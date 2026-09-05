@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "install:js": "npm install --prefix extension && npm install --prefix extension/webview",
+    "install:js": "npm install --prefix extension --ignore-scripts && npm install --prefix extension/webview --ignore-scripts",
     "postinstall": "npm run install:js",
     "bootstrap": "node ./scripts/lifecycle.mjs bootstrap",
     "dev": "node ./scripts/lifecycle.mjs dev",
