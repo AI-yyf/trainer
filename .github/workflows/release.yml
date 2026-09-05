@@ -86,15 +86,20 @@ jobs:
           fi
           "$BIN" --help
 
+      - name: Collect npm debug logs
+        if: failure()
+        run: |
+          mkdir -p npm-debug-logs
+          cp -r "C:/npm/cache/_logs/." npm-debug-logs/ 2>/dev/null || true
+          cp -r /home/runner/.npm/_logs/. npm-debug-logs/ 2>/dev/null || true
+          cp -r /Users/runner/.npm/_logs/. npm-debug-logs/ 2>/dev/null || true
+
       - name: Upload npm debug logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: npm-logs-${{ matrix.target }}
-          path: |
-            C:/npm/cache/_logs/
-            /home/runner/.npm/_logs/
-            /Users/runner/.npm/_logs/
+          path: npm-debug-logs/
           if-no-files-found: ignore
 
       # Full server suite blocks on the primary (linux-x64) target; the other
