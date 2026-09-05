@@ -1,0 +1,1346 @@
+{
+  "packs": [
+    {
+      "id": "remote_workspace",
+      "previewScenario": "training-remote",
+      "sourceChain": {
+        "zh-CN": ["远程工作区元数据", "凭据模式策略", "当前工作区路径"],
+        "en-US": ["Remote workspace metadata", "Credential-mode policy", "Current workspace path"]
+      },
+      "currentFocus": {
+        "zh-CN": "远程工作区边界",
+        "en-US": "Remote workspace boundary"
+      },
+      "coachSummary": {
+        "zh-CN": "先把远程工作区边界讲清楚：文件归谁管、凭据应该放在哪一侧，以及 Trainer 为什么要先基于这个边界再继续教。",
+        "en-US": "First make the remote workspace boundary explainable: which host owns the files, where credentials should live, and why Trainer should coach from that fact before going deeper."
+      },
+      "practiceGoal": {
+        "zh-CN": "在继续更深的远程教学前，先完成一个真实、可解释的远程边界判断。",
+        "en-US": "Finish one real, explainable remote-boundary judgment before deeper remote coaching continues."
+      },
+      "flashGoal": {
+        "zh-CN": "把远程凭据边界压成一句能快速回忆出来的规则。",
+        "en-US": "Compress the remote credential boundary into a rule you can recall quickly."
+      },
+      "practiceNextStep": {
+        "zh-CN": "带回远程边界证据",
+        "en-US": "Return with the remote boundary proof"
+      },
+      "flashNextStep": {
+        "zh-CN": "提交闪记答案",
+        "en-US": "Submit the flash answer"
+      },
+      "practice": {
+        "cardId": "card-training-remote-practice",
+        "type": "practice",
+        "title": {
+          "zh-CN": "练习：验证远程工作区边界",
+          "en-US": "Practice: Verify the remote workspace boundary"
+        },
+        "whyNow": {
+          "zh-CN": "如果连文件归属和凭据边界都没说清，后面的远程教学就很容易误导用户。",
+          "en-US": "If file ownership and credential boundaries stay fuzzy, every deeper remote coaching step becomes less trustworthy."
+        },
+        "focusArea": {
+          "zh-CN": "远程工作区边界",
+          "en-US": "Remote workspace boundary"
+        },
+        "targetSkill": {
+          "zh-CN": "远程工作区边界判断",
+          "en-US": "Remote workspace boundary"
+        },
+        "scenario": {
+          "zh-CN": "你正在通过 Remote SSH、WSL、tunnels 或 dev container 教学，在继续更深的工作前需要先做一次诚实的边界检查。",
+          "en-US": "You are coaching through Remote SSH, WSL, tunnels, or a dev container and need one honest boundary check before deeper work."
+        },
+        "problemStatement": {
+          "zh-CN": "证明哪台机器拥有工作区文件、API key 应该留在本地还是远端，以及 Trainer 应该如何先解释这个边界。",
+          "en-US": "Prove which machine owns the workspace files, which credential mode is safe, and how Trainer should explain that boundary before any deeper coaching continues."
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "检查一个真实的工作区 URI 或路径，然后先用一句话说明安全的凭据模式，再继续后续代码工作。",
+          "en-US": "Inspect one real workspace URI or path, then explain the safe credential mode in one sentence before touching code."
+        },
+        "apiHints": [
+          "detectRemoteWorkspaceType(uri)",
+          "getRecommendedCredentialMode(workspaceType)",
+          "isCredentialModeSecureForWorkspace(mode, workspaceType)"
+        ],
+        "constraints": {
+          "zh-CN": [
+            "不要为了测试远程边界去改项目文件。",
+            "只保留一个工作区路径、一个凭据决定和一个恢复说明。"
+          ],
+          "en-US": [
+            "Do not patch project files just to test the remote boundary.",
+            "Keep the proof to one workspace path, one credential decision, and one recovery note."
+          ]
+        },
+        "deliverable": {
+          "zh-CN": "一段简短的远程边界判断，包含一个已确认的工作区路径和一个凭据模式决定。",
+          "en-US": "A short remote-boundary judgment with one confirmed workspace path and one credential-mode decision."
+        },
+        "selfCheck": {
+          "zh-CN": [
+            "你能说出哪台主机真正拥有工作区文件吗？",
+            "你能解释 API key 在这里应该留在本地还是远端吗？",
+            "你有在不改项目代码的前提下核实一个真实路径或存储边界吗？"
+          ],
+          "en-US": [
+            "Can you name which host owns the workspace files?",
+            "Can you explain whether the API key should stay local or remote here?",
+            "Did you verify one real path or storage boundary without changing project code?"
+          ]
+        },
+        "validationMethod": {
+          "zh-CN": "读取当前工作区元数据，确认远程类型，再核实一个具体路径或凭据边界。",
+          "en-US": "Read the current workspace metadata, name the remote type, and confirm one concrete path or credential boundary."
+        },
+        "learnerDeliverables": {
+          "zh-CN": [
+            "说出远程工作区类型和真正拥有文件的主机。",
+            "确认 API key 应该留在本地还是远端。",
+            "带回一个证明这个边界的真实路径或设置。"
+          ],
+          "en-US": [
+            "Name the remote workspace type and the host that owns the files.",
+            "Confirm whether the API key should stay local or remote for this workspace.",
+            "Bring back one concrete path or setting that proves the boundary."
+          ]
+        },
+        "verificationSteps": {
+          "zh-CN": [
+            "记录当前远程形态（SSH / tunnels / dev container / WSL / local）。",
+            "确认一个解析后的工作区路径或挂载点。",
+            "解释安全的凭据模式，以及 Trainer 为什么应该这样用。"
+          ],
+          "en-US": [
+            "Capture the current remote surface (SSH / tunnels / dev container / WSL / local).",
+            "Confirm one resolved workspace path or mount point.",
+            "Explain the safe credential mode and why Trainer should use it here."
+          ]
+        },
+        "successSignal": {
+          "zh-CN": "你能用一句话解释远程边界，并用一个真实路径或凭据事实支撑它。",
+          "en-US": "You can explain the remote boundary in one sentence and support it with one real path or credential fact."
+        },
+        "expectedSymbols": [
+          "detectRemoteWorkspaceType",
+          "getRecommendedCredentialMode",
+          "isCredentialModeSecureForWorkspace"
+        ],
+        "filesToTouch": [
+          "shared/src/remoteWorkspace.ts",
+          "extension/src/commands/workspaceContext.ts"
+        ],
+        "hintLadder": {
+          "zh-CN": [
+            "先看工作区 URI 或远程名称。",
+            "再决定凭据应该留在本地还是远端。",
+            "最后用一个真实路径或存储事实证明这个边界。"
+          ],
+          "en-US": [
+            "Start with the workspace URI or remote name.",
+            "Then decide whether credentials should stay local or remote.",
+            "Finally prove the boundary with one real path or storage fact."
+          ]
+        },
+        "commonMistakes": {
+          "zh-CN": [
+            "把所有远程主机都当成应该远端存 API key。",
+            "把资源沙箱误当成项目工作区边界。"
+          ],
+          "en-US": [
+            "Assuming every remote machine should store the API key remotely.",
+            "Treating the resource sandbox like the project workspace boundary."
+          ]
+        },
+        "stuckRecovery": {
+          "zh-CN": "如果路径故事还是模糊，先只证明一件事：哪台主机拥有工作区文件。",
+          "en-US": "If the path story is fuzzy, stop and prove only one thing: which host owns the workspace files."
+        },
+        "reflectionPrompt": {
+          "zh-CN": "在你检查真实路径之前，远程边界的哪一部分最不清楚？",
+          "en-US": "Which part of the remote boundary was unclear before you checked a real path?"
+        },
+        "returnWith": {
+          "zh-CN": "带回远程类型、确认路径和凭据决定。",
+          "en-US": "Return with the remote type, the confirmed path, and the credential decision."
+        }
+      },
+      "flash": {
+        "cardId": "card-training-remote-flash",
+        "type": "flash",
+        "title": {
+          "zh-CN": "闪记：远程工作区边界",
+          "en-US": "Flash: Remote workspace boundary"
+        },
+        "whyNow": {
+          "zh-CN": "先把远程凭据边界记牢，下一次远程切换时才不会再次漂移。",
+          "en-US": "Lock the remote credential boundary into memory before the next remote handoff drifts again."
+        },
+        "focusArea": {
+          "zh-CN": "远程工作区边界",
+          "en-US": "Remote workspace boundary"
+        },
+        "targetSkill": {
+          "zh-CN": "远程工作区边界回忆",
+          "en-US": "Remote workspace boundary"
+        },
+        "scenario": {
+          "zh-CN": "用一张闪记卡确认你能回忆出本地与远端凭据边界。",
+          "en-US": "Use one flashcard to confirm that you can recall the local-versus-remote credential boundary."
+        },
+        "problemStatement": {
+          "zh-CN": "在远程 VS Code 会话里，什么时候 Trainer 应该把 API key 留在本地，而不是存进工作区？",
+          "en-US": "When should Trainer keep the API key local instead of storing it in the workspace for a remote VS Code session?"
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "先说出远程类型，再说凭据应该放在哪一侧。",
+          "en-US": "State the remote type first, then decide where the credential should live."
+        },
+        "constraints": {
+          "zh-CN": [
+            "从当前工作区边界回答，不要套泛化口号。",
+            "先说文件归属主机，再说凭据模式。"
+          ],
+          "en-US": [
+            "Answer from the current workspace boundary, not from generic habit.",
+            "Name the owning host first, then the credential mode."
+          ]
+        },
+        "validationMethod": {
+          "zh-CN": "用一个边界规则和一个信任条件完成简答。",
+          "en-US": "Give a short answer with one boundary rule and one trust condition."
+        },
+        "learnerDeliverables": {
+          "zh-CN": [
+            "说出当前工作区类型与文件归属主机。",
+            "解释什么时候 API key 应该留在本地。"
+          ],
+          "en-US": [
+            "State the current workspace type and owning host.",
+            "Explain when the API key should stay local."
+          ]
+        },
+        "verificationSteps": {
+          "zh-CN": [
+            "先识别当前工作区类型。",
+            "再判断文件和凭据分别归谁管理。"
+          ],
+          "en-US": [
+            "Identify the current workspace type first.",
+            "Then decide who owns the files and the credentials."
+          ]
+        },
+        "successSignal": {
+          "zh-CN": "你能不靠猜测地复述本地与远端凭据边界规则。",
+          "en-US": "You can restate the local-versus-remote credential rule without guessing."
+        },
+        "knowledgeType": {
+          "zh-CN": "工程概念",
+          "en-US": "engineering_concept"
+        },
+        "question": {
+          "zh-CN": "在远程 VS Code 会话里，什么时候 Trainer 应该把 API key 留在本地，而不是存进工作区？",
+          "en-US": "When should Trainer keep the API key local instead of storing it in the workspace for a remote VS Code session?"
+        },
+        "context": {
+          "zh-CN": "先用远程工作区边界稳定判断，再继续更深的教学。",
+          "en-US": "Use the remote workspace boundary before trusting deeper coaching."
+        },
+        "answerMode": {
+          "zh-CN": "text",
+          "en-US": "text"
+        },
+        "expectedAnswer": {
+          "zh-CN": "当远程主机是共享的、边界不清楚或不够可信时，把 key 留在本地并使用 ui_proxy。只有在你已经理解文件与主机边界，而且远端环境可信时，才考虑 workspace_secret。",
+          "en-US": "Keep the key local with ui_proxy when the remote host is shared or not fully trusted. Use workspace_secret only when the remote machine and file boundary are understood and trustworthy."
+        },
+        "hintLadder": {
+          "zh-CN": [
+            "先说工作区类型：SSH、tunnels、dev container、WSL 还是 local。",
+            "再问哪一侧真正拥有文件和密钥存储。",
+            "最后决定凭据应该留在本地还是远端。"
+          ],
+          "en-US": [
+            "Start with the workspace type: SSH, tunnels, dev container, WSL, or local.",
+            "Then ask which host owns the files and secret storage.",
+            "Only after that decide whether credentials should stay local or remote."
+          ]
+        },
+        "commonMistakes": {
+          "zh-CN": [
+            "默认所有远程机器都应该远端存 API key。",
+            "把资源沙箱当成项目工作区边界。"
+          ],
+          "en-US": [
+            "Assuming every remote machine should store the API key remotely.",
+            "Treating the resource sandbox like the project workspace boundary."
+          ]
+        },
+        "feedback": {
+          "zh-CN": {
+            "correct": "很好。你把凭据模式和信任边界关联起来了。",
+            "incorrect": "先决定主机和信任边界，再选凭据模式。"
+          },
+          "en-US": {
+            "correct": "Good. You tied credential mode to trust and host ownership.",
+            "incorrect": "Decide the host and trust boundary first, then choose the credential mode."
+          }
+        },
+        "reflectionPrompt": {
+          "zh-CN": "你刚刚回忆的是哪条边界规则，它为什么能减少远程误判？",
+          "en-US": "Which boundary rule did you just recall, and why does it reduce remote misjudgment?"
+        },
+        "returnWith": {
+          "zh-CN": "带回边界规则和一个适用条件。",
+          "en-US": "Return with the boundary rule and one condition where it applies."
+        }
+      }
+    },
+    {
+      "id": "debug_loop",
+      "previewScenario": "training-debug",
+      "sourceChain": {
+        "zh-CN": ["最小复现", "断点边界", "验证过的异常状态"],
+        "en-US": ["Minimal repro", "Breakpoint boundary", "Verified bad state"]
+      },
+      "currentFocus": {
+        "zh-CN": "最小调试闭环",
+        "en-US": "Minimal debug loop"
+      },
+      "coachSummary": {
+        "zh-CN": "先把调试闭环缩成一个复现、一个暂停点和一个被证实的错误状态，再决定改什么。",
+        "en-US": "First shrink the debug loop to one repro, one pause point, and one verified bad state before deciding what to change."
+      },
+      "practiceGoal": {
+        "zh-CN": "在改更多代码前，先完成一个可信的最小调试闭环。",
+        "en-US": "Complete one trustworthy minimal debug loop before changing more code."
+      },
+      "flashGoal": {
+        "zh-CN": "把可信的调试闭环压成一条能立刻复述的规则。",
+        "en-US": "Compress the trustworthy debug loop into a rule you can restate immediately."
+      },
+      "practiceNextStep": {
+        "zh-CN": "带回调试证据",
+        "en-US": "Return with the debug evidence"
+      },
+      "flashNextStep": {
+        "zh-CN": "提交闪记答案",
+        "en-US": "Submit the flash answer"
+      },
+      "practice": {
+        "cardId": "card-training-debug-practice",
+        "type": "practice",
+        "title": {
+          "zh-CN": "练习：收窄调试闭环",
+          "en-US": "Practice: Narrow the debug loop"
+        },
+        "whyNow": {
+          "zh-CN": "如果没有一个可信的最小调试闭环，后面的修改只会继续放大猜测。",
+          "en-US": "If you skip the minimal trustworthy debug loop, later edits are still running on guesswork."
+        },
+        "focusArea": {
+          "zh-CN": "最小调试闭环",
+          "en-US": "Minimal debug loop"
+        },
+        "targetSkill": {
+          "zh-CN": "调试闭环设计",
+          "en-US": "Debug loop design"
+        },
+        "scenario": {
+          "zh-CN": "某个文件正在失败，而你需要在继续改代码前先做一个最小 VS Code 调试闭环。",
+          "en-US": "A file is failing and you need one minimal VS Code debug loop before changing more code."
+        },
+        "problemStatement": {
+          "zh-CN": "构建一个最小调试闭环：可复现问题、在状态第一次出错的地方暂停，并带回一个被证实的发现。",
+          "en-US": "Build one minimal debug loop that reproduces the issue, stops where the state first changes, and returns one verified finding."
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "选一个最小失败命令或文件，在状态边界打第一个有用断点，然后跑最小复现。",
+          "en-US": "Pick one failing command or file, set the first useful breakpoint at the state boundary, and run the smallest repro."
+        },
+        "apiHints": [
+          "launch.json configurations",
+          "Conditional breakpoints and exception breakpoints",
+          "Watch expressions or Debug Console for the first bad value"
+        ],
+        "constraints": {
+          "zh-CN": [
+            "在你还不能稳定复现失败前，不要开始重构。",
+            "优先一个断点和一条失败路径，而不是一整趟调试之旅。"
+          ],
+          "en-US": [
+            "Do not refactor while you still cannot reproduce the bug.",
+            "Prefer one breakpoint and one failing path over a full debug tour."
+          ]
+        },
+        "deliverable": {
+          "zh-CN": "一个可重复的失败步骤，以及对状态在哪里第一次偏离的一个已验证解释。",
+          "en-US": "A reproducible failing step plus one verified explanation of where the state diverges."
+        },
+        "selfCheck": {
+          "zh-CN": [
+            "你能按需复现这个失败吗？",
+            "至少有一个断点或异常暂停在正确边界吗？",
+            "你能说出第一个错误值或错误分支，而不只是最后的症状吗？"
+          ],
+          "en-US": [
+            "Can you reproduce the failure on demand?",
+            "Did at least one breakpoint or exception pause at the right boundary?",
+            "Can you name the first wrong value or branch, not just the final symptom?"
+          ]
+        },
+        "validationMethod": {
+          "zh-CN": "复现一次、在边界暂停、记录第一个被证实的错误状态。",
+          "en-US": "Reproduce once, pause at the boundary, and record the first verified bad state."
+        },
+        "learnerDeliverables": {
+          "zh-CN": [
+            "写下最小复现步骤。",
+            "在第一个有用的断点或异常边界暂停。",
+            "记录第一个被证实的错误值、分支或缺失状态。"
+          ],
+          "en-US": [
+            "Write down the smallest repro step.",
+            "Pause at the first useful breakpoint or exception boundary.",
+            "Record the first verified wrong value, branch, or missing state."
+          ]
+        },
+        "verificationSteps": {
+          "zh-CN": [
+            "运行最小失败复现。",
+            "在第一个有用断点或异常处暂停。",
+            "写下第一个被证实的错误值或错误分支。"
+          ],
+          "en-US": [
+            "Run the smallest failing repro.",
+            "Pause at the first useful breakpoint or exception.",
+            "Write down the first verified wrong value or branch."
+          ]
+        },
+        "successSignal": {
+          "zh-CN": "你能说清坏状态第一次出现在哪里，以及是什么证据证明了它。",
+          "en-US": "You can state where the bad state first appears and what evidence proved it."
+        },
+        "expectedSymbols": [
+          "launch.json",
+          "breakpoint",
+          "Debug Console"
+        ],
+        "filesToTouch": [
+          ".vscode/launch.json",
+          "<current failing file>"
+        ],
+        "hintLadder": {
+          "zh-CN": [
+            "先让失败能够稳定复现。",
+            "再把断点不断前移，直到状态第一次变化。",
+            "最后记录第一个错误值或错误分支。"
+          ],
+          "en-US": [
+            "Start by making the failure repeat on demand.",
+            "Then move the breakpoint earlier until the state first changes.",
+            "Only after that record the first wrong value or branch."
+          ]
+        },
+        "commonMistakes": {
+          "zh-CN": [
+            "在失败还不能稳定复现前就开始改代码。",
+            "把断点打在状态已经坏掉之后。"
+          ],
+          "en-US": [
+            "Changing code before the failure is reproducible.",
+            "Setting breakpoints after the state is already corrupted."
+          ]
+        },
+        "stuckRecovery": {
+          "zh-CN": "如果每个断点都很吵，就再往前移一点，只选第一个你能解释的状态变化。",
+          "en-US": "If every breakpoint feels noisy, move it earlier and choose the first state transition you can explain."
+        },
+        "reflectionPrompt": {
+          "zh-CN": "这次 debugger 证明了什么，是日志或猜测本来证明不了的？",
+          "en-US": "What did the debugger prove that logs or guesswork did not?"
+        },
+        "returnWith": {
+          "zh-CN": "带回复现步骤、暂停位置和第一个错误值。",
+          "en-US": "Return with the repro step, the pause location, and the first wrong value."
+        }
+      },
+      "flash": {
+        "cardId": "card-training-debug-flash",
+        "type": "flash",
+        "title": {
+          "zh-CN": "闪记：最小调试闭环",
+          "en-US": "Flash: Minimal debug loop"
+        },
+        "whyNow": {
+          "zh-CN": "先把可信的调试闭环记牢，下一次才不容易重新滑回盲改代码。",
+          "en-US": "Recall the trustworthy debug loop before you fall back into blind edits."
+        },
+        "focusArea": {
+          "zh-CN": "最小调试闭环",
+          "en-US": "Minimal debug loop"
+        },
+        "targetSkill": {
+          "zh-CN": "调试闭环回忆",
+          "en-US": "Debug loop design"
+        },
+        "scenario": {
+          "zh-CN": "这张闪记卡只检查一件事：在你改代码前，能不能直接说出最小可信调试闭环？",
+          "en-US": "This flashcard checks one thing: can you directly say the smallest trustworthy debug loop before editing code?"
+        },
+        "problemStatement": {
+          "zh-CN": "改代码前，最小可信的调试闭环是什么？",
+          "en-US": "What is the smallest trustworthy debug loop before you change code?"
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "先用一句话说出调试闭环，再带着它回到真实失败路径。",
+          "en-US": "State the debug loop first, then carry that rule back into the real failing path."
+        },
+        "constraints": {
+          "zh-CN": [
+            "把答案压成一个复现、一个暂停点和一个被证实的错误状态。",
+            "不要把整条排错历史都塞进答案里。"
+          ],
+          "en-US": [
+            "Keep the answer to one repro, one pause point, and one verified bad state.",
+            "Do not pour the whole debugging history into the answer."
+          ]
+        },
+        "validationMethod": {
+          "zh-CN": "用一句主规则和一个边界证据点完成回答。",
+          "en-US": "Answer with one main rule and one boundary-evidence point."
+        },
+        "learnerDeliverables": {
+          "zh-CN": [
+            "用一句话说出最小调试闭环。",
+            "补充你会先检查的一个边界证据点。"
+          ],
+          "en-US": [
+            "State the debug loop in one sentence.",
+            "Add one boundary-evidence point you would inspect first."
+          ]
+        },
+        "verificationSteps": {
+          "zh-CN": [
+            "先说出最小复现。",
+            "再说暂停边界和第一个要证实的错误状态。"
+          ],
+          "en-US": [
+            "State the smallest repro first.",
+            "Then name the pause boundary and the first bad state to prove."
+          ]
+        },
+        "successSignal": {
+          "zh-CN": "你能快速复述调试闭环，并说明第一证据点在哪里。",
+          "en-US": "You can quickly restate the debug loop and name the first evidence point."
+        },
+        "knowledgeType": {
+          "zh-CN": "工程概念",
+          "en-US": "engineering_concept"
+        },
+        "question": {
+          "zh-CN": "改代码前，最小可信的调试闭环是什么？",
+          "en-US": "What is the smallest trustworthy debug loop before you change code?"
+        },
+        "context": {
+          "zh-CN": "目标不是逛完整个调用栈，而是证明坏状态第一次从哪里开始。",
+          "en-US": "The goal is to prove where the bad state begins, not to tour the whole stack."
+        },
+        "answerMode": {
+          "zh-CN": "text",
+          "en-US": "text"
+        },
+        "expectedAnswer": {
+          "zh-CN": "先复现失败，再在第一个有用的断点或异常边界暂停，然后记录第一个被证实的错误值或错误分支，最后再改代码。",
+          "en-US": "Reproduce the failure, pause at the first useful breakpoint or exception boundary, and record the first verified wrong value or branch before editing."
+        },
+        "hintLadder": {
+          "zh-CN": [
+            "先有一个可重复的失败。",
+            "再停在状态第一次变化的地方，而不是症状出现的终点。",
+            "最后记录第一个错误值或错误分支。"
+          ],
+          "en-US": [
+            "Start with a failing repro you can repeat.",
+            "Then pause where the state first changes, not where the symptom ends.",
+            "Only after that record the first wrong value or branch."
+          ]
+        },
+        "commonMistakes": {
+          "zh-CN": [
+            "在失败尚未复现前就改代码。",
+            "把断点打在状态已经损坏之后。"
+          ],
+          "en-US": [
+            "Changing code before the failure is reproducible.",
+            "Putting breakpoints after the state is already corrupted."
+          ]
+        },
+        "feedback": {
+          "zh-CN": {
+            "correct": "很好，这个调试闭环已经小到足够可信。",
+            "incorrect": "把闭环再缩小到一个复现、一个暂停和一个被证实的发现。"
+          },
+          "en-US": {
+            "correct": "Nice. The loop is small enough to trust.",
+            "incorrect": "Shrink the loop to one repro, one pause, and one verified finding."
+          }
+        },
+        "reflectionPrompt": {
+          "zh-CN": "哪一个边界证据点最能帮你避免盲改代码？",
+          "en-US": "Which boundary-evidence point most helps you avoid blind edits?"
+        },
+        "returnWith": {
+          "zh-CN": "带回一句调试闭环规则和一个优先检查点。",
+          "en-US": "Return with one debug-loop rule and one first inspection point."
+        }
+      }
+    },
+    {
+      "id": "function_guidance",
+      "previewScenario": "training-function",
+      "sourceChain": {
+        "zh-CN": ["悬停信息", "签名提示", "定义与真实调用点"],
+        "en-US": ["Hover summary", "Signature help", "Definition and real call site"]
+      },
+      "currentFocus": {
+        "zh-CN": "函数契约恢复",
+        "en-US": "Function contract recovery"
+      },
+      "coachSummary": {
+        "zh-CN": "先从真实调用点恢复一个函数契约，再决定能不能安全修改它。",
+        "en-US": "Recover one function contract from a live call site before deciding whether you can edit it safely."
+      },
+      "practiceGoal": {
+        "zh-CN": "先恢复一个真实函数契约，再继续实现或重构。",
+        "en-US": "Recover one real function contract before you continue implementing or refactoring."
+      },
+      "flashGoal": {
+        "zh-CN": "把编辑器提示各自证明什么，压成一条可以复述的规则。",
+        "en-US": "Compress what each editor hint proves into a rule you can restate."
+      },
+      "practiceNextStep": {
+        "zh-CN": "带回函数契约",
+        "en-US": "Return with the function contract"
+      },
+      "flashNextStep": {
+        "zh-CN": "提交闪记答案",
+        "en-US": "Submit the flash answer"
+      },
+      "practice": {
+        "cardId": "card-training-function-practice",
+        "type": "practice",
+        "title": {
+          "zh-CN": "看清这个函数接收什么、返回什么",
+          "en-US": "See what this function takes and returns"
+        },
+        "whyNow": {
+          "zh-CN": "如果函数契约仍靠猜，后面的实现和重构就都不稳。",
+          "en-US": "If the function contract is still guesswork, every later implementation or refactor is unstable."
+        },
+        "focusArea": {
+          "zh-CN": "函数契约恢复",
+          "en-US": "Function contract recovery"
+        },
+        "targetSkill": {
+          "zh-CN": "函数契约恢复",
+          "en-US": "Function contract recovery"
+        },
+        "scenario": {
+          "zh-CN": "你需要借助 hover、signature help、definition 和一个真实调用点，理解一个不熟悉的函数。",
+          "en-US": "You need to understand an unfamiliar function using hover, signature help, definition, and one real call site."
+        },
+        "problemStatement": {
+          "zh-CN": "打开一个真实调用点，用 hover 和定义看清参数和返回值。",
+          "en-US": "Open a real call site, then use hover and Go to Definition to see the parameters and return value."
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "从一个真实调用点出发，在改任何代码前先检查 hover、signature help 和 definition。",
+          "en-US": "Start from one live call site, then inspect hover, signature help, and definition before editing anything."
+        },
+        "apiHints": [
+          "Hover / Peek Definition",
+          "Signature Help (parameter hints)",
+          "Go to Definition / Find All References"
+        ],
+        "constraints": {
+          "zh-CN": [
+            "在理解契约前不要复制实现。",
+            "把调查范围限制在一个函数和一个调用点。"
+          ],
+          "en-US": [
+            "Do not copy an implementation before you understand the contract.",
+            "Keep the investigation to one function and one call site."
+          ]
+        },
+        "deliverable": {
+          "zh-CN": "写下这个函数接收什么、返回什么。",
+          "en-US": "Write down what this function takes and what it returns."
+        },
+        "selfCheck": {
+          "zh-CN": [
+            "你能说出参数和返回形状吗？",
+            "你检查过至少一个真实调用者吗？",
+            "在动手改之前，你能解释一个常见误用吗？"
+          ],
+          "en-US": [
+            "Can you name the parameters and return shape?",
+            "Did you inspect at least one real caller?",
+            "Can you explain one common misuse before editing?"
+          ]
+        },
+        "validationMethod": {
+          "zh-CN": "打开 definition 或一个真实引用，能说出参数和返回值。",
+          "en-US": "Open Go to Definition or one real reference, then name the parameters and return value."
+        },
+        "learnerDeliverables": {
+          "zh-CN": [
+            "打开一个真实调用点。",
+            "从编辑器提示或定义里确认参数和返回契约。",
+            "在编辑前解释一个误用或边界情况。"
+          ],
+          "en-US": [
+            "Open one real call site.",
+            "Confirm the parameter and return contract from editor guidance or definition.",
+            "Explain one misuse or edge case before editing."
+          ]
+        },
+        "verificationSteps": {
+          "zh-CN": [
+            "在真实调用点检查 hover 或 signature help。",
+            "打开 definition 或一个真实引用。",
+            "写下契约和一个安全的下一步修改。"
+          ],
+          "en-US": [
+            "Check hover or signature help from a live call site.",
+            "Open the definition or a real caller/reference.",
+            "Write down the contract and one safe next edit."
+          ]
+        },
+        "successSignal": {
+          "zh-CN": "你能解释函数契约，并在不猜测的前提下做一个小而安全的修改。",
+          "en-US": "You can explain the function contract and make one small safe change without guessing."
+        },
+        "expectedSymbols": [
+          "Hover",
+          "Signature Help",
+          "Go to Definition"
+        ],
+        "filesToTouch": [
+          "<live call site>",
+          "<definition file>"
+        ],
+        "hintLadder": {
+          "zh-CN": [
+            "hover 是快速摘要，不是最终证明。",
+            "signature help 在真实调用点里最有价值。",
+            "definition 和 references 才能确认真正拥有契约的地方。"
+          ],
+          "en-US": [
+            "Hover is the fast summary, not the final proof.",
+            "Signature help is strongest when you are inside a real call site.",
+            "Definition and references confirm what really owns the contract."
+          ]
+        },
+        "commonMistakes": {
+          "zh-CN": [
+            "把自动补全当成已验证契约。",
+            "只看 hover 文本，不查真实调用者或定义。"
+          ],
+          "en-US": [
+            "Treating autocomplete as a verified contract.",
+            "Reading the hover text without checking a real caller or definition."
+          ]
+        },
+        "stuckRecovery": {
+          "zh-CN": "如果签名仍然模糊，停止编辑，再看一个真实调用者或类型定义。",
+          "en-US": "If the signature is still vague, stop editing and inspect one more real caller or type definition."
+        },
+        "reflectionPrompt": {
+          "zh-CN": "哪个编辑器提示补上了关键一块：hover、signature help、definition 还是 references？",
+          "en-US": "Which editor hint gave the missing piece: hover, signature help, definition, or references?"
+        },
+        "returnWith": {
+          "zh-CN": "带回函数契约、证明它的调用点，以及你准备做的安全下一步。",
+          "en-US": "Return with the function contract, the call site that proves it, and the safe next edit."
+        }
+      },
+      "flash": {
+        "cardId": "card-training-function-flash",
+        "type": "flash",
+        "title": {
+          "zh-CN": "闪记：函数提示各自证明什么",
+          "en-US": "Flash: Function guidance contract"
+        },
+        "whyNow": {
+          "zh-CN": "把编辑器提示和真正契约证明区分清楚，后面的实现才不会继续靠猜。",
+          "en-US": "Separate quick editor hints from real contract proof before you rely on them in implementation."
+        },
+        "focusArea": {
+          "zh-CN": "函数契约恢复",
+          "en-US": "Function contract recovery"
+        },
+        "targetSkill": {
+          "zh-CN": "函数提示判断",
+          "en-US": "Function contract recovery"
+        },
+        "scenario": {
+          "zh-CN": "这张闪记卡检查你能不能区分 hover、signature help 和 definition 各自证明什么。",
+          "en-US": "This flashcard checks whether you can separate what hover, signature help, and definition each prove."
+        },
+        "problemStatement": {
+          "zh-CN": "hover、signature help 和 go-to-definition 各自证明了函数的什么？",
+          "en-US": "What do hover, signature help, and go-to-definition each prove about a function?"
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "先说每个提示的边界，再回到真实调用点验证它。",
+          "en-US": "Name each hint's boundary first, then carry that rule back to a live call site."
+        },
+        "constraints": {
+          "zh-CN": [
+            "不要把所有提示都混成一个“差不多知道”。",
+            "答案里要区分快速摘要和真正契约证明。"
+          ],
+          "en-US": [
+            "Do not collapse every hint into a vague “I kind of know”.",
+            "Separate quick summary from real contract proof."
+          ]
+        },
+        "validationMethod": {
+          "zh-CN": "用一条映射关系回答：提示类型 -> 它真正证明的边界。",
+          "en-US": "Answer as a mapping: hint type -> what it really proves."
+        },
+        "learnerDeliverables": {
+          "zh-CN": [
+            "说出 hover 给你的是什么。",
+            "说出 signature help 在哪里最可靠。",
+            "说出 definition / references 真正确认了什么。"
+          ],
+          "en-US": [
+            "State what hover gives you.",
+            "State where signature help is most reliable.",
+            "State what definition / references truly confirm."
+          ]
+        },
+        "verificationSteps": {
+          "zh-CN": [
+            "先区分快速摘要和真实契约证据。",
+            "再说出哪一个真实调用点会把它们连起来。"
+          ],
+          "en-US": [
+            "Separate quick summary from real contract evidence first.",
+            "Then name the live call site that would connect them."
+          ]
+        },
+        "successSignal": {
+          "zh-CN": "你能区分编辑器快速提示和真正契约证明，不再把自动补全当答案。",
+          "en-US": "You can separate quick editor hints from real contract proof instead of treating autocomplete as the answer."
+        },
+        "knowledgeType": {
+          "zh-CN": "工程概念",
+          "en-US": "engineering_concept"
+        },
+        "question": {
+          "zh-CN": "hover、signature help 和 go-to-definition 各自证明了函数的什么？",
+          "en-US": "What do hover, signature help, and go-to-definition each prove about a function?"
+        },
+        "context": {
+          "zh-CN": "先用编辑器提示恢复契约，再决定能不能安全修改真实调用点。",
+          "en-US": "Use editor guidance to verify a contract before you edit a live call site."
+        },
+        "answerMode": {
+          "zh-CN": "text",
+          "en-US": "text"
+        },
+        "expectedAnswer": {
+          "zh-CN": "hover 给快速摘要，signature help 在真实调用点确认参数位置和调用方式，而 definition 加上真实 references 才真正证明实现边界和契约归属。",
+          "en-US": "Hover gives the quick summary, signature help confirms parameters at the call site, and go-to-definition plus real references prove the actual implementation boundary."
+        },
+        "hintLadder": {
+          "zh-CN": [
+            "hover 是快速摘要，不是最终证据。",
+            "signature help 在你身处真实调用点时最强。",
+            "definition 和 references 才能确认真正拥有契约的地方。"
+          ],
+          "en-US": [
+            "Hover is the fast summary, not the final proof.",
+            "Signature help is strongest when you are inside a real call site.",
+            "Definition and references confirm what really owns the contract."
+          ]
+        },
+        "commonMistakes": {
+          "zh-CN": [
+            "把自动补全当成已验证契约。",
+            "不查真实调用者就把 hover 文本当结论。"
+          ],
+          "en-US": [
+            "Treating autocomplete as a verified contract.",
+            "Reading the hover text without checking a real caller or definition."
+          ]
+        },
+        "feedback": {
+          "zh-CN": {
+            "correct": "很好。你把快速提示和真正契约证明分开了。",
+            "incorrect": "把快速提示和 definition / references 提供的真实证据区分开。"
+          },
+          "en-US": {
+            "correct": "Good. You separated quick hints from the real source of truth.",
+            "incorrect": "Distinguish quick editor hints from the definition and live call sites that prove the contract."
+          }
+        },
+        "reflectionPrompt": {
+          "zh-CN": "哪一种提示最容易让你误以为自己“已经懂了”？",
+          "en-US": "Which hint most easily tricks you into feeling done too early?"
+        },
+        "returnWith": {
+          "zh-CN": "带回一条函数提示映射规则和一个真实调用点。",
+          "en-US": "Return with one hint-to-proof rule and one real call site."
+        }
+      }
+    },
+    {
+      "id": "resource_knowledge",
+      "previewScenario": "training-resource",
+      "sourceChain": {
+        "zh-CN": ["已索引资料标识", "资料可信状态", "知识焦点"],
+        "en-US": ["Indexed resource identifier", "Resource trust state", "Knowledge focus"]
+      },
+      "currentFocus": {
+        "zh-CN": "资源到可信知识",
+        "en-US": "Resource to trusted knowledge"
+      },
+      "coachSummary": {
+        "zh-CN": "先确认资料可信，再把其中一个明确概念变成可追溯的知识原子。",
+        "en-US": "Confirm that the resource is trusted before turning one explicit concept into a traceable knowledge atom."
+      },
+      "practiceGoal": {
+        "zh-CN": "从一份可信资料中提取一个知识原子，并提出一张下一步卡片。",
+        "en-US": "Extract one knowledge atom from a trusted resource and propose one next card."
+      },
+      "flashGoal": {
+        "zh-CN": "回忆知识原子的来源、可信状态和核心概念。",
+        "en-US": "Recall a knowledge atom's provenance, trust state, and core concept."
+      },
+      "practiceNextStep": {
+        "zh-CN": "带回知识原子和下一张卡片",
+        "en-US": "Return with the knowledge atom and next card"
+      },
+      "flashNextStep": {
+        "zh-CN": "提交来源与概念回忆",
+        "en-US": "Submit the provenance and concept recall"
+      },
+      "practice": {
+        "cardId": "card-training-resource-practice",
+        "type": "practice",
+        "title": {
+          "zh-CN": "练习：把资料变成可信知识",
+          "en-US": "Practice: Turn a resource into trusted knowledge"
+        },
+        "whyNow": {
+          "zh-CN": "资料只有在来源、可信状态和知识焦点都明确时，才能支持后续训练。",
+          "en-US": "A resource can support training only when its provenance, trust state, and knowledge focus are explicit."
+        },
+        "focusArea": {
+          "zh-CN": "资源到可信知识",
+          "en-US": "Resource to trusted knowledge"
+        },
+        "targetSkill": {
+          "zh-CN": "知识原子提取与溯源",
+          "en-US": "Knowledge-atom extraction and provenance"
+        },
+        "scenario": {
+          "zh-CN": "你已经导入一份资料，现在需要从中提取一个可信、可复用的知识点。",
+          "en-US": "You imported a resource and now need to extract one trusted, reusable knowledge point from it."
+        },
+        "problemStatement": {
+          "zh-CN": "将一个已索引资料或 URL 转成一个知识原子，并说明它应生成的下一张训练卡。",
+          "en-US": "Turn one indexed resource or URL into one knowledge atom and state the next training card it should create."
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "先确认资料可信，再定位一个概念、规则或示例，并把它压缩成可核对的知识原子。",
+          "en-US": "Confirm the resource is trusted, then locate one concept, rule, or example and compress it into a checkable knowledge atom."
+        },
+        "apiHints": ["resource search", "resource preview", "source trust metadata"],
+        "constraints": {
+          "zh-CN": ["不要把目录示例当作真实资料。", "不要从未确认可信度的资料中记忆结论。"],
+          "en-US": ["Do not treat catalog examples as real resources.", "Do not memorize conclusions from an untrusted resource."]
+        },
+        "deliverable": {
+          "zh-CN": "一个带资料标识和可信状态的知识原子，以及一张下一步卡片。",
+          "en-US": "One knowledge atom with its resource identifier and trust state, plus one next card."
+        },
+        "selfCheck": {
+          "zh-CN": ["你能指出知识原子来自哪份资料吗？", "你确认过资料的可信状态吗？"],
+          "en-US": ["Can you point to the resource that produced the knowledge atom?", "Did you confirm the resource's trust state?"]
+        },
+        "validationMethod": {
+          "zh-CN": "核对资料标识、可信状态和被提取的概念是否仍然一致。",
+          "en-US": "Check that the resource identifier, trust state, and extracted concept still agree."
+        },
+        "learnerDeliverables": {
+          "zh-CN": ["一个知识原子。", "资料来源和可信状态。", "一张应当跟进的卡片。"],
+          "en-US": ["One knowledge atom.", "The resource provenance and trust state.", "One card that should follow it."]
+        },
+        "verificationSteps": {
+          "zh-CN": ["确认资料已索引且可信。", "指出知识原子的准确概念或规则。", "说明下一张卡为什么由它产生。"],
+          "en-US": ["Confirm that the resource is indexed and trusted.", "Name the knowledge atom's exact concept or rule.", "Explain why it creates the next card."]
+        },
+        "successSignal": {
+          "zh-CN": "你能从可信资料中提取一个可追溯知识点，而不是只给出泛化摘要。",
+          "en-US": "You can extract one traceable knowledge point from a trusted resource instead of giving a generic summary."
+        },
+        "expectedSymbols": ["resource ID", "trust state", "knowledge atom"],
+        "filesToTouch": [],
+        "hintLadder": {
+          "zh-CN": ["先确认资料可信。", "再找一个可独立表达的概念或规则。", "最后说明它应当触发哪张下一步卡。"],
+          "en-US": ["Confirm the resource is trusted first.", "Then find one independently expressible concept or rule.", "Finally name the next card it should trigger."]
+        },
+        "commonMistakes": {
+          "zh-CN": ["只总结资料标题，不提取知识点。", "忽略资料过期或不可信状态。"],
+          "en-US": ["Summarizing only the resource title instead of extracting a knowledge point.", "Ignoring that the resource is stale or untrusted."]
+        },
+        "stuckRecovery": {
+          "zh-CN": "先只确认资料标识和可信状态，再回到一个最小概念。",
+          "en-US": "Confirm the resource identifier and trust state first, then return to one smallest concept."
+        },
+        "reflectionPrompt": {
+          "zh-CN": "哪个来源事实让这个知识点变得可复用？",
+          "en-US": "Which provenance fact made this knowledge point reusable?"
+        },
+        "returnWith": {
+          "zh-CN": "带回资料标识、知识原子和下一张卡片。",
+          "en-US": "Return with the resource identifier, knowledge atom, and next card."
+        }
+      },
+      "flash": {
+        "cardId": "card-training-resource-flash",
+        "type": "flash",
+        "title": {
+          "zh-CN": "闪记：资料知识的来源",
+          "en-US": "Flash: Resource knowledge provenance"
+        },
+        "whyNow": {
+          "zh-CN": "先记住知识来自哪里，才能避免把不可信摘要当作事实。",
+          "en-US": "Remember where knowledge came from before treating an untrusted summary as fact."
+        },
+        "focusArea": {
+          "zh-CN": "资源到可信知识",
+          "en-US": "Resource to trusted knowledge"
+        },
+        "targetSkill": {
+          "zh-CN": "知识原子溯源回忆",
+          "en-US": "Knowledge-atom provenance recall"
+        },
+        "scenario": {
+          "zh-CN": "你需要说明一条知识为什么可以从资料进入训练。",
+          "en-US": "You need to explain why one knowledge point is allowed to move from a resource into training."
+        },
+        "problemStatement": {
+          "zh-CN": "一个可信知识原子在变成卡片前必须保留哪些来源信息？",
+          "en-US": "What provenance information must a trusted knowledge atom retain before it becomes a card?"
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "先说资料标识和可信状态，再说核心概念和下一张卡。",
+          "en-US": "Name the resource identifier and trust state before the core concept and next card."
+        },
+        "apiHints": ["resource ID", "trust state", "knowledge atom"],
+        "constraints": {
+          "zh-CN": ["回答必须包含来源，不要只说概念定义。"],
+          "en-US": ["Include provenance in the answer, not only a concept definition."]
+        },
+        "validationMethod": {
+          "zh-CN": "用资料标识、可信状态、概念和下一张卡的四段结构核对答案。",
+          "en-US": "Check the answer against resource identifier, trust state, concept, and next card."
+        },
+        "learnerDeliverables": {
+          "zh-CN": ["资料标识。", "可信状态。", "核心概念和下一张卡。"],
+          "en-US": ["The resource identifier.", "Its trust state.", "The core concept and next card."]
+        },
+        "verificationSteps": {
+          "zh-CN": ["先说来源。", "再说明可信状态。", "最后说明概念与后续卡。"],
+          "en-US": ["State provenance first.", "Then state trust.", "Finish with the concept and follow-up card."]
+        },
+        "successSignal": {
+          "zh-CN": "你能解释来源、可信状态和概念之间的关系。",
+          "en-US": "You can connect provenance, trust state, and concept."
+        },
+        "expectedSymbols": ["resource ID", "trust state"],
+        "filesToTouch": [],
+        "hintLadder": {
+          "zh-CN": ["不要跳过资料标识。", "再确认可信状态。", "最后命名概念和下一张卡。"],
+          "en-US": ["Do not skip the resource identifier.", "Confirm the trust state next.", "Then name the concept and next card."]
+        },
+        "commonMistakes": {
+          "zh-CN": ["把来源不明的摘要当作知识。"],
+          "en-US": ["Treating a summary with unknown provenance as knowledge."]
+        },
+        "stuckRecovery": {
+          "zh-CN": "回到资料标识，再补上可信状态。",
+          "en-US": "Return to the resource identifier, then add its trust state."
+        },
+        "reflectionPrompt": {
+          "zh-CN": "哪条来源信息最容易被你遗漏？",
+          "en-US": "Which provenance detail are you most likely to omit?"
+        },
+        "returnWith": {
+          "zh-CN": "带回资料来源、可信状态和知识原子。",
+          "en-US": "Return with the resource provenance, trust state, and knowledge atom."
+        },
+        "knowledgeType": {
+          "zh-CN": "资料知识",
+          "en-US": "resource_knowledge"
+        },
+        "question": {
+          "zh-CN": "一个可信知识原子在变成卡片前必须保留哪些来源信息？",
+          "en-US": "What provenance information must a trusted knowledge atom retain before it becomes a card?"
+        },
+        "context": {
+          "zh-CN": "从可信资料中学习，而不是从无来源摘要中猜测。",
+          "en-US": "Learn from a trusted resource rather than guessing from an ungrounded summary."
+        },
+        "answerMode": {
+          "zh-CN": "text",
+          "en-US": "text"
+        },
+        "expectedAnswer": {
+          "zh-CN": "说出资料标识、可信状态、被提取的核心概念，以及它支持的下一张卡。",
+          "en-US": "Name the resource identifier, trust state, extracted core concept, and the next card it supports."
+        },
+        "feedback": {
+          "zh-CN": {
+            "correct": "很好。你保留了知识进入训练所需的来源链。",
+            "incorrect": "先补上资料标识和可信状态，再说明概念。"
+          },
+          "en-US": {
+            "correct": "Good. You retained the provenance chain needed for knowledge to enter training.",
+            "incorrect": "Add the resource identifier and trust state before explaining the concept."
+          }
+        }
+      }
+    },
+    {
+      "id": "dependency_mastery",
+      "previewScenario": "training-dependency",
+      "sourceChain": {
+        "zh-CN": ["依赖或 API 名称", "真实使用上下文", "验证目标"],
+        "en-US": ["Dependency or API name", "Real usage context", "Verification target"]
+      },
+      "currentFocus": {
+        "zh-CN": "依赖与 API 掌握",
+        "en-US": "Dependency and API mastery"
+      },
+      "coachSummary": {
+        "zh-CN": "先在真实上下文中使用一个 API，再用一个可见输出判断是否真的掌握。",
+        "en-US": "Use one API in a real context first, then judge mastery from one visible output."
+      },
+      "practiceGoal": {
+        "zh-CN": "使用一个真实依赖/API 能力，并验证一个输出。",
+        "en-US": "Use one real dependency/API capability and verify one output."
+      },
+      "flashGoal": {
+        "zh-CN": "回忆一个核心能力、一个边缘条件和一条安全规则。",
+        "en-US": "Recall one core capability, one sharp edge, and one safe usage rule."
+      },
+      "practiceNextStep": {
+        "zh-CN": "带回已验证输出和安全使用笔记",
+        "en-US": "Return with the verified output and safe-usage note"
+      },
+      "flashNextStep": {
+        "zh-CN": "提交 API 掌握回忆",
+        "en-US": "Submit the API mastery recall"
+      },
+      "practice": {
+        "cardId": "card-training-dependency-practice",
+        "type": "practice",
+        "title": {
+          "zh-CN": "练习：验证一个依赖/API 能力",
+          "en-US": "Practice: Verify one dependency/API capability"
+        },
+        "whyNow": {
+          "zh-CN": "只有在真实上下文中验证过一个输出，依赖掌握才不是纸面理解。",
+          "en-US": "Dependency mastery is not paper understanding until one output is verified in real context."
+        },
+        "focusArea": {
+          "zh-CN": "依赖与 API 掌握",
+          "en-US": "Dependency and API mastery"
+        },
+        "targetSkill": {
+          "zh-CN": "依赖/API 安全使用",
+          "en-US": "Dependency/API safe usage"
+        },
+        "scenario": {
+          "zh-CN": "你需要在当前项目上下文中使用一个依赖或 API，而不是只复述文档。",
+          "en-US": "You need to use one dependency or API in the current project context rather than only restating its docs."
+        },
+        "problemStatement": {
+          "zh-CN": "调用一个真实依赖/API 能力，记录一个已验证输出，并说明一个边缘条件。",
+          "en-US": "Call one real dependency/API capability, record one verified output, and explain one sharp edge."
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "将练习限制为一次 API 调用和一次可重复检查。",
+          "en-US": "Keep the exercise to one API call and one repeatable check."
+        },
+        "apiHints": ["dependency documentation", "real call site", "focused assertion or output"],
+        "constraints": {
+          "zh-CN": ["不要把文档示例当作当前项目事实。", "不要在没有验证输出前声明掌握。"],
+          "en-US": ["Do not treat a documentation example as a current-project fact.", "Do not claim mastery before an output is verified."]
+        },
+        "deliverable": {
+          "zh-CN": "一个已验证输出和一条安全使用规则。",
+          "en-US": "One verified output and one safe usage rule."
+        },
+        "selfCheck": {
+          "zh-CN": ["你实际调用了哪个能力？", "哪个输出或断言证明了它？", "你检查了哪个边缘条件？"],
+          "en-US": ["Which capability did you actually call?", "Which output or assertion proved it?", "Which sharp edge did you check?"]
+        },
+        "validationMethod": {
+          "zh-CN": "重新运行一次最小检查，并核对 API 输出或断言。",
+          "en-US": "Repeat one minimal check and inspect the API output or assertion."
+        },
+        "learnerDeliverables": {
+          "zh-CN": ["一次真实 API 调用。", "一个已验证输出或断言。", "一条安全使用规则。"],
+          "en-US": ["One real API call.", "One verified output or assertion.", "One safe usage rule."]
+        },
+        "verificationSteps": {
+          "zh-CN": ["确认当前上下文确实使用该依赖/API。", "运行最小调用并记录输出。", "检查一个可能误用的边缘条件。"],
+          "en-US": ["Confirm that the current context really uses the dependency/API.", "Run the smallest call and record its output.", "Check one sharp edge that could cause misuse."]
+        },
+        "successSignal": {
+          "zh-CN": "你能用一个已验证输出说明 API 能力，而不是只重复定义。",
+          "en-US": "You can explain the API capability with one verified output instead of only repeating a definition."
+        },
+        "expectedSymbols": ["dependency/API", "verified output", "safe usage rule"],
+        "filesToTouch": [],
+        "hintLadder": {
+          "zh-CN": ["先确定真实调用点。", "再缩小到一个 API 能力。", "最后记录一个输出和一个边缘条件。"],
+          "en-US": ["Locate the real call site first.", "Then shrink to one API capability.", "Finally record one output and one sharp edge."]
+        },
+        "commonMistakes": {
+          "zh-CN": ["只背 API 名称，不运行调用。", "忽略空值、超时、异常或版本边界。"],
+          "en-US": ["Memorizing an API name without running a call.", "Ignoring null, timeout, error, or version boundaries."]
+        },
+        "stuckRecovery": {
+          "zh-CN": "退回到一次最小调用和一个可观察输出。",
+          "en-US": "Return to one smallest call and one observable output."
+        },
+        "reflectionPrompt": {
+          "zh-CN": "哪个已验证输出改变了你对这个 API 的理解？",
+          "en-US": "Which verified output changed how you understand this API?"
+        },
+        "returnWith": {
+          "zh-CN": "带回调用、已验证输出和安全规则。",
+          "en-US": "Return with the call, verified output, and safe rule."
+        }
+      },
+      "flash": {
+        "cardId": "card-training-dependency-flash",
+        "type": "flash",
+        "title": {
+          "zh-CN": "闪记：依赖/API 安全使用",
+          "en-US": "Flash: Dependency/API safe usage"
+        },
+        "whyNow": {
+          "zh-CN": "把核心能力、边缘条件和安全规则记稳，下一次使用时才能避免误用。",
+          "en-US": "Lock in the core capability, sharp edge, and safe rule to avoid misuse next time."
+        },
+        "focusArea": {
+          "zh-CN": "依赖与 API 掌握",
+          "en-US": "Dependency and API mastery"
+        },
+        "targetSkill": {
+          "zh-CN": "依赖/API 使用规则回忆",
+          "en-US": "Dependency/API usage-rule recall"
+        },
+        "scenario": {
+          "zh-CN": "你需要从真实使用上下文回忆一个 API 的关键使用规则。",
+          "en-US": "You need to recall one API's key usage rule from a real usage context."
+        },
+        "problemStatement": {
+          "zh-CN": "说明一个核心能力、一个边缘条件和一条安全使用规则。",
+          "en-US": "State one core capability, one sharp edge, and one safe usage rule."
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "先命名真实 API，再说明它的能力、边缘和规则。",
+          "en-US": "Name the real API first, then state its capability, sharp edge, and rule."
+        },
+        "apiHints": ["core capability", "sharp edge", "safe usage rule"],
+        "constraints": {
+          "zh-CN": ["不要只给泛化定义，回答必须绑定真实 API。"],
+          "en-US": ["Do not give only a generic definition; bind the answer to a real API."]
+        },
+        "validationMethod": {
+          "zh-CN": "将三段答案与真实调用点或文档中的验证输出核对。",
+          "en-US": "Check the three-part answer against a real call site or verified documentation output."
+        },
+        "learnerDeliverables": {
+          "zh-CN": ["核心能力。", "一个边缘条件。", "一条安全规则。"],
+          "en-US": ["The core capability.", "One sharp edge.", "One safe rule."]
+        },
+        "verificationSteps": {
+          "zh-CN": ["先命名依赖/API。", "说明一个输出证明的能力。", "补上一条安全规则。"],
+          "en-US": ["Name the dependency/API first.", "State one capability proven by an output.", "Add one safe usage rule."]
+        },
+        "successSignal": {
+          "zh-CN": "你能在真实上下文中说清 API 的能力、边缘和安全规则。",
+          "en-US": "You can state the API's capability, sharp edge, and safe rule in real context."
+        },
+        "expectedSymbols": ["dependency/API", "sharp edge", "safe usage rule"],
+        "filesToTouch": [],
+        "hintLadder": {
+          "zh-CN": ["先说 API 的作用。", "再说最容易误用的边缘。", "最后说安全规则。"],
+          "en-US": ["State what the API does first.", "Then name the sharp edge most likely to cause misuse.", "Finish with the safe rule."]
+        },
+        "commonMistakes": {
+          "zh-CN": ["把一个 API 的能力套用到不兼容的上下文。"],
+          "en-US": ["Applying one API capability to an incompatible context."]
+        },
+        "stuckRecovery": {
+          "zh-CN": "回到一个真实调用点，再说出最小安全规则。",
+          "en-US": "Return to one real call site and state the smallest safe rule."
+        },
+        "reflectionPrompt": {
+          "zh-CN": "哪一个边缘条件最可能让你下次误用这个 API？",
+          "en-US": "Which sharp edge is most likely to make you misuse this API next time?"
+        },
+        "returnWith": {
+          "zh-CN": "带回能力、边缘条件和安全规则。",
+          "en-US": "Return with the capability, sharp edge, and safe rule."
+        },
+        "knowledgeType": {
+          "zh-CN": "依赖掌握",
+          "en-US": "dependency_mastery"
+        },
+        "question": {
+          "zh-CN": "这个依赖/API 的一个核心能力、一个边缘条件和一条安全使用规则是什么？",
+          "en-US": "What are one core capability, one sharp edge, and one safe usage rule for this dependency/API?"
+        },
+        "context": {
+          "zh-CN": "从真实调用上下文中回忆 API，而不是只背文档。",
+          "en-US": "Recall the API from a real call context rather than only memorizing docs."
+        },
+        "answerMode": {
+          "zh-CN": "text",
+          "en-US": "text"
+        },
+        "expectedAnswer": {
+          "zh-CN": "说明一个能力、一个边缘条件和一条绑定真实上下文的安全规则。",
+          "en-US": "State one capability, one sharp edge, and one safe rule tied to the real context."
+        },
+        "feedback": {
+          "zh-CN": {
+            "correct": "很好。你把 API 的能力、边缘和安全规则联系起来了。",
+            "incorrect": "先回到真实调用点，再补上边缘条件和安全规则。"
+          },
+          "en-US": {
+            "correct": "Good. You connected the API's capability, sharp edge, and safe rule.",
+            "incorrect": "Return to the real call site, then add the sharp edge and safe rule."
+          }
+        }
+      }
+    }
+  ]
+}

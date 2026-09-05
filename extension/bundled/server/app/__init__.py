@@ -1,0 +1,1 @@
+"""Trainer sidecar application package."""

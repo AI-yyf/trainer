@@ -1,0 +1,14 @@
+[
+  "orientationNow",
+  "orientationState",
+  "orientationNext",
+  "orientationMore",
+  "orientationStateNeedsSetup",
+  "orientationStateWaiting",
+  "orientationStateWorking",
+  "orientationStateBlocked",
+  "orientationStateReady",
+  "orientationStateInterrupted",
+  "leftoverNotLive",
+  "leftoverNotLiveHint"
+]

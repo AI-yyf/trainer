@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Create python environment
+        working-directory: server
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install -U pip
+          pip install -e ".[dev]"
+
+      - name: Install node dependencies
+        run: npm ci
+
+      - name: Ruff (server)
+        working-directory: server
+        run: |
+          . .venv/bin/activate
+          ruff check app tests
+
+      - name: TypeScript (webview + extension)
+        run: npm run check
+
+      - name: Build
+        run: npm run build
+
+      - name: Extension tests
+        run: npm run test:extension
+
+      - name: Server tests (full)
+        working-directory: server
+        run: |
+          . .venv/bin/activate
+          python -m pytest tests -q --tb=short

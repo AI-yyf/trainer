@@ -1,0 +1,36 @@
+{
+  "name": "trainer-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "install:js": "npm install --prefix extension && npm install --prefix extension/webview",
+    "postinstall": "npm run install:js",
+    "bootstrap": "node ./scripts/lifecycle.mjs bootstrap",
+    "dev": "node ./scripts/lifecycle.mjs dev",
+    "dev:sidecar": "node ./scripts/lifecycle.mjs dev --start-sidecar",
+    "smoke": "node ./scripts/lifecycle.mjs smoke",
+    "smoke:strict": "node ./scripts/lifecycle.mjs smoke --strict",
+    "build": "npm run build --prefix extension/webview && npm run build --prefix extension",
+    "check": "npm run check --prefix extension/webview && npm run check --prefix extension",
+    "lint": "npm run lint --prefix extension/webview && npm run lint --prefix extension",
+    "smoke:provider": "node ./scripts/provider-smoke.mjs",
+    "smoke:trainer-turn": "node ./scripts/trainer-turn-smoke.mjs",
+    "smoke:training-return": "node ./scripts/training-return-smoke.mjs",
+    "test:extension": "node --test extension/tests/*.test.js",
+    "test:experience-matrix": "npx playwright test e2e/trainer-experience-matrix.spec.js --workers=4 --reporter=line",
+    "test:experience-sidecar": "node ./scripts/run-real-sidecar-experience-matrix.mjs",
+    "test:verification-matrix": "node ./scripts/run-verification-matrix.mjs",
+    "test:vsix-e2e": "node ./extension/scripts/verify-vsix-e2e.mjs",
+    "test:server": "node ./scripts/run-server-tests.mjs",
+    "test": "npm run test:extension && npm run test:server",
+    "verify": "node ./scripts/verify-workspace.mjs",
+    "package:vsix": "npm run package:vsix --prefix extension",
+    "verify:delivery": "npm run verify && npm run test:experience-matrix && npm run package:vsix"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AI-yyf/trainer.git"
+  },
+  "author": "ai-yyf",
+  "license": "MIT"
+}

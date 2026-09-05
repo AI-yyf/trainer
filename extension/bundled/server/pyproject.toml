@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trainer-sidecar"
+version = "0.1.0"
+description = "Local FastAPI sidecar for the Trainer VS Code extension."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.34.0",
+  "pydantic>=2.10.0",
+  "pydantic-settings>=2.8.0",
+  "openai>=1.79.0",
+  "httpx>=0.28.1",
+  "PyMuPDF>=1.25.5",
+  "qdrant-client>=1.14.2",
+  "fsrs>=0.3.0",
+  "trafilatura>=2.0.0",
+  "markitdown>=0.1.6"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.5",
+  "pytest-asyncio>=0.24.0",
+  "hypothesis>=6.131.0",
+  "ruff>=0.11.9",
+  "pyright>=1.1.400"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.training" = ["guided_training_scenario_packs.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["**/._*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+ignore = ["E501"]

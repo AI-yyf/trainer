@@ -1,0 +1,137 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.os }} → ${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win32-x64
+            py: "3.12"
+          - os: macos-latest
+            target: darwin-arm64
+            py: "3.12"
+          - os: macos-13
+            target: darwin-x64
+            py: "3.12"
+          - os: ubuntu-latest
+            target: linux-x64
+            py: "3.12"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Python env for the sidecar + PyInstaller binary build.
+      - name: Create python environment
+        working-directory: server
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate 2>/dev/null || . .venv/Scripts/activate
+          python -m pip install -U pip
+          pip install -e ".[dev]"
+
+      # Node deps for root tooling + extension + webview (root postinstall).
+      - name: Install node dependencies
+        run: npm ci
+
+      - name: Build webview + extension
+        run: npm run build
+
+      - name: Mirror server sources into bundled runtime
+        run: npm run sync:server --prefix extension
+
+      - name: Bundle native sidecar binary (${{ matrix.target }})
+        run: npm run bundle:sidecar:binary --prefix extension
+
+      - name: Package VSIX (${{ matrix.target }})
+        run: npm run package:vsix --prefix extension
+
+      # Per-OS adaptation proof: the frozen binary must run on the OS it was
+      # built for. This is the packaged artifact users actually execute.
+      - name: Smoke frozen sidecar binary
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            BIN="extension/bundled/bin/win32-x64/trainer-sidecar.exe"
+          else
+            BIN="extension/bundled/bin/${{ matrix.target }}/trainer-sidecar"
+            chmod +x "$BIN"
+          fi
+          "$BIN" --help
+
+      - name: Extension test suite
+        run: npm run test:extension
+
+      # Full server suite blocks on the primary (linux-x64) target; the other
+      # platforms still run it so drift surfaces as uploaded reports.
+      - name: Server test suite (full)
+        if: matrix.target == 'linux-x64'
+        working-directory: server
+        run: |
+          . .venv/bin/activate
+          python -m pytest tests -q --tb=short
+
+      - name: Server test suite (platform probe)
+        if: matrix.target != 'linux-x64'
+        working-directory: server
+        continue-on-error: true
+        run: |
+          . .venv/bin/activate 2>/dev/null || . .venv/Scripts/activate
+          python -m pytest tests -q --tb=short > pytest-platform.log 2>&1 || true
+          tail -5 pytest-platform.log
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: trainer-extension-${{ matrix.target }}
+          path: extension/*.vsix
+          if-no-files-found: error
+
+      - name: Upload platform pytest report (non-blocking)
+        if: matrix.target != 'linux-x64' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report-${{ matrix.target }}
+          path: server/pytest-platform.log
+          if-no-files-found: ignore
+
+  release:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all VSIX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: trainer-extension-*
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Trainer ${{ github.ref_name }}
+          generate_release_notes: true
+          files: artifacts/*.vsix

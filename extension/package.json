@@ -1,0 +1,322 @@
+{
+  "name": "trainer-extension",
+  "displayName": "Trainer",
+  "description": "A conversation-first universal learning coach for VS Code.",
+  "icon": "media/trainer-icon.png",
+  "version": "0.1.0",
+  "publisher": "local",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AI-yyf/trainer.git"
+  },
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "extensionKind": [
+    "ui"
+  ],
+  "categories": [
+    "Other",
+    "Testing",
+    "Education"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:trainer.openWorkbench",
+    "onView:trainer.sidebar"
+  ],
+  "main": "./dist/extension/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "trainer.openWorkbench",
+        "title": "Trainer: Open Coach Sidebar"
+      },
+      {
+        "command": "trainer.memory.refresh",
+        "title": "Trainer: Refresh Memory"
+      },
+      {
+        "command": "trainer.evaluate.currentFile",
+        "title": "Trainer: Evaluate Current File"
+      },
+      {
+        "command": "trainer.plan.generate",
+        "title": "Trainer: Generate Plan"
+      },
+      {
+        "command": "trainer.plan.global.create",
+        "title": "Trainer: Create Global Plan"
+      },
+      {
+        "command": "trainer.plan.global.linkCurrentProject",
+        "title": "Trainer: Link Current Project Plan"
+      },
+      {
+        "command": "trainer.task.specify",
+        "title": "Trainer: Specify Task From Prompt"
+      },
+      {
+        "command": "trainer.task.next",
+        "title": "Trainer: Next Task"
+      },
+      {
+        "command": "trainer.provider.configure",
+        "title": "Trainer: Configure Provider"
+      },
+      {
+        "command": "trainer.provider.clear",
+        "title": "Trainer: Clear Provider"
+      },
+      {
+        "command": "trainer.provider.test",
+        "title": "Trainer: Test Provider"
+      },
+      {
+        "command": "trainer.session.sendMessage",
+        "title": "Trainer: Send Message"
+      },
+      {
+        "command": "trainer.session.sendStreamMessage",
+        "title": "Trainer: Send Stream Message"
+      },
+      {
+        "command": "trainer.session.resumeLatestCoachCheckpoint",
+        "title": "Trainer: Resume Latest Coach Checkpoint"
+      },
+      {
+        "command": "trainer.session.replayLatestCoachCheckpoint",
+        "title": "Trainer: View Latest Coach Checkpoint"
+      },
+      {
+        "command": "trainer.coach.remoteBoundary",
+        "title": "Trainer: Coach Remote Workspace Boundary"
+      },
+      {
+        "command": "trainer.coach.debugLoop",
+        "title": "Trainer: Coach Minimal Debug Loop"
+      },
+      {
+        "command": "trainer.coach.functionContract",
+        "title": "Trainer: Coach Function Contract"
+      },
+      {
+        "command": "trainer.coach.conceptMastery",
+        "title": "Trainer: Coach Concept Mastery"
+      },
+      {
+        "command": "trainer.coach.vocabularyRecall",
+        "title": "Trainer: Coach Vocabulary and Recall"
+      },
+      {
+        "command": "trainer.coach.mathDerivation",
+        "title": "Trainer: Coach Mathematics Derivation"
+      },
+      {
+        "command": "trainer.coach.writingRevision",
+        "title": "Trainer: Coach Writing Revision"
+      },
+      {
+        "command": "trainer.coach.readingTransfer",
+        "title": "Trainer: Coach Reading and Transfer"
+      },
+      {
+        "command": "trainer.plan.update",
+        "title": "Trainer: Freeze Current Plan"
+      },
+      {
+        "command": "trainer.resource.upload",
+        "title": "Trainer: Upload Resources"
+      },
+      {
+        "command": "trainer.resource.index",
+        "title": "Trainer: Index Resources"
+      },
+      {
+        "command": "trainer.resource.confirmOrganization",
+        "title": "Trainer: Confirm Resource Organization"
+      },
+      {
+        "command": "trainer.resource.cancelOrganization",
+        "title": "Trainer: Cancel Resource Organization"
+      },
+      {
+        "command": "trainer.workspace.chooseRoot",
+        "title": "Trainer: Choose Workspace Root"
+      },
+      {
+        "command": "trainer.workspace.migrateRoot",
+        "title": "Trainer: Migrate Workspace Root"
+      },
+      {
+        "command": "trainer.workspace.backup",
+        "title": "Trainer: Back Up Workspace"
+      },
+      {
+        "command": "trainer.workspace.restore",
+        "title": "Trainer: Restore Workspace Backup"
+      },
+      {
+        "command": "trainer.workspace.adoptProject",
+        "title": "Trainer: Add Current Project"
+      },
+      {
+        "command": "trainer.workspace.chooseProject",
+        "title": "Trainer: Choose Project Folder"
+      },
+      {
+        "command": "trainer.workspace.browseProject",
+        "title": "Trainer: Browse Current Project"
+      },
+      {
+        "command": "trainer.workspace.ignoreProject",
+        "title": "Trainer: Ignore Current Project"
+      },
+      {
+        "command": "trainer.workspace.deleteProject",
+        "title": "Trainer: Delete Current Project"
+      },
+      {
+        "command": "trainer.workspace.retryAdmission",
+        "title": "Trainer: Retry Workspace Admission"
+      },
+      {
+        "command": "trainer.workspace.continueAdmission",
+        "title": "Trainer: Continue Workspace Admission"
+      },
+      {
+        "command": "trainer.workspace.abandonAdmission",
+        "title": "Trainer: Abandon Workspace Admission"
+      },
+      {
+        "command": "trainer.sandbox.refresh",
+        "title": "Trainer: Refresh Sandbox Capability"
+      },
+      {
+        "command": "trainer.evaluate.selection",
+        "title": "Trainer: Evaluate Selection"
+      },
+      {
+        "command": "trainer.evidence.enqueue",
+        "title": "Trainer: Enqueue Evidence"
+      },
+      {
+        "command": "trainer.evidence.adopt",
+        "title": "Trainer: Adopt Evidence"
+      },
+      {
+        "command": "trainer.evidence.reject",
+        "title": "Trainer: Reject Evidence"
+      },
+      {
+        "command": "trainer.evidence.defer",
+        "title": "Trainer: Defer Evidence"
+      },
+      {
+        "command": "trainer.evidence.refreshQueue",
+        "title": "Trainer: Refresh Evidence Queue"
+      },
+      {
+        "command": "trainer.sidecar.restart",
+        "title": "Trainer: Restart Sidecar"
+      },
+      {
+        "command": "trainer.sidecar.stop",
+        "title": "Trainer: Stop Sidecar"
+      },
+      {
+        "command": "trainer.research.create",
+        "title": "Trainer: Create Research Project"
+      },
+      {
+        "command": "trainer.research.theme.add",
+        "title": "Trainer: Add Research Theme"
+      },
+      {
+        "command": "trainer.research.theme.activate",
+        "title": "Trainer: Activate Research Theme"
+      },
+      {
+        "command": "trainer.research.advance",
+        "title": "Trainer: Advance Research"
+      },
+      {
+        "command": "trainer.research.message",
+        "title": "Trainer: Send Research Message"
+      },
+      {
+        "command": "trainer.research.messageStream",
+        "title": "Trainer: Stream Research Message"
+      },
+      {
+        "command": "trainer.research.approve",
+        "title": "Trainer: Approve Research Decision"
+      },
+      {
+        "command": "trainer.research.status",
+        "title": "Trainer: Get Research Status"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "trainer",
+          "title": "Trainer",
+          "icon": "media/trainer-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "trainer": [
+        {
+          "type": "webview",
+          "id": "trainer.sidebar",
+          "name": "Trainer"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Trainer",
+      "properties": {
+        "trainer.sidecar.port": {
+          "type": "number",
+          "default": 8765,
+          "description": "Preferred local Trainer sidecar port. Trainer chooses an available port automatically if this one is busy."
+        },
+        "trainer.provider.baseUrl": {
+          "type": "string",
+          "default": "https://api.openai.com/v1",
+          "description": "OpenAI-compatible provider base URL."
+        },
+        "trainer.provider.model": {
+          "type": "string",
+          "default": "gpt-4.1-mini",
+          "description": "Default chat model."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
+    "bundle:sidecar:binary": "node ./scripts/bundle-sidecar-binary.mjs",
+    "bundle:sidecar": "node ./scripts/bundle-sidecar.mjs",
+    "verify:package": "node ./scripts/verify-package.mjs",
+    "verify:sidecar-runtime": "node ./scripts/verify-bundled-sidecar-runtime.mjs",
+    "verify:coach-recovery": "node --test ./tests/webviewBridge.test.js && npm run verify:webview-recovery",
+    "verify:webview-recovery": "npm exec --yes --package playwright -- node ./scripts/verify-webview-recovery.mjs",
+    "vscode:prepublish": "node ./scripts/prepublish-vsix.mjs",
+    "build": "npm run sync:server && npm run clean && tsc -p tsconfig.json",
+    "build:webview": "node ./scripts/build-webview-package.mjs",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "package:vsix": "node ./scripts/package-vsix.mjs",
+    "sync:server": "node ./scripts/sync-bundled-server.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "@types/vscode": "^1.96.0",
+    "typescript": "^5.8.3"
+  },
+  "license": "MIT",
+  "author": "ai-yyf"
+}
