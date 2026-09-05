@@ -32,6 +32,12 @@ def _run_bundled_script(script: str, *args: str) -> subprocess.CompletedProcess[
 
 
 def _bundled_stream_error_payload(endpoint: str, failure_kind: str) -> dict[str, object]:
+    # Some library imports print to stdout on POSIX (e.g. PyMuPDF >= 1.28 emits
+    # "warning: The `fitz` API is deprecated..." when `app.ingest` imports
+    # `fitz`). The child therefore prints a unique sentinel line before the
+    # JSON payload and the parent slices on it, so startup noise can never
+    # corrupt the parity payload.
+    payload_marker = "BUNDLED_STREAM_ERROR_PAYLOAD_JSON"
     result = _run_bundled_script(
         """
         import json
@@ -138,13 +144,17 @@ def _bundled_stream_error_payload(endpoint: str, failure_kind: str) -> dict[str,
         assert "bearer-bundled-secret" not in raw
         assert "query-bundled-secret" not in raw
         assert "raw upstream response" not in raw
+        print('BUNDLED_STREAM_ERROR_PAYLOAD_JSON')
         print(json.dumps(payload, sort_keys=True))
         """,
         endpoint,
         failure_kind,
     )
     assert result.returncode == 0, result.stderr
-    return json.loads(result.stdout)
+    stdout = result.stdout
+    if payload_marker in stdout:
+        stdout = stdout.split(payload_marker, 1)[1]
+    return json.loads(stdout)
 
 
 def test_bundled_session_message_formal_plan_mutation_matches_source_contract() -> None:
