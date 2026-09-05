@@ -50,7 +50,9 @@ function createVscodeMock(...selectedPaths) {
 
 function createContext(options = {}) {
   const { createDefaultBootstrapData } = require(workbenchDataModulePath);
-  const workspaceFolder = path.resolve('C:\\trainer-workspace-tests\\current-project');
+  // Raw Windows-style identifiers: the host treats them as opaque absolute
+  // roots on every platform (never resolved against the test runner's cwd).
+  const workspaceFolder = 'C:\\trainer-workspace-tests\\current-project';
   let sidecarStatus = options.sidecarStatus ?? {
     lifecycle: 'ready',
     host: '127.0.0.1',
@@ -79,7 +81,7 @@ function createContext(options = {}) {
   let adoptionJobId;
   let adoptionJobCompleted = false;
   let trainerAdmissionMode;
-  let managedDataPath = path.resolve('C:\\trainer-workspace-tests\\sidecar-data');
+  let managedDataPath = 'C:\\trainer-workspace-tests\\sidecar-data';
   const trainerWorkspace = {
     getRoot() {
       return activeRoot;
@@ -111,7 +113,7 @@ function createContext(options = {}) {
         targetRoot,
         projectCount: 1,
         completedAt: '2026-07-11T00:00:00.000Z',
-        managedDataRoot: path.join(targetRoot, '.trainer', 'runtime'),
+        managedDataRoot: path.win32.join(targetRoot, '.trainer', 'runtime'),
       };
     },
     async backupWorkspace(backupRoot, options) {
@@ -121,7 +123,7 @@ function createContext(options = {}) {
         sourceRoot: activeRoot,
         projectCount: 1,
         createdAt: '2026-07-11T00:00:00.000Z',
-        managedDataRoot: path.join(backupRoot, '.trainer', 'runtime'),
+        managedDataRoot: path.win32.join(backupRoot, '.trainer', 'runtime'),
       };
     },
     async restoreWorkspaceBackup(backupRoot, targetRoot) {
@@ -133,7 +135,7 @@ function createContext(options = {}) {
         targetRoot,
         projectCount: 1,
         completedAt: '2026-07-11T00:00:00.000Z',
-        managedDataRoot: path.join(targetRoot, '.trainer', 'runtime'),
+        managedDataRoot: path.win32.join(targetRoot, '.trainer', 'runtime'),
       };
     },
     async rollbackWorkspaceRoot(rootPath) {
@@ -524,7 +526,7 @@ test('choosing a Trainer Workspace Root classifies the current project before an
     (call) => call.kind === 'post' && call.requestPath === '/workspace/classify',
   );
   assert.equal(classifyCalls.length, 1);
-  assert.equal(classifyCalls[0].body.folder_path, path.resolve('C:\\trainer-workspace-tests\\current-project'));
+  assert.equal(classifyCalls[0].body.folder_path, 'C:\\trainer-workspace-tests\\current-project');
   assert.equal(classifyCalls[0].body.root_path, 'C:\\trainer-workspace-tests\\root');
   const firstLookPatch = [...context.__patches]
     .reverse()
@@ -1203,12 +1205,12 @@ test('workspace recovery commands keep backups non-disruptive and refresh after 
     {
       kind: 'migrate',
       targetRoot: 'C:\\trainer-workspace-tests\\migrated',
-      options: { managedDataRoot: path.resolve('C:\\trainer-workspace-tests\\sidecar-data') },
+      options: { managedDataRoot: 'C:\\trainer-workspace-tests\\sidecar-data' },
     },
     {
       kind: 'backup',
       backupRoot: 'C:\\trainer-workspace-tests\\backup',
-      options: { managedDataRoot: path.resolve('C:\\trainer-workspace-tests\\migrated', '.trainer', 'runtime') },
+      options: { managedDataRoot: 'C:\\trainer-workspace-tests\\migrated\\.trainer\\runtime' },
     },
     {
       kind: 'restore',

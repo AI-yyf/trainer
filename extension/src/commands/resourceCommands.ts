@@ -20,6 +20,7 @@ import type { ManagedDataFolderChangeResult } from '../core/sidecarProcessManage
 import { mergeMemorySummarySnapshot, mergeResourceRecords } from '../core/workbenchData';
 import { rehydrateWorkbenchRuntime, trainerSessionBlockReason } from '../core/runtimeRehydration';
 import { getRuntimeWorkspaceId, withWorkspaceQuery } from './workspaceContext';
+import { basenameFs, looksLikeWindowsAbsolutePath } from '../core/workspaceRoots';
 
 const MAX_RESOURCE_UPLOADS = 100;
 type ResourceSourceMode = 'files' | 'folder' | 'url';
@@ -1236,7 +1237,7 @@ export async function previewResourceCommand(
     );
     return {
       ok: true,
-      message: `Previewed ${resource?.title ?? path.basename(previewPath)}.`,
+      message: `Previewed ${resource?.title ?? basenameFs(previewPath)}.`,
       data: preview,
     };
   } catch {
@@ -1256,6 +1257,15 @@ function resolveSandboxRootPath(context: CommandContext): string | undefined {
 }
 
 function isPathWithinRoot(targetPath: string, rootPath: string): boolean {
+  // Windows drive/UNC values are opaque identifiers, but containment inside
+  // them is defined by win32 path rules — apply those rules on every host so
+  // governed sandbox checks hold when Windows-style sandbox paths reach a
+  // POSIX host (path.relative would otherwise report a cross-root climb).
+  if (looksLikeWindowsAbsolutePath(targetPath) || looksLikeWindowsAbsolutePath(rootPath)) {
+    const targetLower = path.win32.normalize(targetPath).toLowerCase();
+    const rootLower = path.win32.normalize(rootPath).toLowerCase();
+    return targetLower === rootLower || targetLower.startsWith(`${rootLower}\\`);
+  }
   const relative = path.relative(path.resolve(rootPath), path.resolve(targetPath));
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
@@ -1630,7 +1640,7 @@ export async function revealSandboxPathCommand(
 
   return {
     ok: true,
-    message: `Opened sandbox path ${path.basename(targetPath) || targetPath}.`,
+    message: `Opened sandbox path ${basenameFs(targetPath) || targetPath}.`,
   };
 }
 
@@ -1679,7 +1689,7 @@ async function uploadLocalFiles(
         session_id: context.getSessionId(),
         workspace_id: workspaceId,
         kind: detectResourceKind(filePath),
-        name: path.basename(filePath),
+        name: basenameFs(filePath),
         source: filePath,
         tags: [],
         ...(collectionPath
@@ -1700,20 +1710,23 @@ async function uploadLocalFiles(
 }
 
 function collectionPathForFile(filePath: string, collectionRoot: string): string | undefined {
-  const root = path.resolve(collectionRoot);
-  const file = path.resolve(filePath);
-  const relativePath = path.relative(root, file);
+  const windowsStyle =
+    looksLikeWindowsAbsolutePath(filePath) || looksLikeWindowsAbsolutePath(collectionRoot);
+  const root = windowsStyle ? path.win32.normalize(collectionRoot) : path.resolve(collectionRoot);
+  const file = windowsStyle ? path.win32.normalize(filePath) : path.resolve(filePath);
+  const relativePath = windowsStyle ? path.win32.relative(root, file) : path.relative(root, file);
+  const separator = windowsStyle ? '\\' : path.sep;
   if (
     !relativePath ||
     relativePath === '.' ||
     relativePath === '..' ||
-    relativePath.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relativePath)
+    relativePath.startsWith(`..${separator}`) ||
+    (windowsStyle ? path.win32.isAbsolute(relativePath) : path.isAbsolute(relativePath))
   ) {
     return undefined;
   }
 
-  const rootName = path.basename(root).trim();
+  const rootName = basenameFs(root).trim();
   const relativeSegments = relativePath
     .split(/[\\/]+/)
     .map((segment) => segment.trim())
@@ -2759,7 +2772,7 @@ async function applySandboxRootChange(
     ok: true,
     message: options.clear
       ? 'Sandbox root reset to the default Trainer workspace.'
-      : `Sandbox root fixed at ${path.basename(nextRoot ?? '') || nextRoot || 'the selected folder'}.`,
+      : `Sandbox root fixed at ${basenameFs(nextRoot ?? '') || nextRoot || 'the selected folder'}.`,
     data: sandboxState,
   };
 }

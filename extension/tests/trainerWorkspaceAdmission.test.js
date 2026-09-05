@@ -20,11 +20,13 @@ test('workspace admission exposes a resumable pending reconciliation to the host
     trainerWorkspaceAdmissionModulePath,
     { workspace: { workspaceFolders: [] }, window: {} },
   );
-  const projectPath = path.resolve('C:\\trainer-workspace-tests\\current-project');
+  // Raw Windows-style identifiers: normalizeFsPath treats them as opaque
+  // absolute roots on every platform, so no path.resolve mangling here.
+  const projectPath = 'C:\\trainer-workspace-tests\\current-project';
   const trainerWorkspace = {
     async toSnapshot() {
       return {
-        rootPath: path.resolve('C:\\trainer-workspace-tests\\root'),
+        rootPath: 'C:\\trainer-workspace-tests\\root',
         workspaceReady: true,
         manifest: {
           rootId: 'root-admission',
@@ -37,7 +39,7 @@ test('workspace admission exposes a resumable pending reconciliation to the host
       assert.equal(pathToLookUp, projectPath);
       return {
         projectPath,
-        workspaceRoot: path.resolve('C:\\trainer-workspace-tests\\root'),
+        workspaceRoot: 'C:\\trainer-workspace-tests\\root',
         reason: 'Trainer adoption indexing was interrupted.',
         jobId: 'job-admission',
         state: 'waiting',

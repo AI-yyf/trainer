@@ -45,7 +45,9 @@ test('logical collection paths are relative, portable, and reject paths outside 
   );
 
   assert.match(helperSource, /path\.relative\(root, file\)/);
-  assert.match(helperSource, /relativePath\.startsWith\(`\.\.\$\{path\.sep\}`\)/);
+  // Parent-escape check must honor the separator convention of the value
+  // (path.sep for POSIX-native paths, win32 '\' for Windows-style roots).
+  assert.match(helperSource, /relativePath\.startsWith\(`\.\.\$\{separator\}`\)/);
   assert.match(helperSource, /path\.isAbsolute\(relativePath\)/);
   assert.ok(helperSource.includes('.split(/[\\\\/]+/)'));
   assert.match(helperSource, /return \[rootName, \.\.\.relativeSegments\]\.join\('\/'\)/);

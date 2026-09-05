@@ -1,7 +1,5 @@
-import * as path from 'node:path';
-
 import type { CommandContext, TrainerRuntimeWorkspaceContext } from '../core/commandContext';
-import { resolveSovereignWorkspaceRootPath } from '../core/workspaceRoots';
+import { basenameFs, resolveSovereignWorkspaceRootPath } from '../core/workspaceRoots';
 
 const DEFAULT_WORKSPACE_ID = 'workspace-default';
 const DEFAULT_WORKSPACE_NAME = 'Trainer';
@@ -41,7 +39,7 @@ export function getWorkspaceName(context: CommandContext): string {
   if (!workspaceFolder) {
     return DEFAULT_WORKSPACE_NAME;
   }
-  return path.basename(workspaceFolder) || workspaceFolder;
+  return basenameFs(workspaceFolder) || workspaceFolder;
 }
 
 export function withWorkspaceQuery(

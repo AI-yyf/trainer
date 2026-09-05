@@ -41,6 +41,31 @@ test('resolveActiveWorkspaceFolder prefers the folder containing the active file
   assert.equal(resolveActiveWorkspaceFolderPath(), 'F:\\trainer-beta');
 });
 
+test('resolveActiveWorkspaceFolder matches POSIX-native folder paths on any host', () => {
+  const vscodeMock = {
+    workspace: {
+      workspaceFolders: [
+        { uri: { fsPath: '/repo/trainer-alpha' } },
+        { uri: { fsPath: '/repo/trainer-beta' } },
+      ],
+    },
+    window: {
+      activeTextEditor: {
+        document: {
+          uri: { fsPath: '/repo/trainer-beta/src/main.py' },
+        },
+      },
+    },
+  };
+
+  const { resolveActiveWorkspaceFolderPath } = loadWithVscodeMock(
+    workspaceRootsModulePath,
+    vscodeMock,
+  );
+
+  assert.equal(resolveActiveWorkspaceFolderPath(), '/repo/trainer-beta');
+});
+
 test('resolveActiveWorkspaceFolder returns undefined when multiple folders have no active-file match', () => {
   const vscodeMock = {
     workspace: {

@@ -250,7 +250,9 @@ test('successful run with a live practice card posts a test_runner attestation',
     focus_area: 'async error handling',
     card_title: 'Implement the retry helper',
     session_id: 'session-1',
-    workspace_id: path.resolve('F:\\trainer'),
+    // Raw Windows-style workspace id: normalizeFsPath keeps it verbatim on
+    // every platform instead of joining it onto the host cwd.
+    workspace_id: 'F:\\trainer',
   });
 });
 
