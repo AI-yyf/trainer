@@ -6,8 +6,8 @@ export interface WorkspaceRootSource {
   workspaceFolder?: string;
 }
 
-const WINDOWS_DRIVE_ABSOLUTE = /^[a-zA-Z]:[\/]/;
-const UNC_ABSOLUTE = /^\\/;
+const WINDOWS_DRIVE_ABSOLUTE = /^[a-zA-Z]:[\\/]/;
+const UNC_ABSOLUTE = /^\\\\/;
 
 function isAbsoluteLikePath(value: string): boolean {
   return path.isAbsolute(value) || WINDOWS_DRIVE_ABSOLUTE.test(value) || UNC_ABSOLUTE.test(value);
