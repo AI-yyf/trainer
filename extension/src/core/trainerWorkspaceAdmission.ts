@@ -1,11 +1,9 @@
-import * as path from 'node:path';
-
 import type {
   TrainerWorkspaceAdmissionView,
   TrainerWorkspaceReconciliationView,
   WorkspaceSnapshot,
 } from './types';
-import { resolveSovereignWorkspaceRootPath } from './workspaceRoots';
+import { basenameFs, resolveSovereignWorkspaceRootPath } from './workspaceRoots';
 import type {
   TrainerWorkspacePendingReconciliation,
   TrainerWorkspaceService,
@@ -43,7 +41,7 @@ export async function resolveTrainerWorkspaceAdmission(
     return {
       status: 'root-missing',
       rootPath: snapshot.rootPath,
-      projectName: projectPath ? path.basename(projectPath) || projectPath : undefined,
+      projectName: projectPath ? basenameFs(projectPath) || projectPath : undefined,
       projectPath,
     };
   }
@@ -63,7 +61,7 @@ export async function resolveTrainerWorkspaceAdmission(
     rootId: project?.rootId ?? snapshot.manifest?.rootId,
     projectId: project?.projectId ?? project?.fingerprint,
     contextId: project?.contextId,
-    projectName: path.basename(projectPath) || projectPath,
+    projectName: basenameFs(projectPath) || projectPath,
     projectPath,
     canonicalProjectPath: project?.canonicalProjectPath,
     identityStatus: project?.identityStatus ?? snapshot.manifest?.identityStatus,

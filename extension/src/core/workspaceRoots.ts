@@ -9,26 +9,53 @@ export interface WorkspaceRootSource {
 const WINDOWS_DRIVE_ABSOLUTE = /^[a-zA-Z]:[\\/]/;
 const UNC_ABSOLUTE = /^\\\\/;
 
-function isAbsoluteLikePath(value: string): boolean {
-  return path.isAbsolute(value) || WINDOWS_DRIVE_ABSOLUTE.test(value) || UNC_ABSOLUTE.test(value);
+export function looksLikeWindowsAbsolutePath(value: string): boolean {
+  return WINDOWS_DRIVE_ABSOLUTE.test(value) || UNC_ABSOLUTE.test(value);
 }
 
-function normalizeFsPath(value: string | undefined): string {
+export function normalizeFsPath(value: string | undefined): string {
   const raw = String(value ?? '').trim();
   if (!raw) {
     return '';
   }
   // Windows-style absolute paths (drive/UNC) are opaque workspace identifiers
-  // on POSIX hosts: they must never be resolved against the POSIX cwd.
-  if (isAbsoluteLikePath(raw)) {
+  // on POSIX hosts: they must never be resolved against the POSIX cwd. Every
+  // other value (posix-absolute or relative) resolves with the host's own
+  // path rules so POSIX paths stay intact on POSIX hosts.
+  if (looksLikeWindowsAbsolutePath(raw)) {
     return path.win32.normalize(raw);
   }
   return path.resolve(raw);
 }
 
+/**
+ * Separator-aware basename: a Windows-style identifier (drive/UNC/backslash
+ * path) keeps win32 basename semantics even on POSIX hosts, so display names
+ * and upload names resolve to the same final segment on every platform.
+ */
+export function basenameFs(value: string | undefined): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) {
+    return '';
+  }
+  if (looksLikeWindowsAbsolutePath(raw) || raw.includes('\\')) {
+    return path.win32.basename(raw);
+  }
+  return path.basename(raw);
+}
+
 function isPathWithin(candidate: string, root: string): boolean {
   if (!candidate || !root) {
     return false;
+  }
+  // Windows-style values (drive/UNC roots) are opaque identifiers, but
+  // containment inside them is still defined by win32 path rules — apply
+  // those rules on every host so multi-root detection works when a
+  // Windows-style workspace id reaches a POSIX host.
+  if (looksLikeWindowsAbsolutePath(candidate) || looksLikeWindowsAbsolutePath(root)) {
+    const candidateLower = path.win32.normalize(candidate).toLowerCase();
+    const rootLower = path.win32.normalize(root).toLowerCase();
+    return candidateLower === rootLower || candidateLower.startsWith(`${rootLower}\\`);
   }
   if (process.platform === 'win32') {
     const candidateLower = candidate.toLowerCase();

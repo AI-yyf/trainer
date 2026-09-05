@@ -13,7 +13,12 @@ import {
   flushPendingTransferPromotionScope,
   postOrQueueTransferPromotionScope,
 } from '../core/transferPromotionScope';
-import { resolveSovereignWorkspaceRootPath } from '../core/workspaceRoots';
+import {
+  basenameFs,
+  looksLikeWindowsAbsolutePath,
+  normalizeFsPath,
+  resolveSovereignWorkspaceRootPath,
+} from '../core/workspaceRoots';
 import {
   buildWorkspaceFileSnapshot,
   type WorkspaceFileSnapshot,
@@ -224,9 +229,21 @@ function pathsEqual(left: string, right: string): boolean {
 
 function selectedRootFromManifest(manifest: TrainerWorkspaceManifest): SelectedTrainerRoot {
   return {
-    canonicalRootPath: path.resolve(manifest.canonicalRootPath),
+    // Windows drive/UNC roots are opaque absolute identifiers on POSIX hosts:
+    // normalize them with filesystem-aware rules instead of path.resolve,
+    // which would wrongly join them onto the POSIX cwd.
+    canonicalRootPath: normalizeFsPath(manifest.canonicalRootPath),
     rootId: manifest.rootId,
   };
+}
+
+function runtimeDataRootUnder(rootPath: string): string {
+  // Windows-style roots keep win32 join semantics on every host so the
+  // configured managed-data location stays a well-formed identifier.
+  if (looksLikeWindowsAbsolutePath(rootPath)) {
+    return path.win32.join(rootPath, '.trainer', 'runtime');
+  }
+  return path.join(rootPath, TRAINER_WORKSPACE_RUNTIME_DATA_DIRECTORY);
 }
 
 async function readSelectedTrainerRoot(context: CommandContext): Promise<SelectedTrainerRoot> {
@@ -321,7 +338,7 @@ export async function chooseTrainerWorkspaceRootCommand(
   const { result: manifest, restartedSidecar } = await runWithQuiescentManagedData(
     context,
     async () => context.trainerWorkspace.selectRoot(rootPath),
-    (selectedManifest) => path.join(selectedManifest.rootPath, TRAINER_WORKSPACE_RUNTIME_DATA_DIRECTORY),
+    (selectedManifest) => runtimeDataRootUnder(selectedManifest.rootPath),
   );
   await patchTrainerWorkspaceAdmission(context);
   await rehydrateAfterWorkspaceDataTransfer(context, restartedSidecar);
@@ -997,9 +1014,14 @@ async function relocateWorkspaceRootForProject(
   projectPath: string,
   selectedRoot: SelectedTrainerRoot,
 ): Promise<SelectedTrainerRoot> {
-  const normalizedProject = path.resolve(projectPath);
-  const parentRoot = path.resolve(path.dirname(normalizedProject));
-  const filesystemRoot = path.parse(normalizedProject).root;
+  const normalizedProject = normalizeFsPath(projectPath);
+  const windowsStyleProject = looksLikeWindowsAbsolutePath(normalizedProject);
+  const parentRoot = windowsStyleProject
+    ? path.win32.normalize(path.win32.dirname(normalizedProject))
+    : path.resolve(path.dirname(normalizedProject));
+  const filesystemRoot = windowsStyleProject
+    ? path.win32.parse(normalizedProject).root
+    : path.parse(normalizedProject).root;
   if (
     !parentRoot ||
     pathsEqual(parentRoot, normalizedProject) ||
@@ -1016,7 +1038,7 @@ async function relocateWorkspaceRootForProject(
   const { result: manifest, restartedSidecar } = await runWithQuiescentManagedData(
     context,
     async () => context.trainerWorkspace.selectRoot(parentRoot),
-    (selectedManifest) => path.join(selectedManifest.rootPath, TRAINER_WORKSPACE_RUNTIME_DATA_DIRECTORY),
+    (selectedManifest) => runtimeDataRootUnder(selectedManifest.rootPath),
   );
   await patchTrainerWorkspaceAdmission(context);
   await rehydrateAfterWorkspaceDataTransfer(context, restartedSidecar);
@@ -1083,7 +1105,7 @@ async function provisionManagedProject(
     throw new Error(status.detail ?? 'Trainer backend is unavailable.');
   }
 
-  const workspaceName = path.basename(projectPath) || 'Trainer';
+  const workspaceName = basenameFs(projectPath) || 'Trainer';
   const workspaceFileSnapshot = await buildWorkspaceFileSnapshot(context);
   const classification = await classifyProjectForAdmission(context, status.port, {
     workspace_id: projectPath,

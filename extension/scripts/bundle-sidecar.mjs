@@ -32,7 +32,9 @@ function resetDirectory(directoryPath) {
 }
 
 export function shouldSkipBundledSidecarPath(itemPath) {
-  const name = path.basename(itemPath);
+  // Bundled sidecar paths may be authored with either separator depending on
+  // the host that produced them; match the basename under both conventions.
+  const name = path.basename(String(itemPath).replace(/\\/g, "/"));
   return name.startsWith("._") || SIDECAR_BUNDLE_IGNORED_NAMES.has(name);
 }
 
