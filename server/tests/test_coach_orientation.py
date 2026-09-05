@@ -11,9 +11,9 @@ from app.core.models import (
     WorkbenchSnapshot,
     WorkspaceUnderstandingSnapshot,
 )
-from app.memory.workspace_recovery import PLAN_RUNTIME_KEY
 from app.db.repository import TrainerRepository
 from app.memory.service import MemoryService
+from app.memory.workspace_recovery import PLAN_RUNTIME_KEY
 from app.pedagogy.coach_orientation import (
     build_coach_orientation_from_snapshot,
     derive_coach_orientation,

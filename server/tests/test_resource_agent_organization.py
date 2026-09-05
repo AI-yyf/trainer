@@ -445,9 +445,10 @@ async def test_organize_resources_cancel_while_confirm_in_flight_consume_fails_c
 async def test_resource_organization_cancel_route_clears_server_pending(
     tmp_path: Path,
 ) -> None:
+    from fastapi.testclient import TestClient
+
     from app.core.settings import AppSettings
     from app.main import create_app
-    from fastapi.testclient import TestClient
 
     settings = AppSettings(
         app_name="Trainer Organize Cancel Tests",

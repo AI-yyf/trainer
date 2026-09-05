@@ -9,7 +9,12 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.models import LearningPlan, PlanStage, TrainingCardCandidateSnapshot, TrainingCardStatus
+from app.core.models import (
+    LearningPlan,
+    PlanStage,
+    TrainingCardCandidateSnapshot,
+    TrainingCardStatus,
+)
 from app.db.repository import TrainerRepository
 from app.memory.service import MemoryService
 

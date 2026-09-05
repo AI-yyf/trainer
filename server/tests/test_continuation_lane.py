@@ -2,12 +2,12 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
+from provider_fixtures import seed_verified_capabilities
 
 from app.core.models import ProviderConfig
 from app.core.settings import AppSettings
 from app.llm.provider_service import ProviderService
 from app.main import create_app
-from provider_fixtures import seed_verified_capabilities
 
 
 def build_client(tmp_path: Path) -> TestClient:

@@ -8,11 +8,16 @@ from fastapi.testclient import TestClient
 
 from app.core.models import EvaluateCurrentFileRequest, EvaluateSnippetRequest
 from app.core.settings import AppSettings
-from app.evaluator.models import CheckCommand, CheckResult, CheckStatus, EvaluationRequest, SemanticReview
+from app.evaluator.models import (
+    CheckCommand,
+    CheckResult,
+    CheckStatus,
+    EvaluationRequest,
+    SemanticReview,
+)
 from app.evaluator.service import EvaluationPipeline, EvaluatorService
 from app.main import create_app
 from app.specs.models import RequirementItem, TaskSpec
-
 
 SENTINEL_MARKER = "TRAINER_EVAL_SENTINEL_UNCHANGED_v1\n"
 

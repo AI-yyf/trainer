@@ -2196,6 +2196,35 @@ function sameCoachDefaults(left: CoachDefaults, right: CoachDefaults): boolean {
   );
 }
 
+/**
+ * True when the saved server snapshot pins every defined field to the same
+ * value as the pending payload. Fields missing from the partial snapshot are
+ * treated as matching so a sparse snapshot never blocks an explicit save.
+ */
+function matchesSavedCoachDefaults(
+  next: CoachDefaults,
+  saved:
+    | (Partial<CoachDefaults> & { workspaceMemoryToggles?: Partial<CoachDefaults["workspaceMemoryToggles"]> })
+    | undefined,
+): boolean {
+  if (!saved) {
+    return false;
+  }
+  return (
+    (saved.memoryScope === undefined || saved.memoryScope === next.memoryScope) &&
+    (saved.workingSetMode === undefined || saved.workingSetMode === next.workingSetMode) &&
+    (saved.reviewCadence === undefined || saved.reviewCadence === next.reviewCadence) &&
+    (saved.reviewReminderMode === undefined ||
+      saved.reviewReminderMode === next.reviewReminderMode) &&
+    (saved.workspaceMemoryToggles?.decisions === undefined ||
+      saved.workspaceMemoryToggles.decisions === next.workspaceMemoryToggles.decisions) &&
+    (saved.workspaceMemoryToggles?.patterns === undefined ||
+      saved.workspaceMemoryToggles.patterns === next.workspaceMemoryToggles.patterns) &&
+    (saved.workspaceMemoryToggles?.resources === undefined ||
+      saved.workspaceMemoryToggles.resources === next.workspaceMemoryToggles.resources)
+  );
+}
+
 function formatSparseWorkspaceControlValue(workspace: WorkspaceSettingsSnapshot, t: Copy): string | undefined {
   const values = [
     workspace.followCurrentFile !== undefined
@@ -6023,13 +6052,24 @@ export function App() {
     applyWorkbenchTheme(resolvedTheme);
   }, [resolvedTheme]);
 
+  // The host-message dispatch changes identity whenever layout values or
+  // settings action state change. Keep the subscription and the one-shot
+  // bootstrap request out of that churn: re-running this effect used to call
+  // `requestBootstrapOnce` again after the bootstrap guard re-armed, which
+  // re-posted `request/bootstrap` and produced a continuous
+  // POST /memory/settings + GET /memory/summary loop against the sidecar.
+  const applyHostMessageRef = useRef(applyHostMessage);
+  useEffect(() => {
+    applyHostMessageRef.current = applyHostMessage;
+  }, [applyHostMessage]);
+
   useEffect(() => {
     const unsubscribe = subscribeToHostMessages((message) => {
-      applyHostMessage(message);
+      applyHostMessageRef.current(message);
     });
     requestBootstrapOnce();
     return unsubscribe;
-  }, [applyHostMessage]);
+  }, []);
 
   useEffect(() => {
     if (isBrowserPreview || hasReceivedHostState) {
@@ -6075,10 +6115,39 @@ export function App() {
     applyBrowserPreviewLocationOverrides();
   }, [applyBrowserPreviewLocationOverrides, isBrowserPreview]);
 
+  // Bootstrap the live browser preview at most once per mount. The callbacks
+  // below change identity on every layout/settings state change, so they are
+  // read through a ref: keying this effect on them refetched the full
+  // POST /memory/settings + GET /memory/summary bootstrap on every churn, and
+  // `previewSessionId` resolving from undefined to a session id doubled it.
+  const browserPreviewBootstrapDepsRef = useRef({
+    applyHostMessage,
+    applyBrowserPreviewLocationOverrides,
+    setOperationMessage,
+    composerLanguage: layout.composerLanguage,
+    previewSessionId,
+  });
+  useEffect(() => {
+    browserPreviewBootstrapDepsRef.current = {
+      applyHostMessage,
+      applyBrowserPreviewLocationOverrides,
+      setOperationMessage,
+      composerLanguage: layout.composerLanguage,
+      previewSessionId,
+    };
+  });
   useEffect(() => {
     if (!isBrowserPreview) {
       return;
     }
+
+    const {
+      applyHostMessage: dispatchHostMessage,
+      applyBrowserPreviewLocationOverrides: applyLocationOverrides,
+      setOperationMessage: reportOperationMessage,
+      composerLanguage,
+      previewSessionId: bootstrapSessionId,
+    } = browserPreviewBootstrapDepsRef.current;
 
     const injectedPreviewBootstrap = getInjectedBootstrapState<BootstrapData>();
     if (injectedPreviewBootstrap && typeof injectedPreviewBootstrap === "object") {
@@ -6086,18 +6155,18 @@ export function App() {
         return;
       }
       injectedPreviewBootstrapHydratedRef.current = true;
-      applyHostMessage({
+      dispatchHostMessage({
         type: "bootstrap",
         payload: structuredClone(injectedPreviewBootstrap),
       });
-      applyBrowserPreviewLocationOverrides();
+      applyLocationOverrides();
       return;
     }
 
     let cancelled = false;
     const requestSequence = hostMessageSequenceRef.current;
     void loadBrowserPreviewModule()
-      .then((browserPreview) => browserPreview.fetchBrowserPreviewBootstrap(previewSessionId))
+      .then((browserPreview) => browserPreview.fetchBrowserPreviewBootstrap(bootstrapSessionId))
       .then(({ sessionId, message }) => {
         if (cancelled) {
           return;
@@ -6106,29 +6175,23 @@ export function App() {
           return;
         }
         setPreviewSessionId(sessionId);
-        applyHostMessage(message);
-        applyBrowserPreviewLocationOverrides();
+        dispatchHostMessage(message);
+        applyLocationOverrides();
       })
       .catch(() => {
         if (cancelled) {
           return;
         }
-        setOperationMessage({
+        reportOperationMessage({
           tone: "error",
-          message: recoverableFailureMessage("bootstrap", layout.composerLanguage),
+          message: recoverableFailureMessage("bootstrap", composerLanguage),
         });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [
-    applyBrowserPreviewLocationOverrides,
-    applyHostMessage,
-    isBrowserPreview,
-    previewSessionId,
-    setOperationMessage,
-  ]);
+  }, [isBrowserPreview]);
 
   useEffect(() => {
     if (!hasReceivedHostState || isBrowserPreview || activeView !== "resources") {
@@ -9520,6 +9583,33 @@ export function App() {
         includeRelatedFiles: overrides?.includeRelatedFiles ?? layout.includeRelatedFiles,
       };
 
+      // Persisting identical values would only round-trip the sidecar and
+      // re-apply a snapshot. Compare against the last server-applied settings
+      // snapshot (not the optimistic layout state, which already reflects the
+      // pending change) so explicit user changes still save while redundant
+      // identical writes are dropped.
+      const savedWorkspaceSettings = data.memory.workspace;
+      const savedTeachingStyle = data.profile.preferredStyle.trim()
+        ? normalizeTeachingStyle(data.profile.preferredStyle)
+        : undefined;
+      const matchesSavedSettings = Boolean(
+        savedWorkspaceSettings &&
+          payload.responseLanguage === savedWorkspaceSettings.responseLanguage &&
+          payload.answerMode === savedWorkspaceSettings.answerMode &&
+          payload.resourceSearchMode === savedWorkspaceSettings.resourceSearchMode &&
+          (savedTeachingStyle === undefined || payload.teachingStyle === savedTeachingStyle) &&
+          payload.followCurrentFile === savedWorkspaceSettings.followCurrentFile &&
+          payload.contextDetail === savedWorkspaceSettings.contextDetail &&
+          payload.includeCurrentFile === savedWorkspaceSettings.includeCurrentFile &&
+          payload.includeSelection === savedWorkspaceSettings.includeSelection &&
+          payload.includeDiagnostics === savedWorkspaceSettings.includeDiagnostics &&
+          payload.includeRelatedFiles === savedWorkspaceSettings.includeRelatedFiles &&
+          matchesSavedCoachDefaults(payload.coachDefaults, savedWorkspaceSettings.coachDefaults),
+      );
+      if (matchesSavedSettings) {
+        return;
+      }
+
       if (isBrowserPreview) {
         setSettingsActionState({
           kind: "save-coach",
@@ -9562,6 +9652,9 @@ export function App() {
     },
     [
       applyHostMessage,
+      baselineConnectedMessage,
+      data.memory.workspace,
+      data.profile.preferredStyle,
       isBrowserPreview,
       layout.coachDefaults,
       layout.composerAnswerMode,
@@ -9576,7 +9669,6 @@ export function App() {
       layout.includeSelection,
       operationMessage,
       previewSessionId,
-      baselineConnectedMessage,
       setSettingsActionState,
       setOperationMessage,
     ],
@@ -10074,10 +10166,20 @@ export function App() {
     setComposerAttachments([]);
   };
 
+  // Re-arm the bootstrap request guard only on the false -> true transition of
+  // host-state reception. In browser preview `hasReceivedHostState` starts
+  // true, so an unconditional reset here disarmed the guard on mount and every
+  // subsequent `requestBootstrapOnce` call re-posted `request/bootstrap`,
+  // driving a continuous POST /memory/settings + GET /memory/summary loop.
+  const hostStateReceivedOnceRef = useRef(hasReceivedHostState);
   useEffect(() => {
     if (!hasReceivedHostState) {
       return;
     }
+    if (hostStateReceivedOnceRef.current) {
+      return;
+    }
+    hostStateReceivedOnceRef.current = true;
     bootstrapRequestSent = false;
   }, [hasReceivedHostState]);
 

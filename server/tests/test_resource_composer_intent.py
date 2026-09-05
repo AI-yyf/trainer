@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, PropertyMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
 from provider_fixtures import seed_verified_capabilities
+from pydantic import ValidationError
 from test_router_stream_scenarios import mark_provider_capabilities_verified
 
 from app.core.models import (
