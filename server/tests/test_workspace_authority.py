@@ -1,6 +1,7 @@
 """Tests for Workspace Authority Service."""
 
 import json
+import os
 import tempfile
 from pathlib import Path
 
@@ -341,8 +342,11 @@ class TestWorkspaceAuthority:
         assert summary["checkpoint_count"] == 0
         assert summary["counts_text"] == "0 / 0"
         assert summary["mounted_sources"] == []
-        assert summary["trash_root"] == f"{temp_workspace}\\trash"
-        assert summary["trash_detail"] == f"trash: {temp_workspace}\\trash"
+        # The trash root must join the workspace root with the platform
+        # separator (pathlib), never a hardcoded '\\' literal.
+        assert summary["trash_root"] == authority.trash_root
+        assert summary["trash_root"].endswith(f"{os.sep}trash")
+        assert summary["trash_detail"] == f"trash: {summary['trash_root']}"
         assert (
             summary["next_safe_action"]
             == "Start by reading, searching, and previewing the key material, then pick the first verifiable task."
