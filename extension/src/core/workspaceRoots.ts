@@ -6,8 +6,24 @@ export interface WorkspaceRootSource {
   workspaceFolder?: string;
 }
 
+const WINDOWS_DRIVE_ABSOLUTE = /^[a-zA-Z]:[\/]/;
+const UNC_ABSOLUTE = /^\\/;
+
+function isAbsoluteLikePath(value: string): boolean {
+  return path.isAbsolute(value) || WINDOWS_DRIVE_ABSOLUTE.test(value) || UNC_ABSOLUTE.test(value);
+}
+
 function normalizeFsPath(value: string | undefined): string {
-  return path.resolve(String(value ?? '').trim());
+  const raw = String(value ?? '').trim();
+  if (!raw) {
+    return '';
+  }
+  // Windows-style absolute paths (drive/UNC) are opaque workspace identifiers
+  // on POSIX hosts: they must never be resolved against the POSIX cwd.
+  if (isAbsoluteLikePath(raw)) {
+    return path.win32.normalize(raw);
+  }
+  return path.resolve(raw);
 }
 
 function isPathWithin(candidate: string, root: string): boolean {

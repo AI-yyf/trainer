@@ -1,0 +1,33 @@
+﻿2026-09-05T17:54:11.9131612Z Current runner version: '2.337.0'
+2026-09-05T17:54:11.9156838Z ##[group]Runner Image Provisioner
+2026-09-05T17:54:11.9157835Z Hosted Compute Agent
+2026-09-05T17:54:11.9158518Z Version: 20260828.587
+2026-09-05T17:54:11.9159162Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-09-05T17:54:11.9159917Z Build Date: 2026-08-28T16:44:25Z
+2026-09-05T17:54:11.9160894Z Worker ID: {2dd86262-9fc6-4b0e-998f-53612a66e930}
+2026-09-05T17:54:11.9161636Z Azure Region: westcentralus
+2026-09-05T17:54:11.9162297Z ##[endgroup]
+2026-09-05T17:54:11.9163905Z ##[group]Operating System
+2026-09-05T17:54:11.9164646Z Ubuntu
+2026-09-05T17:54:11.9165214Z 24.04.4
+2026-09-05T17:54:11.9165720Z LTS
+2026-09-05T17:54:11.9166274Z ##[endgroup]
+2026-09-05T17:54:11.9166817Z ##[group]Runner Image
+2026-09-05T17:54:11.9167390Z Image: ubuntu-24.04
+2026-09-05T17:54:11.9168033Z Version: 20260831.293.1
+2026-09-05T17:54:11.9169147Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260831.293/images/ubuntu/Ubuntu2404-Readme.md
+2026-09-05T17:54:11.9171316Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260831.293
+2026-09-05T17:54:11.9172633Z ##[endgroup]
+2026-09-05T17:54:11.9173973Z ##[group]GITHUB_TOKEN Permissions
+2026-09-05T17:54:11.9176044Z Contents: read
+2026-09-05T17:54:11.9176772Z Metadata: read
+2026-09-05T17:54:11.9177386Z Packages: read
+2026-09-05T17:54:11.9178000Z ##[endgroup]
+2026-09-05T17:54:11.9180151Z Secret source: Actions
+2026-09-05T17:54:11.9181638Z Prepare workflow directory
+2026-09-05T17:54:11.9523265Z Prepare all required actions
+2026-09-05T17:54:11.9570997Z Getting action download info
+2026-09-05T17:54:12.2494136Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-09-05T17:54:12.3502378Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2026-09-05T17:54:12.4295035Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-09-05T17:54:12.6249656Z Complete job name: quality

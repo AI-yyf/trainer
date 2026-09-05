@@ -1,0 +1,13 @@
+﻿2026-09-05T17:54:57.0094318Z ##[group]Run . .venv/bin/activate
+2026-09-05T17:54:57.0094659Z [36;1m. .venv/bin/activate[0m
+2026-09-05T17:54:57.0094913Z [36;1mruff check app tests[0m
+2026-09-05T17:54:57.0133426Z shell: /usr/bin/bash -e {0}
+2026-09-05T17:54:57.0133681Z env:
+2026-09-05T17:54:57.0133951Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:57.0134416Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-09-05T17:54:57.0134857Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:57.0135251Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:57.0135646Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:57.0136040Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-09-05T17:54:57.0136365Z ##[endgroup]
+2026-09-05T17:54:57.1299102Z All checks passed!

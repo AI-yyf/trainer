@@ -1,0 +1,74 @@
+﻿2026-09-05T17:54:12.7028889Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-05T17:54:12.7037673Z ##[group]Run actions/checkout@v4
+2026-09-05T17:54:12.7038499Z with:
+2026-09-05T17:54:12.7038935Z   repository: AI-yyf/trainer
+2026-09-05T17:54:12.7043100Z   token: ***
+2026-09-05T17:54:12.7043537Z   ssh-strict: true
+2026-09-05T17:54:12.7044007Z   ssh-user: git
+2026-09-05T17:54:12.7044454Z   persist-credentials: true
+2026-09-05T17:54:12.7044937Z   clean: true
+2026-09-05T17:54:12.7045382Z   sparse-checkout-cone-mode: true
+2026-09-05T17:54:12.7045900Z   fetch-depth: 1
+2026-09-05T17:54:12.7046324Z   fetch-tags: false
+2026-09-05T17:54:12.7046756Z   show-progress: true
+2026-09-05T17:54:12.7047191Z   lfs: false
+2026-09-05T17:54:12.7047626Z   submodules: false
+2026-09-05T17:54:12.7048098Z   set-safe-directory: true
+2026-09-05T17:54:12.7048606Z   allow-unsafe-pr-checkout: false
+2026-09-05T17:54:12.7049393Z ##[endgroup]
+2026-09-05T17:54:12.8042219Z Syncing repository: AI-yyf/trainer
+2026-09-05T17:54:12.8044891Z ##[group]Getting Git version info
+2026-09-05T17:54:12.8046039Z Working directory is '/home/runner/work/trainer/trainer'
+2026-09-05T17:54:12.8047673Z [command]/usr/bin/git version
+2026-09-05T17:54:12.8126525Z git version 2.55.0
+2026-09-05T17:54:12.8148154Z ##[endgroup]
+2026-09-05T17:54:12.8163873Z Temporarily overriding HOME='/home/runner/work/_temp/fa3c37d5-e315-45ad-b500-810fb5198205' before making global git config changes
+2026-09-05T17:54:12.8166245Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-05T17:54:12.8169344Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/trainer/trainer
+2026-09-05T17:54:12.8221610Z Deleting the contents of '/home/runner/work/trainer/trainer'
+2026-09-05T17:54:12.8225535Z ##[group]Initializing the repository
+2026-09-05T17:54:12.8231196Z [command]/usr/bin/git init /home/runner/work/trainer/trainer
+2026-09-05T17:54:12.8336725Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-09-05T17:54:12.8339114Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-09-05T17:54:12.8341118Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-09-05T17:54:12.8342540Z hint: call:
+2026-09-05T17:54:12.8343862Z hint:
+2026-09-05T17:54:12.8345478Z hint: 	git config --global init.defaultBranch <name>
+2026-09-05T17:54:12.8346806Z hint:
+2026-09-05T17:54:12.8348050Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-09-05T17:54:12.8349896Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-09-05T17:54:12.8352672Z hint:
+2026-09-05T17:54:12.8353703Z hint: 	git branch -m <name>
+2026-09-05T17:54:12.8354811Z hint:
+2026-09-05T17:54:12.8356128Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-09-05T17:54:12.8358382Z Initialized empty Git repository in /home/runner/work/trainer/trainer/.git/
+2026-09-05T17:54:12.8361983Z [command]/usr/bin/git remote add origin https://github.com/AI-yyf/trainer
+2026-09-05T17:54:12.8405474Z ##[endgroup]
+2026-09-05T17:54:12.8406286Z ##[group]Disabling automatic garbage collection
+2026-09-05T17:54:12.8408781Z [command]/usr/bin/git config --local gc.auto 0
+2026-09-05T17:54:12.8459070Z ##[endgroup]
+2026-09-05T17:54:12.8459976Z ##[group]Setting up auth
+2026-09-05T17:54:12.8465878Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-05T17:54:12.8503163Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-05T17:54:12.8911413Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-05T17:54:12.8951753Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-05T17:54:12.9190471Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-05T17:54:12.9227634Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-05T17:54:12.9452013Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-05T17:54:12.9494489Z ##[endgroup]
+2026-09-05T17:54:12.9495617Z ##[group]Fetching the repository
+2026-09-05T17:54:12.9509624Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +6f16c6af59974764c0b306411a980e1922c2d85b:refs/remotes/origin/main
+2026-09-05T17:54:14.2004718Z From https://github.com/AI-yyf/trainer
+2026-09-05T17:54:14.2006873Z  * [new ref]         6f16c6af59974764c0b306411a980e1922c2d85b -> origin/main
+2026-09-05T17:54:14.2011817Z ##[endgroup]
+2026-09-05T17:54:14.2013846Z ##[group]Determining the checkout info
+2026-09-05T17:54:14.2016107Z ##[endgroup]
+2026-09-05T17:54:14.2032662Z [command]/usr/bin/git sparse-checkout disable
+2026-09-05T17:54:14.2091363Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-09-05T17:54:14.2127007Z ##[group]Checking out the ref
+2026-09-05T17:54:14.2133198Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-09-05T17:54:14.3683371Z Switched to a new branch 'main'
+2026-09-05T17:54:14.3687370Z branch 'main' set up to track 'origin/main'.
+2026-09-05T17:54:14.3697122Z ##[endgroup]
+2026-09-05T17:54:14.3744193Z [command]/usr/bin/git log -1 --format=%H
+2026-09-05T17:54:14.3770875Z 6f16c6af59974764c0b306411a980e1922c2d85b

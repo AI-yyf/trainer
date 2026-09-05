@@ -1,0 +1,27 @@
+﻿2026-09-05T17:54:14.5967936Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-05T17:54:14.5970926Z ##[group]Run actions/setup-node@v4
+2026-09-05T17:54:14.5971809Z with:
+2026-09-05T17:54:14.5972577Z   node-version: 20
+2026-09-05T17:54:14.5973371Z   always-auth: false
+2026-09-05T17:54:14.5974186Z   check-latest: false
+2026-09-05T17:54:14.5978249Z   token: ***
+2026-09-05T17:54:14.5979052Z env:
+2026-09-05T17:54:14.5979916Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:14.5981267Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-09-05T17:54:14.5982407Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:14.5983486Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:14.5984605Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:14.5986307Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-09-05T17:54:14.5987903Z ##[endgroup]
+2026-09-05T17:54:14.7445399Z Attempting to download 20...
+2026-09-05T17:54:14.7551587Z (node:2273) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-05T17:54:14.7553649Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-05T17:54:15.7517688Z Acquiring 20.20.2 - x64 from https://github.com/actions/node-versions/releases/download/20.20.2-23521894959/node-20.20.2-linux-x64.tar.gz
+2026-09-05T17:54:16.4452746Z Extracting ...
+2026-09-05T17:54:16.4588141Z [command]/usr/bin/tar xz --strip 1 --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/182e1ab3-aec2-435e-8429-5e3b906ff4f2 -f /home/runner/work/_temp/a69b8b6a-5e4f-43dd-9c02-6302f5afe788
+2026-09-05T17:54:17.4980630Z Adding to the cache ...
+2026-09-05T17:54:19.4715364Z ##[group]Environment details
+2026-09-05T17:54:19.6884764Z node: v20.20.2
+2026-09-05T17:54:19.6885415Z npm: 10.8.2
+2026-09-05T17:54:19.6885739Z yarn: 1.22.22
+2026-09-05T17:54:19.6886424Z ##[endgroup]

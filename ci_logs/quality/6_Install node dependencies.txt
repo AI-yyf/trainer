@@ -1,0 +1,44 @@
+﻿2026-09-05T17:54:49.6459007Z ##[group]Run npm ci
+2026-09-05T17:54:49.6459307Z [36;1mnpm ci[0m
+2026-09-05T17:54:49.6497755Z shell: /usr/bin/bash -e {0}
+2026-09-05T17:54:49.6498031Z env:
+2026-09-05T17:54:49.6498323Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:49.6498824Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-09-05T17:54:49.6499309Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:49.6499737Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:49.6500346Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:49.6500785Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-09-05T17:54:49.6501148Z ##[endgroup]
+2026-09-05T17:54:49.9623432Z 
+2026-09-05T17:54:49.9624092Z > trainer-workspace@0.1.0 postinstall
+2026-09-05T17:54:49.9624641Z > npm run install:js
+2026-09-05T17:54:49.9624809Z 
+2026-09-05T17:54:50.0739275Z 
+2026-09-05T17:54:50.0739698Z > trainer-workspace@0.1.0 install:js
+2026-09-05T17:54:50.0741009Z > npm install --prefix extension && npm install --prefix extension/webview
+2026-09-05T17:54:50.0741622Z 
+2026-09-05T17:54:50.8667286Z 
+2026-09-05T17:54:50.8668329Z added 4 packages, and audited 5 packages in 730ms
+2026-09-05T17:54:50.8675571Z 
+2026-09-05T17:54:50.8675862Z found 0 vulnerabilities
+2026-09-05T17:54:51.2941540Z npm warn EBADENGINE Unsupported engine {
+2026-09-05T17:54:51.2942195Z npm warn EBADENGINE   package: 'chevrotain@12.0.0',
+2026-09-05T17:54:51.2942737Z npm warn EBADENGINE   required: { node: '>=22.0.0' },
+2026-09-05T17:54:51.2943326Z npm warn EBADENGINE   current: { node: 'v20.20.2', npm: '10.8.2' }
+2026-09-05T17:54:51.2943801Z npm warn EBADENGINE }
+2026-09-05T17:54:56.9532610Z 
+2026-09-05T17:54:56.9533412Z added 362 packages, and audited 363 packages in 6s
+2026-09-05T17:54:56.9536602Z 
+2026-09-05T17:54:56.9536931Z 120 packages are looking for funding
+2026-09-05T17:54:56.9537282Z   run `npm fund` for details
+2026-09-05T17:54:56.9718237Z 
+2026-09-05T17:54:56.9718990Z 7 vulnerabilities (1 low, 2 moderate, 4 high)
+2026-09-05T17:54:56.9719319Z 
+2026-09-05T17:54:56.9719488Z To address all issues, run:
+2026-09-05T17:54:56.9719804Z   npm audit fix
+2026-09-05T17:54:56.9719970Z 
+2026-09-05T17:54:56.9720119Z Run `npm audit` for details.
+2026-09-05T17:54:57.0004181Z 
+2026-09-05T17:54:57.0004751Z up to date, audited 1 package in 7s
+2026-09-05T17:54:57.0012612Z 
+2026-09-05T17:54:57.0012888Z found 0 vulnerabilities

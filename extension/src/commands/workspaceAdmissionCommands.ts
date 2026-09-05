@@ -208,6 +208,14 @@ async function withUserInitiatedProjectAdmission<T>(
 
 function pathsEqual(left: string, right: string): boolean {
   const normalize = (value: string): string => {
+    // Windows drive/UNC paths are opaque absolute identifiers on POSIX hosts:
+    // resolving them against the POSIX cwd would corrupt the comparison.
+    if (/^([a-zA-Z]:[\/]|\\)/.test(value)) {
+      const winNormalized = path.win32.normalize(value);
+      return process.platform === 'win32'
+        ? winNormalized.toLocaleLowerCase('en-US')
+        : winNormalized;
+    }
     const normalized = path.normalize(path.resolve(value));
     return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized;
   };

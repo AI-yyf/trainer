@@ -1,0 +1,23 @@
+﻿2026-09-05T17:54:57.1344549Z ##[group]Run npm run check
+2026-09-05T17:54:57.1344856Z [36;1mnpm run check[0m
+2026-09-05T17:54:57.1382343Z shell: /usr/bin/bash -e {0}
+2026-09-05T17:54:57.1382596Z env:
+2026-09-05T17:54:57.1382875Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:57.1383322Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-09-05T17:54:57.1383783Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:57.1384189Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:57.1384576Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-05T17:54:57.1384973Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-09-05T17:54:57.1385301Z ##[endgroup]
+2026-09-05T17:54:57.2519478Z 
+2026-09-05T17:54:57.2520551Z > trainer-workspace@0.1.0 check
+2026-09-05T17:54:57.2521395Z > npm run check --prefix extension/webview && npm run check --prefix extension
+2026-09-05T17:54:57.2521905Z 
+2026-09-05T17:54:57.3661368Z 
+2026-09-05T17:54:57.3661929Z > @trainer/webview@0.1.0 check
+2026-09-05T17:54:57.3662532Z > tsc --noEmit -p tsconfig.json
+2026-09-05T17:54:57.3662736Z 
+2026-09-05T17:55:09.9908132Z 
+2026-09-05T17:55:09.9908930Z > trainer-extension@0.1.0 check
+2026-09-05T17:55:09.9909465Z > tsc -p tsconfig.json --noEmit
+2026-09-05T17:55:09.9909711Z 
