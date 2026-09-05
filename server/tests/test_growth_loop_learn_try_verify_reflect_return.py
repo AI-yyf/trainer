@@ -15,6 +15,7 @@ from typing import Any
 from unittest.mock import AsyncMock, PropertyMock, patch
 
 from fastapi.testclient import TestClient
+from provider_fixtures import seed_verified_capabilities
 
 from app.core.models import (
     LearningPlan,
@@ -25,7 +26,6 @@ from app.core.settings import AppSettings
 from app.llm.provider_service import ProviderService
 from app.main import create_app
 from app.memory.workspace_recovery import leftover_formal_plan_is_live_for_fill
-from provider_fixtures import seed_verified_capabilities
 
 
 def _settings(data_dir: Path) -> AppSettings:

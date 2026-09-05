@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.models import (
+    ActiveCardSelectionResult,
     EvaluationCheck,
     EvaluationReport,
     LearningPlan,
@@ -18,7 +19,6 @@ from app.core.models import (
     ProviderConfig,
     ResourceRecord,
     TrainingCardCandidateSnapshot,
-    ActiveCardSelectionResult,
 )
 from app.core.settings import AppSettings
 from app.llm.provider_service import ProviderService

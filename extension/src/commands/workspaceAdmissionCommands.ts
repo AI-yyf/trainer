@@ -14,7 +14,10 @@ import {
   postOrQueueTransferPromotionScope,
 } from '../core/transferPromotionScope';
 import { resolveSovereignWorkspaceRootPath } from '../core/workspaceRoots';
-import { buildWorkspaceFileSnapshot } from '../core/workspaceFileSnapshot';
+import {
+  buildWorkspaceFileSnapshot,
+  type WorkspaceFileSnapshot,
+} from '../core/workspaceFileSnapshot';
 import type { BootstrapData, CommandExecutionResult, FirstLookSummary } from '../core/types';
 import {
   TRAINER_WORKSPACE_RUNTIME_DATA_DIRECTORY,
@@ -83,6 +86,16 @@ type ProjectProvisioningResponse = {
 type SelectedTrainerRoot = {
   canonicalRootPath: string;
   rootId?: string;
+};
+
+type WorkspaceClassificationRequest = {
+  workspace_id: string;
+  folder_path: string;
+  root_id?: string;
+  root_path: string;
+  remote_name: string;
+  workspace_file_snapshot?: WorkspaceFileSnapshot;
+  response_language?: string;
 };
 
 type ReadOnlyAdmissionMode = Extract<TrainerProjectAdoptionMode, 'browse' | 'ignored'>;
@@ -211,9 +224,33 @@ function selectedRootFromManifest(manifest: TrainerWorkspaceManifest): SelectedT
 async function readSelectedTrainerRoot(context: CommandContext): Promise<SelectedTrainerRoot> {
   const manifest = await context.trainerWorkspace.readWorkspaceManifest();
   if (!manifest) {
-    throw new Error('Trainer workspace setup changed before the project could be added. Please choose it again.');
+    const configuredRoot = context.trainerWorkspace.getRoot();
+    throw new Error(
+      configuredRoot
+        ? `Project could not be added (root_path_unavailable). The selected Trainer workspace root is unavailable: ${configuredRoot}. Choose the Trainer workspace root again, then click Add to Trainer to retry.`
+        : 'Project could not be added (root_missing). No Trainer workspace root is selected. Choose the Trainer workspace root, then click Add to Trainer to retry.',
+    );
   }
   return selectedRootFromManifest(manifest);
+}
+
+function unresolvableProjectPathResult(context: CommandContext): CommandExecutionResult {
+  const language = resolveWorkspaceAdmissionResponseLanguage(context);
+  const failure: WorkspaceAdmissionFailure = {
+    errorCode: 'root_missing',
+    category: 'workspace_root',
+    pathState: 'missing',
+  };
+  const workspace = context.getHostState().workspace;
+  const resolvedPath = workspace.activeWorkspaceRoot ?? workspace.workspaceFolder;
+  const resolutionDetail = resolvedPath
+    ? `Trainer could not resolve the current project folder (resolved workspace folder: ${resolvedPath}).`
+    : 'Trainer could not resolve the current project folder (no workspace folder is open).';
+  return {
+    ok: false,
+    message: `${workspaceAdmissionFailureMessage(failure, language)} ${resolutionDetail} Reopen the project folder, then click Add to Trainer again to retry.`,
+    data: failure,
+  };
 }
 
 function serverRootPath(response: ProjectDecisionResponse): string | undefined {
@@ -803,20 +840,15 @@ async function patchProjectFoundFirstLookSummary(
   try {
     const responseLanguage = resolveWorkspaceAdmissionResponseLanguage(context);
     const workspaceFileSnapshot = await buildWorkspaceFileSnapshot(context);
-    const classification = await postUserInitiatedProjectAdmission<ProjectClassificationResponse>(
-      context,
-      status.port,
-      '/workspace/classify',
-      {
-        workspace_id: projectPath,
-        folder_path: projectPath,
-        ...(selectedRoot.rootId ? { root_id: selectedRoot.rootId } : {}),
-        root_path: selectedRoot.canonicalRootPath,
-        remote_name: context.getHostState().workspace.remoteName ?? '',
-        ...(workspaceFileSnapshot ? { workspace_file_snapshot: workspaceFileSnapshot } : {}),
-        ...(responseLanguage ? { response_language: responseLanguage } : {}),
-      },
-    );
+    const classification = await classifyProjectForAdmission(context, status.port, {
+      workspace_id: projectPath,
+      folder_path: projectPath,
+      root_id: selectedRoot.rootId,
+      root_path: selectedRoot.canonicalRootPath,
+      remote_name: context.getHostState().workspace.remoteName ?? '',
+      ...(workspaceFileSnapshot ? { workspace_file_snapshot: workspaceFileSnapshot } : {}),
+      ...(responseLanguage ? { response_language: responseLanguage } : {}),
+    });
     const firstLookSummary = firstLookSummaryFromClassification(classification);
     if (!firstLookSummary) {
       context.outputChannel.appendLine('Trainer First Look skipped because the backend returned no summary.');
@@ -858,10 +890,7 @@ async function setCurrentWorkspaceProjectAdmission(
 
   const projectPath = selectedProjectPath?.trim() || resolveCurrentTrainerProjectPath(context.getHostState().workspace);
   if (!projectPath) {
-    return {
-      ok: false,
-      message: 'Choose a specific local VS Code project folder before changing Trainer project admission.',
-    };
+    return unresolvableProjectPathResult(context);
   }
 
   let managedIdentity: TrainerManagedProjectIdentity | undefined;
@@ -989,6 +1018,48 @@ async function relocateWorkspaceRootForProject(
   return selectedRootFromManifest(manifest);
 }
 
+async function classifyProjectForAdmission(
+  context: CommandContext,
+  port: number,
+  body: WorkspaceClassificationRequest,
+): Promise<ProjectClassificationResponse> {
+  try {
+    return await postUserInitiatedProjectAdmission<ProjectClassificationResponse>(
+      context,
+      port,
+      '/workspace/classify',
+      body,
+    );
+  } catch (error) {
+    const failure = workspaceAdmissionFailure(error);
+    if (failure?.errorCode !== 'root_path_unavailable' || !body.root_id || !body.root_path) {
+      throw error;
+    }
+    // The backend rejected this root identity as unknown or unavailable (for
+    // example after the sidecar data directory was reset). A retry must stay a
+    // fresh attempt instead of replaying the same stale identity forever:
+    // re-register the selected root by path so the backend returns a fresh
+    // root_identity, which the caller persists before the admission decision.
+    context.outputChannel.appendLine(
+      `[workspace-admission] backend rejected root identity ${body.root_id} (root_path_unavailable); re-registering the selected root by path`,
+    );
+    const reRegistrationBody: WorkspaceClassificationRequest = {
+      workspace_id: body.workspace_id,
+      folder_path: body.folder_path,
+      root_path: body.root_path,
+      remote_name: body.remote_name,
+      ...(body.workspace_file_snapshot ? { workspace_file_snapshot: body.workspace_file_snapshot } : {}),
+      ...(body.response_language ? { response_language: body.response_language } : {}),
+    };
+    return postUserInitiatedProjectAdmission<ProjectClassificationResponse>(
+      context,
+      port,
+      '/workspace/classify',
+      reRegistrationBody,
+    );
+  }
+}
+
 async function provisionManagedProject(
   context: CommandContext,
   projectPath: string,
@@ -1006,20 +1077,15 @@ async function provisionManagedProject(
 
   const workspaceName = path.basename(projectPath) || 'Trainer';
   const workspaceFileSnapshot = await buildWorkspaceFileSnapshot(context);
-  const classification = await postUserInitiatedProjectAdmission<ProjectClassificationResponse>(
-    context,
-    status.port,
-    '/workspace/classify',
-    {
-      workspace_id: projectPath,
-      folder_path: projectPath,
-      root_id: selectedRoot.rootId,
-      root_path: selectedRoot.canonicalRootPath,
-      remote_name: context.getHostState().workspace.remoteName ?? '',
-      ...(workspaceFileSnapshot ? { workspace_file_snapshot: workspaceFileSnapshot } : {}),
-      ...(responseLanguage ? { response_language: responseLanguage } : {}),
-    },
-  );
+  const classification = await classifyProjectForAdmission(context, status.port, {
+    workspace_id: projectPath,
+    folder_path: projectPath,
+    root_id: selectedRoot.rootId,
+    root_path: selectedRoot.canonicalRootPath,
+    remote_name: context.getHostState().workspace.remoteName ?? '',
+    ...(workspaceFileSnapshot ? { workspace_file_snapshot: workspaceFileSnapshot } : {}),
+    ...(responseLanguage ? { response_language: responseLanguage } : {}),
+  });
   const registeredRootId = classification.root_identity?.rootId;
   const registeredRootPath = classification.root_identity?.rootPath;
   if (!registeredRootId || !registeredRootPath) {

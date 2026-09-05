@@ -2052,12 +2052,15 @@ export async function ensureBrowserPreviewSession(existingSessionId?: string): P
   return inFlightPreviewSessionStart;
 }
 
+/** Concurrent live bootstraps for the same session collapse into one round trip. */
+let inFlightLiveBootstrap: Promise<{ sessionId: string; message: HostMessage }> | null = null;
+let inFlightLiveBootstrapKey = "";
+
 export async function fetchBrowserPreviewBootstrap(
   sessionId?: string,
   forceLive = false,
 ): Promise<{ sessionId: string; message: HostMessage }> {
   const resolvedSessionId = await ensureBrowserPreviewSession(sessionId);
-  const workspaceId = previewWorkspaceId();
   const previewBootstrap =
     typeof window !== "undefined"
       ? (window as Window & { __TRAINER_BOOTSTRAP__?: unknown }).__TRAINER_BOOTSTRAP__
@@ -2071,37 +2074,58 @@ export async function fetchBrowserPreviewBootstrap(
       },
     };
   }
-  const responseLanguage = resolvePreviewLanguage();
-  const settingsResponse = await fetchPreview(`${baseUrl()}/memory/settings`, {
-    method: "POST",
-    headers: asJsonHeaders(),
-    body: JSON.stringify({
-      session_id: resolvedSessionId,
-      workspace_id: workspaceId,
-      response_language: responseLanguage,
-    }),
-  }, "bootstrap");
-  if (!settingsResponse.ok) {
-    await throwPreviewHttpFailure(settingsResponse, "bootstrap");
+  // Multiple mount effects and the request/bootstrap bridge can kick off the
+  // same live bootstrap in the same tick; share one in-flight request so the
+  // sidecar never sees a burst of identical /memory/settings writes. The
+  // injected-bootstrap path never reaches the network, so it needs no key.
+  const dedupeKey = resolvedSessionId;
+  if (inFlightLiveBootstrap && inFlightLiveBootstrapKey === dedupeKey) {
+    return inFlightLiveBootstrap;
   }
-  const snapshotResponse = await fetchPreview(
-    `${baseUrl()}/memory/summary?session_id=${encodeURIComponent(resolvedSessionId)}&workspace_id=${encodeURIComponent(
-      workspaceId,
-    )}`,
-    {},
-    "bootstrap",
-  );
-  if (!snapshotResponse.ok) {
-    await throwPreviewHttpFailure(snapshotResponse, "bootstrap");
+  const request = (async (): Promise<{ sessionId: string; message: HostMessage }> => {
+    const workspaceId = previewWorkspaceId();
+    const responseLanguage = resolvePreviewLanguage();
+    const settingsResponse = await fetchPreview(`${baseUrl()}/memory/settings`, {
+      method: "POST",
+      headers: asJsonHeaders(),
+      body: JSON.stringify({
+        session_id: resolvedSessionId,
+        workspace_id: workspaceId,
+        response_language: responseLanguage,
+      }),
+    }, "bootstrap");
+    if (!settingsResponse.ok) {
+      await throwPreviewHttpFailure(settingsResponse, "bootstrap");
+    }
+    const snapshotResponse = await fetchPreview(
+      `${baseUrl()}/memory/summary?session_id=${encodeURIComponent(resolvedSessionId)}&workspace_id=${encodeURIComponent(
+        workspaceId,
+      )}`,
+      {},
+      "bootstrap",
+    );
+    if (!snapshotResponse.ok) {
+      await throwPreviewHttpFailure(snapshotResponse, "bootstrap");
+    }
+    const snapshot = await readPreviewJson(snapshotResponse, "bootstrap");
+    return {
+      sessionId: resolvedSessionId,
+      message: {
+        type: "bootstrap",
+        payload: mapSnapshotToBootstrap(snapshot),
+      },
+    };
+  })();
+  inFlightLiveBootstrap = request;
+  inFlightLiveBootstrapKey = dedupeKey;
+  try {
+    return await request;
+  } finally {
+    if (inFlightLiveBootstrapKey === dedupeKey) {
+      inFlightLiveBootstrap = null;
+      inFlightLiveBootstrapKey = "";
+    }
   }
-  const snapshot = await readPreviewJson(snapshotResponse, "bootstrap");
-  return {
-    sessionId: resolvedSessionId,
-    message: {
-      type: "bootstrap",
-      payload: mapSnapshotToBootstrap(snapshot),
-    },
-  };
 }
 
 export interface BrowserPreviewResourceSearchRequest {

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from app.api.runtime import TrainerRuntime
 from app.core.event_ledger import EventLedgerService
 from app.core.models import (
     LearningPlan,
@@ -19,7 +20,6 @@ from app.core.models import (
     SandboxWriteRequest,
     TrainingCardCandidateSnapshot,
 )
-from app.api.runtime import TrainerRuntime
 from app.sandbox.service import SandboxService
 from app.workspace.authority import PermissionLevel, WorkspaceAuthority
 

@@ -3,7 +3,6 @@ from typing import Any
 from unittest.mock import AsyncMock, PropertyMock, patch
 
 import pytest
-
 from fastapi.testclient import TestClient
 from provider_fixtures import seed_verified_capabilities
 

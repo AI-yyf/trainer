@@ -6,7 +6,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.core.models import LearningPlan, PlanStage, ProviderConfig, ProviderTestResponse, UserProfile
+from app.core.models import (
+    LearningPlan,
+    PlanStage,
+    ProviderConfig,
+    ProviderTestResponse,
+    UserProfile,
+)
 from app.llm.provider_service import ProviderService
 from tests.test_api import build_client
 

@@ -3,13 +3,13 @@
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from provider_fixtures import seed_verified_capabilities
 
 from app.core.models import LearningPlan, ProviderConfig, TaskSpec, UserProfile
 from app.core.settings import AppSettings
 from app.llm.provider_service import ProviderService
 from app.main import create_app
 from app.memory.workspace_recovery import stamp_produced_workspace_record
-from provider_fixtures import seed_verified_capabilities
 
 
 def build_client(tmp_path: Path) -> TestClient:

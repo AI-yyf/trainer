@@ -5,13 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from provider_fixtures import seed_verified_capabilities
 
 from app.core.models import AffectState, LearningPlan, PlanStage, ProviderConfig, UserProfile
 from app.core.settings import AppSettings
 from app.llm.provider_service import ProviderService
 from app.main import create_app
 from app.memory.workspace_recovery import leftover_formal_plan_is_live_for_fill
-from provider_fixtures import seed_verified_capabilities
 
 
 def _settings(data_dir: Path) -> AppSettings:
