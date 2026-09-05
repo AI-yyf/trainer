@@ -1,0 +1,286 @@
+{
+    "version": "1.1.410",
+    "time": "1783902388009",
+    "generalDiagnostics": [
+        {
+            "file": "h:\\trainer_final\\server\\app\\memory\\review_scheduler.py",
+            "severity": "error",
+            "message": "\"get\" is not a known attribute of \"None\"",
+            "range": {
+                "start": {
+                    "line": 89,
+                    "character": 51
+                },
+                "end": {
+                    "line": 89,
+                    "character": 54
+                }
+            },
+            "rule": "reportOptionalMemberAccess"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\memory\\review_scheduler.py",
+            "severity": "error",
+            "message": "\"get\" is not a known attribute of \"None\"",
+            "range": {
+                "start": {
+                    "line": 90,
+                    "character": 48
+                },
+                "end": {
+                    "line": 90,
+                    "character": 51
+                }
+            },
+            "rule": "reportOptionalMemberAccess"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\memory\\review_scheduler.py",
+            "severity": "error",
+            "message": "\"get\" is not a known attribute of \"None\"",
+            "range": {
+                "start": {
+                    "line": 91,
+                    "character": 52
+                },
+                "end": {
+                    "line": 91,
+                    "character": 55
+                }
+            },
+            "rule": "reportOptionalMemberAccess"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\memory\\review_scheduler.py",
+            "severity": "error",
+            "message": "\"get\" is not a known attribute of \"None\"",
+            "range": {
+                "start": {
+                    "line": 92,
+                    "character": 50
+                },
+                "end": {
+                    "line": 92,
+                    "character": 53
+                }
+            },
+            "rule": "reportOptionalMemberAccess"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\memory\\review_scheduler.py",
+            "severity": "error",
+            "message": "\"get\" is not a known attribute of \"None\"",
+            "range": {
+                "start": {
+                    "line": 93,
+                    "character": 51
+                },
+                "end": {
+                    "line": 93,
+                    "character": 54
+                }
+            },
+            "rule": "reportOptionalMemberAccess"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\memory\\review_scheduler.py",
+            "severity": "error",
+            "message": "Argument of type \"str\" cannot be assigned to parameter \"source\" of type \"Literal['weakness', 'mastery', 'reflection', 'plan']\" in function \"__init__\"\n??Type \"str\" is not assignable to type \"Literal['weakness', 'mastery', 'reflection', 'plan']\"\n????\"str\" is not assignable to type \"Literal['weakness']\"\n????\"str\" is not assignable to type \"Literal['mastery']\"\n????\"str\" is not assignable to type \"Literal['reflection']\"\n????\"str\" is not assignable to type \"Literal['plan']\"",
+            "range": {
+                "start": {
+                    "line": 657,
+                    "character": 19
+                },
+                "end": {
+                    "line": 657,
+                    "character": 25
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\memory\\review_scheduler.py",
+            "severity": "error",
+            "message": "Argument of type \"str\" cannot be assigned to parameter \"severity\" of type \"Literal['low', 'medium', 'high']\" in function \"__init__\"\n??Type \"str\" is not assignable to type \"Literal['low', 'medium', 'high']\"\n????\"str\" is not assignable to type \"Literal['low']\"\n????\"str\" is not assignable to type \"Literal['medium']\"\n????\"str\" is not assignable to type \"Literal['high']\"",
+            "range": {
+                "start": {
+                    "line": 658,
+                    "character": 21
+                },
+                "end": {
+                    "line": 658,
+                    "character": 29
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\memory\\review_scheduler.py",
+            "severity": "error",
+            "message": "Argument of type \"str\" cannot be assigned to parameter \"surface_mode\" of type \"Literal['due', 'ahead', 'digest']\" in function \"__init__\"\n??Type \"str\" is not assignable to type \"Literal['due', 'ahead', 'digest']\"\n????\"str\" is not assignable to type \"Literal['due']\"\n????\"str\" is not assignable to type \"Literal['ahead']\"\n????\"str\" is not assignable to type \"Literal['digest']\"",
+            "range": {
+                "start": {
+                    "line": 659,
+                    "character": 25
+                },
+                "end": {
+                    "line": 659,
+                    "character": 37
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\training\\card_generator.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"learning_loop\" for class \"TrainingCardCandidateSnapshot\"\n??Attribute \"learning_loop\" is unknown",
+            "range": {
+                "start": {
+                    "line": 1536,
+                    "character": 9
+                },
+                "end": {
+                    "line": 1536,
+                    "character": 22
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\training\\card_generator.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"single_problem_focus\" for class \"TrainingCardCandidateSnapshot\"\n??Attribute \"single_problem_focus\" is unknown",
+            "range": {
+                "start": {
+                    "line": 1546,
+                    "character": 9
+                },
+                "end": {
+                    "line": 1546,
+                    "character": 29
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\training\\card_generator.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"completion_requires_verification\" for class \"TrainingCardCandidateSnapshot\"\n??Attribute \"completion_requires_verification\" is unknown",
+            "range": {
+                "start": {
+                    "line": 1547,
+                    "character": 9
+                },
+                "end": {
+                    "line": 1547,
+                    "character": 41
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\training\\card_generator.py",
+            "severity": "error",
+            "message": "Argument of type \"str\" cannot be assigned to parameter \"card_type\" of type \"TrainingCardType\" in function \"__init__\"\n??Type \"str\" is not assignable to type \"TrainingCardType\"\n????\"str\" is not assignable to type \"Literal['practice']\"\n????\"str\" is not assignable to type \"Literal['flash']\"\n????\"str\" is not assignable to type \"Literal['drill']\"\n????\"str\" is not assignable to type \"Literal['transfer']\"",
+            "range": {
+                "start": {
+                    "line": 1588,
+                    "character": 18
+                },
+                "end": {
+                    "line": 1588,
+                    "character": 27
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\training\\card_generator.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"trust_state\" for class \"TrainingCardCandidateSnapshot\"\n??Type \"str\" is not assignable to type \"TrainingCardTrustState\"\n????\"str\" is not assignable to type \"Literal['trusted']\"\n????\"str\" is not assignable to type \"Literal['fresh']\"\n????\"str\" is not assignable to type \"Literal['unknown']\"\n????\"str\" is not assignable to type \"Literal['stale']\"\n????\"str\" is not assignable to type \"Literal['untrusted']\"",
+            "range": {
+                "start": {
+                    "line": 3642,
+                    "character": 35
+                },
+                "end": {
+                    "line": 3642,
+                    "character": 46
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\training\\card_generator.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"trust_state\" for class \"TrainingCardCandidateSnapshot\"\n??Type \"str\" is not assignable to type \"TrainingCardTrustState\"\n????\"str\" is not assignable to type \"Literal['trusted']\"\n????\"str\" is not assignable to type \"Literal['fresh']\"\n????\"str\" is not assignable to type \"Literal['unknown']\"\n????\"str\" is not assignable to type \"Literal['stale']\"\n????\"str\" is not assignable to type \"Literal['untrusted']\"",
+            "range": {
+                "start": {
+                    "line": 3727,
+                    "character": 31
+                },
+                "end": {
+                    "line": 3727,
+                    "character": 42
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\training\\card_generator.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"trust_state\" for class \"TrainingCardCandidateSnapshot\"\n??Type \"str\" is not assignable to type \"TrainingCardTrustState\"\n????\"str\" is not assignable to type \"Literal['trusted']\"\n????\"str\" is not assignable to type \"Literal['fresh']\"\n????\"str\" is not assignable to type \"Literal['unknown']\"\n????\"str\" is not assignable to type \"Literal['stale']\"\n????\"str\" is not assignable to type \"Literal['untrusted']\"",
+            "range": {
+                "start": {
+                    "line": 3736,
+                    "character": 27
+                },
+                "end": {
+                    "line": 3736,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\training\\fsrs_scheduler.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"stability\" for class \"TrainingCardState\"\n??Type \"float | None\" is not assignable to type \"float\"\n????\"None\" is not assignable to \"float\"",
+            "range": {
+                "start": {
+                    "line": 178,
+                    "character": 31
+                },
+                "end": {
+                    "line": 178,
+                    "character": 50
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "h:\\trainer_final\\server\\app\\training\\fsrs_scheduler.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"difficulty\" for class \"TrainingCardState\"\n??Type \"float | None\" is not assignable to type \"float\"\n????\"None\" is not assignable to \"float\"",
+            "range": {
+                "start": {
+                    "line": 179,
+                    "character": 32
+                },
+                "end": {
+                    "line": 179,
+                    "character": 52
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        }
+    ],
+    "summary": {
+        "filesAnalyzed": 3,
+        "errorCount": 17,
+        "warningCount": 0,
+        "informationCount": 0,
+        "timeInSec": 1.428
+    }
+}
+

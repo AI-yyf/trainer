@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Trainer Workbench</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      (() => {
+        const search = new URLSearchParams(window.location.search);
+        if (!window.acquireVsCodeApi && search.get("scenario")?.trim()) {
+          const previewUrl = new URL("./vscode-preview.html", window.location.href);
+          previewUrl.search = window.location.search;
+          previewUrl.hash = window.location.hash;
+          window.location.replace(previewUrl.toString());
+        }
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

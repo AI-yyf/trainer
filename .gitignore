@@ -1,0 +1,77 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+._*
+
+# Node / frontend build outputs
+node_modules/
+dist/
+out/
+coverage/
+htmlcov/
+extension/dist/
+extension/webview/dist/
+extension/.sidecar-build/
+*.tsbuildinfo
+
+# VS Code local test harness
+.vscode-test/
+
+# Python caches / virtual environments
+.venv/
+.venv-mac/
+server/.venv/
+server/.venv-mac/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs / coverage / reports
+*.log
+server/.coverage
+
+# Local runtime data
+.tmp-*
+.tmp-sidecar-data/
+.tmp-test/
+.playwright-cli/
+.omx/
+output/
+tmp/
+search-indexes/
+sandboxes/
+inline-resources/
+qdrant/
+*.egg-info/
+H/
+
+# Local test output
+/test-results/
+
+# Trainer local state / memory stores
+.trainer/
+.trainer-memory/
+server/.trainer/
+server/.qdrant/
+*.db
+*.sqlite3
+
+# Packaged extension artifacts
+*.vsix
+
+# AI tool local state / editor local config
+.opencode/
+.omo/
+.codex/
+.tmp/
+.tmp_restore/
+.vscode/
+tmp-*.png
+
+# Built platform binaries — produced per-target by CI release builds
+extension/bundled/bin/
