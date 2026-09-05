@@ -41,7 +41,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       # Python env for the sidecar + PyInstaller binary build.
       - name: Create python environment
@@ -65,6 +65,12 @@ jobs:
       - name: Bundle native sidecar binary (${{ matrix.target }})
         run: npm run bundle:sidecar:binary --prefix extension
 
+      # Extension tests run BEFORE packaging: the deterministic vsix build
+      # strips the browserSidecar test entry, so tests must see the
+      # development webview build (which keeps it).
+      - name: Extension test suite
+        run: npm run test:extension
+
       - name: Package VSIX (${{ matrix.target }})
         run: npm run package:vsix --prefix extension
 
@@ -80,8 +86,16 @@ jobs:
           fi
           "$BIN" --help
 
-      - name: Extension test suite
-        run: npm run test:extension
+      - name: Upload npm debug logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-logs-${{ matrix.target }}
+          path: |
+            C:/npm/cache/_logs/
+            /home/runner/.npm/_logs/
+            /Users/runner/.npm/_logs/
+          if-no-files-found: ignore
 
       # Full server suite blocks on the primary (linux-x64) target; the other
       # platforms still run it so drift surfaces as uploaded reports.
