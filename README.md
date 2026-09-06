@@ -1,18 +1,17 @@
 # Trainer
 
-Trainer is a **desktop-first VS Code extension** paired with a **local Python FastAPI sidecar**. It acts as a conversation-driven learning coach inside VS Code for code, remote/debug/function guidance, math, writing, and resource-based study — not just a code-generation assistant.
+Trainer is a desktop-first VS Code extension paired with a local Python FastAPI sidecar. It provides a conversation-driven learning coach inside VS Code for coding, debugging, writing, math, and resource-based study.
 
-> **Current sidebar IA**: Five-view workbench: `Coach / Plan / Resources / Training / Settings`.
-> **Coach agent**: ReAct loop with tool calling (read file, diagnostics, search, workspace authority).
+> Workbench layout: five fixed views, `Coach`, `Plan`, `Resources`, `Training`, and `Settings`.
+> Coach loop: ReAct with tool calling for file access, diagnostics, search, and workspace authority.
 
 ---
 
-## Cross-Platform Compatibility (跨系统兼容)
+## Platform Support / 跨平台支持
 
-### Source development
+### Development entry points
 
-Windows, macOS, and Linux source development use the same root Node lifecycle
-commands. Do not manually translate the PowerShell helpers for normal work:
+Windows, macOS, and Linux use the same root-level Node lifecycle commands:
 
 ```bash
 npm run bootstrap
@@ -24,25 +23,19 @@ npm run test:server
 npm run verify
 ```
 
-`npm run test:server` resolves the local or system Python interpreter for the
-current host. The `scripts/*.ps1` files remain supported Windows conveniences,
-not the cross-platform source-development entry point.
+`npm run test:server` resolves the local or system Python interpreter for the current host. The `scripts/*.ps1` files remain Windows conveniences rather than the cross-platform source-development entry point.
 
-### Evidence boundaries
+### Verification snapshot
 
-| Scope | Current evidence |
-|-------|------------------|
-| Source development | The Node lifecycle and `npm run test:server` are the Windows/macOS/Linux development entry points. |
-| CI | `.github/workflows/cross-platform-verify.yml` declares Ubuntu, macOS, and Windows jobs, but this repository has no recorded cloud CI run; the workflow is configuration, not execution evidence. |
-| VSIX on the Windows host | Packaging and bundled-sidecar validation have been completed on the Windows host. |
-| VSIX for Linux targets | A native Linux binary and installed-VSIX evidence are required; a missing binary remains an explicit coverage gap. |
-| VSIX for macOS targets | A target-matching Darwin manifest and installed-VSIX evidence are required; an unverified binary leaves Trainer unavailable until the matching VSIX is installed. |
+| Area | Current status |
+|------|----------------|
+| Development | `npm run bootstrap`, `npm run dev`, `npm run smoke`, and `npm run test:server` are the shared source-development entry points. |
+| CI | `.github/workflows/cross-platform-verify.yml` declares Linux x64/ARM64, macOS Apple Silicon/Intel, and Windows jobs. This repository still has no recorded cloud CI run, so the workflow is configuration rather than execution evidence. |
+| Windows release | Packaging and bundled-sidecar validation have been completed on the Windows host. |
+| Linux release | A native Linux binary and installed-VSIX evidence are still required. |
+| macOS release | A target-matching Darwin manifest and installed-VSIX evidence are still required. |
 
-The bundled Python source is portable, but native bundled assets are target
-specific. An installed extension only runs a bundled binary with a valid
-manifest for its own `platform-arch`; otherwise Trainer stays unavailable and
-asks for the matching VSIX. The current VSIX must not be presented as a
-verified three-platform package.
+The bundled Python source is portable, but native bundled assets are target-specific. An installed extension only runs a bundled binary with a valid manifest for its own `platform-arch`; otherwise Trainer stays unavailable and asks for the matching VSIX. A package should not be described as verified across all three desktop platforms unless the corresponding release artifacts and install checks exist.
 
 ---
 
@@ -63,8 +56,7 @@ trainer_final/
 │   └── src/
 ├── docs/                     # Architecture, verification, plans, UI contract
 ├── scripts/                  # Node lifecycle plus Windows PowerShell convenience helpers
-├── e2e/                      # Playwright integration test
-└── .claude/                  # Claude Code project config
+└── e2e/                      # Playwright integration test
 ```
 
 ## Portable Lifecycle
@@ -105,13 +97,13 @@ This installs:
 
 Use `npm run bootstrap -- --use-uv` to request `uv` instead of pip.
 
-### 2. Build
+### 2. Build and run
 
 ```bash
 npm run dev
 ```
 
-Builds:
+This builds:
 1. Webview (Vite) — `extension/webview/dist/`
 2. Extension host (tsc) — `extension/dist/`
 
@@ -130,7 +122,7 @@ npm run smoke:provider
 npm run smoke:trainer-turn
 ```
 
-### 4. Start sidecar manually (alternative)
+### 4. Start the sidecar manually
 
 ```bash
 # Windows
@@ -150,11 +142,30 @@ Open the `extension/` folder as the VS Code workspace, then press `F5` (Run Exte
 npm run package:vsix
 ```
 
-Output: `extension/trainer-extension-0.1.0.vsix` (120 MB).
+The output is target-qualified, for example `extension/trainer-extension-0.1.0-win32-x64.vsix`. Install only a VSIX that matches the machine that will run the extension:
 
-Install via `Extensions: Install from VSIX...` in VS Code.
+| Machine | VSIX suffix |
+|---------|-------------|
+| Windows x64 | `win32-x64` |
+| macOS on Apple Silicon | `darwin-arm64` |
+| macOS on Intel | `darwin-x64` |
+| Linux x64 | `linux-x64` |
+| Linux ARM64 | `linux-arm64` |
 
-## Five-View Sidebar IA
+Release artifacts are built natively; a VSIX is not interchangeable across these targets because it contains a platform-specific sidecar binary. Install the matching file via `Extensions: Install from VSIX...` in VS Code.
+
+macOS artifacts are built and installation-tested on native macOS 15 runners,
+so the supported release baseline is **macOS 15 or newer**. Older macOS
+versions need an artifact built and tested on that older OS; freezing a Python
+sidecar on a newer macOS version is not a sound compatibility guarantee.
+
+Linux assets use the Ubuntu 22.04 glibc baseline (glibc 2.35 or newer). Alpine
+and other musl-based distributions need a future musl-specific release; do not
+install a glibc VSIX there expecting the bundled sidecar to start.
+
+On macOS, if Gatekeeper reports a quarantine issue after installation, open **Settings → Runtime self-check** and use its copyable, sidecar-scoped repair command only after verifying the downloaded release asset.
+
+## Workbench Layout
 
 | View | Chinese | Purpose |
 |------|---------|---------|
@@ -164,13 +175,13 @@ Install via `Extensions: Install from VSIX...` in VS Code.
 | **Training** | 训练 | Active training card, flash cards, scenario lab, FSRS spaced reviews |
 | **Settings** | 设置 | Provider config, coach defaults, language, workspace context controls |
 
-### First-launch expectations
+### Startup states
 
-- **No provider saved**: Webview shows a truthful blocked state (not a black screen)
+- **No provider saved**: Webview shows a clear blocked state
 - **Provider saved but no API key**: Sending is blocked with a settings hint
 - **Sidecar cannot start**: Sidebar still renders and surfaces the failure state
 
-### After installing the VSIX
+### After installation
 
 1. Open the `Trainer` activity bar icon
 2. Go to **Settings** (设置)
@@ -179,17 +190,14 @@ Install via `Extensions: Install from VSIX...` in VS Code.
 
 ## Sidecar Runtime
 
-The installed extension runs only its verified bundled sidecar binary. If that
-runtime is missing or does not match the current platform, Trainer stays
-unavailable and asks for the matching VSIX. Source and local Python launch
-candidates are available only while developing the extension.
+The installed extension runs only its verified bundled sidecar binary. If that runtime is missing or does not match the current platform, Trainer stays unavailable and asks for the matching VSIX. Source and local Python launch options are available only while developing the extension.
 
 Sidecar data is stored under the VS Code global storage directory — not in the repo.
 
 ## Core Principles
 
 - **Desktop-first** five-view workbench
-- **Fixed top-level IA**: Coach / Plan / Resources / Training / Settings
+- **Fixed top-level navigation**: Coach / Plan / Resources / Training / Settings
 - **Keyboard-first** flows with visible focus states
 - **Shared design tokens** across webview and native VS Code surfaces
 - **OpenAI-compatible** provider config with explicit capability flags
@@ -228,23 +236,23 @@ powershell -ExecutionPolicy Bypass -File scripts/smoke.ps1 -Strict
 
 | Symptom | Check |
 |---------|-------|
-| Black screen | `Trainer` output channel — webview startup errors reported there |
+| Blank webview | `Trainer` output channel — webview startup errors are reported there |
 | Provider saved but can't send | API key missing, invalid, or model unsupported by endpoint |
 | Sidecar unavailable | Run `npm run package:vsix` to refresh bundled server; check `Trainer` output channel |
 | TypeScript errors | `npm run check --prefix extension/webview` + `npm run check --prefix extension` |
 | Python test failures | `cd server && python -m pytest tests/path/to/test.py -v` |
 
-## Project Ideal State (项目理想状态)
+## Project Status (项目状态)
 
-Trainer 的最终形态应该满足以下条件。当前状态与理想状态的差距即项目的迭代方向：
+The table below captures the current direction of travel for Trainer. It is intentionally candid about what is already in place and what still needs verification or follow-through.
 
-| 维度 | 理想状态 | 当前状态 |
-|------|----------|---------|
-| **跨平台开发** | macOS / Windows / Linux 使用同一 Node lifecycle 入口 | ⚠️ `npm run bootstrap`、`dev`、`smoke` 与 `test:server` 已是源码开发入口；各目标平台的执行证据仍需持续采集 |
-| **零配置安装** | 安装 VSIX → 配 provider → 直接使用 | ⚠️ 仅本机目标的 VSIX manifest 可验证；Linux、Darwin 与其他 target 的安装证据仍必须分别收集 |
-| **诚实阻塞状态** | 无 provider / 无 key / sidecar 离线各显示明确状态 | ✅ 已实现 blocked state |
-| **教练闭环** | Coach → Plan → Resources → Training → feedback → Plan | ⚠️ Training handoff 未完全闭环 |
-| **训练五问** | 首屏回答：当前卡片？为什么现在？交付什么？怎么验证？结果去哪？ | ✅ 已设计，需持续验证 |
-| **工程质量** | TS strict / Ruff / Pyright / pytest / Jest / E2E 全绿，monster 文件已拆分 | ❌ `test_api.py` 219k 行、`App.tsx` 5843 行、`routers.py` 6027 行 |
-| **跨语言契约** | Python Pydantic ↔ TypeScript interface 自动校验 WorkbenchSnapshot 一致性 | ❌ 无自动校验 |
-| **CI 持续验证** | GitHub Actions matrix (ubuntu + macos + windows) 每次 PR 全平台验证 | ⚠️ matrix workflow 已静态定义，但仓库内无云端运行记录 |
+| Area | Target state | Current status |
+|------|--------------|----------------|
+| Cross-platform development | macOS, Windows, and Linux use the same Node lifecycle entry points | `npm run bootstrap`, `npm run dev`, `npm run smoke`, and `npm run test:server` are shared source-development entry points. Native CI paths exist for Linux x64/ARM64, macOS Apple Silicon/Intel, and Windows, but execution evidence still needs to be collected. |
+| Zero-friction install | Install a VSIX, configure a provider, and start using Trainer | VSIX packages are target-specific. Installation evidence still needs to be gathered separately for Linux x64/ARM64, macOS Apple Silicon/Intel, and Windows. |
+| Clear blocked states | No provider, no key, and sidecar offline states are all explicit | Implemented. |
+| Coach loop closure | Coach → Plan → Resources → Training → feedback → Plan | Training handoff is not fully closed yet. |
+| Training prompts | The first screen answers: what card, why now, what to deliver, how to verify, and where results go | Designed and still being validated. |
+| Code health | TS strict, Ruff, Pyright, pytest, Jest, and E2E stay green, with oversized files split down over time | Large files still exist, including `server/tests/test_api.py`, `extension/webview/src/app/App.tsx`, and `server/app/api/routers.py`. |
+| Cross-language contract | Python Pydantic and TypeScript interfaces stay aligned for `WorkbenchSnapshot` | No automated contract check is in place yet. |
+| CI validation | GitHub Actions validates Linux, macOS, and Windows on every PR | The matrix is defined, but the repository does not yet contain recorded cloud execution evidence. |
