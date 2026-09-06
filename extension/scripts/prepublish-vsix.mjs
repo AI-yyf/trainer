@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { resolveNpmExecPath } from "./package-vsix.mjs";
+import { resolveNpmExecPath, sanitizePackagedSymlinks } from "./package-vsix.mjs";
 import {
   clearForeignSidecarBinaries,
   resolveNativeSidecarTarget,
@@ -88,6 +88,13 @@ export function prepublishVsix({
 
   const removedForeignTargets = clearForeignSidecarBinaries({ extensionDir, targetPlatform });
   runScript("bundle:sidecar", { extensionDir, env });
+  // Materialize or drop symlinks before the packaged trees are verified and
+  // zipped: the vsce secret scanner reads every packaged file and aborts
+  // packaging when it hits a symlinked directory or a dangling link (the
+  // PyInstaller onedir bundle preserves dylib symlinks on macOS/Linux).
+  // Runs before verify:sidecar-runtime so the runtime check validates the
+  // sanitized bundle.
+  const sanitizedSymlinks = sanitizePackagedSymlinks({ extensionDir });
   runScript("verify:sidecar-runtime", { extensionDir, env });
   const packageReport = assertPackageVerified({ extensionDir, repoRoot, env });
   return {
@@ -95,6 +102,7 @@ export function prepublishVsix({
     removedForeignTargets,
     reusedBinary,
     binaryReport,
+    sanitizedSymlinks,
     packageReport,
   };
 }

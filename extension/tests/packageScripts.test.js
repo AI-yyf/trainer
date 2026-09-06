@@ -493,6 +493,161 @@ test('target-specific packaging removes inherited sidecar binaries for other tar
   }
 });
 
+test('sanitizePackagedSymlinks materializes bundle links and drops dangling links for the vsce scanner', async (t) => {
+  const { sanitizePackagedSymlinks } = await loadPackageScriptModules();
+  const tempRoot = createFixtureRoot();
+  const extensionDir = path.join(tempRoot, 'extension');
+  const bundleRoot = path.join(extensionDir, 'bundled', 'bin', `${process.platform}-${process.arch}`);
+
+  try {
+    writeFile(path.join(bundleRoot, '_internal', 'real.dylib'), 'dylib-payload\n');
+    writeFile(path.join(bundleRoot, '_internal', 'payload.bin'), 'payload\n');
+    writeFile(path.join(bundleRoot, 'trainer-sidecar-manifest.json'), '{}\n');
+
+    const linkedDirectory = path.join(bundleRoot, '_internal', 'linked-dir');
+    const realDirectory = path.join(bundleRoot, '_internal', 'real-dir');
+    fs.mkdirSync(realDirectory, { recursive: true });
+    fs.writeFileSync(path.join(realDirectory, 'nested.txt'), 'nested\n', 'utf8');
+    try {
+      fs.symlinkSync(realDirectory, linkedDirectory, process.platform === 'win32' ? 'junction' : 'dir');
+    } catch (error) {
+      t.skip(`Directory links are unavailable in this environment: ${String(error)}`);
+      return;
+    }
+
+    // A symlinked dylib like the ones PyInstaller preserves in the macOS and
+    // Linux onedir bundles.
+    let fileLinkCreated = false;
+    try {
+      fs.symlinkSync(
+        path.join(bundleRoot, '_internal', 'real.dylib'),
+        path.join(bundleRoot, '_internal', 'linked.dylib'),
+        'file',
+      );
+      fileLinkCreated = true;
+    } catch (error) {
+      t.diagnostic(`File symlinks unavailable, skipping materialization assertion: ${String(error)}`);
+    }
+
+    // A dangling link: a junction to a missing directory on Windows, a
+    // directory symlink to a missing target elsewhere.
+    fs.symlinkSync(
+      path.join(bundleRoot, '_internal', 'missing-target'),
+      path.join(bundleRoot, '_internal', 'dangling-link'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+
+    const report = sanitizePackagedSymlinks({ extensionDir, log: () => {} });
+
+    assert.deepEqual(fs.lstatSync(path.join(bundleRoot, '_internal', 'linked-dir')).isSymbolicLink(), false);
+    assert.equal(
+      fs.readFileSync(path.join(bundleRoot, '_internal', 'linked-dir', 'nested.txt'), 'utf8'),
+      'nested\n',
+    );
+    assert.deepEqual(report.directories.map((entry) => entry.split(path.sep).join('/')), [
+      'bundled/bin/' + `${process.platform}-${process.arch}` + '/_internal/linked-dir',
+    ]);
+
+    assert.equal(fs.existsSync(path.join(bundleRoot, '_internal', 'dangling-link')), false);
+    assert.deepEqual(report.removed.map((entry) => entry.split(path.sep).join('/')), [
+      'bundled/bin/' + `${process.platform}-${process.arch}` + '/_internal/dangling-link',
+    ]);
+
+    if (fileLinkCreated) {
+      assert.deepEqual(fs.lstatSync(path.join(bundleRoot, '_internal', 'linked.dylib')).isSymbolicLink(), false);
+      assert.equal(
+        fs.readFileSync(path.join(bundleRoot, '_internal', 'linked.dylib'), 'utf8'),
+        'dylib-payload\n',
+      );
+      assert.equal(report.materialized.length, 1);
+    } else {
+      assert.equal(report.materialized.length, 0);
+    }
+
+    // Regular files and directories are untouched, and nothing in the
+    // packaged trees is a symlink anymore, which is exactly the property the
+    // vsce secret scanner needs (it fs.readFile's every packaged file).
+    assert.equal(fs.readFileSync(path.join(bundleRoot, '_internal', 'payload.bin'), 'utf8'), 'payload\n');
+    assert.equal(fs.readFileSync(path.join(bundleRoot, 'trainer-sidecar-manifest.json'), 'utf8'), '{}\n');
+    for (const tree of ['bundled', 'dist', 'media', path.join('webview', 'dist')]) {
+      const treeRoot = path.join(extensionDir, tree);
+      if (!fs.existsSync(treeRoot)) {
+        continue;
+      }
+      const pending = [treeRoot];
+      while (pending.length > 0) {
+        const current = pending.pop();
+        for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+          assert.equal(entry.isSymbolicLink(), false, `unexpected symlink left at ${entry.name}`);
+          if (entry.isDirectory()) {
+            pending.push(path.join(current, entry.name));
+          }
+        }
+      }
+    }
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('sanitizePackagedSymlinks refuses self-referential directory links and leaves clean trees untouched', async (t) => {
+  const { sanitizePackagedSymlinks } = await loadPackageScriptModules();
+  const tempRoot = createFixtureRoot();
+  const extensionDir = path.join(tempRoot, 'extension');
+  const bundleRoot = path.join(extensionDir, 'bundled', 'bin', `${process.platform}-${process.arch}`);
+
+  try {
+    writeFile(path.join(bundleRoot, '_internal', 'plain.txt'), 'plain\n');
+
+    assert.deepEqual(sanitizePackagedSymlinks({ extensionDir, log: () => {} }), {
+      materialized: [],
+      removed: [],
+      directories: [],
+    });
+    assert.equal(fs.readFileSync(path.join(bundleRoot, '_internal', 'plain.txt'), 'utf8'), 'plain\n');
+
+    // A directory link pointing back across its own ancestor would make any
+    // materialization copy the tree into itself; it must fail loudly instead
+    // of corrupting the bundle.
+    fs.mkdirSync(path.join(bundleRoot, '_internal', 'loop-target'), { recursive: true });
+    fs.symlinkSync(
+      path.join(bundleRoot, '_internal', 'loop-target'),
+      path.join(bundleRoot, '_internal', 'loop'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    fs.symlinkSync(
+      bundleRoot,
+      path.join(bundleRoot, '_internal', 'loop-target', 'self'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+
+    assert.throws(
+      () => sanitizePackagedSymlinks({ extensionDir, log: () => {} }),
+      /self-referential symlinked directory/,
+    );
+    assert.equal(fs.readFileSync(path.join(bundleRoot, '_internal', 'plain.txt'), 'utf8'), 'plain\n');
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('prepublish sanitizes packaged symlinks before verifying the bundled runtime', async () => {
+  const prepublishSource = fs.readFileSync(prepublishVsixModulePath, 'utf8');
+  const packageVsixSource = fs.readFileSync(packageVsixModulePath, 'utf8');
+
+  assert.match(packageVsixSource, /export function sanitizePackagedSymlinks\(/);
+  assert.match(prepublishSource, /import \{ resolveNpmExecPath, sanitizePackagedSymlinks \} from "\.\/package-vsix\.mjs";/);
+  assert.match(prepublishSource, /const sanitizedSymlinks = sanitizePackagedSymlinks\(\{ extensionDir \}\);/);
+  const sanitizeCall = prepublishSource.indexOf('sanitizePackagedSymlinks({ extensionDir })');
+  const runtimeVerifyCall = prepublishSource.indexOf('runScript("verify:sidecar-runtime"');
+  assert.notEqual(sanitizeCall, -1);
+  assert.notEqual(runtimeVerifyCall, -1);
+  assert.ok(
+    sanitizeCall < runtimeVerifyCall,
+    'symlink sanitization must run before the bundled runtime verification',
+  );
+});
+
 test('VSIX output routing binds each package to its native target', async () => {
   const {
     buildVscePackageArgs,
