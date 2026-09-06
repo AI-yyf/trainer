@@ -66,6 +66,9 @@ jobs:
         if: runner.os != 'Linux'
         run: npm exec --yes --package playwright -- playwright install chromium
 
+      - name: Install Playwright test runner
+        run: npm install --no-save --prefix . "@playwright/test@^1.61.0" "playwright@^1.61.0"
+
       - name: Run the 200-scenario preview experience matrix
         run: npm run test:experience-matrix
 
