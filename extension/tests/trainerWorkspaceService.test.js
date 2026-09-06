@@ -611,6 +611,61 @@ test('workspace recovery rejects runtime data that resolves through a symbolic l
   assert.equal(service.getWorkspaceRoot(), path.resolve(sourceRoot));
 });
 
+test('workspace recovery captures sidecar data reached through a junctioned temp ancestor', async (t) => {
+  // GitHub Windows runners expose os.tmpdir() through a junction, so the
+  // canonical path of an external sidecar data root differs from its lexical
+  // path even though nothing malicious is happening. This fixture reproduces
+  // that runner condition: the data root lives behind a junctioned ancestor
+  // and must be captured and rebased, not rejected.
+  const temporaryDirectory = await createTemporaryDirectory(t);
+  const physicalDirectory = path.join(temporaryDirectory, 'physical-temp');
+  const junctionedDirectory = path.join(temporaryDirectory, 'junctioned-temp');
+  const externalDataRoot = path.join(junctionedDirectory, 'sidecar-data');
+  try {
+    await fs.mkdir(path.join(physicalDirectory, 'sidecar-data'), { recursive: true });
+    await fs.symlink(
+      physicalDirectory,
+      junctionedDirectory,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+  } catch (error) {
+    t.skip(`Junctioned directories are unavailable in this environment: ${String(error)}`);
+    return;
+  }
+  await fs.writeFile(path.join(externalDataRoot, 'trainer.db'), 'sqlite-state\n', 'utf8');
+
+  const sourceRoot = path.join(temporaryDirectory, 'source-workspace');
+  const backupRoot = path.join(temporaryDirectory, 'workspace-backup');
+  const restoredRoot = path.join(temporaryDirectory, 'restored-workspace');
+  const migratedRoot = path.join(temporaryDirectory, 'migrated-workspace');
+  const service = createService(createGlobalState());
+  await service.selectRoot(sourceRoot);
+
+  const backup = await service.backupWorkspace(backupRoot, { managedDataRoot: externalDataRoot });
+  assert.equal(backup.managedDataRoot, path.resolve(backupRoot, '.trainer', 'runtime'));
+  assert.equal(
+    await fs.readFile(path.join(backupRoot, '.trainer', 'runtime', 'trainer.db'), 'utf8'),
+    'sqlite-state\n',
+  );
+
+  const migration = await service.migrateWorkspaceRoot(migratedRoot, {
+    managedDataRoot: externalDataRoot,
+  });
+  assert.equal(migration.managedDataRoot, path.resolve(migratedRoot, '.trainer', 'runtime'));
+  assert.equal(
+    await fs.readFile(path.join(migration.managedDataRoot, 'trainer.db'), 'utf8'),
+    'sqlite-state\n',
+  );
+  assert.equal(await fs.readFile(path.join(externalDataRoot, 'trainer.db'), 'utf8'), 'sqlite-state\n');
+
+  const restored = await service.restoreWorkspaceBackup(backupRoot, restoredRoot);
+  assert.equal(restored.managedDataRoot, path.resolve(restoredRoot, '.trainer', 'runtime'));
+  assert.equal(
+    await fs.readFile(path.join(restored.managedDataRoot, 'trainer.db'), 'utf8'),
+    'sqlite-state\n',
+  );
+});
+
 test('workspace recovery refuses non-empty or nested targets before changing the active root', async (t) => {
   const temporaryDirectory = await createTemporaryDirectory(t);
   const sourceRoot = path.join(temporaryDirectory, 'source-workspace');

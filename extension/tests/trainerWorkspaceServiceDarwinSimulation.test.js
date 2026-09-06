@@ -46,7 +46,14 @@ function toDarwinCanonicalForm(resultPath) {
 
 fs.realpath = async function darwinSimulatedRealpath(candidatePath) {
   const resolved = await realRealpath(candidatePath);
-  if (typeof candidatePath === 'string' && candidatePath.startsWith(`${SIM_ROOT}/`)) {
+  if (
+    typeof candidatePath === 'string' &&
+    (candidatePath === SIM_ROOT || candidatePath.startsWith(`${SIM_ROOT}/`))
+  ) {
+    // SIM_ROOT itself must canonicalize too: on macOS the parent of the
+    // external data root (/tmp/...) resolves to /private/tmp/... exactly
+    // like its children, and the canonical-containment check compares the
+    // realpaths of both sides.
     return toDarwinCanonicalForm(resolved);
   }
   return resolved;
