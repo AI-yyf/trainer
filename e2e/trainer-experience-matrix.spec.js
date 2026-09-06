@@ -242,20 +242,23 @@ async function exerciseTraining(page, scenario) {
 async function openConnectionDetails(page) {
   const detail = page.locator(".coach-settings-view__provider-detail");
   await expectSingleVisible(detail);
-  if (!(await detail.evaluate((element) => element.open))) {
-    await detail.locator(":scope > summary").click();
+  // The redesigned Settings IA renders the connection details as a
+  // CollapseSection (header button with aria-expanded), not a <details>.
+  const sectionHeader = detail.locator(".collapse-section__header");
+  await expectSingleVisible(sectionHeader);
+  if ((await sectionHeader.getAttribute("aria-expanded")) !== "true") {
+    await sectionHeader.click();
   }
-  await expect.poll(() => detail.evaluate((element) => element.open)).toBe(true);
+  await expect(sectionHeader).toHaveAttribute("aria-expanded", "true");
   return detail;
 }
 
-async function openProviderConnectionFields(detail) {
-  const fields = detail.locator('details.settings-sheet__minor-panel:has(input[type="password"])');
+async function openProviderConnectionFields(page) {
+  // The redesigned connection card keeps the editable fields (including the
+  // API key) directly inside the always-visible connection form; only the
+  // model picker inside that form still opens through its own summary.
+  const fields = page.locator('form.settings-sheet__minor-body:has(input[type="password"])');
   await expectSingleVisible(fields);
-  if (!(await fields.evaluate((element) => element.open))) {
-    await fields.locator(":scope > summary").click();
-  }
-  await expect.poll(() => fields.evaluate((element) => element.open)).toBe(true);
   return fields;
 }
 
@@ -264,7 +267,7 @@ async function exerciseSettings(page, scenario) {
   const detail = await openConnectionDetails(page);
 
   if (scenario.userAction.kind === "switch_provider_profile") {
-    const fields = await openProviderConnectionFields(detail);
+    const fields = await openProviderConnectionFields(page);
     const modelPicker = fields.locator("details.settings-model-picker");
     await expectSingleVisible(modelPicker);
     if (!(await modelPicker.evaluate((element) => element.open))) {
@@ -310,14 +313,12 @@ async function exerciseSettings(page, scenario) {
 
   if (scenario.userAction.kind === "switch_language") {
     const targetLanguage = scenario.language === "en-US" ? "zh-CN" : "en-US";
-    const defaultsPanel = page.locator(
-      `details.settings-sheet__defaults-panel:has(summary[aria-label*="${LANGUAGE_LABELS[scenario.language]}"])`,
-    );
-    await expectSingleVisible(defaultsPanel);
-    if (!(await defaultsPanel.evaluate((element) => element.open))) {
-      await defaultsPanel.locator(":scope > summary").click();
-    }
-    const choice = defaultsPanel.getByRole("button", { name: LANGUAGE_LABELS[targetLanguage], exact: true });
+    // The redesigned Settings IA renders the response-language choice as a
+    // pill row (data-settings-language) inside the open Teaching preferences
+    // section, not as a <details> defaults panel.
+    const languageRow = page.locator('.settings-row[data-settings-language="true"]');
+    await expectSingleVisible(languageRow);
+    const choice = languageRow.getByRole("button", { name: LANGUAGE_LABELS[targetLanguage], exact: true });
     await expectSingleVisible(choice);
     await choice.click();
     const appliedChoice = page.getByRole("button", { name: LANGUAGE_LABELS[targetLanguage], exact: true });
@@ -406,7 +407,13 @@ async function assertPersistenceContract(page, scenario, actionResult) {
       return;
     case "settings_detail":
       await expectSingleVisible(page.locator(".coach-settings-view__provider-detail"));
-      await expect.poll(() => page.locator(".coach-settings-view__provider-detail").evaluate((element) => element.open)).toBe(true);
+      await expect
+        .poll(() =>
+          page
+            .locator(".coach-settings-view__provider-detail .collapse-section__header")
+            .getAttribute("aria-expanded"),
+        )
+        .toBe("true");
       return;
     case "preview_active_view":
       await expect.poll(() =>

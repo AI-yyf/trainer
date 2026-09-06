@@ -111,7 +111,12 @@ class SubprocessCommandRunner:
 
         candidate_path = Path(candidate)
         if candidate_path.is_absolute():
-            return str(candidate_path.resolve(strict=False))
+            # Lexical normalization only: Path.resolve() would follow symlinks,
+            # which on POSIX rewrites `.venv/bin/python` (a symlink to the base
+            # interpreter) into e.g. `/usr/bin/python3`. The spawned verifier
+            # then loses venv membership ("No module named pytest"). abspath
+            # keeps the invoked path so the OS-level venv detection applies.
+            return os.path.abspath(candidate)
 
         resolved = shutil.which(candidate)
         if resolved is not None:
@@ -124,7 +129,11 @@ class SubprocessCommandRunner:
         return None
 
     def _resolve_sibling_console_script(self, candidate: str) -> Path | None:
-        scripts_dir = Path(sys.executable).resolve(strict=False).parent
+        # Keep the invoked interpreter path un-resolved: on POSIX the venv
+        # python is a symlink, and resolving it would point the sibling search
+        # at the base interpreter's directory (e.g. /usr/bin) instead of the
+        # venv bin directory that actually hosts the console scripts.
+        scripts_dir = Path(sys.executable).absolute().parent
         sibling_candidates = [scripts_dir / candidate]
         if os.name == "nt" and not Path(candidate).suffix:
             sibling_candidates.append(scripts_dir / f"{candidate}.exe")
