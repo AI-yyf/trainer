@@ -228,6 +228,21 @@ function isSafeIdentity(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(value);
 }
 
+const WINDOWS_DRIVE_ABSOLUTE_PATH = /^[a-zA-Z]:[\\/]/;
+const UNC_ABSOLUTE_PATH = /^\\\\/;
+
+/**
+ * Windows drive/UNC locations keep win32 semantics on every host: a realpath
+ * divergence from the lexical path always means a junction/symlink redirect.
+ * POSIX-style locations are judged with host semantics because macOS and
+ * Linux canonicalize system-level ancestors (/var -> /private/var,
+ * /tmp -> /private/tmp), where a realpath divergence is normal operating
+ * system structure rather than a redirect.
+ */
+function looksLikeWindowsAbsolutePath(value: string): boolean {
+  return WINDOWS_DRIVE_ABSOLUTE_PATH.test(value) || UNC_ABSOLUTE_PATH.test(value);
+}
+
 function resolvePendingReconciliationActions(
   state: TrainerWorkspacePendingReconciliationState,
   jobId?: string,
@@ -1140,10 +1155,22 @@ export class TrainerWorkspaceService {
     if (metadata.isSymbolicLink()) {
       throw new Error('Trainer managed data directory cannot be a symbolic link or junction.');
     }
-    const resolvedRuntimeDataRoot = await fs.realpath(normalizedRuntimeDataRoot);
-    if (!pathsEqual(resolvedRuntimeDataRoot, normalizedRuntimeDataRoot)) {
-      throw new Error('Trainer managed data directory must not resolve through a symbolic link or junction.');
+    if (looksLikeWindowsAbsolutePath(normalizedRuntimeDataRoot)) {
+      // Windows drive/UNC locations keep strict junction defense on every
+      // host: when the location resolves somewhere other than its lexical
+      // path, the data directory is being redirected and must fail closed.
+      const resolvedRuntimeDataRoot = await fs.realpath(normalizedRuntimeDataRoot);
+      if (!pathsEqual(resolvedRuntimeDataRoot, normalizedRuntimeDataRoot)) {
+        throw new Error('Trainer managed data directory must not resolve through a symbolic link or junction.');
+      }
     }
+    // POSIX-style locations are judged with host semantics: macOS and Linux
+    // resolve system-level ancestor symlinks (/var -> /private/var,
+    // /tmp -> /private/tmp), so a realpath divergence alone is normal
+    // operating-system structure, not a redirect. The managed data directory
+    // itself was already rejected as a symlink above, its contents are
+    // scanned below, and the snapshot destination is containment-checked in
+    // assertRuntimeDestinationSafe with realpath applied to both sides.
     await this.assertNoSymbolicLinksInDirectory(normalizedRuntimeDataRoot);
   }
 

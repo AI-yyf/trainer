@@ -238,10 +238,16 @@ function selectedRootFromManifest(manifest: TrainerWorkspaceManifest): SelectedT
 }
 
 function runtimeDataRootUnder(rootPath: string): string {
-  // Windows-style roots keep win32 join semantics on every host so the
-  // configured managed-data location stays a well-formed identifier.
+  // The managed runtime data root is a real filesystem location, so it is
+  // always joined with the host separator rules: a Windows-style root keeps
+  // the win32 join on Windows, while a POSIX host joins it with posix rules
+  // so the runtime-data path stays a well-formed host path. Rendering the
+  // joined location with backslashes on POSIX would hand the sidecar and the
+  // runtime-data safety assertions a path the POSIX filesystem never uses.
   if (looksLikeWindowsAbsolutePath(rootPath)) {
-    return path.win32.join(rootPath, '.trainer', 'runtime');
+    return process.platform === 'win32'
+      ? path.win32.join(rootPath, TRAINER_WORKSPACE_RUNTIME_DATA_DIRECTORY)
+      : path.posix.join(rootPath, TRAINER_WORKSPACE_RUNTIME_DATA_DIRECTORY);
   }
   return path.join(rootPath, TRAINER_WORKSPACE_RUNTIME_DATA_DIRECTORY);
 }

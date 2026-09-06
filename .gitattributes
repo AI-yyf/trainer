@@ -1,0 +1,15 @@
+# Normalize line endings: source files are LF everywhere (CI source-contract
+# tests match \n-exact fingerprints; CRLF checkouts on Windows break them).
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary
+*.vsix binary
+*.tar.gz binary
+*.exe binary
+*.dll binary
+*.node binary
+*.woff binary
+*.woff2 binary
