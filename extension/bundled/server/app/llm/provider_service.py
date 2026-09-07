@@ -3991,6 +3991,13 @@ class ProviderService:
     def _configured_protocol(self, provider: ProviderConfig) -> ProviderProtocol | None:
         return normalize_provider_protocol(getattr(provider, "protocol", None))
 
+    def recommended_generation_max_tokens(self, default: int) -> int:
+        """Reasoning-first models can spend the whole default budget on hidden
+        reasoning before any visible JSON appears, so grant them headroom."""
+        if self._config is not None and _model_looks_reasoning_first(self._config):
+            return max(default, 8192)
+        return default
+
     def _plain_completion_protocol(self) -> str | None:
         provider = self._config or ProviderConfig(
             name="unspecified-provider",

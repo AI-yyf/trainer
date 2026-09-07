@@ -3127,6 +3127,17 @@ def _acceptance_criteria_for_payload(
 _CARD_GENERATION_MAX_TOKENS = 2048
 
 
+def _generation_max_tokens(provider_service: Any) -> int:
+    """Reasoning-first providers recommend a larger budget (hidden reasoning
+    consumes the default before any visible JSON); provider-like objects
+    without the capability keep the default."""
+    recommend = cast("Any", getattr(provider_service, "recommended_generation_max_tokens", None))
+    if not callable(recommend):
+        return _CARD_GENERATION_MAX_TOKENS
+    recommended = recommend(_CARD_GENERATION_MAX_TOKENS)
+    return recommended if isinstance(recommended, int) else _CARD_GENERATION_MAX_TOKENS
+
+
 def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -3736,7 +3747,7 @@ class CardGenerationService:
             request = provider.chat_completion(
                 messages,
                 temperature=temperature,
-                max_tokens=_CARD_GENERATION_MAX_TOKENS,
+                max_tokens=_generation_max_tokens(provider),
             )
             if loop and loop.is_running():
                 # We're already in an async context — use nest_asyncio or
@@ -3939,7 +3950,7 @@ class CardGenerationService:
         raw_parts: list[str] = []
         stream_kwargs: dict[str, object] = {
             "temperature": 0.7,
-            "max_tokens": _CARD_GENERATION_MAX_TOKENS,
+            "max_tokens": _generation_max_tokens(self._provider),
         }
         if cancel_event is not None:
             stream_kwargs["cancel_event"] = cancel_event

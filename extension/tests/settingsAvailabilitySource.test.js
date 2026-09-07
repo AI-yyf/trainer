@@ -219,18 +219,23 @@ test('settings offers the recommended template before manual setup for a blank p
     source,
     /const workspaceRootMissing =\s*!trainerWorkspace\?\.rootPath\?\.trim\(\) \|\| trainerWorkspace\?\.status === "root-missing";/,
   );
+  // The availability strip keeps its headline on the CONNECTION state; a
+  // missing workspace root becomes a reminder inside the detail, and the
+  // workspace-root CTA lives only in the workspace panel above (no duplicate).
   assert.match(
     source,
-    /const displayAvailabilityHeadline = workspaceRootMissing[\s\S]*shouldOfferRecommendedProviderTemplate/,
+    /const displayAvailabilityHeadline = shouldOfferRecommendedProviderTemplate/,
   );
+  assert.doesNotMatch(
+    source,
+    /const displayAvailabilityHeadline = workspaceRootMissing/,
+  );
+  assert.match(source, /const workspaceRootReminder = language === "zh-CN"/);
   assert.match(
     source,
-    /const displayAvailabilityDetail = workspaceRootMissing[\s\S]*shouldOfferRecommendedProviderTemplate\s*\? settingsPhrase\(language, "useMiniMaxProfileDetail"\)/,
+    /const displayAvailabilityDetail = \(\s*workspaceRootMissing\s*\? \`\$\{workspaceRootReminder\} \`\s*: ""\s*\) \+ \(shouldOfferRecommendedProviderTemplate\s*\? settingsPhrase\(language, "useMiniMaxProfileDetail"\)/,
   );
-  assert.match(
-    cta,
-    /workspaceRootMissing && onChooseTrainerWorkspaceRoot[\s\S]*shouldOfferRecommendedProviderTemplate/,
-  );
+  assert.doesNotMatch(cta, /workspaceRootMissing && onChooseTrainerWorkspaceRoot/);
   assert.match(source, /shouldOfferRecommendedProviderTemplate/);
   assert.match(source, /shouldRoutePrimaryToSavedProfiles/);
 });
@@ -245,7 +250,9 @@ test('settings details give draft requirements precedence over saved-connection 
 
   assert.match(draftNote, /currentDraftModelPolicyMessage \?\?/);
   assert.match(draftNote, /!providerDraft\.baseUrl\.trim\(\)\s*\? settingsStatusPhrase\(language, "fillProviderFields"\)/);
-  assert.match(draftNote, /!providerDraft\.model\.trim\(\)\s*\? settingsPhrase\(language, "chooseModelDetail"\)/);
+  // Missing-model guidance names the action directly instead of the bare
+  // "pick one from the list below" detail line.
+  assert.match(draftNote, /!providerDraft\.model\.trim\(\)\s*\? modelPickerCopy\.modelRequiredNote/);
   assert.match(
     draftNote,
     /!providerDraftHasApiKey && !providerDraftCanReuseSavedApiKey\s*\? settingsStatusPhrase\(language, "connectionSavedApiKeyMissing"\)/,

@@ -840,10 +840,16 @@ function providerModelPickerCopy(language: ComposerLanguage): {
   useTypedModel: (model: string) => string;
   moreMatchesHint: (count: number) => string;
   saveAndUse: (model: string) => string;
+  directModelPlaceholder: string;
+  directModelHint: string;
+  modelRequiredNote: string;
 } {
   const copy: Record<ComposerLanguage, ReturnType<typeof providerModelPickerCopy>> = {
     "zh-CN": {
       filterPlaceholder: "输入模型名称筛选",
+      directModelPlaceholder: "例如 kimi-k3",
+      directModelHint: "直接输入服务商支持的完整模型名；也可以点“查找模型”自动获取列表。",
+      modelRequiredNote: "请输入完整模型名（例如 kimi-k3），然后点“测试连接”。",
       filterLabel: "筛选模型",
       noMatches: "没有匹配的模型",
       refreshListDetail: "更新列表",
@@ -854,6 +860,9 @@ function providerModelPickerCopy(language: ComposerLanguage): {
     },
     "en-US": {
       filterPlaceholder: "Filter by model name",
+      directModelPlaceholder: "For example kimi-k3",
+      directModelHint: "Type the full model name your provider supports, or run Find models to fetch the list.",
+      modelRequiredNote: "Type the full model name (for example kimi-k3), then run Test Connection.",
       filterLabel: "Filter models",
       noMatches: "No matching models",
       refreshListDetail: "Refresh list",
@@ -864,6 +873,9 @@ function providerModelPickerCopy(language: ComposerLanguage): {
     },
     "es-ES": {
       filterPlaceholder: "Filtrar por nombre de modelo",
+      directModelPlaceholder: "Por ejemplo kimi-k3",
+      directModelHint: "Escribe el nombre completo del modelo, o ejecuta Buscar modelos para obtener la lista.",
+      modelRequiredNote: "Escribe el nombre completo del modelo (por ejemplo kimi-k3) y ejecuta Probar conexión.",
       filterLabel: "Filtrar modelos",
       noMatches: "No hay modelos coincidentes",
       refreshListDetail: "Actualizar lista",
@@ -874,6 +886,9 @@ function providerModelPickerCopy(language: ComposerLanguage): {
     },
     "fr-FR": {
       filterPlaceholder: "Filtrer par nom de modele",
+      directModelPlaceholder: "Par exemple kimi-k3",
+      directModelHint: "Saisis le nom complet du modele, ou lance Rechercher des modeles pour recuperer la liste.",
+      modelRequiredNote: "Saisis le nom complet du modele (par exemple kimi-k3), puis lance Tester la connexion.",
       filterLabel: "Filtrer les modeles",
       noMatches: "Aucun modele correspondant",
       refreshListDetail: "Actualiser la liste",
@@ -884,6 +899,9 @@ function providerModelPickerCopy(language: ComposerLanguage): {
     },
     "de-DE": {
       filterPlaceholder: "Nach Modellnamen filtern",
+      directModelPlaceholder: "Zum Beispiel kimi-k3",
+      directModelHint: "Gib den vollstandigen Modellnamen ein, oder starte Modelle suchen, um die Liste zu laden.",
+      modelRequiredNote: "Gib den vollstandigen Modellnamen ein (zum Beispiel kimi-k3) und starte dann Verbindung testen.",
       filterLabel: "Modelle filtern",
       noMatches: "Keine passenden Modelle",
       refreshListDetail: "Liste aktualisieren",
@@ -894,6 +912,9 @@ function providerModelPickerCopy(language: ComposerLanguage): {
     },
     "ja-JP": {
       filterPlaceholder: "モデル名で絞り込む",
+      directModelPlaceholder: "例: kimi-k3",
+      directModelHint: "プロバイダが対応する完全なモデル名を入力するか、「モデルを検索」で一覧を取得できます。",
+      modelRequiredNote: "完全なモデル名（例: kimi-k3）を入力してから「接続テスト」を実行してください。",
       filterLabel: "モデルを絞り込む",
       noMatches: "一致するモデルはありません",
       refreshListDetail: "一覧を更新",
@@ -904,6 +925,9 @@ function providerModelPickerCopy(language: ComposerLanguage): {
     },
     "ko-KR": {
       filterPlaceholder: "모델 이름으로 검색",
+      directModelPlaceholder: "예: kimi-k3",
+      directModelHint: "프로바이더가 지원하는 전체 모델 이름을 입력하거나, 모델 찾기로 목록을 가져오세요.",
+      modelRequiredNote: "전체 모델 이름(예: kimi-k3)을 입력한 뒤 연결 테스트를 실행하세요.",
       filterLabel: "모델 검색",
       noMatches: "일치하는 모델이 없습니다",
       refreshListDetail: "목록 새로 고침",
@@ -914,6 +938,9 @@ function providerModelPickerCopy(language: ComposerLanguage): {
     },
     "pt-BR": {
       filterPlaceholder: "Filtrar por nome do modelo",
+      directModelPlaceholder: "Por exemplo kimi-k3",
+      directModelHint: "Digite o nome completo do modelo, ou execute Buscar modelos para obter a lista.",
+      modelRequiredNote: "Digite o nome completo do modelo (por exemplo kimi-k3) e execute Testar conexão.",
       filterLabel: "Filtrar modelos",
       noMatches: "Nenhum modelo encontrado",
       refreshListDetail: "Atualizar lista",
@@ -4831,6 +4858,12 @@ export function CoachSettingsView({
   const manualModelBlockedByPolicy =
     Boolean(normalizedManualModelDraft) && !manualModelPolicy.allowed;
   const modelPickerCopy = providerModelPickerCopy(language);
+  // Nothing discovered yet: a plain always-visible model input beats the
+  // disclosure picker (first-run users cannot pick from an empty list).
+  const modelCatalogIsEmpty =
+    availableModels.length === 0 &&
+    draftCatalogModels.length === 0 &&
+    liveCatalogModels.length === 0;
   const providerDraftEditorBlocked = Boolean(requestDefaultsError);
   const requestDefaultsTextHasDrift =
     requestDefaultsText.trim() !== formatRequestDefaultsDraft(draftRequestDefaults).trim();
@@ -6032,28 +6065,27 @@ export function CoachSettingsView({
     providerCredentialsRejected && !providerHasDraftChanges && !providerTestPassed;
   const workspaceRootMissing =
     !trainerWorkspace?.rootPath?.trim() || trainerWorkspace?.status === "root-missing";
-  const displayAvailabilityHeadline = workspaceRootMissing
-    ? language === "zh-CN"
-      ? "先选工作区根目录"
-      : "Choose a workspace root"
-    : shouldOfferRecommendedProviderTemplate
+  const displayAvailabilityHeadline = shouldOfferRecommendedProviderTemplate
     ? settingsPhrase(language, "useMiniMaxProfile")
     : shouldRoutePrimaryToSavedProfiles
       ? language === "zh-CN"
         ? "先应用一个已保存的 profile"
         : "Apply a saved profile first"
       : localizedResolvedAvailabilityHeadline;
-  const displayAvailabilityDetail = workspaceRootMissing
-    ? language === "zh-CN"
-      ? "没有根目录，对话和训练会空转。"
-      : "Without a workspace root, Coach and Training cannot work."
-    : shouldOfferRecommendedProviderTemplate
+  const workspaceRootReminder = language === "zh-CN"
+    ? "先在上方选择工作区根目录，否则对话和训练无法使用。"
+    : "Choose a workspace root above first — Coach and Training cannot work without it.";
+  const displayAvailabilityDetail = (
+    workspaceRootMissing
+      ? `${workspaceRootReminder} `
+      : ""
+  ) + (shouldOfferRecommendedProviderTemplate
     ? settingsPhrase(language, "useMiniMaxProfileDetail")
     : shouldRoutePrimaryToSavedProfiles
       ? language === "zh-CN"
         ? "当前工作区还没有启用中的 provider，但下面已经有可复用的 profiles。"
         : "This workspace has no active provider yet, but reusable profiles are already available below."
-      : localizedResolvedAvailabilityDetail;
+      : localizedResolvedAvailabilityDetail);
   const showAvailabilityPrimaryAction =
     workspaceRootMissing || availabilityMode !== "ready" || Boolean(onTestProvider);
   const resolvedAvailabilityPrimaryLabel = canFindDraftModels
@@ -6182,17 +6214,7 @@ export function CoachSettingsView({
     icon: ReactNode;
     action?: (() => void) | undefined;
   } =
-    workspaceRootMissing && onChooseTrainerWorkspaceRoot
-      ? {
-          label: language === "zh-CN" ? "选择工作区根目录" : "Choose workspace root",
-          detail:
-            language === "zh-CN"
-              ? "没有根目录，对话和训练会空转。"
-              : "Without a workspace root, Coach and Training cannot work.",
-          icon: <FolderIcon size={14} />,
-          action: onChooseTrainerWorkspaceRoot,
-        }
-    : shouldOfferRecommendedProviderTemplate
+    shouldOfferRecommendedProviderTemplate
       ? {
           label: settingsPhrase(language, "useMiniMaxProfile"),
           detail: settingsPhrase(language, "useMiniMaxProfileDetail"),
@@ -6985,7 +7007,7 @@ export function CoachSettingsView({
       (!providerDraft.baseUrl.trim()
         ? settingsStatusPhrase(language, "fillProviderFields")
         : !providerDraft.model.trim()
-          ? settingsPhrase(language, "chooseModelDetail")
+          ? modelPickerCopy.modelRequiredNote
           : !providerDraftHasApiKey && !providerDraftCanReuseSavedApiKey
             ? settingsStatusPhrase(language, "connectionSavedApiKeyMissing")
             : localizedResolvedAvailabilityDetail)
@@ -7288,6 +7310,19 @@ export function CoachSettingsView({
                   />
                 </label>
 
+                {modelCatalogIsEmpty ? (
+                  <label className="settings-field">
+                    <span>{copy.model}</span>
+                    <input
+                      value={currentDraftModel}
+                      placeholder={modelPickerCopy.directModelPlaceholder}
+                      onChange={(event) => onProviderDraftChange({ model: event.target.value })}
+                    />
+                    <p className="settings-sheet__note settings-sheet__note--compact">
+                      {modelPickerCopy.directModelHint}
+                    </p>
+                  </label>
+                ) : (
                 <div className="settings-field">
                   <span>{copy.model}</span>
                   <details
@@ -7397,6 +7432,9 @@ export function CoachSettingsView({
                     ) : null}
                   </details>
                   <div className="settings-sheet__stack settings-sheet__stack--tight">
+                  {/*
+                    model catalog present: keep the disclosure picker
+                  */}
                     {currentDraftModel && !currentDraftModelPolicy.allowed ? (
                       <p className="settings-sheet__note settings-sheet__note--compact" role="status">
                         {modelPolicyHint(
@@ -7412,6 +7450,7 @@ export function CoachSettingsView({
                     ) : null}
                   </div>
                 </div>
+                )}
               </div>
 
               {copy.configFileNote ? (
