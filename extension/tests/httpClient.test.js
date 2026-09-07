@@ -34,7 +34,11 @@ test('provider request timeout is extended but remains bounded', () => {
   assert.equal(SIDECAR_DEFAULTS.requestTimeoutMs, 15_000);
   assert.ok(SIDECAR_DEFAULTS.providerRequestTimeoutMs > SIDECAR_DEFAULTS.requestTimeoutMs);
   assert.ok(SIDECAR_DEFAULTS.providerRequestTimeoutMs <= SIDECAR_DEFAULTS.maxRequestTimeoutMs);
-  assert.ok(SIDECAR_DEFAULTS.maxRequestTimeoutMs <= 90_000);
+  // The coach turn opts into the full ceiling: reasoning-first gateways can
+  // legitimately spend minutes per turn before the first visible frame.
+  assert.equal(SIDECAR_DEFAULTS.coachTurnRequestTimeoutMs, 480_000);
+  assert.ok(SIDECAR_DEFAULTS.maxRequestTimeoutMs >= SIDECAR_DEFAULTS.coachTurnRequestTimeoutMs);
+  assert.ok(SIDECAR_DEFAULTS.providerRequestTimeoutMs <= 90_000);
 });
 
 test('postJson exposes only allow-listed workspace conflict metadata', async (t) => {
