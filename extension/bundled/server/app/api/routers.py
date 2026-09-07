@@ -756,9 +756,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         return normalized
 
     def register_stream_cancellation(stream_id: str) -> None:
+        # Idempotent replace: a crashed stream teardown can leave a stale entry,
+        # and rejecting the re-registration would permanently wedge every later
+        # send that reuses the id. Concurrent double-run protection lives in the
+        # request_id singleflight claim, not here.
         with stream_cancellation_guard:
-            if stream_id in stream_cancellation_events:
-                raise HTTPException(status_code=409, detail="This Trainer stream_id is already active.")
             stream_cancellation_events[stream_id] = asyncio.Event()
 
     def unregister_stream_cancellation(stream_id: str) -> None:
