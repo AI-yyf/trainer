@@ -31,7 +31,17 @@ from ..core.models import (
     TrainingCardTrustState,
     TrainingCardType,
 )
-from ..pedagogy.evidence_controls import PedagogyControls, apply_controls_to_card
+from ..pedagogy.evidence_controls import (
+    CodeReveal,
+    Difficulty,
+    MaterialRecommendation,
+    NextPlanStep,
+    PedagogyControls,
+    PedagogyMode,
+    PracticeType,
+    ReviewFrequency,
+    apply_controls_to_card,
+)
 from .subject_taxonomy import build_subject_blob, classify_learning_subject
 
 try:
@@ -137,20 +147,22 @@ def _apply_context_pedagogy_controls(
     if pedagogy_mode not in {"socratic", "direct", "debug_guide"}:
         pedagogy_mode = "debug_guide" if difficulty == "easy" else "socratic" if difficulty == "hard" else "direct"
     controls = PedagogyControls(
-        difficulty=difficulty,
+        # The whitelist normalization above guarantees each value is a member
+        # of its Literal; the casts only recover that fact for the typechecker.
+        difficulty=cast(Difficulty, difficulty),
         hint_count=max(1, min(5, int(hint_count))),
         explanation_depth="rebuild" if difficulty == "easy" else "grounded",
-        code_reveal=code_reveal,
-        practice_type=practice_type,
-        review_frequency=review_frequency,
-        material_recommendation=material,
-        next_plan_step=next_step,
+        code_reveal=cast(CodeReveal, code_reveal),
+        practice_type=cast(PracticeType, practice_type),
+        review_frequency=cast(ReviewFrequency, review_frequency),
+        material_recommendation=cast(MaterialRecommendation, material),
+        next_plan_step=cast(NextPlanStep, next_step),
         should_reveal_code=bool(should_reveal),
         challenge_level="lower" if difficulty == "easy" else "raise" if difficulty == "hard" else "steady",
         hint_depth="direct" if difficulty == "easy" else "lighter" if difficulty == "hard" else "guided",
         review_urgency="high" if review_frequency == "sooner" else "low" if review_frequency == "later" else "normal",
         next_step_bias="shrink" if next_step == "shrink" else "widen" if next_step == "widen" else "steady",
-        pedagogy_mode=pedagogy_mode,
+        pedagogy_mode=cast(PedagogyMode, pedagogy_mode),
     )
     return apply_controls_to_card(card, controls, language=context.response_language)
 
@@ -3706,7 +3718,8 @@ class CardGenerationService:
         so each request gets exactly one silent synchronous retry at a higher
         temperature before any failure is recorded or surfaced.
         """
-        if self._provider is None:
+        provider = self._provider
+        if provider is None:
             return None
 
         def _invoke_provider(temperature: float) -> str:
@@ -3720,7 +3733,7 @@ class CardGenerationService:
             except RuntimeError:
                 loop = None
 
-            request = self._provider.chat_completion(
+            request = provider.chat_completion(
                 messages,
                 temperature=temperature,
                 max_tokens=_CARD_GENERATION_MAX_TOKENS,

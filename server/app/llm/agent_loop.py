@@ -43,7 +43,7 @@ import inspect
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Awaitable, Callable
+from typing import Any, AsyncIterator, Awaitable, Callable, cast
 
 from .harness import (
     DEFAULT_TOOL_OUTPUT_LIMIT,
@@ -551,7 +551,9 @@ class CoachAgentLoop:
                                     streamed_text_safe = True
                         elif event_type == "final":
                             assistant_text = str(event.get("content") or assistant_text)
-                            tool_calls = list(event.get("tool_calls") or [])
+                            tool_calls = list(
+                                cast("list[dict[str, Any]]", event.get("tool_calls") or [])
+                            )
                             raw_stop = event.get("stop_reason") or event.get("finish_reason")
                             stream_stop_reason = str(raw_stop) if raw_stop else None
                             break
@@ -620,7 +622,7 @@ class CoachAgentLoop:
                     if stream_direct_text:
                         yield {"type": "text", "delta": missing_text}
                     else:
-                        event = {"type": "text", "delta": missing_text}
+                        event: dict[str, object] = {"type": "text", "delta": missing_text}
                         if streamed_text_safe:
                             event["safe_to_stream"] = True
                         yield event

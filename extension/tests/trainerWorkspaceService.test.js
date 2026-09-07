@@ -707,3 +707,54 @@ test('deleteManagedProject removes live registry but leaves the project lane sto
   assert.equal(manifest.projects[beta.fingerprint].projectId, beta.projectId);
   assert.equal(JSON.parse(await fs.readFile(laneManifest, 'utf8')).projectId, alpha.projectId);
 });
+
+test('manifest written through a symlink alias stays readable at its canonical path', async (t) => {
+  // macOS /var -> /private/var (and /tmp -> /private/tmp) must not make the
+  // same physical workspace root look like "a different root" when the
+  // manifest recorded the alias form. Regression for the VSIX E2E admission
+  // failure on darwin.
+  const temporaryDirectory = await createTemporaryDirectory(t);
+  const workspaceRoot = path.join(temporaryDirectory, 'workspace');
+  const aliasRoot = path.join(temporaryDirectory, 'workspace-alias');
+  await fs.mkdir(workspaceRoot, { recursive: true });
+  try {
+    await fs.symlink(workspaceRoot, aliasRoot, 'dir');
+  } catch (error) {
+    t.skip(`Directory symlinks are unavailable in this environment: ${String(error)}`);
+    return;
+  }
+  const canonicalRoot = await fs.realpath(workspaceRoot);
+  if (canonicalRoot === aliasRoot) {
+    t.skip('This environment does not resolve the alias to a distinct path.');
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const manifest = {
+    schemaVersion: 2,
+    kind: 'trainer-workspace',
+    rootPath: aliasRoot,
+    canonicalRootPath: aliasRoot,
+    legacyRootPaths: [],
+    manifestRevision: 1,
+    pathRevision: 0,
+    identityStatus: 'pending',
+    createdAt: now,
+    updatedAt: now,
+    directories: [...TRAINER_WORKSPACE_DIRECTORIES],
+    projects: {},
+  };
+  await fs.mkdir(path.dirname(path.join(workspaceRoot, TRAINER_WORKSPACE_MANIFEST_FILE)), { recursive: true });
+  await fs.writeFile(
+    path.join(workspaceRoot, TRAINER_WORKSPACE_MANIFEST_FILE),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    'utf8',
+  );
+
+  const service = createService(createGlobalState({
+    [TRAINER_WORKSPACE_ROOT_STORAGE_KEY]: canonicalRoot,
+  }));
+
+  const read = await service.readWorkspaceManifest();
+  assert.equal(read.rootPath, aliasRoot);
+});

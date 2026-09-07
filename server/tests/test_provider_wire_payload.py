@@ -207,7 +207,7 @@ def test_unknown_minimax_named_model_does_not_invent_thinking() -> None:
 
     provider = ProviderConfig(
         name="MiniMax",
-        base_url="http://minimax.redfast.top/v1",
+        base_url="http://minimax-gateway.test/v1",
         api_key_ref="trainer.test",
         model="mystery-custom-7b",
         protocol="openai_chat_completions_compatible",
@@ -232,7 +232,7 @@ def test_confirmed_minimax_model_keeps_native_thinking_field() -> None:
 
     provider = ProviderConfig(
         name="MiniMax",
-        base_url="http://minimax.redfast.top/v1",
+        base_url="http://minimax-gateway.test/v1",
         api_key_ref="trainer.test",
         model="MiniMax-M2.7",
         protocol="openai_chat_completions_compatible",

@@ -746,7 +746,7 @@ def test_bundled_openai_chat_call_handles_string_response() -> None:
                 self.chat = SimpleNamespace(completions=FakeCompletions())
 
         class FakeConfig:
-            base_url = "http://minimax.redfast.top"
+            base_url = "http://minimax-gateway.test"
             protocol = "openai_chat_completions_compatible"
 
         class FakeProviderService:

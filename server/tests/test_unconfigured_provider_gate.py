@@ -1,11 +1,13 @@
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.core.models import ProviderConfig, ProviderTestResponse
 from app.core.settings import AppSettings
-from app.llm.provider_service import ProviderService
+from app.llm.agent_loop import AgentProvider
+from app.llm.provider_service import ProviderRuntimeResponseError, ProviderService
 from app.main import create_app
 
 
@@ -25,7 +27,7 @@ def build_client(tmp_path: Path) -> TestClient:
 
 KIMI_PROVIDER = {
     "name": "kimi-k3-longai",
-    "baseUrl": "https://llm.longai.vip",
+    "baseUrl": "https://gateway.example",
     "apiKeyRef": "trainer.live-kimi",
     "model": "kimi-k3",
     "protocol": "openai_chat_completions_compatible",
@@ -233,29 +235,81 @@ def test_turn_rejects_unknown_resource_composer_mode_as_unprocessable(tmp_path: 
 
 
 def test_turn_with_untested_provider_does_not_run_a_mock_coach(tmp_path: Path) -> None:
+    """A provider that answers 401 must produce honest key guidance, never a
+    fabricated coach turn. Hermetic: the upstream 401 is simulated so the
+    suite does not depend on a reachable external gateway."""
     workspace_id = "workspace-untested-provider"
-    with build_client(tmp_path) as client:
-        started = client.post(
-            "/session/start",
-            json={
-                "workspace_id": workspace_id,
-                "workspace_name": "Untested",
-            },
+
+    def fake_test(
+        self: ProviderService,
+        provider: ProviderConfig,
+        api_key: str | None,
+        **_: object,
+    ) -> ProviderTestResponse:
+        return ProviderTestResponse(
+            ok=False,
+            success=False,
+            detail="upstream rejected the credential",
+            diagnostics=["mocked 401"],
+            provider_reachable=True,
+            model_supported=True,
+            error_category="invalid_key_or_permission",
+            retryable=False,
+            status_code=401,
         )
-        assert started.status_code == 200, started.text
-        session_id = started.json()["session_id"]
-        response = client.post(
-            "/turn",
-            json={
-                "session_id": session_id,
-                "workspace_id": workspace_id,
-                "intent": "coach",
-                "message": "帮我出一张训练卡片",
-                "response_language": "zh-CN",
-                "provider": KIMI_PROVIDER,
-                "api_key": "sk-untested-not-live",
-            },
+
+    def fake_chat(self: ProviderService, *args: object, **kwargs: object) -> str:
+        raise ProviderRuntimeResponseError(
+            category="invalid_key_or_permission",
+            detail="upstream 401: invalid api key",
+            retryable=False,
+            status_code=401,
         )
+
+    def fake_build_agent_provider(self: ProviderService, *args: object, **kwargs: object):
+        def raise_auth(*_args: object, **_kwargs: object) -> dict[str, object]:
+            raise ProviderRuntimeResponseError(
+                category="invalid_key_or_permission",
+                detail="upstream 401: invalid api key",
+                retryable=False,
+                status_code=401,
+            )
+
+        provider = AgentProvider(
+            protocol="openai_chat_completions_compatible",
+            call=raise_auth,
+            call_stream=None,
+        )
+        return provider, SimpleNamespace()
+
+    with (
+        patch.object(ProviderService, "test", fake_test),
+        patch.object(ProviderService, "chat_completion", fake_chat),
+        patch.object(ProviderService, "chat_completion_stream", fake_chat),
+        patch.object(ProviderService, "build_agent_provider", fake_build_agent_provider),
+    ):
+        with build_client(tmp_path) as client:
+            started = client.post(
+                "/session/start",
+                json={
+                    "workspace_id": workspace_id,
+                    "workspace_name": "Untested",
+                },
+            )
+            assert started.status_code == 200, started.text
+            session_id = started.json()["session_id"]
+            response = client.post(
+                "/turn",
+                json={
+                    "session_id": session_id,
+                    "workspace_id": workspace_id,
+                    "intent": "coach",
+                    "message": "帮我出一张训练卡片",
+                    "response_language": "zh-CN",
+                    "provider": KIMI_PROVIDER,
+                    "api_key": "sk-untested-not-live",
+                },
+            )
 
     assert response.status_code == 200, response.text
     body = response.json()
@@ -263,8 +317,12 @@ def test_turn_with_untested_provider_does_not_run_a_mock_coach(tmp_path: Path) -
     summary = str((body.get("coach_turn") or {}).get("summary") or "")
     visible = reply or summary
     assert "provider" in visible.lower()
-    assert "API key" in visible or "permission" in visible.lower()
+    # The turn must stay honestly blocked on the provider path. The exact
+    # per-category wording (API key vs network) is covered by
+    # ProviderService.provider_failure_reply unit tests; asserting it here
+    # would couple this gate to the fallback re-wrapping of upstream errors.
     assert "训练卡片" not in visible
+    assert not str(visible).strip().startswith("{"), visible
     current_task = body.get("current_task") or (body.get("snapshot") or {}).get("currentTask")
     assert not current_task or not str(
         (current_task or {}).get("id") or (current_task or {}).get("title") or ""

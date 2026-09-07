@@ -49,7 +49,7 @@ Run after implementation changes:
    - Settings
 7. Confirm truthful blocked states when provider or sidecar is not ready (no black screen)
 8. Configure an OpenAI-compatible provider and test the connection
-   - Keep the product-facing default endpoint on the official provider template. The provided MiniMax gateway (`http://47.107.101.18:3000/v1`) is test-only and must not be surfaced in the UI.
+   - Keep the product-facing default endpoint on the official provider template. The provided MiniMax gateway (`https://your-gateway.example/v1`) is test-only and must not be surfaced in the UI.
    - Run `node scripts/provider-smoke.mjs` only when `TRAINER_PROVIDER_SMOKE_API_KEY` already exists in the process environment; provide `TRAINER_PROVIDER_SMOKE_BASE_URL` and `TRAINER_PROVIDER_SMOKE_MODEL` through the existing SecretStorage/environment bridge. The script never prints or persists credentials or provider responses; output is limited to success/failure category, model, protocol, and elapsed milliseconds.
    - After provider smoke passes, run `node scripts/trainer-turn-smoke.mjs` only when `TRAINER_TURN_SMOKE_PROVIDER_API_KEY`, `TRAINER_TURN_SMOKE_PROVIDER_BASE_URL`, and the local sidecar are already available through the existing secure environment/SecretStorage bridge. Its output is likewise limited to category, model, protocol, and elapsed milliseconds; do not pass keys on the command line or write them to files.
    - The smoke now verifies `/models`, exact probe echoing, `<think>` leakage, and language integrity. Use `TRAINER_PROVIDER_SMOKE_RESPONSE_LANGUAGE=zh-CN` for the default coaching language and `TRAINER_PROVIDER_SMOKE_RESPONSE_LANGUAGE=en-US` only when you intentionally check an English fallback.

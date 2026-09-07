@@ -1171,7 +1171,7 @@ def _resource_for_workspace(runtime: Any, workspace_id: str, resource_id: str) -
     if not callable(list_resources):
         return None
     try:
-        for resource in list_resources(workspace_id):
+        for resource in cast("Iterable[Any]", list_resources(workspace_id)):
             if str(getattr(resource, "id", "") or "") == resource_id:
                 return resource
     except Exception:
@@ -1207,7 +1207,7 @@ def _match_resource_by_sandbox_path(
         except Exception:
             sandbox_root = None
     try:
-        resources = list_resources(workspace_id)
+        resources = cast("Iterable[Any] | None", list_resources(workspace_id))
     except Exception:
         return None
     matches: list[Any] = []
@@ -1530,7 +1530,7 @@ async def _handle_organize_resources(context: ToolContext, args: dict[str, Any])
                 SandboxMkdirRequest(
                     workspace_id=context.workspace_id,
                     path=path,
-                    explicit_destructive_policy=True,
+                    explicitDestructivePolicy=True,
                 ),
                 resources=[],
                 workspace_root_path=getattr(runtime, "resolve_workspace_path", lambda _workspace_id: None)(context.workspace_id),
@@ -1550,7 +1550,7 @@ async def _handle_organize_resources(context: ToolContext, args: dict[str, Any])
                     SandboxBatchRenameRequest(
                         workspace_id=context.workspace_id,
                         items=rename_items,
-                        explicit_destructive_policy=True,
+                        explicitDestructivePolicy=True,
                     ),
                 )
             )
@@ -1566,7 +1566,7 @@ async def _handle_organize_resources(context: ToolContext, args: dict[str, Any])
                     SandboxDeleteRequest(
                         workspace_id=context.workspace_id,
                         path=path,
-                        explicit_destructive_policy=True,
+                        explicitDestructivePolicy=True,
                     ),
                     resources=[],
                     workspace_root_path=getattr(runtime, "resolve_workspace_path", lambda _workspace_id: None)(context.workspace_id),
@@ -1581,7 +1581,7 @@ async def _handle_organize_resources(context: ToolContext, args: dict[str, Any])
                     SandboxRestoreRequest(
                         workspace_id=context.workspace_id,
                         path=path,
-                        explicit_destructive_policy=True,
+                        explicitDestructivePolicy=True,
                     ),
                     resources=[],
                     workspace_root_path=getattr(runtime, "resolve_workspace_path", lambda _workspace_id: None)(context.workspace_id),
@@ -1621,7 +1621,9 @@ async def _handle_organize_resources(context: ToolContext, args: dict[str, Any])
             if isinstance(history, dict):
                 history.pop(undo_id, None)
             refresh_sessions = getattr(runtime, "refresh_workspace_sessions", None)
-            sessions_refreshed = int(refresh_sessions(context.workspace_id) or 0) if callable(refresh_sessions) else 0
+            sessions_refreshed = int(
+                cast("int", refresh_sessions(context.workspace_id)) or 0
+            ) if callable(refresh_sessions) else 0
             return {
                 "ok": True,
                 "committed": True,
@@ -1667,7 +1669,9 @@ async def _handle_organize_resources(context: ToolContext, args: dict[str, Any])
             )
 
         refresh_sessions = getattr(runtime, "refresh_workspace_sessions", None)
-        sessions_refreshed = int(refresh_sessions(context.workspace_id) or 0) if callable(refresh_sessions) else 0
+        sessions_refreshed = int(
+            cast("int", refresh_sessions(context.workspace_id)) or 0
+        ) if callable(refresh_sessions) else 0
         return {
             "ok": True,
             "committed": True,
@@ -1937,11 +1941,12 @@ def _flatten_sandbox_nodes(nodes: Any, *, limit: int, items: list[dict[str, Any]
 
 
 def _sandbox_preview_payload(preview: Any, *, max_chars: int) -> dict[str, Any]:
+    payload: dict[str, Any]
     if hasattr(preview, "model_dump") and callable(preview.model_dump):
         try:
-            payload = preview.model_dump(mode="json")
+            payload = cast("dict[str, Any]", preview.model_dump(mode="json"))
         except TypeError:
-            payload = preview.model_dump()
+            payload = cast("dict[str, Any]", preview.model_dump())
     elif isinstance(preview, dict):
         payload = dict(preview)
     else:
@@ -2082,7 +2087,7 @@ async def _handle_write_sandbox_file(context: ToolContext, args: dict[str, Any])
                 path=relative,
                 content=text,
                 create=create,
-                explicit_destructive_policy=True,
+                explicitDestructivePolicy=True,
             ),
         )
     except Exception as exc:
@@ -2160,7 +2165,7 @@ async def _handle_index_sandbox_file(context: ToolContext, args: dict[str, Any])
         )
         if inspect.isawaitable(indexed):
             indexed = await indexed
-        indexed = indexed.model_copy(update={"sandbox_path": absolute, "sandbox_dirty": False})
+        indexed = cast(Any, indexed).model_copy(update={"sandbox_path": absolute, "sandbox_dirty": False})
         if repository is not None and hasattr(repository, "save_resource"):
             repository.save_resource(context.workspace_id, indexed)
         postprocess = getattr(context.runtime, "postprocess_indexed_resource", None)
@@ -2172,7 +2177,7 @@ async def _handle_index_sandbox_file(context: ToolContext, args: dict[str, Any])
                 indexed = postprocessed[0]
             elif postprocessed is not None:
                 indexed = postprocessed
-            indexed = indexed.model_copy(update={"sandbox_path": absolute, "sandbox_dirty": False})
+            indexed = cast(Any, indexed).model_copy(update={"sandbox_path": absolute, "sandbox_dirty": False})
             if repository is not None and hasattr(repository, "save_resource"):
                 repository.save_resource(context.workspace_id, indexed)
     except Exception as exc:
@@ -2515,7 +2520,9 @@ def _leftover_training_persist_identity(
     leftover_ctx = getattr(memory_service, "_leftover_persist_context", None) if memory_service is not None else None
     if callable(leftover_ctx):
         try:
-            leftover_plan, leftover_runtime, leftover_task_title = leftover_ctx(context.workspace_id)
+            leftover_plan, leftover_runtime, leftover_task_title = cast(
+                "tuple[Any, dict[str, Any], str]", leftover_ctx(context.workspace_id)
+            )
         except Exception:
             leftover_plan, leftover_runtime, leftover_task_title = None, {}, ""
         else:

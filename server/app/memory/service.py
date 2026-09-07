@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import asdict, fields, is_dataclass, replace
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, cast
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -2797,10 +2797,10 @@ class MemoryService:
         )
         teaching_asset_items = self.list_teaching_assets(workspace_id=workspace_id)
         training_card_items = self.get_cards(workspace_id)
-        leftover_plans = []
+        leftover_plans: list[Any] | tuple[Any, ...] | None = []
         list_plans = getattr(self.repository, "list_plans", None)
         if callable(list_plans):
-            leftover_plans = list_plans(workspace_id)
+            leftover_plans = cast("list[Any]", list_plans(workspace_id))
         competing_identity = leftover_bound_plan_competing_identity_labels(
             plan=plan,
             runtime=recovered if isinstance(recovered, dict) else {},
@@ -3268,7 +3268,7 @@ class MemoryService:
             due_review_count=len(due_reviews),
             pace_signal=pace_signal,
             teaching_observations=teaching_observations,
-            user_feedback=user_feedback_items,
+            userFeedback=user_feedback_items,
             workspace=workspace_payload,
             active_thread=active_thread,
             workspace_understanding=workspace_understanding,
@@ -4161,10 +4161,10 @@ class MemoryService:
             cleaned["suggested_actions"] = []
             cleaned.pop("suggestedActions", None)
             patch[COACH_TURN_KEY] = cleaned
-        leftover_plans = []
+        leftover_plans: list[Any] | tuple[Any, ...] | None = []
         list_plans = getattr(self.repository, "list_plans", None)
         if callable(list_plans):
-            leftover_plans = list_plans(workspace_id)
+            leftover_plans = cast("list[Any]", list_plans(workspace_id))
         competing_labels = leftover_bound_plan_competing_identity_labels(
             plan=plan,
             runtime=record,
@@ -4667,6 +4667,7 @@ class MemoryService:
                 {**handoff, "card_title": live_title},
                 workspace_id,
             )
+        hop: dict[str, Any] | None = None
         if current_step:
             hop = {
                 **(next_hop if isinstance(next_hop, dict) else {}),
@@ -4704,7 +4705,7 @@ class MemoryService:
                 workspace_id,
             )
         structured.update_workspace(**updates)
-        if current_step:
+        if current_step and hop is not None:
             # Runtime advance is authoritative for the next training hop, even
             # when leftover-plan cleanup would otherwise blank its title.
             structured.update_workspace(
@@ -6130,9 +6131,9 @@ class MemoryService:
             detail=detail,
             learner_answer=learner_answer,
             selected_option_index=selected_option_index,
-            selected_option_indices=selected_indices,
-            fill_blank_answers=submitted_blanks,
-            sort_order=submitted_sort_order,
+            selectedOptionIndices=selected_indices,
+            fillBlankAnswers=submitted_blanks,
+            sortOrder=submitted_sort_order,
             answer_mode=answer_mode,
             feedback=feedback,
             dependency_key=card.dependency_key,

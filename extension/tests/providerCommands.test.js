@@ -1749,7 +1749,7 @@ test('switchProviderProfileCommand auto-refreshes models and restores resolved-m
     name: 'MiniMax',
     label: 'MiniMax',
     protocol: 'openai_chat_completions_compatible',
-    baseUrl: 'http://47.107.101.18:3000/v1',
+    baseUrl: 'http://minimax-gateway.test/v1',
     model: 'MiniMax-M3',
     apiKeyRef: 'minimax.default',
     availableModels: ['MiniMax-M3'],
@@ -2031,7 +2031,7 @@ test('createProviderProfileFromDraftCommand stores the current draft as a reusab
         name: 'MiniMax',
         label: 'MiniMax',
         protocol: 'openai_chat_completions_compatible',
-        baseUrl: 'http://47.107.101.18:3000/v1',
+        baseUrl: 'http://minimax-gateway.test/v1',
         model: 'MiniMax-M3',
         apiKeyRef: 'minimax.default',
         credentialMode: 'ui_proxy',
@@ -2114,7 +2114,7 @@ test('createProviderProfileFromDraftCommand stores the current draft as a reusab
         detail: 'Provider reachable. Chat probe succeeded.',
         checkedAt: '2026-06-30T00:00:00.000Z',
         providerName: 'MiniMax',
-        baseUrl: 'http://47.107.101.18:3000/v1',
+        baseUrl: 'http://minimax-gateway.test/v1',
         model: 'MiniMax-M2.7-highspeed',
       };
     },
@@ -2128,7 +2128,7 @@ test('createProviderProfileFromDraftCommand stores the current draft as a reusab
   const result = await createProviderProfileFromDraftCommand(context, {
     name: 'MiniMax',
     protocol: 'openai_chat_completions_compatible',
-    baseUrl: 'http://47.107.101.18:3000/v1',
+    baseUrl: 'http://minimax-gateway.test/v1',
     model: 'MiniMax-M2.7-highspeed',
   });
 

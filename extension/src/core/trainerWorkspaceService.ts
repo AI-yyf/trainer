@@ -1,5 +1,6 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs/promises';
+import * as fsSync from 'node:fs';
 import * as path from 'node:path';
 import type * as vscode from 'vscode';
 
@@ -198,7 +199,20 @@ function canonicalPathForComparison(value: string): string {
 }
 
 function pathsEqual(left: string, right: string): boolean {
-  return canonicalPathForComparison(left) === canonicalPathForComparison(right);
+  if (canonicalPathForComparison(left) === canonicalPathForComparison(right)) {
+    return true;
+  }
+  // POSIX symlink aliases (/var vs /private/var, /tmp vs /private/tmp) must
+  // not make the same physical directory look like a different workspace
+  // root, so fall back to resolved-path comparison before rejecting.
+  if (process.platform === 'win32') {
+    return false;
+  }
+  try {
+    return fsSync.realpathSync(left) === fsSync.realpathSync(right);
+  } catch {
+    return false;
+  }
 }
 
 function pathContains(parentPath: string, candidatePath: string): boolean {

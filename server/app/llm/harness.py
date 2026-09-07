@@ -272,7 +272,10 @@ def _serialize_span(messages: list[dict[str, Any]]) -> str:
                 for call in tool_calls:
                     if not isinstance(call, dict):
                         continue
-                    function = call.get("function") if isinstance(call.get("function"), dict) else {}
+                    raw_function = call.get("function")
+                    function: dict[str, object] = (
+                        raw_function if isinstance(raw_function, dict) else {}
+                    )
                     name = str(call.get("name") or function.get("name") or "").strip()
                     arguments = call.get("arguments")
                     if arguments is None:

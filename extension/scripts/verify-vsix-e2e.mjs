@@ -572,6 +572,7 @@ const steps = [];
           : null;
       return {
         commandOk: commandResult && commandResult.ok === true,
+        commandMessage: commandResult && commandResult.message || null,
         rootPath: trainerWorkspace && trainerWorkspace.rootPath || null,
         projectPath: trainerWorkspace && trainerWorkspace.projectPath || null,
         status: trainerWorkspace && trainerWorkspace.status || null,
@@ -1042,7 +1043,14 @@ const steps = [];
           ? generatedCard.card_id || generatedCard.cardId
           : null;
         if (!generatedCardResult || generatedCardResult.ok !== true || !generatedCardId) {
-          throw new Error("Public training card command did not materialize a card.");
+          throw new Error(
+            "Public training card command did not materialize a card: "
+              + JSON.stringify({
+                ok: generatedCardResult ? generatedCardResult.ok : null,
+                message: generatedCardResult ? generatedCardResult.message || null : null,
+                hasCard: Boolean(generatedCard),
+              }),
+          );
         }
 
         await postJson(port, "/learning/signal", {
@@ -2504,9 +2512,22 @@ function sameLocalPath(left, right) {
   const normalize = (value) => path.resolve(value).replace(/[\\/]+$/, "");
   const normalizedLeft = normalize(left);
   const normalizedRight = normalize(right);
-  return process.platform === "win32"
+  const lexicalMatch = process.platform === "win32"
     ? normalizedLeft.toLocaleLowerCase("en-US") === normalizedRight.toLocaleLowerCase("en-US")
     : normalizedLeft === normalizedRight;
+  if (lexicalMatch) {
+    return true;
+  }
+  // POSIX symlink aliases (/var vs /private/var) name the same directory;
+  // compare resolved forms before failing the workspace-root assertion.
+  if (process.platform === "win32") {
+    return false;
+  }
+  try {
+    return fs.realpathSync.native(normalizedLeft) === fs.realpathSync.native(normalizedRight);
+  } catch {
+    return false;
+  }
 }
 
 function sanitize(value) {

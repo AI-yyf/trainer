@@ -362,7 +362,7 @@ def test_session_message_provider_override_infers_anthropic_tool_capabilities(
                 "provider": {
                     "name": "MiniMax gateway",
                     "api": "anthropic",
-                    "baseUrl": "http://minimax.redfast.top",
+                    "baseUrl": "http://minimax-gateway.test",
                     "apiKeyRef": "trainer.override",
                     "model": "MiniMax-M3",
                 },
