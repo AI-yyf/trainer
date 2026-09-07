@@ -2141,7 +2141,7 @@ export async function sendMessageCommand(
 
   const sendRequest = async () =>
     context.sidecarClient.postJson<unknown>(port, requestPath, requestBody, {
-      timeoutMs: SIDECAR_DEFAULTS.providerRequestTimeoutMs,
+      timeoutMs: SIDECAR_DEFAULTS.coachTurnRequestTimeoutMs,
     });
 
   let response: unknown;
@@ -2394,7 +2394,7 @@ export async function sendStreamMessageCommand(
       requestPath,
       requestBody,
       {
-        timeoutMs: SIDECAR_DEFAULTS.providerRequestTimeoutMs,
+        timeoutMs: SIDECAR_DEFAULTS.coachTurnRequestTimeoutMs,
         signal: abortController.signal,
       },
     )) {

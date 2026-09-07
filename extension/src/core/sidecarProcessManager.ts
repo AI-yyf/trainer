@@ -523,7 +523,7 @@ export class SidecarProcessManager implements vscode.Disposable {
     }
 
     throw new Error(
-      'Timed out waiting for the sidecar health check. The first launch after installing a new Trainer build can take longer on macOS; open Settings and restart the sidecar, then check the Trainer output channel if it still fails.',
+      'Timed out waiting for the sidecar health check. The first launch after installing a new Trainer build can take longer; open Settings and restart the sidecar, then check the Trainer output channel if it still fails.',
     );
   }
 

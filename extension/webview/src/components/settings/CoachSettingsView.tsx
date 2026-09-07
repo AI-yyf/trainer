@@ -875,7 +875,7 @@ function providerModelPickerCopy(language: ComposerLanguage): {
       filterPlaceholder: "Filtrar por nombre de modelo",
       directModelPlaceholder: "Por ejemplo kimi-k3",
       directModelHint: "Escribe el nombre completo del modelo, o ejecuta Buscar modelos para obtener la lista.",
-      modelRequiredNote: "Escribe el nombre completo del modelo (por ejemplo kimi-k3) y ejecuta Probar conexión.",
+      modelRequiredNote: "Escribe el nombre completo del modelo (por ejemplo kimi-k3) y ejecuta Probar.",
       filterLabel: "Filtrar modelos",
       noMatches: "No hay modelos coincidentes",
       refreshListDetail: "Actualizar lista",
@@ -913,7 +913,7 @@ function providerModelPickerCopy(language: ComposerLanguage): {
     "ja-JP": {
       filterPlaceholder: "モデル名で絞り込む",
       directModelPlaceholder: "例: kimi-k3",
-      directModelHint: "プロバイダが対応する完全なモデル名を入力するか、「モデルを検索」で一覧を取得できます。",
+      directModelHint: "プロバイダが対応する完全なモデル名を入力するか、「モデル名を直接入力」で一覧を取得できます。",
       modelRequiredNote: "完全なモデル名（例: kimi-k3）を入力してから「接続テスト」を実行してください。",
       filterLabel: "モデルを絞り込む",
       noMatches: "一致するモデルはありません",
