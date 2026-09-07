@@ -1009,12 +1009,6 @@ class PlannerService:
         localized.verify_method = [self._localize_plan_line(item) for item in localized.verify_method if item]
         localized.next_after_current = self._localize_plan_line(localized.next_after_current)
         localized.blocked_reason = self._localize_plan_line(localized.blocked_reason)
-        metadata = getattr(localized, "metadata", None)
-        if isinstance(metadata, dict):
-            try:
-                localized.metadata = self._localize_plan_metadata(metadata)
-            except AttributeError:
-                pass
         return localized
 
     def update_plan(self, current: ApiLearningPlan, request: PlanUpdateRequest) -> ApiLearningPlan:
@@ -1058,13 +1052,15 @@ class PlannerService:
                 updated.why_now = updated.summary
         return updated
 
-    def _localize_plan_title(self, title: str, objective: str) -> str:
+    def _localize_plan_title(self, title: str, objective: str | None) -> str:
+        objective = objective or ""
         if title.startswith("Trainer plan for "):
             anchor = objective[:60].strip() or title.removeprefix("Trainer plan for ").strip()
             return f"训练计划：{anchor}"
         return self._localize_plan_phase_title(title)
 
-    def _localize_plan_summary(self, summary: str, objective: str) -> str:
+    def _localize_plan_summary(self, summary: str, objective: str | None) -> str:
+        objective = objective or ""
         anchor = objective[:48].strip() or objective.strip() or "当前目标"
         if summary.startswith("Keep the plan for '") and "land one thin slice, verify it, then expand only after review." in summary:
             return f"围绕「{anchor}」把计划保持得足够窄：先落地一个薄切片，验证后再扩展。"
@@ -1182,24 +1178,6 @@ class PlannerService:
             if line.startswith(prefix) and prefix == "Verify the previously weak path directly.":
                 return localized_prefix
         return line
-
-    def _localize_plan_metadata(self, metadata: dict[str, object]) -> dict[str, object]:
-        localized = dict(metadata)
-        if "current_step" in localized and isinstance(localized["current_step"], str):
-            localized["current_step"] = self._localize_plan_line(localized["current_step"])
-        if "why_now" in localized and isinstance(localized["why_now"], str):
-            localized["why_now"] = self._localize_plan_line(localized["why_now"])
-        if "next_after_current" in localized and isinstance(localized["next_after_current"], str):
-            localized["next_after_current"] = self._localize_plan_line(localized["next_after_current"])
-        if "blocked_reason" in localized and isinstance(localized["blocked_reason"], str):
-            localized["blocked_reason"] = self._localize_plan_line(localized["blocked_reason"])
-        if "verify_method" in localized and isinstance(localized["verify_method"], list):
-            localized["verify_method"] = [
-                self._localize_plan_line(str(item))
-                for item in localized["verify_method"]
-                if str(item).strip()
-            ]
-        return localized
 
     def refresh_plan_lifecycle(
         self,

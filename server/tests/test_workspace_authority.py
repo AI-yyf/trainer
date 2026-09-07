@@ -73,14 +73,16 @@ class TestWorkspaceAuthority:
 
     def test_initialization(self, authority, temp_workspace):
         """Test authority initializes with correct root and permission."""
-        assert authority.active_workspace_root == temp_workspace
+        # active_workspace_root is stored canonicalized; compare canonical
+        # forms so macOS /var -> /private/var symlink resolution matches.
+        assert Path(authority.active_workspace_root).resolve() == Path(temp_workspace).resolve()
         assert authority.permission_level == PermissionLevel.INSPECT
 
     def test_set_active_workspace(self, temp_workspace):
         """Test setting active workspace root."""
         auth = WorkspaceAuthority()
         auth.set_active_workspace(temp_workspace)
-        assert auth.active_workspace_root == temp_workspace
+        assert Path(auth.active_workspace_root).resolve() == Path(temp_workspace).resolve()
 
     def test_switching_active_workspace_resets_write_authority(self, tmp_path: Path):
         """A normal root switch must not silently preserve a write grant."""
@@ -225,7 +227,12 @@ class TestWorkspaceAuthority:
         assert not Path(trashed_path).exists()
         assert Path(restored_path).exists()
         assert Path(restored_path).read_text(encoding="utf-8") == "restore me"
-        assert Path(restored_path).relative_to(Path(temp_workspace)).as_posix() == "docs/notes.txt"
+        # Both sides are resolved so macOS /var -> /private/var symlink
+        # resolution cannot break the containment comparison.
+        assert (
+            Path(restored_path).resolve().relative_to(Path(temp_workspace).resolve()).as_posix()
+            == "docs/notes.txt"
+        )
 
         latest_restore = authority.get_ledger(operation="restore")[-1]
         assert latest_restore.details["source_trashed_path"] == trashed_path
@@ -236,7 +243,7 @@ class TestWorkspaceAuthority:
         cp = authority.create_checkpoint("Test checkpoint", {"meta": "data"})
         assert cp.checkpoint_id == "cp-0001"
         assert cp.description == "Test checkpoint"
-        assert cp.root_path == temp_workspace
+        assert Path(cp.root_path).resolve() == Path(temp_workspace).resolve()
 
         # Retrieve checkpoint
         retrieved = authority.get_checkpoint(cp.checkpoint_id)
@@ -328,8 +335,8 @@ class TestWorkspaceAuthority:
         summary_model = authority.summary_model()
         assert summary_model.model_dump(mode="json") == summary
         assert summary["has_workspace_root"] is True
-        assert summary["active_workspace_root"] == temp_workspace
-        assert summary["root_uri"] == temp_workspace
+        assert Path(summary["active_workspace_root"]).resolve() == Path(temp_workspace).resolve()
+        assert Path(summary["root_uri"]).resolve() == Path(temp_workspace).resolve()
         assert summary["authority_source"] == "workspace_authority_service"
         assert summary["source"] == "workspace_authority_service"
         assert summary["root_detail"] == "source: workspace_authority_service"
@@ -351,7 +358,10 @@ class TestWorkspaceAuthority:
             summary["next_safe_action"]
             == "Start by reading, searching, and previewing the key material, then pick the first verifiable task."
         )
-        assert summary["summary_text"] == f"{temp_workspace} | read/list/search/index/preview/summarize | workspace_authority_service"
+        expected_summary_root = f"{Path(temp_workspace).resolve()}"
+        assert summary["summary_text"] == (
+            f"{expected_summary_root} | read/list/search/index/preview/summarize | workspace_authority_service"
+        )
 
     def test_summary_keeps_authority_source_separate_from_remote_name(self, temp_workspace):
         """Remote workspaces should surface remote_name without replacing the authority source."""

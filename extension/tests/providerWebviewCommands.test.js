@@ -651,7 +651,7 @@ test('saveProviderFromWebviewCommand keeps the model list ready but blocks coach
 
   const result = await saveProviderFromWebviewCommand(context, {
     name: 'minimax-smoke',
-    baseUrl: 'http://47.107.101.18:3000/v1',
+    baseUrl: 'http://minimax-gateway.test/v1',
     model: 'MiniMax-M3',
     apiKey: 'sk-live',
     replaceApiKey: true,
@@ -822,7 +822,7 @@ test('saveProviderFromWebviewCommand keeps the model list ready when zh-CN integ
 
   const result = await saveProviderFromWebviewCommand(context, {
     name: 'minimax-smoke',
-    baseUrl: 'http://47.107.101.18:3000/v1',
+    baseUrl: 'http://minimax-gateway.test/v1',
     model: 'MiniMax-M3',
     apiKey: 'sk-live',
     replaceApiKey: true,
@@ -932,7 +932,7 @@ test('saveProviderFromWebviewCommand injects stable MiniMax defaults for custom 
   const result = await saveProviderFromWebviewCommand(context, {
     name: 'custom-minimax-gateway',
     protocol: 'openai_chat_completions_compatible',
-    baseUrl: 'http://47.107.101.18:3000/v1',
+    baseUrl: 'http://minimax-gateway.test/v1',
     model: 'MiniMax-M3',
     capabilities: {
       chat: true,
@@ -1076,7 +1076,7 @@ test('saveProviderFromWebviewCommand tests the saved model when live discovery i
   const result = await saveProviderFromWebviewCommand(context, {
     name: 'minimax-compatible',
     protocol: 'anthropic_messages',
-    baseUrl: 'http://minimax.redfast.top',
+    baseUrl: 'http://minimax-gateway.test',
     model: 'MiniMax-M3',
     apiKey: 'test-only-key',
     replaceApiKey: true,
@@ -1361,7 +1361,7 @@ test('switchProviderModelCommand persists a model chosen from the live available
     name: 'mini-max',
     label: 'MiniMax',
     protocol: 'openai_chat_completions_compatible',
-    baseUrl: 'http://47.107.101.18:3000/v1',
+    baseUrl: 'http://minimax-gateway.test/v1',
     apiKeyRef: 'mini-max.default',
     model: 'MiniMax-M3',
     contextWindowTokens: 64000,
@@ -1414,7 +1414,7 @@ test('switchProviderModelCommand persists a model chosen from the live available
     detail: 'Provider reachable. Chat probe succeeded.',
     checkedAt: '2026-06-30T00:00:00.000Z',
     providerName: 'mini-max',
-    baseUrl: 'http://47.107.101.18:3000/v1',
+    baseUrl: 'http://minimax-gateway.test/v1',
     model: 'MiniMax-M3',
   };
 
@@ -1500,7 +1500,7 @@ test('switchProviderModelCommand accepts a model preserved in the configured mod
     name: 'mini-max',
     label: 'MiniMax',
     protocol: 'openai_chat_completions_compatible',
-    baseUrl: 'http://47.107.101.18:3000/v1',
+    baseUrl: 'http://minimax-gateway.test/v1',
     apiKeyRef: 'mini-max.default',
     model: 'MiniMax-M3',
     contextWindowTokens: 64000,
@@ -1754,7 +1754,7 @@ test('refreshProviderModelsCommand keeps protocol identity with refreshed models
     name: 'Anthropic',
     label: 'Anthropic',
     protocol: 'anthropic_messages',
-    baseUrl: 'http://minimax.redfast.top',
+    baseUrl: 'http://minimax-gateway.test',
     apiKeyRef: 'anthropic.default',
     model: 'MiniMax-M3',
     capabilities: {
@@ -3055,7 +3055,7 @@ test('refreshProviderModelsCommand restores saved per-model limits when live ref
     name: 'mini-max',
     label: 'MiniMax',
     protocol: 'openai_chat_completions_compatible',
-    baseUrl: 'http://47.107.101.18:3000/v1',
+    baseUrl: 'http://minimax-gateway.test/v1',
     apiKeyRef: 'mini-max.default',
     model: 'MiniMax-M3',
     contextWindowTokens: 64000,
@@ -3217,7 +3217,7 @@ test('primeProviderModelsState quietly warms the saved provider model list for S
     name: 'MiniMax',
     label: 'MiniMax',
     protocol: 'anthropic_messages',
-    baseUrl: 'http://minimax.redfast.top',
+    baseUrl: 'http://minimax-gateway.test',
     apiKeyRef: 'anthropic.default',
     model: 'MiniMax-M3',
     capabilities: {

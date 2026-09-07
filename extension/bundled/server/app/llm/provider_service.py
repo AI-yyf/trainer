@@ -10,7 +10,7 @@ from contextvars import ContextVar
 from importlib import import_module
 from time import monotonic
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any, Callable, cast
 from urllib.parse import quote, urlsplit
 
 import httpx
@@ -3208,7 +3208,7 @@ class ProviderService:
         if not callable(iterator):
             return []
         try:
-            return list(response)
+            return list(cast("list[object]", response))
         except TypeError:
             return []
 
@@ -3991,7 +3991,7 @@ class ProviderService:
     def _configured_protocol(self, provider: ProviderConfig) -> ProviderProtocol | None:
         return normalize_provider_protocol(getattr(provider, "protocol", None))
 
-    def _plain_completion_protocol(self) -> str:
+    def _plain_completion_protocol(self) -> str | None:
         provider = self._config or ProviderConfig(
             name="unspecified-provider",
             baseUrl="",

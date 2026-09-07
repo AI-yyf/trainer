@@ -166,7 +166,7 @@
 
 ### 现实 smoke
 
-- `GET http://47.107.101.18:3000/v1/models` should return at least:
+- `GET https://your-gateway.example/v1/models` should return at least:
   - `MiniMax-M2.7-highspeed`
   - `MiniMax-M3`
 - `POST /v1/chat/completions` must send UTF-8 JSON and top-level `thinking: { type: "disabled" }`

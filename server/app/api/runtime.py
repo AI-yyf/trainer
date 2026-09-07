@@ -7,7 +7,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Iterable, cast
 from uuid import uuid4
 
 from ..affect.service import AffectService
@@ -245,7 +245,7 @@ class TrainerRuntime:
             return
         present_paths = {
             str(item or "").replace("\\", "/").lstrip("./").strip()
-            for item in (present or [])
+            for item in cast("Iterable[object]", present or [])
             if str(item or "").strip()
         }
         remaining = [path for path in pending if path not in present_paths]

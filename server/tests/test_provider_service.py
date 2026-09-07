@@ -605,7 +605,7 @@ def test_provider_test_skips_cjk_probe_for_english_only_flow() -> None:
 def test_provider_test_uses_native_anthropic_messages_probe() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax-gateway.test",
         api_key_ref="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
@@ -731,7 +731,7 @@ def test_classify_httpx_transport_errors_as_retryable(
 def test_provider_test_retries_native_anthropic_empty_probe_once() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax-gateway.test",
         api_key_ref="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
@@ -773,7 +773,7 @@ def test_provider_test_retries_native_anthropic_empty_probe_once() -> None:
 def test_provider_test_classifies_native_anthropic_thinking_only_reply_without_leaking_it() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax-gateway.test",
         api_key_ref="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
@@ -807,7 +807,7 @@ def test_provider_test_classifies_native_anthropic_thinking_only_reply_without_l
 def test_provider_test_recovers_native_anthropic_blank_visible_probe_via_language_probe() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax-gateway.test",
         api_key_ref="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
@@ -859,7 +859,7 @@ def test_provider_test_recovers_native_anthropic_blank_visible_probe_via_languag
 def test_provider_test_threads_anthropic_probe_request_defaults() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax-gateway.test",
         api_key_ref="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
@@ -893,7 +893,7 @@ def test_provider_test_threads_anthropic_probe_request_defaults() -> None:
 def test_provider_test_native_anthropic_probe_catches_language_corruption() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax-gateway.test",
         api_key_ref="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
@@ -939,7 +939,7 @@ def test_provider_test_native_anthropic_probe_catches_language_corruption() -> N
 def test_provider_test_native_probe_keeps_visible_reply_when_optional_language_probe_is_inconclusive() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax-gateway.test",
         api_key_ref="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
@@ -985,7 +985,7 @@ def test_provider_test_native_probe_keeps_visible_reply_when_optional_language_p
 def test_provider_test_native_anthropic_requires_every_language_probe_to_pass() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax-gateway.test",
         api_key_ref="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
@@ -1295,7 +1295,7 @@ async def test_non_agent_coaching_reply_dispatches_to_configured_native_protocol
 ) -> None:
     config = ProviderConfig(
         name="anthropic-compatible",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax-gateway.test",
         api_key_ref="trainer.anthropic",
         model="MiniMax-M3",
         protocol="anthropic_messages",
@@ -1355,7 +1355,7 @@ async def test_non_google_anthropic_gateway_falls_back_when_native_reply_is_html
 ) -> None:
     config = ProviderConfig(
         name="anthropic-compatible",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax-gateway.test",
         api_key_ref="trainer.anthropic",
         model="MiniMax-M3",
         protocol="anthropic_messages",
@@ -1573,7 +1573,7 @@ async def test_minimax_direct_sidecar_config_forces_visible_reply_wire_defaults(
 
     config = ProviderConfig(
         name="custom-minimax-gateway",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax-gateway.test",
         api_key_ref="trainer.minimax",
         model="MiniMax-M3",
         protocol="openai_chat_completions_compatible",
@@ -1640,7 +1640,7 @@ async def test_nonofficial_anthropic_agent_binding_forces_thinking_disabled() ->
 
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax-gateway.test",
         api_key_ref="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
@@ -1824,7 +1824,7 @@ def test_provider_list_models_uses_native_anthropic_models_endpoint() -> None:
 def test_provider_list_models_falls_back_to_openai_for_compatible_anthropic_gateway() -> None:
     config = ProviderConfig(
         name="minimax-anthropic-gateway",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax-gateway.test",
         api_key_ref="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",

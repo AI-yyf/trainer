@@ -1762,7 +1762,7 @@ test('updatePlanCommand honestly rejects unsupported batch evidence governance r
   context.__hostState.bootstrap.providerConfig = {
     configured: true,
     name: 'Anthropic Gateway',
-    baseUrl: 'http://minimax.redfast.top',
+    baseUrl: 'http://minimax-gateway.test',
     model: 'MiniMax-M3',
     protocol: 'anthropic_messages',
     protocolFamily: 'anthropic',
@@ -1821,7 +1821,7 @@ test('updatePlanCommand honestly rejects unsupported dry-run plan evidence previ
   context.__hostState.bootstrap.providerConfig = {
     configured: true,
     name: 'Anthropic Gateway',
-    baseUrl: 'http://minimax.redfast.top',
+    baseUrl: 'http://minimax-gateway.test',
     model: 'MiniMax-M3',
     protocol: 'anthropic_messages',
     protocolFamily: 'anthropic',
@@ -3233,7 +3233,7 @@ test('sendMessageCommand does not transparently retry session message after time
   context.__hostState.bootstrap.providerConfig = {
     configured: true,
     name: 'Anthropic Gateway',
-    baseUrl: 'http://minimax.redfast.top',
+    baseUrl: 'http://minimax-gateway.test',
     model: 'MiniMax-M3',
     apiKeyConfigured: true,
     capabilities: {
@@ -3255,7 +3255,7 @@ test('sendMessageCommand does not transparently retry session message after time
       detail: 'Provider reachable. Chat probe succeeded with model MiniMax-M3. Response: pong',
       checkedAt: new Date().toISOString(),
       providerName: 'Anthropic Gateway',
-      baseUrl: 'http://minimax.redfast.top',
+      baseUrl: 'http://minimax-gateway.test',
       model: 'MiniMax-M3',
       responseLanguage: 'zh-CN',
     },
@@ -3265,7 +3265,7 @@ test('sendMessageCommand does not transparently retry session message after time
     getConfig() {
       return {
         name: 'Anthropic Gateway',
-        baseUrl: 'http://minimax.redfast.top',
+        baseUrl: 'http://minimax-gateway.test',
         model: 'MiniMax-M3',
         protocol: 'anthropic_messages',
         apiKeyRef: 'anthropic.default',

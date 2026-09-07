@@ -85,6 +85,21 @@ function resolveSymlinkTargetPath(linkPath) {
   return path.resolve(path.dirname(linkPath), normalizedTarget);
 }
 
+// fs.rmSync(..., { recursive: true, force: true }) silently leaves a dangling
+// symlink in place: its internal stat follows the link, force: true swallows
+// the ENOENT as "already gone", and the link itself survives on macOS/Linux.
+// A symlink (or Windows junction) is never a real directory, so it must be
+// unlinked directly.
+function removeSymlink(linkPath) {
+  try {
+    fs.unlinkSync(linkPath);
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
+
 function sanitizeSymlinkEntry(linkPath, { extensionDir, materialized, removed, directories, copiedRealDirectories }) {
   const relativePath = path.relative(extensionDir, linkPath);
   const resolvedTarget = resolveSymlinkTargetPath(linkPath);
@@ -95,7 +110,7 @@ function sanitizeSymlinkEntry(linkPath, { extensionDir, materialized, removed, d
   } catch {
     // Dangling links ship dead bytes and crash both the vsce secret scanner
     // (ENOENT) and the zip step; nothing in the bundle can resolve them.
-    fs.rmSync(linkPath, { recursive: true, force: true });
+    removeSymlink(linkPath);
     removed.push(relativePath);
     return;
   }
@@ -103,14 +118,14 @@ function sanitizeSymlinkEntry(linkPath, { extensionDir, materialized, removed, d
   if (targetStat.isFile()) {
     // Replace the link with a copy of its target content so the packaged
     // artifact stays self-contained on every extraction platform.
-    fs.rmSync(linkPath, { recursive: true, force: true });
+    removeSymlink(linkPath);
     fs.copyFileSync(resolvedTarget, linkPath);
     materialized.push(relativePath);
     return;
   }
 
   if (targetStat.isDirectory()) {
-    fs.rmSync(linkPath, { recursive: true, force: true });
+    removeSymlink(linkPath);
     materializeDirectoryCopy(resolvedTarget, linkPath, copiedRealDirectories);
     directories.push(relativePath);
     return;

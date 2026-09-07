@@ -1574,8 +1574,10 @@ def classify_heuristic(
     raw = str(folder_path or "").strip()
     local_dir = False
     if raw and "://" not in raw:
+        # expanduser() raises only non-OSError (which must propagate), so bind
+        # `path` outside the guarded calls to keep it statically bound below.
+        path = Path(raw).expanduser()
         try:
-            path = Path(raw).expanduser()
             local_dir = path.exists() and path.is_dir()
         except OSError:
             local_dir = False

@@ -144,7 +144,10 @@ export const SIDECAR_DEFAULTS = {
   portStart: 34891,
   portEnd: 34911,
   healthPath: '/health',
-  startupTimeoutMs: 20_000,
+  // The PyInstaller onedir binary can take several seconds on its very first
+  // macOS launch (Gatekeeper signature validation is silent and load-sensitive),
+  // so darwin gets a wider health window than the default 20s.
+  startupTimeoutMs: process.platform === 'darwin' ? 60_000 : 20_000,
   requestTimeoutMs: 15_000,
   providerRequestTimeoutMs: 90_000,
   maxRequestTimeoutMs: 90_000,

@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Lock, Thread
 from time import perf_counter
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, cast
 from uuid import uuid4
 
 from ..core.models import utc_now_iso
@@ -232,6 +232,9 @@ class ProjectAdoptionIndexService:
         return self._record_from_payload(payload)
 
     def _record_from_payload(self, payload: dict[str, Any]) -> ProjectAdoptionJobRecord:
+        raw_status = payload.get("status")
+        valid_statuses = {"queued", "running", "completed", "interrupted", "retry_required"}
+        status = cast(ProjectAdoptionJobStatus, raw_status) if raw_status in valid_statuses else "retry_required"
         return ProjectAdoptionJobRecord(
             job_id=str(payload.get("job_id") or "").strip(),
             workspace_id=str(payload.get("workspace_id") or "").strip(),
@@ -241,7 +244,7 @@ class ProjectAdoptionIndexService:
             root_id=(str(payload.get("root_id") or "").strip() or None),
             root_path=str(payload.get("root_path") or "").strip(),
             context_id=(str(payload.get("context_id") or "").strip() or None),
-            status=payload.get("status") if payload.get("status") in {"queued", "running", "completed", "interrupted", "retry_required"} else "retry_required",
+            status=status,
             progress=float(payload.get("progress") or 0.0),
             progress_message=str(payload.get("progress_message") or "").strip(),
             created_at=str(payload.get("created_at") or utc_now_iso()),

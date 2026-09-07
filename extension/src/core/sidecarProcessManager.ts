@@ -522,7 +522,9 @@ export class SidecarProcessManager implements vscode.Disposable {
       await new Promise((resolve) => setTimeout(resolve, 750));
     }
 
-    throw new Error('Timed out waiting for sidecar health check.');
+    throw new Error(
+      'Timed out waiting for the sidecar health check. The first launch after installing a new Trainer build can take longer on macOS; open Settings and restart the sidecar, then check the Trainer output channel if it still fails.',
+    );
   }
 
   private async stopForManagedDataTransfer(): Promise<void> {

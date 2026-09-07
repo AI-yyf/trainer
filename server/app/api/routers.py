@@ -7,6 +7,7 @@ import json
 import logging
 import posixpath
 import re
+from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass, is_dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -76,6 +77,7 @@ from ..core.models import (
     PrincipleNotes,
     ProjectAdaptationGuide,
     ProjectIdea,
+    ProjectProvisioning,
     ProjectSourceSuggestion,
     ProviderConfig,
     ProviderCredentialMode,
@@ -305,11 +307,17 @@ def _pedagogy_controls_for_workspace(runtime: TrainerRuntime, workspace_id: str)
     return controls_from_profile(getattr(memory, "coaching_adaptation", None))
 
 
+class _TrainingMintOverlay(TypedDict):
+    anchors: dict[str, str]
+    leftover: set[str]
+    recovered_step: str
+
+
 def _workspace_training_mint_overlay(
     runtime: TrainerRuntime,
     workspace_id: str,
     request_payload: CardGenerationRequest,
-) -> dict[str, object]:
+) -> _TrainingMintOverlay:
     """Strip leftover formal title/summary from card mint anchors."""
 
     repository = getattr(runtime, "repository", None)
@@ -442,7 +450,7 @@ def _attach_requested_workspace_files(
     workspace_id: str | None,
 ) -> dict[str, object]:
     getter = getattr(runtime, "requested_workspace_file_paths", None)
-    files = getter(workspace_id) if callable(getter) else []
+    files = cast("list[str]", getter(workspace_id)) if callable(getter) else []
     if not files:
         return payload
     payload["requested_workspace_files"] = list(files)
@@ -604,13 +612,12 @@ def overlay_session_response_honesty_stamps(
             target["streak_blocks_live_object_mint"] = True
 
     if pressure_blocks or streak_blocks:
-        agent_meta = out.get("agent_meta")
-        if not isinstance(agent_meta, dict):
-            agent_meta = out.get("agent")
-        if not isinstance(agent_meta, dict):
-            agent_meta = {"agentic": False}
-        else:
-            agent_meta = dict(agent_meta)
+        raw_agent_meta = out.get("agent_meta")
+        if not isinstance(raw_agent_meta, dict):
+            raw_agent_meta = out.get("agent")
+        agent_meta: dict[str, object] = (
+            dict(raw_agent_meta) if isinstance(raw_agent_meta, dict) else {"agentic": False}
+        )
         _stamp_mapping(agent_meta)
         out["agent_meta"] = agent_meta
         out["agent"] = agent_meta
@@ -1134,8 +1141,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
 
         capabilities: dict[str, object] = {}
         flags = getattr(provider, "capabilities", None)
-        if hasattr(flags, "model_dump"):
-            capabilities = flags.model_dump(by_alias=True)
+        flags_dump = getattr(flags, "model_dump", None)
+        if callable(flags_dump):
+            capabilities = cast("dict[str, object]", flags_dump(by_alias=True))
         elif isinstance(flags, dict):
             capabilities = dict(flags)
 
@@ -4605,7 +4613,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         snapshot: WorkbenchSnapshot,
         coaching_service: ProviderService,
         object_kind: Literal["task", "plan", "coach"] = "coach",
-        scenario: str = "general",
+        scenario: CoachScenario = "general",
     ) -> CoachTurnPayload:
         if object_kind == "plan":
             summary = localized_text(
@@ -12069,7 +12077,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     def routing_plan_state(workspace_id: str) -> dict[str, object]:
         leftover_fields = leftover_plan_state_fields(workspace_id)
         plan = leftover_fields.get("leftover_plan")
-        if plan is None or not hasattr(plan, "stages"):
+        if not isinstance(plan, LearningPlan):
             return leftover_fields
         active_stage = next(
             (
@@ -17002,7 +17010,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     snapshot.memory = snapshot.memory.model_copy(
                         update={"active_training_card_routing": None}
                     )
-            competing_plan, competing_runtime = leftover_runtime_for_workspace(workspace_id)
+            competing_plan, competing_runtime = leftover_runtime_for_workspace(workspace_id or "")
             competing_identity = leftover_bound_plan_competing_identity_labels(
                 plan=snapshot.plan or competing_plan,
                 runtime=competing_runtime or leftover_runtime,
@@ -19859,7 +19867,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 snapshot=state.snapshot,
                 coaching_service=coaching_service,
                 object_kind=unusable_kind,
-                scenario=scenario,
+                # infer_coaching_scenario/infer_message_coaching_scenario only
+                # return valid scenario names.
+                scenario=cast(CoachScenario, scenario),
             )
             scenario = str(coach_turn["scenario"] or scenario)
             artifacts = {}
@@ -20540,7 +20550,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         job: ProjectAdoptionJobRecord,
         discovery: ProjectDiscovery | None = None,
     ) -> dict[str, object]:
-        payload = {"project_adoption_job": job.to_payload()}
+        payload: dict[str, object] = {"project_adoption_job": job.to_payload()}
         result = job.result
         if isinstance(result, dict):
             payload.update(result)
@@ -21004,7 +21014,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             ),
         }
 
-    def validate_project_provisioning_or_repair(workspace_id: str, response_language: str | None) -> object | None:
+    def validate_project_provisioning_or_repair(workspace_id: str, response_language: str | None) -> ProjectProvisioning | None:
         try:
             return runtime.get_project_provisioning(workspace_id)
         except ProjectProvisioningIntegrityError as exc:
@@ -21464,7 +21474,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     attachment_delivery=attachment_delivery,
                 )
                 runtime.save_session_state(state.session_id)
-                return _finish_session_response(to_json_payload(response))
+                return _finish_session_response(json_object_payload(response))
         coach_turn: CoachTurnPayload = resolve_coach_turn(
             state=state,
             profile=profile,
@@ -22363,9 +22373,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             shared_future: asyncio.Future | None,
         ):
             try:
+                shared_payload: dict[str, object]
                 if kind == "wait":
                     assert shared_future is not None
-                    shared_payload = await shared_future
+                    shared_payload = cast("dict[str, object]", await shared_future)
                 else:
                     assert cached_response is not None
                     shared_payload = cached_response
@@ -22464,7 +22475,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 # receive channel after the response starts.
                 return False
 
-        async def generate():
+        # Pyright gives up on this oversized async generator ("code is too
+        # complex to analyze") and then misreads it as a coroutine, so the
+        # complexity bailout is silenced here and the StreamingResponse call
+        # site pins the async-iterator type explicitly.
+        async def generate():  # pyright: ignore[reportGeneralTypeIssues]
             token_count = 0
             streamed_reply_content = ""
             pending_streamed_reply_content = ""
@@ -23130,7 +23145,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 unregister_stream_cancellation(stream_id)
 
         register_stream_cancellation(stream_id)
-        return StreamingResponse(generate(), media_type="text/event-stream")
+        return StreamingResponse(
+            cast(AsyncIterator[bytes], generate()), media_type="text/event-stream"
+        )
 
     @router.post("/turn/stream")
     async def turn_stream(payload: dict, http_request: Request):
@@ -23341,7 +23358,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             except RuntimeError:
                 return False
 
-        async def generate():
+        # Pyright gives up on this oversized async generator ("code is too
+        # complex to analyze") and then misreads it as a coroutine, so the
+        # complexity bailout is silenced here and the StreamingResponse call
+        # site pins the async-iterator type explicitly.
+        async def generate():  # pyright: ignore[reportGeneralTypeIssues]
             nonlocal coaching_service, profile, request, state, use_agent_stream, workspace_id
             token_count = 0
             streamed_reply_content = ""
@@ -24452,7 +24473,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 unregister_stream_cancellation(stream_id)
 
         register_stream_cancellation(stream_id)
-        return StreamingResponse(generate(), media_type="text/event-stream")
+        return StreamingResponse(
+            cast(AsyncIterator[bytes], generate()), media_type="text/event-stream"
+        )
 
     def seed_plan_from_coach_outputs(
         plan: LearningPlan,
@@ -25623,7 +25646,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         workspace_id = str(payload.get("workspace_id") or payload.get("workspaceId") or "").strip()
         if not workspace_id:
             return
-        provider_payload = payload.get("provider") if isinstance(payload.get("provider"), dict) else {}
+        raw_provider_payload = payload.get("provider")
+        provider_payload: dict[str, object] = (
+            raw_provider_payload if isinstance(raw_provider_payload, dict) else {}
+        )
         body = {
             **response,
             "checked_at": datetime.now(UTC).isoformat(),
@@ -26514,7 +26540,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             SandboxRenameRequest(
                 path=request.path,
                 new_path=request.new_path,
-                explicit_destructive_policy=bool(
+                explicitDestructivePolicy=bool(
                     getattr(request, "explicit_destructive_policy", False)
                 ),
             ),
@@ -26825,7 +26851,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     plan=plan,
                     runtime=mismatch_runtime,
                     existing=mismatch_runtime,
-                    request_plan_id=request.plan_id,
+                    request_plan_id=request.plan_id or "",
                     current_step=plan.current_step,
                 ),
                 feedback_id=f"feedback:{uuid4().hex}",
@@ -26958,7 +26984,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     ) -> None:
         overlay = getattr(runtime, "overlay_last_test_on_service", None)
         if callable(overlay):
-            coaching_service = overlay(coaching_service)
+            coaching_service = cast(ProviderService, overlay(coaching_service))
         if provider_is_live_usable(coaching_service, payload):
             return
         raise HTTPException(
@@ -27072,29 +27098,24 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             shared_future: asyncio.Future | None,
         ):
             try:
+                shared_payload: dict[str, object]
                 if kind == "wait":
                     assert shared_future is not None
-                    shared_payload = await shared_future
+                    shared_payload = cast("dict[str, object]", await shared_future)
                 else:
                     assert cached_response is not None
                     shared_payload = cached_response
+                reliability = shared_payload.get("reliability")
+                reliability_outcome = (
+                    str(reliability.get("outcome") or "") if isinstance(reliability, dict) else ""
+                )
                 yield sse_complete_frame(
                     tokens=0,
                     response_data=shared_payload,
                     stream_id=stream_id,
                     request_id=request_id or None,
-                    provider_live_usable=(
-                        str((shared_payload.get("reliability") or {}).get("outcome") or "")
-                        != "failure"
-                        if isinstance(shared_payload.get("reliability"), dict)
-                        else True
-                    ),
-                    provider_failure_detected=(
-                        str((shared_payload.get("reliability") or {}).get("outcome") or "")
-                        == "failure"
-                        if isinstance(shared_payload.get("reliability"), dict)
-                        else False
-                    ),
+                    provider_live_usable=reliability_outcome != "failure",
+                    provider_failure_detected=reliability_outcome == "failure",
                 )
             except asyncio.CancelledError:
                 raise

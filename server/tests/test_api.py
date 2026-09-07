@@ -106,7 +106,7 @@ def test_provider_test_preserves_explicit_protocol_and_profile_fields(tmp_path: 
                         "name": "MiniMax Gateway",
                         "label": "MiniMax Anthropic",
                         "protocol": "anthropic_messages",
-                        "baseUrl": "http://minimax.redfast.top",
+                        "baseUrl": "http://minimax-gateway.test",
                         "apiKeyRef": "trainer.minimax",
                         "model": "MiniMax-M3",
                         "credentialMode": "workspace_secret",
@@ -415,7 +415,7 @@ def test_provider_test_infers_tool_capabilities_from_declared_protocol(tmp_path:
                     "provider": {
                         "name": "MiniMax Gateway",
                         "api": "anthropic",
-                        "baseUrl": "http://minimax.redfast.top",
+                        "baseUrl": "http://minimax-gateway.test",
                         "apiKeyRef": "trainer.minimax",
                         "model": "MiniMax-M3",
                     },
@@ -544,7 +544,7 @@ def test_session_message_provider_override_protocol_matrix_routes_to_agent_loop(
         (
             "anthropic_messages",
             "anthropic",
-            "http://minimax.redfast.top",
+            "http://minimax-gateway.test",
             "MiniMax-M3",
         ),
         (
@@ -716,7 +716,7 @@ def test_turn_provider_override_uses_agent_loop_for_coach_requests(
         session_id = start_response.json()["session_id"]
         override_provider = ProviderConfig(
             name="anthropic-turn-provider",
-            base_url="http://minimax.redfast.top",
+            base_url="http://minimax-gateway.test",
             api_key_ref="trainer.anthropic.turn",
             model="MiniMax-M3",
             protocol="anthropic_messages",
@@ -742,7 +742,7 @@ def test_turn_provider_override_uses_agent_loop_for_coach_requests(
                 "provider": {
                     "name": "anthropic-turn-provider",
                     "api": "anthropic",
-                    "baseUrl": "http://minimax.redfast.top",
+                    "baseUrl": "http://minimax-gateway.test",
                     "apiKeyRef": "trainer.anthropic.turn",
                     "model": "MiniMax-M3",
                     "capabilities": {"tools": True, "streaming": True},
@@ -2766,7 +2766,7 @@ def test_provider_test_threads_request_defaults_into_provider_config(tmp_path: P
             json={
                 "provider": {
                     "name": "mini-max",
-                    "baseUrl": "http://47.107.101.18:3000/v1",
+                    "baseUrl": "http://minimax-gateway.test/v1",
                     "apiKeyRef": "trainer.minimax",
                     "model": "MiniMax-M3",
                     "requestDefaults": {
@@ -2814,7 +2814,7 @@ def test_provider_test_uses_cached_provider_service_instance(tmp_path: Path) -> 
             json={
                 "provider": {
                     "name": "mini-max",
-                    "baseUrl": "http://47.107.101.18:3000/v1",
+                    "baseUrl": "http://minimax-gateway.test/v1",
                     "apiKeyRef": "trainer.minimax",
                     "model": "MiniMax-M3",
                 },
@@ -2831,7 +2831,7 @@ def test_provider_test_uses_cached_provider_service_instance(tmp_path: Path) -> 
     fake_service.test.assert_called_once()
     tested_provider_arg, tested_api_key_arg = fake_service.test.call_args.args
     assert isinstance(tested_provider_arg, ProviderConfig)
-    assert tested_provider_arg.base_url == "http://47.107.101.18:3000/v1"
+    assert tested_provider_arg.base_url == "http://minimax-gateway.test/v1"
     assert tested_api_key_arg == "sk-test"
 
 
@@ -2861,7 +2861,7 @@ def test_provider_models_threads_request_defaults_into_provider_config(tmp_path:
             json={
                 "provider": {
                     "name": "mini-max",
-                    "baseUrl": "http://47.107.101.18:3000/v1",
+                    "baseUrl": "http://minimax-gateway.test/v1",
                     "apiKeyRef": "trainer.minimax",
                     "model": "MiniMax-M3",
                     "requestDefaults": {
@@ -2919,7 +2919,7 @@ def test_provider_models_uses_cached_provider_service_instance(tmp_path: Path) -
             json={
                 "provider": {
                     "name": "mini-max",
-                    "baseUrl": "http://47.107.101.18:3000/v1",
+                    "baseUrl": "http://minimax-gateway.test/v1",
                     "apiKeyRef": "trainer.minimax",
                     "model": "MiniMax-M3",
                 },
@@ -2936,7 +2936,7 @@ def test_provider_models_uses_cached_provider_service_instance(tmp_path: Path) -
     fake_service.list_models.assert_called_once()
     listed_provider_arg, listed_api_key_arg = fake_service.list_models.call_args.args
     assert isinstance(listed_provider_arg, ProviderConfig)
-    assert listed_provider_arg.base_url == "http://47.107.101.18:3000/v1"
+    assert listed_provider_arg.base_url == "http://minimax-gateway.test/v1"
     assert listed_api_key_arg == "sk-test"
 
 
@@ -2983,7 +2983,7 @@ def test_provider_models_protocol_matrix_preserves_route_metadata(tmp_path: Path
         (
             "anthropic_messages",
             "anthropic",
-            "http://minimax.redfast.top",
+            "http://minimax-gateway.test",
             "MiniMax-M3",
             "anthropic",
         ),
@@ -4617,7 +4617,7 @@ def test_turn_guided_remote_coach_request_stays_in_coach_without_explicit_traini
         session_id = start_response.json()["session_id"]
         override_provider = ProviderConfig(
             name="turn-openai-compatible",
-            base_url="http://minimax.redfast.top",
+            base_url="http://minimax-gateway.test",
             api_key_ref="trainer.turn.remote",
             model="MiniMax-M3",
             protocol="openai_chat_completions_compatible",
@@ -4646,7 +4646,7 @@ def test_turn_guided_remote_coach_request_stays_in_coach_without_explicit_traini
                 "api_key": "sk-test",
                 "provider": {
                     "name": "turn-openai-compatible",
-                    "baseUrl": "http://minimax.redfast.top",
+                    "baseUrl": "http://minimax-gateway.test",
                     "apiKeyRef": "trainer.turn.remote",
                     "model": "MiniMax-M3",
                     "protocol": "openai_chat_completions_compatible",

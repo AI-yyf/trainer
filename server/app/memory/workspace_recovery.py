@@ -3624,7 +3624,7 @@ def _runtime_for_formal_plan_persist(
         and runtime_step == plan_step
         and runtime_step != existing_step
     ):
-        return None, _without_leftover_formal_identity(existing, plan), cleaned_existing
+        return None, _without_leftover_formal_identity(existing or {}, plan), cleaned_existing
     return None, _without_leftover_formal_identity(runtime, plan), cleaned_existing
 
 
@@ -4488,7 +4488,10 @@ def live_runtime_stage_id(
 
     runtime = runtime if isinstance(runtime, dict) else {}
     existing = existing if isinstance(existing, dict) else {}
-    current_stage = runtime.get("current_stage") if isinstance(runtime.get("current_stage"), dict) else {}
+    raw_current_stage = runtime.get("current_stage")
+    current_stage: dict[str, Any] = (
+        raw_current_stage if isinstance(raw_current_stage, dict) else {}
+    )
     runtime_step = _text(current_step) or _text(runtime.get("current_step"))
     runtime_has_stage = "current_stage_id" in runtime or "current_stage" in runtime
     runtime_stage = _text(runtime.get("current_stage_id") or current_stage.get("id"))

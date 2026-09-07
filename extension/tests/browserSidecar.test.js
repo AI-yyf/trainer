@@ -3232,7 +3232,7 @@ test('fetchBrowserPreviewBootstrap uses the process-local preview provider key',
     {
       configured: true,
       name: 'MiniMax',
-      baseUrl: 'http://47.107.101.18:3000/v1',
+      baseUrl: 'http://minimax-gateway.test/v1',
       model: 'MiniMax-M3',
       protocol: 'openai_chat_completions_compatible',
       contextWindowTokens: 64000,
@@ -3305,7 +3305,7 @@ test('fetchBrowserPreviewBootstrap drops preview last-test state when protocol i
     {
       configured: true,
       name: 'MiniMax',
-      baseUrl: 'http://47.107.101.18:3000/v1',
+      baseUrl: 'http://minimax-gateway.test/v1',
       model: 'MiniMax-M3',
       protocol: 'anthropic_messages',
       profileId: 'minimax-core',
@@ -3405,7 +3405,7 @@ test('sendBrowserPreviewMessage forwards the saved preview provider override and
     {
       configured: true,
       name: 'MiniMax',
-      baseUrl: 'http://47.107.101.18:3000/v1',
+      baseUrl: 'http://minimax-gateway.test/v1',
       model: 'MiniMax-M3',
       protocol: 'openai_chat_completions_compatible',
       contextWindowTokens: 64000,
@@ -3463,7 +3463,7 @@ test('sendBrowserPreviewMessage forwards the saved preview provider override and
     );
 
     assert.equal(capturedBody.provider.name, 'MiniMax');
-    assert.equal(capturedBody.provider.baseUrl, 'http://47.107.101.18:3000/v1');
+    assert.equal(capturedBody.provider.baseUrl, 'http://minimax-gateway.test/v1');
     assert.equal(capturedBody.provider.model, 'MiniMax-M3');
     assert.equal(capturedBody.provider.requestDefaults.extra_body.thinking.type, 'disabled');
     assert.equal(capturedBody.api_key, 'sk-preview');
@@ -3497,7 +3497,7 @@ test('saveBrowserPreviewProvider keeps the api key in process memory and clears 
     {
       name: 'MiniMax',
       protocol: 'openai_chat_completions_compatible',
-      baseUrl: 'http://47.107.101.18:3000/v1',
+      baseUrl: 'http://minimax-gateway.test/v1',
       model: 'MiniMax-M3',
       contextWindowTokens: 64000,
       maxOutputTokens: 8000,
@@ -3985,7 +3985,7 @@ test('switchBrowserPreviewProviderModel restores saved per-model limits in previ
     {
       configured: true,
       name: 'MiniMax',
-      baseUrl: 'http://47.107.101.18:3000/v1',
+      baseUrl: 'http://minimax-gateway.test/v1',
       model: 'MiniMax-M3',
       protocol: 'openai_chat_completions_compatible',
       contextWindowTokens: 64000,
@@ -4022,7 +4022,7 @@ test('switchBrowserPreviewProviderModel restores saved per-model limits in previ
           label: 'MiniMax Core',
           name: 'MiniMax',
           protocol: 'openai_chat_completions_compatible',
-          baseUrl: 'http://47.107.101.18:3000/v1',
+          baseUrl: 'http://minimax-gateway.test/v1',
           model: 'MiniMax-M3',
           availableModels: ['MiniMax-M3', 'MiniMax-M2.7-highspeed'],
           contextWindowTokens: 64000,
@@ -4067,7 +4067,7 @@ test('switchBrowserPreviewProviderProfile auto-refreshes models and restores res
     {
       configured: true,
       name: 'MiniMax',
-      baseUrl: 'http://47.107.101.18:3000/v1',
+      baseUrl: 'http://minimax-gateway.test/v1',
       model: 'MiniMax-M3',
       protocol: 'openai_chat_completions_compatible',
       contextWindowTokens: 64000,
@@ -4104,7 +4104,7 @@ test('switchBrowserPreviewProviderProfile auto-refreshes models and restores res
           label: 'MiniMax Core',
           name: 'MiniMax',
           protocol: 'openai_chat_completions_compatible',
-          baseUrl: 'http://47.107.101.18:3000/v1',
+          baseUrl: 'http://minimax-gateway.test/v1',
           model: 'MiniMax-M3',
           availableModels: ['MiniMax-M3'],
           contextWindowTokens: 64000,
@@ -4127,7 +4127,7 @@ test('switchBrowserPreviewProviderProfile auto-refreshes models and restores res
           label: 'MiniMax Fast',
           name: 'MiniMax',
           protocol: 'openai_chat_completions_compatible',
-          baseUrl: 'http://47.107.101.18:3000/v1',
+          baseUrl: 'http://minimax-gateway.test/v1',
           model: 'MiniMax-M3',
           availableModels: ['MiniMax-M3'],
           contextWindowTokens: 64000,
@@ -4205,7 +4205,7 @@ test('testBrowserPreviewProvider stores the last live result in preview state', 
     {
       configured: true,
       name: 'MiniMax',
-      baseUrl: 'http://47.107.101.18:3000/v1',
+      baseUrl: 'http://minimax-gateway.test/v1',
       model: 'MiniMax-M3',
       protocol: 'openai_chat_completions_compatible',
       profileId: 'minimax-core',
@@ -4365,7 +4365,7 @@ test('refreshBrowserPreviewProviderModels updates preview model cache and availa
     {
       configured: true,
       name: 'MiniMax',
-      baseUrl: 'http://47.107.101.18:3000/v1',
+      baseUrl: 'http://minimax-gateway.test/v1',
       model: 'MiniMax-M3',
       protocol: 'openai_chat_completions_compatible',
       profileId: 'minimax-core',

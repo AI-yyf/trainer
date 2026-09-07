@@ -255,7 +255,7 @@ def _fallback_asset(
         origin="manual",
         source_ids=[f"plan_stage:{stage_id}"] if stage_id else [],
         tags=["stage-material", "stage-material-fallback"],
-        **{_CONTENT_FIELD_BY_KIND[kind]: content},
+        **cast(dict[str, Any], {_CONTENT_FIELD_BY_KIND[kind]: content}),
     )
 
 
@@ -430,7 +430,7 @@ def compose_principle_explainer_asset(
         request = TurnRequest(
             message=context.strip() or normalized_principle,
             workspace_id=workspace_id,
-            response_language=response_language,
+            responseLanguage=response_language,
         )
         learner_state = LearnerState(
             current_confidence=0.5,
