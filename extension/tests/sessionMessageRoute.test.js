@@ -238,7 +238,7 @@ test('sendMessageCommand routes default coach turns through /session/message', a
   assert.equal(result.ok, true);
   assert.equal(context.__postCalls[0][1], '/session/message');
   assert.equal(context.__postCalls[0][2].intent, 'coach');
-  assert.deepEqual(context.__postCalls[0][3], { timeoutMs: 90_000 });
+  assert.deepEqual(context.__postCalls[0][3], { timeoutMs: 480_000 });
 });
 
 test('sendMessageCommand leaves the active file out of an ordinary Coach question', async () => {
@@ -335,7 +335,7 @@ test('sendMessageCommand keeps non-coach intents on /turn', async () => {
   assert.equal(result.ok, true);
   assert.equal(context.__postCalls[0][1], '/turn');
   assert.equal(context.__postCalls[0][2].intent, 'review');
-  assert.deepEqual(context.__postCalls[0][3], { timeoutMs: 90_000 });
+  assert.deepEqual(context.__postCalls[0][3], { timeoutMs: 480_000 });
 });
 
 test('sendMessageCommand routes plan-view coach turns through /turn and carries active_view', async () => {
@@ -358,7 +358,7 @@ test('sendMessageCommand routes plan-view coach turns through /turn and carries 
   assert.equal(context.__postCalls[0][1], '/turn');
   assert.equal(context.__postCalls[0][2].intent, 'coach');
   assert.equal(context.__postCalls[0][2].active_view, 'plan');
-  assert.deepEqual(context.__postCalls[0][3], { timeoutMs: 90_000 });
+  assert.deepEqual(context.__postCalls[0][3], { timeoutMs: 480_000 });
 });
 
 test('sendMessageCommand forwards Resources composer intent without changing chat or plan semantics', async () => {
@@ -436,7 +436,7 @@ test('sendStreamMessageCommand routes default Coach turns through /session/messa
   assert.equal(body.use_agent_loop, true);
   assert.equal(body.stream, true);
   assert.match(body.stream_id, /^msg_/);
-  assert.equal(options.timeoutMs, 90_000);
+  assert.equal(options.timeoutMs, 480_000);
   assert.ok(options.signal instanceof AbortSignal);
   assert.equal(options.signal.aborted, false);
 });
@@ -541,7 +541,7 @@ test('sendStreamMessageCommand routes structured Plan, Resources, and Training t
     assert.equal(body.intent, turn.intent);
     assert.equal(body.active_view, turn.activeView);
     assert.equal(body.message, turn.text);
-    assert.equal(options.timeoutMs, 90_000);
+    assert.equal(options.timeoutMs, 480_000);
     assert.ok(options.signal instanceof AbortSignal);
     assert.equal(options.signal.aborted, false);
   }

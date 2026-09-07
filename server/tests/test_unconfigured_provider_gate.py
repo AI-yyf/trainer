@@ -392,9 +392,9 @@ def test_kimi_like_provider_uses_generous_agent_and_http_timeouts() -> None:
     provider = ProviderConfig.model_validate(KIMI_PROVIDER)
     service = ProviderService(config=provider, api_key="sk-test")
     timeouts = service._agent_loop_timeout_kwargs()  # noqa: SLF001
-    assert timeouts["step_timeout"] == 120.0
-    assert timeouts["first_step_timeout"] == 180.0
-    assert service._provider_client_timeout_seconds() == 180.0  # noqa: SLF001
+    assert timeouts["step_timeout"] == 240.0
+    assert timeouts["first_step_timeout"] == 300.0
+    assert service._provider_client_timeout_seconds() == 300.0  # noqa: SLF001
     loop = CoachAgentLoop(
         provider=__import__("app.llm.agent_loop", fromlist=["AgentProvider"]).AgentProvider(
             protocol="openai_chat_completions_compatible",
@@ -407,8 +407,8 @@ def test_kimi_like_provider_uses_generous_agent_and_http_timeouts() -> None:
         ),
         **timeouts,
     )
-    assert loop.step_timeout == 120.0
-    assert loop.first_step_timeout == 180.0
+    assert loop.step_timeout == 240.0
+    assert loop.first_step_timeout == 300.0
 
 
 def test_observed_capability_cache_unlocks_vision_delivery_on_a_new_service() -> None:

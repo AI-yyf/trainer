@@ -150,5 +150,12 @@ export const SIDECAR_DEFAULTS = {
   startupTimeoutMs: process.platform === 'darwin' ? 60_000 : 20_000,
   requestTimeoutMs: 15_000,
   providerRequestTimeoutMs: 90_000,
-  maxRequestTimeoutMs: 90_000,
+  // A full coach turn runs the ReAct loop server-side; reasoning-first
+  // models (kimi/m2-class) can legitimately spend minutes before the
+  // first visible frame, so the coach lane gets its own generous window
+  // instead of the single-probe 90s budget.
+  coachTurnRequestTimeoutMs: 480_000,
+  // Upper clamp for every sidecar request; only the coach turn opts into it
+  // (all other lanes pass <= 90s, so the min() clamp leaves them untouched).
+  maxRequestTimeoutMs: 480_000,
 } as const;
