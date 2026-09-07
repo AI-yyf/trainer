@@ -2495,15 +2495,18 @@ class ProviderService:
                 return max(MIN_OPENAI_CLIENT_TIMEOUT_SECONDS, resolved)
         config = provider or self._config
         if _is_kimi_like_provider(config):
-            return 180.0
+            return 300.0
         return DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS
 
     def _agent_loop_timeout_kwargs(self) -> dict[str, float]:
         if not _is_kimi_like_provider(self._config):
             return {}
+        # Measured kimi-k3 gateways: a single hidden-reasoning completion can
+        # take 160s+ with coach-sized prompts, so per-step waits must exceed
+        # the old 120s tier or every turn dies as a false timeout.
         return {
-            "step_timeout": 120.0,
-            "first_step_timeout": 180.0,
+            "step_timeout": 240.0,
+            "first_step_timeout": 300.0,
         }
 
     def _provider_client_max_retries(self, provider: ProviderConfig | None = None) -> int:

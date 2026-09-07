@@ -252,7 +252,10 @@ class CoachAgentLoop:
     DEFAULT_STEP_TIMEOUT_SECONDS = 24.0
     DEFAULT_FIRST_STEP_TIMEOUT_SECONDS = 90.0
     MIN_STEP_TIMEOUT_SECONDS = 1.0
-    MAX_STEP_TIMEOUT_SECONDS = 180.0
+    # Reasoning-first gateways can spend several minutes on a single step
+    # before the first visible token, so the clamp must sit above the
+    # generous kimi-like tier rather than below it.
+    MAX_STEP_TIMEOUT_SECONDS = 300.0
 
     def __init__(
         self,
