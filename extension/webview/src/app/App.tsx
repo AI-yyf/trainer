@@ -4687,6 +4687,8 @@ export function App() {
   const composerHistoryCursorRef = useRef<number | undefined>(undefined);
   const composerHistoryScratchDraftRef = useRef("");
   const streamResumeDraftRef = useRef("");
+  const [abortedDuringToolUse, setAbortedDuringToolUse] = useState(false);
+  const wasStreamingForAbortRef = useRef(false);
   const sendRecoveredPlanResumeRef = useRef<
     (action: "continue_step" | "clear_blocker") => void
   >(() => undefined);
@@ -11357,6 +11359,10 @@ export function App() {
     if (!streaming.isStreaming) {
       return;
     }
+    const midTool = streaming.agentActivity.some(
+      (activity) => activity.status === "running" || activity.status === "failed",
+    );
+    setAbortedDuringToolUse(midTool);
     const resumeDraft = streamResumeDraftRef.current;
     if (resumeDraft.trim()) {
       setComposerDraft(resumeDraft);
@@ -11365,7 +11371,20 @@ export function App() {
       type: "session/cancelStreamMessage",
       payload: streaming.streamMessageId ? { messageId: streaming.streamMessageId } : undefined,
     });
-  }, [setComposerDraft, streaming.isStreaming, streaming.streamMessageId]);
+  }, [
+    setComposerDraft,
+    streaming.agentActivity,
+    streaming.isStreaming,
+    streaming.streamMessageId,
+  ]);
+
+  useEffect(() => {
+    if (streaming.isStreaming && !wasStreamingForAbortRef.current) {
+      // Rising edge only: a new turn started — clear mid-tool abort banner.
+      setAbortedDuringToolUse(false);
+    }
+    wasStreamingForAbortRef.current = streaming.isStreaming;
+  }, [streaming.isStreaming]);
 
   // Codex-style ownership: after cancel OR stream failure, put the last sent
   // draft back so retry does not require retyping. Clear the stash only when a
@@ -14413,6 +14432,9 @@ export function App() {
                 !composerUsesTrainingFlow &&
                 !streaming.isStreaming &&
                 streaming.completionStopReason === "cancelled"
+              }
+              explainAfterAbortMidTool={
+                abortedDuringToolUse
               }
               explainAfterEmptyStream={
                 activeView === "coach" &&

@@ -26,6 +26,7 @@ const composerCopyKeys = [
   'readyNextTurnLabel',
   'readyIdleLabel',
   'readyAfterAbortLabel',
+  'readyAfterAbortMidToolLabel',
   'readyAfterEmptyStreamLabel',
   'accessibilityLabel',
   'submitLabel',
