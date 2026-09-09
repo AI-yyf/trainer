@@ -12,6 +12,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -21,6 +22,7 @@ from app.training.card_generator import (
     _CARD_GENERATION_MAX_TOKENS,
     CardGenerationProviderFailure,
     CardGenerationService,
+    CardGenerationStreamError,
 )
 
 
@@ -197,6 +199,74 @@ class TestCardGenerationRetry(unittest.TestCase):
         card = asyncio.run(generate_from_loop())
         self.assertIsNotNone(card)
         self.assertEqual(len(provider.calls), 2)
+
+
+class _ScriptedStreamProvider:
+    """Fake provider whose chat_completion_stream replays scripted outcomes."""
+
+    def __init__(self, outcomes: list) -> None:
+        self._outcomes = list(outcomes)
+        self.stream_calls = 0
+
+    async def chat_completion_stream(
+        self,
+        messages: list[dict[str, str]],
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        cancel_event=None,
+    ):
+        del model, temperature, max_tokens, cancel_event
+        if not self._outcomes:  # pragma: no cover - guards mis-scripted tests
+            raise AssertionError("Provider received more stream calls than scripted.")
+        outcome = self._outcomes.pop(0)
+        self.stream_calls += 1
+        if isinstance(outcome, Exception):
+            raise outcome
+        for chunk in outcome:
+            yield chunk
+
+
+class TestCardGenerationStreamRetry(unittest.TestCase):
+    """The stream path retries once while nothing visible has been streamed."""
+
+    def _run_stream(self, provider):
+        service = CardGenerationService(provider_service=provider)
+        events = []
+
+        async def _collect():
+            async for event in service.generate_card_stream("conversation_gap", _ctx()):
+                events.append(event)
+
+        asyncio.run(_collect())
+        return events
+
+    def test_stream_failure_before_first_chunk_is_retried_once(self) -> None:
+        payload = _as_json(_practice_llm_payload())
+        provider = _ScriptedStreamProvider([
+            RuntimeError("transient relay 504"),
+            [payload[:40], payload[40:]],
+        ])
+
+        async def _no_delay(_seconds: float) -> None:
+            return None
+
+        with mock.patch("asyncio.sleep", new=_no_delay):
+            events = self._run_stream(provider)
+
+        self.assertTrue(all(event.chunk is not None for event in events[:-1]))
+        self.assertIsNone(events[-1].chunk)
+        self.assertIsNotNone(events[-1].card)
+        self.assertEqual(provider.stream_calls, 2)
+
+    def test_stream_failure_after_visible_chunks_is_not_retried(self) -> None:
+        provider = _ScriptedStreamProvider([
+            ["partial content "],
+            RuntimeError("must not be reached"),
+        ])
+        with self.assertRaises(CardGenerationStreamError):
+            self._run_stream(provider)
+        self.assertEqual(provider.stream_calls, 1)
 
 
 if __name__ == "__main__":  # pragma: no cover

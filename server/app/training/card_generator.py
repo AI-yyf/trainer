@@ -3954,18 +3954,31 @@ class CardGenerationService:
         }
         if cancel_event is not None:
             stream_kwargs["cancel_event"] = cancel_event
-        try:
-            async for chunk in self._provider.chat_completion_stream(
-                self._llm_messages(context, source, card_type),
-                **stream_kwargs,
-            ):
-                if not isinstance(chunk, str) or not chunk:
+        last_stream_error: Exception | None = None
+        # Relays and rate-limited providers commonly fail the request before the
+        # first visible token. Retry once while nothing has been streamed, so a
+        # transient failure does not abort card generation the learner never saw.
+        for stream_attempt in range(2):
+            try:
+                async for chunk in self._provider.chat_completion_stream(
+                    self._llm_messages(context, source, card_type),
+                    **stream_kwargs,
+                ):
+                    if not isinstance(chunk, str) or not chunk:
+                        continue
+                    raw_parts.append(chunk)
+                    yield CardGenerationStreamEvent(chunk=chunk)
+                last_stream_error = None
+                break
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                last_stream_error = exc
+                if stream_attempt == 0 and not raw_parts:
+                    await asyncio.sleep(1.5)
                     continue
-                raw_parts.append(chunk)
-                yield CardGenerationStreamEvent(chunk=chunk)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
+                break
+        if last_stream_error is not None:
             if self._event_ledger is not None:
                 self._event_ledger.record_event(
                     "card_generation_failed",
@@ -3985,7 +3998,7 @@ class CardGenerationService:
                         f"source='{source}' can be retried."
                     ),
                 )
-            raise CardGenerationStreamError(source) from exc
+            raise CardGenerationStreamError(source) from last_stream_error
 
         raw_payload = "".join(raw_parts)
         parsed_payload = _parse_llm_json(raw_payload)
