@@ -2862,6 +2862,7 @@ class ProviderService:
         if (
             isinstance(error, (TimeoutError, socket.timeout, httpx.TimeoutException))
             or "timeout" in lowered
+            or "timed out" in lowered
         ):
             return ("timeout", True, status_code, False, None)
         if (
