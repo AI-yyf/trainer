@@ -109,7 +109,7 @@ for (let index = 1; index <= roundsRequested; index += 1) {
     (!requireProvider || !providerSkipped);
 
   const detailStep = findStep(steps, "assert-resources-resource-detail-visible-truth");
-  const previewStep = findStep(steps, "assert-resources-sandbox-native-open-truth");
+  const previewStep = findStep(steps, "assert-resources-sandbox-preview-truth");
   const capabilityStep = findStep(steps, "assert-resources-sandbox-capability-visible-truth");
   const crossStep = findStep(steps, "assert-cross-workspace-reopen-history-truth");
   const nextHopStep = findStep(steps, "assert-training-next-hop-visible-truth");
@@ -185,10 +185,10 @@ for (let index = 1; index <= roundsRequested; index += 1) {
     failedReasons.push("resources-detail-evidence-mismatch");
   }
   if (!previewStepOk) {
-    failedReasons.push("resources-sandbox-native-open-step-failed");
+    failedReasons.push("resources-sandbox-preview-step-failed");
   }
   if (!previewEvidenceOk) {
-    failedReasons.push("resources-sandbox-native-open-evidence-mismatch");
+    failedReasons.push("resources-sandbox-preview-evidence-mismatch");
   }
   if (!capabilityStepOk) {
     failedReasons.push("resources-sandbox-capability-step-failed");
@@ -410,10 +410,10 @@ function hasSandboxPreviewEvidence(previewData) {
     return false;
   }
   return Boolean(
-    previewData.nativeOpen === true &&
-      previewData.nativeOpenPath === previewData.sandboxPath &&
+    previewData.previewSucceeded === true &&
       typeof previewData.sandboxPath === "string" &&
-      previewData.sandboxPath.length > 0,
+      previewData.sandboxPath.length > 0 &&
+      previewData.selectedSandboxPath === previewData.sandboxPath,
   );
 }
 
@@ -477,8 +477,8 @@ function summarizeSandboxPreviewRound(previewData, stepOk, evidenceOk) {
     stepOk,
     evidenceOk,
     sandboxPath: previewData?.sandboxPath ?? null,
-    nativeOpen: previewData?.nativeOpen === true,
-    nativeOpenPath: previewData?.nativeOpenPath ?? null,
+    previewSucceeded: previewData?.previewSucceeded === true,
+    selectedSandboxPathMatches: previewData?.selectedSandboxPath === previewData?.sandboxPath,
   };
 }
 
