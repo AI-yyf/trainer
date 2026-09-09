@@ -9218,11 +9218,16 @@ export function App() {
       /interrupted|aborted|failed|timeout|network|error/.test(
         streaming.completionStopReason?.trim().toLowerCase() ?? "",
       ));
+  // Empty-state recovery already explains the block; once the learner types or
+  // stages an attachment, keep the composer presence bar visible so the send
+  // disable reason stays on-screen (gate: no silent disable).
   const showComposerBlockingNotice =
     sendBlocked &&
     !suppressComposerRecoverySurface &&
-    !hasFullCoachRecoverySurface &&
-    !hasCoachWorkspaceAdmissionSurface;
+    !hasCoachWorkspaceAdmissionSurface &&
+    (!hasFullCoachRecoverySurface ||
+      Boolean(draft.trim()) ||
+      composerAttachments.length > 0);
   const showComposerPresenceBar =
     !suppressComposerRecoverySurface &&
     (

@@ -106,7 +106,7 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
   assert.match(source, /const hasCoachWorkspaceAdmissionSurface = activeView === "coach" && workspaceSessionBlocked;/);
   assert.match(
     source,
-    /const showComposerBlockingNotice =\s*sendBlocked &&\s*!suppressComposerRecoverySurface &&\s*!hasFullCoachRecoverySurface &&\s*!hasCoachWorkspaceAdmissionSurface;/,
+    /const showComposerBlockingNotice =\s*sendBlocked &&\s*!suppressComposerRecoverySurface &&\s*!hasCoachWorkspaceAdmissionSurface &&\s*\(!hasFullCoachRecoverySurface \|\|\s*Boolean\(draft\.trim\(\)\) \|\|\s*composerAttachments\.length > 0\);/,
   );
   assert.match(
     source,
