@@ -7,6 +7,8 @@ import json
 import logging
 import posixpath
 import re
+import socket
+import ssl
 from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass, is_dataclass, replace
 from datetime import UTC, datetime
@@ -257,6 +259,94 @@ logger = logging.getLogger(__name__)
 SUPPORTED_RESPONSE_LANGUAGES = frozenset(
     {"zh-CN", "en-US", "es-ES", "fr-FR", "de-DE", "ja-JP", "ko-KR", "pt-BR"}
 )
+
+
+_SCHEMELESS_PROVIDER_HOST_RE = re.compile(
+    r"^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,})"
+    r"(?::\d{1,5})?(?:/\S*)?$",
+    re.IGNORECASE,
+)
+_SCHEMELESS_LOCAL_HOST_WITH_PORT_RE = re.compile(
+    r"^[a-z0-9][a-z0-9-]*(?::\d{1,5})(?:/\S*)?$",
+    re.IGNORECASE,
+)
+_LOCAL_PROVIDER_HOST_RE = re.compile(
+    r"^(?:localhost|host\.docker\.internal|::1"
+    r"|(?:127|10)\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r"|192\.168\.\d{1,3}\.\d{1,3}"
+    r"|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"
+    r"|.+\.(?:localhost|local|test))$",
+    re.IGNORECASE,
+)
+# Scheme resolution probes each host once per sidecar process; a relay's TLS
+# support does not change mid-session, and every request path
+# (test/models/turn) re-normalizes the base URL.
+_PROVIDER_SCHEME_CACHE: dict[str, str] = {}
+
+
+def looks_like_schemeless_provider_host(value: str) -> bool:
+    """True for host-style service addresses a user typed without a scheme."""
+    if not value or re.search(r"\s", value):
+        return False
+    if _SCHEMELESS_PROVIDER_HOST_RE.match(value):
+        return True
+    return bool(_SCHEMELESS_LOCAL_HOST_WITH_PORT_RE.match(value))
+
+
+def _probe_provider_url_scheme(host: str, port: int) -> str | None:
+    """Connect and attempt a TLS handshake; None when unreachable."""
+    try:
+        raw_socket = socket.create_connection((host, port), timeout=0.8)
+    except OSError:
+        return None
+    try:
+        with raw_socket:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            try:
+                with context.wrap_socket(raw_socket, server_hostname=host):
+                    return "https"
+            except (ssl.SSLError, OSError):
+                return "http"
+    except OSError:
+        return None
+
+
+def resolve_provider_url_scheme(value: str) -> str:
+    """Pick http/https for a scheme-less service address by probing.
+
+    Local and private hosts are http without probing; public hosts get a TLS
+    handshake probe on their port so http-only relays (no 443) still work
+    instead of failing later with an opaque request error.
+    """
+    authority = value.split("/", 1)[0]
+    host = authority.split(":", 1)[0].lower().strip("[]")
+    port_part = authority.split(":", 1)[1] if ":" in authority else ""
+    try:
+        explicit_port = int(port_part) if port_part else None
+    except ValueError:
+        explicit_port = None
+    if _LOCAL_PROVIDER_HOST_RE.match(host):
+        return "http"
+    cache_key = f"{host}:{explicit_port or 0}"
+    cached = _PROVIDER_SCHEME_CACHE.get(cache_key)
+    if cached:
+        return cached
+    ports = [explicit_port] if explicit_port else [443, 80]
+    resolved = "https"
+    for port in ports:
+        probed = _probe_provider_url_scheme(host, port)
+        if probed is not None:
+            resolved = probed
+            break
+    _PROVIDER_SCHEME_CACHE[cache_key] = resolved
+    return resolved
+
+
+def reset_provider_scheme_cache() -> None:
+    """Clear memoized scheme resolutions (test isolation)."""
+    _PROVIDER_SCHEME_CACHE.clear()
 
 
 def provider_recovery_resumed_summary_text(response_language: str | None) -> str:
@@ -990,8 +1080,18 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         if not raw_value:
             return ""
 
+        # Scheme-less service hosts ("minimax.example.com", "localhost:1234/v1",
+        # "ollama:11434") get a probed scheme so http-only relays and local
+        # servers both work instead of failing later with an opaque error.
+        # Mirrors the webview draft checks in shared TS providerProtocols.
+        candidate = raw_value
+        if not candidate.lower().startswith(("http://", "https://")) and looks_like_schemeless_provider_host(
+            candidate
+        ):
+            candidate = f"{resolve_provider_url_scheme(candidate)}://{candidate}"
+
         try:
-            parsed = urlsplit(raw_value)
+            parsed = urlsplit(candidate)
         except ValueError:
             return raw_value.rstrip("/")
 
