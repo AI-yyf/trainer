@@ -27345,7 +27345,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 provider_service_override=coaching_service,
             )
         except CardGenerationProviderFailure as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(status_code=400, detail=exc.http_detail()) from exc
 
     @router.post("/training/generate-card/stream")
     async def training_generate_card_stream(
