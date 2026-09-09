@@ -14,6 +14,7 @@ const {
  */
 const MATRIX_TO_UI = [
   ['authentication_failed', /API key|Settings|权限|设置/i],
+  ['invalid_key_or_permission', /API key|permission|Settings|权限|设置/i],
   ['rate_limit', /429|Rate limited|限流|稍等/i],
   ['timeout', /too long|太久|稍后再试/i],
   ['empty_stream', /empty stream|空流|草稿/i],

@@ -1039,10 +1039,29 @@ export function buildTrainerStreamingErrorMessage(
 ): string {
   const normalizedError = error.trim();
   const normalizedCategory = category?.trim().toLowerCase();
+  if (
+    normalizedCategory === "invalid_key_or_permission" ||
+    /invalid_key_or_permission/i.test(normalizedError)
+  ) {
+    const trainingCard =
+      /generate[_ -]?card|training[_ -]?card|训练卡/i.test(normalizedError);
+    if (trainingCard) {
+      return localizeTrainerStreamingCopy(
+        language,
+        "Training card generation failed: API key invalid or missing permission. Open Settings to fix the connection, then try again.",
+        "训练卡生成失败：API key 无效或没有权限。请打开设置检查连接后再试。",
+      );
+    }
+    return localizeTrainerStreamingCopy(
+      language,
+      "API key invalid or missing permission. Open Settings to check the key and access, then try again.",
+      "API key 无效或没有权限。请打开设置检查密钥与权限后再试。",
+    );
+  }
+
   const invalidProviderError =
-    category === "invalid_key_or_permission" ||
     category === "authentication_failed" ||
-    /401|403|invalid[_\s-]?api[_\s-]?key|incorrect api key|invalid_key_or_permission|authentication_failed|unauthorized|forbidden/i.test(
+    /401|403|invalid[_\s-]?api[_\s-]?key|incorrect api key|authentication_failed|unauthorized|forbidden/i.test(
       normalizedError,
     );
   if (invalidProviderError || normalizedCategory === "authentication_failed") {
