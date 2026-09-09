@@ -1054,6 +1054,17 @@ export function buildTrainerStreamingErrorMessage(
   }
 
   if (
+    normalizedCategory === "nonempty_sse_no_visible_content" ||
+    /nonempty_sse_no_visible_content|no[_\s-]?visible[_\s-]?content/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "The stream finished without visible reply text. Your draft is still here — send again, or switch model in Settings.",
+      "流有结束信号但没有可见回复。草稿还在，可以再发一次，或到设置里换模型。",
+    );
+  }
+
+  if (
     normalizedCategory === "empty_stream" ||
     /empty[_\s-]?stream|no (?:content|chunks?) (?:received|returned)/i.test(normalizedError)
   ) {
