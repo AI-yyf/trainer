@@ -42,7 +42,7 @@ def test_local_hosts_short_circuit_to_http() -> None:
 
 
 def test_looks_like_schemeless_provider_host_matches_service_addresses() -> None:
-    assert looks_like_schemeless_provider_host("minimax.redfast.top")
+    assert looks_like_schemeless_provider_host("relay.example.test")
     assert looks_like_schemeless_provider_host("api.deepseek.com/v1")
     assert looks_like_schemeless_provider_host("localhost:1234/v1")
     assert looks_like_schemeless_provider_host("ollama:11434")

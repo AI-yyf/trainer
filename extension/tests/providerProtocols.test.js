@@ -70,15 +70,15 @@ test('scheme-less provider base URLs stay scheme-less for the sidecar to resolve
 
   // The transport (sidecar) probes and owns scheme resolution; a blind https
   // guess here silently breaks http-only relays, so hosts stay as typed.
-  assert.equal(normalizeProviderBaseUrl('minimax.redfast.top'), 'minimax.redfast.top');
+  assert.equal(normalizeProviderBaseUrl('relay.example.test'), 'relay.example.test');
   assert.equal(normalizeProviderBaseUrl('api.deepseek.com/v1'), 'api.deepseek.com/v1');
   assert.equal(normalizeProviderBaseUrl('localhost:1234/v1'), 'localhost:1234/v1');
-  assert.equal(normalizeProviderBaseUrl('  minimax.redfast.top  '), 'minimax.redfast.top');
+  assert.equal(normalizeProviderBaseUrl('  relay.example.test  '), 'relay.example.test');
 
   // Pasted full request endpoints still collapse to the service root.
   assert.equal(
-    normalizeProviderBaseUrl('http://minimax.redfast.top/v1/chat/completions'),
-    'http://minimax.redfast.top/v1',
+    normalizeProviderBaseUrl('http://relay.example.test/v1/chat/completions'),
+    'http://relay.example.test/v1',
   );
   assert.equal(normalizeProviderBaseUrl('https://api.deepseek.com/v1/'), 'https://api.deepseek.com/v1');
   assert.equal(normalizeProviderBaseUrl(''), '');
@@ -87,7 +87,7 @@ test('scheme-less provider base URLs stay scheme-less for the sidecar to resolve
 test('looksLikeSchemelessProviderUrl recognizes service hosts pasted without a scheme', async () => {
   const { looksLikeSchemelessProviderUrl } = await import(sharedProviderProtocolsModulePath);
 
-  assert.equal(looksLikeSchemelessProviderUrl('minimax.redfast.top'), true);
+  assert.equal(looksLikeSchemelessProviderUrl('relay.example.test'), true);
   assert.equal(looksLikeSchemelessProviderUrl('api.deepseek.com/v1'), true);
   assert.equal(looksLikeSchemelessProviderUrl('localhost:1234/v1'), true);
   assert.equal(looksLikeSchemelessProviderUrl('127.0.0.1:8099'), true);

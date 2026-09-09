@@ -25,8 +25,8 @@ const settingsViewSourcePath = path.resolve(
 
 const NEWAPI_CONNECTION_BLOB = JSON.stringify({
   _type: 'newapi_channel_conn',
-  key: 'sk-K5DO7XzgBun6jFTLJZLF9UJE0W3bHRvcBugjUtpocmorrXMS',
-  url: 'http://minimax.redfast.top',
+  key: 'sk-test-fixture-key',
+  url: 'http://relay.example.test',
 });
 
 test('relay connection blobs split into base URL plus API key in one paste', async () => {
@@ -34,8 +34,8 @@ test('relay connection blobs split into base URL plus API key in one paste', asy
 
   const parsed = parseProviderConnectionPaste(NEWAPI_CONNECTION_BLOB);
   assert.deepEqual(parsed, {
-    baseUrl: 'http://minimax.redfast.top',
-    apiKey: 'sk-K5DO7XzgBun6jFTLJZLF9UJE0W3bHRvcBugjUtpocmorrXMS',
+    baseUrl: 'http://relay.example.test',
+    apiKey: 'sk-test-fixture-key',
     connectionType: 'newapi_channel_conn',
   });
 });
@@ -44,13 +44,13 @@ test('connection blob parsing tolerates copy wrappers and field aliases', async 
   const { parseProviderConnectionPaste } = await import(sharedProviderGatewayModulePath);
 
   assert.deepEqual(parseProviderConnectionPaste('```json\n' + NEWAPI_CONNECTION_BLOB + '\n```'), {
-    baseUrl: 'http://minimax.redfast.top',
-    apiKey: 'sk-K5DO7XzgBun6jFTLJZLF9UJE0W3bHRvcBugjUtpocmorrXMS',
+    baseUrl: 'http://relay.example.test',
+    apiKey: 'sk-test-fixture-key',
     connectionType: 'newapi_channel_conn',
   });
   assert.deepEqual(parseProviderConnectionPaste(`  ${NEWAPI_CONNECTION_BLOB}  `), {
-    baseUrl: 'http://minimax.redfast.top',
-    apiKey: 'sk-K5DO7XzgBun6jFTLJZLF9UJE0W3bHRvcBugjUtpocmorrXMS',
+    baseUrl: 'http://relay.example.test',
+    apiKey: 'sk-test-fixture-key',
     connectionType: 'newapi_channel_conn',
   });
   assert.deepEqual(
@@ -67,8 +67,8 @@ test('connection blob parsing tolerates copy wrappers and field aliases', async 
 test('values that are not a full connection blob are never claimed', async () => {
   const { parseProviderConnectionPaste } = await import(sharedProviderGatewayModulePath);
 
-  assert.equal(parseProviderConnectionPaste('sk-K5DO7XzgBun6jFTLJZLF9UJE0W3bHRvcBugjUtpocmorrXMS'), null);
-  assert.equal(parseProviderConnectionPaste('http://minimax.redfast.top'), null);
+  assert.equal(parseProviderConnectionPaste('sk-test-fixture-key'), null);
+  assert.equal(parseProviderConnectionPaste('http://relay.example.test'), null);
   assert.equal(parseProviderConnectionPaste(JSON.stringify({ url: 'http://x.y' })), null);
   assert.equal(parseProviderConnectionPaste(JSON.stringify({ key: 'sk-abc' })), null);
   assert.equal(
