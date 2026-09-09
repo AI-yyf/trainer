@@ -16,7 +16,7 @@ const MATRIX_TO_UI = [
   ['authentication_failed', /API key|Settings|权限|设置/i],
   ['rate_limit', /429|Rate limited|限流|稍等/i],
   ['timeout', /too long|太久|稍后再试/i],
-  ['empty_stream', /empty reply|空回复|草稿/i],
+  ['empty_stream', /empty stream|空流|草稿/i],
   ['incomplete_stream', /cut off|截断|重试/i],
   ['stream_aborted_by_client', /stopped|中止|草稿/i],
   ['provider_capability_test_failed', /capability check|能力检查|Settings|设置/i],

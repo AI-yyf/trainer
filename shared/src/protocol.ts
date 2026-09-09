@@ -1055,8 +1055,18 @@ export function buildTrainerStreamingErrorMessage(
 
   if (
     normalizedCategory === "empty_stream" ||
+    /empty[_\s-]?stream|no (?:content|chunks?) (?:received|returned)/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "Empty stream: the model sent no content. Your draft is still here — send again, or switch model in Settings.",
+      "空流：模型没有返回任何内容。草稿还在，可以再发一次，或到设置里换模型。",
+    );
+  }
+
+  if (
     normalizedCategory === "empty_response" ||
-    /empty[_\s-]?stream|empty_response|no (?:content|chunks?) (?:received|returned)/i.test(normalizedError)
+    /empty_response/i.test(normalizedError)
   ) {
     return localizeTrainerStreamingCopy(
       language,

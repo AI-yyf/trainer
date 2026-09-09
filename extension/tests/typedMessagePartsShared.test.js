@@ -295,7 +295,7 @@ test('trainer message parts normalize into the typed registry contract', () => {
     {
       tone: "error",
       message:
-        "The model returned an empty reply. Your draft is still here — try sending again, or switch model in Settings.",
+        "Empty stream: the model sent no content. Your draft is still here — send again, or switch model in Settings.",
     },
   );
   assert.deepEqual(

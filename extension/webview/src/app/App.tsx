@@ -14398,6 +14398,12 @@ export function App() {
                 !streaming.isStreaming &&
                 streaming.completionStopReason === "cancelled"
               }
+              explainAfterEmptyStream={
+                activeView === "coach" &&
+                !composerUsesTrainingFlow &&
+                !streaming.isStreaming &&
+                /empty_stream|empty[_\s-]?stream/i.test(streaming.streamError ?? "")
+              }
               submitLabel=""
               accessibilityLabel={localizedTrainingComposerAccessibilityLabel}
               submitAriaLabel={localizedTrainingComposerSubmitAriaLabel}

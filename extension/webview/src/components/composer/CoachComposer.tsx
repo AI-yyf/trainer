@@ -22,6 +22,7 @@ type ComposerLocaleCopy = {
   readyNextTurnLabel: string;
   readyIdleLabel: string;
   readyAfterAbortLabel: string;
+  readyAfterEmptyStreamLabel: string;
   accessibilityLabel: string;
   submitLabel: string;
   cancelLabel: string;
@@ -44,6 +45,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     readyNextTurnLabel: "可发送下一轮",
     readyIdleLabel: "可以输入下一轮",
     readyAfterAbortLabel: "已中止。草稿已恢复，再发送即可同会话续写",
+    readyAfterEmptyStreamLabel: "空流。草稿已保留，可再发送重试",
     accessibilityLabel: "向教练发送消息",
     submitLabel: "发送消息",
     cancelLabel: "取消回复",
@@ -64,6 +66,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     readyNextTurnLabel: "Ready for next turn",
     readyIdleLabel: "Ready for the next message",
     readyAfterAbortLabel: "Stopped. Draft restored — send again to continue this session",
+    readyAfterEmptyStreamLabel: "Empty stream. Draft kept — send again to retry",
     accessibilityLabel: "Send a message to the coach",
     submitLabel: "Send message",
     cancelLabel: "Cancel reply",
@@ -84,6 +87,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     readyNextTurnLabel: "Listo para el siguiente turno",
     readyIdleLabel: "Listo para el siguiente mensaje",
     readyAfterAbortLabel: "Detenido. Borrador restaurado: envía de nuevo para continuar la sesión",
+    readyAfterEmptyStreamLabel: "Flujo vacío. Borrador conservado: envía de nuevo para reintentar",
     accessibilityLabel: "Enviar un mensaje al entrenador",
     submitLabel: "Enviar mensaje",
     cancelLabel: "Cancelar respuesta",
@@ -104,6 +108,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     readyNextTurnLabel: "Prêt pour le prochain tour",
     readyIdleLabel: "Prêt pour le prochain message",
     readyAfterAbortLabel: "Arrêté. Brouillon restauré — renvoyez pour continuer la session",
+    readyAfterEmptyStreamLabel: "Flux vide. Brouillon conservé — renvoyez pour réessayer",
     accessibilityLabel: "Envoyer un message au coach",
     submitLabel: "Envoyer le message",
     cancelLabel: "Annuler la réponse",
@@ -124,6 +129,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     readyNextTurnLabel: "Bereit für die nächste Runde",
     readyIdleLabel: "Bereit für die nächste Nachricht",
     readyAfterAbortLabel: "Abgebrochen. Entwurf wiederhergestellt — erneut senden, um die Sitzung fortzusetzen",
+    readyAfterEmptyStreamLabel: "Leerer Stream. Entwurf behalten — erneut senden zum Wiederholen",
     accessibilityLabel: "Nachricht an den Coach senden",
     submitLabel: "Nachricht senden",
     cancelLabel: "Antwort abbrechen",
@@ -144,6 +150,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     readyNextTurnLabel: "次のターンを送信できます",
     readyIdleLabel: "次のメッセージを入力できます",
     readyAfterAbortLabel: "中止しました。下書きを復元済み — 再送信で同じセッションを続けられます",
+    readyAfterEmptyStreamLabel: "空ストリーム。下書きを保持済み — 再送信で再試行できます",
     accessibilityLabel: "コーチにメッセージを送信",
     submitLabel: "メッセージを送信",
     cancelLabel: "返信をキャンセル",
@@ -164,6 +171,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     readyNextTurnLabel: "다음 턴을 보낼 수 있음",
     readyIdleLabel: "다음 메시지를 입력할 수 있음",
     readyAfterAbortLabel: "중단됨. 초안이 복원됨 — 다시 보내면 같은 세션을 이어갑니다",
+    readyAfterEmptyStreamLabel: "빈 스트림. 초안 유지됨 — 다시 보내 재시도",
     accessibilityLabel: "코치에게 메시지 보내기",
     submitLabel: "메시지 보내기",
     cancelLabel: "답변 취소",
@@ -184,6 +192,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     readyNextTurnLabel: "Pronto para o próximo turno",
     readyIdleLabel: "Pronto para a próxima mensagem",
     readyAfterAbortLabel: "Interrompido. Rascunho restaurado — envie de novo para continuar a sessão",
+    readyAfterEmptyStreamLabel: "Stream vazio. Rascunho mantido — envie de novo para tentar",
     accessibilityLabel: "Enviar uma mensagem ao coach",
     submitLabel: "Enviar mensagem",
     cancelLabel: "Cancelar resposta",
@@ -251,6 +260,8 @@ export interface CoachComposerProps {
   explainBetweenTurns?: boolean;
   /** When set, after client abort the send-ready state stays explainable (abort→resume). */
   explainAfterAbort?: boolean;
+  /** When set, after empty_stream failure the send-ready state stays explainable (draft retry). */
+  explainAfterEmptyStream?: boolean;
   textareaId?: string;
   minRows?: number;
   submitLabel?: string;
@@ -293,6 +304,7 @@ export function CoachComposer({
   busyLabel,
   explainBetweenTurns = false,
   explainAfterAbort = false,
+  explainAfterEmptyStream = false,
   textareaId = "coach-composer",
   minRows = 2,
   submitLabel = "",
@@ -493,13 +505,21 @@ export function CoachComposer({
     explainAfterAbort && (sendState === "ready" || sendState === "idle")
       ? localizedCopy.readyAfterAbortLabel
       : "";
+  const afterEmptyStreamReadyLabel =
+    !afterAbortReadyLabel &&
+    explainAfterEmptyStream &&
+    (sendState === "ready" || sendState === "idle")
+      ? localizedCopy.readyAfterEmptyStreamLabel
+      : "";
   const betweenTurnReadyLabel = afterAbortReadyLabel
     ? afterAbortReadyLabel
-    : explainBetweenTurns && sendState === "ready"
-      ? localizedCopy.readyNextTurnLabel
-      : explainBetweenTurns && sendState === "idle"
-        ? localizedCopy.readyIdleLabel
-        : "";
+    : afterEmptyStreamReadyLabel
+      ? afterEmptyStreamReadyLabel
+      : explainBetweenTurns && sendState === "ready"
+        ? localizedCopy.readyNextTurnLabel
+        : explainBetweenTurns && sendState === "idle"
+          ? localizedCopy.readyIdleLabel
+          : "";
   const resolvedSummary = summary?.trim() ? summary : undefined;
   const resolvedHintText = hintText?.trim() ? hintText : undefined;
   const primaryHelperText = busy ? resolvedBusyLabel : resolvedSummary ?? resolvedHintText;
