@@ -1,5 +1,23 @@
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+// The sidecar layer needs the project's pinned test environment; a bare
+// `python3` (system/anaconda) usually lacks pytest plugins and cannot even
+// collect the suite. Same resolution order as the extension's sidecar bundler.
+// Candidates resolve against the repo root so the matrix works from any cwd.
+function resolveServerPython() {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const candidates = [
+    path.join(repoRoot, "server", ".venv", "bin", "python"),
+    path.join(repoRoot, "server", ".venv-mac", "bin", "python"),
+    path.join(repoRoot, "server", ".venv", "Scripts", "python.exe"),
+    path.join(repoRoot, "server", ".venv-mac", "Scripts", "python.exe"),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? "python3";
+}
 
 const layers = [
   {
@@ -13,7 +31,7 @@ const layers = [
   {
     id: "sidecar",
     label: "200 experience scenarios / real sidecar with scripted provider",
-    command: process.platform === "win32" ? "python" : "python3",
+    command: resolveServerPython(),
     args: ["-m", "pytest", "tests/test_real_sidecar_experience_matrix.py", "-q"],
     cwd: "server",
     external: false,
