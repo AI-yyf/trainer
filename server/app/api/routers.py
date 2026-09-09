@@ -19463,7 +19463,24 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         stream_id: str | None = None,
     ) -> tuple[object, object, object]:
         workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
-        state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
+        try:
+            state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
+        except LookupError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "state": "session_not_found",
+                    "status": "blocked",
+                    "recoverable": False,
+                    "session_id": str(request.session_id or ""),
+                    "workspace_id": workspace_id,
+                    "detail": (
+                        "The session_id could not be restored after sidecar restart. "
+                        "Start a new session instead of inventing continuity."
+                    ),
+                    "reason": str(exc),
+                },
+            ) from exc
         profile = resolved_profile(state.workspace_id)
         frozen_formal_plan_mutation_requested = bool(
             request.intent == "plan"

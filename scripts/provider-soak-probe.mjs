@@ -150,11 +150,20 @@ async function shortTurn(sessionId, workspaceId, message) {
   const result = await postJson(`${sidecarUrl}/turn`, turnPayload(sessionId, workspaceId, message));
   const reply = String(result.json?.reply?.content ?? "").trim();
   const secretClean = !providerApiKey || !String(result.text).includes(providerApiKey);
+  const responseSessionId = String(
+    result.json?.session_id ?? result.json?.snapshot?.session_id ?? "",
+  ).trim();
+  const messageCount = Array.isArray(result.json?.snapshot?.messages)
+    ? result.json.snapshot.messages.length
+    : 0;
   let category = "success";
   if (!result.response.ok) {
+    const detailState = result.json?.detail?.state || result.json?.detail?.status;
     if (result.response.status === 401 || result.response.status === 403) category = "authentication_failed";
     else if (result.response.status === 429) category = "rate_limit";
-    else category = "turn_failed";
+    else if (result.response.status === 409 && String(detailState || "").includes("session_not_found")) {
+      category = "session_not_found";
+    } else category = "turn_failed";
   } else if (!reply) {
     category = "empty_stream";
   } else if (!secretClean) {
@@ -165,9 +174,86 @@ async function shortTurn(sessionId, workspaceId, message) {
     ok: result.response.ok && Boolean(reply) && secretClean,
     replyChars: reply.length,
     secretClean,
+    responseSessionId,
+    messageCount,
+    sameSession: !responseSessionId || responseSessionId === sessionId,
     elapsedMs: Date.now() - started,
     category,
   };
+}
+
+async function fetchSessionHistory(sessionId, workspaceId) {
+  const url = new URL(`${sidecarUrl}/session/history`);
+  url.searchParams.set("session_id", sessionId);
+  url.searchParams.set("workspace_id", workspaceId);
+  url.searchParams.set("limit", "20");
+  const response = await fetch(url, { method: "GET" });
+  const text = await response.text();
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = undefined;
+  }
+  return { ok: response.ok, status: response.status, json, text: redact(text) };
+}
+
+function durableDataEnv(baseEnv = process.env) {
+  const dataDir = path.join(repoRoot, ".trainer");
+  return {
+    ...baseEnv,
+    TRAINER_DATA_DIR: dataDir,
+  };
+}
+
+function spawnSidecar() {
+  const child = spawn(
+    path.join(repoRoot, "server", ".venv", "bin", "python"),
+    [path.join(repoRoot, "server", "run_sidecar.py"), "--host", "127.0.0.1", "--port", "8765", "--reload"],
+    {
+      // Keep cwd at repo root + absolute TRAINER_DATA_DIR so restart cannot split SQLite.
+      cwd: repoRoot,
+      detached: true,
+      stdio: "ignore",
+      env: durableDataEnv(),
+    },
+  );
+  child.unref();
+  return child;
+}
+
+async function hardRestartSidecar() {
+  const pids = await listSidecarPids();
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      /* ignore */
+    }
+  }
+  await delay(1000);
+  for (const pid of await listSidecarPids()) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      /* ignore */
+    }
+  }
+  let restarted = await waitForHealth({ timeoutMs: 5000, expectDownFirst: false });
+  if (restarted.ok) {
+    // Still healthy somehow; force another terminate cycle.
+    for (const pid of await listSidecarPids()) {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        /* ignore */
+      }
+    }
+    await delay(500);
+  }
+  spawnSidecar();
+  restarted = await waitForHealth({ timeoutMs: 60000, expectDownFirst: false });
+  return restarted;
 }
 
 async function runMultiTurnSoak() {
@@ -273,7 +359,8 @@ async function runReconnectSoak() {
     };
   }
   const sessionId = start.json.session_id;
-  const pre = await shortTurn(sessionId, workspaceId, "重启前：用一句话确认教练连接可用。");
+  const preMarker = "重启前：用一句话确认教练连接可用。";
+  const pre = await shortTurn(sessionId, workspaceId, preMarker);
   if (!pre.ok) {
     return {
       ok: false,
@@ -284,40 +371,20 @@ async function runReconnectSoak() {
     };
   }
 
-  const touchPath = path.join(repoRoot, "server", ".soak_reload_touch.py");
+  // Dotfiles are ignored by uvicorn/watchfiles, so prefer an explicit clean restart
+  // with absolute TRAINER_DATA_DIR (same SQLite across process death).
+  const touchPath = path.join(repoRoot, "server", "soak_reload_touch.py");
   fs.writeFileSync(touchPath, `# soak reload touch ${Date.now()}\n`);
-  let restarted = await waitForHealth({ timeoutMs: 90000, expectDownFirst: true });
+  let restarted = await waitForHealth({ timeoutMs: 15000, expectDownFirst: true });
   if (!restarted.ok) {
-    const pids = await listSidecarPids();
-    for (const pid of pids) {
-      try {
-        process.kill(pid, "SIGTERM");
-      } catch {
-        /* ignore */
-      }
-    }
-    restarted = await waitForHealth({ timeoutMs: 20000, expectDownFirst: false });
+    restarted = await hardRestartSidecar();
     if (!restarted.ok) {
-      const child = spawn(
-        path.join(repoRoot, "server", ".venv", "bin", "python"),
-        [path.join(repoRoot, "server", "run_sidecar.py"), "--host", "127.0.0.1", "--port", "8765", "--reload"],
-        {
-          cwd: path.join(repoRoot, "server"),
-          detached: true,
-          stdio: "ignore",
-          env: process.env,
-        },
-      );
-      child.unref();
-      restarted = await waitForHealth({ timeoutMs: 60000, expectDownFirst: false });
-      if (!restarted.ok) {
-        return {
-          ok: false,
-          probe: "reconnect_after_restart",
-          category: "sidecar_restart_failed",
-          elapsedMs: Date.now() - started,
-        };
-      }
+      return {
+        ok: false,
+        probe: "reconnect_after_restart",
+        category: "sidecar_restart_failed",
+        elapsedMs: Date.now() - started,
+      };
     }
   }
 
@@ -354,25 +421,25 @@ async function runReconnectSoak() {
     };
   }
 
+  const history = await fetchSessionHistory(sessionId, workspaceId);
+  const historyItem = Array.isArray(history.json) ? history.json[0] || {} : history.json || {};
+  const historyMessageCount = Number(historyItem.message_count || 0);
+  const historyLatestUser = String(historyItem.latest_user_message || "");
+  const sameSession = oldSession.sameSession !== false;
+  const durableMessageCount = Number(oldSession.messageCount || 0) >= 4;
+  // /session/history returns a summary row (latest messages), so require turn snapshot
+  // messageCount>=4 plus same session_id — that proves pre+post restart turns survived.
+  const continuityOk =
+    Boolean(oldSession.ok) && sameSession && durableMessageCount && historyMessageCount >= 4;
+
   // Leave sidecar healthy for subsequent probes/agents.
   let finalHealth = await getHealth();
   if (!finalHealth.ok) {
-    const child = spawn(
-      path.join(repoRoot, "server", ".venv", "bin", "python"),
-      [path.join(repoRoot, "server", "run_sidecar.py"), "--host", "127.0.0.1", "--port", "8765", "--reload"],
-      {
-        cwd: path.join(repoRoot, "server"),
-        detached: true,
-        stdio: "ignore",
-        env: process.env,
-      },
-    );
-    child.unref();
+    spawnSidecar();
     const recovered = await waitForHealth({ timeoutMs: 60000, expectDownFirst: false });
     finalHealth = recovered.ok ? recovered.health ?? (await getHealth()) : await getHealth();
   }
 
-  const continuityOk = Boolean(oldSession.ok);
   const ok = post.ok === true && finalHealth.ok === true && continuityOk;
   return {
     ok,
@@ -382,17 +449,26 @@ async function runReconnectSoak() {
       : !finalHealth.ok
         ? "sidecar_unhealthy_after_probe"
         : !continuityOk
-          ? "old_session_not_continued"
+          ? oldSession.category === "session_not_found"
+            ? "old_session_not_found"
+            : "old_session_not_continued"
           : "success",
     preRestart: { ok: pre.ok, category: pre.category, elapsedMs: pre.elapsedMs },
     postRestart: { ok: post.ok, category: post.category, elapsedMs: post.elapsedMs },
     oldSessionContinuity: {
       attempted: oldSession.attempted,
       ok: continuityOk,
-      category: oldSession.category,
+      category: continuityOk ? "success" : oldSession.category,
+      sameSession,
+      responseSessionId: oldSession.responseSessionId || "",
+      messageCount: oldSession.messageCount || 0,
+      historyMessageCount,
+      historyLatestUserChars: historyLatestUser.length,
+      historyStatus: history.status,
+      databasePath: postHealth.json?.database_path || before.json?.database_path || "",
       note: continuityOk
-        ? "Old session_id continued after sidecar restart via durable restore."
-        : "Old session_id did not continue after restart; durable resume still failing.",
+        ? "Old session_id continued after clean sidecar restart via durable SQLite restore."
+        : "Old session_id did not continue after restart; refusing fake success.",
     },
     healthAfter: { ok: finalHealth.ok, status: finalHealth.status },
     elapsedMs: Date.now() - started,
@@ -677,6 +753,19 @@ async function main() {
     baseUrlHost: hostOnly(providerBaseUrl),
     apiKey: "sk-***",
   };
+  const evidenceDir = path.join("/workspace/evidence/provider/soak");
+  try {
+    fs.mkdirSync(evidenceDir, { recursive: true });
+    const evidenceName =
+      modeArg === "reconnect" || modeArg === "reconnect_after_restart"
+        ? "reconnect.json"
+        : modeArg === "all"
+          ? "SOAK-RUN.json"
+          : `${modeArg.replace(/[^a-z0-9_-]+/gi, "-")}.json`;
+    fs.writeFileSync(path.join(evidenceDir, evidenceName), `${JSON.stringify(summary, null, 2)}\n`);
+  } catch {
+    /* evidence is best-effort */
+  }
   console.log(JSON.stringify(summary, null, 2));
   process.exitCode = ok ? 0 : 1;
 }

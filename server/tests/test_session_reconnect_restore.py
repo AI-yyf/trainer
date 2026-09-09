@@ -56,3 +56,23 @@ def test_get_session_rehydrates_from_repository_after_memory_drop(tmp_path: Path
     assert restored.session_id == session_id
     assert restored.workspace_id == state.workspace_id
     assert session_id in runtime.sessions
+
+
+def test_ensure_session_fail_closed_when_explicit_id_missing(tmp_path: Path) -> None:
+    runtime = _build_runtime(tmp_path)
+    try:
+        runtime.ensure_session("session-missing-explicit", workspace_id="ws-reconnect")
+        raised = False
+    except LookupError as exc:
+        raised = True
+        assert "session_not_found" in str(exc)
+    assert raised is True
+
+
+def test_ensure_session_rehydrates_after_memory_drop(tmp_path: Path) -> None:
+    runtime = _build_runtime(tmp_path)
+    state = runtime.start_session("ws-reconnect-ensure", "Reconnect Lab")
+    runtime.sessions.clear()
+    restored = runtime.ensure_session(state.session_id, workspace_id=state.workspace_id)
+    assert restored.session_id == state.session_id
+    assert restored.workspace_id == state.workspace_id

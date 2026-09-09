@@ -831,20 +831,22 @@ class TrainerRuntime:
         workspace_id: str | None = None,
         workspace_name: str = DEFAULT_WORKSPACE_NAME,
     ) -> SessionState:
+        """Return an existing session, restoring from SQLite after restart when needed.
+
+        An explicit session_id must be recoverable. Silently minting a replacement
+        session would fake continuity across sidecar restarts.
+        """
         explicit_workspace_id = self.repository.resolve_context_id(workspace_id) or (workspace_id or "").strip()
-        if session_id and session_id in self.sessions:
-            state = self.sessions[session_id]
-            if not explicit_workspace_id or state.workspace_id == explicit_workspace_id:
+        cleaned_session_id = str(session_id or "").strip()
+        if cleaned_session_id:
+            state = self.get_session(cleaned_session_id)
+            if state is not None and (
+                not explicit_workspace_id or state.workspace_id == explicit_workspace_id
+            ):
                 return state
-        if session_id:
-            restored_payload = self.repository.load_session(session_id)
-            if restored_payload:
-                restored = self._restore_session(restored_payload)
-                if restored is not None and (
-                    not explicit_workspace_id or restored.workspace_id == explicit_workspace_id
-                ):
-                    self.sessions[session_id] = restored
-                    return restored
+            raise LookupError(
+                f"session_not_found:{cleaned_session_id}"
+            )
         return self.start_session(explicit_workspace_id or DEFAULT_WORKSPACE_ID, workspace_name)
 
     def provision_project_adoption(

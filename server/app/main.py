@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,8 +35,17 @@ from .training.card_router import CardRouterService
 
 def create_app(settings_override: Settings | AppSettings | None = None) -> FastAPI:
     settings = settings_override or Settings()
-    data_dir = settings.data_dir  # type: ignore[attr-defined]
+    raw_data_dir = settings.data_dir  # type: ignore[attr-defined]
+    data_dir = (
+        settings.resolved_data_dir  # type: ignore[attr-defined]
+        if hasattr(settings, "resolved_data_dir")
+        else Path(raw_data_dir).expanduser().resolve()
+    )
     database_path = settings.database_path  # type: ignore[attr-defined]
+    if not Path(database_path).is_absolute():
+        database_path = data_dir / Path(database_path).name
+    else:
+        database_path = Path(database_path)
     data_dir.mkdir(parents=True, exist_ok=True)
 
     repository = TrainerRepository(database_path)

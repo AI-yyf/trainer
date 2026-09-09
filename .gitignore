@@ -76,3 +76,4 @@ tmp-*.png
 # Built platform binaries — produced per-target by CI release builds
 extension/bundled/bin/
 server/.soak_reload_touch.py
+server/soak_reload_touch.py
