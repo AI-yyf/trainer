@@ -62,3 +62,39 @@ test('provider protocol helpers normalize protocol selection and capability defa
     'streaming',
   ]);
 });
+
+test('scheme-less provider base URLs stay scheme-less for the sidecar to resolve', async () => {
+  const { normalizeProviderBaseUrl, looksLikeSchemelessProviderUrl } = await import(
+    sharedProviderProtocolsModulePath
+  );
+
+  // The transport (sidecar) probes and owns scheme resolution; a blind https
+  // guess here silently breaks http-only relays, so hosts stay as typed.
+  assert.equal(normalizeProviderBaseUrl('minimax.redfast.top'), 'minimax.redfast.top');
+  assert.equal(normalizeProviderBaseUrl('api.deepseek.com/v1'), 'api.deepseek.com/v1');
+  assert.equal(normalizeProviderBaseUrl('localhost:1234/v1'), 'localhost:1234/v1');
+  assert.equal(normalizeProviderBaseUrl('  minimax.redfast.top  '), 'minimax.redfast.top');
+
+  // Pasted full request endpoints still collapse to the service root.
+  assert.equal(
+    normalizeProviderBaseUrl('http://minimax.redfast.top/v1/chat/completions'),
+    'http://minimax.redfast.top/v1',
+  );
+  assert.equal(normalizeProviderBaseUrl('https://api.deepseek.com/v1/'), 'https://api.deepseek.com/v1');
+  assert.equal(normalizeProviderBaseUrl(''), '');
+});
+
+test('looksLikeSchemelessProviderUrl recognizes service hosts pasted without a scheme', async () => {
+  const { looksLikeSchemelessProviderUrl } = await import(sharedProviderProtocolsModulePath);
+
+  assert.equal(looksLikeSchemelessProviderUrl('minimax.redfast.top'), true);
+  assert.equal(looksLikeSchemelessProviderUrl('api.deepseek.com/v1'), true);
+  assert.equal(looksLikeSchemelessProviderUrl('localhost:1234/v1'), true);
+  assert.equal(looksLikeSchemelessProviderUrl('127.0.0.1:8099'), true);
+  assert.equal(looksLikeSchemelessProviderUrl('ollama:11434'), true);
+  assert.equal(looksLikeSchemelessProviderUrl('https://api.deepseek.com/v1'), false);
+  assert.equal(looksLikeSchemelessProviderUrl('ftp://example.com'), false);
+  assert.equal(looksLikeSchemelessProviderUrl('sk-abc123def456'), false);
+  assert.equal(looksLikeSchemelessProviderUrl('not a host'), false);
+  assert.equal(looksLikeSchemelessProviderUrl(''), false);
+});

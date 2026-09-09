@@ -150,6 +150,7 @@ type ProviderStatusPhraseKey =
   | 'generic_check_hint'
   | 'warming_reason'
   | 'degraded_warning'
+  | 'local_service_no_key_warning'
   | 'model_list_unavailable_warning'
   | 'refreshing_warning'
   | 'missing_vision_reason'
@@ -177,6 +178,7 @@ const providerStatusPhraseTable: Record<
     generic_check_hint: '到“设置”检查连接后再试。',
     warming_reason: '正在检查连接，请稍等。',
     degraded_warning: '最近一次检查没有完成，Trainer 会先继续使用之前可用的模型。',
+    local_service_no_key_warning: '这组连接指向本机服务，不需要密钥也可以直接使用。',
     model_list_unavailable_warning: '当前模型已通过连接测试，但模型列表暂时读取不到。可以继续使用，稍后再刷新。',
     refreshing_warning: '正在后台更新模型列表，Trainer 会继续使用之前可用的模型。',
     missing_vision_reason: '当前连接不支持图片输入，图片不会发送。',
@@ -200,6 +202,7 @@ const providerStatusPhraseTable: Record<
     generic_check_hint: 'Open Settings to check the connection, then try again.',
     warming_reason: 'Trainer is checking the connection. Give it a moment.',
     degraded_warning: 'The latest check did not finish, so Trainer will keep using the last working model for now.',
+    local_service_no_key_warning: 'This connection points at a local service, so it works without an API key.',
     model_list_unavailable_warning: 'The current model passed its connection test, but the model list is unavailable right now. You can keep using it and refresh later.',
     refreshing_warning: 'Trainer is updating the model list in the background and will keep using the last working model for now.',
     missing_vision_reason: 'Pictures cannot be sent right now; text coaching still works.',
@@ -223,6 +226,7 @@ const providerStatusPhraseTable: Record<
     generic_check_hint: 'Revisa la base URL, el nombre del modelo y los permisos.',
     warming_reason: 'Trainer todavía está comprobando la lista de modelos de este proveedor. Dale un momento.',
     degraded_warning: 'La última comprobación de modelos no terminó bien, así que Trainer seguirá usando por ahora el último modelo confirmado.',
+    local_service_no_key_warning: 'Esta conexión apunta a un servicio local, así que funciona sin clave API.',
     model_list_unavailable_warning: 'El modelo actual superó la prueba de conexión, pero la lista de modelos no está disponible ahora. Puedes seguir usándolo y actualizar más tarde.',
     refreshing_warning: 'Trainer está actualizando la lista de modelos en segundo plano y seguirá usando por ahora el último modelo confirmado.',
     missing_vision_reason: 'Esta conexión todavía no tiene visión, así que las imágenes preparadas no llegarán al modelo.',
@@ -246,6 +250,7 @@ const providerStatusPhraseTable: Record<
     generic_check_hint: 'Vérifiez la base URL, le nom du modèle et les autorisations.',
     warming_reason: 'Trainer vérifie encore la liste des modèles pour ce fournisseur. Patientez un instant.',
     degraded_warning: "La dernière vérification des modèles n'a pas complètement réussi, donc Trainer continuera pour l'instant avec le dernier modèle confirmé.",
+    local_service_no_key_warning: "Cette connexion pointe vers un service local ; elle fonctionne donc sans clé API.",
     model_list_unavailable_warning: 'Le modèle actuel a réussi le test de connexion, mais la liste des modèles est indisponible pour le moment. Vous pouvez continuer à l’utiliser et actualiser plus tard.',
     refreshing_warning: "Trainer actualise la liste des modèles en arrière-plan et continuera pour l'instant avec le dernier modèle confirmé.",
     missing_vision_reason: "Cette connexion n'a pas encore la vision, donc les images préparées ne parviendront pas au modèle.",
@@ -269,6 +274,7 @@ const providerStatusPhraseTable: Record<
     generic_check_hint: 'Prüfen Sie Base URL, Modellname und Berechtigungen.',
     warming_reason: 'Trainer prüft noch die Modellliste dieses Anbieters. Einen Moment bitte.',
     degraded_warning: 'Die letzte Modellprüfung war nicht vollständig erfolgreich, daher verwendet Trainer vorerst weiter das zuletzt bestätigte Modell.',
+    local_service_no_key_warning: 'Diese Verbindung zeigt auf einen lokalen Dienst und funktioniert daher ohne API-Schlüssel.',
     model_list_unavailable_warning: 'Das aktuelle Modell hat den Verbindungstest bestanden, aber die Modellliste ist gerade nicht verfügbar. Sie können es weiter verwenden und später aktualisieren.',
     refreshing_warning: 'Trainer aktualisiert die Modellliste im Hintergrund und verwendet vorerst weiter das zuletzt bestätigte Modell.',
     missing_vision_reason: 'Diese Verbindung hat noch keine Vision-Fähigkeit, daher erreichen vorbereitete Bilder das Modell nicht.',
@@ -292,6 +298,7 @@ const providerStatusPhraseTable: Record<
     generic_check_hint: 'base URL、モデル名、権限を確認してください。',
     warming_reason: 'Trainer はこの provider のモデル一覧をまだ確認中です。少し待ってください。',
     degraded_warning: '直近のモデル確認は完全には成功していないため、Trainer はいったん最後に確認できたモデルを使い続けます。',
+    local_service_no_key_warning: 'この接続はローカルサービスを指しているため、API キーがなくても動作します。',
     model_list_unavailable_warning: '現在のモデルは接続テストに通りましたが、モデル一覧は今は取得できません。引き続き使えます。あとで更新してください。',
     refreshing_warning: 'Trainer はバックグラウンドでモデル一覧を更新しており、いったん最後に確認できたモデルを使い続けます。',
     missing_vision_reason: 'この接続ではまだ視覚機能が有効ではないため、準備した画像はモデルに届きません。',
@@ -315,6 +322,7 @@ const providerStatusPhraseTable: Record<
     generic_check_hint: 'base URL, 모델 이름, 권한을 확인하세요.',
     warming_reason: 'Trainer가 이 provider의 모델 목록을 아직 확인 중입니다. 잠시만 기다려 주세요.',
     degraded_warning: '최근 모델 확인이 완전히 성공하지 못해 Trainer는 우선 마지막으로 확인된 모델을 계속 사용합니다.',
+    local_service_no_key_warning: '이 연결은 로컬 서비스를 가리키므로 API 키 없이도 작동합니다.',
     model_list_unavailable_warning: '현재 모델은 연결 테스트를 통과했지만 모델 목록을 지금 가져올 수 없습니다. 계속 사용할 수 있으며 나중에 새로 고침할 수 있습니다.',
     refreshing_warning: 'Trainer가 백그라운드에서 모델 목록을 새로 고치는 동안 마지막으로 확인된 모델을 계속 사용합니다.',
     missing_vision_reason: '이 연결에는 아직 비전 기능이 없어 준비된 이미지가 모델에 도달하지 않습니다.',
@@ -338,6 +346,7 @@ const providerStatusPhraseTable: Record<
     generic_check_hint: 'Verifique a base URL, o nome do modelo e as permissões.',
     warming_reason: 'O Trainer ainda está confirmando a lista de modelos deste provedor. Aguarde um momento.',
     degraded_warning: 'A última verificação de modelos não terminou totalmente bem, então o Trainer continuará usando por enquanto o último modelo confirmado.',
+    local_service_no_key_warning: 'Esta conexão aponta para um serviço local, então funciona sem chave de API.',
     model_list_unavailable_warning: 'O modelo atual passou no teste de conexão, mas a lista de modelos não está disponível agora. Você pode continuar usando-o e atualizar mais tarde.',
     refreshing_warning: 'O Trainer está atualizando a lista de modelos em segundo plano e continuará usando por enquanto o último modelo confirmado.',
     missing_vision_reason: 'Esta conexão ainda não tem visão, então as imagens preparadas não chegarão ao modelo.',
@@ -399,6 +408,21 @@ const unverifiedProviderWarningByLanguage: Record<ProviderSurfaceLanguage, strin
 
 function unverifiedProviderWarning(language: ProviderSurfaceLanguage): string {
   return unverifiedProviderWarningByLanguage[language] ?? unverifiedProviderWarningByLanguage['en-US'];
+}
+
+const staleVerificationWarningByLanguage: Record<ProviderSurfaceLanguage, string> = {
+  'zh-CN': '这组连接之前的检查已通过，但结果有点旧了。现在可以直接发送；建议空闲时重新测试一次。',
+  'en-US': 'This connection passed an earlier check, but the result is a bit old. You can send now; re-test when convenient.',
+  'es-ES': 'Esta conexión pasó una comprobación anterior, pero el resultado ya es algo antiguo. Puedes enviar ahora; vuelve a probar cuando puedas.',
+  'fr-FR': "Cette connexion a passé une vérification plus tôt, mais le résultat commence à dater. Vous pouvez envoyer ; retestez quand vous le pourrez.",
+  'de-DE': 'Diese Verbindung hat eine frühere Prüfung bestanden, aber das Ergebnis ist schon etwas älter. Sie können jetzt senden; testen Sie bei Gelegenheit erneut.',
+  'ja-JP': 'この接続は以前のチェックに合格していますが、結果はやや古いものです。今すぐ送信できます。都合のよいときに再テストしてください。',
+  'ko-KR': '이 연결은 이전 검사를 통과했지만 결과가 다소 오래되었습니다. 지금 보낼 수 있으며, 편할 때 다시 테스트하세요.',
+  'pt-BR': 'Esta conexão passou em uma verificação anterior, mas o resultado já está um pouco antigo. Você pode enviar agora; teste novamente quando puder.',
+};
+
+function staleVerificationWarning(language: ProviderSurfaceLanguage): string {
+  return staleVerificationWarningByLanguage[language] ?? staleVerificationWarningByLanguage['en-US'];
 }
 
 const providerErrorCategoryKeyMap: Partial<Record<string, ProviderStatusPhraseKey>> = {
@@ -788,6 +812,30 @@ function describeRecentProviderTestState(
   };
 }
 
+/**
+ * LM Studio / Ollama / llama.cpp style servers listen on loopback and accept
+ * unauthenticated requests. For those connections the stored-key gate should
+ * degrade to a warning instead of hard-blocking the composer.
+ */
+export function providerBaseUrlIsLocalService(baseUrl: string | undefined): boolean {
+  const raw = String(baseUrl ?? '').trim();
+  if (!raw) {
+    return false;
+  }
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    const host = parsed.hostname.replace(/^\[|\]$/g, '');
+    return (
+      host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0'
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function describeProviderSendState(
   provider: ProviderStatusLike,
   language: ProviderSurfaceLanguage,
@@ -805,6 +853,15 @@ export function describeProviderSendState(
   }
 
   if (!provider.apiKeyConfigured) {
+    // Local loopback services (LM Studio, Ollama, …) accept unauthenticated
+    // requests, so an absent key must not hard-block them.
+    if (providerBaseUrlIsLocalService(provider.baseUrl)) {
+      return {
+        blocked: false,
+        status: 'degraded_error',
+        warning: providerStatusPhrase(language, 'local_service_no_key_warning'),
+      };
+    }
     return {
       blocked: true,
       status: 'missing_api_key',
@@ -814,6 +871,21 @@ export function describeProviderSendState(
 
     const testReadiness = describeProviderTestReadiness(provider, language, now);
   if (provider.lastTestResult?.ok === true && !testReadiness.ready) {
+    // A passing check on this exact connection must not hard-block sending
+    // just because time has passed; the user would otherwise be re-gated
+    // every day. Degrade to a warning instead. Unknown or mismatched test
+    // targets stay blocked so a stale result can never vouch for a new one.
+    if (
+      testReadiness.freshness === 'stale' &&
+      testReadiness.targetsCurrentConnection === true &&
+      testReadiness.languageVerified
+    ) {
+      return {
+        blocked: false,
+        status: 'degraded_error',
+        warning: staleVerificationWarning(language),
+      };
+    }
     return {
       blocked: true,
       status: 'blocked_error',

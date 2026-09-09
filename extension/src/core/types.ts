@@ -185,11 +185,24 @@ export interface TrainerHostState {
   bootstrap: BootstrapData;
 }
 
+export interface ProviderTestOutcomeSummary {
+  ok?: boolean;
+  errorCategory?: string;
+  statusCode?: number;
+  retryable?: boolean;
+}
+
 export interface CommandExecutionResult<T = unknown> {
   ok: boolean;
   cancelled?: boolean;
   message?: string;
   data?: T;
+  /**
+   * Structured provider outcome for connection actions. The webview renders a
+   * localized, category-specific hint from these fields instead of a generic
+   * recovery sentence, without ever trusting host error prose.
+   */
+  providerTest?: ProviderTestOutcomeSummary;
   ui?: {
     focusProviderApiKey?: boolean;
   };
@@ -1855,7 +1868,12 @@ export type HostMessage =
   | { type: 'state/patch'; payload: Partial<BootstrapData> }
   | {
       type: 'operation/status';
-      payload: { tone: 'info' | 'success' | 'error'; message: string; phase?: string };
+      payload: {
+        tone: 'info' | 'success' | 'error';
+        message: string;
+        phase?: string;
+        providerTest?: ProviderTestOutcomeSummary;
+      };
     }
   | { type: 'training/resourceHandoff'; payload: ResourceTrainingHandoffResult }
   | { type: 'training/persistenceAck'; payload: TrainingPersistenceAck }

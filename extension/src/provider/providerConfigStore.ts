@@ -271,6 +271,25 @@ export class ProviderConfigStore implements vscode.Disposable {
       previousEffective,
       previousTargetProfile,
     );
+
+    // Editing an existing connection (for example fixing a Base URL typo)
+    // assigns a fresh opaque key ref. When the caller did not supply a
+    // replacement key, carry the stored secret over to the new ref so a small
+    // edit never silently deletes the user's API key.
+    let carriedApiKey: string | undefined;
+    if (apiKey === undefined && !inheritedApiKey?.trim()) {
+      for (const apiKeyRef of this.collectPreviousApiKeyRefs(configsToClean, configWithSafeApiKeyRef)) {
+        if (this.isApiKeyRefUsedByAnotherProfile(apiKeyRef, targetProfileId)) {
+          continue;
+        }
+        const secret = await this.extensionContext.secrets.get(this.secretKey(apiKeyRef));
+        if (secret?.trim()) {
+          carriedApiKey = secret.trim();
+          break;
+        }
+      }
+    }
+
     for (const apiKeyRef of this.collectPreviousApiKeyRefs(configsToClean, nextConfig)) {
       if (!this.isApiKeyRefUsedByAnotherProfile(apiKeyRef, targetProfileId)) {
         await this.extensionContext.secrets.delete(this.secretKey(apiKeyRef));
@@ -293,6 +312,8 @@ export class ProviderConfigStore implements vscode.Disposable {
       await this.clearLastTestResult(nextConfig);
     } else if (inheritedApiKey?.trim()) {
       await this.extensionContext.secrets.store(this.secretKey(nextConfig.apiKeyRef), inheritedApiKey);
+    } else if (carriedApiKey) {
+      await this.extensionContext.secrets.store(this.secretKey(nextConfig.apiKeyRef), carriedApiKey);
     }
 
     this.emitter.fire(this.getConfig() ?? nextConfig);
@@ -682,9 +703,10 @@ export class ProviderConfigStore implements vscode.Disposable {
   }
 
   private providerFingerprint(config: ProviderConfig): string {
+    // The display name is deliberately excluded: renaming a connection must
+    // not invalidate its model cache or verified test result.
     return [
       normalizeProviderProtocol(config.protocol) ?? '',
-      config.name.trim().toLowerCase(),
       config.baseUrl.trim().toLowerCase(),
       config.model.trim().toLowerCase(),
       config.apiKeyRef.trim().toLowerCase(),

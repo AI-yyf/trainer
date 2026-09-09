@@ -24,10 +24,17 @@ import {
 import { PROVIDER_PROFILE_TEMPLATES } from '../provider/providerProfileRegistry';
 import {
   defaultCapabilitiesForProtocol,
+  normalizeProviderBaseUrl,
   normalizeProviderProtocol,
   OPENAI_COMPATIBLE_PROTOCOL,
   providerProtocolFamily,
 } from '../../../shared/src/providerProtocols';
+import { providerBaseUrlIsLocalService } from '../../../shared/src/providerStatus';
+import {
+  providerHostCopy,
+  resolveProviderHostLanguage,
+  type ProviderHostCopyKey,
+} from './providerHostCopy';
 import {
   applyProviderModelCatalog,
   resolveProviderModelTokenState,
@@ -425,17 +432,18 @@ function buildDraftTestConfig(
   existing: ProviderConfig | undefined,
 ): ProviderConfig | undefined {
   const name = resolveProviderName(input.name, existing?.name);
-  const baseUrl = normalizeBaseUrl(input.baseUrl ?? existing?.baseUrl ?? '');
   const model = (input.model ?? existing?.model ?? '').trim();
-  if (!baseUrl || !model) {
-    return undefined;
-  }
 
   const rawProtocol = input.protocol ?? existing?.protocol ?? DEFAULT_PROVIDER_PROTOCOL;
   const protocol = normalizeProviderProtocol(rawProtocol);
   if (!protocol) {
     return undefined;
   }
+  const baseUrl = normalizeBaseUrl(input.baseUrl ?? existing?.baseUrl ?? '', protocol);
+  if (!baseUrl || !model) {
+    return undefined;
+  }
+
   const sameConnection = providerConnectionMatches(existing, { baseUrl, protocol });
   const protocolChanged = normalizeProviderProtocol(existing?.protocol) !== protocol;
   const hasEmbeddingModel = hasOwn(input, 'embeddingModel');
@@ -619,7 +627,7 @@ export async function clearProviderCommand(
 ): Promise<CommandExecutionResult> {
   const existing = context.providerStore.getConfig();
   if (!existing) {
-    return { ok: true, message: 'No provider configuration to clear.' };
+    return { ok: true, message: providerHostCopy(resolveProviderResponseLanguage(context), 'clearNothingToClear') };
   }
 
   const decision = await vscode.window.showWarningMessage(
@@ -628,7 +636,7 @@ export async function clearProviderCommand(
     'Clear',
   );
   if (!decision) {
-    return { ok: false, message: 'Provider clear cancelled.' };
+    return { ok: false, message: providerHostCopy(resolveProviderResponseLanguage(context), 'clearCancelled') };
   }
 
   await context.providerStore.clear();
@@ -643,7 +651,7 @@ export async function clearProviderCommand(
     ),
   );
   await context.workbench.syncState();
-  return { ok: true, message: 'Provider configuration cleared.' };
+  return { ok: true, message: providerHostCopy(resolveProviderResponseLanguage(context), 'clearDone') };
 }
 
 export async function testProviderCommand(
@@ -698,7 +706,7 @@ export async function testProviderCommand(
   const apiKey = draftInput
     ? await resolveDraftTestApiKey(context, draftInput, testConfig, savedConfig)
     : await resolveProviderApiKey(context, testConfig);
-  if (draftInput && !apiKey) {
+  if (draftInput && !apiKey && !isLocalDraftService(draftInput.baseUrl ?? testConfig.baseUrl)) {
     const message =
       'Add an API key for this draft before testing it. Trainer did not reuse the saved key for a different connection.';
     vscode.window.showWarningMessage(message);
@@ -749,7 +757,7 @@ export async function testProviderCommand(
     };
   }
 
-  const baseMessage = formatProviderTestMessage(response, testConfig.name);
+  const baseMessage = formatProviderTestMessage(response, testConfig.name, responseLanguage);
   // Fail-closed: never toast/persist raw key-shaped strings from provider detail.
   const message = sanitizeErrorSurfaceText(
     draftInput
@@ -816,6 +824,12 @@ export async function testProviderCommand(
     ok,
     message,
     data: response,
+    providerTest: {
+      ok,
+      errorCategory: response.error_category,
+      statusCode: response.status_code,
+      retryable: response.retryable,
+    },
   };
 }
 
@@ -848,11 +862,10 @@ function resolveProviderResponseLanguage(
   context: CommandContext,
   requestedLanguage?: ComposerLanguage,
 ): ComposerLanguage | undefined {
-  if (isComposerLanguage(requestedLanguage)) {
-    return requestedLanguage;
-  }
-  const workspaceLanguage = context.getHostState().bootstrap.memory.workspace?.responseLanguage;
-  return isComposerLanguage(workspaceLanguage) ? workspaceLanguage : undefined;
+  return resolveProviderHostLanguage(
+    requestedLanguage,
+    context.getHostState().bootstrap.memory.workspace?.responseLanguage,
+  );
 }
 
 async function resolveProviderConfig(context: CommandContext): Promise<ProviderConfig | undefined> {
@@ -1792,41 +1805,42 @@ async function promptCapabilities(
   );
 }
 
-function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.trim().replace(/\/+$/, '');
+function normalizeBaseUrl(baseUrl: string, protocol?: ProviderProtocol): string {
+  // Delegate to the shared protocol-aware canonicalizer so a draft test and
+  // the saved connection see the same base URL (paste-full endpoints like
+  // "…/v1/chat/completions" collapse to the service root).
+  return normalizeProviderBaseUrl(baseUrl, protocol ?? DEFAULT_PROVIDER_PROTOCOL);
+}
+
+function isLocalDraftService(baseUrl: string | undefined): boolean {
+  return providerBaseUrlIsLocalService(baseUrl);
 }
 
 function formatProviderTestMessage(
   response: ProviderTestResponse,
   fallbackName: string,
+  language: ComposerLanguage | undefined,
 ): string {
   const providerName = response.provider_name?.trim() || fallbackName;
   const detailRaw = response.detail?.trim();
   // Pattern-match on raw detail for routing; never embed unsanitized detail in output.
   const detail = detailRaw ? sanitizeErrorSurfaceText(detailRaw) : undefined;
+  const copy = (key: ProviderHostCopyKey) => providerHostCopy(language, key, { name: providerName });
 
   if (response.status === 'connected' || response.success) {
-    return sanitizeErrorSurfaceText(
-      `${providerName} is connected. ${detail ?? 'Trainer can use this model now.'}`,
-    );
+    return sanitizeErrorSurfaceText(`${copy('testConnected')} ${detail ?? copy('testConnectedReady')}`);
   }
 
   if (response.status === 'missing_api_key' || response.status === 'scaffold') {
-    return `${providerName} is saved, but no API key is stored yet. Trainer cannot work until you add one.`;
+    return copy('testMissingKey');
   }
 
   if (response.error_category === 'sidecar_unavailable') {
-    return (
-      detail ??
-      'Trainer could not finish the connection check. Try again in a moment.'
-    );
+    return detail ?? copy('testCheckInterrupted');
   }
 
   if (response.status === 'incomplete' || response.configured === false) {
-    return (
-      detail ??
-      `${providerName} is missing required settings. Save the provider name, base URL, and model first.`
-    );
+    return detail ?? copy('testIncomplete');
   }
 
   if (
@@ -1834,9 +1848,7 @@ function formatProviderTestMessage(
     response.error_category === 'language_corruption' ||
     (detailRaw && /question marks|corrupted chinese input/i.test(detailRaw))
   ) {
-    return sanitizeErrorSurfaceText(
-      `${providerName} is reachable, but Chinese input was corrupted before the model saw it. ${detail ?? ''}`.trim(),
-    );
+    return sanitizeErrorSurfaceText(`${copy('testLanguageCorruption')} ${detail ?? ''}`.trim());
   }
 
   if (
@@ -1847,9 +1859,7 @@ function formatProviderTestMessage(
         detailRaw,
       ))
   ) {
-    return sanitizeErrorSurfaceText(
-      `${providerName} is reachable, but zh-CN integrity is not fully verified yet. ${detail ?? ''}`.trim(),
-    );
+    return sanitizeErrorSurfaceText(`${copy('testLanguageInconclusive')} ${detail ?? ''}`.trim());
   }
 
   if (
@@ -1857,20 +1867,16 @@ function formatProviderTestMessage(
     response.error_category === 'empty_response' ||
     (detailRaw && /empty content|empty response|reply was unusable/i.test(detailRaw))
   ) {
-    return sanitizeErrorSurfaceText(
-      `${providerName} is reachable, but the reply was unusable. ${detail ?? ''}`.trim(),
-    );
+    return sanitizeErrorSurfaceText(`${copy('testEmptyReply')} ${detail ?? ''}`.trim());
   }
 
   if (detail && response.reachable) {
-    return sanitizeErrorSurfaceText(
-      `${providerName} responded, but Trainer still cannot use it yet. ${detail}`,
-    );
+    return sanitizeErrorSurfaceText(`${copy('testRespondedUnusable')} ${detail}`);
   }
 
   if (detail) {
-    return sanitizeErrorSurfaceText(`${providerName} could not be reached. ${detail}`);
+    return sanitizeErrorSurfaceText(`${copy('testUnreachable')} ${detail}`);
   }
 
-  return `${providerName} could not be reached. Check the base URL, model, and API key, then try again.`;
+  return sanitizeErrorSurfaceText(`${copy('testUnreachable')} ${copy('testUnreachableAdvice')}`);
 }

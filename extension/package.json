@@ -141,6 +141,14 @@
         "title": "Trainer: Cancel Resource Organization"
       },
       {
+        "command": "trainer.resource.chooseManagedDataFolder",
+        "title": "Trainer: Choose Managed Data Folder"
+      },
+      {
+        "command": "trainer.resource.resetManagedDataFolder",
+        "title": "Trainer: Use Recommended Managed Data Folder"
+      },
+      {
         "command": "trainer.workspace.chooseRoot",
         "title": "Trainer: Choose Workspace Root"
       },

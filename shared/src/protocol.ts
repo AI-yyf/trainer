@@ -577,6 +577,17 @@ export type TrainerStreamingState = {
 export type TrainerOperationMessage = {
   tone: "info" | "success" | "error";
   message: string;
+  /**
+   * Structured provider outcome attached by the host for connection actions.
+   * Surfaces use it to tell "saved but not verified" apart from a clean pass
+   * without string-matching the message text.
+   */
+  providerTest?: {
+    ok?: boolean;
+    errorCategory?: string;
+    statusCode?: number;
+    retryable?: boolean;
+  };
 };
 
 export type ReasoningPart = {

@@ -61,9 +61,36 @@ function writeBundledBinaryManifest(extensionRoot, { platform, entryName } = {})
 }
 
 function expectedSystemPythonLabels() {
-  return process.platform === 'win32'
-    ? ['system-python']
-    : ['system-python3.12', 'system-python3', 'system-python'];
+  if (process.platform === 'win32') {
+    return ['system-python'];
+  }
+  // Mirrors production discovery: GUI-launched VS Code misses Homebrew and
+  // user-local interpreters, so existing absolute locations are probed first
+  // and the bare commands stay as fallbacks for terminal launches.
+  const absoluteCandidates = [
+    ['homebrew-python3.12', '/opt/homebrew/bin/python3.12'],
+    ['homebrew-python3', '/opt/homebrew/bin/python3'],
+    ['usrlocal-python3.12', '/usr/local/bin/python3.12'],
+    ['usrlocal-python3', '/usr/local/bin/python3'],
+    ['usrbin-python3', '/usr/bin/python3'],
+  ];
+  const found = absoluteCandidates
+    .filter(([, candidatePath]) => fs.existsSync(candidatePath))
+    .map(([label]) => label);
+  return [...found, 'system-python3.12', 'system-python3'];
+}
+
+function expectedUvCandidateLabels() {
+  if (process.platform === 'win32') {
+    return ['uv-run'];
+  }
+  const absoluteUvPaths = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin']
+    .map((dir) => path.join(dir, 'uv'))
+    .filter((candidate) => fs.existsSync(candidate));
+  const total = absoluteUvPaths.length + 1;
+  return Array.from({ length: total }, (_, index) =>
+    index === 0 ? 'uv-run' : `uv-run-${index + 1}`,
+  );
 }
 
 const extensionModes = {
@@ -207,14 +234,14 @@ test('SidecarProcessManager uses workspace source candidates ahead of bundled bi
     });
 
     const candidates = manager.buildLaunchCandidates(34891);
-    assert.equal(candidates.length, expectedSystemPythonLabels().length + 2);
-    assert.equal(candidates[0].label, 'uv-run');
+    const expectedLabels = [...expectedUvCandidateLabels(), ...expectedSystemPythonLabels()];
+    assert.equal(candidates.length, expectedLabels.length + 1);
     assert.deepEqual(
-      candidates.slice(1, -1).map((candidate) => candidate.label),
-      expectedSystemPythonLabels(),
+      candidates.map((candidate) => candidate.label),
+      [...expectedLabels, 'bundled-binary'],
     );
-    assert.equal(candidates[candidates.length - 1].label, 'bundled-binary');
     assert.equal(candidates[0].cwd, workspaceServer);
+    assert.equal(candidates[candidates.length - 1].label, 'bundled-binary');
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -283,12 +310,12 @@ test('SidecarProcessManager keeps bundled binary first when only bundled server 
     });
 
     const candidates = manager.buildLaunchCandidates(34891);
-    assert.equal(candidates.length, expectedSystemPythonLabels().length + 2);
+    const expectedLabels = [...expectedUvCandidateLabels(), ...expectedSystemPythonLabels()];
+    assert.equal(candidates.length, expectedLabels.length + 1);
     assert.equal(candidates[0].label, 'bundled-binary');
-    assert.equal(candidates[1].label, 'uv-run');
     assert.deepEqual(
-      candidates.slice(2).map((candidate) => candidate.label),
-      expectedSystemPythonLabels(),
+      candidates.slice(1).map((candidate) => candidate.label),
+      expectedLabels,
     );
     assert.equal(candidates[1].cwd, bundledServer);
   } finally {

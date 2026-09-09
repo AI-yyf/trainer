@@ -38,9 +38,10 @@ test('settings provider profile actions are wired through App and rendered in Se
 
   assert.match(appSource, /onSaveProviderProfile=\{\(\) => \{/);
   assert.match(appSource, /commandId:\s*trainerCommands\.saveProviderProfile/);
-  assert.match(appSource, /onUseProviderTemplate=\{\(\) => \{/);
+  assert.match(appSource, /onUseProviderTemplate=\{\(\) => useProviderTemplateByLabel\("MiniMax"\)\}/);
+  assert.match(appSource, /onUseProviderTemplateLabel=\{useProviderTemplateByLabel\}/);
   assert.match(appSource, /commandId:\s*trainerCommands\.useProviderTemplate/);
-  assert.match(appSource, /templateLabel:\s*"MiniMax"/);
+  assert.match(appSource, /templateLabel,/);
   assert.match(appSource, /skipPicker:\s*true/);
   assert.match(appSource, /onRefreshProviderProfiles=\{\(\) => \{/);
   assert.match(appSource, /commandId:\s*trainerCommands\.refreshProviderProfiles/);

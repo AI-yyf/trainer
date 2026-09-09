@@ -101,6 +101,7 @@ import type {
   WorkspaceSnapshot,
   EvidenceQueueView,
   EvidenceItemView,
+  ProviderTestOutcomeSummary,
 } from './types';
 
 type UnknownRecord = Record<string, unknown>;
@@ -1386,12 +1387,14 @@ export function toHostPatchMessage(state: TrainerHostState): HostMessage {
 export function toOperationStatus(
   ok: boolean,
   message: string,
+  providerTest?: ProviderTestOutcomeSummary,
 ): HostMessage {
   return {
     type: 'operation/status',
     payload: {
       tone: ok ? 'success' : 'error',
       message,
+      ...(providerTest ? { providerTest } : {}),
     },
   };
 }

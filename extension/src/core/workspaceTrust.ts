@@ -95,11 +95,42 @@ export class WorkspaceTrustGuard {
       copy.action,
     );
 
-    if (selection) {
-      await vscode.commands.executeCommand('workbench.trust.manage');
+    if (!selection) {
+      return vscode.workspace.isTrusted;
     }
 
-    return vscode.workspace.isTrusted;
+    await vscode.commands.executeCommand('workbench.trust.manage');
+
+    // The trust dialog is the user's current focus; wait for their decision so
+    // the command that prompted trust succeeds in this same attempt instead of
+    // always failing once and requiring a manual retry.
+    if (vscode.workspace.isTrusted) {
+      return true;
+    }
+    return this.waitForTrust(120_000);
+  }
+
+  private waitForTrust(timeoutMs: number): Promise<boolean> {
+    const trustChanged = vscode.workspace.onDidGrantWorkspaceTrust;
+    if (typeof trustChanged !== 'function') {
+      return Promise.resolve(vscode.workspace.isTrusted);
+    }
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        subscription.dispose();
+        clearTimeout(timeout);
+        resolve(vscode.workspace.isTrusted);
+      };
+      const subscription = trustChanged(() => {
+        finish();
+      });
+      const timeout = setTimeout(finish, timeoutMs);
+    });
   }
 
   rememberActiveEditor(editor: vscode.TextEditor | undefined = vscode.window.activeTextEditor): void {

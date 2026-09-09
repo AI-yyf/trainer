@@ -1091,7 +1091,9 @@ test('saveProviderFromWebviewCommand tests the saved model when live discovery i
   assert.equal(patches[1].providerConfig.resolvedModel, 'MiniMax-M3');
   assert.equal(patches[1].providerConfig.lastTestResult.ok, true);
   assert.equal(patches[1].providerConfig.lastTestResult.responseLanguage, 'zh-CN');
-  assert.match(result.message ?? '', /current model is connected and ready/i);
+  // The test explicitly requests zh-CN, so the no-list success copy comes back
+  // localized; match either language to pin the branch, not the wording.
+  assert.match(result.message ?? '', /current model is connected and ready|当前模型已连通可用/);
   assert.doesNotMatch(JSON.stringify(patches), /test-only-key/);
 });
 
@@ -2403,7 +2405,7 @@ test('refreshProviderModelsCommand respects an active profile change before its 
 test('refreshProviderModelsCommand ignores a lookup once a newer model switch has started', async () => {
   const patches = [];
   const savedConfigs = [];
-  let resolveLookup;
+  let lookupResolvers = [];
   let resolveSwitchSave;
   let markLookupStarted;
   let markSwitchSaveStarted;
@@ -2500,7 +2502,7 @@ test('refreshProviderModelsCommand ignores a lookup once a newer model switch ha
       async postJson() {
         markLookupStarted();
         return new Promise((resolve) => {
-          resolveLookup = resolve;
+          lookupResolvers.push(resolve);
         });
       },
     },
@@ -2528,7 +2530,7 @@ test('refreshProviderModelsCommand ignores a lookup once a newer model switch ha
   await lookupStarted;
   const switchModel = switchProviderModelCommand(context, { model: 'b-model' });
   await switchSaveStarted;
-  resolveLookup({
+  lookupResolvers.shift()({
     ok: true,
     detail: 'Loaded Provider A models.',
     available_models: ['a-model', 'a-reasoning'],
