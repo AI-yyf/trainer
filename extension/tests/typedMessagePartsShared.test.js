@@ -344,7 +344,7 @@ test('trainer message parts normalize into the typed registry contract', () => {
     ),
     {
       tone: "error",
-      message: "回复中途断线了。已保留已到达内容，恢复连接后可重试，或从草稿重写。",
+      message: "回复中途断线了。已保留已到达内容；重连后会尽量恢复同一会话，然后可重试或从草稿重写。",
     },
   );
   assert.deepEqual(

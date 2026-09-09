@@ -338,7 +338,25 @@ class TrainerRuntime:
         return state
 
     def get_session(self, session_id: str) -> SessionState | None:
-        return self.sessions.get(session_id)
+        """Return an in-memory session, or rehydrate it from durable storage.
+
+        Codex-level reconnect requires the same session_id to survive sidecar
+        restarts. Callers that only use get_session (not ensure_session) must
+        still recover conversation state from the repository.
+        """
+        if not session_id:
+            return None
+        existing = self.sessions.get(session_id)
+        if existing is not None:
+            return existing
+        restored_payload = self.repository.load_session(session_id)
+        if not restored_payload:
+            return None
+        restored = self._restore_session(restored_payload)
+        if restored is None:
+            return None
+        self.sessions[session_id] = restored
+        return restored
 
     def latest_session(self) -> SessionState | None:
         latest_session_id = next(reversed(self.sessions), None)

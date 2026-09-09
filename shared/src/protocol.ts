@@ -1122,8 +1122,8 @@ export function buildTrainerStreamingErrorMessage(
   ) {
     return localizeTrainerStreamingCopy(
       language,
-      "Connection dropped mid-reply. Kept what arrived — reconnect, then retry or rewrite from the draft.",
-      "回复中途断线了。已保留已到达内容，恢复连接后可重试，或从草稿重写。",
+      "Connection dropped mid-reply. Kept what arrived — after reconnect Trainer restores the same session when possible, then retry or rewrite from the draft.",
+      "回复中途断线了。已保留已到达内容；重连后会尽量恢复同一会话，然后可重试或从草稿重写。",
     );
   }
 

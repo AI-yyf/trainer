@@ -372,18 +372,27 @@ async function runReconnectSoak() {
     finalHealth = recovered.ok ? recovered.health ?? (await getHealth()) : await getHealth();
   }
 
-  const ok = post.ok === true && finalHealth.ok === true;
+  const continuityOk = Boolean(oldSession.ok);
+  const ok = post.ok === true && finalHealth.ok === true && continuityOk;
   return {
     ok,
     probe: "reconnect_after_restart",
-    category: ok ? "success" : post.ok ? "sidecar_unhealthy_after_probe" : post.category,
+    category: !post.ok
+      ? post.category
+      : !finalHealth.ok
+        ? "sidecar_unhealthy_after_probe"
+        : !continuityOk
+          ? "old_session_not_continued"
+          : "success",
     preRestart: { ok: pre.ok, category: pre.category, elapsedMs: pre.elapsedMs },
     postRestart: { ok: post.ok, category: post.category, elapsedMs: post.elapsedMs },
     oldSessionContinuity: {
       attempted: oldSession.attempted,
-      ok: Boolean(oldSession.ok),
+      ok: continuityOk,
       category: oldSession.category,
-      note: "In-memory session continuity across reload is best-effort; Codex-level durable session resume remains a gap.",
+      note: continuityOk
+        ? "Old session_id continued after sidecar restart via durable restore."
+        : "Old session_id did not continue after restart; durable resume still failing.",
     },
     healthAfter: { ok: finalHealth.ok, status: finalHealth.status },
     elapsedMs: Date.now() - started,
