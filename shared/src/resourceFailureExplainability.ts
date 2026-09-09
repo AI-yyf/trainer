@@ -11,6 +11,7 @@ export type ResourceFailureCategory =
   | "sidecar_down"
   | "corrupt_pdf"
   | "index_failed"
+  | "search_failed"
   | "unknown";
 
 export interface ClassifyResourceFailureInput {
@@ -111,6 +112,14 @@ export function classifyResourceFailure(
     return "index_failed";
   }
 
+  if (
+    /resource search timed out|search timed out|failed to search|search (?:resources? )?failed|couldn'?t search/i.test(
+      lower,
+    )
+  ) {
+    return "search_failed";
+  }
+
   return "unknown";
 }
 
@@ -179,6 +188,15 @@ export function describeResourceFailureState(
           zh
             ? "资料索引失败，还不能当成功来源使用。请刷新索引后重试。"
             : "Resource indexing failed. It is not a successful source yet. Refresh the index and try again.",
+        ),
+      };
+    case "search_failed":
+      return {
+        tone: "error",
+        message: withDetail(
+          zh
+            ? "资料搜索失败。请检查 sidecar 与索引后重试，或换个关键词。"
+            : "Resource search failed. Check the sidecar and index, then retry or try another query.",
         ),
       };
     case "unknown":

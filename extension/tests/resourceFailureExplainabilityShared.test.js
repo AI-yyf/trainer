@@ -123,3 +123,23 @@ test('describeResourceFailureState is honest for four smoke categories in zh/en'
     assert.doesNotMatch(en.message, /available now|ready to use|imported successfully/i);
   }
 });
+
+test('classifyResourceFailure maps search_failed and describe keeps search copy', () => {
+  assert.equal(
+    classifyResourceFailure({
+      message: 'Resource search timed out.',
+    }),
+    'search_failed',
+  );
+  assert.equal(
+    classifyResourceFailure({
+      message: 'Failed to search resources: sidecar unavailable',
+    }),
+    'sidecar_down',
+  );
+  const zh = describeResourceFailureState('zh-CN', 'search_failed');
+  const en = describeResourceFailureState('en-US', 'search_failed');
+  assert.match(zh.message, /搜索失败/);
+  assert.match(en.message, /search failed/i);
+  assert.doesNotMatch(zh.message, /暂时无法搜索资料，请稍后重试/);
+});

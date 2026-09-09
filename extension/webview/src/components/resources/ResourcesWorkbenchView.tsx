@@ -12,6 +12,7 @@ import type { ResourcesOrientationRecord } from "../../../../../shared/src/resou
 import {
   classifyResourceFailure,
   describeResourceFailureState,
+  type ResourceFailureCategory,
 } from "../../../../../shared/src/resourceFailureExplainability";
 import type {
   ComposerLanguage,
@@ -1221,7 +1222,12 @@ type ResourceMutationResult = {
 type ResourceSearchRequestState =
   | { phase: "idle"; requestId?: undefined }
   | { phase: "debouncing" | "loading"; requestId?: string }
-  | { phase: "failed"; requestId?: string };
+  | {
+      phase: "failed";
+      requestId?: string;
+      errorMessage?: string;
+      category?: ResourceFailureCategory;
+    };
 
 type SandboxNodePath = {
   normalizedPaths: string[];
@@ -2206,7 +2212,13 @@ export function ResourcesWorkbenchView({
       : searchFailure
         ? {
             tone: "failed",
-            label: localize(language, "searchFailed"),
+            label: describeResourceFailureState(
+              language,
+              searchFailure.category ??
+                classifyResourceFailure({
+                  message: searchFailure.errorMessage || "Resource search failed.",
+                }),
+            ).message,
           }
         : isServerSearchPending
           ? { tone: "pending", label: localize(language, "searching") }
@@ -2270,14 +2282,40 @@ export function ResourcesWorkbenchView({
       }
       setSearchRequestState({ phase: "loading", requestId });
       try {
-        void Promise.resolve(onSearchResources({ query: trimmedQuery, requestId })).catch(() => {
-          if (sequence !== searchRequestSequenceRef.current) {
-            return;
-          }
-          setSearchRequestState({ phase: "failed", requestId });
+        void Promise.resolve(onSearchResources({ query: trimmedQuery, requestId })).catch(
+          (error: unknown) => {
+            if (sequence !== searchRequestSequenceRef.current) {
+              return;
+            }
+            const errorMessage =
+              error instanceof Error
+                ? error.message
+                : typeof error === "string"
+                  ? error
+                  : "Resource search failed.";
+            const category = classifyResourceFailure({ message: errorMessage });
+            setSearchRequestState({
+              phase: "failed",
+              requestId,
+              errorMessage,
+              category: category === "unknown" ? "search_failed" : category,
+            });
+          },
+        );
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : typeof error === "string"
+              ? error
+              : "Resource search failed.";
+        const category = classifyResourceFailure({ message: errorMessage });
+        setSearchRequestState({
+          phase: "failed",
+          requestId,
+          errorMessage,
+          category: category === "unknown" ? "search_failed" : category,
         });
-      } catch {
-        setSearchRequestState({ phase: "failed", requestId });
       }
     }, 200);
 
