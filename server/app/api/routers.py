@@ -4660,8 +4660,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         raise HTTPException(
             status_code=409,
             detail=localized_text(
-                "This action needs a verified tools-capable provider. Test a provider with tool calls in Settings before continuing.",
-                "\u8fd9\u4e2a\u52a8\u4f5c\u9700\u8981\u5df2\u9a8c\u8bc1\u652f\u6301\u5de5\u5177\u8c03\u7528\u7684 Provider\u3002\u8bf7\u5148\u5728\u8bbe\u7f6e\u4e2d\u6d4b\u8bd5\u652f\u6301 tools \u7684 Provider\u3002",
+                "This action needs a verified tools-capable provider. Run a live provider test (Settings or POST /provider/test) that verifies tool calls before continuing.",
+                "\u8fd9\u4e2a\u52a8\u4f5c\u9700\u8981\u5df2\u9a8c\u8bc1\u652f\u6301\u5de5\u5177\u8c03\u7528\u7684 Provider\u3002\u8bf7\u5148\u901a\u8fc7\u8bbe\u7f6e\u6216 POST /provider/test \u505a\u4e00\u6b21\u9a8c\u8bc1 tools \u7684 live provider test\u3002",
                 request.response_language,
             ),
         )

@@ -21,22 +21,39 @@ const sidecarUrl = (
   .trim()
   .replace(/\/+$/, "");
 const providerBaseUrl = (
-  process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_BASE_URL ?? ""
+  process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_BASE_URL ??
+    process.env.TRAINER_PROVIDER_SMOKE_BASE_URL ??
+    ""
 )
   .trim()
   .replace(/\/+$/, "");
 const providerApiKey = (
-  process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_API_KEY ?? ""
+  process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_API_KEY ??
+    process.env.TRAINER_PROVIDER_SMOKE_API_KEY ??
+    ""
 ).trim();
 const providerModel = (
-  process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_MODEL ?? defaultModel
+  process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_MODEL ??
+    process.env.TRAINER_PROVIDER_SMOKE_MODEL ??
+    defaultModel
 ).trim();
 const providerProtocol = normalizeProtocol(
-  (process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_PROTOCOL ?? defaultProtocol).trim(),
+  (
+    process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_PROTOCOL ??
+      process.env.TRAINER_PROVIDER_SMOKE_PROTOCOL ??
+      defaultProtocol
+  ).trim(),
 );
 const responseLanguage = (
   process.env.TRAINER_TRAINING_RETURN_SMOKE_RESPONSE_LANGUAGE ?? defaultResponseLanguage
 ).trim();
+const smokeStartedAt = Date.now();
+let lastSessionId = "";
+let lastWorkspaceId = "";
+
+function elapsedMs() {
+  return Date.now() - smokeStartedAt;
+}
 
 function normalizeProtocol(value) {
   return SUPPORTED_PROTOCOLS.has(value) ? value : defaultProtocol;
@@ -87,7 +104,26 @@ function emitJson(stream, payload) {
   });
 }
 
-async function failure({ step, category, diagnostics, status }) {
+function classifyTurnHttpFailure(status, text) {
+  const body = compact(text).toLowerCase();
+  if (
+    status === 409 &&
+    (body.includes("verified tools-capable provider") ||
+      body.includes("tool calls in settings") ||
+      body.includes("工具调用"))
+  ) {
+    return "tools_not_verified";
+  }
+  if (
+    status === 409 &&
+    (body.includes("session_not_found") || body.includes("could not be restored"))
+  ) {
+    return "session_continuity_failed";
+  }
+  return "turn_failed";
+}
+
+async function failure({ step, category, diagnostics, status, sessionId, workspaceId }) {
   const report = {
     ok: false,
     step,
@@ -99,6 +135,12 @@ async function failure({ step, category, diagnostics, status }) {
     providerProtocol,
     responseLanguage,
     providerModel,
+    elapsedMs: elapsedMs(),
+    sessionContinuity: {
+      sessionId: compact(sessionId) || lastSessionId || null,
+      workspaceId: compact(workspaceId) || lastWorkspaceId || null,
+      preserved: Boolean(compact(sessionId) || lastSessionId),
+    },
   };
   await emitJson(process.stderr, report);
   process.exitCode = 1;
@@ -280,17 +322,21 @@ async function runProbe({ name, diagnosticsInput, expectPassed, fixture, diagnos
   }
 
   const sessionId = compact(sessionStart.json.session_id);
-  diagnostics.push(`${name}_session_start: started=true`);
+  lastSessionId = sessionId;
+  lastWorkspaceId = workspaceId;
+  diagnostics.push(`${name}_session_start: started=true session_id=${sessionId}`);
 
   const turn = await postJson("/turn", trainingTurnPayload(sessionId, workspaceId));
   if (!turn.response.ok || !turn.json) {
     return failure({
       step: `${name}_turn`,
-      category: "turn_failed",
+      category: classifyTurnHttpFailure(turn.response.status, turn.text),
       detail: `Training turn failed with HTTP ${turn.response.status}.`,
       diagnostics,
       status: turn.response.status,
       preview: compact(turn.text),
+      sessionId,
+      workspaceId,
     });
   }
 
@@ -550,7 +596,7 @@ async function main() {
     return failure({
       step: "config",
       category: "missing_provider_base_url",
-      detail: "Set TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_BASE_URL before running the training return smoke.",
+      detail: "Set TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_BASE_URL or TRAINER_PROVIDER_SMOKE_BASE_URL before running the training return smoke.",
       diagnostics: [],
     });
   }
@@ -558,12 +604,43 @@ async function main() {
     return failure({
       step: "config",
       category: "missing_provider_api_key",
-      detail: "Set TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_API_KEY before running the training return smoke.",
+      detail: "Set TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_API_KEY or TRAINER_PROVIDER_SMOKE_API_KEY before running the training return smoke.",
       diagnostics: [],
     });
   }
 
   const diagnostics = [];
+  const capabilityTest = await postJson("/provider/test", {
+    provider: providerPayload(),
+    api_key: providerApiKey,
+    response_language: responseLanguage,
+    probe_message: "Reply with one short sentence confirming the coach connection.",
+  });
+  if (!capabilityTest.response.ok || capabilityTest.json?.ok !== true) {
+    return failure({
+      step: "provider_test",
+      category: "provider_capability_test_failed",
+      detail: `Provider capability test failed with HTTP ${capabilityTest.response.status}.`,
+      diagnostics,
+      status: capabilityTest.response.status,
+    });
+  }
+  const toolsReady = Boolean(
+    capabilityTest.json?.tools_ready ?? capabilityTest.json?.toolsReady,
+  );
+  diagnostics.push(
+    `provider_test: chat_probe=verified tools_ready=${String(toolsReady)}`,
+  );
+  if (!toolsReady) {
+    return failure({
+      step: "provider_test",
+      category: "tools_not_verified",
+      detail: "Provider test succeeded but did not verify tools capability required by use_agent_loop.",
+      diagnostics,
+      status: capabilityTest.response.status,
+    });
+  }
+
   const fixture = await createFixture();
 
   try {
@@ -587,13 +664,21 @@ async function main() {
     providerProtocol,
     responseLanguage,
     providerModel,
-      checks: {
-        passReturn: "passed",
-        failBlock: "passed",
-      },
-      probeCount: [passProbe, failProbe].length,
-      diagnostics,
-    });
+    elapsedMs: elapsedMs(),
+    sessionContinuity: {
+      passSessionId: passProbe.sessionId,
+      failSessionId: failProbe.sessionId,
+      passWorkspaceId: passProbe.workspaceId,
+      failWorkspaceId: failProbe.workspaceId,
+      preserved: Boolean(passProbe.sessionId && failProbe.sessionId),
+    },
+    checks: {
+      passReturn: "passed",
+      failBlock: "passed",
+    },
+    probeCount: [passProbe, failProbe].length,
+    diagnostics,
+  });
   } finally {
     await fs.rm(fixture.tempDir, { recursive: true, force: true });
   }
