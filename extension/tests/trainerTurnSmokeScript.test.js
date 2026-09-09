@@ -809,3 +809,17 @@ test('trainer turn smoke script keeps empty_stream classification when protocol 
   }
 });
 
+test('trainer turn smoke script advances currentStep past debug_loop for later phases', () => {
+  const source = fs.readFileSync(scriptPath, 'utf8');
+  // Wall-clock timeouts report currentStep; without these setStep calls every late
+  // stall is mislabeled as debug_loop (x3-r2/r3 RCA false locus).
+  for (const step of [
+    'function_guidance',
+    'training_session_start',
+    'training_route',
+    'debug_training_route_zh',
+    'function_training_route_zh',
+  ]) {
+    assert.match(source, new RegExp(`setStep\\(\\"${step}\\"\\)`));
+  }
+});

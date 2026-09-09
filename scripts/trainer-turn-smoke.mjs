@@ -893,6 +893,7 @@ async function main() {
     await assertCurrentFocusLocalized(debugTurn.json, "debug_loop", diagnostics, "zh-CN");
   }
 
+  setStep("function_guidance");
   const functionTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -948,6 +949,7 @@ async function main() {
   }
 
   const trainingWorkspaceId = `${workspaceId}-training`;
+  setStep("training_session_start");
   const trainingStart = await postJson("/session/start", {
     workspace_id: trainingWorkspaceId,
     workspace_name: trainingWorkspaceId,
@@ -969,6 +971,7 @@ async function main() {
     });
   }
 
+  setStep("training_route");
   const trainingTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -990,6 +993,7 @@ async function main() {
   }
   await assertScenario(trainingTurn.json, "remote_workspace", "training_route", diagnostics);
   await assertChatDoesNotMintTrainingCard(trainingTurn.json, "training_route", diagnostics);
+  setStep("training_route_explicit_card");
   await generateExplicitTrainingCard({
     workspaceId: trainingWorkspaceId,
     message:
@@ -1001,6 +1005,7 @@ async function main() {
   });
 
   const trainingZhWorkspaceId = `${workspaceId}-training-zh`;
+  setStep("training_zh_session_start");
   const trainingZhStart = await postJson("/session/start", {
     workspace_id: trainingZhWorkspaceId,
     workspace_name: trainingZhWorkspaceId,
@@ -1022,6 +1027,7 @@ async function main() {
     });
   }
 
+  setStep("training_route_zh");
   const trainingZhTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -1053,6 +1059,7 @@ async function main() {
     diagnostics,
   );
   await assertChatDoesNotMintTrainingCard(trainingZhTurn.json, "training_route_zh", diagnostics);
+  setStep("training_route_zh_explicit_card");
   const trainingZhCard = await generateExplicitTrainingCard({
     workspaceId: trainingZhWorkspaceId,
     message: zhRemoteMessage,
@@ -1071,6 +1078,7 @@ async function main() {
   );
 
   const debugTrainingZhWorkspaceId = `${workspaceId}-debug-training-zh`;
+  setStep("debug_training_zh_session_start");
   const debugTrainingZhStart = await postJson("/session/start", {
     workspace_id: debugTrainingZhWorkspaceId,
     workspace_name: debugTrainingZhWorkspaceId,
@@ -1092,6 +1100,7 @@ async function main() {
     });
   }
 
+  setStep("debug_training_route_zh");
   const debugTrainingZhTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -1123,6 +1132,7 @@ async function main() {
     diagnostics,
   );
   await assertChatDoesNotMintTrainingCard(debugTrainingZhTurn.json, "debug_training_route_zh", diagnostics);
+  setStep("debug_training_route_zh_explicit_card");
   const debugTrainingZhCard = await generateExplicitTrainingCard({
     workspaceId: debugTrainingZhWorkspaceId,
     message: zhDebugMessage,
@@ -1141,6 +1151,7 @@ async function main() {
   );
 
   const functionTrainingWorkspaceId = `${workspaceId}-function-training`;
+  setStep("function_training_session_start");
   const functionTrainingStart = await postJson("/session/start", {
     workspace_id: functionTrainingWorkspaceId,
     workspace_name: functionTrainingWorkspaceId,
@@ -1162,6 +1173,7 @@ async function main() {
     });
   }
 
+  setStep("function_training_route");
   const functionTrainingTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -1188,6 +1200,7 @@ async function main() {
     diagnostics,
   );
   await assertChatDoesNotMintTrainingCard(functionTrainingTurn.json, "function_training_route", diagnostics);
+  setStep("function_training_route_explicit_card");
   await generateExplicitTrainingCard({
     workspaceId: functionTrainingWorkspaceId,
     message:
@@ -1199,6 +1212,7 @@ async function main() {
   });
 
   const functionTrainingZhWorkspaceId = `${workspaceId}-function-training-zh`;
+  setStep("function_training_zh_session_start");
   const functionTrainingZhStart = await postJson("/session/start", {
     workspace_id: functionTrainingZhWorkspaceId,
     workspace_name: functionTrainingZhWorkspaceId,
@@ -1220,6 +1234,7 @@ async function main() {
     });
   }
 
+  setStep("function_training_route_zh");
   const functionTrainingZhTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -1260,6 +1275,7 @@ async function main() {
     "function_training_route_zh",
     diagnostics,
   );
+  setStep("function_training_route_zh_explicit_card");
   const functionTrainingZhCard = await generateExplicitTrainingCard({
     workspaceId: functionTrainingZhWorkspaceId,
     message: zhFunctionGuidanceMessage,
