@@ -256,58 +256,121 @@ async function hardRestartSidecar() {
   return restarted;
 }
 
-async function runMultiTurnSoak() {
+function buildGrowingCoachPrompts(count) {
+  const baseFacts = [
+    "断点（breakpoint）是调试器在源码位置暂停执行的标记。",
+    "命中信号：调试器停住、当前行高亮、变量面板可展开。",
+    "最小下一步：在可疑赋值行设断点，然后单步观察变量变化。",
+    "条件断点适合只在计数器>10 时停下，避免噪声。",
+    "日志点（logpoint）可打印表达式而不永久停住。",
+    "调用栈面板帮助确认是否进了错误的重载路径。",
+    "监视表达式应只盯关键状态，而不是整对象树。",
+    "会话连续性要求：同一 session_id 下历史消息应累积增长。",
+  ];
+  const prompts = [];
+  for (let i = 0; i < count; i += 1) {
+    const retained = baseFacts.slice(0, Math.min(i + 1, baseFacts.length));
+    const baggage = retained
+      .map((fact, idx) => `F${idx + 1}: ${fact}`)
+      .join("\n");
+    const growingTail = retained.join(" ").repeat(Math.max(1, Math.floor((i + 1) / 2)));
+    prompts.push(
+      [
+        `【长上下文浸泡 第${i + 1}/${count}轮】请继续同一调试教练会话。`,
+        "下列既有事实必须视为本会话已讨论内容（请勿否认先前轮次）：",
+        baggage,
+        `扩展上下文块（刻意拉长输入以增长上下文）：${growingTail}`,
+        i === 0
+          ? "任务：用一句话解释断点是什么，并引用 F1。"
+          : i === count - 1
+            ? "任务：用三句话总结本会话全部要点，并明确回答：我们是否仍在同一 session 的调试主题上？"
+            : `任务：基于 F1..F${retained.length}，给出一个新的最小下一步，并点名上轮主题仍在继续。`,
+      ].join("\n"),
+    );
+  }
+  return prompts;
+}
+
+async function runCoachTurnSoak({ probe, turnCount, evidenceSubdir } = {}) {
   const started = Date.now();
+  const targetTurns = Math.max(2, Number(turnCount ?? soakTurns) || soakTurns);
   if (!providerBaseUrl || !providerApiKey) {
-    return { ok: false, category: "missing_config", probe: "multi_turn_soak" };
+    return { ok: false, category: "missing_config", probe };
   }
   const health = await getHealth();
   if (!health.ok) {
-    return { ok: false, category: "sidecar_unhealthy", probe: "multi_turn_soak", status: health.status };
+    return { ok: false, category: "sidecar_unhealthy", probe, status: health.status };
   }
 
-  const workspaceId = `soak-multi-${Date.now()}`;
+  const workspaceId = `soak-${probe}-${Date.now()}`;
   const start = await startSession(workspaceId);
   if (!start.response.ok || !start.json?.session_id) {
     return {
       ok: false,
       category: "session_start_failed",
-      probe: "multi_turn_soak",
+      probe,
       status: start.response.status,
     };
   }
   const sessionId = start.json.session_id;
-  const prompts = [
-    "用一句话说明什么是断点。",
-    "接着上一句，再说一个验证断点命中的信号。",
-    "继续同一话题，给出一个最小下一步。",
-    "请用一句话总结我们刚才聊的断点练习重点。",
-    "最后确认：刚才几轮是否还在同一调试主题上？一句话回答。",
-  ].slice(0, soakTurns);
-
+  const prompts = buildGrowingCoachPrompts(targetTurns);
   const turns = [];
+  let prevMessageCount = 0;
+
   for (let i = 0; i < prompts.length; i += 1) {
     const turn = await shortTurn(sessionId, workspaceId, prompts[i]);
-    turns.push({ index: i + 1, ...turn });
-    if (!turn.ok) {
-      return {
+    const grew =
+      typeof turn.messageCount === "number" && turn.messageCount > prevMessageCount;
+    const record = {
+      index: i + 1,
+      ok: turn.ok && turn.sameSession !== false,
+      category:
+        !turn.ok
+          ? turn.category
+          : turn.sameSession === false
+            ? "session_id_drift"
+            : "success",
+      replyChars: turn.replyChars,
+      elapsedMs: turn.elapsedMs,
+      messageCount: turn.messageCount,
+      responseSessionId: turn.responseSessionId || sessionId,
+      sameSession: turn.sameSession !== false,
+      contextGrew: grew || i === 0,
+      promptChars: prompts[i].length,
+    };
+    turns.push(record);
+    if (!record.ok) {
+      const failed = {
         ok: false,
-        probe: "multi_turn_soak",
-        category: turn.category,
+        probe,
+        category: record.category,
         sessionId,
+        turnCount: turns.length,
         turns,
+        totalElapsedMs: Date.now() - started,
         elapsedMs: Date.now() - started,
+        sessionIdPreserved: turns.every((t) => t.sameSession),
         providerModel,
+        providerProtocol,
         baseUrlHost: hostOnly(providerBaseUrl),
         apiKey: "sk-***",
+        evidenceSubdir: evidenceSubdir || null,
       };
+      return failed;
     }
+    prevMessageCount = Math.max(prevMessageCount, Number(turn.messageCount) || 0);
   }
 
+  const sessionIdPreserved = turns.every((t) => t.sameSession);
+  const contextGrewOverall =
+    turns.length >= 2 &&
+    Number(turns[turns.length - 1].messageCount || 0) > Number(turns[0].messageCount || 0);
+  const ok = sessionIdPreserved && turns.every((t) => t.ok) && (contextGrewOverall || turns.length < 2);
+
   return {
-    ok: true,
-    probe: "multi_turn_soak",
-    category: "success",
+    ok,
+    probe,
+    category: ok ? "success" : !sessionIdPreserved ? "session_id_drift" : "context_did_not_grow",
     sessionId,
     turnCount: turns.length,
     turns: turns.map((t) => ({
@@ -316,12 +379,38 @@ async function runMultiTurnSoak() {
       category: t.category,
       replyChars: t.replyChars,
       elapsedMs: t.elapsedMs,
+      messageCount: t.messageCount,
+      sameSession: t.sameSession,
+      contextGrew: t.contextGrew,
+      promptChars: t.promptChars,
     })),
+    totalElapsedMs: Date.now() - started,
     elapsedMs: Date.now() - started,
+    sessionIdPreserved,
+    contextGrewOverall,
+    finalMessageCount: turns[turns.length - 1]?.messageCount ?? 0,
     providerModel,
+    providerProtocol,
     baseUrlHost: hostOnly(providerBaseUrl),
     apiKey: "sk-***",
+    evidenceSubdir: evidenceSubdir || null,
   };
+}
+
+async function runMultiTurnSoak() {
+  return runCoachTurnSoak({
+    probe: "multi_turn_soak",
+    turnCount: Math.min(soakTurns, 5),
+  });
+}
+
+async function runLongContextSoak() {
+  const longTurns = Math.max(8, Number(process.env.TRAINER_LONG_CONTEXT_TURNS ?? soakTurns) || 8);
+  return runCoachTurnSoak({
+    probe: "long_context_soak",
+    turnCount: longTurns,
+    evidenceSubdir: "long-context-soak",
+  });
 }
 
 async function listSidecarPids() {
@@ -714,6 +803,10 @@ async function main() {
     multi_turn_soak: runMultiTurnSoak,
     multi: runMultiTurnSoak,
     "multi-turn": runMultiTurnSoak,
+    long_context_soak: runLongContextSoak,
+    "long-context": runLongContextSoak,
+    "long-context-soak": runLongContextSoak,
+    long_context: runLongContextSoak,
     rate_limit_mock: runRateLimitProbe,
     "rate-limit": runRateLimitProbe,
     rate_limit: runRateLimitProbe,
@@ -753,16 +846,46 @@ async function main() {
     baseUrlHost: hostOnly(providerBaseUrl),
     apiKey: "sk-***",
   };
-  const evidenceDir = path.join("/workspace/evidence/provider/soak");
+  const longContextMode =
+    modeArg === "long-context" ||
+    modeArg === "long-context-soak" ||
+    modeArg === "long_context_soak" ||
+    modeArg === "long_context";
+  const evidenceDir = path.join(
+    "/workspace/evidence/provider",
+    longContextMode ? "long-context-soak" : "soak",
+  );
   try {
     fs.mkdirSync(evidenceDir, { recursive: true });
     const evidenceName =
       modeArg === "reconnect" || modeArg === "reconnect_after_restart"
         ? "reconnect.json"
-        : modeArg === "all"
-          ? "SOAK-RUN.json"
-          : `${modeArg.replace(/[^a-z0-9_-]+/gi, "-")}.json`;
+        : longContextMode
+          ? "long-context-soak.json"
+          : modeArg === "all"
+            ? "SOAK-RUN.json"
+            : `${modeArg.replace(/[^a-z0-9_-]+/gi, "-")}.json`;
     fs.writeFileSync(path.join(evidenceDir, evidenceName), `${JSON.stringify(summary, null, 2)}\n`);
+    if (longContextMode) {
+      const probe = results[0] || {};
+      const lines = [
+        `Long-context multi-turn soak — ${new Date().toISOString()}`,
+        `protocol=${providerProtocol} model=${providerModel} host=${hostOnly(providerBaseUrl)}`,
+        `ok=${summary.ok} category=${probe.category || "n/a"}`,
+        `session_id=${probe.sessionId || "n/a"} preserved=${probe.sessionIdPreserved}`,
+        `turnCount=${probe.turnCount || 0} totalElapsedMs=${probe.totalElapsedMs || summary.elapsedMs}`,
+        `contextGrewOverall=${probe.contextGrewOverall} finalMessageCount=${probe.finalMessageCount}`,
+        "per-turn:",
+        ...(Array.isArray(probe.turns)
+          ? probe.turns.map(
+              (t) =>
+                `  #${t.index} ok=${t.ok} cat=${t.category} ms=${t.elapsedMs} msgs=${t.messageCount} sameSession=${t.sameSession} promptChars=${t.promptChars} replyChars=${t.replyChars}`,
+            )
+          : ["  (none)"]),
+        "apiKey=sk-***",
+      ];
+      fs.writeFileSync(path.join(evidenceDir, "LONG-CONTEXT-SUMMARY.txt"), `${lines.join("\n")}\n`);
+    }
   } catch {
     /* evidence is best-effort */
   }
