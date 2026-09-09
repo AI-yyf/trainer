@@ -60,6 +60,10 @@ import {
   describeResourceFailureState,
 } from "../../../../shared/src/resourceFailureExplainability";
 import {
+  describeCoachThinkingSendBusy,
+  describeCoachToolActivitySendBusy,
+} from "../../../../shared/src/coachToolActivitySendState";
+import {
   deriveTrainingExecutionState,
   isTrainingPrimerLike as isSharedTrainingPrimerLike,
   normalizeTrainingStatus as normalizeSharedTrainingStatus,
@@ -14391,7 +14395,13 @@ export function App() {
                   ? layout.composerLanguage === "zh-CN"
                     ? "保存中"
                     : "Saving"
-                  : t.streaming
+                  : describeCoachToolActivitySendBusy(
+                        layout.composerLanguage,
+                        streaming.agentActivity,
+                      ) ??
+                    (streaming.isStreaming
+                      ? describeCoachThinkingSendBusy(layout.composerLanguage)
+                      : t.streaming)
               }
               explainBetweenTurns={
                 activeView === "coach" &&

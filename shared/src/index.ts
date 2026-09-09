@@ -31,3 +31,4 @@ export * from "./resourceOpen";
 export * from "./workspaceTrustState";
 export * from "./planVerifyExplainability";
 export * from "./resourceFailureExplainability";
+export * from "./coachToolActivitySendState";
