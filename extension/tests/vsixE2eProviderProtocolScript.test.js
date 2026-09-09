@@ -101,9 +101,11 @@ test('VSIX E2E keeps direct provider-bound smoke calls within the bounded provid
   assert.match(source, /TRAINER_E2E_PROVIDER_TIMEOUT_MS/);
   assert.match(source, /providerBoundTimeoutOverrideMs >= 30_000/);
   assert.match(source, /:\s*150_000;/);
+  // Provider-bound direct calls must carry the same credentials the extension
+  // command layer attaches, not depend on ambient sidecar provider state.
   assert.match(
     source,
-    /const postProviderBoundJson = \(port, requestPath, body\) =>\s*postJson\(port, requestPath, body, providerBoundRequestTimeoutMs\);/,
+    /const postProviderBoundJson = \(port, requestPath, body\) =>\s*postJson\(\s*port,\s*requestPath,\s*\{[\s\S]*?provider: providerTransportConfig\(\),\s*api_key: providerApiKey,\s*\},\s*providerBoundRequestTimeoutMs,\s*\);/,
   );
   assert.match(
     source,
@@ -381,17 +383,20 @@ test('VSIX E2E checks the public sandbox skill capability contract instead of an
   assert.match(source, /trainer\.resource_sandbox\.skill_runtime\.v1/);
 });
 
-test('VSIX E2E compares native-open paths with Windows case rules and checks actual resource state', () => {
+test('VSIX E2E asserts the governed sandbox preview truth and the visible resource state', () => {
   const source = fs.readFileSync(e2eScriptPath, 'utf8');
-  const sandboxStart = source.indexOf('await record("assert-resources-sandbox-capability-visible-truth"');
+  const sandboxStart = source.indexOf('await record("assert-resources-sandbox-preview-truth"');
   const sandboxEnd = source.indexOf('await record("capture-resources-sandbox-installed-screenshot"', sandboxStart);
   const sandboxSource = source.slice(sandboxStart, sandboxEnd);
 
   assert.ok(sandboxStart >= 0 && sandboxEnd > sandboxStart, 'the sandbox truth flow must exist');
-  assert.match(source, /function pathsReferToSameFile\(left, right\)/);
-  assert.match(source, /process\.platform === "win32"/);
-  assert.match(source, /normalizedLeft\.toLowerCase\(\) === normalizedRight\.toLowerCase\(\)/);
-  assert.match(source, /pathsReferToSameFile\(data\.nativeOpenPath, data\.sandboxPath\)/);
+  // The preview command returns a governed in-workbench preview with an
+  // optional canNativeOpen capability flag; it does not open a text editor,
+  // so the driver must not assert editor state or a nativeOpen field.
+  assert.match(sandboxSource, /trainer\.sandbox\.preview/);
+  assert.doesNotMatch(sandboxSource, /nativeOpen/);
+  assert.doesNotMatch(sandboxSource, /activeTextEditor/);
+  assert.match(sandboxSource, /previewSucceeded: previewResult\?\.ok === true/);
   assert.match(sandboxSource, /selectedSandboxPath: facts \? facts\.selectedSandboxPath \|\| null : null,/);
   assert.match(sandboxSource, /workspaceId: managedContextId/);
   assert.doesNotMatch(sandboxSource, /sessionId,\s*workspaceId: managedContextId/);
@@ -400,7 +405,9 @@ test('VSIX E2E compares native-open paths with Windows case rules and checks act
   assert.match(sandboxSource, /data\.restoreSucceeded === true/);
   assert.match(sandboxSource, /data\.activeSurface === "sandbox"/);
   assert.match(sandboxSource, /data\.selectedSandboxPath === data\.sandboxPath/);
-  assert.match(sandboxSource, /data\.detailPaneVisible === false/);
+  // The detail pane opens whenever a resource is selected
+  // (ResourcesWorkbenchView: detailPaneVisible = Boolean(selectedResource)).
+  assert.match(sandboxSource, /data\.detailPaneVisible === true/);
   assert.match(sandboxSource, /data\.sandboxPaneVisible === true/);
   assert.match(sandboxSource, /data\.previewPaneVisible === false/);
   assert.doesNotMatch(sandboxSource, /data\.activeSurface === "detail"/);
