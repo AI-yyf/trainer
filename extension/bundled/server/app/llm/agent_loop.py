@@ -163,6 +163,9 @@ async def _await_with_stream_cancellation(
         if not cancellation.done():
             cancellation.cancel()
         await asyncio.gather(cancellation, return_exceptions=True)
+        if cancel_event is not None and cancel_event.is_set() and not operation.done():
+            operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
 
 
 async def _iterate_with_stream_cancellation(
@@ -290,12 +293,15 @@ class CoachAgentLoop:
     async def run(self, messages: list[dict[str, Any]]) -> AgentRunResult:
         history: list[dict[str, Any]] = list(messages)
         steps: list[AgentStep] = []
+        cancel_event = _stream_cancel_event(self.context)
         last_tool_calls_signature: tuple[tuple[str, str], ...] | None = None
         last_tool_results_signature: tuple[tuple[str, str], ...] | None = None
         identical_call_streak = 0
         index = 0
         self._prepare_next_turn(history)
         while True:
+            if cancel_event is not None and cancel_event.is_set():
+                raise asyncio.CancelledError
             if index >= self.max_steps:
                 summary, next_step = _build_step_limit_recovery(
                     steps[-1] if steps else None,
@@ -312,7 +318,11 @@ class CoachAgentLoop:
             tools_schema = self._tools_schema()
             timeout = self._step_timeout_for(index)
             try:
-                response = await self._call_provider(history, tools_schema, timeout)
+                response = await self._call_provider(
+                    history, tools_schema, timeout, cancel_event=cancel_event
+                )
+            except asyncio.CancelledError:
+                raise
             except asyncio.TimeoutError:
                 summary, next_step = _build_runtime_failure_recovery(
                     "timeout",
@@ -412,6 +422,7 @@ class CoachAgentLoop:
                 history,
                 step,
                 truncated=is_truncated_stop(response.get("stop_reason") or response.get("finish_reason")),
+                cancel_event=cancel_event,
             )
 
             if finalize_payload is not None:
@@ -531,37 +542,65 @@ class CoachAgentLoop:
                 }
                 return
             else:
+                timeout = self._step_timeout_for(index)
                 try:
-                    async for event in _iterate_with_stream_cancellation(
-                        stream_fn(history, tools_schema),
-                        cancel_event,
-                    ):
-                        event_type = event.get("type")
-                        if event_type == "delta":
-                            delta = str(event.get("delta") or "")
-                            if delta:
-                                assistant_text += delta
-                                if stream_direct_text:
-                                    yield {"type": "text", "delta": delta}
-                                    streamed_text += delta
-                                elif event.get("safe_to_stream") is True:
-                                    yield {
-                                        "type": "text",
-                                        "delta": delta,
-                                        "safe_to_stream": True,
-                                    }
-                                    streamed_text += delta
-                                    streamed_text_safe = True
-                        elif event_type == "final":
-                            assistant_text = str(event.get("content") or assistant_text)
-                            tool_calls = list(
-                                cast("list[dict[str, Any]]", event.get("tool_calls") or [])
-                            )
-                            raw_stop = event.get("stop_reason") or event.get("finish_reason")
-                            stream_stop_reason = str(raw_stop) if raw_stop else None
-                            break
-                        else:
-                            yield event
+                    try:
+                        async with asyncio.timeout(timeout):
+                            async for event in _iterate_with_stream_cancellation(
+                                stream_fn(history, tools_schema),
+                                cancel_event,
+                            ):
+                                event_type = event.get("type")
+                                if event_type == "delta":
+                                    delta = str(event.get("delta") or "")
+                                    if delta:
+                                        assistant_text += delta
+                                        if stream_direct_text:
+                                            yield {"type": "text", "delta": delta}
+                                            streamed_text += delta
+                                        elif event.get("safe_to_stream") is True:
+                                            yield {
+                                                "type": "text",
+                                                "delta": delta,
+                                                "safe_to_stream": True,
+                                            }
+                                            streamed_text += delta
+                                            streamed_text_safe = True
+                                elif event_type == "final":
+                                    assistant_text = str(event.get("content") or assistant_text)
+                                    tool_calls = list(
+                                        cast("list[dict[str, Any]]", event.get("tool_calls") or [])
+                                    )
+                                    raw_stop = event.get("stop_reason") or event.get("finish_reason")
+                                    stream_stop_reason = str(raw_stop) if raw_stop else None
+                                    break
+                                else:
+                                    yield event
+                    except TimeoutError:
+                        summary, next_step = _build_runtime_failure_recovery(
+                            "timeout",
+                            context=self.context,
+                            response_language=self.context.response_language,
+                            previous_step=previous_step,
+                        )
+                        yield {
+                            "type": "error",
+                            "detail": f"agent step {index} exceeded {timeout}s",
+                            "category": "timeout",
+                            "recoverable": True,
+                            "terminal": True,
+                            "degraded": False,
+                        }
+                        yield {
+                            "type": "final",
+                            "content": assistant_text,
+                            "summary": summary,
+                            "next_step": next_step,
+                            "stop_reason": "timeout",
+                            "recoverable": True,
+                            "degraded": False,
+                        }
+                        return
                 except Exception as exc:
                     if is_prompt_too_long_error(exc):
                         compact_history(
@@ -781,9 +820,16 @@ class CoachAgentLoop:
         history: list[dict[str, Any]],
         tools_schema: list[dict[str, Any]],
         timeout: float,
+        *,
+        cancel_event: asyncio.Event | None = None,
     ) -> dict[str, Any]:
-        try:
+        async def _call_once() -> dict[str, Any]:
             return await asyncio.wait_for(self.provider.call(history, tools_schema), timeout=timeout)
+
+        try:
+            return await _await_with_stream_cancellation(_call_once(), cancel_event)
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             if not is_prompt_too_long_error(exc):
                 raise
@@ -795,7 +841,7 @@ class CoachAgentLoop:
                 force=True,
             )
             prune_older_tool_results(history, history_char_budget=40_000)
-            return await asyncio.wait_for(self.provider.call(history, tools_schema), timeout=timeout)
+            return await _await_with_stream_cancellation(_call_once(), cancel_event)
 
     async def _invoke_one_tool(
         self,
