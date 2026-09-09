@@ -25134,7 +25134,30 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             )
         if "session_id" in payload:
             session_id = payload["session_id"]
-            state = runtime.ensure_session(session_id)
+            workspace_id_hint = str(
+                payload.get("workspace_id") or payload.get("workspaceId") or ""
+            ).strip() or None
+            try:
+                state = runtime.ensure_session(session_id, workspace_id=workspace_id_hint)
+            except LookupError as exc:
+                # Same honesty bar as /turn: never mint continuity or invent a plan.
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "state": "session_not_found",
+                        "category": "session_not_found",
+                        "status": "blocked",
+                        "recoverable": False,
+                        "session_id": str(session_id or ""),
+                        "workspace_id": workspace_id_hint or "",
+                        "detail": (
+                            "The session_id could not be restored. "
+                            "Start a new session instead of inventing continuity. "
+                            "Trainer did not invent a plan."
+                        ),
+                        "reason": str(exc),
+                    },
+                ) from exc
             reject_frozen_plan_generation(state.workspace_id, payload)
             profile = runtime.repository.get_profile(state.workspace_id) or UserProfile(long_term_goal="Trainer")
             workspace_memory = (
@@ -27322,7 +27345,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 provider_service_override=coaching_service,
             )
         except CardGenerationProviderFailure as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(status_code=400, detail=exc.http_detail()) from exc
 
     @router.post("/training/generate-card/stream")
     async def training_generate_card_stream(

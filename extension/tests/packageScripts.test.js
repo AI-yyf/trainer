@@ -1028,7 +1028,7 @@ test('verifyPackage keeps cross-target inventory diagnostic-only for a native pa
 });
 
 
-test('package:vsix rebuilds the native sidecar when the binary is missing', async () => {
+test('package:vsix rebuilds the native sidecar when the binary is missing or drifted', async () => {
   const {
     ensureNativeSidecarBinaryForPackage,
     resolveNativeSidecarExecutablePath,
@@ -1060,12 +1060,35 @@ test('package:vsix rebuilds the native sidecar when the binary is missing', asyn
     const reused = ensureNativeSidecarBinaryForPackage({
       extensionDir,
       targetPlatform,
+      packageNeedsRefresh() {
+        return { needed: false, reasons: [] };
+      },
       runPrepublish() {
         ranPrepublish += 1;
       },
     });
     assert.equal(ranPrepublish, 1);
     assert.equal(reused.rebuilt, false);
+
+    let driftPrepublish = 0;
+    const drifted = ensureNativeSidecarBinaryForPackage({
+      extensionDir,
+      targetPlatform,
+      packageNeedsRefresh() {
+        return {
+          needed: true,
+          reasons: ['Bundled sidecar drift detected: bundled/server/app/api/routers.py'],
+        };
+      },
+      runPrepublish() {
+        driftPrepublish += 1;
+      },
+    });
+    assert.equal(driftPrepublish, 1);
+    assert.equal(drifted.rebuilt, true);
+    assert.deepEqual(drifted.refreshReasons, [
+      'Bundled sidecar drift detected: bundled/server/app/api/routers.py',
+    ]);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }

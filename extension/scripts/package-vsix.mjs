@@ -5,7 +5,7 @@ import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 
 import { resolveNativeSidecarTarget } from "./bundle-sidecar-binary.mjs";
-import { assertPackageVerified } from "./verify-package.mjs";
+import { assertPackageVerified, verifyPackage } from "./verify-package.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -463,14 +463,23 @@ export function ensureNativeSidecarBinaryForPackage({
   targetPlatform = resolveNativeSidecarTarget(),
   env = process.env,
   runPrepublish = runVsCodePrepublish,
+  packageNeedsRefresh = nativeSidecarPackageNeedsRefresh,
 } = {}) {
   const executablePath = resolveNativeSidecarExecutablePath({ extensionDir, targetPlatform });
-  if (fs.existsSync(executablePath)) {
-    return { rebuilt: false, executablePath, targetPlatform };
+  const missing = !fs.existsSync(executablePath);
+  const refresh = missing
+    ? { needed: true, reasons: [`Native sidecar binary missing for ${targetPlatform}`] }
+    : packageNeedsRefresh({ extensionDir, targetPlatform });
+
+  if (!refresh.needed) {
+    return { rebuilt: false, executablePath, targetPlatform, refreshReasons: [] };
   }
 
   console.log(
-    `Native sidecar binary missing for ${targetPlatform}; running vscode:prepublish before packaging.`,
+    [
+      `${refresh.reasons[0]}; running vscode:prepublish before packaging.`,
+      ...refresh.reasons.slice(1).map((reason) => `- ${reason}`),
+    ].join("\n"),
   );
   runPrepublish({ extensionDir, env });
   if (!fs.existsSync(executablePath)) {
@@ -482,7 +491,39 @@ export function ensureNativeSidecarBinaryForPackage({
       ].join("\n"),
     );
   }
-  return { rebuilt: true, executablePath, targetPlatform };
+  return { rebuilt: true, executablePath, targetPlatform, refreshReasons: refresh.reasons };
+}
+
+export function nativeSidecarPackageNeedsRefresh({
+  extensionDir = path.resolve(__dirname, ".."),
+  targetPlatform = resolveNativeSidecarTarget(),
+  repoRoot = path.resolve(extensionDir, ".."),
+} = {}) {
+  let report;
+  try {
+    report = verifyPackage({ extensionDir, repoRoot, env: process.env });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      needed: true,
+      reasons: [`Could not verify native sidecar package inputs: ${message}`],
+      report: undefined,
+    };
+  }
+  const reasons = [];
+  for (const relativePath of report.sidecarParity?.contentMismatches ?? []) {
+    reasons.push(`Bundled sidecar drift detected: bundled/server/${relativePath}`);
+  }
+  for (const relativePath of report.sidecarParity?.missingBundledFiles ?? []) {
+    reasons.push(`Bundled sidecar file missing: bundled/server/${relativePath}`);
+  }
+  for (const relativePath of report.sidecarParity?.unexpectedBundledFiles ?? []) {
+    reasons.push(`Unexpected bundled sidecar file: bundled/server/${relativePath}`);
+  }
+  for (const message of report.binaryManifest?.errors ?? []) {
+    reasons.push(message);
+  }
+  return { needed: reasons.length > 0, reasons, report };
 }
 
 function runVsCodePrepublish({ extensionDir, env = process.env } = {}) {
