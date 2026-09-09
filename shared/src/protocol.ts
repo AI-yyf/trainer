@@ -1182,6 +1182,28 @@ export function buildTrainerStreamingErrorMessage(
     );
   }
 
+  if (
+    normalizedCategory === "invalid_json" ||
+    /invalid_json|invalid json|expected json/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "The training card reply was not valid JSON. Your draft is still here — generate again, or switch model in Settings.",
+      "训练卡回复不是有效 JSON。草稿还在，可以再生成一次，或到设置里换模型。",
+    );
+  }
+
+  if (
+    normalizedCategory === "provider_request_failed_training_card" ||
+    /provider_request_failed_training_card/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "Training card generation failed on the provider request. Your draft is still here — try again shortly.",
+      "训练卡生成时 provider 请求失败。草稿还在，稍后再试一次。",
+    );
+  }
+
   return localizeTrainerStreamingCopy(
     language,
     "Trainer could not finish this reply. Try again in a moment.",

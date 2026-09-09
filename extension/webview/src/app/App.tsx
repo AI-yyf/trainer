@@ -901,11 +901,17 @@ function ViewFallback({
   label: string;
   language: ComposerLanguage;
 }) {
+  const message =
+    language === "zh-CN"
+      ? `正在加载${label}，请稍候…`
+      : `Loading ${label} — hang on a moment…`;
   return (
-    <section className="section-block section-block--placeholder">
-      <p className="muted">
-        {language === "zh-CN" ? `正在加载${label}…` : `Loading ${label}…`}
-      </p>
+    <section
+      className="section-block section-block--placeholder"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <p className="muted">{message}</p>
     </section>
   );
 }
