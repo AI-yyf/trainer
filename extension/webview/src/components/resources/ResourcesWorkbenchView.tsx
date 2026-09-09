@@ -9,6 +9,10 @@ import {
   type CoachOrientationState,
 } from "../../../../../shared/src/coachOrientationGovernance";
 import type { ResourcesOrientationRecord } from "../../../../../shared/src/resourcesOrientationGovernance";
+import {
+  classifyResourceFailure,
+  describeResourceFailureState,
+} from "../../../../../shared/src/resourceFailureExplainability";
 import type {
   ComposerLanguage,
   DebugVisibleResourcesFacts,
@@ -810,6 +814,21 @@ function resourceIndexNotice(
     return { label: localize(language, "indexing"), tone: "indexing" };
   }
   if (resource.status === "attention" || resource.indexState === "failed") {
+    const category = classifyResourceFailure({
+      indexStatus: "failed",
+      qualityFlags: resource.qualityFlags,
+    });
+    if (
+      category === "no_content" ||
+      category === "bad_file" ||
+      category === "corrupt_pdf" ||
+      category === "index_failed"
+    ) {
+      return {
+        label: describeResourceFailureState(language, category).message,
+        tone: "failed",
+      };
+    }
     return { label: localize(language, "indexFailed"), tone: "failed" };
   }
   return undefined;

@@ -56,6 +56,10 @@ import {
   planVerifyAdvanceStageLabel,
 } from "../../../../shared/src/planVerifyExplainability";
 import {
+  classifyResourceFailure,
+  describeResourceFailureState,
+} from "../../../../shared/src/resourceFailureExplainability";
+import {
   deriveTrainingExecutionState,
   isTrainingPrimerLike as isSharedTrainingPrimerLike,
   normalizeTrainingStatus as normalizeSharedTrainingStatus,
@@ -677,24 +681,58 @@ function sanitizeHostFailureMessage(
   language: ComposerLanguage,
   isProviderAction = false,
   resourceOperationKind?: ResourceOperationKind,
+  connectionState?: "starting" | "connected" | "offline",
 ): HostMessage {
   if (message.type !== "operation/status" || message.payload.tone !== "error") {
     return message;
   }
 
   const partialDeletion = parsePartialResourceDeletionFailure(message.payload.message);
-  const resourceRecovery = resourceOperationFailureMessage(resourceOperationKind, language);
+  if (partialDeletion) {
+    return {
+      ...message,
+      payload: {
+        ...message.payload,
+        message: partialResourceDeletionFailureMessage(partialDeletion, language),
+      },
+    };
+  }
+
+  if (resourceOperationKind) {
+    const category = classifyResourceFailure({
+      message: message.payload.message,
+      connectionState,
+    });
+    if (category !== "unknown") {
+      const explained = describeResourceFailureState(language, category);
+      return {
+        ...message,
+        payload: {
+          ...message.payload,
+          tone: explained.tone,
+          message: explained.message,
+        },
+      };
+    }
+    const resourceRecovery = resourceOperationFailureMessage(resourceOperationKind, language);
+    if (resourceRecovery) {
+      return {
+        ...message,
+        payload: {
+          ...message.payload,
+          message: resourceRecovery,
+        },
+      };
+    }
+  }
+
   const livePlanGate = parseLivePlanTaskGateMarker(message.payload.message);
   return {
     ...message,
     payload: {
       ...message.payload,
-      message: partialDeletion
-        ? partialResourceDeletionFailureMessage(partialDeletion, language)
-        : resourceRecovery
-          ? resourceRecovery
-        : livePlanGate
-          ? livePlanTaskGateFailureMessage(livePlanGate, language)
+      message: livePlanGate
+        ? livePlanTaskGateFailureMessage(livePlanGate, language)
         : isProviderAction
           ? providerCategoryFailureMessage(message.payload.providerTest, language) ??
             providerRecoveryMessage(language)
@@ -5125,6 +5163,7 @@ export function App() {
             layout.composerLanguage,
             Boolean(isProviderActionOverride || settingsActionState?.targets.includes("provider")),
             resourceOperationStatus?.kind,
+            data.connection.state,
           ),
         );
       }
@@ -5136,6 +5175,7 @@ export function App() {
     },
     [
       applyRawHostMessage,
+      data.connection.state,
       layout.composerLanguage,
       localizedResourceOperationFallback,
       resolveTrainingPersistenceAck,

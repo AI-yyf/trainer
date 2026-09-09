@@ -1,6 +1,11 @@
 import { resourceTrainingBlockingQualityFlags } from "./resourceTrust";
 import { coachOrientationTone, type CoachOrientationState } from "./coachOrientationGovernance";
 import { resolveMaterialOrientationKey } from "./materialRecommendationGovernance";
+import {
+  classifyResourceFailure,
+  describeResourceFailureState,
+} from "./resourceFailureExplainability";
+import type { ComposerLanguage } from "./types";
 import { resourcesOrientationCopy } from "./orientationCopy";
 import { liveEvidenceBinding } from "./planOrientationGovernance";
 
@@ -234,10 +239,22 @@ export function deriveResourcesOrientation(input: ResourcesOrientationInput): Re
   }
 
   if (selectedId && indexState === "failed") {
+    const failureCategory = classifyResourceFailure({
+      indexStatus: "failed",
+      qualityFlags: input.qualityFlags,
+    });
+    const explainLanguage: ComposerLanguage =
+      input.language === "zh-CN" ? "zh-CN" : "en-US";
+    const failureWhy =
+      failureCategory === "no_content" ||
+      failureCategory === "bad_file" ||
+      failureCategory === "corrupt_pdf"
+        ? describeResourceFailureState(explainLanguage, failureCategory).message
+        : copy.indexFailed;
     return emit({
       objectLabel: selectedTitle || copy.currentResource,
       state: "blocked",
-      why: copy.indexFailed,
+      why: failureWhy,
       primaryAction: "retry_index",
       primaryActionLabel: copy.retryIndex,
       nextStep: copy.fixIndexFirst,
