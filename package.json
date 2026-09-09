@@ -32,5 +32,8 @@
     "url": "https://github.com/AI-yyf/trainer.git"
   },
   "author": "ai-yyf",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
 }
