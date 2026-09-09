@@ -708,6 +708,7 @@ def test_native_http_502_is_retryable_network_failure(
         (httpx.ReadTimeout("simulated read timeout"), "timeout"),
         (httpx.WriteTimeout("simulated write timeout"), "timeout"),
         (httpx.PoolTimeout("simulated pool timeout"), "timeout"),
+        (Exception("Request timed out."), "timeout"),
         (httpx.ConnectError("simulated connect error"), "network"),
         (httpx.ReadError("simulated read error"), "network"),
         (httpx.WriteError("simulated write error"), "network"),
