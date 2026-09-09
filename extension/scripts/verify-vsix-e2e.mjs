@@ -837,7 +837,21 @@ const steps = [];
         ? providerBoundTimeoutOverrideMs
         : 150_000;
     const postProviderBoundJson = (port, requestPath, body) =>
-      postJson(port, requestPath, body, providerBoundRequestTimeoutMs);
+      postJson(
+        port,
+        requestPath,
+        {
+          ...body,
+          // Direct driver calls bypass the extension command layer, which
+          // normally attaches the saved provider + API key to every coaching
+          // request. Inject the same credentials so routes that build their
+          // coaching service from the request payload (plan/generate,
+          // session/message, /turn) do not depend on ambient sidecar state.
+          provider: providerTransportConfig(),
+          api_key: providerApiKey,
+        },
+        providerBoundRequestTimeoutMs,
+      );
     const providerSettingsConfig = () => ({
       ...providerSavePayloadTemplate,
       baseUrl: providerBaseUrl,
@@ -1029,7 +1043,10 @@ const steps = [];
         }
 
         const generatedCardResult = await vscode.commands.executeCommand("trainer.training.generateCard", {
-          source: "vsix_e2e",
+          // Must be a source the sidecar card generator recognizes
+          // (_SOURCE_MAP in server/app/training/card_generator.py);
+          // unknown sources are rejected instantly as invalid cards.
+          source: "conversation_gap",
           cardType: "flash",
           submode: "flash",
           focusArea: "dependency injection",
@@ -1070,11 +1087,31 @@ const steps = [];
         const dependencyMasterySeed = await record(
           "seed-dependency-mastery-through-public-command",
           async () => {
+            // Mastery entries are created by verified practice outcomes; the
+            // manual mark_* advancements are intentionally gated behind
+            // evaluator verification in both the extension command and the
+            // sidecar route. Mirror the product flow instead: record the
+            // passed-practice outcome (the session profile above lists
+            // FastAPI as a preferred library, so the learning signal
+            // establishes the mastery entry), then submit the same skill-map
+            // action the Training UI sends while waiting for verification
+            // (CoachTrainingView.submitDependencyAction).
+            await postJson(port, "/learning/signal", {
+              session_id: sessionId,
+              workspace_id: managedContextId,
+              concepts: ["FastAPI"],
+              outcome: "tests_passed",
+              summary: "FastAPI Depends practice slice passed the governed verify-current-file check.",
+              focus_area: "dependency injection",
+              scenario: "dependency_mastery",
+              action_type: "training_handoff_return",
+              repetition_count: 1,
+            });
             const actionResult = await vscode.commands.executeCommand(
               "trainer.training.dependencySkillMapAction",
               {
                 dependencyKey: "fastapi",
-                action: "mark_practiced",
+                action: "request_verification",
                 note: "Create one governed FastAPI dependency practice map before the theory drill.",
                 relatedApi: "Depends",
                 scenario: "dependency_mastery",
@@ -1420,7 +1457,10 @@ const steps = [];
               data.surface === "training" &&
               data.activeView === "training" &&
               data.surfaceMode === "project" &&
-              ["practice", "review", "review_queue", "flash"].includes(String(data.activeSubmode || "")) &&
+              // "scenario" is the submode the Training surface reports while a
+              // restored scenario lab is on screen (TrainingWorkbenchView
+              // treats it as its own submode).
+              ["practice", "review", "review_queue", "flash", "scenario"].includes(String(data.activeSubmode || "")) &&
               data.scenarioLabMaterialized === true &&
               typeof data.expectedScenarioLabTitle === "string" &&
               data.expectedScenarioLabTitle.length > 0 &&
@@ -1882,7 +1922,7 @@ const steps = [];
           "Installed-state resource detail screenshot capture failed: " + JSON.stringify(data),
       });
 
-      const sandboxNativeOpenTruth = await record("assert-resources-sandbox-native-open-truth", async () => {
+      const sandboxNativeOpenTruth = await record("assert-resources-sandbox-preview-truth", async () => {
         const uploadResult = await vscode.commands.executeCommand("trainer.resource.upload", {
           mode: "files",
           uploads: [
@@ -1905,9 +1945,8 @@ const steps = [];
           throw new Error("Sandbox preview smoke did not return a sandbox path.");
         }
 
-        const nativeOpenResult = await vscode.commands.executeCommand("trainer.sandbox.preview", { path: sandboxPath });
+        const previewResult = await vscode.commands.executeCommand("trainer.sandbox.preview", { path: sandboxPath });
         await sleep(500);
-        const nativeOpenPath = vscode.window.activeTextEditor?.document.uri.fsPath ?? null;
         const restoreResult = await vscode.commands.executeCommand("trainer.debug.restoreView", {
           workspaceId: managedContextId,
           activeView: "resources",
@@ -1915,8 +1954,8 @@ const steps = [];
           sandboxPath,
           previewPath: sandboxPath,
           workspaceLabel: "trainer-vsix-e2e",
-          resumeReason: "Show the installed sandbox native-open state.",
-          focusArea: "sandbox native open",
+          resumeReason: "Show the installed sandbox preview state.",
+          focusArea: "sandbox preview",
         });
         if (!restoreResult || restoreResult.ok !== true) {
           throw new Error("Sandbox restore command did not succeed: " + JSON.stringify(restoreResult));
@@ -1932,14 +1971,20 @@ const steps = [];
                 facts.selectedSandboxPath === sandboxPath &&
                 facts.singleWorkbenchSurface === true &&
                 facts.sandboxPaneVisible === true &&
-                facts.detailPaneVisible === false &&
+                // The detail pane opens whenever a resource is selected
+                // (ResourcesWorkbenchView: detailPaneVisible = Boolean(selectedResource)).
+                facts.detailPaneVisible === true &&
                 facts.previewPaneVisible === false,
             ),
         );
         return {
           sandboxPath,
-          nativeOpen: nativeOpenResult?.data?.nativeOpen === true,
-          nativeOpenPath,
+          // The product contract for trainer.sandbox.preview is a governed
+          // in-workbench preview (optionally with a canNativeOpen capability
+          // flag) — it does not open a text editor, so assert the preview
+          // result plus the visible sandbox truth below.
+          previewSucceeded: previewResult?.ok === true,
+          previewCanNativeOpen: previewResult?.data?.canNativeOpen === true,
           restoreSucceeded: restoreResult.ok === true,
           hasVisibleFacts: Boolean(visible),
           activeSurface: visible ? visible.activeSurface || null : null,
@@ -1953,24 +1998,23 @@ const steps = [];
         ok: (data) =>
           Boolean(
             data &&
-              data.nativeOpen === true &&
-              pathsReferToSameFile(data.nativeOpenPath, data.sandboxPath) &&
+              data.previewSucceeded === true &&
               data.restoreSucceeded === true &&
               data.hasVisibleFacts === true &&
               data.activeSurface === "sandbox" &&
               data.selectedSandboxPath === data.sandboxPath &&
               data.singleWorkbenchSurface === true &&
-              data.detailPaneVisible === false &&
+              data.detailPaneVisible === true &&
               data.sandboxPaneVisible === true &&
               data.previewPaneVisible === false
           ),
         errorMessage: (data) =>
-          "Installed-state sandbox native-open truth mismatch: " + JSON.stringify(data),
+          "Installed-state sandbox preview truth mismatch: " + JSON.stringify(data),
       });
 
-      await record("capture-resources-sandbox-native-open-installed-screenshot", async () => {
+      await record("capture-resources-sandbox-preview-installed-screenshot", async () => {
         const captured = captureVsCodeWindowArtifacts({
-          label: "resources-sandbox-native-open",
+          label: "resources-sandbox-preview",
           artifactsDir,
           sideBarRatio: 0.36,
           userDataDir: smokeUserDataDir,
@@ -2322,7 +2366,7 @@ const steps = [];
           response_language: "en-US",
         });
 
-        const routedCard = await postJson(port, "/training/generate-card", {
+        const routedCard = await postProviderBoundJson(port, "/training/generate-card", {
           workspace_id: newWorkspaceId,
           source: "practice_feedback",
           card_type: "practice",
