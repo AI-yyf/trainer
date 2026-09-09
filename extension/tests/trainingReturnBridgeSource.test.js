@@ -18,7 +18,13 @@ test('formal training handoff steps persist before opening Coach', () => {
   );
   assert.match(
     source,
-    /if \(pending\.phase === "return"\) \{\s*setActiveView\("coach"\);\s*setComposerDraft\(composeTrainingCoachBridgeDraft\(trainingCoachBridge\)\);/,
+    /if \(pending\.phase === "return"\) \{\s*openTrainingCoachBridge\(trainingCoachBridge\);/,
+  );
+  assert.match(source, /describeTrainingReturnCoachSendState/);
+  assert.match(source, /announceTrainingReturnCoachSendState\(\)/);
+  assert.match(
+    source,
+    /const openTrainingCoachBridge = useCallback\([\s\S]*?announceTrainingReturnCoachSendState\(\);/,
   );
   assert.match(
     source,
@@ -63,7 +69,7 @@ test('training return and evidence adopt do not mint a plan, card, or task turn'
     returnStart,
     appSource.indexOf('setComposerDraft("");', returnStart),
   );
-  assert.match(returnComplete, /setActiveView\("coach"\)/);
+  assert.match(returnComplete, /openTrainingCoachBridge\(trainingCoachBridge\)/);
   assert.doesNotMatch(returnComplete, /sendTurn\(/);
   assert.doesNotMatch(returnComplete, /trainerCommands\.generatePlan/);
   const adoptStart = appSource.indexOf('if (action === "adopt_evidence")');

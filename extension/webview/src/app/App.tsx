@@ -49,6 +49,7 @@ import { normalizeProviderProtocol } from "../../../../shared/src/providerProtoc
 import {
   buildTrainingCoachBridge,
   composeTrainingCoachBridgeDraft,
+  describeTrainingReturnCoachSendState,
 } from "../../../../shared/src/trainingCoachBridge";
 import {
   deriveTrainingExecutionState,
@@ -5139,15 +5140,33 @@ export function App() {
     ],
   );
   const showComposerShell = activeView !== "settings";
+  const trainingReturnSendGateRef = useRef<{
+    language: ComposerLanguage;
+    sendBlocked: boolean;
+    blockedReason?: string;
+  }>({
+    language: layout.composerLanguage,
+    sendBlocked: true,
+    blockedReason: undefined,
+  });
+  const announceTrainingReturnCoachSendState = useCallback(() => {
+    setOperationMessage(
+      describeTrainingReturnCoachSendState(
+        trainingReturnSendGateRef.current.language,
+        trainingReturnSendGateRef.current,
+      ),
+    );
+  }, [setOperationMessage]);
   const openTrainingCoachBridge = useCallback(
     (bridge: Parameters<typeof composeTrainingCoachBridgeDraft>[0]) => {
       setActiveView("coach");
       setComposerDraft(composeTrainingCoachBridgeDraft(bridge));
+      announceTrainingReturnCoachSendState();
       window.requestAnimationFrame(() => {
         focusComposerInput();
       });
     },
-    [setActiveView, setComposerDraft],
+    [announceTrainingReturnCoachSendState, setActiveView, setComposerDraft],
   );
   const {
     onRefreshTask: requestTrainingCardGeneration,
@@ -5533,6 +5552,14 @@ export function App() {
       ),
     [activeView, data.connection.state, data.providerConfig, layout.composerLanguage],
   );
+  trainingReturnSendGateRef.current = {
+    language: layout.composerLanguage,
+    sendBlocked:
+      workspaceSessionBlocked || !providerCanCoachNow || Boolean(providerBlockReason),
+    blockedReason: workspaceSessionBlocked
+      ? workspaceSessionBlockMessage
+      : providerBlockReason ?? blockedComposerGuidance,
+  };
   const blockedCoachGuidance = useMemo(
     () =>
       localizeUiViewReferences(
@@ -8631,19 +8658,14 @@ export function App() {
 
     pendingTrainingHandoffSubmissionRef.current = undefined;
     if (pending.phase === "return") {
-      setActiveView("coach");
-      setComposerDraft(composeTrainingCoachBridgeDraft(trainingCoachBridge));
-      window.requestAnimationFrame(() => {
-        focusComposerInput();
-      });
+      openTrainingCoachBridge(trainingCoachBridge);
       return;
     }
 
     setComposerDraft("");
   }, [
     normalizedTrainingNextHopStatus,
-    setActiveView,
-    setComposerDraft,
+    openTrainingCoachBridge,
     trainingCoachBridge,
     trainingHandoffReturnRequired,
     trainingState?.selectedCardId,
@@ -10818,6 +10840,7 @@ export function App() {
       const title = trainingState.reviewArtifact.title ?? trainingState.reviewArtifact.focusArea ?? "review";
       const result = trainingState.reviewArtifact.verifiedResult ?? trainingState.reviewArtifact.summary ?? "";
       setActiveView("coach");
+      announceTrainingReturnCoachSendState();
       setComposerDraft(
         layout.composerLanguage === "zh-CN"
           ? `\u6211\u5b8c\u6210\u4e86\u201c${title}\u201d\u7684\u56de\u987e\u3002\u7ed3\u8bba\uff1a${result}\n\n\u8bf7\u5e2e\u6211\u5b89\u6392\u4e0b\u4e00\u6b65\u3002`
@@ -10848,18 +10871,14 @@ export function App() {
       return;
     }
 
-    setActiveView("coach");
-    setComposerDraft(composeTrainingCoachBridgeDraft(trainingCoachBridge));
-    window.requestAnimationFrame(() => {
-      focusComposerInput();
-    });
+    openTrainingCoachBridge(trainingCoachBridge);
   }, [
+    announceTrainingReturnCoachSendState,
     handleSubmitTrainingEvidence,
     layout.composerLanguage,
     leftoverTrainingHandoffChromeNotLive,
+    openTrainingCoachBridge,
     reviewArtifactForeground,
-    setActiveView,
-    setComposerDraft,
     setOperationMessage,
     trainingCoachBridge,
     trainingHandoffReflectionRequired,
