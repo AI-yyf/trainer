@@ -166,6 +166,9 @@ async def _await_provider_stream_with_cancellation(
         if not cancellation.done():
             cancellation.cancel()
         await asyncio.gather(cancellation, return_exceptions=True)
+        if cancel_event is not None and cancel_event.is_set() and not operation.done():
+            operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
 
 
 def _is_loopback_provider_url(value: object | None) -> bool:

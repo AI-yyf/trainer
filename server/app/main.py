@@ -3,13 +3,11 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import RequestResponseEndpoint
-from starlette.responses import Response
 
 from .affect.service import AffectService
-from .api.admission import browse_only_rejection
+from .api.admission import BrowseOnlyAdmissionMiddleware
 from .api.routers import build_router
 from .api.routes.research import build_research_router
 from .api.routes.training_handoff import build_training_handoff_router
@@ -101,16 +99,9 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
 
     app = FastAPI(title="Trainer Sidecar", version="0.1.0", lifespan=lifespan)
 
-    @app.middleware("http")
-    async def browse_only_admission_guard(
-        request: Request,
-        call_next: RequestResponseEndpoint,
-    ) -> Response:
-        rejection = await browse_only_rejection(request)
-        if rejection is not None:
-            return rejection
-        return await call_next(request)
-
+    # Pure ASGI (not BaseHTTPMiddleware): client abort must surface as
+    # http.disconnect while /turn is still awaiting the provider.
+    app.add_middleware(BrowseOnlyAdmissionMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=r"^http://(127\.0\.0\.1|localhost):\d+$",

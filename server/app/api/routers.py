@@ -903,19 +903,37 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         return f"request_{uuid4().hex}"
 
     async def watch_request_client_disconnect(http_request: Request, cancel_id: str) -> None:
-        """Poll disconnect while a non-SSE provider await may be blocked."""
-        while True:
-            if stream_cancellation_requested(cancel_id):
-                return
-            try:
-                disconnected = await http_request.is_disconnected()
-            except RuntimeError:
-                return
-            if disconnected:
-                # Same Event the agent loop / provider races — abort upstream promptly.
+        """Arm cancel_event as soon as ASGI delivers http.disconnect.
+
+        Polling ``is_disconnected`` is the backup; wrapping receive is the
+        prompt path so a blocked provider await does not wait on the poll
+        interval after the client TCP close.
+        """
+        original_receive = http_request._receive
+
+        async def receive_and_arm_cancel() -> object:
+            message = await original_receive()
+            if isinstance(message, dict) and message.get("type") == "http.disconnect":
                 signal_stream_disconnect(cancel_id)
-                return
-            await asyncio.sleep(0.25)
+            return message
+
+        http_request._receive = receive_and_arm_cancel  # type: ignore[method-assign]
+        try:
+            while True:
+                if stream_cancellation_requested(cancel_id):
+                    return
+                try:
+                    disconnected = await http_request.is_disconnected()
+                except RuntimeError:
+                    signal_stream_disconnect(cancel_id)
+                    return
+                if disconnected:
+                    signal_stream_disconnect(cancel_id)
+                    return
+                await asyncio.sleep(0.25)
+        finally:
+            if http_request._receive is receive_and_arm_cancel:
+                http_request._receive = original_receive
 
     def resource_training_card_lock(workspace_id: str) -> Lock:
         """Keep one workspace's resource-card route and active selection in sync."""

@@ -163,6 +163,9 @@ async def _await_with_stream_cancellation(
         if not cancellation.done():
             cancellation.cancel()
         await asyncio.gather(cancellation, return_exceptions=True)
+        if cancel_event is not None and cancel_event.is_set() and not operation.done():
+            operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
 
 
 async def _iterate_with_stream_cancellation(
