@@ -862,6 +862,16 @@ export interface CoachingAdaptationView {
   closedLoopReturnBlocksTaskMint?: boolean;
 }
 
+export interface TrainingFsrsStateView {
+  cardId?: string;
+  reps?: number;
+  state?: string;
+  stability?: number;
+  difficulty?: number;
+  intervalDays?: number;
+  masteryScore?: number;
+  lapses?: number;
+}
 export interface MemorySnapshot {
   currentFocus: string;
   weakSpots: string[];
@@ -960,6 +970,7 @@ export interface MemorySnapshot {
       error?: string;
       updatedAt?: string;
     };
+    latestTrainingFsrsStates?: Record<string, TrainingFsrsStateView>;
     resourceSandbox?: ManagedDataFolder;
     trainerWorkspace?: TrainerWorkspaceAdmission;
     coachDefaults?: Partial<CoachDefaults> & {

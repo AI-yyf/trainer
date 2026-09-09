@@ -956,6 +956,16 @@ export interface ActiveThreadView {
   updatedAt?: string;
 }
 
+export interface TrainingFsrsStateView {
+  cardId?: string;
+  reps?: number;
+  state?: string;
+  stability?: number;
+  difficulty?: number;
+  intervalDays?: number;
+  masteryScore?: number;
+  lapses?: number;
+}
 export interface MemorySnapshotView {
   currentFocus: string;
   weakSpots: string[];
@@ -1001,6 +1011,7 @@ export interface MemorySnapshotView {
     latestPlanRuntime?: PlanRuntimeRecoveryRecord;
     latestProviderCapability?: ProviderCapabilityRecoveryRecord;
     latestStreamingCheckpoint?: StreamingCheckpointRecord;
+    latestTrainingFsrsStates?: Record<string, TrainingFsrsStateView>;
     resourceSandbox?: ManagedDataFolderView;
     trainerWorkspace?: TrainerWorkspaceAdmissionView;
     coachDefaults?: {

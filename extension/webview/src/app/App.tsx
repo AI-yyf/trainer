@@ -52,6 +52,10 @@ import {
   describeTrainingReturnCoachSendState,
 } from "../../../../shared/src/trainingCoachBridge";
 import {
+  describePlanVerifyAdvanceState,
+  planVerifyAdvanceStageLabel,
+} from "../../../../shared/src/planVerifyExplainability";
+import {
   deriveTrainingExecutionState,
   isTrainingPrimerLike as isSharedTrainingPrimerLike,
   normalizeTrainingStatus as normalizeSharedTrainingStatus,
@@ -5149,6 +5153,7 @@ export function App() {
     sendBlocked: true,
     blockedReason: undefined,
   });
+  const planVerifyAdvanceAnnounceKeyRef = useRef<string>("");
   const announceTrainingReturnCoachSendState = useCallback(() => {
     setOperationMessage(
       describeTrainingReturnCoachSendState(
@@ -6929,7 +6934,12 @@ export function App() {
     liveCoachTurnChrome.coachJudgmentTeachingGoal,
     runtimeWhyNow,
   ]);
-  const verifyPlanAdvanceNext = planRuntimeStatus?.verifyPlanAdvance?.next?.trim() || "";
+  const verifyPlanAdvance = planRuntimeStatus?.verifyPlanAdvance;
+  const verifyPlanAdvanceNext = verifyPlanAdvance?.next?.trim() || "";
+  const verifyPlanAdvanceLabel = planVerifyAdvanceStageLabel(
+    layout.composerLanguage,
+    verifyPlanAdvance?.advanced,
+  );
   const planVerifyItems = useMemo(() => {
     const items = lockRecoveredPlanVerifyItems({
       recovered: recoveredRuntime,
@@ -7769,6 +7779,54 @@ export function App() {
       selectedTrainingRouteCard.cardId === trainingState?.selectedCardId
         ? selectedTrainingRouteCard.cardId
         : undefined));
+
+  useEffect(() => {
+    const advance = planRuntimeStatus?.verifyPlanAdvance;
+    if (!advance || (advance.advanced !== true && advance.advanced !== false)) {
+      return;
+    }
+    const fsrs =
+      (activeTrainingCardId &&
+        data.memory.workspace?.latestTrainingFsrsStates?.[activeTrainingCardId]) ||
+      undefined;
+    const announceKey = JSON.stringify({
+      advanced: advance.advanced === true,
+      what: advance.what ?? "",
+      next: advance.next ?? "",
+      reps: fsrs?.reps ?? null,
+      state: fsrs?.state ?? "",
+    });
+    if (announceKey === planVerifyAdvanceAnnounceKeyRef.current) {
+      return;
+    }
+    planVerifyAdvanceAnnounceKeyRef.current = announceKey;
+    const explained = describePlanVerifyAdvanceState(layout.composerLanguage, {
+      advanced: advance.advanced,
+      what: advance.what,
+      why: advance.why,
+      next: advance.next,
+      fsrs: fsrs
+        ? {
+            reps: fsrs.reps,
+            state: fsrs.state,
+            intervalDays: fsrs.intervalDays,
+            masteryScore: fsrs.masteryScore,
+            stability: fsrs.stability,
+            difficulty: fsrs.difficulty,
+          }
+        : undefined,
+    });
+    setOperationMessage(explained);
+    setTrainingVerifyNotice(explained.message);
+    setOperationMessageSurface(activeView === "training" ? "training" : activeView === "plan" ? "plan" : "global");
+  }, [
+    activeTrainingCardId,
+    activeView,
+    data.memory.workspace?.latestTrainingFsrsStates,
+    layout.composerLanguage,
+    planRuntimeStatus?.verifyPlanAdvance,
+    setOperationMessage,
+  ]);
   const trainingRestoreReplacesSelectedCard = Boolean(
     trainingRestoreForeground &&
       activeTrainingCardId &&
@@ -13336,13 +13394,15 @@ export function App() {
         nextStep={
           <>
             <p>
-              {verifyPlanAdvanceNext ||
-                (firstLookContinuePrimary
-                  ? planOrientation.nextStep
-                  : recoveredDisplayFacts.currentStep ||
-                    liveCoachTaskChrome.currentStep ||
-                    resolvedCoachNextStep ||
-                    latestArtifactTeaser)}
+              {verifyPlanAdvanceLabel
+                ? `${verifyPlanAdvanceLabel}${verifyPlanAdvanceNext ? ` — ${verifyPlanAdvanceNext}` : ""}`
+                : verifyPlanAdvanceNext ||
+                  (firstLookContinuePrimary
+                    ? planOrientation.nextStep
+                    : recoveredDisplayFacts.currentStep ||
+                      liveCoachTaskChrome.currentStep ||
+                      resolvedCoachNextStep ||
+                      latestArtifactTeaser)}
             </p>
             {runtimeBlockedReason ? (
               <p className="inline-note">{runtimeBlockedReason}</p>
