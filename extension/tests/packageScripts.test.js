@@ -1026,3 +1026,47 @@ test('verifyPackage keeps cross-target inventory diagnostic-only for a native pa
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
 });
+
+
+test('package:vsix rebuilds the native sidecar when the binary is missing', async () => {
+  const {
+    ensureNativeSidecarBinaryForPackage,
+    resolveNativeSidecarExecutablePath,
+    resolveNativeSidecarTarget,
+  } = await loadPackageScriptModules();
+  const tempRoot = createFixtureRoot();
+
+  try {
+    const extensionDir = path.join(tempRoot, 'extension');
+    fs.mkdirSync(extensionDir, { recursive: true });
+    const targetPlatform = resolveNativeSidecarTarget();
+    const executablePath = resolveNativeSidecarExecutablePath({ extensionDir, targetPlatform });
+    assert.equal(fs.existsSync(executablePath), false);
+
+    let ranPrepublish = 0;
+    const rebuilt = ensureNativeSidecarBinaryForPackage({
+      extensionDir,
+      targetPlatform,
+      runPrepublish() {
+        ranPrepublish += 1;
+        fs.mkdirSync(path.dirname(executablePath), { recursive: true });
+        fs.writeFileSync(executablePath, 'sidecar');
+      },
+    });
+    assert.equal(ranPrepublish, 1);
+    assert.equal(rebuilt.rebuilt, true);
+    assert.equal(fs.existsSync(executablePath), true);
+
+    const reused = ensureNativeSidecarBinaryForPackage({
+      extensionDir,
+      targetPlatform,
+      runPrepublish() {
+        ranPrepublish += 1;
+      },
+    });
+    assert.equal(ranPrepublish, 1);
+    assert.equal(reused.rebuilt, false);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});

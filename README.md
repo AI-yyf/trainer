@@ -142,6 +142,12 @@ Open the `extension/` folder as the VS Code workspace, then press `F5` (Run Exte
 npm run package:vsix
 ```
 
+`npm run package:vsix` builds the native sidecar binary for the current host when
+`extension/bundled/bin/<platform-arch>/` is missing (the same path CI uses after
+clearing inherited binaries). On Debian/Ubuntu, install the matching Python
+shared library before packaging so PyInstaller can freeze the sidecar, for
+example `sudo apt-get install -y libpython3.13`.
+
 The output is target-qualified, for example `extension/trainer-extension-0.1.0-win32-x64.vsix`. Install only a VSIX that matches the machine that will run the extension:
 
 | Machine | VSIX suffix |
