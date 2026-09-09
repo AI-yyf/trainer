@@ -13,6 +13,9 @@ function startMockTrainer({
   contaminateFunctionReply = false,
   omitZhTrainingCardTitle = false,
   sessionStartFailureBody = '',
+  providerTestStatus = 200,
+  providerTestOk = true,
+  streamMode = 'normal',
 } = {}) {
   const turnBodies = [];
   const trainingCardBodies = [];
@@ -53,6 +56,24 @@ function startMockTrainer({
           observed: null,
           state: disabled.has(name) ? 'disabled' : 'unverified',
         }));
+        if (providerTestStatus === 401 || providerTestStatus === 403 || providerTestOk === false) {
+          response.writeHead(providerTestStatus === 200 ? 401 : providerTestStatus, {
+            'Content-Type': 'application/json; charset=utf-8',
+          });
+          response.end(
+            JSON.stringify({
+              ok: false,
+              configured: true,
+              api_key_supplied: Boolean(payload.api_key),
+              reachable: true,
+              success: false,
+              status: 'authentication_failed',
+              detail: 'Provider rejected the API key.',
+              diagnostics: ['authentication failed'],
+            }),
+          );
+          return;
+        }
         response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         response.end(
           JSON.stringify({
@@ -91,6 +112,16 @@ function startMockTrainer({
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
       });
+      if (streamMode === 'empty') {
+        response.end();
+        return;
+      }
+      if (streamMode === 'incomplete') {
+        response.write('event: chunk\n');
+        response.write(`data: ${JSON.stringify({ chunk: '我会先验证一个 breakpoint。' })}\n\n`);
+        response.end();
+        return;
+      }
       response.write('event: chunk\n');
       response.write(`data: ${JSON.stringify({ chunk: '我会先验证一个 breakpoint。' })}\n\n`);
       response.write('event: complete\n');
@@ -444,6 +475,10 @@ test('trainer turn smoke script stays env-driven and never hardcodes the hidden 
   assert.match(source, /function_guidance/);
   assert.doesNotMatch(source, /47\.107\.101\.18/);
   assert.doesNotMatch(source, /sk-[A-Za-z0-9_-]{24,}/);
+  assert.doesNotMatch(source, /minimax\.redfast\.top/);
+  assert.match(source, /authentication_failed/);
+  assert.match(source, /empty_stream/);
+  assert.match(source, /incomplete_stream/);
 });
 
 test('trainer turn smoke script passes clean lane transitions and learn-first routing', async () => {
@@ -567,3 +602,57 @@ test('trainer turn smoke script identifies the nonlocalized zh-CN training-card 
     await trainer.close();
   }
 });
+
+test('trainer turn smoke script reports authentication_failed for rejected provider keys', async () => {
+  const trainer = await startMockTrainer({ providerTestStatus: 401, providerTestOk: false });
+
+  try {
+    const result = await runTurnSmoke({
+      TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.category, 'authentication_failed');
+    assert.equal(report.providerModel, 'MiniMax-M3');
+    assert.equal(typeof report.elapsedMs, 'number');
+  } finally {
+    await trainer.close();
+  }
+});
+
+test('trainer turn smoke script reports empty_stream when SSE yields no chunks', async () => {
+  const trainer = await startMockTrainer({ streamMode: 'empty' });
+
+  try {
+    const result = await runTurnSmoke({
+      TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.category, 'empty_stream');
+  } finally {
+    await trainer.close();
+  }
+});
+
+test('trainer turn smoke script reports incomplete_stream when complete event is missing', async () => {
+  const trainer = await startMockTrainer({ streamMode: 'incomplete' });
+
+  try {
+    const result = await runTurnSmoke({
+      TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.category, 'incomplete_stream');
+  } finally {
+    await trainer.close();
+  }
+});
+

@@ -570,12 +570,20 @@ async function main() {
     probe_message: "请用一句话确认当前连接可以进行中文教练对话。",
   });
   if (!capabilityTest.response.ok || capabilityTest.json?.ok !== true) {
+    const status = capabilityTest.response.status;
+    const category =
+      status === 401 || status === 403
+        ? "authentication_failed"
+        : "provider_capability_test_failed";
     return failure({
       step: "provider_test",
-      category: "provider_capability_test_failed",
-      detail: `Provider capability test failed with HTTP ${capabilityTest.response.status}.`,
+      category,
+      detail:
+        category === "authentication_failed"
+          ? `Provider rejected the API key with HTTP ${status}.`
+          : `Provider capability test failed with HTTP ${status}.`,
       diagnostics,
-      status: capabilityTest.response.status,
+      status,
     });
   }
   diagnostics.push("provider_test: chat_probe=verified");
@@ -614,16 +622,27 @@ async function main() {
     ),
   );
   streamChunkCount = stream.chunks;
+  const streamHttpOk = stream.response.status === 200;
+  const streamHasChunks = stream.chunks > 0;
+  const streamComplete = stream.hasComplete;
+  const streamVisibleOk = hasChineseText(stream.visibleText);
+  const streamSecretClean = !providerErrorContainsSecret(stream.body);
   const streamOk =
-    stream.response.status === 200 &&
-    stream.chunks > 0 &&
-    stream.hasComplete &&
-    hasChineseText(stream.visibleText) &&
-    !providerErrorContainsSecret(stream.body);
+    streamHttpOk &&
+    streamHasChunks &&
+    streamComplete &&
+    streamVisibleOk &&
+    streamSecretClean;
   if (!streamOk) {
+    let category = "streaming_contract_failed";
+    if (streamHttpOk && !streamHasChunks && !streamComplete) {
+      category = "empty_stream";
+    } else if (streamHttpOk && streamHasChunks && !streamComplete) {
+      category = "incomplete_stream";
+    }
     return failure({
       step: "turn_stream",
-      category: "streaming_contract_failed",
+      category,
       diagnostics,
       status: stream.response.status,
     });
