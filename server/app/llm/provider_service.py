@@ -2865,10 +2865,20 @@ class ProviderService:
             or "timed out" in lowered
         ):
             return ("timeout", True, status_code, False, None)
+        # OpenAI/NewAPI SDKs wrap httpx ConnectError as APIConnectionError
+        # with a generic "Connection error." message — walk cause/context and
+        # match the safe string forms so Settings /provider/test stays honest.
+        cause = error.__cause__ or error.__context__
         if (
             isinstance(error, (OSError, httpx.NetworkError))
+            or isinstance(cause, (OSError, httpx.NetworkError))
+            or type(error).__name__ in {"APIConnectionError", "ConnectError"}
             or "connection refused" in lowered
+            or "connection error" in lowered
+            or "all connection attempts failed" in lowered
+            or "failed to establish a new connection" in lowered
             or "name or service not known" in lowered
+            or "nodename nor servname" in lowered
         ):
             return ("network", True, status_code, False, None)
         if "malformed" in lowered or "invalid json" in lowered or "unexpected response" in lowered:

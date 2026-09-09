@@ -28,7 +28,8 @@
     "verify:delivery": "npm run verify && npm run test:experience-matrix && npm run package:vsix",
     "smoke:provider-soak": "node ./scripts/provider-soak-probe.mjs",
     "smoke:resources": "node ./scripts/resources-smoke.mjs",
-    "smoke:plan-fsrs": "node ./scripts/plan-fsrs-smoke.mjs"
+    "smoke:plan-fsrs": "node ./scripts/plan-fsrs-smoke.mjs",
+    "smoke:settings-provider": "node ./scripts/settings-provider-smoke.mjs"
   },
   "repository": {
     "type": "git",

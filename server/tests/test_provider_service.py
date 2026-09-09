@@ -712,6 +712,7 @@ def test_native_http_502_is_retryable_network_failure(
         (httpx.ConnectError("simulated connect error"), "network"),
         (httpx.ReadError("simulated read error"), "network"),
         (httpx.WriteError("simulated write error"), "network"),
+        (Exception("Connection error."), "network"),
     ],
 )
 def test_classify_httpx_transport_errors_as_retryable(
@@ -723,6 +724,22 @@ def test_classify_httpx_transport_errors_as_retryable(
     )
 
     assert category == expected_category
+    assert retryable is True
+    assert status_code is None
+    assert provider_reachable is False
+    assert model_supported is None
+
+
+def test_classify_openai_api_connection_error_wrapped_cause_as_network() -> None:
+    class APIConnectionError(Exception):
+        pass
+
+    wrapped = APIConnectionError("Connection error.")
+    wrapped.__cause__ = httpx.ConnectError("[Errno 111] Connection refused")
+    category, retryable, status_code, provider_reachable, model_supported = ProviderService()._classify_error(
+        wrapped
+    )
+    assert category == "network"
     assert retryable is True
     assert status_code is None
     assert provider_reachable is False
