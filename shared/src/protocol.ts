@@ -1055,7 +1055,8 @@ export function buildTrainerStreamingErrorMessage(
 
   if (
     normalizedCategory === "empty_stream" ||
-    /empty[_\s-]?stream|no (?:content|chunks?) (?:received|returned)/i.test(normalizedError)
+    normalizedCategory === "empty_response" ||
+    /empty[_\s-]?stream|empty_response|no (?:content|chunks?) (?:received|returned)/i.test(normalizedError)
   ) {
     return localizeTrainerStreamingCopy(
       language,
@@ -1135,6 +1136,28 @@ export function buildTrainerStreamingErrorMessage(
       language,
       "You stopped this reply. Draft restored below — send again to continue the thread.",
       "你已中止本轮回复。草稿已恢复到下方，再发送即可续上这段对话。",
+    );
+  }
+
+  if (
+    normalizedCategory === "provider_capability_test_failed" ||
+    /provider_capability_test_failed|capability test failed/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "Provider capability check failed. Open Settings, verify the connection, then try again.",
+      "Provider 能力检查失败。请打开设置核对连接后再试。",
+    );
+  }
+
+  if (
+    normalizedCategory === "streaming_contract_failed" ||
+    /streaming_contract_failed/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "The streaming reply did not meet the contract (missing chunks or completion). Retry, or switch protocol/model in Settings.",
+      "流式回复未满足契约（缺片段或未完成）。可重试，或到设置切换协议/模型。",
     );
   }
 
