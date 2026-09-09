@@ -14387,6 +14387,11 @@ export function App() {
                     : "Saving"
                   : t.streaming
               }
+              explainBetweenTurns={
+                activeView === "coach" &&
+                !composerUsesTrainingFlow &&
+                data.conversation.length > 0
+              }
               submitLabel=""
               accessibilityLabel={localizedTrainingComposerAccessibilityLabel}
               submitAriaLabel={localizedTrainingComposerSubmitAriaLabel}
