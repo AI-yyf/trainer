@@ -33,9 +33,39 @@ const responseLanguage = (
   process.env.TRAINER_TURN_SMOKE_RESPONSE_LANGUAGE ?? defaultResponseLanguage
 ).trim();
 const smokeStartedAt = Date.now();
+let streamChunkCount = 0;
+let currentStep = "startup";
+const defaultSmokeTimeoutMs = 360000;
+const parsedSmokeTimeoutMs = Number(
+  process.env.TRAINER_TURN_SMOKE_TIMEOUT_MS ?? defaultSmokeTimeoutMs,
+);
+const smokeTimeoutMs =
+  Number.isFinite(parsedSmokeTimeoutMs) && parsedSmokeTimeoutMs > 0
+    ? Math.floor(parsedSmokeTimeoutMs)
+    : defaultSmokeTimeoutMs;
 
 function elapsedMs() {
   return Date.now() - smokeStartedAt;
+}
+
+function setStep(step) {
+  currentStep = step;
+  return step;
+}
+
+function remainingTimeoutMs(fallbackMs) {
+  const remaining = smokeTimeoutMs - elapsedMs();
+  if (remaining <= 0) {
+    const error = new Error(`trainer-turn-smoke exceeded ${smokeTimeoutMs}ms wall-clock budget`);
+    error.name = "TimeoutError";
+    error.category = "timeout";
+    throw error;
+  }
+  return Math.max(1, Math.min(fallbackMs, remaining));
+}
+
+function abortSignalFor(fallbackMs) {
+  return AbortSignal.timeout(remainingTimeoutMs(fallbackMs));
 }
 
 const zhRemoteMessage =
@@ -82,7 +112,17 @@ function emitJson(stream, payload) {
   });
 }
 
-async function failure({ step, category, diagnostics, status }) {
+async function failure({
+  step,
+  category,
+  diagnostics,
+  status,
+  detail,
+  preview,
+  chunkCount,
+}) {
+  // Keep the machine report redaction-safe: no reply preview/detail bodies.
+  // step + real chunkCount are enough to locate hangs without leaking lane text.
   const report = {
     category,
     providerModel,
@@ -90,9 +130,18 @@ async function failure({ step, category, diagnostics, status }) {
     model: providerModel,
     protocol: providerProtocol,
     elapsedMs: elapsedMs(),
-    chunkCount: 0,
+    chunkCount: typeof chunkCount === "number" ? chunkCount : streamChunkCount,
     ok: false,
   };
+  if (step) {
+    report.step = step;
+  }
+  if (typeof status === "number") {
+    report.status = status;
+  }
+  void diagnostics;
+  void detail;
+  void preview;
   await emitJson(process.stderr, report);
   process.exitCode = 1;
   throw new Error("__trainer_turn_smoke_failed__");
@@ -110,6 +159,7 @@ async function postJson(path, payload) {
       "content-type": "application/json",
     },
     body: JSON.stringify(payload),
+    signal: abortSignalFor(180000),
   });
   const text = await response.text();
   let json;
@@ -129,6 +179,7 @@ async function postStreaming(path, payload) {
       "content-type": "application/json",
     },
     body: JSON.stringify(payload),
+    signal: abortSignalFor(300000),
   });
   let body = "";
   if (response.body) {
@@ -599,7 +650,7 @@ function classifyProviderTestFailure(response, body) {
 }
 
 async function main() {
-  let streamChunkCount = 0;
+  streamChunkCount = 0;
   if (!providerBaseUrl) {
     return failure({
       step: "config",
@@ -651,6 +702,7 @@ async function main() {
   }
   diagnostics.push("provider_test: chat_probe=verified");
   const workspaceId = `trainer-turn-smoke-${Date.now()}`;
+  setStep("session_start");
   const start = await postJson("/session/start", {
     workspace_id: workspaceId,
     workspace_name: workspaceId,
@@ -674,6 +726,7 @@ async function main() {
   const sessionId = compact(start.json.session_id);
   diagnostics.push("session_start: started=true");
 
+  setStep("turn_stream");
   const stream = await postStreaming(
     "/turn/stream",
     buildTurnPayload(
@@ -711,6 +764,7 @@ async function main() {
     });
   }
 
+  setStep("remote_workspace");
   const remoteTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -753,6 +807,7 @@ async function main() {
     await assertCurrentFocusLocalized(remoteTurn.json, "remote_workspace", diagnostics, "zh-CN");
   }
 
+  setStep("debug_loop");
   const debugTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -1207,10 +1262,14 @@ main().catch(async (error) => {
   if (error instanceof Error && error.message === "__trainer_turn_smoke_failed__") {
     return;
   }
+  const message = error instanceof Error ? error.message : String(error);
+  const isTimeout =
+    (error instanceof Error && (error.name === "TimeoutError" || error.category === "timeout")) ||
+    /aborted|timeout/i.test(message);
   await failure({
-    step: "runtime",
-    category: "unexpected_error",
-    detail: error instanceof Error ? error.message : String(error),
-    diagnostics: [],
+    step: currentStep || "runtime",
+    category: isTimeout ? "timeout" : "unexpected_error",
+    detail: message,
+    diagnostics: [`wall_clock_budget_ms=${smokeTimeoutMs}`],
   });
 });

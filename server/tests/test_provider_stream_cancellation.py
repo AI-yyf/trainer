@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from server.app.llm.provider_service import _iterate_provider_stream_with_cancellation
+from app.llm.provider_service import _iterate_provider_stream_with_cancellation
 
 
 @pytest.mark.asyncio

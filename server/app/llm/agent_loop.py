@@ -531,37 +531,65 @@ class CoachAgentLoop:
                 }
                 return
             else:
+                timeout = self._step_timeout_for(index)
                 try:
-                    async for event in _iterate_with_stream_cancellation(
-                        stream_fn(history, tools_schema),
-                        cancel_event,
-                    ):
-                        event_type = event.get("type")
-                        if event_type == "delta":
-                            delta = str(event.get("delta") or "")
-                            if delta:
-                                assistant_text += delta
-                                if stream_direct_text:
-                                    yield {"type": "text", "delta": delta}
-                                    streamed_text += delta
-                                elif event.get("safe_to_stream") is True:
-                                    yield {
-                                        "type": "text",
-                                        "delta": delta,
-                                        "safe_to_stream": True,
-                                    }
-                                    streamed_text += delta
-                                    streamed_text_safe = True
-                        elif event_type == "final":
-                            assistant_text = str(event.get("content") or assistant_text)
-                            tool_calls = list(
-                                cast("list[dict[str, Any]]", event.get("tool_calls") or [])
-                            )
-                            raw_stop = event.get("stop_reason") or event.get("finish_reason")
-                            stream_stop_reason = str(raw_stop) if raw_stop else None
-                            break
-                        else:
-                            yield event
+                    try:
+                        async with asyncio.timeout(timeout):
+                            async for event in _iterate_with_stream_cancellation(
+                                stream_fn(history, tools_schema),
+                                cancel_event,
+                            ):
+                                event_type = event.get("type")
+                                if event_type == "delta":
+                                    delta = str(event.get("delta") or "")
+                                    if delta:
+                                        assistant_text += delta
+                                        if stream_direct_text:
+                                            yield {"type": "text", "delta": delta}
+                                            streamed_text += delta
+                                        elif event.get("safe_to_stream") is True:
+                                            yield {
+                                                "type": "text",
+                                                "delta": delta,
+                                                "safe_to_stream": True,
+                                            }
+                                            streamed_text += delta
+                                            streamed_text_safe = True
+                                elif event_type == "final":
+                                    assistant_text = str(event.get("content") or assistant_text)
+                                    tool_calls = list(
+                                        cast("list[dict[str, Any]]", event.get("tool_calls") or [])
+                                    )
+                                    raw_stop = event.get("stop_reason") or event.get("finish_reason")
+                                    stream_stop_reason = str(raw_stop) if raw_stop else None
+                                    break
+                                else:
+                                    yield event
+                    except TimeoutError:
+                        summary, next_step = _build_runtime_failure_recovery(
+                            "timeout",
+                            context=self.context,
+                            response_language=self.context.response_language,
+                            previous_step=previous_step,
+                        )
+                        yield {
+                            "type": "error",
+                            "detail": f"agent step {index} exceeded {timeout}s",
+                            "category": "timeout",
+                            "recoverable": True,
+                            "terminal": True,
+                            "degraded": False,
+                        }
+                        yield {
+                            "type": "final",
+                            "content": assistant_text,
+                            "summary": summary,
+                            "next_step": next_step,
+                            "stop_reason": "timeout",
+                            "recoverable": True,
+                            "degraded": False,
+                        }
+                        return
                 except Exception as exc:
                     if is_prompt_too_long_error(exc):
                         compact_history(

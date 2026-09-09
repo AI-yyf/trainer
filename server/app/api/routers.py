@@ -823,6 +823,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     # request and the explicit cancel endpoint a shared, bounded signal
     # without persisting transient transport state in the learner session.
     stream_cancellation_events: dict[str, asyncio.Event] = {}
+    # Disconnects must abort upstream reads via the same Event the agent loop
+    # watches, but framing stays "interrupted" (not fail-closed /stream/cancel).
+    stream_client_disconnects: set[str] = set()
     stream_cancellation_guard = Lock()
     completed_session_requests: dict[tuple[str, str, str], dict[str, object]] = {}
     completed_session_requests_guard = Lock()
@@ -852,10 +855,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         # request_id singleflight claim, not here.
         with stream_cancellation_guard:
             stream_cancellation_events[stream_id] = asyncio.Event()
+            stream_client_disconnects.discard(stream_id)
 
     def unregister_stream_cancellation(stream_id: str) -> None:
         with stream_cancellation_guard:
             stream_cancellation_events.pop(stream_id, None)
+            stream_client_disconnects.discard(stream_id)
 
     def request_stream_cancellation(stream_id: str) -> bool:
         with stream_cancellation_guard:
@@ -865,8 +870,26 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             event.set()
             return True
 
+    def signal_stream_disconnect(stream_id: str) -> bool:
+        """Abort upstream provider I/O on client disconnect without fail-closed framing."""
+        with stream_cancellation_guard:
+            event = stream_cancellation_events.get(stream_id)
+            if event is None:
+                return False
+            stream_client_disconnects.add(stream_id)
+            event.set()
+            return True
+
     def stream_cancellation_requested(stream_id: str) -> bool:
         with stream_cancellation_guard:
+            event = stream_cancellation_events.get(stream_id)
+            return bool(event and event.is_set())
+
+    def stream_should_fail_closed(stream_id: str) -> bool:
+        """Explicit /stream/cancel (or direct Event set) is fail-closed; disconnect is not."""
+        with stream_cancellation_guard:
+            if stream_id in stream_client_disconnects:
+                return False
             event = stream_cancellation_events.get(stream_id)
             return bool(event and event.is_set())
 
@@ -22588,11 +22611,17 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if stream_cancellation_requested(stream_id):
                 return True
             try:
-                return await http_request.is_disconnected()
+                disconnected = await http_request.is_disconnected()
             except RuntimeError:
                 # Test clients and a few ASGI adapters do not expose a live
                 # receive channel after the response starts.
                 return False
+            if disconnected:
+                # Set the agent-loop cancel Event so a stalled upstream read
+                # (e.g. NewAPI anthropic SSE) aborts instead of leaking sockets.
+                signal_stream_disconnect(stream_id)
+                return True
+            return False
 
         # Pyright gives up on this oversized async generator ("code is too
         # complex to analyze") and then misreads it as a coroutine, so the
@@ -22612,6 +22641,22 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 for message in state.snapshot.messages
                 if message.role == "assistant"
             }
+
+            async def _watch_client_disconnect() -> None:
+                # Poll while the provider read may be blocked between SSE frames.
+                while True:
+                    if stream_cancellation_requested(stream_id):
+                        return
+                    try:
+                        disconnected = await http_request.is_disconnected()
+                    except RuntimeError:
+                        return
+                    if disconnected:
+                        signal_stream_disconnect(stream_id)
+                        return
+                    await asyncio.sleep(0.25)
+
+            disconnect_watch = asyncio.create_task(_watch_client_disconnect())
 
             async def _abort_fail_closed(*, error_detail: object | None = None):
                 """Emit failed->acked and publish failure complete so same request_id cannot remint."""
@@ -22652,7 +22697,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
 
             async def _abort_for_cancellation():
                 """Explicit /stream/cancel stays fail-closed; a client disconnect only interrupts."""
-                if stream_cancellation_requested(stream_id):
+                if stream_should_fail_closed(stream_id):
                     async for _closed_frame in _abort_fail_closed():
                         yield _closed_frame
                     return
@@ -23180,7 +23225,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 if final_agent_meta:
                     response_data["agent"] = final_agent_meta
                 if await stream_cancelled():
-                    if not stream_cancellation_requested(stream_id):
+                    if not stream_should_fail_closed(stream_id):
                         # Client disconnected: no listener remains for a terminal frame;
                         # leave the turn recoverable as interrupted, mint no fake complete.
                         yield stream_status_event("cancelled", stream_id)
@@ -23261,6 +23306,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         else ("failed" if stream_failed else "interrupted")
                     ),
                 )
+                disconnect_watch.cancel()
+                await asyncio.gather(disconnect_watch, return_exceptions=True)
                 unregister_stream_cancellation(stream_id)
 
         register_stream_cancellation(stream_id)
@@ -23473,9 +23520,15 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if stream_cancellation_requested(stream_id):
                 return True
             try:
-                return await http_request.is_disconnected()
+                disconnected = await http_request.is_disconnected()
             except RuntimeError:
                 return False
+            if disconnected:
+                # Set the agent-loop cancel Event so a stalled upstream read
+                # (e.g. NewAPI anthropic SSE) aborts instead of leaking sockets.
+                signal_stream_disconnect(stream_id)
+                return True
+            return False
 
         # Pyright gives up on this oversized async generator ("code is too
         # complex to analyze") and then misreads it as a coroutine, so the
@@ -23492,6 +23545,22 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             stream_failed = False
             stream_singleflight_published = False
             preexisting_assistant_ids: set[str] = set()
+
+            async def _watch_client_disconnect() -> None:
+                # Poll while the provider read may be blocked between SSE frames.
+                while True:
+                    if stream_cancellation_requested(stream_id):
+                        return
+                    try:
+                        disconnected = await http_request.is_disconnected()
+                    except RuntimeError:
+                        return
+                    if disconnected:
+                        signal_stream_disconnect(stream_id)
+                        return
+                    await asyncio.sleep(0.25)
+
+            disconnect_watch = asyncio.create_task(_watch_client_disconnect())
 
             async def _abort_fail_closed(*, error_detail: object | None = None):
                 """Emit failed->acked and publish failure complete so same request_id cannot remint."""
@@ -23532,7 +23601,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
 
             async def _abort_for_cancellation():
                 """Explicit /stream/cancel stays fail-closed; a client disconnect only interrupts."""
-                if stream_cancellation_requested(stream_id):
+                if stream_should_fail_closed(stream_id):
                     async for _closed_frame in _abort_fail_closed():
                         yield _closed_frame
                     return
@@ -23897,7 +23966,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     if final_agent_meta:
                         response_data["agent"] = final_agent_meta
                     if await stream_cancelled():
-                        if not stream_cancellation_requested(stream_id):
+                        if not stream_should_fail_closed(stream_id):
                             # Client disconnected: no listener remains for a terminal frame;
                             # leave the turn recoverable as interrupted, mint no fake complete.
                             yield stream_status_event("cancelled", stream_id)
@@ -24505,7 +24574,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 if final_agent_meta:
                     response_data["agent"] = final_agent_meta
                 if await stream_cancelled():
-                    if not stream_cancellation_requested(stream_id):
+                    if not stream_should_fail_closed(stream_id):
                         # Client disconnected: no listener remains for a terminal frame;
                         # leave the turn recoverable as interrupted, mint no fake complete.
                         yield stream_status_event("cancelled", stream_id)
@@ -24589,6 +24658,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                             else ("failed" if stream_failed else "interrupted")
                         ),
                     )
+                disconnect_watch.cancel()
+                await asyncio.gather(disconnect_watch, return_exceptions=True)
                 unregister_stream_cancellation(stream_id)
 
         register_stream_cancellation(stream_id)

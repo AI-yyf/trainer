@@ -588,7 +588,7 @@ test('trainer turn smoke script fails when a fresh lane still leaks the previous
     assert.equal(report.providerProtocol, 'openai_chat_completions_compatible');
     assert.equal(typeof report.elapsedMs, 'number');
     assert.equal('preview' in report, false);
-    assert.equal('step' in report, false);
+    assert.equal(typeof report.step, 'string');
     assert.doesNotMatch(result.stderr, /debug loop/i);
   } finally {
     await trainer.close();
@@ -611,7 +611,7 @@ test('trainer turn smoke script redacts a failed sidecar response body', async (
     assert.equal(report.providerProtocol, 'openai_chat_completions_compatible');
     assert.equal(typeof report.elapsedMs, 'number');
     assert.equal('preview' in report, false);
-    assert.equal('step' in report, false);
+    assert.equal(typeof report.step, 'string');
     assert.doesNotMatch(result.stderr, new RegExp(secret));
   } finally {
     await trainer.close();
@@ -633,7 +633,7 @@ test('trainer turn smoke script identifies the nonlocalized zh-CN training-card 
     assert.equal(report.providerModel, 'MiniMax-M3');
     assert.equal(report.providerProtocol, 'openai_chat_completions_compatible');
     assert.equal(typeof report.elapsedMs, 'number');
-    assert.equal('step' in report, false);
+    assert.equal(typeof report.step, 'string');
   } finally {
     await trainer.close();
   }

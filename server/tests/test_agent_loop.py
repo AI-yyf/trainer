@@ -1203,6 +1203,37 @@ async def test_streaming_loop_cancels_provider_iterator_when_stream_event_is_set
     await asyncio.wait_for(provider_closed.wait(), timeout=0.5)
 
 
+
+async def test_streaming_loop_times_out_blocked_provider_step() -> None:
+    async def _call(
+        _messages: list[dict[str, Any]], _tools: list[dict[str, Any]] | None
+    ) -> dict[str, Any]:
+        raise AssertionError("timeout test must use the provider stream")
+
+    async def _call_stream(
+        _messages: list[dict[str, Any]], _tools: list[dict[str, Any]] | None
+    ):
+        yield {"type": "delta", "delta": "partial", "safe_to_stream": True}
+        await asyncio.Event().wait()
+
+    loop = CoachAgentLoop(
+        provider=AgentProvider(
+            protocol="openai_chat_completions",
+            call=_call,
+            call_stream=_call_stream,
+        ),
+        registry=_toy_registry(),
+        context=_context(),
+        max_steps=1,
+        first_step_timeout=0.05,
+        step_timeout=0.05,
+    )
+    events = [event async for event in loop.run_stream([{"role": "user", "content": "hang"}])]
+    assert any(event.get("type") == "error" and event.get("category") == "timeout" for event in events)
+    final = next(event for event in events if event.get("type") == "final")
+    assert final.get("stop_reason") == "timeout"
+
+
 async def test_streaming_loop_empty_final_is_not_completed() -> None:
     registry = _toy_registry()
     provider = await _scripted_stream_provider([{"content": "", "tool_calls": []}])
