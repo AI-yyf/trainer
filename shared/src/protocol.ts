@@ -1092,12 +1092,12 @@ export function buildTrainerStreamingErrorMessage(
 
   if (
     normalizedCategory === "rate_limit" ||
-    /rate[_\s-]?limit|too many requests/i.test(normalizedError)
+    /rate[_\s-]?limit|too many requests|\b429\b/i.test(normalizedError)
   ) {
     return localizeTrainerStreamingCopy(
       language,
-      "The model is busy right now. Wait a moment, then try again.",
-      "模型现在比较忙。等一会儿再试一次。",
+      "Rate limited (429). Your draft is still here — wait a moment, then send again.",
+      "触发限流（429）。草稿还在，稍等片刻再发送。",
     );
   }
 
@@ -1114,12 +1114,27 @@ export function buildTrainerStreamingErrorMessage(
 
   if (
     normalizedCategory === "network" ||
-    /network|fetch failed|econn|connection refused|dns/i.test(normalizedError)
+    normalizedCategory === "disconnected" ||
+    normalizedCategory === "connection_lost" ||
+    /network|fetch failed|econn|connection refused|dns|socket hang up|connection reset|disconnected|connection lost/i.test(
+      normalizedError,
+    )
   ) {
     return localizeTrainerStreamingCopy(
       language,
-      "Trainer could not reach the model. Check the connection and try again.",
-      "Trainer 暂时连不上模型。检查连接后再试一次。",
+      "Connection dropped mid-reply. Kept what arrived — reconnect, then retry or rewrite from the draft.",
+      "回复中途断线了。已保留已到达内容，恢复连接后可重试，或从草稿重写。",
+    );
+  }
+
+  if (
+    normalizedCategory === "stream_aborted_by_client" ||
+    /stream_aborted_by_client|aborted by client/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "You stopped this reply. Draft restored below — send again to continue the thread.",
+      "你已中止本轮回复。草稿已恢复到下方，再发送即可续上这段对话。",
     );
   }
 
@@ -1154,8 +1169,8 @@ export function deriveTrainerStreamingOperationMessage(
       tone: "info",
       message: localizeTrainerStreamingCopy(
         language,
-        "This reply was cancelled. The generated content is still here.",
-        "已取消本轮回复，已保留已生成内容。",
+        "Stopped. Kept generated content and restored your draft — send again to continue.",
+        "已中止。已保留生成内容并恢复草稿，再发送即可续上。",
       ),
     };
   }

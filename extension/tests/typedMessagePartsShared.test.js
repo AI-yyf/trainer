@@ -314,6 +314,69 @@ test('trainer message parts normalize into the typed registry contract', () => {
       message: "这轮回复在完成前被截断了。已保留已到达内容，可重试继续，或取消后重写。",
     },
   );
+  assert.deepEqual(
+    deriveTrainerStreamingOperationMessage(
+      "en-US",
+      {
+        isStreaming: false,
+        streamedContent: "",
+        streamMessageId: "msg-stream-429",
+        streamError: "HTTP 429 too many requests",
+      },
+      { errorCategory: "rate_limit" },
+    ),
+    {
+      tone: "error",
+      message:
+        "Rate limited (429). Your draft is still here — wait a moment, then send again.",
+    },
+  );
+  assert.deepEqual(
+    deriveTrainerStreamingOperationMessage(
+      "zh-CN",
+      {
+        isStreaming: false,
+        streamedContent: "半截",
+        streamMessageId: "msg-stream-drop",
+        streamError: "socket hang up",
+      },
+      { errorCategory: "connection_lost" },
+    ),
+    {
+      tone: "error",
+      message: "回复中途断线了。已保留已到达内容，恢复连接后可重试，或从草稿重写。",
+    },
+  );
+  assert.deepEqual(
+    deriveTrainerStreamingOperationMessage(
+      "en-US",
+      {
+        isStreaming: false,
+        streamedContent: "partial",
+        streamMessageId: "msg-stream-abort-client",
+        streamError: "stream_aborted_by_client",
+      },
+      { errorCategory: "stream_aborted_by_client" },
+    ),
+    {
+      tone: "error",
+      message:
+        "You stopped this reply. Draft restored below — send again to continue the thread.",
+    },
+  );
+  assert.deepEqual(
+    deriveTrainerStreamingOperationMessage("en-US", {
+      isStreaming: false,
+      streamedContent: "partial answer",
+      streamMessageId: "msg-stream-cancelled",
+      completionStopReason: "cancelled",
+    }),
+    {
+      tone: "info",
+      message:
+        "Stopped. Kept generated content and restored your draft — send again to continue.",
+    },
+  );
   const rawStreamFailure = deriveTrainerStreamingOperationMessage("en-US", {
     isStreaming: false,
     streamedContent: "",
