@@ -261,7 +261,7 @@ test('trainer message parts normalize into the typed registry contract', () => {
     {
       tone: "error",
       message:
-        "The current API key is invalid or does not have access to this model. Open Settings and update the provider connection.",
+        "API key invalid or missing permission. Open Settings to check the key and access, then try again.",
     },
   );
   assert.deepEqual(
