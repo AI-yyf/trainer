@@ -391,6 +391,20 @@ test('coach composer exposes a recovery path when streaming has not been verifie
   );
 });
 
+
+test('Coach stream cancel and failure restore the last draft for retry', () => {
+  const source = fs.readFileSync(appPath, 'utf8');
+  assert.match(source, /streamResumeDraftRef\.current = text;/);
+  assert.match(
+    source,
+    /streaming\.completionStopReason === "cancelled" \|\| Boolean\(streaming\.streamError\?\.trim\(\)\)/,
+  );
+  assert.match(
+    source,
+    /failedOrCancelled[\s\S]*?setComposerDraft\(resumeDraft\)/,
+  );
+});
+
 test('Coach interrupted recovery exposes checkpoint resume and replay without resending the draft', () => {
   const source = fs.readFileSync(appPath, 'utf8');
   assert.match(source, /function isCoachCheckpointRecoveryState\(/);

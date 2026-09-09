@@ -11240,11 +11240,29 @@ export function App() {
     });
   }, [setComposerDraft, streaming.isStreaming, streaming.streamMessageId]);
 
+  // Codex-style ownership: after cancel OR stream failure, put the last sent
+  // draft back so retry does not require retyping. Clear the stash only when a
+  // turn finishes cleanly without an interrupt/error.
   useEffect(() => {
-    if (!streaming.isStreaming && streaming.completionStopReason !== "cancelled") {
-      streamResumeDraftRef.current = "";
+    if (streaming.isStreaming) {
+      return;
     }
-  }, [streaming.completionStopReason, streaming.isStreaming]);
+    const failedOrCancelled =
+      streaming.completionStopReason === "cancelled" || Boolean(streaming.streamError?.trim());
+    if (failedOrCancelled) {
+      const resumeDraft = streamResumeDraftRef.current;
+      if (resumeDraft.trim()) {
+        setComposerDraft(resumeDraft);
+      }
+      return;
+    }
+    streamResumeDraftRef.current = "";
+  }, [
+    setComposerDraft,
+    streaming.completionStopReason,
+    streaming.isStreaming,
+    streaming.streamError,
+  ]);
 
   const renderComposerAccessory = () => {
     if (!openMenu) {
