@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { trainerCommands } from "../../../../shared/src/commands";
+import type { TrainerOperationMessage } from "../../../../shared/src/protocol";
 import { isComposerLanguage } from "../../../../shared/src/types";
 import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
 import { analyzeSendIntent, shouldAttachCurrentFile } from "../../../../shared/src/sendIntelligence";
@@ -23,6 +24,7 @@ import {
   hasSavedProviderProfiles,
   describeProviderImageInputState,
   describeProviderSendState,
+  providerErrorHint,
   PROVIDER_TEST_FRESHNESS_WINDOW_MS,
 } from "../../../../shared/src/providerStatus";
 import {
@@ -180,6 +182,7 @@ import type {
   DebugVisibleTrainingFacts,
   EvaluationCheck,
   HostMessage,
+  HostProviderTestSummary,
   MessageAttachment,
   PlanStage,
   ProviderConfigView,
@@ -250,7 +253,7 @@ type WorkspaceSettingsSnapshot = NonNullable<
   ReturnType<typeof useWorkbenchState.getState>["data"]["memory"]["workspace"]
 >;
 type DockedView = "plan" | "resources" | "training" | "settings";
-type OperationMessage = { tone: "info" | "success" | "error"; message: string };
+type OperationMessage = TrainerOperationMessage;
 type ResourceOperationKind = "delete" | "restore" | "search" | "index" | "upload";
 type ResourceMutationOperationKind = "delete" | "restore";
 type PendingResourceOperation = {
@@ -647,6 +650,23 @@ function resourceOperationFailureMessage(
   return copy[language]?.[kind] ?? copy["en-US"][kind];
 }
 
+// Provider failures carry a structured category from the host. Rendering a
+// localized hint from that category keeps the message actionable (wrong key vs.
+// unreachable service vs. unknown model) without ever trusting host error prose.
+function providerCategoryFailureMessage(
+  summary: HostProviderTestSummary | undefined,
+  language: ComposerLanguage,
+): string | undefined {
+  const category = summary?.errorCategory?.trim();
+  if (!category) {
+    return undefined;
+  }
+  return providerErrorHint(
+    { modelErrorCategory: category, modelListDetail: undefined },
+    language,
+  );
+}
+
 function sanitizeHostFailureMessage(
   message: HostMessage,
   language: ComposerLanguage,
@@ -671,7 +691,8 @@ function sanitizeHostFailureMessage(
         : livePlanGate
           ? livePlanTaskGateFailureMessage(livePlanGate, language)
         : isProviderAction
-          ? providerRecoveryMessage(language)
+          ? providerCategoryFailureMessage(message.payload.providerTest, language) ??
+            providerRecoveryMessage(language)
           : recoverableFailureMessage("operation", language),
     },
   };
@@ -2704,6 +2725,17 @@ function buildSettingsFeedback(
   }
 
   if (action.kind === "save-provider") {
+    // The host saves the connection even when the follow-up verification
+    // fails. The structured outcome — not the message text — decides between
+    // a clean pass and an honest "saved, but not verified yet" state.
+    if (!isError && message.providerTest?.ok === false) {
+      return {
+        actionKind: action.kind,
+        tone: "pending",
+        title: copy.feedback.test.needsSetup,
+        detail: sanitizeErrorSurfaceText(message.message, language),
+      };
+    }
     return {
       tone: isError ? "fail" : "pass",
       title: isError ? copy.feedback.save.failure : copy.feedback.save.success,
@@ -2723,7 +2755,10 @@ function buildSettingsFeedback(
     // A verifiably connected result must never read as "still pending", even when the
     // provider display name itself happens to contain setup-like words (e.g. the
     // "未配置模型服务" fallback name appears inside every success message).
+    // The structured host outcome is authoritative; legacy string signals
+    // remain as a fallback for older payloads.
     const connectedSignal =
+      message.providerTest?.ok === true ||
       normalized.includes("is connected") ||
       normalized.includes("connected and ready") ||
       normalized.includes("provider reachable") ||
@@ -2733,6 +2768,7 @@ function buildSettingsFeedback(
     const pendingLike =
       !isError &&
       !connectedSignal &&
+      message.providerTest?.ok === undefined &&
       (normalized.includes("skip") ||
         normalized.includes("skipped") ||
         normalized.includes("scaffold") ||
@@ -5582,7 +5618,10 @@ export function App() {
     () => ({
       configured: data.providerConfig.configured,
       profileId: data.providerConfig.profileId ?? "",
-      name: data.providerConfig.name,
+      // The host's display fallback ("未配置模型服务") must never land in the
+      // editable draft: a user who saves without noticing would persist it as
+      // the real connection name. Keep the draft name empty until configured.
+      name: data.providerConfig.configured ? data.providerConfig.name : "",
       protocol: data.providerConfig.protocol ?? "openai_chat_completions_compatible",
       baseUrl: data.providerConfig.baseUrl,
       model: data.providerConfig.model,
@@ -5658,7 +5697,7 @@ export function App() {
   const providerDraftHasUnsavedApiKey = providerDraft.apiKey.trim().length > 0;
   const providerDraftHasChanges = useMemo(
     () =>
-      providerDraft.name !== data.providerConfig.name ||
+      providerDraft.name !== (data.providerConfig.configured ? data.providerConfig.name : "") ||
       normalizeProviderProtocol(providerDraft.protocol) !==
         normalizeProviderProtocol(data.providerConfig.protocol) ||
       providerDraft.baseUrl !== data.providerConfig.baseUrl ||
@@ -11806,6 +11845,41 @@ export function App() {
       label: providerSetupState.actionLabel,
     },
   };
+  const useProviderTemplateByLabel = (templateLabel: string) => {
+    setSettingsActionState({
+      kind: "save-provider",
+      targets: ["provider"],
+      baselineMessageKey:
+        normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
+    });
+    if (isBrowserPreview) {
+      void loadBrowserPreviewModule()
+        .then((browserPreview) =>
+          browserPreview.useBrowserPreviewProviderTemplate(previewSessionId),
+        )
+        .then(({ sessionId, messages }) => {
+          setPreviewSessionId(sessionId);
+          applyPreviewHostMessages(messages, true);
+        })
+        .catch(() => {
+          setOperationMessage({
+            tone: "error",
+            message: recoverableFailureMessage("provider", layout.composerLanguage),
+          });
+        });
+      return;
+    }
+    postMessage({
+      type: "command/execute",
+      payload: {
+        commandId: trainerCommands.useProviderTemplate,
+        payload: {
+          templateLabel,
+          skipPicker: true,
+        },
+      },
+    });
+  };
   const runWorkspaceAdmissionCommand = (commandId: string, payload?: unknown) => {
     postMessage({
       type: "command/execute",
@@ -11844,15 +11918,27 @@ export function App() {
       return null;
     }
     if (shouldShowNeutralEmptyState) {
+      // Scenario-aware, localized setup copy (first-run "连接模型", missing key,
+      // backend starting, …) instead of a single error-flavoured sentence.
+      const setupTitle = providerSetupState.title;
+      const setupDetail = providerSetupState.detail;
+      const setupActionLabel =
+        providerSetupState.actionLabel ||
+        (layout.composerLanguage === "zh-CN" ? "检查连接" : providerSetupAction.primary.label);
       return (
-        <div className="coach-empty-state coach-empty-state--blocked">
-          <p>
-            {layout.composerLanguage === "zh-CN"
-              ? "这组连接暂时不能用。"
-              : "This connection cannot be used right now."}
-          </p>
+        <div
+          className={`coach-empty-state ${
+            displayConnectionState === "starting"
+              ? "coach-empty-state--welcome"
+              : "coach-empty-state--blocked"
+          }`}
+        >
+          <p>{setupTitle}</p>
+          {setupDetail && setupDetail !== setupTitle ? (
+            <p className="coach-empty-state__detail">{setupDetail}</p>
+          ) : null}
           <button className="button button--accent" type="button" onClick={() => openProviderSetup()}>
-            {layout.composerLanguage === "zh-CN" ? "检查连接" : providerSetupAction.primary.label}
+            {setupActionLabel}
           </button>
         </div>
       );
@@ -13582,41 +13668,8 @@ export function App() {
             },
           });
         }}
-        onUseProviderTemplate={() => {
-          setSettingsActionState({
-            kind: "save-provider",
-            targets: ["provider"],
-            baselineMessageKey:
-              normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-          });
-          if (isBrowserPreview) {
-            void loadBrowserPreviewModule()
-              .then((browserPreview) =>
-                browserPreview.useBrowserPreviewProviderTemplate(previewSessionId),
-              )
-              .then(({ sessionId, messages }) => {
-                setPreviewSessionId(sessionId);
-                applyPreviewHostMessages(messages, true);
-              })
-              .catch(() => {
-                setOperationMessage({
-                  tone: "error",
-                  message: recoverableFailureMessage("provider", layout.composerLanguage),
-                });
-              });
-            return;
-          }
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId: trainerCommands.useProviderTemplate,
-              payload: {
-                templateLabel: "MiniMax",
-                skipPicker: true,
-              },
-            },
-          });
-        }}
+        onUseProviderTemplate={() => useProviderTemplateByLabel("MiniMax")}
+        onUseProviderTemplateLabel={useProviderTemplateByLabel}
         onRefreshProviderProfiles={() => {
           setSettingsActionState({
             kind: "refresh-provider-models",

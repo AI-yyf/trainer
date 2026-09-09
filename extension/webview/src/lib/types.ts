@@ -1965,12 +1965,24 @@ export type WebviewAction =
   | { type: "research/approve"; payload: { projectId: string; approvalId: string; approved: boolean } }
   | { type: "research/getStatus"; payload: { projectId: string } };
 
+export interface HostProviderTestSummary {
+  ok?: boolean;
+  errorCategory?: string;
+  statusCode?: number;
+  retryable?: boolean;
+}
+
 export type HostMessage =
   | { type: "bootstrap"; payload: BootstrapData }
   | { type: "state/patch"; payload: Partial<BootstrapData> }
   | {
       type: "operation/status";
-      payload: { tone: "info" | "success" | "error"; message: string; phase?: string };
+      payload: {
+        tone: "info" | "success" | "error";
+        message: string;
+        phase?: string;
+        providerTest?: HostProviderTestSummary;
+      };
     }
   | { type: "training/resourceHandoff"; payload: ResourceTrainingHandoffResult }
   | { type: "training/persistenceAck"; payload: TrainingPersistenceAck }

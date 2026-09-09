@@ -16,9 +16,11 @@ import {
   type ProviderSendStateStatus,
 } from "../../../../../shared/src/providerStatus";
 import {
+  normalizeProviderBaseUrl,
   normalizeProviderProtocol,
   providerProtocolCompletionLabel,
   providerProtocolEndpointHint,
+  looksLikeSchemelessProviderUrl,
   SUPPORTED_PROVIDER_PROTOCOLS,
 } from "../../../../../shared/src/providerProtocols";
 import {
@@ -31,7 +33,11 @@ import {
   filterProviderModelOptions,
 } from "../../../../../shared/src/providerModelPolicy";
 import type { ProviderModelTokenLimit, ProviderProtocol } from "../../../../../shared/src/models";
-import { isNewApiConnectionType } from "../../../../../shared/src/providerGateway";
+import {
+  isNewApiConnectionType,
+  parseProviderConnectionPaste,
+} from "../../../../../shared/src/providerGateway";
+import { PROVIDER_TEMPLATE_LABELS } from "../../../../../shared/src/providerTemplateCatalog";
 import { describeProviderThinking, updateProviderThinking } from "../../../../../shared/src/providerThinking";
 import type { ProviderThinkingConfig } from "../../../../../shared/src/providerThinking";
 import type { TrainerCapabilityVerdict } from "../../../../../shared/src/capabilityVerdict";
@@ -231,48 +237,40 @@ function asNumber(value: unknown): number | undefined {
 }
 
 function normalizeProviderBaseUrlDraft(value: string, protocol: ProviderProtocol | undefined): string {
+  // Shared canonicalizer keeps the webview draft on the same base URL the host
+  // will test and save (scheme defaults, paste-full endpoint collapsing).
+  return normalizeProviderBaseUrl(value, protocol);
+}
+
+function looksLikeProviderServiceAddress(value: string): boolean {
+  return /^https?:\/\//i.test(value.trim()) || looksLikeSchemelessProviderUrl(value);
+}
+
+function looksLikeProviderApiKeyToken(value: string): boolean {
   const trimmed = value.trim();
-  if (!trimmed) {
-    return "";
+  if (!trimmed || /\s|[/.:]/.test(trimmed)) {
+    return false;
   }
-
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return trimmed.replace(/\/+$/, "");
-    }
-
-    let path = parsed.pathname.replace(/\/+$/, "");
-    const loweredPath = path.toLowerCase();
-    if (
-      protocol === "openai_responses" ||
-      protocol === "openai_chat_completions" ||
-      protocol === "openai_chat_completions_compatible"
-    ) {
-      for (const suffix of ["/chat/completions", "/responses"]) {
-        if (loweredPath.endsWith(suffix)) {
-          path = path.slice(0, -suffix.length) || "/";
-          break;
-        }
-      }
-    } else if (protocol === "anthropic_messages" && loweredPath.endsWith("/messages")) {
-      path = path.slice(0, -"/messages".length) || "/";
-    } else if (
-      protocol === "gemini_generate_content" &&
-      loweredPath.endsWith(":generatecontent")
-    ) {
-      const modelMarker = "/models/";
-      const markerIndex = loweredPath.lastIndexOf(modelMarker);
-      if (markerIndex >= 0) {
-        path = path.slice(0, markerIndex) || "/";
-      }
-    }
-
-    parsed.pathname = path || "/";
-    return parsed.toString().replace(/\/$/, "");
-  } catch {
-    return trimmed.replace(/\/+$/, "");
+  if (/^(?:sk|rk|pk|csk|gsk|xai|ghp|gho|key)[-_][A-Za-z0-9._-]{8,}$/i.test(trimmed)) {
+    return true;
   }
+  return /^[A-Za-z0-9_-]{20,}$/.test(trimmed);
+}
+
+function providerConnectionLabelFromPaste(
+  paste: ReturnType<typeof parseProviderConnectionPaste>,
+): string {
+  if (paste && isNewApiConnectionType(paste.connectionType)) {
+    return "New API";
+  }
+  if (paste) {
+    const host = paste.baseUrl.replace(/^https?:\/\//i, "").split(/[/:]/)[0];
+    const label = host.replace(/^api\./i, "").split(".")[0].trim();
+    if (label) {
+      return `${label.charAt(0).toUpperCase()}${label.slice(1)} relay`;
+    }
+  }
+  return "custom-openai-compatible";
 }
 
 function providerConnectionNameLabel(language: ComposerLanguage): string {
@@ -1393,6 +1391,7 @@ export interface CoachSettingsViewProps {
   onSaveProvider?: () => void;
   onSaveProviderProfile?: () => void;
   onUseProviderTemplate?: () => void;
+  onUseProviderTemplateLabel?: (templateLabel: string) => void;
   onRefreshProviderProfiles?: () => void;
   onSwitchProviderProfile?: (profileId: string) => void;
   onRefreshProviderModels?: () => void;
@@ -4121,6 +4120,7 @@ export function CoachSettingsView({
   onSaveProvider,
   onSaveProviderProfile,
   onUseProviderTemplate,
+  onUseProviderTemplateLabel,
   onRefreshProviderProfiles,
   onSwitchProviderProfile,
   onRefreshProviderModels,
@@ -4171,6 +4171,7 @@ export function CoachSettingsView({
   const [providerDetailRequested, setProviderDetailRequested] = useState(false);
   const [providerApiKeyFocusRequested, setProviderApiKeyFocusRequested] = useState(false);
   const [providerProfilesFocusRequested, setProviderProfilesFocusRequested] = useState(false);
+  const [providerPasteHint, setProviderPasteHint] = useState<string | null>(null);
   const [sectionFlash, setSectionFlash] = useState<"connection" | "teaching" | "memory" | null>(
     null,
   );
@@ -5431,6 +5432,55 @@ export function CoachSettingsView({
     } catch {
       setRequestDefaultsError(localizedRequestDefaultsInvalidJson);
     }
+  };
+  // 中转站/网关的"复制连接信息"是一整段 JSON。粘贴进任一输入框时识别并
+  // 自动拆填到对应字段,而不是把整段 JSON 塞进一个框。
+  const applyProviderSmartPaste = (
+    value: string,
+    field: "baseUrl" | "apiKey",
+  ): "blob" | "moved-url" | "moved-key" | null => {
+    const text = value.trim();
+    if (!text || text === providerDraft[field].trim()) {
+      return null;
+    }
+    const paste = parseProviderConnectionPaste(text);
+    if (paste) {
+      onProviderDraftChange({
+        baseUrl: paste.baseUrl,
+        apiKey: paste.apiKey,
+        ...(providerDraft.name.trim() || providerDraft.baseUrl.trim()
+          ? {}
+          : { name: providerConnectionLabelFromPaste(paste) }),
+      });
+      return "blob";
+    }
+    if (field === "apiKey" && looksLikeProviderServiceAddress(text)) {
+      onProviderDraftChange({ baseUrl: text });
+      return "moved-url";
+    }
+    if (field === "baseUrl" && looksLikeProviderApiKeyToken(text)) {
+      onProviderDraftChange({ apiKey: text });
+      return "moved-key";
+    }
+    return null;
+  };
+  const providerPasteHintCopy = (outcome: ReturnType<typeof applyProviderSmartPaste>): string => {
+    if (outcome === "blob") {
+      return language === "zh-CN"
+        ? "已识别连接信息:服务地址和密钥已自动填入。接下来点「获取模型」选一个模型,然后保存即可。"
+        : "Recognized the connection info: base URL and API key are filled in. Next, fetch models, pick one, and save.";
+    }
+    if (outcome === "moved-url") {
+      return language === "zh-CN"
+        ? "这里粘贴的是服务地址,已帮你移到「服务根地址」。密钥请粘到「API 密钥」。"
+        : "That looks like a service address — moved it to Base URL. Paste the key into API key.";
+    }
+    if (outcome === "moved-key") {
+      return language === "zh-CN"
+        ? "这里粘贴的是密钥,已帮你移到「API 密钥」。服务地址请粘到「服务根地址」。"
+        : "That looks like an API key — moved it to API key. Paste the address into Base URL.";
+    }
+    return "";
   };
   const modelDiscoveryCopy = providerModelDiscoveryCopy(language);
   const modelListingCompletedForDraft = providerHasDraftChanges
@@ -7270,11 +7320,48 @@ export function CoachSettingsView({
                 }
               }}
             >
+              {onUseProviderTemplateLabel ? (
+                <label className="settings-field">
+                  <span>
+                    {language === "zh-CN" ? "从模板开始" : "Start from a template"}
+                  </span>
+                  <select
+                    value=""
+                    onChange={(event) => {
+                      const templateLabel = event.target.value;
+                      if (templateLabel) {
+                        onUseProviderTemplateLabel(templateLabel);
+                      }
+                    }}
+                  >
+                    <option value="">
+                      {language === "zh-CN"
+                        ? "选择服务商模板(OpenAI、DeepSeek、Ollama 等)"
+                        : "Choose a provider template (OpenAI, DeepSeek, Ollama, …)"}
+                    </option>
+                    {PROVIDER_TEMPLATE_LABELS.map((templateLabel) => (
+                      <option key={templateLabel} value={templateLabel}>
+                        {templateLabel}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="settings-sheet__note settings-sheet__note--compact">
+                    {language === "zh-CN"
+                      ? "选好后会自动填入服务地址和默认模型,你只需补上 API 密钥。"
+                      : "Picking one fills the service address and default model; you only add the API key."}
+                  </p>
+                </label>
+              ) : null}
               <div className="settings-grid settings-grid--form">
                 <label className="settings-field">
                   <span>{providerConnectionNameLabel(language)}</span>
                   <input
                     value={providerDraft.name}
+                    placeholder={
+                      language === "zh-CN"
+                        ? "给这组连接起个名字(可不填)"
+                        : "Name this connection (optional)"
+                    }
                     onChange={(event) => onProviderDraftChange({ name: event.target.value })}
                   />
                 </label>
@@ -7283,14 +7370,24 @@ export function CoachSettingsView({
                   <span>{providerBaseUrlLabel}</span>
                   <input
                     value={providerDraft.baseUrl}
-                    onChange={(event) =>
+                    placeholder={
+                      language === "zh-CN"
+                        ? "例如 localhost:1234/v1 或 api.deepseek.com/v1"
+                        : "e.g. localhost:1234/v1 or api.deepseek.com/v1"
+                    }
+                    onChange={(event) => {
+                      const smartPaste = applyProviderSmartPaste(event.target.value, "baseUrl");
+                      setProviderPasteHint(smartPaste ? providerPasteHintCopy(smartPaste) : null);
+                      if (smartPaste) {
+                        return;
+                      }
                       onProviderDraftChange({
                         baseUrl: event.target.value,
                         ...(providerDraft.name.trim()
                           ? {}
                           : { name: DEFAULT_PROVIDER_CONNECTION_NAME }),
-                      })
-                    }
+                      });
+                    }}
                   />
                   <p className="settings-sheet__note settings-sheet__note--compact">
                     {providerBaseUrlHint}
@@ -7306,9 +7403,21 @@ export function CoachSettingsView({
                     placeholder={
                       providerDraftCanReuseSavedApiKey ? copy.apiKeySaved : settingsStatusPhrase(language, "connectionSavedApiKeyMissing")
                     }
-                    onChange={(event) => onProviderDraftChange({ apiKey: event.target.value })}
+                    onChange={(event) => {
+                      const smartPaste = applyProviderSmartPaste(event.target.value, "apiKey");
+                      setProviderPasteHint(smartPaste ? providerPasteHintCopy(smartPaste) : null);
+                      if (smartPaste) {
+                        return;
+                      }
+                      onProviderDraftChange({ apiKey: event.target.value });
+                    }}
                   />
                 </label>
+                {providerPasteHint ? (
+                  <p className="settings-sheet__note settings-sheet__note--compact settings-sheet__note--warning">
+                    {providerPasteHint}
+                  </p>
+                ) : null}
 
                 {modelCatalogIsEmpty ? (
                   <label className="settings-field">

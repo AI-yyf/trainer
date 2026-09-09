@@ -425,6 +425,7 @@ export class WorkbenchSidebarController
                   command.payload,
                   result.message ?? 'Trainer action completed.',
                 ),
+                result.providerTest,
               ),
             );
           }
@@ -445,6 +446,7 @@ export class WorkbenchSidebarController
                   command.payload,
                   result.message ?? 'Trainer action completed.',
                 ),
+                result.providerTest,
               ),
             );
           }
@@ -459,6 +461,7 @@ export class WorkbenchSidebarController
                 command.payload,
                 result.message ?? 'Trainer action completed.',
               ),
+              result.providerTest,
             ),
           );
         }

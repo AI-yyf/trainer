@@ -48,7 +48,10 @@ test('provider errors retain a safe, actionable recovery message in Settings', (
     source,
     /Boolean\(isProviderActionOverride \|\| settingsActionState\?\.targets\.includes\("provider"\)\)/,
   );
-  assert.match(source, /\? providerRecoveryMessage\(language\)/);
+  assert.match(
+    source,
+    /\?\?\s*providerRecoveryMessage\(language\)/,
+  );
 });
 
 test('browser preview keeps provider recovery context when actions resolve immediately', () => {

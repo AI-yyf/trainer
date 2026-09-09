@@ -141,7 +141,13 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
     source,
     /const coachSuperEntryContent = \(embedded = false\) => \{\s*if \(embedded \|\| workspaceSessionBlocked\) \{\s*return null;\s*\}\s*if \(shouldShowNeutralEmptyState\) \{/,
   );
-  assert.match(source, /coach-empty-state coach-empty-state--blocked/);
+  assert.match(
+    source,
+    /displayConnectionState === "starting"\s*\?\s*"coach-empty-state--welcome"\s*:\s*"coach-empty-state--blocked"/,
+  );
+  assert.match(source, /providerSetupState\.title/);
+  assert.match(source, /providerSetupState\.detail/);
+  assert.match(source, /providerSetupState\.actionLabel/);
   assert.match(source, /providerSetupAction\.primary\.label/);
   assert.match(source, /onClick=\{\(\) => openProviderSetup\(\)\}/);
   assert.match(

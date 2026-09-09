@@ -18,6 +18,7 @@ import { getRuntimeWorkspaceId } from './workspaceContext';
 import { normalizeProviderConnectionType } from '../../../shared/src/providerGateway';
 import {
   defaultCapabilitiesForProtocol,
+  normalizeProviderBaseUrl,
   normalizeProviderProtocol,
   OPENAI_COMPATIBLE_PROTOCOL,
   providerProtocolFamily,
@@ -34,7 +35,15 @@ import {
   type ProviderModelPolicyEvaluation,
 } from '../../../shared/src/providerModelPolicy';
 import { normalizeProviderCapabilityTruth } from '../../../shared/src/providerTest';
-import { providerTransportIsConfigured } from '../../../shared/src/providerStatus';
+import {
+  providerBaseUrlIsLocalService,
+  providerTransportIsConfigured,
+} from '../../../shared/src/providerStatus';
+import {
+  providerHostCopy,
+  resolveProviderHostLanguage,
+  type ProviderHostCopyKey,
+} from './providerHostCopy';
 import { stripHostLastTestSecrets } from '../../../shared/src/hostLastTestGovernance';
 import { sanitizeErrorSurfaceText } from '../../../shared/src/errorSurfaceSanitizer';
 import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
@@ -579,11 +588,10 @@ function resolveProviderResponseLanguage(
   context: CommandContext,
   requestedLanguage?: ComposerLanguage,
 ): ComposerLanguage | undefined {
-  if (isComposerLanguage(requestedLanguage)) {
-    return requestedLanguage;
-  }
-  const workspaceLanguage = context.getHostState().bootstrap.memory.workspace?.responseLanguage;
-  return isComposerLanguage(workspaceLanguage) ? workspaceLanguage : undefined;
+  return resolveProviderHostLanguage(
+    requestedLanguage,
+    context.getHostState().bootstrap.memory.workspace?.responseLanguage,
+  );
 }
 
 function preferPersistedProviderConfig(
@@ -842,8 +850,10 @@ export async function saveProviderFromWebviewCommand(
   let finalLastTestResult = storedLastTestResult(context, savedConfig);
   const responseLanguage = resolveProviderResponseLanguage(context, input.responseLanguage);
   let message = hasApiKey
-    ? 'Provider settings saved. Trainer is fetching live models and checking reply health.'
-    : 'Provider settings saved, but Trainer still cannot work yet because no API key is stored. Add one before starting coaching.';
+    ? providerHostCopy(responseLanguage, 'saveChecking')
+    : providerBaseUrlIsLocalService(baseUrl)
+      ? providerHostCopy(responseLanguage, 'saveLocalNoKey')
+      : providerHostCopy(responseLanguage, 'saveNoKey');
 
   if (hasApiKey) {
     const modelLookup = await fetchProviderModels(context, savedConfig, apiKey ?? '', {
@@ -940,35 +950,41 @@ export async function saveProviderFromWebviewCommand(
     await context.workbench.syncState();
 
     if (modelLookup?.ok && modelLookup.availableModels.length > 0) {
+      const modelCount = modelLookup.availableModels.length;
       const resolvedSuffix =
         modelLookup.resolvedModel && modelLookup.resolvedModel !== savedConfig.model
-          ? ` Trainer resolved the configured model to ${modelLookup.resolvedModel}.`
+          ? providerHostCopy(responseLanguage, 'modelResolvedSuffix', {
+              model: modelLookup.resolvedModel,
+            })
           : '';
-      const sourcePrefix = modelLookup.source === 'cache' ? 'Used cached models.' : 'Loaded';
+      const copyModels = (key: ProviderHostCopyKey) =>
+        providerHostCopy(responseLanguage, key, { count: modelCount });
       if (finalLastTestResult?.ok) {
-        message = `${sourcePrefix} ${modelLookup.availableModels.length} live models and verified the current connection.${resolvedSuffix}`;
+        message =
+          `${copyModels(modelLookup.source === 'cache' ? 'modelsCachedVerified' : 'modelsLoadedVerified')}` +
+          `${resolvedSuffix}`;
       } else if (finalLastTestResult?.errorCategory === 'language_probe_inconclusive') {
         message =
-          `${sourcePrefix} ${modelLookup.availableModels.length} live models, ` +
-          `but zh-CN integrity still needs verification on this connection. ${finalLastTestResult.detail}${resolvedSuffix}`;
+          `${copyModels(modelLookup.source === 'cache' ? 'modelsCachedInconclusive' : 'modelsLoadedInconclusive')}` +
+          ` ${finalLastTestResult.detail}${resolvedSuffix}`;
       } else if (finalLastTestResult?.detail) {
         message =
-          `${sourcePrefix} ${modelLookup.availableModels.length} live models, ` +
-          `but Trainer cannot coach with this connection yet. ${finalLastTestResult.detail}${resolvedSuffix}`;
+          `${copyModels(modelLookup.source === 'cache' ? 'modelsCachedFailed' : 'modelsLoadedFailed')}` +
+          ` ${finalLastTestResult.detail}${resolvedSuffix}`;
       } else {
-        message = `${sourcePrefix} ${modelLookup.availableModels.length} live models.${resolvedSuffix}`;
+        message =
+          `${copyModels(modelLookup.source === 'cache' ? 'modelsCachedPlain' : 'modelsLoadedPlain')}` +
+          `${resolvedSuffix}`;
       }
     } else if (modelLookup?.detail) {
       if (finalLastTestResult?.ok) {
-        message =
-          `The current model is connected and ready. This provider did not return a live model list, ` +
-          `so Trainer kept the saved model. ${modelLookup.detail}`;
+        message = `${providerHostCopy(responseLanguage, 'savedModelReadyNoList')} ${modelLookup.detail}`;
       } else if (finalLastTestResult?.detail) {
         message =
-          `Provider settings saved, but Trainer could not verify the current model yet. ` +
+          `${providerHostCopy(responseLanguage, 'savedModelUnverifiedNoList')} ` +
           `${finalLastTestResult.detail}`;
       } else {
-        message = `Provider settings saved, but Trainer could not get the live model list yet. ${modelLookup.detail}`;
+        message = `${providerHostCopy(responseLanguage, 'savedModelNoList')} ${modelLookup.detail}`;
       }
     }
   }
@@ -977,6 +993,16 @@ export async function saveProviderFromWebviewCommand(
     ok: true,
     message,
     data: finalConfig,
+    ...(finalLastTestResult && !finalLastTestResult.ok
+      ? {
+          providerTest: {
+            ok: false,
+            errorCategory: finalLastTestResult.errorCategory,
+            statusCode: finalLastTestResult.statusCode,
+            retryable: finalLastTestResult.retryable,
+          },
+        }
+      : {}),
   };
 }
 
@@ -1165,54 +1191,9 @@ function normalizeBaseUrl(
   baseUrl: string,
   protocol: ProviderConfig['protocol'] = 'openai_chat_completions_compatible',
 ): string {
-  const trimmed = baseUrl.trim();
-  if (!trimmed) {
-    return '';
-  }
-
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return trimmed.replace(/\/+$/, '');
-    }
-
-    const normalizedProtocol = normalizeProviderProtocol(protocol);
-    let pathname = parsed.pathname.replace(/\/+$/, '');
-    const loweredPathname = pathname.toLowerCase();
-    if (
-      normalizedProtocol === 'openai_responses' ||
-      normalizedProtocol === 'openai_chat_completions' ||
-      normalizedProtocol === 'openai_chat_completions_compatible'
-    ) {
-      for (const suffix of ['/chat/completions', '/responses']) {
-        if (loweredPathname.endsWith(suffix)) {
-          pathname = pathname.slice(0, -suffix.length) || '/';
-          break;
-        }
-      }
-    } else if (
-      normalizedProtocol === 'anthropic_messages' &&
-      loweredPathname.endsWith('/messages')
-    ) {
-      pathname = pathname.slice(0, -'/messages'.length) || '/';
-    } else if (
-      normalizedProtocol === 'gemini_generate_content' &&
-      loweredPathname.endsWith(':generatecontent')
-    ) {
-      const modelMarker = '/models/';
-      const markerIndex = loweredPathname.lastIndexOf(modelMarker);
-      if (markerIndex >= 0) {
-        pathname = pathname.slice(0, markerIndex) || '/';
-      }
-    }
-
-    parsed.pathname = pathname || '/';
-    parsed.search = '';
-    parsed.hash = '';
-    return parsed.toString().replace(/\/$/, '');
-  } catch {
-    return trimmed.replace(/\/+$/, '');
-  }
+  // Shared canonicalizer: draft tests and saved connections must agree on the
+  // base URL (paste-full endpoints collapse to the service root).
+  return normalizeProviderBaseUrl(baseUrl, protocol);
 }
 
 function resolveWorkspaceRootUri(context: CommandContext): vscode.Uri | undefined {
@@ -1988,7 +1969,11 @@ export async function switchProviderModelCommand(
   ) {
     return {
       ok: false,
-      message: `Model '${model}' is not in the current provider model list or configured model catalog.`,
+      message: providerHostCopy(
+        resolveProviderResponseLanguage(context),
+        'switchModelNotAllowed',
+        { model },
+      ),
     };
   }
 
@@ -1996,7 +1981,7 @@ export async function switchProviderModelCommand(
   if (currentModel?.toLowerCase() === model.toLowerCase()) {
     return {
       ok: true,
-      message: `Model '${model}' is already active.`,
+      message: providerHostCopy(resolveProviderResponseLanguage(context), 'switchAlreadyActive', { model }),
       data: config,
     };
   }
@@ -2031,6 +2016,46 @@ export async function switchProviderModelCommand(
     });
   }
 
+  // A model switch invalidates the previous verification. Re-verify the new
+  // model in the background so the composer unblocks itself the moment the
+  // fresh result lands — the switch itself must never wait on a live LLM
+  // roundtrip. A generation guard drops results from superseded switches.
+  const switchGeneration = activeProviderModelLookupGeneration(context);
+  void (async () => {
+    const apiKeyForSwitchTest = await context.providerStore.getApiKey();
+    if (!apiKeyForSwitchTest?.trim() || !nextConfig.model.trim()) {
+      return;
+    }
+    const switchLastTestResult = await verifyProviderAfterSave(
+      context,
+      nextConfig,
+      apiKeyForSwitchTest,
+      resolveProviderResponseLanguage(context),
+      switchGeneration,
+    );
+    if (!switchLastTestResult) {
+      return;
+    }
+    const refreshedView = applyDerivedHostState(
+      context.getHostState().bootstrap,
+      context.providerStore.getConfig() ?? nextConfig,
+      context.getHostState().sidecar,
+      context.getHostState().workspace,
+      context.getSessionId(),
+      Boolean(apiKeyForSwitchTest.trim()),
+    ).providerConfig;
+    await context.patchWorkbenchData({
+      providerConfig: {
+        ...refreshedView,
+        lastTestResult: storedLastTestResult(
+          context,
+          context.providerStore.getConfig() ?? nextConfig,
+        ),
+      },
+    });
+    await context.workbench.syncState();
+  })().catch(() => undefined);
+
   const apiKey = await context.providerStore.getApiKey();
   const effectiveConfig = context.providerStore.getConfig() ?? nextConfig;
   const nextViewState = applyDerivedHostState(
@@ -2041,7 +2066,7 @@ export async function switchProviderModelCommand(
     context.getSessionId(),
     Boolean(apiKey?.trim()),
   ).providerConfig;
-  const selectionDetail = `Trainer switched to ${model}. Test or send next to verify reply quality on this model.`;
+  const selectionDetail = providerHostCopy(resolveProviderResponseLanguage(context), 'switchVerifyingDetail', { model });
 
   await context.patchWorkbenchData({
     providerConfig: {
@@ -2073,7 +2098,7 @@ export async function switchProviderModelCommand(
 
   return {
     ok: true,
-    message: `Switched to model '${model}'.`,
+    message: providerHostCopy(resolveProviderResponseLanguage(context), 'switchVerifying', { model }),
     data: effectiveConfig,
   };
 }

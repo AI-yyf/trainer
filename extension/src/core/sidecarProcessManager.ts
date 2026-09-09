@@ -368,6 +368,7 @@ export class SidecarProcessManager implements vscode.Disposable {
       cwd: candidate.cwd,
       env: {
         ...process.env,
+        PATH: augmentLaunchPath(process.env.PATH),
         // Do not leak an embedding Python environment into the PyInstaller
         // sidecar; PYTHONHOME/PYTHONPATH can hide its bundled stdlib.
         PYTHONHOME: undefined,
@@ -383,11 +384,16 @@ export class SidecarProcessManager implements vscode.Disposable {
       windowsHide: true,
     });
 
+    // Keep the last chunk of stderr so launch failures surface the actual
+    // Python/import/port errors instead of a bare exit code.
+    let stderrTail = '';
     child.stdout.on('data', (chunk) => {
       this.outputChannel.append(chunk.toString());
     });
     child.stderr.on('data', (chunk) => {
-      this.outputChannel.append(chunk.toString());
+      const text = chunk.toString();
+      this.outputChannel.append(text);
+      stderrTail = `${stderrTail}${text}`.slice(-800);
     });
 
     const commandLine = `${candidate.command} ${candidate.args.join(' ')}`;
@@ -409,39 +415,20 @@ export class SidecarProcessManager implements vscode.Disposable {
       });
     });
 
+    let healthError: unknown;
     try {
       await Promise.race([this.waitForHealth(port), exitPromise]);
-
-      child.removeAllListeners('exit');
-      child.removeAllListeners('error');
-      child.once('exit', (code, signal) => {
-        if (this.process === child) {
-          this.process = undefined;
-          this.updateStatus({
-            lifecycle: 'stopped',
-            host: SIDECAR_DEFAULTS.host,
-            canStart: true,
-            detail: `Sidecar exited (code=${code}, signal=${signal}).`,
-          });
-        }
-      });
-
-      const status: SidecarStatus = {
-        lifecycle: 'ready',
-        host: SIDECAR_DEFAULTS.host,
-        port,
-        pid: child.pid,
-        commandLine,
-        canStart: true,
-        detail: 'Sidecar ready.',
-        lastHealthcheckAt: new Date().toISOString(),
-      };
-      this.updateStatus(status);
-      return status;
     } catch (error) {
+      healthError = error;
+    }
+
+    if (healthError) {
+      const detail = healthError instanceof Error ? healthError.message : String(healthError);
+      const tail = stderrTail.trim();
+      const enrichedDetail = tail ? `${detail}\nSidecar output: ${tail}` : detail;
       const didExit = await this.terminateChild(child);
       if (!didExit) {
-        const detail = error instanceof Error ? error.message : String(error);
+        const message = `Sidecar failed to start and did not stop cleanly: ${enrichedDetail}`;
         this.updateStatus({
           lifecycle: 'error',
           host: SIDECAR_DEFAULTS.host,
@@ -449,15 +436,42 @@ export class SidecarProcessManager implements vscode.Disposable {
           pid: child.pid,
           commandLine,
           canStart: true,
-          detail: `Sidecar failed to start and did not stop cleanly: ${detail}`,
+          detail: message,
         });
-        throw new Error(`Sidecar failed to start and did not stop cleanly: ${detail}`);
+        throw new Error(message);
       }
       if (this.process === child) {
         this.process = undefined;
       }
-      throw error;
+      throw new Error(enrichedDetail);
     }
+
+    child.removeAllListeners('exit');
+    child.removeAllListeners('error');
+    child.once('exit', (code, signal) => {
+      if (this.process === child) {
+        this.process = undefined;
+        this.updateStatus({
+          lifecycle: 'stopped',
+          host: SIDECAR_DEFAULTS.host,
+          canStart: true,
+          detail: `Sidecar exited (code=${code}, signal=${signal}).`,
+        });
+      }
+    });
+
+    const status: SidecarStatus = {
+      lifecycle: 'ready',
+      host: SIDECAR_DEFAULTS.host,
+      port,
+      pid: child.pid,
+      commandLine,
+      canStart: true,
+      detail: 'Sidecar ready.',
+      lastHealthcheckAt: new Date().toISOString(),
+    };
+    this.updateStatus(status);
+    return status;
   }
 
   private async resolveLaunchPort(): Promise<number> {
@@ -489,17 +503,31 @@ export class SidecarProcessManager implements vscode.Disposable {
   private async terminateChild(process: ChildProcessWithoutNullStreams): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
       let settled = false;
+      let escalateTimer: NodeJS.Timeout | undefined;
       const finish = (value: boolean) => {
         if (settled) {
           return;
         }
         settled = true;
         clearTimeout(timeout);
+        if (escalateTimer) {
+          clearTimeout(escalateTimer);
+        }
         process.removeListener('exit', onExit);
         resolve(value);
       };
       const onExit = () => finish(true);
-      const timeout = setTimeout(() => finish(false), 5_000);
+      const timeout = setTimeout(() => {
+        // Some sidecars ignore SIGTERM while shutting down; escalate to SIGKILL
+        // so a stuck process cannot keep holding the launch port.
+        try {
+          process.kill('SIGKILL');
+        } catch {
+          finish(false);
+          return;
+        }
+        escalateTimer = setTimeout(() => finish(false), 3_000);
+      }, 5_000);
       process.once('exit', onExit);
       if (process.exitCode !== null) {
         finish(true);
@@ -686,11 +714,13 @@ export class SidecarProcessManager implements vscode.Disposable {
       });
     }
 
-    sourceCandidates.push({
-      label: 'uv-run',
-      command: 'uv',
-      args: ['run', '--directory', serverDir, 'python', 'run_sidecar.py', '--host', SIDECAR_DEFAULTS.host, '--port', String(port)],
-      cwd: serverDir,
+    resolveBareCommandCandidates('uv').forEach((command, index) => {
+      sourceCandidates.push({
+        label: index === 0 ? 'uv-run' : `uv-run-${index + 1}`,
+        command,
+        args: ['run', '--directory', serverDir, 'python', 'run_sidecar.py', '--host', SIDECAR_DEFAULTS.host, '--port', String(port)],
+        cwd: serverDir,
+      });
     });
     sourceCandidates.push(
       ...systemPythonCommands().map(({ label, command }) => ({
@@ -742,7 +772,6 @@ export class SidecarProcessManager implements vscode.Disposable {
       : [
           path.join(serverDir, '.venv-mac', 'bin', 'python'),
           path.join(serverDir, '.venv', 'bin', 'python'),
-          path.join(serverDir, '.venv', 'Scripts', 'python.exe'),
         ];
 
     return candidates.find((candidate) => fs.existsSync(candidate));
@@ -832,11 +861,65 @@ function systemPythonCommands(): Array<Pick<LaunchCandidate, 'label' | 'command'
     return [{ label: 'system-python', command: 'python' }];
   }
 
-  return [
+  // A GUI-launched VS Code inherits a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin)
+  // that hides Homebrew and other user-installed interpreters. Probe the
+  // well-known absolute locations first so the sidecar still starts without
+  // launching VS Code from a terminal.
+  const candidates: Array<Pick<LaunchCandidate, 'label' | 'command'>> = [];
+  const absoluteCandidates: Array<Pick<LaunchCandidate, 'label' | 'command'>> = [
+    { label: 'homebrew-python3.12', command: '/opt/homebrew/bin/python3.12' },
+    { label: 'homebrew-python3', command: '/opt/homebrew/bin/python3' },
+    { label: 'usrlocal-python3.12', command: '/usr/local/bin/python3.12' },
+    { label: 'usrlocal-python3', command: '/usr/local/bin/python3' },
+    { label: 'usrbin-python3', command: '/usr/bin/python3' },
+  ];
+  for (const candidate of absoluteCandidates) {
+    try {
+      if (fs.existsSync(candidate.command)) {
+        candidates.push(candidate);
+      }
+    } catch {
+      // Unreadable locations are skipped; bare commands below still apply
+      // when Trainer runs with a full terminal PATH.
+    }
+  }
+  candidates.push(
     { label: 'system-python3.12', command: 'python3.12' },
     { label: 'system-python3', command: 'python3' },
-    { label: 'system-python', command: 'python' },
-  ];
+  );
+  return candidates;
+}
+
+function resolveBareCommandCandidates(command: string): string[] {
+  if (process.platform === 'win32') {
+    return [command];
+  }
+  const candidates = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin']
+    .map((directory) => path.join(directory, command))
+    .filter((candidate) => {
+      try {
+        return fs.existsSync(candidate);
+      } catch {
+        return false;
+      }
+    });
+  candidates.push(command);
+  return candidates;
+}
+
+function augmentLaunchPath(currentPath: string | undefined): string {
+  if (process.platform === 'win32') {
+    return currentPath ?? '';
+  }
+  // GUI-launched VS Code misses Homebrew and user-local bin directories;
+  // append them so bare launch candidates (`python3`, `uv`) can resolve.
+  const entries = (currentPath ?? '').split(path.delimiter).filter(Boolean);
+  for (const directory of ['/opt/homebrew/bin', '/usr/local/bin', '/usr/local/sbin']) {
+    if (!entries.includes(directory)) {
+      entries.push(directory);
+    }
+  }
+  return entries.join(path.delimiter);
 }
 
 function describeNativeRuntimeTarget(targetPlatform: string): string {
@@ -916,7 +999,35 @@ function isNestedPath(basePath: string, candidatePath: string): boolean {
 
 function comparableDirectoryPath(value: string): string {
   const normalized = normalizeDirectoryPath(value);
-  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+  if (process.platform === 'win32') {
+    return normalized.toLowerCase();
+  }
+  return posixCanonicalPathForComparison(normalized);
+}
+
+function posixCanonicalPathForComparison(normalized: string): string {
+  try {
+    return fs.realpathSync(normalized);
+  } catch {
+    // The leaf may not exist yet (a migration target); canonicalize the
+    // closest existing ancestor so aliases still compare as one directory.
+    let current = normalized;
+    for (let depth = 0; depth < 32; depth += 1) {
+      const parent = path.dirname(current);
+      if (parent === current) {
+        break;
+      }
+      current = parent;
+      try {
+        const realParent = fs.realpathSync(current);
+        const suffix = path.relative(current, normalized);
+        return suffix ? path.join(realParent, suffix) : realParent;
+      } catch {
+        continue;
+      }
+    }
+    return normalized;
+  }
 }
 
 function directoryIsEmpty(targetPath: string): boolean {

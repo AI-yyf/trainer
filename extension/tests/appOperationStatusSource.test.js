@@ -74,8 +74,11 @@ test('operation-status errors preserve only local recovery copy', () => {
   assert.match(sanitizer, /recoverableFailureMessage\("operation", language\)/);
   assert.match(
     sanitizer,
-    /partialDeletion\s*\?\s*partialResourceDeletionFailureMessage\(partialDeletion, language\)\s*:\s*resourceRecovery\s*\?\s*resourceRecovery\s*:\s*livePlanGate\s*\?\s*livePlanTaskGateFailureMessage\(livePlanGate, language\)\s*:\s*isProviderAction\s*\?\s*providerRecoveryMessage\(language\)\s*:\s*recoverableFailureMessage\("operation", language\)/,
+    /partialDeletion\s*\?\s*partialResourceDeletionFailureMessage\(partialDeletion, language\)\s*:\s*resourceRecovery\s*\?\s*resourceRecovery\s*:\s*livePlanGate\s*\?\s*livePlanTaskGateFailureMessage\(livePlanGate, language\)\s*:\s*isProviderAction\s*\?\s*providerCategoryFailureMessage\(message\.payload\.providerTest, language\)\s*\?\?\s*providerRecoveryMessage\(language\)\s*:\s*recoverableFailureMessage\("operation", language\)/,
   );
+  // Structured provider categories must render localized hints, never host prose.
+  assert.match(source, /function providerCategoryFailureMessage\(/);
+  assert.match(source, /providerErrorHint\(/);
   assert.doesNotMatch(sanitizer, /message:\s*message\.payload\.message/);
 });
 

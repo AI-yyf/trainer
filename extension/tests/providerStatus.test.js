@@ -581,7 +581,7 @@ test('describeProviderTestReadiness expires and invalidates a test for another c
   assert.equal(mismatched.ready, false);
 });
 
-test('describeProviderSendState blocks an expired successful test before cached-model degradation', () => {
+test('describeProviderSendState degrades an expired successful test on the same connection instead of blocking', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
   const now = Date.parse('2026-07-13T10:00:00.000Z');
 
@@ -611,8 +611,11 @@ test('describeProviderSendState blocks an expired successful test before cached-
     now,
   );
 
-  assert.equal(state.blocked, true);
-  assert.equal(state.status, 'blocked_error');
+  // A passing check on this exact connection degrades to a warning when it
+  // merely ages out; it must not hard-block the composer day after day.
+  assert.equal(state.blocked, false);
+  assert.equal(state.status, 'degraded_error');
+  assert.ok(state.warning);
 });
 
 test('describeProviderSendState requires a current zh-CN probe before Chinese coaching is ready', () => {

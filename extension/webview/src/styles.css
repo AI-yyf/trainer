@@ -12327,6 +12327,14 @@ button.resources-sandbox-layout__chip:focus-visible {
   gap: 4px;
 }
 
+.coach-empty-state__detail {
+  margin: 0;
+  color: var(--fg-1, var(--fg-0, inherit));
+  opacity: 0.78;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .coach-empty-state--inline {
   gap: 4px;
   padding: 1px 0 4px;
