@@ -136,6 +136,66 @@ test('VSIX E2E falls back to the local fixture for empty or partial provider env
   await runtime.stop();
 });
 
+
+test('VSIX E2E fixture provider returns valid flash-card JSON for training card prompts', async () => {
+  const { VSIX_E2E_FIXTURE_PROVIDER_MODEL, startVsixE2EFixtureProvider } = await loadFixtureHelpers();
+  const apiKey = `test-${randomUUID()}`;
+  const fixture = await startVsixE2EFixtureProvider({ apiKey });
+
+  try {
+    const nonStream = await fixtureRequest(fixture.baseUrl, apiKey, 'chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: VSIX_E2E_FIXTURE_PROVIDER_MODEL,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are generating one grounded flash card for Trainer.\n' +
+              'Output valid JSON only.\n' +
+              '- focus_area: dependency injection\n' +
+              '- target_skill: FastAPI Depends\n' +
+              '\n\nLanguage: Respond in zh-CN.',
+          },
+          { role: 'user', content: 'Generate the training card now.' },
+        ],
+      }),
+    });
+    assert.equal(nonStream.response.status, 200);
+    const content = nonStream.body.choices[0].message.content;
+    const card = JSON.parse(content);
+    for (const key of [
+      'title',
+      'why_now',
+      'focus_area',
+      'target_skill',
+      'knowledge_type',
+      'question',
+      'answer_mode',
+      'expected_answer',
+      'problem_statement',
+      'learner_deliverables',
+      'verification_steps',
+      'success_signal',
+      'reflection_prompt',
+      'return_with',
+      'next_after_completion',
+      'hint_ladder',
+      'common_mistakes',
+      'feedback',
+    ]) {
+      assert.ok(card[key], `missing ${key}`);
+    }
+    assert.match(card.title, /闪记|dependency injection/);
+    assert.match(card.why_now, /[\u3400-\u9fff]/);
+    assert.equal(card.focus_area, 'dependency injection');
+    assert.equal(card.target_skill, 'FastAPI Depends');
+  } finally {
+    await fixture.stop();
+  }
+});
+
 test('VSIX E2E fixture mode preserves existing proxy exclusions and always bypasses loopback', async () => {
   const { withVsixE2EFixtureLoopbackBypass } = await loadRuntimeHelpers();
   const environment = withVsixE2EFixtureLoopbackBypass({

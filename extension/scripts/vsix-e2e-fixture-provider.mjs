@@ -134,6 +134,15 @@ function fixtureReplyFor(payload) {
     }
     return userText.trim() || "fixture integrity acknowledgement";
   }
+
+  // Card generation asks for JSON only. Coach prose here causes stream/non-stream
+  // fail-closed minting (invalid_json → CardGenerationStreamError / ProviderFailure),
+  // which the host surfaces as opaque "Provider request failed." after redaction.
+  const cardReply = fixtureTrainingCardReply(systemText, userText);
+  if (cardReply) {
+    return cardReply;
+  }
+
   if (userText.includes("只用简体中文回答") || (userText.includes("先学再测") && userText.includes("VS Code"))) {
     return "先学再测，并在 VS Code 中完成一个最小验证动作。";
   }
@@ -141,6 +150,138 @@ function fixtureReplyFor(payload) {
     return "先把目标缩小为一个可验证的练习：选出当前项目中的一个入口文件，写下它的输入、输出和一个不确定点。完成后把这三项发给我，我再带你走下一步。";
   }
   return "Start with one small, verifiable step: identify one entry point, its input, its output, and one uncertainty. Share those three facts before moving on.";
+}
+
+function fixtureTrainingCardReply(systemText, userText) {
+  const asksForCard =
+    /Generate the training card now\.?/i.test(userText) ||
+    /Output valid JSON only/i.test(systemText) ||
+    /generating one grounded (flash|practice) card/i.test(systemText) ||
+    /Create one grounded (flash|practice) card/i.test(systemText);
+  if (!asksForCard) {
+    return null;
+  }
+
+  const preferChinese =
+    containsCjk(systemText) ||
+    containsCjk(userText) ||
+    /\bzh(?:-CN)?\b/i.test(systemText) ||
+    /简体中文|中文/.test(systemText);
+  const isFlash =
+    /grounded flash card/i.test(systemText) ||
+    /flash card/i.test(systemText) ||
+    /"knowledge_type"/i.test(systemText);
+  const focusArea =
+    contextField(systemText, "focus_area") ||
+    (preferChinese ? "依赖注入" : "dependency injection");
+  const targetSkill =
+    contextField(systemText, "target_skill") ||
+    (preferChinese ? "FastAPI Depends" : "FastAPI Depends");
+
+  if (isFlash) {
+    return JSON.stringify(fixtureFlashCardPayload({ focusArea, targetSkill, preferChinese }));
+  }
+  return JSON.stringify(fixturePracticeCardPayload({ focusArea, targetSkill, preferChinese }));
+}
+
+function contextField(systemText, fieldName) {
+  const match = systemText.match(new RegExp(`-\\s*${fieldName}:\\s*(.+)`, "i"));
+  if (!match?.[1]) {
+    return "";
+  }
+  const value = match[1].trim();
+  if (!value || value === "None" || value === "null" || value === '""') {
+    return "";
+  }
+  return value;
+}
+
+function fixtureFlashCardPayload({ focusArea, targetSkill, preferChinese }) {
+  if (preferChinese) {
+    return {
+      title: `闪记：${focusArea}`,
+      why_now: `先稳住 ${targetSkill} 的边界，再进入更大的练习。`,
+      focus_area: focusArea,
+      target_skill: targetSkill,
+      knowledge_type: "engineering_concept",
+      question: `用一句话说清 ${targetSkill} 解决的边界问题是什么？`,
+      context: `学习者刚在对话里碰到 ${focusArea}，需要先做一次短回忆。`,
+      answer_mode: "text",
+      expected_answer: `${targetSkill} 把共享依赖从路由处理函数中抽离，并在边界注入。`,
+      problem_statement: `还不能稳定说出 ${targetSkill} 的职责边界。`,
+      suggested_workspace_action: "打开一个路由文件，标出 Depends 注入点。",
+      deliverable: "一句边界说明 + 一个 Depends 注入点位置",
+      learner_deliverables: ["一句边界说明", "一个 Depends 注入点位置"],
+      verification_steps: ["对照路由签名确认注入点", "确认处理函数不再自行创建依赖"],
+      success_signal: "能指出 Depends 的注入边界，而不是背定义",
+      reflection_prompt: "哪一条边界让你确认这不是普通函数参数？",
+      return_with: "把边界说明带回教练对话",
+      next_after_completion: "进入一次最小 Depends 练习",
+      hint_ladder: ["先找路由函数签名", "再找 Depends(...)", "对照依赖由谁创建"],
+      common_mistakes: ["把 Depends 当成普通默认参数", "在路由里直接 new 依赖"],
+      feedback: {
+        correct: "你已经抓住了注入边界。",
+        incorrect: "再对照路由签名，区分注入点与普通参数。",
+      },
+    };
+  }
+  return {
+    title: `Flash: ${focusArea}`,
+    why_now: `Stabilize the ${targetSkill} boundary before a larger practice loop.`,
+    focus_area: focusArea,
+    target_skill: targetSkill,
+    knowledge_type: "engineering_concept",
+    question: `In one sentence, what boundary problem does ${targetSkill} solve?`,
+    context: `The learner just hit ${focusArea} in conversation and needs a short recall check.`,
+    answer_mode: "text",
+    expected_answer: `${targetSkill} extracts shared dependencies and injects them at the route boundary.`,
+    problem_statement: `The learner cannot yet name the ${targetSkill} responsibility boundary.`,
+    suggested_workspace_action: "Open one route file and mark the Depends injection site.",
+    deliverable: "One boundary sentence plus one Depends injection site",
+    learner_deliverables: ["One boundary sentence", "One Depends injection site"],
+    verification_steps: ["Confirm the injection site on the route signature", "Confirm the handler does not construct the dependency itself"],
+    success_signal: "The learner can point at the Depends boundary instead of reciting a definition",
+    reflection_prompt: "Which boundary proved this is not an ordinary function argument?",
+    return_with: "Bring the boundary sentence back into Coach",
+    next_after_completion: "Move into one minimal Depends practice card",
+    hint_ladder: ["Find the route signature", "Find Depends(...)", "Ask who constructs the dependency"],
+    common_mistakes: ["Treating Depends like a default argument", "Constructing the dependency inside the route"],
+    feedback: {
+      correct: "You named the injection boundary.",
+      incorrect: "Look at the route signature again and separate injection from ordinary parameters.",
+    },
+  };
+}
+
+function fixturePracticeCardPayload({ focusArea, targetSkill, preferChinese }) {
+  if (preferChinese) {
+    return {
+      title: `练习：${focusArea}`,
+      focus_area: focusArea,
+      target_skill: targetSkill,
+      scenario: `围绕 ${focusArea} 做一个最小可验证练习。`,
+      problem_statement: `还不能把 ${targetSkill} 接到一个真实路由边界上。`,
+      api_hints: ["Depends", "Annotated", targetSkill],
+      deliverable: "一个带 Depends 的最小路由切片",
+      self_check: ["依赖是否在边界注入", "处理函数是否避免自行创建依赖"],
+      grading_rubric: ["注入点清晰", "边界保持最小", "能说明验证方式"],
+      stuck_recovery: "先写一个空依赖函数，再接到路由签名上。",
+      reflection_prompt: "注入边界相对普通参数多了哪一步？",
+    };
+  }
+  return {
+    title: `Practice: ${focusArea}`,
+    focus_area: focusArea,
+    target_skill: targetSkill,
+    scenario: `Run one minimal verifiable practice around ${focusArea}.`,
+    problem_statement: `The learner has not yet wired ${targetSkill} onto a real route boundary.`,
+    api_hints: ["Depends", "Annotated", targetSkill],
+    deliverable: "One minimal route slice that uses Depends",
+    self_check: ["Is the dependency injected at the boundary?", "Does the handler avoid constructing it?"],
+    grading_rubric: ["Injection site is clear", "Boundary stays minimal", "Verification path is named"],
+    stuck_recovery: "Write an empty dependency callable first, then attach it to the route signature.",
+    reflection_prompt: "What extra step does injection add beyond an ordinary parameter?",
+  };
 }
 
 function latestUserText(payload) {
