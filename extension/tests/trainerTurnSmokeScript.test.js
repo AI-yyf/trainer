@@ -149,6 +149,33 @@ function startMockTrainer({
         response.end();
         return;
       }
+      if (streamMode === 'empty_response_scaffold') {
+        // Mimic coach recovery after true empty upstream: visible scaffold + complete
+        // with stop_reason empty_response — must still classify as empty_stream.
+        response.write('event: chunk\n');
+        response.write(
+          `data: ${JSON.stringify({
+            chunk:
+              'provider 返回了空的可见回答，所以 Trainer 会把这一轮保持为可恢复状态。草稿还在。',
+          })}\n\n`,
+        );
+        response.write('event: complete\n');
+        response.write(
+          `data: ${JSON.stringify({
+            tokens: 1,
+            response: {
+              agent_meta: { stop_reason: 'empty_response' },
+              reply: {
+                content:
+                  'provider 返回了空的可见回答，所以 Trainer 会把这一轮保持为可恢复状态。草稿还在。',
+                metadata: { coach_visible_status: { stopReason: 'empty_response' } },
+              },
+            },
+          })}\n\n`,
+        );
+        response.end();
+        return;
+      }
       if (streamMode === 'incomplete') {
         response.write('event: chunk\n');
         response.write(`data: ${JSON.stringify({ chunk: '我会先验证一个 breakpoint。' })}\n\n`);
@@ -673,6 +700,24 @@ test('trainer turn smoke script reports empty_stream when SSE yields no chunks',
     const report = JSON.parse(result.stderr);
     assert.equal(report.ok, false);
     assert.equal(report.category, 'empty_stream');
+  } finally {
+    await trainer.close();
+  }
+});
+
+test('trainer turn smoke script maps recovered empty_response scaffold to empty_stream', async () => {
+  const trainer = await startMockTrainer({ streamMode: 'empty_response_scaffold' });
+
+  try {
+    const result = await runTurnSmoke({
+      TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.category, 'empty_stream');
+    assert.equal(report.step, 'turn_stream');
   } finally {
     await trainer.close();
   }

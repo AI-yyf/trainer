@@ -30,7 +30,8 @@
     "smoke:resources": "node ./scripts/resources-smoke.mjs",
     "smoke:plan-fsrs": "node ./scripts/plan-fsrs-smoke.mjs",
     "smoke:settings-provider": "node ./scripts/settings-provider-smoke.mjs",
-    "smoke:abort-resume": "node ./scripts/abort-resume-smoke.mjs"
+    "smoke:abort-resume": "node ./scripts/abort-resume-smoke.mjs",
+    "smoke:empty-stream-mock": "node ./scripts/empty-stream-mock-probe.mjs"
   },
   "repository": {
     "type": "git",

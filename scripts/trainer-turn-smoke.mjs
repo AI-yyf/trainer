@@ -204,7 +204,23 @@ async function postStreaming(path, payload) {
       }
     })
     .join("");
-  return { response, body, chunks, hasComplete, visibleText };
+  const stopReason = compact((body.match(/"stop_reason"\s*:\s*"([^"]+)"/) || [])[1] || "");
+  const recoveredStopReason = compact(
+    (body.match(/"recovered_stop_reason"\s*:\s*"([^"]+)"/) || [])[1] || "",
+  );
+  const streamErrorCategory = compact(
+    (body.match(/"error_category"\s*:\s*"([^"]+)"/) || [])[1] || "",
+  );
+  return {
+    response,
+    body,
+    chunks,
+    hasComplete,
+    visibleText,
+    stopReason,
+    recoveredStopReason,
+    streamErrorCategory,
+  };
 }
 
 function providerPayload() {
@@ -750,15 +766,23 @@ async function main() {
   const streamComplete = stream.hasComplete;
   const streamVisibleOk = hasChineseText(stream.visibleText);
   const streamSecretClean = !providerErrorContainsSecret(stream.body);
+  const emptyUpstreamStop =
+    stream.stopReason === "empty_response" ||
+    stream.recoveredStopReason === "empty_response" ||
+    stream.streamErrorCategory === "empty_response" ||
+    stream.streamErrorCategory === "empty_stream" ||
+    stream.stopReason === "empty_stream";
+  // True empty upstream (or recovered scaffold after empty) must not look like success.
   const streamOk =
     streamHttpOk &&
     streamHasChunks &&
     streamComplete &&
     streamVisibleOk &&
-    streamSecretClean;
+    streamSecretClean &&
+    !emptyUpstreamStop;
   if (!streamOk) {
     let category = "streaming_contract_failed";
-    if (streamHttpOk && !streamHasChunks && !streamComplete) {
+    if (emptyUpstreamStop || (streamHttpOk && !streamHasChunks && !streamComplete)) {
       category = "empty_stream";
     } else if (streamHttpOk && streamHasChunks && !streamComplete) {
       category = "incomplete_stream";
