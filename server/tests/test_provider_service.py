@@ -2141,7 +2141,26 @@ def test_provider_test_reports_rate_limit_structurally() -> None:
 
     assert result.ok is False
     assert result.error_category == "rate_limit"
-    assert result.retryable is False
+    assert result.retryable is True
+    assert result.status_code == 429
+    assert "rate limit" in (result.detail or "").lower()
+
+
+def test_provider_test_preserves_rate_limit_when_models_list_succeeds() -> None:
+    config = _make_config()
+    service = ProviderService()
+    fake_client = MagicMock()
+    fake_client.chat.completions.create.side_effect = Exception(
+        "Error code: 429 - {'error': {'message': 'Rate limit exceeded'}}"
+    )
+    fake_client.models.list.return_value = [MagicMock(id="MiniMax-M3")]
+
+    with patch.object(service, "_get_sync_openai_class", return_value=MagicMock(return_value=fake_client)):
+        result = service.test(config, "sk-test")
+
+    assert result.ok is False
+    assert result.error_category == "rate_limit"
+    assert result.status_code == 429
     assert "rate limit" in (result.detail or "").lower()
 
 

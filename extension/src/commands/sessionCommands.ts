@@ -2757,14 +2757,17 @@ export async function sendStreamMessageCommand(
         reliabilityOutcome: 'failure',
       }));
       await postStreamReliabilityStatus(context, 'failed', responseLanguage);
-      await updateStreamingState(context, (state) => ({
-        ...state,
-        isStreaming: false,
-        streamError: undefined,
-        completionStopReason: 'cancelled',
-        reliabilityPhase: 'acked',
-        reliabilityOutcome: 'failure',
-      }));
+      await updateStreamingState(context, (state) => {
+        const abortBeforeContent = !String(state.streamedContent ?? '').trim();
+        return {
+          ...state,
+          isStreaming: false,
+          streamError: abortBeforeContent ? 'stream_aborted_by_client' : undefined,
+          completionStopReason: 'cancelled',
+          reliabilityPhase: 'acked',
+          reliabilityOutcome: 'failure',
+        };
+      });
       await postStreamReliabilityStatus(context, 'acked', responseLanguage);
       await context.workbench.syncState();
       await context.workbench.postMessage({

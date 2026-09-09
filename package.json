@@ -25,7 +25,8 @@
     "test": "npm run test:extension && npm run test:server",
     "verify": "node ./scripts/verify-workspace.mjs",
     "package:vsix": "npm run package:vsix --prefix extension",
-    "verify:delivery": "npm run verify && npm run test:experience-matrix && npm run package:vsix"
+    "verify:delivery": "npm run verify && npm run test:experience-matrix && npm run package:vsix",
+    "smoke:provider-soak": "node ./scripts/provider-soak-probe.mjs"
   },
   "repository": {
     "type": "git",

@@ -5858,15 +5858,34 @@ class ProviderService:
                         redact_provider_error(chat_exc, api_key=api_key),
                         *models_result.diagnostics,
                     ]
+                # Keep concrete transport/auth/rate-limit failures honest even when
+                # /models listing succeeds. model_not_tested is only for ambiguous
+                # "listed models but chat did not verify" cases.
+                concrete_categories = {
+                    "rate_limit",
+                    "invalid_key_or_permission",
+                    "timeout",
+                    "network",
+                }
+                if models_result.ok and category not in concrete_categories:
+                    resolved_category = "model_not_tested"
+                    resolved_retryable = retryable
+                    resolved_status = status_code
+                    resolved_model_supported = False
+                else:
+                    resolved_category = category
+                    resolved_retryable = retryable
+                    resolved_status = status_code
+                    resolved_model_supported = model_supported
                 return ProviderTestResponse(
                     ok=False,
-                    detail=detail,
-                    error_category="model_not_tested" if models_result.ok else category,
-                    retryable=retryable if models_result.ok else models_result.retryable,
-                    status_code=status_code if models_result.ok else models_result.status_code,
+                    detail=detail if resolved_category == "model_not_tested" else self._detail_from_category(category, provider=provider, error=chat_exc),
+                    error_category=resolved_category,
+                    retryable=resolved_retryable,
+                    status_code=resolved_status,
                     diagnostics=diagnostics,
                     provider_reachable=models_result.ok or provider_reachable,
-                    model_supported=False if models_result.ok else model_supported,
+                    model_supported=resolved_model_supported,
                 )
         except Exception as exc:  # pragma: no cover - network dependent
             category, retryable, status_code, provider_reachable, model_supported = self._classify_error(exc)

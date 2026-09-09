@@ -1165,6 +1165,18 @@ export function deriveTrainerStreamingOperationMessage(
     return undefined;
   }
   if (state.completionStopReason?.trim().toLowerCase() === "cancelled") {
+    const hadContent = Boolean(normalizeTrainerStreamingNoticeText(state.streamedContent));
+    if (!hadContent) {
+      // Abort-before-content must not claim "kept generated content".
+      return {
+        tone: "error",
+        message: buildTrainerStreamingErrorMessage(
+          language,
+          "stream_aborted_by_client",
+          "stream_aborted_by_client",
+        ),
+      };
+    }
     return {
       tone: "info",
       message: localizeTrainerStreamingCopy(

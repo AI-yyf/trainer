@@ -377,6 +377,35 @@ test('trainer message parts normalize into the typed registry contract', () => {
         "Stopped. Kept generated content and restored your draft — send again to continue.",
     },
   );
+  assert.deepEqual(
+    deriveTrainerStreamingOperationMessage("en-US", {
+      isStreaming: false,
+      streamedContent: "",
+      streamMessageId: "msg-stream-abort-before-content",
+      completionStopReason: "cancelled",
+    }),
+    {
+      tone: "error",
+      message:
+        "You stopped this reply. Draft restored below — send again to continue the thread.",
+    },
+  );
+  assert.deepEqual(
+    deriveTrainerStreamingOperationMessage(
+      "zh-CN",
+      {
+        isStreaming: false,
+        streamedContent: "",
+        streamMessageId: "msg-stream-abort-before-content-zh",
+        completionStopReason: "cancelled",
+      },
+      { errorCategory: "stream_aborted_by_client" },
+    ),
+    {
+      tone: "error",
+      message: "你已中止本轮回复。草稿已恢复到下方，再发送即可续上这段对话。",
+    },
+  );
   const rawStreamFailure = deriveTrainerStreamingOperationMessage("en-US", {
     isStreaming: false,
     streamedContent: "",

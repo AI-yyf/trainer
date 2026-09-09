@@ -268,6 +268,45 @@ test('provider smoke script fails zh-CN smoke when the provider turns Chinese in
   }
 });
 
+test('provider smoke script reports rate_limit for HTTP 429', async () => {
+  const provider = await startOpenAiMockProvider({
+    onChatRequest() {
+      throw new Error('chat reply should not be used after the mock 429');
+    },
+    onResponsesRequest() {
+      throw new Error('responses should not be used for chat-completions smoke');
+    },
+    chatFailure() {
+      return {
+        status: 429,
+        body: JSON.stringify({
+          error: {
+            message: 'Rate limit exceeded for model MiniMax-M3',
+          },
+        }),
+      };
+    },
+  });
+
+  try {
+    const result = await runSmokeScript({
+      TRAINER_PROVIDER_SMOKE_BASE_URL: provider.baseUrl,
+      TRAINER_PROVIDER_SMOKE_MODEL: 'MiniMax-M3',
+      TRAINER_PROVIDER_SMOKE_RESPONSE_LANGUAGE: 'en-US',
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.category, 'rate_limit');
+    assert.equal(report.status, 429);
+    assert.equal(report.model, 'MiniMax-M3');
+    assert.equal(typeof report.elapsedMs, 'number');
+  } finally {
+    await provider.close();
+  }
+});
+
 test('provider smoke script redacts credentials and upstream bodies from failure reports', async () => {
   const provider = await startOpenAiMockProvider({
     onChatRequest() {

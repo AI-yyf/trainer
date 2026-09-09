@@ -1102,25 +1102,23 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         if (!isCurrentStreamEvent(state.streaming, message.payload.messageId)) {
           return {};
         }
-        const cancelledMessage =
-          state.layout.composerLanguage === "zh-CN"
-            ? "已取消本轮回复，已保留已生成内容。"
-            : "This reply was cancelled. The generated content is still here.";
+        const language = state.layout.composerLanguage;
+        const hadContent = Boolean(String(state.streaming.streamedContent ?? "").trim());
+        const nextStreaming = {
+          ...state.streaming,
+          isStreaming: false,
+          pendingVisibleContent: undefined,
+          streamError: hadContent ? undefined : "stream_aborted_by_client",
+          completionStopReason: "cancelled",
+          // Fail-closed: authoritative ack is failure, not silent success. Draft untouched.
+          reliabilityPhase: "acked" as const,
+          reliabilityOutcome: "failure" as const,
+        };
         return {
-          streaming: {
-            ...state.streaming,
-            isStreaming: false,
-            pendingVisibleContent: undefined,
-            streamError: undefined,
-            completionStopReason: "cancelled",
-            // Fail-closed: authoritative ack is failure, not silent success. Draft untouched.
-            reliabilityPhase: "acked",
-            reliabilityOutcome: "failure",
-          },
-          operationMessage: {
-            tone: "info",
-            message: cancelledMessage,
-          },
+          streaming: nextStreaming,
+          operationMessage: deriveTrainerStreamingOperationMessage(language, nextStreaming, {
+            errorCategory: hadContent ? undefined : "stream_aborted_by_client",
+          }),
         };
       }
 
