@@ -60,11 +60,13 @@ try {
       ? withVsixE2EFixtureLoopbackBypass(process.env)
       : process.env;
   writeUserSettings();
+  writePasswordStoreArgv();
   writeWorkspace();
   provisionTemporaryTrainerWorkspace();
   writeDriverExtension(providerConfiguration);
 
   runCode([
+    ...linuxPasswordStoreArgs(),
     "--user-data-dir",
     userDataDir,
     "--extensions-dir",
@@ -75,6 +77,7 @@ try {
   ]);
 
   const launchArgs = [
+    ...linuxPasswordStoreArgs(),
     "--user-data-dir",
     userDataDir,
     "--extensions-dir",
@@ -228,6 +231,31 @@ function cleanupVsixE2ETempRoot(directory) {
   } catch {
     console.warn(`Trainer VSIX E2E cleanup could not finish; temporary files remain at: ${directory}`);
   }
+}
+
+
+function linuxPasswordStoreArgs() {
+  // Headless Linux CI has no gnome-keyring/DBus Secret Service. Without an
+  // explicit Electron password store, extension SecretStorage (provider API
+  // key save) hangs forever and the VSIX e2e dies on trainer.provider.save
+  // with spawnSync ETIMEDOUT after TRAINER_E2E_TIMEOUT_MS.
+  if (process.platform !== "linux") {
+    return [];
+  }
+  return ["--password-store=basic"];
+}
+
+function writePasswordStoreArgv() {
+  if (process.platform !== "linux") {
+    return;
+  }
+  // Belt-and-suspenders for Electron/VS Code builds that prefer argv.json.
+  const argvPath = path.join(userDataDir, "argv.json");
+  fs.writeFileSync(
+    argvPath,
+    `${JSON.stringify({ "password-store": "basic" }, null, 2)}\n`,
+    "utf8",
+  );
 }
 
 function writeUserSettings() {
@@ -465,9 +493,45 @@ const steps = [];
     return port;
   };
 
+  const flushPartialReport = (extra = {}) => {
+    if (!reportPath) {
+      return;
+    }
+    try {
+      fs.writeFileSync(
+        reportPath,
+        JSON.stringify({
+          ok: false,
+          partial: true,
+          extensionId,
+          durationMs: Date.now() - startedAt,
+          currentStep: steps.length ? steps[steps.length - 1].name : null,
+          steps,
+          ...extra,
+        }, null, 2) + "\n",
+        "utf8",
+      );
+    } catch {
+      // Best-effort evidence for hangs/kills.
+    }
+  };
+
+  const withTimeout = (promise, timeoutMs, label) => {
+    let timer;
+    return Promise.race([
+      Promise.resolve(promise).finally(() => clearTimeout(timer)),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(label + " timed out after " + timeoutMs + "ms"));
+        }, timeoutMs);
+      }),
+    ]);
+  };
+
   const record = async (name, fn, options = {}) => {
     const step = { name, ok: false, startedAt: new Date().toISOString() };
     steps.push(step);
+    flushPartialReport({ category: "step-started" });
     try {
       const data = await fn();
       step.ok = options.ok === undefined ? true : Boolean(options.ok(data));
@@ -482,6 +546,7 @@ const steps = [];
     } finally {
       step.finishedAt = new Date().toISOString();
       step.durationMs = Date.now() - Date.parse(step.startedAt);
+      flushPartialReport({ category: step.ok ? "step-finished" : "step-failed" });
     }
   };
 
@@ -887,14 +952,27 @@ const steps = [];
       });
 
       await record("save-provider", async () => {
-        return await vscode.commands.executeCommand("trainer.provider.save", {
-          ...providerSavePayloadTemplate,
-          baseUrl: providerBaseUrl,
-          model: providerModel,
-          apiKey: providerApiKey,
-          replaceApiKey: true,
-        });
-      }, { ok: (data) => data && data.ok === true });
+        const providerSaveTimeoutMs = Math.max(
+          30_000,
+          Number.parseInt(process.env.TRAINER_E2E_PROVIDER_SAVE_TIMEOUT_MS ?? "180000", 10) || 180000,
+        );
+        return await withTimeout(
+          vscode.commands.executeCommand("trainer.provider.save", {
+            ...providerSavePayloadTemplate,
+            baseUrl: providerBaseUrl,
+            model: providerModel,
+            apiKey: providerApiKey,
+            replaceApiKey: true,
+          }),
+          providerSaveTimeoutMs,
+          "trainer.provider.save",
+        );
+      }, {
+        ok: (data) => data && data.ok === true,
+        errorMessage: (data) =>
+          "trainer.provider.save failed or timed out (check SecretStorage/password-store and provider verify): " +
+          JSON.stringify(data),
+      });
 
       const coachMessageResult = await record("send-coach-message", async () => {
         return await vscode.commands.executeCommand("trainer.session.sendMessage", {

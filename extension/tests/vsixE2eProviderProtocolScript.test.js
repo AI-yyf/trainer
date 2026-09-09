@@ -447,3 +447,28 @@ test('VSIX E2E uses workspace resource fixtures and the public review-queue comm
   assert.doesNotMatch(source, /trainer\.reviewQueue\.action/);
   assert.doesNotMatch(source, /source: "inline:\/\//);
 });
+
+
+test('VSIX E2E Linux launches use password-store=basic so SecretStorage cannot hang', () => {
+  const source = fs.readFileSync(e2eScriptPath, 'utf8');
+  assert.match(source, /function linuxPasswordStoreArgs\(\)/);
+  assert.match(source, /--password-store=basic/);
+  assert.match(source, /writePasswordStoreArgv\(\)/);
+  assert.match(source, /\"password-store\": \"basic\"/);
+  assert.match(source, /\.\.\.linuxPasswordStoreArgs\(\)/);
+  // Install + host launch must both pass the flag on Linux.
+  assert.equal((source.match(/\.\.\.linuxPasswordStoreArgs\(\)/g) || []).length >= 2, true);
+});
+
+test('VSIX E2E save-provider fails closed with an honest timeout and partial report flush', () => {
+  const source = fs.readFileSync(e2eScriptPath, 'utf8');
+  assert.match(source, /TRAINER_E2E_PROVIDER_SAVE_TIMEOUT_MS/);
+  assert.match(source, /withTimeout\(/);
+  assert.match(source, /flushPartialReport/);
+  assert.match(source, /trainer\.provider\.save timed out|trainer\.provider\.save"/);
+  const saveIndex = source.indexOf('await record("save-provider"');
+  assert.ok(saveIndex >= 0, 'save-provider step must exist');
+  const saveSlice = source.slice(saveIndex, saveIndex + 900);
+  assert.match(saveSlice, /withTimeout/);
+  assert.match(saveSlice, /providerSaveTimeoutMs/);
+});
