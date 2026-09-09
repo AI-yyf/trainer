@@ -9188,9 +9188,9 @@ export function App() {
     ],
   );
   const composerUsesTrainingFlow = trainingComposerEnabled && !trainingComposerTalkMode;
-  // A missing provider must not destroy a useful draft. Let submission surface the
-  // in-place recovery state and keep the learner in the view where they were working.
-  const composerSendBlocked = workspaceSessionBlocked;
+  // Provider/sidecar/workspace blocks must disable send (no fake-available button).
+  // Keep the draft editable; only the submit affordance is gated.
+  const composerSendBlocked = sendBlocked;
   const imageAttachmentSendBlocked =
     composerAttachments.length > 0 && !providerImageInputState.supported;
   const imageAttachmentBlockedReason = imageAttachmentSendBlocked
@@ -12346,7 +12346,6 @@ export function App() {
           data.connection.state,
         ).detail
       : providerSendState.reason?.trim());
-  void providerRecoveryReason;
   const trainingComposerModeTextCopy = trainingComposerModeText(layout.composerLanguage);
   const blockedComposerFallback =
     sendBlocked && !workspaceSessionBlocked
@@ -12383,6 +12382,11 @@ export function App() {
   const blockedComposerPresenceCopy = workspaceSessionBlocked
     ? workspaceSessionBlockMessage ?? blockedComposerPresenceDetail
     : blockedComposerPresenceDetail;
+  const composerSubmitBlockedReason =
+    imageAttachmentBlockedReason ??
+    (sendBlocked
+      ? (providerRecoveryReason?.trim() || blockedComposerPresenceCopy || undefined)
+      : undefined);
   const compactUtilityComposerPlaceholder =
     sendBlocked
       ? blockedComposerFallback
@@ -14228,7 +14232,7 @@ export function App() {
                   ? !normalizedDraft || imageAttachmentSendBlocked
                   : composerSendBlocked || imageAttachmentSendBlocked
               }
-              submitBlockedReason={imageAttachmentBlockedReason}
+              submitBlockedReason={composerSubmitBlockedReason}
               busy={
                 streaming.isStreaming ||
                 isOperationReliabilityInFlight(streaming.reliabilityPhase) ||

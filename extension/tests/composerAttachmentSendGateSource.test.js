@@ -30,7 +30,9 @@ test('image attachments keep staging separate from the verified send gate', () =
     /busy=\{\s*streaming\.isStreaming \|\|\s*isOperationReliabilityInFlight\(streaming\.reliabilityPhase\) \|\|\s*trainingPersistencePending\s*\}/,
   );
   assert.match(appSource, /operationReliabilityPhase: streaming\.reliabilityPhase,/);
-  assert.match(appSource, /submitBlockedReason=\{imageAttachmentBlockedReason\}/);
+  assert.match(appSource, /submitBlockedReason=\{composerSubmitBlockedReason\}/);
+  assert.match(appSource, /const composerSubmitBlockedReason =/);
+  assert.match(appSource, /const composerSendBlocked = sendBlocked;/);
   assert.match(appSource, /attachments=\{composerAttachments\}[\s\S]*onAttachmentsChange=\{setComposerAttachments\}/);
   assert.match(
     appSource,
@@ -39,6 +41,9 @@ test('image attachments keep staging separate from the verified send gate', () =
   assert.match(appSource, /providerImageInputState=\{providerImageInputState\}/);
   assert.match(composerSource, /submitBlockedReason\?: string;/);
   assert.match(composerSource, /const resolvedSubmitBlockedReason = submitBlockedReason\?\.trim\(\) \|\| "";/);
-  assert.match(composerSource, /stagedAttachments\.length > 0 && resolvedSubmitBlockedReason/);
+  assert.match(
+    composerSource,
+    /resolvedSubmitBlockedReason && \(submitDisabled \|\| stagedAttachments\.length > 0\)/,
+  );
   assert.match(composerSource, /aria-describedby=\{\[[\s\S]*submitBlockedReasonId/);
 });

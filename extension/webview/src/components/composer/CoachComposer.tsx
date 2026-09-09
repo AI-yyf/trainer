@@ -504,7 +504,7 @@ export function CoachComposer({
   const resolvedSubmitBlockedReason = submitBlockedReason?.trim() || "";
   const composerStatusText = busy
     ? resolvedBusyLabel
-    : submitDisabled && hasSubmissionContent
+    : submitDisabled && (hasSubmissionContent || Boolean(resolvedSubmitBlockedReason))
       ? resolvedSubmitBlockedReason || blockedSubmitLabel
       : showAttachmentCapabilityNote
         ? attachmentCapabilityText
@@ -894,7 +894,7 @@ export function CoachComposer({
           <span>{attachmentCapabilityText}</span>
         </div>
       ) : null}
-      {stagedAttachments.length > 0 && resolvedSubmitBlockedReason ? (
+      {resolvedSubmitBlockedReason && (submitDisabled || stagedAttachments.length > 0) ? (
         <div className="composer__capability-note" id={submitBlockedReasonId} role="status">
           <AttachmentIcon size={13} />
           <span>{resolvedSubmitBlockedReason}</span>
@@ -921,7 +921,9 @@ export function CoachComposer({
             aria-describedby={[
               composerStatusId,
               showAttachmentCapabilityNote ? attachmentCapabilityNoteId : "",
-              stagedAttachments.length > 0 && resolvedSubmitBlockedReason ? submitBlockedReasonId : "",
+              resolvedSubmitBlockedReason && (submitDisabled || stagedAttachments.length > 0)
+                ? submitBlockedReasonId
+                : "",
             ]
               .filter(Boolean)
               .join(" ")}
