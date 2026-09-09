@@ -1041,14 +1041,39 @@ export function buildTrainerStreamingErrorMessage(
   const normalizedCategory = category?.trim().toLowerCase();
   const invalidProviderError =
     category === "invalid_key_or_permission" ||
-    /401|403|invalid[_\s-]?api[_\s-]?key|incorrect api key|invalid_key_or_permission|unauthorized|forbidden/i.test(
+    category === "authentication_failed" ||
+    /401|403|invalid[_\s-]?api[_\s-]?key|incorrect api key|invalid_key_or_permission|authentication_failed|unauthorized|forbidden/i.test(
       normalizedError,
     );
-  if (invalidProviderError) {
+  if (invalidProviderError || normalizedCategory === "authentication_failed") {
     return localizeTrainerStreamingCopy(
       language,
       "The current API key is invalid or does not have access to this model. Open Settings and update the provider connection.",
       "当前 API key 无效，或没有访问这个模型的权限。请打开设置并更新 provider 连接。",
+    );
+  }
+
+  if (
+    normalizedCategory === "empty_stream" ||
+    /empty[_\s-]?stream|no (?:content|chunks?) (?:received|returned)/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "The model returned an empty reply. Your draft is still here — try sending again, or switch model in Settings.",
+      "模型返回了空回复。草稿还在，可以再发一次，或到设置里换模型。",
+    );
+  }
+
+  if (
+    normalizedCategory === "incomplete_stream" ||
+    /incomplete[_\s-]?stream|stream (?:ended|closed) (?:early|without complete)|missing complete event/i.test(
+      normalizedError,
+    )
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "This reply was cut off before it finished. Kept what arrived — retry to continue, or cancel and rewrite.",
+      "这轮回复在完成前被截断了。已保留已到达内容，可重试继续，或取消后重写。",
     );
   }
 

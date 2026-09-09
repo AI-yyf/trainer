@@ -264,6 +264,56 @@ test('trainer message parts normalize into the typed registry contract', () => {
         "The current API key is invalid or does not have access to this model. Open Settings and update the provider connection.",
     },
   );
+  assert.deepEqual(
+    deriveTrainerStreamingOperationMessage(
+      "en-US",
+      {
+        isStreaming: false,
+        streamedContent: "",
+        streamMessageId: "msg-stream-auth-failed",
+        streamError: "Provider rejected the API key.",
+      },
+      { errorCategory: "authentication_failed" },
+    ),
+    {
+      tone: "error",
+      message:
+        "The current API key is invalid or does not have access to this model. Open Settings and update the provider connection.",
+    },
+  );
+  assert.deepEqual(
+    deriveTrainerStreamingOperationMessage(
+      "en-US",
+      {
+        isStreaming: false,
+        streamedContent: "",
+        streamMessageId: "msg-stream-empty",
+        streamError: "empty_stream",
+      },
+      { errorCategory: "empty_stream" },
+    ),
+    {
+      tone: "error",
+      message:
+        "The model returned an empty reply. Your draft is still here — try sending again, or switch model in Settings.",
+    },
+  );
+  assert.deepEqual(
+    deriveTrainerStreamingOperationMessage(
+      "zh-CN",
+      {
+        isStreaming: false,
+        streamedContent: "半截",
+        streamMessageId: "msg-stream-incomplete",
+        streamError: "incomplete_stream",
+      },
+      { errorCategory: "incomplete_stream" },
+    ),
+    {
+      tone: "error",
+      message: "这轮回复在完成前被截断了。已保留已到达内容，可重试继续，或取消后重写。",
+    },
+  );
   const rawStreamFailure = deriveTrainerStreamingOperationMessage("en-US", {
     isStreaming: false,
     streamedContent: "",
