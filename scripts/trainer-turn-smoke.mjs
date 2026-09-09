@@ -543,6 +543,61 @@ function assertCurrentFocusLocalized(payload, step, diagnostics, expectedLanguag
   }
 }
 
+
+function classifyProviderTestFailure(response, body) {
+  const httpStatus = response?.status;
+  const payload = body && typeof body === "object" ? body : {};
+  const nestedStatus = Number(payload.status_code);
+  const status =
+    Number.isFinite(nestedStatus) && nestedStatus > 0 ? nestedStatus : httpStatus;
+  const rawCategory = String(payload.error_category || payload.status || "")
+    .trim()
+    .toLowerCase();
+
+  if (
+    status === 401 ||
+    status === 403 ||
+    rawCategory === "authentication_failed" ||
+    rawCategory === "invalid_key_or_permission" ||
+    rawCategory === "missing_api_key"
+  ) {
+    return {
+      category: "authentication_failed",
+      status: status || httpStatus || 401,
+    };
+  }
+  if (status === 429 || rawCategory === "rate_limit") {
+    return {
+      category: "rate_limit",
+      status: status || httpStatus || 429,
+    };
+  }
+  if (
+    status === 408 ||
+    status === 504 ||
+    rawCategory === "timeout"
+  ) {
+    return {
+      category: "timeout",
+      status: status || httpStatus || 408,
+    };
+  }
+  if (
+    rawCategory === "empty_stream" ||
+    rawCategory === "incomplete_stream" ||
+    rawCategory === "empty_response"
+  ) {
+    return {
+      category: rawCategory === "empty_response" ? "empty_stream" : rawCategory,
+      status: status || httpStatus,
+    };
+  }
+  return {
+    category: "provider_capability_test_failed",
+    status: status || httpStatus,
+  };
+}
+
 async function main() {
   let streamChunkCount = 0;
   if (!providerBaseUrl) {
@@ -570,18 +625,26 @@ async function main() {
     probe_message: "请用一句话确认当前连接可以进行中文教练对话。",
   });
   if (!capabilityTest.response.ok || capabilityTest.json?.ok !== true) {
-    const status = capabilityTest.response.status;
-    const category =
-      status === 401 || status === 403
-        ? "authentication_failed"
-        : "provider_capability_test_failed";
+    const classified = classifyProviderTestFailure(
+      capabilityTest.response,
+      capabilityTest.json,
+    );
+    const status = classified.status;
+    const category = classified.category;
+    const detail =
+      category === "authentication_failed"
+        ? `Provider rejected the API key (status ${status ?? "unknown"}).`
+        : category === "rate_limit"
+          ? `Provider rate-limited the capability probe (status ${status ?? "unknown"}).`
+          : category === "timeout"
+            ? `Provider capability probe timed out (status ${status ?? "unknown"}).`
+            : category === "empty_stream" || category === "incomplete_stream"
+              ? `Provider capability probe reported ${category}.`
+              : `Provider capability test failed with HTTP ${capabilityTest.response.status}.`;
     return failure({
       step: "provider_test",
       category,
-      detail:
-        category === "authentication_failed"
-          ? `Provider rejected the API key with HTTP ${status}.`
-          : `Provider capability test failed with HTTP ${status}.`,
+      detail,
       diagnostics,
       status,
     });

@@ -15,6 +15,8 @@ function startMockTrainer({
   sessionStartFailureBody = '',
   providerTestStatus = 200,
   providerTestOk = true,
+  providerTestErrorCategory = '',
+  providerTestStatusCode = undefined,
   streamMode = 'normal',
 } = {}) {
   const turnBodies = [];
@@ -56,8 +58,37 @@ function startMockTrainer({
           observed: null,
           state: disabled.has(name) ? 'disabled' : 'unverified',
         }));
-        if (providerTestStatus === 401 || providerTestStatus === 403 || providerTestOk === false) {
-          response.writeHead(providerTestStatus === 200 ? 401 : providerTestStatus, {
+        if (
+          providerTestStatus === 401 ||
+          providerTestStatus === 403 ||
+          providerTestOk === false ||
+          providerTestErrorCategory
+        ) {
+          const errorCategory =
+            providerTestErrorCategory ||
+            (providerTestStatus === 429
+              ? 'rate_limit'
+              : providerTestStatus === 408 || providerTestStatus === 504
+                ? 'timeout'
+                : 'authentication_failed');
+          const nestedStatusCode =
+            typeof providerTestStatusCode === 'number'
+              ? providerTestStatusCode
+              : providerTestStatus === 200
+                ? errorCategory === 'rate_limit'
+                  ? 429
+                  : errorCategory === 'timeout'
+                    ? 408
+                    : 401
+                : providerTestStatus;
+          // Mirror live sidecar behavior: often HTTP 200 with ok=false + error_category.
+          const httpStatus =
+            providerTestStatus === 200 && providerTestErrorCategory
+              ? 200
+              : providerTestStatus === 200
+                ? 401
+                : providerTestStatus;
+          response.writeHead(httpStatus, {
             'Content-Type': 'application/json; charset=utf-8',
           });
           response.end(
@@ -67,9 +98,11 @@ function startMockTrainer({
               api_key_supplied: Boolean(payload.api_key),
               reachable: true,
               success: false,
-              status: 'authentication_failed',
-              detail: 'Provider rejected the API key.',
-              diagnostics: ['authentication failed'],
+              status: errorCategory,
+              error_category: errorCategory,
+              status_code: nestedStatusCode,
+              detail: `Provider probe failed: ${errorCategory}.`,
+              diagnostics: [errorCategory],
             }),
           );
           return;
@@ -479,6 +512,9 @@ test('trainer turn smoke script stays env-driven and never hardcodes the hidden 
   assert.match(source, /authentication_failed/);
   assert.match(source, /empty_stream/);
   assert.match(source, /incomplete_stream/);
+  assert.match(source, /rate_limit/);
+  assert.match(source, /timeout/);
+  assert.match(source, /invalid_key_or_permission/);
 });
 
 test('trainer turn smoke script passes clean lane transitions and learn-first routing', async () => {
@@ -651,6 +687,75 @@ test('trainer turn smoke script reports incomplete_stream when complete event is
     const report = JSON.parse(result.stderr);
     assert.equal(report.ok, false);
     assert.equal(report.category, 'incomplete_stream');
+  } finally {
+    await trainer.close();
+  }
+});
+
+test('trainer turn smoke script maps sidecar invalid_key_or_permission to authentication_failed', async () => {
+  const trainer = await startMockTrainer({
+    providerTestStatus: 200,
+    providerTestOk: false,
+    providerTestErrorCategory: 'invalid_key_or_permission',
+    providerTestStatusCode: 401,
+  });
+
+  try {
+    const result = await runTurnSmoke({
+      TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+      TRAINER_TURN_SMOKE_PROVIDER_PROTOCOL: 'anthropic_messages',
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.category, 'authentication_failed');
+    assert.equal(report.providerProtocol, 'anthropic_messages');
+    assert.equal(report.protocol, 'anthropic_messages');
+  } finally {
+    await trainer.close();
+  }
+});
+
+test('trainer turn smoke script reports rate_limit and timeout from provider/test across protocols', async () => {
+  for (const [protocol, category, statusCode] of [
+    ['openai_responses', 'rate_limit', 429],
+    ['openai_chat_completions_compatible', 'timeout', 408],
+  ]) {
+    const trainer = await startMockTrainer({
+      providerTestStatus: 200,
+      providerTestOk: false,
+      providerTestErrorCategory: category,
+      providerTestStatusCode: statusCode,
+    });
+    try {
+      const result = await runTurnSmoke({
+        TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+        TRAINER_TURN_SMOKE_PROVIDER_PROTOCOL: protocol,
+      });
+      assert.equal(result.code, 1);
+      const report = JSON.parse(result.stderr);
+      assert.equal(report.category, category);
+      assert.equal(report.protocol, protocol);
+    } finally {
+      await trainer.close();
+    }
+  }
+});
+
+test('trainer turn smoke script keeps empty_stream classification when protocol switches', async () => {
+  const trainer = await startMockTrainer({ streamMode: 'empty' });
+
+  try {
+    const result = await runTurnSmoke({
+      TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+      TRAINER_TURN_SMOKE_PROVIDER_PROTOCOL: 'openai_responses',
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.category, 'empty_stream');
+    assert.equal(report.protocol, 'openai_responses');
   } finally {
     await trainer.close();
   }
