@@ -14392,6 +14392,12 @@ export function App() {
                 !composerUsesTrainingFlow &&
                 data.conversation.length > 0
               }
+              explainAfterAbort={
+                activeView === "coach" &&
+                !composerUsesTrainingFlow &&
+                !streaming.isStreaming &&
+                streaming.completionStopReason === "cancelled"
+              }
               submitLabel=""
               accessibilityLabel={localizedTrainingComposerAccessibilityLabel}
               submitAriaLabel={localizedTrainingComposerSubmitAriaLabel}

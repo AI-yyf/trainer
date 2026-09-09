@@ -21,6 +21,7 @@ type ComposerLocaleCopy = {
   busyLabel: string;
   readyNextTurnLabel: string;
   readyIdleLabel: string;
+  readyAfterAbortLabel: string;
   accessibilityLabel: string;
   submitLabel: string;
   cancelLabel: string;
@@ -42,6 +43,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     busyLabel: "教练正在思考",
     readyNextTurnLabel: "可发送下一轮",
     readyIdleLabel: "可以输入下一轮",
+    readyAfterAbortLabel: "已中止。草稿已恢复，再发送即可同会话续写",
     accessibilityLabel: "向教练发送消息",
     submitLabel: "发送消息",
     cancelLabel: "取消回复",
@@ -61,6 +63,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     busyLabel: "Trainer is thinking",
     readyNextTurnLabel: "Ready for next turn",
     readyIdleLabel: "Ready for the next message",
+    readyAfterAbortLabel: "Stopped. Draft restored — send again to continue this session",
     accessibilityLabel: "Send a message to the coach",
     submitLabel: "Send message",
     cancelLabel: "Cancel reply",
@@ -80,6 +83,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     busyLabel: "El entrenador está pensando",
     readyNextTurnLabel: "Listo para el siguiente turno",
     readyIdleLabel: "Listo para el siguiente mensaje",
+    readyAfterAbortLabel: "Detenido. Borrador restaurado: envía de nuevo para continuar la sesión",
     accessibilityLabel: "Enviar un mensaje al entrenador",
     submitLabel: "Enviar mensaje",
     cancelLabel: "Cancelar respuesta",
@@ -99,6 +103,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     busyLabel: "Le coach réfléchit",
     readyNextTurnLabel: "Prêt pour le prochain tour",
     readyIdleLabel: "Prêt pour le prochain message",
+    readyAfterAbortLabel: "Arrêté. Brouillon restauré — renvoyez pour continuer la session",
     accessibilityLabel: "Envoyer un message au coach",
     submitLabel: "Envoyer le message",
     cancelLabel: "Annuler la réponse",
@@ -118,6 +123,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     busyLabel: "Coach denkt nach",
     readyNextTurnLabel: "Bereit für die nächste Runde",
     readyIdleLabel: "Bereit für die nächste Nachricht",
+    readyAfterAbortLabel: "Abgebrochen. Entwurf wiederhergestellt — erneut senden, um die Sitzung fortzusetzen",
     accessibilityLabel: "Nachricht an den Coach senden",
     submitLabel: "Nachricht senden",
     cancelLabel: "Antwort abbrechen",
@@ -137,6 +143,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     busyLabel: "コーチが考えています",
     readyNextTurnLabel: "次のターンを送信できます",
     readyIdleLabel: "次のメッセージを入力できます",
+    readyAfterAbortLabel: "中止しました。下書きを復元済み — 再送信で同じセッションを続けられます",
     accessibilityLabel: "コーチにメッセージを送信",
     submitLabel: "メッセージを送信",
     cancelLabel: "返信をキャンセル",
@@ -156,6 +163,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     busyLabel: "코치가 생각 중입니다",
     readyNextTurnLabel: "다음 턴을 보낼 수 있음",
     readyIdleLabel: "다음 메시지를 입력할 수 있음",
+    readyAfterAbortLabel: "중단됨. 초안이 복원됨 — 다시 보내면 같은 세션을 이어갑니다",
     accessibilityLabel: "코치에게 메시지 보내기",
     submitLabel: "메시지 보내기",
     cancelLabel: "답변 취소",
@@ -175,6 +183,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     busyLabel: "O coach está pensando",
     readyNextTurnLabel: "Pronto para o próximo turno",
     readyIdleLabel: "Pronto para a próxima mensagem",
+    readyAfterAbortLabel: "Interrompido. Rascunho restaurado — envie de novo para continuar a sessão",
     accessibilityLabel: "Enviar uma mensagem ao coach",
     submitLabel: "Enviar mensagem",
     cancelLabel: "Cancelar resposta",
@@ -240,6 +249,8 @@ export interface CoachComposerProps {
   busyLabel?: string;
   /** When set, between-turn ready/idle send state stays explainable (long-context). */
   explainBetweenTurns?: boolean;
+  /** When set, after client abort the send-ready state stays explainable (abort→resume). */
+  explainAfterAbort?: boolean;
   textareaId?: string;
   minRows?: number;
   submitLabel?: string;
@@ -281,6 +292,7 @@ export function CoachComposer({
   busy = false,
   busyLabel,
   explainBetweenTurns = false,
+  explainAfterAbort = false,
   textareaId = "coach-composer",
   minRows = 2,
   submitLabel = "",
@@ -477,8 +489,13 @@ export function CoachComposer({
   const isSubmitDisabled = submitDisabled || !hasSubmissionPermission;
   const canSubmit = !isTextareaDisabled && !isSubmitDisabled;
   const sendState = busy ? "streaming" : submitDisabled ? "blocked" : hasSubmissionPermission ? "ready" : "idle";
-  const betweenTurnReadyLabel =
-    explainBetweenTurns && sendState === "ready"
+  const afterAbortReadyLabel =
+    explainAfterAbort && (sendState === "ready" || sendState === "idle")
+      ? localizedCopy.readyAfterAbortLabel
+      : "";
+  const betweenTurnReadyLabel = afterAbortReadyLabel
+    ? afterAbortReadyLabel
+    : explainBetweenTurns && sendState === "ready"
       ? localizedCopy.readyNextTurnLabel
       : explainBetweenTurns && sendState === "idle"
         ? localizedCopy.readyIdleLabel
