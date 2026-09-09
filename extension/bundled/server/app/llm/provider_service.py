@@ -97,46 +97,72 @@ async def _iterate_provider_stream_with_cancellation(
     stream: object,
     cancel_event: asyncio.Event | None,
 ):
-    """Iterate an upstream async stream while promptly closing it on cancel."""
+    """Iterate an upstream async stream while promptly closing it on cancel.
+
+    Client disconnect may cancel the outer StreamingResponse generator without
+    arming ``cancel_event`` first. Always aclose the upstream iterator on any
+    exit path so NewAPI ESTAB sockets do not linger after abort→resume.
+    """
 
     iterator = stream.__aiter__()  # type: ignore[attr-defined]
+    closed = False
 
     async def close_iterator() -> None:
+        nonlocal closed
+        if closed:
+            return
+        closed = True
         close = getattr(iterator, "aclose", None)
         if close is not None:
-            await close()
-
-    while True:
-        if cancel_event is None:
             try:
-                yield await iterator.__anext__()
-            except StopAsyncIteration:
-                return
-            continue
-        if cancel_event.is_set():
-            await close_iterator()
-            raise asyncio.CancelledError
+                await close()
+            except Exception:
+                # Best-effort close — never block abort teardown on upstream errors.
+                pass
 
-        next_item = asyncio.ensure_future(iterator.__anext__())
-        cancellation = asyncio.create_task(cancel_event.wait())
-        try:
-            done, _ = await asyncio.wait(
-                {next_item, cancellation},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if cancellation in done and cancel_event.is_set():
-                next_item.cancel()
-                await asyncio.gather(next_item, return_exceptions=True)
+    try:
+        while True:
+            if cancel_event is None:
+                try:
+                    yield await iterator.__anext__()
+                except StopAsyncIteration:
+                    return
+                continue
+            if cancel_event.is_set():
                 await close_iterator()
                 raise asyncio.CancelledError
+
+            next_item = asyncio.ensure_future(iterator.__anext__())
+            cancellation = asyncio.create_task(cancel_event.wait())
             try:
-                yield next_item.result()
-            except StopAsyncIteration:
-                return
-        finally:
-            if not cancellation.done():
-                cancellation.cancel()
-            await asyncio.gather(cancellation, return_exceptions=True)
+                done, _ = await asyncio.wait(
+                    {next_item, cancellation},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if cancellation in done and cancel_event.is_set():
+                    next_item.cancel()
+                    await asyncio.gather(next_item, return_exceptions=True)
+                    await close_iterator()
+                    raise asyncio.CancelledError
+                try:
+                    yield next_item.result()
+                except StopAsyncIteration:
+                    return
+            except asyncio.CancelledError:
+                if not next_item.done():
+                    next_item.cancel()
+                    await asyncio.gather(next_item, return_exceptions=True)
+                await close_iterator()
+                raise
+            finally:
+                if not cancellation.done():
+                    cancellation.cancel()
+                await asyncio.gather(cancellation, return_exceptions=True)
+                if not next_item.done():
+                    next_item.cancel()
+                    await asyncio.gather(next_item, return_exceptions=True)
+    finally:
+        await close_iterator()
 
 
 async def _await_provider_stream_with_cancellation(
@@ -162,11 +188,16 @@ async def _await_provider_stream_with_cancellation(
             await asyncio.gather(operation, return_exceptions=True)
             raise asyncio.CancelledError
         return operation.result()
+    except asyncio.CancelledError:
+        if not operation.done():
+            operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
+        raise
     finally:
         if not cancellation.done():
             cancellation.cancel()
         await asyncio.gather(cancellation, return_exceptions=True)
-        if cancel_event is not None and cancel_event.is_set() and not operation.done():
+        if not operation.done():
             operation.cancel()
             await asyncio.gather(operation, return_exceptions=True)
 

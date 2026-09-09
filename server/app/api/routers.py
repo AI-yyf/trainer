@@ -22767,21 +22767,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 if message.role == "assistant"
             }
 
-            async def _watch_client_disconnect() -> None:
-                # Poll while the provider read may be blocked between SSE frames.
-                while True:
-                    if stream_cancellation_requested(stream_id):
-                        return
-                    try:
-                        disconnected = await http_request.is_disconnected()
-                    except RuntimeError:
-                        return
-                    if disconnected:
-                        signal_stream_disconnect(stream_id)
-                        return
-                    await asyncio.sleep(0.25)
-
-            disconnect_watch = asyncio.create_task(_watch_client_disconnect())
+            # Receive-wrap disconnect (same as non-SSE /turn): do not rely on
+            # 250ms is_disconnected polls alone — arm cancel_event as soon as
+            # ASGI delivers http.disconnect so abort→resume clears upstream ESTAB.
+            disconnect_watch = asyncio.create_task(
+                watch_request_client_disconnect(http_request, stream_id)
+            )
 
             async def _abort_fail_closed(*, error_detail: object | None = None):
                 """Emit failed->acked and publish failure complete so same request_id cannot remint."""
@@ -23671,21 +23662,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             stream_singleflight_published = False
             preexisting_assistant_ids: set[str] = set()
 
-            async def _watch_client_disconnect() -> None:
-                # Poll while the provider read may be blocked between SSE frames.
-                while True:
-                    if stream_cancellation_requested(stream_id):
-                        return
-                    try:
-                        disconnected = await http_request.is_disconnected()
-                    except RuntimeError:
-                        return
-                    if disconnected:
-                        signal_stream_disconnect(stream_id)
-                        return
-                    await asyncio.sleep(0.25)
-
-            disconnect_watch = asyncio.create_task(_watch_client_disconnect())
+            # Receive-wrap disconnect (same as non-SSE /turn): do not rely on
+            # 250ms is_disconnected polls alone — arm cancel_event as soon as
+            # ASGI delivers http.disconnect so abort→resume clears upstream ESTAB.
+            disconnect_watch = asyncio.create_task(
+                watch_request_client_disconnect(http_request, stream_id)
+            )
 
             async def _abort_fail_closed(*, error_detail: object | None = None):
                 """Emit failed->acked and publish failure complete so same request_id cannot remint."""

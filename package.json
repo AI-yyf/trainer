@@ -29,7 +29,8 @@
     "smoke:provider-soak": "node ./scripts/provider-soak-probe.mjs",
     "smoke:resources": "node ./scripts/resources-smoke.mjs",
     "smoke:plan-fsrs": "node ./scripts/plan-fsrs-smoke.mjs",
-    "smoke:settings-provider": "node ./scripts/settings-provider-smoke.mjs"
+    "smoke:settings-provider": "node ./scripts/settings-provider-smoke.mjs",
+    "smoke:abort-resume": "node ./scripts/abort-resume-smoke.mjs"
   },
   "repository": {
     "type": "git",
