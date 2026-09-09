@@ -3668,6 +3668,17 @@ function providerFailureCopy(
         "ko-KR": { statusLabel: "확인이 필요함", headline: "VS Code에서 이 폴더를 신뢰한 뒤 다시 시도하세요" },
         "pt-BR": { statusLabel: "Ação necessária", headline: "Confie nesta pasta no VS Code e tente novamente" },
       });
+    case "provider_capability_test_failed":
+      return localized({
+        "zh-CN": { statusLabel: "能力未通过", headline: "能力检查未通过，请重新测试连接" },
+        "en-US": { statusLabel: "Capability failed", headline: "Capability check failed; re-test the connection" },
+        "es-ES": { statusLabel: "Capacidad fallida", headline: "La comprobación de capacidades falló; vuelve a probar" },
+        "fr-FR": { statusLabel: "Capacité échouée", headline: "Le contrôle des capacités a échoué ; retestez" },
+        "de-DE": { statusLabel: "Fähigkeit fehlgeschlagen", headline: "Fähigkeitsprüfung fehlgeschlagen; erneut testen" },
+        "ja-JP": { statusLabel: "能力チェック失敗", headline: "能力チェックに失敗しました。再テストしてください" },
+        "ko-KR": { statusLabel: "기능 검사 실패", headline: "기능 검사에 실패했습니다. 다시 테스트하세요" },
+        "pt-BR": { statusLabel: "Capacidade falhou", headline: "A verificação de capacidades falhou; teste novamente" },
+      });
     case "network":
     case "network_error":
       return localized({

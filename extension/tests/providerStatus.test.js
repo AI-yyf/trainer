@@ -1293,3 +1293,33 @@ test('describeProviderProfileSummary does not mark an empty connection as ready'
   assert.equal(summary.status, '未命名连接');
   assert.match(summary.detail, /已保存连接: 0/);
 });
+
+test('providerErrorHint maps settings connection failure categories', () => {
+  const { providerErrorHint } = require(providerStatusModulePath);
+
+  const auth = providerErrorHint(
+    { modelErrorCategory: 'authentication_failed' },
+    'zh-CN',
+  );
+  assert.match(auth, /设置|密钥|权限/);
+
+  const authEn = providerErrorHint(
+    { modelErrorCategory: 'authentication_failed' },
+    'en-US',
+  );
+  assert.match(authEn, /Settings|key|access/i);
+
+  const network = providerErrorHint({ modelErrorCategory: 'network' }, 'zh-CN');
+  assert.match(network, /连不上|网络|连接/);
+
+  const capability = providerErrorHint(
+    { modelErrorCategory: 'provider_capability_test_failed' },
+    'zh-CN',
+  );
+  assert.match(capability, /能力检查/);
+  const capabilityEn = providerErrorHint(
+    { modelErrorCategory: 'provider_capability_test_failed' },
+    'en-US',
+  );
+  assert.match(capabilityEn, /[Cc]apability/);
+});
