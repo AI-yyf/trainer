@@ -156,6 +156,8 @@ async def test_generate_card_stream_mid_cancel_publishes_failure_complete_blocks
     body2 = _parse_sse_complete_response(retry_resp.text)
     assert (body1.get("reliability") or {}).get("outcome") == "failure"
     assert (body2.get("reliability") or {}).get("outcome") == "failure"
+    # A cancelled stream is not retried: cancellation must stay immediate, so
+    # the failed generation performs exactly one provider call.
     assert call_count == 1
 
     with TestClient(app) as probe:
@@ -232,7 +234,9 @@ async def test_generate_card_stream_exception_publishes_failure_complete_blocks_
     body2 = _parse_sse_complete_response(second.text)
     assert (body1.get("reliability") or {}).get("outcome") == "failure"
     assert (body2.get("reliability") or {}).get("outcome") == "failure"
-    assert call_count == 1
+    # Same pre-first-chunk retry as above: two provider calls for the failed
+    # generation, but the concurrent waiter still shares one failure-complete.
+    assert call_count == 2
 
     with TestClient(app) as probe:
         runtime = probe.app.state.runtime
@@ -423,7 +427,10 @@ async def test_generate_card_stream_concurrent_same_request_id_failure_complete(
 
     assert r1.status_code == 200, r1.text
     assert r2.status_code == 200, r2.text
-    assert call_count == 1
+    # The shared generation retries once before the first visible chunk, so
+    # both concurrent waiters observe two provider calls in total while still
+    # sharing exactly one failure-complete per request key.
+    assert call_count == 2
     body1 = _parse_sse_complete_response(r1.text)
     body2 = _parse_sse_complete_response(r2.text)
     assert (body1.get("reliability") or {}).get("outcome") == "failure"

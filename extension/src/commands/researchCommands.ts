@@ -240,6 +240,8 @@ export function researchStreamMessageHandler(
         port,
         `/research/${projectId}/message/stream`,
         { message },
+        // Research turns stream long LLM answers; the 15s default aborts them mid-flight.
+        { timeoutMs: SIDECAR_DEFAULTS.providerRequestTimeoutMs },
       )) {
         if (chunk.event === 'error') {
           let errorMessage = chunk.data || 'Research stream failed.';

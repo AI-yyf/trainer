@@ -1043,7 +1043,13 @@ export async function trainingGenerateCardCommand(
       status.port,
       "/training/generate-card/stream",
       requestBody,
-      { signal: abortController.signal },
+      {
+        // Card generation performs a full LLM turn inside the sidecar; the
+        // default 15s request window is too tight and aborts healthy runs
+        // (same reasoning as the session-lane card stream above).
+        timeoutMs: SIDECAR_DEFAULTS.providerRequestTimeoutMs,
+        signal: abortController.signal,
+      },
     )) {
       if (!isCurrentTrainingCardStream(context, activeTrainingStream)) {
         return { ok: true, message: "Training stream invalidated." };
