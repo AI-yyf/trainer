@@ -11,16 +11,10 @@ const extensionDir = path.resolve(__dirname, "..");
 const { vsixPath } = ensureCurrentVsix({
   reason: "Installing a stale VSIX would break packaged-state truth for Trainer.",
 });
-const fallbackCodeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
+const macCodeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
+const linuxCodeCliCandidates = ["/usr/bin/code", "/usr/share/code/bin/code"];
 
-const codeCli =
-  process.env.CODE_CLI_PATH && fs.existsSync(process.env.CODE_CLI_PATH)
-    ? process.env.CODE_CLI_PATH
-    : fs.existsSync(fallbackCodeCli)
-      ? fallbackCodeCli
-      : process.platform === "win32"
-        ? "code.cmd"
-        : "code";
+const codeCli = resolveInstallCodeCli();
 
 const installArgs = ["--install-extension", vsixPath, "--force"];
 const install =
@@ -45,6 +39,27 @@ if (install.status !== 0) {
 }
 
 console.log(`Trainer installed from ${vsixPath}`);
+
+
+function resolveInstallCodeCli() {
+  if (process.env.CODE_CLI_PATH && fs.existsSync(process.env.CODE_CLI_PATH)) {
+    return process.env.CODE_CLI_PATH;
+  }
+  if (process.platform === "darwin" && fs.existsSync(macCodeCli)) {
+    return macCodeCli;
+  }
+  if (process.platform === "linux") {
+    for (const candidate of linuxCodeCliCandidates) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  if (process.platform === "win32") {
+    return "code.cmd";
+  }
+  return "code";
+}
 
 function buildWindowsCmd(command, args) {
   return ["call", quoteWindowsCmdArg(command), ...args.map(quoteWindowsCmdArg)].join(" ");
