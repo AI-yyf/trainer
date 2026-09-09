@@ -152,14 +152,14 @@ const PROTOCOL_LABELS: Record<ProviderProtocol, Record<ComposerLanguage, string>
     "pt-BR": "OpenAI Compatível",
   },
   gemini_generate_content: {
-    "zh-CN": "Gemini Generate",
-    "en-US": "Gemini Generate",
-    "es-ES": "Gemini Generate",
-    "fr-FR": "Gemini Generate",
-    "de-DE": "Gemini Generate",
-    "ja-JP": "Gemini Generate",
-    "ko-KR": "Gemini Generate",
-    "pt-BR": "Gemini Generate",
+    "zh-CN": "Gemini Generate（非原生默认）",
+    "en-US": "Gemini Generate (not Google-native)",
+    "es-ES": "Gemini Generate (no nativo Google)",
+    "fr-FR": "Gemini Generate (pas natif Google)",
+    "de-DE": "Gemini Generate (nicht Google-nativ)",
+    "ja-JP": "Gemini Generate（Google ネイティブ既定ではない）",
+    "ko-KR": "Gemini Generate (Google 네이티브 기본 아님)",
+    "pt-BR": "Gemini Generate (não nativo Google)",
   },
 };
 

@@ -91,7 +91,7 @@ export function providerProtocolCompletionLabel(
     case 'anthropic_messages':
       return 'Anthropic Messages';
     case 'gemini_generate_content':
-      return 'Gemini GenerateContent';
+      return 'Gemini GenerateContent (not Google-native by default)';
     default:
       return 'Protocol unverified';
   }

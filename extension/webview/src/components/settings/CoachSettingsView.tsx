@@ -713,7 +713,7 @@ function providerBaseUrlGuidance(
   if (protocol === "gemini_generate_content") {
     switch (language) {
       case "zh-CN":
-        return "填写 API 根地址，不要粘贴某个模型专用的 generateContent 请求地址。";
+        return "填写 API 根地址（GenerateContent 形；不默认当作 Google 原生 googleapis）。不要粘贴某个模型专用的 generateContent 请求地址。";
       case "es-ES":
         return "Introduce la raíz de la API, no una URL generateContent específica de un modelo.";
       case "fr-FR":
@@ -727,7 +727,7 @@ function providerBaseUrlGuidance(
       case "pt-BR":
         return "Informe a raiz da API, não uma URL generateContent específica de um modelo.";
       default:
-        return "Enter the API root, not a model-specific generateContent request URL.";
+        return "Enter the API root (GenerateContent-shaped; not assumed Google-native googleapis). Not a model-specific generateContent URL.";
     }
   }
 
@@ -3559,7 +3559,7 @@ function protocolChoiceLabel(protocol: ProviderProtocol | undefined, language: C
       case "openai_chat_completions_compatible":
         return "OpenAI 兼容";
       case "gemini_generate_content":
-        return "Gemini";
+        return "Gemini GenerateContent（非 Google 原生默认）";
     }
   }
 
@@ -3573,7 +3573,7 @@ function protocolChoiceLabel(protocol: ProviderProtocol | undefined, language: C
     case "openai_chat_completions_compatible":
       return "OpenAI Compat";
     case "gemini_generate_content":
-      return "Gemini";
+      return "Gemini GenerateContent (not Google-native by default)";
   }
 
   return providerProtocolCompletionLabel(protocol);
