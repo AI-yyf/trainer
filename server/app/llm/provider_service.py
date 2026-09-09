@@ -5957,6 +5957,9 @@ class ProviderService:
             history=history,
         )
         model = self._resolve_model()
+        cancel_event = _stream_cancel_event(
+            coach_context.get("stream_cancel_event") if isinstance(coach_context, dict) else None
+        )
         try:
             messages, max_tokens = self._prepare_context_budget(
                 messages,
@@ -5964,12 +5967,15 @@ class ProviderService:
                 prefer_configured_output=True,
             )
             if self._plain_completion_uses_agent_binding():
-                content = await self._completion_via_agent_binding(
-                    messages,
-                    temperature=0.7,
-                    max_tokens=max_tokens,
-                    prefer_configured_output=True,
-                    allow_local_empty_fallback=True,
+                content = await _await_provider_stream_with_cancellation(
+                    self._completion_via_agent_binding(
+                        messages,
+                        temperature=0.7,
+                        max_tokens=max_tokens,
+                        prefer_configured_output=True,
+                        allow_local_empty_fallback=True,
+                    ),
+                    cancel_event,
                 )
                 return self.finalize_coaching_reply(
                     content or "",
@@ -5981,12 +5987,15 @@ class ProviderService:
                     coach_context=coach_context,
                 )
             client = self._get_client()
-            response, _ = await self._create_chat_completion(
-                client=client,
-                model=model,
-                messages=messages,
-                temperature=0.7,
-                max_tokens=max_tokens,
+            response, _ = await _await_provider_stream_with_cancellation(
+                self._create_chat_completion(
+                    client=client,
+                    model=model,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=max_tokens,
+                ),
+                cancel_event,
             )
             content = _require_provider_runtime_response(
                 "openai_chat_completions",

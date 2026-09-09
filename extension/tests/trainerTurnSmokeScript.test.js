@@ -589,6 +589,8 @@ test('trainer turn smoke script fails when a fresh lane still leaks the previous
     assert.equal(typeof report.elapsedMs, 'number');
     assert.equal('preview' in report, false);
     assert.equal(typeof report.step, 'string');
+    assert.equal(typeof report.session_id, 'string');
+    assert.match(report.session_id, /^session-/);
     assert.doesNotMatch(result.stderr, /debug loop/i);
   } finally {
     await trainer.close();
@@ -612,6 +614,7 @@ test('trainer turn smoke script redacts a failed sidecar response body', async (
     assert.equal(typeof report.elapsedMs, 'number');
     assert.equal('preview' in report, false);
     assert.equal(typeof report.step, 'string');
+    assert.equal('session_id' in report, false);
     assert.doesNotMatch(result.stderr, new RegExp(secret));
   } finally {
     await trainer.close();

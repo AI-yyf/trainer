@@ -35,6 +35,7 @@ const responseLanguage = (
 const smokeStartedAt = Date.now();
 let streamChunkCount = 0;
 let currentStep = "startup";
+let lastSessionId = "";
 const defaultSmokeTimeoutMs = 360000;
 const parsedSmokeTimeoutMs = Number(
   process.env.TRAINER_TURN_SMOKE_TIMEOUT_MS ?? defaultSmokeTimeoutMs,
@@ -120,6 +121,7 @@ async function failure({
   detail,
   preview,
   chunkCount,
+  sessionId,
 }) {
   // Keep the machine report redaction-safe: no reply preview/detail bodies.
   // step + real chunkCount are enough to locate hangs without leaking lane text.
@@ -138,6 +140,10 @@ async function failure({
   }
   if (typeof status === "number") {
     report.status = status;
+  }
+  const resolvedSessionId = compact(sessionId) || lastSessionId;
+  if (resolvedSessionId) {
+    report.session_id = resolvedSessionId;
   }
   void diagnostics;
   void detail;
@@ -724,6 +730,7 @@ async function main() {
     });
   }
   const sessionId = compact(start.json.session_id);
+  lastSessionId = sessionId;
   diagnostics.push("session_start: started=true");
 
   setStep("turn_stream");

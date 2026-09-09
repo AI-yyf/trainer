@@ -893,6 +893,30 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             event = stream_cancellation_events.get(stream_id)
             return bool(event and event.is_set())
 
+    def resolve_request_cancel_id(payload: object) -> str:
+        """Reuse stream_id when present; otherwise mint a request-scoped cancel id."""
+        if isinstance(payload, dict):
+            for key in ("stream_id", "streamId", "request_id", "requestId"):
+                value = str(payload.get(key) or "").strip()
+                if value and len(value) <= 256:
+                    return value
+        return f"request_{uuid4().hex}"
+
+    async def watch_request_client_disconnect(http_request: Request, cancel_id: str) -> None:
+        """Poll disconnect while a non-SSE provider await may be blocked."""
+        while True:
+            if stream_cancellation_requested(cancel_id):
+                return
+            try:
+                disconnected = await http_request.is_disconnected()
+            except RuntimeError:
+                return
+            if disconnected:
+                # Same Event the agent loop / provider races — abort upstream promptly.
+                signal_stream_disconnect(cancel_id)
+                return
+            await asyncio.sleep(0.25)
+
     def resource_training_card_lock(workspace_id: str) -> Lock:
         """Keep one workspace's resource-card route and active selection in sync."""
 
@@ -19484,6 +19508,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         *,
         stream: bool = False,
         stream_id: str | None = None,
+        cancel_event: asyncio.Event | None = None,
     ) -> tuple[object, object, object]:
         workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
         try:
@@ -19528,6 +19553,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             coaching_service,
             response_language=request.response_language,
         )
+
+        def _with_request_cancel(context: dict[str, object]) -> dict[str, object]:
+            if cancel_event is not None:
+                context["stream_cancel_event"] = cancel_event
+            return context
         provider_live_usable = provider_is_live_usable(coaching_service, payload)
         if provider_live_usable:
             ensure_agent_tools_ready(request, coaching_service)
@@ -19661,7 +19691,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 coaching_service,
                 message=request.message,
                 response_language=request.response_language,
-                coach_context=dict(coach_turn["coach_context"]),
+                coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
             )
             if preflight_language_probe is not None:
                 language_corruption_detected = True
@@ -19720,6 +19750,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     agent_context["workspace_id"] = workspace_id
                     agent_context["session_id"] = state.session_id
                     _stamp_library_sandbox_work(agent_context, request, payload)
+                    _with_request_cancel(agent_context)
                     agent_outcome = await coaching_service.coaching_reply_agentic(
                         profile,
                         request.message,
@@ -19761,7 +19792,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     apply_attachment_delivery_metadata(agent_meta, agent_outcome)
                     original_agent_stop_reason = str(agent_outcome.get("stop_reason") or "").strip()
                     local_sequence_fallback = build_local_sequence_visible_fallback(
-                        coach_context=dict(coach_turn["coach_context"]),
+                        coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
                         response_language=request.response_language,
                     )
                     force_local_sequence = bool(
@@ -19770,7 +19801,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                             original_agent_stop_reason == "empty_response"
                             or not reply_explicitly_lists_prepared_sequence(
                                 assistant_content,
-                                coach_context=dict(coach_turn["coach_context"]),
+                                coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
                             )
                         )
                     )
@@ -19803,7 +19834,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                                 request.current_file.model_dump() if request.current_file else None,
                                 response_language=request.response_language,
                                 answer_mode=request.answer_mode,
-                                coach_context=dict(coach_turn["coach_context"]),
+                                coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
                                 history=build_conversation_history(
                                     state.snapshot.messages,
                                     drop_latest_user=True,
@@ -19851,7 +19882,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         request.current_file.model_dump() if request.current_file else None,
                         response_language=request.response_language,
                         answer_mode=request.answer_mode,
-                        coach_context=dict(coach_turn["coach_context"]),
+                        coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
                         history=build_conversation_history(
                             state.snapshot.messages,
                             drop_latest_user=True,
@@ -19928,11 +19959,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     resource_contract_fallback = None
                     if grounded_resource_contract_needs_repair(
                         assistant_content,
-                        coach_context=dict(coach_turn["coach_context"]),
+                        coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
                     ):
                         resource_contract_fallback = build_grounded_resource_contract_visible_fallback(
                             workspace_id=workspace_id,
-                            coach_context=dict(coach_turn["coach_context"]),
+                            coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
                             agent_meta=agent_meta,
                             response_language=request.response_language,
                         )
@@ -20293,6 +20324,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 agent_context["workspace_id"] = workspace_id
                 agent_context["session_id"] = state.session_id
                 _stamp_library_sandbox_work(agent_context, request, payload)
+                _with_request_cancel(agent_context)
                 agent_outcome = await coaching_service.coaching_reply_agentic(
                     profile,
                     request.message,
@@ -20354,7 +20386,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     request.current_file.model_dump() if request.current_file else None,
                     response_language=request.response_language,
                     answer_mode=request.answer_mode,
-                    coach_context=request_coach_context,
+                    coach_context=_with_request_cancel(dict(request_coach_context or {})),
                     history=history,
                 )
         if should_attach_auto_resource_events(agent_meta):
@@ -21392,7 +21424,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         return snapshot_payload
 
     @router.post("/session/message", response_model=None)
-    async def session_message(payload: dict) -> object:
+    async def session_message(payload: dict, http_request: Request) -> object:
         request = SessionMessageRequest.model_validate(payload)
         workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
         # Mid-session host re-attest so trust flips apply before authority/capability.
@@ -21528,7 +21560,31 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         provider_live_usable = provider_is_live_usable(coaching_service, payload)
         if not provider_live_usable:
             turn_request = turn_request_from_stream_payload(payload, intent="coach")
-            response, artifacts, _ = await execute_turn(turn_request, payload, stream=False)
+            cancel_id = resolve_request_cancel_id(payload)
+            register_stream_cancellation(cancel_id)
+            disconnect_watch = asyncio.create_task(
+                watch_request_client_disconnect(http_request, cancel_id)
+            )
+            try:
+                response, artifacts, _ = await execute_turn(
+                    turn_request,
+                    payload,
+                    stream=False,
+                    cancel_event=stream_cancellation_events.get(cancel_id),
+                )
+            except asyncio.CancelledError:
+                if request_id:
+                    fail_session_request_singleflight(
+                        request_key,
+                        asyncio.CancelledError(),
+                        inflight=inflight_session_requests,
+                        guard=completed_session_requests_guard,
+                    )
+                raise
+            finally:
+                disconnect_watch.cancel()
+                await asyncio.gather(disconnect_watch, return_exceptions=True)
+                unregister_stream_cancellation(cancel_id)
             response_payload = json_object_payload(response)
             if artifacts:
                 response_payload["artifacts"] = artifacts
@@ -21617,289 +21673,89 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 )
                 runtime.save_session_state(state.session_id)
                 return _finish_session_response(json_object_payload(response))
-        coach_turn: CoachTurnPayload = resolve_coach_turn(
-            state=state,
-            profile=profile,
-            request=request,
-            message=request.message,
-            coaching_service=coaching_service,
-            current_task=state.snapshot.current_task,
-            current_plan=state.snapshot.plan,
-            current_evaluation=state.snapshot.evaluation,
+        cancel_id = resolve_request_cancel_id(payload)
+        register_stream_cancellation(cancel_id)
+        disconnect_watch = asyncio.create_task(
+            watch_request_client_disconnect(http_request, cancel_id)
         )
-        scenario = str(coach_turn.get("scenario") or "general")
-        if guarantee_guided_learn_first_training_card(
-            workspace_id=state.workspace_id,
-            scenario=str(coach_turn["scenario"] or ""),
-            message=request.message,
-            current_file=request.current_file,
-            response_language=request.response_language,
-            active_thread=state.snapshot.memory.active_thread,
-            requested_answer_mode=raw_requested_answer_mode,
-            saved_answer_mode=saved_answer_mode,
-            profile=profile,
-        ):
-            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-        auto_resource_events = auto_resource_lookup_tool_events(
-            dict(coach_turn["coach_context"]),
-            request.message,
-        )
-        guided_training_prefers_local_reply = should_bypass_agent_loop_for_guided_training(
-            workspace_id=state.workspace_id,
-            scenario=str(coach_turn["scenario"] or scenario),
-            message=request.message,
-            active_view=request.active_view,
-            requested_answer_mode=raw_requested_answer_mode,
-            saved_answer_mode=saved_answer_mode,
-            profile=profile,
-        )
-        guided_training_local_reply = (
-            build_guided_training_visible_fallback(
-                workspace_id=state.workspace_id,
-                response_language=request.response_language,
-            )
-            if guided_training_prefers_local_reply
-            else None
-        )
+        cancel_event = stream_cancellation_events.get(cancel_id)
 
-        agent_meta: dict[str, object] = {}
-        language_corruption_detected = False
-        provider_failure_detected = False
-        preflight_language_probe = detect_provider_language_corruption(
-            coaching_service,
-            message=request.message,
-            response_language=request.response_language,
-            coach_context=dict(coach_turn["coach_context"]),
-        )
-        if preflight_language_probe is not None:
-            language_corruption_detected = True
-            coach_turn = extract_coach_turn_payload(
-                isolate_preflight_language_corruption_turn(
-                    coach_turn_mapping(coach_turn),
-                    message=request.message,
-                    current_file=request.current_file.model_dump() if request.current_file else None,
-                )
-            )
-            assistant_content, updated_coach_turn, agent_meta = apply_language_corruption_override(
-                coaching_service=coaching_service,
-                snapshot=state.snapshot,
-                coach_turn=coach_turn_mapping(coach_turn),
-                message=request.message,
-                response_language=request.response_language,
-                allow_guided_recovery=False,
-            )
-            coach_turn = extract_coach_turn_payload(updated_coach_turn)
-            ensure_explicit_training_card_after_language_block(
+        def _with_request_cancel(context: dict[str, object]) -> dict[str, object]:
+            if cancel_event is not None:
+                context["stream_cancel_event"] = cancel_event
+            return context
+
+        try:
+            coach_turn: CoachTurnPayload = resolve_coach_turn(
                 state=state,
+                profile=profile,
+                request=request,
+                message=request.message,
+                coaching_service=coaching_service,
+                current_task=state.snapshot.current_task,
+                current_plan=state.snapshot.plan,
+                current_evaluation=state.snapshot.evaluation,
+            )
+            scenario = str(coach_turn.get("scenario") or "general")
+            if guarantee_guided_learn_first_training_card(
+                workspace_id=state.workspace_id,
+                scenario=str(coach_turn["scenario"] or ""),
                 message=request.message,
                 current_file=request.current_file,
                 response_language=request.response_language,
-                fallback_scenario=str(coach_turn.get("scenario") or scenario),
-                force_training_card=(
-                    auto_preference_requests_training_card(
-                        request.message,
-                        requested_scenario=str(coach_turn.get("scenario") or scenario),
-                        requested_answer_mode=raw_requested_answer_mode,
-                        saved_answer_mode=saved_answer_mode,
-                        profile=profile,
-                    )
-                    or auto_lane_learn_first_force_training_card(
-                        request.message,
-                        requested_scenario=str(coach_turn.get("scenario") or scenario),
-                        requested_answer_mode=raw_requested_answer_mode,
-                        saved_answer_mode=saved_answer_mode,
-                        profile=profile,
-                    )
-                ),
-                provider_service_override=coaching_service,
-            )
-            scenario = str(coach_turn.get("scenario") or scenario)
-            agent_meta["scenario"] = scenario
-        elif guided_training_local_reply is not None:
-            assistant_content, updated_coach_turn, agent_meta = apply_guided_training_visible_fallback(
-                coach_turn=coach_turn_mapping(coach_turn),
-                fallback=guided_training_local_reply,
-            )
-            coach_turn = extract_coach_turn_payload(updated_coach_turn)
-        elif use_agent_loop and not guided_training_prefers_local_reply:
-            agent_context = dict(coach_turn["coach_context"])
-            agent_context["__runtime__"] = runtime
-            agent_context["workspace_id"] = workspace_id
-            agent_context["session_id"] = state.session_id
-            _stamp_library_sandbox_work(agent_context, request, payload)
-            agent_outcome = await coaching_service.coaching_reply_agentic(
-                profile,
+                active_thread=state.snapshot.memory.active_thread,
+                requested_answer_mode=raw_requested_answer_mode,
+                saved_answer_mode=saved_answer_mode,
+                profile=profile,
+            ):
+                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+            auto_resource_events = auto_resource_lookup_tool_events(
+                dict(coach_turn["coach_context"]),
                 request.message,
-                request.current_file.model_dump() if request.current_file else None,
-                response_language=request.response_language,
-                answer_mode=request.answer_mode,
-                coach_context=agent_context,
-                attachments=attachments_payload,
-                protocol=getattr(coaching_service._config, "protocol", None) if coaching_service._config else None,
-                history=build_conversation_history(
-                    state.snapshot.messages,
-                    drop_latest_user=True,
-                ),
             )
-            assistant_content = str(agent_outcome.get("content") or "").strip()
-            agent_resume_thread = str(agent_outcome.get("resume_thread") or "").strip()
-            if not agent_resume_thread:
-                agent_resume_thread = build_resume_thread_text(
-                    str(agent_outcome.get("summary") or "").strip(),
-                    str(agent_outcome.get("next_step") or "").strip(),
+            guided_training_prefers_local_reply = should_bypass_agent_loop_for_guided_training(
+                workspace_id=state.workspace_id,
+                scenario=str(coach_turn["scenario"] or scenario),
+                message=request.message,
+                active_view=request.active_view,
+                requested_answer_mode=raw_requested_answer_mode,
+                saved_answer_mode=saved_answer_mode,
+                profile=profile,
+            )
+            guided_training_local_reply = (
+                build_guided_training_visible_fallback(
+                    workspace_id=state.workspace_id,
                     response_language=request.response_language,
                 )
-            agent_meta = {
-                "stop_reason": agent_outcome.get("stop_reason"),
-                "summary": agent_outcome.get("summary"),
-                "next_step": agent_outcome.get("next_step"),
-                "decision": agent_outcome.get("decision"),
-                "blocker": agent_outcome.get("blocker"),
-                "teaching_note": agent_outcome.get("teaching_note"),
-                "resume_thread": agent_resume_thread,
-                "confidence": agent_outcome.get("confidence"),
-                "evidence": agent_outcome.get("evidence"),
-                "steps": agent_outcome.get("steps", []),
-                "tool_events": agent_outcome.get("tool_events", []),
-                "fell_back": bool(agent_outcome.get("fell_back")),
-                "recovered_stop_reason": agent_outcome.get("recovered_stop_reason"),
-                "agentic": True,
-            }
-            apply_attachment_delivery_metadata(agent_meta, agent_outcome)
-            original_agent_stop_reason = str(agent_outcome.get("stop_reason") or "").strip()
-            local_sequence_fallback: dict[str, str] | None = None
-            local_sequence_fallback = build_local_sequence_visible_fallback(
-                coach_context=dict(coach_turn["coach_context"]),
-                response_language=request.response_language,
+                if guided_training_prefers_local_reply
+                else None
             )
-            force_local_sequence = bool(
-                local_sequence_fallback is not None
-                and (
-                    str(agent_outcome.get("stop_reason") or "").strip() == "empty_response"
-                    or not reply_explicitly_lists_prepared_sequence(
-                        assistant_content,
-                        coach_context=dict(coach_turn["coach_context"]),
-                    )
-                )
-            )
-            if force_local_sequence and local_sequence_fallback is not None:
-                assistant_content = local_sequence_fallback["reply"]
-                coaching_service.clear_last_reply_override()
-                agent_meta["summary"] = agent_meta.get("summary") or local_sequence_fallback["summary"]
-                agent_meta["next_step"] = (
-                    agent_meta.get("next_step") or local_sequence_fallback["next_step"]
-                )
-                agent_meta["teaching_note"] = (
-                    agent_meta.get("teaching_note") or local_sequence_fallback["teaching_note"]
-                )
-                if not str(agent_meta.get("resume_thread") or "").strip():
-                    agent_meta["resume_thread"] = local_sequence_fallback["resume_thread"]
-                if original_agent_stop_reason == "empty_response":
-                    agent_meta["fell_back"] = True
-                    agent_meta["recovered_stop_reason"] = original_agent_stop_reason
-                    agent_meta["stop_reason"] = "completed"
-                else:
-                    agent_meta["grounded_sequence_enforced"] = True
-                agent_meta["local_sequence_fallback"] = True
-            elif not assistant_content:
-                if local_sequence_fallback is None:
-                    assistant_content = await coaching_service.coaching_reply(
-                        profile,
-                        request.message,
-                        request.current_file.model_dump() if request.current_file else None,
-                        response_language=request.response_language,
-                        answer_mode=request.answer_mode,
-                        coach_context=dict(coach_turn["coach_context"]),
-                        history=build_conversation_history(
-                            state.snapshot.messages,
-                            drop_latest_user=True,
-                        ),
-                    )
-                else:
-                    assistant_content = local_sequence_fallback["reply"]
-                    coaching_service.clear_last_reply_override()
-                    agent_meta["summary"] = agent_meta.get("summary") or local_sequence_fallback["summary"]
-                    agent_meta["next_step"] = (
-                        agent_meta.get("next_step") or local_sequence_fallback["next_step"]
-                    )
-                    agent_meta["teaching_note"] = (
-                        agent_meta.get("teaching_note") or local_sequence_fallback["teaching_note"]
-                    )
-                    if not str(agent_meta.get("resume_thread") or "").strip():
-                        agent_meta["resume_thread"] = local_sequence_fallback["resume_thread"]
-                agent_meta["fell_back"] = True
-                if original_agent_stop_reason == "empty_response":
-                    agent_meta["recovered_stop_reason"] = original_agent_stop_reason
-                    agent_meta["stop_reason"] = "completed"
-                agent_meta["local_sequence_fallback"] = local_sequence_fallback is not None
-            updated_coach_turn = merge_agent_finalize_into_coach_turn(
-                coach_turn_mapping(coach_turn),
-                summary=agent_outcome.get("summary")
-                or (local_sequence_fallback or {}).get("summary"),
-                next_step=agent_outcome.get("next_step")
-                or (local_sequence_fallback or {}).get("next_step"),
-                blocker=agent_outcome.get("blocker"),
-                resume_thread=agent_resume_thread
-                or (local_sequence_fallback or {}).get("resume_thread"),
-                decision=agent_outcome.get("decision"),
-                teaching_note=agent_outcome.get("teaching_note")
-                or (local_sequence_fallback or {}).get("teaching_note"),
-                confidence=agent_outcome.get("confidence"),
-                evidence=agent_outcome.get("evidence"),
-            )
-            coach_turn = extract_coach_turn_payload(updated_coach_turn)
-        else:
-            assistant_content = await coaching_service.coaching_reply(
-                profile,
-                request.message,
-                request.current_file.model_dump() if request.current_file else None,
-                response_language=request.response_language,
-                answer_mode=request.answer_mode,
-                coach_context=dict(coach_turn["coach_context"]),
-                history=build_conversation_history(
-                    state.snapshot.messages,
-                    drop_latest_user=True,
-                ),
-            )
-        provider_empty_reply_override = consume_provider_empty_reply_override(
-            coaching_service=coaching_service,
-            snapshot=state.snapshot,
-            coach_turn=coach_turn_mapping(coach_turn),
-            response_language=request.response_language,
-            assistant_content=assistant_content,
-        )
-        if provider_empty_reply_override is not None:
-            provider_failure_detected = True
-            assistant_content, updated_coach_turn, override_meta = provider_empty_reply_override
-            coach_turn = extract_coach_turn_payload(updated_coach_turn)
-            agent_meta.update(override_meta)
-        else:
-            provider_failure_override = consume_provider_reply_failure_override(
-                coaching_service=coaching_service,
-                snapshot=state.snapshot,
-                coach_turn=coach_turn_mapping(coach_turn),
+
+            agent_meta: dict[str, object] = {}
+            language_corruption_detected = False
+            provider_failure_detected = False
+            preflight_language_probe = detect_provider_language_corruption(
+                coaching_service,
                 message=request.message,
                 response_language=request.response_language,
-                workspace_id=state.workspace_id,
+                coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
             )
-            if provider_failure_override is not None:
-                provider_failure_detected = True
-                assistant_content, updated_coach_turn, override_meta = provider_failure_override
-                coach_turn = extract_coach_turn_payload(updated_coach_turn)
-                agent_meta.update(override_meta)
-            elif not language_corruption_detected and coaching_service.detect_language_corruption(
-                message=request.message,
-                reply=assistant_content,
-                response_language=request.response_language,
-            ):
+            if preflight_language_probe is not None:
                 language_corruption_detected = True
-                assistant_content, updated_coach_turn, override_meta = apply_language_corruption_override(
+                coach_turn = extract_coach_turn_payload(
+                    isolate_preflight_language_corruption_turn(
+                        coach_turn_mapping(coach_turn),
+                        message=request.message,
+                        current_file=request.current_file.model_dump() if request.current_file else None,
+                    )
+                )
+                assistant_content, updated_coach_turn, agent_meta = apply_language_corruption_override(
                     coaching_service=coaching_service,
                     snapshot=state.snapshot,
                     coach_turn=coach_turn_mapping(coach_turn),
                     message=request.message,
                     response_language=request.response_language,
-                    reply_corruption=True,
+                    allow_guided_recovery=False,
                 )
                 coach_turn = extract_coach_turn_payload(updated_coach_turn)
                 ensure_explicit_training_card_after_language_block(
@@ -21927,148 +21783,376 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     provider_service_override=coaching_service,
                 )
                 scenario = str(coach_turn.get("scenario") or scenario)
-                agent_meta.update(override_meta)
-        if not provider_failure_detected:
-            resource_contract_fallback = None
-            if grounded_resource_contract_needs_repair(
-                assistant_content,
-                coach_context=dict(coach_turn["coach_context"]),
-            ):
-                resource_contract_fallback = build_grounded_resource_contract_visible_fallback(
-                    workspace_id=workspace_id,
-                    coach_context=dict(coach_turn["coach_context"]),
-                    agent_meta=agent_meta,
-                    response_language=request.response_language,
-                )
-            if resource_contract_fallback is not None:
-                assistant_content = resource_contract_fallback["reply"]
-                agent_meta["summary"] = resource_contract_fallback["summary"]
-                agent_meta["next_step"] = resource_contract_fallback["next_step"]
-                agent_meta["teaching_note"] = resource_contract_fallback["teaching_note"]
-                agent_meta["resume_thread"] = resource_contract_fallback["resume_thread"]
-                agent_meta["grounded_resource_contract_repaired"] = True
-                agent_meta["scenario"] = str(coach_turn.get("scenario") or scenario)
-                updated_coach_turn = merge_agent_finalize_into_coach_turn(
-                    coach_turn_mapping(coach_turn),
-                    summary=resource_contract_fallback["summary"],
-                    next_step=resource_contract_fallback["next_step"],
-                    blocker=agent_meta.get("blocker"),
-                    resume_thread=resource_contract_fallback["resume_thread"],
-                    decision=agent_meta.get("decision"),
-                    teaching_note=resource_contract_fallback["teaching_note"],
-                    confidence=agent_meta.get("confidence"),
-                    evidence=agent_meta.get("evidence"),
+                agent_meta["scenario"] = scenario
+            elif guided_training_local_reply is not None:
+                assistant_content, updated_coach_turn, agent_meta = apply_guided_training_visible_fallback(
+                    coach_turn=coach_turn_mapping(coach_turn),
+                    fallback=guided_training_local_reply,
                 )
                 coach_turn = extract_coach_turn_payload(updated_coach_turn)
-            assistant_content, updated_coach_turn, agent_meta, _guided_lane_repaired = (
-                apply_guided_lane_visible_fallback(
-                    reply=assistant_content,
-                    scenario=str(coach_turn.get("scenario") or scenario),
-                    learner_message=request.message,
+            elif use_agent_loop and not guided_training_prefers_local_reply:
+                agent_context = dict(coach_turn["coach_context"])
+                agent_context["__runtime__"] = runtime
+                agent_context["workspace_id"] = workspace_id
+                agent_context["session_id"] = state.session_id
+                _stamp_library_sandbox_work(agent_context, request, payload)
+                _with_request_cancel(agent_context)
+                agent_outcome = await coaching_service.coaching_reply_agentic(
+                    profile,
+                    request.message,
+                    request.current_file.model_dump() if request.current_file else None,
                     response_language=request.response_language,
-                    coach_turn=coach_turn_mapping(coach_turn),
-                    agent_meta=agent_meta,
+                    answer_mode=request.answer_mode,
+                    coach_context=agent_context,
+                    attachments=attachments_payload,
+                    protocol=getattr(coaching_service._config, "protocol", None) if coaching_service._config else None,
+                    history=build_conversation_history(
+                        state.snapshot.messages,
+                        drop_latest_user=True,
+                    ),
                 )
-            )
-            coach_turn = extract_coach_turn_payload(updated_coach_turn)
-            ensure_explicit_training_card_after_coach_reply(
-                state=state,
-                message=request.message,
-                current_file=request.current_file,
-                response_language=request.response_language,
-                fallback_scenario=str(coach_turn.get("scenario") or scenario),
-                force_training_card=auto_preference_requests_training_card(
-                    request.message,
-                    requested_scenario=str(coach_turn.get("scenario") or scenario),
-                    requested_answer_mode=raw_requested_answer_mode,
-                    saved_answer_mode=saved_answer_mode,
-                    profile=profile,
+                assistant_content = str(agent_outcome.get("content") or "").strip()
+                agent_resume_thread = str(agent_outcome.get("resume_thread") or "").strip()
+                if not agent_resume_thread:
+                    agent_resume_thread = build_resume_thread_text(
+                        str(agent_outcome.get("summary") or "").strip(),
+                        str(agent_outcome.get("next_step") or "").strip(),
+                        response_language=request.response_language,
+                    )
+                agent_meta = {
+                    "stop_reason": agent_outcome.get("stop_reason"),
+                    "summary": agent_outcome.get("summary"),
+                    "next_step": agent_outcome.get("next_step"),
+                    "decision": agent_outcome.get("decision"),
+                    "blocker": agent_outcome.get("blocker"),
+                    "teaching_note": agent_outcome.get("teaching_note"),
+                    "resume_thread": agent_resume_thread,
+                    "confidence": agent_outcome.get("confidence"),
+                    "evidence": agent_outcome.get("evidence"),
+                    "steps": agent_outcome.get("steps", []),
+                    "tool_events": agent_outcome.get("tool_events", []),
+                    "fell_back": bool(agent_outcome.get("fell_back")),
+                    "recovered_stop_reason": agent_outcome.get("recovered_stop_reason"),
+                    "agentic": True,
+                }
+                apply_attachment_delivery_metadata(agent_meta, agent_outcome)
+                original_agent_stop_reason = str(agent_outcome.get("stop_reason") or "").strip()
+                local_sequence_fallback: dict[str, str] | None = None
+                local_sequence_fallback = build_local_sequence_visible_fallback(
+                    coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
+                    response_language=request.response_language,
                 )
-                or auto_lane_learn_first_force_training_card(
+                force_local_sequence = bool(
+                    local_sequence_fallback is not None
+                    and (
+                        str(agent_outcome.get("stop_reason") or "").strip() == "empty_response"
+                        or not reply_explicitly_lists_prepared_sequence(
+                            assistant_content,
+                            coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
+                        )
+                    )
+                )
+                if force_local_sequence and local_sequence_fallback is not None:
+                    assistant_content = local_sequence_fallback["reply"]
+                    coaching_service.clear_last_reply_override()
+                    agent_meta["summary"] = agent_meta.get("summary") or local_sequence_fallback["summary"]
+                    agent_meta["next_step"] = (
+                        agent_meta.get("next_step") or local_sequence_fallback["next_step"]
+                    )
+                    agent_meta["teaching_note"] = (
+                        agent_meta.get("teaching_note") or local_sequence_fallback["teaching_note"]
+                    )
+                    if not str(agent_meta.get("resume_thread") or "").strip():
+                        agent_meta["resume_thread"] = local_sequence_fallback["resume_thread"]
+                    if original_agent_stop_reason == "empty_response":
+                        agent_meta["fell_back"] = True
+                        agent_meta["recovered_stop_reason"] = original_agent_stop_reason
+                        agent_meta["stop_reason"] = "completed"
+                    else:
+                        agent_meta["grounded_sequence_enforced"] = True
+                    agent_meta["local_sequence_fallback"] = True
+                elif not assistant_content:
+                    if local_sequence_fallback is None:
+                        assistant_content = await coaching_service.coaching_reply(
+                            profile,
+                            request.message,
+                            request.current_file.model_dump() if request.current_file else None,
+                            response_language=request.response_language,
+                            answer_mode=request.answer_mode,
+                            coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
+                            history=build_conversation_history(
+                                state.snapshot.messages,
+                                drop_latest_user=True,
+                            ),
+                        )
+                    else:
+                        assistant_content = local_sequence_fallback["reply"]
+                        coaching_service.clear_last_reply_override()
+                        agent_meta["summary"] = agent_meta.get("summary") or local_sequence_fallback["summary"]
+                        agent_meta["next_step"] = (
+                            agent_meta.get("next_step") or local_sequence_fallback["next_step"]
+                        )
+                        agent_meta["teaching_note"] = (
+                            agent_meta.get("teaching_note") or local_sequence_fallback["teaching_note"]
+                        )
+                        if not str(agent_meta.get("resume_thread") or "").strip():
+                            agent_meta["resume_thread"] = local_sequence_fallback["resume_thread"]
+                    agent_meta["fell_back"] = True
+                    if original_agent_stop_reason == "empty_response":
+                        agent_meta["recovered_stop_reason"] = original_agent_stop_reason
+                        agent_meta["stop_reason"] = "completed"
+                    agent_meta["local_sequence_fallback"] = local_sequence_fallback is not None
+                updated_coach_turn = merge_agent_finalize_into_coach_turn(
+                    coach_turn_mapping(coach_turn),
+                    summary=agent_outcome.get("summary")
+                    or (local_sequence_fallback or {}).get("summary"),
+                    next_step=agent_outcome.get("next_step")
+                    or (local_sequence_fallback or {}).get("next_step"),
+                    blocker=agent_outcome.get("blocker"),
+                    resume_thread=agent_resume_thread
+                    or (local_sequence_fallback or {}).get("resume_thread"),
+                    decision=agent_outcome.get("decision"),
+                    teaching_note=agent_outcome.get("teaching_note")
+                    or (local_sequence_fallback or {}).get("teaching_note"),
+                    confidence=agent_outcome.get("confidence"),
+                    evidence=agent_outcome.get("evidence"),
+                )
+                coach_turn = extract_coach_turn_payload(updated_coach_turn)
+            else:
+                assistant_content = await coaching_service.coaching_reply(
+                    profile,
                     request.message,
-                    requested_scenario=str(coach_turn.get("scenario") or scenario),
-                    requested_answer_mode=raw_requested_answer_mode,
-                    saved_answer_mode=saved_answer_mode,
-                    profile=profile,
-                ),
-                provider_service_override=coaching_service,
-            )
-        if should_attach_auto_resource_events(agent_meta):
-            agent_meta = apply_auto_resource_agent_evidence(agent_meta, auto_resource_events)
-        if not use_agent_loop and agent_meta:
-            agent_meta["agentic"] = False
-        persist_turn_reflection(
-            workspace_id=workspace_id,
-            session_id=state.session_id,
-            user_message=request.message,
-            scenario=str(coach_turn["scenario"]),
-            response_language=request.response_language,
-            answer_mode=answer_mode_preference_for_persistence(
-                raw_requested_answer_mode,
-                saved_answer_mode,
-                request.answer_mode,
-                profile.answer_policy if profile else None,
-            ),
-            coach_defaults=request.coach_defaults,
-            coach_turn_data=coach_turn_mapping(coach_turn),
-            stop_reason=str(agent_meta.get("stop_reason") or ""),
-            recovered_stop_reason=str(agent_meta.get("recovered_stop_reason") or ""),
-            local_sequence_fallback=bool(agent_meta.get("local_sequence_fallback")),
-        )
-        persist_recovered_plan_resume_after_turn(
-            workspace_id=workspace_id,
-            request=request,
-            reply_content=assistant_content,
-            agent_meta=agent_meta if isinstance(agent_meta, dict) else None,
-            coach_context=coach_turn.get("coach_context") if isinstance(coach_turn, dict) else None,
-            recovered_status=state.snapshot.plan_runtime_status
-            if isinstance(state.snapshot.plan_runtime_status, dict)
-            else None,
-        )
-        if not language_corruption_detected and not provider_failure_detected:
-            persist_external_references_as_background(
-                workspace_id=workspace_id,
-                scenario=str(coach_turn["scenario"]),
-                coach_turn_data=coach_turn_mapping(coach_turn),
-            )
-        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-        state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
-        runtime.hydrate_plan_context(state.snapshot, workspace_id)
-        hydrate_snapshot(
-            state.snapshot,
-            response_language=request.response_language,
-            answer_mode=request.answer_mode or (profile.answer_policy if profile else None),
-            scenario=str(coach_turn["scenario"]),
-            learner_signal=str(coach_turn["learner_signal"]),
-            message=request.message,
-            session_workspace_id=workspace_id,
-        )
-        session_suggested_actions = list(coach_turn["suggested_actions"])
-        if not provider_live_usable:
-            session_suggested_actions = honest_suggested_actions_without_usable_provider(
-                session_suggested_actions,
-                response_language=request.response_language,
+                    request.current_file.model_dump() if request.current_file else None,
+                    response_language=request.response_language,
+                    answer_mode=request.answer_mode,
+                    coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
+                    history=build_conversation_history(
+                        state.snapshot.messages,
+                        drop_latest_user=True,
+                    ),
+                )
+            provider_empty_reply_override = consume_provider_empty_reply_override(
+                coaching_service=coaching_service,
                 snapshot=state.snapshot,
-                current_task=state.snapshot.current_task,
-                current_plan=state.snapshot.plan,
-                current_evaluation=state.snapshot.evaluation,
+                coach_turn=coach_turn_mapping(coach_turn),
+                response_language=request.response_language,
+                assistant_content=assistant_content,
             )
-        response = build_session_response(
-            state=state,
-            request=request,
-            reply_content=assistant_content,
-            artifacts=dict(coach_turn["artifacts"]),
-            suggested_actions=session_suggested_actions,
-            scenario=str(coach_turn["scenario"]),
-            learner_signal=str(coach_turn["learner_signal"]),
-            coach_turn_data=coach_turn_mapping(coach_turn),
-            agent_meta=agent_meta or None,
-            attachment_delivery=attachment_delivery,
-        )
-        runtime.save_session_state(state.session_id)
-        response_payload = json_object_payload(response)
-        if agent_meta:
-            response_payload.setdefault("agent_meta", agent_meta)
+            if provider_empty_reply_override is not None:
+                provider_failure_detected = True
+                assistant_content, updated_coach_turn, override_meta = provider_empty_reply_override
+                coach_turn = extract_coach_turn_payload(updated_coach_turn)
+                agent_meta.update(override_meta)
+            else:
+                provider_failure_override = consume_provider_reply_failure_override(
+                    coaching_service=coaching_service,
+                    snapshot=state.snapshot,
+                    coach_turn=coach_turn_mapping(coach_turn),
+                    message=request.message,
+                    response_language=request.response_language,
+                    workspace_id=state.workspace_id,
+                )
+                if provider_failure_override is not None:
+                    provider_failure_detected = True
+                    assistant_content, updated_coach_turn, override_meta = provider_failure_override
+                    coach_turn = extract_coach_turn_payload(updated_coach_turn)
+                    agent_meta.update(override_meta)
+                elif not language_corruption_detected and coaching_service.detect_language_corruption(
+                    message=request.message,
+                    reply=assistant_content,
+                    response_language=request.response_language,
+                ):
+                    language_corruption_detected = True
+                    assistant_content, updated_coach_turn, override_meta = apply_language_corruption_override(
+                        coaching_service=coaching_service,
+                        snapshot=state.snapshot,
+                        coach_turn=coach_turn_mapping(coach_turn),
+                        message=request.message,
+                        response_language=request.response_language,
+                        reply_corruption=True,
+                    )
+                    coach_turn = extract_coach_turn_payload(updated_coach_turn)
+                    ensure_explicit_training_card_after_language_block(
+                        state=state,
+                        message=request.message,
+                        current_file=request.current_file,
+                        response_language=request.response_language,
+                        fallback_scenario=str(coach_turn.get("scenario") or scenario),
+                        force_training_card=(
+                            auto_preference_requests_training_card(
+                                request.message,
+                                requested_scenario=str(coach_turn.get("scenario") or scenario),
+                                requested_answer_mode=raw_requested_answer_mode,
+                                saved_answer_mode=saved_answer_mode,
+                                profile=profile,
+                            )
+                            or auto_lane_learn_first_force_training_card(
+                                request.message,
+                                requested_scenario=str(coach_turn.get("scenario") or scenario),
+                                requested_answer_mode=raw_requested_answer_mode,
+                                saved_answer_mode=saved_answer_mode,
+                                profile=profile,
+                            )
+                        ),
+                        provider_service_override=coaching_service,
+                    )
+                    scenario = str(coach_turn.get("scenario") or scenario)
+                    agent_meta.update(override_meta)
+            if not provider_failure_detected:
+                resource_contract_fallback = None
+                if grounded_resource_contract_needs_repair(
+                    assistant_content,
+                    coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
+                ):
+                    resource_contract_fallback = build_grounded_resource_contract_visible_fallback(
+                        workspace_id=workspace_id,
+                        coach_context=_with_request_cancel(dict(coach_turn["coach_context"])),
+                        agent_meta=agent_meta,
+                        response_language=request.response_language,
+                    )
+                if resource_contract_fallback is not None:
+                    assistant_content = resource_contract_fallback["reply"]
+                    agent_meta["summary"] = resource_contract_fallback["summary"]
+                    agent_meta["next_step"] = resource_contract_fallback["next_step"]
+                    agent_meta["teaching_note"] = resource_contract_fallback["teaching_note"]
+                    agent_meta["resume_thread"] = resource_contract_fallback["resume_thread"]
+                    agent_meta["grounded_resource_contract_repaired"] = True
+                    agent_meta["scenario"] = str(coach_turn.get("scenario") or scenario)
+                    updated_coach_turn = merge_agent_finalize_into_coach_turn(
+                        coach_turn_mapping(coach_turn),
+                        summary=resource_contract_fallback["summary"],
+                        next_step=resource_contract_fallback["next_step"],
+                        blocker=agent_meta.get("blocker"),
+                        resume_thread=resource_contract_fallback["resume_thread"],
+                        decision=agent_meta.get("decision"),
+                        teaching_note=resource_contract_fallback["teaching_note"],
+                        confidence=agent_meta.get("confidence"),
+                        evidence=agent_meta.get("evidence"),
+                    )
+                    coach_turn = extract_coach_turn_payload(updated_coach_turn)
+                assistant_content, updated_coach_turn, agent_meta, _guided_lane_repaired = (
+                    apply_guided_lane_visible_fallback(
+                        reply=assistant_content,
+                        scenario=str(coach_turn.get("scenario") or scenario),
+                        learner_message=request.message,
+                        response_language=request.response_language,
+                        coach_turn=coach_turn_mapping(coach_turn),
+                        agent_meta=agent_meta,
+                    )
+                )
+                coach_turn = extract_coach_turn_payload(updated_coach_turn)
+                ensure_explicit_training_card_after_coach_reply(
+                    state=state,
+                    message=request.message,
+                    current_file=request.current_file,
+                    response_language=request.response_language,
+                    fallback_scenario=str(coach_turn.get("scenario") or scenario),
+                    force_training_card=auto_preference_requests_training_card(
+                        request.message,
+                        requested_scenario=str(coach_turn.get("scenario") or scenario),
+                        requested_answer_mode=raw_requested_answer_mode,
+                        saved_answer_mode=saved_answer_mode,
+                        profile=profile,
+                    )
+                    or auto_lane_learn_first_force_training_card(
+                        request.message,
+                        requested_scenario=str(coach_turn.get("scenario") or scenario),
+                        requested_answer_mode=raw_requested_answer_mode,
+                        saved_answer_mode=saved_answer_mode,
+                        profile=profile,
+                    ),
+                    provider_service_override=coaching_service,
+                )
+            if should_attach_auto_resource_events(agent_meta):
+                agent_meta = apply_auto_resource_agent_evidence(agent_meta, auto_resource_events)
+            if not use_agent_loop and agent_meta:
+                agent_meta["agentic"] = False
+            persist_turn_reflection(
+                workspace_id=workspace_id,
+                session_id=state.session_id,
+                user_message=request.message,
+                scenario=str(coach_turn["scenario"]),
+                response_language=request.response_language,
+                answer_mode=answer_mode_preference_for_persistence(
+                    raw_requested_answer_mode,
+                    saved_answer_mode,
+                    request.answer_mode,
+                    profile.answer_policy if profile else None,
+                ),
+                coach_defaults=request.coach_defaults,
+                coach_turn_data=coach_turn_mapping(coach_turn),
+                stop_reason=str(agent_meta.get("stop_reason") or ""),
+                recovered_stop_reason=str(agent_meta.get("recovered_stop_reason") or ""),
+                local_sequence_fallback=bool(agent_meta.get("local_sequence_fallback")),
+            )
+            persist_recovered_plan_resume_after_turn(
+                workspace_id=workspace_id,
+                request=request,
+                reply_content=assistant_content,
+                agent_meta=agent_meta if isinstance(agent_meta, dict) else None,
+                coach_context=coach_turn.get("coach_context") if isinstance(coach_turn, dict) else None,
+                recovered_status=state.snapshot.plan_runtime_status
+                if isinstance(state.snapshot.plan_runtime_status, dict)
+                else None,
+            )
+            if not language_corruption_detected and not provider_failure_detected:
+                persist_external_references_as_background(
+                    workspace_id=workspace_id,
+                    scenario=str(coach_turn["scenario"]),
+                    coach_turn_data=coach_turn_mapping(coach_turn),
+                )
+            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+            state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
+            runtime.hydrate_plan_context(state.snapshot, workspace_id)
+            hydrate_snapshot(
+                state.snapshot,
+                response_language=request.response_language,
+                answer_mode=request.answer_mode or (profile.answer_policy if profile else None),
+                scenario=str(coach_turn["scenario"]),
+                learner_signal=str(coach_turn["learner_signal"]),
+                message=request.message,
+                session_workspace_id=workspace_id,
+            )
+            session_suggested_actions = list(coach_turn["suggested_actions"])
+            if not provider_live_usable:
+                session_suggested_actions = honest_suggested_actions_without_usable_provider(
+                    session_suggested_actions,
+                    response_language=request.response_language,
+                    snapshot=state.snapshot,
+                    current_task=state.snapshot.current_task,
+                    current_plan=state.snapshot.plan,
+                    current_evaluation=state.snapshot.evaluation,
+                )
+            response = build_session_response(
+                state=state,
+                request=request,
+                reply_content=assistant_content,
+                artifacts=dict(coach_turn["artifacts"]),
+                suggested_actions=session_suggested_actions,
+                scenario=str(coach_turn["scenario"]),
+                learner_signal=str(coach_turn["learner_signal"]),
+                coach_turn_data=coach_turn_mapping(coach_turn),
+                agent_meta=agent_meta or None,
+                attachment_delivery=attachment_delivery,
+            )
+            runtime.save_session_state(state.session_id)
+            response_payload = json_object_payload(response)
+            if agent_meta:
+                response_payload.setdefault("agent_meta", agent_meta)
+        except asyncio.CancelledError:
+            if request_id:
+                fail_session_request_singleflight(
+                    request_key,
+                    asyncio.CancelledError(),
+                    inflight=inflight_session_requests,
+                    guard=completed_session_requests_guard,
+                )
+            raise
+        finally:
+            disconnect_watch.cancel()
+            await asyncio.gather(disconnect_watch, return_exceptions=True)
+            unregister_stream_cancellation(cancel_id)
+
         return _finish_session_response(response_payload)
 
     @router.get("/session/history", response_model=None)
@@ -22219,7 +22303,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         return resume
 
     @router.post("/turn", response_model=None)
-    async def turn(payload: dict) -> object:
+    async def turn(payload: dict, http_request: Request) -> object:
         try:
             request = TurnRequest.model_validate(payload)
         except ValidationError as exc:
@@ -22337,46 +22421,69 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if current_task is not None:
                 current_task.add_done_callback(_owner_task_cleanup)
 
-        response, artifacts, _ = await execute_turn(request, payload)
-        if isinstance(response, SessionMessageResponse):
-            response.snapshot.memory = repair_guided_lane_memory_snapshot_for_response(
-                runtime.memory_service.snapshot(workspace_id),
-                scenario=response.coach_turn.scenario if response.coach_turn else None,
-                response_language=request.response_language,
-                learner_message=request.message,
-            )
-            workspace_memory = (
-                response.snapshot.memory.workspace
-                if isinstance(response.snapshot.memory.workspace, dict)
-                else {}
-            )
-            hydrate_snapshot(
-                response.snapshot,
-                response_language=request.response_language
-                or str(workspace_memory.get("response_language") or "").strip()
-                or None,
-                answer_mode=(
-                    str(workspace_memory.get("answer_mode") or "").strip()
-                    or (
-                        response.snapshot.profile.answer_policy
-                        if response.snapshot.profile is not None
-                        else None
-                    )
-                ),
-                message=request.message,
-                session_workspace_id=workspace_id,
-            )
-        response_data = json_object_payload(response)
-        response_data["artifacts"] = artifacts
-        response_data["intent"] = original_intent
-        return _finish_turn_response(
-            attach_operation_reliability(
-                response_data,
-                phase="acked",
-                outcome=reliability_outcome_from_payload(response_data),
-                request_id=request_id or None,
-            )
+        cancel_id = resolve_request_cancel_id(payload)
+        register_stream_cancellation(cancel_id)
+        disconnect_watch = asyncio.create_task(
+            watch_request_client_disconnect(http_request, cancel_id)
         )
+        try:
+            response, artifacts, _ = await execute_turn(
+                request,
+                payload,
+                cancel_event=stream_cancellation_events.get(cancel_id),
+            )
+            if isinstance(response, SessionMessageResponse):
+                response.snapshot.memory = repair_guided_lane_memory_snapshot_for_response(
+                    runtime.memory_service.snapshot(workspace_id),
+                    scenario=response.coach_turn.scenario if response.coach_turn else None,
+                    response_language=request.response_language,
+                    learner_message=request.message,
+                )
+                workspace_memory = (
+                    response.snapshot.memory.workspace
+                    if isinstance(response.snapshot.memory.workspace, dict)
+                    else {}
+                )
+                hydrate_snapshot(
+                    response.snapshot,
+                    response_language=request.response_language
+                    or str(workspace_memory.get("response_language") or "").strip()
+                    or None,
+                    answer_mode=(
+                        str(workspace_memory.get("answer_mode") or "").strip()
+                        or (
+                            response.snapshot.profile.answer_policy
+                            if response.snapshot.profile is not None
+                            else None
+                        )
+                    ),
+                    message=request.message,
+                    session_workspace_id=workspace_id,
+                )
+            response_data = json_object_payload(response)
+            response_data["artifacts"] = artifacts
+            response_data["intent"] = original_intent
+            return _finish_turn_response(
+                attach_operation_reliability(
+                    response_data,
+                    phase="acked",
+                    outcome=reliability_outcome_from_payload(response_data),
+                    request_id=request_id or None,
+                )
+            )
+        except asyncio.CancelledError:
+            if request_id:
+                fail_session_request_singleflight(
+                    request_key,
+                    asyncio.CancelledError(),
+                    inflight=inflight_session_requests,
+                    guard=completed_session_requests_guard,
+                )
+            raise
+        finally:
+            disconnect_watch.cancel()
+            await asyncio.gather(disconnect_watch, return_exceptions=True)
+            unregister_stream_cancellation(cancel_id)
 
     @router.post("/stream/cancel")
     async def cancel_stream(payload: dict) -> dict[str, object]:
