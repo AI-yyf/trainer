@@ -34,6 +34,7 @@ export type ProviderHostCopyKey =
   | 'savedModelUnverifiedNoList'
   | 'savedModelNoList'
   | 'modelResolvedSuffix'
+  | 'modelAutoSelectedSuffix'
   | 'switchVerifying'
   | 'switchAlreadyActive'
   | 'switchModelNotAllowed'
@@ -74,6 +75,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     savedModelUnverifiedNoList: '连接设置已保存,但暂时还无法确认当前模型可用。',
     savedModelNoList: '连接设置已保存,但暂时还拿不到在线模型列表。',
     modelResolvedSuffix: ' Trainer 已把配置的模型解析为 {model}。',
+    modelAutoSelectedSuffix: 'Trainer 已自动选择模型 {model} 并确认连接可用。',
     switchVerifying: "已切换到模型“{model}”。Trainer 正在确认这组连接。",
     switchAlreadyActive: '模型“{model}”已经是当前模型。',
     switchModelNotAllowed: '模型“{model}”不在当前连接的模型列表或已配置的模型目录中。',
@@ -116,6 +118,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     savedModelUnverifiedNoList: 'Provider settings saved, but Trainer could not verify the current model yet.',
     savedModelNoList: 'Provider settings saved, but Trainer could not get the live model list yet.',
     modelResolvedSuffix: ' Trainer resolved the configured model to {model}.',
+    modelAutoSelectedSuffix: 'Trainer auto-selected model {model} and verified the connection.',
     switchVerifying: "Switched to model '{model}'. Trainer is verifying the connection on this model.",
     switchAlreadyActive: "Model '{model}' is already active.",
     switchModelNotAllowed: "Model '{model}' is not in the current provider model list or configured model catalog.",
@@ -166,6 +169,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     savedModelUnverifiedNoList: 'Configuración guardada, pero Trainer aún no pudo verificar el modelo actual.',
     savedModelNoList: 'Configuración guardada, pero Trainer aún no pudo obtener la lista de modelos en vivo.',
     modelResolvedSuffix: ' Trainer resolvió el modelo configurado a {model}.',
+    modelAutoSelectedSuffix: 'Trainer seleccionó automáticamente el modelo {model} y verificó la conexión.',
     switchVerifying: "Cambiado al modelo «{model}». Trainer está verificando la conexión con este modelo.",
     switchAlreadyActive: 'El modelo «{model}» ya es el modelo actual.',
     switchModelNotAllowed:
@@ -220,6 +224,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     savedModelNoList:
       'Paramètres enregistrés, mais Trainer n’a pas encore pu obtenir la liste des modèles en direct.',
     modelResolvedSuffix: ' Trainer a résolu le modèle configuré vers {model}.',
+    modelAutoSelectedSuffix: 'Trainer a sélectionné automatiquement le modèle {model} et a vérifié la connexion.',
     switchVerifying: "Passé au modèle « {model} ». Trainer vérifie la connexion avec ce modèle.",
     switchAlreadyActive: 'Le modèle « {model} » est déjà le modèle actuel.',
     switchModelNotAllowed:
@@ -275,6 +280,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     savedModelNoList:
       'Einstellungen gespeichert, aber Trainer konnte die Live-Modellliste noch nicht abrufen.',
     modelResolvedSuffix: ' Trainer hat das konfigurierte Modell zu {model} aufgelöst.',
+    modelAutoSelectedSuffix: 'Trainer hat das Modell {model} automatisch ausgewählt und die Verbindung geprüft.',
     switchVerifying: "Zu Modell „{model}“ gewechselt. Trainer überprüft gerade die Verbindung.",
     switchAlreadyActive: 'Modell „{model}“ ist bereits aktiv.',
     switchModelNotAllowed:
@@ -326,6 +332,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     savedModelUnverifiedNoList: '設定は保存されましたが、Trainer はまだ現在のモデルを確認できませんでした。',
     savedModelNoList: '設定は保存されましたが、ライブモデル一覧をまだ取得できませんでした。',
     modelResolvedSuffix: ' Trainer は設定されたモデルを {model} に解決しました。',
+    modelAutoSelectedSuffix: 'Trainer はモデル {model} を自動選択し、接続を確認しました。',
     switchVerifying: "モデル「{model}」に切り替えました。Trainer はこのモデルで接続を確認しています。",
     switchAlreadyActive: 'モデル「{model}」はすでに有効です。',
     switchModelNotAllowed:
@@ -376,6 +383,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     savedModelUnverifiedNoList: '설정은 저장되었지만, Trainer가 아직 현재 모델을 확인하지 못했습니다.',
     savedModelNoList: '설정은 저장되었지만, 라이브 모델 목록을 아직 가져오지 못했습니다.',
     modelResolvedSuffix: ' Trainer가 설정된 모델을 {model}(으)로 해석했습니다.',
+    modelAutoSelectedSuffix: 'Trainer가 모델 {model}을(를) 자동 선택하고 연결을 확인했습니다.',
     switchVerifying: "모델 '{model}'(으)로 전환했습니다. Trainer가 이 모델의 연결을 확인하고 있습니다.",
     switchAlreadyActive: "모델 '{model}'은(는) 이미 활성 모델입니다.",
     switchModelNotAllowed:
@@ -430,6 +438,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     savedModelNoList:
       'Configurações salvas, mas o Trainer ainda não conseguiu obter a lista de modelos ao vivo.',
     modelResolvedSuffix: ' O Trainer resolveu o modelo configurado para {model}.',
+    modelAutoSelectedSuffix: 'O Trainer selecionou automaticamente o modelo {model} e verificou a conexão.',
     switchVerifying: 'Mudado para o modelo “{model}”. O Trainer está verificando a conexão neste modelo.',
     switchAlreadyActive: 'O modelo “{model}” já é o modelo atual.',
     switchModelNotAllowed:

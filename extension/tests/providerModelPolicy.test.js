@@ -46,3 +46,32 @@ test('provider model policy filters new choices while retaining a recoverable cu
     ['gpt-4o', 'GPT-4.1'],
   );
 });
+
+test('pickDefaultModelFromList prefers fast tiers then alphabetical order', async () => {
+  const { pickDefaultModelFromList } = await import(providerModelPolicyModulePath);
+
+  assert.equal(
+    pickDefaultModelFromList(['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed']),
+    'MiniMax-M2.7-highspeed',
+  );
+  assert.equal(pickDefaultModelFromList(['zeta-model', 'alpha-model']), 'alpha-model');
+  assert.equal(pickDefaultModelFromList(['gpt-a', 'gpt-b']), 'gpt-a');
+  assert.equal(pickDefaultModelFromList([]), undefined);
+});
+
+test('pickFreshConnectionModel never overrides explicit or still-offered models', async () => {
+  const { pickFreshConnectionModel } = await import(providerModelPolicyModulePath);
+  const models = ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3'];
+
+  // Fresh paste without a model: adopt the quick pick.
+  assert.equal(pickFreshConnectionModel(undefined, models, false), 'MiniMax-M2.7-highspeed');
+  // Carried-over model the provider still offers: keep it.
+  assert.equal(pickFreshConnectionModel('minimax-m2.7', models, false), undefined);
+  // Carried-over model the provider no longer lists: adopt.
+  assert.equal(pickFreshConnectionModel('gpt-4.1-mini', models, false), 'MiniMax-M2.7-highspeed');
+  // Explicitly typed models are never overridden.
+  assert.equal(pickFreshConnectionModel(undefined, models, true), undefined);
+  assert.equal(pickFreshConnectionModel('gpt-4.1-mini', models, true), undefined);
+  // Nothing to adopt from.
+  assert.equal(pickFreshConnectionModel(undefined, [], false), undefined);
+});
