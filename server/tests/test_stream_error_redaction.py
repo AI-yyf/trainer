@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -256,3 +257,143 @@ def test_stream_abort_persists_interrupted_user_turn_without_fake_assistant(
         item["role"] == "assistant" and "partial provider text" in item["content"]
         for item in messages
     )
+
+
+@pytest.mark.asyncio
+async def test_turn_stream_disconnect_closes_blocked_agentic_provider(tmp_path: Path) -> None:
+    """Disconnect watcher must set cancel_event so a blocked agentic upstream closes."""
+    import httpx
+
+    provider_started = asyncio.Event()
+    provider_closed = asyncio.Event()
+    cancel_was_set = False
+
+    async def hanging_agentic_stream(self: ProviderService, *_args: Any, **kwargs: Any):
+        nonlocal cancel_was_set
+        ctx = kwargs.get("coach_context") if isinstance(kwargs.get("coach_context"), dict) else {}
+        cancel = ctx.get("stream_cancel_event")
+        try:
+            yield {"type": "text", "delta": "partial", "safe_to_stream": True}
+            provider_started.set()
+            if isinstance(cancel, asyncio.Event):
+                await cancel.wait()
+                cancel_was_set = cancel.is_set()
+            else:  # pragma: no cover
+                await asyncio.Event().wait()
+            yield {
+                "type": "final",
+                "content": "should not complete",
+                "stop_reason": "completed",
+            }
+        finally:
+            provider_closed.set()
+
+    async def disconnect_after_provider_started(_request: Any) -> bool:
+        return provider_started.is_set()
+
+    workspace_id = "ws-disconnect-closes-upstream"
+    with (
+        build_client(tmp_path) as client,
+        patch.object(ProviderService, "coaching_reply_agentic_stream", new=hanging_agentic_stream),
+        patch("starlette.requests.Request.is_disconnected", new=disconnect_after_provider_started),
+    ):
+        session_id = seed_session(client, workspace_id=workspace_id)
+        transport = httpx.ASGITransport(app=client.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as async_client:
+            async with async_client.stream(
+                "POST",
+                "/turn/stream",
+                json={
+                    "session_id": session_id,
+                    "workspace_id": workspace_id,
+                    "intent": "coach",
+                    "message": "Hang until disconnect closes upstream.",
+                    "response_language": "en-US",
+                    "use_agent_loop": True,
+                    "stream_id": "stream-disconnect-closes",
+                },
+            ) as response:
+                assert response.status_code == 200
+                await asyncio.wait_for(provider_started.wait(), timeout=3.0)
+                await asyncio.wait_for(provider_closed.wait(), timeout=3.0)
+                body = ""
+                async for chunk in response.aiter_text():
+                    body += chunk
+                    if "cancelled" in body or "complete" in body or "failed" in body:
+                        break
+    assert provider_closed.is_set()
+    assert cancel_was_set
+    assert "should not complete" not in body
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ["/turn", "/session/message"])
+async def test_nonstream_disconnect_closes_blocked_agentic_provider(
+    tmp_path: Path,
+    endpoint: str,
+) -> None:
+    """Non-SSE disconnect watcher must set cancel_event so blocked upstream closes."""
+    import httpx
+
+    provider_started = asyncio.Event()
+    provider_closed = asyncio.Event()
+    cancel_was_set = False
+
+    async def hanging_agentic(self: ProviderService, *_args: Any, **kwargs: Any):
+        nonlocal cancel_was_set
+        ctx = kwargs.get("coach_context") if isinstance(kwargs.get("coach_context"), dict) else {}
+        cancel = ctx.get("stream_cancel_event")
+        provider_started.set()
+        try:
+            if isinstance(cancel, asyncio.Event):
+                await cancel.wait()
+                cancel_was_set = cancel.is_set()
+            else:  # pragma: no cover
+                await asyncio.Event().wait()
+            return {
+                "content": "should not complete",
+                "steps": [],
+                "summary": None,
+                "next_step": None,
+                "stop_reason": "completed",
+                "tool_events": [],
+                "fell_back": False,
+            }
+        finally:
+            provider_closed.set()
+
+    async def disconnect_after_provider_started(_request: Any) -> bool:
+        return provider_started.is_set()
+
+    workspace_id = f"ws-nonstream-disconnect-{endpoint.strip('/').replace('/', '-')}"
+    with (
+        build_client(tmp_path) as client,
+        patch.object(ProviderService, "coaching_reply_agentic", new=hanging_agentic),
+        patch("starlette.requests.Request.is_disconnected", new=disconnect_after_provider_started),
+    ):
+        session_id = seed_session(client, workspace_id=workspace_id)
+        transport = httpx.ASGITransport(app=client.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as async_client:
+            payload: dict[str, object] = {
+                "session_id": session_id,
+                "workspace_id": workspace_id,
+                "message": "Hang until disconnect closes upstream.",
+                "response_language": "en-US",
+                "use_agent_loop": True,
+                "stream_id": f"request-disconnect-{endpoint.strip('/').replace('/', '-')}",
+            }
+            if endpoint == "/turn":
+                payload["intent"] = "coach"
+            request_task = asyncio.create_task(
+                async_client.post(endpoint, json=payload, timeout=5.0)
+            )
+            await asyncio.wait_for(provider_started.wait(), timeout=3.0)
+            await asyncio.wait_for(provider_closed.wait(), timeout=3.0)
+            # Client may see cancel/disconnect error or empty; upstream close is the contract.
+            try:
+                await asyncio.wait_for(request_task, timeout=3.0)
+            except Exception:
+                request_task.cancel()
+                await asyncio.gather(request_task, return_exceptions=True)
+
+    assert provider_closed.is_set()
+    assert cancel_was_set

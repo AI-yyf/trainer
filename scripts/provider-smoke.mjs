@@ -506,13 +506,17 @@ async function readResponse(step, url, init, modelId) {
 }
 
 function buildFailureReport({ model: resolvedModel, protocol: resolvedProtocol, failure }) {
-  return {
+  const report = {
     ok: false,
     category: failure.category,
     model: resolvedModel,
     protocol: resolvedProtocol,
     elapsedMs: elapsedMs(),
   };
+  if (typeof failure.status === "number") {
+    report.status = failure.status;
+  }
+  return report;
 }
 
 function buildProbeVariants(language) {

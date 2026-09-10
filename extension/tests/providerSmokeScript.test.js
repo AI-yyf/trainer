@@ -14,6 +14,7 @@ function startOpenAiMockProvider({
   onChatRequest,
   onResponsesRequest,
   chatFailure,
+  responsesFailure,
   models = ['MiniMax-M2.7-highspeed', 'MiniMax-M3'],
 }) {
   const server = http.createServer((request, response) => {
@@ -62,6 +63,12 @@ function startOpenAiMockProvider({
       });
       request.on('end', () => {
         const payload = JSON.parse(body);
+        const failure = responsesFailure?.(payload);
+        if (failure) {
+          response.writeHead(failure.status, { 'Content-Type': 'application/json; charset=utf-8' });
+          response.end(failure.body);
+          return;
+        }
         const content = onResponsesRequest(payload);
         response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         response.end(
@@ -109,6 +116,7 @@ function startOpenAiMockProvider({
 
 function startAnthropicMockProvider({
   onMessageRequest,
+  messageFailure,
   models = ['MiniMax-M2.7-highspeed', 'MiniMax-M3'],
 }) {
   const server = http.createServer((request, response) => {
@@ -126,6 +134,12 @@ function startAnthropicMockProvider({
       });
       request.on('end', () => {
         const payload = JSON.parse(body);
+        const failure = messageFailure?.(payload);
+        if (failure) {
+          response.writeHead(failure.status, { 'Content-Type': 'application/json; charset=utf-8' });
+          response.end(failure.body);
+          return;
+        }
         const content = onMessageRequest(payload);
         response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         response.end(
@@ -262,6 +276,45 @@ test('provider smoke script fails zh-CN smoke when the provider turns Chinese in
     assert.equal(report.category, 'language_corruption');
     assert.equal(report.model, 'MiniMax-M3');
     assert.equal(report.protocol, 'openai_chat_completions_compatible');
+    assert.equal(typeof report.elapsedMs, 'number');
+  } finally {
+    await provider.close();
+  }
+});
+
+test('provider smoke script reports rate_limit for HTTP 429', async () => {
+  const provider = await startOpenAiMockProvider({
+    onChatRequest() {
+      throw new Error('chat reply should not be used after the mock 429');
+    },
+    onResponsesRequest() {
+      throw new Error('responses should not be used for chat-completions smoke');
+    },
+    chatFailure() {
+      return {
+        status: 429,
+        body: JSON.stringify({
+          error: {
+            message: 'Rate limit exceeded for model MiniMax-M3',
+          },
+        }),
+      };
+    },
+  });
+
+  try {
+    const result = await runSmokeScript({
+      TRAINER_PROVIDER_SMOKE_BASE_URL: provider.baseUrl,
+      TRAINER_PROVIDER_SMOKE_MODEL: 'MiniMax-M3',
+      TRAINER_PROVIDER_SMOKE_RESPONSE_LANGUAGE: 'en-US',
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.category, 'rate_limit');
+    assert.equal(report.status, 429);
+    assert.equal(report.model, 'MiniMax-M3');
     assert.equal(typeof report.elapsedMs, 'number');
   } finally {
     await provider.close();
@@ -568,3 +621,103 @@ test('smoke.ps1 exposes an opt-in trainer turn smoke gate with sidecar, provider
   assert.match(source, /TRAINER_TURN_SMOKE_RESPONSE_LANGUAGE/);
   assert.match(source, /Live trainer turn smoke via scripts\/trainer-turn-smoke\.mjs/);
 });
+
+test('provider smoke script classifies auth/timeout/rate_limit consistently across openai_responses and anthropic_messages', async () => {
+  const cases = [
+    {
+      protocol: 'openai_responses',
+      category: 'authentication_failed',
+      status: 401,
+      start: () =>
+        startOpenAiMockProvider({
+          onChatRequest() {
+            throw new Error('chat should not be used');
+          },
+          onResponsesRequest() {
+            throw new Error('responses should not succeed');
+          },
+          responsesFailure() {
+            return {
+              status: 401,
+              body: JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
+            };
+          },
+        }),
+    },
+    {
+      protocol: 'openai_responses',
+      category: 'timeout',
+      status: 504,
+      start: () =>
+        startOpenAiMockProvider({
+          onChatRequest() {
+            throw new Error('chat should not be used');
+          },
+          onResponsesRequest() {
+            throw new Error('responses should not succeed');
+          },
+          responsesFailure() {
+            return {
+              status: 504,
+              body: JSON.stringify({ error: { message: 'Gateway timeout' } }),
+            };
+          },
+        }),
+    },
+    {
+      protocol: 'anthropic_messages',
+      category: 'rate_limit',
+      status: 429,
+      start: () =>
+        startAnthropicMockProvider({
+          onMessageRequest() {
+            throw new Error('messages should not succeed');
+          },
+          messageFailure() {
+            return {
+              status: 429,
+              body: JSON.stringify({ error: { message: 'Rate limit exceeded' } }),
+            };
+          },
+        }),
+    },
+    {
+      protocol: 'anthropic_messages',
+      category: 'authentication_failed',
+      status: 403,
+      start: () =>
+        startAnthropicMockProvider({
+          onMessageRequest() {
+            throw new Error('messages should not succeed');
+          },
+          messageFailure() {
+            return {
+              status: 403,
+              body: JSON.stringify({ error: { message: 'Forbidden' } }),
+            };
+          },
+        }),
+    },
+  ];
+
+  for (const item of cases) {
+    const provider = await item.start();
+    try {
+      const result = await runSmokeScript({
+        TRAINER_PROVIDER_SMOKE_BASE_URL: provider.baseUrl,
+        TRAINER_PROVIDER_SMOKE_MODEL: 'MiniMax-M3',
+        TRAINER_PROVIDER_SMOKE_PROTOCOL: item.protocol,
+        TRAINER_PROVIDER_SMOKE_RESPONSE_LANGUAGE: 'en-US',
+      });
+      assert.equal(result.code, 1);
+      const report = JSON.parse(result.stderr);
+      assert.equal(report.ok, false);
+      assert.equal(report.category, item.category);
+      assert.equal(report.status, item.status);
+      assert.equal(report.protocol, item.protocol);
+    } finally {
+      await provider.close();
+    }
+  }
+});
+

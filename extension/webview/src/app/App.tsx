@@ -49,7 +49,20 @@ import { normalizeProviderProtocol } from "../../../../shared/src/providerProtoc
 import {
   buildTrainingCoachBridge,
   composeTrainingCoachBridgeDraft,
+  describeTrainingReturnCoachSendState,
 } from "../../../../shared/src/trainingCoachBridge";
+import {
+  describePlanVerifyAdvanceState,
+  planVerifyAdvanceStageLabel,
+} from "../../../../shared/src/planVerifyExplainability";
+import {
+  classifyResourceFailure,
+  describeResourceFailureState,
+} from "../../../../shared/src/resourceFailureExplainability";
+import {
+  describeCoachThinkingSendBusy,
+  describeCoachToolActivitySendBusy,
+} from "../../../../shared/src/coachToolActivitySendState";
 import {
   deriveTrainingExecutionState,
   isTrainingPrimerLike as isSharedTrainingPrimerLike,
@@ -672,24 +685,58 @@ function sanitizeHostFailureMessage(
   language: ComposerLanguage,
   isProviderAction = false,
   resourceOperationKind?: ResourceOperationKind,
+  connectionState?: "starting" | "connected" | "offline",
 ): HostMessage {
   if (message.type !== "operation/status" || message.payload.tone !== "error") {
     return message;
   }
 
   const partialDeletion = parsePartialResourceDeletionFailure(message.payload.message);
-  const resourceRecovery = resourceOperationFailureMessage(resourceOperationKind, language);
+  if (partialDeletion) {
+    return {
+      ...message,
+      payload: {
+        ...message.payload,
+        message: partialResourceDeletionFailureMessage(partialDeletion, language),
+      },
+    };
+  }
+
+  if (resourceOperationKind) {
+    const category = classifyResourceFailure({
+      message: message.payload.message,
+      connectionState,
+    });
+    if (category !== "unknown") {
+      const explained = describeResourceFailureState(language, category);
+      return {
+        ...message,
+        payload: {
+          ...message.payload,
+          tone: explained.tone,
+          message: explained.message,
+        },
+      };
+    }
+    const resourceRecovery = resourceOperationFailureMessage(resourceOperationKind, language);
+    if (resourceRecovery) {
+      return {
+        ...message,
+        payload: {
+          ...message.payload,
+          message: resourceRecovery,
+        },
+      };
+    }
+  }
+
   const livePlanGate = parseLivePlanTaskGateMarker(message.payload.message);
   return {
     ...message,
     payload: {
       ...message.payload,
-      message: partialDeletion
-        ? partialResourceDeletionFailureMessage(partialDeletion, language)
-        : resourceRecovery
-          ? resourceRecovery
-        : livePlanGate
-          ? livePlanTaskGateFailureMessage(livePlanGate, language)
+      message: livePlanGate
+        ? livePlanTaskGateFailureMessage(livePlanGate, language)
         : isProviderAction
           ? providerCategoryFailureMessage(message.payload.providerTest, language) ??
             providerRecoveryMessage(language)
@@ -858,11 +905,17 @@ function ViewFallback({
   label: string;
   language: ComposerLanguage;
 }) {
+  const message =
+    language === "zh-CN"
+      ? `正在加载${label}，请稍候…`
+      : `Loading ${label} — hang on a moment…`;
   return (
-    <section className="section-block section-block--placeholder">
-      <p className="muted">
-        {language === "zh-CN" ? `正在加载${label}…` : `Loading ${label}…`}
-      </p>
+    <section
+      className="section-block section-block--placeholder"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <p className="muted">{message}</p>
     </section>
   );
 }
@@ -4634,6 +4687,8 @@ export function App() {
   const composerHistoryCursorRef = useRef<number | undefined>(undefined);
   const composerHistoryScratchDraftRef = useRef("");
   const streamResumeDraftRef = useRef("");
+  const [abortedDuringToolUse, setAbortedDuringToolUse] = useState(false);
+  const wasStreamingForAbortRef = useRef(false);
   const sendRecoveredPlanResumeRef = useRef<
     (action: "continue_step" | "clear_blocker") => void
   >(() => undefined);
@@ -5120,6 +5175,7 @@ export function App() {
             layout.composerLanguage,
             Boolean(isProviderActionOverride || settingsActionState?.targets.includes("provider")),
             resourceOperationStatus?.kind,
+            data.connection.state,
           ),
         );
       }
@@ -5131,6 +5187,7 @@ export function App() {
     },
     [
       applyRawHostMessage,
+      data.connection.state,
       layout.composerLanguage,
       localizedResourceOperationFallback,
       resolveTrainingPersistenceAck,
@@ -5139,15 +5196,34 @@ export function App() {
     ],
   );
   const showComposerShell = activeView !== "settings";
+  const trainingReturnSendGateRef = useRef<{
+    language: ComposerLanguage;
+    sendBlocked: boolean;
+    blockedReason?: string;
+  }>({
+    language: layout.composerLanguage,
+    sendBlocked: true,
+    blockedReason: undefined,
+  });
+  const planVerifyAdvanceAnnounceKeyRef = useRef<string>("");
+  const announceTrainingReturnCoachSendState = useCallback(() => {
+    setOperationMessage(
+      describeTrainingReturnCoachSendState(
+        trainingReturnSendGateRef.current.language,
+        trainingReturnSendGateRef.current,
+      ),
+    );
+  }, [setOperationMessage]);
   const openTrainingCoachBridge = useCallback(
     (bridge: Parameters<typeof composeTrainingCoachBridgeDraft>[0]) => {
       setActiveView("coach");
       setComposerDraft(composeTrainingCoachBridgeDraft(bridge));
+      announceTrainingReturnCoachSendState();
       window.requestAnimationFrame(() => {
         focusComposerInput();
       });
     },
-    [setActiveView, setComposerDraft],
+    [announceTrainingReturnCoachSendState, setActiveView, setComposerDraft],
   );
   const {
     onRefreshTask: requestTrainingCardGeneration,
@@ -5533,6 +5609,14 @@ export function App() {
       ),
     [activeView, data.connection.state, data.providerConfig, layout.composerLanguage],
   );
+  trainingReturnSendGateRef.current = {
+    language: layout.composerLanguage,
+    sendBlocked:
+      workspaceSessionBlocked || !providerCanCoachNow || Boolean(providerBlockReason),
+    blockedReason: workspaceSessionBlocked
+      ? workspaceSessionBlockMessage
+      : providerBlockReason ?? blockedComposerGuidance,
+  };
   const blockedCoachGuidance = useMemo(
     () =>
       localizeUiViewReferences(
@@ -6902,7 +6986,12 @@ export function App() {
     liveCoachTurnChrome.coachJudgmentTeachingGoal,
     runtimeWhyNow,
   ]);
-  const verifyPlanAdvanceNext = planRuntimeStatus?.verifyPlanAdvance?.next?.trim() || "";
+  const verifyPlanAdvance = planRuntimeStatus?.verifyPlanAdvance;
+  const verifyPlanAdvanceNext = verifyPlanAdvance?.next?.trim() || "";
+  const verifyPlanAdvanceLabel = planVerifyAdvanceStageLabel(
+    layout.composerLanguage,
+    verifyPlanAdvance?.advanced,
+  );
   const planVerifyItems = useMemo(() => {
     const items = lockRecoveredPlanVerifyItems({
       recovered: recoveredRuntime,
@@ -7742,6 +7831,54 @@ export function App() {
       selectedTrainingRouteCard.cardId === trainingState?.selectedCardId
         ? selectedTrainingRouteCard.cardId
         : undefined));
+
+  useEffect(() => {
+    const advance = planRuntimeStatus?.verifyPlanAdvance;
+    if (!advance || (advance.advanced !== true && advance.advanced !== false)) {
+      return;
+    }
+    const fsrs =
+      (activeTrainingCardId &&
+        data.memory.workspace?.latestTrainingFsrsStates?.[activeTrainingCardId]) ||
+      undefined;
+    const announceKey = JSON.stringify({
+      advanced: advance.advanced === true,
+      what: advance.what ?? "",
+      next: advance.next ?? "",
+      reps: fsrs?.reps ?? null,
+      state: fsrs?.state ?? "",
+    });
+    if (announceKey === planVerifyAdvanceAnnounceKeyRef.current) {
+      return;
+    }
+    planVerifyAdvanceAnnounceKeyRef.current = announceKey;
+    const explained = describePlanVerifyAdvanceState(layout.composerLanguage, {
+      advanced: advance.advanced,
+      what: advance.what,
+      why: advance.why,
+      next: advance.next,
+      fsrs: fsrs
+        ? {
+            reps: fsrs.reps,
+            state: fsrs.state,
+            intervalDays: fsrs.intervalDays,
+            masteryScore: fsrs.masteryScore,
+            stability: fsrs.stability,
+            difficulty: fsrs.difficulty,
+          }
+        : undefined,
+    });
+    setOperationMessage(explained);
+    setTrainingVerifyNotice(explained.message);
+    setOperationMessageSurface(activeView === "training" ? "training" : activeView === "plan" ? "plan" : "global");
+  }, [
+    activeTrainingCardId,
+    activeView,
+    data.memory.workspace?.latestTrainingFsrsStates,
+    layout.composerLanguage,
+    planRuntimeStatus?.verifyPlanAdvance,
+    setOperationMessage,
+  ]);
   const trainingRestoreReplacesSelectedCard = Boolean(
     trainingRestoreForeground &&
       activeTrainingCardId &&
@@ -8631,19 +8768,14 @@ export function App() {
 
     pendingTrainingHandoffSubmissionRef.current = undefined;
     if (pending.phase === "return") {
-      setActiveView("coach");
-      setComposerDraft(composeTrainingCoachBridgeDraft(trainingCoachBridge));
-      window.requestAnimationFrame(() => {
-        focusComposerInput();
-      });
+      openTrainingCoachBridge(trainingCoachBridge);
       return;
     }
 
     setComposerDraft("");
   }, [
     normalizedTrainingNextHopStatus,
-    setActiveView,
-    setComposerDraft,
+    openTrainingCoachBridge,
     trainingCoachBridge,
     trainingHandoffReturnRequired,
     trainingState?.selectedCardId,
@@ -9188,9 +9320,9 @@ export function App() {
     ],
   );
   const composerUsesTrainingFlow = trainingComposerEnabled && !trainingComposerTalkMode;
-  // A missing provider must not destroy a useful draft. Let submission surface the
-  // in-place recovery state and keep the learner in the view where they were working.
-  const composerSendBlocked = workspaceSessionBlocked;
+  // Provider/sidecar/workspace blocks must disable send (no fake-available button).
+  // Keep the draft editable; only the submit affordance is gated.
+  const composerSendBlocked = sendBlocked;
   const imageAttachmentSendBlocked =
     composerAttachments.length > 0 && !providerImageInputState.supported;
   const imageAttachmentBlockedReason = imageAttachmentSendBlocked
@@ -9218,11 +9350,16 @@ export function App() {
       /interrupted|aborted|failed|timeout|network|error/.test(
         streaming.completionStopReason?.trim().toLowerCase() ?? "",
       ));
+  // Empty-state recovery already explains the block; once the learner types or
+  // stages an attachment, keep the composer presence bar visible so the send
+  // disable reason stays on-screen (gate: no silent disable).
   const showComposerBlockingNotice =
     sendBlocked &&
     !suppressComposerRecoverySurface &&
-    !hasFullCoachRecoverySurface &&
-    !hasCoachWorkspaceAdmissionSurface;
+    !hasCoachWorkspaceAdmissionSurface &&
+    (!hasFullCoachRecoverySurface ||
+      Boolean(draft.trim()) ||
+      composerAttachments.length > 0);
   const showComposerPresenceBar =
     !suppressComposerRecoverySurface &&
     (
@@ -10813,6 +10950,7 @@ export function App() {
       const title = trainingState.reviewArtifact.title ?? trainingState.reviewArtifact.focusArea ?? "review";
       const result = trainingState.reviewArtifact.verifiedResult ?? trainingState.reviewArtifact.summary ?? "";
       setActiveView("coach");
+      announceTrainingReturnCoachSendState();
       setComposerDraft(
         layout.composerLanguage === "zh-CN"
           ? `\u6211\u5b8c\u6210\u4e86\u201c${title}\u201d\u7684\u56de\u987e\u3002\u7ed3\u8bba\uff1a${result}\n\n\u8bf7\u5e2e\u6211\u5b89\u6392\u4e0b\u4e00\u6b65\u3002`
@@ -10843,18 +10981,14 @@ export function App() {
       return;
     }
 
-    setActiveView("coach");
-    setComposerDraft(composeTrainingCoachBridgeDraft(trainingCoachBridge));
-    window.requestAnimationFrame(() => {
-      focusComposerInput();
-    });
+    openTrainingCoachBridge(trainingCoachBridge);
   }, [
+    announceTrainingReturnCoachSendState,
     handleSubmitTrainingEvidence,
     layout.composerLanguage,
     leftoverTrainingHandoffChromeNotLive,
+    openTrainingCoachBridge,
     reviewArtifactForeground,
-    setActiveView,
-    setComposerDraft,
     setOperationMessage,
     trainingCoachBridge,
     trainingHandoffReflectionRequired,
@@ -11225,6 +11359,10 @@ export function App() {
     if (!streaming.isStreaming) {
       return;
     }
+    const midTool = streaming.agentActivity.some(
+      (activity) => activity.status === "running" || activity.status === "failed",
+    );
+    setAbortedDuringToolUse(midTool);
     const resumeDraft = streamResumeDraftRef.current;
     if (resumeDraft.trim()) {
       setComposerDraft(resumeDraft);
@@ -11233,13 +11371,44 @@ export function App() {
       type: "session/cancelStreamMessage",
       payload: streaming.streamMessageId ? { messageId: streaming.streamMessageId } : undefined,
     });
-  }, [setComposerDraft, streaming.isStreaming, streaming.streamMessageId]);
+  }, [
+    setComposerDraft,
+    streaming.agentActivity,
+    streaming.isStreaming,
+    streaming.streamMessageId,
+  ]);
 
   useEffect(() => {
-    if (!streaming.isStreaming && streaming.completionStopReason !== "cancelled") {
-      streamResumeDraftRef.current = "";
+    if (streaming.isStreaming && !wasStreamingForAbortRef.current) {
+      // Rising edge only: a new turn started — clear mid-tool abort banner.
+      setAbortedDuringToolUse(false);
     }
-  }, [streaming.completionStopReason, streaming.isStreaming]);
+    wasStreamingForAbortRef.current = streaming.isStreaming;
+  }, [streaming.isStreaming]);
+
+  // Codex-style ownership: after cancel OR stream failure, put the last sent
+  // draft back so retry does not require retyping. Clear the stash only when a
+  // turn finishes cleanly without an interrupt/error.
+  useEffect(() => {
+    if (streaming.isStreaming) {
+      return;
+    }
+    const failedOrCancelled =
+      streaming.completionStopReason === "cancelled" || Boolean(streaming.streamError?.trim());
+    if (failedOrCancelled) {
+      const resumeDraft = streamResumeDraftRef.current;
+      if (resumeDraft.trim()) {
+        setComposerDraft(resumeDraft);
+      }
+      return;
+    }
+    streamResumeDraftRef.current = "";
+  }, [
+    setComposerDraft,
+    streaming.completionStopReason,
+    streaming.isStreaming,
+    streaming.streamError,
+  ]);
 
   const renderComposerAccessory = () => {
     if (!openMenu) {
@@ -12346,7 +12515,6 @@ export function App() {
           data.connection.state,
         ).detail
       : providerSendState.reason?.trim());
-  void providerRecoveryReason;
   const trainingComposerModeTextCopy = trainingComposerModeText(layout.composerLanguage);
   const blockedComposerFallback =
     sendBlocked && !workspaceSessionBlocked
@@ -12383,6 +12551,11 @@ export function App() {
   const blockedComposerPresenceCopy = workspaceSessionBlocked
     ? workspaceSessionBlockMessage ?? blockedComposerPresenceDetail
     : blockedComposerPresenceDetail;
+  const composerSubmitBlockedReason =
+    imageAttachmentBlockedReason ??
+    (sendBlocked
+      ? (providerRecoveryReason?.trim() || blockedComposerPresenceCopy || undefined)
+      : undefined);
   const compactUtilityComposerPlaceholder =
     sendBlocked
       ? blockedComposerFallback
@@ -13290,13 +13463,15 @@ export function App() {
         nextStep={
           <>
             <p>
-              {verifyPlanAdvanceNext ||
-                (firstLookContinuePrimary
-                  ? planOrientation.nextStep
-                  : recoveredDisplayFacts.currentStep ||
-                    liveCoachTaskChrome.currentStep ||
-                    resolvedCoachNextStep ||
-                    latestArtifactTeaser)}
+              {verifyPlanAdvanceLabel
+                ? `${verifyPlanAdvanceLabel}${verifyPlanAdvanceNext ? ` — ${verifyPlanAdvanceNext}` : ""}`
+                : verifyPlanAdvanceNext ||
+                  (firstLookContinuePrimary
+                    ? planOrientation.nextStep
+                    : recoveredDisplayFacts.currentStep ||
+                      liveCoachTaskChrome.currentStep ||
+                      resolvedCoachNextStep ||
+                      latestArtifactTeaser)}
             </p>
             {runtimeBlockedReason ? (
               <p className="inline-note">{runtimeBlockedReason}</p>
@@ -14228,7 +14403,7 @@ export function App() {
                   ? !normalizedDraft || imageAttachmentSendBlocked
                   : composerSendBlocked || imageAttachmentSendBlocked
               }
-              submitBlockedReason={imageAttachmentBlockedReason}
+              submitBlockedReason={composerSubmitBlockedReason}
               busy={
                 streaming.isStreaming ||
                 isOperationReliabilityInFlight(streaming.reliabilityPhase) ||
@@ -14239,7 +14414,33 @@ export function App() {
                   ? layout.composerLanguage === "zh-CN"
                     ? "保存中"
                     : "Saving"
-                  : t.streaming
+                  : describeCoachToolActivitySendBusy(
+                        layout.composerLanguage,
+                        streaming.agentActivity,
+                      ) ??
+                    (streaming.isStreaming
+                      ? describeCoachThinkingSendBusy(layout.composerLanguage)
+                      : t.streaming)
+              }
+              explainBetweenTurns={
+                activeView === "coach" &&
+                !composerUsesTrainingFlow &&
+                data.conversation.length > 0
+              }
+              explainAfterAbort={
+                activeView === "coach" &&
+                !composerUsesTrainingFlow &&
+                !streaming.isStreaming &&
+                streaming.completionStopReason === "cancelled"
+              }
+              explainAfterAbortMidTool={
+                abortedDuringToolUse
+              }
+              explainAfterEmptyStream={
+                activeView === "coach" &&
+                !composerUsesTrainingFlow &&
+                !streaming.isStreaming &&
+                /empty_stream|empty[_\s-]?stream/i.test(streaming.streamError ?? "")
               }
               submitLabel=""
               accessibilityLabel={localizedTrainingComposerAccessibilityLabel}

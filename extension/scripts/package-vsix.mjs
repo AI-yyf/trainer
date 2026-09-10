@@ -5,7 +5,7 @@ import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 
 import { resolveNativeSidecarTarget } from "./bundle-sidecar-binary.mjs";
-import { assertPackageVerified } from "./verify-package.mjs";
+import { assertPackageVerified, verifyPackage } from "./verify-package.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -448,6 +448,105 @@ export function resolveNpmExecPath() {
   );
 }
 
+export function resolveNativeSidecarExecutablePath({
+  extensionDir = path.resolve(__dirname, ".."),
+  targetPlatform = resolveNativeSidecarTarget(),
+} = {}) {
+  const entryName = targetPlatform.startsWith("win32-")
+    ? "trainer-sidecar.exe"
+    : "trainer-sidecar";
+  return path.join(extensionDir, "bundled", "bin", targetPlatform, entryName);
+}
+
+export function ensureNativeSidecarBinaryForPackage({
+  extensionDir = path.resolve(__dirname, ".."),
+  targetPlatform = resolveNativeSidecarTarget(),
+  env = process.env,
+  runPrepublish = runVsCodePrepublish,
+  packageNeedsRefresh = nativeSidecarPackageNeedsRefresh,
+} = {}) {
+  const executablePath = resolveNativeSidecarExecutablePath({ extensionDir, targetPlatform });
+  const missing = !fs.existsSync(executablePath);
+  const refresh = missing
+    ? { needed: true, reasons: [`Native sidecar binary missing for ${targetPlatform}`] }
+    : packageNeedsRefresh({ extensionDir, targetPlatform });
+
+  if (!refresh.needed) {
+    return { rebuilt: false, executablePath, targetPlatform, refreshReasons: [] };
+  }
+
+  console.log(
+    [
+      `${refresh.reasons[0]}; running vscode:prepublish before packaging.`,
+      ...refresh.reasons.slice(1).map((reason) => `- ${reason}`),
+    ].join("\n"),
+  );
+  runPrepublish({ extensionDir, env });
+  if (!fs.existsSync(executablePath)) {
+    throw new Error(
+      [
+        `Native sidecar binary still missing after vscode:prepublish: ${executablePath}`,
+        "On Debian/Ubuntu, PyInstaller needs the matching libpython shared library",
+        "(for example `sudo apt-get install -y libpython3.13`) before the binary build can succeed.",
+      ].join("\n"),
+    );
+  }
+  return { rebuilt: true, executablePath, targetPlatform, refreshReasons: refresh.reasons };
+}
+
+export function nativeSidecarPackageNeedsRefresh({
+  extensionDir = path.resolve(__dirname, ".."),
+  targetPlatform = resolveNativeSidecarTarget(),
+  repoRoot = path.resolve(extensionDir, ".."),
+} = {}) {
+  let report;
+  try {
+    report = verifyPackage({ extensionDir, repoRoot, env: process.env });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      needed: true,
+      reasons: [`Could not verify native sidecar package inputs: ${message}`],
+      report: undefined,
+    };
+  }
+  const reasons = [];
+  for (const relativePath of report.sidecarParity?.contentMismatches ?? []) {
+    reasons.push(`Bundled sidecar drift detected: bundled/server/${relativePath}`);
+  }
+  for (const relativePath of report.sidecarParity?.missingBundledFiles ?? []) {
+    reasons.push(`Bundled sidecar file missing: bundled/server/${relativePath}`);
+  }
+  for (const relativePath of report.sidecarParity?.unexpectedBundledFiles ?? []) {
+    reasons.push(`Unexpected bundled sidecar file: bundled/server/${relativePath}`);
+  }
+  for (const message of report.binaryManifest?.errors ?? []) {
+    reasons.push(message);
+  }
+  return { needed: reasons.length > 0, reasons, report };
+}
+
+function runVsCodePrepublish({ extensionDir, env = process.env } = {}) {
+  const npmExecPath = resolveNpmExecPath();
+  const result = spawnSync(process.execPath, [npmExecPath, "run", "vscode:prepublish"], {
+    cwd: extensionDir,
+    env,
+    encoding: "utf8",
+    stdio: "inherit",
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      [
+        "VSIX packaging could not build the native sidecar binary via vscode:prepublish.",
+        result.error ? `${result.error.name}: ${result.error.message}` : "",
+        "On Debian/Ubuntu hosts, install the matching libpython package (e.g. libpython3.13) and retry.",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
+}
+
 export function packageVsix({
   extensionDir = path.resolve(__dirname, ".."),
   env = process.env,
@@ -458,6 +557,7 @@ export function packageVsix({
   const targetPlatform = resolveNativeSidecarTarget();
   const outputPath = resolveVsixOutputPath({ extensionDir, packageJson, targetPlatform, env });
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  ensureNativeSidecarBinaryForPackage({ extensionDir, targetPlatform, env });
   const packageReport = assertPackageVerified({ extensionDir, repoRoot: path.resolve(extensionDir, ".."), env });
 
   const npmExecPath = resolveNpmExecPath();

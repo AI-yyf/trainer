@@ -215,9 +215,17 @@ class ResourceIngestor:
 def _extract_pdf_text(request: IngestionRequest) -> tuple[str, list[str]]:
     warnings: list[str] = []
     if fitz is not None and Path(request.source_uri).exists():
-        with fitz.open(request.source_uri) as doc:  # type: ignore[attr-defined]
-            pages = [str(page.get_text()) for page in doc]
-        return "\n\n".join(pages).strip(), warnings
+        try:
+            with fitz.open(request.source_uri) as doc:  # type: ignore[attr-defined]
+                pages = [str(page.get_text()) for page in doc]
+            return "\n\n".join(pages).strip(), warnings
+        except Exception as exc:  # noqa: BLE001 - corrupt/unreadable PDFs must fail closed
+            # pymupdf.FileDataError and related open failures used to 500 /resource/index.
+            warnings.append(
+                "PDF could not be opened or parsed "
+                f"({type(exc).__name__}); treating as no extractable content."
+            )
+            return "", warnings
     if isinstance(request.content, bytes):
         warnings.append("PyMuPDF unavailable; falling back to byte decode for PDF content.")
         return request.content.decode("utf-8", errors="ignore"), warnings

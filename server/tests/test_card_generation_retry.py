@@ -168,7 +168,7 @@ class TestCardGenerationRetry(unittest.TestCase):
         self.assertEqual(len(failures), 1)
         self.assertEqual(failures[0].payload_ref["reason"], "invalid_json")
 
-    def test_both_attempts_raise_records_exception_failure_once(self) -> None:
+    def test_both_attempts_raise_records_provider_request_failure_once(self) -> None:
         ledger = EventLedgerService()
         provider = _ScriptedProvider(
             [RuntimeError("gateway down"), RuntimeError("gateway still down")],
@@ -184,7 +184,11 @@ class TestCardGenerationRetry(unittest.TestCase):
             project_id="ws-retry",
         )
         self.assertEqual(len(failures), 1)
-        self.assertEqual(failures[0].payload_ref["reason"], "exception")
+        # Provider exceptions stay categorized — never washed into bare "exception".
+        self.assertEqual(
+            failures[0].payload_ref["reason"],
+            "provider_request_failed_training_card",
+        )
 
     def test_retry_reuses_thread_pool_helper_inside_running_loop(self) -> None:
         """The retry must work when invoked from within a running event loop."""

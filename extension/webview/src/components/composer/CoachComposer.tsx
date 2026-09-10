@@ -19,6 +19,11 @@ const MAX_STAGED_ATTACHMENTS = 4;
 type ComposerLocaleCopy = {
   placeholder: string;
   busyLabel: string;
+  readyNextTurnLabel: string;
+  readyIdleLabel: string;
+  readyAfterAbortLabel: string;
+  readyAfterAbortMidToolLabel: string;
+  readyAfterEmptyStreamLabel: string;
   accessibilityLabel: string;
   submitLabel: string;
   cancelLabel: string;
@@ -38,6 +43,11 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
   "zh-CN": {
     placeholder: "问教练",
     busyLabel: "教练正在思考",
+    readyNextTurnLabel: "可发送下一轮",
+    readyIdleLabel: "可以输入下一轮",
+    readyAfterAbortLabel: "已中止。草稿已恢复，再发送即可同会话续写",
+    readyAfterAbortMidToolLabel: "工具调用中已中止。草稿已恢复，再发送即可同会话续写",
+    readyAfterEmptyStreamLabel: "空流。草稿已保留，可再发送重试",
     accessibilityLabel: "向教练发送消息",
     submitLabel: "发送消息",
     cancelLabel: "取消回复",
@@ -55,6 +65,11 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
   "en-US": {
     placeholder: "Ask the coach",
     busyLabel: "Trainer is thinking",
+    readyNextTurnLabel: "Ready for next turn",
+    readyIdleLabel: "Ready for the next message",
+    readyAfterAbortLabel: "Stopped. Draft restored — send again to continue this session",
+    readyAfterAbortMidToolLabel: "Stopped mid tool-call. Draft restored — send again to continue this session",
+    readyAfterEmptyStreamLabel: "Empty stream. Draft kept — send again to retry",
     accessibilityLabel: "Send a message to the coach",
     submitLabel: "Send message",
     cancelLabel: "Cancel reply",
@@ -72,6 +87,11 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
   "es-ES": {
     placeholder: "Dile al entrenador qué quieres construir o dónde te has atascado.",
     busyLabel: "El entrenador está pensando",
+    readyNextTurnLabel: "Listo para el siguiente turno",
+    readyIdleLabel: "Listo para el siguiente mensaje",
+    readyAfterAbortLabel: "Detenido. Borrador restaurado: envía de nuevo para continuar la sesión",
+    readyAfterAbortMidToolLabel: "Detenido a mitad de una herramienta. Borrador restaurado: envía de nuevo para continuar",
+    readyAfterEmptyStreamLabel: "Flujo vacío. Borrador conservado: envía de nuevo para reintentar",
     accessibilityLabel: "Enviar un mensaje al entrenador",
     submitLabel: "Enviar mensaje",
     cancelLabel: "Cancelar respuesta",
@@ -89,6 +109,11 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
   "fr-FR": {
     placeholder: "Dites au coach ce que vous voulez créer ou où vous êtes bloqué.",
     busyLabel: "Le coach réfléchit",
+    readyNextTurnLabel: "Prêt pour le prochain tour",
+    readyIdleLabel: "Prêt pour le prochain message",
+    readyAfterAbortLabel: "Arrêté. Brouillon restauré — renvoyez pour continuer la session",
+    readyAfterAbortMidToolLabel: "Arrêté en cours d'outil. Brouillon restauré — renvoyez pour continuer la session",
+    readyAfterEmptyStreamLabel: "Flux vide. Brouillon conservé — renvoyez pour réessayer",
     accessibilityLabel: "Envoyer un message au coach",
     submitLabel: "Envoyer le message",
     cancelLabel: "Annuler la réponse",
@@ -106,6 +131,11 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
   "de-DE": {
     placeholder: "Sag dem Coach, was du bauen möchtest oder wo du festhängst.",
     busyLabel: "Coach denkt nach",
+    readyNextTurnLabel: "Bereit für die nächste Runde",
+    readyIdleLabel: "Bereit für die nächste Nachricht",
+    readyAfterAbortLabel: "Abgebrochen. Entwurf wiederhergestellt — erneut senden, um die Sitzung fortzusetzen",
+    readyAfterAbortMidToolLabel: "Mitten im Tool-Aufruf gestoppt. Entwurf wiederhergestellt — erneut senden",
+    readyAfterEmptyStreamLabel: "Leerer Stream. Entwurf behalten — erneut senden zum Wiederholen",
     accessibilityLabel: "Nachricht an den Coach senden",
     submitLabel: "Nachricht senden",
     cancelLabel: "Antwort abbrechen",
@@ -123,6 +153,11 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
   "ja-JP": {
     placeholder: "作りたいものや、行き詰まっている箇所をコーチに伝えてください。",
     busyLabel: "コーチが考えています",
+    readyNextTurnLabel: "次のターンを送信できます",
+    readyIdleLabel: "次のメッセージを入力できます",
+    readyAfterAbortLabel: "中止しました。下書きを復元済み — 再送信で同じセッションを続けられます",
+    readyAfterAbortMidToolLabel: "ツール呼び出し中に中止。下書きを復元済み — 再送信で同じセッションを続けられます",
+    readyAfterEmptyStreamLabel: "空ストリーム。下書きを保持済み — 再送信で再試行できます",
     accessibilityLabel: "コーチにメッセージを送信",
     submitLabel: "メッセージを送信",
     cancelLabel: "返信をキャンセル",
@@ -140,6 +175,11 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
   "ko-KR": {
     placeholder: "만들고 싶은 것 또는 막힌 지점을 코치에게 알려 주세요.",
     busyLabel: "코치가 생각 중입니다",
+    readyNextTurnLabel: "다음 턴을 보낼 수 있음",
+    readyIdleLabel: "다음 메시지를 입력할 수 있음",
+    readyAfterAbortLabel: "중단됨. 초안이 복원됨 — 다시 보내면 같은 세션을 이어갑니다",
+    readyAfterAbortMidToolLabel: "도구 호출 중 중단됨. 초안 복원됨 — 다시 보내면 같은 세션을 이어갑니다",
+    readyAfterEmptyStreamLabel: "빈 스트림. 초안 유지됨 — 다시 보내 재시도",
     accessibilityLabel: "코치에게 메시지 보내기",
     submitLabel: "메시지 보내기",
     cancelLabel: "답변 취소",
@@ -157,6 +197,11 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
   "pt-BR": {
     placeholder: "Diga ao coach o que você quer criar ou onde está com dificuldade.",
     busyLabel: "O coach está pensando",
+    readyNextTurnLabel: "Pronto para o próximo turno",
+    readyIdleLabel: "Pronto para a próxima mensagem",
+    readyAfterAbortLabel: "Interrompido. Rascunho restaurado — envie de novo para continuar a sessão",
+    readyAfterAbortMidToolLabel: "Interrompido no meio da ferramenta. Rascunho restaurado — envie de novo",
+    readyAfterEmptyStreamLabel: "Stream vazio. Rascunho mantido — envie de novo para tentar",
     accessibilityLabel: "Enviar uma mensagem ao coach",
     submitLabel: "Enviar mensagem",
     cancelLabel: "Cancelar resposta",
@@ -220,6 +265,14 @@ export interface CoachComposerProps {
   submitDisabled?: boolean;
   busy?: boolean;
   busyLabel?: string;
+  /** When set, between-turn ready/idle send state stays explainable (long-context). */
+  explainBetweenTurns?: boolean;
+  /** When set, after client abort the send-ready state stays explainable (abort→resume). */
+  explainAfterAbort?: boolean;
+  /** When set with explainAfterAbort, abort happened mid tool-call (same-session resume). */
+  explainAfterAbortMidTool?: boolean;
+  /** When set, after empty_stream failure the send-ready state stays explainable (draft retry). */
+  explainAfterEmptyStream?: boolean;
   textareaId?: string;
   minRows?: number;
   submitLabel?: string;
@@ -260,6 +313,10 @@ export function CoachComposer({
   submitDisabled = false,
   busy = false,
   busyLabel,
+  explainBetweenTurns = false,
+  explainAfterAbort = false,
+  explainAfterAbortMidTool = false,
+  explainAfterEmptyStream = false,
   textareaId = "coach-composer",
   minRows = 2,
   submitLabel = "",
@@ -456,6 +513,27 @@ export function CoachComposer({
   const isSubmitDisabled = submitDisabled || !hasSubmissionPermission;
   const canSubmit = !isTextareaDisabled && !isSubmitDisabled;
   const sendState = busy ? "streaming" : submitDisabled ? "blocked" : hasSubmissionPermission ? "ready" : "idle";
+  const afterAbortReadyLabel =
+    explainAfterAbort && (sendState === "ready" || sendState === "idle")
+      ? explainAfterAbortMidTool
+        ? localizedCopy.readyAfterAbortMidToolLabel
+        : localizedCopy.readyAfterAbortLabel
+      : "";
+  const afterEmptyStreamReadyLabel =
+    !afterAbortReadyLabel &&
+    explainAfterEmptyStream &&
+    (sendState === "ready" || sendState === "idle")
+      ? localizedCopy.readyAfterEmptyStreamLabel
+      : "";
+  const betweenTurnReadyLabel = afterAbortReadyLabel
+    ? afterAbortReadyLabel
+    : afterEmptyStreamReadyLabel
+      ? afterEmptyStreamReadyLabel
+      : explainBetweenTurns && sendState === "ready"
+        ? localizedCopy.readyNextTurnLabel
+        : explainBetweenTurns && sendState === "idle"
+          ? localizedCopy.readyIdleLabel
+          : "";
   const resolvedSummary = summary?.trim() ? summary : undefined;
   const resolvedHintText = hintText?.trim() ? hintText : undefined;
   const primaryHelperText = busy ? resolvedBusyLabel : resolvedSummary ?? resolvedHintText;
@@ -477,6 +555,7 @@ export function CoachComposer({
   const showHelperText = Boolean(
     busy ||
       resolvedSummary ||
+      betweenTurnReadyLabel ||
       (resolvedHintText && trimmedValue.length > 0 && trimmedValue.length < 24) ||
       (resolvedShortcutHint && trimmedValue.length === 0),
   );
@@ -504,11 +583,11 @@ export function CoachComposer({
   const resolvedSubmitBlockedReason = submitBlockedReason?.trim() || "";
   const composerStatusText = busy
     ? resolvedBusyLabel
-    : submitDisabled && hasSubmissionContent
+    : submitDisabled && (hasSubmissionContent || Boolean(resolvedSubmitBlockedReason))
       ? resolvedSubmitBlockedReason || blockedSubmitLabel
       : showAttachmentCapabilityNote
         ? attachmentCapabilityText
-        : "";
+        : betweenTurnReadyLabel;
   const charCount = value.length;
   const isNearLimit = charCount > maxLength * 0.9;
   const dropPromptText = attachmentsInteractive ? localizedCopy.dropToAttach : localizedCopy.imageUnavailable;
@@ -894,7 +973,7 @@ export function CoachComposer({
           <span>{attachmentCapabilityText}</span>
         </div>
       ) : null}
-      {stagedAttachments.length > 0 && resolvedSubmitBlockedReason ? (
+      {resolvedSubmitBlockedReason && (submitDisabled || stagedAttachments.length > 0) ? (
         <div className="composer__capability-note" id={submitBlockedReasonId} role="status">
           <AttachmentIcon size={13} />
           <span>{resolvedSubmitBlockedReason}</span>
@@ -921,7 +1000,9 @@ export function CoachComposer({
             aria-describedby={[
               composerStatusId,
               showAttachmentCapabilityNote ? attachmentCapabilityNoteId : "",
-              stagedAttachments.length > 0 && resolvedSubmitBlockedReason ? submitBlockedReasonId : "",
+              resolvedSubmitBlockedReason && (submitDisabled || stagedAttachments.length > 0)
+                ? submitBlockedReasonId
+                : "",
             ]
               .filter(Boolean)
               .join(" ")}

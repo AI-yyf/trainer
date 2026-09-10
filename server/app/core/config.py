@@ -18,9 +18,14 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="TRAINER_", extra="ignore")
 
     @property
+    def resolved_data_dir(self) -> Path:
+      """Absolute data root so reload/respawn cwd changes cannot split SQLite."""
+      return self.data_dir.expanduser().resolve()
+
+    @property
     def database_path(self) -> Path:
-      return self.data_dir / self.database_name
+      return self.resolved_data_dir / self.database_name
 
     @property
     def qdrant_path(self) -> Path:
-      return self.data_dir / self.qdrant_dir_name
+      return self.resolved_data_dir / self.qdrant_dir_name

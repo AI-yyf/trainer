@@ -23,6 +23,11 @@ const supportedLanguages = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP'
 const composerCopyKeys = [
   'placeholder',
   'busyLabel',
+  'readyNextTurnLabel',
+  'readyIdleLabel',
+  'readyAfterAbortLabel',
+  'readyAfterAbortMidToolLabel',
+  'readyAfterEmptyStreamLabel',
   'accessibilityLabel',
   'submitLabel',
   'emptySubmitLabel',

@@ -94,6 +94,7 @@ const hardBlockingCategories = new Set([
   'invalid_key_or_permission',
   'invalid_api_key',
   'authentication_failed',
+  'provider_capability_test_failed',
   'model_unsupported',
   'model_not_supported',
   'model_not_found',
@@ -109,6 +110,7 @@ const recentTestBlockingCategories = new Set([
   'invalid_key_or_permission',
   'invalid_api_key',
   'authentication_failed',
+  'provider_capability_test_failed',
   'model_unsupported',
   'model_not_supported',
   'model_not_found',
@@ -145,6 +147,7 @@ type ProviderStatusPhraseKey =
   | 'model_not_found'
   | 'workspace_trust'
   | 'sidecar_unavailable'
+  | 'provider_capability_test_failed'
   | 'missing_provider_reason'
   | 'missing_api_key_reason'
   | 'generic_check_hint'
@@ -173,6 +176,7 @@ const providerStatusPhraseTable: Record<
     model_not_found: '当前没有可用模型。到“设置”重新选择。',
     workspace_trust: '需要先信任当前工作区，才能继续。',
     sidecar_unavailable: 'Trainer 正在准备中，请稍等。',
+    provider_capability_test_failed: '能力检查未通过。到“设置”重新测试连接，确认工具与流式能力后再用。',
     missing_provider_reason: '还没有完成模型连接。请到“设置”完成连接。',
     missing_api_key_reason: '这组连接还没完成。到“设置”补上密钥后再试。',
     generic_check_hint: '到“设置”检查连接后再试。',
@@ -197,6 +201,7 @@ const providerStatusPhraseTable: Record<
     model_not_found: 'No model is available right now. Choose another one in Settings.',
     workspace_trust: 'Trust this workspace before continuing.',
     sidecar_unavailable: 'Trainer is getting ready. Give it a moment.',
+    provider_capability_test_failed: 'Capability check failed. Re-test the connection in Settings and confirm tools and streaming before using it.',
     missing_provider_reason: 'The model connection is not set up yet. Finish it in Settings.',
     missing_api_key_reason: 'This connection is not complete yet. Add the key in Settings, then try again.',
     generic_check_hint: 'Open Settings to check the connection, then try again.',
@@ -221,6 +226,7 @@ const providerStatusPhraseTable: Record<
     model_not_found: 'El endpoint responde, pero este gateway no tiene ahora mismo un canal disponible para ese modelo.',
     workspace_trust: 'Este workspace todavía no es de confianza, así que Trainer no puede obtener la lista de modelos.',
     sidecar_unavailable: 'El sidecar local de Trainer todavía no está listo, así que no se puede obtener la lista de modelos.',
+    provider_capability_test_failed: 'La comprobación de capacidades falló. Vuelve a probar la conexión en Ajustes y confirma tools y streaming antes de usarla.',
     missing_provider_reason: 'Todavía no hay un proveedor guardado. Termina primero la configuración en Ajustes.',
     missing_api_key_reason: 'La conexión está guardada, pero todavía falta la clave API para que Trainer pueda funcionar.',
     generic_check_hint: 'Revisa la base URL, el nombre del modelo y los permisos.',
@@ -245,6 +251,7 @@ const providerStatusPhraseTable: Record<
     model_not_found: "Le point de terminaison répond, mais cette passerelle n'a actuellement aucun canal disponible pour ce modèle.",
     workspace_trust: "Cet espace de travail n'est pas encore approuvé, donc Trainer ne peut pas récupérer la liste des modèles.",
     sidecar_unavailable: "Le sidecar local de Trainer n'est pas encore prêt, donc la liste des modèles ne peut pas être récupérée.",
+    provider_capability_test_failed: 'Le contrôle des capacités a échoué. Retestez la connexion dans Réglages et confirmez tools et streaming avant de l\'utiliser.',
     missing_provider_reason: "Aucun fournisseur de modèle n'est encore enregistré. Terminez d'abord la configuration dans Réglages.",
     missing_api_key_reason: "La connexion est enregistrée, mais il manque encore la clé API pour que Trainer puisse fonctionner.",
     generic_check_hint: 'Vérifiez la base URL, le nom du modèle et les autorisations.',
@@ -269,6 +276,7 @@ const providerStatusPhraseTable: Record<
     model_not_found: 'Der Endpunkt ist erreichbar, aber dieses Gateway hat derzeit keinen verfügbaren Kanal für das Modell.',
     workspace_trust: 'Dieser Arbeitsbereich ist noch nicht vertrauenswürdig, daher kann Trainer die Modellliste nicht laden.',
     sidecar_unavailable: 'Der lokale Trainer-Sidecar ist noch nicht bereit, daher kann die Modellliste nicht geladen werden.',
+    provider_capability_test_failed: 'Fähigkeitsprüfung fehlgeschlagen. Testen Sie die Verbindung in Einstellungen erneut und bestätigen Sie Tools und Streaming.',
     missing_provider_reason: 'Es ist noch kein Modellanbieter gespeichert. Schließen Sie zuerst die Einrichtung in Einstellungen ab.',
     missing_api_key_reason: 'Die Verbindung ist gespeichert, aber Trainer braucht noch einen API-Schlüssel, bevor es arbeiten kann.',
     generic_check_hint: 'Prüfen Sie Base URL, Modellname und Berechtigungen.',
@@ -293,6 +301,7 @@ const providerStatusPhraseTable: Record<
     model_not_found: 'エンドポイントには接続できますが、このゲートウェイには現在そのモデル向けの利用可能なチャネルがありません。',
     workspace_trust: 'このワークスペースはまだ信頼されていないため、Trainer はモデル一覧を取得できません。',
     sidecar_unavailable: 'ローカルの Trainer sidecar がまだ準備できていないため、モデル一覧を取得できません。',
+    provider_capability_test_failed: '能力チェックに失敗しました。設定で接続を再テストし、tools と streaming を確認してから使ってください。',
     missing_provider_reason: 'まだモデルプロバイダーが保存されていません。先に設定画面で provider 設定を完了してください。',
     missing_api_key_reason: '接続は保存されていますが、Trainer が動くには API キーがまだ必要です。',
     generic_check_hint: 'base URL、モデル名、権限を確認してください。',
@@ -317,6 +326,7 @@ const providerStatusPhraseTable: Record<
     model_not_found: '엔드포인트에는 연결되지만 이 게이트웨이에는 현재 해당 모델용 채널이 없습니다.',
     workspace_trust: '이 워크스페이스는 아직 신뢰되지 않아 Trainer가 모델 목록을 가져올 수 없습니다.',
     sidecar_unavailable: '로컬 Trainer 사이드카가 아직 준비되지 않아 모델 목록을 가져올 수 없습니다.',
+    provider_capability_test_failed: '기능 검사에 실패했습니다. 설정에서 연결을 다시 테스트하고 tools와 streaming을 확인한 뒤 사용하세요.',
     missing_provider_reason: '저장된 모델 제공자가 아직 없습니다. 먼저 설정에서 provider 구성을 완료하세요.',
     missing_api_key_reason: '연결은 저장되었지만 Trainer가 작동하려면 아직 API 키가 필요합니다.',
     generic_check_hint: 'base URL, 모델 이름, 권한을 확인하세요.',
@@ -341,6 +351,7 @@ const providerStatusPhraseTable: Record<
     model_not_found: 'O endpoint está acessível, mas este gateway não tem no momento um canal disponível para esse modelo.',
     workspace_trust: 'Este workspace ainda não é confiável, então o Trainer não pode buscar a lista de modelos.',
     sidecar_unavailable: 'O sidecar local do Trainer ainda não está pronto, então a lista de modelos não pode ser buscada.',
+    provider_capability_test_failed: 'A verificação de capacidades falhou. Teste a conexão novamente em Configurações e confirme tools e streaming antes de usar.',
     missing_provider_reason: 'Ainda não há um provedor salvo. Termine primeiro a configuração em Ajustes.',
     missing_api_key_reason: 'A conexão está salva, mas o Trainer ainda precisa de uma chave de API para funcionar.',
     generic_check_hint: 'Verifique a base URL, o nome do modelo e as permissões.',
@@ -439,6 +450,7 @@ const providerErrorCategoryKeyMap: Partial<Record<string, ProviderStatusPhraseKe
   model_not_found: 'model_not_found',
   workspace_trust: 'workspace_trust',
   sidecar_unavailable: 'sidecar_unavailable',
+  provider_capability_test_failed: 'provider_capability_test_failed',
 };
 
 function providerStatusPhrase(

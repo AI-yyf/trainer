@@ -22,6 +22,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 
+import pytest
+
 from app.llm.agent_binding import (
     DEFAULT_REQUEST_TIMEOUT_SECONDS,
     OPENAI_VISIBLE_REPLY_RETRY_HINT,
@@ -1156,6 +1158,54 @@ async def test_streaming_loop_emits_a_tool_free_first_delta_before_provider_fina
     assert final["content"] == "The first visible sentence finishes here."
 
 
+async def test_nonstream_loop_cancels_blocked_provider_when_stream_event_is_set() -> None:
+    """Non-SSE /turn must honor stream_cancel_event the same way as run_stream."""
+    cancellation = asyncio.Event()
+    provider_waiting = asyncio.Event()
+    provider_closed = asyncio.Event()
+
+    async def _call(
+        _messages: list[dict[str, Any]], _tools: list[dict[str, Any]] | None
+    ) -> dict[str, Any]:
+        provider_waiting.set()
+        try:
+            await asyncio.Event().wait()
+            raise AssertionError("provider.call continued after cancellation")
+        finally:
+            provider_closed.set()
+
+    async def _call_stream(
+        _messages: list[dict[str, Any]], _tools: list[dict[str, Any]] | None
+    ):
+        raise AssertionError("non-stream cancel test must use provider.call")
+        yield {}  # pragma: no cover
+
+    context = _context()
+    context.extra["stream_cancel_event"] = cancellation
+    loop = CoachAgentLoop(
+        provider=AgentProvider(
+            protocol="openai_chat_completions",
+            call=_call,
+            call_stream=_call_stream,
+        ),
+        registry=_toy_registry(),
+        context=context,
+        max_steps=2,
+        step_timeout=5.0,
+        first_step_timeout=5.0,
+    )
+
+    async def _run() -> None:
+        await loop.run([{"role": "user", "content": "cancel nonstream"}])
+
+    task = asyncio.create_task(_run())
+    await asyncio.wait_for(provider_waiting.wait(), timeout=0.5)
+    cancellation.set()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=0.5)
+    await asyncio.wait_for(provider_closed.wait(), timeout=0.5)
+
+
 async def test_streaming_loop_cancels_provider_iterator_when_stream_event_is_set() -> None:
     cancellation = asyncio.Event()
     provider_waiting = asyncio.Event()
@@ -1201,6 +1251,37 @@ async def test_streaming_loop_cancels_provider_iterator_when_stream_event_is_set
     else:  # pragma: no cover - a provider that ignores cancellation is a failure
         raise AssertionError("stream iterator continued after cancellation")
     await asyncio.wait_for(provider_closed.wait(), timeout=0.5)
+
+
+
+async def test_streaming_loop_times_out_blocked_provider_step() -> None:
+    async def _call(
+        _messages: list[dict[str, Any]], _tools: list[dict[str, Any]] | None
+    ) -> dict[str, Any]:
+        raise AssertionError("timeout test must use the provider stream")
+
+    async def _call_stream(
+        _messages: list[dict[str, Any]], _tools: list[dict[str, Any]] | None
+    ):
+        yield {"type": "delta", "delta": "partial", "safe_to_stream": True}
+        await asyncio.Event().wait()
+
+    loop = CoachAgentLoop(
+        provider=AgentProvider(
+            protocol="openai_chat_completions",
+            call=_call,
+            call_stream=_call_stream,
+        ),
+        registry=_toy_registry(),
+        context=_context(),
+        max_steps=1,
+        first_step_timeout=0.05,
+        step_timeout=0.05,
+    )
+    events = [event async for event in loop.run_stream([{"role": "user", "content": "hang"}])]
+    assert any(event.get("type") == "error" and event.get("category") == "timeout" for event in events)
+    final = next(event for event in events if event.get("type") == "final")
+    assert final.get("stop_reason") == "timeout"
 
 
 async def test_streaming_loop_empty_final_is_not_completed() -> None:

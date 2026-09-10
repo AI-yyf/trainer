@@ -152,6 +152,28 @@ function ensurePyInstaller(serverDir) {
   }
 }
 
+
+function formatPyInstallerFailureHint(pythonBin) {
+  const lines = ["PyInstaller build failed."];
+  if (process.platform === "linux") {
+    const probe = spawnSync(
+      pythonBin,
+      ["-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+      { encoding: "utf8" },
+    );
+    const version = String(probe.stdout ?? "").trim();
+    if (version) {
+      lines.push(
+        `On Debian/Ubuntu, install the matching shared library first: sudo apt-get install -y libpython${version}`,
+      );
+      lines.push(
+        "PyInstaller cannot freeze the sidecar without libpythonX.Y.so.1.0 on the host.",
+      );
+    }
+  }
+  return lines.join("\n");
+}
+
 function runPyInstaller(paths) {
   const { serverDir, buildRoot, distRoot, specRoot, launcherPath } = paths;
   const pythonBin = resolvePythonBin(serverDir);
@@ -201,7 +223,7 @@ function runPyInstaller(paths) {
   });
 
   if (result.status !== 0) {
-    fail("PyInstaller build failed.");
+    fail(formatPyInstallerFailureHint(pythonBin));
   }
 }
 

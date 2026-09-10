@@ -1039,16 +1039,82 @@ export function buildTrainerStreamingErrorMessage(
 ): string {
   const normalizedError = error.trim();
   const normalizedCategory = category?.trim().toLowerCase();
+  if (
+    normalizedCategory === "invalid_key_or_permission" ||
+    /invalid_key_or_permission/i.test(normalizedError)
+  ) {
+    const trainingCard =
+      /generate[_ -]?card|training[_ -]?card|训练卡/i.test(normalizedError);
+    if (trainingCard) {
+      return localizeTrainerStreamingCopy(
+        language,
+        "Training card generation failed: API key invalid or missing permission. Open Settings to fix the connection, then try again.",
+        "训练卡生成失败：API key 无效或没有权限。请打开设置检查连接后再试。",
+      );
+    }
+    return localizeTrainerStreamingCopy(
+      language,
+      "API key invalid or missing permission. Open Settings to check the key and access, then try again.",
+      "API key 无效或没有权限。请打开设置检查密钥与权限后再试。",
+    );
+  }
+
   const invalidProviderError =
-    category === "invalid_key_or_permission" ||
-    /401|403|invalid[_\s-]?api[_\s-]?key|incorrect api key|invalid_key_or_permission|unauthorized|forbidden/i.test(
+    category === "authentication_failed" ||
+    /401|403|invalid[_\s-]?api[_\s-]?key|incorrect api key|authentication_failed|unauthorized|forbidden/i.test(
       normalizedError,
     );
-  if (invalidProviderError) {
+  if (invalidProviderError || normalizedCategory === "authentication_failed") {
     return localizeTrainerStreamingCopy(
       language,
       "The current API key is invalid or does not have access to this model. Open Settings and update the provider connection.",
       "当前 API key 无效，或没有访问这个模型的权限。请打开设置并更新 provider 连接。",
+    );
+  }
+
+  if (
+    normalizedCategory === "nonempty_sse_no_visible_content" ||
+    /nonempty_sse_no_visible_content|no[_\s-]?visible[_\s-]?content/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "The stream finished without visible reply text. Your draft is still here — send again, or switch model in Settings.",
+      "流有结束信号但没有可见回复。草稿还在，可以再发一次，或到设置里换模型。",
+    );
+  }
+
+  if (
+    normalizedCategory === "empty_stream" ||
+    /empty[_\s-]?stream|no (?:content|chunks?) (?:received|returned)/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "Empty stream: the model sent no content. Your draft is still here — send again, or switch model in Settings.",
+      "空流：模型没有返回任何内容。草稿还在，可以再发一次，或到设置里换模型。",
+    );
+  }
+
+  if (
+    normalizedCategory === "empty_response" ||
+    /empty_response/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "The model returned an empty reply. Your draft is still here — try sending again, or switch model in Settings.",
+      "模型返回了空回复。草稿还在，可以再发一次，或到设置里换模型。",
+    );
+  }
+
+  if (
+    normalizedCategory === "incomplete_stream" ||
+    /incomplete[_\s-]?stream|stream (?:ended|closed) (?:early|without complete)|missing complete event/i.test(
+      normalizedError,
+    )
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "This reply was cut off before it finished. Kept what arrived — retry to continue, or cancel and rewrite.",
+      "这轮回复在完成前被截断了。已保留已到达内容，可重试继续，或取消后重写。",
     );
   }
 
@@ -1067,12 +1133,12 @@ export function buildTrainerStreamingErrorMessage(
 
   if (
     normalizedCategory === "rate_limit" ||
-    /rate[_\s-]?limit|too many requests/i.test(normalizedError)
+    /rate[_\s-]?limit|too many requests|\b429\b/i.test(normalizedError)
   ) {
     return localizeTrainerStreamingCopy(
       language,
-      "The model is busy right now. Wait a moment, then try again.",
-      "模型现在比较忙。等一会儿再试一次。",
+      "Rate limited (429). Your draft is still here — wait a moment, then send again.",
+      "触发限流（429）。草稿还在，稍等片刻再发送。",
     );
   }
 
@@ -1089,12 +1155,71 @@ export function buildTrainerStreamingErrorMessage(
 
   if (
     normalizedCategory === "network" ||
-    /network|fetch failed|econn|connection refused|dns/i.test(normalizedError)
+    normalizedCategory === "disconnected" ||
+    normalizedCategory === "connection_lost" ||
+    /network|fetch failed|econn|connection refused|dns|socket hang up|connection reset|disconnected|connection lost/i.test(
+      normalizedError,
+    )
   ) {
     return localizeTrainerStreamingCopy(
       language,
-      "Trainer could not reach the model. Check the connection and try again.",
-      "Trainer 暂时连不上模型。检查连接后再试一次。",
+      "Connection dropped mid-reply. Kept what arrived — after reconnect Trainer restores the same session when possible, then retry or rewrite from the draft.",
+      "回复中途断线了。已保留已到达内容；重连后会尽量恢复同一会话，然后可重试或从草稿重写。",
+    );
+  }
+
+  if (
+    normalizedCategory === "stream_aborted_by_client" ||
+    /stream_aborted_by_client|aborted by client/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "You stopped this reply. Draft restored below — send again to continue the thread.",
+      "你已中止本轮回复。草稿已恢复到下方，再发送即可续上这段对话。",
+    );
+  }
+
+  if (
+    normalizedCategory === "provider_capability_test_failed" ||
+    /provider_capability_test_failed|capability test failed/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "Provider capability check failed. Open Settings, verify the connection, then try again.",
+      "Provider 能力检查失败。请打开设置核对连接后再试。",
+    );
+  }
+
+  if (
+    normalizedCategory === "streaming_contract_failed" ||
+    /streaming_contract_failed/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "The streaming reply did not meet the contract (missing chunks or completion). Retry, or switch protocol/model in Settings.",
+      "流式回复未满足契约（缺片段或未完成）。可重试，或到设置切换协议/模型。",
+    );
+  }
+
+  if (
+    normalizedCategory === "invalid_json" ||
+    /invalid_json|invalid json|expected json/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "The training card reply was not valid JSON. Your draft is still here — generate again, or switch model in Settings.",
+      "训练卡回复不是有效 JSON。草稿还在，可以再生成一次，或到设置里换模型。",
+    );
+  }
+
+  if (
+    normalizedCategory === "provider_request_failed_training_card" ||
+    /provider_request_failed_training_card/i.test(normalizedError)
+  ) {
+    return localizeTrainerStreamingCopy(
+      language,
+      "Training card generation failed on the provider request. Your draft is still here — try again shortly.",
+      "训练卡生成时 provider 请求失败。草稿还在，稍后再试一次。",
     );
   }
 
@@ -1125,12 +1250,24 @@ export function deriveTrainerStreamingOperationMessage(
     return undefined;
   }
   if (state.completionStopReason?.trim().toLowerCase() === "cancelled") {
+    const hadContent = Boolean(normalizeTrainerStreamingNoticeText(state.streamedContent));
+    if (!hadContent) {
+      // Abort-before-content must not claim "kept generated content".
+      return {
+        tone: "error",
+        message: buildTrainerStreamingErrorMessage(
+          language,
+          "stream_aborted_by_client",
+          "stream_aborted_by_client",
+        ),
+      };
+    }
     return {
       tone: "info",
       message: localizeTrainerStreamingCopy(
         language,
-        "This reply was cancelled. The generated content is still here.",
-        "已取消本轮回复，已保留已生成内容。",
+        "Stopped. Kept generated content and restored your draft — send again to continue.",
+        "已中止。已保留生成内容并恢复草稿，再发送即可续上。",
       ),
     };
   }

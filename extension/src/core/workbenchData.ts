@@ -4078,6 +4078,40 @@ function mapWorkspaceUnderstanding(
   };
 }
 
+function mapLatestTrainingFsrsStates(
+  value: unknown,
+  fallback: NonNullable<BootstrapData['memory']['workspace']>['latestTrainingFsrsStates'],
+): NonNullable<BootstrapData['memory']['workspace']>['latestTrainingFsrsStates'] {
+  const record = asRecord(value);
+  if (!record) {
+    return fallback;
+  }
+  const mapped: NonNullable<BootstrapData['memory']['workspace']>['latestTrainingFsrsStates'] = {};
+  for (const [rawCardId, rawState] of Object.entries(record)) {
+    const cardId = String(rawCardId || '').trim();
+    const item = asRecord(rawState);
+    if (!cardId || !item) {
+      continue;
+    }
+    mapped[cardId] = {
+      cardId: asString(item.card_id) ?? asString(item.cardId) ?? cardId,
+      reps: asNumber(item.reps) ?? undefined,
+      state: asString(item.state) ?? undefined,
+      stability: asNumber(item.stability) ?? undefined,
+      difficulty: asNumber(item.difficulty) ?? undefined,
+      intervalDays:
+        asNumber(item.interval_days) ??
+        asNumber(item.intervalDays) ??
+        asNumber(item.interval) ??
+        undefined,
+      masteryScore:
+        asNumber(item.mastery_score) ?? asNumber(item.masteryScore) ?? undefined,
+      lapses: asNumber(item.lapses) ?? undefined,
+    };
+  }
+  return Object.keys(mapped).length ? mapped : fallback;
+}
+
 function mapMemoryWorkspace(
   value: unknown,
   fallback: BootstrapData['memory']['workspace'],
@@ -4193,6 +4227,10 @@ function mapMemoryWorkspace(
       latestProviderCapability ?? (sameWorkspace ? fallback?.latestProviderCapability : undefined),
     latestStreamingCheckpoint:
       latestStreamingCheckpoint ?? (sameWorkspace ? fallback?.latestStreamingCheckpoint : undefined),
+    latestTrainingFsrsStates: mapLatestTrainingFsrsStates(
+      record.latest_training_fsrs_states ?? record.latestTrainingFsrsStates,
+      sameWorkspace ? fallback?.latestTrainingFsrsStates : undefined,
+    ),
     trainerWorkspace: mapTrainerWorkspaceAdmission(
       scopedTrainingSubmodeValue(
         record.trainer_workspace ?? record.trainerWorkspace,

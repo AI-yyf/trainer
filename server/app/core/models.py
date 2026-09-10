@@ -1017,6 +1017,7 @@ class TeachingKnowledgeAsset(BaseModel):
     kind: TeachingAssetKind
     scope: TeachingAssetScope = "project"
     workspace_id: str = ""
+    session_id: str = Field(default="", alias="sessionId")
     title: str
     summary: str = ""
     concept_card: str = ""

@@ -97,46 +97,72 @@ async def _iterate_provider_stream_with_cancellation(
     stream: object,
     cancel_event: asyncio.Event | None,
 ):
-    """Iterate an upstream async stream while promptly closing it on cancel."""
+    """Iterate an upstream async stream while promptly closing it on cancel.
+
+    Client disconnect may cancel the outer StreamingResponse generator without
+    arming ``cancel_event`` first. Always aclose the upstream iterator on any
+    exit path so NewAPI ESTAB sockets do not linger after abort→resume.
+    """
 
     iterator = stream.__aiter__()  # type: ignore[attr-defined]
+    closed = False
 
     async def close_iterator() -> None:
+        nonlocal closed
+        if closed:
+            return
+        closed = True
         close = getattr(iterator, "aclose", None)
         if close is not None:
-            await close()
-
-    while True:
-        if cancel_event is None:
             try:
-                yield await iterator.__anext__()
-            except StopAsyncIteration:
-                return
-            continue
-        if cancel_event.is_set():
-            await close_iterator()
-            raise asyncio.CancelledError
+                await close()
+            except Exception:
+                # Best-effort close — never block abort teardown on upstream errors.
+                pass
 
-        next_item = asyncio.ensure_future(iterator.__anext__())
-        cancellation = asyncio.create_task(cancel_event.wait())
-        try:
-            done, _ = await asyncio.wait(
-                {next_item, cancellation},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if cancellation in done and cancel_event.is_set():
-                next_item.cancel()
-                await asyncio.gather(next_item, return_exceptions=True)
+    try:
+        while True:
+            if cancel_event is None:
+                try:
+                    yield await iterator.__anext__()
+                except StopAsyncIteration:
+                    return
+                continue
+            if cancel_event.is_set():
                 await close_iterator()
                 raise asyncio.CancelledError
+
+            next_item = asyncio.ensure_future(iterator.__anext__())
+            cancellation = asyncio.create_task(cancel_event.wait())
             try:
-                yield next_item.result()
-            except StopAsyncIteration:
-                return
-        finally:
-            if not cancellation.done():
-                cancellation.cancel()
-            await asyncio.gather(cancellation, return_exceptions=True)
+                done, _ = await asyncio.wait(
+                    {next_item, cancellation},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if cancellation in done and cancel_event.is_set():
+                    next_item.cancel()
+                    await asyncio.gather(next_item, return_exceptions=True)
+                    await close_iterator()
+                    raise asyncio.CancelledError
+                try:
+                    yield next_item.result()
+                except StopAsyncIteration:
+                    return
+            except asyncio.CancelledError:
+                if not next_item.done():
+                    next_item.cancel()
+                    await asyncio.gather(next_item, return_exceptions=True)
+                await close_iterator()
+                raise
+            finally:
+                if not cancellation.done():
+                    cancellation.cancel()
+                await asyncio.gather(cancellation, return_exceptions=True)
+                if not next_item.done():
+                    next_item.cancel()
+                    await asyncio.gather(next_item, return_exceptions=True)
+    finally:
+        await close_iterator()
 
 
 async def _await_provider_stream_with_cancellation(
@@ -162,10 +188,18 @@ async def _await_provider_stream_with_cancellation(
             await asyncio.gather(operation, return_exceptions=True)
             raise asyncio.CancelledError
         return operation.result()
+    except asyncio.CancelledError:
+        if not operation.done():
+            operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
+        raise
     finally:
         if not cancellation.done():
             cancellation.cancel()
         await asyncio.gather(cancellation, return_exceptions=True)
+        if not operation.done():
+            operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
 
 
 def _is_loopback_provider_url(value: object | None) -> bool:
@@ -2859,12 +2893,23 @@ class ProviderService:
         if (
             isinstance(error, (TimeoutError, socket.timeout, httpx.TimeoutException))
             or "timeout" in lowered
+            or "timed out" in lowered
         ):
             return ("timeout", True, status_code, False, None)
+        # OpenAI/NewAPI SDKs wrap httpx ConnectError as APIConnectionError
+        # with a generic "Connection error." message — walk cause/context and
+        # match the safe string forms so Settings /provider/test stays honest.
+        cause = error.__cause__ or error.__context__
         if (
             isinstance(error, (OSError, httpx.NetworkError))
+            or isinstance(cause, (OSError, httpx.NetworkError))
+            or type(error).__name__ in {"APIConnectionError", "ConnectError"}
             or "connection refused" in lowered
+            or "connection error" in lowered
+            or "all connection attempts failed" in lowered
+            or "failed to establish a new connection" in lowered
             or "name or service not known" in lowered
+            or "nodename nor servname" in lowered
         ):
             return ("network", True, status_code, False, None)
         if "malformed" in lowered or "invalid json" in lowered or "unexpected response" in lowered:
@@ -5858,15 +5903,34 @@ class ProviderService:
                         redact_provider_error(chat_exc, api_key=api_key),
                         *models_result.diagnostics,
                     ]
+                # Keep concrete transport/auth/rate-limit failures honest even when
+                # /models listing succeeds. model_not_tested is only for ambiguous
+                # "listed models but chat did not verify" cases.
+                concrete_categories = {
+                    "rate_limit",
+                    "invalid_key_or_permission",
+                    "timeout",
+                    "network",
+                }
+                if models_result.ok and category not in concrete_categories:
+                    resolved_category = "model_not_tested"
+                    resolved_retryable = retryable
+                    resolved_status = status_code
+                    resolved_model_supported = False
+                else:
+                    resolved_category = category
+                    resolved_retryable = retryable
+                    resolved_status = status_code
+                    resolved_model_supported = model_supported
                 return ProviderTestResponse(
                     ok=False,
-                    detail=detail,
-                    error_category="model_not_tested" if models_result.ok else category,
-                    retryable=retryable if models_result.ok else models_result.retryable,
-                    status_code=status_code if models_result.ok else models_result.status_code,
+                    detail=detail if resolved_category == "model_not_tested" else self._detail_from_category(category, provider=provider, error=chat_exc),
+                    error_category=resolved_category,
+                    retryable=resolved_retryable,
+                    status_code=resolved_status,
                     diagnostics=diagnostics,
                     provider_reachable=models_result.ok or provider_reachable,
-                    model_supported=False if models_result.ok else model_supported,
+                    model_supported=resolved_model_supported,
                 )
         except Exception as exc:  # pragma: no cover - network dependent
             category, retryable, status_code, provider_reachable, model_supported = self._classify_error(exc)
@@ -5938,6 +6002,9 @@ class ProviderService:
             history=history,
         )
         model = self._resolve_model()
+        cancel_event = _stream_cancel_event(
+            coach_context.get("stream_cancel_event") if isinstance(coach_context, dict) else None
+        )
         try:
             messages, max_tokens = self._prepare_context_budget(
                 messages,
@@ -5945,12 +6012,15 @@ class ProviderService:
                 prefer_configured_output=True,
             )
             if self._plain_completion_uses_agent_binding():
-                content = await self._completion_via_agent_binding(
-                    messages,
-                    temperature=0.7,
-                    max_tokens=max_tokens,
-                    prefer_configured_output=True,
-                    allow_local_empty_fallback=True,
+                content = await _await_provider_stream_with_cancellation(
+                    self._completion_via_agent_binding(
+                        messages,
+                        temperature=0.7,
+                        max_tokens=max_tokens,
+                        prefer_configured_output=True,
+                        allow_local_empty_fallback=True,
+                    ),
+                    cancel_event,
                 )
                 return self.finalize_coaching_reply(
                     content or "",
@@ -5962,12 +6032,15 @@ class ProviderService:
                     coach_context=coach_context,
                 )
             client = self._get_client()
-            response, _ = await self._create_chat_completion(
-                client=client,
-                model=model,
-                messages=messages,
-                temperature=0.7,
-                max_tokens=max_tokens,
+            response, _ = await _await_provider_stream_with_cancellation(
+                self._create_chat_completion(
+                    client=client,
+                    model=model,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=max_tokens,
+                ),
+                cancel_event,
             )
             content = _require_provider_runtime_response(
                 "openai_chat_completions",

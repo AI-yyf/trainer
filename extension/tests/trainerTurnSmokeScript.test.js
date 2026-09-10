@@ -13,6 +13,11 @@ function startMockTrainer({
   contaminateFunctionReply = false,
   omitZhTrainingCardTitle = false,
   sessionStartFailureBody = '',
+  providerTestStatus = 200,
+  providerTestOk = true,
+  providerTestErrorCategory = '',
+  providerTestStatusCode = undefined,
+  streamMode = 'normal',
 } = {}) {
   const turnBodies = [];
   const trainingCardBodies = [];
@@ -53,6 +58,55 @@ function startMockTrainer({
           observed: null,
           state: disabled.has(name) ? 'disabled' : 'unverified',
         }));
+        if (
+          providerTestStatus === 401 ||
+          providerTestStatus === 403 ||
+          providerTestOk === false ||
+          providerTestErrorCategory
+        ) {
+          const errorCategory =
+            providerTestErrorCategory ||
+            (providerTestStatus === 429
+              ? 'rate_limit'
+              : providerTestStatus === 408 || providerTestStatus === 504
+                ? 'timeout'
+                : 'authentication_failed');
+          const nestedStatusCode =
+            typeof providerTestStatusCode === 'number'
+              ? providerTestStatusCode
+              : providerTestStatus === 200
+                ? errorCategory === 'rate_limit'
+                  ? 429
+                  : errorCategory === 'timeout'
+                    ? 408
+                    : 401
+                : providerTestStatus;
+          // Mirror live sidecar behavior: often HTTP 200 with ok=false + error_category.
+          const httpStatus =
+            providerTestStatus === 200 && providerTestErrorCategory
+              ? 200
+              : providerTestStatus === 200
+                ? 401
+                : providerTestStatus;
+          response.writeHead(httpStatus, {
+            'Content-Type': 'application/json; charset=utf-8',
+          });
+          response.end(
+            JSON.stringify({
+              ok: false,
+              configured: true,
+              api_key_supplied: Boolean(payload.api_key),
+              reachable: true,
+              success: false,
+              status: errorCategory,
+              error_category: errorCategory,
+              status_code: nestedStatusCode,
+              detail: `Provider probe failed: ${errorCategory}.`,
+              diagnostics: [errorCategory],
+            }),
+          );
+          return;
+        }
         response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         response.end(
           JSON.stringify({
@@ -91,6 +145,43 @@ function startMockTrainer({
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
       });
+      if (streamMode === 'empty') {
+        response.end();
+        return;
+      }
+      if (streamMode === 'empty_response_scaffold') {
+        // Mimic coach recovery after true empty upstream: visible scaffold + complete
+        // with stop_reason empty_response — must still classify as empty_stream.
+        response.write('event: chunk\n');
+        response.write(
+          `data: ${JSON.stringify({
+            chunk:
+              'provider 返回了空的可见回答，所以 Trainer 会把这一轮保持为可恢复状态。草稿还在。',
+          })}\n\n`,
+        );
+        response.write('event: complete\n');
+        response.write(
+          `data: ${JSON.stringify({
+            tokens: 1,
+            response: {
+              agent_meta: { stop_reason: 'empty_response' },
+              reply: {
+                content:
+                  'provider 返回了空的可见回答，所以 Trainer 会把这一轮保持为可恢复状态。草稿还在。',
+                metadata: { coach_visible_status: { stopReason: 'empty_response' } },
+              },
+            },
+          })}\n\n`,
+        );
+        response.end();
+        return;
+      }
+      if (streamMode === 'incomplete') {
+        response.write('event: chunk\n');
+        response.write(`data: ${JSON.stringify({ chunk: '我会先验证一个 breakpoint。' })}\n\n`);
+        response.end();
+        return;
+      }
       response.write('event: chunk\n');
       response.write(`data: ${JSON.stringify({ chunk: '我会先验证一个 breakpoint。' })}\n\n`);
       response.write('event: complete\n');
@@ -444,6 +535,13 @@ test('trainer turn smoke script stays env-driven and never hardcodes the hidden 
   assert.match(source, /function_guidance/);
   assert.doesNotMatch(source, /47\.107\.101\.18/);
   assert.doesNotMatch(source, /sk-[A-Za-z0-9_-]{24,}/);
+  assert.doesNotMatch(source, /minimax\.redfast\.top/);
+  assert.match(source, /authentication_failed/);
+  assert.match(source, /empty_stream/);
+  assert.match(source, /incomplete_stream/);
+  assert.match(source, /rate_limit/);
+  assert.match(source, /timeout/);
+  assert.match(source, /invalid_key_or_permission/);
 });
 
 test('trainer turn smoke script passes clean lane transitions and learn-first routing', async () => {
@@ -517,7 +615,9 @@ test('trainer turn smoke script fails when a fresh lane still leaks the previous
     assert.equal(report.providerProtocol, 'openai_chat_completions_compatible');
     assert.equal(typeof report.elapsedMs, 'number');
     assert.equal('preview' in report, false);
-    assert.equal('step' in report, false);
+    assert.equal(typeof report.step, 'string');
+    assert.equal(typeof report.session_id, 'string');
+    assert.match(report.session_id, /^session-/);
     assert.doesNotMatch(result.stderr, /debug loop/i);
   } finally {
     await trainer.close();
@@ -540,7 +640,8 @@ test('trainer turn smoke script redacts a failed sidecar response body', async (
     assert.equal(report.providerProtocol, 'openai_chat_completions_compatible');
     assert.equal(typeof report.elapsedMs, 'number');
     assert.equal('preview' in report, false);
-    assert.equal('step' in report, false);
+    assert.equal(typeof report.step, 'string');
+    assert.equal('session_id' in report, false);
     assert.doesNotMatch(result.stderr, new RegExp(secret));
   } finally {
     await trainer.close();
@@ -562,8 +663,163 @@ test('trainer turn smoke script identifies the nonlocalized zh-CN training-card 
     assert.equal(report.providerModel, 'MiniMax-M3');
     assert.equal(report.providerProtocol, 'openai_chat_completions_compatible');
     assert.equal(typeof report.elapsedMs, 'number');
-    assert.equal('step' in report, false);
+    assert.equal(typeof report.step, 'string');
   } finally {
     await trainer.close();
+  }
+});
+
+test('trainer turn smoke script reports authentication_failed for rejected provider keys', async () => {
+  const trainer = await startMockTrainer({ providerTestStatus: 401, providerTestOk: false });
+
+  try {
+    const result = await runTurnSmoke({
+      TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.category, 'authentication_failed');
+    assert.equal(report.providerModel, 'MiniMax-M3');
+    assert.equal(typeof report.elapsedMs, 'number');
+  } finally {
+    await trainer.close();
+  }
+});
+
+test('trainer turn smoke script reports empty_stream when SSE yields no chunks', async () => {
+  const trainer = await startMockTrainer({ streamMode: 'empty' });
+
+  try {
+    const result = await runTurnSmoke({
+      TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.category, 'empty_stream');
+  } finally {
+    await trainer.close();
+  }
+});
+
+test('trainer turn smoke script maps recovered empty_response scaffold to empty_stream', async () => {
+  const trainer = await startMockTrainer({ streamMode: 'empty_response_scaffold' });
+
+  try {
+    const result = await runTurnSmoke({
+      TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.category, 'empty_stream');
+    assert.equal(report.step, 'turn_stream');
+  } finally {
+    await trainer.close();
+  }
+});
+
+test('trainer turn smoke script reports incomplete_stream when complete event is missing', async () => {
+  const trainer = await startMockTrainer({ streamMode: 'incomplete' });
+
+  try {
+    const result = await runTurnSmoke({
+      TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.category, 'incomplete_stream');
+  } finally {
+    await trainer.close();
+  }
+});
+
+test('trainer turn smoke script maps sidecar invalid_key_or_permission to authentication_failed', async () => {
+  const trainer = await startMockTrainer({
+    providerTestStatus: 200,
+    providerTestOk: false,
+    providerTestErrorCategory: 'invalid_key_or_permission',
+    providerTestStatusCode: 401,
+  });
+
+  try {
+    const result = await runTurnSmoke({
+      TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+      TRAINER_TURN_SMOKE_PROVIDER_PROTOCOL: 'anthropic_messages',
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.category, 'authentication_failed');
+    assert.equal(report.providerProtocol, 'anthropic_messages');
+    assert.equal(report.protocol, 'anthropic_messages');
+  } finally {
+    await trainer.close();
+  }
+});
+
+test('trainer turn smoke script reports rate_limit and timeout from provider/test across protocols', async () => {
+  for (const [protocol, category, statusCode] of [
+    ['openai_responses', 'rate_limit', 429],
+    ['openai_chat_completions_compatible', 'timeout', 408],
+  ]) {
+    const trainer = await startMockTrainer({
+      providerTestStatus: 200,
+      providerTestOk: false,
+      providerTestErrorCategory: category,
+      providerTestStatusCode: statusCode,
+    });
+    try {
+      const result = await runTurnSmoke({
+        TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+        TRAINER_TURN_SMOKE_PROVIDER_PROTOCOL: protocol,
+      });
+      assert.equal(result.code, 1);
+      const report = JSON.parse(result.stderr);
+      assert.equal(report.category, category);
+      assert.equal(report.protocol, protocol);
+    } finally {
+      await trainer.close();
+    }
+  }
+});
+
+test('trainer turn smoke script keeps empty_stream classification when protocol switches', async () => {
+  const trainer = await startMockTrainer({ streamMode: 'empty' });
+
+  try {
+    const result = await runTurnSmoke({
+      TRAINER_TURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+      TRAINER_TURN_SMOKE_PROVIDER_PROTOCOL: 'openai_responses',
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.category, 'empty_stream');
+    assert.equal(report.protocol, 'openai_responses');
+  } finally {
+    await trainer.close();
+  }
+});
+
+test('trainer turn smoke script advances currentStep past debug_loop for later phases', () => {
+  const source = fs.readFileSync(scriptPath, 'utf8');
+  // Wall-clock timeouts report currentStep; without these setStep calls every late
+  // stall is mislabeled as debug_loop (x3-r2/r3 RCA false locus).
+  for (const step of [
+    'function_guidance',
+    'training_session_start',
+    'training_route',
+    'debug_training_route_zh',
+    'function_training_route_zh',
+  ]) {
+    assert.match(source, new RegExp(`setStep\\(\\"${step}\\"\\)`));
   }
 });

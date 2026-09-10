@@ -306,7 +306,7 @@ class TrainerRuntime:
             return None
         snapshot = WorkbenchSnapshot.model_validate(snapshot_payload)
         snapshot.context_id = workspace_id
-        snapshot.memory = self.memory_service.snapshot(workspace_id)
+        snapshot.memory = self.memory_service.snapshot(workspace_id, session_id=session_id)
         snapshot.profile = self.repository.get_profile(workspace_id)
         self.hydrate_plan_context(snapshot, workspace_id)
         provisioning = self.repository.get_project_provisioning(workspace_id)
@@ -338,7 +338,25 @@ class TrainerRuntime:
         return state
 
     def get_session(self, session_id: str) -> SessionState | None:
-        return self.sessions.get(session_id)
+        """Return an in-memory session, or rehydrate it from durable storage.
+
+        Codex-level reconnect requires the same session_id to survive sidecar
+        restarts. Callers that only use get_session (not ensure_session) must
+        still recover conversation state from the repository.
+        """
+        if not session_id:
+            return None
+        existing = self.sessions.get(session_id)
+        if existing is not None:
+            return existing
+        restored_payload = self.repository.load_session(session_id)
+        if not restored_payload:
+            return None
+        restored = self._restore_session(restored_payload)
+        if restored is None:
+            return None
+        self.sessions[session_id] = restored
+        return restored
 
     def latest_session(self) -> SessionState | None:
         latest_session_id = next(reversed(self.sessions), None)
@@ -362,18 +380,21 @@ class TrainerRuntime:
         if not matching_states:
             return 0
 
-        # Read workspace-level state once; each session receives independent copies so
-        # later session-local mutations cannot alter another session's snapshot.
-        memory = self.memory_service.snapshot(resolved_workspace_id)
+        # Ground each session independently so coach memory cannot cross session_id
+        # boundaries inside the same workspace.
         profile = self.repository.get_profile(resolved_workspace_id)
-        workspace_snapshot = WorkbenchSnapshot(
-            contextId=resolved_workspace_id,
-            memory=memory,
-            profile=profile,
-        )
-        self.hydrate_plan_context(workspace_snapshot, resolved_workspace_id)
 
         for state in matching_states:
+            memory = self.memory_service.snapshot(
+                resolved_workspace_id,
+                session_id=state.session_id,
+            )
+            workspace_snapshot = WorkbenchSnapshot(
+                contextId=resolved_workspace_id,
+                memory=memory,
+                profile=profile,
+            )
+            self.hydrate_plan_context(workspace_snapshot, resolved_workspace_id)
             state.snapshot.context_id = resolved_workspace_id
             state.snapshot.memory = deepcopy(workspace_snapshot.memory)
             state.snapshot.profile = deepcopy(workspace_snapshot.profile)
@@ -813,20 +834,22 @@ class TrainerRuntime:
         workspace_id: str | None = None,
         workspace_name: str = DEFAULT_WORKSPACE_NAME,
     ) -> SessionState:
+        """Return an existing session, restoring from SQLite after restart when needed.
+
+        An explicit session_id must be recoverable. Silently minting a replacement
+        session would fake continuity across sidecar restarts.
+        """
         explicit_workspace_id = self.repository.resolve_context_id(workspace_id) or (workspace_id or "").strip()
-        if session_id and session_id in self.sessions:
-            state = self.sessions[session_id]
-            if not explicit_workspace_id or state.workspace_id == explicit_workspace_id:
+        cleaned_session_id = str(session_id or "").strip()
+        if cleaned_session_id:
+            state = self.get_session(cleaned_session_id)
+            if state is not None and (
+                not explicit_workspace_id or state.workspace_id == explicit_workspace_id
+            ):
                 return state
-        if session_id:
-            restored_payload = self.repository.load_session(session_id)
-            if restored_payload:
-                restored = self._restore_session(restored_payload)
-                if restored is not None and (
-                    not explicit_workspace_id or restored.workspace_id == explicit_workspace_id
-                ):
-                    self.sessions[session_id] = restored
-                    return restored
+            raise LookupError(
+                f"session_not_found:{cleaned_session_id}"
+            )
         return self.start_session(explicit_workspace_id or DEFAULT_WORKSPACE_ID, workspace_name)
 
     def provision_project_adoption(

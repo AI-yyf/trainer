@@ -708,9 +708,11 @@ def test_native_http_502_is_retryable_network_failure(
         (httpx.ReadTimeout("simulated read timeout"), "timeout"),
         (httpx.WriteTimeout("simulated write timeout"), "timeout"),
         (httpx.PoolTimeout("simulated pool timeout"), "timeout"),
+        (Exception("Request timed out."), "timeout"),
         (httpx.ConnectError("simulated connect error"), "network"),
         (httpx.ReadError("simulated read error"), "network"),
         (httpx.WriteError("simulated write error"), "network"),
+        (Exception("Connection error."), "network"),
     ],
 )
 def test_classify_httpx_transport_errors_as_retryable(
@@ -722,6 +724,22 @@ def test_classify_httpx_transport_errors_as_retryable(
     )
 
     assert category == expected_category
+    assert retryable is True
+    assert status_code is None
+    assert provider_reachable is False
+    assert model_supported is None
+
+
+def test_classify_openai_api_connection_error_wrapped_cause_as_network() -> None:
+    class APIConnectionError(Exception):
+        pass
+
+    wrapped = APIConnectionError("Connection error.")
+    wrapped.__cause__ = httpx.ConnectError("[Errno 111] Connection refused")
+    category, retryable, status_code, provider_reachable, model_supported = ProviderService()._classify_error(
+        wrapped
+    )
+    assert category == "network"
     assert retryable is True
     assert status_code is None
     assert provider_reachable is False
@@ -2141,7 +2159,26 @@ def test_provider_test_reports_rate_limit_structurally() -> None:
 
     assert result.ok is False
     assert result.error_category == "rate_limit"
-    assert result.retryable is False
+    assert result.retryable is True
+    assert result.status_code == 429
+    assert "rate limit" in (result.detail or "").lower()
+
+
+def test_provider_test_preserves_rate_limit_when_models_list_succeeds() -> None:
+    config = _make_config()
+    service = ProviderService()
+    fake_client = MagicMock()
+    fake_client.chat.completions.create.side_effect = Exception(
+        "Error code: 429 - {'error': {'message': 'Rate limit exceeded'}}"
+    )
+    fake_client.models.list.return_value = [MagicMock(id="MiniMax-M3")]
+
+    with patch.object(service, "_get_sync_openai_class", return_value=MagicMock(return_value=fake_client)):
+        result = service.test(config, "sk-test")
+
+    assert result.ok is False
+    assert result.error_category == "rate_limit"
+    assert result.status_code == 429
     assert "rate limit" in (result.detail or "").lower()
 
 

@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import Request
 from fastapi.responses import JSONResponse, Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 # The extension can send either JSON aliases or this header. Treat every
 # explicit read-only marker as restrictive so stale managed data cannot widen
@@ -141,3 +142,50 @@ async def browse_only_rejection(request: Request) -> Response | None:
             "admission_mode": admission_mode,
         },
     )
+
+
+class BrowseOnlyAdmissionMiddleware:
+    """Pure ASGI admission gate.
+
+    ``@app.middleware("http")`` is Starlette BaseHTTPMiddleware. That wrapper
+    parks ``http.disconnect`` until the inner handler returns, so
+    ``Request.is_disconnected()`` stays false while ``/turn`` is blocked on
+    NewAPI and ESTAB sockets keep spinning after the client aborts. Replay the
+    request body, then forward later messages (including disconnect) unchanged.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        pending: list[Message] = []
+        more_body = True
+        while more_body:
+            message = await receive()
+            pending.append(message)
+            if message["type"] == "http.disconnect":
+                break
+            if message["type"] == "http.request":
+                more_body = bool(message.get("more_body", False))
+
+        replay_index = 0
+
+        async def replay_receive() -> Message:
+            nonlocal replay_index
+            if replay_index < len(pending):
+                message = pending[replay_index]
+                replay_index += 1
+                return message
+            return await receive()
+
+        request = Request(scope, replay_receive)
+        rejection = await browse_only_rejection(request)
+        if rejection is not None:
+            await rejection(scope, replay_receive, send)
+            return
+        replay_index = 0
+        await self.app(scope, replay_receive, send)

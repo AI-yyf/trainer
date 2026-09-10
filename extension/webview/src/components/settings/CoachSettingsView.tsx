@@ -713,7 +713,7 @@ function providerBaseUrlGuidance(
   if (protocol === "gemini_generate_content") {
     switch (language) {
       case "zh-CN":
-        return "填写 API 根地址，不要粘贴某个模型专用的 generateContent 请求地址。";
+        return "填写 API 根地址（GenerateContent 形；不默认当作 Google 原生 googleapis）。不要粘贴某个模型专用的 generateContent 请求地址。";
       case "es-ES":
         return "Introduce la raíz de la API, no una URL generateContent específica de un modelo.";
       case "fr-FR":
@@ -727,7 +727,7 @@ function providerBaseUrlGuidance(
       case "pt-BR":
         return "Informe a raiz da API, não uma URL generateContent específica de um modelo.";
       default:
-        return "Enter the API root, not a model-specific generateContent request URL.";
+        return "Enter the API root (GenerateContent-shaped; not assumed Google-native googleapis). Not a model-specific generateContent URL.";
     }
   }
 
@@ -3559,7 +3559,7 @@ function protocolChoiceLabel(protocol: ProviderProtocol | undefined, language: C
       case "openai_chat_completions_compatible":
         return "OpenAI 兼容";
       case "gemini_generate_content":
-        return "Gemini";
+        return "Gemini GenerateContent（非 Google 原生默认）";
     }
   }
 
@@ -3573,7 +3573,7 @@ function protocolChoiceLabel(protocol: ProviderProtocol | undefined, language: C
     case "openai_chat_completions_compatible":
       return "OpenAI Compat";
     case "gemini_generate_content":
-      return "Gemini";
+      return "Gemini GenerateContent (not Google-native by default)";
   }
 
   return providerProtocolCompletionLabel(protocol);
@@ -3667,6 +3667,17 @@ function providerFailureCopy(
         "ja-JP": { statusLabel: "確認が必要", headline: "VS Code でこのフォルダーを信頼してから、もう一度試してください" },
         "ko-KR": { statusLabel: "확인이 필요함", headline: "VS Code에서 이 폴더를 신뢰한 뒤 다시 시도하세요" },
         "pt-BR": { statusLabel: "Ação necessária", headline: "Confie nesta pasta no VS Code e tente novamente" },
+      });
+    case "provider_capability_test_failed":
+      return localized({
+        "zh-CN": { statusLabel: "能力未通过", headline: "能力检查未通过，请重新测试连接" },
+        "en-US": { statusLabel: "Capability failed", headline: "Capability check failed; re-test the connection" },
+        "es-ES": { statusLabel: "Capacidad fallida", headline: "La comprobación de capacidades falló; vuelve a probar" },
+        "fr-FR": { statusLabel: "Capacité échouée", headline: "Le contrôle des capacités a échoué ; retestez" },
+        "de-DE": { statusLabel: "Fähigkeit fehlgeschlagen", headline: "Fähigkeitsprüfung fehlgeschlagen; erneut testen" },
+        "ja-JP": { statusLabel: "能力チェック失敗", headline: "能力チェックに失敗しました。再テストしてください" },
+        "ko-KR": { statusLabel: "기능 검사 실패", headline: "기능 검사에 실패했습니다. 다시 테스트하세요" },
+        "pt-BR": { statusLabel: "Capacidade falhou", headline: "A verificação de capacidades falhou; teste novamente" },
       });
     case "network":
     case "network_error":

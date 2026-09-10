@@ -33,9 +33,40 @@ const responseLanguage = (
   process.env.TRAINER_TURN_SMOKE_RESPONSE_LANGUAGE ?? defaultResponseLanguage
 ).trim();
 const smokeStartedAt = Date.now();
+let streamChunkCount = 0;
+let currentStep = "startup";
+let lastSessionId = "";
+const defaultSmokeTimeoutMs = 360000;
+const parsedSmokeTimeoutMs = Number(
+  process.env.TRAINER_TURN_SMOKE_TIMEOUT_MS ?? defaultSmokeTimeoutMs,
+);
+const smokeTimeoutMs =
+  Number.isFinite(parsedSmokeTimeoutMs) && parsedSmokeTimeoutMs > 0
+    ? Math.floor(parsedSmokeTimeoutMs)
+    : defaultSmokeTimeoutMs;
 
 function elapsedMs() {
   return Date.now() - smokeStartedAt;
+}
+
+function setStep(step) {
+  currentStep = step;
+  return step;
+}
+
+function remainingTimeoutMs(fallbackMs) {
+  const remaining = smokeTimeoutMs - elapsedMs();
+  if (remaining <= 0) {
+    const error = new Error(`trainer-turn-smoke exceeded ${smokeTimeoutMs}ms wall-clock budget`);
+    error.name = "TimeoutError";
+    error.category = "timeout";
+    throw error;
+  }
+  return Math.max(1, Math.min(fallbackMs, remaining));
+}
+
+function abortSignalFor(fallbackMs) {
+  return AbortSignal.timeout(remainingTimeoutMs(fallbackMs));
 }
 
 const zhRemoteMessage =
@@ -82,7 +113,18 @@ function emitJson(stream, payload) {
   });
 }
 
-async function failure({ step, category, diagnostics, status }) {
+async function failure({
+  step,
+  category,
+  diagnostics,
+  status,
+  detail,
+  preview,
+  chunkCount,
+  sessionId,
+}) {
+  // Keep the machine report redaction-safe: no reply preview/detail bodies.
+  // step + real chunkCount are enough to locate hangs without leaking lane text.
   const report = {
     category,
     providerModel,
@@ -90,9 +132,22 @@ async function failure({ step, category, diagnostics, status }) {
     model: providerModel,
     protocol: providerProtocol,
     elapsedMs: elapsedMs(),
-    chunkCount: 0,
+    chunkCount: typeof chunkCount === "number" ? chunkCount : streamChunkCount,
     ok: false,
   };
+  if (step) {
+    report.step = step;
+  }
+  if (typeof status === "number") {
+    report.status = status;
+  }
+  const resolvedSessionId = compact(sessionId) || lastSessionId;
+  if (resolvedSessionId) {
+    report.session_id = resolvedSessionId;
+  }
+  void diagnostics;
+  void detail;
+  void preview;
   await emitJson(process.stderr, report);
   process.exitCode = 1;
   throw new Error("__trainer_turn_smoke_failed__");
@@ -110,6 +165,7 @@ async function postJson(path, payload) {
       "content-type": "application/json",
     },
     body: JSON.stringify(payload),
+    signal: abortSignalFor(180000),
   });
   const text = await response.text();
   let json;
@@ -129,6 +185,7 @@ async function postStreaming(path, payload) {
       "content-type": "application/json",
     },
     body: JSON.stringify(payload),
+    signal: abortSignalFor(300000),
   });
   let body = "";
   if (response.body) {
@@ -147,7 +204,23 @@ async function postStreaming(path, payload) {
       }
     })
     .join("");
-  return { response, body, chunks, hasComplete, visibleText };
+  const stopReason = compact((body.match(/"stop_reason"\s*:\s*"([^"]+)"/) || [])[1] || "");
+  const recoveredStopReason = compact(
+    (body.match(/"recovered_stop_reason"\s*:\s*"([^"]+)"/) || [])[1] || "",
+  );
+  const streamErrorCategory = compact(
+    (body.match(/"error_category"\s*:\s*"([^"]+)"/) || [])[1] || "",
+  );
+  return {
+    response,
+    body,
+    chunks,
+    hasComplete,
+    visibleText,
+    stopReason,
+    recoveredStopReason,
+    streamErrorCategory,
+  };
 }
 
 function providerPayload() {
@@ -543,8 +616,63 @@ function assertCurrentFocusLocalized(payload, step, diagnostics, expectedLanguag
   }
 }
 
+
+function classifyProviderTestFailure(response, body) {
+  const httpStatus = response?.status;
+  const payload = body && typeof body === "object" ? body : {};
+  const nestedStatus = Number(payload.status_code);
+  const status =
+    Number.isFinite(nestedStatus) && nestedStatus > 0 ? nestedStatus : httpStatus;
+  const rawCategory = String(payload.error_category || payload.status || "")
+    .trim()
+    .toLowerCase();
+
+  if (
+    status === 401 ||
+    status === 403 ||
+    rawCategory === "authentication_failed" ||
+    rawCategory === "invalid_key_or_permission" ||
+    rawCategory === "missing_api_key"
+  ) {
+    return {
+      category: "authentication_failed",
+      status: status || httpStatus || 401,
+    };
+  }
+  if (status === 429 || rawCategory === "rate_limit") {
+    return {
+      category: "rate_limit",
+      status: status || httpStatus || 429,
+    };
+  }
+  if (
+    status === 408 ||
+    status === 504 ||
+    rawCategory === "timeout"
+  ) {
+    return {
+      category: "timeout",
+      status: status || httpStatus || 408,
+    };
+  }
+  if (
+    rawCategory === "empty_stream" ||
+    rawCategory === "incomplete_stream" ||
+    rawCategory === "empty_response"
+  ) {
+    return {
+      category: rawCategory === "empty_response" ? "empty_stream" : rawCategory,
+      status: status || httpStatus,
+    };
+  }
+  return {
+    category: "provider_capability_test_failed",
+    status: status || httpStatus,
+  };
+}
+
 async function main() {
-  let streamChunkCount = 0;
+  streamChunkCount = 0;
   if (!providerBaseUrl) {
     return failure({
       step: "config",
@@ -570,16 +698,33 @@ async function main() {
     probe_message: "请用一句话确认当前连接可以进行中文教练对话。",
   });
   if (!capabilityTest.response.ok || capabilityTest.json?.ok !== true) {
+    const classified = classifyProviderTestFailure(
+      capabilityTest.response,
+      capabilityTest.json,
+    );
+    const status = classified.status;
+    const category = classified.category;
+    const detail =
+      category === "authentication_failed"
+        ? `Provider rejected the API key (status ${status ?? "unknown"}).`
+        : category === "rate_limit"
+          ? `Provider rate-limited the capability probe (status ${status ?? "unknown"}).`
+          : category === "timeout"
+            ? `Provider capability probe timed out (status ${status ?? "unknown"}).`
+            : category === "empty_stream" || category === "incomplete_stream"
+              ? `Provider capability probe reported ${category}.`
+              : `Provider capability test failed with HTTP ${capabilityTest.response.status}.`;
     return failure({
       step: "provider_test",
-      category: "provider_capability_test_failed",
-      detail: `Provider capability test failed with HTTP ${capabilityTest.response.status}.`,
+      category,
+      detail,
       diagnostics,
-      status: capabilityTest.response.status,
+      status,
     });
   }
   diagnostics.push("provider_test: chat_probe=verified");
   const workspaceId = `trainer-turn-smoke-${Date.now()}`;
+  setStep("session_start");
   const start = await postJson("/session/start", {
     workspace_id: workspaceId,
     workspace_name: workspaceId,
@@ -601,8 +746,10 @@ async function main() {
     });
   }
   const sessionId = compact(start.json.session_id);
+  lastSessionId = sessionId;
   diagnostics.push("session_start: started=true");
 
+  setStep("turn_stream");
   const stream = await postStreaming(
     "/turn/stream",
     buildTurnPayload(
@@ -614,21 +761,41 @@ async function main() {
     ),
   );
   streamChunkCount = stream.chunks;
+  const streamHttpOk = stream.response.status === 200;
+  const streamHasChunks = stream.chunks > 0;
+  const streamComplete = stream.hasComplete;
+  const streamVisibleOk = hasChineseText(stream.visibleText);
+  const streamSecretClean = !providerErrorContainsSecret(stream.body);
+  const emptyUpstreamStop =
+    stream.stopReason === "empty_response" ||
+    stream.recoveredStopReason === "empty_response" ||
+    stream.streamErrorCategory === "empty_response" ||
+    stream.streamErrorCategory === "empty_stream" ||
+    stream.stopReason === "empty_stream";
+  // True empty upstream (or recovered scaffold after empty) must not look like success.
   const streamOk =
-    stream.response.status === 200 &&
-    stream.chunks > 0 &&
-    stream.hasComplete &&
-    hasChineseText(stream.visibleText) &&
-    !providerErrorContainsSecret(stream.body);
+    streamHttpOk &&
+    streamHasChunks &&
+    streamComplete &&
+    streamVisibleOk &&
+    streamSecretClean &&
+    !emptyUpstreamStop;
   if (!streamOk) {
+    let category = "streaming_contract_failed";
+    if (emptyUpstreamStop || (streamHttpOk && !streamHasChunks && !streamComplete)) {
+      category = "empty_stream";
+    } else if (streamHttpOk && streamHasChunks && !streamComplete) {
+      category = "incomplete_stream";
+    }
     return failure({
       step: "turn_stream",
-      category: "streaming_contract_failed",
+      category,
       diagnostics,
       status: stream.response.status,
     });
   }
 
+  setStep("remote_workspace");
   const remoteTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -671,6 +838,7 @@ async function main() {
     await assertCurrentFocusLocalized(remoteTurn.json, "remote_workspace", diagnostics, "zh-CN");
   }
 
+  setStep("debug_loop");
   const debugTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -725,6 +893,7 @@ async function main() {
     await assertCurrentFocusLocalized(debugTurn.json, "debug_loop", diagnostics, "zh-CN");
   }
 
+  setStep("function_guidance");
   const functionTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -780,6 +949,7 @@ async function main() {
   }
 
   const trainingWorkspaceId = `${workspaceId}-training`;
+  setStep("training_session_start");
   const trainingStart = await postJson("/session/start", {
     workspace_id: trainingWorkspaceId,
     workspace_name: trainingWorkspaceId,
@@ -801,6 +971,7 @@ async function main() {
     });
   }
 
+  setStep("training_route");
   const trainingTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -822,6 +993,7 @@ async function main() {
   }
   await assertScenario(trainingTurn.json, "remote_workspace", "training_route", diagnostics);
   await assertChatDoesNotMintTrainingCard(trainingTurn.json, "training_route", diagnostics);
+  setStep("training_route_explicit_card");
   await generateExplicitTrainingCard({
     workspaceId: trainingWorkspaceId,
     message:
@@ -833,6 +1005,7 @@ async function main() {
   });
 
   const trainingZhWorkspaceId = `${workspaceId}-training-zh`;
+  setStep("training_zh_session_start");
   const trainingZhStart = await postJson("/session/start", {
     workspace_id: trainingZhWorkspaceId,
     workspace_name: trainingZhWorkspaceId,
@@ -854,6 +1027,7 @@ async function main() {
     });
   }
 
+  setStep("training_route_zh");
   const trainingZhTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -885,6 +1059,7 @@ async function main() {
     diagnostics,
   );
   await assertChatDoesNotMintTrainingCard(trainingZhTurn.json, "training_route_zh", diagnostics);
+  setStep("training_route_zh_explicit_card");
   const trainingZhCard = await generateExplicitTrainingCard({
     workspaceId: trainingZhWorkspaceId,
     message: zhRemoteMessage,
@@ -903,6 +1078,7 @@ async function main() {
   );
 
   const debugTrainingZhWorkspaceId = `${workspaceId}-debug-training-zh`;
+  setStep("debug_training_zh_session_start");
   const debugTrainingZhStart = await postJson("/session/start", {
     workspace_id: debugTrainingZhWorkspaceId,
     workspace_name: debugTrainingZhWorkspaceId,
@@ -924,6 +1100,7 @@ async function main() {
     });
   }
 
+  setStep("debug_training_route_zh");
   const debugTrainingZhTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -955,6 +1132,7 @@ async function main() {
     diagnostics,
   );
   await assertChatDoesNotMintTrainingCard(debugTrainingZhTurn.json, "debug_training_route_zh", diagnostics);
+  setStep("debug_training_route_zh_explicit_card");
   const debugTrainingZhCard = await generateExplicitTrainingCard({
     workspaceId: debugTrainingZhWorkspaceId,
     message: zhDebugMessage,
@@ -973,6 +1151,7 @@ async function main() {
   );
 
   const functionTrainingWorkspaceId = `${workspaceId}-function-training`;
+  setStep("function_training_session_start");
   const functionTrainingStart = await postJson("/session/start", {
     workspace_id: functionTrainingWorkspaceId,
     workspace_name: functionTrainingWorkspaceId,
@@ -994,6 +1173,7 @@ async function main() {
     });
   }
 
+  setStep("function_training_route");
   const functionTrainingTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -1020,6 +1200,7 @@ async function main() {
     diagnostics,
   );
   await assertChatDoesNotMintTrainingCard(functionTrainingTurn.json, "function_training_route", diagnostics);
+  setStep("function_training_route_explicit_card");
   await generateExplicitTrainingCard({
     workspaceId: functionTrainingWorkspaceId,
     message:
@@ -1031,6 +1212,7 @@ async function main() {
   });
 
   const functionTrainingZhWorkspaceId = `${workspaceId}-function-training-zh`;
+  setStep("function_training_zh_session_start");
   const functionTrainingZhStart = await postJson("/session/start", {
     workspace_id: functionTrainingZhWorkspaceId,
     workspace_name: functionTrainingZhWorkspaceId,
@@ -1052,6 +1234,7 @@ async function main() {
     });
   }
 
+  setStep("function_training_route_zh");
   const functionTrainingZhTurn = await postJson(
     "/turn",
     buildTurnPayload(
@@ -1092,6 +1275,7 @@ async function main() {
     "function_training_route_zh",
     diagnostics,
   );
+  setStep("function_training_route_zh_explicit_card");
   const functionTrainingZhCard = await generateExplicitTrainingCard({
     workspaceId: functionTrainingZhWorkspaceId,
     message: zhFunctionGuidanceMessage,
@@ -1125,10 +1309,14 @@ main().catch(async (error) => {
   if (error instanceof Error && error.message === "__trainer_turn_smoke_failed__") {
     return;
   }
+  const message = error instanceof Error ? error.message : String(error);
+  const isTimeout =
+    (error instanceof Error && (error.name === "TimeoutError" || error.category === "timeout")) ||
+    /aborted|timeout/i.test(message);
   await failure({
-    step: "runtime",
-    category: "unexpected_error",
-    detail: error instanceof Error ? error.message : String(error),
-    diagnostics: [],
+    step: currentStep || "runtime",
+    category: isTimeout ? "timeout" : "unexpected_error",
+    detail: message,
+    diagnostics: [`wall_clock_budget_ms=${smokeTimeoutMs}`],
   });
 });

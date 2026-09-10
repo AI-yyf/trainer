@@ -20,7 +20,8 @@ const { packageJson, vsixPath, rebuilt } = ensureCurrentVsix({
 });
 const extensionId = `${packageJson.publisher}.${packageJson.name}`;
 const installedDirName = `${packageJson.publisher}.${packageJson.name}-${packageJson.version}`;
-const fallbackCodeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
+const macCodeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
+const linuxCodeCliCandidates = ["/usr/bin/code", "/usr/share/code/bin/code"];
 
 const codeCli = resolveCodeCli();
 
@@ -145,8 +146,16 @@ function resolveCodeCli() {
     return process.env.CODE_CLI_PATH;
   }
 
-  if (fs.existsSync(fallbackCodeCli)) {
-    return fallbackCodeCli;
+  if (process.platform === "darwin" && fs.existsSync(macCodeCli)) {
+    return macCodeCli;
+  }
+
+  if (process.platform === "linux") {
+    for (const candidate of linuxCodeCliCandidates) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
   }
 
   if (process.platform === "win32") {

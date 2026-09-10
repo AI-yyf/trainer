@@ -76,17 +76,168 @@ class CardGenerationStreamEvent:
     card: TrainingCardCandidateSnapshot | None = None
 
 
-class CardGenerationProviderFailure(RuntimeError):
-    """A live provider did not produce a valid card; do not persist a template."""
 
-    def __init__(self, reason: str, *, response_language: str | None = None) -> None:
-        self.reason = str(reason or "invalid_card")
-        self.detail = _localized_text(
+def _card_generation_failure_category(reason: str) -> str:
+    """Map internal generation reasons onto distinct Training failure categories."""
+    normalized = str(reason or "").strip().lower()
+    if normalized in {
+        "invalid_json",
+        "missing_required_fields",
+        "language_mismatch",
+        "invalid_card",
+        "unknown_source",
+        "invalid_key_or_permission",
+        "rate_limit",
+        "timeout",
+        "network",
+        "model_not_found",
+        "model_unsupported",
+        "empty_response",
+        "provider_request_failed_training_card",
+    }:
+        return normalized
+    if normalized in {"exception", "provider_exception", "provider_request_failed"}:
+        return "provider_request_failed_training_card"
+    return "provider_request_failed_training_card"
+
+
+def _card_generation_failure_detail(
+    category: str,
+    *,
+    response_language: str | None,
+) -> str:
+    """Learner-facing copy that stays distinct across Training card failure categories."""
+    if category == "invalid_json":
+        return _localized_text(
+            "The training card reply was not valid JSON. Retry generation, or switch model in Settings.",
+            "训练卡回复不是有效 JSON。可以再生成一次，或到设置里换模型。",
+            response_language,
+        )
+    if category == "missing_required_fields":
+        return _localized_text(
+            "The training card reply was missing required fields. Retry generation to obtain a complete card.",
+            "训练卡回复缺少必要字段。请再生成一次以获得完整卡片。",
+            response_language,
+        )
+    if category == "language_mismatch":
+        return _localized_text(
+            "The training card reply did not match the requested language. Retry generation.",
+            "训练卡回复语言与请求不一致。请再生成一次。",
+            response_language,
+        )
+    if category == "invalid_key_or_permission":
+        return _localized_text(
+            "Training card generation failed: provider rejected the API key or permissions. Check Settings, then retry.",
+            "训练卡生成失败：provider 拒绝了 API key 或权限。请先检查设置，再重试。",
+            response_language,
+        )
+    if category == "rate_limit":
+        return _localized_text(
+            "Training card generation hit a provider rate limit. Wait briefly, then retry.",
+            "训练卡生成触发了 provider 限流。请稍后再试。",
+            response_language,
+        )
+    if category == "timeout":
+        return _localized_text(
+            "Training card generation timed out before a usable card arrived. Retry generation.",
+            "训练卡生成超时，没有拿到可用卡片。请再试一次。",
+            response_language,
+        )
+    if category == "network":
+        return _localized_text(
+            "Training card generation could not reach the provider. Check the connection, then retry.",
+            "训练卡生成连不上 provider。请检查连接后再试。",
+            response_language,
+        )
+    if category == "unknown_source":
+        return _localized_text(
+            "Training card generation does not recognize this source. Pick a supported Training path and retry.",
+            "训练卡生成不识别该来源。请换到支持的训练路径后再试。",
+            response_language,
+        )
+    if category == "invalid_card":
+        return _localized_text(
             "The model-authored card was not accepted; retry generation to obtain a model card.",
             "模型生成的卡片未被接受；可以重试以获取模型卡片。",
             response_language,
         )
+    return _localized_text(
+        "Training card generation failed on the provider request. Your draft is still here — try again shortly.",
+        "训练卡生成时 provider 请求失败。草稿还在，稍后再试一次。",
+        response_language,
+    )
+
+
+def _classify_card_provider_exception(exc: BaseException) -> str:
+    """Prefer provider categories; never wash auth/network failures into invalid_card."""
+    import re as _re
+
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        category = getattr(current, "provider_error_category", None)
+        if isinstance(category, str) and category.strip():
+            return _card_generation_failure_category(category)
+        message = str(current)
+        lowered = message.lower()
+        status_match = _re.search(
+            r"(?:http|status|error code:)\s*(?:status\s*)?(\d{3})",
+            message,
+            _re.IGNORECASE,
+        )
+        status_code = int(status_match.group(1)) if status_match else None
+        if (
+            status_code in {401, 403}
+            or "unauthorized" in lowered
+            or "invalid api key" in lowered
+            or "incorrect api key" in lowered
+            or "invalid token" in lowered
+            or "not authorized" in lowered
+            or "permission denied" in lowered
+            or "forbidden" in lowered
+            or "http 401" in lowered
+            or "http 403" in lowered
+        ):
+            return "invalid_key_or_permission"
+        if status_code == 429 or "rate limit" in lowered or "too many requests" in lowered:
+            return "rate_limit"
+        if "timeout" in lowered or "timed out" in lowered:
+            return "timeout"
+        if (
+            "connection" in lowered
+            or "network" in lowered
+            or "name or service not known" in lowered
+            or "temporarily unavailable" in lowered
+        ):
+            return "network"
+        current = current.__cause__ or current.__context__
+    return "provider_request_failed_training_card"
+
+
+class CardGenerationProviderFailure(RuntimeError):
+    """A live provider did not produce a valid card; do not persist a template."""
+
+    def __init__(self, reason: str, *, response_language: str | None = None) -> None:
+        self.reason = str(reason or "invalid_card").strip() or "invalid_card"
+        self.category = _card_generation_failure_category(self.reason)
+        self.detail = _card_generation_failure_detail(
+            self.category,
+            response_language=response_language,
+        )
         super().__init__(self.detail)
+
+    def http_detail(self) -> dict[str, object]:
+        """Structured explainability for /training/generate-card failures."""
+        return {
+            "state": self.category,
+            "category": self.category,
+            "status": "blocked",
+            "recoverable": self.category
+            not in {"invalid_key_or_permission", "unknown_source"},
+            "detail": self.detail,
+            "reason": self.reason,
+        }
 
 
 class CardGenerationStreamError(RuntimeError):
@@ -3763,18 +3914,40 @@ class CardGenerationService:
                 if card_type == "practice"
                 else _FLASH_REQUIRED_FIELDS
             )
-            failure_reason = "exception"
+            failure_reason = "provider_request_failed_training_card"
+            terminal_auth_categories = {
+                "invalid_key_or_permission",
+                "model_not_found",
+                "model_unsupported",
+            }
+
+            def _remember_failure(reason: str) -> None:
+                nonlocal failure_reason
+                # Keep the first actionable category; later event-loop/network
+                # noise from the sync retry bridge must not wash auth failures.
+                if failure_reason in terminal_auth_categories:
+                    return
+                if reason in terminal_auth_categories or failure_reason in {
+                    "provider_request_failed_training_card",
+                    "exception",
+                    "network",
+                }:
+                    failure_reason = reason
+
             for attempt, temperature in enumerate((0.7, 0.9), start=1):
                 try:
                     raw = _invoke_provider(temperature)
-                except Exception:
+                except Exception as exc:
                     logger.debug(
                         "LLM card generation failed for source=%s (attempt %d)",
                         source,
                         attempt,
                         exc_info=True,
                     )
-                    failure_reason = "exception"
+                    classified = _classify_card_provider_exception(exc)
+                    _remember_failure(classified)
+                    if classified in terminal_auth_categories:
+                        break
                     continue
 
                 data = _parse_llm_json(raw)
@@ -3825,13 +3998,13 @@ class CardGenerationService:
             self._record_llm_generation_failure(context, source, card_type, failure_reason)
             return None
 
-        except Exception:
+        except Exception as exc:
             logger.debug("LLM card generation failed for source=%s", source, exc_info=True)
             self._record_llm_generation_failure(
                 context,
                 source,
                 card_type,
-                "exception",
+                _classify_card_provider_exception(exc),
             )
             return None
 

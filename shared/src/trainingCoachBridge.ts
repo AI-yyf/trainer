@@ -486,3 +486,37 @@ export function composeTrainingCoachBridgeDraft(
   );
   return sections.join("\n\n");
 }
+
+export function describeTrainingReturnCoachSendState(
+  language: ComposerLanguage,
+  input: { sendBlocked: boolean; blockedReason?: string },
+): { tone: "info" | "error"; message: string } {
+  const reason = input.blockedReason?.trim();
+  if (input.sendBlocked) {
+    if (language === "zh-CN") {
+      return {
+        tone: "info",
+        message: reason
+          ? `已交回教练，但还不能发送：${reason}`
+          : "已交回教练，但还不能发送。请先处理发送拦截原因。",
+      };
+    }
+    return {
+      tone: "info",
+      message: reason
+        ? `Returned to Coach, but send is blocked: ${reason}`
+        : "Returned to Coach, but send is blocked. Resolve the send gate first.",
+    };
+  }
+  if (language === "zh-CN") {
+    return {
+      tone: "info",
+      message: "已交回教练。发送可用：可直接发出桥接草稿，或先改再发。",
+    };
+  }
+  return {
+    tone: "info",
+    message: "Returned to Coach. Send is ready: send the bridge draft as-is, or edit first.",
+  };
+}
+

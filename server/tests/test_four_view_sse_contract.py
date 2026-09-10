@@ -408,3 +408,4 @@ def test_streaming_tool_requests_are_rejected_without_verified_tools(
 
     assert response.status_code == 409, response.text
     assert "verified tools-capable provider" in response.json()["detail"]
+    assert "POST /provider/test" in response.json()["detail"]

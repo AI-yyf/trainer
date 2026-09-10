@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const {
   buildTrainingCoachBridge,
   composeTrainingCoachBridgeDraft,
+  describeTrainingReturnCoachSendState,
 } = require('../dist/extension/src/core/trainingCoachBridge.js');
 
 test('buildTrainingCoachBridge reports a completed practice result back to coach', () => {
@@ -136,4 +137,23 @@ test('composeTrainingCoachBridgeDraft keeps the coach return prompt compact and 
   assert.match(draft, /Verification result: The focused route test now passes\./i);
   assert.match(draft, /Bring back: One verification output and one open question\./i);
   assert.ok(draft.includes('\n\n- Verification result'));
+});
+
+test('describeTrainingReturnCoachSendState explains ready and blocked after return', () => {
+  const readyZh = describeTrainingReturnCoachSendState('zh-CN', { sendBlocked: false });
+  assert.equal(readyZh.tone, 'info');
+  assert.match(readyZh.message, /已交回教练/);
+  assert.match(readyZh.message, /发送可用/);
+
+  const readyEn = describeTrainingReturnCoachSendState('en-US', { sendBlocked: false });
+  assert.match(readyEn.message, /Returned to Coach/i);
+  assert.match(readyEn.message, /Send is ready/i);
+
+  const blocked = describeTrainingReturnCoachSendState('en-US', {
+    sendBlocked: true,
+    blockedReason: 'This connection has not verified real incremental output yet.',
+  });
+  assert.equal(blocked.tone, 'info');
+  assert.match(blocked.message, /send is blocked/i);
+  assert.match(blocked.message, /verified real incremental output/i);
 });

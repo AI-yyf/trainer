@@ -24,6 +24,19 @@ function startMockTrainer({
   let sessionCounter = 0;
 
   const server = http.createServer((request, response) => {
+    if (request.url === '/provider/test' && request.method === 'POST') {
+      response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({
+        ok: true,
+        tools_ready: true,
+        capability_evidence: [
+          { name: 'chat', state: 'verified', observed: true, declared: true },
+          { name: 'tools', state: 'verified', observed: true, declared: false },
+        ],
+      }));
+      return;
+    }
+
     if (request.url === '/session/start' && request.method === 'POST') {
       let body = '';
       request.setEncoding('utf8');
@@ -308,6 +321,12 @@ test('training return smoke script stays env-driven and never hardcodes the hidd
   assert.match(source, /TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_MODEL/);
   assert.match(source, /TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_PROTOCOL/);
   assert.match(source, /TRAINER_TRAINING_RETURN_SMOKE_RESPONSE_LANGUAGE/);
+  assert.match(source, /TRAINER_PROVIDER_SMOKE_BASE_URL/);
+  assert.match(source, /TRAINER_PROVIDER_SMOKE_API_KEY/);
+  assert.match(source, /\/provider\/test/);
+  assert.match(source, /tools_not_verified/);
+  assert.match(source, /elapsedMs/);
+  assert.match(source, /sessionContinuity/);
   assert.match(source, /\/training\/reflect/);
   assert.match(source, /\/training\/return/);
   assert.match(source, /\/training\/generate-card/);
@@ -330,6 +349,10 @@ test('training return smoke script passes when verified practice returns to Coac
     assert.equal(report.ok, true);
     assert.equal(report.checks.passReturn, 'passed');
     assert.equal(report.checks.failBlock, 'passed');
+    assert.equal(typeof report.elapsedMs, 'number');
+    assert.equal(report.sessionContinuity.preserved, true);
+    assert.match(String(report.sessionContinuity.passSessionId || ''), /^session-/);
+    assert.match(String(report.sessionContinuity.failSessionId || ''), /^session-/);
     assert.equal(trainer.turnBodies.length, 2);
     assert.equal(trainer.trainingCardBodies.length, 2);
     assert.equal(trainer.evaluateBodies.length, 2);
@@ -424,6 +447,62 @@ test('training return smoke script redacts a failed evaluation response body', a
     assert.doesNotMatch(result.stderr, new RegExp(secret));
   } finally {
     await trainer.close();
+  }
+});
+
+test('training return smoke script classifies tools-not-verified turn conflicts honestly', async () => {
+  const sessions = new Map();
+  let sessionCounter = 0;
+  const server = http.createServer((request, response) => {
+    if (request.url === '/provider/test' && request.method === 'POST') {
+      response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({
+        ok: true,
+        tools_ready: true,
+        capability_evidence: [{ name: 'tools', state: 'verified', observed: true }],
+      }));
+      return;
+    }
+    if (request.url === '/session/start' && request.method === 'POST') {
+      sessionCounter += 1;
+      const sessionId = `session-${sessionCounter}`;
+      sessions.set(sessionId, true);
+      response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({ session_id: sessionId }));
+      return;
+    }
+    if (request.url === '/turn' && request.method === 'POST') {
+      response.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({
+        detail: 'This action needs a verified tools-capable provider. Run a live provider test (Settings or POST /provider/test) that verifies tool calls before continuing.',
+      }));
+      return;
+    }
+    response.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+    response.end(JSON.stringify({ error: 'not found' }));
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  try {
+    const result = await runSmokeScript({
+      TRAINER_TRAINING_RETURN_SMOKE_SIDECAR_URL: `http://127.0.0.1:${address.port}`,
+    });
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.step, 'pass_turn');
+    assert.equal(report.category, 'tools_not_verified');
+    assert.equal(report.status, 409);
+    assert.equal(typeof report.elapsedMs, 'number');
+    assert.equal(report.sessionContinuity.preserved, true);
+  } finally {
+    await new Promise((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
   }
 });
 
