@@ -250,9 +250,18 @@ test('settings details give draft requirements precedence over saved-connection 
 
   assert.match(draftNote, /currentDraftModelPolicyMessage \?\?/);
   assert.match(draftNote, /!providerDraft\.baseUrl\.trim\(\)\s*\? settingsStatusPhrase\(language, "fillProviderFields"\)/);
-  // Missing-model guidance names the action directly instead of the bare
-  // "pick one from the list below" detail line.
-  assert.match(draftNote, /!providerDraft\.model\.trim\(\)\s*\? modelPickerCopy\.modelRequiredNote/);
+  // Missing-model guidance: with the key ready the save auto-adopts a live
+  // model, so the note promises that instead of demanding a typed model name;
+  // without a key it still names the typed-model action.
+  assert.match(
+    draftNote,
+    /!providerDraft\.model\.trim\(\)\s*\?\s*providerDraftHasApiKey \|\| providerDraftCanReuseSavedApiKey/,
+  );
+  assert.match(
+    draftNote,
+    /A model will be fetched and selected automatically when you save\./,
+  );
+  assert.match(draftNote, /modelPickerCopy\.modelRequiredNote/);
   assert.match(
     draftNote,
     /!providerDraftHasApiKey && !providerDraftCanReuseSavedApiKey\s*\? settingsStatusPhrase\(language, "connectionSavedApiKeyMissing"\)/,

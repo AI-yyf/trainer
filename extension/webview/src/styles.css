@@ -914,11 +914,11 @@ select {
   text-align: left;
   cursor: pointer;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease,
-    transform 0.15s ease;
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
   box-shadow: none;
 }
 
@@ -1248,6 +1248,21 @@ body,
   color: var(--fg-muted);
   border-color: transparent;
   background: transparent;
+}
+
+.trainer-header .status-pill--starting,
+.trainer-header .status-pill--pending {
+  animation: status-pill-pending 2.4s var(--motion-ease) infinite;
+}
+
+@keyframes status-pill-pending {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
 }
 
 .trainer-header__action {
@@ -1968,7 +1983,7 @@ body,
   font-size: var(--trainer-font-2xs);
   line-height: 1;
   transform: rotate(-90deg);
-  transition: transform 0.16s ease, color 0.16s ease;
+  transition: transform var(--motion-in) var(--motion-ease), color var(--motion-in) var(--motion-ease);
 }
 
 .resource-library-authority[open] > summary::after {
@@ -3005,6 +3020,17 @@ body,
   color: var(--fg-muted);
 }
 
+@keyframes trainer-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes trainer-spin {
   to {
     transform: rotate(1turn);
@@ -3392,7 +3418,7 @@ body,
   font-size: var(--trainer-font-xs);
   line-height: 1.4;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
 }
 
 .resources-search input:focus {
@@ -3758,7 +3784,7 @@ body,
   border-right: 1px solid var(--fg-muted);
   border-bottom: 1px solid var(--fg-muted);
   transform: translateY(-56%) rotate(45deg);
-  transition: transform 0.14s ease, border-color 0.14s ease;
+  transition: transform var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
 }
 
 .resources-sandbox-panel[open] > summary::after {
@@ -4947,7 +4973,7 @@ body,
   border-right: 1px solid var(--fg-muted);
   border-bottom: 1px solid var(--fg-muted);
   transform: translateY(-56%) rotate(45deg);
-  transition: transform 0.14s ease, border-color 0.14s ease;
+  transition: transform var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
 }
 
 .resources-sandbox-boundary[open] > summary::after {
@@ -5378,7 +5404,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   border-radius: 2px;
   background: color-mix(in srgb, var(--fg-0) 78%, var(--line));
   transform: scale(0);
-  transition: transform 0.12s ease;
+  transition: transform var(--motion-fast) var(--motion-ease);
 }
 
 .resources-sandbox-row__checkbox input:hover,
@@ -5641,7 +5667,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   justify-content: center;
   min-height: 12px;
   color: var(--fg-muted);
-  transition: transform 0.14s ease;
+  transition: transform var(--motion-fast) var(--motion-ease);
   font-size: var(--trainer-font-3xs);
   line-height: 1;
 }
@@ -5754,9 +5780,9 @@ button.resources-sandbox-layout__chip:focus-visible {
   background: transparent;
   box-shadow: none;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
 }
 
 .resource-library-row:last-child {
@@ -6556,7 +6582,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   opacity: 0;
   pointer-events: none;
   transform: translateX(-2px);
-  transition: opacity 0.15s ease, transform 0.15s ease, color 0.15s ease, background 0.15s ease;
+  transition: opacity var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease);
 }
 
 .resource-library-row.is-actionable:hover .resource-library-row__action,
@@ -8435,7 +8461,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   display: inline-block;
   margin-right: 5px;
   color: var(--accent);
-  transition: transform 120ms ease;
+  transition: transform var(--motion-fast) var(--motion-ease);
 }
 
 .training-guidance-details__nested[open] > summary::before,
@@ -8973,6 +8999,14 @@ button.resources-sandbox-layout__chip:focus-visible {
   background: var(--fg-0);
   color: var(--bg-0);
   border-color: transparent;
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    opacity var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease);
+}
+
+.composer-shell--quiet .composer__send:active:not(:disabled) {
+  transform: scale(0.94);
 }
 
 .composer-shell--quiet .composer__send:hover:not(:disabled) {
@@ -9626,7 +9660,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   font-size: var(--trainer-font-2xs);
   line-height: 1.2;
   pointer-events: none;
-  animation: composer-drop-prompt-in 0.16s ease-out;
+  animation: composer-drop-prompt-in var(--motion-in) var(--motion-ease)-out;
 }
 
 .composer__drop-prompt--unavailable {
@@ -14452,8 +14486,8 @@ button.resources-sandbox-layout__chip:focus-visible {
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease,
-    transform 0.15s ease;
+  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
 }
 
 .toolbar-button:hover,
@@ -15919,7 +15953,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   color: var(--fg-0);
   font-size: var(--trainer-font-xs);
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  transition: border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease);
   font-family: inherit;
 }
 
@@ -15966,7 +16000,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   font-size: var(--trainer-font-2xs);
   line-height: 1;
   transform: rotate(-90deg);
-  transition: transform 0.15s ease, color 0.15s ease;
+  transition: transform var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
 }
 
 .settings-model-picker[open] > summary::after {
@@ -16160,10 +16194,11 @@ button.resources-sandbox-layout__chip:focus-visible {
   color: var(--fg-1);
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.12s ease, background-color 0.12s ease, color 0.12s ease;
+  transition: border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
 }
 
 .skill-deck {
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
   background: color-mix(in srgb, var(--bg-1) 98%, var(--bg-0));
   border: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
   border-radius: var(--radius-md);
@@ -16699,7 +16734,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   gap: 6px;
   margin-top: 4px;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--motion-fast) var(--motion-ease);
 }
 
 .message-bubble-v2:hover .message-bubble-v2__actions {
@@ -16813,7 +16848,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   margin-right: 5px;
   color: var(--fg-muted);
   font-size: var(--trainer-font-3xs);
-  transition: transform 0.15s ease;
+  transition: transform var(--motion-fast) var(--motion-ease);
 }
 
 .agent-activity-strip__details[open] > summary::before {
@@ -19078,4 +19113,84 @@ details[open] > :not(summary) {
 
 .settings-endpoint-speed__actions input {
   flex: 1 1 auto;
+}
+
+.settings-endpoint-speed {
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
+}
+
+.settings-endpoint-speed__row {
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease) both;
+}
+
+.settings-endpoint-speed__row:nth-child(1) { animation-delay: 0ms; }
+.settings-endpoint-speed__row:nth-child(2) { animation-delay: 40ms; }
+.settings-endpoint-speed__row:nth-child(3) { animation-delay: 80ms; }
+.settings-endpoint-speed__row:nth-child(4) { animation-delay: 120ms; }
+.settings-endpoint-speed__row:nth-child(5) { animation-delay: 160ms; }
+.settings-endpoint-speed__row:nth-child(6) { animation-delay: 200ms; }
+.settings-endpoint-speed__row:nth-child(7) { animation-delay: 240ms; }
+.settings-endpoint-speed__row:nth-child(8) { animation-delay: 280ms; }
+
+/* Motion kill-switch: one blanket override so future animations stay
+   accessibility-safe without remembering a per-feature reduced-motion block. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* View switch entrance: the container fades/slides its direct children in.
+   App re-triggers the animation per view change by restarting the class. */
+@keyframes trainer-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.view-content--enter > * {
+  animation: trainer-view-in var(--motion-slow, 280ms) var(--motion-ease) both;
+}
+
+/* CC Switch-style quick setup card (Settings → provider form top) */
+.settings-quick-setup {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+  border-radius: var(--radius-md);
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
+}
+
+.settings-quick-setup--connected {
+  grid-auto-flow: column;
+  grid-auto-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  border-color: color-mix(in srgb, var(--vscode-testing-iconPassed, var(--accent)) 42%, var(--line));
+}
+
+.settings-quick-setup__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-quick-setup__connected-dot {
+  color: var(--vscode-testing-iconPassed, var(--accent));
+}
+
+.settings-quick-setup__connected-line {
+  font-size: var(--trainer-font-2xs, 11px);
+  opacity: 0.85;
 }
