@@ -7149,6 +7149,7 @@ export function CoachSettingsView({
             savedModel={provider.model}
             connected={providerCoachReady}
             hasStoredApiKey={provider.apiKeyConfigured}
+            trusted={resolvedWorkspaceTrustState === "trusted"}
             busy={providerTestPending}
             onDraftChange={onProviderDraftChange}
             onSave={() => {

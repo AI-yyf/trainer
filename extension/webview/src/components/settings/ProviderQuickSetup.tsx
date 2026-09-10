@@ -16,6 +16,7 @@ interface ProviderQuickSetupProps {
   savedModel: string;
   connected: boolean;
   hasStoredApiKey: boolean;
+  trusted: boolean;
   busy: boolean;
   onDraftChange: (patch: Partial<ProviderQuickSetupDraft & { apiKey: string }>) => void;
   onSave: () => void;
@@ -38,6 +39,7 @@ function copy(language: ComposerLanguage, key: string): string {
     connectedLine: "已连接,可以直接开始对话。模型与密钥可在下方完整表单中调整。",
     parsedHint: "已识别:服务地址与密钥已自动填入。",
     modelHint: "模型将在保存时自动选择。",
+    untrusted: "工作区未被信任:无法完成连接验证。请在 VS Code 中信任此窗口后重试。",
   };
   const en: Record<string, string> = {
     title: "Quick setup",
@@ -55,6 +57,7 @@ function copy(language: ComposerLanguage, key: string): string {
     connectedLine: "Connected — start chatting. Tune the model and key in the full form below.",
     parsedHint: "Recognized: base URL and key were filled in automatically.",
     modelHint: "A model will be picked automatically when you save.",
+    untrusted: "The workspace is not trusted — connection verification cannot run. Trust this window in VS Code, then retry.",
   };
   return (language === "zh-CN" ? zh : en)[key] ?? key;
 }
@@ -66,6 +69,7 @@ export function ProviderQuickSetup({
   savedModel,
   connected,
   hasStoredApiKey,
+  trusted,
   busy,
   onDraftChange,
   onSave,
@@ -163,6 +167,11 @@ export function ProviderQuickSetup({
         </p>
       </label>
 
+      {!trusted ? (
+        <p className="settings-sheet__note settings-sheet__note--warning settings-quick-setup__untrusted">
+          {copy(language, "untrusted")}
+        </p>
+      ) : null}
       <button
         type="button"
         className="action-button action-button--accent"
