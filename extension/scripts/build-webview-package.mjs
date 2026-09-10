@@ -19,14 +19,24 @@ export function buildWebviewPackage({
   const buildEnv = {
     ...env,
     TRAINER_WEBVIEW_OUT_DIR: stagingDir,
-    TRAINER_WEBVIEW_INCLUDE_TEST_ENTRY: "0",
   };
 
   try {
     (runBuild ?? defaultBuild)(webviewDir, buildEnv);
+    // The packaging build keeps the browserSidecar test entry so the
+    // developer dist stays testable; the entry file itself is stripped from
+    // the staged tree right before it becomes the shipped VSIX, and restored
+    // into the live dist (with matching chunk hashes) after the swap.
+    const testBundlePath = path.join(stagingDir, "browserSidecar-test.js");
+    const testBundle = fs.existsSync(testBundlePath)
+      ? fs.readFileSync(testBundlePath)
+      : null;
     removeTestOnlyEntries(stagingDir);
     assertBuildEntries(stagingDir);
     replaceDistAtomically({ distDir, stagingDir });
+    if (testBundle) {
+      fs.writeFileSync(path.join(distDir, "browserSidecar-test.js"), testBundle);
+    }
     return { distDir, stagingDir, entries: ["index.html", "vscode-preview.html"] };
   } catch (error) {
     fs.rmSync(stagingDir, { recursive: true, force: true });
