@@ -17,11 +17,11 @@ const MAX_ENDPOINTS = 8;
 function tierColor(tier: "fast" | "ok" | "slow" | "failed"): string {
   switch (tier) {
     case "fast":
-      return "var(--vscode-testing-iconPassed, var(--accent, #73c991))";
+      return "var(--pass, var(--trainer-fallback-success))";
     case "ok":
-      return "var(--vscode-editorWarning-foreground, #cca700)";
+      return "var(--warning, var(--trainer-fallback-warning))";
     default:
-      return "var(--vscode-errorForeground, #f48771)";
+      return "var(--danger, var(--trainer-fallback-danger))";
   }
 }
 
