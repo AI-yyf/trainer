@@ -32,6 +32,7 @@ import {
 import {
   evaluateProviderModelPolicy,
   filterProviderModelOptions,
+  pickFreshConnectionModel,
   type ProviderModelPolicyEvaluation,
 } from '../../../shared/src/providerModelPolicy';
 import { normalizeProviderCapabilityTruth } from '../../../shared/src/providerTest';
@@ -699,6 +700,8 @@ export async function saveProviderFromWebviewCommand(
     input.baseUrl ?? existing?.baseUrl ?? 'http://localhost:1234/v1',
     resolvedProtocol,
   );
+  const hasExplicitModel =
+    hasOwn(input, 'model') && typeof input.model === 'string' && input.model.trim().length > 0;
   const model = (input.model ?? existing?.model ?? 'gpt-4.1-mini').trim();
 
   if (!baseUrl || !model) {
@@ -865,9 +868,25 @@ export async function saveProviderFromWebviewCommand(
     if (!(await isCurrentProviderModelLookup(context, savedConfig, apiKey ?? '', providerChangeGeneration))) {
       return staleModelLookupResult(context, savedConfig);
     }
+    // CC-Switch-style adoption: when the save did not name a model (a fresh
+    // relay paste, or a switched connection whose old model is not offered),
+    // adopt a sensible model from the live list instead of failing the very
+    // first verification with the silent placeholder. Explicitly typed models
+    // are never overridden.
+    const autoSelectedModel = modelLookup?.ok
+      ? pickFreshConnectionModel(
+          existing?.model,
+          modelLookup.availableModels,
+          hasExplicitModel,
+        )
+      : undefined;
+    const modelBaseForCatalog =
+      autoSelectedModel && autoSelectedModel !== savedConfig.model
+        ? { ...savedConfig, model: autoSelectedModel }
+        : savedConfig;
     const catalogConfig = modelLookup
-      ? applyModelLookupToProviderConfig(savedConfig, modelLookup)
-      : savedConfig;
+      ? applyModelLookupToProviderConfig(modelBaseForCatalog, modelLookup)
+      : modelBaseForCatalog;
     if (providerCatalogConfigDiffers(savedConfig, catalogConfig)) {
       finalConfig = catalogConfig;
       await context.providerStore.saveConfig(finalConfig);
@@ -957,24 +976,30 @@ export async function saveProviderFromWebviewCommand(
               model: modelLookup.resolvedModel,
             })
           : '';
+      const autoSelectedSuffix =
+        autoSelectedModel && autoSelectedModel !== savedConfig.model
+          ? providerHostCopy(responseLanguage, 'modelAutoSelectedSuffix', {
+              model: autoSelectedModel,
+            })
+          : '';
       const copyModels = (key: ProviderHostCopyKey) =>
         providerHostCopy(responseLanguage, key, { count: modelCount });
       if (finalLastTestResult?.ok) {
         message =
           `${copyModels(modelLookup.source === 'cache' ? 'modelsCachedVerified' : 'modelsLoadedVerified')}` +
-          `${resolvedSuffix}`;
+          `${autoSelectedSuffix}${resolvedSuffix}`;
       } else if (finalLastTestResult?.errorCategory === 'language_probe_inconclusive') {
         message =
           `${copyModels(modelLookup.source === 'cache' ? 'modelsCachedInconclusive' : 'modelsLoadedInconclusive')}` +
-          ` ${finalLastTestResult.detail}${resolvedSuffix}`;
+          ` ${finalLastTestResult.detail}${autoSelectedSuffix}${resolvedSuffix}`;
       } else if (finalLastTestResult?.detail) {
         message =
           `${copyModels(modelLookup.source === 'cache' ? 'modelsCachedFailed' : 'modelsLoadedFailed')}` +
-          ` ${finalLastTestResult.detail}${resolvedSuffix}`;
+          ` ${finalLastTestResult.detail}${autoSelectedSuffix}${resolvedSuffix}`;
       } else {
         message =
           `${copyModels(modelLookup.source === 'cache' ? 'modelsCachedPlain' : 'modelsLoadedPlain')}` +
-          `${resolvedSuffix}`;
+          `${autoSelectedSuffix}${resolvedSuffix}`;
       }
     } else if (modelLookup?.detail) {
       if (finalLastTestResult?.ok) {

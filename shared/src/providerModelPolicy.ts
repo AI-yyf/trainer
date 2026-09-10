@@ -79,3 +79,36 @@ export function filterProviderModelOptions(
 
   return filtered;
 }
+
+// Match quick-pick tiers as separator-delimited tokens so brand names that
+// merely contain them ("MiniMax") are not mistaken for a tier hint.
+const FRESH_MODEL_QUICK_PICK_PATTERN = /(?:^|[-_. ])(?:highspeed|fast|mini|lite|flash|turbo)(?:[-_. ]|$)/i;
+
+/** Deterministic quick-pick: fast/tier models first, then alphabetical order. */
+export function pickDefaultModelFromList(availableModels: string[]): string | undefined {
+  const sorted = [...availableModels].sort((left, right) => left.localeCompare(right));
+  return sorted.find((item) => FRESH_MODEL_QUICK_PICK_PATTERN.test(item)) ?? sorted[0];
+}
+
+/**
+ * CC-Switch-style adoption for first-touch connections: a save that did not
+ * name a model (fresh relay paste, or a switched connection whose carried-over
+ * model is not offered) adopts a sensible model from the live list instead of
+ * failing its very first verification with the silent placeholder. Models the
+ * user typed explicitly, and carried-over models the provider still offers,
+ * are never overridden.
+ */
+export function pickFreshConnectionModel(
+  existingModel: string | undefined,
+  availableModels: string[],
+  hasExplicitModel: boolean,
+): string | undefined {
+  if (hasExplicitModel || availableModels.length === 0) {
+    return undefined;
+  }
+  const existing = existingModel?.trim().toLowerCase();
+  if (existing && availableModels.some((item) => item.toLowerCase() === existing)) {
+    return undefined;
+  }
+  return pickDefaultModelFromList(availableModels);
+}
