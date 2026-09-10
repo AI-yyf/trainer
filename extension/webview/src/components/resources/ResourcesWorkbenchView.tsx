@@ -2922,7 +2922,7 @@ export function ResourcesWorkbenchView({
           aria-live="polite"
         >
           <strong>{orientationState}</strong>
-          {orientation?.why ? <span>{orientation.why}</span> : null}
+          {orientation?.why ? <span className="resources-knowledge__orientation-why">{orientation.why}</span> : null}
           {orientation && orientationCanAct ? (
             <button
               className="button button--primary button--compact"

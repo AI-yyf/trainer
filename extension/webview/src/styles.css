@@ -19194,3 +19194,29 @@ details[open] > :not(summary) {
   font-size: var(--trainer-font-2xs, 11px);
   opacity: 0.85;
 }
+
+/* Resources orientation banner (needs setup / waiting / blocked / ready) */
+.resources-knowledge__orientation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+}
+
+.resources-knowledge__orientation-why {
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs, 11px);
+}
+
+.resources-knowledge__orientation.is-blocked,
+.resources-knowledge__orientation.is-needs_setup {
+  border-left-color: var(--warning, var(--trainer-fallback-warning));
+}
+
+.resources-knowledge__orientation.is-ready {
+  border-left-color: var(--vscode-testing-iconPassed, var(--accent));
+}
