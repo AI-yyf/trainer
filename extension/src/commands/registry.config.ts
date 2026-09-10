@@ -12,6 +12,7 @@ import {
   refreshProviderProfilesCommand,
   refreshProviderModelsCommand,
   saveProviderFromWebviewCommand,
+  providerSpeedTestCommand,
   switchProviderModelCommand,
 } from './providerWebviewCommands';
 import { evaluateCurrentFileCommand, evaluateSelectionCommand } from './evaluationCommands';
@@ -134,6 +135,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.openWorkbench, register: (ctx) => openWorkbenchCommand(ctx) },
     { commandId: COMMAND_IDS.configureProvider, register: (ctx) => configureProviderCommand(ctx) },
     { commandId: COMMAND_IDS.saveProvider, register: (ctx, payload) => saveProviderFromWebviewCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.providerSpeedTest, register: (ctx, payload) => providerSpeedTestCommand(ctx, payload) },
     { commandId: COMMAND_IDS.clearProvider, register: (ctx) => clearProviderCommand(ctx) },
     {
       commandId: COMMAND_IDS.testProvider,

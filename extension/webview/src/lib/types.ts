@@ -1965,6 +1965,13 @@ export type WebviewAction =
   | { type: "research/approve"; payload: { projectId: string; approvalId: string; approved: boolean } }
   | { type: "research/getStatus"; payload: { projectId: string } };
 
+export interface ProviderEndpointSpeedTestResult {
+  url: string;
+  latencyMs: number | null;
+  status: number | null;
+  error: string | null;
+}
+
 export interface HostProviderTestSummary {
   ok?: boolean;
   errorCategory?: string;
@@ -1986,6 +1993,7 @@ export type HostMessage =
     }
   | { type: "training/resourceHandoff"; payload: ResourceTrainingHandoffResult }
   | { type: "training/persistenceAck"; payload: TrainingPersistenceAck }
+  | { type: "provider/speedTest"; payload: { results: ProviderEndpointSpeedTestResult[] }; }
   | { type: "ui/restoreView"; payload: RestoreViewPayload }
   | {
       type: "ui/coachPrompt";

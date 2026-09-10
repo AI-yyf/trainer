@@ -19014,3 +19014,68 @@ details[open] > :not(summary) {
     animation: none;
   }
 }
+
+/* CC Switch-style endpoint speed test (Settings → provider form) */
+.settings-endpoint-speed {
+  display: grid;
+  gap: 6px;
+}
+
+.settings-endpoint-speed__rows {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-endpoint-speed__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 6px);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+}
+
+.settings-endpoint-speed__row:hover {
+  background: var(--hover, color-mix(in srgb, var(--accent) 12%, transparent));
+}
+
+.settings-endpoint-speed__dot {
+  flex: none;
+  font-size: var(--trainer-font-3xs);
+  line-height: 1;
+}
+
+.settings-endpoint-speed__url {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.settings-endpoint-speed__latency {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--trainer-font-2xs, 11px);
+  opacity: 0.85;
+}
+
+.settings-endpoint-speed__tag {
+  flex: none;
+  font-size: var(--trainer-font-3xs);
+  opacity: 0.75;
+}
+
+.settings-endpoint-speed__actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.settings-endpoint-speed__actions input {
+  flex: 1 1 auto;
+}

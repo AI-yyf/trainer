@@ -465,6 +465,14 @@ export class WorkbenchSidebarController
             ),
           );
         }
+        // Speed-test latency rows are data, not an operation status message:
+        // the settings panel renders them directly from this dedicated ack.
+        if (command.commandId === COMMAND_IDS.providerSpeedTest && result.data) {
+          await this.postMessage({
+            type: 'provider/speedTest',
+            payload: result.data as { results: unknown[] },
+          });
+        }
         await this.syncState();
         return;
       }

@@ -195,6 +195,7 @@ import type {
   TrainingCardCandidate,
   TrainingLearningFamily,
   WorkspaceTrainingState,
+  ProviderEndpointSpeedTestResult,
 } from "../lib/types";
 import {
   COACH_FIRST_SIDEBAR_VIEWS,
@@ -4660,6 +4661,23 @@ export function App() {
   });
   const providerDraftIsDirtyRef = useRef(false);
   const providerDraftSourceKeyRef = useRef<string>();
+  const [providerSpeedTestResults, setProviderSpeedTestResults] = useState<
+    ProviderEndpointSpeedTestResult[]
+  >([]);
+  const [providerSpeedTestPending, setProviderSpeedTestPending] = useState(false);
+  const runProviderSpeedTest = useCallback((urls: string[]) => {
+    if (urls.length === 0) {
+      return;
+    }
+    setProviderSpeedTestPending(true);
+    postMessage({
+      type: "command/execute",
+      payload: {
+        commandId: trainerCommands.providerSpeedTest,
+        payload: { urls },
+      },
+    });
+  }, []);
   const [composerModelQuery, setComposerModelQuery] = useState("");
   const [composerModelActionDensity, setComposerModelActionDensity] =
     useState<ComposerModelActionDensity>("default");
@@ -5096,6 +5114,11 @@ export function App() {
       }
       if (message.type === "training/persistenceAck") {
         resolveTrainingPersistenceAck(message);
+        return;
+      }
+      if (message.type === "provider/speedTest") {
+        setProviderSpeedTestResults(message.payload.results);
+        setProviderSpeedTestPending(false);
         return;
       }
       if (message.type === "operation/status" && message.payload.message.includes("Learning feedback recorded")) {
@@ -13736,6 +13759,9 @@ export function App() {
             },
           });
         }}
+        providerSpeedTestResults={providerSpeedTestResults}
+        providerSpeedTestPending={providerSpeedTestPending}
+        onSpeedTestEndpoints={runProviderSpeedTest}
         onRefreshProviderModels={() => {
           const shouldUseDraft = providerDraftHasChanges || !data.providerConfig.configured;
           setSettingsActionState({

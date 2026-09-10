@@ -2122,3 +2122,36 @@ export function describeProviderCapabilityMatrix(
         : copy.noCapabilities,
   };
 }
+
+export interface ProviderEndpointSpeedTestResult {
+  url: string;
+  latencyMs: number | null;
+  status: number | null;
+  error: string | null;
+}
+
+/** CC Switch-style buckets: green <500ms, yellow <1s, red beyond or failed. */
+export function endpointLatencyTier(
+  latencyMs: number | null,
+): "fast" | "ok" | "slow" | "failed" {
+  if (latencyMs === null || !Number.isFinite(latencyMs)) {
+    return "failed";
+  }
+  if (latencyMs < 500) {
+    return "fast";
+  }
+  if (latencyMs < 1000) {
+    return "ok";
+  }
+  return "slow";
+}
+
+export function pickFastestEndpoint(
+  results: ProviderEndpointSpeedTestResult[],
+): ProviderEndpointSpeedTestResult | null {
+  const reachable = results.filter((item) => item.latencyMs !== null);
+  if (reachable.length === 0) {
+    return null;
+  }
+  return reachable.reduce((best, item) => (item.latencyMs! < best.latencyMs! ? item : best));
+}
