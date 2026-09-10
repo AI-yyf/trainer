@@ -8017,7 +8017,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 intent="coach",
             )
         )
-        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
         state.snapshot.profile = profile
         scenario = inherit_active_thread_scenario_for_continuation(
             scenario,
@@ -8041,7 +8041,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     state.workspace_id,
                     workspace_understanding,
                 )
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
         pedagogy_learner_state_raw = runtime.pedagogy_service.infer_learner_state(
             request=pedagogy_request,
             profile=profile,
@@ -8349,7 +8349,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         )
         # High urgency (affect) is persisted above; refresh so invent gates and
         # hint-only chips see task_urgency without waiting for weekly_hours/tight budget.
-        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
         if modeled_learner_state and modeled_learner_state.learner_signal:
             learner_signal = modeled_learner_state.learner_signal
         if infer_learner_signal(message, getattr(request, "current_file", None)) == "blocked":
@@ -11522,7 +11522,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             local_sequence_fallback=local_sequence_fallback,
         )
         provider_recovery_blocked = recovery_without_learning_evidence
-        existing_memory_snapshot = runtime.memory_service.snapshot(workspace_id)
+        existing_memory_snapshot = runtime.memory_service.snapshot(
+            workspace_id,
+            session_id=session_id,
+        )
         existing_active_thread_snapshot = existing_memory_snapshot.active_thread
         existing_active_thread_payload = existing_memory_snapshot.workspace.get("active_thread")
         existing_provider_recovery = is_provider_recovery_thread_payload(
@@ -11723,6 +11726,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
 
         runtime.memory_service.record_coaching_reflection(
             workspace_id=workspace_id,
+            session_id=session_id,
             scenario=scenario,
             focus_area=focus_area,
             summary=thread_summary,
@@ -12117,7 +12121,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             state = runtime.latest_session()
         snapshot = state.snapshot.model_copy(deep=True) if state and state.workspace_id == resolved_workspace_id else WorkbenchSnapshot()
         snapshot.context_id = resolved_workspace_id
-        snapshot.memory = runtime.memory_service.snapshot(resolved_workspace_id)
+        snapshot.memory = runtime.memory_service.snapshot(
+            resolved_workspace_id,
+            session_id=session_id or (state.session_id if state is not None else None),
+        )
         snapshot.profile = runtime.repository.get_profile(resolved_workspace_id)
         runtime.hydrate_plan_context(snapshot, resolved_workspace_id)
         workspace_memory = snapshot.memory.workspace if isinstance(snapshot.memory.workspace, dict) else {}
@@ -12208,7 +12215,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if state.workspace_id != workspace_id:
                 continue
             state.snapshot.context_id = workspace_id
-            state.snapshot.memory = runtime.memory_service.snapshot(workspace_id)
+            state.snapshot.memory = runtime.memory_service.snapshot(
+                workspace_id,
+                session_id=state.session_id,
+            )
             state.snapshot.profile = runtime.repository.get_profile(workspace_id)
             runtime.hydrate_plan_context(state.snapshot, workspace_id)
             runtime.save_session_state(state.session_id)
@@ -15068,7 +15078,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         # Explicit POST /training/generate-card is the intentional mint path.
         live_id = runtime.memory_service.live_selected_training_card_id(state.workspace_id)
         if live_id:
-            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
         return
         if not provider_service_allows_object_minting(provider_service_override):
             return
@@ -15087,7 +15097,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             current_plan=state.snapshot.plan,
         ):
             return
-        snapshot = runtime.memory_service.snapshot(state.workspace_id)
+        snapshot = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
         current_file_payload = normalize_current_file_payload(current_file)
         active_thread = state.snapshot.memory.active_thread
         active_thread_scenario = active_thread_scenario_value(active_thread)
@@ -15128,7 +15138,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             provider_service_override=provider_service_override,
         )
         if created is not None:
-            refreshed_snapshot = runtime.memory_service.snapshot(state.workspace_id)
+            refreshed_snapshot = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
             if active_training_card_satisfies_request(
                 refreshed_snapshot.active_training_card_routing,
                 requested_scenario=requested_scenario,
@@ -15208,7 +15218,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         except HTTPException as exc:
             if exc.status_code != 503:
                 raise
-        refreshed_snapshot = runtime.memory_service.snapshot(state.workspace_id)
+        refreshed_snapshot = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
         if not active_training_card_satisfies_request(
             refreshed_snapshot.active_training_card_routing,
             requested_scenario=requested_scenario,
@@ -15223,7 +15233,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 response_language=response_language,
                 active_thread=active_thread,
             ):
-                refreshed_snapshot = runtime.memory_service.snapshot(state.workspace_id)
+                refreshed_snapshot = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
         state.snapshot.memory = refreshed_snapshot
 
     def ensure_explicit_training_card_after_coach_reply(
@@ -19648,7 +19658,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 response_language=request.response_language,
                 provider_service_override=coaching_service,
             )
-            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
             state.snapshot.profile = profile
             coach_turn: CoachTurnPayload = resolve_coach_turn(
                 state=state,
@@ -19672,7 +19682,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 saved_answer_mode=saved_answer_mode,
                 profile=profile,
             ):
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
             scenario = str(coach_turn["scenario"])
             learner_signal = str(coach_turn["learner_signal"])
             if infer_learner_signal(request.message, getattr(request, "current_file", None)) == "blocked":
@@ -20101,7 +20111,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     snapshot=state.snapshot,
                 )
                 state.snapshot.current_task = task
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
                 state.snapshot.profile = profile
                 coach_turn = resolve_coach_turn(
                     state=state,
@@ -20152,7 +20162,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     )
                 )
                 state.snapshot.current_task = task
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
                 state.snapshot.profile = profile
                 coach_turn = resolve_coach_turn(
                     state=state,
@@ -20194,7 +20204,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             )
             runtime.memory_service.record_profile(workspace_id, profile)
             state.snapshot.plan = plan
-            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
             state.snapshot.profile = profile
             if not provider_live_usable:
                 coach_turn = honest_unusable_provider_coach_turn(
@@ -20279,7 +20289,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 state=state,
                 report=report,
             )
-            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
             state.snapshot.profile = profile
             coach_turn = resolve_coach_turn(
                 state=state,
@@ -20540,7 +20550,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 ),
                 request_id=str(request.request_id or "").strip() or None,
             )
-        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
         state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
         hydrate_snapshot(
             state.snapshot,
@@ -21645,7 +21655,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             response_language=request.response_language,
             provider_service_override=coaching_service,
         )
-        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
         learning_project_state = workspace_learning_project_state(state.workspace_id)
         if learning_project_state.get("prompt_status") == "pending":
             handled_reply: str | None = None
@@ -21666,7 +21676,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     request.response_language,
                 )
             if handled_reply:
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
                 state.snapshot.profile = profile
                 hydrate_snapshot(
                     state.snapshot,
@@ -21726,7 +21736,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 saved_answer_mode=saved_answer_mode,
                 profile=profile,
             ):
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
             auto_resource_events = auto_resource_lookup_tool_events(
                 dict(coach_turn["coach_context"]),
                 request.message,
@@ -22119,7 +22129,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     scenario=str(coach_turn["scenario"]),
                     coach_turn_data=coach_turn_mapping(coach_turn),
                 )
-            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
             state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
             runtime.hydrate_plan_context(state.snapshot, workspace_id)
             hydrate_snapshot(
@@ -22841,7 +22851,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     response_language=request.response_language,
                     provider_service_override=coaching_service,
                 )
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
                 coach_turn: CoachTurnPayload = resolve_coach_turn(
                     state=state,
                     profile=profile,
@@ -22864,7 +22874,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     saved_answer_mode=saved_answer_mode,
                     profile=profile,
                 ):
-                    state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+                    state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
                 guided_training_prefers_local_reply = should_bypass_agent_loop_for_guided_training(
                     workspace_id=state.workspace_id,
                     scenario=str(coach_turn["scenario"] or scenario),
@@ -23279,7 +23289,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         scenario=str(coach_turn["scenario"]),
                         coach_turn_data=coach_turn_mapping(coach_turn),
                     )
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
                 state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
                 runtime.hydrate_plan_context(state.snapshot, workspace_id)
                 hydrate_snapshot(
@@ -24144,7 +24154,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     response_language=request.response_language,
                     provider_service_override=coaching_service,
                 )
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
                 coach_turn: CoachTurnPayload = resolve_coach_turn(
                     state=state,
                     profile=profile,
@@ -24167,7 +24177,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     saved_answer_mode=saved_answer_mode,
                     profile=profile,
                 ):
-                    state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+                    state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
                 guided_training_prefers_local_reply = should_bypass_agent_loop_for_guided_training(
                     workspace_id=state.workspace_id,
                     scenario=str(coach_turn["scenario"] or scenario),
@@ -24612,7 +24622,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         scenario=str(coach_turn["scenario"]),
                         coach_turn_data=coach_turn_mapping(coach_turn),
                     )
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
                 state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
                 runtime.hydrate_plan_context(state.snapshot, workspace_id)
                 hydrate_snapshot(
@@ -25208,7 +25218,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 project_plan=plan,
             )
             state.snapshot.profile = profile
-            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
             runtime.hydrate_plan_context(state.snapshot, state.workspace_id)
             workspace_memory = (
                 state.snapshot.memory.workspace if isinstance(state.snapshot.memory.workspace, dict) else {}
@@ -26996,7 +27006,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             report=report,
             evidence_source="ide_current_file",
         )
-        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
         runtime.save_session_state(state.session_id)
         return report
 
@@ -27032,7 +27042,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 report=report,
                 evidence_source="snippet_or_selection",
             )
-            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
             runtime.save_session_state(state.session_id)
             return report
         leftover = leftover_plan_state_fields(workspace_id)
@@ -27060,7 +27070,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             state=state,
             report=report,
         )
-        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
         runtime.save_session_state(state.session_id)
         return report
 
@@ -27130,7 +27140,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             state.snapshot.plan = updated_plan
             runtime.repository.save_plan(workspace_id, updated_plan)
             persist_plan_to_sandbox(workspace_id, updated_plan, reason="learning-signal")
-        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id, session_id=state.session_id)
         runtime.save_session_state(state.session_id)
         return state.snapshot
 

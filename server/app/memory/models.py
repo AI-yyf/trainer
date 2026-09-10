@@ -62,6 +62,7 @@ class ReflectionRecord:
     task_id: str
     summary: str
     action_items: list[str] = field(default_factory=list)
+    session_id: str = ""
     created_at: datetime = field(default_factory=utc_now)
 
 
@@ -108,6 +109,8 @@ class SessionSummary:
     teaching_note: str = ""
     confidence: str = ""
     evidence: list[str] = field(default_factory=list)
+    # Session-local coach grounding overlay (active_thread / latest_turn_* / latest_coach_*).
+    coach_patch: dict[str, Any] = field(default_factory=dict)
     updated_at: datetime = field(default_factory=utc_now)
 
 

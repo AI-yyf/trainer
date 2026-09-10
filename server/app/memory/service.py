@@ -415,7 +415,102 @@ class SemanticMemoryService(SemanticMemory):
         return self.search_hits(text, top_k=top_k if top_k is not None else limit, metadata_filter=metadata_filter)
 
 
+
+# Conversation/coach memory keys that must never cross sessions in the same workspace.
+_SESSION_SCOPED_WORKSPACE_KEYS = frozenset({"active_thread"})
+_SESSION_SCOPED_WORKSPACE_PREFIXES = ("latest_turn_", "latest_coach_")
+
+
+def _is_session_scoped_workspace_key(key: str) -> bool:
+    cleaned = str(key or "").strip()
+    if not cleaned:
+        return False
+    if cleaned in _SESSION_SCOPED_WORKSPACE_KEYS:
+        return True
+    return any(cleaned.startswith(prefix) for prefix in _SESSION_SCOPED_WORKSPACE_PREFIXES)
+
+
+def _session_thread_active_thread(summary: "SessionSummary | None") -> dict[str, Any] | None:
+    if summary is None:
+        return None
+    patch = summary.coach_patch if isinstance(summary.coach_patch, dict) else {}
+    existing = patch.get("active_thread")
+    if isinstance(existing, dict) and any(
+        str(existing.get(field) or "").strip()
+        for field in (
+            "focus_area",
+            "summary",
+            "next_step",
+            "blocker",
+            "verified_result",
+            "decision",
+            "teaching_note",
+            "confidence",
+        )
+    ):
+        return dict(existing)
+    payload: dict[str, Any] = {
+        "scenario": summary.last_scenario or "",
+        "focus_area": summary.active_focus_area or "",
+        "summary": "",
+        "next_step": summary.latest_next_step or "",
+        "blocker": summary.blocker or "",
+        "verified_result": summary.verified_result or "",
+        "updated_at": summary.updated_at.isoformat() if summary.updated_at else "",
+    }
+    if summary.decision:
+        payload["decision"] = summary.decision
+    if summary.teaching_note:
+        payload["teaching_note"] = summary.teaching_note
+    if summary.confidence:
+        payload["confidence"] = summary.confidence
+    if summary.evidence:
+        payload["evidence"] = list(summary.evidence)
+    if not any(
+        str(payload.get(field) or "").strip()
+        for field in (
+            "focus_area",
+            "summary",
+            "next_step",
+            "blocker",
+            "verified_result",
+            "decision",
+            "teaching_note",
+            "confidence",
+        )
+    ):
+        return None
+    return payload
+
+
+def _apply_session_coach_workspace(
+    workspace: dict[str, Any],
+    summary: "SessionSummary | None",
+    *,
+    session_id: str,
+) -> dict[str, Any]:
+    """Return a workspace view grounded only in the requested session's coach memory."""
+    scoped = {
+        key: value
+        for key, value in dict(workspace or {}).items()
+        if not _is_session_scoped_workspace_key(str(key))
+    }
+    patch = summary.coach_patch if summary is not None and isinstance(summary.coach_patch, dict) else {}
+    for key, value in patch.items():
+        if _is_session_scoped_workspace_key(str(key)):
+            scoped[str(key)] = value
+    active = _session_thread_active_thread(summary)
+    if active is not None:
+        scoped["active_thread"] = active
+    elif "active_thread" in scoped:
+        # Foreign workspace active_thread must not bleed into another session.
+        scoped.pop("active_thread", None)
+    scoped["session_id"] = session_id
+    return scoped
+
+
 class StructuredMemoryService:
+
     def __init__(self) -> None:
         self._profile: dict[str, Any] = {}
         self._workspace: dict[str, Any] = {}
@@ -581,8 +676,20 @@ class StructuredMemoryService:
         if key:
             self._weaknesses.pop(key, None)
 
-    def add_reflection(self, task_id: str, summary: str, action_items: list[str] | None = None) -> ReflectionRecord:
-        reflection = ReflectionRecord(task_id=task_id, summary=summary, action_items=list(action_items or []))
+    def add_reflection(
+        self,
+        task_id: str,
+        summary: str,
+        action_items: list[str] | None = None,
+        *,
+        session_id: str = "",
+    ) -> ReflectionRecord:
+        reflection = ReflectionRecord(
+            task_id=task_id,
+            summary=summary,
+            action_items=list(action_items or []),
+            session_id=str(session_id or "").strip(),
+        )
         self._reflections.append(reflection)
         self._reflections = self._reflections[-18:]
         return reflection
@@ -643,6 +750,18 @@ class StructuredMemoryService:
             summary.confidence = confidence
         if evidence:
             summary.evidence = _normalize_text_items(evidence, limit=4)
+        summary.updated_at = utc_now()
+        return summary
+
+    def merge_session_coach_patch(self, session_id: str, patch: dict[str, Any]) -> SessionSummary:
+        summary = self._sessions.setdefault(session_id, SessionSummary(session_id=session_id))
+        current = dict(summary.coach_patch) if isinstance(summary.coach_patch, dict) else {}
+        for key, value in dict(patch or {}).items():
+            cleaned_key = str(key or "").strip()
+            if not cleaned_key or not _is_session_scoped_workspace_key(cleaned_key):
+                continue
+            current[cleaned_key] = value
+        summary.coach_patch = current
         summary.updated_at = utc_now()
         return summary
 
@@ -888,6 +1007,7 @@ class StructuredMemoryService:
         *,
         scope: str | None = None,
         workspace_id: str | None = None,
+        session_id: str | None = None,
     ) -> list[TeachingKnowledgeAsset]:
         assets = list(self._teaching_assets.values())
         if scope is not None:
@@ -899,6 +1019,16 @@ class StructuredMemoryService:
                 if item.workspace_id == workspace_id
                 or (item.scope == "general" and item.workspace_id == "__global__")
             ]
+        requested_session = str(session_id or "").strip()
+        if requested_session:
+            filtered: list[TeachingKnowledgeAsset] = []
+            for item in assets:
+                asset_session = str(getattr(item, "session_id", "") or "").strip()
+                # Workspace/index assets (untagged) remain visible; other sessions' coach assets do not.
+                if asset_session and asset_session != requested_session:
+                    continue
+                filtered.append(item)
+            assets = filtered
         return sorted(assets, key=lambda item: (item.updated_at or "", item.usage_count), reverse=True)
 
     def update_active_thread(
@@ -938,22 +1068,80 @@ class StructuredMemoryService:
         self._workspace["active_thread"] = active_thread
         return dict(active_thread)
 
-    def snapshot(self) -> LaneMemorySnapshot:
+    def snapshot(self, session_id: str | None = None) -> LaneMemorySnapshot:
+        requested = str(session_id or "").strip()
+        if requested:
+            selected_session = self._sessions.get(requested)
+            workspace = _apply_session_coach_workspace(
+                self._workspace,
+                selected_session,
+                session_id=requested,
+            )
+            reflections = [
+                item
+                for item in self._reflections
+                if str(getattr(item, "session_id", "") or "").strip() == requested
+            ]
+            teaching_assets = self.list_teaching_assets(session_id=requested)
+            session = selected_session
+            # Conversation-derived coach memory stays session-local. Durable prefs that are
+            # not turn-ephemeral may remain; turn/reflection-sourced rows do not cross sessions.
+            _ephemeral_pref_keys = {
+                "focus_area",
+                "last_focus_area",
+                "latest_teaching_goal",
+                "latest_turn_decision",
+                "latest_turn_teaching_note",
+                "latest_turn_confidence",
+                "latest_turn_evidence",
+                "project_context",
+                "current_blocker",
+                "onboarding_request",
+            }
+            preferences = []
+            for item in self._preferences.values():
+                key = str(item.key)
+                source = str(item.source or "")
+                if key.startswith("latest_turn_"):
+                    continue
+                if source in {"coach-turn", "coach-reflection"}:
+                    continue
+                if source == "coach-intake" and key in _ephemeral_pref_keys:
+                    continue
+                preferences.append(item)
+            decisions: list[Any] = []
+            progress: list[Any] = []
+            teaching_signals = [
+                item
+                for item in self._teaching_signals.values()
+                if item.source not in {"coach-turn", "coach-reflection"}
+            ]
+        else:
+            # Legacy workspace-wide readers may omit session_id; never use this path for
+            # dual-session coach grounding (callers must pass session_id).
+            workspace = dict(self._workspace)
+            reflections = list(self._reflections)
+            teaching_assets = self.list_teaching_assets()
+            session = max(self._sessions.values(), key=lambda item: item.updated_at, default=None)
+            preferences = list(self._preferences.values())
+            decisions = list(self._decisions.values())
+            progress = list(self._progress.values())
+            teaching_signals = list(self._teaching_signals.values())
         return LaneMemorySnapshot(
             profile=dict(self._profile),
-            workspace=dict(self._workspace),
+            workspace=workspace,
             mastery=sorted(self._mastery.values(), key=lambda item: item.updated_at, reverse=True),
             weaknesses=sorted(
                 self._weaknesses.values(),
                 key=lambda item: (item.severity, item.updated_at),
                 reverse=True,
             ),
-            reflections=list(self._reflections),
-            preferences=sorted(self._preferences.values(), key=lambda item: item.updated_at, reverse=True),
-            decisions=sorted(self._decisions.values(), key=lambda item: item.updated_at, reverse=True),
-            progress=sorted(self._progress.values(), key=lambda item: item.updated_at, reverse=True),
+            reflections=reflections,
+            preferences=sorted(preferences, key=lambda item: item.updated_at, reverse=True),
+            decisions=sorted(decisions, key=lambda item: item.updated_at, reverse=True),
+            progress=sorted(progress, key=lambda item: item.updated_at, reverse=True),
             teaching_signals=sorted(
-                self._teaching_signals.values(),
+                teaching_signals,
                 key=lambda item: item.updated_at,
                 reverse=True,
             ),
@@ -968,8 +1156,8 @@ class StructuredMemoryService:
                 key=lambda item: item.last_updated_at,
                 reverse=True,
             ),
-            teaching_assets=self.list_teaching_assets(),
-            session=max(self._sessions.values(), key=lambda item: item.updated_at, default=None),
+            teaching_assets=teaching_assets,
+            session=session,
         )
 
     @staticmethod
@@ -2395,7 +2583,7 @@ class MemoryService:
         workspace_id = self._resolve_workspace_for_write(None)
         return self._structured_for(workspace_id)
 
-    def snapshot(self, workspace_id: str) -> MemorySnapshot:
+    def snapshot(self, workspace_id: str, session_id: str | None = None) -> MemorySnapshot:
         context_id = self.repository.resolve_context_id(workspace_id)
         asset_catalog = (
             self._asset_library.catalog(context_id)
@@ -2413,7 +2601,8 @@ class MemoryService:
         resources = select_resources_for_scope(resources, workspace_id)
         structured_service = self._structured_for(workspace_id)
         self._sync_dependency_training_views(structured_service)
-        lane_snapshot = structured_service.snapshot()
+        requested_session = str(session_id or "").strip() or None
+        lane_snapshot = structured_service.snapshot(session_id=requested_session)
         workspace = lane_snapshot.workspace if isinstance(lane_snapshot.workspace, dict) else {}
         coach_defaults = self._coach_defaults_from_workspace(workspace)
         toggles = self._workspace_memory_toggles(workspace)
@@ -2795,7 +2984,7 @@ class MemoryService:
             workspace_payload.get(PLAN_RUNTIME_KEY) or workspace_payload.get("latestPlanRuntime"),
             workspace_id,
         )
-        teaching_asset_items = self.list_teaching_assets(workspace_id=workspace_id)
+        teaching_asset_items = self.list_teaching_assets(workspace_id=workspace_id, session_id=requested_session)
         training_card_items = self.get_cards(workspace_id)
         leftover_plans: list[Any] | tuple[Any, ...] | None = []
         list_plans = getattr(self.repository, "list_plans", None)
@@ -3316,9 +3505,15 @@ class MemoryService:
         *,
         scope: str | None = None,
         limit: int = 8,
+        session_id: str | None = None,
     ) -> list[TeachingKnowledgeAsset]:
         structured = self._structured_for(workspace_id)
-        in_memory_assets = structured.list_teaching_assets(scope=scope, workspace_id=workspace_id)
+        requested_session = str(session_id or "").strip() or None
+        in_memory_assets = structured.list_teaching_assets(
+            scope=scope,
+            workspace_id=workspace_id,
+            session_id=requested_session,
+        )
         repository_assets = self.repository.list_teaching_assets(workspace_id=workspace_id, scope=scope)
         merged: dict[str, TeachingKnowledgeAsset] = {}
         for asset in [*repository_assets, *in_memory_assets]:
@@ -3327,6 +3522,9 @@ class MemoryService:
             if asset.scope in {"project", "personal"} and asset.workspace_id not in {"", workspace_id}:
                 continue
             if asset.scope == "general" and asset.workspace_id not in {"__global__", workspace_id}:
+                continue
+            asset_session = str(getattr(asset, "session_id", "") or "").strip()
+            if requested_session and asset_session and asset_session != requested_session:
                 continue
             existing = merged.get(asset.id)
             if existing is None or (asset.updated_at or "") >= (existing.updated_at or ""):
@@ -3802,8 +4000,10 @@ class MemoryService:
         summary: str,
         next_step: str,
         review_note: str | None = None,
+        session_id: str | None = None,
     ) -> list[TeachingKnowledgeAsset]:
         resolved_workspace_id = self._resolve_workspace_for_write(workspace_id)
+        resolved_session_id = str(session_id or "").strip()
         cleaned_focus = (focus_area or "").strip()
         cleaned_summary = summary.strip()
         cleaned_next_step = next_step.strip()
@@ -3813,12 +4013,14 @@ class MemoryService:
         title_anchor = cleaned_focus or scenario or "coach-reflection"
         assets: list[TeachingKnowledgeAsset] = []
         scope = "general" if scenario in {"principle", "review"} and not cleaned_focus else "project"
+        session_key = resolved_session_id or "__workspace__"
         if cleaned_summary:
             assets.append(
                 TeachingKnowledgeAsset(
                     kind="concept_card",
                     scope=scope,
                     workspace_id=resolved_workspace_id,
+                    session_id=resolved_session_id,
                     title=f"{title_anchor} · reflection",
                     summary=cleaned_summary,
                     concept_card=cleaned_summary,
@@ -3827,7 +4029,7 @@ class MemoryService:
                     focus_area=cleaned_focus or title_anchor,
                     scenario=scenario,
                     origin="reflection",
-                    source_key=f"reflection::{resolved_workspace_id}::{scenario}::{cleaned_focus or title_anchor}".lower(),
+                    source_key=f"reflection::{resolved_workspace_id}::{session_key}::{scenario}::{cleaned_focus or title_anchor}".lower(),
                     source_ids=[],
                     source_fragments=[cleaned_next_step, cleaned_review_note] if cleaned_review_note else [cleaned_next_step],
                     evidence_snippets=[cleaned_summary, cleaned_next_step, cleaned_review_note],
@@ -3843,6 +4045,7 @@ class MemoryService:
                     kind="common_pitfall",
                     scope="project",
                     workspace_id=resolved_workspace_id,
+                    session_id=resolved_session_id,
                     title=f"{title_anchor} · pitfall",
                     summary=cleaned_review_note,
                     common_pitfall=cleaned_review_note,
@@ -3851,7 +4054,7 @@ class MemoryService:
                     focus_area=cleaned_focus or title_anchor,
                     scenario=scenario,
                     origin="reflection",
-                    source_key=f"reflection-pitfall::{resolved_workspace_id}::{scenario}::{cleaned_focus or title_anchor}".lower(),
+                    source_key=f"reflection-pitfall::{resolved_workspace_id}::{session_key}::{scenario}::{cleaned_focus or title_anchor}".lower(),
                     source_ids=[],
                     source_fragments=[cleaned_review_note],
                     evidence_snippets=[cleaned_review_note, cleaned_summary, cleaned_next_step],
@@ -6866,8 +7069,9 @@ class MemoryService:
                 summary=cleaned_summary,
                 focus_area=cleaned_focus,
                 response_language=str(response_language or "").strip(),
+                session_id=session_id,
             )
-        structured.update_active_thread(
+        active_thread = structured.update_active_thread(
             scenario=scenario,
             focus_area=cleaned_focus,
             summary=cleaned_summary,
@@ -6880,6 +7084,10 @@ class MemoryService:
             recovery_state="provider_or_local",
         )
         if session_id:
+            structured.merge_session_coach_patch(
+                session_id,
+                {"active_thread": dict(active_thread)},
+            )
             structured.update_session_thread(
                 session_id,
                 focus_area=cleaned_focus,
@@ -6962,6 +7170,7 @@ class MemoryService:
                 summary=cleaned_summary,
                 focus_area=cleaned_focus,
                 response_language=normalized_response_language,
+                session_id=session_id,
             )
         if coach_defaults:
             structured.remember_preference("memory_scope", coach_defaults.memory_scope, source="coach-defaults")
@@ -6975,7 +7184,7 @@ class MemoryService:
         blocker_text = ""
         if review_note:
             blocker_text = review_note.strip()
-        existing_active_thread = structured.snapshot().workspace.get("active_thread")
+        existing_active_thread = structured.snapshot(session_id=session_id).workspace.get("active_thread")
         existing_verified_result = (
             str(existing_active_thread.get("verified_result") or "").strip()
             if isinstance(existing_active_thread, dict)
@@ -7040,7 +7249,7 @@ class MemoryService:
                 }
             )
         structured.update_workspace(**workspace_patch)
-        structured.update_active_thread(
+        active_thread = structured.update_active_thread(
             scenario=scenario,
             focus_area=cleaned_focus,
             summary=cleaned_summary,
@@ -7053,6 +7262,13 @@ class MemoryService:
             evidence=normalized_evidence,
         )
         if session_id:
+            session_patch = {
+                key: value
+                for key, value in workspace_patch.items()
+                if _is_session_scoped_workspace_key(str(key))
+            }
+            session_patch["active_thread"] = dict(active_thread)
+            structured.merge_session_coach_patch(session_id, session_patch)
             structured.update_session_thread(
                 session_id,
                 focus_area=cleaned_focus,
@@ -7118,6 +7334,7 @@ class MemoryService:
         summary: str,
         focus_area: str,
         response_language: str,
+        session_id: str | None = None,
     ) -> None:
         profile = self.repository.get_profile(workspace_id) or UserProfile()
         profile_updates: dict[str, Any] = {}
@@ -7169,14 +7386,17 @@ class MemoryService:
                 source="coach-intake",
             )
 
+        # Session-bound coach turns must not publish private message anchors into
+        # workspace profile / shared intake prefs (same-workspace dual session).
+        session_bound = bool(str(session_id or "").strip())
         project_context = self._extract_project_context(message, focus_area=focus_area)
-        if project_context:
+        if project_context and not session_bound:
             structured.remember_preference("project_context", project_context, source="coach-intake")
             if not profile.target_project:
                 profile_updates["target_project"] = project_context
 
         blocker = self._extract_blocker(message)
-        if blocker:
+        if blocker and not session_bound:
             structured.remember_preference("current_blocker", blocker, source="coach-intake")
 
         rhythm_preference = self._extract_rhythm_preference(message)
@@ -7192,7 +7412,7 @@ class MemoryService:
             structured.remember_preference("preferred_learning_mode", learning_mode, source="coach-intake")
 
         onboarding_request = self._extract_onboarding_request(message)
-        if onboarding_request:
+        if onboarding_request and not session_bound:
             structured.remember_preference("onboarding_request", onboarding_request, source="coach-intake")
 
         language_label = self._normalize_response_language_label(response_language, message=message)
@@ -7408,15 +7628,22 @@ class MemoryService:
         summary: str,
         action_items: list[str] | None = None,
         workspace_id: str | None = None,
+        session_id: str | None = None,
     ) -> None:
         resolved_workspace_id = self._resolve_workspace_for_write(workspace_id)
-        self._structured_for(resolved_workspace_id).add_reflection(task_id, summary, action_items)
+        self._structured_for(resolved_workspace_id).add_reflection(
+            task_id,
+            summary,
+            action_items,
+            session_id=str(session_id or "").strip(),
+        )
         self._persist_structured(resolved_workspace_id)
 
     def record_coaching_reflection(
         self,
         *,
         workspace_id: str | None = None,
+        session_id: str | None = None,
         scenario: str,
         focus_area: str | None,
         summary: str,
@@ -7454,8 +7681,15 @@ class MemoryService:
             action_items.append(cleaned_teaching_note)
         if cleaned_review_note:
             action_items.append(cleaned_review_note)
+        resolved_session_id = str(session_id or "").strip()
         if workspace_id:
-            self.record_reflection(task_id, reflection_summary, action_items, workspace_id=workspace_id)
+            self.record_reflection(
+                task_id,
+                reflection_summary,
+                action_items,
+                workspace_id=workspace_id,
+                session_id=resolved_session_id or None,
+            )
             structured = self._structured_for(workspace_id)
         else:
             return
@@ -7485,11 +7719,10 @@ class MemoryService:
         }
         workspace_patch["workspace_id"] = workspace_id
         structured.update_workspace(**workspace_patch)
-
-        latest_session = structured.snapshot().session
-        if latest_session:
+        if resolved_session_id:
+            structured.merge_session_coach_patch(resolved_session_id, workspace_patch)
             structured.update_session_thread(
-                latest_session.session_id,
+                resolved_session_id,
                 focus_area=(focus_area or "").strip(),
                 scenario=scenario,
                 blocker=cleaned_review_note,
@@ -7549,6 +7782,7 @@ class MemoryService:
             summary=cleaned_summary,
             next_step=cleaned_next_step,
             review_note=cleaned_review_note or None,
+            session_id=resolved_session_id or None,
         )
         self._persist_structured(workspace_id)
 

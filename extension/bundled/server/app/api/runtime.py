@@ -306,7 +306,7 @@ class TrainerRuntime:
             return None
         snapshot = WorkbenchSnapshot.model_validate(snapshot_payload)
         snapshot.context_id = workspace_id
-        snapshot.memory = self.memory_service.snapshot(workspace_id)
+        snapshot.memory = self.memory_service.snapshot(workspace_id, session_id=session_id)
         snapshot.profile = self.repository.get_profile(workspace_id)
         self.hydrate_plan_context(snapshot, workspace_id)
         provisioning = self.repository.get_project_provisioning(workspace_id)
@@ -380,18 +380,21 @@ class TrainerRuntime:
         if not matching_states:
             return 0
 
-        # Read workspace-level state once; each session receives independent copies so
-        # later session-local mutations cannot alter another session's snapshot.
-        memory = self.memory_service.snapshot(resolved_workspace_id)
+        # Ground each session independently so coach memory cannot cross session_id
+        # boundaries inside the same workspace.
         profile = self.repository.get_profile(resolved_workspace_id)
-        workspace_snapshot = WorkbenchSnapshot(
-            contextId=resolved_workspace_id,
-            memory=memory,
-            profile=profile,
-        )
-        self.hydrate_plan_context(workspace_snapshot, resolved_workspace_id)
 
         for state in matching_states:
+            memory = self.memory_service.snapshot(
+                resolved_workspace_id,
+                session_id=state.session_id,
+            )
+            workspace_snapshot = WorkbenchSnapshot(
+                contextId=resolved_workspace_id,
+                memory=memory,
+                profile=profile,
+            )
+            self.hydrate_plan_context(workspace_snapshot, resolved_workspace_id)
             state.snapshot.context_id = resolved_workspace_id
             state.snapshot.memory = deepcopy(workspace_snapshot.memory)
             state.snapshot.profile = deepcopy(workspace_snapshot.profile)
