@@ -6283,6 +6283,18 @@ export function App() {
     setOpenMenu(undefined);
   }, [layout.activeView]);
 
+  // Restart the view entrance animation on every view change without
+  // remounting the container (remounting would drop child state).
+  useEffect(() => {
+    const node = viewContentRef.current;
+    if (!node) {
+      return;
+    }
+    node.classList.remove("view-content--enter");
+    void node.offsetWidth;
+    node.classList.add("view-content--enter");
+  }, [activeView]);
+
   useEffect(() => {
     if (openMenu !== "model") {
       setComposerModelQuery("");

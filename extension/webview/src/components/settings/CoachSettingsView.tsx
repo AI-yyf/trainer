@@ -57,6 +57,7 @@ import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurface
 
 import { ActionButton } from "../common";
 import { ProviderEndpointSpeedTest } from "./ProviderEndpointSpeedTest";
+import { ProviderQuickSetup } from "./ProviderQuickSetup";
 import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
@@ -7071,7 +7072,11 @@ export function CoachSettingsView({
       (!providerDraft.baseUrl.trim()
         ? settingsStatusPhrase(language, "fillProviderFields")
         : !providerDraft.model.trim()
-          ? modelPickerCopy.modelRequiredNote
+          ? providerDraftHasApiKey || providerDraftCanReuseSavedApiKey
+            ? language === "zh-CN"
+              ? "保存时将自动获取并选择可用模型。"
+              : "A model will be fetched and selected automatically when you save."
+            : modelPickerCopy.modelRequiredNote
           : !providerDraftHasApiKey && !providerDraftCanReuseSavedApiKey
             ? settingsStatusPhrase(language, "connectionSavedApiKeyMissing")
             : localizedResolvedAvailabilityDetail)
@@ -7137,6 +7142,21 @@ export function CoachSettingsView({
         </div>
 
         <section className="settings-section settings-section--panel settings-section--setup settings-section--summary">
+          <ProviderQuickSetup
+            language={language}
+            draft={providerDraft}
+            savedBaseUrl={provider.baseUrl}
+            savedModel={provider.model}
+            connected={providerCoachReady}
+            hasStoredApiKey={provider.apiKeyConfigured}
+            busy={providerTestPending}
+            onDraftChange={onProviderDraftChange}
+            onSave={() => {
+              if (onSaveProvider) {
+                onSaveProvider();
+              }
+            }}
+          />
           <div
             className={`settings-availability-strip settings-availability-strip--${resolvedAvailabilityTone}`}
             data-view-identity="true"
