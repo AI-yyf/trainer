@@ -11,7 +11,10 @@ import { resolveBundledBinaryCandidates } from "./verify-package.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const HEALTH_TIMEOUT_MS = 30_000;
+// Packaging runs this smoke right after a full build; under that residual
+// CPU load the PyInstaller binary can take well over 30s to answer its very
+// first health request. The check verifies the bundle works, not startup speed.
+const HEALTH_TIMEOUT_MS = 90_000;
 const HEALTH_POLL_INTERVAL_MS = 250;
 const HEALTH_REQUEST_TIMEOUT_MS = 1_500;
 const CHILD_STOP_TIMEOUT_MS = 5_000;
