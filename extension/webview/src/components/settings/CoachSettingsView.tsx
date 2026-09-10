@@ -33,6 +33,7 @@ import {
   filterProviderModelOptions,
 } from "../../../../../shared/src/providerModelPolicy";
 import type { ProviderModelTokenLimit, ProviderProtocol } from "../../../../../shared/src/models";
+import type { ProviderEndpointSpeedTestResult } from "../../lib/types";
 import {
   isNewApiConnectionType,
   parseProviderConnectionPaste,
@@ -55,6 +56,7 @@ import {
 import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
 
 import { ActionButton } from "../common";
+import { ProviderEndpointSpeedTest } from "./ProviderEndpointSpeedTest";
 import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
@@ -1390,6 +1392,9 @@ export interface CoachSettingsViewProps {
   onRevokeMemoryShare?: (sourceWorkspaceId: string) => void;
   onSaveProvider?: () => void;
   onSaveProviderProfile?: () => void;
+  providerSpeedTestResults?: ProviderEndpointSpeedTestResult[];
+  providerSpeedTestPending?: boolean;
+  onSpeedTestEndpoints?: (urls: string[]) => void;
   onUseProviderTemplate?: () => void;
   onUseProviderTemplateLabel?: (templateLabel: string) => void;
   onRefreshProviderProfiles?: () => void;
@@ -4119,6 +4124,9 @@ export function CoachSettingsView({
   onRevokeMemoryShare,
   onSaveProvider,
   onSaveProviderProfile,
+  providerSpeedTestResults = [],
+  providerSpeedTestPending = false,
+  onSpeedTestEndpoints,
   onUseProviderTemplate,
   onUseProviderTemplateLabel,
   onRefreshProviderProfiles,
@@ -4640,7 +4648,13 @@ export function CoachSettingsView({
   const normalizedDraftBaseUrl = normalizeProviderBaseUrlDraft(providerDraft.baseUrl, draftProtocol);
   const normalizedSavedBaseUrl = normalizeProviderBaseUrlDraft(provider.baseUrl, savedProtocol);
   const providerDraftHasApiKey = providerDraft.apiKey.trim().length > 0;
-  const providerDraftFieldsReady = Boolean(providerDraft.baseUrl.trim() && providerDraft.model.trim());
+  // Saving no longer requires a model: the host auto-adopts a live model from
+  // the fetched list when the draft names none (CC-Switch-style one-shot).
+  const providerDraftFieldsReady = Boolean(providerDraft.baseUrl.trim());
+  // The draft connection test still probes a concrete model.
+  const providerDraftTestReady = Boolean(
+    providerDraft.baseUrl.trim() && providerDraft.model.trim(),
+  );
   const providerDraftCanReuseSavedApiKey =
     providerSaved &&
     provider.apiKeyConfigured &&
@@ -4669,7 +4683,7 @@ export function CoachSettingsView({
     normalizedDraftBaseUrl && (providerDraftHasApiKey || providerDraftCanReuseSavedApiKey),
   );
   const providerDraftReadyForTestBase =
-    providerDraftFieldsReady && (providerDraftHasApiKey || providerDraftCanReuseSavedApiKey);
+    providerDraftTestReady && (providerDraftHasApiKey || providerDraftCanReuseSavedApiKey);
   const attachedContextSummaryText = shortenSummary(attachedContextSummary, 54);
   const providerSummaryText = shortenSummary(providerSummary, 62);
   const advancedSummaryText = shortenSummary(advancedSummary, 82);
@@ -7393,6 +7407,15 @@ export function CoachSettingsView({
                     {providerBaseUrlHint}
                   </p>
                 </label>
+
+                <ProviderEndpointSpeedTest
+                  language={language}
+                  baseUrl={normalizedDraftBaseUrl || providerDraft.baseUrl}
+                  results={providerSpeedTestResults}
+                  pending={providerSpeedTestPending}
+                  onRun={(urls) => onSpeedTestEndpoints?.(urls)}
+                  onAdopt={(url) => onProviderDraftChange({ baseUrl: url })}
+                />
 
                 <label className="settings-field">
                   <span>{copy.apiKey}</span>

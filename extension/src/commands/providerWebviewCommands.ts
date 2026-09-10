@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import http from 'node:http';
 
 import * as vscode from 'vscode';
 
@@ -39,6 +40,7 @@ import { normalizeProviderCapabilityTruth } from '../../../shared/src/providerTe
 import {
   providerBaseUrlIsLocalService,
   providerTransportIsConfigured,
+  type ProviderEndpointSpeedTestResult,
 } from '../../../shared/src/providerStatus';
 import {
   providerHostCopy,
@@ -2207,4 +2209,109 @@ export async function primeProviderModelsState(context: CommandContext): Promise
     },
   });
   await context.workbench.syncState();
+}
+
+const SPEED_TEST_TIMEOUT_MS = 8_000;
+const SPEED_TEST_MAX_URLS = 8;
+
+function normalizeSpeedTestUrls(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const urls = raw
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+  return [...new Set(urls)].slice(0, SPEED_TEST_MAX_URLS);
+}
+
+function classifySpeedTestErrorKey(error: Error): ProviderHostCopyKey {
+  if (/timeout|aborted|ETIMEDOUT/i.test(error.message)) {
+    return 'speedTestTimedOut';
+  }
+  if (/ECONNREFUSED|EAI_AGAIN|ENOTFOUND|connect/i.test(error.message)) {
+    return 'speedTestConnectFailed';
+  }
+  return 'speedTestRequestFailed';
+}
+
+function speedTestOneEndpoint(
+  url: string,
+  responseLanguage: ComposerLanguage | undefined,
+): Promise<ProviderEndpointSpeedTestResult> {
+  const speedTestInvalidUrlCopy = providerHostCopy(responseLanguage, 'speedTestInvalidUrl');
+  return new Promise((resolve) => {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      resolve({ url, latencyMs: null, status: null, error: speedTestInvalidUrlCopy });
+      return;
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      resolve({ url, latencyMs: null, status: null, error: speedTestInvalidUrlCopy });
+      return;
+    }
+
+    const requestOnce = () =>
+      new Promise<{ latencyMs: number; status: number | null }>((resolveOne, rejectOne) => {
+        const startedAt = Date.now();
+        const request = http.request(
+          { method: 'GET', hostname: parsed.hostname, port: parsed.port || undefined, path: parsed.pathname + parsed.search, protocol: parsed.protocol, timeout: SPEED_TEST_TIMEOUT_MS },
+          (incoming) => {
+            incoming.resume();
+            incoming.once('end', () => resolveOne({ latencyMs: Date.now() - startedAt, status: incoming.statusCode ?? null }));
+            incoming.once('error', rejectOne);
+          },
+        );
+        request.on('timeout', () => {
+          request.destroy(new Error('timeout'));
+        });
+        request.once('error', rejectOne);
+        request.end();
+      });
+
+    void (async () => {
+      // CC Switch 端点测速同款:先发一次热身请求消除首包惩罚,再对第二次请求计时。
+      try {
+        await requestOnce();
+      } catch {
+        // 热身失败不代表不可用,交给计时请求给出结论。
+      }
+      try {
+        const { latencyMs, status } = await requestOnce();
+        resolve({ url, latencyMs, status, error: null });
+      } catch (error) {
+        resolve({
+          url,
+          latencyMs: null,
+          status: null,
+          error: providerHostCopy(
+            responseLanguage,
+            classifySpeedTestErrorKey(error instanceof Error ? error : new Error(String(error))),
+          ),
+        });
+      }
+    })();
+  });
+}
+
+export async function providerSpeedTestCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult<{ results: ProviderEndpointSpeedTestResult[] }>> {
+  const responseLanguage = resolveProviderHostLanguage(
+    undefined,
+    context.getHostState().bootstrap.memory.workspace?.responseLanguage,
+  );
+  if (!(await context.trustGuard.ensureTrusted('run the endpoint speed test'))) {
+    return { ok: false, message: providerHostCopy(responseLanguage, 'speedTestUntrusted') };
+  }
+  const input = (payload ?? {}) as { urls?: unknown };
+  const urls = normalizeSpeedTestUrls(input.urls);
+  if (urls.length === 0) {
+    return { ok: false, message: providerHostCopy(responseLanguage, 'speedTestNoUrls') };
+  }
+  const results = await Promise.all(urls.map((url) => speedTestOneEndpoint(url, responseLanguage)));
+  return { ok: true, data: { results } };
 }

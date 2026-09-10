@@ -71,6 +71,19 @@ const hostMessageSchema = z.discriminatedUnion("type", [
     }),
   }),
   z.object({
+    type: z.literal("provider/speedTest"),
+    payload: z.object({
+      results: z.array(
+        z.object({
+          url: z.string(),
+          latencyMs: z.number().nullable(),
+          status: z.number().nullable(),
+          error: z.string().nullable(),
+        }),
+      ),
+    }),
+  }),
+  z.object({
     type: z.literal("ui/restoreView"),
     payload: z.any(),
   }),
