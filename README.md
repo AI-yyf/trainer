@@ -262,3 +262,20 @@ The table below captures the current direction of travel for Trainer. It is inte
 | Code health | TS strict, Ruff, Pyright, pytest, Jest, and E2E stay green, with oversized files split down over time | Large files still exist, including `server/tests/test_api.py`, `extension/webview/src/app/App.tsx`, and `server/app/api/routers.py`. |
 | Cross-language contract | Python Pydantic and TypeScript interfaces stay aligned for `WorkbenchSnapshot` | No automated contract check is in place yet. |
 | CI validation | GitHub Actions validates Linux, macOS, and Windows on every PR | The matrix is defined, but the repository does not yet contain recorded cloud execution evidence. |
+
+
+## Known limitations / 已知限制
+
+Honest yellow-card notes from live verification. This is **not** a claim of full protocol perfection or 史诗级全绿.
+
+**What is green (brief):** OpenAI-compatible `chat_completions` / `responses` same-session paths behave stably in the verified channel. Mock `rate_limit` classification works. Other areas below remain yellow.
+
+| Area | Status | Condition / note |
+|------|--------|------------------|
+| `anthropic_messages` | Yellow — `HUNG_SKIP` / multi-turn unstable | Observed on **NewAPI MiniMax** under multi-turn conditions; do not treat Anthropic Messages as fully stable on that gateway. |
+| `gemini_generate_content` | Yellow — conditional hang | Requests are rewritten to `openai_chat_completions` unless `base_url` contains `googleapis.com`. Default / NewAPI-style Gemini is **not** native Google; hang risk remains on non-Google bases. |
+| True HTTP `429` | Yellow — not live-verified | Mock `rate_limit` classification works; a live rate-limit storm on this channel elicited **0×** real HTTP 429 responses. Do not claim live 429 handling is proven here. |
+| Sandbox | Yellow — `cross_system_degradation` | When Docker/Podman is missing in the environment, sandbox reports cross-system degradation rather than full isolation. |
+| Credentials | Policy | Keep API keys in **local env / SecretStorage only**. Rotate if a key was ever leaked in chat or history. **Never commit keys** to the repo. |
+
+这些条目是诚实黄牌，不是“全绿协议”宣传。绿色兼容路径（同会话 `chat_completions` / `responses` 等）可用，但上表黄牌仍然成立。
