@@ -18206,6 +18206,7 @@ details[open] > :not(summary) {
 }
 
 .plan-dashboard__block {
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
   display: flex;
   flex-direction: column;
   gap: var(--trainer-space-2);
@@ -18246,6 +18247,7 @@ details[open] > :not(summary) {
 }
 
 .plan-dashboard__bar-fill {
+  transition: width var(--motion-slow, 280ms) var(--motion-ease);
   height: 100%;
   border-radius: inherit;
   background: var(--accent);
