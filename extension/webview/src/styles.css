@@ -2156,6 +2156,7 @@ body,
 }
 
 .training-active-card-route {
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -6945,6 +6946,7 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .training-current__card-stack {
+  animation: trainer-view-in var(--motion-base, 180ms) var(--motion-ease);
   position: relative;
   display: flex;
   flex-direction: column;
