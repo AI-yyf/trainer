@@ -17023,7 +17023,8 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .composer__attachment-chip {
-  display: inline-flex;
+  animation: trainer-pop-in var(--motion-fast) var(--motion-ease);
+  transition: border-color var(--motion-fast) var(--motion-ease);  display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 3px 8px;
@@ -17047,7 +17048,7 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .composer__attachment-remove {
-  appearance: none;
+  transition: color var(--motion-fast) var(--motion-ease);  appearance: none;
   border: none;
   background: transparent;
   color: var(--fg-muted);
