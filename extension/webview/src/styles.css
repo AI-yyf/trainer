@@ -1187,7 +1187,7 @@ body,
 
 .notice,
 .coach-inline-notice {
-  margin: 6px 8px 0;
+  animation: trainer-notice-in var(--motion-in) var(--motion-ease);  margin: 6px 8px 0;
   padding: 8px 0;
   border: 0;
   border-top: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
@@ -3026,6 +3026,17 @@ body,
 
 .trainer-citation .freshness-icon--unknown {
   color: var(--fg-muted);
+}
+
+@keyframes trainer-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @keyframes trainer-pop-in {
