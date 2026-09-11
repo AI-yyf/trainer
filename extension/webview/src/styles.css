@@ -5770,6 +5770,7 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .resource-library-row {
+  transition: background var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -9156,6 +9157,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   }
 
   .composer__accessory .skill-deck__item {
+  transition: background var(--motion-fast) var(--motion-ease);
     grid-template-columns: auto minmax(0, 1fr);
   }
 
@@ -9954,6 +9956,7 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .composer-presencebar__provider {
+  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
   appearance: none;
   min-width: 0;
   max-width: min(100%, 220px);
@@ -18168,6 +18171,7 @@ details[open] > :not(summary) {
 }
 
 .plan-dashboard__tab {
+  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
   appearance: none;
   border: none;
   border-radius: var(--radius-sm);
