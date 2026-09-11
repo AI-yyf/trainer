@@ -9048,7 +9048,9 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .composer-shell--quiet .composer-secondary-button {
-  min-height: var(--composer-dock-hit);
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);  min-height: var(--composer-dock-hit);
   height: var(--composer-dock-hit);
   padding: 0 8px;
   border-radius: var(--composer-dock-radius);
