@@ -22178,8 +22178,24 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             raise HTTPException(status_code=404, detail="Checkpoint was not found for this workspace.")
         return resume
 
+    def reject_blank_coach_message(request: TurnRequest) -> None:
+        """Coach turns cost a live model call; a blank message is always a mistake."""
+        if not request.message.strip():
+            raise HTTPException(
+                status_code=422,
+                detail="Please type a message before sending. | 请输入消息内容后再发送。",
+            )
+
     @router.post("/turn", response_model=None)
     async def turn(payload: dict) -> object:
+        try:
+            request = TurnRequest.model_validate(payload)
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=exc.errors(include_context=False),
+            ) from exc
+        reject_blank_coach_message(request)
         try:
             request = TurnRequest.model_validate(payload)
         except ValidationError as exc:
@@ -23261,6 +23277,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         parsed_request = TurnRequest.model_validate(payload)
         if not isinstance(parsed_request, TurnRequest):
             raise TypeError("Turn stream payload did not produce a TurnRequest.")
+        reject_blank_coach_message(parsed_request)
         request: TurnRequest = _normalize_resource_turn_request(parsed_request)
         original_intent = parsed_request.intent
         state: SessionState | None = None
