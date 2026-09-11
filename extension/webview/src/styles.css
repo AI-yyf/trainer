@@ -971,7 +971,10 @@ select {
 }
 
 .action-button {
-  display: flex;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);  display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
@@ -997,6 +1000,10 @@ select {
 .action-button:hover {
   background: var(--bg-1);
   border-color: color-mix(in srgb, var(--line) 76%, var(--accent) 10%);
+}
+
+.action-button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .action-button--accent {
