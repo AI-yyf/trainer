@@ -143,3 +143,26 @@ def test_provider_test_route_resolves_schemeless_local_base_url(tmp_path: Path) 
     assert payload["reachable"] is True
     assert captured["base_url"] == "http://127.0.0.1:8099/v1"
     assert payload["base_url"] == "http://127.0.0.1:8099/v1"
+
+
+def test_turn_stream_rejects_blank_coach_message(tmp_path: Path) -> None:
+    """A blank coach message would burn a live model call; it must 422."""
+    settings = AppSettings(
+        app_name="Trainer Test Server",
+        host="127.0.0.1",
+        port=8765,
+        data_dir=tmp_path,
+        database_name="trainer-test.db",
+        default_session_stage="intake",
+        summary_message_limit=6,
+        enable_network_fetch=True,
+    )
+    app = create_app(settings)
+    with TestClient(app) as client:
+        response = client.post(
+            "/turn/stream",
+            json={"message": "   ", "workspace_id": "ws-blank", "session_id": "s-blank"},
+        )
+
+    assert response.status_code == 422
+    assert "message" in response.text.lower() or "消息" in response.text
