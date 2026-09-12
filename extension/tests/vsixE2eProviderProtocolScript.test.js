@@ -447,3 +447,30 @@ test('VSIX E2E uses workspace resource fixtures and the public review-queue comm
   assert.doesNotMatch(source, /trainer\.reviewQueue\.action/);
   assert.doesNotMatch(source, /source: "inline:\/\//);
 });
+
+test('settings provider form wires the CC-Switch-style quick setup card', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '..', 'webview', 'src', 'components', 'settings', 'CoachSettingsView.tsx'), 'utf8');
+
+  // The card is rendered at the top of the provider section, above the
+  // availability strip, so the ≤3-action path is the first thing users see.
+  const quickStart = source.indexOf('<ProviderQuickSetup');
+  const stripStart = source.indexOf('settings-availability-strip');
+  assert.ok(quickStart > 0, 'expected the quick setup card in the settings view');
+  assert.ok(stripStart > quickStart, 'quick setup must render before the availability strip');
+
+  // It drives the same draft the full form uses and saves through the same
+  // save flow, so paste → key → save is one coherent action path.
+  assert.match(source, /draft=\{providerDraft\}/);
+  assert.match(source, /onDraftChange=\{onProviderDraftChange\}/);
+  assert.match(source, /trusted=\{resolvedWorkspaceTrustState === "trusted"\}/);
+  assert.match(source, /onSave=\{\(\) => \{\s*if \(onSaveProvider\)/);
+
+  // The card component itself splits relay blobs and never gates saving on a
+  // hand-picked model (the host auto-adopts one).
+  const cardSource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'settings', 'ProviderQuickSetup.tsx'),
+    'utf8',
+  );
+  assert.match(cardSource, /parseProviderConnectionPaste/);
+  assert.doesNotMatch(cardSource, /model\.trim\(\) && !canSave/);
+});
