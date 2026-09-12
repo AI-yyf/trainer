@@ -17035,6 +17035,18 @@ button.resources-sandbox-layout__chip:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* Disclosure reveal: details panels fade/slide their content on open.
+   CollapseSection handles grid-rows disclosure; this covers raw <details>
+   disclosures (model picker, route panels) in the settings sheet. */
+.settings-sheet details[open] > *:not(summary),
+.settings-endpoint-speed {
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
+}
+
+.settings-endpoint-speed__row {
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease) both;
+}
+
 .composer__attachment-chip {
   animation: trainer-pop-in var(--motion-fast) var(--motion-ease);
   transition: border-color var(--motion-fast) var(--motion-ease);  display: inline-flex;
@@ -19146,10 +19158,6 @@ details[open] > :not(summary) {
 
 .settings-endpoint-speed {
   animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
-}
-
-.settings-endpoint-speed__row {
-  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease) both;
 }
 
 .settings-endpoint-speed__row:nth-child(1) { animation-delay: 0ms; }
