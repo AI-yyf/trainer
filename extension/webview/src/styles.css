@@ -19341,3 +19341,14 @@ details[open] > :not(summary) {
   height: 14px;
   border-radius: var(--radius-sm);
 }
+
+/* Availability strip: smooth warn→connected transition + one-shot pop */
+.settings-availability-strip {
+  transition:
+    border-color var(--motion-base, 180ms) var(--motion-ease),
+    background var(--motion-base, 180ms) var(--motion-ease);
+}
+
+.settings-availability-strip--connected {
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
+}
