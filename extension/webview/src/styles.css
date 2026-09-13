@@ -19379,3 +19379,20 @@ details[open] > :not(summary) {
   outline: 1px solid var(--focus-ring);
   outline-offset: 1px;
 }
+
+/* Save & connect busy indicator */
+.settings-quick-setup__saving-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: trainer-spin 0.9s linear infinite;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.notice__dismiss:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 1px;
+}
