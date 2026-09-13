@@ -19398,3 +19398,26 @@ details[open] > :not(summary) {
   outline: 1px solid var(--focus-ring);
   outline-offset: 1px;
 }
+
+/* Coaching reply code blocks — the primary content of a coding coach */
+.message-bubble-v2 .message-markdown pre {
+  background: color-mix(in srgb, var(--bg-0) 78%, var(--bg-2));
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.55;
+}
+
+.message-bubble-v2 .message-markdown code {
+  font-family: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.message-bubble-v2 .message-markdown :not(pre) > code {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
+  border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: var(--trainer-font-2xs);
+}
