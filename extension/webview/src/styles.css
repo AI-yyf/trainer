@@ -19352,3 +19352,30 @@ details[open] > :not(summary) {
 .settings-availability-strip--connected {
   animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
 }
+
+/* Quick setup step completion: checkmark pops in */
+.settings-quick-setup__done {
+  display: inline-block;
+  color: var(--pass, var(--trainer-fallback-success));
+  animation: trainer-step-pop var(--motion-base, 180ms) var(--motion-ease);
+}
+
+@keyframes trainer-step-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Speed test rows: keyboard focus ring matches hover */
+.settings-endpoint-speed__row:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 1px;
+}

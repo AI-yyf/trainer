@@ -7427,15 +7427,6 @@ export function CoachSettingsView({
                   </p>
                 </label>
 
-                <ProviderEndpointSpeedTest
-                  language={language}
-                  baseUrl={normalizedDraftBaseUrl || providerDraft.baseUrl}
-                  results={providerSpeedTestResults}
-                  pending={providerSpeedTestPending}
-                  onRun={(urls) => onSpeedTestEndpoints?.(urls)}
-                  onAdopt={(url) => onProviderDraftChange({ baseUrl: url })}
-                />
-
                 <label className="settings-field">
                   <span>{copy.apiKey}</span>
                   <input
@@ -7455,6 +7446,39 @@ export function CoachSettingsView({
                     }}
                   />
                 </label>
+
+                <CollapseSection
+                  level={2}
+                  persistenceKey="settings-advanced"
+                  title={
+                    <span className="eyebrow">
+                      {language === "zh-CN" ? "⚙ 高级" : "⚙ Advanced"}
+                    </span>
+                  }
+                  subtitle={
+                    language === "zh-CN"
+                      ? "端点测速 · 协议 · 连接详情"
+                      : "Speed test · Protocol · Connection details"
+                  }
+                >
+                  <ProviderEndpointSpeedTest
+                    language={language}
+                    baseUrl={normalizedDraftBaseUrl || providerDraft.baseUrl}
+                    results={providerSpeedTestResults}
+                    pending={providerSpeedTestPending}
+                    onRun={(urls) => onSpeedTestEndpoints?.(urls)}
+                    onAdopt={(url) => onProviderDraftChange({ baseUrl: url })}
+                  />
+                  <button
+                    type="button"
+                    className="toolbar-button"
+                    onClick={() => setProviderDetailRequested(true)}
+                  >
+                    {language === "zh-CN"
+                      ? "连接详情 · 协议与目录"
+                      : "Connection details · Protocol & catalog"}
+                  </button>
+                </CollapseSection>
                 {providerPasteHint ? (
                   <p className="settings-sheet__note settings-sheet__note--compact settings-sheet__note--warning">
                     {providerPasteHint}

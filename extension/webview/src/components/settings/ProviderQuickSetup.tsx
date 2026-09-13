@@ -253,7 +253,7 @@ export function ProviderQuickSetup({
       <label className="settings-field">
         <span>
           {copy(language, "pasteLabel")}
-          {step1Done ? " ✓" : ""}
+          {step1Done ? <span className="settings-quick-setup__done">✓</span> : ""}
         </span>
         <input
           type="text"
@@ -269,7 +269,7 @@ export function ProviderQuickSetup({
       <label className="settings-field">
         <span>
           {copy(language, "keyLabel")}
-          {step2Done ? " ✓" : ""}
+          {step2Done ? <span className="settings-quick-setup__done">✓</span> : ""}
         </span>
         <input
           type="password"
