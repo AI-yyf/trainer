@@ -14147,7 +14147,17 @@ export function App() {
         className={`view-content${activeView === "coach" ? "" : " view-content--docked"}`}
         ref={viewContentRef}
       >
-        {activeViewContent}
+        {hasReceivedHostState || isBrowserPreview ? (
+          activeViewContent
+        ) : (
+          <div className="workbench-skeleton" aria-busy="true">
+            <span className="skeleton workbench-skeleton__bar" style={{ width: "34%" }} />
+            <span className="skeleton workbench-skeleton__bar" style={{ width: "88%" }} />
+            <span className="skeleton workbench-skeleton__bar" style={{ width: "76%" }} />
+            <span className="skeleton workbench-skeleton__bar" style={{ width: "82%" }} />
+            <span className="skeleton workbench-skeleton__bar" style={{ width: "58%" }} />
+          </div>
+        )}
       </main>
 
       {showComposerShell ? (

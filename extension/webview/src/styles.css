@@ -19327,3 +19327,17 @@ details[open] > :not(summary) {
 .message-bubble-v2__body {
   line-height: 1.6;
 }
+
+/* Bootstrap skeleton: shown until the host posts its first state snapshot. */
+.workbench-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px var(--trainer-gutter, 12px);
+}
+
+.workbench-skeleton__bar {
+  display: block;
+  height: 14px;
+  border-radius: var(--radius-sm);
+}
