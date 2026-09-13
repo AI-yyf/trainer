@@ -48,6 +48,14 @@ Trainer 自动拉取在线模型列表、自动选择默认模型、自动验证
 | **设置** | 供应商档案(粘贴即用)、模型切换、端点测速、思考强度、教学风格、记忆作用域、工作区准入 |
 
 <div align="center">
+  <table><tr>
+    <td><img src="assets/screenshots/plan.png" alt="计划视图" width="260" /></td>
+    <td><img src="assets/screenshots/resources.png" alt="资料视图" width="260" /></td>
+    <td><img src="assets/screenshots/training.png" alt="训练视图" width="260" /></td>
+  </tr></table>
+</div>
+
+<div align="center">
   <img src="assets/screenshots/training.png" alt="训练视图" width="420" />
 </div>
 
