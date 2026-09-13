@@ -13782,6 +13782,7 @@ export function App() {
         }}
         providerSpeedTestResults={providerSpeedTestResults}
         providerSpeedTestPending={providerSpeedTestPending}
+        providerSaveBusy={settingsActionState?.kind === "save-provider"}
         onSpeedTestEndpoints={runProviderSpeedTest}
         onRefreshProviderModels={() => {
           const shouldUseDraft = providerDraftHasChanges || !data.providerConfig.configured;

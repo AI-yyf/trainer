@@ -1395,6 +1395,7 @@ export interface CoachSettingsViewProps {
   onSaveProviderProfile?: () => void;
   providerSpeedTestResults?: ProviderEndpointSpeedTestResult[];
   providerSpeedTestPending?: boolean;
+  providerSaveBusy?: boolean;
   onSpeedTestEndpoints?: (urls: string[]) => void;
   onUseProviderTemplate?: () => void;
   onUseProviderTemplateLabel?: (templateLabel: string) => void;
@@ -4125,6 +4126,7 @@ export function CoachSettingsView({
   onSaveProviderProfile,
   providerSpeedTestResults = [],
   providerSpeedTestPending = false,
+  providerSaveBusy = false,
   onSpeedTestEndpoints,
   onUseProviderTemplate,
   onUseProviderTemplateLabel,
@@ -7269,7 +7271,13 @@ export function CoachSettingsView({
                     {!modelDiscoveryGuidanceActive ? (
                       <ActionButton
                         fullWidth={false}
-                        icon={<CheckMarkIcon size={14} />}
+                        icon={
+                          providerSaveBusy ? (
+                            <span className="settings-quick-setup__saving-dot" aria-hidden />
+                          ) : (
+                            <CheckMarkIcon size={14} />
+                          )
+                        }
                         label={saveProviderConnectionLabel}
                         ariaLabel={saveProviderConnectionLabel}
                         detail={
