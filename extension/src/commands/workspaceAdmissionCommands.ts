@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
+import fs from 'node:fs';
 import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
 import { SidecarHttpError, type SidecarErrorPathState } from '../core/httpClient';
 
@@ -336,16 +337,53 @@ export async function chooseTrainerWorkspaceRootCommand(
     openLabel: 'Use as Trainer Workspace',
     title: 'Choose Trainer Workspace Root',
   });
-  const rootPath = picks?.[0]?.fsPath;
+  let rootPath = picks?.[0]?.fsPath;
+  if (!rootPath) {
+    // The native folder dialog can be unusable in some window setups (remote
+    // windows, restricted mode). Offer a typed-path fallback so first-time
+    // setup never dead-ends: a missing folder is created for the learner.
+    const typed = await vscode.window.showInputBox({
+      prompt:
+        'Folder dialog cancelled — type the full path of the folder to use as the Trainer Workspace (it will be created if missing)',
+      placeHolder: '/Users/<you>/trainer-learning',
+      ignoreFocusOut: true,
+    });
+    rootPath = typed?.trim();
+    if (rootPath) {
+      try {
+        fs.mkdirSync(rootPath, { recursive: true });
+      } catch (error) {
+        return {
+          ok: false,
+          message: `Could not create the Trainer workspace folder at ${rootPath}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        };
+      }
+    }
+  }
   if (!rootPath) {
     return { ok: false, message: 'Trainer Workspace Root selection cancelled.' };
   }
 
-  const { result: manifest, restartedSidecar } = await runWithQuiescentManagedData(
-    context,
-    async () => context.trainerWorkspace.selectRoot(rootPath),
-    (selectedManifest) => runtimeDataRootUnder(selectedManifest.rootPath),
-  );
+  let manifest: TrainerWorkspaceManifest;
+  let restartedSidecar: boolean;
+  try {
+    const selection = await runWithQuiescentManagedData(
+      context,
+      async () => context.trainerWorkspace.selectRoot(rootPath as string),
+      (selectedManifest) => runtimeDataRootUnder(selectedManifest.rootPath),
+    );
+    manifest = selection.result;
+    restartedSidecar = selection.restartedSidecar;
+  } catch (error) {
+    return {
+      ok: false,
+      message: `Choosing the Trainer workspace root failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    };
+  }
   await patchTrainerWorkspaceAdmission(context);
   await rehydrateAfterWorkspaceDataTransfer(context, restartedSidecar);
   return {
