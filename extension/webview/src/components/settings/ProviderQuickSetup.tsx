@@ -293,7 +293,14 @@ export function ProviderQuickSetup({
         disabled={!canSave || busy}
         onClick={onSave}
       >
-        {busy ? copy(language, "saving") : copy(language, "saveLabel")}
+        {busy ? (
+          <>
+            <span className="settings-quick-setup__saving-dot" aria-hidden />
+            {copy(language, "saving")}
+          </>
+        ) : (
+          copy(language, "saveLabel")
+        )}
       </button>
 
       <p className="settings-sheet__note settings-sheet__note--compact">
