@@ -87,3 +87,10 @@ server/.tmp_*
 /.claude/
 /.sisyphus/
 /=0.1.6
+
+# Internal design docs & scratch assets (not public)
+/ui设计基准.md
+/ui设计基准.pdf
+/resource-preview-300px.png
+/trainer符号标.png
+/横向字标.png
