@@ -2789,12 +2789,10 @@ function ContextList({
           className={`settings-sheet__workspace-list-item ${row.enabled ? "is-enabled" : ""}`}
           type="button"
           aria-pressed={row.enabled}
+          title={row.detail}
           onClick={row.onToggle}
         >
-          <div className="settings-sheet__workspace-list-copy">
-            <strong>{row.label}</strong>
-            <span>{row.detail}</span>
-          </div>
+          <strong>{row.label}</strong>
           <em>{row.enabled ? onLabel : offLabel}</em>
         </button>
       ))}
