@@ -19421,3 +19421,7 @@ details[open] > :not(summary) {
   padding: 1px 5px;
   font-size: var(--trainer-font-2xs);
 }
+
+.settings-quick-setup__connected-dot {
+  animation: trainer-step-pop var(--motion-base, 180ms) var(--motion-ease);
+}

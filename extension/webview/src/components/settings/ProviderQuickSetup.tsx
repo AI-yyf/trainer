@@ -218,7 +218,11 @@ export function ProviderQuickSetup({
   if (collapsed) {
     return (
       <div className="settings-quick-setup settings-quick-setup--connected">
-        <span className="settings-quick-setup__connected-dot" aria-hidden>
+        <span
+          className="settings-quick-setup__connected-dot"
+          aria-hidden
+          style={{ color: "var(--pass, var(--trainer-fallback-success))" }}
+        >
           ✓
         </span>
         <span className="settings-quick-setup__connected-line">
