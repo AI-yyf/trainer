@@ -75,3 +75,14 @@ tmp-*.png
 
 # Built platform binaries — produced per-target by CI release builds
 extension/bundled/bin/
+
+# One-off CI artifacts and local tool state (never ship these)
+/ci_logs/
+/ci_job.zip
+/ci_logs.zip
+/bundle-skill-*.tar.gz
+/fix_*.py
+.server/.tmp_*
+server/.tmp_*
+/.claude/
+/.sisyphus/
