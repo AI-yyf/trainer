@@ -80,6 +80,15 @@ Trainer 自动拉取在线模型列表、自动选择默认模型、自动验证
 - 六级权限模型:默认只读(INSPECT),写/删/改需要逐级验证背书
 - 沙箱预览有严格的路径治理:越界路径直接 422 拒绝
 
+<div align="center">
+  <table>
+    <tr>
+      <td align="center"><img src="assets/feat-memory.png" alt="长期记忆与复习调度" width="300" /><br /><sub>长期记忆 · FSRS 复习调度</sub></td>
+      <td align="center"><img src="assets/feat-speedtest.png" alt="端点测速" width="300" /><br /><sub>端点测速 · 择快而用</sub></td>
+    </tr>
+  </table>
+</div>
+
 ## 安装
 
 **从 VSIX**(预构建,macOS ARM64):下载 `extension/trainer-extension-0.1.0-darwin-arm64.vsix`,VS Code 扩展面板 → `···` → *从 VSIX 安装* → 重载窗口
