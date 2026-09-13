@@ -19261,3 +19261,69 @@ details[open] > :not(summary) {
 .settings-quick-setup__untrusted {
   margin: 0;
 }
+
+.notice {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.notice__text {
+  flex: 1 1 auto;
+}
+
+.notice__dismiss {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: var(--trainer-font-base, 13px);
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+  padding: 0 4px;
+}
+
+.notice__dismiss:hover {
+  opacity: 1;
+}
+
+/* ==========================================================================
+   Message bubble refinement pass — premium surfaces, calmer hierarchy
+   ========================================================================== */
+
+.message-bubble-v2 {
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.message-bubble-v2--assistant .message-bubble-v2__content {
+  background: color-mix(in srgb, var(--bg-1) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 38%, var(--line));
+  border-radius: 4px 10px 10px 4px;
+  padding: 10px 12px;
+}
+
+.message-bubble-v2--user .message-bubble-v2__content {
+  border-radius: 10px 10px 4px 10px;
+  padding: 9px 12px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
+}
+
+.message-bubble-v2__avatar {
+  width: 24px;
+  height: 24px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-1));
+  color: var(--fg-0);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.message-bubble-v2__name {
+  letter-spacing: 0.02em;
+  color: var(--fg-1);
+}
+
+.message-bubble-v2__body {
+  line-height: 1.6;
+}

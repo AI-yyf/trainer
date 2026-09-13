@@ -6283,6 +6283,15 @@ export function App() {
     setOpenMenu(undefined);
   }, [layout.activeView]);
 
+  // Success/info notices self-dismiss; errors stay until explicitly closed.
+  useEffect(() => {
+    if (!operationMessage || operationMessage.tone === "error") {
+      return;
+    }
+    const timer = window.setTimeout(() => setOperationMessage(undefined), 5000);
+    return () => window.clearTimeout(timer);
+  }, [operationMessage]);
+
   // Restart the view entrance animation on every view change without
   // remounting the container (remounting would drop child state).
   useEffect(() => {
@@ -14118,7 +14127,19 @@ export function App() {
       !(operationMessageSurface === "training" && activeView !== "training") &&
       !(operationMessageSurface === "plan" && activeView !== "plan") ? (
         <div className={`notice notice--${operationMessage.tone}`} role="status">
-          {sanitizeErrorSurfaceText(operationMessage.message, layout.composerLanguage)}
+          <span className="notice__text">
+            {sanitizeErrorSurfaceText(operationMessage.message, layout.composerLanguage)}
+          </span>
+          {operationMessage.tone === "error" ? (
+            <button
+              type="button"
+              className="notice__dismiss"
+              aria-label={layout.composerLanguage === "zh-CN" ? "关闭提示" : "Dismiss notice"}
+              onClick={() => setOperationMessage(undefined)}
+            >
+              ×
+            </button>
+          ) : null}
         </div>
       ) : null}
 
