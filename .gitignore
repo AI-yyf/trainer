@@ -86,3 +86,4 @@ extension/bundled/bin/
 server/.tmp_*
 /.claude/
 /.sisyphus/
+/=0.1.6
