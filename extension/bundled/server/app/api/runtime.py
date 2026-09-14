@@ -1084,11 +1084,25 @@ class TrainerRuntime:
                     continue
                 self.provider_capability_cache[cache_key] = {"connection": "unverified"}
         self.provider_capability_cache[key] = states
+        # Pi-agent 式持久化:能力真值落盘,重启即加载,不再要求用户重测。
+        try:
+            self.repository.save_provider_capability(key, states)
+        except Exception:
+            pass
         if len(self.provider_capability_cache) > 16:
             oldest_key = next(iter(self.provider_capability_cache))
             if oldest_key != key:
                 self.provider_capability_cache.pop(oldest_key, None)
         self._overlay_last_test_on_matching_services(provider_config, api_key, states)
+
+    def hydrate_provider_capability_cache(self) -> None:
+        """Reload persisted capability truth into the process cache at boot."""
+        try:
+            rows = self.repository.list_provider_capabilities()
+        except Exception:
+            return
+        for cache_key, states in rows:
+            self.provider_capability_cache.setdefault(cache_key, states)
 
     @staticmethod
     def _normalize_transport_marker(value: object) -> str:
