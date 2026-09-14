@@ -4661,6 +4661,7 @@ export function App() {
   });
   const providerDraftIsDirtyRef = useRef(false);
   const providerDraftSourceKeyRef = useRef<string>();
+  const [operationMessageLeaving, setOperationMessageLeaving] = useState(false);
   const [providerSpeedTestResults, setProviderSpeedTestResults] = useState<
     ProviderEndpointSpeedTestResult[]
   >([]);
@@ -6284,13 +6285,22 @@ export function App() {
   }, [layout.activeView]);
 
   // Success/info notices self-dismiss; errors stay until explicitly closed.
+  // Both paths play the exit animation before the message is removed.
+  const dismissOperationMessage = useCallback(() => {
+    setOperationMessageLeaving(true);
+    window.setTimeout(() => {
+      setOperationMessage(undefined);
+      setOperationMessageLeaving(false);
+    }, 180);
+  }, []);
+
   useEffect(() => {
     if (!operationMessage || operationMessage.tone === "error") {
       return;
     }
-    const timer = window.setTimeout(() => setOperationMessage(undefined), 5000);
+    const timer = window.setTimeout(() => dismissOperationMessage(), 5000);
     return () => window.clearTimeout(timer);
-  }, [operationMessage]);
+  }, [operationMessage, dismissOperationMessage]);
 
   // Restart the view entrance animation on every view change without
   // remounting the container (remounting would drop child state).
@@ -14127,7 +14137,10 @@ export function App() {
       {operationMessage &&
       !(operationMessageSurface === "training" && activeView !== "training") &&
       !(operationMessageSurface === "plan" && activeView !== "plan") ? (
-        <div className={`notice notice--${operationMessage.tone}`} role="status">
+        <div
+          className={`notice notice--${operationMessage.tone}${operationMessageLeaving ? " notice--leaving" : ""}`}
+          role="status"
+        >
           <span className="notice__text">
             {sanitizeErrorSurfaceText(operationMessage.message, layout.composerLanguage)}
           </span>
@@ -14136,7 +14149,7 @@ export function App() {
               type="button"
               className="notice__dismiss"
               aria-label={layout.composerLanguage === "zh-CN" ? "关闭提示" : "Dismiss notice"}
-              onClick={() => setOperationMessage(undefined)}
+              onClick={dismissOperationMessage}
             >
               ×
             </button>
