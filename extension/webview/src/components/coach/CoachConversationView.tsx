@@ -169,7 +169,11 @@ export function CoachConversationView({
                 userLabel={userLabel}
                 language={language}
                 streaming
-              />
+              >
+                <div className="coach-streaming-dots" aria-hidden>
+                  <span /><span /><span />
+                </div>
+              </CoachMessageBubble>
             </div>
           </div>
         ) : null}

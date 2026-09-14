@@ -1424,3 +1424,20 @@ async function pickTrainerWorkspaceDirectory(input: {
   });
   return picks?.[0]?.fsPath;
 }
+
+
+export async function trustWorkspaceWindowCommand(
+  context: CommandContext,
+): Promise<CommandExecutionResult> {
+  // 受限模式下扩展写操作全部被 VS Code 拦截;这里给用户一个明确的一键入口,
+  // 打开原生的工作区信任管理,信任后 Trainer 的所有功能立即可用。
+  await vscode.commands.executeCommand('workbench.trust.manage');
+  const trusted = vscode.workspace.isTrusted;
+  return {
+    ok: true,
+    message: trusted
+      ? '工作区已信任。Trainer 全部功能可用。'
+      : '已打开信任管理。请在其中选择“信任”,然后重试。',
+    data: { trusted },
+  };
+}

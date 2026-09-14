@@ -1396,6 +1396,7 @@ export interface CoachSettingsViewProps {
   providerSpeedTestResults?: ProviderEndpointSpeedTestResult[];
   providerSpeedTestPending?: boolean;
   providerSaveBusy?: boolean;
+  onTrustWindow?: () => void;
   onSpeedTestEndpoints?: (urls: string[]) => void;
   onUseProviderTemplate?: () => void;
   onUseProviderTemplateLabel?: (templateLabel: string) => void;
@@ -4127,6 +4128,7 @@ export function CoachSettingsView({
   providerSpeedTestResults = [],
   providerSpeedTestPending = false,
   providerSaveBusy = false,
+  onTrustWindow,
   onSpeedTestEndpoints,
   onUseProviderTemplate,
   onUseProviderTemplateLabel,

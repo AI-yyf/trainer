@@ -19455,3 +19455,39 @@ details[open] > :not(summary) {
 .settings-view section:nth-child(2) { animation-delay: 40ms; }
 .settings-view section:nth-child(3) { animation-delay: 80ms; }
 .settings-view section:nth-child(n + 4) { animation-delay: 120ms; }
+
+/* 流式等待:三点脉冲(Codex token-pulsing-dot 同款) */
+.coach-streaming-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.coach-streaming-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fg-muted);
+  animation: coach-streaming-dot 1.2s var(--motion-ease) infinite;
+}
+
+.coach-streaming-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.coach-streaming-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes coach-streaming-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
