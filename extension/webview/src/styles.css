@@ -19425,3 +19425,18 @@ details[open] > :not(summary) {
 .settings-quick-setup__connected-dot {
   animation: trainer-step-pop var(--motion-base, 180ms) var(--motion-ease);
 }
+
+.notice--leaving {
+  animation: trainer-notice-out var(--motion-fast) var(--motion-ease) both;
+}
+
+@keyframes trainer-notice-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
