@@ -7,6 +7,13 @@ from typing import Iterator
 
 SCHEMA_STATEMENTS = [
     """
+    CREATE TABLE IF NOT EXISTS provider_capability (
+        cache_key TEXT PRIMARY KEY,
+        states_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS user_profile (
         learner_id TEXT PRIMARY KEY,
         payload_json TEXT NOT NULL,
