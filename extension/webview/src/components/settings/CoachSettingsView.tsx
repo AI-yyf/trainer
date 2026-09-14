@@ -7482,6 +7482,7 @@ export function CoachSettingsView({
                     className="toolbar-button"
                     onClick={() => setProviderDetailRequested(true)}
                   >
+                    <GearIcon size={14} />
                     {language === "zh-CN"
                       ? "连接详情 · 协议与目录"
                       : "Connection details · Protocol & catalog"}
