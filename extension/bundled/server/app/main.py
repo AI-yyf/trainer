@@ -75,6 +75,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         card_router_service=CardRouterService(event_ledger=event_ledger),
         event_ledger=event_ledger,
     )
+    runtime.hydrate_provider_capability_cache()
     runtime.sandbox_service = SandboxService(
         data_root=data_dir,
         event_ledger=event_ledger,

@@ -35,6 +35,30 @@ WINDOWS_WORKSPACE_ALIAS_PATTERN = re.compile(r"^[A-Za-z]:[\\/]")
 
 
 class TrainerRepository:
+    def save_provider_capability(self, cache_key: str, states: dict[str, str]) -> None:
+        """Upsert observed provider capability truth (survives sidecar restarts)."""
+        from datetime import datetime, UTC
+
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO provider_capability (cache_key, states_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(cache_key) DO UPDATE SET
+                    states_json = excluded.states_json,
+                    updated_at = excluded.updated_at
+                """,
+                (cache_key, json.dumps(states), datetime.now(UTC).isoformat()),
+            )
+
+    def list_provider_capabilities(self) -> list[tuple[str, dict[str, str]]]:
+        """Most-recently-updated capability truth first."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT cache_key, states_json FROM provider_capability ORDER BY updated_at DESC"
+            ).fetchall()
+        return [(row["cache_key"], json.loads(row["states_json"])) for row in rows]
+
     def __init__(self, database_path: Path) -> None:
         self.database_path = database_path
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -260,6 +284,11 @@ class TrainerRepository:
                 );
                 CREATE INDEX IF NOT EXISTS idx_plan_change_candidates_workspace_status
                 ON plan_change_candidates(workspace_id, status, created_at DESC);
+                CREATE TABLE IF NOT EXISTS provider_capability (
+                    cache_key TEXT PRIMARY KEY,
+                    states_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             self._migrate_library_asset_schema(connection)
