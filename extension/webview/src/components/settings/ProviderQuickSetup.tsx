@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { parseProviderConnectionPaste } from "../../../../../shared/src/providerGateway";
 import type { ComposerLanguage } from "../../../../../shared/src/types";
+import { CheckMarkIcon, GearIcon } from "../icons";
 
 interface ProviderQuickSetupDraft {
   name: string;
@@ -303,7 +304,10 @@ export function ProviderQuickSetup({
             {copy(language, "saving")}
           </>
         ) : (
-          copy(language, "saveLabel")
+          <>
+            <CheckMarkIcon size={14} />
+            {copy(language, "saveLabel")}
+          </>
         )}
       </button>
 
