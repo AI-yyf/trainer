@@ -105,6 +105,7 @@ import {
   backupTrainerWorkspaceCommand,
   browseWorkspaceProjectCommand,
   chooseTrainerWorkspaceRootCommand,
+  trustWorkspaceWindowCommand,
   chooseWorkspaceProjectCommand,
   ignoreWorkspaceProjectCommand,
   deleteWorkspaceProjectCommand,
@@ -263,6 +264,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.chooseManagedDataFolder, register: (ctx) => chooseManagedDataFolderCommand(ctx) },
     { commandId: COMMAND_IDS.resetManagedDataFolder, register: (ctx) => resetManagedDataFolderCommand(ctx) },
     { commandId: COMMAND_IDS.chooseTrainerWorkspaceRoot, register: (ctx) => chooseTrainerWorkspaceRootCommand(ctx) },
+    { commandId: COMMAND_IDS.trustWorkspaceWindow, register: (ctx) => trustWorkspaceWindowCommand(ctx) },
     { commandId: COMMAND_IDS.migrateTrainerWorkspaceRoot, register: (ctx) => migrateTrainerWorkspaceRootCommand(ctx) },
     { commandId: COMMAND_IDS.backupTrainerWorkspace, register: (ctx) => backupTrainerWorkspaceCommand(ctx) },
     {

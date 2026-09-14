@@ -6,6 +6,7 @@ export const trainerCommands = {
   testProvider: "trainer.provider.test",
   refreshProviderModels: "trainer.provider.refreshModels",
   providerSpeedTest: "trainer.provider.speedTest",
+  trustWorkspaceWindow: "trainer.workspace.trustWindow",
   useProviderTemplate: "trainer.provider.useTemplate",
   switchProviderProfile: "trainer.provider.switchProfile",
   switchProviderModel: "trainer.provider.switchModel",

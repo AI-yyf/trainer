@@ -22,6 +22,8 @@ export interface CoachMessageBubbleProps {
   openArtifactLabel?: string;
   language?: ComposerLanguage;
   streaming?: boolean;
+  /** Optional trailing node (e.g. streaming dots) rendered inside the body. */
+  children?: ReactNode;
   onArtifactOpen?: (artifact: CoachArtifactBlockData, message: ConversationMessage) => void;
 }
 
@@ -365,6 +367,7 @@ function shouldShowAvatar(message: ConversationMessage): boolean {
 
 export function CoachMessageBubble({
   message,
+  children,
   className,
   userLabel,
   assistantLabel,
@@ -747,6 +750,7 @@ export function CoachMessageBubble({
           />
         ) : null}
         {hasParts ? <CoachMessageParts parts={visibleParts ?? []} language={language} /> : null}
+        {children}
         {streaming ? (
           hasBody || hasParts ? (
             <span className="coach-cursor" aria-hidden="true" />

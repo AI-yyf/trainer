@@ -99,6 +99,7 @@ export const COMMAND_IDS = {
   trainingReliabilityControl: trainerCommands.trainingReliabilityControl,
   trainingDependencySkillMapAction: trainerCommands.trainingDependencySkillMapAction,
   providerSpeedTest: trainerCommands.providerSpeedTest,
+  trustWorkspaceWindow: trainerCommands.trustWorkspaceWindow,
   trainingReviewQueueAction: trainerCommands.trainingReviewQueueAction,
   trainingReviewArtifactAction: trainerCommands.trainingReviewArtifactAction,
   trainingScenarioLabAction: trainerCommands.trainingScenarioLabAction,

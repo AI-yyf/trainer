@@ -13794,6 +13794,12 @@ export function App() {
         providerSpeedTestPending={providerSpeedTestPending}
         providerSaveBusy={settingsActionState?.kind === "save-provider"}
         onSpeedTestEndpoints={runProviderSpeedTest}
+        onTrustWindow={() =>
+          postMessage({
+            type: "command/execute",
+            payload: { commandId: trainerCommands.trustWorkspaceWindow },
+          })
+        }
         onRefreshProviderModels={() => {
           const shouldUseDraft = providerDraftHasChanges || !data.providerConfig.configured;
           setSettingsActionState({

@@ -18,6 +18,7 @@ interface ProviderQuickSetupProps {
   connected: boolean;
   hasStoredApiKey: boolean;
   trusted: boolean;
+  onTrustWindow?: () => void;
   busy: boolean;
   onDraftChange: (patch: Partial<ProviderQuickSetupDraft & { apiKey: string }>) => void;
   onSave: () => void;
@@ -186,6 +187,7 @@ export function ProviderQuickSetup({
   connected,
   hasStoredApiKey,
   trusted,
+  onTrustWindow,
   busy,
   onDraftChange,
   onSave,
@@ -288,9 +290,18 @@ export function ProviderQuickSetup({
       </label>
 
       {!trusted ? (
-        <p className="settings-sheet__note settings-sheet__note--warning settings-quick-setup__untrusted">
-          {copy(language, "untrusted")}
-        </p>
+        <div className="settings-quick-setup__untrusted-wrap">
+          <p className="settings-sheet__note settings-sheet__note--warning settings-quick-setup__untrusted">
+            {copy(language, "untrusted")}
+          </p>
+          <button
+            type="button"
+            className="toolbar-button"
+            onClick={() => onTrustWindow?.()}
+          >
+            {language === "zh-CN" ? "信任此窗口" : "Trust this window"}
+          </button>
+        </div>
       ) : null}
       <button
         type="button"
