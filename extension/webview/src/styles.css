@@ -67,6 +67,7 @@
   --motion-in: 160ms;
   --motion-out: 120ms;
   --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-enter-snappy: cubic-bezier(0.23, 1, 0.32, 1);
 
   --type-meta: 11px;
   --type-ui: 13px;
@@ -16225,6 +16226,7 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .skill-deck {
+  mask-image: linear-gradient(to bottom, transparent 0, currentColor 10px, currentColor calc(100% - 10px), transparent 100%);
   animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
   background: color-mix(in srgb, var(--bg-1) 98%, var(--bg-0));
   border: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
