@@ -1039,12 +1039,41 @@ export async function chooseManagedDataFolderCommand(
     openLabel: 'Use this folder',
     title: 'Choose Trainer managed data folder',
   });
-  const targetFolder = picks?.[0]?.fsPath;
+  let targetFolder = picks?.[0]?.fsPath;
   if (!targetFolder) {
-    return { ok: false, message: 'Managed data folder selection cancelled.' };
+    // 原生目录对话框被取消/不可用时,允许直接输入路径(不存在则创建),
+    // 首次设置永远不会在这里卡死。
+    const typed = await vscode.window.showInputBox({
+      prompt:
+        'Folder dialog cancelled — type the full path for the Trainer managed data folder (created if missing)',
+      placeHolder: currentFolder.effectivePath,
+      ignoreFocusOut: true,
+    });
+    targetFolder = typed?.trim();
+    if (!targetFolder) {
+      return { ok: false, message: 'Managed data folder selection cancelled.' };
+    }
   }
 
-  const change = await context.sidecarManager.configureManagedDataFolder(targetFolder, workspaceFolder);
+  let change;
+  try {
+    change = await context.sidecarManager.configureManagedDataFolder(targetFolder, workspaceFolder);
+  } catch (error) {
+    // 非空目录是最常见的误选:自动改用它下面一个空的 Trainer 专用子目录。
+    const fallbackFolder = path.join(targetFolder, 'Trainer');
+    try {
+      await fs.mkdir(fallbackFolder, { recursive: true });
+      change = await context.sidecarManager.configureManagedDataFolder(
+        fallbackFolder,
+        workspaceFolder,
+      );
+    } catch (fallbackError) {
+      return {
+        ok: false,
+        message: `无法使用所选文件夹(${error instanceof Error ? error.message : String(error)}),已尝试在其下创建 Trainer 子目录也失败:${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`,
+      };
+    }
+  }
   return applyManagedDataFolderChange(context, change);
 }
 
