@@ -733,7 +733,7 @@ class SourceIntakeGovernance(BaseModel):
 
 class ResourceRecord(BaseModel):
     id: str
-    kind: Literal["pdf", "image", "text", "markdown", "code", "url"]
+    kind: Literal["pdf", "image", "text", "markdown", "code", "url", "video"]
     name: str
     source: str
     tags: list[str] = Field(default_factory=list)
@@ -2812,7 +2812,7 @@ class ProviderModelsResponse(BaseModel):
 class ResourceUploadRequest(BaseModel):
     session_id: str | None = None
     workspace_id: str | None = None
-    kind: Literal["pdf", "image", "text", "markdown", "code", "url"]
+    kind: Literal["pdf", "image", "text", "markdown", "code", "url", "video"]
     name: str
     source: str
     content: str | None = None
