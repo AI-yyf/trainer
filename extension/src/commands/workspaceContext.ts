@@ -20,11 +20,10 @@ export function getRuntimeWorkspaceContext(
       ? admission.contextId
       : undefined;
 
-  // 长期选择的 Trainer 根目录是主权工作区:优先使用它,只有当某个项目被
-  // 显式采纳(managed)时才进入该项目的 lane。之前 lane 优先导致打开任何
-  // 项目都会抛弃用户长期选择的工作区。
+  // Managed adoption wins: an adopted project lane isolates learning data
+  // per project. The sovereign root applies when nothing is adopted.
   return {
-    workspaceId: sovereignWorkspacePath ?? contextId ?? DEFAULT_WORKSPACE_ID,
+    workspaceId: contextId ?? sovereignWorkspacePath ?? DEFAULT_WORKSPACE_ID,
     canonicalProjectPath: admission?.canonicalProjectPath ?? sovereignWorkspacePath,
     rootId: contextId ? admission?.rootId : undefined,
     projectId: contextId ? admission?.projectId : undefined,
