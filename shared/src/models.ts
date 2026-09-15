@@ -277,7 +277,7 @@ export type PlanRuntimeStatus = {
 
 export type ResourceRecord = {
   id: string;
-  kind: "pdf" | "image" | "text" | "markdown" | "code" | "url";
+  kind: "pdf" | "image" | "text" | "markdown" | "code" | "url" | "video";
   name: string;
   source: string;
   tags: string[];

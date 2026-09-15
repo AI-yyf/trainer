@@ -622,7 +622,7 @@ export interface ActiveThreadView {
 export interface ResourceRecord {
   id: string;
   title: string;
-  kind: "pdf" | "image" | "markdown" | "text" | "code" | "url";
+  kind: "pdf" | "image" | "markdown" | "text" | "code" | "url" | "video";
   status: "ready" | "indexing" | "attention";
   summary: string;
   source?: string;
