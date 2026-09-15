@@ -93,9 +93,9 @@ const RESOURCE_FILTER_EXTENSIONS = [
   'sql',
 ];
 const SUPPORTED_RESOURCE_EXTENSIONS = new Set(RESOURCE_FILTER_EXTENSIONS.map((extension) => `.${extension}`));
-const RESOURCE_UPLOAD_KINDS = new Set(['pdf', 'image', 'text', 'markdown', 'code', 'url'] as const);
+const RESOURCE_UPLOAD_KINDS = new Set(['pdf', 'image', 'text', 'markdown', 'code', 'url', 'video'] as const);
 
-type ResourceUploadKind = 'pdf' | 'image' | 'text' | 'markdown' | 'code' | 'url';
+type ResourceUploadKind = 'pdf' | 'image' | 'text' | 'markdown' | 'code' | 'url' | 'video';
 type ResourceDeletionFailureReason = 'request_failed' | 'not_confirmed';
 type ResourceRestorationFailureReason = 'request_failed' | 'not_confirmed';
 
@@ -2051,6 +2051,9 @@ function detectResourceKind(filePath: string): ResourceUploadKind {
   }
   if (['.txt', '.rst'].includes(extension)) {
     return 'text';
+  }
+  if (['.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v'].includes(extension)) {
+    return 'video';
   }
   return 'text';
 }
