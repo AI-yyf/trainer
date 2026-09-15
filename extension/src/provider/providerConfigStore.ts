@@ -2,6 +2,7 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { TrainerFileStore } from '../core/trainerFileStore';
 
 import { SECRET_KEYS, STORAGE_KEYS } from '../core/constants';
 import type {
@@ -158,6 +159,8 @@ export function resolveProviderApiKeyRef(
 }
 
 export class ProviderConfigStore implements vscode.Disposable {
+  private readonly decryptionFailures = new Set<string>();
+
   private readonly emitter = new vscode.EventEmitter<ProviderConfig | undefined>();
   private readonly profileRegistry: ProviderProfileRegistry;
   private static readonly MODEL_CACHE_TTL_MS = 1000 * 60 * 60 * 12;
@@ -166,13 +169,49 @@ export class ProviderConfigStore implements vscode.Disposable {
 
   readonly onDidChange = this.emitter.event;
 
-  constructor(private readonly extensionContext: vscode.ExtensionContext) {
-    this.extensionContext.globalState.setKeysForSync([STORAGE_KEYS.providerConfig]);
+  private readonly fileStore: TrainerFileStore;
+  private migratedLegacyState = false;
+
+  constructor(
+    private readonly extensionContext: vscode.ExtensionContext,
+    fileStoreRoot?: string,
+  ) {
+    this.fileStore = new TrainerFileStore(fileStoreRoot);
+    this.migrateLegacyGlobalStateIfNeeded();
     this.profileRegistry = new ProviderProfileRegistry(extensionContext);
   }
 
+  /**
+   * 一次性迁移:老版本把全部状态存在 VS Code globalState。检测到旧键且
+   * 文件存储为空时,导入到 ~/.trainer/,此后文件是唯一事实来源。
+   * (globalState 里残留的旧键保留不动,便于回滚旧版本。)
+   */
+  private migrateLegacyGlobalStateIfNeeded(): void {
+    if (this.fileStore.readJSON('config.json', null) !== null) {
+      return;
+    }
+    const legacyConfig = this.extensionContext.globalState.get<ProviderConfig>(
+      STORAGE_KEYS.providerConfig,
+    );
+    const legacyLastTest = this.extensionContext.globalState.get<unknown>(
+      'trainer.provider.lastTestResult',
+    );
+    const legacyModelCache = this.extensionContext.globalState.get<Record<string, unknown>>(
+      STORAGE_KEYS.providerModelCache,
+    );
+    if (!legacyConfig && !legacyLastTest && !legacyModelCache) {
+      return;
+    }
+    this.fileStore.writeJSON('config.json', {
+      config: legacyConfig ?? null,
+      lastTestResult: legacyLastTest ?? null,
+      modelCache: legacyModelCache ?? {},
+    });
+  }
+
   getStoredConfig(): ProviderConfig | undefined {
-    const stored = this.extensionContext.globalState.get<ProviderConfig>(STORAGE_KEYS.providerConfig);
+    const file = this.fileStore.readJSON('config.json', {} as Record<string, unknown>);
+    const stored = (file as { config?: ProviderConfig }).config;
     return stored ? this.materializeProviderConfig(stored) : undefined;
   }
 
@@ -188,7 +227,7 @@ export class ProviderConfigStore implements vscode.Disposable {
       return undefined;
     }
 
-    const apiKey = await this.extensionContext.secrets.get(this.secretKey(config.apiKeyRef));
+    const apiKey = await this.safeSecretGet(config.apiKeyRef);
     return {
       ...config,
       apiKey: apiKey ?? undefined,
@@ -244,7 +283,7 @@ export class ProviderConfigStore implements vscode.Disposable {
         apiKey === undefined,
     );
     const inheritedApiKey = shouldMoveSharedProfileCredential
-      ? await this.extensionContext.secrets.get(this.secretKey(requestedApiKeyRef ?? ''))
+      ? await this.safeSecretGet(requestedApiKeyRef ?? '')
       : undefined;
     const configWithSafeApiKeyRef: ProviderConfig = {
       ...config,
@@ -282,7 +321,7 @@ export class ProviderConfigStore implements vscode.Disposable {
         if (this.isApiKeyRefUsedByAnotherProfile(apiKeyRef, targetProfileId)) {
           continue;
         }
-        const secret = await this.extensionContext.secrets.get(this.secretKey(apiKeyRef));
+        const secret = await this.safeSecretGet(apiKeyRef);
         if (secret?.trim()) {
           carriedApiKey = secret.trim();
           break;
@@ -341,6 +380,31 @@ export class ProviderConfigStore implements vscode.Disposable {
       await this.clearLastTestResult(previous);
     }
     this.emitter.fire(this.getConfig());
+  }
+
+  /**
+   * SecretStorage 密文在系统/VS Code 升级后可能无法解密(BAD_DECRYPT)。
+   * 读取失败时清除坏密文并返回 undefined,让用户重新粘贴密钥即可恢复,
+   * 而不是永远卡在"需要配置"。
+   */
+  private async safeSecretGet(apiKeyRef: string): Promise<string | undefined> {
+    try {
+      return await this.extensionContext.secrets.get(this.secretKey(apiKeyRef));
+    } catch (error) {
+      this.decryptionFailures.add(apiKeyRef);
+      try {
+        await this.extensionContext.secrets.delete(this.secretKey(apiKeyRef));
+      } catch {
+        // 清理失败也不阻塞主流程——密钥已被视为不存在。
+      }
+      this.emitter.fire(this.getConfig() ?? undefined);
+      return undefined;
+    }
+  }
+
+  /** 本次会话内发生过密钥解密失败(用于 UI 提示重新粘贴)。 */
+  hasDecryptionFailure(apiKeyRef: string): boolean {
+    return this.decryptionFailures.has(apiKeyRef);
   }
 
   async getApiKey(): Promise<string | undefined> {
@@ -442,10 +506,12 @@ export class ProviderConfigStore implements vscode.Disposable {
     if (!resolved) {
       return undefined;
     }
-    const allResults =
+    const allResults = this.fileStore.readJSON<Record<string, unknown>>(
+      'last-test.json',
       this.extensionContext.globalState.get<Record<string, unknown>>(
         ProviderConfigStore.LAST_TEST_RESULT_STORAGE_KEY,
-      ) ?? {};
+      ) ?? {},
+    );
     const selected = selectHostLastTest(allResults, resolved, this.providerFingerprint(config));
     return selected ? asStoredLastTestResult(selected) : undefined;
   }
@@ -463,10 +529,12 @@ export class ProviderConfigStore implements vscode.Disposable {
         profileId: result.profileId ?? config.profileId,
       }) as unknown as ProviderLastTestResult;
     }
-    const allResults =
+    const allResults = this.fileStore.readJSON<Record<string, unknown>>(
+      'last-test.json',
       this.extensionContext.globalState.get<Record<string, unknown>>(
         ProviderConfigStore.LAST_TEST_RESULT_STORAGE_KEY,
-      ) ?? {};
+      ) ?? {},
+    );
     writeHostLastTest(
       allResults,
       resolved,
@@ -477,6 +545,7 @@ export class ProviderConfigStore implements vscode.Disposable {
         profileId: resolved.providerProfileId,
       },
     );
+    this.fileStore.writeJSON('last-test.json', allResults);
     await this.extensionContext.globalState.update(
       ProviderConfigStore.LAST_TEST_RESULT_STORAGE_KEY,
       allResults,
