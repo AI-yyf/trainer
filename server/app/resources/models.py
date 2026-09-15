@@ -18,6 +18,7 @@ class ResourceKind(StrEnum):
     MARKDOWN = "markdown"
     CODE = "code"
     URL = "url"
+    VIDEO = "video"
     UNKNOWN = "unknown"
 
 
