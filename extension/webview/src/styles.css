@@ -19620,3 +19620,53 @@ details[open] > :not(summary) {
   flex-direction: column;
   padding: 0 0 8px;
 }
+
+/* ---- Learning home overview (plan view) ---- */
+.coach-plan-view__home-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-block-end: 10px;
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  border-radius: var(--radius-lg);
+  background: var(--bg-1);
+}
+
+.coach-plan-view__home-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.coach-plan-view__home-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coach-plan-view__home-stat strong {
+  color: var(--fg-0);
+  font-weight: 400;
+}
+
+.coach-plan-view__home-stat--stage {
+  max-inline-size: 220px;
+}
+
+.coach-plan-view__home-message {
+  margin: 0;
+  color: var(--fg-1);
+  font-size: 12px;
+}
+
+.coach-plan-view__home-cta {
+  display: flex;
+  gap: 8px;
+}

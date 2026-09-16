@@ -49,7 +49,9 @@ test('app shell renders a text-only top navigation for the five fixed views', ()
   );
   assert.match(source, /const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS\.map\(/);
   assert.match(source, /const label = coachViewLabel\(layout\.composerLanguage\);/);
-  assert.match(source, /label: t\.plan,/);
+  // The plan-composer mode menu keeps the dedicated composer word (计划/Plan)
+  // while the sidebar tab itself switched to the 学习主页/Learning Home label.
+  assert.match(source, /label: resolvePlanComposerCopy\(layout\.composerLanguage\)\.planLabel,/);
   assert.match(source, /const label = resourcesViewLabel\(layout\.composerLanguage\);/);
   assert.match(source, /const label = trainingViewLabel\(layout\.composerLanguage\);/);
   assert.match(source, /const label = settingsViewLabel\(layout\.composerLanguage\);/);

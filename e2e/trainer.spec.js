@@ -10,14 +10,14 @@ const PREVIEW_PATH = "/vscode-preview.html";
 const VIEW_LABELS = {
   "zh-CN": {
     coach: "对话",
-    plan: "计划",
+    plan: "学习主页",
     resources: "资料",
     training: "训练",
     settings: "设置",
   },
   "en-US": {
     coach: "Chat",
-    plan: "Plan",
+    plan: "Learning Home",
     resources: "Resources",
     training: "Training",
     settings: "Settings",
