@@ -1227,6 +1227,10 @@ export interface CoachSettingsLabels {
   memoryShareRevoke: string;
   memorySharePreferences: string;
   memoryShareMastery: string;
+  memoryPersonalTrustTitle: string;
+  memoryPersonalTrustDetail: string;
+  memoryPersonalTrustEnable: string;
+  memoryPersonalTrustDisable: string;
   rememberDecisions: string;
   rememberPatterns: string;
   rememberResources: string;
@@ -1395,6 +1399,8 @@ export interface CoachSettingsViewProps {
   onSaveCoachSettings?: () => void;
   onGrantMemoryShare?: () => void;
   onRevokeMemoryShare?: (sourceWorkspaceId: string) => void;
+  personalAccountTrusted?: boolean;
+  onSetPersonalAccountTrust?: (enabled: boolean) => void;
   onSaveProvider?: () => void;
   onSaveProviderProfile?: () => void;
   providerSpeedTestResults?: ProviderEndpointSpeedTestResult[];
@@ -1847,6 +1853,10 @@ function localizedSettingsLabels(language: ComposerLanguage): Partial<CoachSetti
     memoryShareRevoke: copy.settingsMemoryShareRevoke,
     memorySharePreferences: copy.settingsMemorySharePreferences,
     memoryShareMastery: copy.settingsMemoryShareMastery,
+    memoryPersonalTrustTitle: copy.settingsMemoryPersonalTrustTitle,
+    memoryPersonalTrustDetail: copy.settingsMemoryPersonalTrustDetail,
+    memoryPersonalTrustEnable: copy.settingsMemoryPersonalTrustEnable,
+    memoryPersonalTrustDisable: copy.settingsMemoryPersonalTrustDisable,
     rememberDecisions: copy.settingsRememberDecisions,
     rememberPatterns: copy.settingsRememberPatterns,
     rememberResources: copy.settingsRememberResources,
@@ -4127,6 +4137,8 @@ export function CoachSettingsView({
   onSaveCoachSettings,
   onGrantMemoryShare,
   onRevokeMemoryShare,
+  personalAccountTrusted,
+  onSetPersonalAccountTrust,
   onSaveProvider,
   onSaveProviderProfile,
   providerSpeedTestResults = [],
@@ -5857,7 +5869,9 @@ export function CoachSettingsView({
   });
   const providerSetupStateInfo = deriveProviderSetupState({
     workspaceRootMissing,
-    workspaceTrusted: resolvedWorkspaceTrustState === "trusted" || resolvedWorkspaceTrustState === "remote",
+    // Trust keeps its dedicated always-visible row below (workspace trust
+    // sentence), so the availability verdict stays on the connection state.
+    workspaceTrusted: true,
     availabilityMode,
     draftNeedsModelChoice,
     draftModelDiscoveryPossible: canFindDraftModels,
@@ -8193,6 +8207,23 @@ export function CoachSettingsView({
               <p className="settings-sheet__note settings-sheet__note--compact">
                 {canManageMemoryShares ? copy.memorySharingDetail : copy.memorySharingUnavailable}
               </p>
+              {canManageMemoryShares && onSetPersonalAccountTrust ? (
+                <button
+                  type="button"
+                  className={`settings-memory-sharing__trust ${
+                    personalAccountTrusted ? "is-on" : "is-off"
+                  }`}
+                  data-personal-account-trust={personalAccountTrusted ? "on" : "off"}
+                  aria-pressed={personalAccountTrusted === true}
+                  onClick={() => onSetPersonalAccountTrust(!personalAccountTrusted)}
+                >
+                  <span>
+                    <strong>{copy.memoryPersonalTrustTitle}</strong>
+                    <small>{copy.memoryPersonalTrustDetail}</small>
+                  </span>
+                  <em>{personalAccountTrusted ? copy.memoryPersonalTrustDisable : copy.memoryPersonalTrustEnable}</em>
+                </button>
+              ) : null}
               {memoryShareGrants.length > 0 ? (
                 <ul className="settings-memory-sharing__list">
                   {memoryShareGrants.map((grant) => (

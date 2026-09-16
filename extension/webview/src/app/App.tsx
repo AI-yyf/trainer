@@ -13769,6 +13769,19 @@ export function App() {
                   },
                 })
         }
+        personalAccountTrusted={data.memory.workspace?.personalAccountTrusted === true}
+        onSetPersonalAccountTrust={
+          isBrowserPreview
+            ? undefined
+            : (enabled) =>
+                postMessage({
+                  type: "command/execute",
+                  payload: {
+                    commandId: trainerCommands.setPersonalAccountTrust,
+                    payload: { enabled },
+                  },
+                })
+        }
         onSaveProvider={saveProviderDraft}
         onSaveProviderProfile={() => {
           setSettingsActionState({

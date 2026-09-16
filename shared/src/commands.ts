@@ -13,6 +13,7 @@ export const trainerCommands = {
   saveProviderProfile: "trainer.provider.saveProfile",
   refreshProviderProfiles: "trainer.provider.refreshProfiles",
   startProviderTrial: "trainer.provider.startTrial",
+  setPersonalAccountTrust: "trainer.memory.setPersonalAccountTrust",
   openWorkspaceConfig: "trainer.config.openWorkspace",
   restartSidecar: "trainer.sidecar.restart",
   stopSidecar: "trainer.sidecar.stop",

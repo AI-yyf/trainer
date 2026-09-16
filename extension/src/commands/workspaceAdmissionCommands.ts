@@ -5,6 +5,7 @@ import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/t
 import { SidecarHttpError, type SidecarErrorPathState } from '../core/httpClient';
 
 import type { CommandContext } from '../core/commandContext';
+import { maybePromptCarryOverOnProjectSwitch } from './memoryCommands';
 import { rehydrateWorkbenchRuntime } from '../core/runtimeRehydration';
 import { resolveTrainerWorkspaceAdmission } from '../core/trainerWorkspaceAdmission';
 import { resolveCurrentTrainerProjectPath } from '../core/trainerWorkspaceAdmission';
@@ -447,7 +448,11 @@ export async function backupTrainerWorkspaceCommand(
   await rehydrateAfterWorkspaceDataTransfer(context, restartedSidecar);
   return {
     ok: true,
-    message: `Trainer Workspace backup was created at ${backup.backupRoot}.`,
+    message: (
+      `Trainer Workspace backup was created at ${backup.backupRoot}. ` +
+      'The archive keeps learning records and plans; API keys stay in VS Code secrets and are never included. ' +
+      'On another device, open Trainer, choose Restore Trainer Workspace Backup, and pick this folder.'
+    ),
     data: backup,
   };
 }
@@ -1016,6 +1021,9 @@ async function setCurrentWorkspaceProjectAdmission(
       ensureSidecar: true,
       syncWorkbench: true,
     });
+    // Trusted personal account: offer once to carry mastery into the
+    // freshly adopted project instead of silently sharing.
+    await maybePromptCarryOverOnProjectSwitch(context);
   }
   const description =
     adoptionMode === 'managed'

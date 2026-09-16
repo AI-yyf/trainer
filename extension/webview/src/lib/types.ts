@@ -890,6 +890,7 @@ export interface MemorySnapshot {
   workspaceUnderstanding?: WorkspaceUnderstandingSnapshot;
   workspace?: {
     workspaceId?: string;
+    personalAccountTrusted?: boolean;
     responseLanguage?: ComposerLanguage;
     answerMode?: CoachAnswerMode;
     resourceSearchMode?: ResourceSearchMode;

@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import type { CommandContext } from '../core/commandContext';
+import { STORAGE_KEYS } from '../core/constants';
 import type { BootstrapData, CommandExecutionResult } from '../core/types';
 import { mergeMemorySummarySnapshot } from '../core/workbenchData';
 import { getRuntimeWorkspaceId, getWorkspaceId, withWorkspaceQuery } from './workspaceContext';
@@ -735,4 +736,193 @@ function compareHistoryEntries(
   const rightCreatedAt =
     asNonEmptyString(right.created_at) ?? asNonEmptyString(right.createdAt) ?? '';
   return leftCreatedAt.localeCompare(rightCreatedAt);
+}
+
+
+type ManagedPeerProject = {
+  workspaceId: string;
+  label: string;
+};
+
+async function listManagedPeerProjects(context: CommandContext): Promise<ManagedPeerProject[]> {
+  const physicalWorkspaceId = getWorkspaceId(context);
+  const snapshot = await context.trainerWorkspace.toSnapshot();
+  return Object.values(snapshot.manifest?.projects ?? {})
+    .filter(
+      (project) =>
+        project.adoptionMode === 'managed' &&
+        canonicalWorkspaceId(project.projectPath) !== canonicalWorkspaceId(physicalWorkspaceId),
+    )
+    .map((project) => ({
+      workspaceId: project.projectPath,
+      label: path.basename(project.projectPath) || project.projectPath,
+    }));
+}
+
+export function personalAccountTrusted(context: CommandContext): boolean {
+  return context.extensionContext.globalState.get<boolean>(
+    STORAGE_KEYS.memoryPersonalAccountTrust,
+  ) === true;
+}
+
+async function grantFromAllPeers(
+  context: CommandContext,
+  peers: ManagedPeerProject[],
+): Promise<unknown> {
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    throw new Error(status.detail ?? 'Sidecar is unavailable.');
+  }
+  const workspaceId = getRuntimeWorkspaceId(context);
+  let summary: unknown;
+  for (const peer of peers) {
+    summary = await context.sidecarClient.postJson<unknown>(status.port, '/memory/share-grants', {
+      session_id: context.getSessionId(),
+      workspace_id: workspaceId,
+      source_workspace_id: peer.workspaceId,
+      categories: ['preferences', 'mastery'],
+    });
+  }
+  if (summary !== undefined) {
+    await patchFromSummary(context, summary);
+  }
+  return summary;
+}
+
+/**
+ * "Trusted personal account" master switch (batch 5). Enabling lets reusable
+ * preferences/mastery flow from every other managed Trainer project by
+ * default; disabling revokes all incoming cross-project grants so the
+ * current project returns to isolated memory.
+ */
+export async function setPersonalAccountTrustCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  if (!(await context.trustGuard.ensureTrusted('change the trusted personal account switch'))) {
+    return { ok: false, message: 'Workspace trust is required to change memory sharing.' };
+  }
+  const enabled = asRecord(payload)?.enabled === true;
+  const admission = context.getHostState().bootstrap.memory.workspace?.trainerWorkspace;
+  if (admission?.status !== 'managed') {
+    return {
+      ok: false,
+      message: 'Add the current project to Trainer before changing personal-account memory flow.',
+    };
+  }
+
+  await context.extensionContext.globalState.update(
+    STORAGE_KEYS.memoryPersonalAccountTrust,
+    enabled ? true : undefined,
+  );
+
+  const currentMemory = context.getHostState().bootstrap.memory;
+  await context.patchWorkbenchData({
+    memory: {
+      ...currentMemory,
+      workspace: {
+        ...currentMemory.workspace,
+        personalAccountTrusted: enabled,
+      },
+    },
+  });
+
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+  }
+  const workspaceId = getRuntimeWorkspaceId(context);
+
+  if (enabled) {
+    const peers = await listManagedPeerProjects(context);
+    let summary: unknown;
+    for (const peer of peers) {
+      summary = await context.sidecarClient.postJson<unknown>(status.port, '/memory/share-grants', {
+        session_id: context.getSessionId(),
+        workspace_id: workspaceId,
+        source_workspace_id: peer.workspaceId,
+        categories: ['preferences', 'mastery'],
+      });
+    }
+    if (summary !== undefined) {
+      await patchFromSummary(context, summary);
+    }
+    await context.workbench.syncState();
+    return {
+      ok: true,
+      message:
+        peers.length > 0
+          ? `Trusted personal account is on: preferences and mastery now flow from ${peers.length} project(s).`
+          : 'Trusted personal account is on: new Trainer projects will offer to carry your mastery over.',
+      data: { enabled: true, peers: peers.length },
+    };
+  }
+
+  const grants = context.getHostState().bootstrap.memory.memoryShareGrants ?? [];
+  let summary: unknown;
+  for (const grant of grants) {
+    const sourceWorkspaceId = grant.sourceWorkspaceId?.trim();
+    if (!sourceWorkspaceId) {
+      continue;
+    }
+    summary = await context.sidecarClient.postJson<unknown>(
+      status.port,
+      '/memory/share-grants/revoke',
+      {
+        session_id: context.getSessionId(),
+        workspace_id: workspaceId,
+        source_workspace_id: sourceWorkspaceId,
+      },
+    );
+  }
+  if (summary !== undefined) {
+    await patchFromSummary(context, summary);
+  }
+  await context.workbench.syncState();
+  return {
+    ok: true,
+    message: 'Trusted personal account is off: projects keep isolated memory again.',
+    data: { enabled: false, revoked: grants.length },
+  };
+}
+
+/**
+ * One-time prompt after a project joins Trainer while the personal-account
+ * switch is on: offer to carry mastery over instead of silently sharing.
+ */
+export async function maybePromptCarryOverOnProjectSwitch(
+  context: CommandContext,
+): Promise<void> {
+  if (!personalAccountTrusted(context)) {
+    return;
+  }
+  const admission = context.getHostState().bootstrap.memory.workspace?.trainerWorkspace;
+  if (admission?.status !== 'managed') {
+    return;
+  }
+  const existingGrants = context.getHostState().bootstrap.memory.memoryShareGrants ?? [];
+  if (existingGrants.length > 0) {
+    return;
+  }
+  const peers = await listManagedPeerProjects(context);
+  if (peers.length === 0) {
+    return;
+  }
+  const carry = await vscode.window.showInformationMessage(
+    `Trusted personal account: carry preferences and mastery over from ${peers[0].label}${
+      peers.length > 1 ? ` and ${peers.length - 1} other project(s)` : ''
+    }?`,
+    { modal: false },
+    'Carry over',
+    'Keep isolated',
+  );
+  if (carry !== 'Carry over') {
+    return;
+  }
+  try {
+    await grantFromAllPeers(context, peers);
+    await context.workbench.syncState();
+  } catch {
+    // Prompt is best-effort; the learner can still share from Settings.
+  }
 }
