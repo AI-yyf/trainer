@@ -6,6 +6,10 @@ import {
   sanitizeErrorSurfaceJson,
   sanitizeErrorSurfaceText,
 } from "../../../../../../shared/src/errorSurfaceSanitizer";
+import {
+  parseAcceptanceFeedbackFromToolResult,
+  type AcceptanceFeedback,
+} from "../../../../../shared/src/acceptanceFeedback";
 import type {
   AlertPart,
   CitationPart,
@@ -447,6 +451,59 @@ function WorkspaceToolResultRenderer({
   );
 }
 
+function AcceptanceFeedbackBlock({
+  feedback,
+  language,
+}: {
+  feedback: AcceptanceFeedback;
+  language?: ComposerLanguage;
+}) {
+  const percent = feedback.total > 0 ? Math.round((feedback.matched / feedback.total) * 100) : 0;
+  const progressState =
+    percent >= 100 ? "is-complete" : percent >= 50 ? "is-progress" : "is-start";
+  return (
+    <div className="acceptance-progress" data-acceptance-progress="true">
+      <div className="acceptance-progress__head">
+        <span>
+          {label(language, "已匹配", "Matched")}{" "}
+          <strong data-acceptance-count={`${feedback.matched}/${feedback.total}`}>
+            {feedback.matched}/{feedback.total}
+          </strong>{" "}
+          {label(language, "个验收信号", "acceptance signals")}
+        </span>
+        <span className="acceptance-progress__percent">{percent}%</span>
+      </div>
+      <div className="acceptance-progress__bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+        <div className={`acceptance-progress__fill ${progressState}`} style={{ width: `${percent}%` }} />
+      </div>
+      {feedback.matchedItems.length > 0 ? (
+        <div className="acceptance-progress__items">
+          {feedback.matchedItems.map((item) => (
+            <span key={`m-${item}`} className="acceptance-progress__item is-matched" title={item}>
+              ✓ {item}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {feedback.missingItems.length > 0 ? (
+        <div className="acceptance-progress__items">
+          {feedback.missingItems.map((item) => (
+            <span key={`x-${item}`} className="acceptance-progress__item is-missing" title={item}>
+              ○ {item}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {feedback.nextStep ? (
+        <p className="acceptance-progress__next">
+          {label(language, "下一步：", "Next: ")}
+          {feedback.nextStep}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function ToolResultPartRenderer({ part, context }: { part: ToolResultPart; context?: PartRenderContext }) {
   const resultRecord = asRecordValue(part.result);
   const looksLikeWorkspaceResult =
@@ -456,6 +513,17 @@ function ToolResultPartRenderer({ part, context }: { part: ToolResultPart; conte
       Boolean(asRecordValue(resultRecord?.latestAuthorityOperation)));
   if (resultRecord && looksLikeWorkspaceResult) {
     return <WorkspaceToolResultRenderer part={part} context={context} resultRecord={resultRecord} />;
+  }
+  const acceptanceFeedback = parseAcceptanceFeedbackFromToolResult(part.result);
+  if (resultRecord && acceptanceFeedback) {
+    return (
+      <div className="message-part message-part--tool-result">
+        <div className="message-part__header">
+          <strong>{label(context?.language, "动手练习验收", "Practice verification")}</strong>
+        </div>
+        <AcceptanceFeedbackBlock feedback={acceptanceFeedback} language={context?.language} />
+      </div>
+    );
   }
   const hasFailure = hasCoachToolResultFailure(part.error, part.result);
   const acknowledged = !hasFailure && isAuthoritativeAck(part.result);

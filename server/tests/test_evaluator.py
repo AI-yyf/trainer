@@ -322,12 +322,24 @@ class EvaluatorTests(unittest.TestCase):
         )
 
         self.assertFalse(report.passed)
-        self.assertIn("Training practice verification needs current-file evidence", report.summary)
+        # Progressive feedback: the summary names the matched/total signals and
+        # the first missing one instead of a bare failure sentence.
+        self.assertIn("Training acceptance: 0/2 acceptance signals matched.", report.summary)
+        self.assertIn(
+            "Still missing: Implement debounceSearch for the search input.; debounceSearch.",
+            report.summary,
+        )
+        self.assertIn(
+            'starting with "Implement debounceSearch for the search input."', report.next_step
+        )
         self.assertIn("missing practice acceptance signals", report.next_step)
         training_check = next(
             check for check in report.semantic_checks if check.id == "training-acceptance"
         )
         self.assertEqual(training_check.status, "failed")
+        self.assertIn(
+            "Acceptance progress: 0/2 acceptance signals matched.", training_check.detail
+        )
         self.assertIn("Missing: debounceSearch (debounceSearch)", training_check.detail)
 
     def test_training_acceptance_rejects_comment_and_string_only_evidence(self) -> None:
