@@ -19741,3 +19741,44 @@ details[open] > :not(summary) {
   color: var(--fg-muted);
   font-size: 11px;
 }
+
+.settings-memory-sharing__trust {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  background: var(--bg-1);
+  color: var(--fg-1);
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-memory-sharing__trust.is-on {
+  border-color: var(--pass, var(--accent));
+}
+
+.settings-memory-sharing__trust span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-memory-sharing__trust small {
+  color: var(--fg-muted);
+}
+
+.settings-memory-sharing__trust em {
+  font-style: normal;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.workspace-root-recovery__privacy {
+  margin: 0 0 6px;
+  color: var(--fg-muted);
+  font-size: 11px;
+}

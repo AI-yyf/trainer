@@ -62,6 +62,7 @@ export function WorkspaceRootRecoveryPanel({
         />
         <details className="workspace-root-recovery__more">
           <summary>{t("workspaceRootRecovery")}</summary>
+          <p className="workspace-root-recovery__privacy">{t("archivePrivacyNote")}</p>
           <div className="workspace-root-recovery__actions">
             <ActionButton
               icon={<FileIcon size={14} />}

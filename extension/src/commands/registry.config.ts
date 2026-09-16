@@ -24,6 +24,7 @@ import {
   refreshMemoryCommand,
   refreshWorkspaceAuthorityCommand,
   revokeMemoryShareCommand,
+  setPersonalAccountTrustCommand,
   trainingRestoreOrchestrationCommand,
 } from './memoryCommands';
 import { openWorkbenchCommand } from './openWorkbench';
@@ -267,6 +268,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.chooseTrainerWorkspaceRoot, register: (ctx) => chooseTrainerWorkspaceRootCommand(ctx) },
     { commandId: COMMAND_IDS.trustWorkspaceWindow, register: (ctx) => trustWorkspaceWindowCommand(ctx) },
     { commandId: COMMAND_IDS.startProviderTrial, register: (ctx) => startProviderTrialCommand(ctx) },
+    { commandId: COMMAND_IDS.setPersonalAccountTrust, register: (ctx, payload) => setPersonalAccountTrustCommand(ctx, payload) },
     { commandId: COMMAND_IDS.migrateTrainerWorkspaceRoot, register: (ctx) => migrateTrainerWorkspaceRootCommand(ctx) },
     { commandId: COMMAND_IDS.backupTrainerWorkspace, register: (ctx) => backupTrainerWorkspaceCommand(ctx) },
     {
