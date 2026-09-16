@@ -2402,8 +2402,27 @@ async def _handle_verify_practice_current_file(
         status = "needs_review"
         passed = False
         reason = "missing_acceptance_signals"
-        summary = "The active file was read, but not all practice acceptance signals were found."
-        next_step = "Implement the missing acceptance signals, then run Verify current file again."
+        matched_count = len(criterion_results) - len(missing_results)
+        missing_texts = [
+            str(item.get("text") or "").strip() for item in missing_results
+        ]
+        missing_texts = [text for text in missing_texts if text]
+        missing_preview = "; ".join(missing_texts[:3])
+        summary = (
+            f"The active file was read: {matched_count}/{len(criterion_results)} "
+            "acceptance signals matched."
+        )
+        if missing_preview:
+            summary = f"{summary} Still missing: {missing_preview}."
+        else:
+            summary = f"{summary} Some signals still need current-file evidence."
+        if missing_texts:
+            next_step = (
+                f"Implement the missing acceptance signals (starting with "
+                f"\"{missing_texts[0]}\"), then run Verify current file again."
+            )
+        else:
+            next_step = "Implement the missing acceptance signals, then run Verify current file again."
     else:
         status = "passed"
         passed = True
@@ -2429,6 +2448,8 @@ async def _handle_verify_practice_current_file(
         "blocking_diagnostics": error_diagnostics[:8],
         "warning_diagnostics": warning_diagnostics[:8],
         "criteria": criterion_results,
+        "matched_signal_count": max(0, len(criterion_results) - len(missing_results)),
+        "total_signal_count": len(criterion_results),
         "evidence": evidence[:max_evidence],
         "summary": summary,
         "next_step": next_step,

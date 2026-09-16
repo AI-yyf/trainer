@@ -19670,3 +19670,74 @@ details[open] > :not(summary) {
   display: flex;
   gap: 8px;
 }
+
+/* ---- Practice acceptance progress feedback ---- */
+.acceptance-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+}
+
+.acceptance-progress__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--fg-1);
+  font-size: 12px;
+}
+
+.acceptance-progress__percent {
+  color: var(--fg-muted);
+}
+
+.acceptance-progress__bar {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--bg-2);
+  overflow: hidden;
+}
+
+.acceptance-progress__fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.acceptance-progress__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.acceptance-progress__item {
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  color: var(--fg-1);
+}
+
+.acceptance-progress__item.is-matched {
+  color: var(--pass, var(--fg-1));
+  border-color: var(--pass, var(--fg-1));
+}
+
+.acceptance-progress__item.is-missing {
+  color: var(--warning, var(--fg-muted));
+  border-color: var(--warning, var(--fg-muted));
+}
+
+.acceptance-progress__next {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
