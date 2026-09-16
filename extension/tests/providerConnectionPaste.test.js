@@ -99,3 +99,30 @@ test('settings form wires smart paste into both provider fields', () => {
     /applyProviderSmartPaste\(event\.target\.value, "apiKey"\)/,
   );
 });
+
+test('file store honors the isolation env override (multi-instance safety)', async () => {
+  const os = require('node:os');
+  const fsp = require('node:fs/promises');
+  const pathMod = require('node:path');
+  const modulePath = pathMod.resolve(__dirname, '..', 'dist', 'extension', 'src', 'core', 'trainerFileStore.js');
+  const { TrainerFileStore } = require(modulePath);
+
+  const tempRoot = await fsp.mkdtemp(pathMod.join(os.tmpdir(), 'trainer-store-isolation-'));
+  const previous = process.env.TRAINER_FILE_STORE_ROOT;
+  try {
+    process.env.TRAINER_FILE_STORE_ROOT = tempRoot;
+    const store = new TrainerFileStore();
+    assert.equal(store.root, pathMod.resolve(tempRoot));
+    store.writeJSON('config.json', { config: { name: 'iso' } });
+    const written = await fsp.readFile(pathMod.join(tempRoot, 'config.json'), 'utf8');
+    assert.match(written, /"name": "iso"/);
+    // 显式覆盖优先于环境变量
+    const other = await fsp.mkdtemp(pathMod.join(os.tmpdir(), 'trainer-store-explicit-'));
+    const explicit = new TrainerFileStore(other);
+    assert.notEqual(explicit.root, store.root);
+  } finally {
+    if (previous === undefined) delete process.env.TRAINER_FILE_STORE_ROOT;
+    else process.env.TRAINER_FILE_STORE_ROOT = previous;
+    await fsp.rm(tempRoot, { recursive: true, force: true });
+  }
+});

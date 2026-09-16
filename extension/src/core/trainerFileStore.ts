@@ -22,9 +22,14 @@ export class TrainerFileStore {
   readonly root: string;
 
   constructor(rootOverride?: string) {
+    // 优先级:显式覆盖 > TRAINER_FILE_STORE_ROOT 环境变量(测试/多实例隔离)
+    // > ~/.trainer(日常默认)。
+    const envRoot = process.env.TRAINER_FILE_STORE_ROOT?.trim();
     this.root = rootOverride?.trim()
       ? path.resolve(rootOverride)
-      : path.join(os.homedir(), TRAINER_FILE_STORE_ROOT);
+      : envRoot
+        ? path.resolve(envRoot)
+        : path.join(os.homedir(), TRAINER_FILE_STORE_ROOT);
     fs.mkdirSync(this.root, { recursive: true });
   }
 

@@ -210,8 +210,10 @@ export class ProviderConfigStore implements vscode.Disposable {
   }
 
   getStoredConfig(): ProviderConfig | undefined {
-    const file = this.fileStore.readJSON('config.json', {} as Record<string, unknown>);
-    const stored = (file as { config?: ProviderConfig }).config;
+    // globalState 是事实来源:文件存储只是镜像(便于用户查看/迁移),
+    // 绝不能反过来覆盖 globalState——否则任何共享 ~/.trainer 的进程
+    // (测试、第二个 VS Code 实例)写入的垃圾都会污染真实环境。
+    const stored = this.extensionContext.globalState.get<ProviderConfig>(STORAGE_KEYS.providerConfig);
     return stored ? this.materializeProviderConfig(stored) : undefined;
   }
 
@@ -506,12 +508,10 @@ export class ProviderConfigStore implements vscode.Disposable {
     if (!resolved) {
       return undefined;
     }
-    const allResults = this.fileStore.readJSON<Record<string, unknown>>(
-      'last-test.json',
+    const allResults =
       this.extensionContext.globalState.get<Record<string, unknown>>(
         ProviderConfigStore.LAST_TEST_RESULT_STORAGE_KEY,
-      ) ?? {},
-    );
+      ) ?? {};
     const selected = selectHostLastTest(allResults, resolved, this.providerFingerprint(config));
     return selected ? asStoredLastTestResult(selected) : undefined;
   }
@@ -529,12 +529,10 @@ export class ProviderConfigStore implements vscode.Disposable {
         profileId: result.profileId ?? config.profileId,
       }) as unknown as ProviderLastTestResult;
     }
-    const allResults = this.fileStore.readJSON<Record<string, unknown>>(
-      'last-test.json',
+    const allResults =
       this.extensionContext.globalState.get<Record<string, unknown>>(
         ProviderConfigStore.LAST_TEST_RESULT_STORAGE_KEY,
-      ) ?? {},
-    );
+      ) ?? {};
     writeHostLastTest(
       allResults,
       resolved,

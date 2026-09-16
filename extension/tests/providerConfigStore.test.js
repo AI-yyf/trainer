@@ -101,9 +101,14 @@ function createVscodeMock(workspaceRoot) {
 }
 
 function createExtensionContext(globalState) {
+  // 文件存储必须逐测试隔离:否则共享真实 ~/.trainer,既污染开发者环境,
+  // 又让测试之间互相串状态。构造 ProviderConfigStore 前设置 env 覆盖。
+  const fileStoreRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-file-store-'));
+  process.env.TRAINER_FILE_STORE_ROOT = fileStoreRoot;
   return {
     globalState,
     secrets: createSecrets(),
+    __fileStoreRoot: fileStoreRoot,
   };
 }
 

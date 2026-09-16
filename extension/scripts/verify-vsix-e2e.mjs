@@ -99,6 +99,9 @@ try {
       TRAINER_E2E_PROVIDER_SOURCE: providerRuntime.source,
       TRAINER_E2E_ARTIFACTS_DIR: exportedArtifactsDir,
       TRAINER_E2E_USER_DATA_DIR: userDataDir,
+      // 文件存储必须随实例隔离:否则 E2E 会读写开发者真实的 ~/.trainer,
+      // 既污染用户环境,又让"干净实例"测试不再干净。
+      TRAINER_FILE_STORE_ROOT: path.join(tempRoot, "trainer-file-store"),
       TRAINER_E2E_WORKSPACE_DIR: workspaceDir,
       TRAINER_E2E_TRAINER_WORKSPACE_DIR: trainerWorkspaceDir,
     },
