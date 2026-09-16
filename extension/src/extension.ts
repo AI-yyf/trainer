@@ -19,6 +19,7 @@ import { WorkspaceTrustGuard } from './core/workspaceTrust';
 import { TrainerWorkspaceService } from './core/trainerWorkspaceService';
 import { resolveTrainerWorkspaceAdmission } from './core/trainerWorkspaceAdmission';
 import { ProviderConfigStore } from './provider/providerConfigStore';
+import { disposeTrialProviderServer } from './provider/trialProviderServer';
 import { TrainerTestController } from './testing/testController';
 import { TRAINER_SIDEBAR_VIEW_ID } from './core/constants';
 import {
@@ -488,6 +489,7 @@ export async function deactivate(): Promise<void> {
     await sidecarManagerRef.stop();
     sidecarManagerRef = undefined;
   }
+  await disposeTrialProviderServer();
 }
 
 function withManagedDataFolderSnapshot(

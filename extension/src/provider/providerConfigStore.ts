@@ -685,8 +685,17 @@ export class ProviderConfigStore implements vscode.Disposable {
   async createProfileFromTemplate(
     templateIndex: number,
     apiKey?: string,
-  ): Promise<ProviderConfig | undefined> {
-    const profile = await this.profileRegistry.createFromTemplate(templateIndex);
+    overrides?: Partial<{
+      label: string;
+      baseUrl: string;
+      model: string;
+      apiKeyRef: string;
+      catalogSource: 'provider_live' | 'cached' | 'manual';
+      availableModels: string[];
+      catalogModels?: string[];
+      modelAliases: Record<string, string>;
+    }>,  ): Promise<ProviderConfig | undefined> {
+    const profile = await this.profileRegistry.createFromTemplate(templateIndex, undefined, overrides);
     if (!profile) {
       return undefined;
     }

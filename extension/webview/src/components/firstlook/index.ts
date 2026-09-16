@@ -4,3 +4,4 @@ export {
   type WorkspaceAdmissionPanelProps,
   type WorkspaceAdmissionStatus,
 } from "./WorkspaceAdmissionPanel";
+export { OnboardingWizard, type OnboardingWizardProps } from "./OnboardingWizard";

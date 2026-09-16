@@ -18,6 +18,7 @@ export const COMMAND_IDS = {
   switchProviderModel: trainerCommands.switchProviderModel,
   saveProviderProfile: trainerCommands.saveProviderProfile,
   refreshProviderProfiles: trainerCommands.refreshProviderProfiles,
+  startProviderTrial: trainerCommands.startProviderTrial,
   openWorkspaceConfig: trainerCommands.openWorkspaceConfig,
   restartSidecar: trainerCommands.restartSidecar,
   stopSidecar: trainerCommands.stopSidecar,

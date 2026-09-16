@@ -12,6 +12,7 @@ export const trainerCommands = {
   switchProviderModel: "trainer.provider.switchModel",
   saveProviderProfile: "trainer.provider.saveProfile",
   refreshProviderProfiles: "trainer.provider.refreshProfiles",
+  startProviderTrial: "trainer.provider.startTrial",
   openWorkspaceConfig: "trainer.config.openWorkspace",
   restartSidecar: "trainer.sidecar.restart",
   stopSidecar: "trainer.sidecar.stop",

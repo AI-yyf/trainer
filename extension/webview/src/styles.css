@@ -19491,3 +19491,132 @@ details[open] > :not(summary) {
     transform: scale(1.15);
   }
 }
+
+/* ---- Onboarding wizard (cold start) ---- */
+.onboarding-wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-inline-size: 460px;
+  padding: var(--space-4, 14px);
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  border-radius: var(--radius-lg);
+  background: var(--bg-1);
+  box-shadow: var(--shadow-soft);
+  text-align: left;
+}
+
+.onboarding-wizard__title {
+  margin: 0;
+  color: var(--fg-0);
+  font-size: 13px;
+}
+
+.onboarding-wizard__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-wizard__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  color: var(--fg-muted);
+}
+
+.onboarding-wizard__step--done {
+  color: var(--pass, var(--fg-1));
+  border-color: var(--pass, var(--fg-1));
+}
+
+.onboarding-wizard__step--active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.onboarding-wizard__marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: var(--bg-2);
+  font-size: 11px;
+}
+
+.onboarding-wizard__step-label {
+  font-size: 12px;
+}
+
+.onboarding-wizard__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.onboarding-wizard__detail {
+  margin: 0;
+  color: var(--fg-1);
+  font-size: 12px;
+}
+
+.onboarding-wizard__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.onboarding-wizard__field input {
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--vscode-input-border, var(--trainer-fallback-border, var(--border, transparent)));
+  background: var(--vscode-input-background, var(--bg-0));
+  color: var(--vscode-input-foreground, var(--fg-0));
+}
+
+.onboarding-wizard__hint {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.onboarding-wizard__inline-trust,
+.onboarding-wizard__trial {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-block-start: 4px;
+  border-block-start: 1px dashed var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  width: 100%;
+}
+
+.onboarding-wizard__link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.coach-onboarding {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 8px;
+}

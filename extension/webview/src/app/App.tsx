@@ -129,6 +129,7 @@ import {
   waitingComposerEnqueueFailureText,
 } from "../../../../shared/src/errorSurfaceSanitizer";
 import { readWorkspaceTrustStateFromCapabilitySummary } from "../../../../shared/src/workspaceTrustState";
+import { deriveOnboardingSteps } from "../../../../shared/src/onboarding";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
 import {
   planRuntimeStatusFromRecovery,
@@ -142,7 +143,7 @@ import {
 } from "../components/coach";
 import { CoachComposer, ComposerIconButton } from "../components/composer";
 import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
-import { WorkspaceAdmissionPanel } from "../components/firstlook";
+import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
 import {
   type ResourceSearchRequest,
 } from "../components/resources/ResourcesWorkbenchView";
@@ -287,7 +288,8 @@ type SettingsActionKind =
   | "clear-provider"
   | "open-config"
   | "save-coach"
-  | "reset-defaults";
+  | "reset-defaults"
+  | "start-provider-trial";
 
 type RecoverableFailureKind = "bootstrap" | "send" | "upload" | "provider" | "operation";
 
@@ -11940,6 +11942,99 @@ export function App() {
       payload: payload === undefined ? { commandId } : { commandId, payload },
     });
   };
+  const onboarding = deriveOnboardingSteps({
+    workspaceAdmissionStatus: trainerWorkspaceAdmission?.status,
+    workspaceTrustState: readWorkspaceTrustStateFromCapabilitySummary(
+      liveSandboxState?.capabilitySummary as Record<string, unknown> | undefined,
+    ),
+    providerConfigured: data.providerConfig.configured,
+    providerApiKeyConfigured: data.providerConfig.apiKeyConfigured,
+    providerSendBlocked: providerSendState.blocked,
+  });
+  // Only true cold starts get the wizard: a saved connection that merely lost
+  // its key keeps the existing scenario-aware recovery surface.
+  const onboardingActive =
+    !onboarding.complete &&
+    (!data.providerConfig.configured || trainerWorkspaceAdmission?.status === "root-missing");
+  const startOnboardingTrial = () => {
+    setSettingsActionState({
+      kind: "start-provider-trial",
+      targets: ["provider"],
+      baselineMessageKey:
+        normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
+    });
+    if (isBrowserPreview) {
+      setOperationMessage({
+        tone: "info",
+        message:
+          layout.composerLanguage === "zh-CN"
+            ? "练习模式需要在 VS Code 扩展中启动。"
+            : "Practice mode starts inside the VS Code extension.",
+      });
+      return;
+    }
+    postMessage({
+      type: "command/execute",
+      payload: { commandId: trainerCommands.startProviderTrial },
+    });
+  };
+  const saveProviderDraft = () => {
+    setSettingsActionState({
+      kind: "save-provider",
+      targets: ["provider"],
+      baselineMessageKey:
+        normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
+    });
+    if (isBrowserPreview) {
+      void loadBrowserPreviewModule()
+        .then((browserPreview) =>
+          browserPreview.saveBrowserPreviewProvider(providerSavePayload, previewSessionId),
+        )
+        .then(({ sessionId, messages }) => {
+          setPreviewSessionId(sessionId);
+          applyPreviewHostMessages(messages, true);
+        })
+        .catch(() => {
+          setOperationMessage({
+            tone: "error",
+            message: recoverableFailureMessage("provider", layout.composerLanguage),
+          });
+        });
+      return;
+    }
+    postMessage({
+      type: "command/execute",
+      payload: {
+        commandId: "trainer.provider.save",
+        payload: { ...providerSavePayload, responseLanguage: layout.composerLanguage },
+      },
+    });
+  };
+  const onboardingWizard = onboardingActive ? (
+    <OnboardingWizard
+      steps={onboarding.steps}
+      activeStepId={onboarding.activeStepId}
+      complete={onboarding.complete}
+      busy={settingsActionState?.kind === "save-provider"}
+      trialBusy={settingsActionState?.kind === "start-provider-trial"}
+      draftBaseUrl={providerDraft.baseUrl}
+      draftApiKey={providerDraft.apiKey}
+      hasStoredApiKey={data.providerConfig.apiKeyConfigured}
+      onDraftChange={(patch) => setProviderDraft((draft) => ({ ...draft, ...patch }))}
+      onChooseWorkspaceRoot={() =>
+        runWorkspaceAdmissionCommand(trainerCommands.chooseTrainerWorkspaceRoot)
+      }
+      onTrustWindow={() =>
+        postMessage({
+          type: "command/execute",
+          payload: { commandId: trainerCommands.trustWorkspaceWindow },
+        })
+      }
+      onSaveConnection={saveProviderDraft}
+      onStartTrial={startOnboardingTrial}
+      onOpenSettings={() => openProviderSetup()}
+    />
+  ) : null;
   const workspaceAdmissionContent = trainerWorkspaceAdmission ? (
     <>
       <WorkspaceAdmissionPanel
@@ -11972,6 +12067,21 @@ export function App() {
       return null;
     }
     if (shouldShowNeutralEmptyState) {
+      if (onboardingWizard) {
+        // Unified cold-start wizard covers the fresh-user ladder; the
+        // scenario-aware recovery block below stays for saved connections.
+        return (
+          <div
+            className={`coach-empty-state ${
+              displayConnectionState === "starting"
+                ? "coach-empty-state--welcome"
+                : "coach-empty-state--blocked"
+            }`}
+          >
+            {onboardingWizard}
+          </div>
+        );
+      }
       // Scenario-aware, localized setup copy (first-run "连接模型", missing key,
       // backend starting, …) instead of a single error-flavoured sentence.
       const setupTitle = providerSetupState.title;
@@ -12332,6 +12442,7 @@ export function App() {
     <section className="coach-view">
       {workspaceSessionBlocked && workspaceAdmissionContent ? (
         <>
+          {onboardingWizard ? <div className="coach-onboarding">{onboardingWizard}</div> : null}
           <div className="coach-workspace-admission">{workspaceAdmissionContent}</div>
           {!providerCanCoachNow && providerCoachNotice ? (
             <button
@@ -13658,38 +13769,7 @@ export function App() {
                   },
                 })
         }
-        onSaveProvider={() => {
-          setSettingsActionState({
-            kind: "save-provider",
-            targets: ["provider"],
-            baselineMessageKey:
-              normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-          });
-          if (isBrowserPreview) {
-            void loadBrowserPreviewModule()
-              .then((browserPreview) =>
-                browserPreview.saveBrowserPreviewProvider(providerSavePayload, previewSessionId),
-              )
-              .then(({ sessionId, messages }) => {
-                setPreviewSessionId(sessionId);
-                applyPreviewHostMessages(messages, true);
-              })
-              .catch(() => {
-                setOperationMessage({
-                  tone: "error",
-                  message: recoverableFailureMessage("provider", layout.composerLanguage),
-                });
-              });
-            return;
-          }
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId: "trainer.provider.save",
-              payload: { ...providerSavePayload, responseLanguage: layout.composerLanguage },
-            },
-          });
-        }}
+        onSaveProvider={saveProviderDraft}
         onSaveProviderProfile={() => {
           setSettingsActionState({
             kind: "save-provider",
