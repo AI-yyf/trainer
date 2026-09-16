@@ -19782,3 +19782,44 @@ details[open] > :not(summary) {
   color: var(--fg-muted);
   font-size: 11px;
 }
+
+.training-review-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-block-end: 6px;
+}
+
+.training-review-group__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.training-review-group__count {
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+}
+
+.training-review-row__more {
+  margin-inline-start: auto;
+}
+
+.training-review-row__more summary {
+  color: var(--fg-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.training-review-row__more-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-block-start: 4px;
+}
