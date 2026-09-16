@@ -695,23 +695,30 @@ export class ProviderProfileRegistry implements vscode.Disposable {
   }
 
   /**
-   * Create a profile from a template
+   * Create a profile from a template. Optional overrides let callers derive
+   * zero-config variants (for example the local practice-mode trial) from the
+   * same template catalog without adding entries to it.
    */
-  async createFromTemplate(templateIndex: number, apiKey?: string): Promise<ProviderProfileConfig | undefined> {
+  async createFromTemplate(
+    templateIndex: number,
+    apiKey?: string,
+    overrides?: Partial<Omit<ProviderProfileConfig, 'id'>>,
+  ): Promise<ProviderProfileConfig | undefined> {
     if (templateIndex < 0 || templateIndex >= PROVIDER_PROFILE_TEMPLATES.length) {
       return undefined;
     }
 
     const template = PROVIDER_PROFILE_TEMPLATES[templateIndex];
+    const base = { ...template, ...overrides };
     const profile = await this.createProfile({
-      ...template,
+      ...base,
       credentialMode:
         defaultProviderCredentialMode({
           remoteName: vscode.env.remoteName ?? undefined,
           isRemoteWorkspace: Boolean(vscode.env.remoteName),
         }) === 'workspace_secret'
           ? 'workspace_secret'
-          : template.credentialMode,
+          : base.credentialMode,
     });
 
     if (apiKey && apiKey.trim()) {

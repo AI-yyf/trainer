@@ -23,6 +23,11 @@ import {
 } from '../provider/providerConfigStore';
 import { PROVIDER_PROFILE_TEMPLATES } from '../provider/providerProfileRegistry';
 import {
+  ensureTrialProviderServer,
+  TRIAL_PROVIDER_MODEL_ID,
+  TRIAL_PROVIDER_TEMPLATE_INDEX,
+} from '../provider/trialProviderServer';
+import {
   defaultCapabilitiesForProtocol,
   normalizeProviderBaseUrl,
   normalizeProviderProtocol,
@@ -1745,6 +1750,104 @@ export async function createProviderProfileFromTemplateCommand(
     ui: !apiKey?.trim() && directTemplate && payload?.skipPicker
       ? { focusProviderApiKey: true }
       : undefined,
+  };
+}
+
+/**
+ * Zero-config trial: start the bundled loopback practice service, derive a
+ * profile from the local-compatible template, activate it, and verify the
+ * connection so the composer unblocks without the learner ever pasting a key.
+ */
+export async function startProviderTrialCommand(
+  context: CommandContext,
+): Promise<CommandExecutionResult> {
+  let trialBaseUrl: string;
+  let trialApiKey: string;
+  try {
+    const server = await ensureTrialProviderServer();
+    trialBaseUrl = server.baseUrl;
+    trialApiKey = server.secretApiKey;
+  } catch (error) {
+    return {
+      ok: false,
+      message: `Trainer could not start the local practice service: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    };
+  }
+
+  const store = context.providerStore as typeof context.providerStore & {
+    createProfileFromTemplate?: (
+      templateIndex: number,
+      apiKey?: string,
+      overrides?: {
+        label: string;
+        baseUrl: string;
+        model: string;
+        apiKeyRef: string;
+        catalogSource: 'provider_live' | 'cached' | 'manual';
+        availableModels: string[];
+        catalogModels?: string[];
+        modelAliases: Record<string, string>;
+      },
+    ) => Promise<ProviderConfig | undefined>;
+    syncWorkspaceProviderOverride?: (config: ProviderConfig | undefined) => Promise<void> | void;
+    getApiKey?: () => Promise<string | undefined> | string | undefined;
+  };
+  const createdProfile = await store.createProfileFromTemplate?.(
+    TRIAL_PROVIDER_TEMPLATE_INDEX,
+    trialApiKey,
+    {
+      label: 'Trainer Practice (Local)',
+      baseUrl: trialBaseUrl,
+      model: TRIAL_PROVIDER_MODEL_ID,
+      catalogSource: 'manual',
+      availableModels: [TRIAL_PROVIDER_MODEL_ID],
+      catalogModels: [TRIAL_PROVIDER_MODEL_ID],
+      modelAliases: {
+        'coach-fast': TRIAL_PROVIDER_MODEL_ID,
+        'coach-deep': TRIAL_PROVIDER_MODEL_ID,
+      },
+    },
+  );
+  if (!createdProfile) {
+    return { ok: false, message: 'Trainer could not create the local practice profile.' };
+  }
+
+  const profileId = resolveProfileIdentifier(createdProfile) ?? 'trainer-practice-local';
+  const switched = await switchActiveProfileCompat(context, profileId, 'zero_config_trial');
+  if (!switched) {
+    return { ok: false, message: 'Trainer created the practice profile, but could not activate it.' };
+  }
+
+  const activeConfig = await resolveProviderConfig(context);
+  const sourceConfig = activeConfig ?? createdProfile;
+  if (store.syncWorkspaceProviderOverride) {
+    await store.syncWorkspaceProviderOverride(sourceConfig);
+  }
+  await context.patchWorkbenchData({
+    providerConfig: {
+      ...applyDerivedHostState(
+        context.getHostState().bootstrap,
+        sourceConfig,
+        context.getHostState().sidecar,
+        context.getHostState().workspace,
+        context.getSessionId(),
+        Boolean((await Promise.resolve(store.getApiKey?.()))?.trim()),
+      ).providerConfig,
+      ...sourceConfig,
+    },
+  });
+
+  const verification = await testProviderCommand(context, {});
+  await context.workbench.syncState();
+
+  return {
+    ok: verification.ok,
+    message: verification.ok
+      ? `Practice mode is ready at ${trialBaseUrl}. The key stays on this machine; add your own key in Settings any time.`
+      : `Practice mode started at ${trialBaseUrl}, but the connection test did not pass: ${verification.message}`,
+    data: { profileId, trialBaseUrl, verification: verification.data },
   };
 }
 
