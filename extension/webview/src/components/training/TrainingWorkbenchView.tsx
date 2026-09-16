@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import {
   deriveTrainingExecutionState,
@@ -16,6 +16,7 @@ import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type { ComposerLanguage, TrainingCardType } from "../../lib/types";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
 import type { TrainingCardStatus } from "../../../../../shared/src/trainingCardRouting";
+import { groupReviewQueueByFocusArea } from "../../../../../shared/src/reviewQueueGovernance";
 
 export type TrainingReviewAction = "accept" | "snooze" | "reset" | "skip" | "done";
 export type TrainingCardGrade = "again" | "hard" | "good" | "easy";
@@ -1031,6 +1032,33 @@ export function TrainingWorkbenchView({
 }: TrainingWorkbenchViewProps) {
   const leftoverStoredNote = leftoverNote?.trim() || "";
   const isZh = language === "zh-CN";
+  // Batch 6: default to focus-area groups so the review queue reads as a few
+  // coherent topics instead of a flat list of one-off decisions.
+  const reviewFocusGroups = useMemo(
+    () =>
+      groupReviewQueueByFocusArea(
+        reviewItems.map((item) => ({
+          ...item,
+          reason: item.detail ?? item.meta ?? item.title,
+        })),
+        [],
+        isZh ? "未分组" : "Ungrouped",
+      ),
+    [reviewItems, isZh],
+  );
+  const cappedReviewGroups = useMemo(() => {
+    let budget = 4;
+    const groups: Array<{ focusArea: string; items: TrainingReviewItem[] }> = [];
+    for (const group of reviewFocusGroups) {
+      if (budget <= 0) {
+        break;
+      }
+      const items = group.items.slice(0, budget);
+      budget -= items.length;
+      groups.push({ focusArea: group.focusArea, items });
+    }
+    return groups;
+  }, [reviewFocusGroups]);
   const t = resolveWorkbenchCopy(language);
   const operationMessage = useWorkbenchState((state) => state.operationMessage);
   const handoffOwnerCardId = useWorkbenchState(
@@ -2068,49 +2096,81 @@ export function TrainingWorkbenchView({
 
               {reviewSummary ? <p className="training-details__summary">{reviewSummary}</p> : null}
 
-              {reviewItems.length > 0 ? (
+              {cappedReviewGroups.length > 0 ? (
                 <div className="training-review-stack">
-                  {reviewItems.slice(0, 4).map((item) => (
-                    <article className="training-review-row" key={item.id}>
-                      <h4>{item.title}</h4>
-                      {item.detail ? <p>{item.detail}</p> : null}
-                      {item.meta ? <p className="muted">{item.meta}</p> : null}
-                      {item.fsrs ? (
-                        <details className="training-review-row__fsrs">
-                          <summary>FSRS</summary>
-                          <p>
-                            {item.fsrs.intervalDays !== undefined
-                              ? `${isZh ? "间隔" : "Interval"}: ${item.fsrs.intervalDays}d`
-                              : null}
-                            {item.fsrs.masteryScore !== undefined
-                              ? ` · ${isZh ? "掌握度" : "Mastery"}: ${item.fsrs.masteryScore}`
-                              : null}
-                          </p>
-                        </details>
-                      ) : null}
-                      <details className="training-review-row__actions-details" open>
-                        <summary>{isZh ? "复习操作" : "Review actions"}</summary>
-                      <div className="training-review-row__actions" aria-label={isZh ? "复习操作" : "Review actions"}>
-                        {(["accept", "snooze", "reset", "skip", "done"] as const).map((action) => (
-                          <button
-                            className="button button--ghost"
-                            key={action}
-                            type="button"
-                            onClick={() => onReviewQueueAction?.({
-                              concept: item.concept,
-                              action,
-                              focusArea: item.focusArea,
-                              taskHint: item.taskHint,
-                            })}
-                          >
-                            {isZh
-                              ? { accept: "接受", snooze: "稍后", reset: "重置", skip: "跳过", done: "完成" }[action]
-                              : action[0].toUpperCase() + action.slice(1)}
-                          </button>
-                        ))}
-                      </div>
-                      </details>
-                    </article>
+                  {cappedReviewGroups.map((group) => (
+                    <section className="training-review-group" key={group.focusArea}>
+                      <h4 className="training-review-group__head">
+                        <span>{group.focusArea}</span>
+                        <span className="training-review-group__count">{group.items.length}</span>
+                      </h4>
+                      {group.items.map((item) => (
+                        <article className="training-review-row" key={item.id}>
+                          <h4>{item.title}</h4>
+                          {item.detail ? <p>{item.detail}</p> : null}
+                          {item.meta ? <p className="muted">{item.meta}</p> : null}
+                          {item.fsrs ? (
+                            <details className="training-review-row__fsrs">
+                              <summary>FSRS</summary>
+                              <p>
+                                {item.fsrs.intervalDays !== undefined
+                                  ? `${isZh ? "间隔" : "Interval"}: ${item.fsrs.intervalDays}d`
+                                  : null}
+                                {item.fsrs.masteryScore !== undefined
+                                  ? ` · ${isZh ? "掌握度" : "Mastery"}: ${item.fsrs.masteryScore}`
+                                  : null}
+                              </p>
+                            </details>
+                          ) : null}
+                          <details className="training-review-row__actions-details" open>
+                            <summary>{isZh ? "复习操作" : "Review actions"}</summary>
+                            <div className="training-review-row__actions" aria-label={isZh ? "复习操作" : "Review actions"}>
+                              {(["accept", "snooze"] as const).map((action) => (
+                                <button
+                                  className={action === "accept" ? "button button--accent" : "button button--ghost"}
+                                  key={action}
+                                  type="button"
+                                  onClick={() => onReviewQueueAction?.({
+                                    concept: item.concept,
+                                    action,
+                                    focusArea: item.focusArea,
+                                    taskHint: item.taskHint,
+                                  })}
+                                >
+                                  {isZh
+                                    ? { accept: "开始复习", snooze: "稍后" }[action]
+                                    : action === "accept"
+                                      ? "Start review"
+                                      : "Later"}
+                                </button>
+                              ))}
+                              <details className="training-review-row__more">
+                                <summary>{isZh ? "更多" : "More"}</summary>
+                                <div className="training-review-row__more-actions">
+                                  {(["reset", "skip", "done"] as const).map((action) => (
+                                    <button
+                                      className="button button--ghost"
+                                      key={action}
+                                      type="button"
+                                      onClick={() => onReviewQueueAction?.({
+                                        concept: item.concept,
+                                        action,
+                                        focusArea: item.focusArea,
+                                        taskHint: item.taskHint,
+                                      })}
+                                    >
+                                      {isZh
+                                        ? { reset: "重置", skip: "跳过", done: "完成" }[action]
+                                        : action[0].toUpperCase() + action.slice(1)}
+                                    </button>
+                                  ))}
+                                </div>
+                              </details>
+                            </div>
+                          </details>
+                        </article>
+                      ))}
+                    </section>
                   ))}
                 </div>
               ) : null}
