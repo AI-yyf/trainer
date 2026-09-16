@@ -56,7 +56,11 @@ test('settings provider catalog keeps manually saved models in the per-model pan
     source,
     /catalogModelsSummary\s*\?\s*\{\s*label: localizedCatalogSavedModelsLabel\[language\],\s*value: shortenSummary\(catalogModelsSummary, 80\),\s*\}\s*:\s*null/,
   );
-  assert.match(source, /Remove model/);
+  // providerModelCardCopy moved into providerSettingsCopy.ts (batch 7).
+  assert.match(
+    fs.readFileSync(path.resolve(__dirname, "..", "webview", "src", "components", "settings", "providerSettingsCopy.ts"), "utf8"),
+    /Remove model/,
+  );
 });
 
 test('settings does not reuse saved model metadata for a changed provider transport', () => {

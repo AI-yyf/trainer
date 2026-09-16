@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+const recoveryCopySourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'providerRecoveryCopy.ts');
 
 function providerRecoveryLocaleSection(source, language) {
   const copyStart = source.indexOf('const providerRecoveryCopy');
@@ -21,7 +22,10 @@ function providerRecoveryLocaleSection(source, language) {
 }
 
 test('coach provider setup recovery owns complete, action-oriented copy for all supported languages', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  // Batch 7 moved the recovery copy table and scenario helpers into
+  // providerRecoveryCopy.ts; App keeps the wiring (providerSetupState, gates).
+  const source = fs.readFileSync(recoveryCopySourcePath, 'utf8');
+  const app = fs.readFileSync(appSourcePath, 'utf8');
 
   assert.match(source, /const providerRecoveryCopy: Record<ComposerLanguage, ProviderRecoveryLocale> = \{/);
   assert.match(source, /function providerRecoveryScenario\(/);
@@ -43,11 +47,11 @@ test('coach provider setup recovery owns complete, action-oriented copy for all 
     /function blockedComposerPresenceMessage\([\s\S]*?providerRecoveryLocale\(language\)\.languageIntegrityDetail/,
   );
   assert.match(
-    source,
+    app,
     /function providerModelRuntimeNote\([\s\S]*?providerRecoverySummary\(provider, language\)\.detail;/,
   );
   assert.match(
-    source,
+    app,
     /function providerModelMenuNote\([\s\S]*?providerRecoverySummary\(provider, language\)\.title;/,
   );
 
@@ -100,7 +104,10 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
     /const workspaceSessionBlocked =\s*[\s\S]{0,500}?trainerWorkspaceAdmission\?\.status === "browse"/,
   );
   assert.match(source, /providerCoachBanner\([\s\S]*?blockedCoachGuidance[\s\S]*?\)/);
-  assert.match(source, /function blockedComposerPresenceMessage\(/);
+  assert.match(
+    fs.readFileSync(recoveryCopySourcePath, 'utf8'),
+    /function blockedComposerPresenceMessage\(/,
+  );
   assert.match(source, /const blockedComposerPresenceCopy =/);
   assert.match(source, /const hasFullCoachRecoverySurface = activeView === "coach" && shouldShowNeutralEmptyState;/);
   assert.match(source, /const hasCoachWorkspaceAdmissionSurface = activeView === "coach" && workspaceSessionBlocked;/);
@@ -123,7 +130,10 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
     /<span>\{providerRecoveryLocale\(layout\.composerLanguage\)\.connectionStillWorks\}<\/span>/,
   );
   assert.match(source, /<strong>\{providerSetupState\.actionLabel\}<\/strong>/);
-  assert.match(source, /providerRecoveryLocale\(language\)\.languageIntegrityDetail/);
+  assert.match(
+    fs.readFileSync(recoveryCopySourcePath, 'utf8'),
+    /providerRecoveryLocale\(language\)\.languageIntegrityDetail/,
+  );
   assert.match(
     source,
     /providerCoachNotice && \(sendBlocked || !shouldShowNeutralEmptyState\)/,

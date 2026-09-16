@@ -46,8 +46,16 @@ test('app recovery and common copy receive the active language with a defined fa
   assert.match(source, /const t = resolveWorkbenchCopy\(layout\.composerLanguage\);/);
   assert.doesNotMatch(source, /const englishCopy =/);
   assert.doesNotMatch(source, /"(?:es-ES|fr-FR|de-DE|ja-JP|ko-KR|pt-BR)": englishCopy/);
-  assert.match(source, /function providerSetupSummary\([\s\S]*?language: ComposerLanguage,/);
-  assert.match(source, /function blockedComposerPresenceMessage\([\s\S]*?language: ComposerLanguage,/);
+  // moved into providerRecoveryCopy.ts (batch 7)
+  assert.match(
+    fs.readFileSync(path.resolve(__dirname, "..", "webview", "src", "app", "providerRecoveryCopy.ts"), "utf8"),
+    /function providerSetupSummary\([\s\S]*?language: ComposerLanguage,/,
+  );
+  // moved into providerRecoveryCopy.ts (batch 7)
+  assert.match(
+    fs.readFileSync(path.resolve(__dirname, "..", "webview", "src", "app", "providerRecoveryCopy.ts"), "utf8"),
+    /function blockedComposerPresenceMessage\([\s\S]*?language: ComposerLanguage,/,
+  );
   assert.match(source, /sanitizeOperationFailureMessage\(message, layout\.composerLanguage\)/);
   assert.match(source, /providerSetupSummary\(data\.providerConfig, layout\.composerLanguage, data\.connection\.state\)/);
   assert.match(source, /blockedComposerPresenceMessage\([\s\S]*?layout\.composerLanguage,[\s\S]*?data\.connection\.state,/s);

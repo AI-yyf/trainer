@@ -125,7 +125,7 @@ test('Settings does not let manual per-model limits bypass the connection model 
 test('Settings localizes model picker actions in every supported language', () => {
   const source = fs.readFileSync(settingsSourcePath, 'utf8');
   const start = source.indexOf('function providerModelPickerCopy(');
-  const end = source.indexOf('\nfunction providerModelCardCopy', start);
+  const end = source.indexOf('\nfunction ', start + 10);
 
   assert.ok(start >= 0 && end > start, 'expected model picker locale copy');
   const pickerCopy = source.slice(start, end);

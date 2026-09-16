@@ -381,10 +381,13 @@ test('formal Plan generation requires a current verified tools probe, not declar
 test('coach composer exposes a recovery path when streaming has not been verified', () => {
   const source = fs.readFileSync(appPath, 'utf8');
   assert.match(
-    source,
+    fs.readFileSync(recoveryCopySourcePath, 'utf8'),
     /function providerHasVerifiedStreamingProbe\([\s\S]*?lastTest\.streamingReady === true[\s\S]*?lastTest\.streamProbeStatus === "verified"[\s\S]*?streamingEvidence\?\.state === "verified"[\s\S]*?streamingEvidence\.observed === true/,
   );
-  assert.match(source, /function streamingCapabilityBlockReason\(language: ComposerLanguage\)/);
+  // streamingCapabilityBlockReason moved into providerRecoveryCopy.ts (batch 7).
+  assert.match(
+    fs.readFileSync(recoveryCopySourcePath, 'utf8'),
+    /function streamingCapabilityBlockReason\(language: ComposerLanguage\)/);
   assert.match(
     source,
     /provider\.configured && provider\.apiKeyConfigured && !providerHasVerifiedStreamingProbe\(provider\)/,
@@ -663,3 +666,4 @@ test('handleSuggestedAction does not sendTurn task or next_task when leftover is
   assert.ok(leftoverTask.includes('return;'), 'expected leftover task to return before sendTurn');
   assert.doesNotMatch(leftoverTask, /intent:\s*"task"/);
 });
+const recoveryCopySourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'providerRecoveryCopy.ts');
