@@ -33,6 +33,10 @@ import {
   filterProviderModelOptions,
 } from "../../../../../shared/src/providerModelPolicy";
 import type { ProviderModelTokenLimit, ProviderProtocol } from "../../../../../shared/src/models";
+import {
+  deriveProviderSetupState,
+  type ProviderSetupReason,
+} from "../../../../../shared/src/providerSetupState";
 import type { ProviderEndpointSpeedTestResult } from "../../lib/types";
 import {
   isNewApiConnectionType,
@@ -5796,106 +5800,99 @@ export function CoachSettingsView({
         : providerNeedsRetest
           ? "needs_test"
           : coachSendState.status;
+  const shouldRoutePrimaryToSavedProfiles =
+    !providerHasDraftChanges && !providerSaved && savedProviderProfilesAvailable;
+  const shouldOfferRecommendedProviderTemplate =
+    Boolean(onUseProviderTemplate) &&
+    !providerSaved &&
+    !providerHasDraftChanges &&
+    !savedProviderProfilesAvailable;
+  const shouldOpenProviderDetails =
+    !providerHasDraftChanges &&
+    !providerSaved &&
+    !shouldRoutePrimaryToSavedProfiles &&
+    !shouldOfferRecommendedProviderTemplate;
+  const draftNeedsModelChoice = providerHasDraftChanges && !currentDraftModel;
+  const hasDiscoveredDraftModels = draftNeedsModelChoice && availableModels.length > 0;
+  const canFindDraftModels = draftNeedsModelChoice && !hasDiscoveredDraftModels && canRefreshModels;
+  const modelDiscoveryGuidanceActive = canFindDraftModels || hasDiscoveredDraftModels;
+  const showSecondaryModelDiscoveryAction = !canFindDraftModels;
+  const showProviderDetailActions =
+    !modelDiscoveryGuidanceActive || showSecondaryModelDiscoveryAction;
+  const shouldRepairDraftModelPolicy =
+    providerHasDraftChanges && currentDraftModelBlockedByPolicy;
+  const shouldFocusDraftApiKey =
+    providerHasDraftChanges &&
+    providerDraftFieldsReady &&
+    !providerDraftHasApiKey &&
+    !providerDraftCanReuseSavedApiKey;
+  const shouldCompleteDraftSetup =
+    providerHasDraftChanges &&
+    !providerDraftReadyForTest &&
+    !canFindDraftModels &&
+    !hasDiscoveredDraftModels;
+  const shouldWaitForDraftTest = providerHasDraftChanges && providerTestPending;
+  const shouldRepairProviderCredentials =
+    providerCredentialsRejected && !providerHasDraftChanges && !providerTestPassed;
+  const workspaceRootMissing =
+    !trainerWorkspace?.rootPath?.trim() || trainerWorkspace?.status === "root-missing";
+
+  // Explicit provider setup state machine (replaces the nested availability
+  // ternaries). `providerConnectionSetup` ignores the workspace gates so the
+  // connection-specific copy survives under a root/trust headline.
+  const providerConnectionSetup = deriveProviderSetupState({
+    workspaceRootMissing: false,
+    workspaceTrusted: true,
+    availabilityMode,
+    draftNeedsModelChoice,
+    draftModelDiscoveryPossible: canFindDraftModels,
+    draftHasDiscoveredModels: hasDiscoveredDraftModels,
+    draftModelBlockedByPolicy: shouldRepairDraftModelPolicy,
+    draftNeedsApiKey: shouldFocusDraftApiKey,
+    draftReadyForTest: providerDraftReadyForTest,
+    draftTestPending: providerTestPending,
+    savedNeedsKey: providerNeedsApiKey,
+    savedCredentialsRejected: providerCredentialsRejected,
+    savedNeedsTest: providerNeedsRetest,
+  });
+  const providerSetupStateInfo = deriveProviderSetupState({
+    workspaceRootMissing,
+    workspaceTrusted: resolvedWorkspaceTrustState === "trusted" || resolvedWorkspaceTrustState === "remote",
+    availabilityMode,
+    draftNeedsModelChoice,
+    draftModelDiscoveryPossible: canFindDraftModels,
+    draftHasDiscoveredModels: hasDiscoveredDraftModels,
+    draftModelBlockedByPolicy: shouldRepairDraftModelPolicy,
+    draftNeedsApiKey: shouldFocusDraftApiKey,
+    draftReadyForTest: providerDraftReadyForTest,
+    draftTestPending: providerTestPending,
+    savedNeedsKey: providerNeedsApiKey,
+    savedCredentialsRejected: providerCredentialsRejected,
+    savedNeedsTest: providerNeedsRetest,
+  });
+  const providerSetupReason = providerSetupStateInfo.reason;
+  const providerConnectionReason = providerConnectionSetup.reason;
+  const PROVIDER_SETUP_STRIP_TONE: Record<ProviderSetupReason, "connected" | "pending" | "warn" | "offline"> = {
+    workspace_root_missing: "warn",
+    workspace_untrusted: "warn",
+    draft_model_search: "pending",
+    draft_model_pick: "pending",
+    draft_model_policy: "warn",
+    draft_needs_key: "pending",
+    draft_incomplete: "pending",
+    draft_await_test: "pending",
+    draft_ready: "pending",
+    saved_needs_key: "warn",
+    credentials_rejected: "warn",
+    saved_needs_test: "warn",
+    provider_failure: "warn",
+    checking: "pending",
+    refreshing: "pending",
+    fresh_setup: "offline",
+    ready: "connected",
+  };
   const resolvedAvailabilityTone: "connected" | "pending" | "warn" | "offline" =
-    availabilityMode === "draft"
-      ? currentDraftModelBlockedByPolicy
-        ? "warn"
-        : "pending"
-      : availabilityMode === "needs_test"
-        ? "warn"
-      : availabilityMode === "ready"
-        ? "connected"
-        : availabilityMode === "warming" || availabilityMode === "refreshing"
-          ? "pending"
-          : availabilityMode === "missing_provider"
-            ? "offline"
-            : "warn";
-  const resolvedAvailabilityStatusLabel =
-    availabilityMode === "draft"
-      ? language === "zh-CN"
-        ? "草稿未生效"
-        : "Draft not applied"
-      : availabilityMode === "needs_test"
-        ? settingsStatusPhrase(language, "needsAttention")
-      : availabilityMode === "ready"
-        ? language === "zh-CN"
-          ? "可发送"
-          : "Ready"
-        : availabilityMode === "refreshing"
-          ? language === "zh-CN"
-            ? "刷新中"
-            : "Refreshing"
-          : availabilityMode === "warming"
-            ? language === "zh-CN"
-              ? "检查中"
-              : "Checking"
-            : availabilityMode === "missing_api_key"
-              ? language === "zh-CN"
-                ? "缺少密钥"
-                : "Add API key"
-              : availabilityMode === "missing_provider"
-                ? language === "zh-CN"
-                  ? "待配置"
-                  : "Setup"
-                : providerFailureState.statusLabel;
-  const resolvedAvailabilityHeadline =
-    availabilityMode === "draft" && currentDraftModelPolicyMessage
-      ? settingsPhrase(language, "chooseModel")
-      : availabilityMode === "draft"
-        ? language === "zh-CN"
-        ? "连接草稿尚未保存"
-        : "Connection draft not saved"
-      : availabilityMode === "needs_test"
-        ? settingsStatusPhrase(language, "connectionNeedsTest")
-      : availabilityMode === "ready"
-        ? language === "zh-CN"
-          ? "模型可用"
-          : "Model ready"
-        : availabilityMode === "refreshing"
-          ? language === "zh-CN"
-            ? "正在刷新模型列表"
-            : "Refreshing model list"
-          : availabilityMode === "warming"
-            ? language === "zh-CN"
-              ? "正在确认保存的连接"
-              : "Checking saved connection"
-            : availabilityMode === "missing_api_key"
-              ? language === "zh-CN"
-                ? "缺少 API key"
-                : "API key required"
-              : availabilityMode === "missing_provider"
-                ? language === "zh-CN"
-                  ? "设置模型连接"
-                  : "Set up model access"
-                : providerFailureState.headline;
-  const resolvedAvailabilityDetail =
-    availabilityMode === "draft" && currentDraftModelPolicyMessage
-      ? currentDraftModelPolicyMessage
-      : availabilityMode === "draft"
-        ? providerDraftReadyForTest
-          ? language === "zh-CN"
-            ? "当前草稿已经可以测试。保存后会成为当前连接。"
-            : "This draft can be tested now. Save when you want to apply it."
-          : language === "zh-CN"
-            ? "保存后再测试。"
-            : "Save before testing."
-        : availabilityMode === "needs_test"
-        ? settingsStatusPhrase(language, "connectionSavedNeedsTest")
-      : availabilityMode === "ready"
-        ? language === "zh-CN"
-          ? "对话、计划和训练都会使用这组连接。"
-          : "Chat, plan, and training use this connection."
-          : availabilityMode === "refreshing"
-            ? settingsStatusPhrase(language, "refreshing")
-            : availabilityMode === "warming"
-              ? settingsStatusPhrase(language, "checking")
-            : availabilityMode === "degraded_error"
-              ? availabilityFailureHint ?? providerPrimaryAction
-              : availabilityMode === "recent_failure"
-                ? availabilityFailureHint ?? providerPrimaryAction
-                : availabilityMode === "blocked_error"
-                  ? availabilityFailureHint ?? providerRequirementNote ?? providerPrimaryAction
-                  : providerRequirementNote ?? providerPrimaryAction;
+    PROVIDER_SETUP_STRIP_TONE[providerSetupReason];
   const localizedCoachCapabilityLabel =
     providerCoachReady
       ? settingsStatusPhrase(language, "ready")
@@ -5935,73 +5932,104 @@ export function CoachSettingsView({
         : coachSendState.status === "warming"
           ? settingsStatusPhrase(language, "checking")
           : providerCoachBlockReason ?? providerPrimaryAction;
+  const PROVIDER_SETUP_STATUS_COPY: Record<ProviderSetupReason, string> = {
+    workspace_root_missing: language === "zh-CN" ? "待选目录" : "No folder yet",
+    workspace_untrusted: language === "zh-CN" ? "待信任" : "Trust needed",
+    draft_model_search: settingsStatusPhrase(language, "draftNotApplied"),
+    draft_model_pick: settingsStatusPhrase(language, "draftNotApplied"),
+    draft_model_policy: settingsStatusPhrase(language, "draftNotApplied"),
+    draft_needs_key: settingsStatusPhrase(language, "draftNotApplied"),
+    draft_incomplete: settingsStatusPhrase(language, "draftNotApplied"),
+    draft_await_test: settingsStatusPhrase(language, "draftNotApplied"),
+    draft_ready: settingsStatusPhrase(language, "draftNotApplied"),
+    saved_needs_key: settingsPhrase(language, "addApiKey"),
+    credentials_rejected: providerFailureState.statusLabel,
+    saved_needs_test: settingsStatusPhrase(language, "needsAttention"),
+    provider_failure: providerFailureState.statusLabel,
+    checking: settingsStatusPhrase(language, "checking"),
+    refreshing: settingsStatusPhrase(language, "refreshing"),
+    fresh_setup: settingsStatusPhrase(language, "setup"),
+    ready: settingsStatusPhrase(language, "ready"),
+  };
+  const PROVIDER_SETUP_HEADLINE_COPY: Record<ProviderSetupReason, string> = {
+    workspace_root_missing: language === "zh-CN" ? "先选择工作区根目录" : "Choose a workspace root first",
+    workspace_untrusted: language === "zh-CN" ? "先信任此窗口" : "Trust this window first",
+    draft_model_search: settingsStatusPhrase(language, "connectionDraftNotSaved"),
+    draft_model_pick: settingsStatusPhrase(language, "connectionDraftNotSaved"),
+    draft_model_policy: settingsPhrase(language, "chooseModel"),
+    draft_needs_key: settingsStatusPhrase(language, "connectionDraftNotSaved"),
+    draft_incomplete: settingsStatusPhrase(language, "connectionDraftNotSaved"),
+    draft_await_test: settingsStatusPhrase(language, "connectionDraftNotSaved"),
+    draft_ready: settingsStatusPhrase(language, "connectionDraftNotSaved"),
+    saved_needs_key: settingsStatusPhrase(language, "apiKeyRequired"),
+    credentials_rejected: providerFailureState.headline,
+    saved_needs_test: settingsStatusPhrase(language, "connectionNeedsTest"),
+    provider_failure: providerFailureState.headline,
+    checking: settingsStatusPhrase(language, "checking"),
+    refreshing: settingsStatusPhrase(language, "refreshing"),
+    fresh_setup: settingsStatusPhrase(language, "setupModelAccess"),
+    ready: settingsStatusPhrase(language, "modelReady"),
+  };
   const localizedResolvedAvailabilityStatusLabel =
-    availabilityMode === "draft"
-      ? settingsStatusPhrase(language, "draftNotApplied")
-      : availabilityMode === "needs_test"
-        ? settingsStatusPhrase(language, "needsAttention")
-      : availabilityMode === "ready"
-        ? settingsStatusPhrase(language, "ready")
-        : availabilityMode === "refreshing"
-          ? settingsStatusPhrase(language, "refreshing")
-          : availabilityMode === "warming"
-            ? settingsStatusPhrase(language, "checking")
-            : availabilityMode === "missing_api_key"
-              ? settingsPhrase(language, "addApiKey")
-              : availabilityMode === "missing_provider"
-                ? settingsStatusPhrase(language, "setup")
-                : providerFailureState.statusLabel;
+    PROVIDER_SETUP_STATUS_COPY[providerSetupReason];
   const localizedResolvedAvailabilityHeadline =
-    availabilityMode === "draft" && currentDraftModelPolicyMessage
-      ? settingsPhrase(language, "chooseModel")
-      : availabilityMode === "draft"
-        ? settingsStatusPhrase(language, "connectionDraftNotSaved")
-      : availabilityMode === "needs_test"
-        ? settingsStatusPhrase(language, "connectionNeedsTest")
-      : availabilityMode === "ready"
-        ? settingsStatusPhrase(language, "modelReady")
-        : availabilityMode === "refreshing"
-          ? settingsStatusPhrase(language, "refreshing")
-          : availabilityMode === "warming"
-            ? settingsStatusPhrase(language, "checking")
-            : availabilityMode === "missing_api_key"
-              ? settingsStatusPhrase(language, "apiKeyRequired")
-              : availabilityMode === "missing_provider"
-                ? settingsStatusPhrase(language, "setupModelAccess")
-                : providerFailureState.headline;
+    PROVIDER_SETUP_HEADLINE_COPY[providerSetupReason];
   const readyAvailabilityScopeDetail = `${copy.currentWorkspace} \u00b7 ${settingsStatusPhrase(
     language,
     "chatPlanTrainingUseThisConnection",
   )}`;
-  const localizedResolvedAvailabilityDetail =
-    availabilityMode === "draft" && currentDraftModelPolicyMessage
-      ? currentDraftModelPolicyMessage
-      : availabilityMode === "draft"
-        ? providerDraftReadyForTest
-          ? language === "zh-CN"
-            ? "当前草稿已经可以测试。保存后会成为当前连接。"
-            : "This draft can be tested now. Save when you want to apply it."
-          : settingsStatusPhrase(language, "saveBeforeTesting")
-        : availabilityMode === "needs_test"
-        ? settingsStatusPhrase(language, "connectionSavedNeedsTest")
-      : availabilityMode === "ready"
-        ? readyAvailabilityScopeDetail
-          : availabilityMode === "refreshing"
-          ? settingsStatusPhrase(language, "refreshing")
-          : availabilityMode === "warming"
-            ? settingsStatusPhrase(language, "checking")
-            : availabilityMode === "degraded_error"
-              ? availabilityFailureHint ?? providerPrimaryAction
-              : availabilityMode === "recent_failure"
-                ? availabilityFailureHint ?? providerPrimaryAction
-                : availabilityMode === "blocked_error"
-                  ? availabilityFailureHint ?? providerRequirementNote ?? providerPrimaryAction
-                  : providerRequirementNote ??
-                    (providerNeedsApiKey
-                      ? settingsStatusPhrase(language, "connectionSavedApiKeyMissing")
-                      : providerSaved
-                        ? settingsStatusPhrase(language, "connectionSavedNeedsTest")
-                        : settingsStatusPhrase(language, "fillProviderFields"));
+  const PROVIDER_CONNECTION_DETAIL: Record<ProviderSetupReason, string> = {
+    workspace_root_missing: "",
+    workspace_untrusted: "",
+    draft_model_search: providerDraftReadyForTest
+      ? language === "zh-CN"
+        ? "当前草稿已经可以测试。保存后会成为当前连接。"
+        : "This draft can be tested now. Save when you want to apply it."
+      : settingsStatusPhrase(language, "saveBeforeTesting"),
+    draft_model_pick: providerDraftReadyForTest
+      ? language === "zh-CN"
+        ? "当前草稿已经可以测试。保存后会成为当前连接。"
+        : "This draft can be tested now. Save when you want to apply it."
+      : settingsStatusPhrase(language, "saveBeforeTesting"),
+    draft_model_policy: currentDraftModelPolicyMessage ?? modelDiscoveryBlockedReason,
+    draft_needs_key: providerDraftReadyForTest
+      ? language === "zh-CN"
+        ? "当前草稿已经可以测试。保存后会成为当前连接。"
+        : "This draft can be tested now. Save when you want to apply it."
+      : settingsStatusPhrase(language, "saveBeforeTesting"),
+    draft_incomplete: providerDraftReadyForTest
+      ? language === "zh-CN"
+        ? "当前草稿已经可以测试。保存后会成为当前连接。"
+        : "This draft can be tested now. Save when you want to apply it."
+      : settingsStatusPhrase(language, "saveBeforeTesting"),
+    draft_await_test: providerDraftReadyForTest
+      ? language === "zh-CN"
+        ? "当前草稿已经可以测试。保存后会成为当前连接。"
+        : "This draft can be tested now. Save when you want to apply it."
+      : settingsStatusPhrase(language, "saveBeforeTesting"),
+    draft_ready: providerDraftReadyForTest
+      ? language === "zh-CN"
+        ? "当前草稿已经可以测试。保存后会成为当前连接。"
+        : "This draft can be tested now. Save when you want to apply it."
+      : settingsStatusPhrase(language, "saveBeforeTesting"),
+    saved_needs_key: providerRequirementNote ?? settingsStatusPhrase(language, "connectionSavedApiKeyMissing"),
+    credentials_rejected: availabilityFailureHint ?? providerPrimaryAction,
+    saved_needs_test: settingsStatusPhrase(language, "connectionSavedNeedsTest"),
+    provider_failure:
+      availabilityFailureHint
+      ?? (availabilityMode === "blocked_error" ? providerRequirementNote : undefined)
+      ?? providerPrimaryAction,
+    checking: settingsStatusPhrase(language, "checking"),
+    refreshing: settingsStatusPhrase(language, "refreshing"),
+    fresh_setup: providerRequirementNote ?? settingsStatusPhrase(language, "fillProviderFields"),
+    ready: readyAvailabilityScopeDetail,
+  };
+  const PROVIDER_SETUP_DETAIL_COPY: Record<ProviderSetupReason, string> = {
+    ...PROVIDER_CONNECTION_DETAIL,
+    workspace_root_missing: PROVIDER_CONNECTION_DETAIL[providerConnectionReason],
+    workspace_untrusted: PROVIDER_CONNECTION_DETAIL[providerConnectionReason],
+  };
+  const localizedResolvedAvailabilityDetail = PROVIDER_SETUP_DETAIL_COPY[providerSetupReason];
   const canApplyMiniMaxRecovery =
     miniMaxLikeProvider && Boolean(onUseProviderTemplate) && !providerHasDraftChanges;
   const shouldOfferMiniMaxDefaults =
@@ -6096,42 +6124,6 @@ export function CoachSettingsView({
       modelSelectRef.current?.focus();
     });
   };
-  const shouldRoutePrimaryToSavedProfiles =
-    !providerHasDraftChanges && !providerSaved && savedProviderProfilesAvailable;
-  const shouldOfferRecommendedProviderTemplate =
-    Boolean(onUseProviderTemplate) &&
-    !providerSaved &&
-    !providerHasDraftChanges &&
-    !savedProviderProfilesAvailable;
-  const shouldOpenProviderDetails =
-    !providerHasDraftChanges &&
-    !providerSaved &&
-    !shouldRoutePrimaryToSavedProfiles &&
-    !shouldOfferRecommendedProviderTemplate;
-  const draftNeedsModelChoice = providerHasDraftChanges && !currentDraftModel;
-  const hasDiscoveredDraftModels = draftNeedsModelChoice && availableModels.length > 0;
-  const canFindDraftModels = draftNeedsModelChoice && !hasDiscoveredDraftModels && canRefreshModels;
-  const modelDiscoveryGuidanceActive = canFindDraftModels || hasDiscoveredDraftModels;
-  const showSecondaryModelDiscoveryAction = !canFindDraftModels;
-  const showProviderDetailActions =
-    !modelDiscoveryGuidanceActive || showSecondaryModelDiscoveryAction;
-  const shouldRepairDraftModelPolicy =
-    providerHasDraftChanges && currentDraftModelBlockedByPolicy;
-  const shouldFocusDraftApiKey =
-    providerHasDraftChanges &&
-    providerDraftFieldsReady &&
-    !providerDraftHasApiKey &&
-    !providerDraftCanReuseSavedApiKey;
-  const shouldCompleteDraftSetup =
-    providerHasDraftChanges &&
-    !providerDraftReadyForTest &&
-    !canFindDraftModels &&
-    !hasDiscoveredDraftModels;
-  const shouldWaitForDraftTest = providerHasDraftChanges && providerTestPending;
-  const shouldRepairProviderCredentials =
-    providerCredentialsRejected && !providerHasDraftChanges && !providerTestPassed;
-  const workspaceRootMissing =
-    !trainerWorkspace?.rootPath?.trim() || trainerWorkspace?.status === "root-missing";
   const displayAvailabilityHeadline = shouldOfferRecommendedProviderTemplate
     ? settingsPhrase(language, "useMiniMaxProfile")
     : shouldRoutePrimaryToSavedProfiles
