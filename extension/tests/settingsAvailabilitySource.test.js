@@ -14,6 +14,15 @@ const settingsViewPath = path.resolve(
   'settings',
   'CoachSettingsView.tsx',
 );
+const providerSettingsCopyPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'components',
+  'settings',
+  'providerSettingsCopy.ts',
+);
 const workspaceAuthoritySummaryPath = path.resolve(
   __dirname,
   '..',
@@ -29,6 +38,10 @@ const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx'
 
 function readSettingsSource() {
   return fs.readFileSync(settingsViewPath, 'utf8');
+}
+
+function readProviderSettingsCopySource() {
+  return fs.readFileSync(providerSettingsCopyPath, 'utf8');
 }
 
 function readAppSource() {
@@ -159,14 +172,15 @@ test('settings keeps availability as the compact source of provider truth', () =
 
 test('settings maps provider failures to retestable recovery states', () => {
   const source = readSettingsSource();
+  const failureCopySource = readProviderSettingsCopySource();
 
-  assert.match(source, /function providerFailureCopy\(/);
-  assert.match(source, /case "test_failed":/);
-  assert.match(source, /Connection test failed/);
-  assert.match(source, /API key rejected/);
-  assert.match(source, /Model name rejected/);
-  assert.match(source, /Model is unavailable right now/);
-  assert.match(source, /Try again, or choose another model/);
+  assert.match(readProviderSettingsCopySource(), /function providerFailureCopy\(/);
+  assert.match(failureCopySource, /case "test_failed":/);
+  assert.match(readProviderSettingsCopySource(), /Connection test failed/);
+  assert.match(failureCopySource, /API key rejected/);
+  assert.match(failureCopySource, /Model name rejected/);
+  assert.match(failureCopySource, /Model is unavailable right now/);
+  assert.match(failureCopySource, /Try again, or choose another model/);
   assert.match(source, /const shouldSurfaceRecentTestFailure =/);
   assert.match(source, /!shouldSurfaceRecentTestFailure/);
   assert.match(source, /shouldSurfaceRecentTestFailure\s*\? "recent_failure"\s*:\s*providerNeedsRetest/);
@@ -401,11 +415,12 @@ test('settings opens and focuses saved profiles from the offline recovery action
 
 test('settings localizes the visible model-card actions in all supported languages', () => {
   const source = readSettingsSource();
-  const start = source.indexOf('function providerModelCardCopy(');
-  const end = source.indexOf('\nfunction normalizeComparablePath', start);
+  const copySource = readProviderSettingsCopySource();
+  const start = copySource.indexOf('function providerModelCardCopy(');
+  const end = copySource.indexOf('\nexport {', start);
 
   assert.ok(start >= 0 && end > start, 'expected model-card locale copy');
-  const modelCardCopy = source.slice(start, end);
+  const modelCardCopy = copySource.slice(start, end);
   for (const language of ["zh-CN", "en-US", "es-ES", "fr-FR", "de-DE", "ja-JP", "ko-KR", "pt-BR"]) {
     assert.match(modelCardCopy, new RegExp(`"${language}": \\{`));
   }
@@ -440,7 +455,7 @@ test('settings keeps draft model discovery scoped to its current connection', ()
 test('settings makes the connection name explicitly optional in every supported locale', () => {
   const source = readSettingsSource();
 
-  assert.match(source, /function providerConnectionNameLabel\(language: ComposerLanguage\)/);
+  assert.match(readProviderSettingsCopySource(), /function providerConnectionNameLabel\(language: ComposerLanguage\)/);
   for (const language of ["zh-CN", "en-US", "es-ES", "fr-FR", "de-DE", "ja-JP", "ko-KR", "pt-BR"]) {
     assert.match(source, new RegExp(`case "${language}"|${language === "en-US" ? "default:" : ""}`));
   }

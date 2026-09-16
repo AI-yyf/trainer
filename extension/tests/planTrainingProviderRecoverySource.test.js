@@ -34,7 +34,12 @@ test('workspace admission takes priority over provider recovery across coaching 
     source,
     /const sendTurn = \(\{[\s\S]*?if \(workspaceSessionBlocked\) \{\s*openWorkspaceAdmission\(\);[\s\S]*?return;\s*\}\s*if \(!providerCanCoachNow \|\| providerBlockReason \|\| capabilitySendBlocked\) \{\s*setActiveView\("settings"\);\s*setOperationMessage\(\{\s*tone: "info",\s*message: blockedComposerGuidance,[\s\S]*?return;/,
   );
-  assert.match(source, /const scenario = providerRecoveryScenario\(provider, language, connectionState\);/);
+  // providerCoachBanner (holding this line) moved into providerRecoveryCopy.ts.
+const recoveryCopySource = fs.readFileSync(
+  path.resolve(__dirname, '..', 'webview', 'src', 'app', 'providerRecoveryCopy.ts'),
+  'utf8',
+  );
+  assert.match(recoveryCopySource, /const scenario = providerRecoveryScenario\(provider, language, connectionState\);/);
   assert.match(source, /const showComposerBlockingNotice =\s*sendBlocked &&/);
   assert.match(source, /!hasFullCoachRecoverySurface &&/);
   assert.match(source, /!hasCoachWorkspaceAdmissionSurface;/);

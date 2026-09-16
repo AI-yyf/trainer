@@ -146,7 +146,12 @@ test('memory privacy and advanced sections default collapsed and keep their save
   // Memory scope, sharing grants, migration and sandbox authority keep their
   // original handlers; no merged save was introduced.
   assert.match(source, /onCoachDefaultsChange\?\.\(\{ memoryScope: value \}\)/);
-  assert.match(source, /onClick=\{\(\) => onRevokeMemoryShare\?\.\(grant\.sourceWorkspaceId\)\}/);
+  // The revoke button moved verbatim into MemorySharingPanel (batch 7).
+  const memoryPanelSource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'settings', 'MemorySharingPanel.tsx'),
+    'utf8',
+  );
+  assert.match(memoryPanelSource, /onClick=\{\(\) => onRevokeMemoryShare\?\.\(grant\.sourceWorkspaceId\)\}/);
   assert.match(source, /onClick=\{onChooseManagedDataFolder\}/);
   assert.match(source, /onClick=\{onRefreshWorkspaceAuthority\}/);
   assert.match(source, /updateWorkspaceMemoryToggles\(\{ decisions: !workspaceMemoryToggles\.decisions \}\)/);

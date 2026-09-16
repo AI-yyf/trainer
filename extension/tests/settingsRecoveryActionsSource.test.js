@@ -20,7 +20,10 @@ test('Settings offers a direct sidecar restart and avoids duplicate model discov
   const source = fs.readFileSync(settingsPath, 'utf8');
 
   assert.match(source, /onRestartSidecar\?: \(\) => void;/);
-  assert.match(source, /function sidecarRestartCopy\(/);
+  assert.match(
+    fs.readFileSync(path.resolve(__dirname, '..', 'webview', 'src', 'components', 'settings', 'providerSettingsCopy.ts'), 'utf8'),
+    /function sidecarRestartCopy\(/,
+  );
   assert.match(
     source,
     /const canRestartSidecar =\s*providerFailureCategory === "sidecar_unavailable" && Boolean\(onRestartSidecar\);/,
