@@ -267,6 +267,15 @@ export class ProviderConfigStore implements vscode.Disposable {
     };
   }
 
+  /** globalState 是事实来源;文件镜像仅供用户查看/迁移,best-effort。 */
+  private mirrorConfigToFile(nextConfig: ProviderConfig | undefined): void {
+    try {
+      this.fileStore.writeJSON('config.json', { config: nextConfig ?? null });
+    } catch {
+      // 镜像失败不影响配置持久化——globalState 已经写成功。
+    }
+  }
+
   async saveConfig(config: ProviderConfig, apiKey?: string): Promise<void> {
     const previousStored = this.getStoredConfig();
     const previousEffective = this.getConfig();
@@ -304,6 +313,7 @@ export class ProviderConfigStore implements vscode.Disposable {
       targetProfileId ? this.getProfileConfigById(targetProfileId) : previousEffective,
     );
     await this.extensionContext.globalState.update(STORAGE_KEYS.providerConfig, nextConfig);
+    this.mirrorConfigToFile(nextConfig);
     await this.syncWorkspaceProviderOverride(nextConfig);
 
     const configsToClean = this.previousConfigsForSave(
@@ -368,6 +378,7 @@ export class ProviderConfigStore implements vscode.Disposable {
       ? this.resolveKnownProfileId(profileSource, previousEffective)
       : undefined;
     await this.extensionContext.globalState.update(STORAGE_KEYS.providerConfig, undefined);
+    this.mirrorConfigToFile(undefined);
     await this.syncWorkspaceProviderOverride(undefined);
     if (this.profileRegistry.getActiveProfileId()) {
       await this.profileRegistry.clearActiveProfile('manual_clear');
@@ -714,6 +725,7 @@ export class ProviderConfigStore implements vscode.Disposable {
 
     const nextConfig = this.getProfileConfigById(profile.id) ?? this.profileToProviderConfig(profile);
     await this.extensionContext.globalState.update(STORAGE_KEYS.providerConfig, nextConfig);
+    this.mirrorConfigToFile(nextConfig);
     await this.syncWorkspaceProviderOverride(nextConfig);
     this.emitter.fire(this.getConfig() ?? nextConfig);
     return this.getConfig() ?? nextConfig;
