@@ -874,8 +874,8 @@ const viewLabels: Record<
   ComposerLanguage,
   Record<"coach" | "plan" | "resources" | "training" | "settings", string>
 > = {
-  "zh-CN": { coach: "\u5bf9\u8bdd", plan: "\u8ba1\u5212", resources: "\u8d44\u6599", training: "\u8bad\u7ec3", settings: "\u8bbe\u7f6e" },
-  "en-US": { coach: "Chat", plan: "Plan", resources: "Resources", training: "Training", settings: "Settings" },
+  "zh-CN": { coach: "\u5bf9\u8bdd", plan: "\u5b66\u4e60\u4e3b\u9875", resources: "\u8d44\u6599", training: "\u8bad\u7ec3", settings: "\u8bbe\u7f6e" },
+  "en-US": { coach: "Chat", plan: "Learning Home", resources: "Resources", training: "Training", settings: "Settings" },
   "es-ES": { coach: "Chat", plan: "Plan", resources: "Recursos", training: "Entrenamiento", settings: "Ajustes" },
   "fr-FR": { coach: "Chat", plan: "Plan", resources: "Ressources", training: "Entra\u00eenement", settings: "Param\u00e8tres" },
   "de-DE": { coach: "Chat", plan: "Plan", resources: "Materialien", training: "Training", settings: "Einstellungen" },
@@ -14441,7 +14441,7 @@ export function App() {
                 !composerUsesTrainingFlow && activeView === "plan"
                   ? {
                       id: "plan-composer-mode",
-                      label: t.plan,
+                      label: resolvePlanComposerCopy(layout.composerLanguage).planLabel,
                       value: resolvedPlanComposerMode,
                       options: planComposerModes.map((mode) => ({
                         value: mode.id,

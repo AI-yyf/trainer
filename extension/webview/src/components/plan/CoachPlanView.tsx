@@ -19,6 +19,7 @@ import {
 } from "../icons";
 import { useTranslation } from "../../lib/i18n/useTranslation";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
+import { getMotivationalMessage, type MotivationLanguage } from "../../../../../shared/src/motivation";
 import type {
   EvidenceItemView,
   EvidenceQueueView,
@@ -1818,6 +1819,13 @@ export function CoachPlanView(props: CoachPlanViewProps) {
 
       {planTabBar}
 
+      <LearningHomeOverview
+        activeStageTitle={activeStageTitle ?? ""}
+        onStageContinue={
+          onStageSelect && activeStage ? () => onStageSelect(activeStage) : undefined
+        }
+      />
+
       {planTab === "progress" ? (
         <PlanDashboard plan={plan} />
       ) : (
@@ -2476,6 +2484,77 @@ function collectPlanMastery(
   (dueReviews ?? []).forEach((item) => consider(item.concept, item.masteryScore));
   (reviewPoints ?? []).forEach((item) => consider(item.concept, item.masteryScore));
   return masteryByConcept;
+}
+
+/**
+ * Learning-home overview for the top of the Plan (学习主页) view. Reads the
+ * shared workbench store directly — due reviews, wins and view switching come
+ * from the store, so no new external props are threaded through App.
+ */
+function LearningHomeOverview({
+  activeStageTitle,
+  onStageContinue,
+}: {
+  activeStageTitle: string;
+  onStageContinue?: () => void;
+}) {
+  const { t, language } = useTranslation();
+  const setActiveView = useWorkbenchState((state) => state.setActiveView);
+  const storedDueReviews = useWorkbenchState((state) => state.data.memory.dueReviews);
+  const storedDueCount = useWorkbenchState((state) => state.data.memory.dueReviewCount);
+  const recentWins = useWorkbenchState((state) => state.data.memory.recentWins);
+  const motivationLanguage: MotivationLanguage = language === "zh-CN" ? "zh-CN" : "en-US";
+  const dueCount = storedDueCount ?? storedDueReviews.length;
+  const motivation = getMotivationalMessage(0, 0, 0, dueCount, motivationLanguage);
+  const nextReview = storedDueReviews[0];
+  const dueCountDisplay = dueCount > 0 ? String(dueCount) : "0";
+
+  return (
+    <div className="coach-plan-view__home-overview" data-learning-home-overview="true">
+      <div className="coach-plan-view__home-stats" aria-label={t("learningHomeDueLabel")}>
+        <span className="coach-plan-view__home-stat">
+          <strong>{dueCountDisplay}</strong> {t("learningHomeDueLabel")}
+        </span>
+        {nextReview ? (
+          <span
+            className="coach-plan-view__home-stat"
+            title={[nextReview.concept, nextReview.reason].filter(Boolean).join(" · ")}
+          >
+            {t("learningHomeNextLabel")}: <strong>{nextReview.concept}</strong>
+          </span>
+        ) : null}
+        <span className="coach-plan-view__home-stat">
+          {t("learningHomeWinsLabel")}: <strong>{recentWins.length}</strong>
+        </span>
+        {activeStageTitle ? (
+          <span className="coach-plan-view__home-stat coach-plan-view__home-stat--stage" title={activeStageTitle}>
+            <strong>{activeStageTitle}</strong>
+          </span>
+        ) : null}
+      </div>
+      <p className="coach-plan-view__home-message" data-motivation-type={motivation.type}>
+        {motivation.message}
+      </p>
+      <div className="coach-plan-view__home-cta">
+        {dueCount > 0 ? (
+          <ActionButton
+            tone="accent"
+            label={t("learningHomeStartReview")}
+            onClick={() => setActiveView("training")}
+            fullWidth={false}
+          />
+        ) : (
+          <ActionButton
+            tone="accent"
+            label={t("learningHomeContinueTask")}
+            onClick={onStageContinue}
+            disabled={!onStageContinue}
+            fullWidth={false}
+          />
+        )}
+      </div>
+    </div>
+  );
 }
 
 /**
