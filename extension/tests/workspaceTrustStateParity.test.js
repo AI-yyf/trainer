@@ -293,7 +293,13 @@ test('Settings first screen paints live trust sentence, not leftover sandbox chr
   assert.match(app, /workspaceAuthority=\{liveSandboxState\?\.authority\}/);
   assert.match(
     app,
-    /workspaceTrustState=\{readWorkspaceTrustStateFromCapabilitySummary\(\s*liveSandboxState\?\.capabilitySummary/,
+    /workspaceTrustState=\{effectiveWorkspaceTrustState/,
+  );
+  // First runs have no capability summary; the host window-trust verdict
+  // fills the gap so the strip never asks a trusted window to trust itself.
+  assert.match(
+    app,
+    /const effectiveWorkspaceTrustState = resolveEffectiveTrustState\(\s*readWorkspaceTrustStateFromCapabilitySummary\(\s*liveSandboxState\?\.capabilitySummary/,
   );
   assert.match(app, /leftoverResourceSandboxStateIsNotLive\(/);
   assert.match(app, /const liveSandboxState = leftoverResourceSandboxStateNotLive/);

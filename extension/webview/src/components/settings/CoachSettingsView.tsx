@@ -7571,13 +7571,116 @@ export function CoachSettingsView({
 
         </section>
 
-        <WorkspaceRootRecoveryPanel
-          trainerWorkspace={trainerWorkspace}
-          onChooseRoot={onChooseTrainerWorkspaceRoot}
-          onMigrateRoot={onMigrateTrainerWorkspaceRoot}
-          onBackup={onBackupTrainerWorkspace}
-          onRestore={onRestoreTrainerWorkspaceBackup}
-        />
+        <CollapseSection
+          level={1}
+          persistenceKey="settings-workspace"
+          title={<span className="eyebrow">{resolveWorkbenchCopy(language).workspaceRootControl}</span>}
+        >
+          <div className="settings-sheet__minor-body">
+            <WorkspaceRootRecoveryPanel
+              trainerWorkspace={trainerWorkspace}
+              onChooseRoot={onChooseTrainerWorkspaceRoot}
+              onMigrateRoot={onMigrateTrainerWorkspaceRoot}
+              onBackup={onBackupTrainerWorkspace}
+              onRestore={onRestoreTrainerWorkspaceBackup}
+            />
+            {resourceSandbox ? (
+              <section className="settings-sheet__workspace-card">
+                <div className="settings-sheet__authority-block-head">
+                  <span className="eyebrow">{copy.managedDataFolder}</span>
+                  <div className="settings-actions settings-actions--compact">
+                    <ActionButton
+                      fullWidth={false}
+                      icon={<FolderIcon size={14} />}
+                      label={copy.managedDataFolderChoose}
+                      detail={language === "zh-CN" ? "切换并重启后端" : "Switch and restart"}
+                      onClick={onChooseManagedDataFolder}
+                    />
+                    <ActionButton
+                      fullWidth={false}
+                      icon={<RefreshIcon size={14} />}
+                      label={copy.managedDataFolderReset}
+                      detail={language === "zh-CN" ? "回到推荐目录" : "Return to recommended"}
+                      onClick={onResetManagedDataFolder}
+                    />
+                  </div>
+                </div>
+                <div className="settings-sheet__summary-grid">
+                  <SummaryCard
+                    label={copy.effectiveNow}
+                    value={
+                      <span
+                        className="settings-sheet__path-value"
+                        title={resourceSandbox.effectivePath}
+                      >
+                        {resourceSandbox.effectivePath}
+                      </span>
+                    }
+                    detail={managedDataSourceLabel}
+                  />
+                  {showManagedDataRecommendedCard ? (
+                    <SummaryCard
+                      label={copy.managedDataFolderRecommended}
+                      value={
+                        <span
+                          className="settings-sheet__path-value"
+                          title={resourceSandbox.defaultPath}
+                        >
+                          {resourceSandbox.defaultPath}
+                        </span>
+                      }
+                    />
+                  ) : null}
+                  {showManagedDataCustomCard ? (
+                    <SummaryCard
+                      label={copy.managedDataFolderCustom}
+                      value={
+                        <span
+                          className="settings-sheet__path-value"
+                          title={resourceSandbox.configuredPath}
+                        >
+                          {resourceSandbox.configuredPath}
+                        </span>
+                      }
+                    />
+                  ) : null}
+                </div>
+                {showManagedDataFallbackNote ? (
+                  <p className="settings-sheet__note settings-sheet__note--compact">
+                    {copy.managedDataFolderFallbackNote}
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
+
+            <div className="settings-sheet__authority-block">
+              <div className="settings-sheet__authority-block-head">
+                <span className="eyebrow">{copy.currentWorkspace}</span>
+                <ActionButton
+                  fullWidth={false}
+                  icon={<RefreshIcon size={14} />}
+                  label={copy.refreshWorkspaceAuthority}
+                  detail={settingsStatusPhrase(language, "rereadSandboxBoundary")}
+                  onClick={onRefreshWorkspaceAuthority}
+                />
+              </div>
+              {workspaceAuthority ? (
+                <WorkspaceAuthoritySummary
+                  language={language}
+                  authority={workspaceAuthority}
+                  className="workspace-authority-summary--compact"
+                />
+              ) : (
+                <div className="empty-state settings-sheet__authority-empty">
+                  <span className="empty-state__icon" aria-hidden="true">
+                    <GearIcon size={16} />
+                  </span>
+                  <span className="empty-state__title">{copy.workspaceAuthorityEmpty}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </CollapseSection>
 
         <div
           ref={teachingPrefsAnchorRef}
@@ -7884,102 +7987,6 @@ export function CoachSettingsView({
               <p className="settings-sheet__note settings-sheet__note--compact">{runtimeFlowSummary}</p>
             </div>
           </details>
-
-          {resourceSandbox ? (
-            <section className="settings-sheet__workspace-card">
-              <div className="settings-sheet__authority-block-head">
-                <span className="eyebrow">{copy.managedDataFolder}</span>
-                <div className="settings-actions settings-actions--compact">
-                  <ActionButton
-                    fullWidth={false}
-                    icon={<FolderIcon size={14} />}
-                    label={copy.managedDataFolderChoose}
-                    detail={language === "zh-CN" ? "切换并重启后端" : "Switch and restart"}
-                    onClick={onChooseManagedDataFolder}
-                  />
-                  <ActionButton
-                    fullWidth={false}
-                    icon={<RefreshIcon size={14} />}
-                    label={copy.managedDataFolderReset}
-                    detail={language === "zh-CN" ? "回到推荐目录" : "Return to recommended"}
-                    onClick={onResetManagedDataFolder}
-                  />
-                </div>
-              </div>
-              <div className="settings-sheet__summary-grid">
-                <SummaryCard
-                  label={copy.effectiveNow}
-                  value={
-                    <span
-                      className="settings-sheet__path-value"
-                      title={resourceSandbox.effectivePath}
-                    >
-                      {resourceSandbox.effectivePath}
-                    </span>
-                  }
-                  detail={managedDataSourceLabel}
-                />
-                {showManagedDataRecommendedCard ? (
-                  <SummaryCard
-                    label={copy.managedDataFolderRecommended}
-                    value={
-                      <span
-                        className="settings-sheet__path-value"
-                        title={resourceSandbox.defaultPath}
-                      >
-                        {resourceSandbox.defaultPath}
-                      </span>
-                    }
-                  />
-                ) : null}
-                {showManagedDataCustomCard ? (
-                  <SummaryCard
-                    label={copy.managedDataFolderCustom}
-                    value={
-                      <span
-                        className="settings-sheet__path-value"
-                        title={resourceSandbox.configuredPath}
-                      >
-                        {resourceSandbox.configuredPath}
-                      </span>
-                    }
-                  />
-                ) : null}
-              </div>
-              {showManagedDataFallbackNote ? (
-                <p className="settings-sheet__note settings-sheet__note--compact">
-                  {copy.managedDataFolderFallbackNote}
-                </p>
-              ) : null}
-            </section>
-          ) : null}
-
-          <div className="settings-sheet__authority-block">
-            <div className="settings-sheet__authority-block-head">
-              <span className="eyebrow">{copy.currentWorkspace}</span>
-              <ActionButton
-                fullWidth={false}
-                icon={<RefreshIcon size={14} />}
-                label={copy.refreshWorkspaceAuthority}
-                detail={settingsStatusPhrase(language, "rereadSandboxBoundary")}
-                onClick={onRefreshWorkspaceAuthority}
-              />
-            </div>
-            {workspaceAuthority ? (
-              <WorkspaceAuthoritySummary
-                language={language}
-                authority={workspaceAuthority}
-                className="workspace-authority-summary--compact"
-              />
-            ) : (
-              <div className="empty-state settings-sheet__authority-empty">
-                <span className="empty-state__icon" aria-hidden="true">
-                  <GearIcon size={16} />
-                </span>
-                <span className="empty-state__title">{copy.workspaceAuthorityEmpty}</span>
-              </div>
-            )}
-          </div>
 
             </div>
         </CollapseSection>

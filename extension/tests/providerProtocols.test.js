@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const sharedProviderProtocolsModulePath = path.resolve(
   __dirname,
@@ -85,7 +86,7 @@ test('scheme-less provider base URLs stay scheme-less for the sidecar to resolve
 });
 
 test('looksLikeSchemelessProviderUrl recognizes service hosts pasted without a scheme', async () => {
-  const { looksLikeSchemelessProviderUrl } = await import(sharedProviderProtocolsModulePath);
+  const { looksLikeSchemelessProviderUrl } = await import(pathToFileURL(sharedProviderProtocolsModulePath).href);
 
   assert.equal(looksLikeSchemelessProviderUrl('minimax.redfast.top'), true);
   assert.equal(looksLikeSchemelessProviderUrl('api.deepseek.com/v1'), true);

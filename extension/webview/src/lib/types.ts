@@ -891,6 +891,7 @@ export interface MemorySnapshot {
   workspace?: {
     workspaceId?: string;
     personalAccountTrusted?: boolean;
+    windowTrusted?: boolean;
     responseLanguage?: ComposerLanguage;
     answerMode?: CoachAnswerMode;
     resourceSearchMode?: ResourceSearchMode;

@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const sharedProviderGatewayModulePath = path.resolve(
   __dirname,
@@ -30,7 +31,7 @@ const NEWAPI_CONNECTION_BLOB = JSON.stringify({
 });
 
 test('relay connection blobs split into base URL plus API key in one paste', async () => {
-  const { parseProviderConnectionPaste } = await import(sharedProviderGatewayModulePath);
+  const { parseProviderConnectionPaste } = await import(pathToFileURL(sharedProviderGatewayModulePath).href);
 
   const parsed = parseProviderConnectionPaste(NEWAPI_CONNECTION_BLOB);
   assert.deepEqual(parsed, {
@@ -41,7 +42,7 @@ test('relay connection blobs split into base URL plus API key in one paste', asy
 });
 
 test('connection blob parsing tolerates copy wrappers and field aliases', async () => {
-  const { parseProviderConnectionPaste } = await import(sharedProviderGatewayModulePath);
+  const { parseProviderConnectionPaste } = await import(pathToFileURL(sharedProviderGatewayModulePath).href);
 
   assert.deepEqual(parseProviderConnectionPaste('```json\n' + NEWAPI_CONNECTION_BLOB + '\n```'), {
     baseUrl: 'http://minimax.redfast.top',
@@ -65,7 +66,7 @@ test('connection blob parsing tolerates copy wrappers and field aliases', async 
 });
 
 test('values that are not a full connection blob are never claimed', async () => {
-  const { parseProviderConnectionPaste } = await import(sharedProviderGatewayModulePath);
+  const { parseProviderConnectionPaste } = await import(pathToFileURL(sharedProviderGatewayModulePath).href);
 
   assert.equal(parseProviderConnectionPaste('sk-K5DO7XzgBun6jFTLJZLF9UJE0W3bHRvcBugjUtpocmorrXMS'), null);
   assert.equal(parseProviderConnectionPaste('http://minimax.redfast.top'), null);

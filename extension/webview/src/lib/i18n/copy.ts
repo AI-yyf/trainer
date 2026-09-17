@@ -885,7 +885,7 @@ export const copyTable = {
     coachArtifactFullDetails: "查看完整内容",
     trainer: "教练",
     you: "你",
-    plan: "学习主页",
+    plan: "学习",
     settings: "设置",
     chat: "对话",
     workspace: "工作区",

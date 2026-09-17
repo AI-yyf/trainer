@@ -35,11 +35,15 @@ test('App derives onboarding state from workbench data and wires every wizard ac
 
   assert.match(
     app,
-    /import \{ deriveOnboardingSteps \} from "\.\.\/\.\.\/\.\.\/\.\.\/shared\/src\/onboarding";/,
+    /import \{\s*deriveOnboardingSteps,\s*resolveEffectiveTrustState,\s*\} from "\.\.\/\.\.\/\.\.\/\.\.\/shared\/src\/onboarding";/,
   );
   assert.match(
     app,
-    /const onboarding = deriveOnboardingSteps\(\{\s*workspaceAdmissionStatus: trainerWorkspaceAdmission\?\.status,\s*workspaceTrustState: readWorkspaceTrustStateFromCapabilitySummary\(/,
+    /const effectiveWorkspaceTrustState = resolveEffectiveTrustState\(\s*readWorkspaceTrustStateFromCapabilitySummary\(/,
+  );
+  assert.match(
+    app,
+    /const onboarding = deriveOnboardingSteps\(\{\s*workspaceAdmissionStatus: trainerWorkspaceAdmission\?\.status,\s*workspaceTrustState: effectiveWorkspaceTrustState,/,
   );
   // Wizard covers true cold starts only; saved-connection recovery stays untouched.
   assert.match(

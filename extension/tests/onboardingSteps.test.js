@@ -13,7 +13,12 @@ const onboardingModulePath = path.resolve(
   'onboarding.js',
 );
 
-const { deriveOnboardingSteps, isOnboardingStepDone, ONBOARDING_STEP_ORDER } = require(
+const {
+  deriveOnboardingSteps,
+  isOnboardingStepDone,
+  resolveEffectiveTrustState,
+  ONBOARDING_STEP_ORDER,
+} = require(
   onboardingModulePath,
 );
 
@@ -93,4 +98,16 @@ test('model step requires a configured, keyed, unblocked provider', () => {
     }),
     true,
   );
+});
+
+test('effective trust falls back to the window verdict when capabilities are absent', () => {
+  // Genuine first run: no capability summary yet, but the window is trusted —
+  // the learner must not be asked to trust the window again.
+  assert.equal(resolveEffectiveTrustState('unknown', true), 'trusted');
+  assert.equal(resolveEffectiveTrustState(undefined, true), 'trusted');
+  assert.equal(resolveEffectiveTrustState(undefined, false), 'unknown');
+  // An explicit sidecar verdict always wins.
+  assert.equal(resolveEffectiveTrustState('untrusted', true), 'untrusted');
+  assert.equal(resolveEffectiveTrustState('trusted', false), 'trusted');
+  assert.equal(resolveEffectiveTrustState('remote', false), 'remote');
 });
