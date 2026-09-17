@@ -13,6 +13,7 @@ from ...core.models import (
 )
 from ...llm.provider_gateway import NEWAPI_CONNECTION_TYPE
 from ...llm.provider_protocols import provider_protocol_family
+from .._helpers import contains_cjk_text, localized_text, prefers_chinese
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 
@@ -20,9 +21,6 @@ from ._deps import RouterDeps
 def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
     router = APIRouter(tags=["provider"])
 
-    localized_text = deps.localized_text
-    contains_cjk_text = deps.contains_cjk_text
-    prefers_chinese = deps.prefers_chinese
     operation_reliability_record = deps.operation_reliability_record
     provider_api_key_from_payload = deps.provider_api_key_from_payload
     provider_capabilities_from_payload = deps.provider_capabilities_from_payload

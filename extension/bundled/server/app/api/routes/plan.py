@@ -25,6 +25,7 @@ from ...memory.workspace_recovery import (
     live_plan_update_persist_chrome,
     stamp_produced_workspace_record,
 )
+from .._helpers import localized_text
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 
@@ -35,7 +36,6 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
     current_workspace_id = deps.current_workspace_id
     current_snapshot = deps.current_snapshot
     hydrate_snapshot = deps.hydrate_snapshot
-    localized_text = deps.localized_text
     operation_reliability_record = deps.operation_reliability_record
     provider_config_from_payload = deps.provider_config_from_payload
     provider_api_key_from_payload = deps.provider_api_key_from_payload
