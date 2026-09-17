@@ -129,7 +129,10 @@ import {
   waitingComposerEnqueueFailureText,
 } from "../../../../shared/src/errorSurfaceSanitizer";
 import { readWorkspaceTrustStateFromCapabilitySummary } from "../../../../shared/src/workspaceTrustState";
-import { deriveOnboardingSteps } from "../../../../shared/src/onboarding";
+import {
+  deriveOnboardingSteps,
+  resolveEffectiveTrustState,
+} from "../../../../shared/src/onboarding";
 import {
   blockedComposerPresenceMessage,
   blockedComposerSetupMessage,
@@ -885,7 +888,7 @@ const viewLabels: Record<
   ComposerLanguage,
   Record<"coach" | "plan" | "resources" | "training" | "settings", string>
 > = {
-  "zh-CN": { coach: "\u5bf9\u8bdd", plan: "\u5b66\u4e60\u4e3b\u9875", resources: "\u8d44\u6599", training: "\u8bad\u7ec3", settings: "\u8bbe\u7f6e" },
+  "zh-CN": { coach: "\u5bf9\u8bdd", plan: "\u5b66\u4e60", resources: "\u8d44\u6599", training: "\u8bad\u7ec3", settings: "\u8bbe\u7f6e" },
   "en-US": { coach: "Chat", plan: "Learning Home", resources: "Resources", training: "Training", settings: "Settings" },
   "es-ES": { coach: "Chat", plan: "Plan", resources: "Recursos", training: "Entrenamiento", settings: "Ajustes" },
   "fr-FR": { coach: "Chat", plan: "Plan", resources: "Ressources", training: "Entra\u00eenement", settings: "Param\u00e8tres" },
@@ -11331,11 +11334,17 @@ export function App() {
       payload: payload === undefined ? { commandId } : { commandId, payload },
     });
   };
-  const onboarding = deriveOnboardingSteps({
-    workspaceAdmissionStatus: trainerWorkspaceAdmission?.status,
-    workspaceTrustState: readWorkspaceTrustStateFromCapabilitySummary(
+  // First runs have no capability summary yet; the host window trust verdict
+  // fills the gap so a trusted window is never asked to trust itself again.
+  const effectiveWorkspaceTrustState = resolveEffectiveTrustState(
+    readWorkspaceTrustStateFromCapabilitySummary(
       liveSandboxState?.capabilitySummary as Record<string, unknown> | undefined,
     ),
+    data.memory.workspace?.windowTrusted === true,
+  );
+  const onboarding = deriveOnboardingSteps({
+    workspaceAdmissionStatus: trainerWorkspaceAdmission?.status,
+    workspaceTrustState: effectiveWorkspaceTrustState,
     providerConfigured: data.providerConfig.configured,
     providerApiKeyConfigured: data.providerConfig.apiKeyConfigured,
     providerSendBlocked: providerSendState.blocked,
@@ -13024,9 +13033,7 @@ export function App() {
           resolvedCoachSignal ? learnerSignalLabel(resolvedCoachSignal, layout.composerLanguage) : undefined
         }
         workspaceAuthority={liveSandboxState?.authority}
-        workspaceTrustState={readWorkspaceTrustStateFromCapabilitySummary(
-          liveSandboxState?.capabilitySummary as Record<string, unknown> | undefined,
-        )}
+        workspaceTrustState={effectiveWorkspaceTrustState}
         resourceSandbox={data.memory.workspace?.resourceSandbox ?? null}
         trainerWorkspace={trainerWorkspaceAdmission}
         learnerName={

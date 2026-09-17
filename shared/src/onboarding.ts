@@ -93,3 +93,21 @@ export function deriveOnboardingSteps(
     complete: !activeStep,
   };
 }
+
+/**
+ * Resolve the trust state the learner actually experiences.
+ *
+ * The capability summary is only produced after the sidecar has classified
+ * the workspace, so on a genuine first run it is `unknown` even though the
+ * window is already trusted — the wizard must not ask the learner to trust a
+ * window VS Code already trusts. Explicit `untrusted` always wins.
+ */
+export function resolveEffectiveTrustState(
+  capabilityState: OnboardingTrustState | undefined,
+  windowTrusted: boolean,
+): OnboardingTrustState {
+  if (capabilityState === "trusted" || capabilityState === "remote" || capabilityState === "untrusted") {
+    return capabilityState;
+  }
+  return windowTrusted ? "trusted" : (capabilityState ?? "unknown");
+}

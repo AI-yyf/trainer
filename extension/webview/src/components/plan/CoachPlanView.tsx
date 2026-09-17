@@ -2487,7 +2487,7 @@ function collectPlanMastery(
 }
 
 /**
- * Learning-home overview for the top of the Plan (学习主页) view. Reads the
+ * Learning-home overview for the top of the Plan (学习) view. Reads the
  * shared workbench store directly — due reviews, wins and view switching come
  * from the store, so no new external props are threaded through App.
  */

@@ -198,18 +198,37 @@ function canonicalPathForComparison(value: string): string {
   return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized;
 }
 
+function stripWindowsExtendedPathPrefix(value: string): string {
+  // fs.realpath on Windows answers with extended-length paths
+  // (\\?\C:\... and \\?\UNC\server\share). They are pure spellings of the
+  // same directory; strip them so alias comparisons stay textual.
+  if (value.startsWith('\\\\?\\UNC\\')) {
+    return `\\\\${value.slice(8)}`;
+  }
+  if (value.startsWith('\\\\?\\')) {
+    return value.slice(4);
+  }
+  return value;
+}
+
 function pathsEqual(left: string, right: string): boolean {
   if (canonicalPathForComparison(left) === canonicalPathForComparison(right)) {
     return true;
   }
-  // POSIX symlink aliases (/var vs /private/var, /tmp vs /private/tmp) must
-  // not make the same physical directory look like a different workspace
-  // root, so fall back to resolved-path comparison before rejecting.
-  if (process.platform === 'win32') {
-    return false;
-  }
+  // Symlink aliases (/var vs /private/var, /tmp vs /private/tmp on POSIX;
+  // junctions and \??\ aliases on Windows) must not make the same physical
+  // directory look like a different workspace root, so fall back to
+  // resolved-path comparison before rejecting.
   try {
-    return fsSync.realpathSync(left) === fsSync.realpathSync(right);
+    const leftReal = fsSync.realpathSync(left);
+    const rightReal = fsSync.realpathSync(right);
+    if (process.platform === 'win32') {
+      return (
+        stripWindowsExtendedPathPrefix(leftReal) ===
+        stripWindowsExtendedPathPrefix(rightReal)
+      );
+    }
+    return leftReal === rightReal;
   } catch {
     return false;
   }

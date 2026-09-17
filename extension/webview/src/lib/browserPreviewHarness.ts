@@ -1022,7 +1022,7 @@ function liveAgentHandoffPrompt(
           : "handle the current resource";
   return previewText(
     language,
-    `我在${action.payload.commandId === trainerCommands.openResource ? "资料" : "学习主页"}视图请求${commandLabel}。请使用真实 Agent 工具检查当前状态，说明可执行的下一步；不要伪造已经完成的写入。`,
+    `我在${action.payload.commandId === trainerCommands.openResource ? "资料" : "学习"}视图请求${commandLabel}。请使用真实 Agent 工具检查当前状态，说明可执行的下一步；不要伪造已经完成的写入。`,
     `I requested "${commandLabel}" from the ${action.payload.commandId === trainerCommands.openResource ? "Resources" : "Plan"} view. Use the real Agent tools to inspect the current state and explain the next executable step; do not claim a write completed unless it did.`,
   );
 }

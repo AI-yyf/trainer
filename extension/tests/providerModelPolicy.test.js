@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const providerModelPolicyModulePath = path.resolve(
   __dirname,
@@ -48,7 +49,7 @@ test('provider model policy filters new choices while retaining a recoverable cu
 });
 
 test('pickDefaultModelFromList prefers fast tiers then alphabetical order', async () => {
-  const { pickDefaultModelFromList } = await import(providerModelPolicyModulePath);
+  const { pickDefaultModelFromList } = await import(pathToFileURL(providerModelPolicyModulePath).href);
 
   assert.equal(
     pickDefaultModelFromList(['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed']),
@@ -60,7 +61,7 @@ test('pickDefaultModelFromList prefers fast tiers then alphabetical order', asyn
 });
 
 test('pickFreshConnectionModel never overrides explicit or still-offered models', async () => {
-  const { pickFreshConnectionModel } = await import(providerModelPolicyModulePath);
+  const { pickFreshConnectionModel } = await import(pathToFileURL(providerModelPolicyModulePath).href);
   const models = ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3'];
 
   // Fresh paste without a model: adopt the quick pick.

@@ -983,6 +983,7 @@ export interface MemorySnapshotView {
   workspace?: {
     workspaceId?: string;
     personalAccountTrusted?: boolean;
+    windowTrusted?: boolean;
     responseLanguage?: ComposerLanguage;
     answerMode?: 'auto' | 'coach-first' | 'balanced' | 'direct';
     resourceSearchMode?: ResourceSearchMode;

@@ -31,7 +31,6 @@ export function WorkspaceRootRecoveryPanel({
           aria-hidden="true"
         />
         <div className="workspace-root-recovery__status-copy">
-          <h3 className="workspace-root-recovery__title">{t("workspaceRootControl")}</h3>
           <p className="workspace-root-recovery__detail">
             {rootIsReady ? t("workspaceRootReady") : t("workspaceAdmissionRootMissingDetail")}
           </p>
@@ -40,13 +39,10 @@ export function WorkspaceRootRecoveryPanel({
   );
 
   if (rootIsReady) {
+    // The unified settings workspace section owns the header; the panel body
+    // stays chrome-free so the title is not painted twice.
     return (
-      <details className="workspace-root-recovery workspace-root-recovery--ready" aria-label={t("workspaceRootControl")}>
-        <summary>
-          <span>{t("workspaceRootControl")}</span>
-          <em>{t("workspaceRootReady")}</em>
-        </summary>
-        {statusBlock}
+      <div className="workspace-root-recovery workspace-root-recovery--ready">
         {rootPath ? (
           <p className="workspace-root-recovery__path" title={rootPath}>
             <span>{t("workspaceRootPath")}</span>
@@ -84,7 +80,7 @@ export function WorkspaceRootRecoveryPanel({
             />
           </div>
         </details>
-      </details>
+      </div>
     );
   }
 

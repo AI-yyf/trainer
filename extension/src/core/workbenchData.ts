@@ -299,6 +299,16 @@ export function applyDerivedHostState(
     ...data,
     workspaceName: workspaceName(workspace),
     sessionLabel: sessionId ?? data.sessionLabel,
+    memory: {
+      ...data.memory,
+      workspace: {
+        ...data.memory.workspace,
+        // Host window trust verdict (VS Code workspace trust). The sidecar
+        // capability summary only appears after the first classification, so
+        // the webview falls back to this flag on a genuine first run.
+        windowTrusted: workspace.trusted,
+      },
+    },
     connection: {
       state: toConnectionState(sidecar),
       provider: toProviderSummary(provider),
