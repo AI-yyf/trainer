@@ -1893,6 +1893,10 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
       );
   }
 
+  .view-stack--single {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
   .view-stack--resources,
   .view-stack--training {
     --view-stack-chat-min-height: 104px;
@@ -14621,24 +14625,36 @@ button.resources-sandbox-layout__chip:focus-visible {
 
 .settings-sheet__layout {
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+  min-height: 0;
+}
+
+/* The pane hosts the sheet: keep it non-scrolling so the category nav can
+   sit as a real footer and never overlay the content beneath it. */
+.coach-settings-view.settings-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.coach-settings-view .settings-sheet__body {
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 .settings-nav {
   order: 2;
   display: flex;
+  flex: none;
   flex-direction: row;
   gap: 2px;
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
   padding: 6px 2px 4px;
   border-top: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
-  background: color-mix(in srgb, var(--bg-0, var(--panel)) 92%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: var(--bg-0, var(--panel));
 }
 
 .settings-nav__item {
@@ -14682,11 +14698,14 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .settings-sheet__pane {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  overflow-y: auto;
+  padding-bottom: 4px;
 }
 
 .settings-sheet__body--hierarchical > .settings-section {
