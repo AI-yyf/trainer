@@ -48,6 +48,15 @@ const resourcesViewPath = path.resolve(
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const modelsPath = path.resolve(__dirname, '..', '..', 'server', 'app', 'core', 'models.py');
 const routersPath = path.resolve(__dirname, '..', '..', 'server', 'app', 'api', 'routers.py');
+const apiRoutesDir = path.resolve(__dirname, '..', '..', 'server', 'app', 'api', 'routes');
+const readApiSource = () =>
+  fs.readFileSync(routersPath, 'utf8') +
+  fs
+    .readdirSync(apiRoutesDir)
+    .filter((f) => f.endsWith('.py'))
+    .map((f) => fs.readFileSync(path.join(apiRoutesDir, f), 'utf8'))
+    .join('\n');
+
 const toolsPath = path.resolve(__dirname, '..', '..', 'server', 'app', 'llm', 'tools.py');
 const runtimePath = path.resolve(__dirname, '..', '..', 'server', 'app', 'api', 'runtime.py');
 
@@ -128,7 +137,7 @@ test('non-stream response notes organize tool_result pending like stream', () =>
 
 test('cancel clears host pending and posts server organization cancel', () => {
   const resources = fs.readFileSync(resourceCommandsPath, 'utf8');
-  const routers = fs.readFileSync(routersPath, 'utf8');
+  const routers = readApiSource();
   const session = fs.readFileSync(sessionCommandsPath, 'utf8');
   assert.match(resources, /export async function cancelResourceOrganizationCommand/);
   assert.match(resources, /cancelResourceOrganizationConfirm\(context\)/);
@@ -152,7 +161,7 @@ test('click path sets stamp: host arms only after pending; request body consumes
   const app = fs.readFileSync(appPath, 'utf8');
   const view = fs.readFileSync(resourcesViewPath, 'utf8');
   const models = fs.readFileSync(modelsPath, 'utf8');
-  const routers = fs.readFileSync(routersPath, 'utf8');
+  const routers = readApiSource();
   const runtime = fs.readFileSync(runtimePath, 'utf8');
 
   assert.match(session, /export function noteResourceOrganizationToolResult/);

@@ -15,6 +15,23 @@ const recoveryPath = path.resolve(
   'workspace_recovery.py',
 );
 const routersPath = path.resolve(__dirname, '..', '..', 'server', 'app', 'api', 'routers.py');
+const apiRoutesDir = path.resolve(__dirname, '..', '..', 'server', 'app', 'api', 'routes');
+const bundledApiRoutesDir = path.resolve(__dirname, '..', 'bundled', 'server', 'app', 'api', 'routes');
+const readApiSource = () =>
+  fs.readFileSync(routersPath, 'utf8') +
+  fs
+    .readdirSync(apiRoutesDir)
+    .filter((f) => f.endsWith('.py'))
+    .map((f) => fs.readFileSync(path.join(apiRoutesDir, f), 'utf8'))
+    .join('\n');
+const readBundledApiSource = () =>
+  fs.readFileSync(bundledRoutersPath, 'utf8') +
+  fs
+    .readdirSync(bundledApiRoutesDir)
+    .filter((f) => f.endsWith('.py'))
+    .map((f) => fs.readFileSync(path.join(bundledApiRoutesDir, f), 'utf8'))
+    .join('\n');
+
 const servicePath = path.resolve(__dirname, '..', '..', 'server', 'app', 'memory', 'service.py');
 const orientationPath = path.resolve(
   __dirname,
@@ -91,7 +108,7 @@ const bundledRepositoryPath = path.resolve(
 
 test('leftover bound plan competing identity is omitted after generate on five views', () => {
   const recovery = fs.readFileSync(recoveryPath, 'utf8');
-  const routers = fs.readFileSync(routersPath, 'utf8');
+  const routers = readApiSource();
   const service = fs.readFileSync(servicePath, 'utf8');
   const orientation = fs.readFileSync(orientationPath, 'utf8');
   const repository = fs.readFileSync(repositoryPath, 'utf8');
@@ -99,7 +116,7 @@ test('leftover bound plan competing identity is omitted after generate on five v
   const sharedOrientation = fs.readFileSync(sharedOrientationPath, 'utf8');
   const coachOrientation = fs.readFileSync(coachOrientationPath, 'utf8');
   const bundledRecovery = fs.readFileSync(bundledRecoveryPath, 'utf8');
-  const bundledRouters = fs.readFileSync(bundledRoutersPath, 'utf8');
+  const bundledRouters = readBundledApiSource();
   const bundledService = fs.readFileSync(bundledServicePath, 'utf8');
   const bundledOrientation = fs.readFileSync(bundledOrientationPath, 'utf8');
   const bundledRepository = fs.readFileSync(bundledRepositoryPath, 'utf8');

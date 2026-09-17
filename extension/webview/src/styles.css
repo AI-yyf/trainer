@@ -14606,28 +14606,34 @@ button.resources-sandbox-layout__chip:focus-visible {
 
 .settings-sheet__layout {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 10px;
   min-width: 0;
 }
 
 .settings-nav {
-  flex: none;
-  width: 106px;
+  order: 2;
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  flex-direction: row;
+  gap: 2px;
   position: sticky;
-  top: 4px;
-  padding-top: 2px;
+  bottom: 0;
+  z-index: 2;
+  padding: 6px 2px 4px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  background: color-mix(in srgb, var(--bg-0, var(--panel)) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .settings-nav__item {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 6px 8px;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 2px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -14635,7 +14641,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   font-family: inherit;
   font-size: var(--trainer-font-2xs);
   line-height: 1.3;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
 }
 
@@ -14647,17 +14653,17 @@ button.resources-sandbox-layout__chip:focus-visible {
 .settings-nav__item.is-active {
   color: var(--fg-0);
   font-weight: var(--trainer-font-weight-medium);
-  background: color-mix(in srgb, var(--fg-0) 7%, transparent);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--fg-0) 6%, transparent);
+  box-shadow: inset 0 2px 0 var(--accent);
 }
 
 .settings-nav__label {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-height: 1.25;
 }
 
 .settings-sheet__pane {
@@ -14666,32 +14672,6 @@ button.resources-sandbox-layout__chip:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-@media (max-width: 360px) {
-  .settings-sheet__layout {
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .settings-nav {
-    position: static;
-    width: 100%;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding: 0 0 4px;
-    border-bottom: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
-  }
-
-  .settings-nav__item {
-    width: auto;
-    flex: none;
-  }
-
-  .settings-nav__item.is-active {
-    box-shadow: inset 0 -2px 0 var(--accent);
-  }
 }
 
 .settings-sheet__body--hierarchical > .settings-section {

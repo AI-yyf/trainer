@@ -23,6 +23,15 @@ const settingsViewPath = path.resolve(
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const resourceCommandsPath = path.resolve(__dirname, '..', 'src', 'commands', 'resourceCommands.ts');
 const routersPath = path.resolve(__dirname, '..', '..', 'server', 'app', 'api', 'routers.py');
+const apiRoutesDir = path.resolve(__dirname, '..', '..', 'server', 'app', 'api', 'routes');
+const readApiSource = () =>
+  fs.readFileSync(routersPath, 'utf8') +
+  fs
+    .readdirSync(apiRoutesDir)
+    .filter((f) => f.endsWith('.py'))
+    .map((f) => fs.readFileSync(path.join(apiRoutesDir, f), 'utf8'))
+    .join('\n');
+
 
 test('workspace trust states map to honest sentences (zh-CN + en-US)', () => {
   assert.equal(normalizeWorkspaceTrustState('trusted'), 'trusted');
@@ -87,7 +96,7 @@ test('host workspace/authority sends workspace_trusted + remote_name (never omit
 });
 
 test('sidecar workspace_authority applies host trust before authority_summary', () => {
-  const routers = fs.readFileSync(routersPath, 'utf8');
+  const routers = readApiSource();
   const start = routers.indexOf('def workspace_authority(');
   assert.ok(start >= 0, 'expected workspace_authority route');
   const body = routers.slice(start, start + 1600);
@@ -132,7 +141,7 @@ test('host session/start sends workspace_trusted + remote_name (never JSON-omit)
 });
 
 test('sidecar sandbox_state applies host trust before list_state', () => {
-  const routers = fs.readFileSync(routersPath, 'utf8');
+  const routers = readApiSource();
   const start = routers.indexOf('def sandbox_state(');
   assert.ok(start >= 0, 'expected sandbox_state route');
   const body = routers.slice(start, start + 1800);
@@ -163,7 +172,7 @@ test('host sandbox mutation POSTs send workspace_trusted + remote_name (never JS
 });
 
 test('sidecar sandbox mutation routes apply host trust before op', () => {
-  const routers = fs.readFileSync(routersPath, 'utf8');
+  const routers = readApiSource();
   for (const marker of [
     'def sandbox_mkdir(',
     'def sandbox_write(',
@@ -183,7 +192,7 @@ test('sidecar sandbox mutation routes apply host trust before op', () => {
 });
 
 test('sidecar sandbox_root applies host trust before list_state', () => {
-  const routers = fs.readFileSync(routersPath, 'utf8');
+  const routers = readApiSource();
   const start = routers.indexOf('def sandbox_root(');
   assert.ok(start >= 0, 'expected sandbox_root route');
   const body = routers.slice(start, start + 2800);
@@ -223,7 +232,7 @@ test('host turn/session/message sends workspace_trusted + remote_name (never JSO
 });
 
 test('sidecar turn/session/message apply host trust before execute/ensure', () => {
-  const routers = fs.readFileSync(routersPath, 'utf8');
+  const routers = readApiSource();
   for (const marker of ['async def session_message(', 'async def turn(', 'async def session_message_stream(', 'async def turn_stream(']) {
     const start = routers.indexOf(marker);
     assert.ok(start >= 0, `expected ${marker}`);

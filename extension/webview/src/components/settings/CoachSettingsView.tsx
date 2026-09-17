@@ -6829,83 +6829,6 @@ export function CoachSettingsView({
         </div>
 
         <div className="settings-sheet__layout">
-          <nav
-            className="settings-nav"
-            role="tablist"
-            aria-label={copy.title}
-            onKeyDown={(event) => {
-              if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
-                return;
-              }
-              event.preventDefault();
-              const index = SETTINGS_CATEGORY_ORDER.indexOf(activeSettingsCategory);
-              const next =
-                event.key === "ArrowDown"
-                  ? SETTINGS_CATEGORY_ORDER[(index + 1) % SETTINGS_CATEGORY_ORDER.length]
-                  : SETTINGS_CATEGORY_ORDER[
-                      (index - 1 + SETTINGS_CATEGORY_ORDER.length) %
-                        SETTINGS_CATEGORY_ORDER.length
-                    ];
-              openSettingsCategorySection(next);
-              const nav = event.currentTarget as HTMLElement;
-              nav
-                .querySelector<HTMLButtonElement>(`[data-settings-nav="${next}"]`)
-                ?.focus();
-            }}
-          >
-            {(
-              [
-                {
-                  id: "connection",
-                  label: settingsGlobalCopy.settingsSectionConnection,
-                  dirty: connectionDirty,
-                },
-                {
-                  id: "workspace",
-                  label: resolveWorkbenchCopy(language).workspaceRootControl,
-                  dirty: false,
-                },
-                {
-                  id: "teaching",
-                  label: settingsGlobalCopy.settingsTeachingPrefs,
-                  dirty: teachingPrefsDirty,
-                },
-                {
-                  id: "memory",
-                  label: settingsGlobalCopy.settingsMemoryPrivacy,
-                  dirty: memoryPrivacyDirty,
-                },
-                {
-                  id: "advanced",
-                  label: settingsGlobalCopy.settingsAdvanced,
-                  dirty: false,
-                },
-              ] as const
-            ).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={activeSettingsCategory === item.id}
-                className={`settings-nav__item${
-                  activeSettingsCategory === item.id ? " is-active" : ""
-                }`}
-                data-settings-nav={item.id}
-                onClick={() => openSettingsCategorySection(item.id)}
-              >
-                <span className="settings-nav__label">{item.label}</span>
-                {item.dirty ? (
-                  <span
-                    className="settings-section-dot"
-                    data-settings-dirty={item.id}
-                    title={settingsGlobalCopy.settingsStatusUnsaved}
-                  >
-                    <span className="sr-only">{settingsGlobalCopy.settingsStatusUnsaved}</span>
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </nav>
           <div className="settings-sheet__pane" role="tabpanel">
         {activeSettingsCategory === "connection" ? (
         <section className="settings-section settings-section--panel settings-section--setup settings-section--summary">
@@ -8226,6 +8149,84 @@ export function CoachSettingsView({
         </CollapseSection>
         ) : null}
           </div>
+          <nav
+            className="settings-nav"
+            role="tablist"
+            aria-orientation="horizontal"
+            aria-label={copy.title}
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+                return;
+              }
+              event.preventDefault();
+              const index = SETTINGS_CATEGORY_ORDER.indexOf(activeSettingsCategory);
+              const next =
+                event.key === "ArrowRight"
+                  ? SETTINGS_CATEGORY_ORDER[(index + 1) % SETTINGS_CATEGORY_ORDER.length]
+                  : SETTINGS_CATEGORY_ORDER[
+                      (index - 1 + SETTINGS_CATEGORY_ORDER.length) %
+                        SETTINGS_CATEGORY_ORDER.length
+                    ];
+              openSettingsCategorySection(next);
+              const nav = event.currentTarget as HTMLElement;
+              nav
+                .querySelector<HTMLButtonElement>(`[data-settings-nav="${next}"]`)
+                ?.focus();
+            }}
+          >
+            {(
+              [
+                {
+                  id: "connection",
+                  label: settingsGlobalCopy.settingsSectionConnection,
+                  dirty: connectionDirty,
+                },
+                {
+                  id: "workspace",
+                  label: resolveWorkbenchCopy(language).workspaceRootControl,
+                  dirty: false,
+                },
+                {
+                  id: "teaching",
+                  label: settingsGlobalCopy.settingsTeachingPrefs,
+                  dirty: teachingPrefsDirty,
+                },
+                {
+                  id: "memory",
+                  label: settingsGlobalCopy.settingsMemoryPrivacy,
+                  dirty: memoryPrivacyDirty,
+                },
+                {
+                  id: "advanced",
+                  label: settingsGlobalCopy.settingsAdvanced,
+                  dirty: false,
+                },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={activeSettingsCategory === item.id}
+                className={`settings-nav__item${
+                  activeSettingsCategory === item.id ? " is-active" : ""
+                }`}
+                data-settings-nav={item.id}
+                onClick={() => openSettingsCategorySection(item.id)}
+              >
+                <span className="settings-nav__label">{item.label}</span>
+                {item.dirty ? (
+                  <span
+                    className="settings-section-dot"
+                    data-settings-dirty={item.id}
+                    title={settingsGlobalCopy.settingsStatusUnsaved}
+                  >
+                    <span className="sr-only">{settingsGlobalCopy.settingsStatusUnsaved}</span>
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </nav>
         </div>
       </div>
     </section>
