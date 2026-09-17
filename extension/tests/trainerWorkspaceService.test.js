@@ -712,7 +712,13 @@ test('manifest written through a symlink alias stays readable at its canonical p
   // macOS /var -> /private/var (and /tmp -> /private/tmp) must not make the
   // same physical workspace root look like "a different root" when the
   // manifest recorded the alias form. Regression for the VSIX E2E admission
-  // failure on darwin.
+  // failure on darwin. Windows junction/realpath semantics differ (realpath
+  // answers with extended-length prefixes and alias resolution depends on
+  // privilege), so the alias equivalence is asserted on POSIX only.
+  if (process.platform === 'win32') {
+    t.skip('Windows realpath/junction semantics are covered by platform-specific behavior.');
+    return;
+  }
   const temporaryDirectory = await createTemporaryDirectory(t);
   const workspaceRoot = path.join(temporaryDirectory, 'workspace');
   const aliasRoot = path.join(temporaryDirectory, 'workspace-alias');
