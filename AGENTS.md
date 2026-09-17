@@ -90,7 +90,7 @@ trainer/                            # Repository root
 │   │   ├── __init__.py
 │   │   ├── main.py                 # create_app() — FastAPI app factory with DI
 │   │   ├── api/
-│   │   │   ├── routers.py          # Core HTTP endpoints (~27k lines — largest file)
+│   │   │   ├── routers.py          # Core HTTP endpoints (~25.5k lines — largest file)
 │   │   │   ├── runtime.py          # TrainerRuntime — wires all services
 │   │   │   └── routes/             # Extracted domain routers (build_*_router(runtime, deps))
 │   │   │       ├── _deps.py        # RouterDeps — shared closure helpers
@@ -98,6 +98,8 @@ trainer/                            # Repository root
 │   │   │       ├── memory.py       # /memory/* + /evidence/*
 │   │   │       ├── learning.py     # stage materials, pedagogy, training attest
 │   │   │       ├── resources.py    # /assets + /resource/* library routes
+│   │   │       ├── provider.py     # /provider/test + /provider/models
+│   │   │       ├── sandbox.py      # /sandbox/* + /workspace/authority
 │   │   │       ├── research.py     # Research sub-router
 │   │   │       └── training_handoff.py
 │   │   ├── core/
@@ -268,7 +270,7 @@ Five fixed top-level views:
 |--------|------|------|
 | `create_app` | `server/app/main.py` | FastAPI app factory — DI wiring of all services |
 | `TrainerRuntime` | `server/app/api/runtime.py` | Wires all services, manages sessions |
-| `build_router` | `server/app/api/routers.py` (~27k lines) | All HTTP endpoints |
+| `build_router` | `server/app/api/routers.py` (~25.5k lines) | All HTTP endpoints |
 | `ProviderService` | `server/app/llm/provider_service.py` (~14k lines) | OpenAI-compatible provider abstraction |
 | `AgentLoop` | `server/app/llm/agent_loop.py` | ReAct tool-calling loop |
 | `AgentBinding` | `server/app/llm/agent_binding.py` | Tool definition binding |
@@ -455,5 +457,5 @@ cd extension/webview && npm run dev   # then open the printed URL
 - Browser preview: `extension/webview/src/lib/browserPreviewHarness.ts` — standalone Vite dev without VS Code
 - Workspace data stored under VS Code global storage directory, not in repo
 - Bundled sidecar: `extension/bundled/` (~245 MB, 98 .py files) — for .vsix distribution
-- Largest files: `routers.py` (~27k lines), `styles.css` (~20k lines), `App.tsx` (~14.1k lines), `provider_service.py` (~14k lines), `memory/service.py` (~11.5k lines), `test_api.py` (~10.9k lines), `CoachSettingsView.tsx` (~8.2k lines)
+- Largest files: `routers.py` (~25.5k lines), `styles.css` (~20k lines), `App.tsx` (~14.1k lines), `provider_service.py` (~14k lines), `memory/service.py` (~11.5k lines), `test_api.py` (~10.9k lines), `CoachSettingsView.tsx` (~8.2k lines)
 - i18n covered: zh-CN, en-US, es-ES, fr-FR, de-DE, ja-JP, ko-KR, pt-BR
