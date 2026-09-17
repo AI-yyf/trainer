@@ -66,7 +66,7 @@ test('provider protocol helpers normalize protocol selection and capability defa
 
 test('scheme-less provider base URLs stay scheme-less for the sidecar to resolve', async () => {
   const { normalizeProviderBaseUrl, looksLikeSchemelessProviderUrl } = await import(
-    sharedProviderProtocolsModulePath
+    pathToFileURL(sharedProviderProtocolsModulePath).href
   );
 
   // The transport (sidecar) probes and owns scheme resolution; a blind https
