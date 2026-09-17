@@ -70,7 +70,7 @@ test('Resources lets its workspace tree fill the unused primary panel area', () 
   );
   assert.match(
     styles,
-    /\.resources-library-tree__node\s*\{[\s\S]*?grid-template-columns: 18px 18px minmax\(0, 1fr\) auto;/,
+    /\.resources-library-tree__node\s*\{[\s\S]*?grid-template-columns: 18px 18px 18px minmax\(0, 1fr\) auto;/,
   );
   assert.doesNotMatch(
     styles,

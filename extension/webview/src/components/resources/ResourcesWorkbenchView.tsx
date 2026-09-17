@@ -24,8 +24,10 @@ import {
   CheckIcon,
   ChevronDownIcon,
   CloseIcon,
+  FileIcon,
   FolderIcon,
   LinkIcon,
+  PageIcon,
   RefreshIcon,
   SearchIcon,
   TrashIcon,
@@ -1612,6 +1614,12 @@ function visibleTreeItemIds(nodes: ResourceTreeNode[], expandedIds: Set<string>)
   });
 }
 
+function ResourceKindIcon({ kind }: { kind: ResourceRecord["kind"] | undefined }) {
+  const Icon =
+    kind === "url" ? LinkIcon : kind === "pdf" || kind === "image" || kind === "video" ? PageIcon : FileIcon;
+  return <Icon size={12} aria-hidden="true" />;
+}
+
 interface ResourceTreeItemProps {
   node: ResourceTreeNode;
   depth: number;
@@ -1687,6 +1695,9 @@ function ResourceTreeItem({
         aria-keyshortcuts="Enter Space"
       >
         <span className="resources-library-tree__indent" aria-hidden="true" />
+        <span className="resources-library-tree__kind" aria-hidden="true">
+          <ResourceKindIcon kind={node.resource.kind} />
+        </span>
         <label
           className="resources-library-tree__selection"
           onClick={(event) => event.stopPropagation()}
@@ -1762,8 +1773,13 @@ function ResourceTreeItem({
       <CollapseSection
         level={depth === 0 ? 1 : depth === 1 ? 2 : 3}
         persistenceKey={resourceCollectionPersistenceKey(node.id)}
-        title={<span title={collectionDescription}>{node.label}</span>}
-        subtitle={isLogicalCollection ? localize(language, "logicalCollection") : undefined}
+        title={
+          <span className="resources-library-tree__collection-label" title={collectionDescription}>
+            <FolderIcon size={12} aria-hidden="true" />
+            <span>{node.label}</span>
+          </span>
+        }
+        subtitle={undefined}
         badge={
           <span className="resources-library-tree__count">{descendantResourceIds.length}</span>
         }
@@ -2434,7 +2450,7 @@ export function ResourcesWorkbenchView({
   }, [pendingTreeFocusId, renderedTreeItemIds]);
 
   const selectResource = (resource: ResourceRecord) => {
-    setResourceDetail(resource.id);
+    setResourceDetail(selectedResourceId === resource.id ? null : resource.id);
   };
 
   const toggleResourceSelection = (resourceId: string) => {
@@ -2792,7 +2808,7 @@ export function ResourcesWorkbenchView({
 
   return (
     <section
-      className={`workbench-pane resources-pane resources-pane--library resources-knowledge resources-knowledge--workspace-tree${selectedResource ? " is-detail-open" : ""}`}
+      className={`workbench-pane resources-pane resources-pane--library resources-knowledge resources-knowledge--workspace-tree${selectedResource ? " is-detail-open" : ""}${selectedResourceIds.size > 0 ? " has-selection" : ""}`}
       aria-label={localize(language, "title")}
       data-resources-leftover-not-live={leftoverStoredNote ? "true" : undefined}
     >
@@ -3168,6 +3184,15 @@ export function ResourcesWorkbenchView({
               <div className="resources-empty">
                 <p className="resources-empty__title">{localize(language, "emptyTitle")}</p>
                 <p className="resources-empty__hint">{localize(language, "emptyBody")}</p>
+                {canWriteResources ? (
+                  <button
+                    className="resources-empty__action"
+                    type="button"
+                    onClick={() => openImportMenu()}
+                  >
+                    {localize(language, "addResource")}
+                  </button>
+                ) : null}
               </div>
             ) : null}
 
@@ -3179,7 +3204,7 @@ export function ResourcesWorkbenchView({
           </>
         )}
 
-      {leftoverStoredNote ? null : (
+      {leftoverStoredNote || trashedResources.length === 0 ? null : (
       <details
         className="resources-knowledge__trash resources-library-tree__trash"
         open={trashOpen}
@@ -3332,8 +3357,7 @@ export function ResourcesWorkbenchView({
           ) : null}
 
           {!sandboxPreview && (hasSelectedResourceFacts || selectedResourceTrainingState || selectedResourceCanStartTraining) ? (
-            <details className="resources-knowledge__governance">
-            <summary>{localize(language, "resourceDetail")}</summary>
+            <>
             <dl className="resources-knowledge__facts">
               {selectedResourceSource.length > 0 ? (
                 <div className="resources-knowledge__fact resources-knowledge__fact--source">
@@ -3413,7 +3437,7 @@ export function ResourcesWorkbenchView({
               ) : null}
             </details>
           ) : null}
-          </details>
+          </>
           ) : null}
           {!sandboxPreview ? (
           <div className="resources-knowledge__detail-actions">

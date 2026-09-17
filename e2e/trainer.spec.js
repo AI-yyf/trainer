@@ -622,7 +622,9 @@ test.describe("Trainer Five-View Shell", () => {
       });
       await expect(primaryTreeItem).toBeVisible();
       await expect(primaryTreeItem.locator("strong")).toHaveText(copy.primaryResource);
-      await expect(primaryTreeItem.locator("svg")).toHaveCount(0);
+      await expect(
+        primaryTreeItem.locator(".resources-library-tree__kind svg"),
+      ).toHaveCount(1);
       await expect(primaryCheckbox).toBeVisible();
       const checkboxCountBeforeSelection = await tree.getByRole("checkbox").count();
       expect(checkboxCountBeforeSelection).toBeGreaterThan(1);

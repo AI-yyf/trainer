@@ -156,11 +156,11 @@ test('Resources keeps the first screen focused and folds secondary governance ac
   assert.match(viewSource, /resources-knowledge__search/);
   assert.match(viewSource, /resources-knowledge__open-action/);
   assert.match(viewSource, /<details className="resources-knowledge__batch-actions">/);
-  assert.match(viewSource, /<details className="resources-knowledge__governance">/);
+  assert.match(viewSource, /<dl className="resources-knowledge__facts">/);
   assert.match(viewSource, /<details className="resources-knowledge__training-handoff">/);
   assert.match(viewSource, /<details[\s\S]*?className="resources-knowledge__trash/);
   assert.match(stylesSource, /\.resources-knowledge__batch-actions/);
-  assert.match(stylesSource, /\.resources-knowledge__governance/);
+  assert.match(stylesSource, /\.resources-knowledge__facts/);
   assert.match(stylesSource, /\.resources-knowledge__training-handoff/);
   assert.match(stylesSource, /\.resources-knowledge__trash/);
 });
@@ -241,7 +241,7 @@ test('Resources treats URL material as webpage snapshots without restoring statu
   assert.doesNotMatch(viewSource, /resources-file-toolbar/);
   assert.doesNotMatch(viewSource, /resources-knowledge__state/);
   assert.doesNotMatch(viewSource, /collectionSegmentPrefix}links/);
-  assert.match(stylesSource, /grid-template-columns: 18px 18px minmax\(0, 1fr\) auto;/);
+  assert.match(stylesSource, /grid-template-columns: 18px 18px 18px minmax\(0, 1fr\) auto;/);
   assert.match(stylesSource, /\.resources-knowledge__actions \.resources-knowledge__icon-button/);
   assert.doesNotMatch(stylesSource, /\.resources-knowledge__state/);
 });
@@ -367,7 +367,8 @@ test('Resources derives compact Trash and mutation feedback from persistent host
 
   assert.match(viewSource, /function resourceTreeCollectionKind\(/);
   assert.match(viewSource, /collectionKind\?: "directory" \| "logical";/);
-  assert.doesNotMatch(viewSource, /ContextLayersIcon|FileIcon|resources-library-tree__icon/);
+  assert.doesNotMatch(viewSource, /ContextLayersIcon|resources-library-tree__icon/);
+  assert.match(viewSource, /resources-library-tree__kind/);
   assert.match(stylesSource, /grid-template-columns: 24px minmax\(0, 1fr\)/);
   assert.match(viewSource, /const firstVisibleResourceAncestorIds = useMemo/);
   assert.match(viewSource, /firstResourceAncestorCollectionIds\(visibleResourceTree\)/);
