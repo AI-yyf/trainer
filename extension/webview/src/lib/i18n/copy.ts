@@ -1680,7 +1680,7 @@ export const copyTable = {
     coachArtifactFullDetails: "Full details",
     trainer: "Trainer",
     you: "You",
-    plan: "Learning Home",
+    plan: "Learning",
     settings: "Settings",
     chat: "Chat",
     workspace: "Workspace",

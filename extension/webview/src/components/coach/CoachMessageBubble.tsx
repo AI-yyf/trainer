@@ -444,7 +444,9 @@ export function CoachMessageBubble({
   }
 
   const showSystemMeta = message.role === "system";
-  const showUserMeta = message.role === "user" && (showAuthor || showTimestampInline);
+  // Feed chrome stays out of the way: user turns render without a repeated
+  // author/timestamp row; the timestamp remains available as a tooltip.
+  const showUserMeta = false;
   const showAssistantRail = false;
   const coachVisibleStatus =
     message.role === "assistant" ? findCoachVisibleStatusPart(message.parts) : undefined;
@@ -611,6 +613,7 @@ export function CoachMessageBubble({
       data-role={message.role}
       data-has-artifacts={messageHasArtifacts ? "true" : "false"}
       data-has-support={hasSupportDetails ? "true" : "false"}
+      title={message.role === "user" && message.timestamp ? message.timestamp : undefined}
     >
       {showSystemMeta || showUserMeta ? (
         <div className="message-bubble__meta coach-meta-nums">
@@ -642,24 +645,6 @@ export function CoachMessageBubble({
             className={`message-bubble__agent-status message-bubble__agent-status--${statusTone}`}
             title={statusDetail && statusDetail !== statusSummary ? statusDetail : undefined}
           >
-            <div className="message-bubble__agent-status-head">
-              <div className="message-bubble__agent-status-meta">
-                <span
-                  className={`message-bubble__agent-status-tone message-bubble__agent-status-tone--${statusTone}`}
-                >
-                  {statusToneLabel}
-                </span>
-              </div>
-              {statusCounters.length > 0 ? (
-                <div className="message-bubble__agent-status-counts coach-meta-nums">
-                  {statusCounters.map((item) => (
-                    <span key={item} className="message-bubble__agent-status-count">
-                      {item}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </div>
             {statusInlineSummary ? (
               <p className="message-bubble__agent-status-summary">{statusInlineSummary}</p>
             ) : null}
@@ -671,12 +656,22 @@ export function CoachMessageBubble({
                 className="message-bubble__agent-status-disclosure"
                 defaultOpen={statusTone === "blocked"}
                 summary={
-                  <div className="message-bubble__agent-status-disclosure-summary">
-                    <span className="message-bubble__agent-status-disclosure-title">
-                      {coachVisibleStatusDetailsTitle(statusTone, language)}
+                  <div
+                    className="message-bubble__agent-status-line"
+                    aria-label={coachVisibleStatusDetailsTitle(statusTone, language)}
+                  >
+                    <span
+                      className={`message-bubble__agent-status-tone message-bubble__agent-status-tone--${statusTone}`}
+                    >
+                      {statusToneLabel}
                     </span>
+                    {statusCounters.length > 0 ? (
+                      <span className="message-bubble__agent-status-line-counters coach-meta-nums">
+                        {statusCounters.join(" · ")}
+                      </span>
+                    ) : null}
                     {statusDetailsPreview ? (
-                      <span className="message-bubble__agent-status-disclosure-preview">
+                      <span className="message-bubble__agent-status-line-preview">
                         {statusDetailsPreview}
                       </span>
                     ) : null}
@@ -736,7 +731,20 @@ export function CoachMessageBubble({
                   ) : null}
                 </div>
               </CollapsibleBlock>
-            ) : null}
+            ) : (
+              <div className="message-bubble__agent-status-line message-bubble__agent-status-line--static">
+                <span
+                  className={`message-bubble__agent-status-tone message-bubble__agent-status-tone--${statusTone}`}
+                >
+                  {statusToneLabel}
+                </span>
+                {statusCounters.length > 0 ? (
+                  <span className="message-bubble__agent-status-line-counters coach-meta-nums">
+                    {statusCounters.join(" · ")}
+                  </span>
+                ) : null}
+              </div>
+            )}
           </div>
         ) : null}
         {hasBody ? (

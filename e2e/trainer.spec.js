@@ -17,7 +17,7 @@ const VIEW_LABELS = {
   },
   "en-US": {
     coach: "Chat",
-    plan: "Learning Home",
+    plan: "Learning",
     resources: "Resources",
     training: "Training",
     settings: "Settings",
