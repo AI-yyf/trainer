@@ -3165,33 +3165,15 @@ export function ResourcesWorkbenchView({
             ))}
 
             {resources.length === 0 && !hasSearchQuery ? (
-              <div className="empty-state resources-empty">
-                <span className="empty-state__icon" aria-hidden="true">
-                  <FolderIcon size={20} />
-                </span>
-                <strong className="empty-state__title">{localize(language, "emptyTitle")}</strong>
-                <p>{localize(language, "emptyBody")}</p>
-                <p className="resources-knowledge__empty-hint">{resourceReuseSummary(language)}</p>
-                {canWriteResources && onImportFiles ? (
-                  <button
-                    className="button button--primary button--compact empty-state__action"
-                    type="button"
-                    onClick={() => runImportAction(onImportFiles)}
-                  >
-                    <UploadIcon size={13} aria-hidden="true" />
-                    <span>{localize(language, "addResource")}</span>
-                  </button>
-                ) : null}
+              <div className="resources-empty">
+                <p className="resources-empty__title">{localize(language, "emptyTitle")}</p>
+                <p className="resources-empty__hint">{localize(language, "emptyBody")}</p>
               </div>
             ) : null}
 
             {shouldShowNoMatches ? (
-              <div className="empty-state resources-empty">
-                <span className="empty-state__icon" aria-hidden="true">
-                  <SearchIcon size={20} />
-                </span>
-                <strong className="empty-state__title">{localize(language, "noMatches")}</strong>
-                <p className="resources-knowledge__empty-hint">{resourceReuseSummary(language)}</p>
+              <div className="resources-empty">
+                <p className="resources-empty__title">{localize(language, "noMatches")}</p>
               </div>
             ) : null}
           </>
@@ -3217,20 +3199,14 @@ export function ResourcesWorkbenchView({
         </summary>
         <div className="resources-knowledge__trash-body">
           {!trashSnapshotAvailable ? (
-            <div className="empty-state resources-empty">
-              <span className="empty-state__icon" aria-hidden="true">
-                <TrashIcon size={18} />
-              </span>
-              <p>{localize(language, "trashLoading")}</p>
-            </div>
+            <p className="resources-empty resources-empty--compact">
+              {localize(language, "trashLoading")}
+            </p>
           ) : null}
           {trashSnapshotAvailable && trashedResources.length === 0 ? (
-            <div className="empty-state resources-empty">
-              <span className="empty-state__icon" aria-hidden="true">
-                <TrashIcon size={18} />
-              </span>
-              <p>{localize(language, "trashEmpty")}</p>
-            </div>
+            <p className="resources-empty resources-empty--compact">
+              {localize(language, "trashEmpty")}
+            </p>
           ) : null}
           {trashSnapshotAvailable && trashedResources.length > 0 ? (
             <>

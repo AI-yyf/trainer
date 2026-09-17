@@ -3844,6 +3844,29 @@ export function CoachSettingsView({
   const [coachDefaultsOpen, setCoachDefaultsOpen] = useState(true);
   const [memoryPrivacyOpen, setMemoryPrivacyOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  type SettingsCategory = "connection" | "workspace" | "teaching" | "memory" | "advanced";
+  const SETTINGS_CATEGORY_ORDER: SettingsCategory[] = [
+    "connection",
+    "workspace",
+    "teaching",
+    "memory",
+    "advanced",
+  ];
+  const [activeSettingsCategory, setActiveSettingsCategory] =
+    useState<SettingsCategory>("connection");
+  const [workspaceSectionOpen, setWorkspaceSectionOpen] = useState(false);
+  const openSettingsCategorySection = (id: SettingsCategory) => {
+    setActiveSettingsCategory(id);
+    if (id === "workspace") {
+      setWorkspaceSectionOpen(true);
+    } else if (id === "teaching") {
+      setCoachDefaultsOpen(true);
+    } else if (id === "memory") {
+      setMemoryPrivacyOpen(true);
+    } else if (id === "advanced") {
+      setAdvancedOpen(true);
+    }
+  };
   const [advancedContextPinned, setAdvancedContextPinned] = useState(false);
   const [providerDetailRequested, setProviderDetailRequested] = useState(false);
   const [providerApiKeyFocusRequested, setProviderApiKeyFocusRequested] = useState(false);
@@ -3894,35 +3917,40 @@ export function CoachSettingsView({
    * then flash its header once (skipped entirely under reduced motion).
    */
   const revealSettingsSection = (target: "connection" | "teaching" | "memory") => {
+    setActiveSettingsCategory(target);
     if (target === "teaching") {
       setCoachDefaultsOpen(true);
     }
     if (target === "memory") {
       setMemoryPrivacyOpen(true);
     }
+    // The anchor node mounts only after the category pane swaps in, so wait
+    // two frames before scrolling/flashing.
     window.requestAnimationFrame(() => {
-      const node =
-        target === "connection"
-          ? connectionAnchorRef.current
-          : target === "teaching"
-            ? teachingPrefsAnchorRef.current
-            : memoryPrivacyAnchorRef.current;
-      if (!node) {
-        return;
-      }
-      const reduced = prefersReducedMotion();
-      node.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
-      if (reduced) {
-        return;
-      }
-      if (sectionFlashTimerRef.current !== null) {
-        window.clearTimeout(sectionFlashTimerRef.current);
-      }
-      setSectionFlash(target);
-      sectionFlashTimerRef.current = window.setTimeout(() => {
-        setSectionFlash(null);
-        sectionFlashTimerRef.current = null;
-      }, SETTINGS_SECTION_FLASH_MS);
+      window.requestAnimationFrame(() => {
+        const node =
+          target === "connection"
+            ? connectionAnchorRef.current
+            : target === "teaching"
+              ? teachingPrefsAnchorRef.current
+              : memoryPrivacyAnchorRef.current;
+        if (!node) {
+          return;
+        }
+        const reduced = prefersReducedMotion();
+        node.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+        if (reduced) {
+          return;
+        }
+        if (sectionFlashTimerRef.current !== null) {
+          window.clearTimeout(sectionFlashTimerRef.current);
+        }
+        setSectionFlash(target);
+        sectionFlashTimerRef.current = window.setTimeout(() => {
+          setSectionFlash(null);
+          sectionFlashTimerRef.current = null;
+        }, SETTINGS_SECTION_FLASH_MS);
+      });
     });
   };
   const applyAnswerStylePreset = (preset: "simple" | "balanced" | "deep") => {
@@ -3964,6 +3992,7 @@ export function CoachSettingsView({
     if (!providerApiKeyFocusRequest) {
       return;
     }
+    setActiveSettingsCategory("connection");
     setProviderDetailRequested(true);
     setProviderApiKeyFocusRequested(true);
   }, [providerApiKeyFocusRequest]);
@@ -6799,6 +6828,86 @@ export function CoachSettingsView({
           ) : null}
         </div>
 
+        <div className="settings-sheet__layout">
+          <nav
+            className="settings-nav"
+            role="tablist"
+            aria-label={copy.title}
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+                return;
+              }
+              event.preventDefault();
+              const index = SETTINGS_CATEGORY_ORDER.indexOf(activeSettingsCategory);
+              const next =
+                event.key === "ArrowDown"
+                  ? SETTINGS_CATEGORY_ORDER[(index + 1) % SETTINGS_CATEGORY_ORDER.length]
+                  : SETTINGS_CATEGORY_ORDER[
+                      (index - 1 + SETTINGS_CATEGORY_ORDER.length) %
+                        SETTINGS_CATEGORY_ORDER.length
+                    ];
+              openSettingsCategorySection(next);
+              const nav = event.currentTarget as HTMLElement;
+              nav
+                .querySelector<HTMLButtonElement>(`[data-settings-nav="${next}"]`)
+                ?.focus();
+            }}
+          >
+            {(
+              [
+                {
+                  id: "connection",
+                  label: settingsGlobalCopy.settingsSectionConnection,
+                  dirty: connectionDirty,
+                },
+                {
+                  id: "workspace",
+                  label: resolveWorkbenchCopy(language).workspaceRootControl,
+                  dirty: false,
+                },
+                {
+                  id: "teaching",
+                  label: settingsGlobalCopy.settingsTeachingPrefs,
+                  dirty: teachingPrefsDirty,
+                },
+                {
+                  id: "memory",
+                  label: settingsGlobalCopy.settingsMemoryPrivacy,
+                  dirty: memoryPrivacyDirty,
+                },
+                {
+                  id: "advanced",
+                  label: settingsGlobalCopy.settingsAdvanced,
+                  dirty: false,
+                },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={activeSettingsCategory === item.id}
+                className={`settings-nav__item${
+                  activeSettingsCategory === item.id ? " is-active" : ""
+                }`}
+                data-settings-nav={item.id}
+                onClick={() => openSettingsCategorySection(item.id)}
+              >
+                <span className="settings-nav__label">{item.label}</span>
+                {item.dirty ? (
+                  <span
+                    className="settings-section-dot"
+                    data-settings-dirty={item.id}
+                    title={settingsGlobalCopy.settingsStatusUnsaved}
+                  >
+                    <span className="sr-only">{settingsGlobalCopy.settingsStatusUnsaved}</span>
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </nav>
+          <div className="settings-sheet__pane" role="tabpanel">
+        {activeSettingsCategory === "connection" ? (
         <section className="settings-section settings-section--panel settings-section--setup settings-section--summary">
           <ProviderQuickSetup
             language={language}
@@ -7570,10 +7679,14 @@ export function CoachSettingsView({
           </div>
 
         </section>
+        ) : null}
 
+        {activeSettingsCategory === "workspace" ? (
         <CollapseSection
           level={1}
           persistenceKey="settings-workspace"
+          open={workspaceSectionOpen}
+          onToggle={setWorkspaceSectionOpen}
           title={<span className="eyebrow">{resolveWorkbenchCopy(language).workspaceRootControl}</span>}
         >
           <div className="settings-sheet__minor-body">
@@ -7681,7 +7794,9 @@ export function CoachSettingsView({
             </div>
           </div>
         </CollapseSection>
+        ) : null}
 
+        {activeSettingsCategory === "teaching" ? (
         <div
           ref={teachingPrefsAnchorRef}
           className={`settings-anchor${sectionFlash === "teaching" ? " settings-anchor--flash" : ""}`}
@@ -7837,7 +7952,9 @@ export function CoachSettingsView({
             </div>
         </CollapseSection>
         </div>
+        ) : null}
 
+        {activeSettingsCategory === "memory" ? (
         <div
           ref={memoryPrivacyAnchorRef}
           className={`settings-anchor${sectionFlash === "memory" ? " settings-anchor--flash" : ""}`}
@@ -7991,7 +8108,9 @@ export function CoachSettingsView({
             </div>
         </CollapseSection>
         </div>
+        ) : null}
 
+        {activeSettingsCategory === "advanced" ? (
         <CollapseSection
           level={1}
           persistenceKey="settings-advanced"
@@ -8105,6 +8224,9 @@ export function CoachSettingsView({
               </div>
             </div>
         </CollapseSection>
+        ) : null}
+          </div>
+        </div>
       </div>
     </section>
   );

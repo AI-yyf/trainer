@@ -171,12 +171,14 @@ import {
 } from "../components/training/TrainingWorkbenchView";
 import {
   CheckMarkIcon,
+  ChevronRightIcon,
   ContextLayersIcon,
   FolderIcon,
   LinkIcon,
   RefreshIcon,
   ResourcesIcon,
   UploadIcon,
+  WarningIcon,
 } from "../components/icons";
 import { StatusPill } from "../components/StatusPill";
 import { applyWorkbenchTheme } from "../lib/theme";
@@ -11854,12 +11856,14 @@ export function App() {
           ) : null}
         </>
       ) : providerCoachNotice && sendBlocked && !shouldShowNeutralEmptyState && !workspaceSessionBlocked ? (
-        <div
+        <button
+          type="button"
           className={`coach-inline-notice coach-inline-notice--${providerCoachNotice.tone}`}
-          role="status"
+          onClick={() => openProviderSetup()}
         >
-          {providerCoachNotice.message}
-        </div>
+          <span className="coach-inline-notice__text">{providerCoachNotice.message}</span>
+          <ChevronRightIcon size={12} aria-hidden="true" />
+        </button>
       ) : null}
       {renderCoachConversationPane("coach-pane", false)}
     </section>
@@ -13715,16 +13719,26 @@ export function App() {
                       setActiveView("settings");
                     }}
                   >
-                    {workspaceSessionBlocked ? (
-                      <strong>{workspaceSessionBlockTitle}</strong>
-                    ) : (
-                      <strong>{providerSetupState.actionLabel}</strong>
-                    )}
-                    <span>
-                      {workspaceSessionBlocked
-                        ? workspaceSessionBlockMessage
-                        : blockedComposerPresenceCopy}
+                    <span className="composer-presencebar__blocked-icon" aria-hidden="true">
+                      <WarningIcon size={13} />
                     </span>
+                    <span className="composer-presencebar__blocked-copy">
+                      {workspaceSessionBlocked ? (
+                        <strong>{workspaceSessionBlockTitle}</strong>
+                      ) : (
+                        <strong>{providerSetupState.actionLabel}</strong>
+                      )}
+                      <span>
+                        {workspaceSessionBlocked
+                          ? workspaceSessionBlockMessage
+                          : blockedComposerPresenceCopy}
+                      </span>
+                    </span>
+                    <ChevronRightIcon
+                      size={12}
+                      className="composer-presencebar__blocked-chevron"
+                      aria-hidden="true"
+                    />
                   </button>
                 ) : null}
               </div>

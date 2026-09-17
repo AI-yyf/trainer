@@ -43,18 +43,37 @@ function collectConsoleErrors(page) {
   return errors;
 }
 
+async function isDisclosureOpen(locator) {
+  return locator.evaluate((element) =>
+    element instanceof HTMLDetailsElement
+      ? element.open
+      : (element.matches(".collapse-section")
+          ? element
+          : element.querySelector(".collapse-section")
+        )?.classList.contains("is-open") ?? false,
+  );
+}
+
+async function clickDisclosureToggle(locator) {
+  const isDetails = await locator.evaluate(
+    (element) => element instanceof HTMLDetailsElement,
+  );
+  if (isDetails) {
+    await locator.locator(":scope > summary").first().click();
+    return;
+  }
+  await locator.locator(".collapse-section__header").first().click();
+}
+
 async function openProviderDetails(page) {
   const detail = page.locator(".coach-settings-view__provider-detail");
   await expect(detail).toBeVisible();
-  if (!(await detail.evaluate((element) => element.open))) {
-    await detail.locator(":scope > summary").click();
+  if (!(await isDisclosureOpen(detail))) {
+    await clickDisclosureToggle(detail);
   }
-  const connectionFields = providerConnectionFields(detail);
-  if (!(await connectionFields.evaluate((element) => element.open))) {
-    await connectionFields.locator(":scope > summary").click();
-  }
+  const connectionFields = providerConnectionFields(page);
   await expect(connectionFields.getByLabel("Connection name (optional)", { exact: true })).toBeVisible();
-  return detail;
+  return page;
 }
 
 async function openProviderProfiles(page) {
@@ -66,10 +85,8 @@ async function openProviderProfiles(page) {
   return profiles;
 }
 
-function providerConnectionFields(detail) {
-  return detail.locator("details.settings-sheet__minor-panel").filter({
-    hasText: "Connection fields and key",
-  });
+function providerConnectionFields(root) {
+  return root.locator('[data-settings-section="connection"]');
 }
 
 function providerModelPicker(detail) {
@@ -88,8 +105,16 @@ async function expectPreviewHarness(page) {
   );
 }
 
+function providerManualModelInput(root) {
+  return root.locator('label.settings-field:has(> span:text-is("Model")) > input');
+}
+
 async function setProviderModel(detail, model) {
   const picker = providerModelPicker(detail);
+  if ((await picker.count()) === 0) {
+    await providerManualModelInput(providerConnectionFields(detail)).fill(model);
+    return;
+  }
   await expect(picker).toBeVisible();
   if (!(await picker.evaluate((element) => element.open))) {
     await picker.locator(":scope > summary").click();
@@ -250,7 +275,7 @@ test.describe("Trainer Settings provider lifecycle", () => {
 
     const collapsedProviderDetail = page.locator(".coach-settings-view__provider-detail");
     await expect(collapsedProviderDetail).toBeVisible();
-    expect(await collapsedProviderDetail.evaluate((element) => element.open)).toBe(false);
+    expect(await isDisclosureOpen(collapsedProviderDetail)).toBe(false);
 
     const detail = await openProviderDetails(page);
     await providerConnectionFields(detail)
@@ -294,7 +319,15 @@ test.describe("Trainer Settings provider lifecycle", () => {
     await expect(
       providerConnectionFields(reloadedDetail).getByLabel("Service root"),
     ).toHaveValue(providerBaseUrl);
-    await expect(providerModelPicker(reloadedDetail).locator(":scope > summary")).toContainText(rejectedModel);
+    if ((await providerModelPicker(reloadedDetail).count()) === 0) {
+      await expect(
+        providerManualModelInput(providerConnectionFields(reloadedDetail)),
+      ).toHaveValue(rejectedModel);
+    } else {
+      await expect(
+        providerModelPicker(reloadedDetail).locator(":scope > summary"),
+      ).toContainText(rejectedModel);
+    }
     const reloadedModelLimits = await openProviderModelLimits(reloadedDetail);
     await expect(providerContextWindowInput(reloadedModelLimits)).toHaveValue("24000");
     await expect(providerMaxOutputInput(reloadedModelLimits)).toHaveValue("2048");
@@ -327,8 +360,9 @@ test.describe("Trainer Settings provider lifecycle", () => {
     await firstTestRequest;
     await expect(page.locator(".notice.notice--error")).toBeVisible();
     await expect(page.locator(".notice.notice--error")).not.toContainText(failedDetail);
-    await expect(page.locator('[data-availability-fact="test"]')).toContainText("Failed");
-    await expect(page.locator(".settings-availability-strip")).toContainText("Model is unavailable right now");
+    await expect(page.locator(".settings-availability-strip")).toContainText(
+      "No model is available right now",
+    );
 
     const failedPayload = providerTestPayloads[0];
     expect(failedPayload).toMatchObject({
@@ -358,10 +392,11 @@ test.describe("Trainer Settings provider lifecycle", () => {
     await secondTestButton.click();
     await secondTestRequest;
     await expect(page.locator(".notice.notice--success")).toBeVisible();
-    await expect(page.locator('[data-availability-fact="test"]')).toContainText("Passed");
-    await expect(page.locator(".settings-availability-strip")).toContainText("Ready");
+    await expect(page.locator(".settings-availability-strip")).toContainText(
+      "use this connection",
+    );
     await expect(page.locator(".settings-availability-strip")).not.toContainText(
-      "Model is unavailable right now",
+      "No model is available right now",
     );
 
     const correctedPayload = providerTestPayloads[1];

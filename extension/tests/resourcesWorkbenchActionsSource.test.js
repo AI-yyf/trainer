@@ -463,7 +463,8 @@ test('Resources starts a review card only from fresh, trusted, indexed material 
   assert.match(viewSource, /function resourceReuseSummary\(language: ComposerLanguage\): string/);
   assert.match(viewSource, /const selectedResourceReuseSummary = selectedResource \? resourceReuseSummary\(language\) : undefined;/);
   assert.match(viewSource, /resources-knowledge__reuse-summary/);
-  assert.match(viewSource, /resources-knowledge__empty-hint/);
+  assert.match(viewSource, /resources-empty__title/);
+  assert.match(viewSource, /resources-empty__hint/);
 
   assert.match(appSource, /const requestResourceTrainingHandoff = useCallback/);
   assert.match(appSource, /source: "resource_knowledge",[\s\S]*?cardType: "flash",[\s\S]*?submode: "flash"/);
