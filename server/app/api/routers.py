@@ -10,7 +10,7 @@ import re
 import socket
 import ssl
 from collections.abc import AsyncIterator
-from dataclasses import asdict, dataclass, is_dataclass, replace
+from dataclasses import asdict, is_dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
@@ -39,7 +39,6 @@ from ..core.models import (
     CoachDefaults,
     CoachingState,
     CoachScenario,
-    CoachSettingsRequest,
     CoachTurnSummary,
     DependencySkillMapActionRequest,
     DependencySkillMapRestoreRequest,
@@ -48,13 +47,8 @@ from ..core.models import (
     EvaluateSnippetRequest,
     EvaluationCheck,
     EvaluationReport,
-    EvidenceAdoptResponse,
-    EvidenceItem,
-    EvidenceQueueSnapshot,
     FirstLookSummary,
     FlashcardAnswerRequest,
-    GlobalMemory,
-    GlobalMemoryUpdateRequest,
     GlobalPlan,
     GlobalPlanProjectLink,
     GlobalPlanProjectLinkRequest,
@@ -67,9 +61,6 @@ from ..core.models import (
     LibraryAssetLifecycleRequest,
     LibraryAssetLinkRequest,
     LibraryAssetUpsertRequest,
-    MemoryShareGrant,
-    MemoryShareGrantRevokeRequest,
-    MemoryShareGrantUpsertRequest,
     MemorySnapshot,
     PlanChangeCandidate,
     PlanGenerateRequest,
@@ -125,7 +116,6 @@ from ..core.models import (
     TheoryDrillRestoreRequest,
     ToneDecision,
     TrainingCardCandidateSnapshot,
-    TransferPromotionScopeRequest,
     TurnRequest,
     UserFeedbackRequest,
     UserProfile,
@@ -230,22 +220,20 @@ from ..training.card_generator import (
     _make_guided_scenario_pack_card,
 )
 from ..training.card_request import message_requests_explicit_training_card
-from ..workspace.adoption_index import ProjectAdoptionJobRecord
 from ..workspace.authority import PermissionLevel, WorkspaceAuthority
 from ..workspace.classifier import (
-    ProjectDiscovery,
     classify_heuristic,
-    classify_with_llm,
-    complete_project_adoption,
-    discover_project,
     is_code_like_current_file,
     is_code_like_entry_point,
-    resolve_project_discovery,
 )
 from ..workspace.provisioning import (
     ProjectProvisioningConflictError,
     ProjectProvisioningIntegrityError,
 )
+from .routes._deps import RouterDeps
+from .routes.learning import build_learning_router
+from .routes.memory import build_memory_router
+from .routes.workspace import build_workspace_router
 from .runtime import SessionState, TrainerRuntime
 from .training_card_identity import (
     require_live_selected_card_for_status as require_live_selected_card_for_status_impl,
@@ -876,15 +864,6 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         with resource_training_card_locks_guard:
             return resource_training_card_locks.setdefault(workspace_id, Lock())
 
-    @dataclass(frozen=True)
-    class TrainerRootSelection:
-        """The user-selected Trainer data container, separate from a code project."""
-
-        root_id: str | None
-        root_path: str | None
-
-    project_discoveries: dict[str, tuple[str, ProjectDiscovery, TrainerRootSelection]] = {}
-    project_discoveries_guard = Lock()
 
     class CoachTurnPayload(TypedDict):
         """Stable data returned by ``resolve_coach_turn`` to every reply path."""
@@ -20539,17 +20518,19 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             },
         }
 
-    def workspace_discovery_owner_id(payload: dict) -> str:
-        workspace_id = str(payload.get("workspace_id") or "").strip()
-        session_id = str(payload.get("session_id") or "").strip()
-        # Discovery ownership is an ephemeral client key.  Resolving an old
-        # workspace alias here would change the key immediately after adoption
-        # and make a repeated decision look like a different discovery owner.
-        if workspace_id:
-            return workspace_id
-        if session_id:
-            return current_workspace_id(session_id=session_id)
-        return ""
+
+    def force_new_session_requested(payload: dict) -> bool:
+        """Treat only an explicit truthy flag as a request to discard the active thread."""
+        value = payload.get("force_new")
+        if value is None:
+            value = payload.get("forceNew")
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value == 1
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return False
 
     def normalize_trainer_root_path(value: str) -> str:
         raw_path = str(value or "").strip()
@@ -20566,538 +20547,6 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 "The selected Trainer workspace root must be an available directory."
             )
         return str(normalized)
-
-    def workspace_admission_conflict(
-        code: str,
-        category: str,
-        path_state: str,
-        detail: str,
-    ) -> HTTPException:
-        return HTTPException(
-            status_code=409,
-            detail={
-                "code": code,
-                "category": category,
-                "path_state": path_state,
-                "message": detail,
-            },
-        )
-
-    def trainer_root_selection_from_payload(
-        payload: dict,
-        workspace_id: str,
-    ) -> TrainerRootSelection:
-        """Resolve the data root without treating the project path as that root."""
-        requested_root_id = str(payload.get("root_id") or payload.get("rootId") or "").strip() or None
-        requested_root_path = str(payload.get("root_path") or payload.get("rootPath") or "").strip() or None
-        if requested_root_id:
-            stored_root = runtime.repository.get_trainer_root(requested_root_id)
-            if stored_root is None:
-                raise ProjectProvisioningConflictError("The selected Trainer workspace root is unavailable.")
-            if requested_root_path:
-                try:
-                    normalized_requested_path = str(Path(requested_root_path).expanduser().resolve(strict=False))
-                except (OSError, RuntimeError) as exc:
-                    raise ProjectProvisioningConflictError(
-                        "The selected Trainer workspace root cannot be normalized."
-                    ) from exc
-                if normalized_requested_path != str(Path(stored_root.root_path).resolve(strict=False)):
-                    raise ProjectProvisioningConflictError(
-                        "The selected Trainer workspace root ID does not match its path."
-                    )
-            return TrainerRootSelection(
-                root_id=stored_root.root_id,
-                root_path=normalize_trainer_root_path(stored_root.root_path),
-            )
-        if requested_root_path:
-            normalized_path = normalize_trainer_root_path(requested_root_path)
-            stored_root = runtime.repository.get_trainer_root_by_path(normalized_path)
-            return TrainerRootSelection(
-                root_id=stored_root.root_id if stored_root is not None else None,
-                root_path=normalized_path,
-            )
-
-        # Compatibility for direct API users that configured a root before the
-        # discovery request. This is never used as a project-path fallback by
-        # provisioning itself, so a project cannot silently become its own root.
-        legacy_root_path = runtime.resolve_workspace_path(workspace_id)
-        if legacy_root_path:
-            normalized_path = normalize_trainer_root_path(legacy_root_path)
-            stored_root = runtime.repository.get_trainer_root_by_path(normalized_path)
-            return TrainerRootSelection(
-                root_id=stored_root.root_id if stored_root is not None else None,
-                root_path=normalized_path,
-            )
-        return TrainerRootSelection(root_id=None, root_path=None)
-
-    def project_discovery_authority(
-        project_path: str,
-        root_selection: TrainerRootSelection,
-    ) -> WorkspaceAuthority | None:
-        """Authorize reads from the selected project, not from Trainer's data root."""
-        if not root_selection.root_path:
-            return None
-        try:
-            return WorkspaceAuthority(
-                root_path=project_path,
-                initial_permission=PermissionLevel.INSPECT,
-            )
-        except (OSError, ValueError):
-            return None
-
-    def root_selections_match(left: TrainerRootSelection, right: TrainerRootSelection) -> bool:
-        return left.root_id == right.root_id and left.root_path == right.root_path
-
-    def project_adoption_job_response(
-        job: ProjectAdoptionJobRecord,
-        discovery: ProjectDiscovery | None = None,
-    ) -> dict[str, object]:
-        payload: dict[str, object] = {"project_adoption_job": job.to_payload()}
-        result = job.result
-        if isinstance(result, dict):
-            payload.update(result)
-        elif discovery is not None:
-            payload["project_discovery"] = discovery.to_payload()
-        return payload
-
-    @router.post("/workspace/classify", response_model=None)
-    async def workspace_classify(payload: dict) -> dict[str, object]:
-        workspace_id = workspace_discovery_owner_id(payload)
-        requested_response_language = (
-            str(payload.get("response_language") or payload.get("responseLanguage") or "").strip() or None
-        )
-        response_language = effective_response_language(workspace_id, requested_response_language)
-        folder_path = str(
-            payload.get("folder_path")
-            or payload.get("project_path")
-            or payload.get("workspace_path")
-            or ""
-        ).strip()
-        if not folder_path and workspace_id:
-            folder_path = runtime.resolve_workspace_path(workspace_id) or ""
-        if not folder_path:
-            raise HTTPException(status_code=400, detail="folder_path is required.")
-
-        try:
-            root_selection = trainer_root_selection_from_payload(payload, workspace_id)
-        except ProjectProvisioningConflictError as exc:
-            detail = str(exc)
-            if "ID does not match" in detail:
-                raise workspace_admission_conflict(
-                    "root_id_mismatch", "workspace_root", "unknown", "The selected Trainer workspace root ID does not match its path."
-                ) from exc
-            if "unavailable" in detail or "available directory" in detail:
-                raise workspace_admission_conflict(
-                    "root_path_unavailable", "workspace_root", "unavailable", "The selected Trainer workspace root is unavailable."
-                ) from exc
-            raise workspace_admission_conflict(
-                "root_missing", "workspace_root", "missing", "A Trainer workspace root is required."
-            ) from exc
-
-        # Register the explicitly selected Trainer data root before observing a
-        # project. This does not adopt the project and never grants authority to
-        # the candidate path; it only makes the root registry canonical.
-        if root_selection.root_path:
-            try:
-                registered_root = runtime.register_trainer_root(
-                    root_id=root_selection.root_id,
-                    root_path=root_selection.root_path,
-                )
-            except (KeyError, ValueError) as exc:
-                raise HTTPException(status_code=409, detail=str(exc)) from exc
-            root_selection = TrainerRootSelection(
-                root_id=registered_root.root_id,
-                root_path=registered_root.root_path,
-            )
-        snapshot = payload.get("workspace_file_snapshot") or payload.get("workspaceFileSnapshot")
-        if not isinstance(snapshot, dict):
-            snapshot = None
-        remote_name = str(
-            payload.get("remote_name") or payload.get("remoteName") or ""
-        ).strip() or None
-        summary = classify_heuristic(
-            folder_path,
-            response_language=response_language,
-            workspace_file_snapshot=snapshot,
-            remote_name=remote_name,
-        )
-        classification_service = runtime.provider_service
-        override_config = provider_config_from_payload(payload)
-        api_key_override = provider_api_key_from_payload(payload)
-        if override_config is not None or api_key_override is not None:
-            # Do not retain request-scoped credentials in the runtime service cache.
-            classification_service = ProviderService(config=override_config, api_key=api_key_override)
-        if (
-            classification_service.has_api_key
-            and runtime.provider_connection_verified(classification_service)
-        ):
-            summary = await classify_with_llm(
-                folder_path,
-                classification_service,
-                heuristic_result=summary,
-                response_language=response_language,
-            )
-        discovery = discover_project(
-            folder_path,
-            summary=summary,
-            # Classification only observes the candidate. The project-specific
-            # authority is created at the explicit decision boundary below.
-            authority=None,
-            remote_workspace=bool(
-                remote_name
-                or (isinstance(snapshot, dict) and snapshot.get("is_remote") is True)
-                or "://" in folder_path
-            ),
-        )
-        with project_discoveries_guard:
-            project_discoveries[discovery.discovery_id] = (workspace_id, discovery, root_selection)
-
-        response = summary.model_dump(mode="json")
-        response["project_discovery"] = discovery.to_payload()
-        if root_selection.root_path:
-            response["root_identity"] = {
-                "rootId": root_selection.root_id,
-                "rootPath": root_selection.root_path,
-            }
-        return cast(dict[str, object], response)
-
-    @router.post("/workspace/discovery/decision", response_model=None)
-    def workspace_discovery_decision(payload: dict) -> dict[str, object]:
-        workspace_id = workspace_discovery_owner_id(payload)
-        context_id = str(payload.get("context_id") or payload.get("contextId") or "").strip() or None
-        discovery_id = str(payload.get("discovery_id") or "").strip()
-        decision = str(payload.get("decision") or "").strip().lower()
-        if not discovery_id:
-            raise HTTPException(status_code=400, detail="discovery_id is required.")
-        if decision not in {"adopt", "browse", "ignore"}:
-            raise HTTPException(status_code=422, detail="decision must be adopt, browse, or ignore.")
-
-        with project_discoveries_guard:
-            stored = project_discoveries.get(discovery_id)
-        if stored is None or stored[0] != workspace_id:
-            # Do not reveal a discovery record's path or ownership context.
-            raise HTTPException(status_code=404, detail="Project discovery was not found.")
-
-        _, discovery, stored_root_selection = stored
-        has_explicit_root_selection = bool(
-            str(payload.get("root_id") or payload.get("rootId") or "").strip()
-            or str(payload.get("root_path") or payload.get("rootPath") or "").strip()
-        )
-        if has_explicit_root_selection:
-            try:
-                requested_root_selection = trainer_root_selection_from_payload(payload, workspace_id)
-            except ProjectProvisioningConflictError as exc:
-                raise HTTPException(status_code=409, detail=str(exc)) from exc
-            if not root_selections_match(stored_root_selection, requested_root_selection):
-                raise HTTPException(
-                    status_code=409,
-                    detail="The selected Trainer workspace root changed after project discovery.",
-                )
-        root_selection = stored_root_selection
-        if decision == "adopt" and discovery.status == "adopted":
-            try:
-                provisioning = runtime.get_project_provisioning(workspace_id)
-            except ProjectProvisioningIntegrityError as exc:
-                logger.error("Stored project provisioning evidence is incomplete: %s", type(exc).__name__)
-                raise HTTPException(
-                    status_code=409,
-                    detail="The managed project needs repair before it can be resumed.",
-                ) from exc
-            if provisioning is None or provisioning.project_path != discovery.project_path:
-                raise HTTPException(
-                    status_code=409,
-                    detail="The managed project record is unavailable for this discovery.",
-                )
-            persist_first_look_summary(provisioning.workspace_id, discovery.summary)
-            return {
-                "project_discovery": discovery.to_payload(),
-                "project_provisioning": provisioning.model_dump(mode="json"),
-                "project_identity": runtime.project_identity_payload(
-                    provisioning,
-                    idempotency="reused",
-                ),
-            }
-        if decision == "adopt" and discovery.status == "adoption_requested" and discovery.adoption_job_id:
-            if not root_selection.root_path:
-                raise HTTPException(
-                    status_code=409,
-                    detail="The selected Trainer workspace root changed after project discovery.",
-                )
-            job = runtime.get_project_adoption_job(
-                root_path=root_selection.root_path,
-                job_id=discovery.adoption_job_id,
-            )
-            if job is None:
-                raise HTTPException(
-                    status_code=409,
-                    detail="The project adoption job is no longer available and must be retried.",
-                )
-            return project_adoption_job_response(job, discovery)
-
-        authority = project_discovery_authority(discovery.project_path, root_selection)
-        try:
-            resolved = resolve_project_discovery(
-                discovery,
-                decision,
-                authority=authority,
-            )
-        except PermissionError as exc:
-            logger.info("Workspace project discovery decision denied: %s", type(exc).__name__)
-            raise HTTPException(
-                status_code=403,
-                detail="Choose a Trainer workspace root before opening this project.",
-            ) from exc
-        except ValueError as exc:
-            message = str(exc).strip() or "The project discovery cannot be resolved in its current state."
-            logger.info("Workspace project discovery decision could not be resolved: %s", type(exc).__name__)
-            raise HTTPException(status_code=409, detail=message) from exc
-
-        if decision != "adopt":
-            with project_discoveries_guard:
-                project_discoveries[discovery_id] = (workspace_id, resolved, root_selection)
-            return {"project_discovery": resolved.to_payload()}
-
-        if root_selection.root_path and Path(root_selection.root_path).resolve(strict=False) == Path(
-            resolved.project_path
-        ).resolve(strict=False):
-            raise HTTPException(
-                status_code=409,
-                detail="This workspace is already associated with a different managed project.",
-            )
-
-        job_id = f"project-adoption-{uuid4().hex[:12]}"
-        job_id_box: dict[str, str] = {"job_id": job_id}
-
-        def finalize_adoption(inventory: dict[str, object]) -> dict[str, object]:
-            existing = runtime.get_project_provisioning(context_id or workspace_id)
-            provisioning = runtime.provision_project_adoption(
-                workspace_id=workspace_id,
-                context_id=context_id,
-                root_id=root_selection.root_id,
-                root_path=root_selection.root_path,
-                project_path=resolved.project_path,
-                project_name=resolved.project_name,
-            )
-            adopted = complete_project_adoption(
-                replace(resolved, adoption_job_id=job_id_box.get("job_id")),
-                provisioning.adoption_artifacts(),
-            )
-            persist_first_look_summary(provisioning.workspace_id, adopted.summary)
-            with project_discoveries_guard:
-                project_discoveries[discovery_id] = (workspace_id, adopted, root_selection)
-            return {
-                "project_discovery": adopted.to_payload(),
-                "project_provisioning": provisioning.model_dump(mode="json"),
-                "project_identity": runtime.project_identity_payload(
-                    provisioning,
-                    idempotency=(
-                        "reused"
-                        if existing is not None and existing.project_path == provisioning.project_path
-                        else "created"
-                    ),
-                ),
-                "project_adoption_inventory": inventory,
-            }
-
-        try:
-            job = runtime.start_project_adoption_job(
-                workspace_id=workspace_id,
-                discovery_id=discovery_id,
-                job_id=job_id,
-                project_path=resolved.project_path,
-                project_name=resolved.project_name,
-                root_id=root_selection.root_id,
-                root_path=root_selection.root_path or "",
-                context_id=context_id,
-                finalize=finalize_adoption,
-            )
-            requested = replace(resolved, adoption_job_id=job.job_id)
-            with project_discoveries_guard:
-                project_discoveries[discovery_id] = (workspace_id, requested, root_selection)
-        except ProjectProvisioningConflictError as exc:
-            logger.info("Workspace project provisioning conflict: %s", type(exc).__name__)
-            raise HTTPException(
-                status_code=409,
-                detail="This workspace is already associated with a different managed project.",
-            ) from exc
-        except ProjectProvisioningIntegrityError as exc:
-            logger.error("Workspace project provisioning integrity failure: %s", type(exc).__name__)
-            raise HTTPException(
-                status_code=409,
-                detail="Project provisioning could not establish a complete recoverable project lane.",
-            ) from exc
-
-        return {
-            "project_discovery": requested.to_payload(),
-            "project_adoption_job": job.to_payload(),
-        }
-
-    @router.get("/workspace/adoption-job", response_model=None)
-    def workspace_adoption_job(
-        job_id: str | None = None,
-        root_path: str | None = None,
-        workspace_id: str | None = None,
-    ) -> dict[str, object]:
-        if not job_id:
-            raise HTTPException(status_code=400, detail="job_id is required.")
-        if not root_path:
-            raise HTTPException(status_code=400, detail="root_path is required.")
-        job = runtime.get_project_adoption_job(root_path=root_path, job_id=job_id)
-        if job is None:
-            raise HTTPException(status_code=404, detail="Project adoption job was not found.")
-        if workspace_id is not None and str(workspace_id).strip() and job.workspace_id != workspace_id.strip():
-            raise HTTPException(status_code=404, detail="Project adoption job was not found.")
-        response = project_adoption_job_response(job)
-        if job.status == "completed" and job.context_id:
-            try:
-                provisioning = runtime.get_project_provisioning(job.context_id)
-            except ProjectProvisioningIntegrityError as exc:
-                logger.error("Project adoption job recovered incomplete provisioning: %s", type(exc).__name__)
-                raise HTTPException(
-                    status_code=409,
-                    detail="The managed project needs repair before it can be resumed.",
-                ) from exc
-            if provisioning is not None:
-                response.setdefault("project_provisioning", provisioning.model_dump(mode="json"))
-                response.setdefault(
-                    "project_identity",
-                    runtime.project_identity_payload(provisioning, idempotency="existing"),
-                )
-        return response
-
-    @router.get("/workspace/project-provisioning", response_model=None)
-    def workspace_project_provisioning(
-        workspace_id: str | None = None,
-        context_id: str | None = None,
-        session_id: str | None = None,
-    ) -> dict[str, object]:
-        if not (workspace_id or context_id or session_id):
-            raise HTTPException(status_code=400, detail="workspace_id, context_id, or session_id is required.")
-        resolved_workspace_id = current_workspace_id(
-            session_id=session_id,
-            workspace_id=context_id or workspace_id,
-        )
-        try:
-            provisioning = runtime.get_project_provisioning(resolved_workspace_id)
-        except ProjectProvisioningIntegrityError as exc:
-            logger.error("Project provisioning lookup found incomplete evidence: %s", type(exc).__name__)
-            raise HTTPException(
-                status_code=409,
-                detail="The managed project needs repair before it can be resumed.",
-            ) from exc
-        if provisioning is None:
-            raise HTTPException(status_code=404, detail="No managed project was found for this workspace.")
-        return {
-            "project_provisioning": provisioning.model_dump(mode="json"),
-            "project_identity": runtime.project_identity_payload(provisioning, idempotency="existing"),
-        }
-
-    @router.get("/workspace/identity", response_model=None)
-    def workspace_identity(
-        workspace_id: str | None = None,
-        context_id: str | None = None,
-        session_id: str | None = None,
-    ) -> dict[str, object]:
-        if not (workspace_id or context_id or session_id):
-            raise HTTPException(status_code=400, detail="workspace_id, context_id, or session_id is required.")
-        resolved_workspace_id = current_workspace_id(
-            session_id=session_id,
-            workspace_id=context_id or workspace_id,
-        )
-        try:
-            provisioning = runtime.get_project_provisioning(resolved_workspace_id)
-        except ProjectProvisioningIntegrityError as exc:
-            raise HTTPException(
-                status_code=409,
-                detail="The managed project needs repair before it can be resumed.",
-            ) from exc
-        if provisioning is None:
-            raise HTTPException(status_code=404, detail="No managed project identity was found.")
-        return runtime.project_identity_payload(provisioning, idempotency="existing")
-
-    @router.post("/workspace/roots/{root_id}/reconcile", response_model=None)
-    def workspace_root_reconcile(root_id: str, payload: dict) -> dict[str, object]:
-        root_path = str(payload.get("root_path") or payload.get("rootPath") or "").strip()
-        if not root_path:
-            raise HTTPException(status_code=400, detail="root_path is required.")
-        try:
-            root = runtime.reconcile_trainer_root(root_id, root_path)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="Trainer root was not found.") from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail="Trainer root cannot be reconciled.") from exc
-        pending_project_ids: list[str] = []
-        for project in runtime.repository.list_trainer_projects(root.root_id):
-            try:
-                Path(project.project_path).relative_to(Path(root.root_path))
-            except ValueError:
-                pending_project_ids.append(project.project_id)
-        pending = bool(pending_project_ids)
-        return {
-            "root": root.model_dump(mode="json"),
-            "root_identity": {
-                "rootId": root.root_id,
-                "rootPath": root.root_path,
-                "revisions": {"root": root.revision},
-                "pending": pending,
-                "reconcile": {
-                    "state": "pending_projects" if pending else "reconciled",
-                    "pendingProjectIds": pending_project_ids,
-                },
-            },
-        }
-
-    @router.post("/workspace/projects/{project_id}/reconcile", response_model=None)
-    def workspace_project_reconcile(project_id: str, payload: dict) -> dict[str, object]:
-        root_id = str(payload.get("root_id") or payload.get("rootId") or "").strip()
-        project_path = str(payload.get("project_path") or payload.get("projectPath") or "").strip()
-        project_name = str(payload.get("project_name") or payload.get("projectName") or "").strip() or None
-        if not root_id or not project_path:
-            raise HTTPException(status_code=400, detail="root_id and project_path are required.")
-        try:
-            project = runtime.reconcile_project_location(
-                root_id=root_id,
-                project_id=project_id,
-                project_path=project_path,
-                project_name=project_name,
-            )
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="Trainer root or project was not found.") from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail="Project location cannot be reconciled.") from exc
-        context = runtime.repository.get_project_context_for_project(project.project_id)
-        if context is None:
-            raise HTTPException(status_code=409, detail="Project context is incomplete.")
-        try:
-            provisioning = runtime.get_project_provisioning(context.context_id)
-        except ProjectProvisioningIntegrityError as exc:
-            raise HTTPException(
-                status_code=409,
-                detail="The managed project needs repair before it can be resumed.",
-            ) from exc
-        if provisioning is None:
-            raise HTTPException(status_code=409, detail="Project context cannot be loaded.")
-        return {
-            "project": project.model_dump(mode="json"),
-            "project_identity": runtime.project_identity_payload(
-                provisioning,
-                idempotency="reconciled",
-                reconcile_state="reconciled",
-            ),
-        }
-
-    def force_new_session_requested(payload: dict) -> bool:
-        """Treat only an explicit truthy flag as a request to discard the active thread."""
-        value = payload.get("force_new")
-        if value is None:
-            value = payload.get("forceNew")
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, (int, float)):
-            return value == 1
-        if isinstance(value, str):
-            return value.strip().lower() in {"1", "true", "yes", "on"}
-        return False
 
     def project_provisioning_repair_detail(response_language: str | None) -> dict[str, object]:
         return {
@@ -27720,412 +27169,56 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             "history": [item.model_dump(mode="json") for item in history],
         }
 
-    @router.get("/memory/summary", response_model=WorkbenchSnapshot)
-    def memory_summary(session_id: str | None = None, workspace_id: str | None = None) -> WorkbenchSnapshot:
-        if session_id is None and workspace_id:
-            runtime.restore_latest_session_for_workspace(workspace_id)
-        return current_snapshot(session_id=session_id, workspace_id=workspace_id)
 
-    @router.get("/memory/global", response_model=GlobalMemory)
-    def memory_global() -> GlobalMemory:
-        return runtime.memory_service.global_memory()
 
-    @router.post("/memory/global", response_model=WorkbenchSnapshot)
-    def update_memory_global(request: GlobalMemoryUpdateRequest) -> WorkbenchSnapshot:
-        workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
-        runtime.memory_service.update_global_memory(
-            preferences=request.preferences,
-            long_term_goals=request.long_term_goals,
+
+    router.include_router(
+        build_workspace_router(
+            runtime,
+            RouterDeps(
+                current_workspace_id=current_workspace_id,
+                current_snapshot=current_snapshot,
+                refresh_workspace_sessions=refresh_workspace_sessions,
+                hydrate_snapshot=hydrate_snapshot,
+                effective_response_language=effective_response_language,
+                persist_first_look_summary=persist_first_look_summary,
+                provider_config_from_payload=provider_config_from_payload,
+                provider_api_key_from_payload=provider_api_key_from_payload,
+                normalize_trainer_root_path=normalize_trainer_root_path,
+            ),
         )
-        refresh_workspace_sessions(workspace_id)
-        return current_snapshot(session_id=request.session_id, workspace_id=workspace_id)
-
-    @router.get("/memory/share-grants", response_model=list[MemoryShareGrant])
-    def memory_share_grants(
-        session_id: str | None = None,
-        workspace_id: str | None = None,
-    ) -> list[MemoryShareGrant]:
-        target_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
-        return runtime.memory_service.list_memory_share_grants(target_workspace_id)
-
-    @router.post("/memory/share-grants", response_model=WorkbenchSnapshot)
-    def save_memory_share_grant(request: MemoryShareGrantUpsertRequest) -> WorkbenchSnapshot:
-        target_workspace_id = current_workspace_id(
-            session_id=request.session_id,
-            workspace_id=request.workspace_id,
-        )
-        if request.source_workspace_id == target_workspace_id:
-            raise HTTPException(status_code=422, detail="memory share source and target must differ")
-        runtime.memory_service.save_memory_share_grant(
-            source_workspace_id=request.source_workspace_id,
-            target_workspace_id=target_workspace_id,
-            categories=request.categories,
-        )
-        refresh_workspace_sessions(target_workspace_id)
-        return current_snapshot(session_id=request.session_id, workspace_id=target_workspace_id)
-
-    @router.post("/memory/transfer/exclude-workspace")
-    def exclude_workspace_from_transfer_promotion(request: TransferPromotionScopeRequest) -> dict[str, object]:
-        workspace_ids = [item.strip() for item in request.workspace_ids if item and item.strip()]
-        if request.workspace_id and request.workspace_id.strip():
-            workspace_ids.append(request.workspace_id.strip())
-        excluded = runtime.memory_service.exclude_workspaces_from_transfer_promotion(workspace_ids)
-        return {"ok": True, "workspace_ids": excluded}
-
-    @router.post("/memory/transfer/include-workspace")
-    def include_workspace_in_transfer_promotion(request: TransferPromotionScopeRequest) -> dict[str, object]:
-        workspace_ids = [item.strip() for item in request.workspace_ids if item and item.strip()]
-        if request.workspace_id and request.workspace_id.strip():
-            workspace_ids.append(request.workspace_id.strip())
-        included = runtime.memory_service.include_workspaces_in_transfer_promotion(workspace_ids)
-        return {"ok": True, "workspace_ids": included}
-
-    @router.post("/memory/share-grants/revoke", response_model=WorkbenchSnapshot)
-    def revoke_memory_share_grant(request: MemoryShareGrantRevokeRequest) -> WorkbenchSnapshot:
-        target_workspace_id = current_workspace_id(
-            session_id=request.session_id,
-            workspace_id=request.workspace_id,
-        )
-        runtime.memory_service.revoke_memory_share_grant(
-            source_workspace_id=request.source_workspace_id,
-            target_workspace_id=target_workspace_id,
-        )
-        refresh_workspace_sessions(target_workspace_id)
-        return current_snapshot(session_id=request.session_id, workspace_id=target_workspace_id)
-
-    @router.get("/memory/profile", response_model=UserProfile | None)
-    def memory_profile(session_id: str | None = None, workspace_id: str | None = None) -> UserProfile | None:
-        resolved_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
-        return runtime.memory_service.profile(resolved_workspace_id)
-
-    @router.get("/memory/weaknesses", response_model=list[str])
-    def memory_weaknesses(session_id: str | None = None, workspace_id: str | None = None) -> list[str]:
-        resolved_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
-        return runtime.memory_service.weaknesses(resolved_workspace_id)
-
-    @router.get("/memory/reviews", response_model=list[str])
-    def memory_reviews(session_id: str | None = None, workspace_id: str | None = None) -> list[str]:
-        resolved_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
-        return runtime.memory_service.reviews(resolved_workspace_id)
-
-    @router.get("/memory/teaching-assets")
-    def memory_teaching_assets(
-        session_id: str | None = None,
-        workspace_id: str | None = None,
-        scope: str | None = None,
-        scenario: str | None = None,
-        focus_area: str | None = None,
-        query: str | None = None,
-        kind: str | None = None,
-        limit: int = 12,
-    ) -> dict[str, object]:
-        resolved_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
-        safe_limit = max(1, min(limit, 40))
-        return runtime.memory_service.teaching_asset_library(
-            resolved_workspace_id,
-            scope=scope,
-            scenario=scenario,
-            focus_area=focus_area,
-            query=query,
-            kind=kind,
-            limit=safe_limit,
-        )
-
-    def _stage_material_payload(asset: TeachingKnowledgeAsset) -> dict[str, object]:
-        content = asset.concept_card or asset.example or asset.exercise_seed or asset.summary
-        return {
-            "id": asset.id,
-            "planStageId": asset.plan_stage_id,
-            "kind": asset.kind,
-            "title": asset.title,
-            "summary": asset.summary,
-            "content": content,
-            "focusArea": asset.focus_area,
-            "createdAt": asset.created_at or "",
-        }
-
-    def _stage_materials_for_stage(workspace: str, stage: str) -> list[TeachingKnowledgeAsset]:
-        assets = runtime.memory_service.list_teaching_assets(workspace, scope=None, limit=200)
-        return [asset for asset in assets if asset.plan_stage_id == stage]
-
-    @router.get("/plan/{plan_id}/stages/{stage_id}/materials")
-    def list_stage_materials(
-        plan_id: str,
-        stage_id: str,
-        session_id: str | None = None,
-        workspace_id: str | None = None,
-    ) -> dict[str, object]:
-        resolved_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
-        materials = _stage_materials_for_stage(resolved_workspace_id, stage_id)
-        return {
-            "plan_id": plan_id,
-            "stage_id": stage_id,
-            "materials": [_stage_material_payload(asset) for asset in materials],
-        }
-
-    @router.post("/plan/{plan_id}/stages/{stage_id}/material/generate")
-    async def generate_stage_materials(
-        plan_id: str,
-        stage_id: str,
-        payload: dict | None = None,
-    ) -> dict[str, object]:
-        payload = payload or {}
-        resolved_workspace_id = current_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
-        plan = runtime.repository.get_latest_plan(resolved_workspace_id)
-        if plan is None:
-            raise HTTPException(status_code=404, detail="No learning plan is available for this workspace.")
-        if plan_id not in {getattr(plan, "id", ""), getattr(plan, "plan_id", "")}:
-            raise HTTPException(status_code=404, detail="Plan not found for this workspace.")
-        stage = next((item for item in (plan.stages or []) if item.id == stage_id), None)
-        if stage is None:
-            raise HTTPException(status_code=404, detail="Plan stage not found.")
-        stage_exercises = list(getattr(stage, "exercises", None) or [])
-        if not stage_exercises:
-            stage_exercises = [
-                exercise
-                for phase in (plan.phases or [])
-                for exercise in (phase.exercises or [])
-            ][:6]
-        provider_config = provider_config_from_payload(payload)
-        api_key = provider_api_key_from_payload(payload)
-        provider_service = runtime.provider_service_for(provider_config, api_key)
-        profile = runtime.repository.get_profile(resolved_workspace_id)
-        profile_summary = "; ".join(
-            item
-            for item in (
-                getattr(profile, "long_term_goal", "") if profile else "",
-                getattr(profile, "background", "") if profile else "",
-            )
-            if str(item or "").strip()
-        )
-        hints = [
-            asset.title
-            for asset in runtime.memory_service.list_teaching_assets(
-                resolved_workspace_id, scope=None, limit=12
-            )
-            if asset.title
-        ]
-        from ..pedagogy.stage_material_composer import StageMaterialComposer
-
-        composer = StageMaterialComposer(provider_service=provider_service)
-        response_language = str(
-            payload.get("response_language") or payload.get("responseLanguage") or "zh-CN"
-        )
-        materials = await composer.compose_stage_materials(
-            workspace_id=resolved_workspace_id,
-            plan_title=plan.title,
-            stage_id=stage_id,
-            stage_title=stage.title,
-            stage_goal=stage.goal,
-            stage_outcomes=list(stage.outcomes or []),
-            stage_exercises=stage_exercises,
-            focus_area=str(payload.get("focus_area") or payload.get("focusArea") or ""),
-            profile_summary=profile_summary,
-            teaching_asset_hints=hints,
-            response_language=response_language,
-        )
-        persisted: list[TeachingKnowledgeAsset] = []
-        for asset in materials:
-            persisted.append(
-                runtime.memory_service.record_teaching_asset(resolved_workspace_id, asset)
-            )
-        return {
-            "plan_id": plan_id,
-            "stage_id": stage_id,
-            "materials": [_stage_material_payload(asset) for asset in persisted],
-            "snapshot": current_snapshot(session_id=payload.get("session_id"), workspace_id=resolved_workspace_id),
-        }
-
-    @router.post("/pedagogy/explain")
-    def explain_principle(payload: dict) -> dict[str, object]:
-        principle = str(payload.get("principle") or "").strip()
-        if not principle:
-            raise HTTPException(status_code=422, detail="principle is required.")
-        resolved_workspace_id = current_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
-        from ..pedagogy.stage_material_composer import compose_principle_explainer_asset
-
-        asset = compose_principle_explainer_asset(
-            workspace_id=resolved_workspace_id,
-            principle=principle,
-            context=str(payload.get("context") or ""),
-            focus_area=str(payload.get("focus_area") or payload.get("focusArea") or ""),
-            response_language=str(payload.get("response_language") or payload.get("responseLanguage") or "zh-CN"),
-        )
-        saved = runtime.memory_service.record_teaching_asset(resolved_workspace_id, asset)
-        return {"ok": True, "asset": _stage_material_payload(saved)}
-
-    @router.post("/training/handoff/rebind")
-    def rebind_training_handoff(payload: dict) -> dict[str, object]:
-        card_id = str(payload.get("card_id") or payload.get("cardId") or "").strip()
-        if not card_id:
-            raise HTTPException(status_code=422, detail="card_id is required.")
-        resolved_workspace_id = current_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
-        try:
-            result = runtime.memory_service.rebind_training_handoff(resolved_workspace_id, card_id)
-        except LookupError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        return {"ok": True, **result}
-
-    _HOST_TRUSTED_VERIFICATION_SOURCES = frozenset(
-        {"automated_test", "evaluator", "ide_current_file", "server_evaluator", "test_runner", "verification_service"}
     )
-
-    @router.post("/training/verification/attest")
-    def attest_training_verification(payload: dict) -> dict[str, object]:
-        """Host test-controller attestation of a real dynamic verification run.
-
-        The local host (VS Code test runner / task pipeline) is the designated
-        verifier: it executes the learner's tests in the real workspace and
-        posts the outcome here. Learner-supplied success flags stay untrusted —
-        only this host channel may attest with a trusted evidence source.
-        """
-        card_id = str(payload.get("card_id") or payload.get("cardId") or "").strip()
-        if not card_id:
-            raise HTTPException(status_code=422, detail="card_id is required.")
-        evidence_source = str(payload.get("evidence_source") or payload.get("evidenceSource") or "").strip()
-        if evidence_source not in _HOST_TRUSTED_VERIFICATION_SOURCES:
-            raise HTTPException(
-                status_code=422,
-                detail=f"evidence_source must be one of: {', '.join(sorted(_HOST_TRUSTED_VERIFICATION_SOURCES))}.",
-            )
-        tests_output = str(payload.get("tests_output") or payload.get("testsOutput") or "").strip()
-        passed = bool(payload.get("passed"))
-        resolved_workspace_id = current_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
-        updated = runtime.memory_service.record_training_practice_evaluation_result(
-            workspace_id=resolved_workspace_id,
-            card_id=card_id,
-            card_title=str(payload.get("card_title") or payload.get("cardTitle") or ""),
-            passed=passed,
-            summary=str(payload.get("summary") or tests_output or "Host test runner attestation."),
-            next_step=str(payload.get("next_step") or payload.get("nextStep") or "Record a reflection, then return the card."),
-            focus_area=str(payload.get("focus_area") or payload.get("focusArea") or ""),
-            evidence_source=evidence_source,
-            verified_by_evaluator=passed,
+    router.include_router(
+        build_memory_router(
+            runtime,
+            RouterDeps(
+                current_workspace_id=current_workspace_id,
+                current_snapshot=current_snapshot,
+                refresh_workspace_sessions=refresh_workspace_sessions,
+                hydrate_snapshot=hydrate_snapshot,
+                effective_response_language=effective_response_language,
+                persist_first_look_summary=persist_first_look_summary,
+                provider_config_from_payload=provider_config_from_payload,
+                provider_api_key_from_payload=provider_api_key_from_payload,
+                normalize_trainer_root_path=normalize_trainer_root_path,
+            ),
         )
-        return {"ok": True, "workspace": updated}
-
-    @router.get("/evidence/queue", response_model=EvidenceQueueSnapshot)
-    def evidence_queue(session_id: str | None = None, workspace_id: str | None = None) -> EvidenceQueueSnapshot:
-        resolved_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
-        return runtime.memory_service.evidence_queue(resolved_workspace_id)
-
-    @router.post("/evidence/enqueue", response_model=EvidenceItem)
-    def evidence_enqueue(payload: dict) -> EvidenceItem:
-        workspace_id = current_workspace_id(
-            session_id=payload.get("session_id"),
-            workspace_id=payload.get("workspace_id"),
+    )
+    router.include_router(
+        build_learning_router(
+            runtime,
+            RouterDeps(
+                current_workspace_id=current_workspace_id,
+                current_snapshot=current_snapshot,
+                refresh_workspace_sessions=refresh_workspace_sessions,
+                hydrate_snapshot=hydrate_snapshot,
+                effective_response_language=effective_response_language,
+                persist_first_look_summary=persist_first_look_summary,
+                provider_config_from_payload=provider_config_from_payload,
+                provider_api_key_from_payload=provider_api_key_from_payload,
+                normalize_trainer_root_path=normalize_trainer_root_path,
+            ),
         )
-        if payload.get("waiting_composer") is True or payload.get("waitingComposer") is True:
-            enqueued = runtime.memory_service.enqueue_waiting_composer_evidence(
-                workspace_id,
-                str(payload.get("summary") or payload.get("text") or ""),
-            )
-            if enqueued is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Waiting composer evidence was not accepted.",
-                )
-            refresh_workspace_sessions(workspace_id)
-            return enqueued
-        raw_concepts = payload.get("concepts")
-        item = EvidenceItem.model_validate(
-            {
-                "summary": payload.get("summary", ""),
-                "source": payload.get("source", "learning_signal"),
-                "source_card_id": payload.get("source_card_id") or payload.get("sourceCardId", ""),
-                "concepts": raw_concepts if isinstance(raw_concepts, list) else [],
-                "outcome": payload.get("outcome", "partial"),
-                "confidence": payload.get("confidence", 0.0),
-                "target_plan_stage_id": (
-                    payload.get("target_plan_stage_id") or payload.get("targetPlanStageId", "")
-                ),
-            }
-        )
-        enqueued = runtime.memory_service.enqueue_evidence(workspace_id, item)
-        refresh_workspace_sessions(workspace_id)
-        return enqueued
-
-    @router.post("/evidence/adopt", response_model=EvidenceAdoptResponse)
-    def evidence_adopt(payload: dict) -> EvidenceAdoptResponse:
-        workspace_id = current_workspace_id(
-            session_id=payload.get("session_id"),
-            workspace_id=payload.get("workspace_id"),
-        )
-        evidence_id = str(payload.get("evidence_id") or payload.get("id") or "").strip()
-        if not evidence_id:
-            raise HTTPException(status_code=400, detail="evidence_id is required")
-        response = runtime.memory_service.adopt_evidence(workspace_id, evidence_id)
-        refresh_workspace_sessions(workspace_id)
-        return response
-
-    @router.post("/evidence/reject", response_model=EvidenceItem)
-    def evidence_reject(payload: dict) -> EvidenceItem:
-        workspace_id = current_workspace_id(
-            session_id=payload.get("session_id"),
-            workspace_id=payload.get("workspace_id"),
-        )
-        evidence_id = str(payload.get("evidence_id") or payload.get("id") or "").strip()
-        if not evidence_id:
-            raise HTTPException(status_code=400, detail="evidence_id is required")
-        reason = str(payload.get("reason") or "").strip()
-        rejected = runtime.memory_service.reject_evidence(workspace_id, evidence_id, reason)
-        refresh_workspace_sessions(workspace_id)
-        return rejected
-
-    @router.post("/evidence/defer", response_model=EvidenceItem)
-    def evidence_defer(payload: dict) -> EvidenceItem:
-        workspace_id = current_workspace_id(
-            session_id=payload.get("session_id"),
-            workspace_id=payload.get("workspace_id"),
-        )
-        evidence_id = str(payload.get("evidence_id") or payload.get("id") or "").strip()
-        if not evidence_id:
-            raise HTTPException(status_code=400, detail="evidence_id is required")
-        reason = str(payload.get("reason") or "").strip()
-        deferred = runtime.memory_service.defer_evidence(workspace_id, evidence_id, reason)
-        refresh_workspace_sessions(workspace_id)
-        return deferred
-
-    @router.post("/memory/settings", response_model=WorkbenchSnapshot)
-    def save_coach_settings(request: CoachSettingsRequest) -> WorkbenchSnapshot:
-        workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
-        runtime.memory_service.save_coach_settings(
-            workspace_id=workspace_id,
-            response_language=request.response_language,
-            answer_mode=request.answer_mode,
-            teaching_style=request.teaching_style,
-            coach_defaults=request.coach_defaults,
-            follow_current_file=request.follow_current_file,
-            context_detail=request.context_detail,
-            include_current_file=request.include_current_file,
-            include_selection=request.include_selection,
-            include_diagnostics=request.include_diagnostics,
-            include_related_files=request.include_related_files,
-        )
-
-        state = runtime.get_session(request.session_id) if request.session_id else runtime.latest_session()
-        if state and state.workspace_id == workspace_id:
-            state.snapshot.memory = runtime.memory_service.snapshot(workspace_id)
-            state.snapshot.profile = runtime.repository.get_profile(workspace_id)
-            state.snapshot.plan = runtime.repository.get_latest_plan(workspace_id)
-            workspace_memory = state.snapshot.memory.workspace if isinstance(state.snapshot.memory.workspace, dict) else {}
-            hydrate_snapshot(
-                state.snapshot,
-                response_language=(
-                    str(workspace_memory.get("response_language")).strip()
-                    if workspace_memory.get("response_language")
-                    else None
-                ),
-                answer_mode=(
-                    str(workspace_memory.get("answer_mode")).strip()
-                    if workspace_memory.get("answer_mode")
-                    else (state.snapshot.profile.answer_policy if state.snapshot.profile else None)
-                ),
-            )
-            runtime.save_session_state(state.session_id)
-
-        return current_snapshot(session_id=request.session_id, workspace_id=workspace_id)
+    )
 
     return router
