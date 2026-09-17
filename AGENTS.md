@@ -1,6 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
 **Generated:** 2026-06-19
+**Updated:** 2026-09-18 — refreshed structure, sizes, and test-stack notes
 **Branch:** main
 
 ## OVERVIEW
@@ -9,7 +10,7 @@ Desktop-first VS Code extension + FastAPI Python sidecar for conversation-driven
 ## STRUCTURE
 
 ```
-trainer_final/                      # Repository root
+trainer/                            # Repository root
 ├── extension/                      # VS Code extension host (TypeScript)
 │   ├── src/                        # Extension commands, core services, webview bridge
 │   │   ├── commands/               # 25+ command handlers grouped by domain
@@ -45,16 +46,16 @@ trainer_final/                      # Repository root
 │   ├── webview/                    # React workbench UI (Vite + Zustand + i18n)
 │   │   └── src/
 │   │       ├── app/
-│   │       │   ├── App.tsx         # Root workbench (5843 lines — renders all 5 views)
+│   │       │   ├── App.tsx         # Root workbench (~14.1k lines — renders all 5 views)
 │   │       │   ├── useWorkbenchState.ts  # Zustand store
 │   │       │   ├── views/          # (empty)
 │   │       │   └── useTrainingCommands.ts
 │   │       ├── components/
 │   │       │   ├── coach/          # CoachConversationView, CoachMessageBubble, etc.
 │   │       │   ├── plan/           # CoachPlanView + evidence governance
-│   │       │   ├── resources/      # ResourcesWorkbenchView (80814 lines)
+│   │       │   ├── resources/      # ResourcesWorkbenchView (~3.5k lines)
 │   │       │   ├── training/       # TrainingWorkbenchView, CardPanel, etc.
-│   │       │   ├── settings/       # CoachSettingsView (62537 lines)
+│   │       │   ├── settings/       # CoachSettingsView (~8.2k lines)
 │   │       │   ├── composer/       # CoachComposer
 │   │       │   ├── common/         # Shared UI parts
 │   │       │   ├── flash/          # Flash card components
@@ -65,7 +66,7 @@ trainer_final/                      # Repository root
 │   │       │   ├── shell/          # App shell components
 │   │       │   └── practice/       # Practice components
 │   │       ├── lib/
-│   │       │   ├── types.ts        # Webview-side types (29240 lines)
+│   │       │   ├── types.ts        # Webview-side types (~2k lines)
 │   │       │   ├── mockData.ts     # Mock bootstrap data for dev
 │   │       │   ├── rlMockData.ts   # RL training mock data
 │   │       │   ├── rlTrainingData.ts  # RL training card data
@@ -78,10 +79,10 @@ trainer_final/                      # Repository root
 │   │       │   ├── vscode.ts       # VS Code webview message helpers
 │   │       │   ├── htmlSanitizer.ts
 │   │       │   └── i18n/
-│   │       │       └── copy.ts     # 8-language i18n (2953 lines)
-│   │       └── styles.css          # 2822 lines — token-driven design system
-│   ├── bundled/                    # Bundled Python sidecar (286 MB, 104 .py files)
-│   ├── tests/                      # 55 Jest test files
+│   │       │       └── copy.ts     # 8-language i18n (~5.2k lines)
+│   │       └── styles.css          # ~20k lines — token-driven design system
+│   ├── bundled/                    # Bundled Python sidecar (~245 MB, 98 .py files)
+│   ├── tests/                      # 215 node:test files (node --test)
 │   ├── dist/                       # Build output
 │   └── package.json                # Extension manifest (24 commands, 1 webview view)
 ├── server/                         # FastAPI Python sidecar
@@ -89,13 +90,13 @@ trainer_final/                      # Repository root
 │   │   ├── __init__.py
 │   │   ├── main.py                 # create_app() — FastAPI app factory with DI
 │   │   ├── api/
-│   │   │   ├── routers.py          # 23 endpoints (6027 lines)
+│   │   │   ├── routers.py          # All HTTP endpoints (~28k lines — largest file)
 │   │   │   ├── runtime.py          # TrainerRuntime — wires all services
 │   │   │   └── routes/
 │   │   │       ├── research.py     # Research sub-router
-│   │   │       └── provider_profiles.py
+│   │   │       └── training_handoff.py
 │   │   ├── core/
-│   │   │   ├── models.py           # Pydantic models (970 lines)
+│   │   │   ├── models.py           # Pydantic models (~3.5k lines)
 │   │   │   ├── config.py / settings.py
 │   │   │   └── event_ledger.py
 │   │   ├── db/
@@ -104,22 +105,22 @@ trainer_final/                      # Repository root
 │   │   │   ├── repositories.py     # Additional repositories
 │   │   │   └── database.py         # DB setup
 │   │   ├── llm/
-│   │   │   ├── provider_service.py # ProviderService (2200 lines)
+│   │   │   ├── provider_service.py # ProviderService (~14k lines)
 │   │   │   ├── agent_loop.py       # ReAct coach agent loop
 │   │   │   ├── agent_binding.py    # Tool binding
-│   │   │   ├── prompts.py          # System prompts (1666 lines)
+│   │   │   ├── prompts.py          # System prompts (~3.7k lines)
 │   │   │   └── tools.py            # Tool implementations
 │   │   ├── pedagogy/
-│   │   │   ├── service.py          # PedagogyService (2068 lines)
+│   │   │   ├── service.py          # PedagogyService (~2.4k lines)
 │   │   │   ├── implementation_coach.py
 │   │   │   ├── project_idea_miner.py
 │   │   │   ├── project_adaptation_coach.py
 │   │   │   ├── project_source_scout.py
 │   │   │   └── principle_explainer.py
 │   │   ├── affect/service.py       # AffectService
-│   │   ├── planner/service.py      # PlannerService (54347 lines)
+│   │   ├── planner/service.py      # PlannerService (~2k lines)
 │   │   ├── memory/
-│   │   │   ├── service.py          # MemoryService (4468 lines)
+│   │   │   ├── service.py          # MemoryService (~11.5k lines)
 │   │   │   ├── models.py
 │   │   │   ├── review_scheduler.py # FSRS review scheduler
 │   │   │   ├── semantic.py         # Qdrant semantic memory
@@ -141,7 +142,7 @@ trainer_final/                      # Repository root
 │   │   ├── resources/service.py    # ResourceService
 │   │   ├── ingest/service.py       # IngestService (file parsing)
 │   │   └── specs/service.py        # SpecService
-│   ├── tests/                      # 59 pytest files (60k+ lines total)
+│   ├── tests/                      # 161 pytest files (test_api.py alone ~10.9k lines)
 │   └── pyproject.toml              # Package config (ruff, pytest, setuptools)
 ├── shared/                         # Shared TypeScript types & protocol
 │   └── src/
@@ -180,26 +181,24 @@ trainer_final/                      # Repository root
 │       ├── previewAssets.ts
 │       ├── coachLanguage.ts
 │       └── types.ts
-├── docs/                           # Architecture, verification, plans, UI contract
-│   ├── architecture.md
-│   ├── verification.md
-│   ├── developer-workflows.md
-│   ├── ui-contract.md
-│   ├── implementation-master-plan.md
-│   ├── implementation-status.md / implementation-progress.md
-│   ├── ux-enhancement-roadmap.md / ux-improvements-summary.md
-│   ├── trainer-view-ux-master-plan.md
-│   ├── workspace-first-artifact-layout.md
-│   ├── plans/                      # Historical plan documents (three-view era)
-│   ├── shared/                     # Shared reference docs
-│   └── verification/               # Verification reference docs
 ├── scripts/                        # Dev helper scripts
 │   ├── bootstrap.ps1               # Full dependency bootstrap
 │   ├── dev.ps1                     # Build webview + extension
 │   ├── check.ps1                   # Staged verification
-│   └── smoke.ps1                   # Smoke test
-└── e2e/                            # Playwright black-box test
-    └── trainer.spec.js             # Single e2e spec
+│   ├── smoke.ps1                   # Smoke test
+│   ├── run-server-tests.mjs        # Pytest runner (creates venv if needed)
+│   ├── run-verification-matrix.mjs # Release verification matrix
+│   ├── run-real-sidecar-experience-matrix.mjs  # E2E against a real sidecar
+│   ├── provider-smoke.mjs / lifecycle.mjs / trainer-turn-smoke.mjs
+│   └── verify-workspace.mjs / vsix-ci-capability.mjs
+└── e2e/                            # Playwright black-box specs
+    ├── trainer.spec.js             # Main sidebar/workbench spec
+    ├── trainer-experience-matrix.spec.js       # 50-case experience matrix
+    ├── trainer-settings-lifecycle.spec.js      # Provider save/test lifecycle
+    ├── trainer-locales.spec.js / trainer-rtl-i18n.spec.js
+    ├── trainer-provider-configuration-human.spec.js
+    ├── trainer-governance.spec.js / trainer-error-surface.spec.js
+    └── trainer-experience-matrix.js            # Shared matrix helpers
 ```
 
 ## SIDEBAR IA (SHIPPED)
@@ -209,7 +208,7 @@ Five fixed top-level views:
 | View | ID | Chinese | Purpose |
 |------|----|---------|---------|
 | Coach | `coach` | 对话 | Conversation with the coach agent (messages, artifacts, composer) |
-| Plan | `plan` | 计划 | Learning plan stages, current task, evidence governance |
+| Plan | `plan` | 学习 | Learning plan stages, current task, evidence governance |
 | Resources | `resources` | 资料 | Uploaded materials, search (FTS5), preview (Tier A/B/C) |
 | Training | `training` | 训练 | Active training card, flash cards, scenario lab, FSRS reviews |
 | Settings | `settings` | 设置 | Provider config, coach defaults, language, workspace control |
@@ -227,8 +226,8 @@ Five fixed top-level views:
 | **Configure provider** | `extension/src/provider/providerConfigStore.ts` | VS Code SecretStorage for API keys |
 | **Coach agent loop** | `server/app/llm/agent_loop.py` + `agent_binding.py` | ReAct loop with tool execution |
 | **Training card flow** | `server/app/training/` | card_generator, card_router, fsrs_scheduler, handoff |
-| **Test backend** | `server/tests/` | pytest + FastAPI TestClient (59 files) |
-| **Test frontend** | `extension/tests/` | Jest (55 files) |
+| **Test backend** | `server/tests/` | pytest + FastAPI TestClient (161 files) |
+| **Test frontend** | `extension/tests/` | `node --test` (215 files; many are source-text guards — prefer behavior tests for new work) |
 
 ## CODE MAP
 
@@ -249,7 +248,7 @@ Five fixed top-level views:
 
 | Symbol | File | Role |
 |--------|------|------|
-| `App` | `extension/webview/src/app/App.tsx` (5843 lines) | Root workbench — handles all 5 view renders, state, messaging |
+| `App` | `extension/webview/src/app/App.tsx` (~14.1k lines) | Root workbench — handles all 5 view renders, state, messaging |
 | `useWorkbenchState` | `extension/webview/src/app/useWorkbenchState.ts` | Zustand store — workbench data + actions |
 | `CoachConversationView` | `extension/webview/src/components/coach/` | Coach message history + streaming |
 | `CoachPlanView` | `extension/webview/src/components/plan/` | Plan stages, current task, evidence |
@@ -264,23 +263,23 @@ Five fixed top-level views:
 |--------|------|------|
 | `create_app` | `server/app/main.py` | FastAPI app factory — DI wiring of all services |
 | `TrainerRuntime` | `server/app/api/runtime.py` | Wires all services, manages sessions |
-| `build_router` | `server/app/api/routers.py` (6027 lines) | All 23 HTTP endpoints |
-| `ProviderService` | `server/app/llm/provider_service.py` (2200 lines) | OpenAI-compatible provider abstraction |
+| `build_router` | `server/app/api/routers.py` (~28k lines) | All HTTP endpoints |
+| `ProviderService` | `server/app/llm/provider_service.py` (~14k lines) | OpenAI-compatible provider abstraction |
 | `AgentLoop` | `server/app/llm/agent_loop.py` | ReAct tool-calling loop |
 | `AgentBinding` | `server/app/llm/agent_binding.py` | Tool definition binding |
-| `Prompts` | `server/app/llm/prompts.py` (1666 lines) | System prompts for coach modes |
+| `Prompts` | `server/app/llm/prompts.py` (~3.7k lines) | System prompts for coach modes |
 | `Tools` | `server/app/llm/tools.py` | Tool implementations (read_file, diagnostics, search, etc.) |
-| `MemoryService` | `server/app/memory/service.py` (4468 lines) | Profile, reflections, weaknesses, teaching assets |
+| `MemoryService` | `server/app/memory/service.py` (~11.5k lines) | Profile, reflections, weaknesses, teaching assets |
 | `ReviewScheduler` | `server/app/memory/review_scheduler.py` | FSRS-based spaced repetition scheduling |
 | `SemanticMemory` | `server/app/memory/semantic.py` | Qdrant vector storage for semantic search |
-| `PedagogyService` | `server/app/pedagogy/service.py` (2068 lines) | Teaching decision engine |
+| `PedagogyService` | `server/app/pedagogy/service.py` (~2.4k lines) | Teaching decision engine |
 | `ImplementationCoach` | `server/app/pedagogy/implementation_coach.py` | Idea implementation guidance |
 | `ProjectIdeaMiner` | `server/app/pedagogy/project_idea_miner.py` | Project idea mining from codebase |
 | `ProjectAdaptationCoach` | `server/app/pedagogy/project_adaptation_coach.py` | Cross-project migration guidance |
 | `PrincipleExplainer` | `server/app/pedagogy/principle_explainer.py` | Concept/principle explanation |
 | `ProjectSourceScout` | `server/app/pedagogy/project_source_scout.py` | Reference repo suggestion |
 | `AffectService` | `server/app/affect/service.py` | Learner affect detection + tone decisions |
-| `PlannerService` | `server/app/planner/service.py` (54347 lines) | Learning plan generation |
+| `PlannerService` | `server/app/planner/service.py` (~2k lines) | Learning plan generation |
 | `EvaluatorService` | `server/app/evaluator/service.py` | Static/dynamic/semantic code evaluation |
 | `ResearchOrchestratorService` | `server/app/research/service.py` | Multi-theme deep research (background, no primary UI) |
 | `ResearchScheduler` | `server/app/research/scheduler.py` | Time-based research checkpoints |
@@ -365,7 +364,7 @@ FastAPI sidecar (port 8765, extension-managed range 34891-34911):
 | `extension/webview/` (React) | ✅ 三平台 | Vite build 产物平台无关 |
 | `shared/src/` (TS) | ✅ 三平台 | 纯类型定义 |
 | `server/app/` (Python) | ✅ 三平台 | Python 3.12+ 跨平台 |
-| `extension/bundled/` (Python source) | ✅ 三平台 | 104 个 `.py` 文件，平台无关 |
+| `extension/bundled/` (Python source) | ✅ 三平台 | 98 个 `.py` 文件，平台无关 |
 | `.vsix` 打包文件 | ✅ 三平台 | ZIP 格式，任何平台打包/安装一致 |
 
 ### What is NOT cross-platform (yet)
@@ -409,42 +408,40 @@ FastAPI sidecar (port 8765, extension-managed range 34891-34911):
 ## COMMANDS
 
 ```bash
-# Bootstrap
-powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
+# TypeScript checks (webview + extension host)
+npm run check
 
-# Build webview + extension
-powershell -ExecutionPolicy Bypass -File scripts/dev.ps1
+# Extension tests (node:test)
+npm run test:extension
 
-# Start sidecar
-powershell -ExecutionPolicy Bypass -File scripts/dev.ps1 -StartSidecar
-# Manually:
-server/.venv/Scripts/python.exe server/run_sidecar.py --host 127.0.0.1 --port 8765 --reload
-
-# Verification
-powershell -ExecutionPolicy Bypass -File scripts/check.ps1
-powershell -ExecutionPolicy Bypass -File scripts/check.ps1 -Strict
-
-# Smoke test
-powershell -ExecutionPolicy Bypass -File scripts/smoke.ps1
-powershell -ExecutionPolicy Bypass -File scripts/smoke.ps1 -Strict
-scripts/smoke.ps1 -Port 8765  # Probe specific port
-
-# TypeScript checks
-npm run check --prefix extension/webview
-npm run check --prefix extension
+# Backend tests (pytest; creates server/.venv if needed)
+npm run test:server
+# or directly:
+cd server && python -m pytest tests/ -v
 
 # Build all
 npm run build
 
-# Package VSIX
+# Browser-preview E2E (Playwright; builds the preview bundle first)
+npm run test:experience-matrix
+npx playwright test e2e/trainer.spec.js
+npx playwright test e2e/trainer-settings-lifecycle.spec.js
+
+# Release verification + packaging
+npm run verify
 npm run package:vsix
-npm run verify:delivery  # Build + tests + package
+npm run verify:delivery  # verify + experience matrix + package
 
-# Python tests
-cd server && python -m pytest tests/ -v
+# Windows-only helpers (PowerShell)
+powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
+powershell -ExecutionPolicy Bypass -File scripts/dev.ps1
+powershell -ExecutionPolicy Bypass -File scripts/check.ps1 -Strict
 
-# E2E
-cd e2e && npx playwright test trainer.spec.js
+# Start sidecar manually (dev)
+cd server && .venv/bin/python run_sidecar.py --host 127.0.0.1 --port 8765 --reload
+
+# Standalone webview preview (no VS Code needed)
+cd extension/webview && npm run dev   # then open the printed URL
 ```
 
 ## NOTES
@@ -452,6 +449,6 @@ cd e2e && npx playwright test trainer.spec.js
 - Mock data in `extension/webview/src/lib/mockData.ts` for browser-only dev
 - Browser preview: `extension/webview/src/lib/browserPreviewHarness.ts` — standalone Vite dev without VS Code
 - Workspace data stored under VS Code global storage directory, not in repo
-- Bundled sidecar: `extension/bundled/` (286 MB, 104 .py files) — for .vsix distribution
-- Largest files: `routers.py` (6027 lines), `App.tsx` (5843 lines), `test_api.py` (219117 lines), `CoachResourcesView.tsx` (80814 lines)
+- Bundled sidecar: `extension/bundled/` (~245 MB, 98 .py files) — for .vsix distribution
+- Largest files: `routers.py` (~28k lines), `styles.css` (~20k lines), `App.tsx` (~14.1k lines), `provider_service.py` (~14k lines), `memory/service.py` (~11.5k lines), `test_api.py` (~10.9k lines), `CoachSettingsView.tsx` (~8.2k lines)
 - i18n covered: zh-CN, en-US, es-ES, fr-FR, de-DE, ja-JP, ko-KR, pt-BR

@@ -2,7 +2,7 @@
 
 版本：v1.0  
 最后更新：2026-06-18  
-项目路径：`H:\trainer_final`
+项目路径：本仓库根目录（`trainer/`）
 
 ## 1. 产品定义
 
@@ -10,7 +10,7 @@ Trainer 是一个嵌入 VS Code 侧边栏的长期代码教练系统，不是普
 
 ### 核心职责
 - 让用户在同一个教练主体下持续学习、练习、复盘、迁移
-- 让对话、计划、资料、训练、设置五个视图各司其职
+- 让对话、学习、资料、训练、设置五个视图各司其职
 - 让任何学习结果都能回流到计划、资料和下一次训练
 - 让 Trainer 只负责教练、解释、诊断、评估和编排，不替用户直接改代码
 
@@ -19,7 +19,7 @@ Trainer 是一个嵌入 VS Code 侧边栏的长期代码教练系统，不是普
 ┌─────────────────────────────────────────────────┐
 │                  Trainer Sidebar                 │
 ├──────────┬──────────┬──────────┬────────┬──────┤
-│   对话    │   计划    │   资料    │  训练   │  设置 │
+│   对话    │   学习    │   资料    │  训练   │  设置 │
 │  (Chat)  │  (Plan)  │ (Resources)│(Training)│(Settings)│
 └──────────┴──────────┴──────────┴────────┴──────┘
 ```
@@ -46,7 +46,7 @@ extension/
 │   ├── app/                    # 主应用
 │   ├── components/             # 视图组件
 │   │   ├── coach/             # 教练核心组件
-│   │   ├── plan/              # 计划视图
+│   │   ├── plan/              # 学习视图（plan）
 │   │   ├── resources/         # 资料视图
 │   │   ├── training/          # 训练视图
 │   │   ├── settings/          # 设置视图
@@ -95,7 +95,7 @@ server/
 - Trainer 回复主形态也必须像消息
 - 禁止变成完整工作台
 
-### 3.2 计划视图 (CoachPlanView)
+### 3.2 学习视图 (CoachPlanView)
 
 **职责**: 总计划 + 分项目子计划治理
 
@@ -293,6 +293,5 @@ inspect < annotate < reorganize < generate < apply < destructive
 
 ## 10. 参考文档
 
-- `docs/trainer-ideal/trainer-product-design-spec.md` - 产品设计说明书
-- `docs/trainer-ideal/trainer-development-prompt.md` - 开发提示词
-- `docs/implementation-status.md` - 实施状态
+- `AGENTS.md` - 项目结构与协作知识库（当前维护的事实来源）
+- `README.md` - 构建、运行与验证命令
