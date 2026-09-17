@@ -97,6 +97,7 @@ trainer/                            # Repository root
 │   │   │       ├── workspace.py    # /workspace/* discovery, adoption, reconcile
 │   │   │       ├── memory.py       # /memory/* + /evidence/*
 │   │   │       ├── learning.py     # stage materials, pedagogy, training attest
+│   │   │       ├── resources.py    # /assets + /resource/* library routes
 │   │   │       ├── research.py     # Research sub-router
 │   │   │       └── training_handoff.py
 │   │   ├── core/

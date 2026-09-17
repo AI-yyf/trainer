@@ -89,7 +89,7 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
             )
             if asset.title
         ]
-        from ..pedagogy.stage_material_composer import StageMaterialComposer
+        from ...pedagogy.stage_material_composer import StageMaterialComposer
 
         composer = StageMaterialComposer(provider_service=provider_service)
         response_language = str(
@@ -126,7 +126,7 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         if not principle:
             raise HTTPException(status_code=422, detail="principle is required.")
         resolved_workspace_id = current_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
-        from ..pedagogy.stage_material_composer import compose_principle_explainer_asset
+        from ...pedagogy.stage_material_composer import compose_principle_explainer_asset
 
         asset = compose_principle_explainer_asset(
             workspace_id=resolved_workspace_id,

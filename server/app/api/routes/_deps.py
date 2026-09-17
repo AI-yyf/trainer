@@ -18,3 +18,4 @@ class RouterDeps:
     provider_config_from_payload: Callable[[dict[str, Any]], Any]
     provider_api_key_from_payload: Callable[[dict[str, Any]], str | None]
     normalize_trainer_root_path: Callable[[str], str]
+    routing_learner_state: Callable[..., Any]
