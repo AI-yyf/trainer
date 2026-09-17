@@ -509,7 +509,18 @@ class EvaluatorService:
         elif failed_tool_labels:
             summary = f"Evaluation failed on: {', '.join(failed_tool_labels)}."
         elif training_acceptance_blocks:
-            summary = "Training practice verification needs current-file evidence for the card acceptance signals."
+            acceptance_progress = _acceptance_progress_from_detail(
+                training_acceptance_check.detail if training_acceptance_check else ""
+            )
+            if acceptance_progress is not None:
+                matched_count, total_count, missing_preview = acceptance_progress
+                summary = (
+                    f"Training acceptance: {matched_count}/{total_count} acceptance signals matched."
+                )
+                if missing_preview:
+                    summary = f"{summary} Still missing: {missing_preview}."
+            else:
+                summary = "Training practice verification needs current-file evidence for the card acceptance signals."
         elif verification_required:
             summary = "Verification is still required because no dynamic verifier actually ran."
         elif report.missing_requirements:
@@ -528,7 +539,17 @@ class EvaluatorService:
         ):
             next_step = "Provide concrete acceptance criteria or expected symbols for this practice card, then re-run verification."
         elif training_acceptance_blocks:
-            next_step = "Implement the missing practice acceptance signals in the current file, then re-run verification."
+            acceptance_progress = _acceptance_progress_from_detail(
+                training_acceptance_check.detail if training_acceptance_check else ""
+            )
+            if acceptance_progress is not None and acceptance_progress[2]:
+                first_missing = acceptance_progress[2].split(";")[0].strip()
+                next_step = (
+                    "Implement the missing practice acceptance signals in the current file "
+                    f'(starting with "{first_missing}"), then re-run verification.'
+                )
+            else:
+                next_step = "Implement the missing practice acceptance signals in the current file, then re-run verification."
         elif verification_required:
             next_step = "Run at least one dynamic verifier, then re-run verification."
         elif failed_tool_labels:
@@ -643,7 +664,10 @@ class EvaluatorService:
         missing_results = [
             item for item in [*criteria_results, *symbol_results] if item["status"] != "matched"
         ]
+        total_signals = len(criteria_results) + len(symbol_results)
+        matched_signals = total_signals - len(missing_results)
         detail_lines = [
+            f"Acceptance progress: {matched_signals}/{total_signals} acceptance signals matched.",
             f"Acceptance criteria supplied: {len(criteria)}.",
             f"Expected symbols supplied: {len(symbols)}.",
             *[
@@ -822,6 +846,31 @@ def _dedupe_non_empty(values: list[str]) -> list[str]:
         seen.add(normalized)
         result.append(normalized)
     return result
+
+
+def _acceptance_progress_from_detail(detail: str) -> tuple[int, int, str] | None:
+    """Parse "Matched:/Missing:" breakdown lines of a training-acceptance check.
+
+    Returns ``(matched, total, missing_preview)`` where ``missing_preview``
+    joins up to three missing signal texts, or ``None`` when the detail does
+    not carry an acceptance progress breakdown.
+    """
+    matched = 0
+    missing_texts: list[str] = []
+    for raw_line in str(detail or "").splitlines():
+        line = raw_line.strip()
+        if line.startswith("Matched:"):
+            matched += 1
+        elif line.startswith("Missing:"):
+            text = line[len("Missing:"):].strip()
+            text = text.split(" (", 1)[0].strip()
+            if text:
+                missing_texts.append(text)
+    if matched == 0 and not missing_texts:
+        return None
+    total = matched + len(missing_texts)
+    preview = "; ".join(missing_texts[:3])
+    return matched, total, preview
 
 
 def _practice_signals(text: str) -> list[str]:
