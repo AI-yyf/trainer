@@ -10451,6 +10451,98 @@ button.resources-sandbox-layout__chip:focus-visible {
   overflow-y: auto;
 }
 
+.composer-menu-panel--history {
+  max-height: min(48vh, 288px);
+  overflow: auto;
+}
+
+.composer-session-list__title {
+  font-weight: 400;
+}
+
+.composer-session-list__item[disabled] {
+  cursor: default;
+}
+
+.composer-thinking {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 8px;
+}
+
+.composer-thinking__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.composer-thinking__state {
+  font-size: var(--trainer-font-3xs);
+  color: var(--fg-muted);
+}
+
+.composer-thinking__modes {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
+  background: color-mix(in srgb, var(--bg-1) 70%, transparent);
+  align-self: flex-start;
+}
+
+.composer-thinking__mode {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.2;
+  padding: 4px 10px;
+  border-radius: calc(var(--radius-md) - 3px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.composer-thinking__mode:hover,
+.composer-thinking__mode:focus-visible {
+  color: var(--fg-0);
+  outline: none;
+}
+
+.composer-thinking__mode.is-active {
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-1));
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--fg-0);
+}
+
+.composer-thinking__modes--effort {
+  opacity: 0.92;
+}
+
+.composer-context-ring {
+  display: block;
+}
+
+.composer-context-ring--ok {
+  color: var(--success, var(--accent));
+}
+
+.composer-context-ring--warn {
+  color: var(--warning, var(--accent));
+}
+
+.composer-context-ring--critical {
+  color: var(--danger, var(--accent));
+}
+
+.composer-context-ring--unknown {
+  color: var(--fg-muted);
+}
+
 .composer-resource-list {
   display: flex;
   flex-wrap: wrap;

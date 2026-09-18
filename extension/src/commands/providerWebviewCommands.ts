@@ -47,6 +47,8 @@ import {
   resolveProviderHostLanguage,
   type ProviderHostCopyKey,
 } from './providerHostCopy';
+import { updateProviderThinking } from '../../../shared/src/providerThinking';
+import type { ProviderThinkingConfig } from '../../../shared/src/providerThinking';
 import { stripHostLastTestSecrets } from '../../../shared/src/hostLastTestGovernance';
 import { sanitizeErrorSurfaceText } from '../../../shared/src/errorSurfaceSanitizer';
 import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
@@ -2314,4 +2316,106 @@ export async function providerSpeedTestCommand(
   }
   const results = await Promise.all(urls.map((url) => speedTestOneEndpoint(url, responseLanguage)));
   return { ok: true, data: { results } };
+}
+
+interface SetProviderThinkingPayload {
+  mode?: unknown;
+  budgetTokens?: unknown;
+  reasoningEffort?: unknown;
+  thinking?: unknown;
+}
+
+function normalizeThinkingPayload(payload?: SetProviderThinkingPayload): ProviderThinkingConfig | undefined {
+  const source = (payload?.thinking && typeof payload.thinking === 'object'
+    ? payload.thinking
+    : payload) as Record<string, unknown> | undefined;
+  if (!source) {
+    return undefined;
+  }
+  const mode = source.mode;
+  if (mode !== 'enabled' && mode !== 'disabled' && mode !== 'auto') {
+    return undefined;
+  }
+  const config: ProviderThinkingConfig = { mode };
+  const budget = source.budgetTokens;
+  if (budget === 'auto') {
+    config.budgetTokens = 'auto';
+  } else if (typeof budget === 'number' && Number.isInteger(budget) && budget > 0) {
+    config.budgetTokens = budget;
+  }
+  const effort = source.reasoningEffort;
+  if (effort === 'low' || effort === 'medium' || effort === 'high') {
+    config.reasoningEffort = effort;
+  }
+  return config;
+}
+
+function thinkingLiveEvidence(
+  context: CommandContext,
+  config: ProviderConfig | undefined,
+): boolean {
+  const lastTest = storedLastTestResult(context, config) as
+    | { capabilityEvidence?: Array<{ name?: unknown; state?: unknown; observed?: unknown }> }
+    | undefined;
+  const evidence = Array.isArray(lastTest?.capabilityEvidence) ? lastTest.capabilityEvidence : [];
+  return evidence.some(
+    (entry) =>
+      typeof entry?.name === 'string' &&
+      entry.name.trim().toLowerCase() === 'thinking' &&
+      entry.state === 'verified' &&
+      entry.observed === true,
+  );
+}
+
+export async function setProviderThinkingCommand(
+  context: CommandContext,
+  payload?: SetProviderThinkingPayload,
+): Promise<CommandExecutionResult<ProviderConfig>> {
+  const thinking = normalizeThinkingPayload(payload);
+  if (!thinking) {
+    return { ok: false, message: 'A thinking mode is required.' };
+  }
+  const config = context.providerStore.getConfig();
+  if (!config) {
+    return { ok: false, message: 'Save a provider before adjusting thinking.' };
+  }
+
+  const nextRequestDefaults = updateProviderThinking(
+    {
+      protocol: config.protocol,
+      model: config.model,
+      providerName: config.name,
+      baseUrl: config.baseUrl,
+      liveEvidence: thinkingLiveEvidence(context, config),
+      modelCapabilities: config.modelCapabilities?.[config.model],
+      profileCapabilities: config.capabilities,
+    },
+    config.requestDefaults,
+    thinking,
+  );
+
+  const nextConfig: ProviderConfig = { ...config, requestDefaults: nextRequestDefaults };
+  await context.providerStore.saveConfig(nextConfig);
+
+  const apiKey = await context.providerStore.getApiKey();
+  const effectiveConfig = context.providerStore.getConfig() ?? nextConfig;
+  const nextViewState = applyDerivedHostState(
+    context.getHostState().bootstrap,
+    effectiveConfig,
+    context.getHostState().sidecar,
+    context.getHostState().workspace,
+    context.getSessionId(),
+    Boolean(apiKey?.trim()),
+  ).providerConfig;
+
+  await context.patchWorkbenchData({
+    providerConfig: {
+      ...nextViewState,
+      requestDefaults: effectiveConfig.requestDefaults,
+      lastTestResult: storedLastTestResult(context, effectiveConfig),
+    },
+  });
+  await context.workbench.syncState();
+
+  return { ok: true, data: effectiveConfig };
 }

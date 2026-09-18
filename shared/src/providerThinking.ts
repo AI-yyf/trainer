@@ -137,7 +137,7 @@ function readConfig(input: Record<string, unknown>): { config?: ProviderThinking
 }
 
 function removeThinkingFields(target: Record<string, unknown>): void {
-  for (const key of ['thinking', 'thinkingBudget', 'thinking_budget', 'reasoningEffort', 'reasoning_effort']) delete target[key];
+  for (const key of ['thinking', 'thinkingBudget', 'thinking_budget', 'reasoning', 'reasoningEffort', 'reasoning_effort']) delete target[key];
   const extra = record(target.extra_body);
   if (extra) {
     delete extra.thinking;

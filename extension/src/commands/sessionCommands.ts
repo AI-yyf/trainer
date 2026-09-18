@@ -17,6 +17,7 @@ import type {
   StreamMessagePayload,
 } from '../core/types';
 import {
+  mergeMemorySummary,
   mergeMemorySummarySnapshot,
   mergePlanResultSnapshot,
   mergeSessionStartSnapshot,
@@ -4490,4 +4491,117 @@ function extractStreamAgentCompletion(response: unknown): StreamAgentCompletionM
     stopReason,
     toolCount: toolCount > 0 ? toolCount : undefined,
   };
+}
+
+export interface CoachSessionSummary {
+  session_id: string;
+  summary: string;
+  message_count: number;
+  updated_at?: string | null;
+  is_active?: boolean;
+  latest_user_message?: string;
+  latest_assistant_message?: string;
+}
+
+function normalizeCoachSessionList(value: unknown): CoachSessionSummary[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const sessions: CoachSessionSummary[] = [];
+  for (const entry of value) {
+    const record = asTrainingRecord(entry);
+    const sessionId = asNonEmptyString(record?.session_id);
+    if (!sessionId) {
+      continue;
+    }
+    sessions.push({
+      session_id: sessionId,
+      summary: asNonEmptyString(record?.summary) ?? '',
+      message_count: typeof record?.message_count === 'number' ? record.message_count : 0,
+      updated_at: asNonEmptyString(record?.updated_at) ?? null,
+      is_active: record?.is_active === true,
+      latest_user_message: asNonEmptyString(record?.latest_user_message),
+      latest_assistant_message: asNonEmptyString(record?.latest_assistant_message),
+    });
+  }
+  return sessions;
+}
+
+export async function listCoachSessionsCommand(
+  context: CommandContext,
+): Promise<CommandExecutionResult> {
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: status.detail ?? 'Trainer could not reach the Coach service.' };
+  }
+  const workspaceId = getRuntimeWorkspaceContext(context).workspaceId;
+  const params = new URLSearchParams();
+  params.set('workspace_id', workspaceId);
+  const sessionId = asNonEmptyString(context.getSessionId());
+  if (sessionId) {
+    params.set('session_id', sessionId);
+  }
+  try {
+    const response = await context.sidecarClient.getJson<unknown>(
+      status.port,
+      `/session/list?${params.toString()}`,
+    );
+    return { ok: true, data: { sessions: normalizeCoachSessionList(response) } };
+  } catch (error) {
+    logCheckpointFailure(context, 'list', error);
+    return { ok: false, message: 'Trainer could not load the conversation list.' };
+  }
+}
+
+export async function activateCoachSessionCommand(
+  context: CommandContext,
+  payload?: { sessionId?: string; session_id?: string },
+): Promise<CommandExecutionResult> {
+  const requestedSessionId = asNonEmptyString(payload?.sessionId ?? payload?.session_id);
+  if (!requestedSessionId) {
+    return { ok: false, message: 'session_id is required.' };
+  }
+  const workspaceGate = trainerWorkspaceSessionGate(context);
+  if (workspaceGate) {
+    return workspaceGate;
+  }
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: status.detail ?? 'Trainer could not reach the Coach service.' };
+  }
+  const workspaceId = getRuntimeWorkspaceContext(context).workspaceId;
+  let activateResponse: unknown;
+  try {
+    activateResponse = await context.sidecarClient.postJson<unknown>(
+      status.port,
+      '/session/activate',
+      { session_id: requestedSessionId, workspace_id: workspaceId },
+    );
+  } catch (error) {
+    logCheckpointFailure(context, 'activate', error);
+    return { ok: false, message: 'Trainer could not open that conversation.' };
+  }
+  const resolvedSessionId =
+    asNonEmptyString(asTrainingRecord(activateResponse)?.session_id) ?? requestedSessionId;
+  const snapshot = asTrainingRecord(activateResponse)?.snapshot;
+  try {
+    // mergeMemorySummary maps snapshot.messages -> conversation so the restored
+    // session's transcript actually replaces the visible one. The narrower
+    // mergeMemorySummarySnapshot only stamps plan/task/memory and would leave
+    // the old conversation on screen.
+    await context.patchWorkbenchData(
+      mergeMemorySummary(context.getHostState().bootstrap, snapshot),
+    );
+  } catch {
+    // Fall through to a plain resync if the embedded snapshot fails to merge.
+  }
+  await context.setSessionId(resolvedSessionId);
+  await context.setStreamingState(createEmptyTrainerStreamingState());
+  await context.workbench.show();
+  await context.workbench.syncState();
+  await context.workbench.postMessage({
+    type: 'ui/restoreView',
+    payload: { sessionId: resolvedSessionId, activeView: 'coach' },
+  });
+  return { ok: true, data: { session_id: resolvedSessionId } };
 }

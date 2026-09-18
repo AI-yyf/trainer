@@ -14,6 +14,7 @@ import {
   refreshProviderModelsCommand,
   saveProviderFromWebviewCommand,
   providerSpeedTestCommand,
+  setProviderThinkingCommand,
   switchProviderModelCommand,
 } from './providerWebviewCommands';
 import { evaluateCurrentFileCommand, evaluateSelectionCommand } from './evaluationCommands';
@@ -58,6 +59,8 @@ import {
   generatePlanCommand,
   linkCurrentProjectPlanCommand,
   nextTaskCommand,
+  activateCoachSessionCommand,
+  listCoachSessionsCommand,
   replayLatestCoachCheckpointCommand,
   resumeLatestCoachCheckpointCommand,
   saveCoachSettingsCommand,
@@ -173,6 +176,11 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
         switchProviderModelCommand(ctx, payload as Parameters<typeof switchProviderModelCommand>[1]),
     },
     {
+      commandId: COMMAND_IDS.setProviderThinking,
+      register: (ctx, payload) =>
+        setProviderThinkingCommand(ctx, payload as Parameters<typeof setProviderThinkingCommand>[1]),
+    },
+    {
       commandId: COMMAND_IDS.saveProviderProfile,
       register: (ctx, payload) =>
         createProviderProfileFromDraftCommand(
@@ -195,6 +203,12 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     },
     { commandId: COMMAND_IDS.resumeLatestCoachCheckpoint, register: (ctx) => resumeLatestCoachCheckpointCommand(ctx) },
     { commandId: COMMAND_IDS.replayLatestCoachCheckpoint, register: (ctx) => replayLatestCoachCheckpointCommand(ctx) },
+    { commandId: COMMAND_IDS.listCoachSessions, register: (ctx) => listCoachSessionsCommand(ctx) },
+    {
+      commandId: COMMAND_IDS.activateCoachSession,
+      register: (ctx, payload) =>
+        activateCoachSessionCommand(ctx, payload as Parameters<typeof activateCoachSessionCommand>[1]),
+    },
     { commandId: COMMAND_IDS.coachRemoteBoundary, register: (ctx) => openCoachScenarioCommand(ctx, 'remoteBoundary') },
     { commandId: COMMAND_IDS.coachDebugLoop, register: (ctx) => openCoachScenarioCommand(ctx, 'debugLoop') },
     {

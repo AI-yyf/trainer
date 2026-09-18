@@ -174,6 +174,7 @@ import {
   ChevronRightIcon,
   ContextLayersIcon,
   FolderIcon,
+  HistoryIcon,
   LinkIcon,
   NavCoachIcon,
   NavPlanIcon,
@@ -193,12 +194,21 @@ import { resolvePlanComposerCopy } from "../lib/i18n/planComposerCopy";
 import { resolveResourceComposerCopy } from "../lib/i18n/resourceComposerCopy";
 import { resolvePlanViewCopy } from "../lib/i18n/planViewCopy";
 import { resolveTextDirection, type TextDirection } from "../lib/i18n/direction";
+import {
+  describeProviderThinking,
+  thinkingProtocolSupportsWire,
+} from "../../../../shared/src/providerThinking";
+import type {
+  ProviderThinkingConfig,
+  ProviderThinkingDescriptor,
+} from "../../../../shared/src/providerThinking";
 import type {
   ActiveWorkbenchView,
   BootstrapData,
   BrowserUploadResourceInput as BrowserUploadResourceInputType,
   CoachAnswerMode,
   CoachDefaults,
+  CoachSessionSummary,
   ComposerLanguage,
   ConversationMessage,
   DebugVisibleTrainingFacts,
@@ -248,7 +258,7 @@ import type {
   SettingsSectionStatus,
 } from "../components/settings/CoachSettingsView";
 
-type ContextMenu = "context" | "resources" | "model" | undefined;
+type ContextMenu = "context" | "resources" | "model" | "history" | undefined;
 type ComposerModelActionDensity = "default" | "compact";
 type TrainingPracticeReturnMode = "result" | "blocked";
 type TrainingComposerRoute = "card" | "coach";
@@ -1311,6 +1321,17 @@ function compactComposerModelLabel(
       .replace(/[:/](latest|default)$/i, "")
       .trim() || normalized
   );
+}
+
+function formatTokenCount(value: number | undefined): string {
+  const tokens = typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+  if (tokens >= 1000000) {
+    return `${(tokens / 1000000).toFixed(tokens >= 10000000 ? 0 : 1)}M`;
+  }
+  if (tokens >= 1000) {
+    return `${(tokens / 1000).toFixed(tokens >= 10000 ? 0 : 1)}k`;
+  }
+  return String(tokens);
 }
 
 function composerModelPolicyHint(
@@ -4095,6 +4116,11 @@ export function App() {
     });
   }, []);
   const [composerModelQuery, setComposerModelQuery] = useState("");
+  const [coachSessions, setCoachSessions] = useState<CoachSessionSummary[]>([]);
+  const [coachSessionsStatus, setCoachSessionsStatus] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
+  const [coachSessionsMessage, setCoachSessionsMessage] = useState<string>();
   const [composerModelActionDensity, setComposerModelActionDensity] =
     useState<ComposerModelActionDensity>("default");
   const [headerSwitcherDensity, setHeaderSwitcherDensity] = useState<HeaderSwitcherDensity>("full");
@@ -4535,6 +4561,12 @@ export function App() {
       if (message.type === "provider/speedTest") {
         setProviderSpeedTestResults(message.payload.results);
         setProviderSpeedTestPending(false);
+        return;
+      }
+      if (message.type === "session/list") {
+        setCoachSessions(message.payload.sessions);
+        setCoachSessionsStatus(message.payload.ok ? "ready" : "error");
+        setCoachSessionsMessage(message.payload.message);
         return;
       }
       if (message.type === "operation/status" && message.payload.message.includes("Learning feedback recorded")) {
@@ -5469,6 +5501,186 @@ export function App() {
       [item.label, item.model].some((value) => value.toLowerCase().includes(query)),
     );
   }, [composerModelQuery, composerProviderMenuItems]);
+
+  const composerThinkingDescriptor = useMemo<ProviderThinkingDescriptor | undefined>(() => {
+    const provider = data.providerConfig;
+    if (!provider.configured) {
+      return undefined;
+    }
+    const lastTest = provider.lastTestResult as
+      | { capabilityEvidence?: Array<{ name?: unknown; state?: unknown; observed?: unknown }> }
+      | undefined;
+    const liveEvidence = (lastTest?.capabilityEvidence ?? []).some(
+      (entry) =>
+        typeof entry?.name === "string" &&
+        entry.name.trim().toLowerCase() === "thinking" &&
+        entry.state === "verified" &&
+        entry.observed === true,
+    );
+    const model = provider.resolvedModel ?? provider.model;
+    const context = {
+      protocol: provider.protocol,
+      model,
+      providerName: provider.name,
+      baseUrl: provider.baseUrl,
+      liveEvidence,
+      modelCapabilities: model ? provider.modelCapabilities?.[model] : undefined,
+      profileCapabilities: provider.capabilities,
+    };
+    const descriptor = describeProviderThinking(context, provider.requestDefaults);
+    if (descriptor) {
+      return descriptor;
+    }
+    // describeProviderThinking stays silent until thinking is already written
+    // into requestDefaults. The composer should still offer the control whenever
+    // the connection is *known* to support thinking, so synthesize a default
+    // "auto" descriptor for capable models instead of hiding the section.
+    const modelThinking = model ? provider.modelCapabilities?.[model]?.thinking : undefined;
+    const supported =
+      liveEvidence || modelThinking === true || provider.capabilities?.thinking === true;
+    if (!supported || !thinkingProtocolSupportsWire(provider.protocol)) {
+      return undefined;
+    }
+    const protocol = normalizeProviderProtocol(provider.protocol);
+    if (protocol === "anthropic_messages") {
+      return {
+        protocol,
+        kind: "thinking_budget" as const,
+        advanced: true,
+        config: { mode: "auto" } as ProviderThinkingConfig,
+        budgetMin: 1,
+        budgetMax: 200000,
+      };
+    }
+    if (protocol === "gemini_generate_content") {
+      return {
+        protocol,
+        kind: "gemini_thinking" as const,
+        advanced: true,
+        config: { mode: "auto" } as ProviderThinkingConfig,
+        budgetMin: 1,
+        budgetMax: 32768,
+      };
+    }
+    return {
+      protocol: protocol ?? "openai_chat_completions_compatible",
+      kind: "reasoning_effort" as const,
+        advanced: true,
+      config: { mode: "auto" } as ProviderThinkingConfig,
+      effortOptions: ["low", "medium", "high"] as const,
+    };
+  }, [
+    data.providerConfig.baseUrl,
+    data.providerConfig.capabilities,
+    data.providerConfig.configured,
+    data.providerConfig.lastTestResult,
+    data.providerConfig.model,
+    data.providerConfig.modelCapabilities,
+    data.providerConfig.name,
+    data.providerConfig.protocol,
+    data.providerConfig.requestDefaults,
+    data.providerConfig.resolvedModel,
+  ]);
+
+  const composerContextUsage = useMemo(() => {
+    const provider = data.providerConfig;
+    const model = provider.resolvedModel ?? provider.model;
+    const limit =
+      (model ? provider.modelTokenLimits?.[model]?.contextWindowTokens : undefined) ??
+      provider.contextWindowTokens;
+    let cjk = 0;
+    let other = 0;
+    const cjkPattern = /[\u1100-\u11ff\u2e80-\u9fff\uac00-\ud7af\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]/;
+    const tally = (text: string) => {
+      for (const ch of text) {
+        if (cjkPattern.test(ch)) {
+          cjk += 1;
+        } else {
+          other += 1;
+        }
+      }
+    };
+    for (const message of data.conversation) {
+      tally(message.body ?? "");
+      for (const attachment of message.attachments ?? []) {
+        tally(attachment.value ?? "");
+      }
+      // Per-message framing overhead (role tags, separators).
+      other += 16;
+    }
+    if (streaming.streamedContent) {
+      tally(streaming.streamedContent);
+    }
+    // A system/pedagogy prompt is always prepended server-side.
+    const systemOverhead = 1200;
+    const used = Math.ceil(cjk + other / 4) + systemOverhead;
+    const ratio = limit && limit > 0 ? Math.min(1, used / limit) : undefined;
+    return { used, limit, ratio };
+  }, [data.conversation, data.providerConfig, streaming.streamedContent]);
+
+  const composerContextUsageTone = composerContextUsage.ratio === undefined
+    ? "unknown"
+    : composerContextUsage.ratio >= 0.85
+      ? "critical"
+      : composerContextUsage.ratio >= 0.6
+        ? "warn"
+        : "ok";
+
+  const composerContextUsageLabel =
+    layout.composerLanguage === "zh-CN"
+      ? composerContextUsage.limit
+        ? `上下文用量约 ${formatTokenCount(composerContextUsage.used)} / ${formatTokenCount(composerContextUsage.limit)}`
+        : `上下文用量约 ${formatTokenCount(composerContextUsage.used)}（未知上限）`
+      : composerContextUsage.limit
+        ? `Context ~${formatTokenCount(composerContextUsage.used)} / ${formatTokenCount(composerContextUsage.limit)}`
+        : `Context ~${formatTokenCount(composerContextUsage.used)} (limit unknown)`;
+
+  const composerContextUsageDetail =
+    layout.composerLanguage === "zh-CN"
+      ? composerContextUsage.limit
+        ? `本会话已用约 ${formatTokenCount(composerContextUsage.used)} 个上下文，上限约 ${formatTokenCount(composerContextUsage.limit)}（约 ${Math.round((composerContextUsage.ratio ?? 0) * 100)}%）。这是按消息长度估算的近似值。`
+        : `本会话已用约 ${formatTokenCount(composerContextUsage.used)} 个上下文（按消息长度估算）。该连接没有可靠的上下文上限，所以只显示估算值。`
+      : composerContextUsage.limit
+        ? `This conversation is using ~${formatTokenCount(composerContextUsage.used)} of ~${formatTokenCount(composerContextUsage.limit)} context tokens (~${Math.round((composerContextUsage.ratio ?? 0) * 100)}%). Estimate based on message length.`
+        : `This conversation is using ~${formatTokenCount(composerContextUsage.used)} context tokens (estimate). This connection has no reliable context limit, so only the estimate is shown.`;
+
+  const composerContextRingNode = (
+    <svg
+      viewBox="0 0 18 18"
+      width="18"
+      height="18"
+      aria-hidden="true"
+      className={`composer-context-ring composer-context-ring--${composerContextUsageTone}`}
+    >
+      <circle
+        cx="9"
+        cy="9"
+        r="7"
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity="0.18"
+        strokeWidth="2.2"
+      />
+      {composerContextUsage.ratio !== undefined ? (
+        <circle
+          cx="9"
+          cy="9"
+          r="7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeDasharray={`${(composerContextUsage.ratio * 43.98).toFixed(2)} 43.98`}
+          transform="rotate(-90 9 9)"
+        />
+      ) : (
+        <circle cx="9" cy="9" r="1.6" fill="currentColor" />
+      )}
+    </svg>
+  );
+
+  const composerHistoryLabel =
+    layout.composerLanguage === "zh-CN" ? "会话历史" : "History";
 
   useEffect(() => {
     const pending = pendingLivePlanTaskMintRef.current;
@@ -9784,6 +9996,91 @@ export function App() {
     setOperationMessage,
   ]);
 
+  const requestCoachSessions = useCallback(() => {
+    setCoachSessionsStatus("loading");
+    setCoachSessionsMessage(undefined);
+    if (isBrowserPreview) {
+      const previewStamp = new Date().toISOString();
+      setCoachSessions([
+        {
+          session_id: previewSessionId || "preview-session",
+          summary:
+            layout.composerLanguage === "zh-CN"
+              ? "当前会话"
+              : "Current conversation",
+          message_count: data.conversation.length,
+          updated_at: previewStamp,
+          is_active: true,
+        },
+      ]);
+      setCoachSessionsStatus("ready");
+      return;
+    }
+    postMessage({
+      type: "command/execute",
+      payload: { commandId: trainerCommands.listCoachSessions },
+    });
+  }, [
+    data.conversation.length,
+    isBrowserPreview,
+    layout.composerLanguage,
+    previewSessionId,
+  ]);
+
+  const toggleComposerHistoryMenu = useCallback(() => {
+    setOpenMenu((current) => {
+      const next = current === "history" ? undefined : "history";
+      if (next === "history") {
+        requestCoachSessions();
+      }
+      return next;
+    });
+  }, [requestCoachSessions]);
+
+  const activateCoachSession = useCallback(
+    (sessionId: string) => {
+      const trimmed = sessionId.trim();
+      if (!trimmed) {
+        return;
+      }
+      setOpenMenu(undefined);
+      if (isBrowserPreview) {
+        return;
+      }
+      postMessage({
+        type: "command/execute",
+        payload: {
+          commandId: trainerCommands.activateCoachSession,
+          payload: { sessionId: trimmed },
+        },
+      });
+    },
+    [isBrowserPreview],
+  );
+
+  const setComposerThinking = useCallback(
+    (thinking: ProviderThinkingConfig) => {
+      if (isBrowserPreview) {
+        setOperationMessage({
+          tone: "info",
+          message:
+            layout.composerLanguage === "zh-CN"
+              ? "预览模式不会保存思考强度。"
+              : "Thinking effort is not saved in preview mode.",
+        });
+        return;
+      }
+      postMessage({
+        type: "command/execute",
+        payload: {
+          commandId: trainerCommands.setProviderThinking,
+          payload: { thinking },
+        },
+      });
+    },
+    [isBrowserPreview, layout.composerLanguage, setOperationMessage],
+  );
+
   const primeSettingsProviderModels = useCallback(() => {
     if (!data.providerConfig.configured || !data.providerConfig.apiKeyConfigured) {
       return;
@@ -10828,6 +11125,106 @@ export function App() {
       );
     }
 
+    if (openMenu === "history") {
+      const zh = layout.composerLanguage === "zh-CN";
+      const sessionCountLabel = (count: number) =>
+        zh ? `${count} 条消息` : `${count} message${count === 1 ? "" : "s"}`;
+      const formatSessionTime = (value?: string | null) => {
+        if (!value) {
+          return "";
+        }
+        const stamp = new Date(value);
+        if (Number.isNaN(stamp.getTime())) {
+          return "";
+        }
+        return stamp.toLocaleString(zh ? "zh-CN" : undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      };
+      return (
+        <section className="composer-menu-panel composer-menu-panel--history">
+          <div className="composer-menu-panel__header">
+            <span className="eyebrow">{zh ? "历史会话" : "Conversations"}</span>
+            <div className="composer-menu-panel__header-actions">
+              <ComposerIconButton
+                icon={<RefreshIcon size={14} />}
+                label={zh ? "刷新" : "Refresh"}
+                ariaLabel={zh ? "刷新会话列表" : "Refresh conversation list"}
+                title={zh ? "刷新会话列表" : "Refresh conversation list"}
+                active={coachSessionsStatus === "loading"}
+                disabled={coachSessionsStatus === "loading"}
+                onClick={requestCoachSessions}
+              />
+            </div>
+          </div>
+          <div className="composer-menu-panel__section">
+            {coachSessionsStatus === "loading" ? (
+              <p className="composer-menu-panel__hint">
+                {zh ? "正在读取会话…" : "Loading conversations…"}
+              </p>
+            ) : coachSessionsStatus === "error" ? (
+              <p className="composer-menu-panel__hint">
+                {coachSessionsMessage ??
+                  (zh ? "暂时读不到会话，稍后再试。" : "Couldn't load conversations. Try again.")}
+              </p>
+            ) : coachSessions.length === 0 ? (
+              <p className="composer-menu-panel__hint">
+                {zh
+                  ? "还没有历史会话。新的对话会出现在这里。"
+                  : "No past conversations yet. New chats will appear here."}
+              </p>
+            ) : (
+              <div className="composer-provider-list composer-session-list" role="list">
+                {coachSessions.map((session) => {
+                  const active = session.is_active === true;
+                  const title =
+                    session.summary?.trim() ||
+                    session.latest_user_message?.trim() ||
+                    (zh ? "未命名会话" : "Untitled conversation");
+                  const time = formatSessionTime(session.updated_at);
+                  return (
+                    <button
+                      key={session.session_id}
+                      className={`composer-provider-list__item composer-session-list__item ${
+                        active ? "is-active" : ""
+                      }`}
+                      type="button"
+                      disabled={active}
+                      aria-current={active ? "true" : undefined}
+                      title={title}
+                      onClick={() => activateCoachSession(session.session_id)}
+                    >
+                      <div className="composer-provider-list__row">
+                        <span className="composer-provider-list__stack">
+                          <span className="composer-provider-list__model composer-session-list__title">
+                            {title}
+                          </span>
+                          <span className="composer-provider-list__label">
+                            {[sessionCountLabel(session.message_count), time]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
+                        </span>
+                        {active ? (
+                          <span className="composer-provider-list__state">
+                            <CheckMarkIcon size={12} />
+                            <span className="sr-only">{zh ? "当前会话" : "Current"}</span>
+                          </span>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      );
+    }
+
     if (openMenu === "model") {
       const providerApplied = data.providerConfig.configured;
       const visibleSelections = filteredComposerProviderMenuItems;
@@ -10949,6 +11346,93 @@ export function App() {
             </label>
           ) : null}
 
+          {composerThinkingDescriptor ? (
+            <div className="composer-menu-panel__section composer-thinking">
+              <div className="composer-thinking__header">
+                <span className="eyebrow">
+                  {layout.composerLanguage === "zh-CN" ? "思考强度" : "Thinking"}
+                </span>
+                {composerThinkingDescriptor.disabled ? (
+                  <span className="composer-thinking__state">
+                    {layout.composerLanguage === "zh-CN" ? "已关闭" : "Off"}
+                  </span>
+                ) : null}
+              </div>
+              <div className="composer-thinking__modes" role="group" aria-label={layout.composerLanguage === "zh-CN" ? "思考强度" : "Thinking effort"}>
+                {(
+                  [
+                    { value: "auto", label: layout.composerLanguage === "zh-CN" ? "自动" : "Auto" },
+                    { value: "disabled", label: layout.composerLanguage === "zh-CN" ? "关闭" : "Off" },
+                    { value: "enabled", label: layout.composerLanguage === "zh-CN" ? "开启" : "On" },
+                  ] as const
+                ).map((option) => {
+                  const active = composerThinkingDescriptor.config.mode === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`composer-thinking__mode ${active ? "is-active" : ""}`}
+                      aria-pressed={active}
+                      onClick={() =>
+                        setComposerThinking({ ...composerThinkingDescriptor.config, mode: option.value })
+                      }
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {composerThinkingDescriptor.config.mode === "enabled" &&
+              composerThinkingDescriptor.kind === "reasoning_effort" &&
+              composerThinkingDescriptor.effortOptions ? (
+                <div className="composer-thinking__modes composer-thinking__modes--effort" role="group" aria-label={layout.composerLanguage === "zh-CN" ? "推理力度" : "Reasoning effort"}>
+                  {composerThinkingDescriptor.effortOptions.map((option) => {
+                    const active =
+                      (composerThinkingDescriptor.config.reasoningEffort ?? "medium") === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        className={`composer-thinking__mode ${active ? "is-active" : ""}`}
+                        aria-pressed={active}
+                        onClick={() =>
+                          setComposerThinking({
+                            ...composerThinkingDescriptor.config,
+                            mode: "enabled",
+                            reasoningEffort: option,
+                          })
+                        }
+                      >
+                        {option === "low"
+                          ? layout.composerLanguage === "zh-CN" ? "低" : "Low"
+                          : option === "high"
+                            ? layout.composerLanguage === "zh-CN" ? "高" : "High"
+                            : layout.composerLanguage === "zh-CN" ? "中" : "Medium"}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {composerThinkingDescriptor.config.mode === "enabled" &&
+              (composerThinkingDescriptor.kind === "thinking_budget" ||
+                composerThinkingDescriptor.kind === "gemini_thinking") ? (
+                <p className="composer-menu-panel__hint">
+                  {layout.composerLanguage === "zh-CN"
+                    ? `思考预算 ${
+                        typeof composerThinkingDescriptor.config.budgetTokens === "number"
+                          ? composerThinkingDescriptor.config.budgetTokens
+                          : "自动"
+                      }，可在“设置”里调整。`
+                    : `Thinking budget ${
+                        typeof composerThinkingDescriptor.config.budgetTokens === "number"
+                          ? composerThinkingDescriptor.config.budgetTokens
+                          : "auto"
+                      }. Adjust it in Settings.`}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           {showModelSection ? (
             <div className="composer-menu-panel__section">
               {visibleSelectionCount > 0 ? (
@@ -11065,6 +11549,7 @@ export function App() {
           {!hasModelQuery && !showSearch && !providerApplied && savedProfiles.length === 0 ? (
             <p className="composer-menu-panel__hint">{emptyStateLabel}</p>
           ) : null}
+
         </section>
       );
     }
@@ -13922,6 +14407,30 @@ export function App() {
               secondaryActions={[
                 ...(activeView === "coach"
                   ? [
+                      {
+                        id: "context-usage",
+                        compact: true as const,
+                        icon: composerContextRingNode,
+                        label: composerContextUsageLabel,
+                        title: composerContextUsageLabel,
+                        ariaLabel: composerContextUsageLabel,
+                        tone: "ghost" as const,
+                        onClick: () =>
+                          setOperationMessage({
+                            tone: "info",
+                            message: composerContextUsageDetail,
+                          }),
+                      },
+                      {
+                        id: "session-history",
+                        compact: true as const,
+                        icon: <HistoryIcon size={16} />,
+                        label: composerHistoryLabel,
+                        title: composerHistoryLabel,
+                        ariaLabel: composerHistoryLabel,
+                        tone: "ghost" as const,
+                        onClick: toggleComposerHistoryMenu,
+                      },
                       {
                         id: "model-switch",
                         label: composerModelButtonDisplayLabel,

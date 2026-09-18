@@ -1582,6 +1582,16 @@ export interface StreamMessageRequest extends SessionMessageRequest {
   sessionId?: string;
 }
 
+export interface CoachSessionSummary {
+  session_id: string;
+  summary: string;
+  message_count: number;
+  updated_at?: string | null;
+  is_active?: boolean;
+  latest_user_message?: string;
+  latest_assistant_message?: string;
+}
+
 export interface TrainingPersistenceAck {
   requestId: string;
   commandId: string;
@@ -1996,6 +2006,10 @@ export type HostMessage =
   | { type: "training/resourceHandoff"; payload: ResourceTrainingHandoffResult }
   | { type: "training/persistenceAck"; payload: TrainingPersistenceAck }
   | { type: "provider/speedTest"; payload: { results: ProviderEndpointSpeedTestResult[] }; }
+  | {
+      type: "session/list";
+      payload: { ok: boolean; sessions: CoachSessionSummary[]; message?: string };
+    }
   | { type: "ui/restoreView"; payload: RestoreViewPayload }
   | {
       type: "ui/coachPrompt";

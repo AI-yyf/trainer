@@ -473,6 +473,18 @@ export class WorkbenchSidebarController
             payload: result.data as { results: unknown[] },
           });
         }
+        // The session list is data for the coach history panel, not a status
+        // line, so it travels on its own ack channel like the speed test.
+        if (command.commandId === COMMAND_IDS.listCoachSessions) {
+          await this.postMessage({
+            type: 'session/list',
+            payload: {
+              ok: result.ok,
+              sessions: result.ok && result.data ? (result.data as { sessions?: unknown[] }).sessions ?? [] : [],
+              ...(!result.ok ? { message: result.message ?? 'Trainer could not load sessions.' } : {}),
+            },
+          });
+        }
         await this.syncState();
         return;
       }
