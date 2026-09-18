@@ -14769,15 +14769,22 @@ button.resources-sandbox-layout__chip:focus-visible {
   min-height: 0;
 }
 
-.settings-nav {
+.settings-nav-bar {
   order: 2;
   display: flex;
   flex: none;
+  align-items: center;
+  border-top: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  background: var(--bg-0, var(--panel));
+}
+
+.settings-nav {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   flex-direction: row;
   gap: 2px;
   padding: 6px 2px 4px;
-  border-top: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
-  background: var(--bg-0, var(--panel));
 }
 
 .settings-nav__item {
@@ -14801,10 +14808,19 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .settings-nav__icon {
-  display: none;
+  display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
+}
+
+.settings-nav--measuring .settings-nav__item {
+  flex: none;
+}
+
+.settings-nav--measuring .settings-nav__label {
+  display: inline;
+  -webkit-line-clamp: unset;
 }
 
 .settings-nav--icon .settings-nav__item {
@@ -14823,6 +14839,40 @@ button.resources-sandbox-layout__chip:focus-visible {
   position: absolute;
   top: 4px;
   right: calc(50% - 14px);
+}
+
+.settings-nav__actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding: 0 4px 0 6px;
+  border-left: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+}
+
+.settings-nav__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.settings-nav__action:hover {
+  color: var(--fg-0);
+  background: color-mix(in srgb, var(--fg-0) 5%, transparent);
+}
+
+.settings-nav__action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
 }
 
 .settings-nav__item:hover {
@@ -16248,12 +16298,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  cursor: pointer;
   color: var(--fg-1);
-}
-
-.settings-sheet__remembered-summary::marker {
-  color: var(--fg-muted);
 }
 
 .settings-sheet__remembered-preview {
@@ -16262,7 +16307,11 @@ button.resources-sandbox-layout__chip:focus-visible {
   line-height: 1.35;
 }
 
-.settings-sheet__remembered-panel[open] .settings-sheet__simple-list {
+.settings-sheet__remembered-panel .settings-sheet__simple-list {
+  margin-top: 8px;
+}
+
+.settings-sheet__minor-body--flat {
   margin-top: 8px;
 }
 

@@ -9411,6 +9411,38 @@ export function App() {
       persistCoachSettingsRef.current();
     }, COACH_SETTINGS_AUTOSAVE_DELAY_MS);
   }, []);
+
+  const handleShareSession = useCallback(async () => {
+    const zh = layout.composerLanguage === "zh-CN";
+    const lines = data.conversation
+      .filter((message) => message.body?.trim())
+      .map((message) => {
+        const role =
+          message.role === "user" ? (zh ? "我" : "Me") : zh ? "教练" : "Coach";
+        return `**${role}**: ${message.body.trim()}`;
+      });
+    if (!lines.length) {
+      setOperationMessage({
+        tone: "info",
+        message: zh ? "还没有会话内容可以分享。" : "Nothing to share yet.",
+      });
+      return;
+    }
+    const title = zh ? "Trainer 会话" : "Trainer session";
+    const text = `# ${title}\n\n${lines.join("\n\n")}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setOperationMessage({
+        tone: "success",
+        message: zh ? "会话摘要已复制到剪贴板。" : "Session summary copied to clipboard.",
+      });
+    } catch {
+      setOperationMessage({
+        tone: "error",
+        message: zh ? "复制失败，请重试。" : "Copy failed. Try again.",
+      });
+    }
+  }, [data.conversation, layout.composerLanguage, setOperationMessage]);
   useEffect(
     () => () => {
       if (coachSettingsAutosaveTimerRef.current !== null) {
@@ -12734,7 +12766,6 @@ export function App() {
     trainingComposerReturnMode &&
     trainingHandoffReturnRequired &&
     Boolean(activeTrainingCardId);
-  const shouldUseCompactUtilityComposer = activeView !== "coach" && draft.trim().length === 0;
   const trainingPrimaryAction = !hasTrainingCard ? undefined : undefined;
   const showComposerTrainingVerify =
     activeView === "training" &&
@@ -14075,6 +14106,8 @@ export function App() {
                 : "Coach defaults restored.",
           });
         }}
+        onNavigateToView={setActiveView}
+        onShareSession={handleShareSession}
         />
       </Suspense>
       {renderContextualResultRail("settings")}
@@ -14217,7 +14250,7 @@ export function App() {
       </main>
 
       {showComposerShell ? (
-      <footer className={`composer-shell composer-shell--quiet${shouldUseCompactUtilityComposer ? " composer-shell--compact" : ""}`}>
+      <footer className="composer-shell composer-shell--quiet">
           <div ref={composerShellRef}>
             {showComposerPresenceBar ? (
               <div className="composer-presencebar">
@@ -14349,11 +14382,11 @@ export function App() {
               onSubmit={handleSubmit}
               onCancel={handleCancelStream}
               onNavigateHistory={navigateComposerHistory}
-              density={shouldUseCompactUtilityComposer ? "compact" : "default"}
+              density="default"
               placeholder={
                 workspaceSessionBlocked && !canCaptureGoalBeforeWorkspaceSetup
                   ? workspaceSessionBlockMessage ?? ""
-                  : shouldUseCompactUtilityComposer
+                  : activeView !== "coach" && !normalizedDraft
                     ? resolvedCompactUtilityComposerPlaceholder
                     : blockedComposerFallback
               }
@@ -14438,42 +14471,38 @@ export function App() {
                 providerImageInputState.detail ?? providerImageInputState.reason
               }
               secondaryActions={[
-                ...(activeView === "coach"
-                  ? [
-                      {
-                        id: "context-usage",
-                        compact: true as const,
-                        icon: composerContextRingNode,
-                        label: composerContextUsageLabel,
-                        title: composerContextUsageLabel,
-                        ariaLabel: composerContextUsageLabel,
-                        tone: "ghost" as const,
-                        onClick: () =>
-                          setOperationMessage({
-                            tone: "info",
-                            message: composerContextUsageDetail,
-                          }),
-                      },
-                      {
-                        id: "session-history",
-                        compact: true as const,
-                        icon: <HistoryIcon size={16} />,
-                        label: composerHistoryLabel,
-                        title: composerHistoryLabel,
-                        ariaLabel: composerHistoryLabel,
-                        tone: "ghost" as const,
-                        onClick: toggleComposerHistoryMenu,
-                      },
-                      {
-                        id: "model-switch",
-                        label: composerModelButtonDisplayLabel,
-                        tone: "ghost" as const,
-                        title: composerModelButtonTitle,
-                        ariaLabel: composerModelButtonTitle,
-                        onClick: toggleComposerModelMenu,
-                      },
-                    ]
-                  : []),
+                {
+                  id: "context-usage",
+                  compact: true as const,
+                  icon: composerContextRingNode,
+                  label: composerContextUsageLabel,
+                  title: composerContextUsageLabel,
+                  ariaLabel: composerContextUsageLabel,
+                  tone: "ghost" as const,
+                  onClick: () =>
+                    setOperationMessage({
+                      tone: "info",
+                      message: composerContextUsageDetail,
+                    }),
+                },
+                {
+                  id: "session-history",
+                  compact: true as const,
+                  icon: <HistoryIcon size={16} />,
+                  label: composerHistoryLabel,
+                  title: composerHistoryLabel,
+                  ariaLabel: composerHistoryLabel,
+                  tone: "ghost" as const,
+                  onClick: toggleComposerHistoryMenu,
+                },
+                {
+                  id: "model-switch",
+                  label: composerModelButtonDisplayLabel,
+                  tone: "ghost" as const,
+                  title: composerModelButtonTitle,
+                  ariaLabel: composerModelButtonTitle,
+                  onClick: toggleComposerModelMenu,
+                },
               ]}
               onKeyDown={(event) => {
                 if (event.nativeEvent.isComposing) {

@@ -1,4 +1,11 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   countSavedProviderProfiles,
   describeProviderCapabilityMatrixGroups,
@@ -78,7 +85,7 @@ import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
-import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, NavAdvancedIcon, NavConnectionIcon, NavTeachingIcon, NavWorkspaceIcon, PlusIcon, RefreshIcon, TrashIcon } from "../icons";
+import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, LinkIcon, NavAdvancedIcon, NavConnectionIcon, NavResourcesIcon, NavTeachingIcon, NavTrainingIcon, NavWorkspaceIcon, PlusIcon, RefreshIcon, TrashIcon } from "../icons";
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type {
@@ -1468,6 +1475,8 @@ export interface CoachSettingsViewProps {
   onResetManagedDataFolder?: () => void;
   onRefreshMemory?: () => void;
   onResetDefaults?: () => void;
+  onNavigateToView?: (view: "resources" | "training") => void;
+  onShareSession?: () => void;
 }
 
 const defaultLabels: Partial<CoachSettingsLabels> = {
@@ -2049,7 +2058,11 @@ type SettingsPhraseKey =
   | "addProvider"
   | "startFromTemplate"
   | "startFromTemplateDetail"
-  | "currentConnectionPrefix";
+  | "currentConnectionPrefix"
+  | "navShare"
+  | "navResources"
+  | "navTraining"
+  | "navWorkspace";
 
 const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, string>> = {
   "zh-CN": {
@@ -2102,6 +2115,10 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "或从供应商模板开始",
     startFromTemplateDetail: "自动填好服务地址与默认模型，只需补上密钥",
     currentConnectionPrefix: "当前连接",
+    navShare: "分享会话",
+    navResources: "资料库",
+    navTraining: "训练卡",
+    navWorkspace: "工作区",
   },
   "en-US": {
     notRecorded: "Not recorded",
@@ -2153,6 +2170,10 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "Or start from a provider template",
     startFromTemplateDetail: "Pre-fills the service root and default model; just add your key",
     currentConnectionPrefix: "Current connection",
+    navShare: "Share session",
+    navResources: "Library",
+    navTraining: "Training card",
+    navWorkspace: "Workspace",
   },
   "es-ES": {
     notRecorded: "Sin registro",
@@ -2204,6 +2225,10 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "O empieza desde una plantilla de proveedor",
     startFromTemplateDetail: "Rellena la dirección del servicio y el modelo por defecto; solo añade tu clave",
     currentConnectionPrefix: "Conexión actual",
+    navShare: "Compartir sesión",
+    navResources: "Biblioteca",
+    navTraining: "Tarjeta de entrenamiento",
+    navWorkspace: "Espacio",
   },
   "fr-FR": {
     notRecorded: "Non enregistré",
@@ -2255,6 +2280,10 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "Ou partir d'un modèle de fournisseur",
     startFromTemplateDetail: "Préremplit l'adresse du service et le modèle par défaut ; ajoutez seulement votre clé",
     currentConnectionPrefix: "Connexion actuelle",
+    navShare: "Partager la session",
+    navResources: "Bibliothèque",
+    navTraining: "Carte d’entraînement",
+    navWorkspace: "Espace",
   },
   "de-DE": {
     notRecorded: "Nicht erfasst",
@@ -2306,6 +2335,10 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "Oder mit einer Anbietervorlage beginnen",
     startFromTemplateDetail: "Füllt Dienstadresse und Standardmodell vor; nur der Schlüssel fehlt",
     currentConnectionPrefix: "Aktuelle Verbindung",
+    navShare: "Sitzung teilen",
+    navResources: "Bibliothek",
+    navTraining: "Übungskarte",
+    navWorkspace: "Bereich",
   },
   "ja-JP": {
     notRecorded: "記録なし",
@@ -2357,6 +2390,10 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "またはプロバイダーテンプレートから開始",
     startFromTemplateDetail: "サービスアドレスと既定モデルを自動入力。キーだけ追加",
     currentConnectionPrefix: "現在の接続",
+    navShare: "セッションを共有",
+    navResources: "ライブラリ",
+    navTraining: "トレーニングカード",
+    navWorkspace: "ワークスペース",
   },
   "ko-KR": {
     notRecorded: "기록 없음",
@@ -2408,6 +2445,10 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "또는 공급자 템플릿에서 시작",
     startFromTemplateDetail: "서비스 주소와 기본 모델을 자동 입력합니다. 키만 추가하세요",
     currentConnectionPrefix: "현재 연결",
+    navShare: "세션 공유",
+    navResources: "라이브러리",
+    navTraining: "훈련 카드",
+    navWorkspace: "작업 영역",
   },
   "pt-BR": {
     notRecorded: "Sem registro",
@@ -2459,6 +2500,10 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "Ou comece por um modelo de provedor",
     startFromTemplateDetail: "Preenche o endereço do serviço e o modelo padrão; basta adicionar sua chave",
     currentConnectionPrefix: "Conexão atual",
+    navShare: "Compartilhar sessão",
+    navResources: "Biblioteca",
+    navTraining: "Cartão de treino",
+    navWorkspace: "Espaço",
   },
 };
 
@@ -3858,6 +3903,8 @@ export function CoachSettingsView({
   onResetManagedDataFolder,
   onRefreshMemory,
   onResetDefaults,
+  onNavigateToView,
+  onShareSession,
 }: CoachSettingsViewProps) {
   const baseLabels = {
     ...(language === "zh-CN" ? defaultLabels : englishLabels),
@@ -6171,7 +6218,7 @@ export function CoachSettingsView({
     },
     {
       id: "workspace",
-      label: resolveWorkbenchCopy(language).workspaceRootControl,
+      label: settingsPhrase(language, "navWorkspace"),
       dirty: false,
       icon: <NavWorkspaceIcon size={15} />,
     },
@@ -6188,6 +6235,30 @@ export function CoachSettingsView({
       icon: <NavAdvancedIcon size={15} />,
     },
   ] as const;
+  const settingsNavRef = useRef<HTMLElement | null>(null);
+  const [settingsNavDense, setSettingsNavDense] = useState(false);
+  // Measure real overflow: render labels, check scrollWidth vs clientWidth,
+  // then fall back to icon-only when the text does not fit. Layout effect so
+  // the probe never paints.
+  useLayoutEffect(() => {
+    const nav = settingsNavRef.current;
+    if (!nav) {
+      return;
+    }
+    const measure = () => {
+      nav.classList.remove("settings-nav--icon");
+      nav.classList.add("settings-nav--measuring");
+      const overflows = nav.scrollWidth > nav.clientWidth + 1;
+      nav.classList.remove("settings-nav--measuring");
+      nav.classList.toggle("settings-nav--icon", overflows);
+      setSettingsNavDense(overflows);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    measure();
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsNavItems.map((item) => item.label).join("|")]);
   const settingsStatusConnectionReady = providerCoachReady && !providerHasDraftChanges;
   // Blocker banner — one row per real problem, each with the action that
   // clears it. Same truth sources as the availability strip; hidden when
@@ -8058,21 +8129,21 @@ export function CoachSettingsView({
                 </div>
               </div>
           {rememberedRows.length ? (
-            <details className="settings-sheet__minor-panel settings-sheet__remembered-panel">
-              <summary className="settings-sheet__remembered-summary">
+            <div className="settings-sheet__remembered-panel">
+              <div className="settings-sheet__remembered-summary">
                 <span className="eyebrow">
                   {settingsPhrase(language, "trainerRemembers")}
                 </span>
                 {remembersSummary ? (
                   <span className="settings-sheet__remembered-preview">{remembersSummary}</span>
                 ) : null}
-              </summary>
+              </div>
               <div className="settings-sheet__simple-list" aria-label={settingsPhrase(language, "trainerRemembers")}>
                 {rememberedRows.map((row) => (
                   <SimpleInfoRow key={row.label} label={row.label} value={row.value} />
                 ))}
               </div>
-            </details>
+            </div>
           ) : null}
 
           <div className="settings-sheet__utility-grid">
@@ -8174,13 +8245,7 @@ export function CoachSettingsView({
                   </div>
                 </section>
               </div>
-          <details className="settings-sheet__minor-panel">
-            <summary>
-              {language === "zh-CN"
-                ? "续接状态"
-                : "Continuation state"}
-            </summary>
-            <div className="settings-sheet__minor-body">
+          <div className="settings-sheet__minor-body settings-sheet__minor-body--flat">
               <div className="settings-sheet__summary-grid">
                 <SummaryCard
                   label={copy.runtimeSection}
@@ -8197,14 +8262,15 @@ export function CoachSettingsView({
               </div>
               <p className="settings-sheet__note settings-sheet__note--compact">{runtimeFlowSummary}</p>
             </div>
-          </details>
             </div>
           </div>
         </section>
         ) : null}
           </div>
+          <div className="settings-nav-bar">
           <nav
-            className="settings-nav settings-nav--icon"
+            ref={settingsNavRef}
+            className={`settings-nav${settingsNavDense ? " settings-nav--icon" : ""}`}
             role="tablist"
             aria-orientation="horizontal"
             aria-label={copy.title}
@@ -8258,6 +8324,42 @@ export function CoachSettingsView({
               </button>
             ))}
           </nav>
+            <div className="settings-nav__actions" role="group" aria-label={settingsPhrase(language, "navShare")}>
+              {onShareSession ? (
+                <button
+                  type="button"
+                  className="settings-nav__action"
+                  aria-label={settingsPhrase(language, "navShare")}
+                  title={settingsPhrase(language, "navShare")}
+                  onClick={onShareSession}
+                >
+                  <LinkIcon size={14} aria-hidden="true" />
+                </button>
+              ) : null}
+              {onNavigateToView ? (
+                <button
+                  type="button"
+                  className="settings-nav__action"
+                  aria-label={settingsPhrase(language, "navResources")}
+                  title={settingsPhrase(language, "navResources")}
+                  onClick={() => onNavigateToView("resources")}
+                >
+                  <NavResourcesIcon size={14} aria-hidden="true" />
+                </button>
+              ) : null}
+              {onNavigateToView ? (
+                <button
+                  type="button"
+                  className="settings-nav__action"
+                  aria-label={settingsPhrase(language, "navTraining")}
+                  title={settingsPhrase(language, "navTraining")}
+                  onClick={() => onNavigateToView("training")}
+                >
+                  <NavTrainingIcon size={14} aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
       </div>
     </section>
