@@ -78,7 +78,7 @@ import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
-import { CheckMarkIcon, ChevronUpIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, PlusIcon, RefreshIcon, TrashIcon } from "../icons";
+import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, PlusIcon, RefreshIcon, TrashIcon } from "../icons";
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type {
@@ -3933,7 +3933,8 @@ export function CoachSettingsView({
   const classes = ["settings-sheet", "coach-settings-view", className].filter(Boolean).join(" ");
   const providerDirectoryRef = useRef<HTMLDivElement | null>(null);
   const providerTemplatesRef = useRef<HTMLDivElement | null>(null);
-  const [connectionView, setConnectionView] = useState<"auto" | "edit" | "add">("auto");
+  const [connectionView, setConnectionView] = useState<"auto" | "edit" | "add" | "advanced">("auto");
+  const [advancedReturnView, setAdvancedReturnView] = useState<"auto" | "edit">("auto");
   const apiKeyInputRef = useRef<HTMLInputElement | null>(null);
   const modelPickerRef = useRef<HTMLDetailsElement | null>(null);
 
@@ -3973,7 +3974,6 @@ export function CoachSettingsView({
     }
   };
   const [advancedContextPinned, setAdvancedContextPinned] = useState(false);
-  const [providerDetailRequested, setProviderDetailRequested] = useState(false);
   const [providerApiKeyFocusRequested, setProviderApiKeyFocusRequested] = useState(false);
   const [providerProfilesFocusRequested, setProviderProfilesFocusRequested] = useState(false);
   const [providerTemplatesFocusRequested, setProviderTemplatesFocusRequested] = useState(false);
@@ -4100,7 +4100,6 @@ export function CoachSettingsView({
     }
     setActiveSettingsCategory("connection");
     setConnectionView("edit");
-    setProviderDetailRequested(true);
     setProviderApiKeyFocusRequested(true);
   }, [providerApiKeyFocusRequest]);
   const scopedLastTest = selectScopedSettingsLastTest(provider.lastTestResult, {
@@ -5880,16 +5879,16 @@ export function CoachSettingsView({
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [providerApiKeyFocusRequested, providerDetailRequested]);
+  }, [providerApiKeyFocusRequested]);
 
-  const openProviderDetails = (focusApiKey = false) => {
-    setConnectionView("edit");
-    setProviderDetailRequested(true);
-    if (focusApiKey) {
-      setProviderApiKeyFocusRequested(true);
-    }
+  const openProviderDetails = () => {
+    setAdvancedReturnView(connectionView === "edit" ? "edit" : "auto");
+    setConnectionView("advanced");
   };
-  const openProviderApiKey = () => openProviderDetails(true);
+  const openProviderApiKey = () => {
+    setConnectionView("edit");
+    setProviderApiKeyFocusRequested(true);
+  };
   const showConnectionSummary =
     providerSaved && !providerHasDraftChanges && connectionView === "auto";
   const showProviderTemplates =
@@ -5897,7 +5896,7 @@ export function CoachSettingsView({
   const showConnectionForm =
     !providerSaved || providerHasDraftChanges || connectionView === "edit";
   const showAvailabilityStrip =
-    showConnectionForm ||
+    (showConnectionForm && connectionView !== "advanced") ||
     (showConnectionSummary && resolvedAvailabilityTone !== "connected");
   const connectionHost = (provider.baseUrl || providerDraft.baseUrl || "")
     .replace(/^https?:\/\//i, "")
@@ -5908,7 +5907,6 @@ export function CoachSettingsView({
   };
   const focusDraftModelPicker = () => {
     setConnectionView("edit");
-    setProviderDetailRequested(true);
     setModelPickerOpen(true);
     window.requestAnimationFrame(() => {
       const picker = modelPickerRef.current;
@@ -6036,7 +6034,7 @@ export function CoachSettingsView({
         : shouldFocusDraftApiKey
           ? openProviderApiKey
         : shouldCompleteDraftSetup
-        ? () => openProviderDetails()
+        ? () => setConnectionView("edit")
         : shouldWaitForDraftTest
           ? undefined
           : shouldRepairProviderCredentials
@@ -6828,7 +6826,8 @@ export function CoachSettingsView({
         </div>
       </div>
     ) : null;
-  const providerDirectory = showProviderTemplates ? (
+  const providerDirectory =
+    showProviderTemplates && connectionView !== "advanced" ? (
     <div className="settings-provider-directory-wrap">
       <div
         ref={providerTemplatesRef}
@@ -6877,15 +6876,6 @@ export function CoachSettingsView({
   ) : null;
   const providerSecondaryActions = (
     <div className="settings-actions settings-actions--compact">
-      {providerSaved && !providerHasDraftChanges && connectionView !== "auto" ? (
-        <ActionButton
-          fullWidth={false}
-          icon={<ChevronUpIcon size={14} />}
-          label={settingsPhrase(language, "collapseConnection")}
-          detail={settingsPhrase(language, "collapseConnectionDetail")}
-          onClick={() => setConnectionView("auto")}
-        />
-      ) : null}
       <ActionButton
         fullWidth={false}
         icon={<GearIcon size={14} />}
@@ -6905,6 +6895,143 @@ export function CoachSettingsView({
   const showProviderDetailStatePill =
     shouldShowProviderConnectionSummary &&
     (providerHasDraftChanges || !providerCoachReady || providerNeedsRetest);
+  const connectionLevelTitles: Record<"add" | "edit" | "advanced", string> = {
+    add: settingsPhrase(language, "addProvider"),
+    edit: settingsPhrase(language, "editConfiguration"),
+    advanced: settingsGlobalCopy.settingsConnectionDetails,
+  };
+  const connectionLevelHead =
+    connectionView === "add" || connectionView === "edit" ? (
+      <div className="settings-level-head">
+        <button
+          type="button"
+          className="settings-level-head__back"
+          aria-label={settingsGlobalCopy.settingsSectionConnection}
+          title={settingsGlobalCopy.settingsSectionConnection}
+          onClick={() => setConnectionView("auto")}
+        >
+          <ChevronLeftIcon size={14} aria-hidden />
+          <span>{settingsGlobalCopy.settingsSectionConnection}</span>
+        </button>
+        <span className="eyebrow settings-level-head__title">
+          {connectionLevelTitles[connectionView]}
+        </span>
+      </div>
+    ) : null;
+  const providerAdvancedEntry = (
+    <div className="settings-sheet__support coach-settings-view__provider-detail collapse-section collapse-section--level-2">
+      <div className="collapse-section__header-row">
+        <button
+          type="button"
+          className="collapse-section__header"
+          aria-expanded="false"
+          onClick={openProviderDetails}
+        >
+          <ChevronRightIcon size={12} aria-hidden />
+          <span className="collapse-section__title">
+            <span className="eyebrow">{settingsGlobalCopy.settingsConnectionDetails}</span>
+          </span>
+          {showProviderDetailStatePill ? (
+            <span className="collapse-section__badge">
+              <StatusPill tone={resolvedAvailabilityTone}>
+                {localizedResolvedAvailabilityStatusLabel}
+              </StatusPill>
+            </span>
+          ) : null}
+          {shouldShowProviderConnectionSummary ? (
+            <span className="collapse-section__subtitle">
+              <span
+                className="settings-sheet__defaults-preview"
+                title={providerConnectionSummary}
+                data-full-value={providerConnectionSummary}
+              >
+                {providerPreviewSummaryText}
+              </span>
+            </span>
+          ) : null}
+        </button>
+      </div>
+    </div>
+  );
+  const providerPrimaryActions = showProviderDetailActions ? (
+    <div className="settings-actions settings-actions--compact settings-actions--primary">
+      {!modelDiscoveryGuidanceActive ? (
+        <ActionButton
+          fullWidth={false}
+          icon={
+            providerSaveBusy ? (
+              <span className="settings-quick-setup__saving-dot" aria-hidden />
+            ) : (
+              <CheckMarkIcon size={14} />
+            )
+          }
+          label={saveProviderConnectionLabel}
+          ariaLabel={saveProviderConnectionLabel}
+          detail={
+            canSaveProviderConnection
+              ? settingsPhrase(language, "saveToApply")
+              : currentDraftModelPolicyMessage ??
+                settingsPhrase(language, "saveConnectionDetail")
+          }
+          disabled={!canSaveProviderConnection}
+          onClick={onSaveProvider}
+          title={saveProviderConnectionTitle}
+        />
+      ) : null}
+      {showSecondaryModelDiscoveryAction ? (
+        <ActionButton
+          fullWidth={false}
+          icon={<RefreshIcon size={14} />}
+          label={modelDiscoveryActionLabel}
+          detail={modelDiscoveryActionDetail}
+          disabled={!canRefreshModels}
+          onClick={onRefreshProviderModels}
+          title={canRefreshModels ? modelDiscoveryActionLabel : modelDiscoveryBlockedReason}
+        />
+      ) : null}
+      {!modelDiscoveryGuidanceActive && showProviderDetailTestAction ? (
+        <ActionButton
+          fullWidth={false}
+          icon={<DiagnosticsIcon size={14} />}
+          label={copy.test}
+          ariaLabel={copy.test}
+          detail={
+            currentDraftModelPolicyMessage ??
+            settingsPhrase(language, "verifyConnectionDetail")
+          }
+          disabled={!canRetestProvider}
+          onClick={onTestProvider}
+          title={
+            canRetestProvider
+              ? providerHasDraftChanges
+                ? settingsPhrase(language, "testDraftConnectionDetail")
+                : copy.test
+              : currentDraftModelPolicyMessage
+                ? currentDraftModelPolicyMessage
+              : !providerDraftFieldsReady
+                ? language === "zh-CN"
+                  ? "先完成 provider、base URL 和 model，再测试连接。"
+                  : "Finish the provider, base URL, and model before testing the connection."
+                : !providerDraftHasApiKey && !providerDraftCanReuseSavedApiKey
+                  ? language === "zh-CN"
+                    ? "先补上 API key，再测试这组连接。"
+                    : "Add an API key before testing this connection."
+                  : providerSaved
+                    ? language === "zh-CN"
+                      ? "先保存当前草稿，再测试这组连接。"
+                      : "Save the current draft before testing this connection."
+                    : savedProviderProfilesAvailable
+                      ? language === "zh-CN"
+                        ? "先启用一个已保存的 profile，再测试当前连接。"
+                        : "Apply a saved profile before testing the current connection."
+                      : language === "zh-CN"
+                        ? "先完成 provider 配置，再测试连接。"
+                        : "Finish the provider setup before testing the connection."
+          }
+        />
+      ) : null}
+    </div>
+  ) : null;
   const providerDetailRequirementNote = providerHasDraftChanges
     ? currentDraftModelPolicyMessage ??
       (!providerDraft.baseUrl.trim()
@@ -7068,11 +7195,11 @@ export function CoachSettingsView({
 
             {connectionSummaryCard}
 
+            {connectionLevelHead}
+
             {providerDirectory}
 
-            {!showConnectionSummary ? (
-            <>
-            {showConnectionForm ? (
+            {showConnectionForm && connectionView !== "advanced" ? (
             <>
             <form
               className="settings-sheet__minor-body"
@@ -7322,125 +7449,46 @@ export function CoachSettingsView({
               ) : null}
             </form>
 
-            {showProviderDetailActions ? (
-                  <div className="settings-actions settings-actions--compact settings-actions--primary">
-                    {!modelDiscoveryGuidanceActive ? (
-                      <ActionButton
-                        fullWidth={false}
-                        icon={
-                          providerSaveBusy ? (
-                            <span className="settings-quick-setup__saving-dot" aria-hidden />
-                          ) : (
-                            <CheckMarkIcon size={14} />
-                          )
-                        }
-                        label={saveProviderConnectionLabel}
-                        ariaLabel={saveProviderConnectionLabel}
-                        detail={
-                          canSaveProviderConnection
-                            ? settingsPhrase(language, "saveToApply")
-                            : currentDraftModelPolicyMessage ??
-                              settingsPhrase(language, "saveConnectionDetail")
-                        }
-                        disabled={!canSaveProviderConnection}
-                        onClick={onSaveProvider}
-                        title={saveProviderConnectionTitle}
-                      />
-                    ) : null}
-                    {showSecondaryModelDiscoveryAction ? (
-                      <ActionButton
-                        fullWidth={false}
-                        icon={<RefreshIcon size={14} />}
-                        label={modelDiscoveryActionLabel}
-                        detail={modelDiscoveryActionDetail}
-                        disabled={!canRefreshModels}
-                        onClick={onRefreshProviderModels}
-                        title={canRefreshModels ? modelDiscoveryActionLabel : modelDiscoveryBlockedReason}
-                      />
-                    ) : null}
-                    {!modelDiscoveryGuidanceActive && showProviderDetailTestAction ? (
-                      <ActionButton
-                        fullWidth={false}
-                        icon={<DiagnosticsIcon size={14} />}
-                        label={copy.test}
-                        ariaLabel={copy.test}
-                        detail={
-                          currentDraftModelPolicyMessage ??
-                          settingsPhrase(language, "verifyConnectionDetail")
-                        }
-                        disabled={!canRetestProvider}
-                        onClick={onTestProvider}
-                        title={
-                          canRetestProvider
-                            ? providerHasDraftChanges
-                              ? settingsPhrase(language, "testDraftConnectionDetail")
-                              : copy.test
-                            : currentDraftModelPolicyMessage
-                              ? currentDraftModelPolicyMessage
-                            : !providerDraftFieldsReady
-                              ? language === "zh-CN"
-                                ? "先完成 provider、base URL 和 model，再测试连接。"
-                                : "Finish the provider, base URL, and model before testing the connection."
-                              : !providerDraftHasApiKey && !providerDraftCanReuseSavedApiKey
-                                ? language === "zh-CN"
-                                  ? "先补上 API key，再测试这组连接。"
-                                  : "Add an API key before testing this connection."
-                                : providerSaved
-                                  ? language === "zh-CN"
-                                    ? "先保存当前草稿，再测试这组连接。"
-                                    : "Save the current draft before testing this connection."
-                                  : savedProviderProfilesAvailable
-                                    ? language === "zh-CN"
-                                      ? "先启用一个已保存的 profile，再测试当前连接。"
-                                      : "Apply a saved profile before testing the current connection."
-                                    : language === "zh-CN"
-                                      ? "先完成 provider 配置，再测试连接。"
-                                      : "Finish the provider setup before testing the connection."
-                        }
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
-            </>
-            ) : null}
+            {providerPrimaryActions}
             {providerSecondaryActions}
-            {showConnectionForm && !providerCoachReady ? (
+            {!providerCoachReady ? (
               <p className="settings-sheet__note settings-sheet__note--warning">
                 {providerDetailRequirementNote}
               </p>
             ) : null}
-            {showConnectionForm && showAvailabilityChecklist ? renderProviderSetupChecks("settings-setup-checks--availability") : null}
+            {showAvailabilityChecklist ? renderProviderSetupChecks("settings-setup-checks--availability") : null}
+            {providerAdvancedEntry}
             </>
             ) : null}
           </div>
 
-          {showConnectionForm ? (
-          <div className="settings-sheet__support coach-settings-view__provider-detail">
-            <CollapseSection
-              level={2}
-              persistenceKey="settings-provider"
-              open={providerDetailRequested}
-              onToggle={setProviderDetailRequested}
-              title={<span className="eyebrow">{settingsGlobalCopy.settingsConnectionDetails}</span>}
-              subtitle={
-                shouldShowProviderConnectionSummary ? (
-                  <span
-                    className="settings-sheet__defaults-preview"
-                    title={providerConnectionSummary}
-                    data-full-value={providerConnectionSummary}
-                  >
-                    {providerPreviewSummaryText}
+          {connectionView === "advanced" ? (
+          <div className="settings-sheet__support coach-settings-view__provider-detail collapse-section collapse-section--level-2 is-open">
+            <div className="collapse-section__header-row">
+              <button
+                type="button"
+                className="collapse-section__header"
+                aria-expanded="true"
+                onClick={() => setConnectionView(advancedReturnView)}
+              >
+                <ChevronLeftIcon size={12} aria-hidden />
+                <span className="collapse-section__title">
+                  <span className="eyebrow">{settingsGlobalCopy.settingsConnectionDetails}</span>
+                </span>
+                {showProviderDetailStatePill ? (
+                  <span className="collapse-section__badge">
+                    <StatusPill tone={resolvedAvailabilityTone}>
+                      {localizedResolvedAvailabilityStatusLabel}
+                    </StatusPill>
                   </span>
-                ) : undefined
-              }
-              badge={
-                showProviderDetailStatePill ? (
-                  <StatusPill tone={resolvedAvailabilityTone}>
-                    {localizedResolvedAvailabilityStatusLabel}
-                  </StatusPill>
-                ) : undefined
-              }
-            >
+                ) : null}
+                <span className="collapse-section__subtitle">
+                  {displayAvailabilityHeadline}
+                </span>
+              </button>
+            </div>
+            <div className="collapse-section__body-wrap">
+              <div className="collapse-section__body">
               <div className="coach-settings-view__provider-detail-body">
                 <div className="settings-grid settings-grid--form">
                   <div className="settings-field">
@@ -7678,7 +7726,9 @@ export function CoachSettingsView({
               {thinkingControl}
               {providerCatalogPanel}
             </div>
-            </CollapseSection>
+            {providerPrimaryActions}
+              </div>
+            </div>
           </div>
           ) : null}
 

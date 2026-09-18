@@ -15309,6 +15309,56 @@ button.resources-sandbox-layout__chip:focus-visible {
   display: none;
 }
 
+.settings-level-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 2px 0 4px;
+}
+
+.settings-level-head__back {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 5px;
+  border: 1px solid color-mix(in srgb, var(--line) 36%, transparent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-1);
+  font-family: inherit;
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.25;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+
+.settings-level-head__back:hover {
+  color: var(--fg-0);
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--line));
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.settings-level-head__back:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
+.settings-level-head__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coach-settings-view__provider-detail > .collapse-section__header-row .collapse-section__header svg {
+  flex: none;
+  color: var(--vscode-descriptionForeground, inherit);
+}
+
 .settings-provider-bar {
   display: flex;
   align-items: center;

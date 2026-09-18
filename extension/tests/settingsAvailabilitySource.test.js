@@ -149,14 +149,15 @@ test('settings keeps availability as the compact source of provider truth', () =
   assert.match(strip, /<StatusPill tone=\{resolvedAvailabilityTone\}>\{localizedResolvedAvailabilityStatusLabel\}<\/StatusPill>/);
   assert.match(strip, /effectiveAvailabilityPrimaryCta\.label/);
   // The compact connected summary hides the strip; it stays mounted while
-  // configuring or whenever the saved connection needs attention.
+  // configuring or whenever the saved connection needs attention. The strip
+  // drops out of the dedicated advanced-details level.
   assert.match(
     source,
-    /const showAvailabilityStrip =\s*showConnectionForm \|\|\s*\(showConnectionSummary && resolvedAvailabilityTone !== "connected"\);/,
+    /const showAvailabilityStrip =\s*\(showConnectionForm && connectionView !== "advanced"\) \|\|\s*\(showConnectionSummary && resolvedAvailabilityTone !== "connected"\);/,
   );
   assert.match(source, /\{showAvailabilityStrip \? \(/);
-  assert.match(source, /open=\{providerDetailRequested\}/);
-  assert.match(source, /onToggle=\{setProviderDetailRequested\}/);
+  assert.match(source, /\{connectionView === "advanced" \? \(/);
+  assert.doesNotMatch(source, /providerDetailRequested/);
   assert.doesNotMatch(source, /const providerDetailOpen =/);
   assert.doesNotMatch(source, /settings-sheet__setup-card/);
 });
@@ -198,7 +199,7 @@ test('settings maps provider failures to retestable recovery states', () => {
     source,
     /const shouldCompleteDraftSetup =\s*providerHasDraftChanges &&\s*!providerDraftReadyForTest &&\s*!canFindDraftModels &&\s*!hasDiscoveredDraftModels;/,
   );
-  assert.match(source, /shouldCompleteDraftSetup\s*\? \(\) => openProviderDetails\(\)/);
+  assert.match(source, /shouldCompleteDraftSetup\s*\? \(\) => setConnectionView\("edit"\)/);
 });
 
 test('settings offers the recommended template before manual setup for a blank provider', () => {
@@ -286,7 +287,7 @@ test('settings routes incomplete drafts back to the form and only tests ready dr
     /shouldCompleteDraftSetup\s*\? settingsPhrase\(language, "connectionFieldsAndKey"\)/,
   );
   assert.match(cta, /shouldCompleteDraftSetup\s*\? modelDiscoveryBlockedReason/);
-  assert.match(cta, /shouldCompleteDraftSetup\s*\? \(\) => openProviderDetails\(\)/);
+  assert.match(cta, /shouldCompleteDraftSetup\s*\? \(\) => setConnectionView\("edit"\)/);
   assert.match(source, /const shouldWaitForDraftTest = providerHasDraftChanges && providerTestPending;/);
   assert.match(cta, /shouldWaitForDraftTest\s*\? settingsStatusPhrase\(language, "checking"\)/);
   assert.match(cta, /shouldWaitForDraftTest\s*\? undefined/);
@@ -361,19 +362,22 @@ test('settings takes rejected credentials directly to the API key field', () => 
   );
   assert.match(source, /const providerCredentialsRejected =/);
   assert.match(source, /const shouldRepairProviderCredentials =/);
-  assert.match(source, /const openProviderApiKey = \(\) => openProviderDetails\(true\);/);
+  assert.match(
+    source,
+    /const openProviderApiKey = \(\) => \{\s*setConnectionView\("edit"\);\s*setProviderApiKeyFocusRequested\(true\);/,
+  );
   // The focus request must mount the edit form first — the summary view has
   // no API-key input, so the effect switches the connection into edit mode.
   assert.match(
     source,
-    /setActiveSettingsCategory\("connection"\);\s*setConnectionView\("edit"\);\s*setProviderDetailRequested\(true\);\s*setProviderApiKeyFocusRequested\(true\);/,
+    /setActiveSettingsCategory\("connection"\);\s*setConnectionView\("edit"\);\s*setProviderApiKeyFocusRequested\(true\);/,
   );
   assert.match(source, /apiKeyInput\?\.scrollIntoView\(\{ block: "center" \}\);/);
   assert.match(source, /apiKeyInput\?\.focus\(\{ preventScroll: true \}\);/);
   assert.match(source, /setProviderApiKeyFocusRequested\(false\);/);
   assert.match(
     source,
-    /const openProviderDetails = \(focusApiKey = false\) => \{\s*setConnectionView\("edit"\);\s*setProviderDetailRequested\(true\);\s*if \(focusApiKey\) \{\s*setProviderApiKeyFocusRequested\(true\);/,
+    /const openProviderDetails = \(\) => \{\s*setAdvancedReturnView\(connectionView === "edit" \? "edit" : "auto"\);\s*setConnectionView\("advanced"\);/,
   );
   assert.match(source, /shouldRepairProviderCredentials\s*\? openProviderApiKey/);
 });

@@ -1,4 +1,4 @@
-const { test } = require("playwright/test");
+const { test, expect } = require("playwright/test");
 
 test("debug current browser preview actions", async ({ page }) => {
   const logs = [];
@@ -63,12 +63,8 @@ test("debug live provider save", async ({ page }) => {
   });
   const editButton = page.getByRole("button", { name: "Edit configuration", exact: true });
   if (await editButton.count()) await editButton.click();
-  const detail = page.locator(".coach-settings-view__provider-detail");
-  const sectionHeader = detail.locator(".collapse-section__header");
-  if (await sectionHeader.count() && (await sectionHeader.getAttribute("aria-expanded")) !== "true") {
-    await sectionHeader.click();
-  }
   const fields = page.locator("form.settings-sheet__minor-body");
+  await expect(fields).toBeVisible();
   await fields.getByLabel("Connection name (optional)", { exact: true }).fill("Debug provider");
   await fields.getByLabel("Service root").fill("https://provider.invalid/v1");
   await fields.getByLabel("API Key", { exact: true }).fill("debug-key");

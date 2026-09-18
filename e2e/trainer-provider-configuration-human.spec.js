@@ -39,30 +39,15 @@ function connectionFields(page) {
 }
 
 async function openDetails(page) {
-  // Connected state shows the compact summary card — enter edit mode first.
-  // Applying a provider template remounts the settings view, so the edit click
-  // may need a second attempt once pending host updates settle.
+  // Connected state shows the compact summary card — the "Edit configuration"
+  // level exposes the connection form directly. Advanced diagnostics live one
+  // level deeper behind the "Connection details" drill-in row.
   const editButton = page.getByRole("button", { name: /Edit configuration|编辑配置/ });
   if (await editButton.count()) {
     await editButton.click();
   }
   const detail = providerDetail(page);
-  try {
-    await expect(detail).toBeVisible({ timeout: 3000 });
-  } catch {
-    if (await editButton.count()) {
-      await editButton.click();
-    }
-    await expect(detail).toBeVisible();
-  }
-  const sectionHeader = detail.locator(".collapse-section__header");
-  try {
-    if (await sectionHeader.count() && (await sectionHeader.getAttribute("aria-expanded")) !== "true") {
-      await sectionHeader.click();
-    }
-  } catch {
-    // A pending provider update can remount the view mid-interaction.
-  }
+  await expect(detail).toBeVisible();
   const fields = connectionFields(page);
   await expect(fields).toBeVisible();
   return { detail, fields };
@@ -179,7 +164,10 @@ test.describe("human Provider configuration preview", () => {
     const selectedModel = hasReasoningOption ? "preview-reasoning" : "MiniMax-M3";
     await expect(picker.locator(":scope > summary")).toContainText(selectedModel);
 
-    const advanced = initial.detail.locator("details.settings-sheet__provider-catalog");
+    // The request catalog lives in the advanced "Connection details" level —
+    // drill in through the collapsible entry row.
+    await providerDetail(page).locator(".collapse-section__header").click();
+    const advanced = providerDetail(page).locator("details.settings-sheet__provider-catalog");
     await expect(advanced).toBeVisible();
     if (!(await advanced.evaluate((element) => element.open))) {
       await advanced.locator(":scope > summary").click();
@@ -192,6 +180,9 @@ test.describe("human Provider configuration preview", () => {
     await expect(requestDefaults).toBeVisible();
     const nativeThinking = '{"thinking":{"type":"enabled","budget_tokens":2048}}';
     await requestDefaults.fill(nativeThinking);
+    // Back to the edit level to fill the API key field.
+    await providerDetail(page).locator(".collapse-section__header").click();
+    await expect(connectionFields(page)).toBeVisible();
     await initial.fields.getByLabel("API Key", { exact: true }).fill(credential);
 
     const profiles = await openProfiles(page);

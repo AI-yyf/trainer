@@ -118,23 +118,26 @@ test('teaching preferences shows only the preset radio, language, and advanced-c
   assert.match(section, /settings-section-save/);
 });
 
-test('connection details stay toggle-driven while the required trio renders open', () => {
+test('connection details live behind an explicit advanced level', () => {
   const source = readSettingsSource();
 
-  assert.match(source, /open=\{providerDetailRequested\}/);
-  assert.match(source, /onToggle=\{setProviderDetailRequested\}/);
-  assert.doesNotMatch(source, /const providerDetailOpen =/);
-  assert.match(source, /level=\{2\}\s+persistenceKey="settings-provider"/);
+  // The drill-in entry stays collapsed in the edit level; the advanced level
+  // header is the expanded counterpart that returns to the previous level.
+  assert.match(source, /aria-expanded="false"/);
+  assert.match(source, /onClick=\{openProviderDetails\}/);
+  assert.match(source, /aria-expanded="true"/);
+  assert.match(source, /onClick=\{\(\) => setConnectionView\(advancedReturnView\)\}/);
+  assert.doesNotMatch(source, /providerDetailRequested/);
   assert.match(source, /data-settings-section="connection"/);
-  // The collapsed details hold protocol plus the read-only truth tables.
-  const detailsStart = source.indexOf('persistenceKey="settings-provider"');
-  const detailsEnd = source.indexOf('</CollapseSection>', detailsStart);
+  // The advanced level holds protocol plus the read-only truth tables.
+  const detailsStart = source.indexOf('connectionView === "advanced" ? (');
+  const detailsEnd = source.indexOf('{providerPrimaryActions}', detailsStart);
   const details = source.slice(detailsStart, detailsEnd);
   assert.match(details, /settingsSupportPhrase\(language, "protocol"\)/);
   assert.match(details, /\{!canNestModelLimitsInCatalog \? providerModelLimitsPanel : null\}/);
   assert.match(details, /modelAndTestDetail/);
-  // Saved profiles + templates live in the directory listbox at the top of the
-  // connection section, not inside the details fold.
+  // Saved profiles + templates live in the top provider bar and the add-level
+  // directory, not inside the advanced level.
   assert.doesNotMatch(details, /settings-provider-profile/);
   const connectionStart = source.indexOf('data-settings-section="connection"');
   const connectionEnd = source.indexOf('<form', connectionStart);

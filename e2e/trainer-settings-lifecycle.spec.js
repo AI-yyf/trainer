@@ -66,14 +66,12 @@ async function clickDisclosureToggle(locator) {
 }
 
 async function openProviderDetails(page) {
+  // Connected state shows the compact summary card — the "Edit configuration"
+  // level exposes the connection form directly (advanced diagnostics live one
+  // level deeper and are not needed for field edits).
   const editButton = page.getByRole("button", { name: "Edit configuration", exact: true });
   if (await editButton.count()) {
     await editButton.click();
-  }
-  const detail = page.locator(".coach-settings-view__provider-detail");
-  await expect(detail).toBeVisible();
-  if (!(await isDisclosureOpen(detail))) {
-    await clickDisclosureToggle(detail);
   }
   const connectionFields = providerConnectionFields(page);
   await expect(connectionFields.getByLabel("Connection name (optional)", { exact: true })).toBeVisible();
@@ -151,6 +149,24 @@ async function setProviderModel(detail, model) {
   await search.fill(model);
   await picker.getByRole("button", { name: `Use ${model}`, exact: true }).click();
   await expect(picker.locator(":scope > summary")).toContainText(model);
+}
+
+async function openProviderAdvanced(page) {
+  // Advanced configuration lives one level below the connection form — the
+  // drill-in row looks like a collapsed section header. Clicking it swaps the
+  // form for the details level (and clicking again returns).
+  const entry = page
+    .locator(".coach-settings-view__provider-detail .collapse-section__header")
+    .first();
+  await expect(entry).toBeVisible();
+  if ((await entry.getAttribute("aria-expanded")) !== "true") {
+    await entry.click();
+  }
+  await expect(
+    page.locator(
+      '.coach-settings-view__provider-detail .collapse-section__header[aria-expanded="true"]',
+    ),
+  ).toBeVisible();
 }
 
 async function openProviderModelLimits(detail) {
@@ -289,10 +305,12 @@ test.describe("Trainer Settings provider lifecycle", () => {
       .fill(providerName);
     await providerConnectionFields(detail).getByLabel("Service root").fill(providerBaseUrl);
     await setProviderModel(detail, rejectedModel);
+    await providerConnectionFields(detail).getByLabel("API Key", { exact: true }).fill(ephemeralCredential);
+    // Model limits live in the advanced "Connection details" level.
+    await openProviderAdvanced(page);
     const modelLimits = await openProviderModelLimits(detail);
     await providerContextWindowInput(modelLimits).fill("24000");
     await providerMaxOutputInput(modelLimits).fill("2048");
-    await providerConnectionFields(detail).getByLabel("API Key", { exact: true }).fill(ephemeralCredential);
 
     const profiles = await openProviderProfiles(page);
     await profiles.getByRole("button", { name: "Save as connection", exact: true }).click();
@@ -334,9 +352,15 @@ test.describe("Trainer Settings provider lifecycle", () => {
         providerModelPicker(reloadedDetail).locator(":scope > summary"),
       ).toContainText(rejectedModel);
     }
+    await openProviderAdvanced(page);
     const reloadedModelLimits = await openProviderModelLimits(reloadedDetail);
     await expect(providerContextWindowInput(reloadedModelLimits)).toHaveValue("24000");
     await expect(providerMaxOutputInput(reloadedModelLimits)).toHaveValue("2048");
+    // Back to the edit level for the API key field.
+    await page
+      .locator(".coach-settings-view__provider-detail .collapse-section__header")
+      .first()
+      .click();
     await expect(providerConnectionFields(reloadedDetail).getByLabel("API Key", { exact: true })).toHaveValue("");
 
     await page.goto(buildPreviewUrl({ live: true }));

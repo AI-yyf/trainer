@@ -30,6 +30,6 @@ test('template setup carries a host focus request into the Settings API key fiel
   assert.match(settings, /providerApiKeyFocusRequest\?: number;/);
   assert.match(
     settings,
-    /if \(!providerApiKeyFocusRequest\) \{\s*return;\s*\}[\s\S]*?setProviderDetailRequested\(true\);[\s\S]*?setProviderApiKeyFocusRequested\(true\);/,
+    /if \(!providerApiKeyFocusRequest\) \{\s*return;\s*\}[\s\S]*?setConnectionView\("edit"\);[\s\S]*?setProviderApiKeyFocusRequested\(true\);/,
   );
 });

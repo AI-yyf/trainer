@@ -192,6 +192,14 @@ export function ChevronDownIcon(props: CoachIconProps) {
   );
 }
 
+export function ChevronLeftIcon(props: CoachIconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="m9.5 4.5-3.5 3.5 3.5 3.5" />
+    </IconBase>
+  );
+}
+
 export function ChevronRightIcon(props: CoachIconProps) {
   return (
     <IconBase {...props}>
