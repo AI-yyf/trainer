@@ -78,7 +78,7 @@ import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
-import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, PlusIcon, RefreshIcon, TrashIcon } from "../icons";
+import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, NavAdvancedIcon, NavConnectionIcon, NavMemoryIcon, NavTeachingIcon, NavWorkspaceIcon, PlusIcon, RefreshIcon, TrashIcon } from "../icons";
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type {
@@ -6208,6 +6208,38 @@ export function CoachSettingsView({
     coachDefaultsStatus?.saveState === "unsaved" || workspaceControlStatus?.saveState === "unsaved";
   const memoryPrivacyDirty = coachDefaultsStatus?.saveState === "unsaved";
   const connectionDirty = providerStatus?.saveState === "unsaved";
+  const settingsNavItems = [
+    {
+      id: "connection",
+      label: settingsGlobalCopy.settingsSectionConnection,
+      dirty: connectionDirty,
+      icon: <NavConnectionIcon size={15} />,
+    },
+    {
+      id: "workspace",
+      label: resolveWorkbenchCopy(language).workspaceRootControl,
+      dirty: false,
+      icon: <NavWorkspaceIcon size={15} />,
+    },
+    {
+      id: "teaching",
+      label: settingsGlobalCopy.settingsTeachingPrefs,
+      dirty: teachingPrefsDirty,
+      icon: <NavTeachingIcon size={15} />,
+    },
+    {
+      id: "memory",
+      label: settingsGlobalCopy.settingsMemoryPrivacy,
+      dirty: memoryPrivacyDirty,
+      icon: <NavMemoryIcon size={15} />,
+    },
+    {
+      id: "advanced",
+      label: settingsGlobalCopy.settingsAdvanced,
+      dirty: false,
+      icon: <NavAdvancedIcon size={15} />,
+    },
+  ] as const;
   const settingsStatusConnectionReady = providerCoachReady && !providerHasDraftChanges;
   // Status summary bar anomalies — same truth sources as the availability strip.
   const settingsStatusIssues: Array<{
@@ -8281,7 +8313,7 @@ export function CoachSettingsView({
         ) : null}
           </div>
           <nav
-            className="settings-nav"
+            className="settings-nav settings-nav--icon"
             role="tablist"
             aria-orientation="horizontal"
             aria-label={copy.title}
@@ -8305,46 +8337,23 @@ export function CoachSettingsView({
                 ?.focus();
             }}
           >
-            {(
-              [
-                {
-                  id: "connection",
-                  label: settingsGlobalCopy.settingsSectionConnection,
-                  dirty: connectionDirty,
-                },
-                {
-                  id: "workspace",
-                  label: resolveWorkbenchCopy(language).workspaceRootControl,
-                  dirty: false,
-                },
-                {
-                  id: "teaching",
-                  label: settingsGlobalCopy.settingsTeachingPrefs,
-                  dirty: teachingPrefsDirty,
-                },
-                {
-                  id: "memory",
-                  label: settingsGlobalCopy.settingsMemoryPrivacy,
-                  dirty: memoryPrivacyDirty,
-                },
-                {
-                  id: "advanced",
-                  label: settingsGlobalCopy.settingsAdvanced,
-                  dirty: false,
-                },
-              ] as const
-            ).map((item) => (
+            {settingsNavItems.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 role="tab"
                 aria-selected={activeSettingsCategory === item.id}
+                aria-label={item.label}
+                title={item.label}
                 className={`settings-nav__item${
                   activeSettingsCategory === item.id ? " is-active" : ""
                 }`}
                 data-settings-nav={item.id}
                 onClick={() => openSettingsCategorySection(item.id)}
               >
+                <span className="settings-nav__icon" aria-hidden="true">
+                  {item.icon}
+                </span>
                 <span className="settings-nav__label">{item.label}</span>
                 {item.dirty ? (
                   <span

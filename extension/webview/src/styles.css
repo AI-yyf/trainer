@@ -1390,6 +1390,26 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
   text-overflow: clip;
 }
 
+.header-switcher__icon {
+  display: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-switcher--icon .header-switcher__item {
+  padding: 7px 2px 8px;
+  justify-content: center;
+}
+
+.header-switcher--icon .header-switcher__icon {
+  display: inline-flex;
+}
+
+.header-switcher--icon .header-switcher__label {
+  display: none;
+}
+
 .header-switcher__item:hover {
   background: transparent;
   color: var(--fg-0);
@@ -14674,6 +14694,32 @@ button.resources-sandbox-layout__chip:focus-visible {
   line-height: 1.3;
   text-align: center;
   cursor: pointer;
+  position: relative;
+}
+
+.settings-nav__icon {
+  display: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-nav--icon .settings-nav__item {
+  padding: 7px 2px;
+}
+
+.settings-nav--icon .settings-nav__icon {
+  display: inline-flex;
+}
+
+.settings-nav--icon .settings-nav__label {
+  display: none;
+}
+
+.settings-nav--icon .settings-section-dot {
+  position: absolute;
+  top: 4px;
+  right: calc(50% - 14px);
 }
 
 .settings-nav__item:hover {

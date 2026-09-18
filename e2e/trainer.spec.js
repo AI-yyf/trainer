@@ -549,7 +549,7 @@ test.describe("Trainer Five-View Shell", () => {
 
   for (const language of ["zh-CN", "en-US"]) {
     for (const width of [300, 360, 420]) {
-      test(`keeps five visible top-level labels at ${width}px in ${language}`, async ({ page }) => {
+      test(`keeps five usable top-level tabs at ${width}px in ${language}`, async ({ page }) => {
         const errors = attachConsoleErrorCollector(page);
 
         await page.setViewportSize({ width, height: 800 });
@@ -561,8 +561,20 @@ test.describe("Trainer Five-View Shell", () => {
 
         await expectFiveTopLevelViews(page, language);
         await expectActiveView(page, language, "coach");
-        await expect(page.locator(".header-switcher")).not.toHaveClass(/header-switcher--icons/);
-        await expectHeaderLabelsVisible(page);
+        // English labels are ~70px each — five tabs need ~410px before the
+        // switcher swaps squeezed text for icons (aria-labels keep the names).
+        const iconMode = language === "en-US" && width < 410;
+        if (iconMode) {
+          await expect(page.locator(".header-switcher")).toHaveClass(/header-switcher--icon/);
+          const icons = page.locator(".header-switcher__icon");
+          await expect(icons).toHaveCount(5);
+          for (let index = 0; index < 5; index += 1) {
+            await expect(icons.nth(index)).toBeVisible();
+          }
+        } else {
+          await expect(page.locator(".header-switcher")).not.toHaveClass(/header-switcher--icon/);
+          await expectHeaderLabelsVisible(page);
+        }
         await expectNoHorizontalOverflow(page);
         await expectNoConsoleErrors(errors);
       });

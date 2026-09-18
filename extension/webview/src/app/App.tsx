@@ -175,8 +175,13 @@ import {
   ContextLayersIcon,
   FolderIcon,
   LinkIcon,
+  NavCoachIcon,
+  NavPlanIcon,
+  NavResourcesIcon,
+  NavTrainingIcon,
   RefreshIcon,
   ResourcesIcon,
+  SettingsIcon,
   UploadIcon,
   WarningIcon,
 } from "../components/icons";
@@ -262,7 +267,7 @@ type ComposerProviderMenuItem = {
   isSelectable?: boolean;
   policyReason?: ProviderModelPolicyReason;
 };
-type HeaderSwitcherDensity = "full" | "compact";
+type HeaderSwitcherDensity = "full" | "compact" | "icon";
 const COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT = 6;
 const RESOURCE_UPLOAD_LIMIT = 100;
 const RESOURCE_COMPOSER_MAX_IDS = 12;
@@ -1591,15 +1596,29 @@ function resolveHeaderSwitcherDensity(widthPerTab: number): HeaderSwitcherDensit
 function resolveHeaderSwitcherDensityForTabs(
   containerWidth: number,
   labels: string[],
+  compactLabels: string[] = labels,
 ): HeaderSwitcherDensity {
   const tabCount = Math.max(labels.length, 1);
   const widthPerTab = containerWidth / tabCount;
   const labelAllowance = Math.max(...labels.map(estimateHeaderSwitcherLabelWidth), 0) + 18;
-  if (widthPerTab < labelAllowance) {
+  if (widthPerTab >= labelAllowance) {
+    return resolveHeaderSwitcherDensity(widthPerTab);
+  }
+  const compactAllowance =
+    Math.max(...compactLabels.map(estimateHeaderSwitcherLabelWidth), 0) + 12;
+  if (widthPerTab >= compactAllowance) {
     return "compact";
   }
-  return resolveHeaderSwitcherDensity(widthPerTab);
+  return "icon";
 }
+
+const SIDEBAR_VIEW_ICONS: Record<ActiveWorkbenchView, ReactNode> = {
+  coach: <NavCoachIcon size={15} />,
+  plan: <NavPlanIcon size={15} />,
+  resources: <NavResourcesIcon size={15} />,
+  training: <NavTrainingIcon size={15} />,
+  settings: <SettingsIcon size={15} />,
+};
 
 function skillSectionTargetView(section: TrainerSkillSection): ActiveWorkbenchView {
   switch (section) {
@@ -5806,6 +5825,7 @@ export function App() {
         resolveHeaderSwitcherDensityForTabs(
           containerWidth,
           sidebarViewTabs.map(({ label }) => label),
+          sidebarViewTabs.map(({ compactLabel }) => compactLabel),
         ),
       );
     };
@@ -13620,6 +13640,9 @@ export function App() {
                   aria-pressed={activeView === view}
                   aria-current={activeView === view ? "page" : undefined}
                 >
+                  <span className="header-switcher__icon" aria-hidden="true">
+                    {SIDEBAR_VIEW_ICONS[view]}
+                  </span>
                   <span className="header-switcher__label">{displayLabel}</span>
                 </button>
               );

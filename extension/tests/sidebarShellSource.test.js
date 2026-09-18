@@ -64,11 +64,12 @@ test('app shell renders a text-only top navigation for the five fixed views', ()
   assert.match(source, /aria-pressed=\{activeView === view\}/);
   assert.match(source, /aria-current=\{activeView === view \? "page" : undefined\}/);
   assert.match(source, /<span className="header-switcher__label">\{displayLabel\}<\/span>/);
-  assert.doesNotMatch(source, /header-switcher__icon/);
-  assert.doesNotMatch(source, /header-switcher--icons/);
+  assert.match(source, /<span className="header-switcher__icon" aria-hidden="true">/);
+  assert.match(source, /\{SIDEBAR_VIEW_ICONS\[view\]\}/);
+  assert.match(source, /aria-label=\{label\}/);
 });
 
-test('top navigation keeps VS Code-like text density without alternate icon modes', () => {
+test('top navigation swaps squeezed text for per-view icons', () => {
   const styles = fs.readFileSync(stylesPath, 'utf8');
   const switcherStart = styles.indexOf('\n.header-switcher {');
   const switcherBlock = styles.slice(switcherStart, switcherStart + 520);
@@ -82,8 +83,9 @@ test('top navigation keeps VS Code-like text density without alternate icon mode
   assert.match(styles, /\.header-switcher--compact\s*\{\s*gap:\s*0;/);
   assert.match(styles, /\.header-switcher--compact \.header-switcher__item\s*\{[\s\S]*?font-size:\s*var\(--trainer-font-2xs\);/);
   assert.match(styles, /\.header-switcher--compact \.header-switcher__label\s*\{\s*font-size:\s*var\(--trainer-font-2xs\);/);
-  assert.doesNotMatch(styles, /\.header-switcher--icons/);
-  assert.doesNotMatch(styles, /\.header-switcher--compact \.header-switcher__icon/);
+  assert.match(styles, /\.header-switcher__icon\s*\{[\s\S]*?display:\s*none;/);
+  assert.match(styles, /\.header-switcher--icon \.header-switcher__icon\s*\{[\s\S]*?display:\s*inline-flex;/);
+  assert.match(styles, /\.header-switcher--icon \.header-switcher__label\s*\{[\s\S]*?display:\s*none;/);
 });
 
 test('extension manifest exposes Trainer as the VS Code-native universal coach', () => {
