@@ -16686,19 +16686,18 @@ button.resources-sandbox-layout__chip:focus-visible {
   min-height: 26px;
   padding: 4px 8px;
   border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border: 1px solid transparent;
   background: color-mix(in srgb, var(--bg-0) 76%, var(--bg-1));
   color: var(--fg-0);
   font-size: var(--trainer-font-xs);
   outline: none;
-  transition: border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease);
+  transition: box-shadow var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease);
   font-family: inherit;
 }
 
 .settings-field input:focus,
 .settings-field select:focus,
 .settings-field textarea:focus {
-  border-color: color-mix(in srgb, var(--accent) 26%, var(--line));
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
@@ -16718,7 +16717,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   justify-content: space-between;
   gap: 8px;
   padding: 4px 8px;
-  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--bg-0) 76%, var(--bg-1));
   color: var(--fg-0);
@@ -16751,7 +16750,6 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .settings-model-picker > summary:focus-visible {
-  border-color: color-mix(in srgb, var(--accent) 26%, var(--line));
   box-shadow: 0 0 0 3px var(--focus-ring);
   outline: none;
 }
@@ -20055,6 +20053,18 @@ details[open] > :not(summary) {
 
 .settings-endpoint-speed__actions input {
   flex: 1 1 auto;
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-0) 76%, var(--bg-1));
+  color: var(--fg-0);
+  font-size: var(--trainer-font-xs);
+  outline: none;
+}
+
+.settings-endpoint-speed__actions input:focus {
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .settings-endpoint-speed {
