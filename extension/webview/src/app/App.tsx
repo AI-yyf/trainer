@@ -11305,7 +11305,10 @@ export function App() {
     if (isBrowserPreview) {
       void loadBrowserPreviewModule()
         .then((browserPreview) =>
-          browserPreview.useBrowserPreviewProviderTemplate(previewSessionId),
+          browserPreview.useBrowserPreviewProviderTemplate(
+            templateLabel,
+            previewSessionId,
+          ),
         )
         .then(({ sessionId, messages }) => {
           setPreviewSessionId(sessionId);
@@ -13215,7 +13218,6 @@ export function App() {
             },
           });
         }}
-        onUseProviderTemplate={() => useProviderTemplateByLabel("MiniMax")}
         onUseProviderTemplateLabel={useProviderTemplateByLabel}
         onRefreshProviderProfiles={() => {
           setSettingsActionState({

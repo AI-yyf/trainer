@@ -229,7 +229,7 @@ test('Settings clears a model filter when the picker closes or the saved connect
   assert.match(source, /if \(!picker\.open\) \{\s*resetModelPickerSearch\(\);\s*return;/);
   assert.match(
     source,
-    /onClick=\{\(\) => \{\s*resetModelPickerSearch\(\);\s*setModelPickerOpen\(false\);\s*onSwitchProviderProfile\?\.\(profile\.id\);/,
+    /onClick=\{\(\) => \{\s*resetModelPickerSearch\(\);\s*setModelPickerOpen\(false\);\s*setConnectionView\("auto"\);\s*onSwitchProviderProfile\?\.\(profile\.id\);/,
   );
 });
 

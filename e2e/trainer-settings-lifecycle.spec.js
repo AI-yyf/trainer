@@ -66,6 +66,10 @@ async function clickDisclosureToggle(locator) {
 }
 
 async function openProviderDetails(page) {
+  const editButton = page.getByRole("button", { name: "Edit configuration", exact: true });
+  if (await editButton.count()) {
+    await editButton.click();
+  }
   const detail = page.locator(".coach-settings-view__provider-detail");
   await expect(detail).toBeVisible();
   if (!(await isDisclosureOpen(detail))) {
@@ -79,9 +83,6 @@ async function openProviderDetails(page) {
 async function openProviderProfiles(page) {
   const profiles = page.locator(".settings-sheet__provider-profiles");
   await expect(profiles).toBeVisible();
-  if (!(await profiles.evaluate((element) => element.open))) {
-    await profiles.locator(":scope > summary").click();
-  }
   return profiles;
 }
 
@@ -273,6 +274,11 @@ test.describe("Trainer Settings provider lifecycle", () => {
     await page.waitForLoadState("networkidle");
     await expectPreviewHarness(page);
 
+    // Connected state shows the compact summary card; the details fold only
+    // exists once the edit form is opened.
+    const editButton = page.getByRole("button", { name: "Edit configuration", exact: true });
+    await expect(editButton).toBeVisible();
+    await editButton.click();
     const collapsedProviderDetail = page.locator(".coach-settings-view__provider-detail");
     await expect(collapsedProviderDetail).toBeVisible();
     expect(await isDisclosureOpen(collapsedProviderDetail)).toBe(false);
@@ -378,6 +384,9 @@ test.describe("Trainer Settings provider lifecycle", () => {
     expect(failedPayload.api_key.length).toBeGreaterThan(0);
     expect(failedPayload.provider).not.toHaveProperty("apiKey");
 
+    // The failed-test host update returns the view to the summary card;
+    // re-enter edit mode before adjusting the model.
+    await openProviderDetails(page);
     await setProviderModel(liveDetail, correctedModel);
     await page
       .getByRole("button", { name: `Save and use ${correctedModel}`, exact: true })

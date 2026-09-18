@@ -43,7 +43,12 @@ test('webview template picker labels match the extension provider profile regist
   const registryLabels = [...registryBody.matchAll(/^\s{4}label: '(.+)',$/gm)].map(
     (match) => match[1],
   );
-  const catalogLabels = [...catalogSource.matchAll(/^\s*'(.+)',$/gm)].map((match) => match[1]);
+  const labelsStart = catalogSource.indexOf('export const PROVIDER_TEMPLATE_LABELS');
+  assert.ok(labelsStart >= 0, 'PROVIDER_TEMPLATE_LABELS array not found');
+  const labelsEnd = catalogSource.indexOf('\n];', labelsStart);
+  assert.ok(labelsEnd > labelsStart, 'PROVIDER_TEMPLATE_LABELS array not terminated');
+  const catalogBody = catalogSource.slice(labelsStart, labelsEnd);
+  const catalogLabels = [...catalogBody.matchAll(/^\s*'(.+)',$/gm)].map((match) => match[1]);
 
   assert.ok(registryLabels.length >= 5, 'registry template labels were not parsed');
   assert.deepEqual(catalogLabels, registryLabels);
@@ -53,7 +58,8 @@ test('the settings template picker consumes the shared catalog through the host 
   const settingsSource = fs.readFileSync(settingsViewSourcePath, 'utf8');
   const catalogSource = fs.readFileSync(catalogSourcePath, 'utf8');
 
-  assert.match(settingsSource, /PROVIDER_TEMPLATE_LABELS\.map\(\(templateLabel\) =>/);
-  assert.match(settingsSource, /onUseProviderTemplateLabel\(templateLabel\)/);
+  assert.match(settingsSource, /PROVIDER_TEMPLATE_GROUP_ORDER\.map/);
+  assert.match(settingsSource, /PROVIDER_TEMPLATE_LABELS\.filter\(\s*\(templateLabel\) => PROVIDER_TEMPLATE_GROUPS\[templateLabel\] === group,?\s*\)/);
+  assert.match(settingsSource, /onUseProviderTemplateLabel\?\.\(templateLabel\)/);
   assert.match(catalogSource, /PROVIDER_PROFILE_TEMPLATES\[\]\.label/);
 });

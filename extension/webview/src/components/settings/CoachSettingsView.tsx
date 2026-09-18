@@ -49,7 +49,12 @@ import {
   isNewApiConnectionType,
   parseProviderConnectionPaste,
 } from "../../../../../shared/src/providerGateway";
-import { PROVIDER_TEMPLATE_LABELS } from "../../../../../shared/src/providerTemplateCatalog";
+import {
+  PROVIDER_TEMPLATE_GROUPS,
+  type ProviderTemplateGroup,
+  PROVIDER_TEMPLATE_GROUP_ORDER,
+  PROVIDER_TEMPLATE_LABELS,
+} from "../../../../../shared/src/providerTemplateCatalog";
 import { describeProviderThinking, updateProviderThinking } from "../../../../../shared/src/providerThinking";
 import type { ProviderThinkingConfig } from "../../../../../shared/src/providerThinking";
 import type { TrainerCapabilityVerdict } from "../../../../../shared/src/capabilityVerdict";
@@ -73,7 +78,7 @@ import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
-import { CheckMarkIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, RefreshIcon, TrashIcon } from "../icons";
+import { CheckMarkIcon, ChevronUpIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, PlusIcon, RefreshIcon, TrashIcon } from "../icons";
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type {
@@ -590,6 +595,79 @@ type ProviderDetailLabelKey =
   | "saveProfileDetail"
   | "perModelLimits"
   | "modelCatalog";
+
+function providerTemplateGroupLabel(
+  language: ComposerLanguage,
+  group: ProviderTemplateGroup,
+): string {
+  const copy: Record<ComposerLanguage, Record<ProviderTemplateGroup, string>> = {
+    "zh-CN": {
+      major: "主流厂商",
+      china: "中国厂商",
+      aggregator: "聚合与云推理",
+      subscription: "订阅服务",
+      local: "本地运行",
+      custom: "自定义与网关",
+    },
+    "en-US": {
+      major: "Major providers",
+      china: "China providers",
+      aggregator: "Aggregators & cloud",
+      subscription: "Subscriptions",
+      local: "Local",
+      custom: "Custom & gateways",
+    },
+    "es-ES": {
+      major: "Proveedores principales",
+      china: "Proveedores de China",
+      aggregator: "Agregadores y nube",
+      subscription: "Suscripciones",
+      local: "Local",
+      custom: "Personalizados y puertas de enlace",
+    },
+    "fr-FR": {
+      major: "Fournisseurs majeurs",
+      china: "Fournisseurs chinois",
+      aggregator: "Agrégateurs et cloud",
+      subscription: "Abonnements",
+      local: "Local",
+      custom: "Personnalisés et passerelles",
+    },
+    "de-DE": {
+      major: "Große Anbieter",
+      china: "Anbieter aus China",
+      aggregator: "Aggregatoren & Cloud",
+      subscription: "Abonnements",
+      local: "Lokal",
+      custom: "Benutzerdefiniert & Gateways",
+    },
+    "ja-JP": {
+      major: "主要プロバイダー",
+      china: "中国系プロバイダー",
+      aggregator: "アグリゲーター/クラウド",
+      subscription: "サブスクリプション",
+      local: "ローカル",
+      custom: "カスタム/ゲートウェイ",
+    },
+    "ko-KR": {
+      major: "주요 공급자",
+      china: "중국 공급자",
+      aggregator: "애그리게이터·클라우드",
+      subscription: "구독 서비스",
+      local: "로컬",
+      custom: "사용자 지정·게이트웨이",
+    },
+    "pt-BR": {
+      major: "Provedores principais",
+      china: "Provedores da China",
+      aggregator: "Agregadores e nuvem",
+      subscription: "Assinaturas",
+      local: "Local",
+      custom: "Personalizados e gateways",
+    },
+  };
+  return copy[language][group];
+}
 
 function providerDetailLabel(language: ComposerLanguage, key: ProviderDetailLabelKey): string {
   const copy: Record<ComposerLanguage, Record<ProviderDetailLabelKey, string>> = {
@@ -1373,7 +1451,6 @@ export interface CoachSettingsViewProps {
   providerSaveBusy?: boolean;
   onTrustWindow?: () => void;
   onSpeedTestEndpoints?: (urls: string[]) => void;
-  onUseProviderTemplate?: () => void;
   onUseProviderTemplateLabel?: (templateLabel: string) => void;
   onRefreshProviderProfiles?: () => void;
   onSwitchProviderProfile?: (profileId: string) => void;
@@ -1930,10 +2007,8 @@ type SettingsPhraseKey =
   | "chooseModelDetail"
   | "testDraftConnection"
   | "testDraftConnectionDetail"
-  | "useMiniMaxDefaults"
-  | "useMiniMaxDefaultsDetail"
-  | "reenterMiniMaxKey"
-  | "reenterMiniMaxKeyDetail"
+  | "chooseProviderTemplate"
+  | "chooseProviderTemplateDetail"
   | "testAgain"
   | "testCurrentConnection"
   | "addApiKey"
@@ -1953,8 +2028,6 @@ type SettingsPhraseKey =
   | "contextWindow"
   | "maxOutput"
   | "modelAndTestDetail"
-  | "useMiniMaxProfile"
-  | "useMiniMaxProfileDetail"
   | "workspaceFile"
   | "clearDraft"
   | "trainerRemembers"
@@ -1967,20 +2040,25 @@ type SettingsPhraseKey =
   | "rhythm"
   | "thisRound"
   | "context"
+  | "editConfiguration"
+  | "editConfigurationDetail"
+  | "collapseConnection"
+  | "collapseConnectionDetail"
+  | "providerDirectoryLabel"
+  | "providerDirectoryNote"
+  | "addProvider"
   | "currentConnectionPrefix";
 
 const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, string>> = {
   "zh-CN": {
     notRecorded: "未记录",
     saveDraft: "保存草稿",
+    chooseProviderTemplate: "选择服务商模板",
+    chooseProviderTemplateDetail: "点一个服务商会自动填好服务地址和默认模型,再补上 API 密钥。",
     chooseModel: "选择模型",
     chooseModelDetail: "从下方列表选择一个模型",
     testDraftConnection: "测试草稿连接",
     testDraftConnectionDetail: "只测试当前填写的内容，不会保存改动",
-    useMiniMaxDefaults: "改用推荐默认配置",
-    useMiniMaxDefaultsDetail: "切回推荐默认值，并重新测试",
-    reenterMiniMaxKey: "重新录入 API key",
-    reenterMiniMaxKeyDetail: "重新应用推荐连接，并提示你输入新的 API key",
     testAgain: "重新测试",
     testCurrentConnection: "测试当前连接",
     addApiKey: "补上 API key",
@@ -2000,8 +2078,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     contextWindow: "上下文长度",
     maxOutput: "最大输出",
     modelAndTestDetail: "模型与测试",
-    useMiniMaxProfile: "使用 MiniMax 模板",
-    useMiniMaxProfileDetail: "先用模板，再补 API key",
     workspaceFile: "工作区文件",
     clearDraft: "清空草稿",
     trainerRemembers: "教练已记住",
@@ -2014,19 +2090,24 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     rhythm: "节奏",
     thisRound: "这轮重点",
     context: "背景",
+    editConfiguration: "编辑配置",
+    editConfigurationDetail: "展开完整连接表单",
+    collapseConnection: "收起",
+    collapseConnectionDetail: "回到当前连接摘要",
+    providerDirectoryLabel: "供应商目录",
+    providerDirectoryNote: "点模板自动填入服务地址与默认模型，只需补上 API 密钥；点已保存的连接可直接切换。",
+    addProvider: "添加供应商",
     currentConnectionPrefix: "当前连接",
   },
   "en-US": {
     notRecorded: "Not recorded",
     saveDraft: "Save draft",
+    chooseProviderTemplate: "Choose a provider template",
+    chooseProviderTemplateDetail: "Pick a provider to fill in the service address and default model, then add your API key.",
     chooseModel: "Choose a model",
     chooseModelDetail: "Pick one from the list below",
     testDraftConnection: "Test draft connection",
     testDraftConnectionDetail: "Tests the current entries without saving changes",
-    useMiniMaxDefaults: "Use recommended defaults",
-    useMiniMaxDefaultsDetail: "Switch to the recommended defaults, then test again",
-    reenterMiniMaxKey: "Re-enter API key",
-    reenterMiniMaxKeyDetail: "Re-apply the recommended connection and prompt for a fresh key",
     testAgain: "Test again",
     testCurrentConnection: "Test current connection",
     addApiKey: "Add API key",
@@ -2046,8 +2127,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     contextWindow: "Context window",
     maxOutput: "Max output",
     modelAndTestDetail: "Model and test detail",
-    useMiniMaxProfile: "Use MiniMax template",
-    useMiniMaxProfileDetail: "Use the template, then add an API key.",
     workspaceFile: "Workspace file",
     clearDraft: "Clear draft",
     trainerRemembers: "Trainer remembers",
@@ -2060,19 +2139,24 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     rhythm: "Rhythm",
     thisRound: "This round",
     context: "Context",
+    editConfiguration: "Edit configuration",
+    editConfigurationDetail: "Show the full connection form",
+    collapseConnection: "Collapse",
+    collapseConnectionDetail: "Back to the current connection summary",
+    providerDirectoryLabel: "Provider directory",
+    providerDirectoryNote: "Pick a template to fill the endpoint and default model — only the API key is left; click a saved connection to switch to it.",
+    addProvider: "Add provider",
     currentConnectionPrefix: "Current connection",
   },
   "es-ES": {
     notRecorded: "Sin registro",
     saveDraft: "Guardar borrador",
+    chooseProviderTemplate: "Elegir plantilla de proveedor",
+    chooseProviderTemplateDetail: "Elige un proveedor para rellenar la dirección y el modelo por defecto; solo añade tu clave API.",
     chooseModel: "Elegir un modelo",
     chooseModelDetail: "Elige uno de la lista de abajo",
     testDraftConnection: "Probar conexión de borrador",
     testDraftConnectionDetail: "Prueba los datos actuales sin guardar cambios",
-    useMiniMaxDefaults: "Usar valores recomendados",
-    useMiniMaxDefaultsDetail: "Volver a probar con los valores recomendados",
-    reenterMiniMaxKey: "Volver a introducir la clave API",
-    reenterMiniMaxKeyDetail: "Reaplicar la conexión recomendada y pedir una clave nueva",
     testAgain: "Probar de nuevo",
     testCurrentConnection: "Probar la conexión actual",
     addApiKey: "Añadir clave API",
@@ -2092,8 +2176,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     contextWindow: "Ventana de contexto",
     maxOutput: "Salida máxima",
     modelAndTestDetail: "Modelo y detalle de prueba",
-    useMiniMaxProfile: "Usar plantilla de MiniMax",
-    useMiniMaxProfileDetail: "Usa la plantilla y luego añade la clave API.",
     workspaceFile: "Archivo del workspace",
     clearDraft: "Limpiar borrador",
     trainerRemembers: "Trainer recuerda",
@@ -2106,19 +2188,24 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     rhythm: "Ritmo",
     thisRound: "Esta ronda",
     context: "Contexto",
+    editConfiguration: "Editar configuración",
+    editConfigurationDetail: "Mostrar el formulario de conexión completo",
+    collapseConnection: "Contraer",
+    collapseConnectionDetail: "Volver al resumen de la conexión actual",
+    providerDirectoryLabel: "Directorio de proveedores",
+    providerDirectoryNote: "Elige una plantilla para rellenar el endpoint y el modelo por defecto — solo falta la clave API; pulsa una conexión guardada para cambiar a ella.",
+    addProvider: "Añadir proveedor",
     currentConnectionPrefix: "Conexión actual",
   },
   "fr-FR": {
     notRecorded: "Non enregistré",
     saveDraft: "Enregistrer le brouillon",
+    chooseProviderTemplate: "Choisir un modèle de fournisseur",
+    chooseProviderTemplateDetail: "Choisissez un fournisseur pour remplir l’adresse et le modèle par défaut, puis ajoutez votre clé API.",
     chooseModel: "Choisir un modèle",
     chooseModelDetail: "Choisissez-en un dans la liste ci-dessous",
     testDraftConnection: "Tester la connexion du brouillon",
     testDraftConnectionDetail: "Teste les informations actuelles sans enregistrer les modifications",
-    useMiniMaxDefaults: "Utiliser les valeurs recommandées",
-    useMiniMaxDefaultsDetail: "Revenir aux valeurs recommandées puis retester",
-    reenterMiniMaxKey: "Saisir de nouveau la clé API",
-    reenterMiniMaxKeyDetail: "Réappliquer la connexion recommandée et demander une nouvelle clé",
     testAgain: "Tester à nouveau",
     testCurrentConnection: "Tester la connexion actuelle",
     addApiKey: "Ajouter la clé API",
@@ -2138,8 +2225,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     contextWindow: "Fenêtre de contexte",
     maxOutput: "Sortie max",
     modelAndTestDetail: "Modèle et détails de test",
-    useMiniMaxProfile: "Utiliser le modèle MiniMax",
-    useMiniMaxProfileDetail: "Utilisez le modèle, puis ajoutez la clé API.",
     workspaceFile: "Fichier de l’espace de travail",
     clearDraft: "Effacer le brouillon",
     trainerRemembers: "Trainer retient",
@@ -2152,19 +2237,24 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     rhythm: "Rythme",
     thisRound: "Ce tour",
     context: "Contexte",
+    editConfiguration: "Modifier la configuration",
+    editConfigurationDetail: "Afficher le formulaire de connexion complet",
+    collapseConnection: "Réduire",
+    collapseConnectionDetail: "Revenir au résumé de la connexion actuelle",
+    providerDirectoryLabel: "Annuaire des fournisseurs",
+    providerDirectoryNote: "Choisissez un modèle pour remplir l’adresse et le modèle par défaut — il ne reste que la clé API ; cliquez sur une connexion enregistrée pour y passer.",
+    addProvider: "Ajouter un fournisseur",
     currentConnectionPrefix: "Connexion actuelle",
   },
   "de-DE": {
     notRecorded: "Nicht erfasst",
     saveDraft: "Entwurf speichern",
+    chooseProviderTemplate: "Anbieter-Vorlage wählen",
+    chooseProviderTemplateDetail: "Wähle einen Anbieter, um Adresse und Standardmodell zu füllen, dann nur noch den API-Schlüssel ergänzen.",
     chooseModel: "Modell auswählen",
     chooseModelDetail: "Wählen Sie eines aus der Liste unten",
     testDraftConnection: "Verbindungsentwurf testen",
     testDraftConnectionDetail: "Testet die aktuellen Angaben, ohne Änderungen zu speichern",
-    useMiniMaxDefaults: "Empfohlene Standardwerte verwenden",
-    useMiniMaxDefaultsDetail: "Zu den empfohlenen Standardwerten wechseln und erneut testen",
-    reenterMiniMaxKey: "API-Schlüssel neu eingeben",
-    reenterMiniMaxKeyDetail: "Die empfohlene Verbindung erneut anwenden und einen neuen Schlüssel anfordern",
     testAgain: "Erneut testen",
     testCurrentConnection: "Aktuelle Verbindung testen",
     addApiKey: "API-Schlüssel ergänzen",
@@ -2184,8 +2274,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     contextWindow: "Kontextfenster",
     maxOutput: "Max Ausgabe",
     modelAndTestDetail: "Modell- und Testdetails",
-    useMiniMaxProfile: "MiniMax-Vorlage verwenden",
-    useMiniMaxProfileDetail: "Vorlage nutzen, dann API-Schlüssel ergänzen.",
     workspaceFile: "Workspace-Datei",
     clearDraft: "Entwurf leeren",
     trainerRemembers: "Trainer merkt sich",
@@ -2198,19 +2286,24 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     rhythm: "Rhythmus",
     thisRound: "Diese Runde",
     context: "Kontext",
+    editConfiguration: "Konfiguration bearbeiten",
+    editConfigurationDetail: "Vollständiges Verbindungsformular anzeigen",
+    collapseConnection: "Einklappen",
+    collapseConnectionDetail: "Zurück zur Übersicht der aktuellen Verbindung",
+    providerDirectoryLabel: "Anbieterverzeichnis",
+    providerDirectoryNote: "Wähle eine Vorlage, um Endpunkt und Standardmodell zu füllen — nur der API-Schlüssel fehlt noch; klicke auf eine gespeicherte Verbindung, um zu wechseln.",
+    addProvider: "Anbieter hinzufügen",
     currentConnectionPrefix: "Aktuelle Verbindung",
   },
   "ja-JP": {
     notRecorded: "記録なし",
     saveDraft: "下書きを保存",
+    chooseProviderTemplate: "プロバイダーテンプレートを選ぶ",
+    chooseProviderTemplateDetail: "プロバイダーを選ぶと接続先と既定モデルが自動入力されます。あとは API キーだけ。",
     chooseModel: "モデルを選ぶ",
     chooseModelDetail: "下の一覧から1つ選んでください",
     testDraftConnection: "接続の下書きをテスト",
     testDraftConnectionDetail: "現在の入力だけをテストし、変更は保存しません",
-    useMiniMaxDefaults: "推奨の既定値を使う",
-    useMiniMaxDefaultsDetail: "推奨の既定値に戻して再テスト",
-    reenterMiniMaxKey: "API キーを再入力",
-    reenterMiniMaxKeyDetail: "推奨の接続を再適用し、新しいキーを求める",
     testAgain: "再テスト",
     testCurrentConnection: "現在の接続をテスト",
     addApiKey: "API キーを追加",
@@ -2230,8 +2323,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     contextWindow: "Context window",
     maxOutput: "Max output",
     modelAndTestDetail: "モデルとテスト詳細",
-    useMiniMaxProfile: "MiniMax テンプレートを使う",
-    useMiniMaxProfileDetail: "先にテンプレート、あとで API キー",
     workspaceFile: "ワークスペース設定",
     clearDraft: "下書きを消去",
     trainerRemembers: "Trainer が覚えていること",
@@ -2244,19 +2335,24 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     rhythm: "リズム",
     thisRound: "今回の重点",
     context: "背景",
+    editConfiguration: "設定を編集",
+    editConfigurationDetail: "接続フォームをすべて表示",
+    collapseConnection: "折りたたむ",
+    collapseConnectionDetail: "現在の接続サマリーに戻る",
+    providerDirectoryLabel: "プロバイダー一覧",
+    providerDirectoryNote: "テンプレートを選ぶと接続先と既定モデルが自動入力されます。あとは API キーだけ。保存済みの接続をクリックすると切り替わります。",
+    addProvider: "プロバイダーを追加",
     currentConnectionPrefix: "現在の接続",
   },
   "ko-KR": {
     notRecorded: "기록 없음",
     saveDraft: "초안 저장",
+    chooseProviderTemplate: "공급자 템플릿 선택",
+    chooseProviderTemplateDetail: "공급자를 고르면 주소와 기본 모델이 자동으로 채워집니다. API 키만 추가하세요.",
     chooseModel: "모델 선택",
     chooseModelDetail: "아래 목록에서 하나를 선택하세요",
     testDraftConnection: "연결 초안 테스트",
     testDraftConnectionDetail: "현재 입력만 테스트하며 변경 내용은 저장하지 않습니다",
-    useMiniMaxDefaults: "권장 기본값 사용",
-    useMiniMaxDefaultsDetail: "권장 기본값으로 되돌린 뒤 다시 테스트",
-    reenterMiniMaxKey: "API 키 다시 입력",
-    reenterMiniMaxKeyDetail: "권장 연결을 다시 적용하고 새 키를 요청",
     testAgain: "다시 테스트",
     testCurrentConnection: "현재 연결 테스트",
     addApiKey: "API 키 추가",
@@ -2276,8 +2372,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     contextWindow: "Context window",
     maxOutput: "Max output",
     modelAndTestDetail: "모델 및 테스트 세부사항",
-    useMiniMaxProfile: "MiniMax 템플릿 사용",
-    useMiniMaxProfileDetail: "먼저 템플릿, 나중에 API 키",
     workspaceFile: "워크스페이스 파일",
     clearDraft: "초안 지우기",
     trainerRemembers: "Trainer가 기억함",
@@ -2290,19 +2384,24 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     rhythm: "리듬",
     thisRound: "이번 라운드",
     context: "맥락",
+    editConfiguration: "구성 편집",
+    editConfigurationDetail: "전체 연결 양식 표시",
+    collapseConnection: "접기",
+    collapseConnectionDetail: "현재 연결 요약으로 돌아가기",
+    providerDirectoryLabel: "공급자 디렉터리",
+    providerDirectoryNote: "템플릿을 선택하면 주소와 기본 모델이 자동으로 채워집니다. API 키만 추가하세요. 저장된 연결을 클릭하면 전환됩니다.",
+    addProvider: "공급자 추가",
     currentConnectionPrefix: "현재 연결",
   },
   "pt-BR": {
     notRecorded: "Sem registro",
     saveDraft: "Salvar rascunho",
+    chooseProviderTemplate: "Escolher modelo de provedor",
+    chooseProviderTemplateDetail: "Escolha um provedor para preencher o endereço e o modelo padrão; depois adicione sua chave API.",
     chooseModel: "Escolher um modelo",
     chooseModelDetail: "Escolha um na lista abaixo",
     testDraftConnection: "Testar conexão em rascunho",
     testDraftConnectionDetail: "Testa os dados atuais sem salvar alterações",
-    useMiniMaxDefaults: "Usar padrões recomendados",
-    useMiniMaxDefaultsDetail: "Voltar aos padrões recomendados e testar de novo",
-    reenterMiniMaxKey: "Inserir chave de API novamente",
-    reenterMiniMaxKeyDetail: "Reaplicar a conexão recomendada e pedir uma nova chave",
     testAgain: "Testar de novo",
     testCurrentConnection: "Testar conexão atual",
     addApiKey: "Adicionar chave API",
@@ -2322,8 +2421,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     contextWindow: "Janela de contexto",
     maxOutput: "Saída máxima",
     modelAndTestDetail: "Modelo e detalhe do teste",
-    useMiniMaxProfile: "Usar modelo MiniMax",
-    useMiniMaxProfileDetail: "Use o modelo e depois adicione a chave API.",
     workspaceFile: "Arquivo do workspace",
     clearDraft: "Limpar rascunho",
     trainerRemembers: "Trainer lembra",
@@ -2336,6 +2433,13 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     rhythm: "Ritmo",
     thisRound: "Esta rodada",
     context: "Contexto",
+    editConfiguration: "Editar configuração",
+    editConfigurationDetail: "Mostrar o formulário de conexão completo",
+    collapseConnection: "Recolher",
+    collapseConnectionDetail: "Voltar ao resumo da conexão atual",
+    providerDirectoryLabel: "Diretório de provedores",
+    providerDirectoryNote: "Escolha um modelo para preencher o endereço e o modelo padrão — só falta a chave API; clique numa conexão salva para alternar.",
+    addProvider: "Adicionar provedor",
     currentConnectionPrefix: "Conexão atual",
   },
 };
@@ -3796,7 +3900,6 @@ export function CoachSettingsView({
   providerSaveBusy = false,
   onTrustWindow,
   onSpeedTestEndpoints,
-  onUseProviderTemplate,
   onUseProviderTemplateLabel,
   onRefreshProviderProfiles,
   onSwitchProviderProfile,
@@ -3825,13 +3928,15 @@ export function CoachSettingsView({
     auto: adaptiveBehaviorLabel(language, "both"),
     ...labels,
   } as CoachSettingsLabels;
-  const orientationMoreLabel = resolveWorkbenchCopy(language).orientationMore;
   const settingsGlobalCopy = resolveWorkbenchCopy(language);
   const surfaceAlignmentCopy = learningSurfaceAlignmentCopy(language);
   const classes = ["settings-sheet", "coach-settings-view", className].filter(Boolean).join(" ");
-  const providerProfilesPanelRef = useRef<HTMLDetailsElement | null>(null);
+  const providerDirectoryRef = useRef<HTMLDivElement | null>(null);
+  const providerTemplatesRef = useRef<HTMLDivElement | null>(null);
+  const [connectionView, setConnectionView] = useState<"auto" | "edit" | "add">("auto");
   const apiKeyInputRef = useRef<HTMLInputElement | null>(null);
   const modelPickerRef = useRef<HTMLDetailsElement | null>(null);
+
   const modelSearchInputRef = useRef<HTMLInputElement | null>(null);
   const modelSelectRef = useRef<HTMLSelectElement | null>(null);
   const connectionAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -3871,6 +3976,7 @@ export function CoachSettingsView({
   const [providerDetailRequested, setProviderDetailRequested] = useState(false);
   const [providerApiKeyFocusRequested, setProviderApiKeyFocusRequested] = useState(false);
   const [providerProfilesFocusRequested, setProviderProfilesFocusRequested] = useState(false);
+  const [providerTemplatesFocusRequested, setProviderTemplatesFocusRequested] = useState(false);
   const [providerPasteHint, setProviderPasteHint] = useState<string | null>(null);
   const [sectionFlash, setSectionFlash] = useState<"connection" | "teaching" | "memory" | null>(
     null,
@@ -3993,6 +4099,7 @@ export function CoachSettingsView({
       return;
     }
     setActiveSettingsCategory("connection");
+    setConnectionView("edit");
     setProviderDetailRequested(true);
     setProviderApiKeyFocusRequested(true);
   }, [providerApiKeyFocusRequest]);
@@ -4155,7 +4262,7 @@ export function CoachSettingsView({
     providerFailureCategory === "invalid_api_key" ||
     providerFailureCategory === "authentication_failed";
   const providerFailureState = providerFailureCopy(providerFailureCategory, language);
-  const miniMaxLikeProvider = isMiniMaxLikeProvider(provider);
+
   const safeProviderFailureHint =
     providerErrorHint({ modelErrorCategory: providerFailureCategory }, language) ??
     (language === "zh-CN" ? "请检查连接设置后重试。" : "Check the connection settings and try again.");
@@ -4645,14 +4752,7 @@ export function CoachSettingsView({
           : "pending";
   const providerProfiles = useMemo(() => normalizeProviderProfileViews(provider), [provider]);
   const providerProfileCount = countSavedProviderProfiles(provider);
-  const [providerProfilesOpen, setProviderProfilesOpen] = useState(
-    () => !provider.configured && providerProfiles.length === 0,
-  );
-  useEffect(() => {
-    if (!provider.configured && providerProfiles.length === 0) {
-      setProviderProfilesOpen(true);
-    }
-  }, [provider.configured, providerProfiles.length]);
+
   const liveProtocol = normalizeProviderProtocol(provider.protocol);
   const liveProtocolLabel = protocolChoiceLabel(liveProtocol, language);
   const liveProtocolEndpoint = providerProtocolEndpointHint(liveProtocol);
@@ -4812,10 +4912,7 @@ export function CoachSettingsView({
     onSaveProviderProfile && profileDraftReady && (providerHasDraftChanges || !provider.profileId),
   );
   const localizedProviderProfilesLabel = providerDetailLabel(language, "savedProfiles");
-  const localizedSavedProfilesDetail =
-    providerProfileCount > 0
-      ? providerDetailLabel(language, "savedProfilesAvailable")
-      : providerDetailLabel(language, "savedProfilesEmpty");
+  const localizedProviderDirectoryLabel = settingsPhrase(language, "providerDirectoryLabel");
   const localizedRefreshProfilesLabel = providerDetailLabel(language, "refreshProfiles");
   const localizedRefreshProfilesDetail = providerDetailLabel(language, "reloadProfiles");
   const localizedSaveProfileLabel = providerDetailLabel(language, "saveProfile");
@@ -4891,7 +4988,7 @@ export function CoachSettingsView({
   const localizedManualModelLabel =
     language === "zh-CN" ? "手动加入 model" : "Add model manually";
   const localizedManualModelPlaceholder =
-    language === "zh-CN" ? "例如 MiniMax-M3" : "For example MiniMax-M3";
+    language === "zh-CN" ? "例如 kimi-k3" : "For example kimi-k3";
   const localizedManualModelButton =
     language === "zh-CN" ? "加入当前 catalog" : "Add to current catalog";
   const localizedManualModelHint =
@@ -5494,7 +5591,7 @@ export function CoachSettingsView({
   const shouldRoutePrimaryToSavedProfiles =
     !providerHasDraftChanges && !providerSaved && savedProviderProfilesAvailable;
   const shouldOfferRecommendedProviderTemplate =
-    Boolean(onUseProviderTemplate) &&
+    Boolean(onUseProviderTemplateLabel) &&
     !providerSaved &&
     !providerHasDraftChanges &&
     !savedProviderProfilesAvailable;
@@ -5723,36 +5820,19 @@ export function CoachSettingsView({
     workspace_untrusted: PROVIDER_CONNECTION_DETAIL[providerConnectionReason],
   };
   const localizedResolvedAvailabilityDetail = PROVIDER_SETUP_DETAIL_COPY[providerSetupReason];
-  const canApplyMiniMaxRecovery =
-    miniMaxLikeProvider && Boolean(onUseProviderTemplate) && !providerHasDraftChanges;
-  const shouldOfferMiniMaxDefaults =
-    canApplyMiniMaxRecovery &&
-    (providerFailureCategory === "model_not_found" || providerFailureCategory === "model_unsupported" || providerFailureCategory === "model_not_supported");
-  const shouldOfferMiniMaxKeyReset =
-    canApplyMiniMaxRecovery &&
-    (providerFailureCategory === "invalid_key_or_permission" ||
-      providerFailureCategory === "invalid_api_key" ||
-      providerFailureCategory === "authentication_failed");
   useEffect(() => {
     if (!providerProfilesFocusRequested) {
       return;
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      const panel = providerProfilesPanelRef.current;
-      if (!panel) {
+      const directory = providerDirectoryRef.current;
+      if (!directory) {
         return;
       }
 
-      const providerDetails = panel.closest<HTMLDetailsElement>(
-        ".coach-settings-view__provider-detail",
-      );
-      if (providerDetails) {
-        providerDetails.open = true;
-      }
-      panel.open = true;
-      panel.scrollIntoView({ block: "nearest" });
-      const nextButton = panel.querySelector<HTMLButtonElement>(
+      directory.scrollIntoView({ block: "nearest" });
+      const nextButton = directory.querySelector<HTMLButtonElement>(
         ".settings-provider-profile:not(:disabled)",
       );
       nextButton?.focus();
@@ -5762,8 +5842,28 @@ export function CoachSettingsView({
     return () => window.cancelAnimationFrame(frameId);
   }, [providerProfiles.length, providerProfilesFocusRequested]);
 
+  useEffect(() => {
+    if (!providerTemplatesFocusRequested) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const templates = providerTemplatesRef.current;
+      if (!templates) {
+        return;
+      }
+
+      templates.scrollIntoView({ block: "nearest" });
+      templates
+        .querySelector<HTMLButtonElement>(".settings-provider-directory__item")
+        ?.focus();
+      setProviderTemplatesFocusRequested(false);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [providerTemplatesFocusRequested]);
+
   const openSavedProviderProfiles = () => {
-    setProviderDetailRequested(true);
     setProviderProfilesFocusRequested(true);
   };
 
@@ -5774,18 +5874,6 @@ export function CoachSettingsView({
 
     const frameId = window.requestAnimationFrame(() => {
       const apiKeyInput = apiKeyInputRef.current;
-      const providerDetails = apiKeyInput?.closest<HTMLDetailsElement>(
-        ".coach-settings-view__provider-detail",
-      );
-      const connectionFields = apiKeyInput?.closest<HTMLDetailsElement>(
-        ".settings-sheet__minor-panel",
-      );
-      if (providerDetails) {
-        providerDetails.open = true;
-      }
-      if (connectionFields) {
-        connectionFields.open = true;
-      }
       apiKeyInput?.scrollIntoView({ block: "center" });
       apiKeyInput?.focus({ preventScroll: true });
       setProviderApiKeyFocusRequested(false);
@@ -5795,13 +5883,31 @@ export function CoachSettingsView({
   }, [providerApiKeyFocusRequested, providerDetailRequested]);
 
   const openProviderDetails = (focusApiKey = false) => {
+    setConnectionView("edit");
     setProviderDetailRequested(true);
     if (focusApiKey) {
       setProviderApiKeyFocusRequested(true);
     }
   };
   const openProviderApiKey = () => openProviderDetails(true);
+  const showConnectionSummary =
+    providerSaved && !providerHasDraftChanges && connectionView === "auto";
+  const showProviderTemplates =
+    Boolean(onUseProviderTemplateLabel) && (!providerSaved || connectionView === "add");
+  const showConnectionForm =
+    !providerSaved || providerHasDraftChanges || connectionView === "edit";
+  const showAvailabilityStrip =
+    showConnectionForm ||
+    (showConnectionSummary && resolvedAvailabilityTone !== "connected");
+  const connectionHost = (provider.baseUrl || providerDraft.baseUrl || "")
+    .replace(/^https?:\/\//i, "")
+    .split("/")[0];
+  const focusProviderTemplatePicker = () => {
+    setConnectionView("add");
+    setProviderTemplatesFocusRequested(true);
+  };
   const focusDraftModelPicker = () => {
+    setConnectionView("edit");
     setProviderDetailRequested(true);
     setModelPickerOpen(true);
     window.requestAnimationFrame(() => {
@@ -5818,7 +5924,7 @@ export function CoachSettingsView({
     });
   };
   const displayAvailabilityHeadline = shouldOfferRecommendedProviderTemplate
-    ? settingsPhrase(language, "useMiniMaxProfile")
+    ? settingsPhrase(language, "chooseProviderTemplate")
     : shouldRoutePrimaryToSavedProfiles
       ? language === "zh-CN"
         ? "先应用一个已保存的 profile"
@@ -5832,7 +5938,7 @@ export function CoachSettingsView({
       ? `${workspaceRootReminder} `
       : ""
   ) + (shouldOfferRecommendedProviderTemplate
-    ? settingsPhrase(language, "useMiniMaxProfileDetail")
+    ? settingsPhrase(language, "chooseProviderTemplateDetail")
     : shouldRoutePrimaryToSavedProfiles
       ? language === "zh-CN"
         ? "当前工作区还没有启用中的 provider，但下面已经有可复用的 profiles。"
@@ -5853,16 +5959,12 @@ export function CoachSettingsView({
       : shouldWaitForDraftTest
         ? settingsStatusPhrase(language, "checking")
         : shouldRepairProviderCredentials
-          ? settingsPhrase(language, "reenterMiniMaxKey")
+          ? settingsPhrase(language, "addApiKey")
         : providerHasDraftChanges && canSaveProviderConnection
           ? saveProviderConnectionLabel
           : providerHasDraftChanges
           ? settingsPhrase(language, "testDraftConnection")
-          : shouldOfferMiniMaxDefaults
-            ? settingsPhrase(language, "useMiniMaxDefaults")
-            : shouldOfferMiniMaxKeyReset
-              ? settingsPhrase(language, "reenterMiniMaxKey")
-              : providerNeedsRetest
+          : providerNeedsRetest
                 ? copy.test
                 : shouldRoutePrimaryToSavedProfiles
                   ? language === "zh-CN"
@@ -5896,11 +5998,7 @@ export function CoachSettingsView({
           : providerNeedsRetest
             ? settingsPhrase(language, "verifyConnectionDetail")
             : canRetestProvider
-              ? shouldOfferMiniMaxDefaults
-                ? settingsPhrase(language, "useMiniMaxDefaultsDetail")
-                : shouldOfferMiniMaxKeyReset
-                  ? settingsPhrase(language, "reenterMiniMaxKeyDetail")
-                  : settingsPhrase(language, "testCurrentConnection")
+              ? settingsPhrase(language, "testCurrentConnection")
               : shouldRoutePrimaryToSavedProfiles
                 ? language === "zh-CN"
                   ? "\u76F4\u63A5\u6253\u5F00\u4E0B\u65B9\u7684 profiles\u3002"
@@ -5923,9 +6021,7 @@ export function CoachSettingsView({
           ? <RefreshIcon size={14} />
           : shouldRepairProviderCredentials
             ? <GearIcon size={14} />
-          : shouldOfferMiniMaxDefaults || shouldOfferMiniMaxKeyReset
-            ? <LightningIcon size={14} />
-            : canRetestProvider
+          : canRetestProvider
               ? <RefreshIcon size={14} />
               : shouldOpenProviderDetails
                 ? <GearIcon size={14} />
@@ -5940,24 +6036,20 @@ export function CoachSettingsView({
         : shouldFocusDraftApiKey
           ? openProviderApiKey
         : shouldCompleteDraftSetup
-        ? openProviderDetails
+        ? () => openProviderDetails()
         : shouldWaitForDraftTest
           ? undefined
           : shouldRepairProviderCredentials
             ? openProviderApiKey
-          : shouldOfferMiniMaxDefaults || shouldOfferMiniMaxKeyReset
-            ? onUseProviderTemplate
-            : shouldRoutePrimaryToSavedProfiles
+          : shouldRoutePrimaryToSavedProfiles
               ? openSavedProviderProfiles
               : providerHasDraftChanges && canSaveProviderConnection
                 ? onSaveProvider
               : canRetestProvider
                 ? onTestProvider
                 : shouldOpenProviderDetails
-                  ? openProviderDetails
+                  ? () => openProviderDetails()
                   : onSaveProvider;
-  const canOfferMiniMaxRecoveryAction =
-    canRetestProvider && miniMaxLikeProvider && Boolean(onUseProviderTemplate);
   const canRestartSidecar =
     providerFailureCategory === "sidecar_unavailable" && Boolean(onRestartSidecar);
   const effectiveAvailabilityPrimaryCta: {
@@ -5968,10 +6060,10 @@ export function CoachSettingsView({
   } =
     shouldOfferRecommendedProviderTemplate
       ? {
-          label: settingsPhrase(language, "useMiniMaxProfile"),
-          detail: settingsPhrase(language, "useMiniMaxProfileDetail"),
+          label: settingsPhrase(language, "chooseProviderTemplate"),
+          detail: settingsPhrase(language, "chooseProviderTemplateDetail"),
           icon: <LightningIcon size={14} />,
-          action: onUseProviderTemplate,
+          action: focusProviderTemplatePicker,
         }
       : canRestartSidecar
         ? {
@@ -5979,40 +6071,14 @@ export function CoachSettingsView({
             icon: <RefreshIcon size={14} />,
             action: onRestartSidecar,
           }
-        : canOfferMiniMaxRecoveryAction && providerFailureCategory === "model_not_found"
-          ? {
-              label: settingsPhrase(language, "useMiniMaxDefaults"),
-              detail: settingsPhrase(language, "useMiniMaxDefaultsDetail"),
-              icon: <LightningIcon size={14} />,
-              action: onUseProviderTemplate,
-            }
-          : canOfferMiniMaxRecoveryAction &&
-              (providerFailureCategory === "model_unsupported" ||
-                providerFailureCategory === "model_not_supported")
-            ? {
-                label: settingsPhrase(language, "useMiniMaxDefaults"),
-                detail: settingsPhrase(language, "useMiniMaxDefaultsDetail"),
-                icon: <LightningIcon size={14} />,
-                action: onUseProviderTemplate,
-              }
-            : shouldRepairProviderCredentials
+        : shouldRepairProviderCredentials
               ? {
-                  label: settingsPhrase(language, "reenterMiniMaxKey"),
+                  label: settingsPhrase(language, "addApiKey"),
                   detail: settingsPhrase(language, "addApiKeyDetail"),
                   icon: <GearIcon size={14} />,
                   action: openProviderApiKey,
                 }
-              : canOfferMiniMaxRecoveryAction &&
-                  (providerFailureCategory === "invalid_key_or_permission" ||
-                    providerFailureCategory === "invalid_api_key" ||
-                    providerFailureCategory === "authentication_failed")
-                ? {
-                    label: settingsPhrase(language, "reenterMiniMaxKey"),
-                    detail: settingsPhrase(language, "reenterMiniMaxKeyDetail"),
-                    icon: <LightningIcon size={14} />,
-                    action: onUseProviderTemplate,
-                  }
-                : providerSaved && providerNeedsApiKey && !providerHasDraftChanges
+              : providerSaved && providerNeedsApiKey && !providerHasDraftChanges
                   ? {
                       label: settingsPhrase(language, "addApiKey"),
                       detail: settingsPhrase(language, "addApiKeyDetail"),
@@ -6029,6 +6095,73 @@ export function CoachSettingsView({
     !canRetestProvider || effectiveAvailabilityPrimaryCta.action !== onTestProvider;
   const effectiveAvailabilityPrimaryTone =
     availabilityMode === "ready" && !providerHasDraftChanges ? "ghost" : "accent";
+  const connectionSummaryCard = showConnectionSummary ? (
+    <div className="settings-connection-summary">
+      <div className="settings-connection-summary__main">
+        <div className="settings-connection-summary__identity">
+          <span
+            className="settings-connection-summary__dot"
+            data-state={resolvedAvailabilityTone}
+            aria-hidden="true"
+          />
+          <strong className="settings-connection-summary__name">
+            {provider.profileLabel || provider.name || providerDraft.name || provider.profileId ||
+              settingsPhrase(language, "currentConnectionPrefix")}
+          </strong>
+          <StatusPill tone={resolvedAvailabilityTone}>{lastTestLabel}</StatusPill>
+        </div>
+        <div className="settings-connection-summary__meta">
+          <span className="settings-connection-summary__model" title={provider.model || ""}>
+            {provider.model || providerDraft.model || copy.notConfigured}
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>{liveProtocolLabel}</span>
+          {connectionHost ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="settings-connection-summary__host" title={provider.baseUrl}>
+                {connectionHost}
+              </span>
+            </>
+          ) : null}
+        </div>
+        {lastTestDetail ? (
+          <p className="settings-sheet__note settings-sheet__note--compact">{lastTestDetail}</p>
+        ) : null}
+        {resolvedWorkspaceTrustState !== "trusted" && !showAvailabilityStrip ? (
+          <p
+            className="settings-sheet__note settings-sheet__note--warning"
+            data-workspace-trust-state={resolvedWorkspaceTrustState}
+            role="status"
+          >
+            {workspaceTrustSentence}
+          </p>
+        ) : null}
+      </div>
+      <div className="settings-actions settings-actions--compact">
+        {showAvailabilityPrimaryAction && !showAvailabilityStrip ? (
+          <ActionButton
+            fullWidth={false}
+            icon={effectiveAvailabilityPrimaryCta.icon}
+            label={effectiveAvailabilityPrimaryCta.label}
+            detail={effectiveAvailabilityPrimaryCta.detail}
+            ariaLabel={effectiveAvailabilityPrimaryCta.label}
+            onClick={effectiveAvailabilityPrimaryCta.action}
+            disabled={!effectiveAvailabilityPrimaryCta.action}
+            title={effectiveAvailabilityPrimaryCta.detail}
+          />
+        ) : null}
+        <ActionButton
+          fullWidth={false}
+          icon={<GearIcon size={14} />}
+          label={settingsPhrase(language, "editConfiguration")}
+          ariaLabel={settingsPhrase(language, "editConfiguration")}
+          detail={settingsPhrase(language, "editConfigurationDetail")}
+          onClick={() => setConnectionView("edit")}
+        />
+      </div>
+    </div>
+  ) : null;
   const appliedProviderFactValue =
     (providerSaved
       ? provider.profileLabel?.trim() || provider.name?.trim()
@@ -6036,13 +6169,6 @@ export function CoachSettingsView({
         ? providerDraft.name.trim()
         : undefined) ||
     copy.notConfigured;
-  const appliedProviderFactDetail = compactSummaryValue(
-    [
-      providerSaved || providerHasDraftChanges ? localizedSelectedProtocolLabel : undefined,
-      providerSaved ? provider.baseUrl?.trim() : providerHasDraftChanges ? providerDraft.baseUrl.trim() : undefined,
-    ].filter(Boolean) as string[],
-    providerSummaryText,
-  );
   const appliedModelFactValue =
     (providerSaved
       ? provider.resolvedModel?.trim() || provider.model?.trim()
@@ -6050,17 +6176,6 @@ export function CoachSettingsView({
         ? providerDraft.model.trim()
         : undefined) ||
     copy.notConfigured;
-  const appliedModelLimit = readProviderModelTokenLimit(provider.modelTokenLimits, appliedModelFactValue);
-  const appliedModelFactDetail = compactSummaryValue(
-    [
-      copy.detectedModel,
-      appliedModelLimit?.contextWindowTokens ? `ctx ${appliedModelLimit.contextWindowTokens}` : undefined,
-      appliedModelLimit?.maxOutputTokens ? `out ${appliedModelLimit.maxOutputTokens}` : undefined,
-      provider.contextWindowTokens ? `ctx ${provider.contextWindowTokens}` : undefined,
-      provider.maxOutputTokens ? `out ${provider.maxOutputTokens}` : undefined,
-    ].filter(Boolean) as string[],
-    providerSummaryText,
-  );
   const providerPreviewSummaryText = shortenSummary(
     compactSummaryValue(
       [
@@ -6074,38 +6189,6 @@ export function CoachSettingsView({
     44,
   );
   const shouldShowProviderConnectionSummary = providerSaved || providerHasDraftChanges;
-  const availabilityFacts = [
-    {
-      id: "provider",
-      label: copy.provider,
-      value: appliedProviderFactValue,
-      tone: providerHasDraftChanges ? "pending" : provider.configured ? "connected" : "offline",
-      detail: appliedProviderFactDetail,
-      presentation: "text" as const,
-    },
-    {
-      id: "model",
-      label: copy.model,
-      value: appliedModelFactValue,
-      tone:
-        providerHasDraftChanges
-          ? "pending"
-          : provider.resolvedModel?.trim() || provider.model?.trim()
-            ? "connected"
-            : "offline",
-      detail: appliedModelFactDetail,
-      presentation: "text" as const,
-    },
-    {
-      id: "test",
-      label: copy.lastTest,
-      value: lastTestLabel,
-      tone: providerTestPassed ? "connected" : providerSaved ? "warn" : "offline",
-      detail: localizedLastTestDetailText ?? settingsPhrase(language, "notTested"),
-      presentation: "pill" as const,
-    },
-  ] as const;
-  const shouldShowAvailabilityFacts = providerSaved;
   const showAvailabilityChecklist =
     providerHasDraftChanges || (!providerCoachReady && !shouldRoutePrimaryToSavedProfiles);
   const renderProviderSetupChecks = (className: string) => (
@@ -6653,104 +6736,172 @@ export function CoachSettingsView({
         </div>
       </details>
     ) : null;
-  const providerProfilesPanel =
-    providerProfiles.length > 0 || canSaveProviderProfile || Boolean(onUseProviderTemplate) ? (
-      <details
-        ref={providerProfilesPanelRef}
-        className="settings-sheet__minor-panel settings-sheet__provider-profiles"
-        open={providerProfilesOpen}
-        onToggle={(event) => setProviderProfilesOpen(event.currentTarget.open)}
+  const providerListBar =
+    providerProfiles.length > 0 ||
+    canSaveProviderProfile ||
+    (providerSaved && (onRefreshProviderProfiles || onUseProviderTemplateLabel)) ? (
+      <div
+        ref={providerDirectoryRef}
+        className="settings-provider-bar"
+        role="group"
+        aria-label={localizedProviderProfilesLabel}
       >
-        <summary>
-          {localizedProviderProfilesLabel} <span aria-hidden="true">·</span>{" "}
-          <span className="settings-section-count">
-            {providerProfileCount > 0 ? providerProfileCount : providerProfiles.length}
-          </span>
-        </summary>
-        <div className="settings-sheet__minor-body settings-provider-profile-panel">
-          {!providerSaved || canSaveProviderProfile ? (
-            <p className="settings-provider-profile-panel__note">
-              {canSaveProviderProfile ? localizedSaveProfileDetail : localizedSavedProfilesDetail}
-            </p>
-          ) : null}
-
-          {providerProfiles.length > 0 ? (
-            <div className="settings-provider-profile-list" role="list" aria-label={providerSummaryText}>
-              {providerProfiles.map((profile) => (
-                <button
-                  key={profile.id}
-                  className={`settings-provider-profile ${profile.isActive ? "is-active" : ""}`}
-                  type="button"
-                  aria-pressed={profile.isActive}
-                  title={profile.detail ?? profile.label}
-                  disabled={!onSwitchProviderProfile || profile.isActive}
-                  onClick={() => {
-                    resetModelPickerSearch();
-                    setModelPickerOpen(false);
-                    onSwitchProviderProfile?.(profile.id);
-                  }}
-                >
-                  <span className="settings-provider-profile__row">
-                    <span className="settings-provider-profile__label">{profile.label}</span>
-                    <span className="settings-provider-profile__meta">
-                      <span className="settings-provider-profile__model">
-                        {profile.model || provider.model}
-                      </span>
-                      {profile.isActive ? (
-                        <span className="settings-provider-profile__state" aria-hidden="true">
-                          <CheckMarkIcon size={12} />
-                        </span>
-                      ) : null}
-                    </span>
+        <div
+          className="settings-sheet__provider-profiles settings-provider-bar__content"
+          aria-label={providerSummaryText}
+        >
+          <div className="settings-provider-bar__list" role="list">
+          {providerProfiles.map((profile) => (
+            <button
+              key={profile.id}
+              className={`settings-provider-profile settings-provider-profile--bar ${
+                profile.isActive ? "is-active" : ""
+              }`}
+              type="button"
+              role="listitem"
+              aria-pressed={profile.isActive}
+              title={profile.detail ?? profile.label}
+              disabled={!onSwitchProviderProfile || profile.isActive}
+              onClick={() => {
+                resetModelPickerSearch();
+                setModelPickerOpen(false);
+                setConnectionView("auto");
+                onSwitchProviderProfile?.(profile.id);
+              }}
+            >
+              <span className="settings-provider-profile__row">
+                <span
+                  className="settings-provider-profile__dot"
+                  data-state={profile.isActive ? "active" : "idle"}
+                  aria-hidden="true"
+                />
+                <span className="settings-provider-profile__label">{profile.label}</span>
+                <span className="settings-provider-profile__meta">
+                  <span className="settings-provider-profile__model">
+                    {profile.model || provider.model}
                   </span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="settings-actions settings-actions--compact">
-            {canSaveProviderProfile ? (
-              <ActionButton
-                fullWidth={false}
-                icon={<CheckMarkIcon size={14} />}
-                label={localizedSaveProfileLabel}
-                detail={localizedSaveProfileDetail}
-                ariaLabel={localizedSaveProfileLabel}
+                  {profile.isActive ? (
+                    <span className="settings-provider-profile__state" aria-hidden="true">
+                      <CheckMarkIcon size={12} />
+                    </span>
+                  ) : null}
+                </span>
+              </span>
+            </button>
+          ))}
+          </div>
+          <div className="settings-provider-bar__actions">
+            {canSaveProviderProfile && !showConnectionSummary ? (
+              <button
+                type="button"
+                className="settings-provider-bar__add"
+                title={localizedSaveProfileDetail}
+                aria-label={localizedSaveProfileLabel}
                 onClick={onSaveProviderProfile}
-              />
+              >
+                <CheckMarkIcon size={13} />
+                <span>{localizedSaveProfileLabel}</span>
+              </button>
             ) : null}
-            <ActionButton
-              fullWidth={false}
-              icon={<RefreshIcon size={14} />}
-              label={localizedRefreshProfilesLabel}
-              detail={localizedRefreshProfilesDetail}
-              onClick={onRefreshProviderProfiles}
-            />
-            <ActionButton
-              fullWidth={false}
-              icon={<LightningIcon size={14} />}
-              label={settingsPhrase(language, "useMiniMaxProfile")}
-              detail={settingsPhrase(language, "useMiniMaxProfileDetail")}
-              onClick={onUseProviderTemplate}
-            />
-            <ActionButton
-              fullWidth={false}
-              icon={<GearIcon size={14} />}
-              label={copy.openConfig}
-              detail={settingsPhrase(language, "workspaceFile")}
-              onClick={onOpenConfig}
-            />
-            <ActionButton
-              fullWidth={false}
-              icon={<TrashIcon size={14} />}
-              label={copy.clear}
-              detail={settingsPhrase(language, "clearDraft")}
-              onClick={onClearProvider}
-            />
+            {onRefreshProviderProfiles ? (
+              <button
+                type="button"
+                className="settings-provider-bar__icon-button"
+                title={localizedRefreshProfilesLabel}
+                aria-label={localizedRefreshProfilesLabel}
+                onClick={onRefreshProviderProfiles}
+              >
+                <RefreshIcon size={14} />
+              </button>
+            ) : null}
+            {providerSaved && onUseProviderTemplateLabel && connectionView !== "add" ? (
+              <button
+                type="button"
+                className="settings-provider-bar__add"
+                onClick={() => setConnectionView("add")}
+              >
+                <PlusIcon size={13} />
+                <span>{settingsPhrase(language, "addProvider")}</span>
+              </button>
+            ) : null}
           </div>
         </div>
-      </details>
+      </div>
     ) : null;
+  const providerDirectory = showProviderTemplates ? (
+    <div className="settings-provider-directory-wrap">
+      <div
+        ref={providerTemplatesRef}
+        className="settings-provider-directory"
+        role="group"
+        aria-label={localizedProviderDirectoryLabel}
+      >
+        {PROVIDER_TEMPLATE_GROUP_ORDER.map((group) => {
+          const groupLabels = PROVIDER_TEMPLATE_LABELS.filter(
+            (templateLabel) => PROVIDER_TEMPLATE_GROUPS[templateLabel] === group,
+          );
+          if (groupLabels.length === 0) {
+            return null;
+          }
+          return (
+            <div className="settings-provider-directory__group" key={group}>
+              <div className="settings-provider-directory__heading">
+                {providerTemplateGroupLabel(language, group)}
+                <span className="settings-section-count" aria-hidden="true">
+                  {groupLabels.length}
+                </span>
+              </div>
+              <div role="list">
+                {groupLabels.map((templateLabel) => (
+                  <button
+                    key={templateLabel}
+                    type="button"
+                    className="settings-provider-directory__item"
+                    onClick={() => {
+                      setConnectionView("edit");
+                      onUseProviderTemplateLabel?.(templateLabel);
+                    }}
+                  >
+                    {templateLabel}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="settings-sheet__note settings-sheet__note--compact">
+        {settingsPhrase(language, "providerDirectoryNote")}
+      </p>
+    </div>
+  ) : null;
+  const providerSecondaryActions = (
+    <div className="settings-actions settings-actions--compact">
+      {providerSaved && !providerHasDraftChanges && connectionView !== "auto" ? (
+        <ActionButton
+          fullWidth={false}
+          icon={<ChevronUpIcon size={14} />}
+          label={settingsPhrase(language, "collapseConnection")}
+          detail={settingsPhrase(language, "collapseConnectionDetail")}
+          onClick={() => setConnectionView("auto")}
+        />
+      ) : null}
+      <ActionButton
+        fullWidth={false}
+        icon={<GearIcon size={14} />}
+        label={copy.openConfig}
+        detail={settingsPhrase(language, "workspaceFile")}
+        onClick={onOpenConfig}
+      />
+      <ActionButton
+        fullWidth={false}
+        icon={<TrashIcon size={14} />}
+        label={copy.clear}
+        detail={settingsPhrase(language, "clearDraft")}
+        onClick={onClearProvider}
+      />
+    </div>
+  );
   const showProviderDetailStatePill =
     shouldShowProviderConnectionSummary &&
     (providerHasDraftChanges || !providerCoachReady || providerNeedsRetest);
@@ -6832,6 +6983,7 @@ export function CoachSettingsView({
           <div className="settings-sheet__pane" role="tabpanel">
         {activeSettingsCategory === "connection" ? (
         <section className="settings-section settings-section--panel settings-section--setup settings-section--summary">
+          {!providerSaved ? (
           <ProviderQuickSetup
             language={language}
             draft={providerDraft}
@@ -6848,6 +7000,8 @@ export function CoachSettingsView({
               }
             }}
           />
+          ) : null}
+          {showAvailabilityStrip ? (
           <div
             className={`settings-availability-strip settings-availability-strip--${resolvedAvailabilityTone}`}
             data-view-identity="true"
@@ -6889,55 +7043,8 @@ export function CoachSettingsView({
                 />
               ) : null}
             </div>
-            {false && (shouldShowProviderConnectionSummary || shouldShowAvailabilityFacts) ? (
-              <details className="settings-availability-strip__more">
-                <summary>{orientationMoreLabel}</summary>
-                {shouldShowProviderConnectionSummary ? (
-                  <span className="eyebrow">{copy.setupSection}</span>
-                ) : null}
-                {shouldShowProviderConnectionSummary ? (
-                  <span
-                    className="settings-availability-strip__meta"
-                    title={providerConnectionSummary}
-                    aria-label={providerConnectionSummary}
-                    data-full-value={providerConnectionSummary}
-                  >
-                    {providerPreviewSummaryText}
-                  </span>
-                ) : null}
-                {shouldShowAvailabilityFacts ? (
-                  <div className="settings-availability-strip__facts" aria-label={settingsPhrase(language, "connectionState")}>
-                    {availabilityFacts.map((fact) => (
-                      <div
-                        key={fact.id}
-                        className="settings-availability-fact"
-                        title={`${fact.label}: ${fact.value}. ${fact.detail}`}
-                        aria-label={`${fact.label}: ${fact.value}. ${fact.detail}`}
-                        data-availability-fact={fact.id}
-                        data-availability-value={fact.value}
-                        data-secret="false"
-                      >
-                        <span>{fact.label}</span>
-                        <strong>
-                          {fact.presentation === "text" ? (
-                            <span
-                              className={`settings-availability-fact__text is-${fact.tone}`}
-                              title={fact.value}
-                              data-availability-fact-value={fact.value}
-                            >
-                              {fact.value}
-                            </span>
-                          ) : (
-                            <StatusPill tone={fact.tone}>{fact.value}</StatusPill>
-                          )}
-                        </strong>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </details>
-            ) : null}
           </div>
+          ) : null}
 
           <div
             ref={connectionAnchorRef}
@@ -6956,92 +7063,17 @@ export function CoachSettingsView({
                 </span>
               ) : null}
             </div>
-            {showProviderDetailActions ? (
-                  <div className="settings-actions settings-actions--compact settings-actions--primary">
-                    {!modelDiscoveryGuidanceActive ? (
-                      <ActionButton
-                        fullWidth={false}
-                        icon={
-                          providerSaveBusy ? (
-                            <span className="settings-quick-setup__saving-dot" aria-hidden />
-                          ) : (
-                            <CheckMarkIcon size={14} />
-                          )
-                        }
-                        label={saveProviderConnectionLabel}
-                        ariaLabel={saveProviderConnectionLabel}
-                        detail={
-                          canSaveProviderConnection
-                            ? settingsPhrase(language, "saveToApply")
-                            : currentDraftModelPolicyMessage ??
-                              settingsPhrase(language, "saveConnectionDetail")
-                        }
-                        disabled={!canSaveProviderConnection}
-                        onClick={onSaveProvider}
-                        title={saveProviderConnectionTitle}
-                      />
-                    ) : null}
-                    {showSecondaryModelDiscoveryAction ? (
-                      <ActionButton
-                        fullWidth={false}
-                        icon={<RefreshIcon size={14} />}
-                        label={modelDiscoveryActionLabel}
-                        detail={modelDiscoveryActionDetail}
-                        disabled={!canRefreshModels}
-                        onClick={onRefreshProviderModels}
-                        title={canRefreshModels ? modelDiscoveryActionLabel : modelDiscoveryBlockedReason}
-                      />
-                    ) : null}
-                    {!modelDiscoveryGuidanceActive && showProviderDetailTestAction ? (
-                      <ActionButton
-                        fullWidth={false}
-                        icon={<DiagnosticsIcon size={14} />}
-                        label={copy.test}
-                        ariaLabel={copy.test}
-                        detail={
-                          currentDraftModelPolicyMessage ??
-                          settingsPhrase(language, "verifyConnectionDetail")
-                        }
-                        disabled={!canRetestProvider}
-                        onClick={onTestProvider}
-                        title={
-                          canRetestProvider
-                            ? providerHasDraftChanges
-                              ? settingsPhrase(language, "testDraftConnectionDetail")
-                              : copy.test
-                            : currentDraftModelPolicyMessage
-                              ? currentDraftModelPolicyMessage
-                            : !providerDraftFieldsReady
-                              ? language === "zh-CN"
-                                ? "先完成 provider、base URL 和 model，再测试连接。"
-                                : "Finish the provider, base URL, and model before testing the connection."
-                              : !providerDraftHasApiKey && !providerDraftCanReuseSavedApiKey
-                                ? language === "zh-CN"
-                                  ? "先补上 API key，再测试这组连接。"
-                                  : "Add an API key before testing this connection."
-                                : providerSaved
-                                  ? language === "zh-CN"
-                                    ? "先保存当前草稿，再测试这组连接。"
-                                    : "Save the current draft before testing this connection."
-                                  : savedProviderProfilesAvailable
-                                    ? language === "zh-CN"
-                                      ? "先启用一个已保存的 profile，再测试当前连接。"
-                                      : "Apply a saved profile before testing the current connection."
-                                    : language === "zh-CN"
-                                      ? "先完成 provider 配置，再测试连接。"
-                                      : "Finish the provider setup before testing the connection."
-                        }
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
-            {!providerCoachReady ? (
-              <p className="settings-sheet__note settings-sheet__note--warning">
-                {providerDetailRequirementNote}
-              </p>
-            ) : null}
-            {showAvailabilityChecklist ? renderProviderSetupChecks("settings-setup-checks--availability") : null}
 
+            {providerListBar}
+
+            {connectionSummaryCard}
+
+            {providerDirectory}
+
+            {!showConnectionSummary ? (
+            <>
+            {showConnectionForm ? (
+            <>
             <form
               className="settings-sheet__minor-body"
               onSubmit={(event) => {
@@ -7051,38 +7083,6 @@ export function CoachSettingsView({
                 }
               }}
             >
-              {onUseProviderTemplateLabel ? (
-                <label className="settings-field">
-                  <span>
-                    {language === "zh-CN" ? "从模板开始" : "Start from a template"}
-                  </span>
-                  <select
-                    value=""
-                    onChange={(event) => {
-                      const templateLabel = event.target.value;
-                      if (templateLabel) {
-                        onUseProviderTemplateLabel(templateLabel);
-                      }
-                    }}
-                  >
-                    <option value="">
-                      {language === "zh-CN"
-                        ? "选择服务商模板(OpenAI、DeepSeek、Ollama 等)"
-                        : "Choose a provider template (OpenAI, DeepSeek, Ollama, …)"}
-                    </option>
-                    {PROVIDER_TEMPLATE_LABELS.map((templateLabel) => (
-                      <option key={templateLabel} value={templateLabel}>
-                        {templateLabel}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="settings-sheet__note settings-sheet__note--compact">
-                    {language === "zh-CN"
-                      ? "选好后会自动填入服务地址和默认模型,你只需补上 API 密钥。"
-                      : "Picking one fills the service address and default model; you only add the API key."}
-                  </p>
-                </label>
-              ) : null}
               <div className="settings-grid settings-grid--form">
                 <label className="settings-field">
                   <span>{providerConnectionNameLabel(language)}</span>
@@ -7167,16 +7167,6 @@ export function CoachSettingsView({
                     onRun={(urls) => onSpeedTestEndpoints?.(urls)}
                     onAdopt={(url) => onProviderDraftChange({ baseUrl: url })}
                   />
-                  <button
-                    type="button"
-                    className="toolbar-button"
-                    onClick={() => setProviderDetailRequested(true)}
-                  >
-                    <GearIcon size={14} />
-                    {language === "zh-CN"
-                      ? "连接详情 · 协议与目录"
-                      : "Connection details · Protocol & catalog"}
-                  </button>
                 </CollapseSection>
                 {providerPasteHint ? (
                   <p className="settings-sheet__note settings-sheet__note--compact settings-sheet__note--warning">
@@ -7331,8 +7321,100 @@ export function CoachSettingsView({
                 <p className="inline-note settings-sheet__note">{copy.configFileNote}</p>
               ) : null}
             </form>
+
+            {showProviderDetailActions ? (
+                  <div className="settings-actions settings-actions--compact settings-actions--primary">
+                    {!modelDiscoveryGuidanceActive ? (
+                      <ActionButton
+                        fullWidth={false}
+                        icon={
+                          providerSaveBusy ? (
+                            <span className="settings-quick-setup__saving-dot" aria-hidden />
+                          ) : (
+                            <CheckMarkIcon size={14} />
+                          )
+                        }
+                        label={saveProviderConnectionLabel}
+                        ariaLabel={saveProviderConnectionLabel}
+                        detail={
+                          canSaveProviderConnection
+                            ? settingsPhrase(language, "saveToApply")
+                            : currentDraftModelPolicyMessage ??
+                              settingsPhrase(language, "saveConnectionDetail")
+                        }
+                        disabled={!canSaveProviderConnection}
+                        onClick={onSaveProvider}
+                        title={saveProviderConnectionTitle}
+                      />
+                    ) : null}
+                    {showSecondaryModelDiscoveryAction ? (
+                      <ActionButton
+                        fullWidth={false}
+                        icon={<RefreshIcon size={14} />}
+                        label={modelDiscoveryActionLabel}
+                        detail={modelDiscoveryActionDetail}
+                        disabled={!canRefreshModels}
+                        onClick={onRefreshProviderModels}
+                        title={canRefreshModels ? modelDiscoveryActionLabel : modelDiscoveryBlockedReason}
+                      />
+                    ) : null}
+                    {!modelDiscoveryGuidanceActive && showProviderDetailTestAction ? (
+                      <ActionButton
+                        fullWidth={false}
+                        icon={<DiagnosticsIcon size={14} />}
+                        label={copy.test}
+                        ariaLabel={copy.test}
+                        detail={
+                          currentDraftModelPolicyMessage ??
+                          settingsPhrase(language, "verifyConnectionDetail")
+                        }
+                        disabled={!canRetestProvider}
+                        onClick={onTestProvider}
+                        title={
+                          canRetestProvider
+                            ? providerHasDraftChanges
+                              ? settingsPhrase(language, "testDraftConnectionDetail")
+                              : copy.test
+                            : currentDraftModelPolicyMessage
+                              ? currentDraftModelPolicyMessage
+                            : !providerDraftFieldsReady
+                              ? language === "zh-CN"
+                                ? "先完成 provider、base URL 和 model，再测试连接。"
+                                : "Finish the provider, base URL, and model before testing the connection."
+                              : !providerDraftHasApiKey && !providerDraftCanReuseSavedApiKey
+                                ? language === "zh-CN"
+                                  ? "先补上 API key，再测试这组连接。"
+                                  : "Add an API key before testing this connection."
+                                : providerSaved
+                                  ? language === "zh-CN"
+                                    ? "先保存当前草稿，再测试这组连接。"
+                                    : "Save the current draft before testing this connection."
+                                  : savedProviderProfilesAvailable
+                                    ? language === "zh-CN"
+                                      ? "先启用一个已保存的 profile，再测试当前连接。"
+                                      : "Apply a saved profile before testing the current connection."
+                                    : language === "zh-CN"
+                                      ? "先完成 provider 配置，再测试连接。"
+                                      : "Finish the provider setup before testing the connection."
+                        }
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+            </>
+            ) : null}
+            {providerSecondaryActions}
+            {showConnectionForm && !providerCoachReady ? (
+              <p className="settings-sheet__note settings-sheet__note--warning">
+                {providerDetailRequirementNote}
+              </p>
+            ) : null}
+            {showConnectionForm && showAvailabilityChecklist ? renderProviderSetupChecks("settings-setup-checks--availability") : null}
+            </>
+            ) : null}
           </div>
 
+          {showConnectionForm ? (
           <div className="settings-sheet__support coach-settings-view__provider-detail">
             <CollapseSection
               level={2}
@@ -7595,11 +7677,10 @@ export function CoachSettingsView({
 
               {thinkingControl}
               {providerCatalogPanel}
-
-              {providerProfilesPanel}
             </div>
             </CollapseSection>
           </div>
+          ) : null}
 
         </section>
         ) : null}

@@ -54,6 +54,7 @@ import {
 import { normalizeProviderCapabilityTruth } from "../../../../shared/src/providerTest";
 import { isComposerLanguage } from "../../../../shared/src/types";
 import { normalizeCoachOrientationRecord } from "../../../../shared/src/coachOrientationGovernance";
+import { PROVIDER_TEMPLATE_PRESETS } from "../../../../shared/src/providerTemplateCatalog";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
 import {
   normalizePlanRuntimeRecovery,
@@ -2575,14 +2576,20 @@ export async function saveBrowserPreviewProviderProfile(
 }
 
 export async function useBrowserPreviewProviderTemplate(
+  templateLabel?: string,
   sessionId?: string,
 ): Promise<PreviewProviderActionResult> {
+  const preset = (templateLabel && PROVIDER_TEMPLATE_PRESETS[templateLabel]) || {
+    protocol: "openai_chat_completions_compatible",
+    baseUrl: "",
+    model: "",
+  };
   return saveBrowserPreviewProviderCore(
     {
-      name: "MiniMax",
-      protocol: "openai_chat_completions_compatible",
-      baseUrl: "https://api.minimaxi.com/v1",
-      model: "MiniMax-M3",
+      name: templateLabel || "Custom (OpenAI-compatible)",
+      protocol: preset.protocol,
+      baseUrl: preset.baseUrl,
+      model: preset.model,
     },
     sessionId,
     "template",

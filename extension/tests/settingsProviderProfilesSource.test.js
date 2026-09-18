@@ -17,7 +17,7 @@ const settingsViewPath = path.resolve(
 );
 
 function extractProviderProfilesPanel(source) {
-  const start = source.indexOf('const providerProfilesPanel =');
+  const start = source.indexOf('const providerDirectory =');
   if (start < 0) {
     return '';
   }
@@ -38,7 +38,6 @@ test('settings provider profile actions are wired through App and rendered in Se
 
   assert.match(appSource, /onSaveProviderProfile=\{\(\) => \{/);
   assert.match(appSource, /commandId:\s*trainerCommands\.saveProviderProfile/);
-  assert.match(appSource, /onUseProviderTemplate=\{\(\) => useProviderTemplateByLabel\("MiniMax"\)\}/);
   assert.match(appSource, /onUseProviderTemplateLabel=\{useProviderTemplateByLabel\}/);
   assert.match(appSource, /commandId:\s*trainerCommands\.useProviderTemplate/);
   assert.match(appSource, /templateLabel,/);
@@ -65,9 +64,9 @@ test('settings provider profile actions are wired through App and rendered in Se
     settingsSource,
     /const localizedProviderProfilesLabel = providerDetailLabel\(language, "savedProfiles"\);/,
   );
-  assert.match(providerProfilesPanel, /settings-provider-profile-panel__note/);
+  assert.match(providerProfilesPanel, /settings-provider-directory/);
+  assert.match(providerProfilesPanel, /PROVIDER_TEMPLATE_GROUP_ORDER\.map/);
   assert.doesNotMatch(providerProfilesPanel, /settings-sheet__summary-grid/);
-  assert.doesNotMatch(providerProfilesPanel, /open=\{providerProfileCount > 1 \|\| \(!providerSaved && providerProfileCount > 0\)\}/);
 });
 
 test('provider details keep connection status labels localized in every supported language', () => {

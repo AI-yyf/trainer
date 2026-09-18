@@ -34,28 +34,42 @@ function providerDetail(page) {
   return page.locator(".coach-settings-view__provider-detail");
 }
 
-function connectionFields(detail) {
-  return detail.locator("details.settings-sheet__minor-panel").filter({
-    hasText: "Connection fields and key",
-  });
+function connectionFields(page) {
+  return page.locator('form.settings-sheet__minor-body');
 }
 
 async function openDetails(page) {
+  // Connected state shows the compact summary card — enter edit mode first.
+  // Applying a provider template remounts the settings view, so the edit click
+  // may need a second attempt once pending host updates settle.
+  const editButton = page.getByRole("button", { name: /Edit configuration|编辑配置/ });
+  if (await editButton.count()) {
+    await editButton.click();
+  }
   const detail = providerDetail(page);
-  await expect(detail).toBeVisible();
-  if (!(await detail.evaluate((element) => element.open))) {
-    await detail.locator(":scope > summary").click();
+  try {
+    await expect(detail).toBeVisible({ timeout: 3000 });
+  } catch {
+    if (await editButton.count()) {
+      await editButton.click();
+    }
+    await expect(detail).toBeVisible();
   }
-  const fields = connectionFields(detail);
-  if (!(await fields.evaluate((element) => element.open))) {
-    await fields.locator(":scope > summary").click();
+  const sectionHeader = detail.locator(".collapse-section__header");
+  try {
+    if (await sectionHeader.count() && (await sectionHeader.getAttribute("aria-expanded")) !== "true") {
+      await sectionHeader.click();
+    }
+  } catch {
+    // A pending provider update can remount the view mid-interaction.
   }
+  const fields = connectionFields(page);
+  await expect(fields).toBeVisible();
   return { detail, fields };
 }
 
-async function openModelPicker(detail) {
-  const fields = connectionFields(detail);
-  const picker = fields.locator("details.settings-model-picker");
+async function openModelPicker(page) {
+  const picker = connectionFields(page).locator("details.settings-model-picker");
   if (!(await picker.evaluate((element) => element.open))) {
     await picker.locator(":scope > summary").click();
   }
@@ -65,9 +79,6 @@ async function openModelPicker(detail) {
 async function openProfiles(page) {
   const profiles = page.locator(".settings-sheet__provider-profiles");
   await expect(profiles).toBeVisible();
-  if (!(await profiles.evaluate((element) => element.open))) {
-    await profiles.locator(":scope > summary").click();
-  }
   return profiles;
 }
 
@@ -144,11 +155,16 @@ test.describe("human Provider configuration preview", () => {
     await expect(initial.fields.getByLabel("API Key", { exact: true })).toHaveValue("");
     await expect(page.locator(".settings-provider-profile")).toHaveCount(0);
 
-    await page.getByRole("button", { name: /Use MiniMax profile|MiniMax template/i }).click();
+    await page
+      .locator(".settings-provider-directory__item")
+      .filter({ hasText: /^MiniMax$/ })
+      .click();
+    // Applying a template lands directly in edit mode so the API key can be
+    // entered right away — the applied values stream into the form.
     await expect(initial.fields.getByLabel("Service root")).toHaveValue("https://api.minimaxi.com/v1");
     await expect(initial.fields.getByLabel("Connection name (optional)")).toHaveValue("MiniMax");
 
-    const picker = await openModelPicker(initial.detail);
+    const picker = await openModelPicker(page);
     const modelSelect = picker.getByRole("combobox", { name: "Model", exact: true });
     const hasReasoningOption =
       (await modelSelect.count()) > 0 &&
@@ -186,18 +202,17 @@ test.describe("human Provider configuration preview", () => {
     expect(JSON.stringify(saved)).not.toContain(credential);
     expect(saved.requestDefaults).toMatchObject({ extra_body: { thinking: { type: "disabled" } } });
 
-    const testButton = page.getByRole("button", { name: "Test Connection", exact: true }).first();
+    const testButton = page.getByRole("button", { name: /Test Connection|Test again/ }).first();
     await expect(testButton).toBeEnabled();
     await testButton.click();
-    await expect(page.locator('[data-availability-fact="test"]')).toContainText("Failed");
     await expect(page.locator(".notice.notice--error")).toBeVisible();
     expect(testPayloads[0].api_key).toBe(credential);
     expect(testPayloads[0].provider.apiKey).toBeUndefined();
     expect(JSON.stringify(testPayloads[0].provider)).not.toContain(credential);
     expect(await persistedProvider(page)).not.toHaveProperty("lastTestResult.ok", true);
 
-    await openModelPicker(initial.detail);
-    const retryPicker = initial.detail.locator("details.settings-model-picker");
+    await openModelPicker(page);
+    const retryPicker = connectionFields(page).locator("details.settings-model-picker");
     const retrySelect = retryPicker.getByRole("combobox", { name: "Model", exact: true });
     const hasChatOption =
       (await retrySelect.count()) > 0 &&
@@ -212,8 +227,8 @@ test.describe("human Provider configuration preview", () => {
     const retrySave = page.getByRole("button", { name: `Save and use ${retryModel}`, exact: true });
     if (await retrySave.isEnabled()) await retrySave.click();
     await testButton.click();
-    await expect(page.locator('[data-availability-fact="test"]')).toContainText("Passed");
-    await expect(page.locator(".settings-availability-strip")).toContainText("Ready");
+    await expect(page.locator(".notice.notice--success")).toBeVisible();
+    expect(await persistedProvider(page)).toHaveProperty("lastTestResult.ok", true);
     expect(testPayloads[1].provider.model).toBe(retryModel);
     expect(testPayloads[1].api_key).toBe(credential);
 

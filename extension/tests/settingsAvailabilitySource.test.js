@@ -56,15 +56,6 @@ function readStylesSource() {
   return fs.readFileSync(stylesPath, 'utf8');
 }
 
-function availabilityFactsSource(source) {
-  const start = source.indexOf('const availabilityFacts = [');
-  const end = source.indexOf('const showAvailabilityChecklist =', start);
-
-  assert.ok(start >= 0, 'expected the availability facts declaration');
-  assert.ok(end > start, 'expected the availability facts declaration to be bounded');
-  return source.slice(start, end);
-}
-
 function availabilityStripSource(source) {
   const start = source.indexOf('className={`settings-availability-strip');
   // The strip stays a self-contained read-only region; the provider
@@ -145,7 +136,6 @@ test('settings workspace authority keeps a separately reported remote identity v
 
 test('settings keeps availability as the compact source of provider truth', () => {
   const source = readSettingsSource();
-  const facts = availabilityFactsSource(source);
   const strip = availabilityStripSource(source);
 
   assert.match(
@@ -156,14 +146,15 @@ test('settings keeps availability as the compact source of provider truth', () =
   assert.match(source, /const localizedResolvedAvailabilityHeadline =/);
   assert.match(source, /const localizedResolvedAvailabilityDetail =/);
   assert.match(source, /const effectiveAvailabilityPrimaryCta:/);
-  assert.match(facts, /id: "provider"/);
-  assert.match(facts, /id: "model"/);
-  assert.match(facts, /id: "test"/);
-  assert.match(facts, /value: appliedProviderFactValue,/);
-  assert.match(facts, /value: appliedModelFactValue,/);
   assert.match(strip, /<StatusPill tone=\{resolvedAvailabilityTone\}>\{localizedResolvedAvailabilityStatusLabel\}<\/StatusPill>/);
   assert.match(strip, /effectiveAvailabilityPrimaryCta\.label/);
-  assert.match(strip, /availabilityFacts\.map\(\(fact\) =>/);
+  // The compact connected summary hides the strip; it stays mounted while
+  // configuring or whenever the saved connection needs attention.
+  assert.match(
+    source,
+    /const showAvailabilityStrip =\s*showConnectionForm \|\|\s*\(showConnectionSummary && resolvedAvailabilityTone !== "connected"\);/,
+  );
+  assert.match(source, /\{showAvailabilityStrip \? \(/);
   assert.match(source, /open=\{providerDetailRequested\}/);
   assert.match(source, /onToggle=\{setProviderDetailRequested\}/);
   assert.doesNotMatch(source, /const providerDetailOpen =/);
@@ -197,10 +188,7 @@ test('settings maps provider failures to retestable recovery states', () => {
     /const providerNeedsFirstTest =\s*providerSaved && provider\.apiKeyConfigured && !providerHasDraftChanges && !lastTest\?\.checkedAt;/,
   );
   assert.match(source, /const canRetestProvider = providerDraftReadyForTest && !providerTestPending;/);
-  assert.match(source, /const canApplyMiniMaxRecovery =/);
-  assert.match(source, /const shouldOfferMiniMaxDefaults =/);
-  assert.match(source, /const shouldOfferMiniMaxKeyReset =/);
-  assert.match(source, /action: onUseProviderTemplate,/);
+  assert.match(source, /action: focusProviderTemplatePicker,/);
   assert.match(
     source,
     /const canFindDraftModels = draftNeedsModelChoice && !hasDiscoveredDraftModels && canRefreshModels;/,
@@ -210,7 +198,7 @@ test('settings maps provider failures to retestable recovery states', () => {
     source,
     /const shouldCompleteDraftSetup =\s*providerHasDraftChanges &&\s*!providerDraftReadyForTest &&\s*!canFindDraftModels &&\s*!hasDiscoveredDraftModels;/,
   );
-  assert.match(source, /shouldCompleteDraftSetup\s*\? openProviderDetails/);
+  assert.match(source, /shouldCompleteDraftSetup\s*\? \(\) => openProviderDetails\(\)/);
 });
 
 test('settings offers the recommended template before manual setup for a blank provider', () => {
@@ -223,7 +211,7 @@ test('settings offers the recommended template before manual setup for a blank p
 
   assert.match(
     source,
-    /const shouldOfferRecommendedProviderTemplate =\s*Boolean\(onUseProviderTemplate\) &&\s*!providerSaved &&\s*!providerHasDraftChanges &&\s*!savedProviderProfilesAvailable;/,
+    /const shouldOfferRecommendedProviderTemplate =\s*Boolean\(onUseProviderTemplateLabel\) &&\s*!providerSaved &&\s*!providerHasDraftChanges &&\s*!savedProviderProfilesAvailable;/,
   );
   assert.match(
     source,
@@ -247,7 +235,7 @@ test('settings offers the recommended template before manual setup for a blank p
   assert.match(source, /const workspaceRootReminder = language === "zh-CN"/);
   assert.match(
     source,
-    /const displayAvailabilityDetail = \(\s*workspaceRootMissing\s*\? \`\$\{workspaceRootReminder\} \`\s*: ""\s*\) \+ \(shouldOfferRecommendedProviderTemplate\s*\? settingsPhrase\(language, "useMiniMaxProfileDetail"\)/,
+    /const displayAvailabilityDetail = \(\s*workspaceRootMissing\s*\? \`\$\{workspaceRootReminder\} \`\s*: ""\s*\) \+ \(shouldOfferRecommendedProviderTemplate\s*\? settingsPhrase\(language, "chooseProviderTemplateDetail"\)/,
   );
   assert.doesNotMatch(cta, /workspaceRootMissing && onChooseTrainerWorkspaceRoot/);
   assert.match(source, /shouldOfferRecommendedProviderTemplate/);
@@ -289,7 +277,7 @@ test('settings details give draft requirements precedence over saved-connection 
 test('settings routes incomplete drafts back to the form and only tests ready drafts', () => {
   const source = readSettingsSource();
   const ctaStart = source.indexOf('const resolvedAvailabilityPrimaryLabel =');
-  const ctaEnd = source.indexOf('const canOfferMiniMaxRecoveryAction =', ctaStart);
+  const ctaEnd = source.indexOf('const canRestartSidecar =', ctaStart);
 
   assert.ok(ctaStart >= 0 && ctaEnd > ctaStart, 'expected availability CTA resolution');
   const cta = source.slice(ctaStart, ctaEnd);
@@ -298,7 +286,7 @@ test('settings routes incomplete drafts back to the form and only tests ready dr
     /shouldCompleteDraftSetup\s*\? settingsPhrase\(language, "connectionFieldsAndKey"\)/,
   );
   assert.match(cta, /shouldCompleteDraftSetup\s*\? modelDiscoveryBlockedReason/);
-  assert.match(cta, /shouldCompleteDraftSetup\s*\? openProviderDetails/);
+  assert.match(cta, /shouldCompleteDraftSetup\s*\? \(\) => openProviderDetails\(\)/);
   assert.match(source, /const shouldWaitForDraftTest = providerHasDraftChanges && providerTestPending;/);
   assert.match(cta, /shouldWaitForDraftTest\s*\? settingsStatusPhrase\(language, "checking"\)/);
   assert.match(cta, /shouldWaitForDraftTest\s*\? undefined/);
@@ -320,7 +308,7 @@ test('settings routes incomplete drafts back to the form and only tests ready dr
 test('settings takes a complete draft that only lacks its API key straight to that field', () => {
   const source = readSettingsSource();
   const ctaStart = source.indexOf('const resolvedAvailabilityPrimaryLabel =');
-  const ctaEnd = source.indexOf('const canOfferMiniMaxRecoveryAction =', ctaStart);
+  const ctaEnd = source.indexOf('const canRestartSidecar =', ctaStart);
 
   assert.ok(ctaStart >= 0 && ctaEnd > ctaStart, 'expected availability CTA resolution');
   const cta = source.slice(ctaStart, ctaEnd);
@@ -337,7 +325,7 @@ test('settings takes a complete draft that only lacks its API key straight to th
 test('settings blocks a draft model that conflicts with its connection policy before save or test', () => {
   const source = readSettingsSource();
   const ctaStart = source.indexOf('const resolvedAvailabilityPrimaryLabel =');
-  const ctaEnd = source.indexOf('const canOfferMiniMaxRecoveryAction =', ctaStart);
+  const ctaEnd = source.indexOf('const canRestartSidecar =', ctaStart);
 
   assert.ok(ctaStart >= 0 && ctaEnd > ctaStart, 'expected availability CTA resolution');
   const cta = source.slice(ctaStart, ctaEnd);
@@ -374,17 +362,18 @@ test('settings takes rejected credentials directly to the API key field', () => 
   assert.match(source, /const providerCredentialsRejected =/);
   assert.match(source, /const shouldRepairProviderCredentials =/);
   assert.match(source, /const openProviderApiKey = \(\) => openProviderDetails\(true\);/);
+  // The focus request must mount the edit form first — the summary view has
+  // no API-key input, so the effect switches the connection into edit mode.
   assert.match(
     source,
-    /apiKeyInput\?\.closest<HTMLDetailsElement>\(\s*"\.coach-settings-view__provider-detail",/,
+    /setActiveSettingsCategory\("connection"\);\s*setConnectionView\("edit"\);\s*setProviderDetailRequested\(true\);\s*setProviderApiKeyFocusRequested\(true\);/,
   );
-  assert.match(source, /providerDetails\.open = true;/);
   assert.match(source, /apiKeyInput\?\.scrollIntoView\(\{ block: "center" \}\);/);
   assert.match(source, /apiKeyInput\?\.focus\(\{ preventScroll: true \}\);/);
   assert.match(source, /setProviderApiKeyFocusRequested\(false\);/);
   assert.match(
     source,
-    /const openProviderDetails = \(focusApiKey = false\) => \{\s*setProviderDetailRequested\(true\);\s*if \(focusApiKey\) \{\s*setProviderApiKeyFocusRequested\(true\);/,
+    /const openProviderDetails = \(focusApiKey = false\) => \{\s*setConnectionView\("edit"\);\s*setProviderDetailRequested\(true\);\s*if \(focusApiKey\) \{\s*setProviderApiKeyFocusRequested\(true\);/,
   );
   assert.match(source, /shouldRepairProviderCredentials\s*\? openProviderApiKey/);
 });
@@ -398,17 +387,15 @@ test('settings opens and focuses saved profiles from the offline recovery action
   );
   assert.match(
     source,
-    /if \(!providerProfilesFocusRequested\) \{\s*return;\s*\}[\s\S]*?panel\.closest<HTMLDetailsElement>\([\s\S]*?"\.coach-settings-view__provider-detail"/,
+    /if \(!providerProfilesFocusRequested\) \{\s*return;\s*\}[\s\S]*?providerDirectoryRef\.current/,
   );
-  assert.match(source, /providerDetails\.open = true;/);
-  assert.match(source, /panel\.open = true;/);
-  assert.match(source, /panel\.scrollIntoView\(\{ block: "nearest" \}\);/);
+  assert.match(source, /directory\.scrollIntoView\(\{ block: "nearest" \}\);/);
   assert.match(source, /\.settings-provider-profile:not\(:disabled\)/);
   assert.match(source, /nextButton\?\.focus\(\);/);
   assert.match(source, /\}, \[providerProfiles\.length, providerProfilesFocusRequested\]\);/);
   assert.match(
     source,
-    /const openSavedProviderProfiles = \(\) => \{\s*setProviderDetailRequested\(true\);\s*setProviderProfilesFocusRequested\(true\);\s*\};/,
+    /const openSavedProviderProfiles = \(\) => \{\s*setProviderProfilesFocusRequested\(true\);\s*\};/,
   );
   assert.match(source, /shouldRoutePrimaryToSavedProfiles\s*\? openSavedProviderProfiles/);
 });
@@ -464,15 +451,15 @@ test('settings makes the connection name explicitly optional in every supported 
 
 test('availability exposes only non-secret provider facts', () => {
   const source = readSettingsSource();
-  const facts = availabilityFactsSource(source);
   const strip = availabilityStripSource(source);
+  const cardStart = source.indexOf('const connectionSummaryCard =');
+  const cardEnd = source.indexOf('const appliedProviderFactValue', cardStart);
+  const card = cardStart >= 0 && cardEnd > cardStart ? source.slice(cardStart, cardEnd) : '';
 
-  assert.match(strip, /data-availability-fact=\{fact\.id\}/);
-  assert.match(strip, /data-availability-value=\{fact\.value\}/);
-  assert.match(strip, /data-secret="false"/);
-  assert.match(strip, /data-availability-fact-value=\{fact\.value\}/);
-  assert.doesNotMatch(facts, /apiKey|baseUrl|providerDraft/);
+  // The summary card and the strip show name/model/status only — the API key
+  // stays inside the password input of the edit form.
   assert.doesNotMatch(strip, /providerDraft\.apiKey/);
+  assert.doesNotMatch(card, /providerDraft\.apiKey|apiKey\b/);
   assert.match(
     source,
     /<input\s+ref=\{apiKeyInputRef\}\s+type="password"\s+value=\{providerDraft\.apiKey\}/,
@@ -550,7 +537,8 @@ test('settings uses plain-language localized recovery copy for unavailable conne
   const source = readSettingsSource();
   const strip = availabilityStripSource(source);
 
-  assert.match(strip, /<span className="eyebrow">\{copy\.setupSection\}<\/span>/);
+  assert.match(strip, /data-view-object/);
+  assert.match(strip, /data-view-why/);
   assert.match(source, /setupModelAccess: "设置模型连接"/);
   assert.match(source, /fillProviderFields: "填写连接信息和 API key 后即可测试。"/);
   assert.match(source, /\{providerDetailRequirementNote\}/);

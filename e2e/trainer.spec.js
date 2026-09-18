@@ -1187,15 +1187,20 @@ test.describe("Trainer Five-View Shell", () => {
     });
 
     await expectActiveView(page, "en-US", "settings");
-    const detailSummary = page
-      .locator(".settings-view")
-      .locator("summary")
-      .filter({ hasText: "Model and test detail" })
+    // The connected state shows the compact summary card — enter edit mode,
+    // then expand the collapsed "Connection details" section.
+    const editButton = page.getByRole("button", { name: "Edit configuration", exact: true });
+    await expect(editButton).toBeVisible();
+    await editButton.click();
+    const detailHeader = page
+      .locator(".coach-settings-view__provider-detail")
+      .locator(".collapse-section__header")
       .first();
-    await detailSummary.focus();
-    await detailSummary.press("Enter");
+    if ((await detailHeader.getAttribute("aria-expanded")) !== "true") {
+      await detailHeader.click();
+    }
     await expect(page.locator("main")).toContainText("Protocol");
-    await expect(page.locator("main")).toContainText("Diagnostics");
+    await expect(page.locator("main")).toContainText("Connection check");
     await expect(page.locator("main")).toContainText("Profiles");
     await expect(page.locator("main")).toContainText("Model ready");
     await expect(page.getByText("Connection needs test", { exact: true })).toHaveCount(0);
@@ -1314,6 +1319,9 @@ test.describe("Trainer Five-View Shell", () => {
       connection: "connected",
     });
 
+    const teachingTab = page.locator('[data-settings-nav="teaching"]');
+    await expect(teachingTab).toBeVisible();
+    await teachingTab.click();
     const languageRow = page.locator("[data-settings-language]");
     await expect(languageRow).toBeVisible();
     await languageRow.getByRole("button", { name: "English", exact: true }).click();

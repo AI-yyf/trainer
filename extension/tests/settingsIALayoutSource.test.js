@@ -133,7 +133,13 @@ test('connection details stay toggle-driven while the required trio renders open
   assert.match(details, /settingsSupportPhrase\(language, "protocol"\)/);
   assert.match(details, /\{!canNestModelLimitsInCatalog \? providerModelLimitsPanel : null\}/);
   assert.match(details, /modelAndTestDetail/);
-  assert.match(details, /\{providerProfilesPanel\}/);
+  // Saved profiles + templates live in the directory listbox at the top of the
+  // connection section, not inside the details fold.
+  assert.doesNotMatch(details, /settings-provider-profile/);
+  const connectionStart = source.indexOf('data-settings-section="connection"');
+  const connectionEnd = source.indexOf('<form', connectionStart);
+  const connection = source.slice(connectionStart, connectionEnd);
+  assert.match(connection, /\{providerDirectory\}/);
 });
 
 test('memory privacy and advanced sections default collapsed and keep their save endpoints', () => {

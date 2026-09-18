@@ -3557,14 +3557,17 @@ test('saveBrowserPreviewProvider supplies the production default name when a com
   assert.equal(providerPatch.apiKeyConfigured, true);
 });
 
-test('useBrowserPreviewProviderTemplate uses the MiniMax starter and keeps the Chinese next step visible', async () => {
+test('useBrowserPreviewProviderTemplate applies the selected label preset and keeps the Chinese next step visible', async () => {
   global.window.localStorage.setItem(
     PREVIEW_LAYOUT_STORAGE_KEY,
     JSON.stringify({ composerLanguage: 'zh-CN' }),
   );
   const module = await loadBrowserSidecarModule();
 
-  const result = await module.useBrowserPreviewProviderTemplate('session-minimax-template');
+  const result = await module.useBrowserPreviewProviderTemplate(
+    'MiniMax',
+    'session-minimax-template',
+  );
   const providerPatch = result.messages[0].payload.providerConfig;
   const status = result.messages[1].payload;
 
@@ -3575,6 +3578,20 @@ test('useBrowserPreviewProviderTemplate uses the MiniMax starter and keeps the C
   assert.equal(providerPatch.apiKeyConfigured, false);
   assert.equal(status.tone, 'success');
   assert.equal(status.message, '已填好 MiniMax 模板。填好 API key 后再测试。');
+});
+
+test('useBrowserPreviewProviderTemplate maps non-MiniMax labels to their preset', async () => {
+  const module = await loadBrowserSidecarModule();
+
+  const result = await module.useBrowserPreviewProviderTemplate(
+    'DeepSeek',
+    'session-deepseek-template',
+  );
+  const providerPatch = result.messages[0].payload.providerConfig;
+
+  assert.equal(providerPatch.name, 'DeepSeek');
+  assert.equal(providerPatch.baseUrl, 'https://api.deepseek.com/v1');
+  assert.equal(providerPatch.model, 'deepseek-chat');
 });
 
 test('saveBrowserPreviewProvider updates an active profile label to the entered connection name', async () => {

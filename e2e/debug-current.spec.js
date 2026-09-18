@@ -61,22 +61,30 @@ test("debug live provider save", async ({ page }) => {
     const originalFetch = window.fetch;
     window.fetch = (...args) => { console.log("FETCH", String(args[0])); return originalFetch(...args); };
   });
+  const editButton = page.getByRole("button", { name: "Edit configuration", exact: true });
+  if (await editButton.count()) await editButton.click();
   const detail = page.locator(".coach-settings-view__provider-detail");
-  if (!(await detail.evaluate(element => element.open))) await detail.locator(":scope > summary").click();
-  const fields = detail.locator("details.settings-sheet__minor-panel").filter({ hasText: "Connection fields and key" });
-  if (!(await fields.evaluate(element => element.open))) await fields.locator(":scope > summary").click();
+  const sectionHeader = detail.locator(".collapse-section__header");
+  if (await sectionHeader.count() && (await sectionHeader.getAttribute("aria-expanded")) !== "true") {
+    await sectionHeader.click();
+  }
+  const fields = page.locator("form.settings-sheet__minor-body");
   await fields.getByLabel("Connection name (optional)", { exact: true }).fill("Debug provider");
   await fields.getByLabel("Service root").fill("https://provider.invalid/v1");
   await fields.getByLabel("API Key", { exact: true }).fill("debug-key");
   const picker = fields.locator("details.settings-model-picker");
-  if (!(await picker.evaluate(element => element.open))) await picker.locator(":scope > summary").click();
-  const manual = picker.getByRole("button", { name: "Enter a full model name", exact: true });
-  if (await manual.count()) await manual.click();
-  const search = picker.getByRole("searchbox", { name: "Filter models", exact: true });
-  await search.fill("debug-model");
-  await picker.getByRole("button", { name: "Use debug-model", exact: true }).click();
+  if ((await picker.count()) === 0) {
+    // Empty model catalog: the form renders a plain model input instead.
+    await fields.locator('label.settings-field:has(> span:text-is("Model")) > input').fill("debug-model");
+  } else {
+    if (!(await picker.evaluate(element => element.open))) await picker.locator(":scope > summary").click();
+    const manual = picker.getByRole("button", { name: "Enter a full model name", exact: true });
+    if (await manual.count()) await manual.click();
+    const search = picker.getByRole("searchbox", { name: "Filter models", exact: true });
+    await search.fill("debug-model");
+    await picker.getByRole("button", { name: "Use debug-model", exact: true }).click();
+  }
   const profiles = page.locator(".settings-sheet__provider-profiles");
-  if (!(await profiles.evaluate(element => element.open))) await profiles.locator(":scope > summary").click();
   const saveProfile = profiles.getByRole("button", { name: "Save as connection", exact: true });
   console.log("SAVE_PROFILE", await saveProfile.evaluate((element) => ({ disabled: element.disabled, html: element.outerHTML.slice(0, 220) })));
   await saveProfile.click();

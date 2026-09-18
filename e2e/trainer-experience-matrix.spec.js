@@ -13,14 +13,14 @@ const PROVIDER_ACTION_LABELS = {
 const VIEW_LABELS = {
   "zh-CN": {
     coach: "\u5bf9\u8bdd",
-    plan: "\u8ba1\u5212",
+    plan: "\u5b66\u4e60",
     resources: "\u8d44\u6599",
     training: "\u8bad\u7ec3",
     settings: "\u8bbe\u7f6e",
   },
   "en-US": {
     coach: "Chat",
-    plan: "Plan",
+    plan: "Learning",
     resources: "Resources",
     training: "Training",
     settings: "Settings",
@@ -240,6 +240,11 @@ async function exerciseTraining(page, scenario) {
 }
 
 async function openConnectionDetails(page) {
+  // Connected state shows the compact summary card — enter edit mode first.
+  const editButton = page.getByRole("button", { name: /Edit configuration|编辑配置/ });
+  if (await editButton.count()) {
+    await editButton.click();
+  }
   const detail = page.locator(".coach-settings-view__provider-detail");
   await expectSingleVisible(detail);
   // The redesigned Settings IA renders the connection details as a
@@ -280,9 +285,6 @@ async function exerciseSettings(page, scenario) {
     await expect(model).toHaveValue(PREVIEW_SWITCH_MODEL);
     const profiles = page.locator(".settings-sheet__provider-profiles");
     await expectSingleVisible(profiles);
-    if (!(await profiles.evaluate((element) => element.open))) {
-      await profiles.locator(":scope > summary").click();
-    }
     const saveProfile = profiles.getByRole("button", {
       name: PROVIDER_ACTION_LABELS[scenario.language],
     });
@@ -314,8 +316,10 @@ async function exerciseSettings(page, scenario) {
   if (scenario.userAction.kind === "switch_language") {
     const targetLanguage = scenario.language === "en-US" ? "zh-CN" : "en-US";
     // The redesigned Settings IA renders the response-language choice as a
-    // pill row (data-settings-language) inside the open Teaching preferences
-    // section, not as a <details> defaults panel.
+    // pill row (data-settings-language) inside the Teaching preferences tab.
+    const teachingTab = page.locator('[data-settings-nav="teaching"]');
+    await expect(teachingTab).toBeVisible();
+    await teachingTab.click();
     const languageRow = page.locator('.settings-row[data-settings-language="true"]');
     await expectSingleVisible(languageRow);
     const choice = languageRow.getByRole("button", { name: LANGUAGE_LABELS[targetLanguage], exact: true });

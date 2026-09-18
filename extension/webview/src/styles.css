@@ -14685,7 +14685,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   color: var(--fg-0);
   font-weight: var(--trainer-font-weight-medium);
   background: color-mix(in srgb, var(--fg-0) 6%, transparent);
-  box-shadow: inset 0 2px 0 var(--accent);
+  box-shadow: inset 0 2px 0 color-mix(in srgb, var(--fg-0) 55%, transparent);
 }
 
 .settings-nav__label {
@@ -14714,6 +14714,159 @@ button.resources-sandbox-layout__chip:focus-visible {
 
 .settings-section--summary {
   padding-bottom: 2px;
+}
+
+.settings-connection-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-1) 38%, transparent);
+}
+
+.settings-connection-summary__main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-connection-summary__identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-connection-summary__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-0);
+  font-size: var(--trainer-font-xs);
+  font-weight: var(--trainer-font-weight-medium);
+}
+
+.settings-connection-summary__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-muted);
+}
+
+.settings-connection-summary__dot[data-state="connected"] {
+  background: var(--ok);
+}
+
+.settings-connection-summary__dot[data-state="warn"] {
+  background: var(--warning);
+}
+
+.settings-connection-summary__dot[data-state="pending"] {
+  background: var(--accent);
+}
+
+.settings-connection-summary__dot[data-state="offline"] {
+  background: var(--danger, var(--trainer-fallback-danger));
+}
+
+.settings-connection-summary__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.4;
+}
+
+.settings-connection-summary__model,
+.settings-connection-summary__host {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-provider-directory {
+  max-height: 236px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-1) 38%, transparent);
+  scrollbar-width: thin;
+}
+
+.settings-provider-directory__group + .settings-provider-directory__group {
+  border-top: 1px solid color-mix(in srgb, var(--line) 32%, transparent);
+}
+
+.settings-provider-directory__heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 10px 3px;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  letter-spacing: 0.03em;
+  background: color-mix(in srgb, var(--bg-1) 92%, transparent);
+}
+
+.settings-provider-directory__item {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  display: block;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg-1);
+  font-family: inherit;
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.settings-provider-directory__item:hover {
+  color: var(--fg-0);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.settings-provider-directory__item:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
+.settings-provider-directory .settings-provider-profile {
+  border-bottom: 0;
+  border-radius: 0;
+  padding: 5px 10px;
+}
+
+.settings-provider-profile__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-faint, color-mix(in srgb, var(--fg-muted) 45%, transparent));
+}
+
+.settings-provider-profile__dot[data-state="active"] {
+  background: var(--ok);
 }
 
 .settings-sheet__group {
@@ -15156,11 +15309,90 @@ button.resources-sandbox-layout__chip:focus-visible {
   display: none;
 }
 
-.settings-provider-profile-list {
+.settings-provider-bar {
   display: flex;
-  flex-direction: column;
-  gap: 0;
-  border-top: 1px solid color-mix(in srgb, var(--line) 28%, transparent);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-provider-bar__content {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0;
+}
+
+.settings-provider-bar__list {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 2px;
+}
+
+.settings-provider-bar__actions {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-provider-bar .settings-provider-profile--bar {
+  width: auto;
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--line) 34%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  background: color-mix(in srgb, var(--bg-1) 45%, transparent);
+}
+
+.settings-provider-bar .settings-provider-profile--bar.is-active {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.settings-provider-bar__icon-button,
+.settings-provider-bar__add {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-1);
+  font-family: inherit;
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.25;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+
+.settings-provider-bar__icon-button {
+  padding: 4px 6px;
+}
+
+.settings-provider-bar__icon-button:hover,
+.settings-provider-bar__add:hover {
+  color: var(--fg-0);
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--line));
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.settings-provider-bar__icon-button:focus-visible,
+.settings-provider-bar__add:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: -1px;
 }
 
 .settings-provider-profile {
