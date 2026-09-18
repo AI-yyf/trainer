@@ -279,6 +279,7 @@ type ComposerProviderMenuItem = {
 };
 type HeaderSwitcherDensity = "full" | "compact" | "icon";
 const COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT = 6;
+const COACH_SETTINGS_AUTOSAVE_DELAY_MS = 250;
 const RESOURCE_UPLOAD_LIMIT = 100;
 const RESOURCE_COMPOSER_MAX_IDS = 12;
 type WorkbenchDataSnapshot = ReturnType<typeof useWorkbenchState.getState>["data"];
@@ -5185,7 +5186,7 @@ export function App() {
       providerDraftStringArrayKey(providerDraft.deniedModels) !==
         providerDraftStringArrayKey(data.providerConfig.deniedModels) ||
       (providerDraft.embeddingModel ?? "") !== (data.providerConfig.embeddingModel ?? "") ||
-      providerDraft.catalogSource !== data.providerConfig.catalogSource ||
+      providerDraft.catalogSource !== (data.providerConfig.catalogSource ?? "provider_live") ||
       providerDraft.cacheTtlSeconds !== data.providerConfig.cacheTtlSeconds ||
       providerRequestDefaultsKey(providerDraft.requestDefaults) !==
         providerRequestDefaultsKey(data.providerConfig.requestDefaults) ||
@@ -9393,6 +9394,38 @@ export function App() {
       setSettingsActionState,
       setOperationMessage,
     ],
+  );
+
+  // Settings save on change. Preset clicks fan out to several setters in one
+  // tick, so the flush is debounced and reads the *latest* persist closure —
+  // by then the layout store already holds every pending change.
+  const persistCoachSettingsRef = useRef(persistCoachSettings);
+  persistCoachSettingsRef.current = persistCoachSettings;
+  const coachSettingsAutosaveTimerRef = useRef<number | null>(null);
+  const queueCoachSettingsSave = useCallback(() => {
+    if (coachSettingsAutosaveTimerRef.current !== null) {
+      window.clearTimeout(coachSettingsAutosaveTimerRef.current);
+    }
+    coachSettingsAutosaveTimerRef.current = window.setTimeout(() => {
+      coachSettingsAutosaveTimerRef.current = null;
+      persistCoachSettingsRef.current();
+    }, COACH_SETTINGS_AUTOSAVE_DELAY_MS);
+  }, []);
+  useEffect(
+    () => () => {
+      if (coachSettingsAutosaveTimerRef.current !== null) {
+        window.clearTimeout(coachSettingsAutosaveTimerRef.current);
+      }
+    },
+    [],
+  );
+  const autosaving = useCallback(
+    <T,>(apply: (value: T) => void) =>
+      (value: T) => {
+        apply(value);
+        queueCoachSettingsSave();
+      },
+    [queueCoachSettingsSave],
   );
 
   const handleSuggestedAction = (
@@ -13645,16 +13678,16 @@ export function App() {
         }}
         onThemePreferenceChange={setThemePreference}
         onLearningSurfaceAlignmentChange={setLearningSurfaceAlignment}
-        onLanguageChange={setComposerLanguage}
-        onAnswerModeChange={setComposerAnswerMode}
-        onTeachingStyleChange={setTeachingStyle}
-        onFollowCurrentFileChange={setFollowCurrentFile}
-        onCoachDefaultsChange={setCoachDefaults}
-        onContextDetailChange={setContextDetail}
-        onIncludeCurrentFileChange={setIncludeCurrentFile}
-        onIncludeSelectionChange={setIncludeSelection}
-        onIncludeDiagnosticsChange={setIncludeDiagnostics}
-        onIncludeRelatedFilesChange={setIncludeRelatedFiles}
+        onLanguageChange={autosaving(setComposerLanguage)}
+        onAnswerModeChange={autosaving(setComposerAnswerMode)}
+        onTeachingStyleChange={autosaving(setTeachingStyle)}
+        onFollowCurrentFileChange={autosaving(setFollowCurrentFile)}
+        onCoachDefaultsChange={autosaving(setCoachDefaults)}
+        onContextDetailChange={autosaving(setContextDetail)}
+        onIncludeCurrentFileChange={autosaving(setIncludeCurrentFile)}
+        onIncludeSelectionChange={autosaving(setIncludeSelection)}
+        onIncludeDiagnosticsChange={autosaving(setIncludeDiagnostics)}
+        onIncludeRelatedFilesChange={autosaving(setIncludeRelatedFiles)}
         onSaveCoachSettings={() => persistCoachSettings()}
         onGrantMemoryShare={
           isBrowserPreview

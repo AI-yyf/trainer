@@ -150,10 +150,11 @@ test('settings keeps availability as the compact source of provider truth', () =
   assert.match(strip, /effectiveAvailabilityPrimaryCta\.label/);
   // The compact connected summary hides the strip; it stays mounted while
   // configuring or whenever the saved connection needs attention. The strip
-  // drops out of the dedicated advanced-details level.
+  // drops out of the dedicated advanced-details level, and workspace-trust
+  // states are owned by the blocker banner so trust is never stated twice.
   assert.match(
     source,
-    /const showAvailabilityStrip =\s*\(showConnectionForm && connectionView !== "advanced"\) \|\|\s*\(showConnectionSummary && resolvedAvailabilityTone !== "connected"\);/,
+    /const showAvailabilityStrip =\s*providerSetupReason !== "workspace_untrusted" &&\s*\(\(showConnectionForm && connectionView !== "advanced"\) \|\|\s*\(showConnectionSummary && resolvedAvailabilityTone !== "connected"\)\);/,
   );
   assert.match(source, /\{showAvailabilityStrip \? \(/);
   assert.match(source, /\{connectionView === "advanced" \? \(/);

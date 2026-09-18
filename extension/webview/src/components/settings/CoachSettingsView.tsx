@@ -78,7 +78,7 @@ import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
-import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, NavAdvancedIcon, NavConnectionIcon, NavMemoryIcon, NavTeachingIcon, NavWorkspaceIcon, PlusIcon, RefreshIcon, TrashIcon } from "../icons";
+import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, NavAdvancedIcon, NavConnectionIcon, NavTeachingIcon, NavWorkspaceIcon, PlusIcon, RefreshIcon, TrashIcon } from "../icons";
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type {
@@ -2047,6 +2047,8 @@ type SettingsPhraseKey =
   | "providerDirectoryLabel"
   | "providerDirectoryNote"
   | "addProvider"
+  | "startFromTemplate"
+  | "startFromTemplateDetail"
   | "currentConnectionPrefix";
 
 const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, string>> = {
@@ -2097,6 +2099,8 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     providerDirectoryLabel: "供应商目录",
     providerDirectoryNote: "点模板自动填入服务地址与默认模型，只需补上 API 密钥；点已保存的连接可直接切换。",
     addProvider: "添加供应商",
+    startFromTemplate: "或从供应商模板开始",
+    startFromTemplateDetail: "自动填好服务地址与默认模型，只需补上密钥",
     currentConnectionPrefix: "当前连接",
   },
   "en-US": {
@@ -2146,6 +2150,8 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     providerDirectoryLabel: "Provider directory",
     providerDirectoryNote: "Pick a template to fill the endpoint and default model — only the API key is left; click a saved connection to switch to it.",
     addProvider: "Add provider",
+    startFromTemplate: "Or start from a provider template",
+    startFromTemplateDetail: "Pre-fills the service root and default model; just add your key",
     currentConnectionPrefix: "Current connection",
   },
   "es-ES": {
@@ -2195,6 +2201,8 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     providerDirectoryLabel: "Directorio de proveedores",
     providerDirectoryNote: "Elige una plantilla para rellenar el endpoint y el modelo por defecto — solo falta la clave API; pulsa una conexión guardada para cambiar a ella.",
     addProvider: "Añadir proveedor",
+    startFromTemplate: "O empieza desde una plantilla de proveedor",
+    startFromTemplateDetail: "Rellena la dirección del servicio y el modelo por defecto; solo añade tu clave",
     currentConnectionPrefix: "Conexión actual",
   },
   "fr-FR": {
@@ -2244,6 +2252,8 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     providerDirectoryLabel: "Annuaire des fournisseurs",
     providerDirectoryNote: "Choisissez un modèle pour remplir l’adresse et le modèle par défaut — il ne reste que la clé API ; cliquez sur une connexion enregistrée pour y passer.",
     addProvider: "Ajouter un fournisseur",
+    startFromTemplate: "Ou partir d'un modèle de fournisseur",
+    startFromTemplateDetail: "Préremplit l'adresse du service et le modèle par défaut ; ajoutez seulement votre clé",
     currentConnectionPrefix: "Connexion actuelle",
   },
   "de-DE": {
@@ -2293,6 +2303,8 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     providerDirectoryLabel: "Anbieterverzeichnis",
     providerDirectoryNote: "Wähle eine Vorlage, um Endpunkt und Standardmodell zu füllen — nur der API-Schlüssel fehlt noch; klicke auf eine gespeicherte Verbindung, um zu wechseln.",
     addProvider: "Anbieter hinzufügen",
+    startFromTemplate: "Oder mit einer Anbietervorlage beginnen",
+    startFromTemplateDetail: "Füllt Dienstadresse und Standardmodell vor; nur der Schlüssel fehlt",
     currentConnectionPrefix: "Aktuelle Verbindung",
   },
   "ja-JP": {
@@ -2342,6 +2354,8 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     providerDirectoryLabel: "プロバイダー一覧",
     providerDirectoryNote: "テンプレートを選ぶと接続先と既定モデルが自動入力されます。あとは API キーだけ。保存済みの接続をクリックすると切り替わります。",
     addProvider: "プロバイダーを追加",
+    startFromTemplate: "またはプロバイダーテンプレートから開始",
+    startFromTemplateDetail: "サービスアドレスと既定モデルを自動入力。キーだけ追加",
     currentConnectionPrefix: "現在の接続",
   },
   "ko-KR": {
@@ -2391,6 +2405,8 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     providerDirectoryLabel: "공급자 디렉터리",
     providerDirectoryNote: "템플릿을 선택하면 주소와 기본 모델이 자동으로 채워집니다. API 키만 추가하세요. 저장된 연결을 클릭하면 전환됩니다.",
     addProvider: "공급자 추가",
+    startFromTemplate: "또는 공급자 템플릿에서 시작",
+    startFromTemplateDetail: "서비스 주소와 기본 모델을 자동 입력합니다. 키만 추가하세요",
     currentConnectionPrefix: "현재 연결",
   },
   "pt-BR": {
@@ -2440,6 +2456,8 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     providerDirectoryLabel: "Diretório de provedores",
     providerDirectoryNote: "Escolha um modelo para preencher o endereço e o modelo padrão — só falta a chave API; clique numa conexão salva para alternar.",
     addProvider: "Adicionar provedor",
+    startFromTemplate: "Ou comece por um modelo de provedor",
+    startFromTemplateDetail: "Preenche o endereço do serviço e o modelo padrão; basta adicionar sua chave",
     currentConnectionPrefix: "Conexão atual",
   },
 };
@@ -3613,26 +3631,6 @@ function gatewayFingerprintNote(
     : "New API gateway identified. Catalog endpoint types are claims; use the live test.";
 }
 
-function saveStateTone(saveState: SaveState): "connected" | "pending" | "offline" {
-  if (saveState === "saved") {
-    return "connected";
-  }
-  if (saveState === "unsaved") {
-    return "pending";
-  }
-  return "offline";
-}
-
-function saveStateLabel(copy: CoachSettingsLabels, saveState: SaveState): string {
-  if (saveState === "saved") {
-    return copy.savedState;
-  }
-  if (saveState === "unsaved") {
-    return copy.unsavedState;
-  }
-  return copy.emptyState;
-}
-
 function protocolChoiceLabel(protocol: ProviderProtocol | undefined, language: ComposerLanguage): string {
   if (!protocol) {
     return language === "zh-CN" ? "未选择协议" : "Protocol unverified";
@@ -3673,63 +3671,6 @@ function isMiniMaxLikeProvider(provider: Pick<ProviderConfigView, "name" | "base
   return /minimax/i.test(`${provider.name} ${provider.baseUrl} ${provider.model}`);
 }
 
-
-function SettingsStatePanel({
-  copy,
-  status,
-  primaryLabel,
-}: {
-  copy: CoachSettingsLabels;
-  status?: SettingsSectionStatus;
-  primaryLabel: string;
-}) {
-  if (!status) {
-    return null;
-  }
-  const savedValue = status.savedValue ?? saveStateLabel(copy, status.saveState);
-  const showSavedRow = status.saveState !== "empty" && savedValue !== status.effectiveValue;
-  const showEffectiveRow =
-    status.saveState !== "empty" || showSavedRow || Boolean(status.editingValue);
-
-  return (
-    <section className="settings-sheet__state-panel">
-      <div className="settings-sheet__state-rows">
-        {showEffectiveRow ? (
-          <div className="settings-sheet__state-row">
-            <span>{primaryLabel}</span>
-            <strong title={status.effectiveValue}>{shortenSummary(status.effectiveValue, 96)}</strong>
-          </div>
-        ) : null}
-        {showSavedRow ? (
-          <div className="settings-sheet__state-row">
-            <span>{copy.savedInWorkspace}</span>
-            <strong title={savedValue}>{shortenSummary(savedValue, 96)}</strong>
-          </div>
-        ) : null}
-        {status.editingValue ? (
-          <div className="settings-sheet__state-row">
-            <span>{copy.editingDraft}</span>
-            <strong title={status.editingValue}>{shortenSummary(status.editingValue, 96)}</strong>
-          </div>
-        ) : null}
-      </div>
-      {status.note ? <p className="settings-sheet__note settings-sheet__note--compact">{status.note}</p> : null}
-      {status.feedback ? (
-        <div className={`settings-sheet__feedback settings-sheet__feedback--${status.feedback.tone}`}>
-          <div className="settings-sheet__feedback-head">
-            <span>{copy.latestAction}</span>
-            <StatusPill tone={status.feedback.tone}>{status.feedback.title}</StatusPill>
-          </div>
-          {status.feedback.detail ? (
-            <p className="settings-sheet__note settings-sheet__note--compact">
-              {sanitizeErrorSurfaceText(status.feedback.detail)}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-    </section>
-  );
-}
 
 function describeLanguageIntegrityFact(input: {
   language: ComposerLanguage;
@@ -3942,45 +3883,28 @@ export function CoachSettingsView({
   const modelSelectRef = useRef<HTMLSelectElement | null>(null);
   const connectionAnchorRef = useRef<HTMLDivElement | null>(null);
   const teachingPrefsAnchorRef = useRef<HTMLDivElement | null>(null);
-  const memoryPrivacyAnchorRef = useRef<HTMLDivElement | null>(null);
+  const workspaceAnchorRef = useRef<HTMLDivElement | null>(null);
+  const preferencesAnchorRef = useRef<HTMLDivElement | null>(null);
   const sectionFlashTimerRef = useRef<number | null>(null);
   const [modelPickerOpen, setModelPickerOpen] = useState(() => !providerDraft.model.trim());
-  // Keep the language control reachable from the first Settings viewport;
-  // users can still collapse the rest of the coach defaults after choosing it.
-  const [coachDefaultsOpen, setCoachDefaultsOpen] = useState(true);
-  const [memoryPrivacyOpen, setMemoryPrivacyOpen] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  type SettingsCategory = "connection" | "workspace" | "teaching" | "memory" | "advanced";
+  type SettingsCategory = "connection" | "workspace" | "teaching" | "preferences";
   const SETTINGS_CATEGORY_ORDER: SettingsCategory[] = [
     "connection",
     "workspace",
     "teaching",
-    "memory",
-    "advanced",
+    "preferences",
   ];
   const [activeSettingsCategory, setActiveSettingsCategory] =
     useState<SettingsCategory>("connection");
-  const [workspaceSectionOpen, setWorkspaceSectionOpen] = useState(false);
   const openSettingsCategorySection = (id: SettingsCategory) => {
     setActiveSettingsCategory(id);
-    if (id === "workspace") {
-      setWorkspaceSectionOpen(true);
-    } else if (id === "teaching") {
-      setCoachDefaultsOpen(true);
-    } else if (id === "memory") {
-      setMemoryPrivacyOpen(true);
-    } else if (id === "advanced") {
-      setAdvancedOpen(true);
-    }
   };
   const [advancedContextPinned, setAdvancedContextPinned] = useState(false);
   const [providerApiKeyFocusRequested, setProviderApiKeyFocusRequested] = useState(false);
   const [providerProfilesFocusRequested, setProviderProfilesFocusRequested] = useState(false);
   const [providerTemplatesFocusRequested, setProviderTemplatesFocusRequested] = useState(false);
   const [providerPasteHint, setProviderPasteHint] = useState<string | null>(null);
-  const [sectionFlash, setSectionFlash] = useState<"connection" | "teaching" | "memory" | null>(
-    null,
-  );
+  const [sectionFlash, setSectionFlash] = useState<SettingsCategory | null>(null);
   const derivedAnswerStyle = useMemo(
     () =>
       deriveAnswerStylePreset({
@@ -4007,11 +3931,6 @@ export function CoachSettingsView({
   );
   const answerStyle: AnswerStylePreset = answerStyleCustomSelected ? "custom" : derivedAnswerStyle;
   useEffect(() => {
-    if (coachDefaultsStatus?.saveState === "unsaved") {
-      setCoachDefaultsOpen(true);
-    }
-  }, [coachDefaultsStatus?.saveState]);
-  useEffect(() => {
     return () => {
       if (sectionFlashTimerRef.current !== null) {
         window.clearTimeout(sectionFlashTimerRef.current);
@@ -4022,14 +3941,8 @@ export function CoachSettingsView({
    * Status-bar anomaly jump: reveal the target section, smooth-scroll to it,
    * then flash its header once (skipped entirely under reduced motion).
    */
-  const revealSettingsSection = (target: "connection" | "teaching" | "memory") => {
+  const revealSettingsSection = (target: SettingsCategory) => {
     setActiveSettingsCategory(target);
-    if (target === "teaching") {
-      setCoachDefaultsOpen(true);
-    }
-    if (target === "memory") {
-      setMemoryPrivacyOpen(true);
-    }
     // The anchor node mounts only after the category pane swaps in, so wait
     // two frames before scrolling/flashing.
     window.requestAnimationFrame(() => {
@@ -4039,7 +3952,9 @@ export function CoachSettingsView({
             ? connectionAnchorRef.current
             : target === "teaching"
               ? teachingPrefsAnchorRef.current
-              : memoryPrivacyAnchorRef.current;
+              : target === "workspace"
+                ? workspaceAnchorRef.current
+                : preferencesAnchorRef.current;
         if (!node) {
           return;
         }
@@ -5891,13 +5806,18 @@ export function CoachSettingsView({
   };
   const showConnectionSummary =
     providerSaved && !providerHasDraftChanges && connectionView === "auto";
-  const showProviderTemplates =
-    Boolean(onUseProviderTemplateLabel) && (!providerSaved || connectionView === "add");
-  const showConnectionForm =
-    !providerSaved || providerHasDraftChanges || connectionView === "edit";
+  const showProviderTemplates = Boolean(onUseProviderTemplateLabel) && connectionView === "add";
+  // Empty state stays a single-purpose screen: the paste card plus one entry
+  // into the template directory. The full form only appears once the user
+  // drills into edit (directly or via a template).
+  const showConnectionForm = providerSaved
+    ? providerHasDraftChanges || connectionView === "edit"
+    : connectionView === "edit";
+  const showQuickSetup = !providerSaved && connectionView === "auto";
   const showAvailabilityStrip =
-    (showConnectionForm && connectionView !== "advanced") ||
-    (showConnectionSummary && resolvedAvailabilityTone !== "connected");
+    providerSetupReason !== "workspace_untrusted" &&
+    ((showConnectionForm && connectionView !== "advanced") ||
+      (showConnectionSummary && resolvedAvailabilityTone !== "connected"));
   const connectionHost = (provider.baseUrl || providerDraft.baseUrl || "")
     .replace(/^https?:\/\//i, "")
     .split("/")[0];
@@ -6126,15 +6046,6 @@ export function CoachSettingsView({
         {lastTestDetail ? (
           <p className="settings-sheet__note settings-sheet__note--compact">{lastTestDetail}</p>
         ) : null}
-        {resolvedWorkspaceTrustState !== "trusted" && !showAvailabilityStrip ? (
-          <p
-            className="settings-sheet__note settings-sheet__note--warning"
-            data-workspace-trust-state={resolvedWorkspaceTrustState}
-            role="status"
-          >
-            {workspaceTrustSentence}
-          </p>
-        ) : null}
       </div>
       <div className="settings-actions settings-actions--compact">
         {showAvailabilityPrimaryAction && !showAvailabilityStrip ? (
@@ -6203,11 +6114,54 @@ export function CoachSettingsView({
       ))}
     </div>
   );
-  const showCoachDefaultsStatePill = coachDefaultsStatus?.saveState === "unsaved";
-  const teachingPrefsDirty =
-    coachDefaultsStatus?.saveState === "unsaved" || workspaceControlStatus?.saveState === "unsaved";
-  const memoryPrivacyDirty = coachDefaultsStatus?.saveState === "unsaved";
-  const connectionDirty = providerStatus?.saveState === "unsaved";
+  const coachSettingsSaving = coachDefaultsStatus?.feedback?.tone === "pending";
+  const coachSettingsSavedRecently = coachDefaultsStatus?.feedback?.tone === "pass";
+  const coachSettingsSaveFailure =
+    coachDefaultsStatus?.feedback?.tone === "fail" ? coachDefaultsStatus.feedback : undefined;
+  // Save-on-change has no Save button to hang feedback on, so the header
+  // carries a live status: saving → saved, or the sanitized failure detail.
+  const coachSettingsAutosaveNode = (
+    <span
+      className={`settings-autosave${
+        coachSettingsSaving
+          ? " is-saving"
+          : coachSettingsSaveFailure
+            ? " is-failed"
+            : coachSettingsSavedRecently
+              ? " is-saved"
+              : ""
+      }`}
+      role="status"
+      aria-live="polite"
+      data-settings-autosave={
+        coachSettingsSaving
+          ? "saving"
+          : coachSettingsSaveFailure
+            ? "failed"
+            : coachSettingsSavedRecently
+              ? "saved"
+              : "idle"
+      }
+    >
+      {coachSettingsSaving
+        ? settingsGlobalCopy.settingsAutosaving
+        : coachSettingsSaveFailure
+          ? `${coachSettingsSaveFailure.title}${
+              coachSettingsSaveFailure.detail
+                ? ` · ${sanitizeErrorSurfaceText(coachSettingsSaveFailure.detail)}`
+                : ""
+            }`
+          : coachSettingsSavedRecently
+            ? settingsGlobalCopy.settingsAutosaved
+            : ""}
+    </span>
+  );
+  // An unsaved *empty* draft differs from the empty config only in defaults;
+  // only count it as dirty once the user has actually typed something.
+  const connectionDirty =
+    providerStatus?.saveState === "unsaved" &&
+    (providerSaved ||
+      Boolean(providerDraft.baseUrl.trim() || providerDraft.apiKey.trim() || providerDraft.model.trim()));
   const settingsNavItems = [
     {
       id: "connection",
@@ -6224,34 +6178,32 @@ export function CoachSettingsView({
     {
       id: "teaching",
       label: settingsGlobalCopy.settingsTeachingPrefs,
-      dirty: teachingPrefsDirty,
+      dirty: false,
       icon: <NavTeachingIcon size={15} />,
     },
     {
-      id: "memory",
-      label: settingsGlobalCopy.settingsMemoryPrivacy,
-      dirty: memoryPrivacyDirty,
-      icon: <NavMemoryIcon size={15} />,
-    },
-    {
-      id: "advanced",
-      label: settingsGlobalCopy.settingsAdvanced,
+      id: "preferences",
+      label: settingsGlobalCopy.settingsPreferences,
       dirty: false,
       icon: <NavAdvancedIcon size={15} />,
     },
   ] as const;
   const settingsStatusConnectionReady = providerCoachReady && !providerHasDraftChanges;
-  // Status summary bar anomalies — same truth sources as the availability strip.
+  // Blocker banner — one row per real problem, each with the action that
+  // clears it. Same truth sources as the availability strip; hidden when
+  // nothing is wrong so healthy Settings opens straight on the content.
   const settingsStatusIssues: Array<{
     id: "key" | "test" | "trust" | "unsaved";
     label: string;
-    target: "connection" | "teaching" | "memory";
+    target: SettingsCategory;
+    action?: () => void;
   }> = [];
   if (providerNeedsApiKey || coachSendState.status === "missing_api_key") {
     settingsStatusIssues.push({
       id: "key",
       label: settingsGlobalCopy.settingsStatusNoApiKey,
       target: "connection",
+      action: openProviderApiKey,
     });
   } else if (providerSaved && !providerTestPassed) {
     settingsStatusIssues.push({
@@ -6264,14 +6216,16 @@ export function CoachSettingsView({
     settingsStatusIssues.push({
       id: "trust",
       label: settingsGlobalCopy.settingsStatusTrust,
-      target: "memory",
+      target: "workspace",
+      action: onTrustWindow,
     });
   }
-  if (connectionDirty || teachingPrefsDirty) {
+  if (connectionDirty) {
     settingsStatusIssues.push({
       id: "unsaved",
       label: settingsGlobalCopy.settingsStatusUnsaved,
-      target: "teaching",
+      target: "connection",
+      action: () => setConnectionView("edit"),
     });
   }
   const providerConnectionSummary =
@@ -6859,7 +6813,7 @@ export function CoachSettingsView({
       </div>
     ) : null;
   const providerDirectory =
-    showProviderTemplates && connectionView !== "advanced" ? (
+    showProviderTemplates ? (
     <div className="settings-provider-directory-wrap">
       <div
         ref={providerTemplatesRef}
@@ -7086,63 +7040,66 @@ export function CoachSettingsView({
       </h2>
 
       <div className="settings-sheet__body settings-sheet__body--hierarchical">
+        {settingsStatusIssues.length > 0 ? (
         <div
-          className="settings-status-bar"
+          className="settings-status-bar settings-status-bar--blockers"
           role="region"
           aria-label={settingsGlobalCopy.settingsStatusRegionLabel}
           data-settings-status-bar="true"
+          data-settings-status-connection={settingsStatusConnectionReady ? "ready" : "setup"}
         >
-          <p className="settings-status-bar__line">
-            <span
-              className={`settings-status-bar__state is-${settingsStatusConnectionReady ? "ok" : "warn"}`}
-              data-settings-status-connection={settingsStatusConnectionReady ? "ready" : "setup"}
+          {settingsStatusIssues.map((issue) => (
+            <div
+              key={issue.id}
+              className={`settings-status-bar__row is-${issue.id}`}
+              data-settings-status-issue={issue.id}
             >
-              {settingsStatusConnectionReady
-                ? settingsGlobalCopy.settingsStatusConnected
-                : settingsGlobalCopy.settingsStatusNotConnected}
-            </span>
-            <span
-              className="settings-status-bar__value"
-              title={`${appliedProviderFactValue} · ${appliedModelFactValue}`}
-            >
-              {appliedProviderFactValue} · {appliedModelFactValue}
-            </span>
-            <span className="settings-status-bar__sep" aria-hidden="true">
-              ·
-            </span>
-            <span className="settings-status-bar__item">
-              {settingsGlobalCopy.settingsStatusLanguage}{" "}
-              <strong>{LANGUAGE_LABELS[language]}</strong>
-            </span>
-            <span className="settings-status-bar__sep" aria-hidden="true">
-              ·
-            </span>
-            <span className="settings-status-bar__item">
-              {settingsGlobalCopy.settingsStatusMemory} <strong>{memoryScopeLabel}</strong>
-            </span>
-          </p>
-          {settingsStatusIssues.length > 0 ? (
-            <div className="settings-status-bar__issues">
-              {settingsStatusIssues.map((issue) => (
-                <button
-                  key={issue.id}
-                  type="button"
-                  className="settings-status-bar__issue"
-                  data-settings-status-issue={issue.id}
-                  onClick={() => revealSettingsSection(issue.target)}
+              <span className="settings-status-bar__dot" aria-hidden="true" />
+              {issue.id === "trust" ? (
+                <span
+                  className="settings-status-bar__text"
+                  data-workspace-trust-state={resolvedWorkspaceTrustState}
+                  data-settings-workspace-trust="true"
+                  role="status"
+                  aria-live="polite"
                 >
-                  {issue.label}
-                </button>
-              ))}
+                  {workspaceTrustSentence}
+                </span>
+              ) : (
+                <span className="settings-status-bar__text">{issue.label}</span>
+              )}
+              <button
+                type="button"
+                className="settings-status-bar__issue"
+                onClick={() => {
+                  if (issue.action) {
+                    issue.action();
+                    if (issue.target !== activeSettingsCategory && issue.id !== "trust") {
+                      revealSettingsSection(issue.target);
+                    }
+                    return;
+                  }
+                  revealSettingsSection(issue.target);
+                }}
+              >
+                {issue.id === "trust"
+                  ? onTrustWindow
+                    ? language === "zh-CN" ? "信任此窗口" : "Trust this window"
+                    : resolveWorkbenchCopy(language).workspaceRootControl
+                  : issue.id === "key" || issue.id === "unsaved"
+                    ? settingsPhrase(language, "editConfiguration")
+                    : settingsGlobalCopy.settingsSectionConnection}
+              </button>
             </div>
-          ) : null}
+          ))}
         </div>
+        ) : null}
 
         <div className="settings-sheet__layout">
           <div className="settings-sheet__pane" role="tabpanel">
         {activeSettingsCategory === "connection" ? (
         <section className="settings-section settings-section--panel settings-section--setup settings-section--summary">
-          {!providerSaved ? (
+          {showQuickSetup ? (
           <ProviderQuickSetup
             language={language}
             draft={providerDraft}
@@ -7160,6 +7117,20 @@ export function CoachSettingsView({
             }}
           />
           ) : null}
+          {showQuickSetup && onUseProviderTemplateLabel ? (
+            <button
+              type="button"
+              className="settings-template-entry"
+              data-settings-template-entry="true"
+              onClick={() => setConnectionView("add")}
+            >
+              <span className="settings-template-entry__copy">
+                <strong>{settingsPhrase(language, "startFromTemplate")}</strong>
+                <span>{settingsPhrase(language, "startFromTemplateDetail")}</span>
+              </span>
+              <ChevronRightIcon size={14} aria-hidden />
+            </button>
+          ) : null}
           {showAvailabilityStrip ? (
           <div
             className={`settings-availability-strip settings-availability-strip--${resolvedAvailabilityTone}`}
@@ -7173,17 +7144,6 @@ export function CoachSettingsView({
                 </span>
                 {showAvailabilityPrimaryAction && displayAvailabilityDetail ? (
                   <p data-view-why="">{displayAvailabilityDetail}</p>
-                ) : null}
-                {resolvedWorkspaceTrustState !== "trusted" ? (
-                  <p
-                    className="settings-availability-strip__trust"
-                    data-workspace-trust-state={resolvedWorkspaceTrustState}
-                    data-settings-workspace-trust="true"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    {workspaceTrustSentence}
-                  </p>
                 ) : null}
               </div>
               {showAvailabilityPrimaryAction ? (
@@ -7210,6 +7170,7 @@ export function CoachSettingsView({
             className={`settings-anchor${sectionFlash === "connection" ? " settings-anchor--flash" : ""}`}
             data-settings-section="connection"
           >
+            {providerSaved ? (
             <div className="settings-section-head">
               <span className="eyebrow">{settingsGlobalCopy.settingsSectionConnection}</span>
               {connectionDirty ? (
@@ -7222,6 +7183,7 @@ export function CoachSettingsView({
                 </span>
               ) : null}
             </div>
+            ) : null}
 
             {providerListBar}
 
@@ -7768,13 +7730,17 @@ export function CoachSettingsView({
         ) : null}
 
         {activeSettingsCategory === "workspace" ? (
-        <CollapseSection
-          level={1}
-          persistenceKey="settings-workspace"
-          open={workspaceSectionOpen}
-          onToggle={setWorkspaceSectionOpen}
-          title={<span className="eyebrow">{resolveWorkbenchCopy(language).workspaceRootControl}</span>}
+        <section
+          ref={workspaceAnchorRef}
+          className={`settings-section settings-section--flat settings-anchor${sectionFlash === "workspace" ? " settings-anchor--flash" : ""}`}
+          data-settings-section="workspace"
+          aria-labelledby="settings-section-workspace-title"
         >
+          <header className="settings-section-head settings-section-head--flat">
+            <span id="settings-section-workspace-title" className="eyebrow">
+              {resolveWorkbenchCopy(language).workspaceRootControl}
+            </span>
+          </header>
           <div className="settings-sheet__minor-body">
             <WorkspaceRootRecoveryPanel
               trainerWorkspace={trainerWorkspace}
@@ -7879,68 +7845,24 @@ export function CoachSettingsView({
               )}
             </div>
           </div>
-        </CollapseSection>
+        </section>
         ) : null}
 
         {activeSettingsCategory === "teaching" ? (
-        <div
+        <section
           ref={teachingPrefsAnchorRef}
-          className={`settings-anchor${sectionFlash === "teaching" ? " settings-anchor--flash" : ""}`}
+          className={`settings-section settings-section--flat settings-anchor${sectionFlash === "teaching" ? " settings-anchor--flash" : ""}`}
           data-settings-section="teaching"
+          aria-labelledby="settings-section-teaching-title"
         >
-        <CollapseSection
-          level={1}
-          persistenceKey="settings-teaching-prefs"
-          open={coachDefaultsOpen}
-          onToggle={setCoachDefaultsOpen}
-          title={
-            <span className="eyebrow">
+          <header className="settings-section-head settings-section-head--flat">
+            <span id="settings-section-teaching-title" className="eyebrow">
               {settingsGlobalCopy.settingsTeachingPrefs}
-              {teachingPrefsDirty ? (
-                <span
-                  className="settings-section-dot"
-                  data-settings-dirty="teaching"
-                  title={settingsGlobalCopy.settingsStatusUnsaved}
-                >
-                  <span className="sr-only">{settingsGlobalCopy.settingsStatusUnsaved}</span>
-                </span>
-              ) : null}
             </span>
-          }
-          subtitle={<span className="settings-sheet__defaults-preview">{coachBehaviorSummary}</span>}
-          badge={
-            showCoachDefaultsStatePill ? (
-              <StatusPill tone={saveStateTone(coachDefaultsStatus?.saveState ?? "empty")}>
-                {saveStateLabel(copy, coachDefaultsStatus?.saveState ?? "empty")}
-              </StatusPill>
-            ) : undefined
-          }
-          actions={
-            <ActionButton
-              className={
-                teachingPrefsDirty ? "settings-section-save is-dirty" : "settings-section-save"
-              }
-              tone="accent"
-              fullWidth={false}
-              icon={<CheckMarkIcon size={14} />}
-              label={copy.save}
-              ariaLabel={copy.saveCoachDefaults}
-              detail={
-                teachingPrefsDirty
-                  ? settingsGlobalCopy.settingsStatusUnsaved
-                  : settingsPhrase(language, "saveDefaults")
-              }
-              onClick={onSaveCoachSettings}
-            />
-          }
-        >
-            <div className="settings-sheet__minor-body settings-sheet__defaults-body">
-              <SettingsStatePanel
-                copy={copy}
-                status={coachDefaultsStatus}
-                primaryLabel={copy.effectiveNow}
-              />
-
+            <span className="settings-section-head__summary">{coachBehaviorSummary}</span>
+            {coachSettingsAutosaveNode}
+          </header>
+          <div className="settings-sheet__minor-body settings-sheet__defaults-body">
               <div
                 className="settings-answer-style"
                 role="radiogroup"
@@ -7972,6 +7894,30 @@ export function CoachSettingsView({
                 <p className="settings-sheet__note settings-sheet__note--compact">
                   {settingsGlobalCopy.settingsAnswerStyleHint}
                 </p>
+              </div>
+
+              <div className="settings-grid settings-grid--compact settings-grid--tight">
+                <div className="settings-row">
+                  <span className="eyebrow">{copy.answerMode}</span>
+                  <ChoiceList
+                    active={answerMode}
+                    items={[
+                      { label: copy.auto, value: "auto" },
+                      { label: copy.coachFirst, value: "coach-first" },
+                      { label: copy.balanced, value: "balanced" },
+                      { label: copy.direct, value: "direct" },
+                    ]}
+                    onChange={onAnswerModeChange}
+                  />
+                </div>
+                <div className="settings-row">
+                  <span className="eyebrow">{copy.teachingStyle}</span>
+                  <ChoiceList
+                    active={teachingStyle}
+                    items={teachingStyleItems}
+                    onChange={onTeachingStyleChange}
+                  />
+                </div>
               </div>
 
               <div className="settings-grid settings-grid--compact settings-grid--tight">
@@ -8035,54 +7981,56 @@ export function CoachSettingsView({
                   ) : null}
                 </div>
               </CollapseSection>
-            </div>
-        </CollapseSection>
-        </div>
+          </div>
+        </section>
         ) : null}
 
-        {activeSettingsCategory === "memory" ? (
-        <div
-          ref={memoryPrivacyAnchorRef}
-          className={`settings-anchor${sectionFlash === "memory" ? " settings-anchor--flash" : ""}`}
-          data-settings-section="memory"
+        {activeSettingsCategory === "preferences" ? (
+        <section
+          ref={preferencesAnchorRef}
+          className={`settings-section settings-section--flat settings-anchor${sectionFlash === "preferences" ? " settings-anchor--flash" : ""}`}
+          data-settings-section="preferences"
+          aria-labelledby="settings-section-preferences-title"
         >
-        <CollapseSection
-          level={1}
-          persistenceKey="settings-memory-privacy"
-          open={memoryPrivacyOpen}
-          onToggle={setMemoryPrivacyOpen}
-          title={
-            <span className="eyebrow">
-              {settingsGlobalCopy.settingsMemoryPrivacy}
-              {memoryPrivacyDirty ? (
-                <span
-                  className="settings-section-dot"
-                  data-settings-dirty="memory"
-                  title={settingsGlobalCopy.settingsStatusUnsaved}
-                >
-                  <span className="sr-only">{settingsGlobalCopy.settingsStatusUnsaved}</span>
-                </span>
-              ) : null}
+          <header className="settings-section-head settings-section-head--flat">
+            <span id="settings-section-preferences-title" className="eyebrow">
+              {settingsGlobalCopy.settingsPreferences}
             </span>
-          }
-          subtitle={<span className="settings-sheet__defaults-preview">{memoryScopeLabel}</span>}
-          actions={
-            <ActionButton
-              className={
-                memoryPrivacyDirty ? "settings-section-save is-dirty" : "settings-section-save"
-              }
-              tone="accent"
-              fullWidth={false}
-              icon={<CheckMarkIcon size={14} />}
-              label={copy.save}
-              ariaLabel={copy.saveCoachDefaults}
-              detail={settingsPhrase(language, "saveDefaults")}
-              onClick={onSaveCoachSettings}
-            />
-          }
-        >
-            <div className="settings-sheet__minor-body settings-sheet__defaults-body">
+            <span className="settings-section-head__summary">{advancedSummaryText}</span>
+            {coachSettingsAutosaveNode}
+          </header>
+          <div className="settings-sheet__minor-body settings-sheet__defaults-body">
+            <div className="settings-subsection" data-settings-subsection="appearance">
+              <span className="eyebrow settings-subsection__title">{settingsGlobalCopy.settingsAppearance}</span>
+              <div className="settings-grid settings-grid--compact settings-grid--tight">
+                <div className="settings-row">
+                  <span className="eyebrow">{copy.theme}</span>
+                  <ChoiceList
+                    active={themePreference}
+                    items={[
+                      { label: copy.system, value: "system" },
+                      { label: copy.light, value: "light" },
+                      { label: copy.dark, value: "dark" },
+                    ]}
+                    onChange={onThemePreferenceChange}
+                  />
+                </div>
+                <div className="settings-row">
+                  <span className="eyebrow">{surfaceAlignmentCopy.label}</span>
+                  <ChoiceList
+                    active={learningSurfaceAlignment}
+                    items={[
+                      { label: surfaceAlignmentCopy.left, value: "left" },
+                      { label: surfaceAlignmentCopy.right, value: "right" },
+                    ]}
+                    onChange={onLearningSurfaceAlignmentChange}
+                  />
+                </div>
+              </div>
+            </div>
 
+            <div className="settings-subsection" data-settings-subsection="memory">
+              <span className="eyebrow settings-subsection__title">{settingsGlobalCopy.settingsMemoryPrivacy}</span>
               <div className="settings-grid settings-grid--compact settings-grid--tight">
                 <div className="settings-row">
                   <span className="eyebrow">{copy.memoryScope}</span>
@@ -8096,8 +8044,19 @@ export function CoachSettingsView({
                     onChange={(value) => onCoachDefaultsChange?.({ memoryScope: value })}
                   />
                 </div>
+                <div className="settings-row">
+                  <span className="eyebrow">{copy.workingSet}</span>
+                  <ChoiceList
+                    active={workingSetMode}
+                    items={[
+                      { label: copy.workingSetFocused, value: "focused" },
+                      { label: copy.workingSetBalanced, value: "balanced" },
+                      { label: copy.workingSetBroad, value: "broad" },
+                    ]}
+                    onChange={(value) => onCoachDefaultsChange?.({ workingSetMode: value })}
+                  />
+                </div>
               </div>
-
           {rememberedRows.length ? (
             <details className="settings-sheet__minor-panel settings-sheet__remembered-panel">
               <summary className="settings-sheet__remembered-summary">
@@ -8165,7 +8124,56 @@ export function CoachSettingsView({
             onGrantMemoryShare={onGrantMemoryShare}
             onRevokeMemoryShare={onRevokeMemoryShare}
           />
+            </div>
 
+            <div className="settings-subsection" data-settings-subsection="review">
+              <div className="settings-sheet__utility-grid">
+                <section className="settings-sheet__workspace-card">
+                  <span className="eyebrow settings-subsection__title">{copy.reviewStrategy}</span>
+                  <div className="settings-sheet__stack">
+                    <div className="settings-sheet__compact-row">
+                      <span>{copy.reviewRhythmPace}</span>
+                      <ChoiceList
+                        active={reviewCadence}
+                        items={reviewCadenceItems}
+                        onChange={(value) => onCoachDefaultsChange?.({ reviewCadence: value })}
+                      />
+                    </div>
+                    <div className="settings-sheet__compact-row">
+                      <span>{copy.reviewRhythmReminder}</span>
+                      <ChoiceList
+                        active={reviewReminderMode}
+                        items={reviewReminderItems}
+                        onChange={(value) => onCoachDefaultsChange?.({ reviewReminderMode: value })}
+                      />
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <div className="settings-subsection" data-settings-subsection="maintenance">
+              <div className="settings-sheet__utility-grid">
+                <section className="settings-sheet__workspace-card">
+                  <span className="eyebrow">{copy.systemActions}</span>
+                  <div className="settings-actions settings-actions--compact">
+                    <ActionButton
+                      fullWidth={false}
+                      icon={<RefreshIcon size={14} />}
+                      label={copy.refreshMemory}
+                      detail={language === "zh-CN" ? "重建摘要" : "Rebuild summary"}
+                      onClick={onRefreshMemory}
+                    />
+                    <ActionButton
+                      fullWidth={false}
+                      icon={<LightningIcon size={14} />}
+                      label={copy.resetDefaults}
+                      detail={language === "zh-CN" ? "推荐值" : "Recommended"}
+                      onClick={onResetDefaults}
+                    />
+                  </div>
+                </section>
+              </div>
           <details className="settings-sheet__minor-panel">
             <summary>
               {language === "zh-CN"
@@ -8190,126 +8198,9 @@ export function CoachSettingsView({
               <p className="settings-sheet__note settings-sheet__note--compact">{runtimeFlowSummary}</p>
             </div>
           </details>
-
             </div>
-        </CollapseSection>
-        </div>
-        ) : null}
-
-        {activeSettingsCategory === "advanced" ? (
-        <CollapseSection
-          level={1}
-          persistenceKey="settings-advanced"
-          open={advancedOpen}
-          onToggle={setAdvancedOpen}
-          title={<span className="eyebrow">{settingsGlobalCopy.settingsAdvanced}</span>}
-          subtitle={<span className="settings-sheet__defaults-preview">{advancedSummaryText}</span>}
-        >
-            <div className="settings-sheet__minor-body settings-sheet__defaults-body">
-              <div className="settings-grid settings-grid--compact settings-grid--tight">
-                <div className="settings-row">
-                  <span className="eyebrow">{copy.answerMode}</span>
-                  <ChoiceList
-                    active={answerMode}
-                    items={[
-                      { label: copy.auto, value: "auto" },
-                      { label: copy.coachFirst, value: "coach-first" },
-                      { label: copy.balanced, value: "balanced" },
-                      { label: copy.direct, value: "direct" },
-                    ]}
-                    onChange={onAnswerModeChange}
-                  />
-                </div>
-                <div className="settings-row">
-                  <span className="eyebrow">{copy.teachingStyle}</span>
-                  <ChoiceList
-                    active={teachingStyle}
-                    items={teachingStyleItems}
-                    onChange={onTeachingStyleChange}
-                  />
-                </div>
-                <div className="settings-row">
-                  <span className="eyebrow">{copy.workingSet}</span>
-                  <ChoiceList
-                    active={workingSetMode}
-                    items={[
-                      { label: copy.workingSetFocused, value: "focused" },
-                      { label: copy.workingSetBalanced, value: "balanced" },
-                      { label: copy.workingSetBroad, value: "broad" },
-                    ]}
-                    onChange={(value) => onCoachDefaultsChange?.({ workingSetMode: value })}
-                  />
-                </div>
-                <div className="settings-row">
-                  <span className="eyebrow">{copy.theme}</span>
-                  <ChoiceList
-                    active={themePreference}
-                    items={[
-                      { label: copy.system, value: "system" },
-                      { label: copy.light, value: "light" },
-                      { label: copy.dark, value: "dark" },
-                    ]}
-                    onChange={onThemePreferenceChange}
-                  />
-                </div>
-                <div className="settings-row">
-                  <span className="eyebrow">{surfaceAlignmentCopy.label}</span>
-                  <ChoiceList
-                    active={learningSurfaceAlignment}
-                    items={[
-                      { label: surfaceAlignmentCopy.left, value: "left" },
-                      { label: surfaceAlignmentCopy.right, value: "right" },
-                    ]}
-                    onChange={onLearningSurfaceAlignmentChange}
-                  />
-                </div>
-              </div>
-
-              <div className="settings-sheet__utility-grid">
-                <section className="settings-sheet__workspace-card">
-                  <span className="eyebrow">{copy.reviewStrategy}</span>
-                  <div className="settings-sheet__stack">
-                    <div className="settings-sheet__compact-row">
-                      <span>{copy.reviewRhythmPace}</span>
-                      <ChoiceList
-                        active={reviewCadence}
-                        items={reviewCadenceItems}
-                        onChange={(value) => onCoachDefaultsChange?.({ reviewCadence: value })}
-                      />
-                    </div>
-                    <div className="settings-sheet__compact-row">
-                      <span>{copy.reviewRhythmReminder}</span>
-                      <ChoiceList
-                        active={reviewReminderMode}
-                        items={reviewReminderItems}
-                        onChange={(value) => onCoachDefaultsChange?.({ reviewReminderMode: value })}
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                <section className="settings-sheet__workspace-card">
-                  <span className="eyebrow">{copy.systemActions}</span>
-                  <div className="settings-actions settings-actions--compact">
-                    <ActionButton
-                      fullWidth={false}
-                      icon={<RefreshIcon size={14} />}
-                      label={copy.refreshMemory}
-                      detail={language === "zh-CN" ? "重建摘要" : "Rebuild summary"}
-                      onClick={onRefreshMemory}
-                    />
-                    <ActionButton
-                      fullWidth={false}
-                      icon={<LightningIcon size={14} />}
-                      label={copy.resetDefaults}
-                      detail={language === "zh-CN" ? "推荐值" : "Recommended"}
-                      onClick={onResetDefaults}
-                    />
-                  </div>
-                </section>
-              </div>
-            </div>
-        </CollapseSection>
+          </div>
+        </section>
         ) : null}
           </div>
           <nav

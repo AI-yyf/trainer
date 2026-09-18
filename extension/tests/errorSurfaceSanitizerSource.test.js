@@ -41,7 +41,7 @@ test('Settings and Training display host errors through the sanitizer', () => {
   const training = read('components/training/TrainingWorkbenchView.tsx');
   const state = read('app/useWorkbenchState.ts');
 
-  assert.match(settings, /sanitizeErrorSurfaceText\(status\.feedback\.detail/);
+  assert.match(settings, /sanitizeErrorSurfaceText\(coachSettingsSaveFailure\.detail/);
   assert.match(app, /sanitizeErrorSurfaceText\(message\.message, language\)/);
   assert.match(training, /sanitizeErrorSurfaceText\(latestTrainingReliability\.error/);
   assert.match(state, /sanitizeErrorSurfaceText\(/);

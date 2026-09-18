@@ -21154,6 +21154,103 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             ).strip()
         return [history_item][:max(1, min(limit, 50))]
 
+    def summarize_session_list_payload(payload: dict[str, object]) -> dict[str, object] | None:
+        snapshot = payload.get("snapshot")
+        messages = list(snapshot.get("messages") or []) if isinstance(snapshot, dict) else []
+        latest_user_message = next(
+            (
+                message
+                for message in reversed(messages)
+                if isinstance(message, dict)
+                and message.get("role") == "user"
+                and str(message.get("content") or "").strip()
+            ),
+            None,
+        )
+        latest_assistant_message = next(
+            (
+                message
+                for message in reversed(messages)
+                if isinstance(message, dict)
+                and message.get("role") == "assistant"
+                and str(message.get("content") or "").strip()
+            ),
+            None,
+        )
+        summary = str(
+            (latest_user_message or {}).get("content")
+            or (latest_assistant_message or {}).get("content")
+            or payload.get("workspace_name")
+            or ""
+        ).strip()
+        if not summary and not messages:
+            return None
+        updated_at = ""
+        if messages:
+            last_message = messages[-1]
+            if isinstance(last_message, dict):
+                updated_at = str(
+                    last_message.get("created_at") or last_message.get("timestamp") or ""
+                ).strip()
+        item: dict[str, object] = {
+            "session_id": str(payload.get("session_id") or "").strip(),
+            "workspace_id": str(payload.get("workspace_id") or "").strip(),
+            "workspace_name": str(payload.get("workspace_name") or "").strip(),
+            "summary": summary,
+            "message_count": len(messages),
+            "updated_at": updated_at or None,
+        }
+        if latest_user_message is not None:
+            item["latest_user_message"] = str(latest_user_message.get("content") or "").strip()
+        if latest_assistant_message is not None:
+            item["latest_assistant_message"] = str(latest_assistant_message.get("content") or "").strip()
+        return item
+
+    @router.get("/session/list", response_model=None)
+    def session_list(
+        workspace_id: str,
+        session_id: str | None = None,
+        limit: int = 30,
+    ) -> list[dict[str, object]]:
+        resolved_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
+        resolved_workspace_id = runtime.repository.resolve_context_id(resolved_workspace_id) or resolved_workspace_id
+        payloads = runtime.repository.list_sessions_for_workspace(
+            resolved_workspace_id,
+            limit=max(1, min(limit, 100)),
+        )
+        items: list[dict[str, object]] = []
+        active_session_id = getattr(runtime.latest_session(), "session_id", None)
+        for payload in payloads:
+            item = summarize_session_list_payload(payload)
+            if item is None:
+                continue
+            item["is_active"] = bool(
+                active_session_id and item.get("session_id") == active_session_id
+            )
+            items.append(item)
+        return items
+
+    @router.post("/session/activate", response_model=None)
+    def session_activate(payload: dict) -> dict[str, object]:
+        requested_session_id = str(payload.get("session_id") or payload.get("sessionId") or "").strip()
+        resolved_workspace_id = current_workspace_id(
+            session_id=requested_session_id,
+            workspace_id=str(payload.get("workspace_id") or payload.get("workspaceId") or "").strip() or None,
+        )
+        resolved_workspace_id = runtime.repository.resolve_context_id(resolved_workspace_id) or resolved_workspace_id
+        resolved_session_id, state = resolve_session_history_state(
+            session_id=requested_session_id,
+            workspace_id=resolved_workspace_id,
+        )
+        if state is None or not resolved_session_id:
+            raise HTTPException(status_code=404, detail="Session was not found for this workspace.")
+        snapshot = current_snapshot(session_id=resolved_session_id, workspace_id=resolved_workspace_id)
+        return {
+            "session_id": resolved_session_id,
+            "workspace_id": resolved_workspace_id,
+            "snapshot": snapshot.model_dump(mode="json"),
+        }
+
     @router.get("/session/checkpoints", response_model=None)
     def list_session_checkpoints(
         workspace_id: str,

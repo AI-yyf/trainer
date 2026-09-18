@@ -366,6 +366,16 @@ test.describe("Trainer Settings provider lifecycle", () => {
     await page.goto(buildPreviewUrl({ live: true }));
     await page.waitForLoadState("networkidle");
     await expectPreviewHarness(page);
+    // Live mode starts unconfigured: the first level is the paste card plus
+    // the template-directory entry; applying a template lands in edit mode.
+    const templateEntry = page.locator('[data-settings-template-entry="true"]');
+    if (await templateEntry.count()) {
+      await templateEntry.click();
+      await page
+        .locator(".settings-provider-directory__item")
+        .filter({ hasText: "Custom (OpenAI-compatible)" })
+        .click();
+    }
     const liveDetail = await openProviderDetails(page);
     await providerConnectionFields(liveDetail)
       .getByLabel("Connection name (optional)", { exact: true })

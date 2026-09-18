@@ -27,21 +27,32 @@ function presetTableSource(source) {
   return source.slice(start, end);
 }
 
-test('settings opens with a live status summary bar before the availability strip', () => {
+test('settings opens on a blocker banner that only renders when something is wrong', () => {
   const source = readSettingsSource();
   const barStart = source.indexOf('data-settings-status-bar="true"');
   const stripStart = source.indexOf('className={`settings-availability-strip');
   const bodyStart = source.indexOf('settings-sheet__body settings-sheet__body--hierarchical');
 
-  assert.ok(barStart > bodyStart, 'expected the status bar inside the settings body');
-  assert.ok(stripStart > barStart, 'expected the status bar before the availability strip');
+  assert.ok(barStart > bodyStart, 'expected the banner inside the settings body');
+  assert.ok(stripStart > barStart, 'expected the banner before the availability strip');
+  // Healthy Settings opens straight on content: the banner is gated on issues.
+  assert.match(source, /\{settingsStatusIssues\.length > 0 \? \(\s*<div\s+className="settings-status-bar settings-status-bar--blockers"/);
   assert.match(source, /role="region"\s+aria-label=\{settingsGlobalCopy\.settingsStatusRegionLabel\}/);
   assert.match(source, /settingsStatusConnectionReady\s*=\s*providerCoachReady && !providerHasDraftChanges/);
-  assert.match(source, /\{appliedProviderFactValue\} \· \{appliedModelFactValue\}/);
-  assert.match(source, /settingsStatusIssues\.push\(\{\s*id: "key",\s*label: settingsGlobalCopy\.settingsStatusNoApiKey,\s*target: "connection",\s*\}\)/);
+  // No always-on "connected · language · memory" line any more.
+  assert.doesNotMatch(source, /settingsGlobalCopy\.settingsStatusLanguage/);
+  assert.doesNotMatch(source, /settingsGlobalCopy\.settingsStatusMemory/);
+  // Each blocker carries the action that clears it.
+  assert.match(source, /settingsStatusIssues\.push\(\{\s*id: "key",\s*label: settingsGlobalCopy\.settingsStatusNoApiKey,\s*target: "connection",\s*action: openProviderApiKey,\s*\}\)/);
   assert.match(source, /providerSaved && !providerTestPassed/);
   assert.match(source, /resolvedWorkspaceTrustState !== "trusted"/);
-  assert.match(source, /onClick=\{\(\) => revealSettingsSection\(issue\.target\)\}/);
+  assert.match(source, /target: "workspace",\s*action: onTrustWindow,/);
+  // Trust is stated once — inside the banner — and nowhere else on the sheet.
+  assert.equal((source.match(/data-settings-workspace-trust="true"/g) ?? []).length, 1);
+  assert.doesNotMatch(source, /settings-availability-strip__trust/);
+  // Teaching/preferences save on change, so "unsaved" only ever means the connection draft.
+  assert.match(source, /if \(connectionDirty\) \{\s*settingsStatusIssues\.push\(\{\s*id: "unsaved"/);
+  assert.match(source, /revealSettingsSection\(issue\.target\)/);
 });
 
 test('status bar anomaly jumps smooth-scroll and flash once, honoring reduced motion', () => {
@@ -95,16 +106,19 @@ test('preset derivation covers every legacy combination without dropping values'
   assert.doesNotMatch(source, /onIncludeCurrentFileChange\?\.\(target\.includeCurrentFile\) : undefined/);
 });
 
-test('teaching preferences shows only the preset radio, language, and advanced-context fold', () => {
+test('teaching is a flat section: preset radio, feedback + style, language, advanced-context fold', () => {
   const source = readSettingsSource();
-  const start = source.indexOf('persistenceKey="settings-teaching-prefs"');
-  const end = source.indexOf('persistenceKey="settings-advanced"', start);
-  assert.ok(start >= 0 && end > start, 'expected the teaching preferences section');
+  const start = source.indexOf('data-settings-section="teaching"');
+  const end = source.indexOf('data-settings-section="preferences"', start);
+  assert.ok(start >= 0 && end > start, 'expected the teaching section before preferences');
   const section = source.slice(start, end);
 
   assert.match(section, /role="radiogroup"/);
   assert.match(section, /role="radio"/);
   assert.match(section, /aria-checked=\{answerStyle === option\.value\}/);
+  // Feedback mode and teaching style moved here from the dissolved Advanced tab.
+  assert.match(section, /onChange=\{onAnswerModeChange\}/);
+  assert.match(section, /onChange=\{onTeachingStyleChange\}/);
   assert.match(section, /data-settings-language="true"/);
   assert.match(section, /onChange=\{onLanguageChange\}/);
   assert.match(section, /persistenceKey="settings-advanced-context"/);
@@ -112,10 +126,45 @@ test('teaching preferences shows only the preset radio, language, and advanced-c
   // The five legacy knobs live inside the advanced-context fold, values intact.
   assert.match(section, /<ContextList rows=\{contextRows\} onLabel=\{copy\.on\} offLabel=\{copy\.off\} \/>/);
   assert.match(section, /tuneAdvancedContextKnob\(\(\) => onContextDetailChange\?\.\(value\)\)/);
-  // The dissolved workspace section keeps its save flow through the header action.
-  assert.match(section, /onClick=\{onSaveCoachSettings\}/);
-  assert.match(section, /settings-section-dot"/);
-  assert.match(section, /settings-section-save/);
+  // Save-on-change: no per-section Save button or dirty dot; a live status
+  // span reports saving / saved / sanitized failure instead.
+  assert.doesNotMatch(section, /onClick=\{onSaveCoachSettings\}/);
+  assert.doesNotMatch(section, /settings-section-save/);
+  assert.doesNotMatch(section, /settings-section-dot/);
+  assert.match(section, /\{coachSettingsAutosaveNode\}/);
+  assert.match(source, /sanitizeErrorSurfaceText\(coachSettingsSaveFailure\.detail\)/);
+  // No collapsible card shell around a single-card category.
+  assert.doesNotMatch(section, /persistenceKey="settings-teaching-prefs"/);
+});
+
+test('settings navigation is four flat categories saved on change', () => {
+  const source = readSettingsSource();
+  const app = fs.readFileSync(path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx'), 'utf8');
+
+  assert.match(source, /type SettingsCategory = "connection" \| "workspace" \| "teaching" \| "preferences";/);
+  assert.doesNotMatch(source, /id: "memory",/);
+  assert.doesNotMatch(source, /id: "advanced",/);
+  assert.doesNotMatch(source, /useState\(false\);\s*\n\s*type SettingsCategory/);
+  for (const id of ['connection', 'workspace', 'teaching', 'preferences']) {
+    assert.match(source, new RegExp(`data-settings-section="${id}"`));
+  }
+  // Every choice-type setting persists as soon as it changes.
+  for (const cb of [
+    'onLanguageChange',
+    'onAnswerModeChange',
+    'onTeachingStyleChange',
+    'onFollowCurrentFileChange',
+    'onCoachDefaultsChange',
+    'onContextDetailChange',
+    'onIncludeCurrentFileChange',
+    'onIncludeSelectionChange',
+    'onIncludeDiagnosticsChange',
+    'onIncludeRelatedFilesChange',
+  ]) {
+    assert.match(app, new RegExp(`${cb}=\\{autosaving\\(`), `${cb} must autosave`);
+  }
+  assert.match(app, /const COACH_SETTINGS_AUTOSAVE_DELAY_MS = \d+;/);
+  assert.match(app, /persistCoachSettingsRef\.current\(\);/);
 });
 
 test('connection details live behind an explicit advanced level', () => {
@@ -145,17 +194,28 @@ test('connection details live behind an explicit advanced level', () => {
   assert.match(connection, /\{providerDirectory\}/);
 });
 
-test('memory privacy and advanced sections default collapsed and keep their save endpoints', () => {
+test('preferences groups appearance, memory, review and maintenance with original handlers', () => {
   const source = readSettingsSource();
+  const start = source.indexOf('data-settings-section="preferences"');
+  const end = source.indexOf('<nav', start);
+  assert.ok(start >= 0 && end > start, 'expected the preferences section');
+  const section = source.slice(start, end);
 
-  assert.match(source, /const \[memoryPrivacyOpen, setMemoryPrivacyOpen\] = useState\(false\);/);
-  assert.match(source, /const \[advancedOpen, setAdvancedOpen\] = useState\(false\);/);
-  assert.match(source, /persistenceKey="settings-memory-privacy"/);
-  assert.match(source, /persistenceKey="settings-advanced"/);
+  for (const sub of ['appearance', 'memory', 'review', 'maintenance']) {
+    assert.match(section, new RegExp(`data-settings-subsection="${sub}"`));
+  }
+  assert.match(section, /onChange=\{onThemePreferenceChange\}/);
+  assert.match(section, /onChange=\{onLearningSurfaceAlignmentChange\}/);
   // Memory scope, sharing grants, migration and sandbox authority keep their
   // original handlers; no merged save was introduced.
-  assert.match(source, /onCoachDefaultsChange\?\.\(\{ memoryScope: value \}\)/);
-  // The revoke button moved verbatim into MemorySharingPanel (batch 7).
+  assert.match(section, /onCoachDefaultsChange\?\.\(\{ memoryScope: value \}\)/);
+  assert.match(section, /onCoachDefaultsChange\?\.\(\{ workingSetMode: value \}\)/);
+  assert.match(section, /onCoachDefaultsChange\?\.\(\{ reviewCadence: value \}\)/);
+  assert.match(section, /updateWorkspaceMemoryToggles\(\{ decisions: !workspaceMemoryToggles\.decisions \}\)/);
+  assert.match(section, /<MemorySharingPanel/);
+  assert.match(section, /onClick=\{onRefreshMemory\}/);
+  assert.match(section, /onClick=\{onResetDefaults\}/);
+  assert.doesNotMatch(section, /onClick=\{onSaveCoachSettings\}/);
   const memoryPanelSource = fs.readFileSync(
     path.resolve(__dirname, '..', 'webview', 'src', 'components', 'settings', 'MemorySharingPanel.tsx'),
     'utf8',
@@ -163,7 +223,21 @@ test('memory privacy and advanced sections default collapsed and keep their save
   assert.match(memoryPanelSource, /onClick=\{\(\) => onRevokeMemoryShare\?\.\(grant\.sourceWorkspaceId\)\}/);
   assert.match(source, /onClick=\{onChooseManagedDataFolder\}/);
   assert.match(source, /onClick=\{onRefreshWorkspaceAuthority\}/);
-  assert.match(source, /updateWorkspaceMemoryToggles\(\{ decisions: !workspaceMemoryToggles\.decisions \}\)/);
+});
+
+test('empty connection state is one screen: paste card plus a template entry', () => {
+  const source = readSettingsSource();
+  assert.match(source, /const showQuickSetup = !providerSaved && connectionView === "auto";/);
+  assert.match(source, /const showProviderTemplates = Boolean\(onUseProviderTemplateLabel\) && connectionView === "add";/);
+  assert.match(source, /const showConnectionForm = providerSaved\s*\? providerHasDraftChanges \|\| connectionView === "edit"\s*: connectionView === "edit";/);
+  assert.match(source, /data-settings-template-entry="true"/);
+  assert.match(source, /settingsPhrase\(language, "startFromTemplate"\)/);
+  // The quick-setup card no longer repeats the trust warning; the banner owns it.
+  const card = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'settings', 'ProviderQuickSetup.tsx'),
+    'utf8',
+  );
+  assert.doesNotMatch(card, /settings-quick-setup__untrusted-wrap/);
 });
 
 test('new settings copy ships in all eight languages', () => {
@@ -188,7 +262,10 @@ test('new settings copy ships in all eight languages', () => {
     'settingsAnswerStyleHint',
     'settingsAdvancedContext',
     'settingsMemoryPrivacy',
-    'settingsAdvanced',
+    'settingsPreferences',
+    'settingsAppearance',
+    'settingsAutosaving',
+    'settingsAutosaved',
   ];
   for (const key of keys) {
     let count = 0;

@@ -186,8 +186,6 @@ export function ProviderQuickSetup({
   savedModel,
   connected,
   hasStoredApiKey,
-  trusted,
-  onTrustWindow,
   busy,
   onDraftChange,
   onSave,
@@ -289,20 +287,6 @@ export function ProviderQuickSetup({
         </p>
       </label>
 
-      {!trusted ? (
-        <div className="settings-quick-setup__untrusted-wrap">
-          <p className="settings-sheet__note settings-sheet__note--warning settings-quick-setup__untrusted">
-            {copy(language, "untrusted")}
-          </p>
-          <button
-            type="button"
-            className="toolbar-button"
-            onClick={() => onTrustWindow?.()}
-          >
-            {language === "zh-CN" ? "信任此窗口" : "Trust this window"}
-          </button>
-        </div>
-      ) : null}
       <button
         type="button"
         className="action-button action-button--accent"
@@ -322,11 +306,6 @@ export function ProviderQuickSetup({
         )}
       </button>
 
-      <p className="settings-sheet__note settings-sheet__note--compact">
-        {language === "zh-CN"
-          ? "协议、测速与高级选项在下方完整表单中。"
-          : "Protocol, speed test, and advanced options live in the full form below."}
-      </p>
     </div>
   );
 }

@@ -2152,6 +2152,34 @@ class TrainerRepository:
             ).fetchone()
         return json.loads(row["payload"]) if row else None
 
+    def list_sessions_for_workspace(
+        self,
+        workspace_id: str,
+        *,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return stored session payloads for a workspace, newest first."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT session_id, payload FROM sessions
+                WHERE workspace_id = ?
+                ORDER BY rowid DESC
+                LIMIT ?
+                """,
+                (workspace_id, limit),
+            ).fetchall()
+        sessions: list[dict[str, Any]] = []
+        for row in rows:
+            try:
+                payload = json.loads(row["payload"])
+            except (TypeError, ValueError):
+                continue
+            if isinstance(payload, dict):
+                payload.setdefault("session_id", row["session_id"])
+                sessions.append(payload)
+        return sessions
+
     def save_agent_turn_checkpoint(
         self,
         *,

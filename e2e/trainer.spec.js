@@ -792,7 +792,7 @@ test.describe("Trainer Five-View Shell", () => {
     await page.getByRole("button", { name: /测试连接|重新测试/ }).first().click();
     await expectActiveView(page, "zh-CN", "settings");
     await expect(page.locator(".notice[role=\"status\"]")).toContainText(
-      "连接还没有通过。请检查服务地址、API key 和模型名称，然后再试一次。",
+      "浏览器预览无法验证真实连接；开始对话前请在 VS Code 中测试。",
     );
     await expectNoConsoleErrors(errors);
   });

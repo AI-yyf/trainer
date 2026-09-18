@@ -136,9 +136,13 @@ test.describe("human Provider configuration preview", () => {
     await page.goto(previewUrl());
     await page.waitForLoadState("networkidle");
 
-    const initial = await openDetails(page);
-    await expect(initial.fields.getByLabel("API Key", { exact: true })).toHaveValue("");
+    // Empty state is a single-purpose screen: the paste card plus one entry
+    // into the template directory. The full form only appears after a
+    // template is applied (or edit is opened explicitly).
+    await expect(page.locator(".settings-quick-setup")).toBeVisible();
+    await expect(connectionFields(page)).toHaveCount(0);
     await expect(page.locator(".settings-provider-profile")).toHaveCount(0);
+    await page.locator('[data-settings-template-entry="true"]').click();
 
     await page
       .locator(".settings-provider-directory__item")
@@ -146,6 +150,7 @@ test.describe("human Provider configuration preview", () => {
       .click();
     // Applying a template lands directly in edit mode so the API key can be
     // entered right away — the applied values stream into the form.
+    const initial = await openDetails(page);
     await expect(initial.fields.getByLabel("Service root")).toHaveValue("https://api.minimaxi.com/v1");
     await expect(initial.fields.getByLabel("Connection name (optional)")).toHaveValue("MiniMax");
 
