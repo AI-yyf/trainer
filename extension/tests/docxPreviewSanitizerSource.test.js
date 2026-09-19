@@ -90,7 +90,7 @@ test('conversation file_preview paints via CoachMessageParts only (registry is H
   // Live conversation paint path
   assert.match(bubble, /import \{ CoachMessageParts \} from ["']\.\/CoachMessageParts["']/);
   assert.match(bubble, /<CoachMessageParts parts=\{visibleParts \?\? \[\]\} language=\{language\} \/>/);
-  assert.match(conversation, /import \{ CoachMessageBubble \} from ["']\.\/CoachMessageBubble["']/);
+  assert.match(conversation, /import \{ CoachMessageBubble[, \w:]+\} from ["']\.\/CoachMessageBubble["']/);
   assert.match(conversation, /<CoachMessageBubble[\s\S]*message=\{message\}/);
   assert.match(app, /<CoachConversationView/);
   assert.match(app, /<CoachMessageBubble/);

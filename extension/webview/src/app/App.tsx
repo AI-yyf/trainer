@@ -164,6 +164,7 @@ import {
 } from "../../../../shared/src/workspaceRecoveryGovernance";
 import {
   type CoachArtifactBlockData,
+  type CoachMessageAction,
   CoachConversationView,
   CoachMessageBubble,
 } from "../components/coach";
@@ -195,7 +196,6 @@ import {
   RefreshIcon,
   ResourcesIcon,
   SettingsIcon,
-  ShareIcon,
   UploadIcon,
   WarningIcon,
 } from "../components/icons";
@@ -931,19 +931,52 @@ const viewLabels: Record<
   "pt-BR": { coach: "Chat", plan: "Plano", resources: "Recursos", training: "Treinamento", settings: "Configura\u00e7\u00f5es" },
 };
 
-const headerActionLabels: Record<
-  ComposerLanguage,
-  { share: string; resources: string; training: string }
-> = {
-  "zh-CN": { share: "分享会话", resources: "资料库", training: "训练卡" },
-  "en-US": { share: "Share session", resources: "Resource library", training: "Training card" },
-  "es-ES": { share: "Compartir sesión", resources: "Biblioteca", training: "Tarjeta de entrenamiento" },
-  "fr-FR": { share: "Partager la session", resources: "Bibliothèque", training: "Carte d'entraînement" },
-  "de-DE": { share: "Sitzung teilen", resources: "Bibliothek", training: "Trainingskarte" },
-  "ja-JP": { share: "セッションを共有", resources: "ライブラリ", training: "トレーニングカード" },
-  "ko-KR": { share: "세션 공유", resources: "라이브러리", training: "트레이닝 카드" },
-  "pt-BR": { share: "Compartilhar sessão", resources: "Biblioteca", training: "Cartão de treino" },
-};
+const COACH_REPLY_BODY_MAX_CHARS = 4000;
+
+function coachReplyTitle(
+  message: ConversationMessage,
+  language: ComposerLanguage,
+): string {
+  const firstLine = message.body
+    .split("\n")
+    .map((line) => line.replace(/^[#>*`\-\s]+/, "").trim())
+    .find((line) => line.length > 0);
+  const fallback = language === "zh-CN" ? "教练回复" : "Coach reply";
+  if (!firstLine) {
+    return fallback;
+  }
+  return firstLine.length > 48 ? `${firstLine.slice(0, 48)}…` : firstLine;
+}
+
+function coachReplyMarkdown(
+  message: ConversationMessage,
+  language: ComposerLanguage,
+): { title: string; markdown: string } {
+  const zh = language === "zh-CN";
+  const title = coachReplyTitle(message, language);
+  const sections = [`# ${title}`, ""];
+  if (message.body.trim()) {
+    sections.push(message.body.trim(), "");
+  }
+  const artifacts = message.artifacts ?? [];
+  if (artifacts.length > 0) {
+    sections.push(zh ? "## 产物" : "## Artifacts");
+    for (const artifact of artifacts) {
+      const detail = artifact.summary ?? artifact.teaser ?? "";
+      sections.push(`- **${artifact.title}**${detail ? ` — ${detail}` : ""}`);
+    }
+    sections.push("");
+  }
+  const attachments = message.attachments ?? [];
+  if (attachments.length > 0) {
+    sections.push(zh ? "## 引用" : "## References");
+    for (const attachment of attachments) {
+      sections.push(`- ${attachment.label}: ${attachment.value}`);
+    }
+    sections.push("");
+  }
+  return { title, markdown: sections.join("\n").trim() };
+}
 
 function resourcesViewLabel(language: ComposerLanguage): string {
   return viewLabels[language].resources;
@@ -4168,6 +4201,8 @@ export function App() {
   const trainingPersistenceResolversRef = useRef(new Map<string, PendingTrainingPersistence>());
   const trainingPersistenceSequenceRef = useRef(0);
   const [trainingPersistencePending, setTrainingPersistencePending] = useState(false);
+  const [pendingMessageAction, setPendingMessageAction] = useState<string | null>(null);
+  const pendingMessageActionTimeoutRef = useRef<number | undefined>(undefined);
   const [userFeedbackState, setUserFeedbackState] = useState<{
     busy: boolean;
     submittedKind?: UserFeedbackKind;
@@ -4303,6 +4338,152 @@ export function App() {
       }
     });
   }, []);
+  const requestCoachReplyUpload = useCallback(
+    (message: ConversationMessage): Promise<void> => {
+      const requestId = `resource-operation-${Date.now().toString(36)}-${++resourceOperationSequenceRef.current}`;
+      return new Promise<void>((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => {
+          const operation = resourceOperationResolversRef.current.get(requestId);
+          if (!operation || operation.kind !== "upload") {
+            return;
+          }
+          resourceOperationResolversRef.current.delete(requestId);
+          operation.reject(new Error("Resource upload timed out."));
+        }, RESOURCE_OPERATION_TIMEOUT_MS);
+        resourceOperationResolversRef.current.set(requestId, {
+          kind: "upload",
+          resolve,
+          reject,
+          timeoutId,
+        });
+        try {
+          const replyDoc = coachReplyMarkdown(message, layout.composerLanguage);
+          postMessage({
+            type: "command/execute",
+            payload: {
+              commandId: trainerCommands.uploadResource,
+              payload: {
+                uploads: [
+                  {
+                    kind: "markdown",
+                    name: replyDoc.title,
+                    source: "coach-reply",
+                    content: replyDoc.markdown,
+                    tags: ["coach-reply"],
+                    sourceType: "file",
+                  },
+                ],
+                __trainerResourceOperationId: requestId,
+              },
+            },
+          });
+        } catch (error) {
+          const operation = resourceOperationResolversRef.current.get(requestId);
+          resourceOperationResolversRef.current.delete(requestId);
+          if (operation) {
+            window.clearTimeout(operation.timeoutId);
+            operation.reject(error);
+          } else {
+            reject(error);
+          }
+        }
+      });
+    },
+    [layout.composerLanguage],
+  );
+  const handleCoachMessageAction = useCallback(
+    async (action: CoachMessageAction, message: ConversationMessage) => {
+      const zh = layout.composerLanguage === "zh-CN";
+      const replyDoc = coachReplyMarkdown(message, layout.composerLanguage);
+      if (action === "share") {
+        try {
+          await navigator.clipboard.writeText(replyDoc.markdown);
+          setOperationMessage({
+            tone: "success",
+            message: zh ? "这条教练回复已复制到剪贴板。" : "Coach reply copied to clipboard.",
+          });
+        } catch {
+          setOperationMessage({
+            tone: "error",
+            message: zh ? "复制失败,请重试。" : "Copy failed. Try again.",
+          });
+        }
+        return;
+      }
+      setPendingMessageAction(`${message.id}:${action}`);
+      if (pendingMessageActionTimeoutRef.current !== undefined) {
+        window.clearTimeout(pendingMessageActionTimeoutRef.current);
+      }
+      pendingMessageActionTimeoutRef.current = window.setTimeout(() => {
+        setPendingMessageAction(null);
+        pendingMessageActionTimeoutRef.current = undefined;
+      }, 30_000);
+      if (action === "save-resource") {
+        try {
+          if (isBrowserPreview) {
+            const browserPreview = await loadBrowserPreviewModule();
+            const result = await browserPreview.uploadBrowserPreviewResources(
+              [
+                {
+                  kind: "markdown",
+                  name: replyDoc.title,
+                  source: "coach-reply",
+                  content: replyDoc.markdown,
+                  contentEncoding: "utf-8",
+                  tags: ["coach-reply"],
+                },
+              ],
+              previewSessionId,
+            );
+            setPreviewSessionId(result.sessionId);
+            useWorkbenchState.getState().patchData(result.patch);
+            setOperationMessage({
+              tone: result.failedUploadCount > 0 ? "error" : "success",
+              message:
+                result.failedUploadCount > 0
+                  ? zh
+                    ? "这条回复没有存进资料库,请重试。"
+                    : "The reply was not saved to Resources. Try again."
+                  : zh
+                    ? "已把这条回复存入资料库。"
+                    : "The reply was saved to the resource library.",
+            });
+          } else {
+            await requestCoachReplyUpload(message);
+          }
+        } catch {
+          // The resource-operation status message already surfaced the failure.
+        }
+        return;
+      }
+      const excerpt =
+        message.body.trim().length > COACH_REPLY_BODY_MAX_CHARS
+          ? `${message.body.trim().slice(0, COACH_REPLY_BODY_MAX_CHARS)}…`
+          : message.body.trim();
+      postMessage({
+        type: "command/execute",
+        payload: {
+          commandId: trainerCommands.trainingGenerateCard,
+          payload: {
+            source: "conversation_gap",
+            cardType: "practice",
+            prompt: excerpt,
+            // Live browser preview reads contextHint directly; the host rebuilds
+            // it from prompt. Send both so the reply reaches the card generator.
+            contextHint: excerpt,
+            focusArea: replyDoc.title,
+          },
+        },
+      });
+    },
+    [
+      isBrowserPreview,
+      layout.composerLanguage,
+      previewSessionId,
+      requestCoachReplyUpload,
+      setOperationMessage,
+    ],
+  );
   const requestResourceSearch = useCallback(
     ({ query, requestId }: ResourceSearchRequest): Promise<void> => {
       return new Promise<void>((resolve, reject) => {
@@ -4543,6 +4724,15 @@ export function App() {
   const applyHostMessage = useCallback(
     (message: HostMessage, isProviderActionOverride = false) => {
       hostMessageSequenceRef.current += 1;
+      // Per-reply quick actions are acknowledged by the first stream/status
+      // message that follows the command — clear the button's pending state.
+      if (message.type === "operation/status" || message.type === "stream/start") {
+        if (pendingMessageActionTimeoutRef.current !== undefined) {
+          window.clearTimeout(pendingMessageActionTimeoutRef.current);
+          pendingMessageActionTimeoutRef.current = undefined;
+        }
+        setPendingMessageAction(null);
+      }
       if (message.type === "training/resourceHandoff") {
         const handoff = resourceTrainingHandoffResolversRef.current.get(message.payload.requestId);
         if (handoff?.resourceId === message.payload.resourceId) {
@@ -9451,6 +9641,9 @@ export function App() {
       if (coachSettingsAutosaveTimerRef.current !== null) {
         window.clearTimeout(coachSettingsAutosaveTimerRef.current);
       }
+      if (pendingMessageActionTimeoutRef.current !== undefined) {
+        window.clearTimeout(pendingMessageActionTimeoutRef.current);
+      }
     },
     [],
   );
@@ -11925,17 +12118,6 @@ export function App() {
               ? "继续输入可收窄范围，删除 $ 就会按普通消息发送。"
               : "Keep typing to narrow it down, or remove $ to send a normal message."}
           </span>
-          <button
-            type="button"
-            className="skill-deck__manage-toggle"
-            aria-expanded={skillManagerOpen}
-            onClick={() => {
-              setPendingDeleteSkillId(undefined);
-              setSkillManagerOpen((open) => !open);
-            }}
-          >
-            {zh ? "管理" : "Manage"}
-          </button>
         </div>
         {matchingLocalSkills.length === 0 ? (
           <p className="skill-deck__empty">
@@ -11993,6 +12175,25 @@ export function App() {
             {zh ? `创建技能 ${creatableTrigger}` : `Create skill ${creatableTrigger}`}
           </button>
         ) : null}
+        {/* The deck header is display:none chrome — the manager entry must live
+            outside it or custom skills become unreachable. */}
+        <button
+          type="button"
+          className="skill-deck__create-row skill-deck__manage-row"
+          aria-expanded={skillManagerOpen}
+          onClick={() => {
+            setPendingDeleteSkillId(undefined);
+            setSkillManagerOpen((open) => !open);
+          }}
+        >
+          {skillManagerOpen
+            ? zh
+              ? "收起技能管理"
+              : "Close skill manager"
+            : zh
+              ? "管理技能"
+              : "Manage skills"}
+        </button>
         {skillManagerOpen ? (
           <div className="skill-deck__manager">
             {customSkills.length > 0 ? (
@@ -12507,6 +12708,8 @@ export function App() {
       agentActivity={streaming.agentActivity}
       agentStep={streaming.agentStep}
       onArtifactOpen={handleCoachArtifactOpen}
+      onMessageAction={handleCoachMessageAction}
+      pendingMessageAction={pendingMessageAction}
     />
   );
 
@@ -12699,6 +12902,8 @@ export function App() {
             userLabel={t.you}
             streaming={isStreamingForView}
             onArtifactOpen={handleCoachArtifactOpen}
+            onMessageAction={handleCoachMessageAction}
+            pendingMessageAction={pendingMessageAction}
           />
           {!isStreamingForView ? (
             <UserFeedbackDisclosure
@@ -14515,33 +14720,6 @@ export function App() {
             })}
           </div>
           <div className="header-actions">
-            <button
-              type="button"
-              className="header-actions__button"
-              aria-label={headerActionLabels[layout.composerLanguage].share}
-              title={headerActionLabels[layout.composerLanguage].share}
-              onClick={() => void handleShareSession()}
-            >
-              <ShareIcon size={14} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className={`header-actions__button${activeView === "resources" ? " is-active" : ""}`}
-              aria-label={headerActionLabels[layout.composerLanguage].resources}
-              title={headerActionLabels[layout.composerLanguage].resources}
-              onClick={() => setActiveView("resources")}
-            >
-              <NavResourcesIcon size={14} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className={`header-actions__button${activeView === "training" ? " is-active" : ""}`}
-              aria-label={headerActionLabels[layout.composerLanguage].training}
-              title={headerActionLabels[layout.composerLanguage].training}
-              onClick={() => setActiveView("training")}
-            >
-              <NavTrainingIcon size={14} aria-hidden="true" />
-            </button>
             {activeView === "coach" && displayConnectionState !== "connected" ? (
               <StatusPill tone={displayConnectionState}>
                 {connectionStateLabel(displayConnectionState, t)}

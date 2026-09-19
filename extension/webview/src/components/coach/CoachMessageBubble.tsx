@@ -6,11 +6,18 @@ import {
   describeTrainerStopReason,
 } from "../../../../../shared/src/protocol";
 import type { ComposerLanguage, ConversationMessage } from "../../lib/types";
+import {
+  ResourcesIcon,
+  ShareIcon,
+  TrainingIcon,
+} from "../icons/CoachIcons";
 import { AgentActivityStrip } from "./AgentActivityStripSmart";
 import { CoachArtifactBlock, type CoachArtifactBlockData } from "./CoachArtifactBlock";
 import { CoachMessageParts } from "./CoachMessageParts";
 import { CollapsibleBlock } from "./CollapsibleBlock";
 import { MessageRichContent } from "./MessageRichContent";
+
+export type CoachMessageAction = "share" | "save-resource" | "training-card";
 
 export interface CoachMessageBubbleProps {
   message: ConversationMessage;
@@ -25,7 +32,25 @@ export interface CoachMessageBubbleProps {
   /** Optional trailing node (e.g. streaming dots) rendered inside the body. */
   children?: ReactNode;
   onArtifactOpen?: (artifact: CoachArtifactBlockData, message: ConversationMessage) => void;
+  /** Quick actions under an assistant reply: share / save to library / create a training card. */
+  onMessageAction?: (action: CoachMessageAction, message: ConversationMessage) => void;
+  /** In-flight action key, formatted `${message.id}:${action}`; matching buttons disable. */
+  pendingMessageAction?: string | null;
 }
+
+const COACH_MESSAGE_ACTION_LABELS: Record<
+  ComposerLanguage,
+  Record<CoachMessageAction, string>
+> = {
+  "zh-CN": { share: "分享", "save-resource": "加入资料库", "training-card": "加入训练卡片" },
+  "en-US": { share: "Share", "save-resource": "Save to Resources", "training-card": "Create training card" },
+  "es-ES": { share: "Compartir", "save-resource": "Guardar en Recursos", "training-card": "Crear tarjeta" },
+  "fr-FR": { share: "Partager", "save-resource": "Ajouter aux Ressources", "training-card": "Créer une carte" },
+  "de-DE": { share: "Teilen", "save-resource": "In Bibliothek speichern", "training-card": "Karte erstellen" },
+  "ja-JP": { share: "共有", "save-resource": "ライブラリに保存", "training-card": "カードを作成" },
+  "ko-KR": { share: "공유", "save-resource": "라이브러리에 저장", "training-card": "카드 만들기" },
+  "pt-BR": { share: "Compartilhar", "save-resource": "Salvar na Biblioteca", "training-card": "Criar cartão" },
+};
 
 function fallbackRoleLabel(message: ConversationMessage): string {
   if (message.role === "user") {
@@ -377,6 +402,8 @@ export function CoachMessageBubble({
   language = "en-US",
   streaming = false,
   onArtifactOpen,
+  onMessageAction,
+  pendingMessageAction,
 }: CoachMessageBubbleProps) {
   const resolvedRoleLabel =
     roleLabel ??
@@ -492,6 +519,15 @@ export function CoachMessageBubble({
         )
       : message.body;
   const hasBody = visibleBody.trim().length > 0;
+  const pendingAssistantAction = pendingMessageAction?.startsWith(`${message.id}:`)
+    ? (pendingMessageAction.slice(message.id.length + 1) as CoachMessageAction)
+    : null;
+  const showAssistantActions =
+    message.role === "assistant" &&
+    !streaming &&
+    Boolean(onMessageAction) &&
+    (hasBody || messageHasArtifacts);
+  const messageActionLabels = COACH_MESSAGE_ACTION_LABELS[language] ?? COACH_MESSAGE_ACTION_LABELS["en-US"];
   const shouldShowUserContextInline =
     message.role === "user" && !messageHasArtifacts && supportDetails.length === 1 && attachmentCount <= 1;
   // Supplement material folds only when there is genuinely a lot to hide:
@@ -794,6 +830,50 @@ export function CoachMessageBubble({
             <div className="message-bubble__details-body">{detailBlocks}</div>
           </div>
         )
+      ) : null}
+
+      {showAssistantActions ? (
+        <div
+          className="message-bubble__actions"
+          role="group"
+          aria-label={
+            language === "zh-CN" ? "这条回复的快捷操作" : "Quick actions for this reply"
+          }
+        >
+          <button
+            type="button"
+            className="message-bubble__action"
+            disabled={pendingAssistantAction === "share"}
+            aria-label={messageActionLabels.share}
+            title={messageActionLabels.share}
+            onClick={() => onMessageAction?.("share", message)}
+          >
+            <ShareIcon size={13} aria-hidden="true" />
+            <span>{messageActionLabels.share}</span>
+          </button>
+          <button
+            type="button"
+            className="message-bubble__action"
+            disabled={pendingAssistantAction === "save-resource"}
+            aria-label={messageActionLabels["save-resource"]}
+            title={messageActionLabels["save-resource"]}
+            onClick={() => onMessageAction?.("save-resource", message)}
+          >
+            <ResourcesIcon size={13} aria-hidden="true" />
+            <span>{messageActionLabels["save-resource"]}</span>
+          </button>
+          <button
+            type="button"
+            className="message-bubble__action"
+            disabled={pendingAssistantAction === "training-card"}
+            aria-label={messageActionLabels["training-card"]}
+            title={messageActionLabels["training-card"]}
+            onClick={() => onMessageAction?.("training-card", message)}
+          >
+            <TrainingIcon size={13} aria-hidden="true" />
+            <span>{messageActionLabels["training-card"]}</span>
+          </button>
+        </div>
       ) : null}
     </article>
   );

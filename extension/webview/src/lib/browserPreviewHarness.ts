@@ -963,10 +963,18 @@ function emitLivePreviewOperationStatus(
     action.type === "command/execute" && action.payload.commandId === trainerCommands.indexResources;
   const isResourceSearch =
     action.type === "command/execute" && action.payload.commandId === trainerCommands.searchResources;
+  const isResourceUpload =
+    action.type === "command/execute" && action.payload.commandId === trainerCommands.uploadResource;
   const operationId =
     browserPreviewString(payload?.__trainerResourceOperationId) ||
     (isResourceSearch ? browserPreviewString(payload?.requestId) : "");
-  const operationKind = isResourceIndex ? "index" : isResourceSearch ? "search" : undefined;
+  const operationKind = isResourceIndex
+    ? "index"
+    : isResourceSearch
+      ? "search"
+      : isResourceUpload
+        ? "upload"
+        : undefined;
   const operationMessage =
     operationKind && operationId
       ? `[[trainer-resource-operation:${operationKind}:${operationId}]] ${message}`
@@ -1128,6 +1136,7 @@ async function runBrowserPreviewLiveAction(
   const isResourceIndex =
     commandId === trainerCommands.indexResources;
   const isResourceSearch = commandId === trainerCommands.searchResources;
+  const isResourceUpload = commandId === trainerCommands.uploadResource;
   const isResourceTrashRefresh = commandId === trainerCommands.refreshResourceTrash;
   const isResourceOpen = action.type === "resource/open";
   const isSandboxPreview = commandId === trainerCommands.previewSandbox;
@@ -1142,6 +1151,7 @@ async function runBrowserPreviewLiveAction(
     !isTaskSpecify &&
     !isResourceIndex &&
     !isResourceSearch &&
+    !isResourceUpload &&
     !isResourceTrashRefresh &&
     !isResourceOpen &&
     !isSandboxPreview &&
@@ -1503,6 +1513,82 @@ async function runBrowserPreviewLiveAction(
         action,
         "success",
         previewText(language, `已完成资料搜索：“${query}”。`, `Resource search completed for "${query}".`),
+      );
+      return;
+    }
+
+    if (isResourceUpload) {
+      const rawUploads = Array.isArray(payload?.uploads) ? payload.uploads : [];
+      const uploads = rawUploads.filter(
+        (item): item is Record<string, unknown> => Boolean(item && typeof item === "object"),
+      );
+      if (uploads.length === 0) {
+        emitLivePreviewOperationStatus(
+          action,
+          "error",
+          previewText(language, "没有可导入的内联资料。", "No inline resources were provided."),
+        );
+        return;
+      }
+      let uploadedCount = 0;
+      let failedCount = 0;
+      for (const upload of uploads) {
+        const uploadResponse = await fetch(`${sidecarBaseUrl}/resource/upload`, {
+          method: "POST",
+          headers: requestHeaders,
+          body: JSON.stringify({
+            session_id: livePreviewSessionId,
+            workspace_id: workspaceId,
+            kind: browserPreviewString(upload.kind) || "markdown",
+            name: browserPreviewString(upload.name),
+            source: browserPreviewString(upload.source),
+            content: browserPreviewString(upload.content) || undefined,
+            content_encoding: browserPreviewString(upload.contentEncoding) || undefined,
+            tags: browserPreviewStringArray(upload.tags),
+            source_type: browserPreviewString(upload.sourceType) || "file",
+            source_items: browserPreviewStringArray(upload.sourceItems),
+          }),
+        });
+        if (!uploadResponse.ok) {
+          failedCount += 1;
+          continue;
+        }
+        const record = (await uploadResponse.json().catch(() => ({}))) as Record<string, unknown>;
+        const resourceId = browserPreviewString(record.id ?? record.resource_id);
+        if (!resourceId) {
+          uploadedCount += 1;
+          continue;
+        }
+        const indexResponse = await fetch(`${sidecarBaseUrl}/resource/index`, {
+          method: "POST",
+          headers: requestHeaders,
+          body: JSON.stringify({
+            session_id: livePreviewSessionId,
+            workspace_id: workspaceId,
+            resource_id: resourceId,
+          }),
+        });
+        if (indexResponse.ok) {
+          uploadedCount += 1;
+        } else {
+          failedCount += 1;
+        }
+      }
+      await refreshLiveBrowserPreviewBootstrap();
+      emitLivePreviewOperationStatus(
+        action,
+        failedCount > 0 ? "error" : "success",
+        failedCount > 0
+          ? previewText(
+              language,
+              `已导入 ${uploadedCount} 项，${failedCount} 项失败，请检查资料状态。`,
+              `Imported ${uploadedCount}; ${failedCount} resource${failedCount === 1 ? "" : "s"} failed. Check their status.`,
+            )
+          : previewText(
+              language,
+              "已把这条回复存入资料库。",
+              "The reply was saved to the resource library.",
+            ),
       );
       return;
     }

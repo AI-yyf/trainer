@@ -5,7 +5,7 @@ import type { ComposerLanguage } from "../../lib/types";
 import type { AgentToolActivity } from "../../app/useWorkbenchState";
 import type { CoachArtifactBlockData } from "./CoachArtifactBlock";
 import { AgentActivityStrip } from "./AgentActivityStripSmart";
-import { CoachMessageBubble } from "./CoachMessageBubble";
+import { CoachMessageBubble, type CoachMessageAction } from "./CoachMessageBubble";
 
 export interface StreamingMessageState {
   body: string;
@@ -35,6 +35,8 @@ export interface CoachConversationViewProps {
   agentActivity?: AgentToolActivity[];
   agentStep?: number;
   onArtifactOpen?: (artifact: CoachArtifactBlockData, message: ConversationMessage) => void;
+  onMessageAction?: (action: CoachMessageAction, message: ConversationMessage) => void;
+  pendingMessageAction?: string | null;
   renderMessageSupplement?: (message: ConversationMessage) => ReactNode;
 }
 
@@ -57,6 +59,8 @@ export function CoachConversationView({
   agentActivity,
   agentStep,
   onArtifactOpen,
+  onMessageAction,
+  pendingMessageAction,
   renderMessageSupplement,
 }: CoachConversationViewProps) {
   const classes = [
@@ -137,6 +141,8 @@ export function CoachConversationView({
                 userLabel={userLabel}
                 language={language}
                 onArtifactOpen={onArtifactOpen}
+                onMessageAction={onMessageAction}
+                pendingMessageAction={pendingMessageAction}
               />
             </div>
             {supplement ? <div className="coach-conversation-view__supplement">{supplement}</div> : null}
