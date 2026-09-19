@@ -1,0 +1,47 @@
+{
+  "model": "gpt-image-2",
+  "provider": "huishitu",
+  "account": "huishitu",
+  "request_style": "openai_images",
+  "network_route": "direct",
+  "workflow": "normal",
+  "generation_mode": "standard",
+  "text_zones": [],
+  "text_zone_style": null,
+  "asset_background": null,
+  "reference_fidelity": "faithful",
+  "references": [
+    {
+      "source": "/Users/Apple/Desktop/trainer/assets/refs/ai_niang_style_ref.jpeg",
+      "role": "style",
+      "uploaded_path": "/Users/Apple/Desktop/trainer/assets/refs/ai_niang_style_ref.jpeg",
+      "tile": null
+    }
+  ],
+  "prompt": "High-quality Japanese anime illustration, drawn like a character-introduction card from the famous Chinese AI-girl (AI娘 / 萌娘) fan-art series. ONE elegant anime girl with normal anime proportions (about 6.5-7 heads tall — NOT chibi, NOT super-deformed), framed from the knees up, standing centered like a trading-card portrait. Refined bishoujo face: large glossy anime eyes with layered highlights and colored iris gradient, small delicate nose, small soft lips, smooth pale skin. Detailed hair rendered strand by strand with a soft shine and a signature hair ornament. Ornate elegant outfit themed to her brand color palette, mixing Victorian / academy / lolita elements — ribbons, corset belts, lace, frills, high collar; her brand emblem appears subtly as embroidery or a brooch. Clean delicate lineart, soft cel shading blended with gentle airbrush shading, warm soft lighting. Plain warm off-white paper background (#FAF7F2), generous negative space, no scenery. No text in the image except the tiny prop labels explicitly listed. No watermark, no signature, no border, no frame, no photorealism, no 3D render.DEVIN girl, themed to Devin / Cognition's official brand: monochrome gray engineering — cool grays #626870 on near-black #171717, no color except the red 'unmerged' stamps, autonomous-machine calm. Hair: silver-gray long hair, precise low ponytail, a small matte-black hexagonal gear hairclip. Eyes: cool steel-gray, level and methodical. Outfit: tailored gray engineer dress with structured black panels joined by visible precision seams, an interlocking TRIPLE-HEXAGON emblem embroidered in white on the chest, a polished dark-metal mechanical gauntlet covering her right forearm. Prop: a small robotic arm rises over her shoulder holding five paper slips, each stamped 'unmerged' in red — the only red in the image; a work badge on her chest reads 'Autonomous Engineer (in training)'. Expression: earnest, methodical, doing her very best, a tiny nervous sweat drop.",
+  "verbatim_text": [],
+  "shaped_prompt": "Use case: photorealistic-natural\nAsset type: finished raster image\nPrimary request: High-quality Japanese anime illustration, drawn like a character-introduction card from the famous Chinese AI-girl (AI娘 / 萌娘) fan-art series. ONE elegant anime girl with normal anime proportions (about 6.5-7 heads tall — NOT chibi, NOT super-deformed), framed from the knees up, standing centered like a trading-card portrait. Refined bishoujo face: large glossy anime eyes with layered highlights and colored iris gradient, small delicate nose, small soft lips, smooth pale skin. Detailed hair rendered strand by strand with a soft shine and a signature hair ornament. Ornate elegant outfit themed to her brand color palette, mixing Victorian / academy / lolita elements — ribbons, corset belts, lace, frills, high collar; her brand emblem appears subtly as embroidery or a brooch. Clean delicate lineart, soft cel shading blended with gentle airbrush shading, warm soft lighting. Plain warm off-white paper background (#FAF7F2), generous negative space, no scenery. No text in the image except the tiny prop labels explicitly listed. No watermark, no signature, no border, no frame, no photorealism, no 3D render.DEVIN girl, themed to Devin / Cognition's official brand: monochrome gray engineering — cool grays #626870 on near-black #171717, no color except the red 'unmerged' stamps, autonomous-machine calm. Hair: silver-gray long hair, precise low ponytail, a small matte-black hexagonal gear hairclip. Eyes: cool steel-gray, level and methodical. Outfit: tailored gray engineer dress with structured black panels joined by visible precision seams, an interlocking TRIPLE-HEXAGON emblem embroidered in white on the chest, a polished dark-metal mechanical gauntlet covering her right forearm. Prop: a small robotic arm rises over her shoulder holding five paper slips, each stamped 'unmerged' in red — the only red in the image; a work badge on her chest reads 'Autonomous Engineer (in training)'. Expression: earnest, methodical, doing her very best, a tiny nervous sweat drop.\nInput images: Image 1: style input\nScene/backdrop: infer only what the request implies; keep it coherent and uncluttered\nSubject: make the requested subject the unmistakable focal point\nStyle/medium: follow the requested medium; if omitted, use a polished production-ready finish\nComposition/framing: one clear focal subject, coherent depth, intentional framing, no accidental clutter\nLighting/mood: consistent light direction, believable shadows, refined contrast and color\nColor palette: preserve colors from the request or references; avoid arbitrary brand colors\nMaterials/textures: physically plausible surfaces, fine texture, clean edges, no plastic-looking detail\nText (verbatim, every string must be exact): none specified\nConstraints: do not invent unrequested subjects; preserve reference identity, silhouette and key geometry when applicable\nAvoid: unrequested objects, extra people, duplicate subjects, distorted anatomy, bad hands, unreadable text, random logos, watermark, signature, border, overprocessed skin, plastic texture, muddy details, accidental collage\nRender at the highest native quality available. Prioritize subject fidelity, clean edges, coherent perspective and accurate requested text.\nDelivery intent: compose specifically for a 2880x2880 canvas at 1.0000:1; keep important content inside the canvas and make every required element readable at that delivery size.\nReference policy: use each input only for its stated role; do not paste borders, watermarks, or old text from references; blend lighting and perspective naturally.\nReference fidelity: faithfully preserve the supplied reference's visual grammar, palette, paper texture, illustration language, hierarchy and recognizable subject geometry. Replace only content explicitly requested by the user.",
+  "requested_native_size": "2880x2880",
+  "native_size_policy": "target-ratio-maximum",
+  "requested_quality": "high",
+  "upstream_format": "PNG",
+  "native_size": [
+    2880,
+    2880
+  ],
+  "native_request_honored": true,
+  "native_output": "/Users/Apple/Desktop/trainer/assets/portraits/devin.png",
+  "final_size": [
+    2880,
+    2880
+  ],
+  "target_size": [
+    2880,
+    2880
+  ],
+  "output_size_mode": "native",
+  "resize_mode": null,
+  "delivery_sharpen": null,
+  "postprocess": "none",
+  "output": "/Users/Apple/Desktop/trainer/assets/portraits/devin.png"
+}
