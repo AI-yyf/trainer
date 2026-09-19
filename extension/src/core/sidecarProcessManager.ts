@@ -378,6 +378,11 @@ export class SidecarProcessManager implements vscode.Disposable {
         PYTHONUNBUFFERED: '1',
         TRAINER_PORT: String(port),
         TRAINER_DATA_DIR: this.resolveSidecarDataDirectory(),
+        TRAINER_ENABLE_NETWORK_FETCH: vscode.workspace
+          .getConfiguration('trainer')
+          .get<boolean>('research.networkEnabled', true)
+          ? 'true'
+          : 'false',
         ...candidate.env,
       },
       stdio: 'pipe',

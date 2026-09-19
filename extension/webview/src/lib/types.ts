@@ -2006,6 +2006,7 @@ export type HostMessage =
         tone: "info" | "success" | "error";
         message: string;
         phase?: string;
+        surface?: "global" | "stream";
         providerTest?: HostProviderTestSummary;
       };
     }

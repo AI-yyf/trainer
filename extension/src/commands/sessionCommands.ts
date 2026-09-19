@@ -2639,7 +2639,7 @@ export async function sendStreamMessageCommand(
                 : 'Provider streaming is degraded; Trainer will finish this reply without pretending buffered text is incremental.';
           await context.workbench.postMessage({
             type: 'operation/status',
-            payload: { tone: 'info', message },
+            payload: { tone: 'info', message, surface: 'stream' },
           });
           continue;
         }
@@ -4401,6 +4401,7 @@ async function postStreamReliabilityStatus(
       tone: reliabilityPhase === 'failed' ? 'error' : 'info',
       message,
       phase,
+      surface: 'stream',
     },
   });
 }

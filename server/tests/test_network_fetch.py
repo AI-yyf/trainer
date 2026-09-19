@@ -464,6 +464,139 @@ def test_research_web_search_obeys_the_shared_network_switch(monkeypatch) -> Non
     assert calls == ["https://example.com"]
 
 
+def test_web_search_excerpt_prefers_article_content_over_navigation() -> None:
+    html = (
+        "<html><body><nav>" + ("menu " * 500) + "</nav>"
+        "<main><article><h1>Dependency Injection</h1>"
+        "<p>Testing overrides replace dependencies safely.</p></article></main>"
+        "</body></html>"
+    )
+
+    excerpt = WebSearchClient(network_enabled=True)._extract_text_from_html(html, 200)
+
+    assert excerpt == "Dependency Injection Testing overrides replace dependencies safely."
+
+
+def test_web_search_falls_back_to_bing_when_duckduckgo_returns_a_challenge(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def fake_fetch(url: str, **_kwargs) -> ControlledFetchResponse:
+        calls.append(url)
+        if "search.brave.com" in url or "duckduckgo.com" in url:
+            body = b'<form id="challenge-form"><div>bot challenge</div></form>'
+        elif "bing.com/search" in url:
+            body = (
+                b'<li class="b_algo"><h2><a href="https://docs.example/guide">'
+                b"Verified guide</a></h2></li>"
+            )
+        else:
+            raise AssertionError(f"unexpected URL {url}")
+        return ControlledFetchResponse(
+            body=body,
+            final_url=url,
+            status=200,
+            headers={"content-type": "text/html"},
+            fetched_at="2026-09-19T00:00:00+00:00",
+        )
+
+    monkeypatch.setattr("app.research.web_search.fetch_url", fake_fetch)
+    results = WebSearchClient(network_enabled=True).search("verified guide", limit=2)
+
+    assert results == [
+        {
+            "title": "Verified guide",
+            "url": "https://docs.example/guide",
+            "source": "docs.example",
+            "rank": 1,
+        }
+    ]
+    assert "search.brave.com" in calls[0]
+    assert "duckduckgo.com" in calls[1]
+    assert "bing.com/search" in calls[2]
+
+
+def test_web_search_parses_brave_site_constrained_results(monkeypatch) -> None:
+    def fake_fetch(url: str, **_kwargs) -> ControlledFetchResponse:
+        if url == "https://fastapi.tiangolo.com/sitemap.xml":
+            return ControlledFetchResponse(
+                body=b"<urlset></urlset>",
+                final_url=url,
+                status=200,
+                headers={"content-type": "application/xml"},
+                fetched_at="2026-09-19T00:00:00+00:00",
+            )
+        assert "search.brave.com" in url
+        return ControlledFetchResponse(
+            body=(
+                b'<div class="snippet" data-type="web"><a href="https://fastapi.tiangolo.com/'
+                b'tutorial/dependencies/" class="result l1"><div class="title search-snippet-title" '
+                b'title="Dependencies - FastAPI">Dependencies - FastAPI</div></a></div>'
+            ),
+            final_url=url,
+            status=200,
+            headers={"content-type": "text/html"},
+            fetched_at="2026-09-19T00:00:00+00:00",
+        )
+
+    monkeypatch.setattr("app.research.web_search.fetch_url", fake_fetch)
+    results = WebSearchClient(network_enabled=True).search(
+        "site:fastapi.tiangolo.com tutorial dependency injection",
+        limit=2,
+    )
+
+    assert results[0]["title"] == "Dependencies - FastAPI"
+    assert results[0]["url"] == "https://fastapi.tiangolo.com/tutorial/dependencies/"
+
+
+def test_web_search_prefers_first_party_sitemap_for_site_scoped_docs(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def fake_fetch(url: str, **_kwargs) -> ControlledFetchResponse:
+        calls.append(url)
+        assert url == "https://fastapi.tiangolo.com/sitemap.xml"
+        return ControlledFetchResponse(
+            body=(
+                b"<urlset>"
+                b"<url><loc>https://fastapi.tiangolo.com/</loc></url>"
+                b"<url><loc>https://fastapi.tiangolo.com/tutorial/dependencies/</loc></url>"
+                b"<url><loc>https://fastapi.tiangolo.com/tutorial/dependencies/sub-dependencies/</loc></url>"
+                b"<url><loc>https://fastapi.tiangolo.com/advanced/testing-dependencies/</loc></url>"
+                b"</urlset>"
+            ),
+            final_url=url,
+            status=200,
+            headers={"content-type": "application/xml"},
+            fetched_at="2026-09-19T00:00:00+00:00",
+        )
+
+    monkeypatch.setattr("app.research.web_search.fetch_url", fake_fetch)
+    results = WebSearchClient(network_enabled=True).search(
+        "site:fastapi.tiangolo.com dependency injection sub-dependencies testing",
+        limit=3,
+    )
+
+    assert calls == ["https://fastapi.tiangolo.com/sitemap.xml"]
+    assert [result["url"] for result in results] == [
+        "https://fastapi.tiangolo.com/tutorial/dependencies/sub-dependencies/",
+        "https://fastapi.tiangolo.com/advanced/testing-dependencies/",
+    ]
+
+
+def test_web_search_site_constraint_rejects_irrelevant_fallback_results() -> None:
+    client = WebSearchClient(network_enabled=True)
+    constrained = client._apply_site_constraint(
+        [
+            {"title": "Wrong", "url": "https://unrelated.example/tutorial"},
+            {"title": "Right", "url": "https://docs.example.org/guide"},
+        ],
+        "site:example.org verified guide",
+    )
+
+    assert constrained == [
+        {"title": "Right", "url": "https://docs.example.org/guide"}
+    ]
+
+
 def test_research_search_reports_page_fetch_failures_without_recording_live_findings(monkeypatch) -> None:
     def fake_fetch(url: str, **_kwargs) -> ControlledFetchResponse:
         if "duckduckgo.com" in url:
@@ -519,6 +652,9 @@ def test_research_search_records_verified_page_provenance(monkeypatch) -> None:
 
     assert result["results_count"] == 1
     assert result["results"][0]["url"] == "https://final.example/source"
+    assert result["results"][0]["fetched_at"] == "2026-07-12T00:05:00+00:00"
+    assert result["results"][0]["freshness"] == "fresh"
+    assert result["results"][0]["trust_score"] == 0.7
     assert references[0]["source"] == "https://final.example/source"
     assert references[0]["freshness"] == "fresh"
     assert references[0]["fetched_at"] == "2026-07-12T00:05:00+00:00"

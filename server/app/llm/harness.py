@@ -33,6 +33,9 @@ RESERVE_TOKENS = 16_384
 KEEP_RECENT_TOKENS = 20_000
 OVERFLOW_KEEP_RECENT_TOKENS = 8_000
 COMPACTION_TOOL_SERIALIZE_CHARS = 2_000
+COMPACTION_RESEARCH_SOURCE_LIMIT = 48
+COMPACTION_RESEARCH_ASSESSMENT_LIMIT = 8
+COMPACTION_RECORD_LIMIT = 12
 
 # Character caps aligned with Pi toolOutputLimits (bash 30k / read 100k / default 30k).
 TOOL_OUTPUT_LIMITS: dict[str, int] = {
@@ -298,6 +301,127 @@ def _serialize_span(messages: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _research_evidence_ledger(extra: dict[str, Any]) -> list[str]:
+    """Render the durable research state, not repeated raw page bodies.
+
+    Tool results are deliberately pruned well before a very large context window is full.
+    This ledger is the loss-resistant checkpoint that lets the model continue deciding
+    whether evidence is sufficient after a full history compaction.
+    """
+
+    state_raw = extra.get("_learning_material_research_state")
+    if not isinstance(state_raw, dict):
+        return []
+    state = state_raw
+    required_facets = [
+        " ".join(str(item or "").split())
+        for item in state.get("required_facets", [])
+        if str(item or "").strip()
+    ][:8]
+    covered_facets = [
+        " ".join(str(item or "").split())
+        for item in state.get("covered_facets", [])
+        if str(item or "").strip()
+    ][:8]
+    covered_keys = {item.casefold() for item in covered_facets}
+    missing_facets = [item for item in required_facets if item.casefold() not in covered_keys]
+    sources = [
+        item for item in state.get("sources", []) if isinstance(item, dict)
+    ][:COMPACTION_RESEARCH_SOURCE_LIMIT]
+    assessments = [
+        item for item in state.get("assessment", []) if isinstance(item, dict)
+    ][:COMPACTION_RESEARCH_ASSESSMENT_LIMIT]
+    evidence_standard_raw = state.get("evidence_standard")
+    evidence_standard = (
+        evidence_standard_raw if isinstance(evidence_standard_raw, dict) else {}
+    )
+
+    lines = ["## Research Evidence Ledger"]
+    lines.append(f"- Status: {str(state.get('status') or 'in_progress').strip()}")
+    lines.append(f"- Search rounds completed: {int(state.get('search_count') or 0)}")
+    if required_facets:
+        lines.append("- Required facets: " + "; ".join(required_facets))
+    if covered_facets:
+        lines.append("- Covered facets: " + "; ".join(covered_facets))
+    if missing_facets:
+        lines.append("- Open evidence gaps: " + "; ".join(missing_facets))
+    if evidence_standard:
+        lines.extend(["", "### Adaptive Evidence Standard"])
+        lines.append(
+            "- Risk / claims: "
+            + str(evidence_standard.get("risk_level") or "unknown")
+            + " / "
+            + ", ".join(
+                str(item) for item in evidence_standard.get("claim_types", []) if str(item)
+            )
+        )
+        lines.append(
+            "- Source threshold: "
+            + str(evidence_standard.get("minimum_independent_sources") or "unknown")
+            + "; authoritative required="
+            + str(evidence_standard.get("requires_authoritative_source")).lower()
+            + "; freshness="
+            + str(evidence_standard.get("freshness_requirement") or "unknown")
+        )
+        scope = " ".join(str(evidence_standard.get("applicability_scope") or "").split())
+        stopping_rule = " ".join(str(evidence_standard.get("stopping_rule") or "").split())
+        if scope:
+            lines.append(f"- Applicability: {scope[:360]}")
+        if stopping_rule:
+            lines.append(f"- Stop rule: {stopping_rule[:360]}")
+        for check in evidence_standard.get("quality_checks", []):
+            if not isinstance(check, dict):
+                continue
+            dimension = str(check.get("dimension") or "quality").strip()
+            status = str(check.get("status") or "unknown").strip()
+            rationale = " ".join(str(check.get("rationale") or "").split())[:300]
+            lines.append(f"- Quality {dimension}: {status} | {rationale}")
+        uncertainties = [
+            " ".join(str(item or "").split())
+            for item in evidence_standard.get("unresolved_uncertainties", [])
+            if str(item or "").strip()
+        ]
+        if uncertainties:
+            lines.append("- Unresolved uncertainties: " + "; ".join(uncertainties[:8]))
+    if sources:
+        lines.extend(["", "### Verified Source Catalog"])
+        for source in sources:
+            source_id = str(source.get("id") or source.get("url") or "source").strip()
+            title = " ".join(str(source.get("title") or "Untitled source").split())[:180]
+            url = str(source.get("url") or "").strip()
+            fetched_at = str(source.get("fetched_at") or "").strip()
+            suffix = f" (fetched {fetched_at})" if fetched_at else ""
+            lines.append(f"- [{source_id}] {title} — {url}{suffix}")
+    if assessments:
+        lines.extend(["", "### Model Evidence Judgments"])
+        for assessment in assessments:
+            facet = " ".join(str(assessment.get("facet") or "facet").split())[:120]
+            status = str(assessment.get("status") or "unknown").strip()
+            source_ids = [
+                str(item).strip()
+                for item in assessment.get("source_ids", [])
+                if str(item).strip()
+            ][:8]
+            rationale = " ".join(str(assessment.get("rationale") or "").split())[:320]
+            line = f"- {facet}: {status}"
+            if source_ids:
+                line += " | sources=" + ", ".join(source_ids)
+            if rationale:
+                line += f" | rationale={rationale}"
+            lines.append(line)
+            quotes = [
+                item
+                for item in assessment.get("evidence_quotes", [])
+                if isinstance(item, dict)
+            ][:4]
+            for quote_item in quotes:
+                quote_source = str(quote_item.get("source_id") or "").strip()
+                quote = " ".join(str(quote_item.get("quote") or "").split())[:280]
+                if quote:
+                    lines.append(f'  - exact evidence [{quote_source}]: "{quote}"')
+    return lines
+
+
 def structured_compaction_summary(
     messages: list[dict[str, Any]],
     *,
@@ -353,6 +477,9 @@ def structured_compaction_summary(
         lines.extend(["", "### Blocked", f"- {blocker}"])
     lines.extend(["", "## Next Steps"])
     lines.append(f"1. {next_step or 'Continue from the latest tool evidence.'}")
+    research_ledger = _research_evidence_ledger(extra)
+    if research_ledger:
+        lines.extend(["", *research_ledger])
     lines.extend(["", "## Critical Context"])
     if sandbox_paths:
         for path in sandbox_paths[:8]:
@@ -465,6 +592,20 @@ def compact_history(
             "tokens_after": record.tokens_after,
         },
     )
+    if isinstance(extra, dict):
+        metrics_raw = extra.get("_context_compaction_records")
+        metrics = list(metrics_raw) if isinstance(metrics_raw, list) else []
+        metric = {
+            "reason": record.reason,
+            "tokens_before": record.tokens_before,
+            "tokens_after": record.tokens_after,
+            "research_state_preserved": isinstance(
+                extra.get("_learning_material_research_state"), dict
+            ),
+        }
+        metrics.append(metric)
+        extra["_context_compaction_records"] = metrics[-COMPACTION_RECORD_LIMIT:]
+        extra["_last_context_compaction"] = metric
     return record
 
 

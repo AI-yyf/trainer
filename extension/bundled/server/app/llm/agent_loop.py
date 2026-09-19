@@ -172,42 +172,57 @@ async def _iterate_with_stream_cancellation(
     """Yield provider events while making cancellation close the upstream iterator."""
 
     iterator = stream.__aiter__()
+    iterator_closed = False
+    iterator_exhausted = False
 
     async def close_iterator() -> None:
+        nonlocal iterator_closed
+        if iterator_closed or iterator_exhausted:
+            return
+        iterator_closed = True
         close = getattr(iterator, "aclose", None)
         if close is not None:
-            await close()
-
-    while True:
-        if cancel_event is None:
             try:
-                yield await iterator.__anext__()
-            except StopAsyncIteration:
-                return
-            continue
-        if cancel_event.is_set():
-            await close_iterator()
-            raise asyncio.CancelledError
-        next_event = asyncio.ensure_future(iterator.__anext__())
-        cancellation = asyncio.create_task(cancel_event.wait())
-        try:
-            done, _ = await asyncio.wait(
-                {next_event, cancellation},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if cancellation in done and cancel_event.is_set():
-                next_event.cancel()
-                await asyncio.gather(next_event, return_exceptions=True)
+                await close()
+            except RuntimeError as exc:
+                if "asynchronous generator is already running" not in str(exc):
+                    raise
+
+    try:
+        while True:
+            if cancel_event is None:
+                try:
+                    yield await iterator.__anext__()
+                except StopAsyncIteration:
+                    iterator_exhausted = True
+                    return
+                continue
+            if cancel_event.is_set():
                 await close_iterator()
                 raise asyncio.CancelledError
+            next_event = asyncio.ensure_future(iterator.__anext__())
+            cancellation = asyncio.create_task(cancel_event.wait())
             try:
-                yield next_event.result()
-            except StopAsyncIteration:
-                return
-        finally:
-            if not cancellation.done():
-                cancellation.cancel()
-            await asyncio.gather(cancellation, return_exceptions=True)
+                done, _ = await asyncio.wait(
+                    {next_event, cancellation},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if cancellation in done and cancel_event.is_set():
+                    next_event.cancel()
+                    await asyncio.gather(next_event, return_exceptions=True)
+                    await close_iterator()
+                    raise asyncio.CancelledError
+                try:
+                    yield next_event.result()
+                except StopAsyncIteration:
+                    iterator_exhausted = True
+                    return
+            finally:
+                if not cancellation.done():
+                    cancellation.cancel()
+                await asyncio.gather(cancellation, return_exceptions=True)
+    finally:
+        await close_iterator()
 
 
 @dataclass
@@ -502,6 +517,7 @@ class CoachAgentLoop:
             streamed_text_safe = False
             tool_calls: list[dict[str, Any]] = []
             stream_stop_reason: str | None = None
+            provider_final_received = False
             yield {"type": "step", "index": index, "stop_reason": None}
 
             stream_fn = self.provider.call_stream
@@ -536,6 +552,8 @@ class CoachAgentLoop:
                         stream_fn(history, tools_schema),
                         cancel_event,
                     ):
+                        if provider_final_received:
+                            continue
                         event_type = event.get("type")
                         if event_type == "delta":
                             delta = str(event.get("delta") or "")
@@ -559,7 +577,10 @@ class CoachAgentLoop:
                             )
                             raw_stop = event.get("stop_reason") or event.get("finish_reason")
                             stream_stop_reason = str(raw_stop) if raw_stop else None
-                            break
+                            # A final frame is logically terminal, but keep consuming until the
+                            # tiny provider iterator naturally exhausts. Breaking here forces an
+                            # early aclose() and triggers cleanup races in some compatible SDKs.
+                            provider_final_received = True
                         else:
                             yield event
                 except Exception as exc:

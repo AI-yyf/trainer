@@ -7777,7 +7777,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             "project_sourcing",
         }
         continuation_of_active_thread = (
-            message_requests_lane_continuation(request.message)
+            message_keeps_existing_thread(request.message)
             and state.snapshot.memory.active_thread is not None
         )
         relationship_first_opening = (
@@ -14841,6 +14841,32 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             )
         )
 
+    def message_is_relationship_reentry(message: str | None) -> bool:
+        lowered = " ".join(str(message or "").strip().lower().split())
+        if not lowered:
+            return False
+        compact = re.sub(r"[\s\.,!?:;\"'(){}\[\]/\\_\-，。！？、：；]+", "", lowered)
+        return compact in {
+            "hello",
+            "hi",
+            "hey",
+            "hellotrainer",
+            "hitrainer",
+            "goodmorning",
+            "goodafternoon",
+            "goodevening",
+            "你好",
+            "您好",
+            "嗨",
+            "哈喽",
+            "早上好",
+            "下午好",
+            "晚上好",
+        }
+
+    def message_keeps_existing_thread(message: str | None) -> bool:
+        return message_requests_lane_continuation(message) or message_is_relationship_reentry(message)
+
     def normalize_active_view_name(active_view: str | None) -> str:
         normalized = str(active_view or "").strip().lower()
         return (
@@ -15002,7 +15028,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     ) -> str:
         if resolved_scenario != "general":
             return resolved_scenario
-        if not message_requests_lane_continuation(message):
+        if not message_keeps_existing_thread(message):
             return resolved_scenario
         active_thread_scenario = active_thread_scenario_value(active_thread)
         if active_thread_scenario and active_thread_scenario != "general":
@@ -15200,7 +15226,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             )
         if active_thread is None:
             return False
-        return message_requests_lane_continuation(message)
+        return message_keeps_existing_thread(message)
 
     def should_preserve_relationship_continuity_for_turn(
         memory,
@@ -15209,7 +15235,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         grounding_context: dict[str, object] | None = None,
         active_view: str | None = None,
     ) -> bool:
-        if not message_requests_lane_continuation(message):
+        if not message_keeps_existing_thread(message):
             return False
         if resource_grounding_turn_prefers_fresh_lane(message, grounding_context):
             return False

@@ -37,6 +37,40 @@ def build_client(tmp_path: Path) -> TestClient:
     )
 
 
+def adaptive_plan_evidence_standard(source_ids: list[str]) -> dict[str, Any]:
+    return {
+        "risk_level": "normal",
+        "minimum_independent_sources": len(set(source_ids)),
+        "requires_authoritative_source": True,
+        "claim_types": ["procedural", "factual"],
+        "freshness_requirement": "current",
+        "applicability_scope": "The current FastAPI documentation and the learner's plan scope.",
+        "stopping_rule": (
+            "Stop after every requested FastAPI facet and all five evidence-quality dimensions "
+            "are supported by the fetched official documentation."
+        ),
+        "unresolved_uncertainties": [],
+        "quality_checks": [
+            {
+                "dimension": dimension,
+                "status": "satisfied",
+                "source_ids": source_ids,
+                "rationale": (
+                    f"The official fetched sources were reviewed in detail for {dimension} "
+                    "within the requested FastAPI learning-plan scope."
+                ),
+            }
+            for dimension in (
+                "coverage",
+                "source_quality",
+                "recency",
+                "contradictions",
+                "applicability",
+            )
+        ],
+    }
+
+
 def seed_formal_plan(*, plan_id: str) -> LearningPlan:
     return LearningPlan(
         id=plan_id,
@@ -154,6 +188,157 @@ async def test_save_formal_plan_revises_existing_live_unfrozen_plan(tmp_path: Pa
         assert revised.title == "Revised login error plan"
         assert len(revised.stages) == 2
         assert revised.stages[0].title == "Error mapping"
+
+
+@pytest.mark.asyncio
+async def test_verified_web_sources_ground_a_complex_plan_that_survives_restart(
+    tmp_path: Path,
+) -> None:
+    workspace_id = "workspace-research-grounded-plan"
+    session_id = ""
+    source_ids: list[str] = []
+
+    with build_client(tmp_path) as client:
+        started = client.post(
+            "/session/start",
+            json={"workspace_id": workspace_id, "workspace_name": "Research grounded plan"},
+        )
+        assert started.status_code == 200, started.text
+        session_id = started.json()["session_id"]
+        runtime = client.app.state.runtime
+
+        def verified_search(query: str, **_kwargs: object) -> dict[str, object]:
+            return {
+                "query": query,
+                "results": [
+                    {
+                        "id": "finding-fastapi-dependencies",
+                        "title": "Dependencies - FastAPI",
+                        "url": "https://fastapi.tiangolo.com/tutorial/dependencies/",
+                        "source": "fastapi.tiangolo.com",
+                        "snippet": "Official dependency injection tutorial.",
+                        "fetched_at": "2026-09-19T00:00:00+00:00",
+                        "freshness": "fresh",
+                        "trust_score": 0.9,
+                    },
+                    {
+                        "id": "finding-fastapi-testing",
+                        "title": "Testing Dependencies with Overrides - FastAPI",
+                        "url": "https://fastapi.tiangolo.com/advanced/testing-dependencies/",
+                        "source": "fastapi.tiangolo.com",
+                        "snippet": "Official guide to dependency overrides in tests.",
+                        "fetched_at": "2026-09-19T00:00:01+00:00",
+                        "freshness": "fresh",
+                        "trust_score": 0.9,
+                    },
+                ],
+            }
+
+        runtime.research_service.search_web = verified_search
+        registry = build_default_tool_registry()
+        context = ToolContext(
+            runtime=runtime,
+            workspace_id=workspace_id,
+            session_id=session_id,
+            extra={"formal_plan_mutation": True, "allow_coach_only_tools": True},
+        )
+        research = await registry.invoke(
+            context,
+            "search_learning_materials",
+            {
+                "query": "site:fastapi.tiangolo.com dependency injection and testing",
+                "focus_area": "FastAPI dependency injection",
+                "required_facets": ["dependency injection", "testing overrides"],
+                "preferred_domains": ["fastapi.tiangolo.com"],
+                "limit": 4,
+            },
+        )
+        assert research["ok"] is True
+        assert research["citation_required"] is True
+        source_ids = [source["id"] for source in research["sources"]]
+        assessment = await registry.invoke(
+            context,
+            "assess_research_evidence",
+            {
+                "verdict": "sufficient",
+                "evidence_standard": adaptive_plan_evidence_standard(source_ids),
+                "facet_assessments": [
+                    {
+                        "facet": "dependency injection",
+                        "status": "covered",
+                        "source_ids": ["finding-fastapi-dependencies"],
+                        "evidence_quotes": [
+                            {
+                                "source_id": "finding-fastapi-dependencies",
+                                "quote": "Official dependency injection tutorial",
+                            }
+                        ],
+                        "rationale": "The fetched official tutorial directly covers dependency injection.",
+                    },
+                    {
+                        "facet": "testing overrides",
+                        "status": "covered",
+                        "source_ids": ["finding-fastapi-testing"],
+                        "evidence_quotes": [
+                            {
+                                "source_id": "finding-fastapi-testing",
+                                "quote": "dependency overrides in tests",
+                            }
+                        ],
+                        "rationale": "The fetched official testing guide directly covers overrides.",
+                    },
+                ],
+            },
+        )
+        assert assessment["research_complete"] is True
+
+        stage_specs = [
+            ("mental-model", "Dependency graph mental model"),
+            ("callables", "Callable and class dependencies"),
+            ("sub-dependencies", "Sub-dependency composition"),
+            ("testing", "Dependency override testing"),
+            ("architecture", "Application boundary integration"),
+            ("capstone", "Verified project capstone"),
+        ]
+        committed = await registry.invoke(
+            context,
+            "save_formal_plan",
+            {
+                "title": "FastAPI dependency injection mastery",
+                "summary": "A six-stage source-grounded path from mental model to verified capstone.",
+                "current_step": "Map one dependency graph from the current project.",
+                "verify_method": [
+                    "Each stage has one observable code or test result.",
+                    "Claims about FastAPI behavior cite a fetched official source.",
+                ],
+                "stages": [
+                    {
+                        "id": f"stage-{stage_id}",
+                        "title": title,
+                        "goal": f"Learn and verify {title.lower()} in the current project.",
+                        "outcomes": [f"Produce one checked artifact for {title.lower()}."],
+                        "resources": source_ids,
+                        "status": "active" if index == 0 else "pending",
+                    }
+                    for index, (stage_id, title) in enumerate(stage_specs)
+                ],
+            },
+        )
+        assert committed["ok"] is True
+        assert len(committed["plan"]["stages"]) == 6
+
+    with build_client(tmp_path) as restored_client:
+        restored = restored_client.post(
+            "/session/start",
+            json={"workspace_id": workspace_id, "workspace_name": "Research grounded plan"},
+        )
+
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["session_id"] == session_id
+    restored_plan = restored.json()["plan"]
+    assert len(restored_plan["stages"]) == 6
+    assert restored_plan["stages"][0]["resources"] == source_ids
+    assert restored_plan["stages"][5]["title"] == "Verified project capstone"
 
 
 def test_plan_discussion_without_explicit_mutation_stays_coaching_and_preserves_formal_plan(

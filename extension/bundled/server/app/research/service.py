@@ -716,6 +716,10 @@ class ResearchOrchestratorService:
                 "source": result["source"],
                 "url": result["url"],
                 "snippet": result.get("content_snippet", "")[:200],
+                "evidence_excerpt": result.get("content_snippet", "")[:1200],
+                "fetched_at": result["fetched_at"],
+                "freshness": result["freshness"],
+                "trust_score": 0.7,
             })
 
         return {

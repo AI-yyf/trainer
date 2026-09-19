@@ -88,7 +88,13 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
     source,
     /const shouldShowNeutralEmptyState =\s*data\.conversation\.length === 0 && \(!providerCanCoachNow \|\| displayConnectionState !== "connected"\);/,
   );
-  assert.match(source, /const isFirstCoachConversation = data\.conversation\.length === 0;/);
+  assert.match(source, /const hasDurableCoachContext = Boolean\(/);
+  assert.match(source, /data\.memory\.activeThread/);
+  assert.match(source, /data\.memory\.workspaceUnderstanding/);
+  assert.match(
+    source,
+    /const isFirstCoachConversation =\s*data\.conversation\.length === 0 && !hasDurableCoachContext;/,
+  );
   assert.match(source, /const providerSetupAction = \{/);
   assert.match(source, /label: providerSetupState\.actionLabel,/);
   assert.match(
@@ -208,4 +214,14 @@ test('provider test action sends an unsaved draft to the isolated test path', ()
     source.slice(source.indexOf('onTestProvider={() =>'), source.indexOf('onClearProvider={() =>')),
     /trainer\.provider\.save/,
   );
+});
+
+test('startup can scope a restored provider proof before sidecar memory finishes hydrating', () => {
+  const source = fs.readFileSync(appSourcePath, 'utf8');
+
+  assert.match(
+    source,
+    /const settingsWorkspaceId =\s*data\.memory\.workspace\?\.workspaceId \?\?\s*data\.workspaceTrainingState\?\.workspaceId \?\?\s*data\.providerConfig\.lastTestResult\?\.workspaceId;/,
+  );
+  assert.match(source, /selectScopedSettingsLastTest\(\s*data\.providerConfig\.lastTestResult,/);
 });

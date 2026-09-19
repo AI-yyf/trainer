@@ -135,6 +135,53 @@ def _context(runtime: Any = None) -> ToolContext:
     return ToolContext(runtime=runtime, workspace_id="workspace-test", session_id="session-test")
 
 
+def _adaptive_evidence_standard(
+    source_ids: list[str],
+    *,
+    minimum_sources: int | None = None,
+    unresolved: list[str] | None = None,
+    risk_level: str = "normal",
+    requires_authority: bool = True,
+) -> dict[str, Any]:
+    open_questions = list(unresolved or [])
+    checks: list[dict[str, Any]] = []
+    for dimension in (
+        "coverage",
+        "source_quality",
+        "recency",
+        "contradictions",
+        "applicability",
+    ):
+        status = "unresolved" if dimension == "coverage" and open_questions else "satisfied"
+        checks.append(
+            {
+                "dimension": dimension,
+                "status": status,
+                "source_ids": source_ids,
+                "rationale": (
+                    f"The fetched evidence was explicitly reviewed for {dimension} under the "
+                    "scope and risk of this learning-plan decision."
+                ),
+            }
+        )
+    return {
+        "risk_level": risk_level,
+        "minimum_independent_sources": minimum_sources or len(set(source_ids)),
+        "requires_authoritative_source": requires_authority,
+        "claim_types": ["procedural", "factual"],
+        "freshness_requirement": "current",
+        "applicability_scope": (
+            "The current documented framework version and this learner's implementation plan."
+        ),
+        "stopping_rule": (
+            "Stop only after every required facet and quality dimension meets this declared "
+            "standard, or targeted searches cease producing relevant evidence."
+        ),
+        "unresolved_uncertainties": open_questions,
+        "quality_checks": checks,
+    }
+
+
 def _tool_schema_names(schemas: list[dict[str, Any]]) -> set[str]:
     names: set[str] = set()
     for schema in schemas:
@@ -1603,6 +1650,8 @@ def test_default_registry_exposes_coach_tools() -> None:
     names = set(registry.names())
     for expected in {
         "search_resources",
+        "search_learning_materials",
+        "assess_research_evidence",
         "inspect_current_file",
         "verify_practice_current_file",
         "read_workspace_file",
@@ -1876,6 +1925,490 @@ async def test_search_resources_degrades_without_internal_service_names() -> Non
     assert result["error"] == "service_unavailable"
     assert "resource_service" not in result["detail"]
     assert "resource library" in result["detail"].lower()
+
+
+async def test_search_learning_materials_returns_only_fetched_citation_ready_sources() -> None:
+    class _ResearchService:
+        def search_web(self, query: str, **kwargs: Any) -> dict[str, Any]:
+            assert query == "FSRS spaced repetition primary sources"
+            assert kwargs["workspace_id"] == "workspace-test"
+            return {
+                "query": query,
+                "results": [
+                    {
+                        "id": "finding-1",
+                        "title": "FSRS technical overview",
+                        "url": "https://example.org/fsrs",
+                        "source": "example.org",
+                        "snippet": "A fetched explanation of the scheduling model.",
+                        "fetched_at": "2026-09-19T00:00:00+00:00",
+                        "freshness": "fresh",
+                        "trust_score": 0.7,
+                    },
+                    {
+                        "title": "Unfetched search hit",
+                        "url": "https://example.org/unfetched",
+                    },
+                ],
+            }
+
+    registry = build_default_tool_registry()
+    result = await registry.invoke(
+        _context(runtime=SimpleNamespace(research_service=_ResearchService())),
+        "search_learning_materials",
+        {"query": "FSRS spaced repetition primary sources", "limit": 4},
+    )
+
+    assert result["ok"] is True
+    assert result["citation_required"] is True
+    assert result["source_count"] == 1
+    assert result["sources"][0]["url"] == "https://example.org/fsrs"
+    assert result["sources"][0]["fetched_at"] == "2026-09-19T00:00:00+00:00"
+
+
+async def test_search_learning_materials_exposes_network_disabled_without_fake_sources() -> None:
+    class _ResearchService:
+        def search_web(self, query: str, **kwargs: Any) -> dict[str, Any]:
+            return {
+                "error": "Trainer network source acquisition is disabled.",
+                "reason_code": "network_disabled",
+                "query": query,
+                "results": [],
+            }
+
+    result = await build_default_tool_registry().invoke(
+        _context(runtime=SimpleNamespace(research_service=_ResearchService())),
+        "search_learning_materials",
+        {"query": "verified learning material"},
+    )
+
+    assert result == {
+        "ok": False,
+        "error": "network_disabled",
+        "detail": "Trainer network source acquisition is disabled.",
+        "query": "verified learning material",
+        "sources": [],
+    }
+
+
+async def test_formal_plan_research_reuses_sufficient_evidence_instead_of_searching_forever() -> None:
+    class _ResearchService:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def search_web(self, query: str, **_kwargs: Any) -> dict[str, Any]:
+            self.calls += 1
+            return {
+                "query": query,
+                "results": [
+                    {
+                        "id": "official-one",
+                        "title": "Official dependency injection guide",
+                        "url": "https://docs.example.test/one",
+                        "source": "docs.example.test",
+                        "snippet": "Dependency injection and sub-dependency composition.",
+                        "fetched_at": "2026-09-19T00:00:00+00:00",
+                    },
+                    {
+                        "id": "official-two",
+                        "title": "Official testing overrides guide",
+                        "url": "https://docs.example.test/two",
+                        "source": "docs.example.test",
+                        "snippet": "Testing overrides for isolated service tests.",
+                        "fetched_at": "2026-09-19T00:00:01+00:00",
+                    },
+                ],
+            }
+
+    research_service = _ResearchService()
+    context = _context(runtime=SimpleNamespace(research_service=research_service))
+    context.extra["formal_plan_mutation"] = True
+    registry = build_default_tool_registry()
+
+    first = await registry.invoke(
+        context,
+        "search_learning_materials",
+        {
+            "query": "site:docs.example.test dependency injection testing overrides",
+            "required_facets": ["dependency injection", "testing overrides"],
+            "preferred_domains": ["docs.example.test"],
+        },
+    )
+    assessment = await registry.invoke(
+        context,
+        "assess_research_evidence",
+        {
+            "verdict": "sufficient",
+            "evidence_standard": _adaptive_evidence_standard(
+                ["official-one", "official-two"]
+            ),
+            "facet_assessments": [
+                {
+                    "facet": "dependency injection",
+                    "status": "covered",
+                    "source_ids": ["official-one"],
+                    "evidence_quotes": [
+                        {"source_id": "official-one", "quote": "Dependency injection"}
+                    ],
+                    "rationale": "The official guide directly explains dependency injection composition.",
+                },
+                {
+                    "facet": "testing overrides",
+                    "status": "covered",
+                    "source_ids": ["official-two"],
+                    "evidence_quotes": [
+                        {"source_id": "official-two", "quote": "Testing overrides"}
+                    ],
+                    "rationale": "The official testing guide explains isolated dependency overrides.",
+                },
+            ],
+        },
+    )
+    second = await registry.invoke(
+        context,
+        "search_learning_materials",
+        {"query": "another broad query that should not run"},
+    )
+
+    assert first["research_complete"] is False
+    assert first["research_status"] == "awaiting_model_assessment"
+    assert first["evidence_coverage"]["authoritative_source_count"] == 2
+    assert assessment["research_complete"] is True
+    assert assessment["research_status"] == "sufficient"
+    assert assessment["evidence_coverage"]["missing_facets"] == []
+    assert "search_learning_materials" in context.extra["denied_tool_names"]
+    assert "assess_research_evidence" in context.extra["denied_tool_names"]
+    assert context.extra["allowed_tool_names"] == ["save_formal_plan", "coach_finalize"]
+    assert second["ok"] is False
+    assert second["error"] == "tool_not_available"
+    assert research_service.calls == 1
+
+
+async def test_formal_plan_research_keeps_search_open_for_specific_evidence_gaps() -> None:
+    class _ResearchService:
+        def search_web(self, query: str, **_kwargs: Any) -> dict[str, Any]:
+            if "testing" in query:
+                return {
+                    "query": query,
+                    "results": [
+                        {
+                            "id": "testing",
+                            "title": "Testing overrides",
+                            "url": "https://docs.example.test/testing",
+                            "source": "docs.example.test",
+                            "snippet": "Testing overrides isolate dependency behavior.",
+                            "fetched_at": "2026-09-19T00:00:01+00:00",
+                        }
+                    ],
+                }
+            return {
+                "query": query,
+                "results": [
+                    {
+                        "id": "dependency-one",
+                        "title": "Dependency injection guide",
+                        "url": "https://docs.example.test/dependency-one",
+                        "source": "docs.example.test",
+                        "snippet": "Dependency injection composes service boundaries.",
+                        "fetched_at": "2026-09-19T00:00:00+00:00",
+                    },
+                    {
+                        "id": "dependency-two",
+                        "title": "Dependency injection patterns",
+                        "url": "https://docs.example.test/dependency-two",
+                        "source": "docs.example.test",
+                        "snippet": "Dependency injection separates service boundaries.",
+                        "fetched_at": "2026-09-19T00:00:01+00:00",
+                    },
+                ],
+            }
+
+    context = _context(runtime=SimpleNamespace(research_service=_ResearchService()))
+    context.extra["formal_plan_mutation"] = True
+    registry = build_default_tool_registry()
+    facets = ["dependency injection", "testing overrides"]
+
+    first = await registry.invoke(
+        context,
+        "search_learning_materials",
+        {
+            "query": "site:docs.example.test dependency injection",
+            "required_facets": facets,
+            "preferred_domains": ["docs.example.test"],
+        },
+    )
+    assert first["research_complete"] is False
+    assert first["research_status"] == "awaiting_model_assessment"
+    assert first["source_count"] == 2
+    assert first["evidence_coverage"]["authoritative_source_count"] == 2
+    first_assessment = await registry.invoke(
+        context,
+        "assess_research_evidence",
+        {
+            "verdict": "gaps_remain",
+            "evidence_standard": _adaptive_evidence_standard(
+                ["dependency-one", "dependency-two"],
+                unresolved=["testing overrides still lacks direct evidence"],
+            ),
+            "facet_assessments": [
+                {
+                    "facet": "dependency injection",
+                    "status": "covered",
+                    "source_ids": ["dependency-one", "dependency-two"],
+                    "evidence_quotes": [
+                        {"source_id": "dependency-one", "quote": "Dependency injection"}
+                    ],
+                    "rationale": "Both official excerpts explain dependency injection boundaries.",
+                },
+                {
+                    "facet": "testing overrides",
+                    "status": "missing",
+                    "source_ids": [],
+                    "evidence_quotes": [],
+                    "rationale": "Neither fetched excerpt discusses how tests override dependencies.",
+                },
+            ],
+        },
+    )
+    assert first_assessment["research_status"] == "gaps_remain"
+    assert first_assessment["evidence_coverage"]["missing_facets"] == ["testing overrides"]
+    assert "allowed_tool_names" not in context.extra
+
+    second = await registry.invoke(
+        context,
+        "search_learning_materials",
+        {
+            "query": "site:docs.example.test testing overrides",
+            "required_facets": facets,
+            "preferred_domains": ["docs.example.test"],
+        },
+    )
+    assert second["research_status"] == "awaiting_model_assessment"
+    second_assessment = await registry.invoke(
+        context,
+        "assess_research_evidence",
+        {
+            "verdict": "sufficient",
+            "evidence_standard": _adaptive_evidence_standard(
+                ["dependency-one", "testing"]
+            ),
+            "facet_assessments": [
+                {
+                    "facet": "dependency injection",
+                    "status": "covered",
+                    "source_ids": ["dependency-one"],
+                    "evidence_quotes": [
+                        {"source_id": "dependency-one", "quote": "Dependency injection"}
+                    ],
+                    "rationale": "The dependency guide directly supports the composition facet.",
+                },
+                {
+                    "facet": "testing overrides",
+                    "status": "covered",
+                    "source_ids": ["testing"],
+                    "evidence_quotes": [
+                        {"source_id": "testing", "quote": "Testing overrides"}
+                    ],
+                    "rationale": "The testing guide directly supports dependency override practice.",
+                },
+            ],
+        },
+    )
+    assert second_assessment["research_complete"] is True
+    assert second_assessment["evidence_coverage"]["covered_facets"] == facets
+    assert context.extra["allowed_tool_names"] == ["save_formal_plan", "coach_finalize"]
+
+
+async def test_model_can_end_research_with_gaps_before_emergency_limit() -> None:
+    context = _context(runtime=SimpleNamespace())
+    context.extra["formal_plan_mutation"] = True
+    context.extra["_learning_material_research_state"] = {
+        "required_facets": ["covered topic", "unresolved topic"],
+        "preferred_domains": ["docs.example.test"],
+        "search_count": 2,
+        "sources": [
+            {
+                "id": "official-one",
+                "title": "Official guide",
+                "url": "https://docs.example.test/one",
+                "source": "docs.example.test",
+                "snippet": "Covered topic is explained by the official guide.",
+                "evidence_excerpt": "Covered topic is explained by the official guide.",
+                "fetched_at": "2026-09-19T00:00:00+00:00",
+                "trust_score": 0.9,
+            }
+        ],
+        "status": "awaiting_model_assessment",
+        "had_allowed_tool_names": False,
+    }
+    registry = build_default_tool_registry()
+
+    result = await registry.invoke(
+        context,
+        "assess_research_evidence",
+        {
+            "verdict": "exhausted_with_gaps",
+            "evidence_standard": _adaptive_evidence_standard(
+                ["official-one"],
+                unresolved=["unresolved topic has no auditable primary evidence"],
+            ),
+            "facet_assessments": [
+                {
+                    "facet": "covered topic",
+                    "status": "covered",
+                    "source_ids": ["official-one"],
+                    "evidence_quotes": [
+                        {"source_id": "official-one", "quote": "Covered topic"}
+                    ],
+                    "rationale": "The official source directly explains the covered topic.",
+                },
+                {
+                    "facet": "unresolved topic",
+                    "status": "missing",
+                    "source_ids": [],
+                    "evidence_quotes": [],
+                    "rationale": "Repeated targeted queries produced no auditable primary evidence.",
+                },
+            ],
+        },
+    )
+
+    assert result["ok"] is True
+    assert result["research_status"] == "exhausted_with_gaps"
+    assert result["evidence_coverage"]["search_count"] == 2
+    assert context.extra["allowed_tool_names"] == ["save_formal_plan", "coach_finalize"]
+
+
+async def test_model_adapts_low_risk_sufficiency_to_one_precise_source() -> None:
+    context = _context(runtime=SimpleNamespace())
+    context.extra["formal_plan_mutation"] = True
+    context.extra["_learning_material_research_state"] = {
+        "required_facets": ["API name", "basic usage"],
+        "preferred_domains": [],
+        "search_count": 1,
+        "sources": [
+            {
+                "id": "concise-guide",
+                "title": "Concise API guide",
+                "url": "https://example.test/guide",
+                "source": "example.test",
+                "snippet": "The Widget API is named create_widget and basic usage calls it once.",
+                "evidence_excerpt": (
+                    "The Widget API is named create_widget and basic usage calls it once."
+                ),
+                "fetched_at": "2026-09-19T00:00:00+00:00",
+                "trust_score": 0.6,
+            }
+        ],
+        "status": "awaiting_model_assessment",
+        "had_allowed_tool_names": False,
+    }
+    registry = build_default_tool_registry()
+
+    result = await registry.invoke(
+        context,
+        "assess_research_evidence",
+        {
+            "verdict": "sufficient",
+            "evidence_standard": _adaptive_evidence_standard(
+                ["concise-guide"],
+                minimum_sources=1,
+                risk_level="exploratory",
+                requires_authority=False,
+            ),
+            "facet_assessments": [
+                {
+                    "facet": "API name",
+                    "status": "covered",
+                    "source_ids": ["concise-guide"],
+                    "evidence_quotes": [
+                        {"source_id": "concise-guide", "quote": "create_widget"}
+                    ],
+                    "rationale": "The fetched guide gives the exact API identifier directly.",
+                },
+                {
+                    "facet": "basic usage",
+                    "status": "covered",
+                    "source_ids": ["concise-guide"],
+                    "evidence_quotes": [
+                        {"source_id": "concise-guide", "quote": "basic usage calls it once"}
+                    ],
+                    "rationale": "The same concise guide directly states the basic usage pattern.",
+                },
+            ],
+        },
+    )
+
+    assert result["ok"] is True
+    assert result["research_status"] == "sufficient"
+    standard = result["evidence_coverage"]["evidence_standard"]
+    assert standard["minimum_independent_sources"] == 1
+    assert standard["requires_authoritative_source"] is False
+
+
+async def test_model_declared_high_risk_threshold_is_strictly_enforced() -> None:
+    context = _context(runtime=SimpleNamespace())
+    context.extra["formal_plan_mutation"] = True
+    context.extra["_learning_material_research_state"] = {
+        "required_facets": ["safety behavior", "failure recovery"],
+        "preferred_domains": ["official.example.test"],
+        "search_count": 1,
+        "sources": [
+            {
+                "id": "official-safety",
+                "title": "Official safety guide",
+                "url": "https://official.example.test/safety",
+                "source": "official.example.test",
+                "snippet": "Safety behavior includes a documented failure recovery procedure.",
+                "evidence_excerpt": (
+                    "Safety behavior includes a documented failure recovery procedure."
+                ),
+                "fetched_at": "2026-09-19T00:00:00+00:00",
+                "trust_score": 0.95,
+            }
+        ],
+        "status": "awaiting_model_assessment",
+        "had_allowed_tool_names": False,
+    }
+
+    result = await build_default_tool_registry().invoke(
+        context,
+        "assess_research_evidence",
+        {
+            "verdict": "sufficient",
+            "evidence_standard": _adaptive_evidence_standard(
+                ["official-safety"],
+                minimum_sources=3,
+                risk_level="high_stakes",
+                requires_authority=True,
+            ),
+            "facet_assessments": [
+                {
+                    "facet": "safety behavior",
+                    "status": "covered",
+                    "source_ids": ["official-safety"],
+                    "evidence_quotes": [
+                        {"source_id": "official-safety", "quote": "Safety behavior"}
+                    ],
+                    "rationale": "The official guide describes the requested safety behavior.",
+                },
+                {
+                    "facet": "failure recovery",
+                    "status": "covered",
+                    "source_ids": ["official-safety"],
+                    "evidence_quotes": [
+                        {"source_id": "official-safety", "quote": "failure recovery procedure"}
+                    ],
+                    "rationale": "The official guide also documents a failure recovery procedure.",
+                },
+            ],
+        },
+    )
+
+    assert result["ok"] is False
+    assert result["error"] == "unsupported_sufficient_verdict"
+    assert result["cited_source_count"] == 1
+    assert result["evidence_standard"]["minimum_independent_sources"] == 3
 
 
 async def test_inspect_current_file_reads_ide_snapshot_without_runtime() -> None:

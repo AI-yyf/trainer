@@ -1126,6 +1126,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
 
       if (message.type === "operation/status") {
         const reliabilityPhase = mapStreamStatusToReliabilityPhase(message.payload.phase);
+        const streamScopedStatus = message.payload.surface === "stream";
         return {
           streaming: reliabilityPhase
             ? {
@@ -1139,16 +1140,19 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
                       : state.streaming.reliabilityOutcome,
               }
             : state.streaming,
-          operationMessage: {
-            ...message.payload,
-            message: sanitizeErrorSurfaceText(
-              sanitizeVisibleText(
-                message.payload.message,
-                unreadableVisibleText(state.layout.composerLanguage),
-              ),
-              state.layout.composerLanguage,
-            ),
-          },
+          operationMessage:
+            streamScopedStatus && message.payload.tone !== "error"
+              ? undefined
+              : {
+                  ...message.payload,
+                  message: sanitizeErrorSurfaceText(
+                    sanitizeVisibleText(
+                      message.payload.message,
+                      unreadableVisibleText(state.layout.composerLanguage),
+                    ),
+                    state.layout.composerLanguage,
+                  ),
+                },
           // Stage material generation failures arrive as error statuses; never leave
           // an optimistic in-flight spinner stuck after the host reports a failure.
           stageMaterialGenerating:

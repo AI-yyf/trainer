@@ -100,43 +100,58 @@ async def _iterate_provider_stream_with_cancellation(
     """Iterate an upstream async stream while promptly closing it on cancel."""
 
     iterator = stream.__aiter__()  # type: ignore[attr-defined]
+    iterator_closed = False
+    iterator_exhausted = False
 
     async def close_iterator() -> None:
+        nonlocal iterator_closed
+        if iterator_closed or iterator_exhausted:
+            return
+        iterator_closed = True
         close = getattr(iterator, "aclose", None)
         if close is not None:
-            await close()
-
-    while True:
-        if cancel_event is None:
             try:
-                yield await iterator.__anext__()
-            except StopAsyncIteration:
-                return
-            continue
-        if cancel_event.is_set():
-            await close_iterator()
-            raise asyncio.CancelledError
+                await close()
+            except RuntimeError as exc:
+                if "asynchronous generator is already running" not in str(exc):
+                    raise
 
-        next_item = asyncio.ensure_future(iterator.__anext__())
-        cancellation = asyncio.create_task(cancel_event.wait())
-        try:
-            done, _ = await asyncio.wait(
-                {next_item, cancellation},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if cancellation in done and cancel_event.is_set():
-                next_item.cancel()
-                await asyncio.gather(next_item, return_exceptions=True)
+    try:
+        while True:
+            if cancel_event is None:
+                try:
+                    yield await iterator.__anext__()
+                except StopAsyncIteration:
+                    iterator_exhausted = True
+                    return
+                continue
+            if cancel_event.is_set():
                 await close_iterator()
                 raise asyncio.CancelledError
+
+            next_item = asyncio.ensure_future(iterator.__anext__())
+            cancellation = asyncio.create_task(cancel_event.wait())
             try:
-                yield next_item.result()
-            except StopAsyncIteration:
-                return
-        finally:
-            if not cancellation.done():
-                cancellation.cancel()
-            await asyncio.gather(cancellation, return_exceptions=True)
+                done, _ = await asyncio.wait(
+                    {next_item, cancellation},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if cancellation in done and cancel_event.is_set():
+                    next_item.cancel()
+                    await asyncio.gather(next_item, return_exceptions=True)
+                    await close_iterator()
+                    raise asyncio.CancelledError
+                try:
+                    yield next_item.result()
+                except StopAsyncIteration:
+                    iterator_exhausted = True
+                    return
+            finally:
+                if not cancellation.done():
+                    cancellation.cancel()
+                await asyncio.gather(cancellation, return_exceptions=True)
+    finally:
+        await close_iterator()
 
 
 async def _await_provider_stream_with_cancellation(
@@ -935,7 +950,11 @@ def _agent_result_visible_text(result: Any) -> str:
 
 
 def _agentic_has_grounded_resource_evidence(tool_events: list[dict[str, Any]]) -> bool:
-    grounded_tool_names = {"search_resources", "read_workspace_file"}
+    grounded_tool_names = {
+        "search_learning_materials",
+        "search_resources",
+        "read_workspace_file",
+    }
     for event in tool_events:
         if not isinstance(event, dict):
             continue
@@ -5166,8 +5185,64 @@ class ProviderService:
     ) -> tuple[bool | None, str]:
         """Run one real incremental request and observe visible streamed output."""
 
+        protocol = self._configured_protocol(provider)
+        uses_default_stream = (
+            getattr(self.chat_completion_stream, "__func__", None)
+            is ProviderService.chat_completion_stream
+        )
+        if uses_default_stream and protocol in {
+            "openai_chat_completions",
+            "openai_chat_completions_compatible",
+        }:
+            client = None
+            stream = None
+            try:
+                client = self._create_sync_client(provider, api_key)
+                max_tokens = 256 if _needs_generous_visible_probe_budget(provider) else 16
+                payload = self._apply_request_defaults(
+                    {
+                        "model": provider.model,
+                        "messages": [
+                            {"role": "user", "content": "Reply with one short visible word: OK."}
+                        ],
+                        "temperature": 0,
+                        "max_tokens": max_tokens,
+                        "stream": True,
+                    },
+                    provider,
+                )
+                if _is_minimax_like_provider(provider):
+                    extra_body = dict(payload.get("extra_body") or {})
+                    extra_body["thinking"] = {"type": "disabled"}
+                    payload["extra_body"] = extra_body
+                stream = client.chat.completions.create(**payload)
+                reasoning_filter = _ReasoningBlockFilter()
+                observed = False
+                for chunk in stream:
+                    choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
+                    delta = getattr(choice, "delta", None)
+                    content = getattr(delta, "content", None)
+                    if isinstance(content, str) and reasoning_filter.push(content).strip():
+                        observed = True
+                if reasoning_filter.flush().strip():
+                    observed = True
+            except Exception:  # noqa: BLE001 - capability probes must not leak upstream details.
+                return None, "Streaming capability probe could not complete safely."
+            finally:
+                if stream is not None:
+                    close = getattr(stream, "close", None)
+                    if close is not None:
+                        close()
+                if client is not None:
+                    close_client = getattr(client, "close", None)
+                    if close_client is not None:
+                        close_client()
+            if observed:
+                return True, "Streaming probe returned visible incremental content."
+            return False, "Streaming probe completed without visible incremental content."
+
         async def consume() -> bool:
-            async for chunk in self.chat_completion_stream(
+            stream = self.chat_completion_stream(
                 [{"role": "user", "content": "Reply with one short visible word: OK."}],
                 model=provider.model,
                 temperature=0,
@@ -5176,13 +5251,14 @@ class ProviderService:
                 # aligned with the other visible-token probes so a working
                 # native stream is not reported as unavailable.
                 max_tokens=256 if _needs_generous_visible_probe_budget(provider) else 16,
-            ):
-                if isinstance(chunk, str) and chunk.strip():
-                    # Streaming is verified as soon as the provider emits one visible chunk.
-                    # Waiting for the stream to terminate can hang on providers that keep the
-                    # connection open after already proving incremental output.
-                    return True
-            return False
+            )
+            try:
+                async for chunk in stream:
+                    if isinstance(chunk, str) and chunk.strip():
+                        return True
+                return False
+            finally:
+                await stream.aclose()
 
         try:
             try:

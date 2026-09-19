@@ -300,6 +300,11 @@
           "type": "string",
           "default": "gpt-4.1-mini",
           "description": "Default chat model."
+        },
+        "trainer.research.networkEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow Trainer to fetch public web sources for learning-material research. Controlled fetch blocks private and local network targets. Restart the Trainer sidecar after changing this setting."
         }
       }
     }

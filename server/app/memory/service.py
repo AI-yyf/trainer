@@ -9506,6 +9506,30 @@ class MemoryService:
 
     @staticmethod
     def _extract_project_context(message: str, *, focus_area: str) -> str:
+        normalized_message = " ".join(message.strip().lower().split())
+        compact_message = re.sub(
+            r"[\s\.,!?:;\"'(){}\[\]/\\_\-，。！？、：；]+",
+            "",
+            normalized_message,
+        )
+        if compact_message in {
+            "hello",
+            "hi",
+            "hey",
+            "hellotrainer",
+            "hitrainer",
+            "goodmorning",
+            "goodafternoon",
+            "goodevening",
+            "你好",
+            "您好",
+            "嗨",
+            "哈喽",
+            "早上好",
+            "下午好",
+            "晚上好",
+        }:
+            return ""
         quoted = re.search(r"[“\"]([^”\"]{4,80})[”\"]", message)
         if quoted:
             return quoted.group(1).strip()

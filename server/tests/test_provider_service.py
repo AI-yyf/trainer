@@ -67,7 +67,11 @@ def _is_openai_capability_probe_call(kwargs: dict[str, object]) -> bool:
     if kwargs.get("tools"):
         return True
     content = _chat_completion_user_text(kwargs)
-    return "THINKING_OK" in content or "trainer_capability_probe" in content
+    return (
+        "THINKING_OK" in content
+        or "trainer_capability_probe" in content
+        or "Reply with one short visible word: OK." in content
+    )
 
 
 def _provider_test_reply_for_prompt(last_user: str, primary_reply: str) -> str:
@@ -595,7 +599,9 @@ def test_provider_test_skips_cjk_probe_for_english_only_flow() -> None:
     connectivity_prompts = [
         prompt
         for prompt in prompts
-        if "trainer_capability_probe" not in prompt and "THINKING_OK" not in prompt
+        if "trainer_capability_probe" not in prompt
+        and "THINKING_OK" not in prompt
+        and "Reply with one short visible word: OK." not in prompt
     ]
     assert connectivity_prompts == ["Reply with exactly: pong"]
     assert all("只返回" not in prompt and "请只输出" not in prompt for prompt in prompts)
@@ -2485,6 +2491,8 @@ def test_system_prompt_includes_state_driven_teaching_and_retrieval_rhythm() -> 
     assert "search in passes: broad -> narrow -> verify." in prompt
     assert "prepared library grounding" in prompt
     assert "must call `search_resources` before answering." in prompt
+    assert "search_learning_materials" in prompt
+    assert "fetched timestamps" in prompt
     assert "do not invent from memory." in prompt
     assert "preserve its step count, labels, and boundaries." in prompt
     assert "live coach with a working library habit" in prompt

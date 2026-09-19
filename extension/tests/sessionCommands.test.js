@@ -4371,8 +4371,12 @@ test('sendStreamMessageCommand starts the first Chinese coach stream without a s
     'the host must not claim it is testing the provider when it is sending the real request',
   );
   assert.ok(
-    workbenchMessages.some((message) => message.type === 'operation/status' && message.payload?.phase === 'pending'),
-    'the host should show the turn as pending before the sidecar request finishes',
+    workbenchMessages.some((message) =>
+      message.type === 'operation/status' &&
+      message.payload?.phase === 'pending' &&
+      message.payload?.surface === 'stream'
+    ),
+    'the host should keep pending turn progress inside the streaming message surface',
   );
 });
 
@@ -4990,6 +4994,7 @@ test('sendStreamMessageCommand forwards agent completion metadata to the webview
       tone: 'info',
       message: 'Preparing the current workspace and learning context.',
       phase: 'preparing_context',
+      surface: 'stream',
     },
   });
   assert.equal(

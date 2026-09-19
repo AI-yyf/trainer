@@ -49,6 +49,8 @@ const hostMessageSchema = z.discriminatedUnion("type", [
     payload: z.object({
       tone: z.enum(["info", "success", "error"]),
       message: z.string(),
+      phase: z.string().optional(),
+      surface: z.enum(["global", "stream"]).optional(),
     }),
   }),
   z.object({

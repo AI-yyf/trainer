@@ -573,10 +573,15 @@ def test_streaming_probe_returns_after_first_visible_chunk_even_if_stream_never_
         ),
     )
     service = ProviderService(config=provider, api_key="sk-test")
+    stream_closed = False
 
     async def hanging_stream(*_args: object, **_kwargs: object):
-        yield "OK"
-        await asyncio.Event().wait()
+        nonlocal stream_closed
+        try:
+            yield "OK"
+            await asyncio.Event().wait()
+        finally:
+            stream_closed = True
 
     with patch.object(service, "chat_completion_stream", new=hanging_stream):
         result = service._with_capability_truth(
@@ -591,6 +596,7 @@ def test_streaming_probe_returns_after_first_visible_chunk_even_if_stream_never_
     assert streaming.state == "verified"
     assert result.streaming_ready is True
     assert result.stream_probe_status == "verified"
+    assert stream_closed is True
 
 
 def test_minimax_streaming_probe_uses_generous_visible_budget() -> None:

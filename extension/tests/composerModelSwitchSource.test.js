@@ -68,6 +68,16 @@ test('composer model switch label stays honest about the active model', () => {
   assert.doesNotMatch(source, /composerModelActionDensity === "compact" \? "Auto" : composerModelButtonLabel/);
 });
 
+test('composer model switch becomes an accessible icon action in a narrow sidebar', () => {
+  const source = fs.readFileSync(appSourcePath, 'utf8');
+
+  assert.match(source, /density=\{composerModelActionDensity\}/);
+  assert.match(source, /id: "model-switch",\s*compact: composerModelActionDensity === "compact",/);
+  assert.match(source, /icon: <BrainIcon size=\{16\} \/>/);
+  assert.match(source, /ariaLabel: composerModelButtonTitle/);
+  assert.match(source, /setComposerModelActionDensity\(width < 430 \? "compact" : "default"\)/);
+});
+
 test('Coach composer keeps model selection focused while setup stays in Settings', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
 

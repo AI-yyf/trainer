@@ -1097,6 +1097,27 @@ test.describe("Trainer Five-View Shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
+  test("collapses the composer model switch to an accessible icon in a narrow sidebar", async ({ page }) => {
+    const errors = attachConsoleErrorCollector(page);
+
+    await page.setViewportSize({ width: 360, height: 800 });
+    await openPreview(page, "coach", {
+      lang: "zh-CN",
+      scenario: "ready",
+      connection: "connected",
+    });
+
+    const modelButton = page.getByRole("button", { name: /切换模型：gpt-4\.1-mini/ }).first();
+    await expect(modelButton).toBeVisible();
+    await expect(modelButton).toHaveClass(/icon-button/);
+    await expect(modelButton.locator("svg")).toBeVisible();
+    await expect(modelButton.locator(".composer-secondary-button__label")).toHaveCount(0);
+    await modelButton.click();
+    await expect(page.locator(".composer-menu-panel--provider")).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await expectNoConsoleErrors(errors);
+  });
+
   test("restores a requested five-view destination from a host message", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 
@@ -1258,6 +1279,54 @@ test.describe("Trainer Five-View Shell", () => {
     const assistantText = (await assistant.innerText()).trim();
     expect(assistantText === draft).toBe(false);
     expect(assistantText.includes(`\n${draft}`) || assistantText.endsWith(draft)).toBe(false);
+    await expectNoConsoleErrors(errors);
+  });
+
+  test("keeps stream progress in the Coach thread and reserves the global notice for failures", async ({ page }) => {
+    const errors = attachConsoleErrorCollector(page);
+
+    await openPreview(page, "coach", {
+      lang: "zh-CN",
+      scenario: "ready",
+      connection: "connected",
+    });
+
+    await page.evaluate(() => {
+      window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__?.({
+        type: "stream/start",
+        payload: { messageId: "e2e-stream-progress" },
+      });
+      window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__?.({
+        type: "operation/status",
+        payload: {
+          tone: "info",
+          message: "正在等待回复",
+          phase: "awaiting_response",
+          surface: "stream",
+        },
+      });
+    });
+
+    await expect(page.locator(".notice")).toHaveCount(0);
+    await expect(page.locator(".message-bubble--streaming")).toBeVisible();
+    await expect(page.locator(".message-bubble--streaming")).toContainText(
+      "正在梳理你的问题，然后给出第一段可见回复。",
+    );
+
+    await page.evaluate(() => {
+      window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__?.({
+        type: "operation/status",
+        payload: {
+          tone: "error",
+          message: "本次回复失败，请重试。",
+          phase: "failed",
+          surface: "stream",
+        },
+      });
+    });
+
+    await expect(page.locator(".notice.notice--error")).toBeVisible();
+    await expect(page.locator(".notice.notice--error")).toContainText("再试一次");
     await expectNoConsoleErrors(errors);
   });
 

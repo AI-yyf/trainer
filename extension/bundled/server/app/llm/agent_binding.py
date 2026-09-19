@@ -43,6 +43,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncIterator
+from inspect import isawaitable
 from typing import Any
 from urllib.parse import quote
 
@@ -67,6 +68,19 @@ from .tools import ToolDefinition, ToolRegistry
 from .vision_payload import openai_responses_input_image_parts
 
 logger = logging.getLogger("trainer.llm.agent_binding")
+
+
+async def _iterate_and_close_provider_stream(stream: Any) -> AsyncIterator[Any]:
+    """Consume a provider stream and explicitly release its HTTP response."""
+    try:
+        async for chunk in stream:
+            yield chunk
+    finally:
+        close = getattr(stream, "close", None) or getattr(stream, "aclose", None)
+        if close is not None:
+            result = close()
+            if isawaitable(result):
+                await result
 
 ANTHROPIC_API_VERSION = "2023-06-01"
 ANTHROPIC_DEFAULT_MAX_TOKENS = 1024
@@ -1542,7 +1556,7 @@ class ProviderAgentBinding:
 
         tool_call_state: dict[int, dict[str, Any]] = {}
         finish_reason: str | None = None
-        async for chunk in stream:
+        async for chunk in _iterate_and_close_provider_stream(stream):
             choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
             if choice is None:
                 continue

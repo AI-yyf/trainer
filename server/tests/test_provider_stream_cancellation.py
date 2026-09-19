@@ -31,3 +31,21 @@ async def test_provider_stream_iterator_closes_when_cancelled_while_waiting() ->
         await pending
 
     assert cancelled.is_set()
+
+
+@pytest.mark.asyncio
+async def test_provider_stream_iterator_closes_when_consumer_stops_after_first_chunk() -> None:
+    closed = asyncio.Event()
+
+    async def upstream():
+        try:
+            yield "first"
+            await asyncio.Event().wait()
+        finally:
+            closed.set()
+
+    stream = _iterate_provider_stream_with_cancellation(upstream(), None)
+    assert await anext(stream) == "first"
+    await stream.aclose()
+
+    assert closed.is_set()

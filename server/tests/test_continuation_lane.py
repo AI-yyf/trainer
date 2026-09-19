@@ -146,3 +146,72 @@ def test_turn_continuation_inherits_active_thread_scenario_across_mixed_lanes(
     assert payload["reply"]["metadata"]["coach_turn"]["scenario"] == "project_adaptation"
     assert payload["snapshot"]["coaching_state"]["scenario"] == "project_adaptation"
     assert payload["snapshot"]["memory"]["active_thread"]["scenario"] == "project_adaptation"
+
+
+def test_reentry_greeting_recognizes_existing_project_without_resetting_the_thread(
+    tmp_path: Path,
+) -> None:
+    captured_context: dict[str, object] = {}
+
+    async def fake_coaching_reply(*args, **kwargs) -> str:
+        coach_context = kwargs.get("coach_context")
+        if isinstance(coach_context, dict):
+            captured_context.update(coach_context)
+        return "Welcome back. We can continue from the saved adaptation boundary."
+
+    with (
+        build_client(tmp_path) as client,
+        patch.object(
+            ProviderService,
+            "coaching_reply",
+            new=AsyncMock(side_effect=fake_coaching_reply),
+        ),
+    ):
+        start_response = client.post(
+            "/session/start",
+            json={
+                "workspace_id": "workspace-greeting-reentry",
+                "workspace_name": "trainer-greeting-reentry",
+                "profile": {
+                    "long_term_goal": "Continue an existing project without onboarding again",
+                    "weekly_hours": 4,
+                    "teaching_style": "guided",
+                    "answer_policy": "guided",
+                },
+            },
+        )
+        assert start_response.status_code == 200
+        session_id = start_response.json()["session_id"]
+
+        runtime = client.app.state.runtime
+        runtime.memory_service.record_turn_memory(
+            workspace_id="workspace-greeting-reentry",
+            session_id=session_id,
+            scenario="project_adaptation",
+            focus_area="adaptation boundary",
+            summary="The learner already isolated the first migration boundary.",
+            next_step="Verify that boundary before widening the migration.",
+            response_language="en-US",
+            answer_mode="guided",
+        )
+
+        response = client.post(
+            "/turn",
+            json={
+                "session_id": session_id,
+                "workspace_id": "workspace-greeting-reentry",
+                "intent": "coach",
+                "message": "你好",
+                "response_language": "zh-CN",
+                "answer_mode": "coach-first",
+            },
+        )
+        memory = runtime.memory_service.snapshot("workspace-greeting-reentry")
+
+    assert response.status_code == 200, response.text
+    active_thread = captured_context.get("active_thread")
+    assert isinstance(active_thread, dict)
+    assert active_thread["focus_area"] == "adaptation boundary"
+    assert "adaptation boundary" in str(captured_context.get("continuity_summary") or "")
+    assert captured_context["relationship_stage"] == "active"
+    assert str(memory.workspace.get("project_context") or "") != "你好"

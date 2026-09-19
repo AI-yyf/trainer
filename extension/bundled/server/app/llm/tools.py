@@ -299,12 +299,17 @@ class ToolRegistry:
         )
 
         operation_key = sandbox_operation_key(context.workspace_id, name, parsed_arguments)
-        cached = lookup_sandbox_operation(context.runtime, operation_key)
-        if cached is not None:
-            replayed = dict(cached)
-            replayed["replayed"] = True
-            replayed.setdefault("ok", True)
-            return replayed
+        stateful_research_tool = name in {
+            "search_learning_materials",
+            "assess_research_evidence",
+        }
+        if not stateful_research_tool:
+            cached = lookup_sandbox_operation(context.runtime, operation_key)
+            if cached is not None:
+                replayed = dict(cached)
+                replayed["replayed"] = True
+                replayed.setdefault("ok", True)
+                return replayed
         try:
             result = tool.handler(context, parsed_arguments)
             if inspect.isawaitable(result):
@@ -314,7 +319,8 @@ class ToolRegistry:
             else:
                 result = dict(result)
                 result.setdefault("ok", True)
-            store_sandbox_operation(context.runtime, operation_key, result)
+            if not stateful_research_tool:
+                store_sandbox_operation(context.runtime, operation_key, result)
             return result
         except Exception as exc:  # pragma: no cover - belt and braces
             logger.exception("tool_invocation_failed", extra={"tool": name})
@@ -731,6 +737,680 @@ async def _handle_search_resources(context: ToolContext, args: dict[str, Any]) -
         "verification_warning": verification_warning,
         "summary": summary,
         "hits": visible_hits[:limit],
+    }
+
+
+# --- search_learning_materials -----------------------------------------
+
+
+# This is an emergency circuit breaker, not an evidence-sufficiency rule. The model owns
+# the semantic stop decision through assess_research_evidence.
+MAX_RESEARCH_SEARCH_ROUNDS = 24
+MAX_RESEARCH_SOURCES = 48
+ADAPTIVE_EVIDENCE_DIMENSIONS = frozenset(
+    {"coverage", "source_quality", "recency", "contradictions", "applicability"}
+)
+
+
+def _normalized_research_facets(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    facets: list[str] = []
+    for raw in value:
+        facet = " ".join(str(raw or "").split()).strip()
+        if not facet or len(facet) > 96 or facet.casefold() in {item.casefold() for item in facets}:
+            continue
+        facets.append(facet)
+        if len(facets) >= 8:
+            break
+    return facets
+
+
+def _normalized_research_domains(value: object, query: str) -> list[str]:
+    raw_domains = value if isinstance(value, list) else []
+    raw_domains = [*raw_domains, *re.findall(r"\bsite:([^\s]+)", query, flags=re.IGNORECASE)]
+    domains: list[str] = []
+    for raw in raw_domains:
+        domain = str(raw or "").strip().lower().strip("./").removeprefix("www.")
+        if domain and domain not in domains:
+            domains.append(domain)
+    return domains[:8]
+
+
+def _source_matches_preferred_domain(source: dict[str, Any], domains: list[str]) -> bool:
+    if not domains:
+        return False
+    domain = urlsplit(str(source.get("url") or "")).netloc.lower().removeprefix("www.")
+    return any(domain == preferred or domain.endswith("." + preferred) for preferred in domains)
+
+
+def _source_trust_score(source: dict[str, Any]) -> float:
+    try:
+        return float(source.get("trust_score") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _transition_formal_research_to_synthesis(context: ToolContext) -> None:
+    denied_raw = context.extra.get("denied_tool_names")
+    denied = (
+        [str(name).strip() for name in denied_raw if str(name).strip()]
+        if isinstance(denied_raw, (list, tuple, set))
+        else []
+    )
+    context.extra["denied_tool_names"] = list(
+        dict.fromkeys(
+            [
+                *denied,
+                "search_learning_materials",
+                "assess_research_evidence",
+                "search_resources",
+            ]
+        )
+    )
+    existing_allowed_raw = context.extra.get("allowed_tool_names")
+    synthesis_tools = ["save_formal_plan", "coach_finalize"]
+    if isinstance(existing_allowed_raw, (list, tuple, set)):
+        existing_allowed = {
+            str(name).strip() for name in existing_allowed_raw if str(name).strip()
+        }
+        synthesis_tools = [name for name in synthesis_tools if name in existing_allowed]
+    context.extra["allowed_tool_names"] = synthesis_tools
+
+
+async def _handle_search_learning_materials(
+    context: ToolContext,
+    args: dict[str, Any],
+) -> dict[str, Any]:
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return {
+            "ok": False,
+            "error": "missing_query",
+            "detail": "search_learning_materials requires a non-empty query.",
+        }
+    try:
+        limit = max(1, min(int(args.get("limit", 4)), 6))
+    except (TypeError, ValueError):
+        limit = 4
+    formal_plan_research = context.extra.get("formal_plan_mutation") is True
+    state_key = "_learning_material_research_state"
+    state_raw = context.extra.get(state_key)
+    state = dict(state_raw) if isinstance(state_raw, dict) else {}
+    prior_search_count = int(state.get("search_count") or 0)
+    if prior_search_count >= MAX_RESEARCH_SEARCH_ROUNDS:
+        return {
+            "ok": False,
+            "error": "research_search_safety_limit_reached",
+            "detail": (
+                "The emergency search-loop limit was reached. Assess the accumulated evidence "
+                "as sufficient or exhausted_with_gaps; do not start another broad search."
+            ),
+            "research_status": str(state.get("status") or "gaps_remain"),
+            "search_count": prior_search_count,
+            "safety_search_limit": MAX_RESEARCH_SEARCH_ROUNDS,
+        }
+    required_facets = _normalized_research_facets(state.get("required_facets"))
+    requested_facets = _normalized_research_facets(args.get("required_facets"))
+    if formal_plan_research and not required_facets and len(requested_facets) < 2:
+        return {
+            "ok": False,
+            "error": "research_facets_required",
+            "detail": (
+                "A source-grounded formal plan needs 2-8 explicit required_facets before search. "
+                "List the distinct concepts or decisions the final plan must substantiate."
+            ),
+            "query": query,
+            "sources": [],
+        }
+    if not required_facets:
+        required_facets = requested_facets
+    requested_domains = (
+        list(args.get("preferred_domains"))
+        if isinstance(args.get("preferred_domains"), list)
+        else []
+    )
+    prior_domains = (
+        list(state.get("preferred_domains"))
+        if isinstance(state.get("preferred_domains"), list)
+        else []
+    )
+    preferred_domains = _normalized_research_domains(
+        [*prior_domains, *requested_domains],
+        query,
+    )
+    search_query = query
+    if requested_domains and not re.search(r"\bsite:", query, flags=re.IGNORECASE):
+        search_query = " ".join(
+            [*(f"site:{domain}" for domain in preferred_domains[:2]), query]
+        )
+    prior_sources_raw = state.get("sources")
+    prior_sources = (
+        [item for item in prior_sources_raw if isinstance(item, dict)]
+        if isinstance(prior_sources_raw, list)
+        else []
+    )
+    research_service = getattr(context.runtime, "research_service", None)
+    if research_service is None or not hasattr(research_service, "search_web"):
+        return {
+            "ok": False,
+            "error": "service_unavailable",
+            "detail": "Verified public learning-material search is unavailable in this runtime.",
+        }
+    focus_area = str(args.get("focus_area") or "Learning materials").strip()
+    try:
+        result = research_service.search_web(
+            search_query,
+            workspace_id=context.workspace_id,
+            focus_area=focus_area,
+            limit=limit,
+        )
+        if inspect.isawaitable(result):
+            result = await result
+    except Exception as exc:  # pragma: no cover - integration guard
+        return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
+    if not isinstance(result, dict):
+        return {
+            "ok": False,
+            "error": "invalid_search_result",
+            "detail": "Learning-material search returned an unreadable result.",
+        }
+    if result.get("error"):
+        return {
+            "ok": False,
+            "error": str(result.get("reason_code") or "search_failed"),
+            "detail": str(result.get("error")),
+            "query": query,
+            "sources": [],
+        }
+    sources: list[dict[str, Any]] = []
+    raw_results = result.get("results")
+    for item in raw_results if isinstance(raw_results, list) else []:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip()
+        title = str(item.get("title") or "").strip()
+        fetched_at = str(item.get("fetched_at") or "").strip()
+        if not url or not title or not fetched_at:
+            continue
+        sources.append(
+            {
+                "id": str(item.get("id") or "").strip(),
+                "title": title,
+                "url": url,
+                "source": str(item.get("source") or "").strip(),
+                "snippet": str(item.get("snippet") or "").strip()[:240],
+                "evidence_excerpt": str(item.get("evidence_excerpt") or "").strip()[:1200],
+                "fetched_at": fetched_at,
+                "freshness": str(item.get("freshness") or "fresh").strip(),
+                "trust_score": item.get("trust_score"),
+            }
+        )
+    if not sources:
+        return {
+            "ok": False,
+            "error": "no_verified_sources",
+            "detail": "No public result page could be fetched with provenance.",
+            "query": query,
+            "sources": [],
+        }
+    merged_sources: dict[str, dict[str, Any]] = {}
+    for source in [*prior_sources, *sources]:
+        source_url = str(source.get("url") or "").strip()
+        if source_url and source_url not in merged_sources:
+            # Keep the first fetched record so its evidence ID remains stable across targeted
+            # follow-up searches. The model may legitimately cite that ID in a later assessment.
+            merged_sources[source_url] = source
+    accumulated_sources = list(merged_sources.values())[:MAX_RESEARCH_SOURCES]
+    authoritative_sources = [
+        source
+        for source in accumulated_sources
+        if _source_matches_preferred_domain(source, preferred_domains)
+        or _source_trust_score(source) >= 0.8
+    ]
+    previous_urls = {
+        str(source.get("url") or "").strip()
+        for source in prior_sources
+        if str(source.get("url") or "").strip()
+    }
+    new_source_count = sum(
+        str(source.get("url") or "").strip() not in previous_urls
+        for source in accumulated_sources
+    )
+    search_count = int(state.get("search_count") or 0) + 1
+    state = {
+        "required_facets": required_facets,
+        "preferred_domains": preferred_domains,
+        "sources": accumulated_sources,
+        "search_count": search_count,
+        "status": "awaiting_model_assessment",
+    }
+    prior_assessment = [
+        item for item in state_raw.get("assessment", []) if isinstance(item, dict)
+    ] if isinstance(state_raw, dict) else []
+    prior_covered_facets = _normalized_research_facets(
+        state_raw.get("covered_facets") if isinstance(state_raw, dict) else None
+    )
+    prior_evidence_standard = (
+        dict(state_raw.get("evidence_standard"))
+        if isinstance(state_raw, dict)
+        and isinstance(state_raw.get("evidence_standard"), dict)
+        else {}
+    )
+    if prior_assessment:
+        state["assessment"] = prior_assessment
+    if prior_covered_facets:
+        state["covered_facets"] = prior_covered_facets
+    if prior_evidence_standard:
+        state["evidence_standard"] = prior_evidence_standard
+    if formal_plan_research:
+        existing_allowed = context.extra.get("allowed_tool_names")
+        if isinstance(existing_allowed, (list, tuple, set)):
+            state["had_allowed_tool_names"] = True
+            state["allowed_tool_names_before_assessment"] = [
+                str(name).strip() for name in existing_allowed if str(name).strip()
+            ]
+        else:
+            state["had_allowed_tool_names"] = False
+            state["allowed_tool_names_before_assessment"] = []
+        context.extra["allowed_tool_names"] = ["assess_research_evidence"]
+    context.extra[state_key] = state
+    return {
+        "ok": True,
+        "query": str(result.get("query") or search_query),
+        "source_count": len(accumulated_sources),
+        "citation_required": True,
+        "research_complete": False,
+        "research_exhausted": False,
+        "research_status": state["status"],
+        "evidence_coverage": {
+            "required_facets": required_facets,
+            "authoritative_source_count": len(authoritative_sources),
+            "new_source_count": new_source_count,
+            "search_count": search_count,
+            "safety_searches_remaining": max(0, MAX_RESEARCH_SEARCH_ROUNDS - search_count),
+        },
+        "sources": accumulated_sources,
+        "instruction": (
+            "Read the fetched excerpts and call assess_research_evidence. You—not a keyword "
+            "counter—must judge every required facet, cite supporting source IDs, and explain "
+            "your reasoning. Do not search again until the assessment returns gaps_remain."
+        ),
+    }
+
+
+async def _handle_assess_research_evidence(
+    context: ToolContext,
+    args: dict[str, Any],
+) -> dict[str, Any]:
+    state_raw = context.extra.get("_learning_material_research_state")
+    state = dict(state_raw) if isinstance(state_raw, dict) else {}
+    required_facets = _normalized_research_facets(state.get("required_facets"))
+    sources = [item for item in state.get("sources", []) if isinstance(item, dict)]
+    if not required_facets or not sources:
+        return {
+            "ok": False,
+            "error": "research_evidence_missing",
+            "detail": "Search for verified evidence before assessing its sufficiency.",
+        }
+
+    verdict = str(args.get("verdict") or "").strip()
+    if verdict not in {"sufficient", "gaps_remain", "exhausted_with_gaps"}:
+        return {
+            "ok": False,
+            "error": "invalid_research_verdict",
+            "detail": "verdict must be sufficient, gaps_remain, or exhausted_with_gaps.",
+        }
+    raw_standard = args.get("evidence_standard")
+    evidence_standard = dict(raw_standard) if isinstance(raw_standard, dict) else {}
+    risk_level = str(evidence_standard.get("risk_level") or "").strip()
+    stopping_rule = " ".join(str(evidence_standard.get("stopping_rule") or "").split())
+    try:
+        minimum_independent_sources = int(
+            evidence_standard.get("minimum_independent_sources")
+        )
+    except (TypeError, ValueError):
+        minimum_independent_sources = 0
+    requires_authoritative_source = evidence_standard.get("requires_authoritative_source")
+    claim_types = [
+        " ".join(str(item or "").split())
+        for item in evidence_standard.get("claim_types", [])
+        if str(item or "").strip()
+    ] if isinstance(evidence_standard.get("claim_types"), list) else []
+    freshness_requirement = str(
+        evidence_standard.get("freshness_requirement") or ""
+    ).strip()
+    applicability_scope = " ".join(
+        str(evidence_standard.get("applicability_scope") or "").split()
+    )
+    unresolved_uncertainties = [
+        " ".join(str(item or "").split())
+        for item in evidence_standard.get("unresolved_uncertainties", [])
+        if str(item or "").strip()
+    ] if isinstance(evidence_standard.get("unresolved_uncertainties"), list) else []
+    raw_quality_checks = evidence_standard.get("quality_checks")
+    quality_checks = [
+        item for item in raw_quality_checks if isinstance(item, dict)
+    ] if isinstance(raw_quality_checks, list) else []
+    available_source_ids = {
+        str(identifier or "").strip()
+        for source in sources
+        for identifier in (source.get("id"), source.get("url"))
+        if str(identifier or "").strip()
+    }
+    standard_errors: list[str] = []
+    if risk_level not in {"exploratory", "normal", "high_stakes"}:
+        standard_errors.append(
+            "evidence_standard.risk_level must be exploratory, normal, or high_stakes"
+        )
+    if minimum_independent_sources < 1 or minimum_independent_sources > 8:
+        standard_errors.append(
+            "evidence_standard.minimum_independent_sources must be between 1 and 8"
+        )
+    if not isinstance(requires_authoritative_source, bool):
+        standard_errors.append(
+            "evidence_standard.requires_authoritative_source must be boolean"
+        )
+    if not claim_types or len(claim_types) > 6:
+        standard_errors.append("evidence_standard.claim_types must contain 1-6 claim types")
+    if freshness_requirement not in {"historical", "stable", "current", "latest"}:
+        standard_errors.append(
+            "evidence_standard.freshness_requirement must be historical, stable, current, or latest"
+        )
+    if len(applicability_scope) < 16:
+        standard_errors.append(
+            "evidence_standard.applicability_scope must state the scope and boundary"
+        )
+    if len(stopping_rule) < 20:
+        standard_errors.append(
+            "evidence_standard.stopping_rule must explain the task-adapted stop rule"
+        )
+    if len(unresolved_uncertainties) > 8:
+        standard_errors.append(
+            "evidence_standard.unresolved_uncertainties accepts at most 8 items"
+        )
+    checks_by_dimension: dict[str, dict[str, Any]] = {}
+    normalized_quality_checks: list[dict[str, Any]] = []
+    for check in quality_checks:
+        dimension = str(check.get("dimension") or "").strip()
+        if dimension in checks_by_dimension:
+            standard_errors.append(f"duplicate evidence quality dimension: {dimension}")
+            continue
+        status = str(check.get("status") or "").strip()
+        rationale = " ".join(str(check.get("rationale") or "").split())
+        source_ids = list(
+            dict.fromkeys(
+                str(item or "").strip()
+                for item in check.get("source_ids", [])
+                if str(item or "").strip()
+            )
+        ) if isinstance(check.get("source_ids"), list) else []
+        if dimension not in ADAPTIVE_EVIDENCE_DIMENSIONS:
+            standard_errors.append(f"unknown evidence quality dimension: {dimension}")
+            continue
+        if status not in {"satisfied", "unresolved", "not_applicable"}:
+            standard_errors.append(f"{dimension}: invalid quality-check status")
+        if len(rationale) < 16:
+            standard_errors.append(f"{dimension}: quality-check rationale is too short")
+        unknown_source_ids = [
+            identifier for identifier in source_ids if identifier not in available_source_ids
+        ]
+        if unknown_source_ids:
+            standard_errors.append(
+                f"{dimension}: quality check cites unknown source IDs {unknown_source_ids}"
+            )
+        if status == "satisfied" and not source_ids:
+            standard_errors.append(
+                f"{dimension}: a satisfied quality check requires supporting source IDs"
+            )
+        normalized_check = {
+            "dimension": dimension,
+            "status": status,
+            "source_ids": source_ids,
+            "rationale": rationale,
+        }
+        checks_by_dimension[dimension] = normalized_check
+        normalized_quality_checks.append(normalized_check)
+    missing_dimensions = sorted(ADAPTIVE_EVIDENCE_DIMENSIONS - checks_by_dimension.keys())
+    if missing_dimensions:
+        standard_errors.append(
+            "evidence_standard.quality_checks is missing dimensions " + str(missing_dimensions)
+        )
+    if standard_errors:
+        return {
+            "ok": False,
+            "error": "invalid_adaptive_evidence_standard",
+            "detail": (
+                "The model must declare a task-adapted evidence standard before judging "
+                "sufficiency."
+            ),
+            "integrity_errors": standard_errors,
+        }
+    normalized_standard = {
+        "risk_level": risk_level,
+        "minimum_independent_sources": minimum_independent_sources,
+        "requires_authoritative_source": requires_authoritative_source,
+        "claim_types": claim_types,
+        "freshness_requirement": freshness_requirement,
+        "applicability_scope": applicability_scope,
+        "stopping_rule": stopping_rule,
+        "unresolved_uncertainties": unresolved_uncertainties,
+        "quality_checks": normalized_quality_checks,
+    }
+    raw_assessments = args.get("facet_assessments")
+    assessments = (
+        [item for item in raw_assessments if isinstance(item, dict)]
+        if isinstance(raw_assessments, list)
+        else []
+    )
+    by_facet = {
+        " ".join(str(item.get("facet") or "").casefold().split()): item
+        for item in assessments
+        if str(item.get("facet") or "").strip()
+    }
+    missing_assessments = [
+        facet for facet in required_facets if facet.casefold() not in by_facet
+    ]
+    if missing_assessments:
+        return {
+            "ok": False,
+            "error": "incomplete_evidence_assessment",
+            "detail": "Every required facet needs one explicit model judgment.",
+            "missing_facets": missing_assessments,
+        }
+
+    source_by_id: dict[str, dict[str, Any]] = {}
+    for source in sources:
+        for identifier in (source.get("id"), source.get("url")):
+            normalized = str(identifier or "").strip()
+            if normalized:
+                source_by_id[normalized] = source
+    normalized_assessments: list[dict[str, Any]] = []
+    cited_ids: set[str] = set()
+    integrity_errors: list[str] = []
+    for facet in required_facets:
+        assessment = by_facet[facet.casefold()]
+        status = str(assessment.get("status") or "").strip()
+        rationale = " ".join(str(assessment.get("rationale") or "").split())
+        raw_ids = assessment.get("source_ids")
+        source_ids = list(
+            dict.fromkeys(
+                str(identifier or "").strip()
+                for identifier in (raw_ids if isinstance(raw_ids, list) else [])
+                if str(identifier or "").strip()
+            )
+        )
+        raw_quotes = assessment.get("evidence_quotes")
+        evidence_quotes = (
+            [item for item in raw_quotes if isinstance(item, dict)]
+            if isinstance(raw_quotes, list)
+            else []
+        )
+        unknown_ids = [identifier for identifier in source_ids if identifier not in source_by_id]
+        if status not in {"covered", "missing"}:
+            integrity_errors.append(f"{facet}: status must be covered or missing")
+        if len(rationale) < 12:
+            integrity_errors.append(f"{facet}: rationale is too short to audit")
+        if unknown_ids:
+            integrity_errors.append(f"{facet}: unknown source IDs {unknown_ids}")
+        if status == "covered" and not source_ids:
+            integrity_errors.append(f"{facet}: covered judgments require source IDs")
+        if status == "covered" and not evidence_quotes:
+            integrity_errors.append(f"{facet}: covered judgments require evidence quotes")
+        normalized_quotes: list[dict[str, str]] = []
+        for quote_item in evidence_quotes:
+            quote_source_id = str(quote_item.get("source_id") or "").strip()
+            quote = " ".join(str(quote_item.get("quote") or "").split())
+            if quote_source_id not in source_by_id or quote_source_id not in source_ids:
+                integrity_errors.append(
+                    f"{facet}: quote source {quote_source_id!r} is not a cited fetched source"
+                )
+                continue
+            if len(quote) < 8 or len(quote) > 280:
+                integrity_errors.append(f"{facet}: evidence quote length is not auditable")
+                continue
+            source = source_by_id[quote_source_id]
+            source_text = " ".join(
+                str(source.get(key) or "")
+                for key in ("title", "snippet", "evidence_excerpt")
+            )
+            normalized_source_text = " ".join(source_text.casefold().split())
+            if quote.casefold() not in normalized_source_text:
+                integrity_errors.append(
+                    f"{facet}: evidence quote is not present in source {quote_source_id}"
+                )
+                continue
+            normalized_quotes.append({"source_id": quote_source_id, "quote": quote})
+        cited_ids.update(identifier for identifier in source_ids if identifier in source_by_id)
+        normalized_assessments.append(
+            {
+                "facet": facet,
+                "status": status,
+                "source_ids": source_ids,
+                "evidence_quotes": normalized_quotes,
+                "rationale": rationale,
+            }
+        )
+    if integrity_errors:
+        return {
+            "ok": False,
+            "error": "invalid_evidence_assessment",
+            "detail": "The model assessment failed provenance checks.",
+            "integrity_errors": integrity_errors,
+        }
+
+    covered_facets = [
+        item["facet"] for item in normalized_assessments if item["status"] == "covered"
+    ]
+    missing_facets = [
+        item["facet"] for item in normalized_assessments if item["status"] == "missing"
+    ]
+    coverage_check = next(
+        (
+            check
+            for check in normalized_quality_checks
+            if check.get("dimension") == "coverage"
+        ),
+        None,
+    )
+    if missing_facets and (
+        not isinstance(coverage_check, dict)
+        or coverage_check.get("status") != "unresolved"
+    ):
+        return {
+            "ok": False,
+            "error": "inconsistent_adaptive_evidence_standard",
+            "detail": (
+                "Missing facets require the adaptive coverage quality check to remain unresolved."
+            ),
+            "missing_facets": missing_facets,
+            "evidence_standard": normalized_standard,
+        }
+    preferred_domains = [
+        str(domain) for domain in state.get("preferred_domains", []) if str(domain).strip()
+    ]
+    authoritative_ids = {
+        identifier
+        for identifier in cited_ids
+        if _source_matches_preferred_domain(source_by_id[identifier], preferred_domains)
+        or _source_trust_score(source_by_id[identifier]) >= 0.8
+    }
+    if verdict == "sufficient" and (
+        missing_facets
+        or len(cited_ids) < minimum_independent_sources
+        or (requires_authoritative_source and not authoritative_ids)
+        or unresolved_uncertainties
+        or any(check["status"] == "unresolved" for check in normalized_quality_checks)
+    ):
+        return {
+            "ok": False,
+            "error": "unsupported_sufficient_verdict",
+            "detail": (
+                "The sufficient verdict does not satisfy the model's declared adaptive evidence "
+                "standard or still contains unresolved uncertainties."
+            ),
+            "missing_facets": missing_facets,
+            "evidence_standard": normalized_standard,
+            "cited_source_count": len(cited_ids),
+            "authoritative_cited_source_count": len(authoritative_ids),
+        }
+    if verdict != "sufficient" and not missing_facets:
+        return {
+            "ok": False,
+            "error": "gap_verdict_without_gap",
+            "detail": "A gap verdict must identify at least one missing facet.",
+        }
+    search_count = int(state.get("search_count") or 0)
+    if verdict == "gaps_remain" and search_count >= MAX_RESEARCH_SEARCH_ROUNDS:
+        return {
+            "ok": False,
+            "error": "research_search_safety_limit_reached",
+            "detail": (
+                "The emergency loop limit is reached. The model must now choose sufficient or "
+                "exhausted_with_gaps from the accumulated evidence."
+            ),
+            "missing_facets": missing_facets,
+            "search_count": search_count,
+            "safety_search_limit": MAX_RESEARCH_SEARCH_ROUNDS,
+        }
+
+    state["status"] = verdict
+    state["assessment"] = normalized_assessments
+    state["covered_facets"] = covered_facets
+    state["evidence_standard"] = normalized_standard
+    context.extra["_learning_material_research_state"] = state
+    if state.get("had_allowed_tool_names") is True:
+        context.extra["allowed_tool_names"] = list(
+            state.get("allowed_tool_names_before_assessment") or []
+        )
+    else:
+        context.extra.pop("allowed_tool_names", None)
+    if verdict in {"sufficient", "exhausted_with_gaps"}:
+        _transition_formal_research_to_synthesis(context)
+    return {
+        "ok": True,
+        "research_status": verdict,
+        "research_complete": verdict == "sufficient",
+        "research_exhausted": verdict == "exhausted_with_gaps",
+        "evidence_coverage": {
+            "required_facets": required_facets,
+            "covered_facets": covered_facets,
+            "missing_facets": missing_facets,
+            "coverage_ratio": round(len(covered_facets) / len(required_facets), 3),
+            "cited_source_count": len(cited_ids),
+            "authoritative_cited_source_count": len(authoritative_ids),
+            "evidence_standard": normalized_standard,
+            "model_assessments": normalized_assessments,
+            "search_count": search_count,
+            "safety_searches_remaining": max(0, MAX_RESEARCH_SEARCH_ROUNDS - search_count),
+        },
+        "instruction": (
+            "The model judged the evidence sufficient. Stop searching and call save_formal_plan."
+            if verdict == "sufficient"
+            else "Search only for the model-identified missing facets, then assess again."
+            if verdict == "gaps_remain"
+            else "The model judged further search unproductive. Save a plan that explicitly marks the gaps."
+        ),
     }
 
 
@@ -3845,6 +4525,216 @@ def build_default_tool_registry() -> ToolRegistry:
                 "required": ["query"],
             },
             handler=_handle_search_resources,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="search_learning_materials",
+            description=(
+                "Search the public web for current, verifiable learning materials when the learner "
+                "asks Trainer to find sources or build a source-grounded learning plan. Results are "
+                "accepted only after the page is fetched, and include URL, retrieval time, snippet, "
+                "and provenance. Cite the returned URLs in the answer and do not claim unfetched hits."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": _string("Focused web query for learning materials."),
+                    "focus_area": _string("Learning topic that these sources should support."),
+                    "required_facets": {
+                        "type": "array",
+                        "description": (
+                            "For a formal plan, the stable list of 2-8 distinct concepts or "
+                            "decisions that fetched evidence must cover before research is sufficient."
+                        ),
+                        "items": {"type": "string"},
+                        "minItems": 2,
+                        "maxItems": 8,
+                    },
+                    "preferred_domains": {
+                        "type": "array",
+                        "description": (
+                            "Preferred authoritative documentation domains, without URL paths."
+                        ),
+                        "items": {"type": "string"},
+                        "maxItems": 8,
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of fetched and verified sources (1-6).",
+                        "minimum": 1,
+                        "maximum": 6,
+                        "default": 4,
+                    },
+                },
+                "required": ["query"],
+            },
+            handler=_handle_search_learning_materials,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="assess_research_evidence",
+            description=(
+                "After each public learning-material search, use your own semantic judgment to "
+                "decide whether the fetched excerpts cover every required facet. For each facet, "
+                "cite real returned source IDs and explain why it is covered or still missing. "
+                "First declare an evidence standard adapted to the task's risk and claim type. "
+                "Trainer validates that your declared standard, provenance, and completeness are "
+                "internally consistent but does not impose a fixed source count or decide semantics "
+                "by keyword counting."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "verdict": _enum(
+                        "Your evidence-sufficiency judgment.",
+                        ["sufficient", "gaps_remain", "exhausted_with_gaps"],
+                    ),
+                    "evidence_standard": {
+                        "type": "object",
+                        "description": (
+                            "The evidence threshold you selected for this task. Calibrate it to "
+                            "risk, claim type, disagreement, and verifiability; do not default every "
+                            "task to the same source count."
+                        ),
+                        "properties": {
+                            "risk_level": _enum(
+                                "Risk if the resulting plan is wrong.",
+                                ["exploratory", "normal", "high_stakes"],
+                            ),
+                            "minimum_independent_sources": {
+                                "type": "integer",
+                                "description": (
+                                    "Your task-specific minimum number of distinct cited sources."
+                                ),
+                                "minimum": 1,
+                                "maximum": 8,
+                            },
+                            "requires_authoritative_source": {
+                                "type": "boolean",
+                                "description": (
+                                    "Whether this task requires at least one first-party, standards, "
+                                    "or otherwise authoritative cited source."
+                                ),
+                            },
+                            "claim_types": _string_array(
+                                "The factual, procedural, comparative, predictive, or normative claim types being judged."
+                            ),
+                            "freshness_requirement": _enum(
+                                "How time-sensitive the evidence must be for this task.",
+                                ["historical", "stable", "current", "latest"],
+                            ),
+                            "applicability_scope": _string(
+                                "The environments, learner level, versions, and boundaries to which the evidence applies."
+                            ),
+                            "stopping_rule": _string(
+                                "Why this threshold is appropriate and what makes further search low value."
+                            ),
+                            "unresolved_uncertainties": _string_array(
+                                "Known uncertainties that remain under this standard; empty only when none remain."
+                            ),
+                            "quality_checks": {
+                                "type": "array",
+                                "description": (
+                                    "Exactly one auditable check for each dimension: coverage, "
+                                    "source_quality, recency, contradictions, and applicability."
+                                ),
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "dimension": _enum(
+                                            "Evidence-quality dimension.",
+                                            sorted(ADAPTIVE_EVIDENCE_DIMENSIONS),
+                                        ),
+                                        "status": _enum(
+                                            "Your task-specific judgment for this dimension.",
+                                            ["satisfied", "unresolved", "not_applicable"],
+                                        ),
+                                        "source_ids": _string_array(
+                                            "Fetched source IDs supporting this quality judgment."
+                                        ),
+                                        "rationale": _string(
+                                            "Detailed reasoning for the status under this task's standard."
+                                        ),
+                                    },
+                                    "required": [
+                                        "dimension",
+                                        "status",
+                                        "source_ids",
+                                        "rationale",
+                                    ],
+                                },
+                                "minItems": 5,
+                                "maxItems": 5,
+                            },
+                        },
+                        "required": [
+                            "risk_level",
+                            "minimum_independent_sources",
+                            "requires_authoritative_source",
+                            "claim_types",
+                            "freshness_requirement",
+                            "applicability_scope",
+                            "stopping_rule",
+                            "unresolved_uncertainties",
+                            "quality_checks",
+                        ],
+                    },
+                    "facet_assessments": {
+                        "type": "array",
+                        "description": "One auditable judgment for every required facet.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "facet": _string("Exact required facet being judged."),
+                                "status": _enum(
+                                    "Whether the fetched evidence semantically covers this facet.",
+                                    ["covered", "missing"],
+                                ),
+                                "source_ids": _string_array(
+                                    "IDs or URLs of fetched sources supporting this judgment."
+                                ),
+                                "evidence_quotes": {
+                                    "type": "array",
+                                    "description": (
+                                        "For a covered facet, one or more short verbatim excerpts "
+                                        "copied from the fetched title or evidence excerpt."
+                                    ),
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "source_id": _string(
+                                                "Returned source ID or URL containing the quote."
+                                            ),
+                                            "quote": _string(
+                                                "Exact short excerpt supporting the judgment."
+                                            ),
+                                        },
+                                        "required": ["source_id", "quote"],
+                                    },
+                                },
+                                "rationale": _string(
+                                    "Specific reasoning grounded in the fetched excerpts."
+                                ),
+                            },
+                            "required": [
+                                "facet",
+                                "status",
+                                "source_ids",
+                                "evidence_quotes",
+                                "rationale",
+                            ],
+                        },
+                        "minItems": 2,
+                        "maxItems": 8,
+                    },
+                },
+                "required": ["verdict", "evidence_standard", "facet_assessments"],
+            },
+            handler=_handle_assess_research_evidence,
         )
     )
 

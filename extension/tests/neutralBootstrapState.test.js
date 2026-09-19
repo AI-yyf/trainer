@@ -804,3 +804,42 @@ test('stream/cancelled keeps composer draft and acks failure without clearing it
   assert.equal(state.getState().streaming.completionStopReason, 'cancelled');
   assert.equal(state.getState().streaming.streamError, undefined);
 });
+
+test('stream-scoped progress stays in the assistant bubble while failures remain global', () => {
+  const state = loadWorkbenchState({
+    injectedBootstrap: {
+      connection: { state: 'connected' },
+      conversation: [],
+    },
+  });
+
+  state.applyHostMessage({
+    type: 'stream/start',
+    payload: { messageId: 'msg-inline-progress' },
+  });
+  state.applyHostMessage({
+    type: 'operation/status',
+    payload: {
+      tone: 'info',
+      phase: 'preparing_context',
+      surface: 'stream',
+      message: 'Preparing context',
+    },
+  });
+
+  assert.equal(state.getState().operationMessage, undefined);
+  assert.equal(state.getState().streaming.reliabilityPhase, 'executing');
+
+  state.applyHostMessage({
+    type: 'operation/status',
+    payload: {
+      tone: 'error',
+      phase: 'failed',
+      surface: 'stream',
+      message: 'The stream failed',
+    },
+  });
+
+  assert.equal(state.getState().operationMessage?.tone, 'error');
+  assert.equal(state.getState().streaming.reliabilityPhase, 'failed');
+});

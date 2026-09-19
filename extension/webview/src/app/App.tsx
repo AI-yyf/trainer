@@ -184,6 +184,7 @@ import {
 } from "../components/training/TrainingWorkbenchView";
 import {
   CheckMarkIcon,
+  BrainIcon,
   ChevronRightIcon,
   ContextLayersIcon,
   FolderIcon,
@@ -5080,7 +5081,9 @@ export function App() {
     return () => window.clearTimeout(timeoutId);
   }, [providerTestCheckedAt]);
   const settingsWorkspaceId =
-    data.memory.workspace?.workspaceId ?? data.workspaceTrainingState?.workspaceId;
+    data.memory.workspace?.workspaceId ??
+    data.workspaceTrainingState?.workspaceId ??
+    data.providerConfig.lastTestResult?.workspaceId;
   const settingsLastTestScope = {
     workspaceId: settingsWorkspaceId,
     providerProfileId: data.providerConfig.profileId,
@@ -5244,7 +5247,18 @@ export function App() {
   const displayConnectionState = effectiveConnectionState(data.connection.state);
   const shouldShowNeutralEmptyState =
     data.conversation.length === 0 && (!providerCanCoachNow || displayConnectionState !== "connected");
-  const isFirstCoachConversation = data.conversation.length === 0;
+  const hasDurableCoachContext = Boolean(
+    data.memory.activeThread ||
+      data.memory.memoryEvidence.length > 0 ||
+      data.memory.workspaceUnderstanding ||
+      data.plan?.id ||
+      data.profile.goals.length > 0 ||
+      data.profile.targetProject?.trim() ||
+      data.profile.projectContext?.trim() ||
+      data.memory.workspace?.projectContext?.trim(),
+  );
+  const isFirstCoachConversation =
+    data.conversation.length === 0 && !hasDurableCoachContext;
   const baselineConnectedMessage = useMemo(
     () =>
       layout.composerLanguage === "zh-CN" ? "已连接到扩展宿主。" : "Connected to extension host.",
@@ -14902,7 +14916,7 @@ export function App() {
               onSubmit={handleSubmit}
               onCancel={handleCancelStream}
               onNavigateHistory={navigateComposerHistory}
-              density="default"
+              density={composerModelActionDensity}
               placeholder={
                 workspaceSessionBlocked && !canCaptureGoalBeforeWorkspaceSetup
                   ? workspaceSessionBlockMessage ?? ""
@@ -15017,6 +15031,8 @@ export function App() {
                 },
                 {
                   id: "model-switch",
+                  compact: composerModelActionDensity === "compact",
+                  icon: <BrainIcon size={16} />,
                   label: composerModelButtonDisplayLabel,
                   tone: "ghost" as const,
                   title: composerModelButtonTitle,

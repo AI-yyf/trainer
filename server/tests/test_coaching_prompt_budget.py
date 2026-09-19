@@ -140,6 +140,8 @@ def test_formal_plan_turn_requires_model_commit_and_keeps_library_context() -> N
     )
     system_content = messages[0]["content"]
     assert "Formal Plan Turn" in system_content
+    assert "search_learning_materials" in system_content
+    assert "current external sources" in system_content
     assert "save_formal_plan" in system_content
     assert "resource-route-notes" in system_content
     assert "uploaded route notes" in system_content
