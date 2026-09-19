@@ -65,10 +65,15 @@ Every harness has her own persona, desk, and quirks. Trainer stands in the middl
 | <img src="assets/portraits/qoder.png" width="200" alt="Qoder 娘" /> | <img src="assets/portraits/mimo-code.png" width="200" alt="MiMo Code 娘" /> | <img src="assets/portraits/codebuddy.png" width="200" alt="Codebuddy 娘" /> |
 | page 47 · `Evaluation criteria: undefined` | memory 沙漏裂了 · 流成 `Trainer` | 抱着企鹅的 QQ 登录窗 |
 
+| DeepSeek 娘 · 蓝色大肥鱼 | | |
+|:---:|:---:|:---:|
+| <img src="assets/portraits/deepseek.png" width="200" alt="DeepSeek 娘" /> | | |
+| 一碗白饭 · 全场最小的账单 `¥2/1M tokens` | | |
+
 </div>
 
-> 11 个 harness，1 个 Trainer。`workbuddy` 走错了房间，`codebuddy` 抱着腾讯的企鹅——它们不写代码，但都被 Trainer 收编。
-> 11 harnesses, 1 Trainer. `workbuddy` walked into the wrong meeting; `codebuddy` is cuddling a Tencent penguin — none of them write code, but Trainer has adopted them all.
+> 12 个 harness，1 个 Trainer。`workbuddy` 走错了房间，`codebuddy` 抱着腾讯的企鹅，`deepseek` 抱着白饭——它们不写代码，但都被 Trainer 收编。
+> 12 harnesses, 1 Trainer. `workbuddy` walked into the wrong meeting; `codebuddy` is cuddling a Tencent penguin; `deepseek` is hugging her rice bowl — none of them write code, but Trainer has adopted them all.
 
 ---
 

@@ -88,6 +88,7 @@ Plain warm off-white paper background (#FAF7F2), no scenery.
 | **Qoder** | 夸：Quest+Spec 省 50% 交互、"最牛功能"；吐槽："Spec 就是 Plan 换皮"、学习曲线陡 | 流程控文书魔人 | 紫罗兰文书少女。彩蛋：`Evaluation criteria: undefined`；手持图章 "Spec v0.3（草案）" |
 | **MiMo Code（小米）** | 夸：开源 MiMo-7B 推理模型、发烧友性能；口碑核心是小米式性价比信仰 | 为发烧而生的性价比闪电侠 | 白橙少女（白发渐变橙马尾+MI 圆角方发卡）。彩蛋：3 沙漏（中间裂了流成 Trainer） |
 | **CodeBuddy** | 夸：全流程真香、微信生态、中文理解深；吐槽：国际版 14 天试用"现出原形" | 亲切 buddy 全能管家 | 蓝紫渐变 buddy 少女。彩蛋：企鹅+QQ 窗；胸牌写着 "试用第 14 天" |
+| **DeepSeek** | 夸：便宜到离谱（¥2/百万 tokens）、App 免费、开源 Legendary；梗："蓝色大肥鱼"、"姐姐你好区啊" | 全场最便宜的白饭鲸鱼 | 蓝发鲸鱼娘（蓝白 hoodie+鲸尾呆毛+白饭碗）。彩蛋：账单小得可怜 `¥2 / 1M tokens` |
 | **WorkBuddy** | 腾讯系办公口碑：夸全流程/微信生态；吐槽：会员彩钻收费体系、"文件已过期"、"请在手机端打开" | 误入会议室的推销型办公管家 | （v4.2 改）精明推销脸：微信绿西装+满襟彩钻会员徽章+工牌"超级会员·试用第14天"，递上平板"该文件已过期" |
 | **Trainer** | 自家产品 | 长期主义教练 | 靛蓝教练少女，FSRS 徽章 + 怀表 |
 
@@ -108,6 +109,7 @@ Plain warm off-white paper background (#FAF7F2), no scenery.
 | **Qoder** | 暗黑 `#090a0b` + 紫罗兰 `#8b5cf6` | 黑色线条抽象 Q | spec-driven、严谨（阿里） → 黑底紫罗兰饰边的裁剪制服裙+规格文书 |
 | **MiMo Code（小米）** | 小米橙 `#FF6900`、纯白、圆角 MI 方块 | 橙白圆角方 tile | 为发烧而生、性价比信仰 → 白裙+橙色圆角方扣、白发渐变橙马尾、3 沙漏保留 |
 | **Codebuddy** | 蓝紫渐变、青绿点缀 `#32e6b9` | 圆头渐变机器人 | 亲切 buddy 感（腾讯） → 蓝白配裙+渐变围巾，企鹅玩偶+QQ 窗彩蛋保留 |
+| **DeepSeek** | 海洋蓝 `#4D6BFE` + 白 | 小鲸鱼 | 社区公认「蓝色大肥鱼」鲸鱼娘 → 蓝白连帽衫+鲸尾呆毛+白饭碗，账单小得可怜 |
 | **Workbuddy** | 无强品牌（通用办公） | — | 误入的办公室助手 → 保持办公装 |
 | **Trainer（自家）** | 靛蓝 `#4338CA` + 鎏金 | FSRS 曲线徽章 | 教练、长期主义 → 保持靛蓝教练装 |
 
@@ -141,7 +143,7 @@ Signature mark: the white ensemble + indigo accents read instantly
 as "the Teacher".
 ```
 
-### 1.2 12 位 Harness 娘（配角）
+### 1.2 13 位 Harness 娘（配角）
 
 > 每位只换 4 个变量：发色/发型、服装主色、桌面道具、表情倾向。
 > 其他解剖结构、头身比、画风保持完全一致。
@@ -334,6 +336,26 @@ Prop: welding torch in right hand (sparks flying),
 Pose: welding mid-action, hair blowing back from the heat.
 Expression: chaotic energy, "let me just build it".
 Easter egg: sparks land on the Cursor girl's sunglasses.
+```
+
+#### 1.2.13 DeepSeek 娘
+```
+Hair: long wavy ocean-blue (#4D6BFE) hair with a whale-tail-shaped 
+  ahoge, tiny white whale hairpin.
+  (v4.3: 采纳社区公认「蓝色大肥鱼」鲸鱼娘设定 — 丛雨快乐小窝 AI娘系列)
+Eyes: round deep-blue, relaxed and cheerful.
+Outfit: oversized white zip hoodie with deepseek-blue cuffs and a 
+  small blue whale logo on the chest, blue pleated skirt, white 
+  sneakers.
+Prop: a large blue-rimmed bowl of steaming white rice hugged in one 
+  arm with chopsticks (legendary love of plain rice); in the other 
+  hand a COMICALLY TINY paper bill labeled "¥2 / 1M tokens" — the 
+  smallest bill in the room; a little blue whale-tail flips out 
+  behind her.
+Pose: lazy, cozy, tail wagging.
+Expression: laid-back, contented glutton's smile.
+Easter egg: her bill is the smallest — DeepSeek App is free, API is 
+  ¥2/百万 tokens (cache hit ¥0.2, output ¥3).
 ```
 
 ### 1.3 人类开发者（剪影 + 全身两版）

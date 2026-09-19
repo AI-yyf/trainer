@@ -133,6 +133,24 @@ PORTRAITS = [
         ),
     },
     {
+        "id": "deepseek",
+        "prompt": (
+            STYLE +
+            "DEEPSEEK girl, designed after the community DeepSeek moe-girl (the beloved 'blue fat fish' whale "
+            "girl) in DeepSeek's official ocean-blue #4D6BFE and white. Laid-back, happy-go-lucky, famously the "
+            "cheapest and coziest of them all. "
+            "Hair: long wavy ocean-blue #4D6BFE hair with a small whale-tail-shaped ahoge sticking up, decorated "
+            "with a tiny white whale hairpin. "
+            "Eyes: round deep-blue, relaxed and cheerful. "
+            "Outfit: oversized white zip hoodie with deepseek-blue cuffs and a small blue whale logo on the chest, "
+            "worn loose and comfy over a blue pleated skirt, white sneakers. "
+            "Prop: a large blue-rimmed bowl of steaming white rice hugged in one arm with chopsticks (her legendary "
+            "love of plain rice); in her other hand she holds out a COMICALLY TINY paper bill labeled '¥2 / 1M "
+            "tokens' — the smallest bill in the room; a little blue whale-tail flips out behind her. "
+            "Expression: laid-back, contented glutton's smile."
+        ),
+    },
+    {
         "id": "workbuddy",
         "prompt": (
             STYLE +
