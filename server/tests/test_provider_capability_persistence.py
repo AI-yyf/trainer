@@ -35,7 +35,7 @@ def _settings(tmp_path: Path) -> AppSettings:
 def _provider() -> ProviderConfig:
     return ProviderConfig(
         name="MiniMax Relay",
-        base_url="http://minimax.redfast.top",
+        base_url="http://minimax.relay.example.test",
         api_key_ref="trainer.default",
         model="MiniMax-M2.7",
     )

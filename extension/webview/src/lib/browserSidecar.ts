@@ -39,6 +39,8 @@ import {
 } from "../../../../shared/src/providerProtocols";
 import { providerErrorHint } from "../../../../shared/src/providerStatus";
 import { normalizeProviderRequestDefaults } from "../../../../shared/src/providerRequestDefaults";
+import { normalizeProviderThinkingConfig } from "../../../../shared/src/providerThinking";
+import { normalizeTrainerCustomSkills } from "../../../../shared/src/skillCatalog";
 import {
   applyProviderModelCatalog,
   mergeProviderModelTokenLimits,
@@ -401,6 +403,7 @@ type PreviewProviderDraftInput = {
   apiKey?: string;
   capabilities?: ProviderConfigView["capabilities"] | Record<string, unknown>;
   requestDefaults?: Record<string, unknown>;
+  thinkingConfig?: ProviderConfigView["thinkingConfig"];
 };
 
 function previewSidecarPortOverride(): number | undefined {
@@ -1027,6 +1030,10 @@ function buildPreviewProviderView(value: unknown): ProviderConfigView | undefine
     { name, baseUrl, model },
     record.requestDefaults,
   );
+  const thinkingConfig = normalizeProviderThinkingConfig(
+    record.thinkingConfig ?? record.requestDefaults,
+    protocol,
+  );
   const tokenState = resolveProviderModelTokenState(
     {
       model,
@@ -1057,6 +1064,7 @@ function buildPreviewProviderView(value: unknown): ProviderConfigView | undefine
       (isBrowserPreviewFixture() && asBoolean(record.apiKeyConfigured) === true),
     capabilities,
     requestDefaults,
+    thinkingConfig,
     protocol,
     protocolFamily:
       asString(record.protocolFamily) ?? providerProtocolFamily(protocol),
@@ -1236,6 +1244,7 @@ function buildPreviewProfileRecord(
     embeddingModel?: string;
     catalogSource?: ProviderConfigView["catalogSource"];
     cacheTtlSeconds?: number;
+    thinkingConfig?: ProviderConfigView["thinkingConfig"];
   },
 ): Record<string, unknown> {
   const requestDefaults = normalizePreviewRequestDefaults(input, input.requestDefaults);
@@ -1255,6 +1264,7 @@ function buildPreviewProfileRecord(
     modelTokenLimits: input.modelTokenLimits,
     capabilities: input.capabilities,
     requestDefaults,
+    thinkingConfig: input.thinkingConfig,
     modelAliases: input.modelAliases ?? {},
     taskBindings: input.taskBindings ?? {},
     allowedModels: input.allowedModels ?? [],
@@ -1429,6 +1439,8 @@ function buildPreviewDraftProvider(
     deniedModels: draft.deniedModels ?? current?.deniedModels,
     capabilities: draft.capabilities ?? current?.capabilities,
     requestDefaults: draft.requestDefaults ?? current?.requestDefaults,
+    thinkingConfig:
+      draft.thinkingConfig ?? (sameTransportAsCurrent ? current?.thinkingConfig : undefined),
   });
   if (!provider) {
     throw new Error("Preview provider draft could not be prepared.");
@@ -2275,6 +2287,7 @@ export async function saveBrowserPreviewCoachSettings(
             review_cadence: request.coachDefaults.reviewCadence,
             review_reminder_mode: request.coachDefaults.reviewReminderMode,
             workspace_memory_toggles: request.coachDefaults.workspaceMemoryToggles,
+            custom_skills: request.coachDefaults.customSkills,
           }
         : undefined,
       follow_current_file: request.followCurrentFile,
@@ -2363,10 +2376,18 @@ async function saveBrowserPreviewProviderCore(
     typeof draft.cacheTtlSeconds === "number" && Number.isFinite(draft.cacheTtlSeconds) && draft.cacheTtlSeconds > 0
       ? Math.round(draft.cacheTtlSeconds)
       : current?.cacheTtlSeconds;
+  const requestDefaultsInput = asRecord(draft.requestDefaults) ?? current?.requestDefaults ?? {};
   const requestDefaults = normalizePreviewRequestDefaults(
     { name, baseUrl, model },
-    asRecord(draft.requestDefaults) ?? current?.requestDefaults ?? {},
+    requestDefaultsInput,
   );
+  // Mirrors the host save path: explicit draft intent wins, wire markers in the
+  // submitted defaults come next, and the stored intent carries over only while
+  // the transport is unchanged.
+  const thinkingConfig =
+    normalizeProviderThinkingConfig(draft.thinkingConfig, protocol) ??
+    normalizeProviderThinkingConfig(requestDefaultsInput, protocol) ??
+    (sameTransport ? current?.thinkingConfig : undefined);
   const currentProviderKey = current
     ? previewProviderKey({
         profileId: current.profileId,
@@ -2423,6 +2444,7 @@ async function saveBrowserPreviewProviderCore(
     modelTokenLimits: tokenState.modelTokenLimits,
     capabilities,
     requestDefaults,
+    thinkingConfig,
     mode: profileMode,
     credentialMode,
     modelAliases: current?.modelAliases,
@@ -5552,6 +5574,16 @@ function asMemoryWorkspace(value: unknown): BootstrapData["memory"]["workspace"]
             patterns: asBoolean(toggles?.patterns) ?? true,
             resources: asBoolean(toggles?.resources) ?? true,
           },
+          // Only emit the key when the server record carries it, so an
+          // absent field never wipes locally pending skills on merge.
+          ...(coachDefaultsRecord?.custom_skills !== undefined ||
+          coachDefaultsRecord?.customSkills !== undefined
+            ? {
+                customSkills: normalizeTrainerCustomSkills(
+                  coachDefaultsRecord.custom_skills ?? coachDefaultsRecord.customSkills,
+                ),
+              }
+            : {}),
         }
       : undefined;
 

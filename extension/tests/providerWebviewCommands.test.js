@@ -3499,7 +3499,7 @@ test('saveProviderFromWebviewCommand adopts a live model when the save names non
   // No `model` in the payload: the fresh relay paste flow.
   const result = await saveProviderFromWebviewCommand(context, {
     name: 'Relay',
-    baseUrl: 'http://minimax.redfast.top',
+    baseUrl: 'http://minimax.relay.example.test',
     protocol: 'openai_chat_completions_compatible',
   });
 
@@ -3507,4 +3507,265 @@ test('saveProviderFromWebviewCommand adopts a live model when the save names non
   const lastSaved = savedConfigs[savedConfigs.length - 1];
   assert.equal(lastSaved.model, 'MiniMax-M2.7-highspeed');
   assert.match(result.message, /MiniMax-M2\.7-highspeed/);
+});
+
+function createThinkingTestContext(existingConfig) {
+  const patches = [];
+  const syncs = [];
+  const savedConfigs = [];
+  const bootstrap = createDefaultBootstrapData(
+    {
+      trusted: true,
+      workspaceFolder: 'F:\\trainer\\workspace-a',
+    },
+    existingConfig,
+    {
+      lifecycle: 'ready',
+      host: '127.0.0.1',
+      port: 34891,
+      canStart: true,
+    },
+  );
+  let current = existingConfig;
+  const context = {
+    providerStore: {
+      getConfig() {
+        return current;
+      },
+      async saveConfig(config) {
+        savedConfigs.push(config);
+        current = config;
+      },
+      async getApiKey() {
+        return undefined;
+      },
+      getModelCache() {
+        return undefined;
+      },
+      isModelCacheFresh() {
+        return false;
+      },
+      isModelCacheCompatible() {
+        return false;
+      },
+      getLastTestResult() {
+        return undefined;
+      },
+      getProfileRegistrySnapshot() {
+        return { activeProfileId: '', profiles: [], switchHistory: [] };
+      },
+    },
+    getHostState() {
+      return {
+        bootstrap,
+        sidecar: { lifecycle: 'ready', port: 34891, host: '127.0.0.1', canStart: true },
+        workspace: {
+          workspaceFolder: 'F:\\trainer\\workspace-a',
+        },
+      };
+    },
+    getSessionId() {
+      return 'session-1';
+    },
+    async patchWorkbenchData(patch) {
+      patches.push(patch);
+    },
+    workbench: {
+      async syncState() {
+        syncs.push(true);
+      },
+    },
+    __patches: patches,
+    __syncs: syncs,
+    __savedConfigs: savedConfigs,
+  };
+  return context;
+}
+
+test('setProviderThinkingCommand persists the chosen intent when the wire cannot emit it', async () => {
+  const { setProviderThinkingCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
+  const context = createThinkingTestContext({
+    name: 'Local Compatible',
+    protocol: 'openai_chat_completions_compatible',
+    baseUrl: 'http://localhost:1234/v1',
+    apiKeyRef: 'trainer.default',
+    model: 'demo-model',
+    capabilities: {
+      chat: true,
+      responses: true,
+      vision: false,
+      embeddings: false,
+      tools: false,
+      jsonSchema: false,
+      structuredOutput: false,
+      streaming: true,
+    },
+    requestDefaults: { temperature: 0.4 },
+  });
+
+  const result = await setProviderThinkingCommand(context, {
+    mode: 'enabled',
+    reasoningEffort: 'high',
+  });
+
+  assert.equal(result.ok, true);
+  const saved = context.__savedConfigs[0];
+  // No capability evidence: the wire stays clean but the durable intent survives.
+  assert.equal(saved.requestDefaults.reasoning_effort, undefined);
+  assert.equal(saved.requestDefaults.temperature, 0.4);
+  assert.deepEqual(saved.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
+  const providerPatch = context.__patches[context.__patches.length - 1].providerConfig;
+  assert.deepEqual(providerPatch.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
+});
+
+test('setProviderThinkingCommand persists an explicit disabled intent without evidence', async () => {
+  const { setProviderThinkingCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
+  const context = createThinkingTestContext({
+    name: 'Local Compatible',
+    protocol: 'openai_chat_completions_compatible',
+    baseUrl: 'http://localhost:1234/v1',
+    apiKeyRef: 'trainer.default',
+    model: 'demo-model',
+    capabilities: {
+      chat: true,
+      responses: true,
+      vision: false,
+      embeddings: false,
+      tools: false,
+      jsonSchema: false,
+      structuredOutput: false,
+      streaming: true,
+    },
+    requestDefaults: { temperature: 0.4 },
+  });
+
+  const result = await setProviderThinkingCommand(context, { mode: 'disabled' });
+
+  assert.equal(result.ok, true);
+  const saved = context.__savedConfigs[0];
+  assert.deepEqual(saved.thinkingConfig, { mode: 'disabled' });
+  assert.equal(saved.requestDefaults.temperature, 0.4);
+});
+
+test('saveProviderFromWebviewCommand persists draft thinkingConfig and re-emits it once evidence exists', async () => {
+  const { saveProviderFromWebviewCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
+  const context = createThinkingTestContext({
+    name: 'Local Compatible',
+    protocol: 'openai_chat_completions_compatible',
+    baseUrl: 'http://localhost:1234/v1',
+    apiKeyRef: 'trainer.default',
+    model: 'demo-model',
+    capabilities: {
+      chat: true,
+      responses: true,
+      vision: false,
+      embeddings: false,
+      tools: false,
+      jsonSchema: false,
+      structuredOutput: false,
+      streaming: true,
+    },
+    requestDefaults: {},
+  });
+
+  const result = await saveProviderFromWebviewCommand(context, {
+    name: 'Local Compatible',
+    protocol: 'openai_chat_completions_compatible',
+    baseUrl: 'http://localhost:1234/v1',
+    model: 'demo-model',
+    requestDefaults: {},
+    thinkingConfig: { mode: 'enabled', reasoningEffort: 'high' },
+  });
+
+  assert.equal(result.ok, true);
+  const saved = context.__savedConfigs[0];
+  assert.deepEqual(saved.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
+});
+
+test('saveProviderFromWebviewCommand carries stored thinking intent on the same connection only', async () => {
+  const { saveProviderFromWebviewCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
+  const existing = {
+    name: 'Local Compatible',
+    protocol: 'openai_chat_completions_compatible',
+    baseUrl: 'http://localhost:1234/v1',
+    apiKeyRef: 'trainer.default',
+    model: 'demo-model',
+    capabilities: {
+      chat: true,
+      responses: true,
+      vision: false,
+      embeddings: false,
+      tools: false,
+      jsonSchema: false,
+      structuredOutput: false,
+      streaming: true,
+    },
+    requestDefaults: {},
+    thinkingConfig: { mode: 'enabled', reasoningEffort: 'high' },
+  };
+
+  // Same connection, payload without thinkingConfig: stored intent carries over.
+  const sameContext = createThinkingTestContext(existing);
+  const sameResult = await saveProviderFromWebviewCommand(sameContext, {
+    name: 'Local Compatible',
+    protocol: 'openai_chat_completions_compatible',
+    baseUrl: 'http://localhost:1234/v1',
+    model: 'demo-model',
+    requestDefaults: {},
+  });
+  assert.equal(sameResult.ok, true);
+  assert.deepEqual(sameContext.__savedConfigs[0].thinkingConfig, {
+    mode: 'enabled',
+    reasoningEffort: 'high',
+  });
+
+  // Different connection: the stored intent and its wire fields must not leak.
+  const movedContext = createThinkingTestContext(existing);
+  const movedResult = await saveProviderFromWebviewCommand(movedContext, {
+    name: 'Other Provider',
+    protocol: 'openai_chat_completions_compatible',
+    baseUrl: 'https://other.example/v1',
+    model: 'demo-model',
+    requestDefaults: {},
+  });
+  assert.equal(movedResult.ok, true);
+  assert.equal(movedContext.__savedConfigs[0].thinkingConfig, undefined);
+});
+
+test('setProviderThinkingCommand persists an explicit disabled intent even when an effort rides along', async () => {
+  const { setProviderThinkingCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
+  const context = createThinkingTestContext({
+    name: 'Local Compatible',
+    protocol: 'openai_chat_completions_compatible',
+    baseUrl: 'http://localhost:1234/v1',
+    apiKeyRef: 'trainer.default',
+    model: 'demo-model',
+    capabilities: {
+      chat: true,
+      responses: true,
+      vision: false,
+      embeddings: false,
+      tools: false,
+      jsonSchema: false,
+      structuredOutput: false,
+      streaming: true,
+      thinking: true,
+    },
+    requestDefaults: { reasoning_effort: 'high' },
+    thinkingConfig: { mode: 'enabled', reasoningEffort: 'high' },
+  });
+
+  // The composer spreads the current config when switching mode, so the chosen
+  // effort rides along on the "off" click — the disabled mode must survive
+  // normalization instead of flipping back to enabled.
+  const result = await setProviderThinkingCommand(context, {
+    mode: 'disabled',
+    reasoningEffort: 'high',
+  });
+
+  assert.equal(result.ok, true);
+  const saved = context.__savedConfigs[0];
+  assert.deepEqual(saved.thinkingConfig, { mode: 'disabled', reasoningEffort: 'high' });
+  assert.deepEqual(saved.requestDefaults.thinking, { type: 'disabled' });
+  assert.equal(saved.requestDefaults.reasoning_effort, undefined);
 });

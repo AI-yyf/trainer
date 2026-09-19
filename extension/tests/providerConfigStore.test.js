@@ -1166,3 +1166,144 @@ test('ProviderConfigStore last-test is isolated by workspace and provider profil
   assert.equal(store.getLastTestResult({ ...sharedConfig, profileId: 'profile-b' }, { workspaceId: 'workspace-a' }), undefined);
   assert.equal(store.getLastTestResult(sharedConfig, { workspaceId: 'workspace-a' })?.detail, 'Workspace A last-test');
 });
+
+const THINKING_MODEL_CAPABILITIES = {
+  chat: true,
+  responses: true,
+  vision: false,
+  embeddings: false,
+  tools: true,
+  jsonSchema: false,
+  streaming: true,
+  structuredOutput: false,
+  thinking: true,
+};
+
+function thinkingStoreConfig(overrides = {}) {
+  return {
+    name: 'openai',
+    label: 'OpenAI',
+    protocol: 'openai_responses',
+    baseUrl: 'https://api.openai.com/v1',
+    apiKeyRef: 'openai.default',
+    credentialMode: 'ui_proxy',
+    model: 'o3',
+    modelCapabilities: { o3: { ...THINKING_MODEL_CAPABILITIES } },
+    ...overrides,
+  };
+}
+
+function createThinkingStore() {
+  const workspaceRoot = createWorkspaceRoot();
+  const { ProviderConfigStore } = loadWithVscodeMock(
+    providerConfigStoreModulePath,
+    createVscodeMock(workspaceRoot),
+  );
+  const extensionContext = createExtensionContext(createGlobalState());
+  return { store: new ProviderConfigStore(extensionContext), extensionContext, ProviderConfigStore };
+}
+
+test('ProviderConfigStore preserves enabled thinking intent and wire defaults across save and reload', async () => {
+  const { store, extensionContext, ProviderConfigStore } = createThinkingStore();
+  await store.saveConfig(
+    thinkingStoreConfig({
+      requestDefaults: { reasoning_effort: 'high', temperature: 0.4 },
+      thinkingConfig: { mode: 'enabled', reasoningEffort: 'high' },
+    }),
+    'sk-test',
+  );
+
+  const saved = store.getConfig();
+  assert.equal(saved.requestDefaults.reasoning_effort, 'high');
+  assert.equal(saved.requestDefaults.temperature, 0.4);
+  assert.deepEqual(saved.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
+
+  const reloaded = new ProviderConfigStore(extensionContext).getConfig();
+  assert.equal(reloaded.requestDefaults.reasoning_effort, 'high');
+  assert.equal(reloaded.requestDefaults.temperature, 0.4);
+  assert.deepEqual(reloaded.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
+});
+
+test('ProviderConfigStore persists explicit disabled thinking across reload', async () => {
+  const { store, extensionContext, ProviderConfigStore } = createThinkingStore();
+  await store.saveConfig(
+    thinkingStoreConfig({
+      requestDefaults: { thinking: { type: 'disabled' } },
+      thinkingConfig: { mode: 'disabled' },
+    }),
+    'sk-test',
+  );
+
+  const saved = store.getConfig();
+  assert.deepEqual(saved.requestDefaults.thinking, { type: 'disabled' });
+  assert.deepEqual(saved.thinkingConfig, { mode: 'disabled' });
+
+  const reloaded = new ProviderConfigStore(extensionContext).getConfig();
+  assert.deepEqual(reloaded.requestDefaults.thinking, { type: 'disabled' });
+  assert.deepEqual(reloaded.thinkingConfig, { mode: 'disabled' });
+});
+
+test('ProviderConfigStore prefers fresh request defaults over stale fallback thinking intent', async () => {
+  const { store } = createThinkingStore();
+  await store.saveConfig(
+    thinkingStoreConfig({
+      requestDefaults: { reasoning_effort: 'high' },
+      thinkingConfig: { mode: 'enabled', reasoningEffort: 'high' },
+    }),
+    'sk-test',
+  );
+
+  // Save again with thinking cleared — the stale stored intent must not resurrect.
+  await store.saveConfig(
+    thinkingStoreConfig({ requestDefaults: { temperature: 0.4 } }),
+    'sk-test',
+  );
+
+  const cleared = store.getConfig();
+  assert.equal(cleared.requestDefaults.reasoning_effort, undefined);
+  assert.equal(cleared.requestDefaults.temperature, 0.4);
+  assert.equal(cleared.thinkingConfig, undefined);
+});
+
+test('ProviderConfigStore keeps thinking fields off the wire without model capability evidence but retains the intent', async () => {
+  const { store } = createThinkingStore();
+  await store.saveConfig(
+    thinkingStoreConfig({
+      model: 'gpt-4o',
+      modelCapabilities: {
+        'gpt-4o': { ...THINKING_MODEL_CAPABILITIES, thinking: false },
+      },
+      requestDefaults: { reasoning_effort: 'high' },
+      thinkingConfig: { mode: 'enabled', reasoningEffort: 'high' },
+    }),
+    'sk-test',
+  );
+
+  const saved = store.getConfig();
+  assert.equal(saved.requestDefaults.reasoning_effort, undefined);
+  assert.deepEqual(saved.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
+});
+
+test('ProviderConfigStore keeps an explicit disabled choice disabled when an effort rides along', async () => {
+  const { store, extensionContext, ProviderConfigStore } = createThinkingStore();
+  // Mirrors the composer "Off" click: the mode flips to disabled while the last
+  // effort selection is still on the intent object. The mode must stay
+  // disabled through normalize, persist, and reload — never flipping back on.
+  await store.saveConfig(
+    thinkingStoreConfig({
+      requestDefaults: { reasoning_effort: 'high' },
+      thinkingConfig: { mode: 'disabled', reasoningEffort: 'high' },
+    }),
+    'sk-test',
+  );
+
+  const saved = store.getConfig();
+  assert.deepEqual(saved.thinkingConfig, { mode: 'disabled', reasoningEffort: 'high' });
+  assert.deepEqual(saved.requestDefaults.thinking, { type: 'disabled' });
+  assert.equal(saved.requestDefaults.reasoning_effort, undefined);
+
+  const reloaded = new ProviderConfigStore(extensionContext).getConfig();
+  assert.deepEqual(reloaded.thinkingConfig, { mode: 'disabled', reasoningEffort: 'high' });
+  assert.deepEqual(reloaded.requestDefaults.thinking, { type: 'disabled' });
+  assert.equal(reloaded.requestDefaults.reasoning_effort, undefined);
+});

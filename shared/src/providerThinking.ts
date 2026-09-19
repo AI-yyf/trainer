@@ -18,9 +18,32 @@ export function normalizeProviderThinkingConfig(
 ): ProviderThinkingConfig | undefined {
   const input = record(value);
   if (!input) return undefined;
-  const parsed = readConfig(input);
-  if (!parsed.config) return undefined;
-  const normalized = { ...parsed.config };
+  // The persisted thinkingConfig field is already flat ({mode, budgetTokens?,
+  // reasoningEffort?}). When every key is a config key, the explicit mode is
+  // authoritative — otherwise readConfig re-derives "enabled" from a retained
+  // effort/budget field and silently flips an "off"/"auto" choice back on.
+  // Extra keys disqualify the flat shape, so stray request-defaults params
+  // can't masquerade as intent; those inputs fall through to readConfig.
+  let normalized: ProviderThinkingConfig | undefined;
+  const flatMode = input.mode;
+  if (
+    (flatMode === 'disabled' || flatMode === 'enabled' || flatMode === 'auto')
+    && Object.keys(input).every(
+      (key) => key === 'mode' || key === 'budgetTokens' || key === 'reasoningEffort',
+    )
+  ) {
+    normalized = { mode: flatMode };
+    const budget = positiveBudget(input.budgetTokens);
+    if (budget) normalized.budgetTokens = budget;
+    const effort = input.reasoningEffort;
+    if (effort === 'low' || effort === 'medium' || effort === 'high') {
+      normalized.reasoningEffort = effort;
+    }
+  } else {
+    normalized = readConfig(input).config;
+  }
+  if (!normalized) return undefined;
+  normalized = { ...normalized };
   const normalizedProtocol = normalizeProviderProtocol(protocol);
   if (normalizedProtocol === 'anthropic_messages' || normalizedProtocol === 'gemini_generate_content') {
     delete normalized.reasoningEffort;
@@ -109,12 +132,27 @@ function thinkingSupported(context: ProviderThinkingNormalizationContext): boole
 
 function readConfig(input: Record<string, unknown>): { config?: ProviderThinkingConfig; migrated: boolean; invalid: boolean } {
   const old = record(input.thinking) ?? record(record(input.extra_body)?.thinking);
+  const generationConfig = record(input.generationConfig) ?? record(input.generation_config);
+  const geminiThinking =
+    record(generationConfig?.thinkingConfig) ??
+    record(generationConfig?.thinking_config) ??
+    record(input.thinkingConfig) ??
+    record(input.thinking_config);
   const wireReasoning = record(input.reasoning);
   const effort = input.reasoningEffort ?? input.reasoning_effort ?? wireReasoning?.effort;
   const budget = positiveBudget(
-    old?.budgetTokens ?? old?.budget_tokens ?? input.thinkingBudget ?? input.thinking_budget,
+    old?.budgetTokens ??
+      old?.budget_tokens ??
+      input.thinkingBudget ??
+      input.thinking_budget ??
+      geminiThinking?.thinkingBudget ??
+      geminiThinking?.thinking_budget,
   );
-  const rawMode = old?.mode ?? old?.type;
+  const includeThoughts = geminiThinking?.includeThoughts ?? geminiThinking?.include_thoughts;
+  const rawMode =
+    old?.mode ??
+    old?.type ??
+    (includeThoughts === false ? 'disabled' : includeThoughts === true ? 'enabled' : undefined);
   const mode: ProviderThinkingMode | undefined =
     rawMode === 'disabled' || rawMode === 'enabled' || rawMode === 'auto'
       ? rawMode
@@ -127,7 +165,8 @@ function readConfig(input: Record<string, unknown>): { config?: ProviderThinking
         : undefined;
   const reasoningEffort = effort === 'low' || effort === 'medium' || effort === 'high' ? effort : undefined;
   const hadLegacy = hasOwn(input, 'thinkingBudget') || hasOwn(input, 'thinking_budget') ||
-    hasOwn(input, 'reasoningEffort') || hasOwn(input, 'reasoning_effort') || Boolean(old);
+    hasOwn(input, 'reasoningEffort') || hasOwn(input, 'reasoning_effort') || Boolean(old) ||
+    Boolean(geminiThinking);
   if (!mode && !budget && !reasoningEffort) return { migrated: hadLegacy, invalid: hadLegacy, config: undefined };
   return {
     migrated: hadLegacy,
@@ -136,15 +175,41 @@ function readConfig(input: Record<string, unknown>): { config?: ProviderThinking
   };
 }
 
-function removeThinkingFields(target: Record<string, unknown>): void {
-  for (const key of ['thinking', 'thinkingBudget', 'thinking_budget', 'reasoning', 'reasoningEffort', 'reasoning_effort']) delete target[key];
+export function removeThinkingFields(target: Record<string, unknown>): void {
+  for (const key of [
+    'thinking',
+    'thinkingBudget',
+    'thinking_budget',
+    'reasoning',
+    'reasoningEffort',
+    'reasoning_effort',
+    'thinkingConfig',
+    'thinking_config',
+  ]) delete target[key];
+  // Replace (never mutate) nested containers: callers pass shallow copies, so
+  // in-place edits would leak into the source record.
   const extra = record(target.extra_body);
   if (extra) {
-    delete extra.thinking;
-    target.extra_body = extra;
+    const next = { ...extra };
+    delete next.thinking;
+    target.extra_body = next;
   }
-  delete target.thinkingConfig;
-  delete target.thinking_config;
+  // thinkingConfig lives under generationConfig on the Gemini wire path; strip
+  // only that key so unrelated generation defaults (tokens, temperature) stay.
+  for (const key of ['generationConfig', 'generation_config']) {
+    const generation = record(target[key]);
+    if (!generation) {
+      continue;
+    }
+    const next = { ...generation };
+    delete next.thinkingConfig;
+    delete next.thinking_config;
+    if (Object.keys(next).length === 0) {
+      delete target[key];
+    } else {
+      target[key] = next;
+    }
+  }
 }
 
 function emitMiniMaxThinking(target: Record<string, unknown>, config: ProviderThinkingConfig): void {
@@ -153,20 +218,49 @@ function emitMiniMaxThinking(target: Record<string, unknown>, config: ProviderTh
   target.extra_body = extra;
 }
 
+// Anthropic rejects thinking.type=enabled without budget_tokens, so an explicit
+// "on" must always carry a concrete budget.
+const ANTHROPIC_DEFAULT_THINKING_BUDGET = 4096;
+
+// `thinking` is filtered out of every request-defaults wire path except
+// anthropic, where {type:'disabled'} is the documented explicit-disable — so
+// the marker doubles as intent persistence and (on anthropic/gemini) the
+// correct wire shape.
+export function applyDisabledThinkingMarker(
+  target: Record<string, unknown>,
+  protocol?: ProviderProtocol | string,
+): void {
+  target.thinking = { type: 'disabled' };
+  if (normalizeProviderProtocol(protocol) === 'gemini_generate_content') {
+    const generation = record(target.generationConfig) ?? {};
+    generation.thinkingConfig = { includeThoughts: false };
+    target.generationConfig = generation;
+  }
+}
+
 function emitThinking(target: Record<string, unknown>, protocol: ProviderProtocol, config: ProviderThinkingConfig): boolean {
-  if (config.mode === 'disabled') return false;
+  if (config.mode !== 'enabled') return false;
   const budget = config.budgetTokens;
   if (protocol === 'openai_responses') {
-    target.reasoning = { ...(config.reasoningEffort ? { effort: config.reasoningEffort } : {}) };
+    // The send path reads the flat reasoning_effort alias and maps it onto the
+    // wire `reasoning` object — nesting it here would never reach the request.
+    target.reasoning_effort = config.reasoningEffort ?? 'medium';
   } else if (protocol === 'anthropic_messages') {
-    const thinking = { type: 'enabled', budget_tokens: typeof budget === 'number' ? budget : undefined };
-    if (thinking.budget_tokens === undefined) delete thinking.budget_tokens;
-    target.thinking = thinking;
+    target.thinking = {
+      type: 'enabled',
+      budget_tokens: typeof budget === 'number' ? budget : ANTHROPIC_DEFAULT_THINKING_BUDGET,
+    };
   } else if (protocol === 'gemini_generate_content') {
-    target.thinkingConfig = { includeThoughts: true, ...(typeof budget === 'number' ? { thinkingBudget: budget } : {}) };
+    // Gemini consumes thinking config inside generationConfig; a top-level
+    // thinkingConfig key is dropped by the send path.
+    const generation = record(target.generationConfig) ?? {};
+    generation.thinkingConfig = {
+      includeThoughts: true,
+      ...(typeof budget === 'number' ? { thinkingBudget: budget } : {}),
+    };
+    target.generationConfig = generation;
   } else if (protocol === 'openai_chat_completions' || protocol === 'openai_chat_completions_compatible') {
-    if (!config.reasoningEffort) return false;
-    target.reasoning_effort = config.reasoningEffort;
+    target.reasoning_effort = config.reasoningEffort ?? 'medium';
   } else {
     return false;
   }
@@ -207,6 +301,15 @@ export function normalizeProviderThinking(
   }
   if (parsed.invalid || !parsed.config) return { requestDefaults: target, migrated: parsed.migrated, emitted: false, reason: parsed.invalid ? 'invalid' : 'disabled' };
   if (!thinkingSupported(context)) return { config: parsed.config, requestDefaults: target, migrated: parsed.migrated, emitted: false, reason: 'unknown_model' };
+  // Disabled (and explicit auto) carry no wire fields — report the parsed mode
+  // back so descriptors can render the choice instead of falling to 'auto'.
+  // An explicit "off" restores its marker so the choice survives normalization.
+  if (parsed.config.mode !== 'enabled') {
+    if (parsed.config.mode === 'disabled') {
+      applyDisabledThinkingMarker(target, protocol);
+    }
+    return { config: parsed.config, requestDefaults: target, migrated: parsed.migrated, emitted: false, reason: 'disabled' };
+  }
   if (emitThinking(target, protocol, parsed.config)) return { config: parsed.config, requestDefaults: target, migrated: parsed.migrated, emitted: true, reason: 'emitted' };
   return { config: parsed.config, requestDefaults: target, migrated: parsed.migrated, emitted: false, reason: 'unsupported_protocol' };
 }
@@ -251,6 +354,38 @@ export function describeProviderThinking(
   return undefined;
 }
 
+/**
+ * Build a descriptor for a connection with no thinking fields in its wire
+ * defaults — e.g. the user never chose a mode, or capability evidence is
+ * absent so nothing could be emitted. Returns undefined when the protocol
+ * cannot carry thinking at all, so callers can distinguish "no choice yet"
+ * from "unsupported transport".
+ */
+export function synthesizeProviderThinkingDescriptor(
+  context: ProviderThinkingNormalizationContext,
+  config: ProviderThinkingConfig = { mode: 'auto' },
+): ProviderThinkingDescriptor | undefined {
+  const protocol = normalizeProviderProtocol(context.protocol);
+  const minimax = /minimax/i.test(`${context.providerName ?? ''} ${context.baseUrl ?? ''} ${context.model ?? ''}`);
+  if (minimax) {
+    return {
+      protocol: protocol ?? 'openai_chat_completions_compatible',
+      kind: 'minimax_thinking',
+      config,
+      advanced: true,
+      disabled: config.mode !== 'enabled',
+    };
+  }
+  if (!protocol || !thinkingProtocolSupportsWire(protocol)) return undefined;
+  if (protocol === 'anthropic_messages') {
+    return { protocol, kind: 'thinking_budget', config, budgetMin: 1, budgetMax: 200000, advanced: true };
+  }
+  if (protocol === 'gemini_generate_content') {
+    return { protocol, kind: 'gemini_thinking', config, budgetMin: 1, budgetMax: 32768, advanced: true };
+  }
+  return { protocol, kind: 'reasoning_effort', config, effortOptions: ['low', 'medium', 'high'], advanced: true };
+}
+
 export function updateProviderThinking(
   context: ProviderThinkingNormalizationContext,
   requestDefaults: unknown,
@@ -266,7 +401,12 @@ export function updateProviderThinking(
     emitMiniMaxThinking(next, { ...config, mode: enable ? 'enabled' : 'disabled' });
     return next;
   }
-  if (!protocol || config.mode === 'disabled' || config.mode === 'auto' || !thinkingSupported(context)) return next;
+  if (!protocol || !thinkingSupported(context)) return next;
+  if (config.mode === 'auto') return next;
+  if (config.mode === 'disabled') {
+    applyDisabledThinkingMarker(next, protocol);
+    return next;
+  }
   emitThinking(next, protocol, config);
   return next;
 }

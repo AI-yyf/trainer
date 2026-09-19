@@ -5264,6 +5264,96 @@ def test_memory_settings_endpoint_persists_workspace_coach_defaults(tmp_path: Pa
         assert workspace["workspace_memory_toggles"]["patterns"] is False
 
 
+def test_memory_settings_accepts_camelcase_coach_defaults_and_custom_skills(tmp_path: Path) -> None:
+    """The extension posts camelCase coachDefaults; they must not be dropped."""
+    with build_client(tmp_path) as client:
+        start_response = client.post(
+            "/session/start",
+            json={
+                "workspace_id": "workspace-camel-defaults",
+                "workspace_name": "trainer-camel-defaults",
+                "profile": {},
+            },
+        )
+        assert start_response.status_code == 200
+        session_id = start_response.json()["session_id"]
+
+        settings_response = client.post(
+            "/memory/settings",
+            json={
+                "session_id": session_id,
+                "coach_defaults": {
+                    "memoryScope": "session",
+                    "workingSetMode": "focused",
+                    "customSkills": [
+                        {
+                            "id": "custom:retro",
+                            "trigger": "$retro",
+                            "title": "Retro",
+                            "prompt": "Summarize what I learned this session.",
+                            "keywords": ["recap"],
+                        }
+                    ],
+                },
+            },
+        )
+        assert settings_response.status_code == 200
+
+        summary_response = client.get("/memory/summary", params={"session_id": session_id})
+        assert summary_response.status_code == 200
+        workspace = summary_response.json()["memory"]["workspace"]
+        assert workspace["coach_defaults"]["memory_scope"] == "session"
+        assert workspace["coach_defaults"]["working_set_mode"] == "focused"
+        skills = workspace["coach_defaults"]["custom_skills"]
+        assert skills[0]["trigger"] == "$retro"
+        assert skills[0]["prompt"] == "Summarize what I learned this session."
+
+
+def test_memory_settings_partial_coach_defaults_preserves_custom_skills(tmp_path: Path) -> None:
+    """A coachDefaults save that omits customSkills must not wipe stored skills."""
+    with build_client(tmp_path) as client:
+        start_response = client.post(
+            "/session/start",
+            json={
+                "workspace_id": "workspace-partial-defaults",
+                "workspace_name": "trainer-partial-defaults",
+                "profile": {},
+            },
+        )
+        assert start_response.status_code == 200
+        session_id = start_response.json()["session_id"]
+
+        seed_response = client.post(
+            "/memory/settings",
+            json={
+                "session_id": session_id,
+                "coach_defaults": {
+                    "customSkills": [
+                        {"trigger": "$mine", "prompt": "my saved prompt"},
+                    ],
+                },
+            },
+        )
+        assert seed_response.status_code == 200
+
+        partial_response = client.post(
+            "/memory/settings",
+            json={
+                "session_id": session_id,
+                "coach_defaults": {"memoryScope": "personal"},
+            },
+        )
+        assert partial_response.status_code == 200
+
+        summary_response = client.get("/memory/summary", params={"session_id": session_id})
+        assert summary_response.status_code == 200
+        workspace = summary_response.json()["memory"]["workspace"]
+        assert workspace["coach_defaults"]["memory_scope"] == "personal"
+        skills = workspace["coach_defaults"]["custom_skills"]
+        assert len(skills) == 1
+        assert skills[0]["trigger"] == "$mine"
+
+
 def test_session_message_uses_saved_teaching_style_bias_in_followup_prompt(tmp_path: Path) -> None:
     captured_messages: dict[str, object] = {}
 

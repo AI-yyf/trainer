@@ -326,8 +326,10 @@ class MemoryServiceTests(unittest.TestCase):
 
     def test_structured_memory_persists_across_service_rebuild(self) -> None:
         database_path = Path(".tmp-test/memory-persisted.db")
-        if database_path.exists():
-            database_path.unlink()
+        for suffix in ("", "-journal", "-wal", "-shm"):
+            stale_path = Path(f"{database_path}{suffix}")
+            if stale_path.exists():
+                stale_path.unlink()
         workspace_id = "workspace-persisted"
 
         service = MemoryService(TrainerRepository(database_path))

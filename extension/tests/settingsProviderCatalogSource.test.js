@@ -63,6 +63,19 @@ test('settings provider catalog keeps manually saved models in the per-model pan
   );
 });
 
+test('provider draft dirty check counts a durable thinking intent change', () => {
+  const source = fs.readFileSync(settingsSourcePath, 'utf8');
+
+  // On wires that cannot emit thinking markers, a mode change leaves
+  // requestDefaults untouched — without a thinkingConfig comparison the draft
+  // never registers dirty and the save action stays unreachable.
+  const dirtyStart = source.indexOf('const providerHasDraftChanges');
+  assert.ok(dirtyStart > -1, 'expected providerHasDraftChanges declaration');
+  const dirtyBlock = source.slice(dirtyStart, dirtyStart + 2600);
+  assert.match(dirtyBlock, /normalizeProviderThinkingConfig\(providerDraft\.thinkingConfig/);
+  assert.match(dirtyBlock, /normalizeProviderThinkingConfig\(provider\.thinkingConfig/);
+});
+
 test('settings does not reuse saved model metadata for a changed provider transport', () => {
   const source = fs.readFileSync(settingsSourcePath, 'utf8');
 

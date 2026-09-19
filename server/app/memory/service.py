@@ -1929,6 +1929,36 @@ class MemoryService:
         defaults = workspace.get("coach_defaults")
         return defaults if isinstance(defaults, dict) else {}
 
+    def _coach_defaults_workspace_patch(
+        self,
+        structured: "StructuredMemoryService",
+        coach_defaults: CoachDefaults,
+    ) -> dict[str, Any]:
+        """Merge incoming coach defaults into the stored record.
+
+        Turn/settings payloads may carry a partial CoachDefaults (older clients,
+        or lanes that only touch a subset of fields). Storing a bare model_dump
+        would silently reset untouched fields — including custom_skills — back
+        to defaults, so only explicitly provided fields overwrite the snapshot.
+        """
+        dumped = coach_defaults.model_dump(exclude_unset=True)
+        existing = self._coach_defaults_from_workspace(structured.snapshot().workspace)
+        existing_toggles = existing.get("workspace_memory_toggles")
+        incoming_toggles = dumped.get("workspace_memory_toggles")
+        if isinstance(existing_toggles, dict) and isinstance(incoming_toggles, dict):
+            dumped["workspace_memory_toggles"] = {**existing_toggles, **incoming_toggles}
+        patch: dict[str, Any] = {"coach_defaults": {**existing, **dumped}}
+        for key in (
+            "memory_scope",
+            "working_set_mode",
+            "review_cadence",
+            "review_reminder_mode",
+            "workspace_memory_toggles",
+        ):
+            if key in dumped:
+                patch[key] = dumped[key]
+        return patch
+
     @staticmethod
     def _workspace_memory_toggles(workspace: dict[str, Any]) -> dict[str, bool]:
         toggles = workspace.get("workspace_memory_toggles")
@@ -6848,14 +6878,7 @@ class MemoryService:
             workspace_patch["response_language"] = response_language.strip()
         if coach_defaults:
             workspace_patch.update(
-                {
-                    "coach_defaults": coach_defaults.model_dump(),
-                    "memory_scope": coach_defaults.memory_scope,
-                    "working_set_mode": coach_defaults.working_set_mode,
-                    "review_cadence": coach_defaults.review_cadence,
-                    "review_reminder_mode": coach_defaults.review_reminder_mode,
-                    "workspace_memory_toggles": coach_defaults.workspace_memory_toggles.model_dump(),
-                }
+                self._coach_defaults_workspace_patch(structured, coach_defaults)
             )
         structured.update_workspace(**workspace_patch)
         if cleaned_user_message:
@@ -6963,15 +6986,20 @@ class MemoryService:
                 focus_area=cleaned_focus,
                 response_language=normalized_response_language,
             )
-        if coach_defaults:
-            structured.remember_preference("memory_scope", coach_defaults.memory_scope, source="coach-defaults")
-            structured.remember_preference("working_set_mode", coach_defaults.working_set_mode, source="coach-defaults")
-            structured.remember_preference("review_cadence", coach_defaults.review_cadence, source="coach-defaults")
-            structured.remember_preference(
-                "review_reminder_mode",
-                coach_defaults.review_reminder_mode,
-                source="coach-defaults",
-            )
+        if coach_defaults is not None:
+            coach_defaults_dumped = coach_defaults.model_dump(exclude_unset=True)
+            if "memory_scope" in coach_defaults_dumped:
+                structured.remember_preference("memory_scope", coach_defaults.memory_scope, source="coach-defaults")
+            if "working_set_mode" in coach_defaults_dumped:
+                structured.remember_preference("working_set_mode", coach_defaults.working_set_mode, source="coach-defaults")
+            if "review_cadence" in coach_defaults_dumped:
+                structured.remember_preference("review_cadence", coach_defaults.review_cadence, source="coach-defaults")
+            if "review_reminder_mode" in coach_defaults_dumped:
+                structured.remember_preference(
+                    "review_reminder_mode",
+                    coach_defaults.review_reminder_mode,
+                    source="coach-defaults",
+                )
         blocker_text = ""
         if review_note:
             blocker_text = review_note.strip()
@@ -7030,14 +7058,7 @@ class MemoryService:
             workspace_patch["exercise_prompt"] = dict(exercise_prompt)
         if coach_defaults:
             workspace_patch.update(
-                {
-                    "coach_defaults": coach_defaults.model_dump(),
-                    "memory_scope": coach_defaults.memory_scope,
-                    "working_set_mode": coach_defaults.working_set_mode,
-                    "review_cadence": coach_defaults.review_cadence,
-                    "review_reminder_mode": coach_defaults.review_reminder_mode,
-                    "workspace_memory_toggles": coach_defaults.workspace_memory_toggles.model_dump(),
-                }
+                self._coach_defaults_workspace_patch(structured, coach_defaults)
             )
         structured.update_workspace(**workspace_patch)
         structured.update_active_thread(
@@ -7355,36 +7376,34 @@ class MemoryService:
             )
             self.repository.save_profile(resolved_workspace_id, updated_profile)
             structured.update_profile(**updated_profile.model_dump())
-        if coach_defaults:
-            structured.remember_preference(
-                "memory_scope",
-                coach_defaults.memory_scope,
-                source="coach-settings",
-            )
-            structured.remember_preference(
-                "working_set_mode",
-                coach_defaults.working_set_mode,
-                source="coach-settings",
-            )
-            structured.remember_preference(
-                "review_cadence",
-                coach_defaults.review_cadence,
-                source="coach-settings",
-            )
-            structured.remember_preference(
-                "review_reminder_mode",
-                coach_defaults.review_reminder_mode,
-                source="coach-settings",
-            )
+        if coach_defaults is not None:
+            coach_defaults_dumped = coach_defaults.model_dump(exclude_unset=True)
+            if "memory_scope" in coach_defaults_dumped:
+                structured.remember_preference(
+                    "memory_scope",
+                    coach_defaults.memory_scope,
+                    source="coach-settings",
+                )
+            if "working_set_mode" in coach_defaults_dumped:
+                structured.remember_preference(
+                    "working_set_mode",
+                    coach_defaults.working_set_mode,
+                    source="coach-settings",
+                )
+            if "review_cadence" in coach_defaults_dumped:
+                structured.remember_preference(
+                    "review_cadence",
+                    coach_defaults.review_cadence,
+                    source="coach-settings",
+                )
+            if "review_reminder_mode" in coach_defaults_dumped:
+                structured.remember_preference(
+                    "review_reminder_mode",
+                    coach_defaults.review_reminder_mode,
+                    source="coach-settings",
+                )
             workspace_patch.update(
-                {
-                    "coach_defaults": coach_defaults.model_dump(),
-                    "memory_scope": coach_defaults.memory_scope,
-                    "working_set_mode": coach_defaults.working_set_mode,
-                    "review_cadence": coach_defaults.review_cadence,
-                    "review_reminder_mode": coach_defaults.review_reminder_mode,
-                    "workspace_memory_toggles": coach_defaults.workspace_memory_toggles.model_dump(),
-                }
+                self._coach_defaults_workspace_patch(structured, coach_defaults)
             )
         if follow_current_file is not None:
             workspace_patch["follow_current_file"] = follow_current_file

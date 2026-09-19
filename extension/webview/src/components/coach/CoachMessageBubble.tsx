@@ -406,7 +406,6 @@ export function CoachMessageBubble({
   const supportDetails = supportDetailLines(message, language);
   const detailBlocks: ReactNode[] = [];
   const messageHasArtifacts = artifactCount > 0;
-  const hasSupplementMaterial = detailBlocks.length > 0 || messageHasArtifacts || supportDetails.length > 0;
 
   if (message.artifacts?.length) {
     detailBlocks.push(
@@ -443,6 +442,10 @@ export function CoachMessageBubble({
     );
   }
 
+  // `detailBlocks` is only fed by these two sources, and a support block can be
+  // pushed while still empty (e.g. a preview without lines), so the gate reads
+  // the sources rather than the array.
+  const hasSupplementMaterial = messageHasArtifacts || supportDetails.length > 0;
   const showSystemMeta = message.role === "system";
   // Feed chrome stays out of the way: user turns render without a repeated
   // author/timestamp row; the timestamp remains available as a tooltip.
@@ -491,12 +494,13 @@ export function CoachMessageBubble({
   const hasBody = visibleBody.trim().length > 0;
   const shouldShowUserContextInline =
     message.role === "user" && !messageHasArtifacts && supportDetails.length === 1 && attachmentCount <= 1;
+  // Supplement material folds only when there is genuinely a lot to hide:
+  // a lone artifact or a couple of support lines render inline (artifact cards
+  // already self-collapse their own detail region), while attachments or
+  // multiple supplement blocks still collapse to keep the feed scannable.
   const shouldCollapseDetails =
     !shouldShowUserContextInline &&
-    ((message.role === "assistant" && hasBody) ||
-      artifactCount > 1 ||
-      attachmentCount > 0 ||
-      supportDetails.length > 1);
+    (attachmentCount > 0 || detailBlocks.length > 1 || supportDetails.length > 4);
   const detailSummary =
     message.role === "assistant"
       ? assistantDetailsSummary(language, message, attachmentCount, artifactCount)
@@ -772,7 +776,7 @@ export function CoachMessageBubble({
         ) : null}
       </div>
 
-      {hasSupplementMaterial && detailBlocks.length > 0 ? (
+      {hasSupplementMaterial ? (
         shouldCollapseDetails ? (
           <CollapsibleBlock
             className={`message-bubble__details ${message.role === "user" ? "message-bubble__details--user" : ""}`}

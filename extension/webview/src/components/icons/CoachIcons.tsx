@@ -253,6 +253,18 @@ export function LinkIcon(props: CoachIconProps) {
   );
 }
 
+export function ShareIcon(props: CoachIconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12.4" cy="4" r="1.9" />
+      <circle cx="3.8" cy="8" r="1.9" />
+      <circle cx="12.4" cy="12" r="1.9" />
+      <path d="m5.4 7 5.4-2.3" />
+      <path d="m5.4 9 5.4 2.3" />
+    </IconBase>
+  );
+}
+
 export function TrashIcon(props: CoachIconProps) {
   return (
     <IconBase {...props}>

@@ -1,14 +1,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from ..core.models import TeachingKnowledgeAsset
 
+_last_utc_now: datetime | None = None
+
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    # Records written within the same clock tick share a timestamp and would
+    # fall back to insertion order when sorted by updated_at. Keep the clock
+    # strictly monotonic so the last write always orders first.
+    global _last_utc_now
+    now = datetime.now(timezone.utc)
+    if _last_utc_now is not None and now <= _last_utc_now:
+        now = _last_utc_now + timedelta(microseconds=1)
+    _last_utc_now = now
+    return now
 
 
 @dataclass(slots=True)

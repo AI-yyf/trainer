@@ -65,6 +65,7 @@ import {
   type OperationReliabilityPhase,
 } from '../../../shared/src/operationReliabilityGovernance';
 import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
+import { normalizeTrainerCustomSkills } from '../../../shared/src/skillCatalog';
 import {
   sanitizeErrorSurfaceText,
   sanitizeHostToolResult,
@@ -457,6 +458,11 @@ function mergeLocalCoachSettings(
       mergedDefaults.workspaceMemoryToggles = mergedToggles;
       defaultsChanged = true;
     }
+  }
+
+  if (incomingDefaults.customSkills !== undefined) {
+    mergedDefaults.customSkills = normalizeTrainerCustomSkills(incomingDefaults.customSkills);
+    defaultsChanged = true;
   }
 
   if (defaultsChanged) {
@@ -3750,6 +3756,9 @@ function extractSessionPayload(payload: unknown): ResourceComposerSessionMessage
                     : undefined,
               }
             : undefined,
+          customSkills: Array.isArray(coachDefaultsRecord.customSkills)
+            ? normalizeTrainerCustomSkills(coachDefaultsRecord.customSkills)
+            : undefined,
         }
       : undefined,
     attachments: extractAttachmentsPayload(asRecord.attachments),
@@ -4281,6 +4290,9 @@ function extractCoachSettingsPayload(payload: unknown): CoachSettingsPayload | u
                     ? workspaceMemoryRecord.resources
                     : undefined,
               }
+            : undefined,
+          customSkills: Array.isArray(coachDefaultsRecord.customSkills)
+            ? normalizeTrainerCustomSkills(coachDefaultsRecord.customSkills)
             : undefined,
         }
       : undefined,

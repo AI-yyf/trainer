@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/src/models';
 import type { TrainerMessagePart, TrainerStreamingState } from '../../../shared/src/protocol';
 import type { ResourceSearchMode } from '../../../shared/src/resourceSearch';
+import type { TrainerCustomSkill } from '../../../shared/src/skillCatalog';
 import type { ComposerLanguage } from '../../../shared/src/types';
 import type { TransferSkillStateRecord } from '../../../shared/src/transferSkillGovernance';
 import type {
@@ -226,6 +227,7 @@ export interface ProviderConfigView {
   apiKeyConfigured: boolean;
   capabilities: CapabilityFlags;
   requestDefaults?: Record<string, unknown>;
+  thinkingConfig?: ProviderThinkingConfig;
   protocol?: ProviderProtocol;
   protocolFamily?: string;
   connectionType?: string;
@@ -1015,6 +1017,7 @@ export interface MemorySnapshotView {
         patterns?: boolean;
         resources?: boolean;
       };
+      customSkills?: TrainerCustomSkill[];
     };
   };
 }
@@ -1624,6 +1627,7 @@ export interface SessionMessagePayload {
       patterns?: boolean;
       resources?: boolean;
     };
+    customSkills?: TrainerCustomSkill[];
   };
   attachments?: MessageAttachmentPayload[];
   useAgentLoop?: boolean;
@@ -1654,6 +1658,7 @@ export interface CoachSettingsPayload {
       patterns?: boolean;
       resources?: boolean;
     };
+    customSkills?: TrainerCustomSkill[];
   };
   followCurrentFile?: boolean;
   contextDetail?: 'focused' | 'balanced' | 'full';

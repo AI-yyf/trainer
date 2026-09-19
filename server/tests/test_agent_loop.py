@@ -3538,6 +3538,113 @@ def test_compatibility_fallback_preserves_explicit_thinking_setting() -> None:
     assert binding._apply_compatibility_thinking_disabled(payload) == payload
 
 
+def test_compatibility_fallback_preserves_explicit_reasoning_effort() -> None:
+    for defaults in (
+        {"reasoning_effort": "high"},
+        {"reasoningEffort": "low"},
+    ):
+        service = SimpleNamespace(
+            _config=SimpleNamespace(base_url="https://gateway.example/v1"),
+            _provider_request_defaults=lambda defaults=defaults: defaults,
+        )
+        binding = ProviderAgentBinding(provider_service=service, protocol="anthropic_messages")
+        payload = {"messages": [{"role": "user", "content": "help me"}]}
+
+        assert binding._apply_compatibility_thinking_disabled(payload) == payload
+
+
+def test_compatibility_fallback_still_disables_thinking_for_auto_effort() -> None:
+    for defaults in ({"reasoning_effort": "auto"}, {}, {"reasoning_effort": ""}):
+        service = SimpleNamespace(
+            _config=SimpleNamespace(base_url="https://gateway.example/v1"),
+            _provider_request_defaults=lambda defaults=defaults: defaults,
+        )
+        binding = ProviderAgentBinding(provider_service=service, protocol="anthropic_messages")
+        payload = {"messages": [{"role": "user", "content": "help me"}]}
+
+        result = binding._apply_compatibility_thinking_disabled(payload)
+        assert result["extra_body"]["thinking"] == {"type": "disabled"}
+
+
+def test_compatibility_fallback_preserves_other_wire_shapes_for_thinking_on() -> None:
+    # Anthropic-shaped markers, budgets, nested reasoning effort, and gemini
+    # thinkingConfig all mean "the user turned thinking on" — none may be
+    # contradicted by an injected extra_body disabled flag on the compat path.
+    cases = (
+        {"thinking": {"type": "enabled", "budget_tokens": 4096}},
+        {"thinking": {"type": "enabled"}},
+        {"thinking": {"enabled": True}},
+        {"thinking_budget": 2048},
+        {"thinkingBudget": 2048},
+        {"reasoning": {"effort": "high"}},
+        {"generationConfig": {"thinkingConfig": {"includeThoughts": True}}},
+        {"generation_config": {"thinking_config": {"include_thoughts": True}}},
+        {"generationConfig": {"thinkingConfig": {"thinkingBudget": 1024}}},
+    )
+    for defaults in cases:
+        service = SimpleNamespace(
+            _config=SimpleNamespace(base_url="https://gateway.example/v1"),
+            _provider_request_defaults=lambda defaults=defaults: defaults,
+        )
+        binding = ProviderAgentBinding(provider_service=service, protocol="anthropic_messages")
+        payload = {"messages": [{"role": "user", "content": "help me"}]}
+
+        assert binding._apply_compatibility_thinking_disabled(payload) == payload, defaults
+
+
+def test_compatibility_fallback_still_disables_when_thinking_marker_is_off() -> None:
+    # An explicit disabled marker is not an "on" intent — the compatibility
+    # default still applies (and produces the same disabled wire shape).
+    for defaults in (
+        {"thinking": {"type": "disabled"}},
+        {"thinking": {"enabled": False}},
+        {"generationConfig": {"thinkingConfig": {"includeThoughts": False}}},
+        {"thinking_budget": 0},
+        {"reasoning": {"effort": "auto"}},
+    ):
+        service = SimpleNamespace(
+            _config=SimpleNamespace(base_url="https://gateway.example/v1"),
+            _provider_request_defaults=lambda defaults=defaults: defaults,
+        )
+        binding = ProviderAgentBinding(provider_service=service, protocol="anthropic_messages")
+        payload = {"messages": [{"role": "user", "content": "help me"}]}
+
+        result = binding._apply_compatibility_thinking_disabled(payload)
+        assert result["extra_body"]["thinking"] == {"type": "disabled"}, defaults
+
+
+def test_anthropic_request_defaults_lift_max_tokens_above_thinking_budget() -> None:
+    # Anthropic rejects thinking.type=enabled unless max_tokens > budget_tokens —
+    # a saved cap at or below the budget must be lifted, not 400 every request.
+    service = SimpleNamespace(
+        _config=SimpleNamespace(base_url="https://api.anthropic.com"),
+        _provider_request_defaults=lambda: {
+            "thinking": {"type": "enabled", "budget_tokens": 4096},
+            "max_tokens": 1024,
+        },
+    )
+    binding = ProviderAgentBinding(provider_service=service, protocol="anthropic_messages")
+    configured = binding._apply_anthropic_request_defaults({"messages": []})
+
+    assert configured["thinking"] == {"type": "enabled", "budget_tokens": 4096}
+    assert configured["max_tokens"] == 4096 + 1024
+
+
+def test_anthropic_request_defaults_keep_max_tokens_when_above_thinking_budget() -> None:
+    service = SimpleNamespace(
+        _config=SimpleNamespace(base_url="https://api.anthropic.com"),
+        _provider_request_defaults=lambda: {
+            "thinking": {"type": "enabled", "budget_tokens": 2048},
+            "max_tokens": 8192,
+        },
+    )
+    binding = ProviderAgentBinding(provider_service=service, protocol="anthropic_messages")
+    configured = binding._apply_anthropic_request_defaults({"messages": []})
+
+    assert configured["thinking"] == {"type": "enabled", "budget_tokens": 2048}
+    assert configured["max_tokens"] == 8192
+
+
 async def test_anthropic_stream_uses_transport_timeout_after_agent_loop_ceiling() -> None:
     service = SimpleNamespace(
         _api_key="sk-test",

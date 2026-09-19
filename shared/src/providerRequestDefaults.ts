@@ -8,6 +8,12 @@ export interface ProviderRequestDefaultsIdentity {
   protocol?: ProviderProtocol | string;
   knownModels?: readonly string[];
   thinkingSupported?: boolean;
+  /** Persisted profile-level capability flags — evidence, not invention. */
+  capabilities?: { thinking?: boolean };
+  /** Persisted per-model capability flags for `model`. */
+  modelCapabilities?: { thinking?: boolean };
+  /** Thinking capability observed by the stored live probe result. */
+  liveEvidence?: boolean;
 }
 
 const MINIMAX_PROVIDER_REQUEST_DEFAULTS: Record<string, unknown> = {
@@ -66,6 +72,9 @@ export function normalizeProviderRequestDefaults(
     baseUrl: identity.baseUrl,
     knownModels: identity.knownModels,
     supported: identity.thinkingSupported,
+    liveEvidence: identity.liveEvidence,
+    modelCapabilities: identity.modelCapabilities,
+    profileCapabilities: identity.capabilities,
   });
   if (!isMiniMaxLikeProvider(identity) && !identity.protocol) {
     return cloneRequestDefaults(normalized);

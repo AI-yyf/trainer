@@ -21244,6 +21244,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         )
         if state is None or not resolved_session_id:
             raise HTTPException(status_code=404, detail="Session was not found for this workspace.")
+        # The helper falls back to the workspace's latest session; activation
+        # must target the requested id or fail honestly.
+        if requested_session_id and resolved_session_id != requested_session_id:
+            raise HTTPException(status_code=404, detail="Session was not found for this workspace.")
         snapshot = current_snapshot(session_id=resolved_session_id, workspace_id=resolved_workspace_id)
         return {
             "session_id": resolved_session_id,

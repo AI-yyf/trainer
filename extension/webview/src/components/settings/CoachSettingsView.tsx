@@ -62,7 +62,7 @@ import {
   PROVIDER_TEMPLATE_GROUP_ORDER,
   PROVIDER_TEMPLATE_LABELS,
 } from "../../../../../shared/src/providerTemplateCatalog";
-import { describeProviderThinking, updateProviderThinking } from "../../../../../shared/src/providerThinking";
+import { describeProviderThinking, normalizeProviderThinkingConfig, synthesizeProviderThinkingDescriptor, thinkingProtocolSupportsWire, updateProviderThinking } from "../../../../../shared/src/providerThinking";
 import type { ProviderThinkingConfig } from "../../../../../shared/src/providerThinking";
 import type { TrainerCapabilityVerdict } from "../../../../../shared/src/capabilityVerdict";
 import {
@@ -85,7 +85,7 @@ import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
-import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, LinkIcon, NavAdvancedIcon, NavConnectionIcon, NavResourcesIcon, NavTeachingIcon, NavTrainingIcon, NavWorkspaceIcon, PlusIcon, RefreshIcon, TrashIcon } from "../icons";
+import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, NavAdvancedIcon, NavConnectionIcon, NavResourcesIcon, NavTeachingIcon, NavTrainingIcon, NavWorkspaceIcon, PlusIcon, RefreshIcon, ShareIcon, TrashIcon } from "../icons";
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type {
@@ -1190,6 +1190,7 @@ export interface ProviderDraft {
   catalogSource?: ProviderConfigView["catalogSource"];
   cacheTtlSeconds?: number;
   requestDefaults?: Record<string, unknown>;
+  thinkingConfig?: ProviderThinkingConfig;
   apiKey: string;
 }
 
@@ -4410,6 +4411,17 @@ export function CoachSettingsView({
     (providerDraft.cacheTtlSeconds ?? provider.cacheTtlSeconds) !== provider.cacheTtlSeconds ||
     requestDefaultsKey(providerDraft.requestDefaults ?? provider.requestDefaults) !==
       requestDefaultsKey(provider.requestDefaults) ||
+    // thinkingConfig is durable intent: on wires that cannot emit thinking
+    // markers a mode change leaves requestDefaults untouched, so it must count
+    // as dirty on its own or the save action stays unreachable. Compare the
+    // normalized forms so key order and protocol-inapplicable fields (budget on
+    // OpenAI, effort on Anthropic) never register as phantom changes.
+    JSON.stringify(
+      normalizeProviderThinkingConfig(providerDraft.thinkingConfig, draftProtocol) ?? null,
+    ) !==
+      JSON.stringify(
+        normalizeProviderThinkingConfig(provider.thinkingConfig, savedProtocol) ?? null,
+      ) ||
     providerDraft.apiKey.trim().length > 0;
   const normalizedDraftBaseUrl = normalizeProviderBaseUrlDraft(providerDraft.baseUrl, draftProtocol);
   const normalizedSavedBaseUrl = normalizeProviderBaseUrlDraft(provider.baseUrl, savedProtocol);
@@ -4492,20 +4504,44 @@ export function CoachSettingsView({
   const draftRequestDefaults =
     asRecord(providerDraft.requestDefaults) ?? asRecord(provider.requestDefaults) ?? {};
   const draftRequestDefaultsSignature = requestDefaultsKey(draftRequestDefaults);
-  const thinkingDescriptor = describeProviderThinking(
-    {
-      protocol: draftProtocol,
-      model: providerDraft.model,
-      providerName: providerDraft.name,
-      baseUrl: providerDraft.baseUrl,
-      liveEvidence: lastTest?.capabilityEvidence?.some((entry) =>
-        entry.name.trim().toLowerCase() === "thinking" &&
-        entry.state === "verified" &&
-        entry.observed === true,
-      ) === true,
-    },
+  const draftThinkingLiveEvidence = lastTest?.capabilityEvidence?.some((entry) =>
+    entry.name.trim().toLowerCase() === "thinking" &&
+    entry.state === "verified" &&
+    entry.observed === true,
+  ) === true;
+  const draftThinkingModelCapabilities =
+    canUseSavedModelMetadata && providerDraft.model.trim()
+      ? provider.modelCapabilities?.[providerDraft.model.trim()]
+      : undefined;
+  const draftThinkingContext = {
+    protocol: draftProtocol,
+    model: providerDraft.model,
+    providerName: providerDraft.name,
+    baseUrl: providerDraft.baseUrl,
+    liveEvidence: draftThinkingLiveEvidence,
+    modelCapabilities: draftThinkingModelCapabilities,
+    profileCapabilities: provider.capabilities,
+  };
+  // The durable draft intent is the source of truth for the displayed mode:
+  // wire markers only exist when capability evidence allowed an emit, so an
+  // explicit choice must still render (and stay editable) before that.
+  const draftThinkingConfig = normalizeProviderThinkingConfig(
+    providerDraft.thinkingConfig,
+    draftProtocol,
+  );
+  const describedThinking = describeProviderThinking(
+    draftThinkingContext,
     draftRequestDefaults,
   );
+  const thinkingSupported =
+    draftThinkingLiveEvidence ||
+    draftThinkingModelCapabilities?.thinking === true ||
+    provider.capabilities?.thinking === true;
+  const thinkingDescriptor = describedThinking
+    ? { ...describedThinking, config: draftThinkingConfig ?? describedThinking.config }
+    : (thinkingSupported || draftThinkingConfig) && thinkingProtocolSupportsWire(draftProtocol)
+      ? synthesizeProviderThinkingDescriptor(draftThinkingContext, draftThinkingConfig ?? { mode: "auto" })
+      : undefined;
   const currentDraftModel = providerDraft.model.trim();
   const currentLiveModel = canUseSavedModelMetadata ? provider.model.trim() : "";
   const draftModelPolicy = {
@@ -5111,21 +5147,11 @@ export function CoachSettingsView({
   const draftDeniedModelsText = formatDraftStringList(providerDraft.deniedModels ?? provider.deniedModels);
   const updateThinkingConfig = (config: ProviderThinkingConfig) => {
     const next = updateProviderThinking(
-      {
-        protocol: draftProtocol,
-        model: providerDraft.model,
-        providerName: providerDraft.name,
-        baseUrl: providerDraft.baseUrl,
-        liveEvidence: lastTest?.capabilityEvidence?.some((entry) =>
-          entry.name.trim().toLowerCase() === "thinking" &&
-          entry.state === "verified" &&
-          entry.observed === true,
-        ) === true,
-      },
+      draftThinkingContext,
       draftRequestDefaults,
       config,
     );
-    onProviderDraftChange({ requestDefaults: next });
+    onProviderDraftChange({ requestDefaults: next, thinkingConfig: config });
   };
   const thinkingFieldLabel = thinkingDescriptor?.kind === "reasoning_effort"
     ? labels?.thinkingEffort ?? copy.thinkingEffort
@@ -5149,7 +5175,17 @@ export function CoachSettingsView({
             { label: labels?.thinkingAuto ?? copy.thinkingAuto, value: "auto" },
             { label: labels?.thinkingOn ?? copy.thinkingOn, value: "enabled" },
           ]}
-          onChange={(value) => updateThinkingConfig({ ...thinkingDescriptor.config, mode: value as ProviderThinkingConfig["mode"] })}
+          onChange={(value) => updateThinkingConfig({
+            ...thinkingDescriptor.config,
+            mode: value as ProviderThinkingConfig["mode"],
+            // "On" must carry a concrete effort or nothing is emitted and the
+            // choice falls back to "auto".
+            ...(value === "enabled" &&
+            thinkingDescriptor.kind === "reasoning_effort" &&
+            !thinkingDescriptor.config.reasoningEffort
+              ? { reasoningEffort: "medium" as const }
+              : {}),
+          })}
           />
         )}
         <details>
@@ -5184,9 +5220,17 @@ export function CoachSettingsView({
   ) : null;
   const handleRequestDefaultsTextChange = (value: string) => {
     setRequestDefaultsText(value);
+    // Thinking intent only clears when the edit removes markers that were
+    // actually there — a marker-free draft (nothing emitted yet) must keep its
+    // stored choice instead of snapping back to "auto" on unrelated edits.
+    const previousHadMarkers =
+      normalizeProviderThinkingConfig(draftRequestDefaults, draftProtocol) !== undefined;
     if (!value.trim()) {
       setRequestDefaultsError(undefined);
-      onProviderDraftChange({ requestDefaults: {} });
+      onProviderDraftChange({
+        requestDefaults: {},
+        ...(previousHadMarkers ? { thinkingConfig: { mode: "auto" } } : {}),
+      });
       return;
     }
 
@@ -5198,7 +5242,17 @@ export function CoachSettingsView({
         return;
       }
       setRequestDefaultsError(undefined);
-      onProviderDraftChange({ requestDefaults: normalized });
+      // Raw edits are the intent: thinking fields are re-derived from the
+      // edited defaults; deleting markers that existed means "auto".
+      const editedThinking = normalizeProviderThinkingConfig(normalized, draftProtocol);
+      onProviderDraftChange({
+        requestDefaults: normalized,
+        ...(editedThinking
+          ? { thinkingConfig: editedThinking }
+          : previousHadMarkers
+            ? { thinkingConfig: { mode: "auto" } }
+            : {}),
+      });
     } catch {
       setRequestDefaultsError(localizedRequestDefaultsInvalidJson);
     }
@@ -8333,7 +8387,7 @@ export function CoachSettingsView({
                   title={settingsPhrase(language, "navShare")}
                   onClick={onShareSession}
                 >
-                  <LinkIcon size={14} aria-hidden="true" />
+                  <ShareIcon size={14} aria-hidden="true" />
                 </button>
               ) : null}
               {onNavigateToView ? (

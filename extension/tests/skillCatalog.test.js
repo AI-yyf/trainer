@@ -15,8 +15,15 @@ const skillCatalogModulePath = path.resolve(
 
 const {
   filterTrainerSkills,
+  mergeSkillCatalog,
+  normalizeCustomSkillTrigger,
   normalizeSkillQuery,
+  normalizeTrainerCustomSkill,
+  normalizeTrainerCustomSkills,
+  parseTrainerSkillShare,
+  serializeTrainerSkillShare,
   trainerSkillCatalog,
+  trainerSkillTriggerToken,
 } = require(skillCatalogModulePath);
 
 function createContext(overrides = {}) {
@@ -103,4 +110,98 @@ test('filterTrainerSkills does not leak unrelated skills for an unknown trigger'
   const skills = filterTrainerSkills('$does-not-exist', createContext(), 6);
 
   assert.deepEqual(skills, []);
+});
+
+test('normalizeCustomSkillTrigger accepts bare and prefixed triggers', () => {
+  assert.equal(normalizeCustomSkillTrigger('$review'), '$review');
+  assert.equal(normalizeCustomSkillTrigger('review'), '$review');
+  assert.equal(normalizeCustomSkillTrigger('  $My-Thing  '), '$My-Thing');
+  assert.equal(normalizeCustomSkillTrigger('$'), undefined);
+  assert.equal(normalizeCustomSkillTrigger('with space'), undefined);
+  assert.equal(normalizeCustomSkillTrigger(42), undefined);
+});
+
+test('normalizeTrainerCustomSkill requires a trigger and prompt', () => {
+  assert.equal(normalizeTrainerCustomSkill({ trigger: '$x' }), undefined);
+  assert.equal(normalizeTrainerCustomSkill({ prompt: 'do it' }), undefined);
+
+  const skill = normalizeTrainerCustomSkill({
+    trigger: 'retro',
+    title: 'Retro notes',
+    prompt: 'Summarize what I learned this session',
+    detail: 'Session recap',
+    keywords: ['recap', 'summary'],
+  });
+  assert.equal(skill?.trigger, '$retro');
+  assert.equal(skill?.id, 'custom:retro');
+  assert.equal(skill?.title, 'Retro notes');
+  assert.deepEqual(skill?.keywords, ['recap', 'summary']);
+});
+
+test('normalizeTrainerCustomSkills dedupes triggers and caps the list', () => {
+  const skills = normalizeTrainerCustomSkills([
+    { trigger: '$a', prompt: 'first' },
+    { trigger: '$A', prompt: 'duplicate' },
+    { trigger: '$b', prompt: 'second' },
+    { trigger: '', prompt: 'invalid' },
+  ]);
+
+  assert.equal(skills.length, 2);
+  assert.equal(skills[0]?.prompt, 'first');
+  assert.equal(skills[1]?.trigger, '$b');
+});
+
+test('mergeSkillCatalog appends custom skills without shadowing built-ins', () => {
+  const merged = mergeSkillCatalog([
+    { id: 'custom:mine', trigger: '$mine', title: 'Mine', detail: '', prompt: 'custom prompt', keywords: [] },
+    { id: 'custom:explain', trigger: '$explain', title: 'Shadow', detail: '', prompt: 'shadow', keywords: [] },
+  ]);
+
+  const mine = merged.find((skill) => skill.trigger === '$mine');
+  assert.equal(mine?.commandId, 'trainer.session.sendStreamMessage');
+  assert.equal(mine?.prompt?.['en-US'], 'custom prompt');
+
+  const explain = merged.filter((skill) => skill.trigger === '$explain');
+  assert.equal(explain.length, 1);
+  assert.equal(explain[0]?.id, 'explain-principle');
+});
+
+test('skill share payload round-trips through serialize and parse', () => {
+  const skill = normalizeTrainerCustomSkill({
+    trigger: '$review-tests',
+    title: 'Review tests',
+    prompt: 'Review my test coverage and name the weakest assertions.',
+    keywords: ['tests'],
+  });
+  const blob = serializeTrainerSkillShare(skill);
+
+  const parsed = parseTrainerSkillShare(blob);
+  assert.equal(parsed?.trigger, '$review-tests');
+  assert.equal(parsed?.prompt, 'Review my test coverage and name the weakest assertions.');
+
+  assert.equal(parseTrainerSkillShare('{"_type":"other"}'), undefined);
+  assert.equal(parseTrainerSkillShare('not json'), undefined);
+  assert.equal(parseTrainerSkillShare('{"_type":"trainer_skill_share","trigger":"$x"}'), undefined);
+});
+
+test('trainerSkillTriggerToken returns only the leading $token of a draft', () => {
+  assert.equal(trainerSkillTriggerToken('$explain'), '$explain');
+  // Arguments after the trigger are not part of the lookup token.
+  assert.equal(trainerSkillTriggerToken('$explain my last session'), '$explain');
+  assert.equal(trainerSkillTriggerToken('  $review  file.ts  '), '$review');
+  assert.equal(trainerSkillTriggerToken('$'), '$');
+  assert.equal(trainerSkillTriggerToken('plain message'), undefined);
+  assert.equal(trainerSkillTriggerToken('   '), undefined);
+});
+
+test('filtering on the trigger token keeps the resolved skill visible with args', () => {
+  // The deck must keep confirming "$explain" while the user types arguments —
+  // the full-draft query would score every catalog entry to zero and offer to
+  // create a colliding skill.
+  const skills = filterTrainerSkills(
+    trainerSkillTriggerToken('$explain focus on the diff'),
+    createContext(),
+    10,
+  );
+  assert.equal(skills[0]?.trigger, '$explain');
 });

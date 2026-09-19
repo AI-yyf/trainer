@@ -123,12 +123,20 @@ test('persistCoachSettings skips the save when the payload already matches the s
   assert.match(persistSource, /postMessage\(\{\s*type: "settings\/saveCoach",\s*payload,\s*\}\);/);
   assert.match(persistSource, /saveBrowserPreviewCoachSettings\(payload, previewSessionId\)/);
 
-  // Sparse snapshots never block an explicit save: undefined snapshot fields
-  // count as matching, missing coach defaults always force the write.
+  // The comparison itself lives in shared/src/coachDefaults.ts so the
+  // save-dedup semantics are covered by real behavior tests
+  // (extension/tests/coachDefaultsMatch.test.js): a missing snapshot never
+  // blocks a save, and a field absent from the snapshot only counts as
+  // matching when the payload carries its neutral value.
   assert.match(
     source,
-    /function matchesSavedCoachDefaults\(\s*next: CoachDefaults,\s*saved:\s*\|?\s*\(Partial<CoachDefaults>[^\n]*\)\s*\| undefined,\s*\): boolean \{\s*if \(!saved\) \{\s*return false;\s*\}/,
+    /matchesSavedCoachDefaults,\s*sameCoachDefaults,\s*\} from "\.\.\/\.\.\/\.\.\/\.\.\/shared\/src\/coachDefaults"/,
   );
+  const sharedSource = fs.readFileSync(
+    path.resolve(__dirname, '..', '..', 'shared', 'src', 'coachDefaults.ts'),
+    'utf8',
+  );
+  assert.match(sharedSource, /if \(!saved\) \{\s*return false;\s*\}/);
 });
 
 test('settings save handlers stay user-intent only with no persisting effects', () => {

@@ -16,6 +16,7 @@ import { providerTransportIsConfigured } from '../../../shared/src/providerStatu
 import { describeWorkspaceAuthoritySummary } from '../../../shared/src/workspaceAuthority';
 import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
 import { normalizeCoachOrientationRecord } from '../../../shared/src/coachOrientationGovernance';
+import { normalizeTrainerCustomSkills } from '../../../shared/src/skillCatalog';
 import {
   preferRecoveredCoachTaskChrome,
   preferRecoveredCoachTurnChrome,
@@ -1490,6 +1491,7 @@ function toProviderConfigView(
     protocolFamily: provider ? providerProtocolFamily(protocol) : undefined,
     connectionType: provider?.connectionType,
     requestDefaults: provider?.requestDefaults ?? {},
+    thinkingConfig: provider?.thinkingConfig,
     profileId: provider?.profileId,
     profileLabel: provider?.profileLabel,
     profileMode: provider?.profileMode,
@@ -4268,12 +4270,18 @@ function mapMemoryWorkspace(
             record.review_reminder_mode ??
             record.reviewReminderMode,
         );
+      const incomingCustomSkills =
+        coachDefaults?.custom_skills ??
+        coachDefaults?.customSkills ??
+        record.custom_skills ??
+        record.customSkills;
       if (
         !coachDefaults &&
         !incomingMemoryScope &&
         !incomingWorkingSetMode &&
         !incomingReviewCadence &&
-        !incomingReviewReminderMode
+        !incomingReviewReminderMode &&
+        incomingCustomSkills === undefined
       ) {
         return chromeDefaults;
       }
@@ -4293,6 +4301,14 @@ function mapMemoryWorkspace(
                 asBoolean(toggles.resources) ?? chromeDefaults?.workspaceMemoryToggles?.resources,
             }
           : chromeDefaults?.workspaceMemoryToggles,
+        // Only emit the key when a real value exists — an explicit
+        // `customSkills: undefined` would wipe locally pending skills the next
+        // time this snapshot spreads over the layout chrome.
+        ...(incomingCustomSkills !== undefined
+          ? { customSkills: normalizeTrainerCustomSkills(incomingCustomSkills) }
+          : chromeDefaults?.customSkills !== undefined
+            ? { customSkills: chromeDefaults.customSkills }
+            : {}),
       };
     })(),
   };

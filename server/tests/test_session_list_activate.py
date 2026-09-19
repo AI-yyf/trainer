@@ -101,3 +101,21 @@ def test_session_activate_rejects_foreign_workspace(tmp_path: Path) -> None:
             json={"session_id": first, "workspace_id": "workspace-foreign-other"},
         )
         assert response.status_code == 404
+
+
+def test_session_activate_rejects_unknown_session_instead_of_latest_fallback(
+    tmp_path: Path,
+) -> None:
+    with build_client(tmp_path) as client:
+        first = _start(client)
+        _say(client, first, "MARKER。")
+        response = client.post(
+            "/session/activate",
+            json={"session_id": "session-does-not-exist", "workspace_id": WORKSPACE},
+        )
+        assert response.status_code == 404
+        history = client.get(
+            "/session/history",
+            params={"workspace_id": WORKSPACE, "session_id": first},
+        )
+        assert history.status_code == 200

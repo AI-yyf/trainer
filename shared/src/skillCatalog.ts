@@ -522,13 +522,28 @@ export function normalizeSkillQuery(value: string): string {
   return value.trim().replace(/^\$+/, "").replace(/\s+/g, " ").toLowerCase();
 }
 
+/**
+ * The first `$token` of a composer draft — the skill trigger. Everything after
+ * it is arguments handed to the skill on submit, so deck lookups and submit
+ * resolution must read this token only; matching the full draft would drop the
+ * resolved skill (and falsely offer to re-create it) once arguments appear.
+ */
+export function trainerSkillTriggerToken(draft: string): `$${string}` | undefined {
+  const trimmed = draft.trim();
+  if (!trimmed.startsWith("$")) {
+    return undefined;
+  }
+  return trimmed.split(/\s+/, 1)[0] as `$${string}`;
+}
+
 export function filterTrainerSkills(
   value: string,
   context: TrainerSkillContext,
   limit = 8,
+  catalog: readonly TrainerSkillCatalogItem[] = trainerSkillCatalog,
 ): TrainerSkillCatalogItem[] {
   const normalized = normalizeSkillQuery(value);
-  const candidates = trainerSkillCatalog.filter((skill) => !skill.when || skill.when(context));
+  const candidates = catalog.filter((skill) => !skill.when || skill.when(context));
   const ranked = candidates
     .map((skill, index) => ({
       skill,
@@ -594,4 +609,156 @@ function scoreSkill(skill: TrainerSkillCatalogItem, normalizedQuery: string): nu
   }
 
   return score;
+}
+
+// ---------------------------------------------------------------------------
+// Custom (user-authored) skills
+//
+// A custom skill is a user-saved `$trigger` prompt. It persists inside the
+// workspace coach defaults (`coach_defaults.custom_skills`), so it survives
+// restarts and syncs through the normal coach-settings channel. Skills can be
+// created in the composer skill deck, shared as a JSON blob, and installed by
+// pasting that blob back.
+// ---------------------------------------------------------------------------
+
+export const TRAINER_SKILL_SHARE_TYPE = "trainer_skill_share";
+export const TRAINER_CUSTOM_SKILL_LIMIT = 24;
+
+export interface TrainerCustomSkill {
+  id: string;
+  trigger: `$${string}`;
+  title: string;
+  detail: string;
+  prompt: string;
+  keywords: string[];
+  createdAt?: string;
+}
+
+export function normalizeCustomSkillTrigger(value: unknown): `$${string}` | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const token = value.trim().replace(/^[$#]+/, "").trim();
+  if (!token || token.length > 48 || /\s/.test(token)) {
+    return undefined;
+  }
+  return `$${token}` as `$${string}`;
+}
+
+export function normalizeTrainerCustomSkill(raw: unknown): TrainerCustomSkill | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const record = raw as Record<string, unknown>;
+  const trigger = normalizeCustomSkillTrigger(record.trigger);
+  const prompt = typeof record.prompt === "string" ? record.prompt.trim() : "";
+  if (!trigger || !prompt || prompt.length > 4000) {
+    return undefined;
+  }
+  const title =
+    typeof record.title === "string" && record.title.trim() ? record.title.trim().slice(0, 160) : trigger;
+  const detail = typeof record.detail === "string" ? record.detail.trim().slice(0, 400) : "";
+  const keywords = Array.isArray(record.keywords)
+    ? record.keywords
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .slice(0, 16)
+    : [];
+  const id =
+    typeof record.id === "string" && record.id.trim()
+      ? record.id.trim().slice(0, 120)
+      : `custom:${trigger.slice(1).toLowerCase()}`;
+  const createdAtRaw = record.createdAt ?? record.created_at;
+  const createdAt =
+    typeof createdAtRaw === "string" && createdAtRaw.trim() ? createdAtRaw.trim() : undefined;
+  return { id, trigger, title, detail, prompt, keywords, createdAt };
+}
+
+export function normalizeTrainerCustomSkills(raw: unknown): TrainerCustomSkill[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const normalized: TrainerCustomSkill[] = [];
+  for (const entry of raw) {
+    const skill = normalizeTrainerCustomSkill(entry);
+    if (!skill) {
+      continue;
+    }
+    const key = skill.trigger.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push(skill);
+    if (normalized.length >= TRAINER_CUSTOM_SKILL_LIMIT) {
+      break;
+    }
+  }
+  return normalized;
+}
+
+/**
+ * Project a custom skill into the catalog item shape the composer already
+ * understands. Custom skills always stream their prompt as a coach message.
+ */
+export function customSkillToCatalogItem(skill: TrainerCustomSkill): TrainerSkillCatalogItem {
+  return {
+    id: skill.id,
+    trigger: skill.trigger,
+    section: "Coach",
+    title: { "en-US": skill.title },
+    detail: { "en-US": skill.detail || skill.prompt },
+    keywords: [skill.trigger.slice(1), ...skill.keywords],
+    commandId: trainerCommands.sendStreamMessage,
+    prompt: { "en-US": skill.prompt },
+  };
+}
+
+/**
+ * Merge user skills into the built-in catalog. Built-ins win on trigger
+ * collisions so a custom `$explain` can never shadow the shipped skill.
+ */
+export function mergeSkillCatalog(
+  customSkills: readonly TrainerCustomSkill[],
+  catalog: readonly TrainerSkillCatalogItem[] = trainerSkillCatalog,
+): TrainerSkillCatalogItem[] {
+  const builtinTriggers = new Set(catalog.map((skill) => skill.trigger.toLowerCase()));
+  const customItems = customSkills
+    .filter((skill) => !builtinTriggers.has(skill.trigger.toLowerCase()))
+    .map(customSkillToCatalogItem);
+  return [...catalog, ...customItems];
+}
+
+export function serializeTrainerSkillShare(skill: TrainerCustomSkill): string {
+  return JSON.stringify(
+    {
+      _type: TRAINER_SKILL_SHARE_TYPE,
+      version: 1,
+      trigger: skill.trigger,
+      title: skill.title,
+      detail: skill.detail,
+      prompt: skill.prompt,
+      keywords: skill.keywords,
+    },
+    null,
+    2,
+  );
+}
+
+export function parseTrainerSkillShare(text: string): TrainerCustomSkill | undefined {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{")) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    if (parsed?._type !== TRAINER_SKILL_SHARE_TYPE) {
+      return undefined;
+    }
+    return normalizeTrainerCustomSkill(parsed);
+  } catch {
+    return undefined;
+  }
 }

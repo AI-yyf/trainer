@@ -1,11 +1,13 @@
 import type { TrainerCommandCatalogItem } from "../../../../shared/src/commands";
 import type { TrainerMessagePart, TrainerStreamingState } from "../../../../shared/src/protocol";
 import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
+import type { TrainerCustomSkill } from "../../../../shared/src/skillCatalog";
 import type { ComposerLanguage as SharedComposerLanguage } from "../../../../shared/src/types";
 import type {
   ProviderCapabilityEvidence,
   ProviderCapabilityVerificationState,
 } from "../../../../shared/src/providerTest";
+import type { ProviderThinkingConfig } from "../../../../shared/src/providerThinking";
 
 export type ThemePreference = "system" | "light" | "dark";
 export type LearningSurfaceAlignment = "left" | "right";
@@ -94,6 +96,7 @@ export interface ProviderConfigView {
   apiKeyConfigured: boolean;
   capabilities: CapabilityFlags;
   requestDefaults?: Record<string, unknown>;
+  thinkingConfig?: ProviderThinkingConfig;
   protocol?: ProviderProtocol;
   protocolFamily?: string;
   connectionType?: string;
@@ -155,6 +158,7 @@ export interface ProviderConfig {
   modelTokenLimits?: Record<string, ProviderModelTokenLimit>;
   taskBindings?: Record<string, unknown>;
   requestDefaults?: Record<string, unknown>;
+  thinkingConfig?: ProviderThinkingConfig;
   contextWindowTokens?: number;
   maxOutputTokens?: number;
   embeddingModel?: string;
@@ -1481,6 +1485,8 @@ export interface CoachDefaults {
   reviewCadence: ReviewCadence;
   reviewReminderMode: ReviewReminderMode;
   workspaceMemoryToggles: WorkspaceMemoryToggles;
+  /** User-authored `$trigger` skills, persisted with the workspace coach defaults. */
+  customSkills?: TrainerCustomSkill[];
 }
 
 export const COACH_FIRST_SIDEBAR_VIEWS = [

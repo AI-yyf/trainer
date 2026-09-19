@@ -49,6 +49,7 @@ import {
   filterProviderModelOptions,
   type ProviderModelPolicyEvaluation,
 } from '../../../shared/src/providerModelPolicy';
+import { normalizeProviderThinkingConfig } from '../../../shared/src/providerThinking';
 import { normalizeProviderCapabilityTruth } from '../../../shared/src/providerTest';
 import { stripHostLastTestSecrets } from '../../../shared/src/hostLastTestGovernance';
 import { sanitizeErrorSurfaceText } from '../../../shared/src/errorSurfaceSanitizer';
@@ -102,6 +103,7 @@ type CreateProviderProfileFromDraftPayload = {
   credentialMode?: ProviderCredentialMode;
   capabilities?: Partial<CapabilityFlags>;
   requestDefaults?: Record<string, unknown>;
+  thinkingConfig?: unknown;
   profileLabel?: string;
   reason?: string;
 };
@@ -124,6 +126,7 @@ type ProviderDraftTestInput = {
   apiKey?: string;
   capabilities?: Partial<CapabilityFlags>;
   requestDefaults?: Record<string, unknown>;
+  thinkingConfig?: unknown;
 };
 
 /**
@@ -453,6 +456,8 @@ function buildDraftTestConfig(
   const protocolChanged = normalizeProviderProtocol(existing?.protocol) !== protocol;
   const hasEmbeddingModel = hasOwn(input, 'embeddingModel');
   const hasCacheTtlSeconds = hasOwn(input, 'cacheTtlSeconds');
+  const draftRequestDefaults =
+    input.requestDefaults ?? (sameConnection ? existing?.requestDefaults ?? {} : {});
   const tokenState = resolveProviderModelTokenState(sameConnection ? existing : undefined, model, {
     modelTokenLimits: input.modelTokenLimits,
     hasModelTokenLimits: hasOwn(input, 'modelTokenLimits'),
@@ -508,9 +513,25 @@ function buildDraftTestConfig(
         ? existing?.cacheTtlSeconds
         : undefined,
     requestDefaults: normalizeProviderRequestDefaults(
-      { name, baseUrl, model },
-      input.requestDefaults ?? (sameConnection ? existing?.requestDefaults ?? {} : {}),
+      {
+        name,
+        baseUrl,
+        model,
+        capabilities: protocolChanged
+          ? defaultCapabilitiesForProtocol(protocol)
+          : {
+              ...defaultCapabilitiesForProtocol(protocol),
+              ...(existing?.capabilities ?? {}),
+              ...(input.capabilities ?? {}),
+            },
+        modelCapabilities: sameConnection ? existing?.modelCapabilities?.[model] : undefined,
+      },
+      draftRequestDefaults,
     ),
+    thinkingConfig:
+      normalizeProviderThinkingConfig(input.thinkingConfig, protocol) ??
+      normalizeProviderThinkingConfig(draftRequestDefaults, protocol) ??
+      (sameConnection ? existing?.thinkingConfig : undefined),
   };
 }
 
@@ -591,9 +612,14 @@ export async function configureProviderCommand(
         name: name.trim(),
         baseUrl: normalizedBaseUrl,
         model: model.trim(),
+        capabilities,
+        modelCapabilities: sameConnection ? existing?.modelCapabilities?.[model.trim()] : undefined,
       },
-      existing?.requestDefaults ?? {},
+      sameConnection ? existing?.requestDefaults ?? {} : {},
     ),
+    // Durable thinking intent survives a reconfigure of the same connection but
+    // never leaks onto a different provider.
+    thinkingConfig: sameConnection ? existing?.thinkingConfig : undefined,
   };
 
   const modelPolicy = evaluateProviderModelPolicy(config.model, config);
@@ -1556,6 +1582,8 @@ export async function createProviderProfileFromDraftCommand(
     hasContextWindowTokens: hasOwn(input, 'contextWindowTokens'),
     hasMaxOutputTokens: hasOwn(input, 'maxOutputTokens'),
   });
+  const requestDefaultsInput =
+    input.requestDefaults ?? (sameConnection ? existing?.requestDefaults ?? {} : {});
   const config: ProviderConfig = {
     name,
     label: profileLabel,
@@ -1572,9 +1600,18 @@ export async function createProviderProfileFromDraftCommand(
         name,
         baseUrl,
         model,
+        capabilities,
+        modelCapabilities: sameConnection ? existing?.modelCapabilities?.[model] : undefined,
       },
-      input.requestDefaults ?? (sameConnection ? existing?.requestDefaults ?? {} : {}),
+      requestDefaultsInput,
     ),
+    // Same precedence as the webview save: explicit draft intent, then wire
+    // markers in the submitted defaults, then the stored intent — but only on
+    // the same connection.
+    thinkingConfig:
+      normalizeProviderThinkingConfig(input.thinkingConfig, protocol) ??
+      normalizeProviderThinkingConfig(requestDefaultsInput, protocol) ??
+      (sameConnection ? existing?.thinkingConfig : undefined),
     availableModels: sameConnection ? existing?.availableModels ?? [] : [],
     catalogModels: mergeCatalogModels(
       input.catalogModels,

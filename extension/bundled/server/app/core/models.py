@@ -2416,12 +2416,39 @@ class WorkspaceMemoryToggles(BaseModel):
     resources: bool = True
 
 
+class CustomSkill(BaseModel):
+    """A user-authored `$trigger` prompt persisted with the workspace coach defaults.
+
+    Custom skills are created, imported, and removed entirely through the
+    coach-settings channel; the agent loop never executes them directly — the
+    webview expands a skill into a normal coach prompt before sending.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    id: str = Field(default="", max_length=120)
+    trigger: str = Field(default="", max_length=64)
+    title: str = Field(default="", max_length=200)
+    detail: str = Field(default="", max_length=500)
+    prompt: str = Field(default="", max_length=4000)
+    keywords: list[str] = Field(default_factory=list, max_length=16)
+    created_at: str | None = Field(default=None, alias="createdAt")
+
+
 class CoachDefaults(BaseModel):
-    memory_scope: CoachMemoryScope = "project"
-    working_set_mode: WorkingSetMode = "balanced"
-    review_cadence: ReviewCadence = "steady"
-    review_reminder_mode: ReviewReminderMode = "due"
-    workspace_memory_toggles: WorkspaceMemoryToggles = Field(default_factory=WorkspaceMemoryToggles)
+    # The extension sends camelCase keys (memoryScope, workspaceMemoryToggles,
+    # customSkills) while stored snapshots are snake_case; populate_by_name keeps
+    # both representations valid.
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    memory_scope: CoachMemoryScope = Field(default="project", alias="memoryScope")
+    working_set_mode: WorkingSetMode = Field(default="balanced", alias="workingSetMode")
+    review_cadence: ReviewCadence = Field(default="steady", alias="reviewCadence")
+    review_reminder_mode: ReviewReminderMode = Field(default="due", alias="reviewReminderMode")
+    workspace_memory_toggles: WorkspaceMemoryToggles = Field(
+        default_factory=WorkspaceMemoryToggles, alias="workspaceMemoryToggles"
+    )
+    custom_skills: list[CustomSkill] = Field(default_factory=list, alias="customSkills", max_length=24)
 
 
 class ResourceComposerIntent(BaseModel):

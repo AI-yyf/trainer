@@ -29,13 +29,25 @@ import {
 } from "../../../../shared/src/providerStatus";
 import {
   filterTrainerSkills,
+  mergeSkillCatalog,
+  normalizeTrainerCustomSkill,
+  normalizeTrainerCustomSkills,
+  parseTrainerSkillShare,
   resolveTrainerSkillText,
+  serializeTrainerSkillShare,
   trainerSkillCatalog,
   trainerSkillSectionLabel,
+  trainerSkillTriggerToken,
+  TRAINER_CUSTOM_SKILL_LIMIT,
+  type TrainerCustomSkill,
   type TrainerSkillCatalogItem,
   type TrainerSkillContext,
   type TrainerSkillSection,
 } from "../../../../shared/src/skillCatalog";
+import {
+  matchesSavedCoachDefaults,
+  sameCoachDefaults,
+} from "../../../../shared/src/coachDefaults";
 import {
   providerModelTokenLimitsKey,
   resolveProviderModelTokenState,
@@ -183,6 +195,7 @@ import {
   RefreshIcon,
   ResourcesIcon,
   SettingsIcon,
+  ShareIcon,
   UploadIcon,
   WarningIcon,
 } from "../components/icons";
@@ -196,6 +209,8 @@ import { resolvePlanViewCopy } from "../lib/i18n/planViewCopy";
 import { resolveTextDirection, type TextDirection } from "../lib/i18n/direction";
 import {
   describeProviderThinking,
+  normalizeProviderThinkingConfig,
+  synthesizeProviderThinkingDescriptor,
   thinkingProtocolSupportsWire,
 } from "../../../../shared/src/providerThinking";
 import type {
@@ -914,6 +929,20 @@ const viewLabels: Record<
   "ja-JP": { coach: "\u5bfe\u8a71", plan: "\u8a08\u753b", resources: "\u8cc7\u6599", training: "\u8a13\u7df4", settings: "\u8a2d\u5b9a" },
   "ko-KR": { coach: "\ub300\ud654", plan: "\uacc4\ud68d", resources: "\uc790\ub8cc", training: "\ud6c8\ub828", settings: "\uc124\uc815" },
   "pt-BR": { coach: "Chat", plan: "Plano", resources: "Recursos", training: "Treinamento", settings: "Configura\u00e7\u00f5es" },
+};
+
+const headerActionLabels: Record<
+  ComposerLanguage,
+  { share: string; resources: string; training: string }
+> = {
+  "zh-CN": { share: "分享会话", resources: "资料库", training: "训练卡" },
+  "en-US": { share: "Share session", resources: "Resource library", training: "Training card" },
+  "es-ES": { share: "Compartir sesión", resources: "Biblioteca", training: "Tarjeta de entrenamiento" },
+  "fr-FR": { share: "Partager la session", resources: "Bibliothèque", training: "Carte d'entraînement" },
+  "de-DE": { share: "Sitzung teilen", resources: "Bibliothek", training: "Trainingskarte" },
+  "ja-JP": { share: "セッションを共有", resources: "ライブラリ", training: "トレーニングカード" },
+  "ko-KR": { share: "세션 공유", resources: "라이브러리", training: "트레이닝 카드" },
+  "pt-BR": { share: "Compartilhar sessão", resources: "Biblioteca", training: "Cartão de treino" },
 };
 
 function resourcesViewLabel(language: ComposerLanguage): string {
@@ -2263,47 +2292,6 @@ function restoredTrainingCard(
   }
 
   return nextHopCard ?? scenarioLabCard ?? theoryDrillCard ?? reviewArtifactCard;
-}
-
-function sameCoachDefaults(left: CoachDefaults, right: CoachDefaults): boolean {
-  return (
-    left.memoryScope === right.memoryScope &&
-    left.workingSetMode === right.workingSetMode &&
-    left.reviewCadence === right.reviewCadence &&
-    left.reviewReminderMode === right.reviewReminderMode &&
-    left.workspaceMemoryToggles.decisions === right.workspaceMemoryToggles.decisions &&
-    left.workspaceMemoryToggles.patterns === right.workspaceMemoryToggles.patterns &&
-    left.workspaceMemoryToggles.resources === right.workspaceMemoryToggles.resources
-  );
-}
-
-/**
- * True when the saved server snapshot pins every defined field to the same
- * value as the pending payload. Fields missing from the partial snapshot are
- * treated as matching so a sparse snapshot never blocks an explicit save.
- */
-function matchesSavedCoachDefaults(
-  next: CoachDefaults,
-  saved:
-    | (Partial<CoachDefaults> & { workspaceMemoryToggles?: Partial<CoachDefaults["workspaceMemoryToggles"]> })
-    | undefined,
-): boolean {
-  if (!saved) {
-    return false;
-  }
-  return (
-    (saved.memoryScope === undefined || saved.memoryScope === next.memoryScope) &&
-    (saved.workingSetMode === undefined || saved.workingSetMode === next.workingSetMode) &&
-    (saved.reviewCadence === undefined || saved.reviewCadence === next.reviewCadence) &&
-    (saved.reviewReminderMode === undefined ||
-      saved.reviewReminderMode === next.reviewReminderMode) &&
-    (saved.workspaceMemoryToggles?.decisions === undefined ||
-      saved.workspaceMemoryToggles.decisions === next.workspaceMemoryToggles.decisions) &&
-    (saved.workspaceMemoryToggles?.patterns === undefined ||
-      saved.workspaceMemoryToggles.patterns === next.workspaceMemoryToggles.patterns) &&
-    (saved.workspaceMemoryToggles?.resources === undefined ||
-      saved.workspaceMemoryToggles.resources === next.workspaceMemoryToggles.resources)
-  );
 }
 
 function formatSparseWorkspaceControlValue(workspace: WorkspaceSettingsSnapshot, t: Copy): string | undefined {
@@ -4068,6 +4056,15 @@ export function App() {
   const [openMenu, setOpenMenu] = useState<ContextMenu>();
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [dismissedComposerDeck, setDismissedComposerDeck] = useState<ComposerDeckKind>();
+  const [skillManagerOpen, setSkillManagerOpen] = useState(false);
+  const [pendingDeleteSkillId, setPendingDeleteSkillId] = useState<string>();
+  const [skillDraftFields, setSkillDraftFields] = useState({
+    trigger: "",
+    title: "",
+    detail: "",
+    prompt: "",
+  });
+  const [skillImportText, setSkillImportText] = useState("");
   const composerDeckRef = useRef<HTMLDivElement | null>(null);
   const composerHistoryCursorRef = useRef<number | undefined>(undefined);
   const composerHistoryScratchDraftRef = useRef("");
@@ -5081,6 +5078,7 @@ export function App() {
       catalogSource: providerDraft.catalogSource,
       cacheTtlSeconds: providerDraft.cacheTtlSeconds ?? null,
       requestDefaults: providerDraft.requestDefaults ?? {},
+      ...(providerDraft.thinkingConfig ? { thinkingConfig: providerDraft.thinkingConfig } : {}),
       ...(trimmedApiKey ? { apiKey: trimmedApiKey, replaceApiKey: true } : {}),
       capabilities: data.providerConfig.capabilities,
     };
@@ -5108,6 +5106,7 @@ export function App() {
       catalogSource: data.providerConfig.catalogSource ?? "provider_live",
       cacheTtlSeconds: data.providerConfig.cacheTtlSeconds,
       requestDefaults: data.providerConfig.requestDefaults ?? {},
+      thinkingConfig: data.providerConfig.thinkingConfig,
     }),
     [
       data.providerConfig.configured,
@@ -5127,6 +5126,7 @@ export function App() {
       data.providerConfig.catalogSource,
       data.providerConfig.cacheTtlSeconds,
       data.providerConfig.requestDefaults,
+      data.providerConfig.thinkingConfig,
     ],
   );
   const providerDraftSourceKey = JSON.stringify(providerDraftSource);
@@ -5161,6 +5161,7 @@ export function App() {
       catalogSource: providerDraftSource.catalogSource,
       cacheTtlSeconds: providerDraftSource.cacheTtlSeconds,
       requestDefaults: providerDraftSource.requestDefaults,
+      thinkingConfig: providerDraftSource.thinkingConfig,
       apiKey: "",
     });
     providerDraftIsDirtyRef.current = false;
@@ -5190,6 +5191,10 @@ export function App() {
       providerDraft.cacheTtlSeconds !== data.providerConfig.cacheTtlSeconds ||
       providerRequestDefaultsKey(providerDraft.requestDefaults) !==
         providerRequestDefaultsKey(data.providerConfig.requestDefaults) ||
+      // thinkingConfig is durable intent: a mode change can leave the wire
+      // defaults untouched (no capability evidence), so it must count on its own.
+      JSON.stringify(providerDraft.thinkingConfig ?? null) !==
+        JSON.stringify(data.providerConfig.thinkingConfig ?? null) ||
       providerDraftHasUnsavedApiKey,
     [
       data.providerConfig.baseUrl,
@@ -5220,6 +5225,8 @@ export function App() {
       providerDraft.catalogModels,
       providerDraft.allowedModels,
       providerDraft.requestDefaults,
+      providerDraft.thinkingConfig,
+      data.providerConfig.thinkingConfig,
       data.providerConfig.contextWindowTokens,
       data.providerConfig.maxOutputTokens,
       providerDraftHasUnsavedApiKey,
@@ -5534,42 +5541,20 @@ export function App() {
     }
     // describeProviderThinking stays silent until thinking is already written
     // into requestDefaults. The composer should still offer the control whenever
-    // the connection is *known* to support thinking, so synthesize a default
-    // "auto" descriptor for capable models instead of hiding the section.
+    // the connection is *known* to support thinking — or the user already made
+    // a durable choice the wire can't express yet — so synthesize a descriptor
+    // seeded from the stored intent instead of hiding the section.
     const modelThinking = model ? provider.modelCapabilities?.[model]?.thinking : undefined;
     const supported =
       liveEvidence || modelThinking === true || provider.capabilities?.thinking === true;
-    if (!supported || !thinkingProtocolSupportsWire(provider.protocol)) {
+    const storedThinking = normalizeProviderThinkingConfig(
+      provider.thinkingConfig,
+      provider.protocol,
+    );
+    if ((!supported && !storedThinking) || !thinkingProtocolSupportsWire(provider.protocol)) {
       return undefined;
     }
-    const protocol = normalizeProviderProtocol(provider.protocol);
-    if (protocol === "anthropic_messages") {
-      return {
-        protocol,
-        kind: "thinking_budget" as const,
-        advanced: true,
-        config: { mode: "auto" } as ProviderThinkingConfig,
-        budgetMin: 1,
-        budgetMax: 200000,
-      };
-    }
-    if (protocol === "gemini_generate_content") {
-      return {
-        protocol,
-        kind: "gemini_thinking" as const,
-        advanced: true,
-        config: { mode: "auto" } as ProviderThinkingConfig,
-        budgetMin: 1,
-        budgetMax: 32768,
-      };
-    }
-    return {
-      protocol: protocol ?? "openai_chat_completions_compatible",
-      kind: "reasoning_effort" as const,
-        advanced: true,
-      config: { mode: "auto" } as ProviderThinkingConfig,
-      effortOptions: ["low", "medium", "high"] as const,
-    };
+    return synthesizeProviderThinkingDescriptor(context, storedThinking ?? { mode: "auto" });
   }, [
     data.providerConfig.baseUrl,
     data.providerConfig.capabilities,
@@ -5581,6 +5566,7 @@ export function App() {
     data.providerConfig.protocol,
     data.providerConfig.requestDefaults,
     data.providerConfig.resolvedModel,
+    data.providerConfig.thinkingConfig,
   ]);
 
   const composerContextUsage = useMemo(() => {
@@ -8457,6 +8443,9 @@ export function App() {
       reviewCadence: liveWorkspaceCoachDefaults?.reviewCadence ?? defaultCoachDefaults.reviewCadence,
       reviewReminderMode:
         liveWorkspaceCoachDefaults?.reviewReminderMode ?? defaultCoachDefaults.reviewReminderMode,
+      // Pass the snapshot's skills through — omitting the key would pin the
+      // saved side to [] and report "unsaved" forever once a skill exists.
+      customSkills: liveWorkspaceCoachDefaults?.customSkills,
       workspaceMemoryToggles: {
         decisions:
           liveWorkspaceCoachDefaults?.workspaceMemoryToggles?.decisions ??
@@ -8792,15 +8781,29 @@ export function App() {
       data.resources.length,
     ],
   );
+  const customSkills = useMemo(
+    () => layout.coachDefaults.customSkills ?? [],
+    [layout.coachDefaults.customSkills],
+  );
+  const availableSkillCatalog = useMemo(
+    () => mergeSkillCatalog(customSkills),
+    [customSkills],
+  );
   const matchingLocalSkills = useMemo<LocalSkillSuggestion[]>(() => {
-    if (!normalizedDraft.startsWith("$")) {
+    // Only the first `$token` selects a skill — text after it is arguments
+    // handed to the skill on submit. Filtering on the full draft would drop
+    // the resolved skill (and falsely offer to re-create it) once the user
+    // starts typing arguments.
+    const triggerToken = trainerSkillTriggerToken(normalizedDraft);
+    if (triggerToken === undefined) {
       return [];
     }
 
-    return filterTrainerSkills(normalizedDraft, trainerSkillContext, 10);
+    return filterTrainerSkills(triggerToken, trainerSkillContext, 10, availableSkillCatalog);
   }, [
     normalizedDraft,
     trainerSkillContext,
+    availableSkillCatalog,
   ]);
   const matchingLocalCommands = useMemo(
     () =>
@@ -9589,7 +9592,7 @@ export function App() {
     const submittedSkillTrigger = normalizedDraft.split(/\s+/, 1)[0] ?? "";
     const submittedSkill =
       submittedSkillTrigger.startsWith("$")
-        ? trainerSkillCatalog.find((skill) =>
+        ? availableSkillCatalog.find((skill) =>
             skill.trigger.toLowerCase() === submittedSkillTrigger.toLowerCase() &&
             (!skill.when || skill.when(trainerSkillContext)),
           )
@@ -11439,7 +11442,17 @@ export function App() {
                       className={`composer-thinking__mode ${active ? "is-active" : ""}`}
                       aria-pressed={active}
                       onClick={() =>
-                        setComposerThinking({ ...composerThinkingDescriptor.config, mode: option.value })
+                        setComposerThinking({
+                          ...composerThinkingDescriptor.config,
+                          mode: option.value,
+                          // "On" must carry a concrete effort or nothing is
+                          // emitted and the toggle falls back to "auto".
+                          ...(option.value === "enabled" &&
+                          composerThinkingDescriptor.kind === "reasoning_effort" &&
+                          !composerThinkingDescriptor.config.reasoningEffort
+                            ? { reasoningEffort: "medium" as const }
+                            : {}),
+                        })
                       }
                     >
                       {option.label}
@@ -11724,7 +11737,12 @@ export function App() {
   };
 
   const selectSkillSuggestion = (skill: LocalSkillSuggestion) => {
-    setComposerDraft(`${skill.trigger} `);
+    // Replace only the typed `$token` — text after it is skill arguments and
+    // must survive autocomplete ("$exp notes" → "$explain notes").
+    const triggerToken = trainerSkillTriggerToken(normalizedDraft);
+    const remainder =
+      triggerToken !== undefined ? normalizedDraft.slice(triggerToken.length).trim() : "";
+    setComposerDraft(remainder ? `${skill.trigger} ${remainder}` : `${skill.trigger} `);
     setDismissedComposerDeck("skill");
     setOpenMenu(undefined);
     setSelectedCommandIndex(0);
@@ -11733,28 +11751,195 @@ export function App() {
     });
   };
 
+  const persistCustomSkills = (next: TrainerCustomSkill[]) => {
+    // Keep local state identical to what the server stores — the payload is
+    // normalized (deduped, capped) on the way out, so an un-normalized list
+    // would leave the save-dedup comparison permanently mismatched.
+    setCoachDefaults({ customSkills: normalizeTrainerCustomSkills(next) });
+    queueCoachSettingsSave();
+  };
+
+  const saveCustomSkillDraft = () => {
+    const skill = normalizeTrainerCustomSkill({
+      ...skillDraftFields,
+      id: undefined,
+      createdAt: new Date().toISOString(),
+    });
+    if (!skill) {
+      setOperationMessage({
+        tone: "error",
+        message:
+          layout.composerLanguage === "zh-CN"
+            ? "技能需要 $触发词 和提示词。"
+            : "A skill needs a $trigger and a prompt.",
+      });
+      return;
+    }
+    const builtinCollision = trainerSkillCatalog.some(
+      (entry) => entry.trigger.toLowerCase() === skill.trigger.toLowerCase(),
+    );
+    if (builtinCollision) {
+      setOperationMessage({
+        tone: "error",
+        message:
+          layout.composerLanguage === "zh-CN"
+            ? `${skill.trigger} 已经是内置技能，换个触发词。`
+            : `${skill.trigger} is a built-in skill. Pick another trigger.`,
+      });
+      return;
+    }
+    const remaining = customSkills.filter(
+      (entry) => entry.trigger.toLowerCase() !== skill.trigger.toLowerCase(),
+    );
+    if (remaining.length >= TRAINER_CUSTOM_SKILL_LIMIT) {
+      setOperationMessage({
+        tone: "error",
+        message:
+          layout.composerLanguage === "zh-CN"
+            ? `最多只能有 ${TRAINER_CUSTOM_SKILL_LIMIT} 个自定义技能，先删除一个。`
+            : `Custom skills are capped at ${TRAINER_CUSTOM_SKILL_LIMIT}. Remove one first.`,
+      });
+      return;
+    }
+    persistCustomSkills([...remaining, skill]);
+    setSkillDraftFields({ trigger: "", title: "", detail: "", prompt: "" });
+    setOperationMessage({
+      tone: "success",
+      message:
+        layout.composerLanguage === "zh-CN"
+          ? `已保存 ${skill.trigger}。`
+          : `Saved ${skill.trigger}.`,
+    });
+  };
+
+  const installCustomSkillFromPaste = () => {
+    const skill = parseTrainerSkillShare(skillImportText);
+    if (!skill) {
+      setOperationMessage({
+        tone: "error",
+        message:
+          layout.composerLanguage === "zh-CN"
+            ? "粘贴的内容不是有效的技能分享包。"
+            : "That paste is not a valid skill share payload.",
+      });
+      return;
+    }
+    const builtinCollision = trainerSkillCatalog.some(
+      (entry) => entry.trigger.toLowerCase() === skill.trigger.toLowerCase(),
+    );
+    if (builtinCollision) {
+      setOperationMessage({
+        tone: "error",
+        message:
+          layout.composerLanguage === "zh-CN"
+            ? `${skill.trigger} 与内置技能冲突，未安装。`
+            : `${skill.trigger} collides with a built-in skill. Not installed.`,
+      });
+      return;
+    }
+    const remaining = customSkills.filter(
+      (entry) => entry.trigger.toLowerCase() !== skill.trigger.toLowerCase(),
+    );
+    if (remaining.length >= TRAINER_CUSTOM_SKILL_LIMIT) {
+      setOperationMessage({
+        tone: "error",
+        message:
+          layout.composerLanguage === "zh-CN"
+            ? `最多只能有 ${TRAINER_CUSTOM_SKILL_LIMIT} 个自定义技能，先删除一个。`
+            : `Custom skills are capped at ${TRAINER_CUSTOM_SKILL_LIMIT}. Remove one first.`,
+      });
+      return;
+    }
+    persistCustomSkills([...remaining, skill]);
+    setSkillImportText("");
+    setOperationMessage({
+      tone: "success",
+      message:
+        layout.composerLanguage === "zh-CN"
+          ? `已安装 ${skill.trigger}。`
+          : `Installed ${skill.trigger}.`,
+    });
+  };
+
+  const removeCustomSkill = (skillId: string) => {
+    if (pendingDeleteSkillId !== skillId) {
+      setPendingDeleteSkillId(skillId);
+      return;
+    }
+    setPendingDeleteSkillId(undefined);
+    const skill = customSkills.find((entry) => entry.id === skillId);
+    persistCustomSkills(customSkills.filter((entry) => entry.id !== skillId));
+    setOperationMessage({
+      tone: "info",
+      message:
+        layout.composerLanguage === "zh-CN"
+          ? `已删除 ${skill?.trigger ?? "skill"}。`
+          : `Removed ${skill?.trigger ?? "skill"}.`,
+    });
+  };
+
+  const copyCustomSkillShare = async (skill: TrainerCustomSkill) => {
+    try {
+      await navigator.clipboard.writeText(serializeTrainerSkillShare(skill));
+      setOperationMessage({
+        tone: "success",
+        message:
+          layout.composerLanguage === "zh-CN"
+            ? `${skill.trigger} 分享包已复制，可粘贴给其他工作区。`
+            : `${skill.trigger} share payload copied — paste it into another workspace to install.`,
+      });
+    } catch {
+      setOperationMessage({
+        tone: "error",
+        message: layout.composerLanguage === "zh-CN" ? "复制失败，请重试。" : "Copy failed. Try again.",
+      });
+    }
+  };
+
   const renderSkillDeck = () => {
     if (
       dismissedComposerDeck === "skill" ||
-      !normalizedDraft.startsWith("$") ||
-      matchingLocalSkills.length === 0
+      !normalizedDraft.startsWith("$")
     ) {
       return null;
     }
 
+    const zh = layout.composerLanguage === "zh-CN";
+    const draftTriggerToken = trainerSkillTriggerToken(normalizedDraft) ?? "$";
+    // Check the merged catalog — not the narrowed suggestion list — so an
+    // existing trigger (including one whose `when` context currently hides it
+    // from the list) never gets a "create" affordance that would collide on
+    // save or silently overwrite a custom skill.
+    const hasExactTrigger = availableSkillCatalog.some(
+      (skill) => skill.trigger.toLowerCase() === draftTriggerToken.toLowerCase(),
+    );
+    const creatableTrigger =
+      draftTriggerToken.length > 1 && !hasExactTrigger ? draftTriggerToken : undefined;
+
     return (
-      <div ref={composerDeckRef} className="skill-deck" role="list" aria-label={layout.composerLanguage === "zh-CN" ? "技能" : "Skills"}>
+      <div ref={composerDeckRef} className="skill-deck" role="list" aria-label={zh ? "技能" : "Skills"}>
         <div className="skill-deck__header">
-          <strong>{layout.composerLanguage === "zh-CN" ? "技能" : "Skills"}</strong>
+          <strong>{zh ? "技能" : "Skills"}</strong>
           <span className="skill-deck__hint">
-            {layout.composerLanguage === "zh-CN"
+            {zh
               ? "继续输入可收窄范围，删除 $ 就会按普通消息发送。"
               : "Keep typing to narrow it down, or remove $ to send a normal message."}
           </span>
+          <button
+            type="button"
+            className="skill-deck__manage-toggle"
+            aria-expanded={skillManagerOpen}
+            onClick={() => {
+              setPendingDeleteSkillId(undefined);
+              setSkillManagerOpen((open) => !open);
+            }}
+          >
+            {zh ? "管理" : "Manage"}
+          </button>
         </div>
         {matchingLocalSkills.length === 0 ? (
           <p className="skill-deck__empty">
-            {layout.composerLanguage === "zh-CN"
+            {zh
               ? "没有匹配到 skill。继续输入，或者直接当作普通消息发送。"
               : "No matching skill was found. Keep typing, or send this as a normal message."}
           </p>
@@ -11796,6 +11981,136 @@ export function App() {
             ))}
           </div>
         )}
+        {creatableTrigger && !skillManagerOpen ? (
+          <button
+            type="button"
+            className="skill-deck__create-row"
+            onClick={() => {
+              setSkillDraftFields((fields) => ({ ...fields, trigger: creatableTrigger }));
+              setSkillManagerOpen(true);
+            }}
+          >
+            {zh ? `创建技能 ${creatableTrigger}` : `Create skill ${creatableTrigger}`}
+          </button>
+        ) : null}
+        {skillManagerOpen ? (
+          <div className="skill-deck__manager">
+            {customSkills.length > 0 ? (
+              <ul className="skill-deck__custom-list">
+                {customSkills.map((skill) => (
+                  <li key={skill.id} className="skill-deck__custom-item">
+                    <span className="skill-deck__custom-label">
+                      <strong>{skill.trigger}</strong>
+                      <span>{skill.title}</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="skill-deck__mini-button"
+                      title={zh ? "复制分享包" : "Copy share payload"}
+                      onClick={() => void copyCustomSkillShare(skill)}
+                    >
+                      {zh ? "分享" : "Share"}
+                    </button>
+                    <button
+                      type="button"
+                      className="skill-deck__mini-button skill-deck__mini-button--danger"
+                      title={
+                        pendingDeleteSkillId === skill.id
+                          ? zh
+                            ? "再次点击确认删除"
+                            : "Click again to confirm"
+                          : zh
+                            ? "删除技能"
+                            : "Delete skill"
+                      }
+                      onClick={() => removeCustomSkill(skill.id)}
+                    >
+                      {pendingDeleteSkillId === skill.id
+                        ? zh
+                          ? "确认删除"
+                          : "Confirm?"
+                        : zh
+                          ? "删除"
+                          : "Delete"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="skill-deck__manager-note">
+                {zh
+                  ? "还没有自定义技能。下面创建一个，或粘贴别人分享的技能包。"
+                  : "No custom skills yet. Create one below, or paste a shared skill payload."}
+              </p>
+            )}
+            <div className="skill-deck__form">
+              <div className="skill-deck__form-row">
+                <input
+                  className="skill-deck__input skill-deck__input--trigger"
+                  value={skillDraftFields.trigger}
+                  placeholder={zh ? "$触发词" : "$trigger"}
+                  aria-label={zh ? "技能触发词" : "Skill trigger"}
+                  onChange={(event) =>
+                    setSkillDraftFields((fields) => ({ ...fields, trigger: event.target.value }))
+                  }
+                />
+                <input
+                  className="skill-deck__input"
+                  value={skillDraftFields.title}
+                  placeholder={zh ? "名称（可选）" : "Title (optional)"}
+                  aria-label={zh ? "技能名称" : "Skill title"}
+                  onChange={(event) =>
+                    setSkillDraftFields((fields) => ({ ...fields, title: event.target.value }))
+                  }
+                />
+              </div>
+              <input
+                className="skill-deck__input"
+                value={skillDraftFields.detail}
+                placeholder={zh ? "描述（可选）：选择时显示的说明" : "Detail (optional): shown in the skill list"}
+                aria-label={zh ? "技能描述" : "Skill detail"}
+                onChange={(event) =>
+                  setSkillDraftFields((fields) => ({ ...fields, detail: event.target.value }))
+                }
+              />
+              <textarea
+                className="skill-deck__textarea"
+                value={skillDraftFields.prompt}
+                placeholder={zh ? "提示词：输入 $触发词 后发给教练的指令" : "Prompt sent to the coach when this skill runs"}
+                aria-label={zh ? "技能提示词" : "Skill prompt"}
+                rows={3}
+                onChange={(event) =>
+                  setSkillDraftFields((fields) => ({ ...fields, prompt: event.target.value }))
+                }
+              />
+              <button
+                type="button"
+                className="skill-deck__mini-button skill-deck__mini-button--primary"
+                onClick={saveCustomSkillDraft}
+              >
+                {zh ? "保存技能" : "Save skill"}
+              </button>
+            </div>
+            <div className="skill-deck__form">
+              <textarea
+                className="skill-deck__textarea"
+                value={skillImportText}
+                placeholder={zh ? "粘贴技能分享包 JSON 进行安装" : "Paste a skill share payload (JSON) to install"}
+                aria-label={zh ? "安装技能" : "Install skill"}
+                rows={2}
+                onChange={(event) => setSkillImportText(event.target.value)}
+              />
+              <button
+                type="button"
+                className="skill-deck__mini-button skill-deck__mini-button--primary"
+                disabled={!skillImportText.trim()}
+                onClick={installCustomSkillFromPaste}
+              >
+                {zh ? "安装技能" : "Install skill"}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -14200,6 +14515,33 @@ export function App() {
             })}
           </div>
           <div className="header-actions">
+            <button
+              type="button"
+              className="header-actions__button"
+              aria-label={headerActionLabels[layout.composerLanguage].share}
+              title={headerActionLabels[layout.composerLanguage].share}
+              onClick={() => void handleShareSession()}
+            >
+              <ShareIcon size={14} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={`header-actions__button${activeView === "resources" ? " is-active" : ""}`}
+              aria-label={headerActionLabels[layout.composerLanguage].resources}
+              title={headerActionLabels[layout.composerLanguage].resources}
+              onClick={() => setActiveView("resources")}
+            >
+              <NavResourcesIcon size={14} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={`header-actions__button${activeView === "training" ? " is-active" : ""}`}
+              aria-label={headerActionLabels[layout.composerLanguage].training}
+              title={headerActionLabels[layout.composerLanguage].training}
+              onClick={() => setActiveView("training")}
+            >
+              <NavTrainingIcon size={14} aria-hidden="true" />
+            </button>
             {activeView === "coach" && displayConnectionState !== "connected" ? (
               <StatusPill tone={displayConnectionState}>
                 {connectionStateLabel(displayConnectionState, t)}
@@ -14562,12 +14904,22 @@ export function App() {
                   !event.metaKey &&
                   !event.ctrlKey
                 ) {
-                  event.preventDefault();
                   const selectedSkill = matchingLocalSkills[selectedCommandIndex];
-                  if (selectedSkill) {
-                    selectSkillSuggestion(selectedSkill);
+                  const typedTrigger = trainerSkillTriggerToken(normalizedDraft);
+                  const alreadyResolvedWithArgs =
+                    typedTrigger !== undefined &&
+                    normalizedDraft.length > typedTrigger.length &&
+                    selectedSkill?.trigger.toLowerCase() === typedTrigger.toLowerCase();
+                  if (!alreadyResolvedWithArgs) {
+                    event.preventDefault();
+                    if (selectedSkill) {
+                      selectSkillSuggestion(selectedSkill);
+                    }
+                    return;
                   }
-                  return;
+                  // "$skill args" already resolves to the highlighted skill —
+                  // fall through so Enter submits the turn instead of
+                  // pointlessly refilling the composer with the same text.
                 }
 
                 if (hasCommandDeck && event.key === "ArrowDown") {

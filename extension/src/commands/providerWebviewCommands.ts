@@ -47,7 +47,7 @@ import {
   resolveProviderHostLanguage,
   type ProviderHostCopyKey,
 } from './providerHostCopy';
-import { updateProviderThinking } from '../../../shared/src/providerThinking';
+import { normalizeProviderThinkingConfig, updateProviderThinking } from '../../../shared/src/providerThinking';
 import type { ProviderThinkingConfig } from '../../../shared/src/providerThinking';
 import { stripHostLastTestSecrets } from '../../../shared/src/hostLastTestGovernance';
 import { sanitizeErrorSurfaceText } from '../../../shared/src/errorSurfaceSanitizer';
@@ -75,6 +75,7 @@ type SaveProviderPayload = {
   responseLanguage?: ComposerLanguage;
   capabilities?: Partial<CapabilityFlags>;
   requestDefaults?: Record<string, unknown>;
+  thinkingConfig?: unknown;
 };
 
 type ProviderModelDiscoveryDraft = {
@@ -743,6 +744,9 @@ export async function saveProviderFromWebviewCommand(
     hasMaxOutputTokens: hasOwn(input, 'maxOutputTokens'),
   });
 
+  const requestDefaultsInput =
+    input.requestDefaults ?? (sameConnection ? existing?.requestDefaults ?? {} : {});
+
   const config: ProviderConfig = {
     name,
     label: name,
@@ -792,9 +796,19 @@ export async function saveProviderFromWebviewCommand(
         name,
         baseUrl,
         model,
+        capabilities,
+        modelCapabilities: sameConnection ? existing?.modelCapabilities?.[model] : undefined,
       },
-      input.requestDefaults ?? (sameConnection ? existing?.requestDefaults ?? {} : {}),
+      requestDefaultsInput,
     ),
+    // Explicit draft intent wins; wire fields in the edited defaults come next;
+    // only then does the stored intent carry over — and only on the same
+    // connection, so an unrelated save can't silently erase the choice while a
+    // different provider never inherits it.
+    thinkingConfig:
+      normalizeProviderThinkingConfig(input.thinkingConfig, resolvedProtocol) ??
+      normalizeProviderThinkingConfig(requestDefaultsInput, resolvedProtocol) ??
+      (sameConnection ? existing?.thinkingConfig : undefined),
   };
 
   const modelPolicy = evaluateProviderModelPolicy(config.model, config);
@@ -1074,9 +1088,12 @@ export async function openWorkspaceConfigCommand(
                   name: provider.name,
                   baseUrl: provider.baseUrl,
                   model: provider.model,
+                  capabilities: provider.capabilities,
+                  modelCapabilities: provider.modelCapabilities?.[provider.model],
                 },
                 provider.requestDefaults ?? {},
               ),
+              thinkingConfig: provider.thinkingConfig,
             }
           : {
               name: 'custom-openai-compatible',
@@ -1160,9 +1177,14 @@ export async function refreshProviderProfilesCommand(
         name: currentConfig?.name ?? currentView.name,
         baseUrl: currentConfig?.baseUrl ?? currentView.baseUrl,
         model: currentConfig?.model ?? currentView.model,
+        capabilities: currentConfig?.capabilities ?? currentView.capabilities,
+        modelCapabilities:
+          currentConfig?.modelCapabilities?.[currentConfig?.model ?? currentView.model] ??
+          currentView.modelCapabilities?.[currentConfig?.model ?? currentView.model],
       },
       currentConfig?.requestDefaults ?? currentView.requestDefaults ?? {},
     ),
+    thinkingConfig: currentConfig?.thinkingConfig ?? currentView.thinkingConfig,
     availableModels:
       Array.isArray(currentConfig?.availableModels)
         ? (currentConfig.availableModels as string[])
@@ -1286,6 +1308,10 @@ function normalizeProviderProfileEntry(
         name: asString(profile.label) ?? asString(profile.name),
         baseUrl: asString(profile.baseUrl),
         model: asString(profile.model),
+        capabilities: asRecord(profile.capabilities) as { thinking?: boolean } | undefined,
+        modelCapabilities: asRecord(asRecord(profile.modelCapabilities)?.[asString(profile.model) ?? '']) as
+          | { thinking?: boolean }
+          | undefined,
       },
       profile.requestDefaults ?? profile.request_defaults,
     ),
@@ -1407,8 +1433,17 @@ async function resolveDraftProviderModelLookup(
     deniedModels: asStringArray(input?.deniedModels),
     capabilities: draftCapabilities(protocol, input?.capabilities),
     requestDefaults: normalizeProviderRequestDefaults(
-      { name, baseUrl, model },
+      {
+        name,
+        baseUrl,
+        model,
+        capabilities: draftCapabilities(protocol, input?.capabilities),
+      },
       asRecord(input?.requestDefaults) ?? {},
+    ),
+    thinkingConfig: normalizeProviderThinkingConfig(
+      input?.thinkingConfig ?? input?.requestDefaults,
+      protocol,
     ),
   };
 
@@ -2394,7 +2429,14 @@ export async function setProviderThinkingCommand(
     thinking,
   );
 
-  const nextConfig: ProviderConfig = { ...config, requestDefaults: nextRequestDefaults };
+  const nextConfig: ProviderConfig = {
+    ...config,
+    requestDefaults: nextRequestDefaults,
+    // Persist the explicit intent, not the emitted projection — when the wire
+    // can't carry the choice yet (no capability evidence), the emitted defaults
+    // contain nothing to parse and the intent would be silently dropped.
+    thinkingConfig: normalizeProviderThinkingConfig(thinking, config.protocol),
+  };
   await context.providerStore.saveConfig(nextConfig);
 
   const apiKey = await context.providerStore.getApiKey();
@@ -2412,6 +2454,7 @@ export async function setProviderThinkingCommand(
     providerConfig: {
       ...nextViewState,
       requestDefaults: effectiveConfig.requestDefaults,
+      thinkingConfig: effectiveConfig.thinkingConfig,
       lastTestResult: storedLastTestResult(context, effectiveConfig),
     },
   });

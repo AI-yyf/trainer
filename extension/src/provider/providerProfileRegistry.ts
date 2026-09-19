@@ -1764,6 +1764,7 @@ export class ProviderProfileRegistry implements vscode.Disposable {
       modelTokenLimits: legacyConfig.modelTokenLimits,
       taskBindings: (legacyConfig.taskBindings as Record<string, ProviderTaskBinding>) ?? {},
       requestDefaults: legacyConfig.requestDefaults ?? {},
+      thinkingConfig: legacyConfig.thinkingConfig,
       capabilities: legacyConfig.capabilities,
     };
 

@@ -10,6 +10,7 @@ export * from "./providerGateway";
 export * from "./providerProtocols";
 export * from "./sendIntelligence";
 export * from "./skillCatalog";
+export * from "./coachDefaults";
 export * from "./sidebarCommands";
 export * from "./trainingCardCopy";
 export * from "./trainingExecutionGovernance";

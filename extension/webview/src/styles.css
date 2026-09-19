@@ -1285,6 +1285,34 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
   display: flex;
 }
 
+.header-actions__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.header-actions__button:hover {
+  color: var(--fg-0);
+  background: color-mix(in srgb, var(--fg-0) 5%, transparent);
+}
+
+.header-actions__button.is-active {
+  color: var(--fg-0);
+}
+
+.header-actions__button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
 .trainer-header .status-pill {
   padding: 0;
   border: 0;
@@ -20804,4 +20832,178 @@ details[open] > :not(summary) {
   flex-wrap: wrap;
   gap: 4px;
   padding-block-start: 4px;
+}
+
+.skill-deck__manage-toggle {
+  flex: none;
+  padding: 1px 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  cursor: pointer;
+}
+
+.skill-deck__manage-toggle:hover {
+  color: var(--fg-0);
+  background: color-mix(in srgb, var(--fg-0) 5%, transparent);
+}
+
+.skill-deck__manage-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
+.skill-deck__create-row {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px dashed color-mix(in srgb, var(--line) 55%, transparent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-deck__create-row:hover {
+  color: var(--fg-0);
+  border-color: color-mix(in srgb, var(--line) 75%, transparent);
+  background: color-mix(in srgb, var(--bg-2) 55%, transparent);
+}
+
+.skill-deck__manager {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skill-deck__manager-note {
+  margin: 0;
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.45;
+  color: var(--fg-muted);
+}
+
+.skill-deck__custom-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skill-deck__custom-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-2) 45%, transparent);
+}
+
+.skill-deck__custom-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-1);
+}
+
+.skill-deck__custom-label strong {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  flex: none;
+}
+
+.skill-deck__custom-label span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+}
+
+.skill-deck__form {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.skill-deck__form-row {
+  display: flex;
+  gap: 5px;
+}
+
+.skill-deck__input,
+.skill-deck__textarea {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-0) 65%, transparent);
+  color: var(--fg-0);
+  font-family: inherit;
+  font-size: var(--trainer-font-2xs);
+}
+
+.skill-deck__input--trigger {
+  width: 34%;
+  flex: none;
+  font-family: var(--font-mono);
+}
+
+.skill-deck__textarea {
+  resize: vertical;
+  min-height: 38px;
+  line-height: 1.4;
+}
+
+.skill-deck__input:focus-visible,
+.skill-deck__textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
+.skill-deck__mini-button {
+  align-self: flex-start;
+  padding: 2px 9px;
+  border: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-3xs);
+  cursor: pointer;
+}
+
+.skill-deck__mini-button:hover:not(:disabled) {
+  color: var(--fg-0);
+  background: color-mix(in srgb, var(--fg-0) 6%, transparent);
+}
+
+.skill-deck__mini-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.skill-deck__mini-button--primary {
+  border-color: color-mix(in srgb, var(--accent, var(--fg-0)) 35%, transparent);
+}
+
+.skill-deck__mini-button--danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.skill-deck__mini-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
 }

@@ -20,7 +20,7 @@ import { normalizeProviderRequestDefaults } from '../core/providerDefaults';
 import { mergeProviderRequestDefaults } from '../../../shared/src/providerRequestDefaults';
 import { defaultCapabilitiesForProtocol, normalizeProviderProtocol, OPENAI_COMPATIBLE_PROTOCOL } from '../../../shared/src/providerProtocols';
 import { normalizeProviderConnectionType } from '../../../shared/src/providerGateway';
-import { normalizeProviderThinkingConfig } from '../../../shared/src/providerThinking';
+import { normalizeProviderThinkingConfig, removeThinkingFields, updateProviderThinking } from '../../../shared/src/providerThinking';
 import {
   clearHostLastTest,
   selectHostLastTest,
@@ -902,6 +902,8 @@ export class ProviderConfigStore implements vscode.Disposable {
       ...(baseConfig?.capabilities ?? {}),
       ...this.readCapabilities(providerRecord.capabilities),
     };
+    const modelCapabilities =
+      this.readModelCapabilities(providerRecord.modelCapabilities, protocol) ?? fallback.modelCapabilities ?? {};
     const requestDefaults = normalizeProviderRequestDefaults(
       {
         name,
@@ -909,14 +911,14 @@ export class ProviderConfigStore implements vscode.Disposable {
         model,
         protocol,
         knownModels: this.readStringArray(providerRecord.availableModels) ?? fallback.availableModels,
+        capabilities,
+        modelCapabilities: model ? modelCapabilities[model] : undefined,
       },
       this.readRequestDefaults(providerRecord.requestDefaults) ??
       this.readRequestDefaults(providerRecord.request_defaults) ??
       fallback.requestDefaults ??
       {},
     );
-    const modelCapabilities =
-      this.readModelCapabilities(providerRecord.modelCapabilities, protocol) ?? fallback.modelCapabilities ?? {};
     const catalogModels = this.mergeCatalogModels(
       this.readStringArray(providerRecord.catalogModels),
       fallback.catalogModels ?? [],
@@ -947,6 +949,14 @@ export class ProviderConfigStore implements vscode.Disposable {
           : fallback.credentialMode,
       capabilities,
       requestDefaults,
+      thinkingConfig: normalizeProviderThinkingConfig(
+        providerRecord.thinkingConfig ??
+          providerRecord.thinking_config ??
+          this.readRequestDefaults(providerRecord.requestDefaults) ??
+          this.readRequestDefaults(providerRecord.request_defaults) ??
+          requestDefaults,
+        protocol,
+      ),
       modelCapabilities,
       catalogModels,
       modelTokenLimits:
@@ -991,6 +1001,8 @@ export class ProviderConfigStore implements vscode.Disposable {
           baseUrl: normalized.baseUrl,
           model: normalized.model,
           protocol: normalized.protocol,
+          capabilities: normalized.capabilities,
+          modelCapabilities: normalized.modelCapabilities?.[normalized.model],
         },
         this.readRequestDefaults(normalized.requestDefaults) ?? {},
       ),
@@ -1097,6 +1109,8 @@ export class ProviderConfigStore implements vscode.Disposable {
           model: profile.model,
           protocol: profile.protocol,
           knownModels: profile.availableModels,
+          capabilities: profile.capabilities,
+          modelCapabilities: profile.modelCapabilities?.[profile.model],
         },
         profile.requestDefaults,
       ),
@@ -1161,6 +1175,8 @@ export class ProviderConfigStore implements vscode.Disposable {
           model: normalized.model,
           protocol,
           knownModels: normalized.availableModels,
+          capabilities: normalized.capabilities,
+          modelCapabilities: normalized.modelCapabilities?.[normalized.model],
         },
         this.readRequestDefaults(normalized.requestDefaults) ?? {},
       ),
@@ -1219,23 +1235,58 @@ export class ProviderConfigStore implements vscode.Disposable {
       contextWindowTokens: effectiveContextWindowTokens,
       maxOutputTokens: effectiveMaxOutputTokens,
     });
+    const normalizedBaseUrl = this.normalizeBaseUrl(config.baseUrl);
+    const capabilities = {
+      ...defaultCapabilitiesForProtocol(protocol),
+      ...(fallback?.capabilities ?? {}),
+      ...config.capabilities,
+    };
+    const modelCapabilities = config.modelCapabilities ?? fallback?.modelCapabilities ?? {};
+    // thinkingConfig is the durable intent store. requestDefaults' thinking
+    // fields are re-materialized from it on every load/save — otherwise a
+    // normalize pass (which correctly strips them when capability evidence is
+    // absent) could never restore them, and the wire never sees the choice.
+    const thinkingConfig = normalizeProviderThinkingConfig(
+      config.thinkingConfig ?? config.requestDefaults ?? fallback?.thinkingConfig ?? fallback?.requestDefaults,
+      protocol,
+    );
+    const thinkingEvidence = this.thinkingEvidenceContext(
+      { ...config, profileId: fallback?.profileId ?? config.profileId },
+      model,
+      capabilities,
+      modelCapabilities,
+    );
+    // Fallback defaults merge forward, but thinking fields must not: they are
+    // derived exclusively from thinkingConfig (or the fresh requestDefaults
+    // intent). Merging stale wire fields would resurrect a cleared choice.
+    const fallbackRequestDefaults = this.readRequestDefaults(fallback?.requestDefaults) ?? {};
+    removeThinkingFields(fallbackRequestDefaults);
+    const normalizedRequestDefaults = normalizeProviderRequestDefaults(
+      {
+        name: config.name.trim(),
+        baseUrl: normalizedBaseUrl,
+        model,
+        protocol,
+        ...thinkingEvidence,
+      },
+      mergeProviderRequestDefaults(
+        fallbackRequestDefaults,
+        this.readRequestDefaults(config.requestDefaults) ?? {},
+      ),
+    );
     return {
       ...fallback,
       ...config,
       name: config.name.trim(),
       label: config.label?.trim() || fallback?.label || config.name.trim(),
-      baseUrl: this.normalizeBaseUrl(config.baseUrl),
+      baseUrl: normalizedBaseUrl,
       apiKeyRef: config.apiKeyRef.trim(),
       model,
       protocol,
       connectionType: normalizeProviderConnectionType(config.connectionType ?? fallback?.connectionType),
       contextWindowTokens: effectiveContextWindowTokens,
       maxOutputTokens: effectiveMaxOutputTokens,
-      capabilities: {
-        ...defaultCapabilitiesForProtocol(protocol),
-        ...(fallback?.capabilities ?? {}),
-        ...config.capabilities,
-      },
+      capabilities,
       profileId: fallback?.profileId ?? config.profileId,
       profileLabel: config.profileLabel?.trim() || fallback?.profileLabel || config.label?.trim() || config.name.trim(),
       profileMode: fallback?.profileMode ?? config.profileMode,
@@ -1243,23 +1294,49 @@ export class ProviderConfigStore implements vscode.Disposable {
       profileHistory: fallback?.profileHistory ?? config.profileHistory,
       providerProfiles: fallback?.providerProfiles ?? config.providerProfiles,
       modelTokenLimits: nextModelTokenLimits,
-      requestDefaults: normalizeProviderRequestDefaults(
-        {
-          name: config.name.trim(),
-          baseUrl: this.normalizeBaseUrl(config.baseUrl),
-          model,
-          protocol,
-        },
-        mergeProviderRequestDefaults(
-          this.readRequestDefaults(fallback?.requestDefaults) ?? {},
-          this.readRequestDefaults(config.requestDefaults) ?? {},
-        ),
-      ),
-      thinkingConfig: normalizeProviderThinkingConfig(
-        config.thinkingConfig ?? fallback?.thinkingConfig ?? config.requestDefaults ?? fallback?.requestDefaults,
-        protocol,
-      ),
-      modelCapabilities: config.modelCapabilities ?? fallback?.modelCapabilities ?? {},
+      requestDefaults: thinkingConfig
+        ? updateProviderThinking(
+            {
+              protocol,
+              model,
+              providerName: config.name.trim(),
+              baseUrl: normalizedBaseUrl,
+              ...thinkingEvidence,
+            },
+            normalizedRequestDefaults,
+            thinkingConfig,
+          )
+        : normalizedRequestDefaults,
+      thinkingConfig,
+      modelCapabilities,
+    };
+  }
+
+  private thinkingEvidenceContext(
+    config: ProviderConfig,
+    model: string,
+    capabilities: ProviderConfig['capabilities'],
+    modelCapabilities: ProviderConfig['modelCapabilities'],
+  ): {
+    capabilities?: { thinking?: boolean };
+    profileCapabilities?: { thinking?: boolean };
+    modelCapabilities?: { thinking?: boolean };
+    liveEvidence: boolean;
+  } {
+    const evidence = this.getLastTestResult(config)?.capabilityEvidence;
+    const liveEvidence = Array.isArray(evidence)
+      && evidence.some(
+        (entry) =>
+          typeof entry?.name === 'string'
+          && entry.name.trim().toLowerCase() === 'thinking'
+          && entry.state === 'verified'
+          && entry.observed === true,
+      );
+    return {
+      capabilities,
+      profileCapabilities: capabilities,
+      modelCapabilities: model ? modelCapabilities?.[model] : undefined,
+      liveEvidence,
     };
   }
 
@@ -1297,18 +1374,24 @@ export class ProviderConfigStore implements vscode.Disposable {
       allowedModels: nextConfig.allowedModels ?? currentProfile.allowedModels,
       deniedModels: nextConfig.deniedModels ?? currentProfile.deniedModels,
       taskBindings: this.normalizeTaskBindings(nextConfig.taskBindings) ?? currentProfile.taskBindings,
-      requestDefaults: normalizeProviderRequestDefaults(
-        {
-          name: nextConfig.profileLabel?.trim() || nextConfig.label?.trim() || nextConfig.name,
-          baseUrl: nextConfig.baseUrl,
-          model: nextConfig.model,
-          protocol: nextConfig.protocol,
-        },
-        mergeProviderRequestDefaults(
-          currentProfile.requestDefaults ?? {},
-          nextConfig.requestDefaults ?? {},
-        ),
-      ),
+      requestDefaults: (() => {
+        const profileDefaults = { ...(currentProfile.requestDefaults ?? {}) };
+        removeThinkingFields(profileDefaults);
+        return normalizeProviderRequestDefaults(
+          {
+            name: nextConfig.profileLabel?.trim() || nextConfig.label?.trim() || nextConfig.name,
+            baseUrl: nextConfig.baseUrl,
+            model: nextConfig.model,
+            protocol: nextConfig.protocol,
+            capabilities: nextConfig.capabilities,
+            modelCapabilities: nextConfig.modelCapabilities?.[nextConfig.model],
+          },
+          mergeProviderRequestDefaults(
+            profileDefaults,
+            nextConfig.requestDefaults ?? {},
+          ),
+        );
+      })(),
       thinkingConfig: normalizeProviderThinkingConfig(
         nextConfig.thinkingConfig ?? nextConfig.requestDefaults ?? currentProfile.thinkingConfig ?? currentProfile.requestDefaults,
         nextConfig.protocol,
@@ -1410,6 +1493,13 @@ export class ProviderConfigStore implements vscode.Disposable {
           baseUrl: baseUrl ?? '',
           model: model ?? '',
           protocol,
+          capabilities: {
+            ...defaultCapabilitiesForProtocol(protocol),
+            ...this.readCapabilities(record.capabilities),
+          },
+          modelCapabilities: model
+            ? this.readModelCapabilities(record.modelCapabilities, protocol)?.[model]
+            : undefined,
         },
         this.readRequestDefaults(record.requestDefaults) ?? {},
       ),
@@ -1480,6 +1570,7 @@ export class ProviderConfigStore implements vscode.Disposable {
       'jsonSchema',
       'structuredOutput',
       'streaming',
+      'thinking',
     ] as const) {
       if (typeof record[key] === 'boolean') {
         partial[key] = record[key];

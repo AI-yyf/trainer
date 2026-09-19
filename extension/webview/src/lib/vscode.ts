@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SUPPORTED_LANGUAGES } from "../../../../shared/src/types";
 import { stripProviderSnapshotSecrets } from "../../../../shared/src/hostLastTestGovernance";
+import { normalizeTrainerCustomSkills } from "../../../../shared/src/skillCatalog";
 
 import type {
   CoachDefaults,
@@ -81,6 +82,24 @@ const hostMessageSchema = z.discriminatedUnion("type", [
           error: z.string().nullable(),
         }),
       ),
+    }),
+  }),
+  z.object({
+    type: z.literal("session/list"),
+    payload: z.object({
+      ok: z.boolean(),
+      sessions: z.array(
+        z.object({
+          session_id: z.string(),
+          summary: z.string(),
+          message_count: z.number(),
+          updated_at: z.string().nullable().optional(),
+          is_active: z.boolean().optional(),
+          latest_user_message: z.string().optional(),
+          latest_assistant_message: z.string().optional(),
+        }),
+      ),
+      message: z.string().optional(),
     }),
   }),
   z.object({
@@ -395,6 +414,11 @@ function normalizePersistedState(state: PersistedWorkbenchState): PersistedWorkb
           state.coachDefaults?.workspaceMemoryToggles?.resources ??
           DEFAULT_COACH_DEFAULTS.workspaceMemoryToggles.resources,
       },
+      // Preserve absence so a stale persisted state never overwrites newer
+      // server-side skills with an empty list on the next turn payload.
+      ...(state.coachDefaults?.customSkills === undefined
+        ? {}
+        : { customSkills: normalizeTrainerCustomSkills(state.coachDefaults.customSkills) }),
     },
     composerDraft: state.composerDraft ?? "",
     previewProviderConfig: stripProviderSnapshotSecrets(state.previewProviderConfig),

@@ -2028,6 +2028,54 @@ class ProviderAgentBinding:
     def _should_default_compatibility_thinking(self) -> bool:
         return not _base_url_is_official_anthropic(self._base_url)
 
+    @staticmethod
+    def _thinking_record_enabled(value: Any) -> bool:
+        """A configured thinking record only counts as "on" when it says so —
+        an explicit {type: 'disabled'} marker must not block the disabled
+        injection it is itself producing."""
+        if not isinstance(value, dict):
+            return False
+        marker = value.get("type", value.get("mode"))
+        if isinstance(marker, str) and marker.strip().lower() == "enabled":
+            return True
+        if value.get("enabled") is True:
+            return True
+        budget = value.get("budget_tokens", value.get("budgetTokens"))
+        return isinstance(budget, int) and not isinstance(budget, bool) and budget > 0
+
+    @classmethod
+    def _configured_thinking_explicitly_on(cls, defaults: dict[str, Any]) -> bool:
+        """Detect a user-chosen thinking-ON intent in any supported wire shape —
+        flat reasoning effort, anthropic `thinking`, budgets, or gemini
+        generationConfig.thinkingConfig — so compatibility defaults never
+        contradict it with an injected disabled flag."""
+        effort = defaults.get("reasoning_effort", defaults.get("reasoningEffort"))
+        if isinstance(effort, str) and effort.strip().lower() not in {"", "auto"}:
+            return True
+        reasoning = defaults.get("reasoning")
+        if isinstance(reasoning, dict):
+            nested_effort = reasoning.get("effort")
+            if isinstance(nested_effort, str) and nested_effort.strip().lower() not in {"", "auto"}:
+                return True
+        if cls._thinking_record_enabled(defaults.get("thinking")):
+            return True
+        extra_body = defaults.get("extra_body")
+        if isinstance(extra_body, dict) and cls._thinking_record_enabled(extra_body.get("thinking")):
+            return True
+        budget = defaults.get("thinking_budget", defaults.get("thinkingBudget"))
+        if isinstance(budget, int) and not isinstance(budget, bool) and budget > 0:
+            return True
+        generation = defaults.get("generationConfig", defaults.get("generation_config"))
+        if isinstance(generation, dict):
+            gemini = generation.get("thinkingConfig", generation.get("thinking_config"))
+            if isinstance(gemini, dict):
+                if gemini.get("includeThoughts") is True or gemini.get("include_thoughts") is True:
+                    return True
+                gemini_budget = gemini.get("thinkingBudget", gemini.get("thinking_budget"))
+                if isinstance(gemini_budget, int) and not isinstance(gemini_budget, bool) and gemini_budget > 0:
+                    return True
+        return False
+
     def _apply_nonofficial_anthropic_thinking_default(
         self,
         payload: dict[str, Any],
@@ -2043,6 +2091,7 @@ class ProviderAgentBinding:
             or "thinking" in payload
             or (isinstance(configured_extra_body, dict) and "thinking" in configured_extra_body)
             or (isinstance(explicit_thinking_budget, int) and explicit_thinking_budget > 0)
+            or self._configured_thinking_explicitly_on(configured_defaults)
         ):
             return payload
         return {**payload, "thinking": {"type": "disabled"}}
@@ -2052,9 +2101,13 @@ class ProviderAgentBinding:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         existing_extra_body = payload.get("extra_body")
-        configured_extra_body = self._request_defaults().get("extra_body")
+        configured_defaults = self._request_defaults()
+        configured_extra_body = configured_defaults.get("extra_body")
+        # An explicit thinking-on choice in any wire shape means the user
+        # turned thinking on — injecting a disabled flag would contradict it.
         if (
             not self._should_default_compatibility_thinking()
+            or self._configured_thinking_explicitly_on(configured_defaults)
             or (isinstance(existing_extra_body, dict) and "thinking" in existing_extra_body)
             or (isinstance(configured_extra_body, dict) and "thinking" in configured_extra_body)
         ):
@@ -2185,6 +2238,21 @@ class ProviderAgentBinding:
             merged["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
         elif not explicit_wire_thinking and isinstance(thinking_budget, str) and thinking_budget.strip().lower() == "disabled":
             merged.pop("thinking", None)
+        merged_thinking = merged.get("thinking")
+        if isinstance(merged_thinking, dict) and merged_thinking.get("type") == "enabled":
+            budget_tokens = merged_thinking.get("budget_tokens")
+            merged_max_tokens = merged.get("max_tokens")
+            if (
+                isinstance(budget_tokens, int)
+                and not isinstance(budget_tokens, bool)
+                and isinstance(merged_max_tokens, int)
+                and not isinstance(merged_max_tokens, bool)
+                and merged_max_tokens <= budget_tokens
+            ):
+                # Anthropic requires max_tokens > budget_tokens; a saved cap at
+                # or below the thinking budget would 400 every request, so lift
+                # the cap rather than drop the user's explicit choice.
+                merged["max_tokens"] = budget_tokens + 1024
         return self._flatten_raw_http_thinking(merged)
 
     def _apply_gemini_request_defaults(self, payload: dict[str, Any]) -> dict[str, Any]:

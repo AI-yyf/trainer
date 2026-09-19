@@ -498,9 +498,14 @@ test('Composer candidate decks keep Codex-style draft ownership and keyboard dis
     styles,
     /\.composer__accessory :is\(\.command-deck__header, \.skill-deck__header, \.skill-deck__empty\)\s*\{[\s\S]*?display:\s*none/,
   );
-  assert.match(source, /const selectSkillSuggestion = \(skill: LocalSkillSuggestion\) => \{[\s\S]*?setComposerDraft\(`\$\{skill\.trigger\} `\)/);
+  // Autocomplete owns the draft: it swaps only the typed $token for the chosen
+  // trigger and preserves any arguments the user already typed after it.
+  assert.match(
+    source,
+    /const selectSkillSuggestion = \(skill: LocalSkillSuggestion\) => \{[\s\S]*?normalizedDraft\.slice\(triggerToken\.length\)[\s\S]*?setComposerDraft\(remainder \? `\$\{skill\.trigger\} \$\{remainder\}` : `\$\{skill\.trigger\} `\)/,
+  );
   assert.doesNotMatch(source, /skill\.run\(\)/);
-  assert.match(source, /trainerSkillCatalog\.find\(\(skill\) =>/);
+  assert.match(source, /availableSkillCatalog\.find\(\(skill\) =>/);
   assert.match(source, /if \(submittedSkill\) \{/);
   assert.match(source, /submittedSkill\.commandId === trainerCommands\.sendStreamMessage/);
   const submittedSkillDispatch = source.slice(

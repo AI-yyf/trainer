@@ -2888,3 +2888,152 @@ test('testProviderCommand refuses to reuse a saved key for a different draft end
   assert.equal(context.__patches.length, 0);
   assert.match(result.message ?? '', /did not reuse the saved key/i);
 });
+
+function createThinkingConfigureContext(existingConfig) {
+  const context = createContext();
+  const savedConfigs = [];
+  context.providerStore = {
+    getConfig() {
+      return existingConfig;
+    },
+    async saveConfig(config) {
+      savedConfigs.push(config);
+    },
+    async getApiKey() {
+      return 'sk-test';
+    },
+    getLastTestResult() {
+      return undefined;
+    },
+  };
+  context.__savedConfigs = savedConfigs;
+  return context;
+}
+
+function thinkingConfigureVscodeMock(baseUrl) {
+  return {
+    window: {
+      async showInputBox(options) {
+        if (options.title === 'Provider name') return 'Local Compatible';
+        if (options.title === 'Base URL') return baseUrl;
+        if (options.title === 'Chat model') return 'demo-model';
+        if (options.title === 'API key (leave blank to keep current or store none)') return '';
+        return '';
+      },
+      async showQuickPick(items) {
+        return items.filter((item) => item.picked);
+      },
+      async showInformationMessage() {},
+      async showWarningMessage() {},
+      async showErrorMessage() {},
+    },
+  };
+}
+
+function thinkingExistingConfig(overrides = {}) {
+  return {
+    name: 'Local Compatible',
+    baseUrl: 'http://localhost:1234/v1',
+    model: 'demo-model',
+    protocol: 'openai_chat_completions_compatible',
+    apiKeyRef: 'trainer.default',
+    capabilities: {
+      chat: true,
+      responses: true,
+      vision: false,
+      embeddings: false,
+      tools: false,
+      jsonSchema: false,
+      structuredOutput: false,
+      streaming: true,
+      thinking: true,
+    },
+    modelCapabilities: {
+      'demo-model': {
+        chat: true,
+        responses: true,
+        vision: false,
+        embeddings: false,
+        tools: false,
+        jsonSchema: false,
+        structuredOutput: false,
+        streaming: true,
+        thinking: true,
+      },
+    },
+    requestDefaults: { reasoning_effort: 'high' },
+    thinkingConfig: { mode: 'enabled', reasoningEffort: 'high' },
+    ...overrides,
+  };
+}
+
+test('configureProviderCommand preserves thinking intent on a same-connection reconfigure', async () => {
+  const { configureProviderCommand } = loadWithVscodeMock(
+    providerCommandsModulePath,
+    thinkingConfigureVscodeMock('http://localhost:1234/v1'),
+  );
+  const context = createThinkingConfigureContext(thinkingExistingConfig());
+
+  const result = await configureProviderCommand(context);
+
+  assert.equal(result.ok, true);
+  const saved = context.__savedConfigs[0];
+  assert.deepEqual(saved.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
+  // Same connection + same model: capability evidence still applies, so the
+  // intent re-emits onto the wire defaults.
+  assert.equal(saved.requestDefaults.reasoning_effort, 'high');
+});
+
+test('configureProviderCommand drops thinking intent and stale wire fields on a different connection', async () => {
+  const { configureProviderCommand } = loadWithVscodeMock(
+    providerCommandsModulePath,
+    thinkingConfigureVscodeMock('https://other.example/v1'),
+  );
+  const context = createThinkingConfigureContext(thinkingExistingConfig());
+
+  const result = await configureProviderCommand(context);
+
+  assert.equal(result.ok, true);
+  const saved = context.__savedConfigs[0];
+  assert.equal(saved.thinkingConfig, undefined);
+  assert.equal(saved.requestDefaults.reasoning_effort, undefined);
+});
+
+test('createProviderProfileFromDraftCommand threads the draft thinkingConfig into the profile', async () => {
+  const { createProviderProfileFromDraftCommand } = loadWithVscodeMock(providerCommandsModulePath, {});
+  let createdConfigArg;
+  const context = createContext();
+  context.providerStore = {
+    getResolvedConfig() {
+      return undefined;
+    },
+    getConfig() {
+      return undefined;
+    },
+    async getApiKey() {
+      return undefined;
+    },
+    async createProfileFromConfig(config) {
+      createdConfigArg = config;
+      return { ...config, profileId: 'draft-profile' };
+    },
+    getLastTestResult() {
+      return undefined;
+    },
+  };
+
+  const result = await createProviderProfileFromDraftCommand(context, {
+    name: 'Draft Provider',
+    protocol: 'openai_chat_completions_compatible',
+    baseUrl: 'https://draft.example/v1',
+    model: 'draft-model',
+    requestDefaults: {},
+    thinkingConfig: { mode: 'enabled', reasoningEffort: 'medium' },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(createdConfigArg.thinkingConfig, {
+    mode: 'enabled',
+    reasoningEffort: 'medium',
+  });
+});
