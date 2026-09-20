@@ -149,12 +149,10 @@ import {
   blockedComposerPresenceMessage,
   blockedComposerSetupMessage,
   providerCoachBanner,
-  providerHasVerifiedStreamingProbe,
   providerRecoveryLocale,
   providerRecoverySummary,
   providerRecoveryStatusLabel,
   providerSetupSummary,
-  streamingCapabilityBlockReason,
 } from "./providerRecoveryCopy";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
 import {
@@ -172,6 +170,8 @@ import { CoachComposer, ComposerIconButton } from "../components/composer";
 import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
 import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
 import {
+  type LibraryItemData,
+  type LibraryOverviewData,
   type ResourceSearchRequest,
 } from "../components/resources/ResourcesWorkbenchView";
 import {
@@ -184,19 +184,20 @@ import {
 } from "../components/training/TrainingWorkbenchView";
 import {
   CheckMarkIcon,
-  BrainIcon,
   ChevronRightIcon,
   ContextLayersIcon,
   FolderIcon,
   HistoryIcon,
   LinkIcon,
   NavCoachIcon,
+  ModelSwitchIcon,
   NavPlanIcon,
   NavResourcesIcon,
   NavTrainingIcon,
   RefreshIcon,
   ResourcesIcon,
   SettingsIcon,
+  SparklesIcon,
   UploadIcon,
   WarningIcon,
 } from "../components/icons";
@@ -2905,13 +2906,32 @@ function providerBlockingReason(
   connectionState?: "starting" | "connected" | "offline",
 ): string | undefined {
   const sendState = describeProviderSendState(provider, language);
-  if (connectionState === "offline" || connectionState === "starting" || sendState.blocked) {
+  if (connectionState === "offline" || connectionState === "starting") {
     return providerRecoverySummary(provider, language, connectionState).detail;
   }
-  if (provider.configured && provider.apiKeyConfigured && !providerHasVerifiedStreamingProbe(provider)) {
-    return streamingCapabilityBlockReason(language);
+  if (sendState.blocked && !providerProofCanBeRevalidatedBySend(provider, language, connectionState)) {
+    return providerRecoverySummary(provider, language, connectionState).detail;
   }
   return undefined;
+}
+
+function providerProofCanBeRevalidatedBySend(
+  provider: ProviderConfigView,
+  language: ComposerLanguage,
+  connectionState?: "starting" | "connected" | "offline",
+): boolean {
+  const sendState = describeProviderSendState(provider, language);
+  if (!sendState.blocked || sendState.status !== "blocked_error" || connectionState !== "connected") {
+    return false;
+  }
+  if (!provider.configured || !provider.apiKeyConfigured || provider.modelListStatus === "error") {
+    return false;
+  }
+  const declaredProtocol = provider.protocol?.trim();
+  if (declaredProtocol && !normalizeProviderProtocol(declaredProtocol)) {
+    return false;
+  }
+  return provider.lastTestResult === undefined || provider.lastTestResult.ok === true;
 }
 
 function reviewSurfaceModeLabel(
@@ -3301,7 +3321,7 @@ function sendContextSummary(
     );
   }
 
-  return parts.length > 0 ? parts.join(" · ") : t.noContext;
+  return parts.join(" · ");
 }
 
 function sendContextShortSummary(
@@ -3324,7 +3344,7 @@ function sendContextShortSummary(
   ].filter((value): value is string => Boolean(value));
 
   if (activeLabels.length === 0) {
-    return t.noContext;
+    return "";
   }
   if (activeLabels.length >= 3) {
     return layout.composerLanguage === "zh-CN" ? "当前代码线索" : "current code context";
@@ -4149,6 +4169,13 @@ export function App() {
   }, []);
   const [composerModelQuery, setComposerModelQuery] = useState("");
   const [coachSessions, setCoachSessions] = useState<CoachSessionSummary[]>([]);
+  const [libraryOverview, setLibraryOverview] = useState<LibraryOverviewData | null>(null);
+  const [libraryStatus, setLibraryStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [libraryPendingMutation, setLibraryPendingMutation] = useState<{
+    requestId: string;
+    type: "card" | "plan" | "session";
+    id: string;
+  }>();
   const [coachSessionsStatus, setCoachSessionsStatus] = useState<
     "idle" | "loading" | "ready" | "error"
   >("idle");
@@ -4237,6 +4264,23 @@ export function App() {
     },
     [layout.composerLanguage, setRawOperationMessage],
   );
+  const recoverProviderOrRuntime = useCallback(() => {
+    if (data.connection.state === "offline" && !isBrowserPreview) {
+      setOperationMessage({
+        tone: "info",
+        message:
+          layout.composerLanguage === "zh-CN"
+            ? "正在重新启动 Trainer，本次无需重新测试模型连接。"
+            : "Restarting Trainer; the saved model connection does not need to be tested again.",
+      });
+      postMessage({
+        type: "command/execute",
+        payload: { commandId: trainerCommands.restartSidecar },
+      });
+      return;
+    }
+    openProviderSetup();
+  }, [data.connection.state, isBrowserPreview, layout.composerLanguage, openProviderSetup, setOperationMessage]);
   const handleResourceSelectionChange = useCallback(
     (resourceIds: string[], reason?: "selection" | "unmount") => {
       setSelectedResourceContextIds(resourceIds);
@@ -4758,6 +4802,42 @@ export function App() {
         setCoachSessionsMessage(message.payload.message);
         return;
       }
+      if (message.type === "library/overview") {
+        setLibraryOverview(message.payload.ok ? message.payload.overview : null);
+        setLibraryStatus(message.payload.ok ? "ready" : "error");
+        return;
+      }
+      if (message.type === "library/mutation") {
+        const mutation = message.payload.mutation;
+        setLibraryPendingMutation((pending) => {
+          if (pending && mutation?.requestId && pending.requestId !== mutation.requestId) {
+            return pending;
+          }
+          return undefined;
+        });
+        if (message.payload.ok && mutation?.deleted && mutation.type && mutation.id) {
+          setLibraryOverview((current) => {
+            if (!current) {
+              return current;
+            }
+            const key = mutation.type === "card" ? "cards" : mutation.type === "plan" ? "plans" : "sessions";
+            return {
+              ...current,
+              [key]: current[key].filter((item) => item.id !== mutation.id),
+              activity: mutation.activity
+                ? [
+                    mutation.activity,
+                    ...(current.activity ?? []).filter(
+                      (item) => item.eventId !== mutation.activity?.eventId,
+                    ),
+                  ]
+                : current.activity,
+            };
+          });
+          setLibraryStatus("ready");
+        }
+        return;
+      }
       if (message.type === "operation/status" && message.payload.message.includes("Learning feedback recorded")) {
         setUserFeedbackState((current) => current.busy ? { busy: false, submittedKind: userFeedbackPendingKindRef.current } : current);
         return;
@@ -4889,7 +4969,7 @@ export function App() {
   }, [setActiveView, trainerWorkspaceAdmission?.status]);
   const defaultCoachDefaults = useMemo(
     () => ({
-      memoryScope: "project" as const,
+      memoryScope: "personal" as const,
       workingSetMode: "balanced" as const,
       reviewCadence: "steady" as const,
       reviewReminderMode: "due" as const,
@@ -5111,6 +5191,11 @@ export function App() {
     [data.providerConfig, scopedProviderLastTest, layout.composerLanguage, providerTestClock],
   );
   const providerTransportConnected = data.connection.state === "connected";
+  const providerProofMayRevalidateOnSend = providerProofCanBeRevalidatedBySend(
+    { ...data.providerConfig, lastTestResult: scopedProviderLastTest },
+    layout.composerLanguage,
+    data.connection.state,
+  );
   const capabilityVerdict = useMemo(
     () => deriveTrainerCapabilityVerdict({
       connectionState: data.connection.state,
@@ -5141,7 +5226,8 @@ export function App() {
       providerImageInputState.supported,
     ],
   );
-  const providerCanCoachNow = providerTransportConnected && !providerSendState.blocked;
+  const providerCanCoachNow =
+    providerTransportConnected && (!providerSendState.blocked || providerProofMayRevalidateOnSend);
   const providerSupportsFormalPlanTools = providerHasVerifiedToolsProbe({
     lastTestResult: scopedProviderLastTest,
   });
@@ -5173,8 +5259,13 @@ export function App() {
     return messages[layout.composerLanguage];
   }, [layout.composerLanguage]);
   const providerBlockReason = useMemo(
-    () => providerBlockingReason(data.providerConfig, layout.composerLanguage, data.connection.state),
-    [data.connection.state, data.providerConfig, layout.composerLanguage],
+    () =>
+      providerBlockingReason(
+        { ...data.providerConfig, lastTestResult: scopedProviderLastTest },
+        layout.composerLanguage,
+        data.connection.state,
+      ),
+    [data.connection.state, data.providerConfig, layout.composerLanguage, scopedProviderLastTest],
   );
   const blockedComposerGuidance = useMemo(
     () =>
@@ -5930,8 +6021,8 @@ export function App() {
   }, [layout.composerLanguage, operationMessage, settingsActionState]);
 
   useEffect(() => {
-    applyWorkbenchTheme(resolvedTheme);
-  }, [resolvedTheme]);
+    applyWorkbenchTheme(resolvedTheme, layout.themePreference === "system");
+  }, [resolvedTheme, layout.themePreference]);
 
   // The host-message dispatch changes identity whenever layout values or
   // settings action state change. Keep the subscription and the one-shot
@@ -9039,12 +9130,18 @@ export function App() {
   }, [dismissedComposerDeck, normalizedDraft, selectedCommandIndex]);
 
   const visibleWarnings = useMemo(
-    () => sendAnalysis.warnings.filter((warning) => warning.id !== "diagnostics-enabled-without-signals"),
+    () =>
+      sendAnalysis.warnings.filter(
+        (warning) =>
+          warning.id !== "diagnostics-enabled-without-signals" &&
+          warning.id !== "selection-available-but-disabled" &&
+          warning.id !== "related-available-but-disabled",
+      ),
     [sendAnalysis.warnings],
   );
   const sendBlocked =
     workspaceSessionBlocked || !providerCanCoachNow || Boolean(providerBlockReason);
-  const capabilitySendBlocked = !capabilityVerdict.chat;
+  const capabilitySendBlocked = !capabilityVerdict.chat && !providerProofMayRevalidateOnSend;
   const handleGenerateTrainingCard = useCallback(
     (focusArea?: string) => {
       if (workspaceSessionBlocked) {
@@ -9619,37 +9716,6 @@ export function App() {
     }, COACH_SETTINGS_AUTOSAVE_DELAY_MS);
   }, []);
 
-  const handleShareSession = useCallback(async () => {
-    const zh = layout.composerLanguage === "zh-CN";
-    const lines = data.conversation
-      .filter((message) => message.body?.trim())
-      .map((message) => {
-        const role =
-          message.role === "user" ? (zh ? "我" : "Me") : zh ? "教练" : "Coach";
-        return `**${role}**: ${message.body.trim()}`;
-      });
-    if (!lines.length) {
-      setOperationMessage({
-        tone: "info",
-        message: zh ? "还没有会话内容可以分享。" : "Nothing to share yet.",
-      });
-      return;
-    }
-    const title = zh ? "Trainer 会话" : "Trainer session";
-    const text = `# ${title}\n\n${lines.join("\n\n")}`;
-    try {
-      await navigator.clipboard.writeText(text);
-      setOperationMessage({
-        tone: "success",
-        message: zh ? "会话摘要已复制到剪贴板。" : "Session summary copied to clipboard.",
-      });
-    } catch {
-      setOperationMessage({
-        tone: "error",
-        message: zh ? "复制失败，请重试。" : "Copy failed. Try again.",
-      });
-    }
-  }, [data.conversation, layout.composerLanguage, setOperationMessage]);
   useEffect(
     () => () => {
       if (coachSettingsAutosaveTimerRef.current !== null) {
@@ -10270,6 +10336,69 @@ export function App() {
     previewSessionId,
     setOperationMessage,
   ]);
+
+  const requestLibraryOverview = useCallback(() => {
+    if (isBrowserPreview) {
+      setLibraryOverview({
+        sessions: [
+          {
+            id: previewSessionId || "preview-session",
+            title: layout.composerLanguage === "zh-CN" ? "当前会话" : "Current conversation",
+            messageCount: data.conversation.length,
+            isActive: true,
+          },
+        ],
+        plans: data.plan?.id
+          ? [
+              {
+                id: String(data.plan.id),
+                title: data.plan.title || (layout.composerLanguage === "zh-CN" ? "学习计划" : "Learning plan"),
+                frozen: data.plan.frozen,
+              },
+            ]
+          : [],
+        cards: [],
+        resources: liveResources.slice(0, 8).map((item) => ({ id: item.id, title: item.title })),
+        activity: [],
+      });
+      setLibraryStatus("ready");
+      return;
+    }
+    setLibraryStatus("loading");
+    postMessage({
+      type: "command/execute",
+      payload: { commandId: trainerCommands.libraryOverview },
+    });
+  }, [data.conversation.length, data.plan, isBrowserPreview, layout.composerLanguage, liveResources, previewSessionId]);
+
+  const deleteLibraryItem = useCallback(
+    (itemType: "card" | "plan" | "session", itemId: string) => {
+      const trimmed = itemId.trim();
+      if (!trimmed || libraryPendingMutation) {
+        return;
+      }
+      const requestId = `library-mutation-${Date.now().toString(36)}-${itemType}-${trimmed}`;
+      if (isBrowserPreview) {
+        setLibraryOverview((current: LibraryOverviewData | null) => {
+          if (!current) {
+            return current;
+          }
+          const key = itemType === "card" ? "cards" : itemType === "plan" ? "plans" : "sessions";
+          return { ...current, [key]: current[key].filter((item: LibraryItemData) => item.id !== trimmed) };
+        });
+        return;
+      }
+      setLibraryPendingMutation({ requestId, type: itemType, id: trimmed });
+      postMessage({
+        type: "command/execute",
+        payload: {
+          commandId: trainerCommands.libraryDelete,
+          payload: { type: itemType, id: trimmed, requestId },
+        },
+      });
+    },
+    [isBrowserPreview, libraryPendingMutation],
+  );
 
   const requestCoachSessions = useCallback(() => {
     setCoachSessionsStatus("loading");
@@ -12165,10 +12294,23 @@ export function App() {
                 }}
                 onClick={() => selectSkillSuggestion(skill)}
               >
-                <span className="skill-deck__trigger">{skill.trigger}</span>
+                <span className="skill-deck__icon" aria-hidden="true">
+                  <SparklesIcon size={16} />
+                </span>
                 <span className="skill-deck__body">
-                  <strong>{resolveTrainerSkillText(skill.title, layout.composerLanguage)}</strong>
-                  <span>{resolveTrainerSkillText(skill.detail, layout.composerLanguage)}</span>
+                  <span className="skill-deck__headline">
+                    <strong>{resolveTrainerSkillText(skill.title, layout.composerLanguage)}</strong>
+                    <span className="skill-deck__trigger">{skill.trigger}</span>
+                  </span>
+                  <span className="skill-deck__description">
+                    <span className="skill-deck__source">
+                      {skill.source
+                        ? zh ? "社区" : "Community"
+                        : zh ? "Trainer 内置" : "Built in"}
+                    </span>
+                    <span aria-hidden="true"> · </span>
+                    {resolveTrainerSkillText(skill.detail, layout.composerLanguage)}
+                  </span>
                 </span>
                 <span className="skill-deck__section">
                   {trainerSkillSectionLabel(skill.section, layout.composerLanguage)}
@@ -12177,6 +12319,10 @@ export function App() {
             ))}
           </div>
         )}
+        <div className="skill-deck__footer-hint">
+          <span aria-hidden="true">ⓘ</span>
+          <span>{zh ? "输入内容可搜索技能，↑↓ 选择，Enter 使用" : "Type to search skills, use arrows to choose, Enter to apply"}</span>
+        </div>
         {creatableTrigger && !skillManagerOpen ? (
           <button
             type="button"
@@ -12588,7 +12734,13 @@ export function App() {
       // Scenario-aware, localized setup copy (first-run "连接模型", missing key,
       // backend starting, …) instead of a single error-flavoured sentence.
       const setupTitle = providerSetupState.title;
-      const setupDetail = providerSetupState.detail;
+      // A hard provider failure must name the actual reason (e.g. bad key) —
+      // the generic "needs attention" detail alone reads like a false alarm.
+      const blockedSendReason =
+        providerSendState.status === "blocked_error" || providerSendState.status === "degraded_error"
+          ? providerSendState.reason
+          : undefined;
+      const setupDetail = blockedSendReason ?? providerSetupState.detail;
       const setupActionLabel =
         providerSetupState.actionLabel ||
         (layout.composerLanguage === "zh-CN" ? "检查连接" : providerSetupAction.primary.label);
@@ -12610,7 +12762,9 @@ export function App() {
         </div>
       );
     }
-    if (isFirstCoachConversation && providerCanCoachNow && displayConnectionState === "connected") {
+    // Any empty coach thread gets the neutral one-line invitation — a returning
+    // workspace with durable context must not fall back to a blank canvas.
+    if (providerCanCoachNow && displayConnectionState === "connected") {
       return (
         <div className="coach-empty-state coach-empty-state--welcome">
           <p>
@@ -12955,7 +13109,7 @@ export function App() {
             <button
               className="button button--ghost coach-workspace-admission__provider-action"
               type="button"
-              onClick={openProviderSetup}
+              onClick={recoverProviderOrRuntime}
             >
               <span>{providerSetupState.actionLabel}</span>
               <strong>{providerCoachNotice.message}</strong>
@@ -12966,7 +13120,7 @@ export function App() {
         <button
           type="button"
           className={`coach-inline-notice coach-inline-notice--${providerCoachNotice.tone}`}
-          onClick={() => openProviderSetup()}
+          onClick={recoverProviderOrRuntime}
         >
           <span className="coach-inline-notice__text">{providerCoachNotice.message}</span>
           <ChevronRightIcon size={12} aria-hidden="true" />
@@ -13353,6 +13507,11 @@ export function App() {
           sandboxState={liveSandboxState}
           sandboxPreview={leftoverSandboxPreviewNotLive ? undefined : data.memory.sandboxPreview}
           resourceWriteAccess={resourceWriteAccess}
+          libraryOverview={libraryOverview}
+          libraryStatus={libraryStatus}
+          libraryPendingDeleteId={libraryPendingMutation?.id}
+          onLibraryRefresh={requestLibraryOverview}
+          onLibraryDelete={deleteLibraryItem}
           onChooseWorkspaceRoot={
             trainerWorkspaceAdmission?.status === "root-missing"
               ? () => runWorkspaceAdmissionCommand(trainerCommands.chooseTrainerWorkspaceRoot)
@@ -13448,8 +13607,7 @@ export function App() {
                     payload: {
                       commandId: trainerCommands.indexResources,
                     },
-                  })
-              : requestResourceIndex
+                  })              : requestResourceIndex
           }
           onRefreshDeletedResources={
             isBrowserPreview
@@ -14253,7 +14411,6 @@ export function App() {
         onIncludeSelectionChange={autosaving(setIncludeSelection)}
         onIncludeDiagnosticsChange={autosaving(setIncludeDiagnostics)}
         onIncludeRelatedFilesChange={autosaving(setIncludeRelatedFiles)}
-        onSaveCoachSettings={() => persistCoachSettings()}
         onGrantMemoryShare={
           isBrowserPreview
             ? undefined
@@ -14275,7 +14432,7 @@ export function App() {
                   },
                 })
         }
-        personalAccountTrusted={data.memory.workspace?.personalAccountTrusted === true}
+        personalAccountTrusted={data.memory.crossWorkspaceMemory !== "isolated"}
         onSetPersonalAccountTrust={
           isBrowserPreview
             ? undefined
@@ -14640,8 +14797,6 @@ export function App() {
                 : "Coach defaults restored.",
           });
         }}
-        onNavigateToView={setActiveView}
-        onShareSession={handleShareSession}
         />
       </Suspense>
       {renderContextualResultRail("settings")}
@@ -15032,7 +15187,7 @@ export function App() {
                 {
                   id: "model-switch",
                   compact: composerModelActionDensity === "compact",
-                  icon: <BrainIcon size={16} />,
+                  icon: <ModelSwitchIcon size={16} />,
                   label: composerModelButtonDisplayLabel,
                   tone: "ghost" as const,
                   title: composerModelButtonTitle,
@@ -15184,8 +15339,13 @@ export function App() {
               leadingActions={[
                 {
                   id: "context",
-                  label: t.currentContext,
+                  label: layout.composerLanguage === "zh-CN" ? "上下文" : "Context",
                   icon: <ContextLayersIcon size={16} />,
+                  description:
+                    layout.composerLanguage === "zh-CN"
+                      ? "按需选择文件、选区或相关代码；不选也能直接发送。"
+                      : "Optionally add a file, selection, or related code.",
+                  section: layout.composerLanguage === "zh-CN" ? "添加" : "Add",
                   active: openMenu === "context",
                   onClick: () => setOpenMenu(openMenu === "context" ? undefined : "context"),
                 },
@@ -15194,14 +15354,56 @@ export function App() {
                   : [
                       {
                         id: "resources",
-                        label: t.resourcesMenu,
+                        label: layout.composerLanguage === "zh-CN" ? "附件与资料" : "Attachments and resources",
                         icon: <ResourcesIcon size={16} />,
+                        description:
+                          layout.composerLanguage === "zh-CN"
+                            ? "从资料库选择内容，或导入新的学习材料。"
+                            : "Choose from the library or import learning material.",
+                        section: layout.composerLanguage === "zh-CN" ? "添加" : "Add",
                         active: openMenu === "resources",
                         onClick: () => {
                           setOpenMenu(openMenu === "resources" ? undefined : "resources");
                         },
                       },
                     ]),
+                {
+                  id: "goal",
+                  label: layout.composerLanguage === "zh-CN" ? "目标" : "Goal",
+                  icon: <NavPlanIcon size={16} />,
+                  description:
+                    layout.composerLanguage === "zh-CN"
+                      ? "打开学习计划，把这一轮对话绑定到明确目标。"
+                      : "Open the learning plan and bind this turn to a goal.",
+                  section: layout.composerLanguage === "zh-CN" ? "添加" : "Add",
+                  onClick: () => setActiveView("plan"),
+                },
+                {
+                  id: "workflow",
+                  label: layout.composerLanguage === "zh-CN" ? "训练工作流" : "Training workflow",
+                  icon: <NavTrainingIcon size={16} />,
+                  description:
+                    layout.composerLanguage === "zh-CN"
+                      ? "进入训练卡、复习与验证闭环。"
+                      : "Open cards, reviews, and verification loops.",
+                  section: layout.composerLanguage === "zh-CN" ? "添加" : "Add",
+                  onClick: () => setActiveView("training"),
+                },
+                {
+                  id: "skills",
+                  label: layout.composerLanguage === "zh-CN" ? "技能" : "Skills",
+                  icon: <SparklesIcon size={16} />,
+                  description:
+                    layout.composerLanguage === "zh-CN"
+                      ? "展开技能目录，并按名称或说明快速筛选。"
+                      : "Open the skill directory and filter by name or description.",
+                  section: layout.composerLanguage === "zh-CN" ? "技能" : "Skills",
+                  onClick: () => {
+                    setComposerDraft("$");
+                    setDismissedComposerDeck(undefined);
+                    window.requestAnimationFrame(focusComposerInput);
+                  },
+                },
                 ...(showComposerTrainingVerify
                   ? [
                       {

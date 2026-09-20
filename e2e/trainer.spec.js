@@ -100,7 +100,6 @@ const TRAINING_COPY = {
 };
 
 const TRAINING_LOOP_KEYS = ["learn", "try", "verify", "reflect", "return"];
-const TRAINING_CARD_FACTS = ["current", "why-now", "deliverable", "verify", "return"];
 
 function viewNavigationTestId(view) {
   return `trainer-view-nav-${view}`;
@@ -200,12 +199,18 @@ function collectPreviewCommands(page) {
 
 async function revealTrainingCardDetails(card) {
   const more = card.locator("details.training-current__more").first();
-  if ((await more.count()) === 0) {
-    return;
+  if ((await more.count()) > 0) {
+    const isOpen = await more.evaluate((node) => node instanceof HTMLDetailsElement && node.open);
+    if (!isOpen) {
+      await more.locator(":scope > summary").click();
+    }
   }
-  const isOpen = await more.evaluate((node) => node instanceof HTMLDetailsElement && node.open);
-  if (!isOpen) {
-    await more.locator(":scope > summary").click();
+  const full = card.locator("details.training-current__full").first();
+  if ((await full.count()) > 0) {
+    const fullOpen = await full.evaluate((node) => node instanceof HTMLDetailsElement && node.open);
+    if (!fullOpen) {
+      await full.locator(":scope > summary").click();
+    }
   }
 }
 
@@ -239,16 +244,10 @@ async function expectTrainingLoop(card, activeStep) {
 }
 
 async function expectTrainingCardFacts(card) {
-  await revealTrainingCardDetails(card);
-  const facts = card.locator("[data-training-card-fact]");
-  if ((await facts.count()) === 0) {
-    await expect(card.locator("[data-view-object]").first()).toBeVisible();
-    return;
-  }
-  await expect(facts).toHaveCount(TRAINING_CARD_FACTS.length);
-  for (const fact of TRAINING_CARD_FACTS) {
-    await expect(card.locator(`[data-training-card-fact="${fact}"]`)).toBeVisible();
-  }
+  // Question-only card design: the face shows the question (heading + task
+  // sentence); fact sections and guidance live off the face entirely.
+  await expect(card.locator("[data-view-object]").first()).toBeVisible();
+  await expect(card.locator("[data-training-card-fact]")).toHaveCount(0);
 }
 
 async function submitPlanComposerRequest(page, mode, message) {
@@ -690,6 +689,19 @@ test.describe("Trainer Five-View Shell", () => {
       await expect(restoreButton).toBeDisabled();
       await expect(restoreButton).toHaveAttribute("title", copy.restoreUnavailable);
 
+      const manager = library.locator(".library-manager");
+      await manager.locator(":scope > summary").click();
+      await expect(manager).toHaveAttribute("open", "");
+      const currentConversationDelete = manager.getByRole("button", {
+        name: `${language === "zh-CN" ? "删除" : "Delete"} ${language === "zh-CN" ? "当前会话" : "Current conversation"}`,
+        exact: true,
+      });
+      await expect(currentConversationDelete).toBeDisabled();
+      await expect(currentConversationDelete).toHaveAttribute(
+        "title",
+        language === "zh-CN" ? "请先切换到另一个对话" : "Switch to another conversation first",
+      );
+
       await expectNoHorizontalOverflow(page);
       await expectNoConsoleErrors(errors);
     });
@@ -812,13 +824,14 @@ test.describe("Trainer Five-View Shell", () => {
 
       const card = page.getByRole("group", { name: copy.card, exact: true });
       await expect(card).toHaveCount(1);
+      // Shipped single-card immersive design: one card-only pane, no loop rail,
+      // no card switcher. Learn-first means the current-task card leads the pane.
+      await expect(page.locator(".training-pane--card-only")).toHaveCount(1);
+      await expect(card.locator(".training-loop-rail")).toHaveCount(0);
       await expectTrainingLoop(card, "learn");
-      const activeLearnStep = card.locator('[data-training-loop-step="learn"]');
-      await expect(activeLearnStep).toHaveAttribute("aria-current", "step");
-      await expect(activeLearnStep).toHaveText(copy.activeLearnStep);
       await expectTrainingCardFacts(card);
+      await expect(card.getByRole("heading").first()).toBeVisible();
       await expect(page.locator(".training-card-nav")).toHaveCount(0);
-      await expect(card.getByRole("button", { name: copy.startThisStep, exact: true })).toBeVisible();
       await expect(card.getByText(copy.verifyCurrentFile, { exact: true })).toHaveCount(0);
       await expectNoHorizontalOverflow(page);
       await expectNoConsoleErrors(errors);
@@ -840,10 +853,11 @@ test.describe("Trainer Five-View Shell", () => {
       const card = page.getByRole("group", { name: copy.card, exact: true });
       const composer = page.locator(".composer-shell");
       await expect(card).toHaveCount(1);
-      await expect(card.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toBeVisible();
+      // Question-only card: the face states the task; verification runs from
+      // the composer's pinned training action.
+      await expect(card.getByRole("heading").first()).toBeVisible();
       await expect(composer).toBeVisible();
-      await expect(card.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toBeVisible();
-      await expect(composer.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toHaveCount(0);
+      await expect(composer.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toHaveCount(1);
       await expectNoConsoleErrors(errors);
     });
   }
@@ -861,10 +875,6 @@ test.describe("Trainer Five-View Shell", () => {
     await expectTrainingLoop(card, "try");
     await expectTrainingCardFacts(card);
     await expect(card).toContainText("Build one minimal debug loop");
-    await expect(card.locator('[data-training-card-fact="verify"]')).toContainText("Verify");
-    await expect(card.locator('[data-training-card-fact="return"]')).toContainText(
-      "Return with the repro step",
-    );
 
     await openPreview(page, "training", {
       lang: "en-US",
@@ -885,7 +895,9 @@ test.describe("Trainer Five-View Shell", () => {
     card = page.getByRole("group", { name: "Current training card", exact: true });
     await expectTrainingLoop(card, "reflect");
     await expectTrainingCardFacts(card);
-    await card.getByRole("button", { name: "Record this step", exact: true }).click();
+    // The reflect step is composer-driven in the shipped single-card design:
+    // the handoff state machine switches the composer into reflect mode, and
+    // the empty reflection keeps the submit disabled.
     const reflection = "The focused check proves the boundary before the result can return.";
     const reflectionInput = page.getByRole("textbox", {
       name: "Record the current training reflection",
@@ -938,10 +950,9 @@ test.describe("Trainer Five-View Shell", () => {
 
     card = page.getByRole("group", { name: "Current training card", exact: true });
     await expectTrainingLoop(card, "return");
-    await expect(card.locator('[data-training-card-fact="return"]')).toContainText(
-      "Return with the repro step",
-    );
-    await card.getByRole("button", { name: TRAINING_COPY["en-US"].returnToCoach, exact: true }).click();
+    // After a recorded reflection the return action surfaces beside the card
+    // (training pane), not inside the card face.
+    await page.getByRole("button", { name: TRAINING_COPY["en-US"].returnToCoach, exact: true }).click();
     await expect.poll(() =>
       page.evaluate(() => {
         const state = window.__TRAINER_BOOTSTRAP__?.workspaceTrainingState;
@@ -1007,8 +1018,8 @@ test.describe("Trainer Five-View Shell", () => {
     {
       id: "function",
       preview: "training-function",
-      title: "Recover a function contract with editor guidance",
-      taskEvidence: "Use VS Code function guidance to recover one function's contract",
+      title: "See what this function takes and returns",
+      taskEvidence: "hover and Go to Definition",
       returnEvidence: "Return with the function contract",
     },
   ]) {
@@ -1026,17 +1037,6 @@ test.describe("Trainer Five-View Shell", () => {
       await expectTrainingLoop(card, "try");
       await expectTrainingCardFacts(card);
       await expect(card).toContainText(scenario.taskEvidence);
-      await expect(card.locator('[data-training-card-fact="verify"]')).toContainText("Verify");
-      await expect(card.locator('[data-training-card-fact="return"]')).toContainText(
-        scenario.returnEvidence,
-      );
-      await expect(card.getByRole("button", { name: "Verify current file", exact: true })).toBeVisible();
-      await expect(
-        page.locator(".composer-shell").getByRole("button", {
-          name: "Verify current file",
-          exact: true,
-        }),
-      ).toHaveCount(0);
       await expectNoConsoleErrors(errors);
     });
   }
@@ -1056,18 +1056,14 @@ test.describe("Trainer Five-View Shell", () => {
     const composer = page.locator(".composer-shell");
     await expect(card.getByRole("heading", { name: /Práctica: espacio de trabajo remoto de VS Code/ })).toBeVisible();
     await revealTrainingCardDetails(card);
-    await expect(card.locator(".training-loop-rail")).toHaveAttribute(
-      "aria-label",
-      "Ciclo de aprendizaje",
-    );
+    // Card-only design keeps the loop off the pane; the localized evidence
+    // lives in the card facts.
+    await expect(card.locator(".training-loop-rail")).toHaveCount(0);
     await expectTrainingCardFacts(card);
     await expect(composer.getByRole("textbox")).toHaveAttribute(
       "placeholder",
-      /Primero logra el resultado más pequeño/,
+      /Registra el resultado/,
     );
-    await expect(
-      card.getByRole("button", { name: "Verificar archivo actual", exact: true }),
-    ).toBeVisible();
     await expectNoConsoleErrors(errors);
   });
 
@@ -1196,13 +1192,33 @@ test.describe("Trainer Five-View Shell", () => {
         connection: "connected",
       });
 
-      const iconButtons = page.locator(".composer__leading-actions .icon-button");
-      await expect(iconButtons).toHaveCount(2);
+      const plusTrigger = page.getByRole("button", {
+        name: language === "zh-CN" ? "给这一条加点东西" : "Add to this message",
+      });
+      await expect(plusTrigger).toHaveCount(1);
 
-      await iconButtons.nth(0).click();
+      await plusTrigger.click();
+      const addMenu = page.getByRole("menu", {
+        name: language === "zh-CN" ? "给这一条加点东西" : "Add to this message",
+      });
+      await addMenu
+        .getByRole("menuitemcheckbox", { name: language === "zh-CN" ? /上下文/ : /Context/ })
+        .click();
       await expect(page.locator(".composer-menu-panel .menu-row")).toHaveCount(2);
 
-      await iconButtons.nth(1).click();
+      await page.locator("#coach-composer").click();
+      await page.keyboard.press("Escape");
+      await expect(page.locator(".composer-menu-panel")).toHaveCount(0);
+
+      await plusTrigger.click();
+      await page
+        .getByRole("menu", {
+          name: language === "zh-CN" ? "给这一条加点东西" : "Add to this message",
+        })
+        .getByRole("menuitemcheckbox", {
+          name: language === "zh-CN" ? /附件与资料/ : /Attachments and resources/,
+        })
+        .click();
       await expect(page.locator(".composer-menu-panel--resources")).toBeVisible();
       await expect(page.locator(".composer-menu-panel--resources .menu-list__item")).toHaveCount(2);
     }
@@ -1282,6 +1298,39 @@ test.describe("Trainer Five-View Shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
+  test("composer keeps optional context quiet and opens a detailed add and skills panel", async ({ page }) => {
+    const errors = attachConsoleErrorCollector(page);
+
+    await openPreview(page, "coach", {
+      lang: "zh-CN",
+      scenario: "ready",
+      connection: "connected",
+    });
+
+    const composer = page.locator("#coach-composer");
+    await composer.fill("直接回答这条消息");
+    await expect(page.getByText("不附带上下文", { exact: true })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "给这一条加点东西" }).click();
+    const addMenu = page.getByRole("menu", { name: "给这一条加点东西" });
+    await expect(addMenu).toBeVisible();
+    await expect(addMenu.getByText("添加", { exact: true })).toBeVisible();
+    await expect(addMenu.getByText("上下文", { exact: true })).toBeVisible();
+    await expect(addMenu.getByText("附件与资料", { exact: true })).toBeVisible();
+    await expect(addMenu.getByText("目标", { exact: true })).toBeVisible();
+    await expect(addMenu.getByText("训练工作流", { exact: true })).toBeVisible();
+    await expect(addMenu.getByText("技能", { exact: true }).last()).toBeVisible();
+
+    await addMenu.getByRole("menuitemcheckbox", { name: /技能/ }).click();
+    const skillDeck = page.locator(".skill-deck");
+    await expect(skillDeck).toBeVisible();
+    await expect(skillDeck.locator(".skill-deck__item").first()).toBeVisible();
+    await expect(skillDeck.locator(".skill-deck__description").first()).toBeVisible();
+    await expect(skillDeck.locator(".skill-deck__footer-hint")).toContainText("输入内容可搜索技能");
+    await expectNoHorizontalOverflow(page);
+    await expectNoConsoleErrors(errors);
+  });
+
   test("keeps stream progress in the Coach thread and reserves the global notice for failures", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 
@@ -1309,9 +1358,23 @@ test.describe("Trainer Five-View Shell", () => {
 
     await expect(page.locator(".notice")).toHaveCount(0);
     await expect(page.locator(".message-bubble--streaming")).toBeVisible();
+    await expect(page.locator(".agent-activity-strip")).toBeVisible();
+    await expect(page.locator(".agent-activity-strip__timeline")).toContainText("理解请求");
     await expect(page.locator(".message-bubble--streaming")).toContainText(
       "正在梳理你的问题，然后给出第一段可见回复。",
     );
+
+    await page.evaluate(() => {
+      window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__?.({
+        type: "stream/tool_call",
+        payload: {
+          messageId: "e2e-stream-progress",
+          id: "e2e-search",
+          name: "search_learning_materials",
+        },
+      });
+    });
+    await expect(page.locator(".agent-activity-strip__timeline")).toContainText("检索学习资料");
 
     await page.evaluate(() => {
       window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__?.({

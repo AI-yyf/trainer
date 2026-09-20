@@ -959,6 +959,7 @@ export interface ActiveThreadView {
 }
 
 export interface MemorySnapshotView {
+  crossWorkspaceMemory?: 'global' | 'isolated';
   currentFocus: string;
   weakSpots: string[];
   recentWins: string[];

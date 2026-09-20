@@ -2245,6 +2245,7 @@ class MemorySnapshot(BaseModel):
     )
     teaching_assets: list[TeachingKnowledgeAsset] = Field(default_factory=list)
     memory_share_grants: list[MemoryShareGrant] = Field(default_factory=list)
+    memory_scope: Literal["global", "isolated"] = Field(default="global", alias="memoryScope")
     teaching_knowledge_catalog: dict[str, Any] = Field(default_factory=dict)
     coaching_adaptation: CoachingAdaptationProfile | None = None
     teaching_strategy_effectiveness: list[dict[str, Any]] = Field(default_factory=list)
@@ -2441,7 +2442,7 @@ class CoachDefaults(BaseModel):
     # both representations valid.
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
-    memory_scope: CoachMemoryScope = Field(default="project", alias="memoryScope")
+    memory_scope: CoachMemoryScope = Field(default="personal", alias="memoryScope")
     working_set_mode: WorkingSetMode = Field(default="balanced", alias="workingSetMode")
     review_cadence: ReviewCadence = Field(default="steady", alias="reviewCadence")
     review_reminder_mode: ReviewReminderMode = Field(default="due", alias="reviewReminderMode")
@@ -2523,6 +2524,7 @@ class CoachSettingsRequest(BaseModel):
     workspace_id: str | None = None
     response_language: ResponseLanguage | None = None
     answer_mode: CoachRequestAnswerMode | None = None
+    resource_search_mode: Literal["lexical", "trusted"] | None = None
     teaching_style: str | None = None
     coach_defaults: CoachDefaults | None = None
     follow_current_file: bool | None = None
@@ -2580,6 +2582,22 @@ class MemoryShareGrantRevokeRequest(BaseModel):
     @classmethod
     def require_source_workspace_id(cls, value: str) -> str:
         return MemoryShareGrant.require_workspace_id(value)
+
+
+class MemoryScopeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str | None = None
+    workspace_id: str | None = None
+    scope: Literal["global", "isolated"]
+
+    @field_validator("scope")
+    @classmethod
+    def normalize_memory_scope(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if cleaned not in {"global", "isolated"}:
+            raise ValueError("memory scope must be 'global' or 'isolated'")
+        return cleaned
 
 
 class TurnRequest(SessionMessageRequest):
@@ -2892,6 +2910,27 @@ class ResourceRestoreRequest(BaseModel):
     session_id: str | None = None
     workspace_id: str | None = None
     resource_id: str
+
+
+class LibraryDeleteRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    session_id: str | None = None
+    workspace_id: str | None = None
+    item_type: Literal["card", "plan", "session"] = Field(alias="type")
+    item_id: str = Field(alias="id")
+    request_id: str = Field(default="", alias="requestId", max_length=128)
+
+    @field_validator("item_id", "request_id")
+    @classmethod
+    def normalize_library_identifier(cls, value: str) -> str:
+        return value.strip()
+
+    @model_validator(mode="after")
+    def require_library_item_id(self) -> "LibraryDeleteRequest":
+        if not self.item_id:
+            raise ValueError("A library item id is required.")
+        return self
 
 
 class TaskNextRequest(BaseModel):

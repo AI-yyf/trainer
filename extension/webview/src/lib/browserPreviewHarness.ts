@@ -3850,7 +3850,7 @@ function resolvePreviewState(): BrowserPreviewState {
     contextDetail: "balanced",
     followCurrentFile: true,
     coachDefaults: {
-      memoryScope: "project",
+      memoryScope: "personal",
       workingSetMode: "balanced",
       reviewCadence: "steady",
       reviewReminderMode: "due",

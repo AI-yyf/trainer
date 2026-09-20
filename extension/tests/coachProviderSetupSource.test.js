@@ -146,7 +146,7 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
   );
   assert.match(
     source,
-    /workspaceSessionBlocked && workspaceAdmissionContent[\s\S]*?!providerCanCoachNow && providerCoachNotice[\s\S]*?coach-workspace-admission__provider-action[\s\S]*?onClick=\{openProviderSetup\}/,
+    /workspaceSessionBlocked && workspaceAdmissionContent[\s\S]*?!providerCanCoachNow && providerCoachNotice[\s\S]*?coach-workspace-admission__provider-action[\s\S]*?onClick=\{recoverProviderOrRuntime\}/,
   );
   assert.match(
     source,

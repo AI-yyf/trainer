@@ -9,6 +9,7 @@ from ...core.models import (
     EvidenceQueueSnapshot,
     GlobalMemory,
     GlobalMemoryUpdateRequest,
+    MemoryScopeRequest,
     MemoryShareGrant,
     MemoryShareGrantRevokeRequest,
     MemoryShareGrantUpsertRequest,
@@ -72,6 +73,19 @@ def build_memory_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
         )
         refresh_workspace_sessions(target_workspace_id)
         return current_snapshot(session_id=request.session_id, workspace_id=target_workspace_id)
+
+    @router.post("/memory/scope", response_model=WorkbenchSnapshot)
+    def set_memory_scope(request: MemoryScopeRequest) -> WorkbenchSnapshot:
+        """Switch the learner-wide memory scope. Defaults to 'global' (every
+        workspace shares durable preferences and mastery signals); 'isolated'
+        restores per-workspace memory with explicit share grants only."""
+        workspace_id = current_workspace_id(
+            session_id=request.session_id,
+            workspace_id=request.workspace_id,
+        )
+        runtime.memory_service.set_memory_scope(request.scope)
+        refresh_workspace_sessions(workspace_id)
+        return current_snapshot(session_id=request.session_id, workspace_id=workspace_id)
 
     @router.post("/memory/transfer/exclude-workspace")
     def exclude_workspace_from_transfer_promotion(request: TransferPromotionScopeRequest) -> dict[str, object]:
@@ -229,6 +243,7 @@ def build_memory_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
             workspace_id=workspace_id,
             response_language=request.response_language,
             answer_mode=request.answer_mode,
+            resource_search_mode=request.resource_search_mode,
             teaching_style=request.teaching_style,
             coach_defaults=request.coach_defaults,
             follow_current_file=request.follow_current_file,

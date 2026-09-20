@@ -2270,6 +2270,66 @@ export async function saveBrowserPreviewCoachSettings(
   sessionId?: string,
 ): Promise<{ sessionId: string; message: HostMessage }> {
   const resolvedSessionId = await ensureBrowserPreviewSession(sessionId);
+  if (isBrowserPreviewFixture()) {
+    const bootstrap = window.__TRAINER_BOOTSTRAP__ as BootstrapData;
+    const currentWorkspace = bootstrap.memory?.workspace ?? {};
+    const currentCoachDefaults = currentWorkspace.coachDefaults;
+    const nextCoachDefaults = request.coachDefaults
+      ? {
+          ...currentCoachDefaults,
+          ...request.coachDefaults,
+          workspaceMemoryToggles: {
+            ...currentCoachDefaults?.workspaceMemoryToggles,
+            ...request.coachDefaults.workspaceMemoryToggles,
+          },
+        }
+      : currentCoachDefaults;
+    const profile = {
+      ...bootstrap.profile,
+      ...(request.teachingStyle !== undefined
+        ? { preferredStyle: request.teachingStyle }
+        : {}),
+      ...(request.answerMode !== undefined ? { answerPolicy: request.answerMode } : {}),
+    } as BootstrapData["profile"];
+    const memory = {
+      ...bootstrap.memory,
+      workspace: {
+        ...currentWorkspace,
+        ...(request.responseLanguage !== undefined
+          ? { responseLanguage: request.responseLanguage }
+          : {}),
+        ...(request.answerMode !== undefined ? { answerMode: request.answerMode } : {}),
+        ...(request.resourceSearchMode !== undefined
+          ? { resourceSearchMode: request.resourceSearchMode }
+          : {}),
+        ...(request.followCurrentFile !== undefined
+          ? { followCurrentFile: request.followCurrentFile }
+          : {}),
+        ...(request.contextDetail !== undefined
+          ? { contextDetail: request.contextDetail }
+          : {}),
+        ...(request.includeCurrentFile !== undefined
+          ? { includeCurrentFile: request.includeCurrentFile }
+          : {}),
+        ...(request.includeSelection !== undefined
+          ? { includeSelection: request.includeSelection }
+          : {}),
+        ...(request.includeDiagnostics !== undefined
+          ? { includeDiagnostics: request.includeDiagnostics }
+          : {}),
+        ...(request.includeRelatedFiles !== undefined
+          ? { includeRelatedFiles: request.includeRelatedFiles }
+          : {}),
+        ...(nextCoachDefaults !== undefined ? { coachDefaults: nextCoachDefaults } : {}),
+      },
+    } as BootstrapData["memory"];
+    const patch: Partial<BootstrapData> = { profile, memory };
+    window.__TRAINER_BOOTSTRAP__ = { ...bootstrap, ...patch };
+    return {
+      sessionId: resolvedSessionId,
+      message: { type: "state/patch", payload: patch },
+    };
+  }
   const workspaceId = previewWorkspaceId();
   const response = await fetchPreview(`${baseUrl()}/memory/settings`, {
     method: "POST",
@@ -2279,6 +2339,7 @@ export async function saveBrowserPreviewCoachSettings(
       workspace_id: workspaceId,
       response_language: request.responseLanguage,
       answer_mode: request.answerMode,
+      resource_search_mode: request.resourceSearchMode,
       teaching_style: request.teachingStyle,
       coach_defaults: request.coachDefaults
         ? {

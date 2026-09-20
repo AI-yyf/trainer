@@ -112,13 +112,13 @@ test('coach keeps the normal message thread free of a summary rail until a real 
   assert.doesNotMatch(summary, /resolvedCoachNextStep/);
 });
 
-test('coach composer keeps the resources button label short', () => {
+test('coach composer describes the attachment and resources action in the expanded add panel', () => {
   const source = fs.readFileSync(appPath, 'utf8');
   const blockStart = source.indexOf('icon: <ResourcesIcon size={16} />');
   assert.ok(blockStart > -1, 'expected composer resources action');
   const block = source.slice(blockStart - 80, blockStart + 140);
 
-  assert.match(block, /label: t\.resourcesMenu/);
+  assert.match(block, /附件与资料/);
   assert.doesNotMatch(block, /label: t\.resourcesSummary/);
 });
 
@@ -170,7 +170,7 @@ test('coach agent activity renders as a normalized lightweight progress rail', (
   assert.match(activityWorking[0], /display:\s*none/);
 });
 
-test('coach activity details collapse completed tool work while keeping live work open', () => {
+test('coach activity details stay open during streaming and expose an operational timeline', () => {
   const source = fs.readFileSync(agentActivityPath, 'utf8');
   const conversation = fs.readFileSync(
     path.resolve(__dirname, '..', 'webview', 'src', 'components', 'coach', 'CoachConversationView.tsx'),
@@ -179,7 +179,10 @@ test('coach activity details collapse completed tool work while keeping live wor
 
   assert.match(source, /collapsible\?: boolean/);
   assert.match(source, /<CollapsibleBlock/);
-  assert.match(source, /defaultOpen=\{hasRunningItems\}/);
+  assert.match(source, /defaultOpen/);
+  assert.match(source, /agent-activity-strip__timeline/);
+  assert.match(source, /理解请求/);
+  assert.match(source, /组织回答/);
   assert.match(source, /运行详情/);
   assert.match(conversation, /collapsible[\s\S]*?step=\{agentStep\}/);
 });
@@ -378,17 +381,16 @@ test('formal Plan generation requires a current verified tools probe, not declar
   assert.match(source, /const intent = formalPlanGeneration \? "plan" : analyzedIntent;/);
 });
 
-test('coach composer exposes a recovery path when streaming has not been verified', () => {
+test('coach composer revalidates saved connection proof through the real send path', () => {
   const source = fs.readFileSync(appPath, 'utf8');
   assert.match(
     fs.readFileSync(recoveryCopySourcePath, 'utf8'),
     /function providerHasVerifiedStreamingProbe\([\s\S]*?lastTest\.streamingReady === true[\s\S]*?lastTest\.streamProbeStatus === "verified"[\s\S]*?streamingEvidence\?\.state === "verified"[\s\S]*?streamingEvidence\.observed === true/,
   );
-  // streamingCapabilityBlockReason moved into providerRecoveryCopy.ts (batch 7).
-  assert.match(
-    fs.readFileSync(recoveryCopySourcePath, 'utf8'),
-    /function streamingCapabilityBlockReason\(language: ComposerLanguage\)/);
-  assert.match(
+  assert.match(source, /function providerProofCanBeRevalidatedBySend\(/);
+  assert.match(source, /provider\.lastTestResult === undefined \|\| provider\.lastTestResult\.ok === true/);
+  assert.match(source, /!capabilityVerdict\.chat && !providerProofMayRevalidateOnSend/);
+  assert.doesNotMatch(
     source,
     /provider\.configured && provider\.apiKeyConfigured && !providerHasVerifiedStreamingProbe\(provider\)/,
   );
@@ -494,10 +496,8 @@ test('Composer candidate decks keep Codex-style draft ownership and keyboard dis
   assert.match(source, /scrollIntoView\(\{ block: "nearest" \}\)/);
   assert.match(commandDeck, /dismissedComposerDeck === "command"/);
   assert.match(skillDeck, /dismissedComposerDeck === "skill"/);
-  assert.match(
-    styles,
-    /\.composer__accessory :is\(\.command-deck__header, \.skill-deck__header, \.skill-deck__empty\)\s*\{[\s\S]*?display:\s*none/,
-  );
+  assert.match(styles, /\.composer__accessory \.skill-deck__header/);
+  assert.match(styles, /\.skill-deck__footer-hint/);
   // Autocomplete owns the draft: it swaps only the typed $token for the chosen
   // trigger and preserves any arguments the user already typed after it.
   assert.match(
@@ -556,16 +556,22 @@ test('Composer expansion lists stay anchored, bounded, scrollable, and keyboard-
   const panels = styles.match(
     /\.composer__accessory > :is\(\.composer-menu-panel, \.command-deck, \.skill-deck\)\s*\{[\s\S]*?\n\}/,
   );
+  const compactSkillPanel = styles.match(
+    /\.composer__accessory > \.skill-deck\s*\{[\s\S]*?\n\}/,
+  );
   assert.ok(accessory, 'expected a composer-anchored accessory layer');
   assert.ok(panels, 'expected bounded expansion panel styles');
+  assert.ok(compactSkillPanel, 'expected a compact skill-specific panel size');
   assert.match(accessory[0], /position:\s*absolute/);
   assert.match(accessory[0], /bottom:\s*calc\(100% \+ 6px\)/);
-  assert.match(panels[0], /inline-size:\s*min\(calc\(100% - 12px\), 320px\)/);
+  assert.match(panels[0], /inline-size:\s*min\(calc\(100% - 12px\), 640px\)/);
   assert.match(panels[0], /max-inline-size:\s*calc\(100% - 12px\)/);
-  assert.match(panels[0], /max-block-size:\s*min\(36vh, 220px\)/);
+  assert.match(panels[0], /max-block-size:\s*min\(48vh, 420px\)/);
   assert.match(panels[0], /overflow:\s*auto/);
   assert.match(panels[0], /overflow-x:\s*hidden/);
   assert.match(panels[0], /overscroll-behavior:\s*contain/);
+  assert.match(compactSkillPanel[0], /inline-size:\s*min\(calc\(100% - 12px\), 420px\)/);
+  assert.match(compactSkillPanel[0], /max-block-size:\s*min\(40vh, 280px\)/);
   assert.match(styles, /\.composer__accessory :is\(\.command-deck__item, \.skill-deck__item\):focus-visible/);
   assert.match(styles, /@media \(max-width: 360px\)[\s\S]*?\.composer__accessory > :is\(\.composer-menu-panel, \.command-deck, \.skill-deck\)/);
   assert.match(source, /title=\{\[command\.command, command\.title, command\.description\]/);
@@ -620,6 +626,22 @@ test('Unavailable image capability stays accessible and only surfaces inline aft
   assert.match(styles, /@keyframes composer-drop-pulse/);
   assert.match(appSource, /"当前连接还不能验证图片。"/);
   assert.doesNotMatch(appSource, /褰撳墠杩炴帴/);
+});
+
+test('Informational notices use the neutral workbench surface instead of an accent-blue fill', () => {
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const infoNotice = styles.match(
+    /\.notice--info,\s*\n\.coach-inline-notice--info\s*\{[\s\S]*?\n\}/,
+  );
+  const infoMarker = styles.match(
+    /\.notice--info::before,\s*\n\.coach-inline-notice--info::before\s*\{[\s\S]*?\n\}/,
+  );
+
+  assert.ok(infoNotice, 'expected shared informational notice styles');
+  assert.ok(infoMarker, 'expected shared informational notice marker styles');
+  assert.match(infoNotice[0], /background:\s*color-mix\(in srgb, var\(--bg-1\)/);
+  assert.doesNotMatch(infoNotice[0], /var\(--accent\)/);
+  assert.match(infoMarker[0], /background:\s*var\(--fg-muted\)/);
 });
 
 test('hint suggested action fills the composer and does not mint a task turn', () => {

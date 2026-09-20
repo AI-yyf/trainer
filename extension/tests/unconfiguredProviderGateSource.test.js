@@ -8,7 +8,7 @@ const path = require('node:path');
 const sharedStatusPath = path.resolve(__dirname, '..', '..', 'shared', 'src', 'providerStatus.ts');
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
-test('untested or unconfigured providers cannot send as a live coach', () => {
+test('unconfigured providers stay blocked while a saved connection may revalidate on real send', () => {
   const status = fs.readFileSync(sharedStatusPath, 'utf8');
   const app = fs.readFileSync(appPath, 'utf8');
 
@@ -22,7 +22,15 @@ test('untested or unconfigured providers cannot send as a live coach', () => {
   assert.match(status, /if \(!provider\.configured \|\| transportMissing\) \{[\s\S]*?blocked:\s*true/);
   assert.match(status, /if \(!provider\.apiKeyConfigured\) \{[\s\S]*?blocked:\s*true/);
 
-  assert.match(app, /const providerCanCoachNow = providerTransportConnected && !providerSendState\.blocked;/);
+  assert.match(app, /function providerProofCanBeRevalidatedBySend\(/);
+  assert.match(
+    app,
+    /if \(!provider\.configured \|\| !provider\.apiKeyConfigured \|\| provider\.modelListStatus === "error"\) \{\s*return false;/,
+  );
+  assert.match(
+    app,
+    /const providerCanCoachNow =\s*providerTransportConnected && \(!providerSendState\.blocked \|\| providerProofMayRevalidateOnSend\);/,
+  );
   const sendTurn = app.slice(app.indexOf('const sendTurn = ('), app.indexOf('const handleBrowserUploads'));
   assert.match(
     sendTurn,

@@ -20,7 +20,7 @@ const {
 } = require(coachDefaultsModulePath);
 
 const NEUTRAL = {
-  memoryScope: 'project',
+  memoryScope: 'personal',
   workingSetMode: 'balanced',
   reviewCadence: 'steady',
   reviewReminderMode: 'due',
@@ -74,7 +74,7 @@ test('a snapshot field missing on the server matches only the neutral payload va
   // Sparse snapshots must not swallow real changes: a non-neutral value for a
   // field the server does not know is new information and must save.
   assert.equal(
-    matchesSavedCoachDefaults({ ...NEUTRAL, memoryScope: 'personal' }, { ...NEUTRAL, memoryScope: undefined }),
+    matchesSavedCoachDefaults({ ...NEUTRAL, memoryScope: 'project' }, { ...NEUTRAL, memoryScope: undefined }),
     false,
   );
   assert.equal(

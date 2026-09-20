@@ -760,6 +760,10 @@ async function listManagedPeerProjects(context: CommandContext): Promise<Managed
 }
 
 export function personalAccountTrusted(context: CommandContext): boolean {
+  const scope = context.getHostState().bootstrap.memory.crossWorkspaceMemory;
+  if (scope === 'global' || scope === 'isolated') {
+    return scope === 'global';
+  }
   return context.extensionContext.globalState.get<boolean>(
     STORAGE_KEYS.memoryPersonalAccountTrust,
   ) === true;
@@ -790,10 +794,9 @@ async function grantFromAllPeers(
 }
 
 /**
- * "Trusted personal account" master switch (batch 5). Enabling lets reusable
- * preferences/mastery flow from every other managed Trainer project by
- * default; disabling revokes all incoming cross-project grants so the
- * current project returns to isolated memory.
+ * Authoritative cross-project memory switch. The sidecar owns the persisted
+ * global/isolated policy; Extension globalState is only a compatibility cache
+ * for older installs and must never override the server snapshot.
  */
 export async function setPersonalAccountTrustCommand(
   context: CommandContext,
@@ -811,50 +814,29 @@ export async function setPersonalAccountTrustCommand(
     };
   }
 
-  await context.extensionContext.globalState.update(
-    STORAGE_KEYS.memoryPersonalAccountTrust,
-    enabled ? true : undefined,
-  );
-
-  const currentMemory = context.getHostState().bootstrap.memory;
-  await context.patchWorkbenchData({
-    memory: {
-      ...currentMemory,
-      workspace: {
-        ...currentMemory.workspace,
-        personalAccountTrusted: enabled,
-      },
-    },
-  });
-
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
     return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
   }
   const workspaceId = getRuntimeWorkspaceId(context);
 
+  const scopeSummary = await context.sidecarClient.postJson<unknown>(status.port, '/memory/scope', {
+    session_id: context.getSessionId(),
+    workspace_id: workspaceId,
+    scope: enabled ? 'global' : 'isolated',
+  });
+  await patchFromSummary(context, scopeSummary);
+  await context.extensionContext.globalState.update(
+    STORAGE_KEYS.memoryPersonalAccountTrust,
+    enabled ? true : undefined,
+  );
+
   if (enabled) {
-    const peers = await listManagedPeerProjects(context);
-    let summary: unknown;
-    for (const peer of peers) {
-      summary = await context.sidecarClient.postJson<unknown>(status.port, '/memory/share-grants', {
-        session_id: context.getSessionId(),
-        workspace_id: workspaceId,
-        source_workspace_id: peer.workspaceId,
-        categories: ['preferences', 'mastery'],
-      });
-    }
-    if (summary !== undefined) {
-      await patchFromSummary(context, summary);
-    }
     await context.workbench.syncState();
     return {
       ok: true,
-      message:
-        peers.length > 0
-          ? `Trusted personal account is on: preferences and mastery now flow from ${peers.length} project(s).`
-          : 'Trusted personal account is on: new Trainer projects will offer to carry your mastery over.',
-      data: { enabled: true, peers: peers.length },
+      message: 'Personal memory is on: durable preferences and verified mastery can flow across Trainer projects.',
+      data: { enabled: true, scope: 'global' },
     };
   }
 
@@ -882,7 +864,7 @@ export async function setPersonalAccountTrustCommand(
   return {
     ok: true,
     message: 'Trusted personal account is off: projects keep isolated memory again.',
-    data: { enabled: false, revoked: grants.length },
+    data: { enabled: false, scope: 'isolated', revoked: grants.length },
   };
 }
 
@@ -893,6 +875,9 @@ export async function setPersonalAccountTrustCommand(
 export async function maybePromptCarryOverOnProjectSwitch(
   context: CommandContext,
 ): Promise<void> {
+  if (context.getHostState().bootstrap.memory.crossWorkspaceMemory === 'global') {
+    return;
+  }
   if (!personalAccountTrusted(context)) {
     return;
   }

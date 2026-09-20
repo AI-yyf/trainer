@@ -98,7 +98,9 @@ function applyFallbackTheme(themeName: WorkbenchThemeName): void {
 }
 
 function syncHostTheme(): void {
-  const resolvedTheme = resolveHostThemeName(activeFallbackTheme);
+  // An explicit light/dark choice is the user's own setting: it must win over
+  // the VS Code host theme. Only "system" follows the host classes.
+  const resolvedTheme = themeFollowsHost ? resolveHostThemeName(activeFallbackTheme) : activeFallbackTheme;
   const root = document.documentElement;
 
   root.dataset.theme = resolvedTheme;
@@ -106,10 +108,13 @@ function syncHostTheme(): void {
   applyFallbackTheme(resolvedTheme);
 }
 
-export function applyWorkbenchTheme(themeName: WorkbenchThemeName): void {
+let themeFollowsHost = true;
+
+export function applyWorkbenchTheme(themeName: WorkbenchThemeName, followsHost = true): void {
   const root = document.documentElement;
 
   activeFallbackTheme = themeName;
+  themeFollowsHost = followsHost;
   for (const [name, value] of rootVariableEntries) {
     setStyleProperty(root.style, name, value);
   }

@@ -865,16 +865,12 @@ async def _handle_search_learning_materials(
         }
     if not required_facets:
         required_facets = requested_facets
+    requested_domains_raw = args.get("preferred_domains")
     requested_domains = (
-        list(args.get("preferred_domains"))
-        if isinstance(args.get("preferred_domains"), list)
-        else []
+        list(requested_domains_raw) if isinstance(requested_domains_raw, list) else []
     )
-    prior_domains = (
-        list(state.get("preferred_domains"))
-        if isinstance(state.get("preferred_domains"), list)
-        else []
-    )
+    prior_domains_raw = state.get("preferred_domains")
+    prior_domains = list(prior_domains_raw) if isinstance(prior_domains_raw, list) else []
     preferred_domains = _normalized_research_domains(
         [*prior_domains, *requested_domains],
         query,
@@ -991,10 +987,12 @@ async def _handle_search_learning_materials(
     prior_covered_facets = _normalized_research_facets(
         state_raw.get("covered_facets") if isinstance(state_raw, dict) else None
     )
+    prior_evidence_standard_raw = (
+        state_raw.get("evidence_standard") if isinstance(state_raw, dict) else None
+    )
     prior_evidence_standard = (
-        dict(state_raw.get("evidence_standard"))
-        if isinstance(state_raw, dict)
-        and isinstance(state_raw.get("evidence_standard"), dict)
+        dict(prior_evidence_standard_raw)
+        if isinstance(prior_evidence_standard_raw, dict)
         else {}
     )
     if prior_assessment:
@@ -1067,7 +1065,7 @@ async def _handle_assess_research_evidence(
     stopping_rule = " ".join(str(evidence_standard.get("stopping_rule") or "").split())
     try:
         minimum_independent_sources = int(
-            evidence_standard.get("minimum_independent_sources")
+            evidence_standard.get("minimum_independent_sources") or 0
         )
     except (TypeError, ValueError):
         minimum_independent_sources = 0

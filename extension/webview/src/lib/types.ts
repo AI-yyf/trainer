@@ -867,6 +867,7 @@ export interface CoachingAdaptationView {
 }
 
 export interface MemorySnapshot {
+  crossWorkspaceMemory?: "global" | "isolated";
   currentFocus: string;
   weakSpots: string[];
   recentWins: string[];
@@ -2016,6 +2017,49 @@ export type HostMessage =
   | {
       type: "session/list";
       payload: { ok: boolean; sessions: CoachSessionSummary[]; message?: string };
+    }
+  | {
+      type: "library/overview";
+      payload: {
+        ok: boolean;
+        overview: {
+          workspaceId?: string;
+          sessions: Array<{ id: string; title: string; messageCount?: number; updatedAt?: string; isActive?: boolean }>;
+          plans: Array<{ id: string; title: string; frozen?: boolean; updatedAt?: string }>;
+          cards: Array<{ id: string; title: string; status?: string; focusArea?: string; updatedAt?: string }>;
+          resources: Array<{ id: string; title: string }>;
+          activity: Array<{
+            eventId: string;
+            type: "card" | "plan" | "session";
+            id: string;
+            action: "deleted";
+            occurredAt: string;
+            title: string;
+          }>;
+        } | null;
+        message?: string;
+      };
+    }
+  | {
+      type: "library/mutation";
+      payload: {
+        ok: boolean;
+        mutation: {
+          requestId?: string;
+          type?: "card" | "plan" | "session";
+          id?: string;
+          deleted?: boolean;
+          activity?: {
+            eventId: string;
+            type: "card" | "plan" | "session";
+            id: string;
+            action: "deleted";
+            occurredAt: string;
+            title: string;
+          };
+        } | null;
+        message?: string;
+      };
     }
   | { type: "ui/restoreView"; payload: RestoreViewPayload }
   | {

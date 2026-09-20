@@ -34,6 +34,10 @@ const TOOL_LABELS: Record<string, { zh: string; en: string }> = {
   card_generation: { zh: "生成训练卡", en: "Card generation" },
   evaluation: { zh: "评估结果", en: "Evaluation" },
   coach_finalize: { zh: "收束回复", en: "Finalize" },
+  search_learning_materials: { zh: "检索学习资料", en: "Search learning materials" },
+  assess_research_evidence: { zh: "评估证据覆盖", en: "Assess evidence coverage" },
+  save_formal_plan: { zh: "保存正式计划", en: "Save formal plan" },
+  inspect_workspace: { zh: "理解工作区", en: "Inspect workspace" },
 };
 
 function toolLabel(name: string, language: ComposerLanguage): string {
@@ -111,28 +115,50 @@ function activityDetailsLabel(language: ComposerLanguage, count: number): string
   return `Run details · ${count} step${count === 1 ? "" : "s"}`;
 }
 
-function activityPills(activities: AgentToolActivity[], language: ComposerLanguage) {
+function activityTimeline(activities: AgentToolActivity[], language: ComposerLanguage) {
+  const isZh = language === "zh-CN";
   return (
-    <div className="agent-activity-strip__pills">
+    <ol className="agent-activity-strip__timeline">
+      <li
+        className={`agent-activity-stage ${activities.length > 0 ? "agent-activity-stage--succeeded" : "agent-activity-stage--running"}`}
+      >
+        <span className="agent-activity-stage__marker" aria-hidden="true" />
+        <span className="agent-activity-stage__copy">
+          <strong>{isZh ? "理解请求" : "Understand the request"}</strong>
+          <span>
+            {activities.length > 0
+              ? isZh ? "已确定这一轮需要核对的内容" : "Identified what this turn needs to check"
+              : isZh ? "正在梳理目标、约束与已有上下文" : "Mapping the goal, constraints, and available context"}
+          </span>
+        </span>
+      </li>
       {activities.map((activity) => {
         const hint = summarizeResult(activity, language);
         const title = toolLabel(activity.name, language);
         return (
-          <span
+          <li
             key={activity.id}
-            className={`agent-activity-pill agent-activity-pill--${activity.status}`}
+            className={`agent-activity-stage agent-activity-stage--${activity.status}`}
             title={hint ? `${title} - ${hint}` : title}
           >
-            <span
-              className={`agent-activity-pill__dot agent-activity-pill__dot--${activity.status}`}
-              aria-hidden="true"
-            />
-            <span className="agent-activity-pill__label">{title}</span>
-            {hint ? <span className="agent-activity-pill__hint">{hint}</span> : null}
-          </span>
+            <span className="agent-activity-stage__marker" aria-hidden="true" />
+            <span className="agent-activity-stage__copy">
+              <strong>{title}</strong>
+              <span>{hint ?? (isZh ? "正在执行并等待结果" : "Running and waiting for a result")}</span>
+            </span>
+          </li>
         );
       })}
-    </div>
+      {activities.length > 0 && activities.every((activity) => activity.status !== "running") ? (
+        <li className="agent-activity-stage agent-activity-stage--running">
+          <span className="agent-activity-stage__marker" aria-hidden="true" />
+          <span className="agent-activity-stage__copy">
+            <strong>{isZh ? "组织回答" : "Shape the answer"}</strong>
+            <span>{isZh ? "正在把证据、结论和下一步串起来" : "Connecting evidence, conclusions, and next steps"}</span>
+          </span>
+        </li>
+      ) : null}
+    </ol>
   );
 }
 
@@ -155,10 +181,6 @@ export function AgentActivityStrip({
   stopReason,
   collapsible = false,
 }: AgentActivityStripProps) {
-  if (activities.length === 0) {
-    return null;
-  }
-
   const isZh = language === "zh-CN";
   const summary = summarizeActivitySet(activities, language);
   const hasRunningItems = activities.some((item) => item.status === "running");
@@ -173,14 +195,15 @@ export function AgentActivityStrip({
           {isZh ? "正在核对上下文..." : "Checking context..."}
         </span>
       ) : null}
-      {activityPills(activities, language)}
+      {activityTimeline(activities, language)}
       {stopReasonLine(stopReason, language)}
     </>
   );
 
   return (
-    <div className="agent-activity-strip" role="status" aria-live="polite">
+    <div className="agent-activity-strip" role="status" aria-live="polite" aria-atomic="false">
       <div className="agent-activity-strip__summary">
+        <span className="agent-activity-strip__pulse" aria-hidden="true" />
         {typeof displayStep === "number" ? (
           <span className="agent-activity-strip__step">
             {isZh ? `第 ${displayStep} 步` : `Step ${displayStep}`}
@@ -192,7 +215,7 @@ export function AgentActivityStrip({
         <CollapsibleBlock
           className="agent-activity-strip__details"
           summary={activityDetailsLabel(language, activities.length)}
-          defaultOpen={hasRunningItems}
+          defaultOpen
         >
           {details}
         </CollapsibleBlock>

@@ -32,6 +32,7 @@ type ComposerLocaleCopy = {
   removeAttachment: string;
   clear: string;
   plusMenu: string;
+  addTitle: string;
 };
 
 const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
@@ -51,6 +52,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     removeAttachment: "移除附件",
     clear: "清空",
     plusMenu: "给这一条加点东西",
+    addTitle: "添加",
   },
   "en-US": {
     placeholder: "Ask the coach",
@@ -68,6 +70,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     removeAttachment: "Remove attachment",
     clear: "Clear",
     plusMenu: "Add to this message",
+    addTitle: "Add",
   },
   "es-ES": {
     placeholder: "Dile al entrenador qué quieres construir o dónde te has atascado.",
@@ -85,6 +88,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     removeAttachment: "Quitar archivo adjunto",
     clear: "Limpiar",
     plusMenu: "Añadir a este mensaje",
+    addTitle: "Añadir",
   },
   "fr-FR": {
     placeholder: "Dites au coach ce que vous voulez créer ou où vous êtes bloqué.",
@@ -102,6 +106,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     removeAttachment: "Retirer la pièce jointe",
     clear: "Effacer",
     plusMenu: "Ajouter à ce message",
+    addTitle: "Ajouter",
   },
   "de-DE": {
     placeholder: "Sag dem Coach, was du bauen möchtest oder wo du festhängst.",
@@ -119,6 +124,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     removeAttachment: "Anhang entfernen",
     clear: "Leeren",
     plusMenu: "Dieser Nachricht hinzufügen",
+    addTitle: "Hinzufügen",
   },
   "ja-JP": {
     placeholder: "作りたいものや、行き詰まっている箇所をコーチに伝えてください。",
@@ -136,6 +142,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     removeAttachment: "添付を削除",
     clear: "消去",
     plusMenu: "このメッセージに追加",
+    addTitle: "追加",
   },
   "ko-KR": {
     placeholder: "만들고 싶은 것 또는 막힌 지점을 코치에게 알려 주세요.",
@@ -153,6 +160,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     removeAttachment: "첨부 파일 제거",
     clear: "지우기",
     plusMenu: "이 메시지에 추가",
+    addTitle: "추가",
   },
   "pt-BR": {
     placeholder: "Diga ao coach o que você quer criar ou onde está com dificuldade.",
@@ -170,6 +178,7 @@ const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
     removeAttachment: "Remover anexo",
     clear: "Limpar",
     plusMenu: "Adicionar a esta mensagem",
+    addTitle: "Adicionar",
   },
 };
 
@@ -180,6 +189,8 @@ export interface ComposerActionItem {
   active?: boolean;
   disabled?: boolean;
   pinned?: boolean;
+  description?: string;
+  section?: string;
   onClick?: () => void;
 }
 
@@ -1006,30 +1017,44 @@ export function CoachComposer({
                       onKeyDown={handlePlusMenuKeyDown}
                       role="menu"
                     >
+                      <div className="composer-plus-menu__title">{localizedCopy.addTitle}</div>
                       {plusMenuActions.map((action, index) => {
                         const isActive = Boolean(action.active);
+                        const previousSection = plusMenuActions[index - 1]?.section;
                         return (
-                          <button
-                            key={action.id}
-                            aria-checked={isActive}
-                            className={`composer-mode-menu__option composer-plus-menu__option ${
-                              isActive ? "is-active" : ""
-                            }`}
-                            disabled={action.disabled || areActionsDisabled}
-                            onClick={() => handlePlusOptionSelect(action)}
-                            ref={(element) => {
-                              plusOptionRefs.current[index] = element;
-                            }}
-                            role="menuitemcheckbox"
-                            type="button"
-                          >
-                            <span className="composer-mode-menu__copy">
-                              <strong>{action.label}</strong>
-                            </span>
-                            <span className="composer-mode-menu__state" aria-hidden="true">
-                              {isActive ? <CheckMarkIcon size={16} /> : null}
-                            </span>
-                          </button>
+                          <div className="composer-plus-menu__entry" key={action.id} role="none">
+                            {action.section &&
+                            action.section !== previousSection &&
+                            action.section !== localizedCopy.addTitle ? (
+                              <div className="composer-plus-menu__section" role="presentation">
+                                {action.section}
+                              </div>
+                            ) : null}
+                            <button
+                              aria-checked={isActive}
+                              className={`composer-mode-menu__option composer-plus-menu__option ${
+                                isActive ? "is-active" : ""
+                              }`}
+                              disabled={action.disabled || areActionsDisabled}
+                              onClick={() => handlePlusOptionSelect(action)}
+                              ref={(element) => {
+                                plusOptionRefs.current[index] = element;
+                              }}
+                              role="menuitemcheckbox"
+                              type="button"
+                            >
+                              <span className="composer-plus-menu__icon" aria-hidden="true">
+                                {action.icon}
+                              </span>
+                              <span className="composer-mode-menu__copy composer-plus-menu__copy">
+                                <strong>{action.label}</strong>
+                                {action.description ? <span>{action.description}</span> : null}
+                              </span>
+                              <span className="composer-mode-menu__state" aria-hidden="true">
+                                {isActive ? <CheckMarkIcon size={16} /> : null}
+                              </span>
+                            </button>
+                          </div>
                         );
                       })}
                     </div>

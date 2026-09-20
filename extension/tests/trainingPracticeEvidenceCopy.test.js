@@ -69,8 +69,9 @@ test('training pasted proof stays hidden until it can change the verdict', () =>
   assert.match(appSource, /id: "composer-verify-file"/);
   assert.match(appSource, /onClick: handleVerifyTrainingFromIde/);
   assert.doesNotMatch(appSource, /onClick=\{handleVerifyTrainingFromIde\}/);
-  assert.match(trainingViewSource, /const cardOnlyBodySections: TrainingCardOnlySection\[\] = \[/);
-  assert.match(trainingViewSource, /key: "current"/);
+  // The route strip items carry the same keys (no longer a cardOnlyBodySections array).
+  assert.match(trainingViewSource, /const routeStripItems = \[/);
+  assert.match(trainingViewSource, /key: "deliverable"/);
   assert.match(trainingViewSource, /key: "verify"/);
   assert.match(trainingViewSource, /key: "return"/);
   assert.match(trainingViewSource, /!cardOnly \? \(isFlashCard \? flashProofSurface : practiceProofSurface\) : null/);
@@ -84,20 +85,18 @@ test('training single-card keeps the knowledge card separate from composer verif
 
   const cardFaceIndex = trainingViewSource.indexOf('className="training-current__card-face"');
   const whyIndex = trainingViewSource.indexOf('data-view-why=""');
-  const cardOnlySectionsStart = trainingViewSource.indexOf('const cardOnlyBodySections');
-  const cardOnlySectionsEnd = trainingViewSource.indexOf('const hasAdjustmentOutcome', cardOnlySectionsStart);
+  // Question-only card: the route strip items carry the same keys.
+  const cardOnlySectionsStart = trainingViewSource.indexOf('const routeStripItems = [');
+  const cardOnlySectionsEnd = trainingViewSource.indexOf('];', cardOnlySectionsStart);
   const cardOnlySections = trainingViewSource.slice(cardOnlySectionsStart, cardOnlySectionsEnd);
 
   assert.notEqual(cardFaceIndex, -1, 'expected the current card face');
   assert.notEqual(whyIndex, -1, 'expected why-now on the card face');
   assert.ok(cardFaceIndex < whyIndex, 'why-now stays on the current card face');
-  assert.match(cardOnlySections, /key: "current"/);
-  assert.match(cardOnlySections, /key: "why-now"/);
   assert.match(cardOnlySections, /key: "deliverable"/);
   assert.match(cardOnlySections, /key: "verify"/);
   assert.match(cardOnlySections, /key: "return"/);
-  assert.match(cardOnlySections, /detail: routeVerifySummary/);
-  assert.match(cardOnlySections, /detail: routeReturnSummary/);
+  assert.match(cardOnlySections, /trainingLoopStepLabel\("verify"/);
   assert.doesNotMatch(trainingViewSource, /training-current__card-footer/);
   assert.match(appSource, /const renderTrainingComposerAccessory = \(\) => \{/);
   assert.doesNotMatch(appSource, /id: "training-verify-current-file"/);
@@ -354,9 +353,10 @@ test('training view stays truthful when no governed card exists and keeps verifi
 
   assert.match(trainingViewSource, /successSignal\?: string;/);
   assert.match(trainingViewSource, /const resolvedSuccessSignal = firstText\(successSignal\?\.trim\(\)\);/);
-  assert.match(trainingViewSource, /const cardOnlyBodySections: TrainingCardOnlySection\[\] = \[/);
-  assert.match(trainingViewSource, /detail: routeVerifySummary/);
-  assert.match(trainingViewSource, /detail: routeReturnSummary/);
+  // Question-only card: route strip carries the verify/return summaries.
+  assert.match(trainingViewSource, /const routeStripItems = \[/);
+  assert.match(trainingViewSource, /label: trainingLoopStepLabel\("verify"/);
+  assert.match(trainingViewSource, /label: trainingLoopStepLabel\("return"/);
   assert.match(trainingViewSource, /!cardOnly \? \(isFlashCard \? flashProofSurface : practiceProofSurface\) : null/);
 });
 

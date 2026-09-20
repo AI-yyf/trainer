@@ -85,6 +85,7 @@ def test_project_facts_do_not_leak_into_other_workspace_surfaces(tmp_path: Path)
             " ".join(asset.title for asset in snapshot_b.teaching_assets),
             " ".join(asset.summary for asset in snapshot_b.teaching_assets),
             " ".join(resource.name for resource in snapshot_b.resources),
+            " ".join(snapshot_b.recent_wins),
         ]
     )
     for private_value in (
@@ -92,13 +93,14 @@ def test_project_facts_do_not_leak_into_other_workspace_surfaces(tmp_path: Path)
         "alpha-private-summary",
         "alpha-private-decision",
         "alpha-private-evidence",
-        "alpha-only-skill",
         "alpha-only-success-summary",
         "alpha-only-verified-result",
-        "alpha-only-evidence",
     ):
         assert private_value not in snapshot_text
 
+    # Global memory shares durable signals only: the mastery concept label
+    # crosses workspaces, but the outcome payload stays in project A.
+    assert "alpha-only-skill" in snapshot_b.lowest_mastery_concepts
     assert snapshot_b.resources == []
     assert snapshot_b.learning_outcomes == []
     assert service.evidence_queue(project_b).total_count == 0

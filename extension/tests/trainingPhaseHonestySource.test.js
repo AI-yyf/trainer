@@ -26,10 +26,9 @@ test('training keeps Learn-first honest and makes card-only mode a focused card 
   assert.match(source, /const showLearnFirstPanel = learnPhaseActive && hasLearnFirstBlock;/);
   assert.match(source, /const showLearnPrimerNote = !cardOnly && !learnPhaseActive && hasLearnFirstBlock;/);
   assert.match(source, /const showCardOnlyTryStep = cardOnly && !isFlashCard;/);
-  assert.match(source, /const cardOnlyBodySections: TrainingCardOnlySection\[\] = \[/);
   assert.match(source, /\{!cardOnly \? \(isFlashCard \? flashProofSurface : practiceProofSurface\) : null\}/);
   assert.match(source, /\{!learnPhaseActive && !cardOnly && adjustmentCopy \?/);
-  assert.match(source, /data-training-card-fact=\{section\.key\}/);
+  assert.doesNotMatch(source, /data-training-card-fact=\{section\.key\}/);
   assert.doesNotMatch(source, /const showLearnStageBlock =/);
 });
 

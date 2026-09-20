@@ -71,7 +71,13 @@ function createContext({ grants = [], globalStore = {} } = {}) {
     sidecarClient: {
       async postJson(port, requestPath, body) {
         posts.push({ requestPath, body });
-        return { memory: { memory_share_grants: grants } };
+        return {
+          memory: {
+            memory_scope:
+              requestPath === '/memory/scope' && body.scope === 'isolated' ? 'isolated' : 'global',
+            memory_share_grants: grants,
+          },
+        };
       },
     },
     trainerWorkspace: {
@@ -119,7 +125,7 @@ function createContext({ grants = [], globalStore = {} } = {}) {
   };
 }
 
-test('setPersonalAccountTrustCommand grants preferences+mastery from every managed peer when enabled', async () => {
+test('setPersonalAccountTrustCommand enables the authoritative global memory policy', async () => {
   const { setPersonalAccountTrustCommand } = loadWithVscodeMock(memoryCommandsModulePath, {
     window: {},
   });
@@ -128,15 +134,12 @@ test('setPersonalAccountTrustCommand grants preferences+mastery from every manag
   const result = await setPersonalAccountTrustCommand(context, { enabled: true });
 
   assert.equal(result.ok, true);
-  assert.equal(context.__posts.length, 2, 'one grant per managed peer project');
-  for (const post of context.__posts) {
-    assert.equal(post.requestPath, '/memory/share-grants');
-    assert.deepEqual(post.body.categories, ['preferences', 'mastery']);
-    assert.notEqual(post.body.source_workspace_id, 'F:\\trainer\\workspace-a', 'current project is not its own peer');
-  }
+  assert.equal(context.__posts.length, 1);
+  assert.equal(context.__posts[0].requestPath, '/memory/scope');
+  assert.equal(context.__posts[0].body.scope, 'global');
   assert.equal(context.__globalStore['trainer.memory.personalAccountTrust'], true);
-  const memoryPatch = context.__patches.find((patch) => patch.memory?.workspace?.personalAccountTrusted === true);
-  assert.ok(memoryPatch, 'bootstrap patch flips the webview toggle');
+  const memoryPatch = context.__patches.find((patch) => patch.memory?.crossWorkspaceMemory === 'global');
+  assert.ok(memoryPatch, 'server snapshot flips the webview toggle');
 });
 
 test('setPersonalAccountTrustCommand revokes incoming grants when disabled', async () => {
@@ -154,15 +157,19 @@ test('setPersonalAccountTrustCommand revokes incoming grants when disabled', asy
   const result = await setPersonalAccountTrustCommand(context, { enabled: false });
 
   assert.equal(result.ok, true);
-  assert.equal(context.__posts.length, 2);
-  assert.ok(context.__posts.every((post) => post.requestPath === '/memory/share-grants/revoke'));
+  assert.equal(context.__posts.length, 3);
+  assert.equal(context.__posts[0].requestPath, '/memory/scope');
+  assert.equal(context.__posts[0].body.scope, 'isolated');
+  assert.ok(context.__posts.slice(1).every((post) => post.requestPath === '/memory/share-grants/revoke'));
   assert.equal(context.__globalStore['trainer.memory.personalAccountTrust'], undefined);
 });
 
-test('personalAccountTrusted reads the persisted switch', async () => {
+test('personalAccountTrusted prefers the authoritative server policy over the legacy cache', async () => {
   const { personalAccountTrusted } = loadWithVscodeMock(memoryCommandsModulePath, { window: {} });
-  const off = createContext();
+  const off = createContext({ globalStore: { 'trainer.memory.personalAccountTrust': true } });
+  off.getHostState().bootstrap.memory.crossWorkspaceMemory = 'isolated';
   assert.equal(personalAccountTrusted(off), false);
-  const on = createContext({ globalStore: { 'trainer.memory.personalAccountTrust': true } });
+  const on = createContext();
+  on.getHostState().bootstrap.memory.crossWorkspaceMemory = 'global';
   assert.equal(personalAccountTrusted(on), true);
 });

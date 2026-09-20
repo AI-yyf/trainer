@@ -1706,6 +1706,50 @@ class MemoryService:
     def list_memory_share_grants(self, target_workspace_id: str) -> list[MemoryShareGrant]:
         return self.repository.list_memory_share_grants(target_workspace_id)
 
+    MEMORY_SCOPE_GLOBAL = "global"
+    MEMORY_SCOPE_ISOLATED = "isolated"
+    _memory_scope_cache: Literal["global", "isolated"] | None = None
+
+    # Project/runtime context must never cross workspaces, even when a learner
+    # enables personal memory. Durable preferences remain globally reusable;
+    # transient/runtime families are denied explicitly.
+    CROSS_WORKSPACE_EXCLUDED_PREFERENCE_KEYS = frozenset(
+        {
+            "current_blocker",
+            "focus_area",
+            "last_focus_area",
+            "latest_turn_decision",
+            "latest_turn_evidence",
+            "latest_turn_teaching_note",
+            "latest_turn_confidence",
+            "latest_teaching_goal",
+            "onboarding_request",
+            "project_context",
+        }
+    )
+    CROSS_WORKSPACE_EXCLUDED_PREFERENCE_PREFIXES = ("latest_",)
+    def memory_scope(self) -> Literal["global", "isolated"]:
+        """Trainer defaults to the strongest memory mode: every workspace reads
+        the learner's durable preferences and mastery signals across projects.
+        The setting is global (one flag for the whole learner), persisted in the
+        sidecar database, and can be switched back to per-workspace isolation."""
+        if self._memory_scope_cache is None:
+            stored = self.repository.load_memory_setting("memory_scope")
+            self._memory_scope_cache = "isolated" if stored == "isolated" else "global"
+        return self._memory_scope_cache
+
+    def set_memory_scope(self, scope: str) -> Literal["global", "isolated"]:
+        cleaned = scope.strip().lower()
+        if cleaned == "global":
+            normalized: Literal["global", "isolated"] = "global"
+        elif cleaned == "isolated":
+            normalized = "isolated"
+        else:
+            raise ValueError("memory scope must be 'global' or 'isolated'")
+        self.repository.save_memory_setting("memory_scope", normalized)
+        self._memory_scope_cache = normalized
+        return normalized
+
     def save_memory_share_grant(
         self,
         *,
@@ -1776,10 +1820,12 @@ class MemoryService:
         current_workspace_id: str,
     ) -> list[tuple[str, StructuredMemoryService, set[str]]]:
         sources = [(current_workspace_id, self._structured_for(current_workspace_id), set())]
+        granted_sources: set[str] = set()
         for grant in self.repository.list_memory_share_grants(current_workspace_id):
             source_workspace_id = grant.source_workspace_id
             if source_workspace_id == current_workspace_id:
                 continue
+            granted_sources.add(source_workspace_id)
             existing = self._structured_by_workspace.get(source_workspace_id)
             if existing is not None:
                 sources.append((source_workspace_id, existing, set(grant.categories)))
@@ -1792,6 +1838,28 @@ class MemoryService:
                     source_workspace_id,
                     StructuredMemoryService.from_state(payload),
                     set(grant.categories),
+                )
+            )
+        if self.memory_scope() != self.MEMORY_SCOPE_GLOBAL:
+            return sources
+        # Global memory (the default, strongest mode): every workspace that owns
+        # durable memory contributes its preferences and mastery signals, with
+        # explicit grants kept only as documentation of hand-picked shares.
+        all_categories = {"preferences", "mastery"}
+        for source_workspace_id, payload in self.repository.list_structured_memory():
+            if source_workspace_id == current_workspace_id or source_workspace_id.startswith("__"):
+                continue
+            if source_workspace_id in granted_sources:
+                continue
+            existing = self._structured_by_workspace.get(source_workspace_id)
+            if existing is not None:
+                sources.append((source_workspace_id, existing, all_categories))
+                continue
+            sources.append(
+                (
+                    source_workspace_id,
+                    StructuredMemoryService.from_state(payload),
+                    all_categories,
                 )
             )
         return sources
@@ -1835,6 +1903,16 @@ class MemoryService:
 
             if is_current_workspace or "preferences" in shared_categories:
                 for preference in snapshot.preferences:
+                    cross_workspace = not is_current_workspace
+                    excluded = (
+                        preference.key in self.CROSS_WORKSPACE_EXCLUDED_PREFERENCE_KEYS
+                        or preference.key.startswith(self.CROSS_WORKSPACE_EXCLUDED_PREFERENCE_PREFIXES)
+                    )
+                    if cross_workspace and excluded:
+                        # Internal per-turn keys carry raw project content
+                        # (decisions, evidence text); they are context for the
+                        # owning project, not durable learner preferences.
+                        continue
                     existing = aggregate._preferences.get(preference.key)
                     if existing is None or preference.updated_at >= existing.updated_at:
                         aggregate._preferences[preference.key] = preference
@@ -1912,10 +1990,41 @@ class MemoryService:
                     if existing is None or session.updated_at >= existing.updated_at:
                         aggregate._sessions[session_id] = session
 
+                # The personal lane is the default active lane, so the current
+                # workspace's operational records must survive the merge.
+                for feedback in snapshot.user_feedback:
+                    aggregate._user_feedback.append(feedback)
+
+                for outcome in snapshot.learning_outcomes:
+                    outcome_key = "::".join(
+                        [
+                            outcome.concept.strip().lower() or "concept",
+                            outcome.outcome.strip().lower() or "outcome",
+                            outcome.action_type.strip().lower() or "general",
+                        ]
+                    )
+                    existing_outcome = aggregate._learning_outcomes.get(outcome_key)
+                    if existing_outcome is None or outcome.updated_at >= existing_outcome.updated_at:
+                        aggregate._learning_outcomes[outcome_key] = outcome
+
+                for asset in snapshot.teaching_assets:
+                    aggregate.upsert_teaching_asset(asset)
+
         aggregate._reflections = sorted(
             aggregate._reflections,
             key=lambda item: item.created_at,
         )[-18:]
+        aggregate._user_feedback = sorted(
+            aggregate._user_feedback,
+            key=lambda item: item.created_at,
+        )[-24:]
+        if len(aggregate._learning_outcomes) > 40:
+            trimmed_outcomes = sorted(
+                aggregate._learning_outcomes.items(),
+                key=lambda item: item[1].updated_at,
+                reverse=True,
+            )[:40]
+            aggregate._learning_outcomes = dict(trimmed_outcomes)
 
         # Keep the current workspace thread and runtime defaults as the live foreground context,
         # while the rest of the personal memory stays in the background aggregate.
@@ -1973,7 +2082,7 @@ class MemoryService:
     @staticmethod
     def _memory_scope(workspace: dict[str, Any]) -> str:
         scope = str(workspace.get("memory_scope") or "").strip()
-        return scope or "project"
+        return scope or "personal"
 
     def _resolve_workspace_for_write(self, workspace_id: str | None) -> str:
         if workspace_id:
@@ -3282,6 +3391,7 @@ class MemoryService:
             assetCatalog=asset_catalog,
             teaching_assets=teaching_asset_items,
             memory_share_grants=self.list_memory_share_grants(workspace_id),
+            memoryScope=self.memory_scope(),
             coaching_adaptation=coaching_adaptation,
             teaching_strategy_effectiveness=teaching_strategy_items,
             learning_outcomes=learning_outcome_items,
@@ -5411,6 +5521,36 @@ class MemoryService:
             key=lambda item: (priority.get(item.status, 9), item.updated_at, item.card_id),
         )
 
+    def delete_training_card(self, workspace_id: str, card_id: str) -> bool:
+        """Library management action: remove a training card outright.
+
+        Deliberately outside the learning status machine — this is an explicit
+        learner cleanup from the Resources library, not a learning outcome. If
+        the removed card was selected, the selection clears so routing picks a
+        fresh card on the next training turn.
+        """
+        cleaned_card_id = card_id.strip()
+        if not cleaned_card_id:
+            return False
+        structured = self._structured_for(workspace_id)
+        card = structured._training_cards.get(cleaned_card_id)
+        if card is None:
+            return False
+        del structured._training_cards[cleaned_card_id]
+        self._record_training_event(
+            structured,
+            event_type="training_card_deleted",
+            payload={
+                "card_candidate_id": cleaned_card_id,
+                "previous_status": card.status,
+                "reason": "Removed from the Resources library by the learner.",
+            },
+        )
+        if str(structured._workspace.get("selected_card_id") or "") == cleaned_card_id:
+            structured.update_workspace(selected_card_id="", selected_card_status="")
+        self._persist_structured(workspace_id)
+        return True
+
     def persist_active_card_selection(
         self,
         workspace_id: str,
@@ -7337,6 +7477,7 @@ class MemoryService:
         workspace_id: str | None = None,
         response_language: str | None = None,
         answer_mode: str | None = None,
+        resource_search_mode: str | None = None,
         teaching_style: str | None = None,
         coach_defaults: CoachDefaults | None = None,
         follow_current_file: bool | None = None,
@@ -7356,6 +7497,14 @@ class MemoryService:
         if answer_mode:
             structured.remember_preference("answer_mode", answer_mode, source="coach-settings")
             workspace_patch["answer_mode"] = answer_mode
+        normalized_resource_search_mode = (resource_search_mode or "").strip()
+        if normalized_resource_search_mode:
+            structured.remember_preference(
+                "resource_search_mode",
+                normalized_resource_search_mode,
+                source="coach-settings",
+            )
+            workspace_patch["resource_search_mode"] = normalized_resource_search_mode
         if response_language:
             structured.remember_preference(
                 "response_language",

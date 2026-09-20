@@ -26,7 +26,7 @@ export interface CoachDefaultsSnapshot {
  * carrying any other value must be sent.
  */
 export const NEUTRAL_COACH_DEFAULTS = {
-  memoryScope: "project",
+  memoryScope: "personal",
   workingSetMode: "balanced",
   reviewCadence: "steady",
   reviewReminderMode: "due",

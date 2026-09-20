@@ -120,9 +120,9 @@ const providerRecoveryCopy: Record<ComposerLanguage, ProviderRecoveryLocale> = {
   "zh-CN": {
     summary: {
       offline: {
-        title: "Trainer 暂时还不能继续",
-        detail: "打开“设置”检查连接。当前对话会保留在这里。",
-        actionLabel: "打开设置",
+        title: "Trainer 正在自动恢复",
+        detail: "无需重新测试模型连接；后台服务恢复后会继续当前对话。",
+        actionLabel: "重试启动",
       },
       starting: {
         title: "Trainer 正在准备中",
@@ -172,9 +172,9 @@ const providerRecoveryCopy: Record<ComposerLanguage, ProviderRecoveryLocale> = {
   "en-US": {
     summary: {
       offline: {
-        title: "Trainer cannot continue yet",
-        detail: "Open Settings to check the connection. This conversation will stay here.",
-        actionLabel: "Open Settings",
+        title: "Trainer is recovering automatically",
+        detail: "There is no need to retest the model connection; this conversation resumes when the local service is ready.",
+        actionLabel: "Retry startup",
       },
       starting: {
         title: "Trainer is getting ready",
@@ -224,9 +224,9 @@ const providerRecoveryCopy: Record<ComposerLanguage, ProviderRecoveryLocale> = {
   "es-ES": {
     summary: {
       offline: {
-        title: "Trainer aún no puede continuar",
-        detail: "Abre Ajustes para revisar la conexión. Esta conversación se conservará aquí.",
-        actionLabel: "Abrir Ajustes",
+        title: "Trainer se está recuperando automáticamente",
+        detail: "No hace falta volver a probar el modelo; la conversación continuará cuando el servicio local esté listo.",
+        actionLabel: "Reintentar inicio",
       },
       starting: {
         title: "Trainer se está preparando",
@@ -276,9 +276,9 @@ const providerRecoveryCopy: Record<ComposerLanguage, ProviderRecoveryLocale> = {
   "fr-FR": {
     summary: {
       offline: {
-        title: "Trainer ne peut pas encore continuer",
-        detail: "Ouvrez Paramètres pour vérifier la connexion. Cette conversation restera ici.",
-        actionLabel: "Ouvrir Paramètres",
+        title: "Trainer se rétablit automatiquement",
+        detail: "Inutile de retester le modèle ; la conversation reprendra lorsque le service local sera prêt.",
+        actionLabel: "Relancer",
       },
       starting: {
         title: "Trainer se prépare",
@@ -328,9 +328,9 @@ const providerRecoveryCopy: Record<ComposerLanguage, ProviderRecoveryLocale> = {
   "de-DE": {
     summary: {
       offline: {
-        title: "Trainer kann noch nicht fortfahren",
-        detail: "Öffne Einstellungen und prüfe die Verbindung. Diese Unterhaltung bleibt erhalten.",
-        actionLabel: "Einstellungen öffnen",
+        title: "Trainer stellt sich automatisch wieder her",
+        detail: "Der Modellzugang muss nicht erneut getestet werden; die Unterhaltung wird fortgesetzt, sobald der lokale Dienst bereit ist.",
+        actionLabel: "Start erneut versuchen",
       },
       starting: {
         title: "Trainer wird vorbereitet",
@@ -380,9 +380,9 @@ const providerRecoveryCopy: Record<ComposerLanguage, ProviderRecoveryLocale> = {
   "ja-JP": {
     summary: {
       offline: {
-        title: "Trainer はまだ続行できません",
-        detail: "設定で接続を確認してください。会話はここに残ります。",
-        actionLabel: "設定を開く",
+        title: "Trainer は自動復旧中です",
+        detail: "モデル接続の再テストは不要です。ローカルサービスの復旧後に会話を続行します。",
+        actionLabel: "起動を再試行",
       },
       starting: {
         title: "Trainer は準備中です",
@@ -432,9 +432,9 @@ const providerRecoveryCopy: Record<ComposerLanguage, ProviderRecoveryLocale> = {
   "ko-KR": {
     summary: {
       offline: {
-        title: "Trainer를 아직 계속 사용할 수 없습니다",
-        detail: "설정에서 연결을 확인하세요. 이 대화는 그대로 유지됩니다.",
-        actionLabel: "설정 열기",
+        title: "Trainer가 자동으로 복구 중입니다",
+        detail: "모델 연결을 다시 테스트할 필요가 없습니다. 로컬 서비스가 준비되면 대화를 계속합니다.",
+        actionLabel: "시작 다시 시도",
       },
       starting: {
         title: "Trainer를 준비하는 중입니다",
@@ -484,9 +484,9 @@ const providerRecoveryCopy: Record<ComposerLanguage, ProviderRecoveryLocale> = {
   "pt-BR": {
     summary: {
       offline: {
-        title: "O Trainer ainda não pode continuar",
-        detail: "Abra Configurações para verificar a conexão. Esta conversa ficará aqui.",
-        actionLabel: "Abrir configurações",
+        title: "O Trainer está se recuperando automaticamente",
+        detail: "Não é preciso testar o modelo novamente; a conversa continua quando o serviço local estiver pronto.",
+        actionLabel: "Tentar iniciar novamente",
       },
       starting: {
         title: "O Trainer está se preparando",
@@ -596,15 +596,6 @@ function blockedComposerSetupMessage(
   _activeView: ActiveWorkbenchView,
   connectionState?: "starting" | "connected" | "offline",
 ): string {
-  if (
-    connectionState !== "offline" &&
-    connectionState !== "starting" &&
-    provider.configured &&
-    provider.apiKeyConfigured &&
-    !providerHasVerifiedStreamingProbe(provider)
-  ) {
-    return streamingCapabilityBlockReason(language);
-  }
   return providerRecoverySummary(provider, language, connectionState).detail;
 }
 

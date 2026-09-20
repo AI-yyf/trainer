@@ -561,6 +561,112 @@ test('deleteResourceCommand ignores the UI operation id when it removes the boot
   ]);
 });
 
+test('libraryDeleteCommand forwards a request id and refreshes authoritative memory before ack', async () => {
+  const { libraryDeleteCommand } = loadWithVscodeMock(resourceCommandsModulePath, {});
+  const requests = [];
+  const gets = [];
+  const patches = [];
+  let syncCount = 0;
+  const bootstrap = createDefaultBootstrapData(
+    { trusted: true, workspaceFolder: 'F:\\trainer\\workspace-a' },
+    undefined,
+    { lifecycle: 'ready', host: '127.0.0.1', port: 34891, canStart: true },
+  );
+  const context = {
+    sidecarManager: {
+      async ensureRunning() {
+        return { lifecycle: 'ready', port: 34891 };
+      },
+    },
+    sidecarClient: {
+      async postJson(port, requestPath, body) {
+        requests.push({ port, requestPath, body });
+        return {
+          ok: true,
+          type: 'plan',
+          id: 'plan-1',
+          requestId: 'library-request-1',
+          activity: {
+            eventId: 'library-event-1',
+            type: 'plan',
+            id: 'plan-1',
+            action: 'deleted',
+            occurredAt: '2026-09-20T08:00:00Z',
+            payload: { title: 'Plan one' },
+          },
+        };
+      },
+      async getJson(port, requestPath) {
+        gets.push({ port, requestPath });
+        return { memory: { recent_summary: 'Plan removed.' }, plan: null };
+      },
+    },
+    trustGuard: {
+      async ensureTrusted() {
+        return true;
+      },
+    },
+    getSessionId() {
+      return 'session-1';
+    },
+    getHostState() {
+      return {
+        bootstrap,
+        workspace: { trusted: true, workspaceFolder: 'F:\\trainer\\workspace-a' },
+      };
+    },
+    async patchWorkbenchData(patch) {
+      patches.push(patch);
+    },
+    workbench: {
+      async syncState() {
+        syncCount += 1;
+      },
+    },
+  };
+
+  const result = await libraryDeleteCommand(context, {
+    type: 'plan',
+    id: 'plan-1',
+    requestId: 'library-request-1',
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.data, {
+    mutation: {
+      requestId: 'library-request-1',
+      type: 'plan',
+      id: 'plan-1',
+      deleted: true,
+      activity: {
+        eventId: 'library-event-1',
+        type: 'plan',
+        id: 'plan-1',
+        action: 'deleted',
+        occurredAt: '2026-09-20T08:00:00Z',
+        title: 'Plan one',
+      },
+    },
+  });
+  assert.deepEqual(requests, [
+    {
+      port: 34891,
+      requestPath: '/library/delete',
+      body: {
+        session_id: 'session-1',
+        workspace_id: 'F:\\trainer\\workspace-a',
+        type: 'plan',
+        id: 'plan-1',
+        request_id: 'library-request-1',
+      },
+    },
+  ]);
+  assert.equal(gets.length, 1);
+  assert.match(gets[0].requestPath, /^\/memory\/summary\?/);
+  assert.equal(patches.length, 1);
+  assert.equal(syncCount, 1);
+});
+
 test('refreshResourceTrashCommand preserves the last known Trash when a matching response is malformed', async () => {
   const vscodeMock = {};
   const { refreshResourceTrashCommand } = loadWithVscodeMock(resourceCommandsModulePath, vscodeMock);

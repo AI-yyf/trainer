@@ -2,6 +2,8 @@ name: Trainer Cross-Platform Verify
 
 on:
   push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
     inputs:
@@ -10,6 +12,10 @@ on:
         required: false
         default: false
         type: boolean
+
+concurrency:
+  group: trainer-cross-platform-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -81,6 +87,9 @@ jobs:
       - name: Clear inherited sidecar binaries before native packaging
         run: >-
           node -e "require('node:fs').rmSync('extension/bundled/bin', { recursive: true, force: true })"
+
+      - name: Bundle the native sidecar for this runner
+        run: npm run bundle:sidecar:binary --prefix extension
 
       - name: Build and verify a native VSIX delivery artifact
         id: package-vsix

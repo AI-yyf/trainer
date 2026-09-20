@@ -149,7 +149,10 @@ test('startup installs host theme observation for VS Code family theme changes',
   assert.match(themeSource, /function resolveHostThemeName/);
   assert.match(themeSource, /vscode-high-contrast-light/);
   assert.match(themeSource, /data-vscode-theme-kind/);
-  assert.match(themeSource, /const resolvedTheme = resolveHostThemeName\(activeFallbackTheme\)/);
+  assert.match(
+    themeSource,
+    /const resolvedTheme = themeFollowsHost \? resolveHostThemeName\(activeFallbackTheme\) : activeFallbackTheme;/,
+  );
   assert.match(themeSource, /applyFallbackTheme\(resolvedTheme\)/);
   assert.match(themeSource, /root\.dataset\.theme = resolvedTheme/);
   assert.match(mainSource, /installWorkbenchHostThemeBridge\(\)/);

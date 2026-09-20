@@ -1279,10 +1279,14 @@ class MemoryServiceTests(unittest.TestCase):
             lane = current.structured_for_workspace(target_workspace_id).snapshot()
             return current._build_personal_lane_snapshot(target_workspace_id, lane)
 
-        isolated = aggregated(service)
-        self.assertFalse(any(item.value == "source-only preference" for item in isolated.preferences))
-        self.assertFalse(any(item.concept == "shared-mastery" for item in isolated.mastery))
+        # Global memory is the default: the target workspace reads the source's
+        # durable preferences and mastery signals without any explicit grant.
+        global_view = aggregated(service)
+        self.assertTrue(any(item.value == "source-only preference" for item in global_view.preferences))
+        self.assertTrue(any(item.concept == "shared-mastery" for item in global_view.mastery))
 
+        # An explicit narrow grant narrows that source to the granted
+        # categories, even while the global default stays on.
         service.save_memory_share_grant(
             source_workspace_id=source_workspace_id,
             target_workspace_id=target_workspace_id,
@@ -1302,6 +1306,8 @@ class MemoryServiceTests(unittest.TestCase):
         self.assertFalse(any(item.value == "source-only preference" for item in mastery_only.preferences))
         self.assertTrue(any(item.concept == "shared-mastery" for item in mastery_only.mastery))
 
+        # In isolated mode, revoking the grant removes the source entirely.
+        rebuilt.set_memory_scope("isolated")
         self.assertTrue(
             rebuilt.revoke_memory_share_grant(
                 source_workspace_id=source_workspace_id,
@@ -1310,6 +1316,7 @@ class MemoryServiceTests(unittest.TestCase):
         )
         revoked = aggregated(rebuilt)
         self.assertFalse(any(item.concept == "shared-mastery" for item in revoked.mastery))
+        self.assertFalse(any(item.value == "source-only preference" for item in revoked.preferences))
 
     def test_project_scope_current_focus_stays_concise_when_thread_next_step_is_already_present(self) -> None:
         database_path = Path(".tmp-test/memory-project-focus-compact.db")

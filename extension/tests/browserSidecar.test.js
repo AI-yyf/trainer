@@ -1432,6 +1432,85 @@ test('browser preview keeps raw non-stream transport failures out of public erro
   }
 });
 
+test('browser preview fixture saves coach settings locally without a sidecar request', async () => {
+  const originalFetch = global.fetch;
+  const previousPreviewFlag = global.window.__TRAINER_BROWSER_PREVIEW__;
+  const previousBootstrap = global.window.__TRAINER_BOOTSTRAP__;
+  const module = await loadBrowserSidecarModule();
+  let fetchCount = 0;
+
+  try {
+    global.window.__TRAINER_BROWSER_PREVIEW__ = true;
+    global.window.__TRAINER_BOOTSTRAP__ = {
+      profile: {
+        learnerName: 'Preview learner',
+        goals: [],
+        weeklyHours: 4,
+        preferredStyle: 'guided',
+        answerPolicy: 'guided',
+        focusAreas: [],
+      },
+      memory: {
+        workspace: {
+          responseLanguage: 'en-US',
+          resourceSearchMode: 'workspace',
+          coachDefaults: {
+            memoryScope: 'personal',
+            workingSetMode: 'balanced',
+            reviewCadence: 'adaptive',
+            reviewReminderMode: 'gentle',
+            workspaceMemoryToggles: {
+              decisions: true,
+              patterns: true,
+              resources: true,
+            },
+          },
+        },
+      },
+    };
+    global.fetch = async () => {
+      fetchCount += 1;
+      throw new Error('fixture settings must not use the network');
+    };
+
+    const result = await module.saveBrowserPreviewCoachSettings(
+      {
+        responseLanguage: 'zh-CN',
+        answerMode: 'direct',
+        resourceSearchMode: 'global',
+        teachingStyle: 'socratic',
+        includeDiagnostics: false,
+      },
+      'preview-fixture-settings',
+    );
+
+    assert.equal(fetchCount, 0);
+    assert.equal(result.sessionId, 'preview-fixture-settings');
+    assert.equal(result.message.type, 'state/patch');
+    assert.equal(result.message.payload.profile.preferredStyle, 'socratic');
+    assert.equal(result.message.payload.profile.answerPolicy, 'direct');
+    assert.equal(result.message.payload.memory.workspace.responseLanguage, 'zh-CN');
+    assert.equal(result.message.payload.memory.workspace.resourceSearchMode, 'global');
+    assert.equal(result.message.payload.memory.workspace.includeDiagnostics, false);
+    assert.equal(
+      global.window.__TRAINER_BOOTSTRAP__.memory.workspace.resourceSearchMode,
+      'global',
+    );
+  } finally {
+    global.fetch = originalFetch;
+    if (previousPreviewFlag === undefined) {
+      delete global.window.__TRAINER_BROWSER_PREVIEW__;
+    } else {
+      global.window.__TRAINER_BROWSER_PREVIEW__ = previousPreviewFlag;
+    }
+    if (previousBootstrap === undefined) {
+      delete global.window.__TRAINER_BOOTSTRAP__;
+    } else {
+      global.window.__TRAINER_BOOTSTRAP__ = previousBootstrap;
+    }
+  }
+});
+
 test('browser preview replaces provider failure details and diagnostics with safe recovery copy', async () => {
   const originalFetch = global.fetch;
   const module = await seedPreviewProviderState(
