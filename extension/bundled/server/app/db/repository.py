@@ -37,7 +37,7 @@ WINDOWS_WORKSPACE_ALIAS_PATTERN = re.compile(r"^[A-Za-z]:[\\/]")
 class TrainerRepository:
     def save_provider_capability(self, cache_key: str, states: dict[str, str]) -> None:
         """Upsert observed provider capability truth (survives sidecar restarts)."""
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
 
         with self._connect() as connection:
             connection.execute(
