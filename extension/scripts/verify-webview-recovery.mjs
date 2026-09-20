@@ -889,6 +889,7 @@ function startWebviewDevServer(port) {
           ["run", "dev", "--", "--host", "127.0.0.1", "--port", String(port)],
           {
             cwd: webviewDir,
+            detached: true,
             env: {
               ...process.env,
               BROWSER: "none",
@@ -965,7 +966,42 @@ async function stopWebviewDevServer(child) {
     });
     return;
   }
-  child.kill("SIGTERM");
+  const pid = child.pid;
+  if (!pid) {
+    child.kill("SIGTERM");
+    return;
+  }
+
+  // npm launches Vite as a child process. Killing only npm leaves Vite alive on
+  // Linux with this script's stdout/stderr pipes open, so Node waits forever.
+  // The detached spawn above creates a dedicated process group that lets us
+  // terminate the complete preview-server tree without touching the runner.
+  signalProcessGroup(pid, "SIGTERM");
+  if (await waitForChildExit(child, 2_000)) {
+    return;
+  }
+  signalProcessGroup(pid, "SIGKILL");
+  await waitForChildExit(child, 2_000);
+}
+
+function signalProcessGroup(pid, signal) {
+  try {
+    process.kill(-pid, signal);
+  } catch (error) {
+    if (error?.code !== "ESRCH") {
+      throw error;
+    }
+  }
+}
+
+async function waitForChildExit(child, timeoutMs) {
+  if (child.exitCode != null) {
+    return true;
+  }
+  return await Promise.race([
+    new Promise((resolve) => child.once("exit", () => resolve(true))),
+    sleep(timeoutMs).then(() => false),
+  ]);
 }
 
 function assertEqual(actual, expected, message) {
