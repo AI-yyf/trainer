@@ -2,6 +2,8 @@ name: Trainer Cross-Platform Verify
 
 on:
   push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
     inputs:
@@ -10,6 +12,10 @@ on:
         required: false
         default: false
         type: boolean
+
+concurrency:
+  group: trainer-cross-platform-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
