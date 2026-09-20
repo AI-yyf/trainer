@@ -7,7 +7,6 @@ const { test, expect } = require("playwright/test");
 
 const PREVIEW_PATH = "/vscode-preview.html";
 const VIEWPORT_WIDTHS = [300, 360, 420];
-const TRAINING_CARD_FACTS = ["current", "why-now", "deliverable", "verify", "return"];
 
 const VIEW_LABELS = {
   "es-ES": ["Chat", "Plan", "Recursos", "Entrenamiento", "Ajustes"],
@@ -62,12 +61,9 @@ async function expectFiveLocalizedTopLevelViews(page, language) {
 
 async function expectCurrentTrainingCardFacts(page) {
   const card = page.locator(".training-current__card-stack[role=group]");
-  const facts = card.locator("[data-training-card-fact]");
-
-  await expect(facts).toHaveCount(TRAINING_CARD_FACTS.length);
-  for (const fact of TRAINING_CARD_FACTS) {
-    await expect(card.locator(`[data-training-card-fact=\"${fact}\"]`)).toBeVisible();
-  }
+  await expect(card.locator("[data-view-object]").first()).toBeVisible();
+  await expect(card.locator(".training-current__sentence")).toContainText(/\S/);
+  await expect(card.locator("[data-training-card-fact]")).toHaveCount(0);
 }
 
 async function expectNoHorizontalOverflow(page) {

@@ -232,9 +232,11 @@ async function exerciseResources(page, scenario) {
 async function exerciseTraining(page, scenario) {
   const card = page.locator(".training-pane--card-only");
   await expect(card).toBeVisible();
-  await expect(card.locator("[data-training-card-fact]")).toHaveCount(5);
-  // The narrow card-only surface answers the five learner questions directly;
-  // the full Learn/Try/Verify/Reflect/Return rail belongs to the expanded view.
+  await expect(card.locator("[data-view-object]").first()).toBeVisible();
+  await expect(card.locator(".training-current__sentence")).toContainText(/\S/);
+  await expect(card.locator("[data-training-card-fact]")).toHaveCount(0);
+  // The narrow card-only surface keeps only the current question; the full
+  // Learn/Try/Verify/Reflect/Return rail belongs to the expanded view.
   await expect(card.locator(".training-loop-step")).toHaveCount(0);
   return { kind: scenario.userAction.kind, card };
 }
@@ -413,7 +415,9 @@ async function assertPersistenceContract(page, scenario, actionResult) {
       await expect(page.locator('.resources-knowledge__search input[type="search"]')).toHaveValue(actionResult.query);
       return;
     case "current_training_card":
-      await expect(page.locator(".training-pane--card-only [data-training-card-fact]")).toHaveCount(5);
+      await expect(page.locator(".training-pane--card-only [data-view-object]").first()).toBeVisible();
+      await expect(page.locator(".training-pane--card-only .training-current__sentence")).toContainText(/\S/);
+      await expect(page.locator(".training-pane--card-only [data-training-card-fact]")).toHaveCount(0);
       return;
     case "settings_detail":
       await expectSingleVisible(page.locator(".coach-settings-view__provider-detail"));
