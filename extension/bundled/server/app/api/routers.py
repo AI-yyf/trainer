@@ -7595,6 +7595,47 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
 
         return artifacts
 
+    def _resolve_context_tier(
+        request: TurnRequest | SessionMessageRequest,
+    ) -> str:
+        """Classify a turn as a pure conversational Q&A ("minimal") or "full".
+
+        Minimal turns carry no code anchors, no resources, no attachments, no
+        agent-loop demand, and stay on the coach view. They need the coaching
+        identity plus the question — not the learner archive, resource
+        retrieval, or the run's pedagogy injections. Anything ambiguous
+        classifies as full; minimal is only ever a prompt/IO reduction, never
+        a behavior gate.
+        """
+        try:
+            if getattr(request, "use_agent_loop", None):
+                return "full"
+            if getattr(request, "formal_plan_mutation", False):
+                return "full"
+            if getattr(request, "plan_runtime_recovery", None):
+                return "full"
+            if getattr(request, "current_file", None) is not None:
+                return "full"
+            if getattr(request, "workspace_file_snapshot", None):
+                return "full"
+            if getattr(request, "attachments", None):
+                return "full"
+            if getattr(request, "resource_ids", None) or getattr(
+                request, "resource_composer_intent", None
+            ):
+                return "full"
+            if request_resource_ids(request):
+                return "full"
+            intent = str(getattr(request, "intent", "") or "coach").strip().lower()
+            active_view = str(getattr(request, "active_view", "") or "").strip().lower()
+            if intent not in {"", "coach"}:
+                return "full"
+            if active_view and active_view != "coach":
+                return "full"
+        except Exception:
+            return "full"
+        return "minimal"
+
     def resolve_coach_turn(
         *,
         state,
@@ -7881,16 +7922,24 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             or str(request_focus_area or "").strip()
             or str(message or "").strip()
         )
-        (
-            resolved_external_references,
-            resolved_curated_background_references,
-            resolved_recent_background_findings,
-        ) = resolve_external_references(
-            workspace_id=state.workspace_id,
-            resource_context=resource_context,
-            focus_area=focus_area_hint,
-            limit=4,
-        )
+        context_tier = _resolve_context_tier(request)
+        if context_tier == "minimal":
+            # Pure Q&A: skip resource/knowledge retrieval entirely. The turn
+            # answers from the model plus the recent conversation.
+            resolved_external_references = None
+            resolved_curated_background_references = None
+            resolved_recent_background_findings = None
+        else:
+            (
+                resolved_external_references,
+                resolved_curated_background_references,
+                resolved_recent_background_findings,
+            ) = resolve_external_references(
+                workspace_id=state.workspace_id,
+                resource_context=resource_context,
+                focus_area=focus_area_hint,
+                limit=4,
+            )
         pedagogy_artifacts_raw = runtime.pedagogy_service.build_artifacts(
             request=pedagogy_request,
             learner_state=pedagogy_learner_state_raw,
@@ -8075,6 +8124,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             curated_background_references=resolved_curated_background_references,
             recent_background_findings=resolved_recent_background_findings,
             plan_runtime_recovery=getattr(request, "plan_runtime_recovery", None),
+            context_tier=context_tier,
         )
         if isinstance(request, TurnRequest) and request.intent == "plan" and request.formal_plan_mutation:
             coach_context["formal_plan_mutation"] = True
@@ -17618,7 +17668,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         curated_background_references: list[dict[str, object]] | None = None,
         recent_background_findings: list[dict[str, object]] | None = None,
         plan_runtime_recovery: dict[str, object] | None = None,
+        context_tier: str = "full",
     ) -> dict[str, object]:
+        minimal_context = context_tier == "minimal"
         coaching_state = snapshot.coaching_state
         memory = snapshot.memory
         active_stage = active_plan_stage(snapshot.plan)
@@ -18104,10 +18156,26 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 fresh_memory["review_rhythm"] = ""
             fresh_memory["active_thread"] = None
             coach_context["memory"] = fresh_memory
+        if minimal_context and isinstance(coach_context.get("memory"), dict):
+            # Pure Q&A: the transcript itself carries continuity. Blank the
+            # learner-archive projections so the prompt stays lean and the
+            # answer is not steered by plan/review machinery.
+            minimal_memory = dict(coach_context["memory"])
+            minimal_memory["current_focus"] = ""
+            minimal_memory["recent_summary"] = ""
+            minimal_memory["recent_wins"] = []
+            minimal_memory["teaching_observations"] = []
+            minimal_memory["memory_evidence"] = []
+            minimal_memory["due_reviews"] = []
+            minimal_memory["due_review_count"] = 0
+            minimal_memory["review_rhythm"] = ""
+            minimal_memory["active_thread"] = None
+            coach_context["memory"] = minimal_memory
+            coach_context["context_tier"] = "minimal"
         if resource_context:
             coach_context.update(resource_context)
         effective_focus = current_focus or summary
-        if workspace_id:
+        if workspace_id and not minimal_context:
             teaching_knowledge_fragments = runtime.resource_service.top_knowledge_fragments(
                 workspace_id,
                 max_fragments=6,
@@ -18138,7 +18206,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 coach_context["background_references"] = curated_background_references
             if recent_background_findings:
                 coach_context["recent_background_findings"] = recent_background_findings
-        if external_references:
+        if external_references and not minimal_context:
             coach_context["external_references"] = external_references
             background_reference_summary_parts: list[str] = []
             for item in external_references[:2]:

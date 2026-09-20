@@ -9,7 +9,7 @@ import type {
   TrainerWebviewMessage,
 } from './types';
 import { sanitizeErrorSurfaceJson, sanitizeErrorSurfaceText } from '../../../shared/src/errorSurfaceSanitizer';
-import { toHostBootstrapMessage, toHostPatchMessage, toOperationStatus } from './workbenchData';
+import { toBootstrapPayload, toHostBootstrapMessage, toHostPatchMessage, toOperationStatus } from './workbenchData';
 
 const RESOURCE_OPERATION_REQUEST_ID_KEY = '__trainerResourceOperationId';
 const RESOURCE_SEARCH_REQUEST_ID_KEY = 'requestId';
@@ -159,6 +159,14 @@ export class WorkbenchSidebarController
   private pendingRestorePayload?: unknown;
   private lastOperationStatusPayload?: unknown;
   private lastVisibleFactsPayload?: unknown;
+  /**
+   * Incremental sync bookkeeping: the bootstrap payload as last delivered to
+   * the webview, plus per-key serialized fingerprints. Unchanged top-level
+   * keys are never re-sent, so a sync after a tiny state change ships a small
+   * `state/patch` instead of the full bootstrap.
+   */
+  private lastSyncedPayload?: Record<string, unknown>;
+  private readonly syncedKeyFingerprints = new Map<string, string>();
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -226,6 +234,7 @@ export class WorkbenchSidebarController
       this.outputChannel.appendLine('[webview] html ready');
 
       await this.postMessage(toHostBootstrapMessage(this.getState()));
+      this.adoptSyncedPayload();
       this.outputChannel.appendLine('[webview] bootstrap posted');
     } catch (error) {
       this.outputChannel.appendLine(
@@ -243,7 +252,7 @@ export class WorkbenchSidebarController
     }
 
     await this.ensureRendered(this.view, 'syncState');
-    await this.postMessage(toHostPatchMessage(this.getState()));
+    await this.postIncrementalPatch();
   }
 
   async syncLiveContext(): Promise<void> {
@@ -251,7 +260,71 @@ export class WorkbenchSidebarController
       return;
     }
 
-    await this.postMessage(toHostPatchMessage(this.getState()));
+    await this.postIncrementalPatch();
+  }
+
+  /**
+   * Ship only the top-level bootstrap keys that actually changed since the
+   * last successful delivery. Reference equality gives an O(1) fast path per
+   * key (host state is rebuilt immutably); a serialized fingerprint guards
+   * against equal-content rebuilds.
+   */
+  private async postIncrementalPatch(): Promise<void> {
+    const next = toBootstrapPayload(this.getState()) as unknown as Record<string, unknown>;
+    const previous = this.lastSyncedPayload;
+    const changedKeys: string[] = [];
+    const keys = new Set<string>([
+      ...Object.keys(next),
+      ...(previous ? Object.keys(previous) : []),
+    ]);
+    for (const key of keys) {
+      const nextValue = next[key];
+      if (previous && Object.prototype.hasOwnProperty.call(previous, key)) {
+        if (nextValue === previous[key]) {
+          continue;
+        }
+        const fingerprint = JSON.stringify(nextValue ?? null);
+        if (this.syncedKeyFingerprints.get(key) === fingerprint) {
+          // Rebuilt object with identical content: keep the last-delivered
+          // reference so subsequent syncs stay on the fast path.
+          this.lastSyncedPayload = { ...this.lastSyncedPayload, [key]: nextValue };
+          continue;
+        }
+        this.syncedKeyFingerprints.set(key, fingerprint);
+      } else {
+        this.syncedKeyFingerprints.set(key, JSON.stringify(nextValue ?? null));
+      }
+      changedKeys.push(key);
+    }
+
+    if (changedKeys.length === 0) {
+      return;
+    }
+
+    if (!previous) {
+      // Fresh webview (new html): deliver the complete payload once.
+      this.lastSyncedPayload = next;
+      await this.postMessage(toHostPatchMessage(this.getState()));
+      return;
+    }
+
+    const partial: Record<string, unknown> = {};
+    for (const key of changedKeys) {
+      partial[key] = next[key];
+      this.lastSyncedPayload = { ...this.lastSyncedPayload, [key]: next[key] };
+    }
+    await this.postMessage({ type: 'state/patch', payload: partial });
+  }
+
+  private resetSyncedPayload(): void {
+    this.lastSyncedPayload = undefined;
+    this.syncedKeyFingerprints.clear();
+  }
+
+  /** Align incremental-sync bookkeeping with a full bootstrap delivery. */
+  private adoptSyncedPayload(): void {
+    this.lastSyncedPayload = toBootstrapPayload(this.getState()) as unknown as Record<string, unknown>;
+    this.syncedKeyFingerprints.clear();
   }
 
   async postMessage(message: unknown): Promise<void> {
@@ -336,6 +409,7 @@ export class WorkbenchSidebarController
         const pendingRestorePayload = this.pendingRestorePayload;
         this.pendingRestorePayload = undefined;
         await this.postMessage(toHostBootstrapMessage(this.getState()));
+        this.adoptSyncedPayload();
         await this.syncState();
         if (pendingRestorePayload !== undefined) {
           await this.postMessage({
@@ -583,6 +657,8 @@ export class WorkbenchSidebarController
       this.lastRenderedHtml = html;
       this.lastLifecycleAckAt = 0;
       this.awaitingLifecycleAck = true;
+      // A fresh webview starts with an empty store: full payload on next sync.
+      this.resetSyncedPayload();
       view.webview.html = html;
       this.outputChannel.appendLine(`[webview] html refreshed (${reason})`);
     })();
@@ -721,7 +797,8 @@ export class WorkbenchSidebarController
         );
       }
     }
-    await this.postMessage(toHostBootstrapMessage(this.getState()));
+    // A refresh re-derives host state and ships one incremental patch; the
+    // full bootstrap channel is reserved for fresh webview instances.
     await this.syncState();
   }
 

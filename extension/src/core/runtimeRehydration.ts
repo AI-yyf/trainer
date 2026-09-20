@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 
-import { primeProviderModelsState } from '../commands/providerWebviewCommands';
 import { getRuntimeWorkspaceContext } from '../commands/workspaceContext';
 import type { CommandContext } from './commandContext';
 import type { SidecarStatus } from './types';
@@ -458,7 +457,10 @@ export async function rehydrateWorkbenchRuntime(
 
     if (status.lifecycle === 'ready' && status.port && !trainerSessionBlockReason(context)) {
       await flushPendingTransferPromotionScope(context);
-      await primeProviderModelsState(context);
+      // Provider model discovery is Settings-layer metadata: the coach runtime
+      // starts from the last valid provider profile and never re-asks /models
+      // here. Refresh happens on demand (picker open with stale cache,
+      // explicit refresh, provider change, or model_not_found).
       if (getRuntimeWorkspaceContext(context).workspaceId !== workspaceIdAtStart) {
         return context.sidecarManager.getStatus();
       }

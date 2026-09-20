@@ -1499,6 +1499,8 @@ export async function fetchProviderModels(
     preferCache?: boolean;
     backgroundRefresh?: boolean;
     forceRefresh?: boolean;
+    /** Serve the model cache regardless of freshness; never contact /models. */
+    cacheOnly?: boolean;
     transient?: boolean;
     responseLanguage?: ComposerLanguage;
     generation?: number;
@@ -1528,10 +1530,31 @@ export async function fetchProviderModels(
     const cacheFresh =
       context.providerStore.isModelCacheFresh(cache) &&
       context.providerStore.isModelCacheCompatible(config, cache, apiKey);
-    if (options?.preferCache && cacheFresh && !options?.forceRefresh) {
+    if (options?.preferCache && (cacheFresh || options?.cacheOnly) && !options?.forceRefresh) {
       const cachedEntry = cache;
       if (!cachedEntry) {
         return undefined;
+      }
+      if (options.cacheOnly && !cacheFresh) {
+        // Stale cache without a refresh trigger: hand back what we have so
+        // Settings renders immediately; the picker decides when to go live.
+        const staleResult: ProviderModelLookupResult = {
+          ok: cachedEntry.availableModels.length > 0,
+          detail: sanitizeErrorSurfaceText(
+            cachedEntry.lastError ||
+              `Using cached model list from ${cachedEntry.fetchedAt} (expired). Refresh models to update.`,
+          ),
+          availableModels: cachedEntry.availableModels,
+          resolvedModel: cachedEntry.resolvedModel,
+          modelTokenLimits: cachedEntry.modelTokenLimits,
+          source: 'cache',
+          fetchedAt: cachedEntry.fetchedAt,
+          expiresAt: cachedEntry.expiresAt,
+          errorCategory: cachedEntry.lastErrorCategory,
+          retryable: cachedEntry.retryable,
+          statusCode: cachedEntry.lastStatusCode,
+        };
+        return applyProviderModelPolicyToLookup(config, staleResult);
       }
       const cachedResult: ProviderModelLookupResult = {
         ok: cachedEntry.availableModels.length > 0,
@@ -2176,9 +2199,12 @@ export async function primeProviderModelsState(context: CommandContext): Promise
     return;
   }
 
+  // Priming is a cache sync, not discovery: it must never touch /models.
+  // Live refresh belongs to the picker (stale cache), the explicit refresh
+  // command, provider changes, and model_not_found recovery.
   const result = await fetchProviderModels(context, config, apiKey, {
     preferCache: true,
-    backgroundRefresh: true,
+    cacheOnly: true,
     generation: modelLookupGeneration,
   });
 

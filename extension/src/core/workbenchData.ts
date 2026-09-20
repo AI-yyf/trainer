@@ -295,21 +295,28 @@ export function applyDerivedHostState(
     data.providerConfig.name === baseProviderConfig.name &&
     data.providerConfig.baseUrl === baseProviderConfig.baseUrl &&
     normalizeProviderProtocol(data.providerConfig.protocol) === normalizeProviderProtocol(baseProviderConfig.protocol);
+  // Keep the memory subtree reference-stable when only the window-trust flag
+  // is involved: incremental sync compares subtree identity first, and a
+  // rebuilt memory object would force a large fingerprint on every patch.
+  const memoryNext =
+    data.memory?.workspace?.windowTrusted === workspace.trusted
+      ? data.memory
+      : {
+          ...data.memory,
+          workspace: {
+            ...data.memory.workspace,
+            // Host window trust verdict (VS Code workspace trust). The sidecar
+            // capability summary only appears after the first classification, so
+            // the webview falls back to this flag on a genuine first run.
+            windowTrusted: workspace.trusted,
+          },
+        };
 
   return {
     ...data,
     workspaceName: workspaceName(workspace),
     sessionLabel: sessionId ?? data.sessionLabel,
-    memory: {
-      ...data.memory,
-      workspace: {
-        ...data.memory.workspace,
-        // Host window trust verdict (VS Code workspace trust). The sidecar
-        // capability summary only appears after the first classification, so
-        // the webview falls back to this flag on a genuine first run.
-        windowTrusted: workspace.trusted,
-      },
-    },
+    memory: memoryNext,
     connection: {
       state: toConnectionState(sidecar),
       provider: toProviderSummary(provider),

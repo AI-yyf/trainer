@@ -6006,8 +6006,9 @@ export function App() {
       if (document.visibilityState !== "visible") {
         return;
       }
-      const elapsed = Date.now() - lastBootstrapRequestAt;
-      if (!hasReceivedHostState || elapsed > 1500) {
+      // With host state already in the store, refocusing is free: the host
+      // pushes incremental patches and the runtime is never re-initialized.
+      if (!hasReceivedHostState) {
         syncBootstrapLifecycleOnVisible(hasReceivedHostState);
       }
     };

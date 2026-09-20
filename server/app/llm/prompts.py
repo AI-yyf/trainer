@@ -657,6 +657,12 @@ def build_coaching_system_prompt(
         current_file,
         coach_context,
     )
+    # Minimal tier: a pure conversational Q&A turn. The coaching identity plus
+    # the request-priority rules are enough — the archive, plan machinery, and
+    # per-run pedagogy sections stay out of the prompt.
+    minimal_context = isinstance(coach_context, dict) and (
+        coach_context.get("context_tier") == "minimal"
+    )
     coaching_context = _prioritize_current_request_context(
         extract_coaching_context(message, current_file, coach_context)
     )
@@ -665,11 +671,13 @@ def build_coaching_system_prompt(
     if context_block:
         system_prompt += f"\n\n## Current Coaching Context\n{context_block}"
 
-    active_thread_block = _build_active_thread_block(coaching_context)
+    active_thread_block = None if minimal_context else _build_active_thread_block(coaching_context)
     if active_thread_block:
         system_prompt += f"\n\n## Active Thread\n{active_thread_block}"
 
-    turn_contract_block = _build_turn_contract_block(coaching_context)
+    turn_contract_block = (
+        None if minimal_context else _build_turn_contract_block(coaching_context)
+    )
     if turn_contract_block:
         system_prompt += f"\n\n## Turn Contract\n{turn_contract_block}"
 
@@ -677,7 +685,9 @@ def build_coaching_system_prompt(
     if resource_composer_boundary:
         system_prompt += f"\n\n## Resource Task Boundary\n{resource_composer_boundary}"
 
-    if isinstance(coach_context, dict) and coach_context.get("formal_plan_mutation") is True:
+    if minimal_context:
+        pass
+    elif isinstance(coach_context, dict) and coach_context.get("formal_plan_mutation") is True:
         system_prompt += (
             "\n\n## Formal Plan Turn\n"
             "This is an explicit request to create or revise the formal learning plan. "
@@ -716,7 +726,11 @@ def build_coaching_system_prompt(
                 resume_lines.append(f"- Why now: {recovered_why}.")
             system_prompt += "\n\n## Recovered Plan Runtime\n" + "\n".join(resume_lines)
 
-    honesty_block = _growth_loop_honesty_block(coach_context if isinstance(coach_context, dict) else None)
+    honesty_block = (
+        None
+        if minimal_context
+        else _growth_loop_honesty_block(coach_context if isinstance(coach_context, dict) else None)
+    )
     if honesty_block:
         system_prompt += honesty_block
 
@@ -726,7 +740,7 @@ def build_coaching_system_prompt(
         f"- {_teaching_style_instruction(profile.teaching_style)}"
     )
 
-    pedagogy_mode = _resolve_pedagogy_mode(coach_context)
+    pedagogy_mode = None if minimal_context else _resolve_pedagogy_mode(coach_context)
     if pedagogy_mode:
         system_prompt += (
             "\n\n## Pedagogy Mode\n"
@@ -747,16 +761,21 @@ def build_coaching_system_prompt(
         "- Do not add a generic next action when the requested answer is already complete."
     )
 
-    system_prompt += (
-        "\n\n## Teaching Method\n"
-        "- Teach in this order when understanding matters: current state -> gap -> object or boundary -> constraint -> code or API move -> verification -> new state.\n"
-        "- Make concepts feel necessary before naming them.\n"
-        "- Do not start with a definition when the learner first needs the failure mode, pressure, or boundary.\n"
-        "- Every important variable, function, API, or branch should answer: why is it needed now, what does it connect to, and what breaks without it?\n"
-        "- Every 2-3 new ideas, briefly recycle the state so the learner knows what is already known, what is still missing, and what proof comes next."
-    )
+    if not minimal_context:
+        system_prompt += (
+            "\n\n## Teaching Method\n"
+            "- Teach in this order when understanding matters: current state -> gap -> object or boundary -> constraint -> code or API move -> verification -> new state.\n"
+            "- Make concepts feel necessary before naming them.\n"
+            "- Do not start with a definition when the learner first needs the failure mode, pressure, or boundary.\n"
+            "- Every important variable, function, API, or branch should answer: why is it needed now, what does it connect to, and what breaks without it?\n"
+            "- Every 2-3 new ideas, briefly recycle the state so the learner knows what is already known, what is still missing, and what proof comes next."
+        )
 
-    tone_block = _build_tone_adaptation_block(coaching_context)
+    tone_block = (
+        None
+        if minimal_context
+        else _build_tone_adaptation_block(coaching_context)
+    )
     if tone_block:
         system_prompt += f"\n\n## Tone And Continuity Bias\n{tone_block}"
 

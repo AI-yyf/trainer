@@ -300,10 +300,10 @@ export async function activate(
   registry.setContext(commandContext);
   tests.setAttestationRuntime(commandContext);
   workbench.setRefreshHandler(async () => {
-    await rehydrateWorkbenchRuntime(commandContext, {
-      ensureSidecar: false,
-      syncWorkbench: false,
-    });
+    // Visibility/refresh must never re-initialize the runtime: the Trainer
+    // Engine keeps session, memory, and the provider session alive behind the
+    // panel. A refresh only re-derives host state and pushes a patch.
+    await syncExtensionState(commandContext);
   });
 
   extensionContext.subscriptions.push(
