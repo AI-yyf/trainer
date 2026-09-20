@@ -5269,8 +5269,16 @@ const leftoverHonestyLocaleOverrides: Record<ComposerLanguage, LeftoverHonestyCo
   },
 };
 
+// Resolved copies are treated as immutable, so cache one object per language.
+// Callers (and useMemo deps) rely on reference stability across renders.
+const resolveCopyCache = new Map<ComposerLanguage, Copy>();
+
 export function resolveCopy(language: ComposerLanguage): Copy {
-  return {
+  const cached = resolveCopyCache.get(language);
+  if (cached) {
+    return cached;
+  }
+  const resolved: Copy = {
     ...defaultCopy,
     ...(copyTable[language] ?? {}),
     ...(resourceViewLocaleOverrides[language] ?? {}),
@@ -5280,4 +5288,6 @@ export function resolveCopy(language: ComposerLanguage): Copy {
     ...orientationRailLocaleOverrides[language],
     ...leftoverHonestyLocaleOverrides[language],
   };
+  resolveCopyCache.set(language, resolved);
+  return resolved;
 }

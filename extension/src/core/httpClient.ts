@@ -74,9 +74,16 @@ export class SidecarHttpClient {
     return this.requestJson<T>('PUT', port, path, body, options);
   }
 
-  async probeHealth(port: number, path = SIDECAR_DEFAULTS.healthPath): Promise<boolean> {
+  async probeHealth(
+    port: number,
+    path = SIDECAR_DEFAULTS.healthPath,
+    timeoutMs = SIDECAR_DEFAULTS.healthProbeTimeoutMs,
+  ): Promise<boolean> {
     try {
-      await this.requestJson('GET', port, path);
+      // Health probes must never inherit the 15s request window: when the
+      // sidecar event loop is busy with a long provider call, a slow probe
+      // used to stall every UI action for up to 15s.
+      await this.requestJson('GET', port, path, undefined, { timeoutMs });
       return true;
     } catch {
       return false;

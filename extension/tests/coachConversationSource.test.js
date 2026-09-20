@@ -99,17 +99,19 @@ test('coach summary rail surfaces blocker guidance alongside the live thread', (
   assert.match(source, /How the next turn will resume/);
 });
 
-test('coach keeps the normal message thread free of a summary rail until a real transition, blocker, or stream exists', () => {
+test('coach keeps the normal message thread free of a summary rail', () => {
   const source = fs.readFileSync(appPath, 'utf8');
-  const summaryStart = source.indexOf('const coachConversationSummaryBar');
-  const summaryEnd = source.indexOf('const trainingState =', summaryStart);
+  const conversation = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'coach', 'CoachConversationView.tsx'),
+    'utf8',
+  );
 
-  assert.ok(summaryStart >= 0, 'expected the coach summary rail derivation');
-  assert.ok(summaryEnd > summaryStart, 'expected the coach summary rail derivation to end');
-  const summary = source.slice(summaryStart, summaryEnd);
-  assert.match(summary, /const coachConversationSummaryBar = undefined;/);
-  assert.doesNotMatch(summary, /resolvedCoachSummary/);
-  assert.doesNotMatch(summary, /resolvedCoachNextStep/);
+  // The summary rail slot was removed outright: the transcript stays a pure
+  // message feed with no derived status strip above it.
+  assert.doesNotMatch(source, /coachConversationSummaryBar/);
+  assert.doesNotMatch(source, /summaryBar=\{/);
+  assert.doesNotMatch(conversation, /summaryBar/);
+  assert.doesNotMatch(conversation, /coach-conversation-view__summary/);
 });
 
 test('coach composer keeps the resources button label short', () => {
@@ -170,33 +172,36 @@ test('coach agent activity renders as a normalized lightweight progress rail', (
   assert.match(activityWorking[0], /display:\s*none/);
 });
 
-test('coach activity details collapse completed tool work while keeping live work open', () => {
+test('coach activity details render flat with no fold toggling mid-stream', () => {
   const source = fs.readFileSync(agentActivityPath, 'utf8');
   const conversation = fs.readFileSync(
     path.resolve(__dirname, '..', 'webview', 'src', 'components', 'coach', 'CoachConversationView.tsx'),
     'utf8',
   );
 
-  assert.match(source, /collapsible\?: boolean/);
-  assert.match(source, /<CollapsibleBlock/);
-  assert.match(source, /defaultOpen=\{hasRunningItems\}/);
-  assert.match(source, /运行详情/);
-  assert.match(conversation, /collapsible[\s\S]*?step=\{agentStep\}/);
+  // Tool activity is a live progress rail: pills and the stop reason stay
+  // visible without a disclosure that opens/closes as steps settle.
+  assert.doesNotMatch(source, /CollapsibleBlock/);
+  assert.doesNotMatch(source, /collapsible\?: boolean/);
+  assert.doesNotMatch(source, /运行详情/);
+  assert.doesNotMatch(conversation, /collapsible/);
+  assert.match(source, /activityPills\(activities, language\)/);
+  assert.match(source, /stopReasonLine\(stopReason, language\)/);
 });
 
 test('coach context status does not become a second transcript message', () => {
-  const source = fs.readFileSync(
+  const conversation = fs.readFileSync(
     path.resolve(__dirname, '..', 'webview', 'src', 'components', 'coach', 'CoachConversationView.tsx'),
     'utf8',
   );
-  const appSource = fs.readFileSync(appPath, 'utf8');
 
-  assert.match(source, /latestAssistantHasStatus/);
-  assert.match(source, /showSummaryBar/);
-  assert.match(source, /coach-conversation-view__summary--context/);
-  assert.doesNotMatch(source, /\{summaryBar \? <div className="coach-conversation-view__summary">/);
-  assert.match(source, /latestAssistantHasStatus/);
-  assert.match(source, /Boolean\(summaryBar\) && \(Boolean\(streamingMessage\) \|\| !latestAssistantHasStatus\)/);
+  // No derived status slot above or below the transcript: the list renders
+  // messages and (while streaming) the activity strip + streaming bubble only.
+  assert.doesNotMatch(conversation, /latestAssistantHasStatus/);
+  assert.doesNotMatch(conversation, /showSummaryBar/);
+  assert.doesNotMatch(conversation, /coach-conversation-view__summary/);
+  assert.match(conversation, /AgentActivityStrip/);
+  assert.match(conversation, /CoachMessageBubble/);
 });
 
 test('coach visible status renders an explicit recovery resume line', () => {
@@ -246,48 +251,22 @@ test('coach typed parts reuse rich renderers for code math and tables', () => {
   assert.match(source, /body=\{mathMarkdown\(part\.tex, Boolean\(part\.display\)\)\}/);
 });
 
-test('coach message bubble keeps recovery resume guidance visible inline', () => {
+test('coach message bubble stays a clean reply card with no status disclosure', () => {
   const source = fs.readFileSync(coachMessageBubblePath, 'utf8');
 
-  assert.match(source, /statusResumeThread/);
-  assert.match(source, /normalizeStatusComparisonText/);
-  assert.match(source, /isStatusResumeThreadRedundant/);
-  assert.match(source, /message-bubble__agent-status-resume/);
-  assert.match(source, /statusToneLabel/);
-  assert.match(source, /statusSourceLabel/);
-  assert.match(source, /statusCounters/);
-  assert.match(source, /statusDetailsPreview/);
-  assert.match(source, /hasStatusDetails/);
-  assert.match(source, /message-bubble__agent-status-disclosure/);
-  assert.match(source, /coachVisibleStatusDetailsTitle/);
-  assert.doesNotMatch(source, /coachVisibleStatus\?\.status !== "done"/);
-  assert.match(source, /statusDecision/);
-  assert.match(source, /statusBlocker/);
-  assert.match(source, /statusTeachingNote/);
-  assert.match(source, /statusConfidence/);
-  assert.match(source, /hasEvidenceFacts/);
-  assert.match(source, /statusTone/);
-  assert.match(source, /statusInlineSummary/);
-  assert.match(source, /statusInlineResume/);
-  assert.match(source, /key: "decision"/);
-  assert.match(source, /preferCollapse=\{!hasAgentStatus && statusTone !== "working"\}/);
-  assert.match(source, /summaryOverride=\{undefined\}/);
-  assert.match(source, /message-bubble__agent-status-facts/);
-  assert.match(source, /message-bubble__agent-status-fact--evidence/);
-  assert.match(source, /part\.type === "coach_visible_status"/);
-  assert.match(source, /part\.type === "tool_call" \|\| part\.type === "tool_result"/);
-  assert.match(source, /statusDetailCandidate/);
-  assert.match(source, /statusResumeThreadCandidate/);
-});
-
-test('coach message bubble collapses repeated status prose before rendering the answer body', () => {
-  const source = fs.readFileSync(coachMessageBubblePath, 'utf8');
-
-  assert.match(source, /function compactAssistantBody\(/);
-  assert.match(source, /normalizedBlock === previousBlock/);
-  assert.match(source, /excludedStatusLines\.has\(normalizedBlock\)/);
-  assert.match(source, /const visibleBody =/);
-  assert.match(source, /body=\{visibleBody\}/);
+  // Agent-run bookkeeping (tone chips, counters, fact pills, evidence lists,
+  // run details) is hidden from the feed entirely; only a quiet running line
+  // and an empty-turn fallback summary remain.
+  assert.doesNotMatch(source, /CollapsibleBlock/);
+  assert.doesNotMatch(source, /message-bubble__agent-status-disclosure/);
+  assert.doesNotMatch(source, /statusCounters/);
+  assert.doesNotMatch(source, /statusFacts/);
+  assert.doesNotMatch(source, /statusDetailsPreview/);
+  assert.doesNotMatch(source, /hasStatusDetails/);
+  assert.doesNotMatch(source, /coachVisibleStatusDetailsTitle/);
+  assert.match(source, /HIDDEN_ASSISTANT_PART_TYPES/);
+  assert.match(source, /part\.type === "tool_call" \|\| part\.type === "tool_result"|coach_visible_status/);
+  assert.match(source, /AgentActivityStrip|fallbackStatusSummary/);
 });
 
 test('coach user timestamps stay attached to the identity rail instead of a detached right edge', () => {
@@ -378,19 +357,20 @@ test('formal Plan generation requires a current verified tools probe, not declar
   assert.match(source, /const intent = formalPlanGeneration \? "plan" : analyzedIntent;/);
 });
 
-test('coach composer exposes a recovery path when streaming has not been verified', () => {
+test('coach composer does not gate sending on an unverified streaming probe', () => {
   const source = fs.readFileSync(appPath, 'utf8');
+  // The probe helper still lives in providerRecoveryCopy for Settings, but the
+  // coach surface must not block sending while streaming evidence is missing:
+  // the stream path degrades gracefully at runtime instead.
   assert.match(
     fs.readFileSync(recoveryCopySourcePath, 'utf8'),
     /function providerHasVerifiedStreamingProbe\([\s\S]*?lastTest\.streamingReady === true[\s\S]*?lastTest\.streamProbeStatus === "verified"[\s\S]*?streamingEvidence\?\.state === "verified"[\s\S]*?streamingEvidence\.observed === true/,
   );
-  // streamingCapabilityBlockReason moved into providerRecoveryCopy.ts (batch 7).
-  assert.match(
-    fs.readFileSync(recoveryCopySourcePath, 'utf8'),
-    /function streamingCapabilityBlockReason\(language: ComposerLanguage\)/);
-  assert.match(
+  assert.doesNotMatch(source, /providerHasVerifiedStreamingProbe/);
+  assert.doesNotMatch(source, /streamingCapabilityBlockReason/);
+  assert.doesNotMatch(
     source,
-    /provider\.configured && provider\.apiKeyConfigured && !providerHasVerifiedStreamingProbe\(provider\)/,
+    /providerBlockingReason[\s\S]*?streamingCapabilityBlockReason\(language\)/,
   );
 });
 

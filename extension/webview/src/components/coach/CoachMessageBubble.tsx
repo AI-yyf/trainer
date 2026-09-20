@@ -1,12 +1,13 @@
-﻿import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 
 import {
   deriveTrainerToolActivity,
   findCoachVisibleStatusPart,
-  describeTrainerStopReason,
 } from "../../../../../shared/src/protocol";
+import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
 import type { ComposerLanguage, ConversationMessage } from "../../lib/types";
 import {
+  RefreshIcon,
   ResourcesIcon,
   ShareIcon,
   TrainingIcon,
@@ -14,10 +15,9 @@ import {
 import { AgentActivityStrip } from "./AgentActivityStripSmart";
 import { CoachArtifactBlock, type CoachArtifactBlockData } from "./CoachArtifactBlock";
 import { CoachMessageParts } from "./CoachMessageParts";
-import { CollapsibleBlock } from "./CollapsibleBlock";
 import { MessageRichContent } from "./MessageRichContent";
 
-export type CoachMessageAction = "share" | "save-resource" | "training-card";
+export type CoachMessageAction = "share" | "save-resource" | "training-card" | "retry";
 
 export interface CoachMessageBubbleProps {
   message: ConversationMessage;
@@ -29,6 +29,8 @@ export interface CoachMessageBubbleProps {
   openArtifactLabel?: string;
   language?: ComposerLanguage;
   streaming?: boolean;
+  /** Only the latest assistant reply offers regenerate. */
+  isLatestAssistant?: boolean;
   /** Optional trailing node (e.g. streaming dots) rendered inside the body. */
   children?: ReactNode;
   onArtifactOpen?: (artifact: CoachArtifactBlockData, message: ConversationMessage) => void;
@@ -42,14 +44,14 @@ const COACH_MESSAGE_ACTION_LABELS: Record<
   ComposerLanguage,
   Record<CoachMessageAction, string>
 > = {
-  "zh-CN": { share: "分享", "save-resource": "加入资料库", "training-card": "加入训练卡片" },
-  "en-US": { share: "Share", "save-resource": "Save to Resources", "training-card": "Create training card" },
-  "es-ES": { share: "Compartir", "save-resource": "Guardar en Recursos", "training-card": "Crear tarjeta" },
-  "fr-FR": { share: "Partager", "save-resource": "Ajouter aux Ressources", "training-card": "Créer une carte" },
-  "de-DE": { share: "Teilen", "save-resource": "In Bibliothek speichern", "training-card": "Karte erstellen" },
-  "ja-JP": { share: "共有", "save-resource": "ライブラリに保存", "training-card": "カードを作成" },
-  "ko-KR": { share: "공유", "save-resource": "라이브러리에 저장", "training-card": "카드 만들기" },
-  "pt-BR": { share: "Compartilhar", "save-resource": "Salvar na Biblioteca", "training-card": "Criar cartão" },
+  "zh-CN": { share: "分享", "save-resource": "加入资料库", "training-card": "加入训练卡片", retry: "重新生成" },
+  "en-US": { share: "Share", "save-resource": "Save to Resources", "training-card": "Create training card", retry: "Regenerate" },
+  "es-ES": { share: "Compartir", "save-resource": "Guardar en Recursos", "training-card": "Crear tarjeta", retry: "Regenerar" },
+  "fr-FR": { share: "Partager", "save-resource": "Ajouter aux Ressources", "training-card": "Créer une carte", retry: "Régénérer" },
+  "de-DE": { share: "Teilen", "save-resource": "In Bibliothek speichern", "training-card": "Karte erstellen", retry: "Neu generieren" },
+  "ja-JP": { share: "共有", "save-resource": "ライブラリに保存", "training-card": "カードを作成", retry: "再生成" },
+  "ko-KR": { share: "공유", "save-resource": "라이브러리에 저장", "training-card": "카드 만들기", retry: "다시 생성" },
+  "pt-BR": { share: "Compartilhar", "save-resource": "Salvar na Biblioteca", "training-card": "Criar cartão", retry: "Regenerar" },
 };
 
 function fallbackRoleLabel(message: ConversationMessage): string {
@@ -117,264 +119,13 @@ function compactTimestamp(value: string): string {
   return value.trim();
 }
 
-function shortenPreview(value: string, limit = 22): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (normalized.length <= limit) {
-    return normalized;
-  }
-  return `${normalized.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
-}
-function normalizeStatusComparisonText(value: string | undefined): string {
-  return value?.replace(/\s+/g, " ").trim().toLowerCase() ?? "";
-}
-
-function isStatusResumeThreadRedundant(
-  resumeThread: string | undefined,
-  summary: string | undefined,
-  nextStep: string | undefined,
-): boolean {
-  const normalizedResumeThread = normalizeStatusComparisonText(resumeThread);
-  const normalizedSummary = normalizeStatusComparisonText(summary);
-  const normalizedNextStep = normalizeStatusComparisonText(nextStep);
-
-  if (!normalizedResumeThread) {
-    return false;
-  }
-  if (normalizedSummary && normalizedResumeThread === normalizedSummary) {
-    return true;
-  }
-  if (normalizedNextStep && normalizedResumeThread === normalizedNextStep) {
-    return true;
-  }
-  return Boolean(
-    normalizedSummary &&
-      normalizedNextStep &&
-      normalizedResumeThread.includes(normalizedSummary) &&
-      normalizedResumeThread.includes(normalizedNextStep),
-  );
-}
-
-function normalizeMessageBlock(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function compactAssistantBody(
-  body: string,
-  statusLines: Array<string | undefined>,
-  hasAgentStatus: boolean,
-): string {
-  const excludedStatusLines = new Set(
-    statusLines.map((line) => normalizeMessageBlock(line ?? "")).filter(Boolean),
-  );
-  const blocks = body
-    .trim()
-    .split(/\n\s*\n/)
-    .map((block) => block.trim())
-    .filter(Boolean);
-  const compacted: string[] = [];
-  let previousBlock = "";
-
-  for (const block of blocks) {
-    const normalizedBlock = normalizeMessageBlock(block);
-    if (!normalizedBlock || normalizedBlock === previousBlock) {
-      continue;
-    }
-    // The visible status rail already carries these facts. Keeping them in
-    // the answer body creates the repeated, log-like flow seen in degraded runs.
-    if (hasAgentStatus && excludedStatusLines.has(normalizedBlock)) {
-      continue;
-    }
-    compacted.push(block);
-    previousBlock = normalizedBlock;
-  }
-
-  return compacted.join("\n\n").trim();
-}
-
-function supportSummaryLabel(
-  language: ComposerLanguage,
-  attachmentCount: number,
-  artifactCount: number,
-  hasNote: boolean,
-): string {
-  if (language === "zh-CN") {
-    if (artifactCount > 0) {
-      return artifactCount > 1 ? `这次我还参考了 ${artifactCount} 条补充` : "这次我还参考了这些";
-    }
-    if (attachmentCount > 0) {
-      return attachmentCount > 1 ? `这次一起带上的上下文（${attachmentCount}）` : "这次一起带上的上下文";
-    }
-    return hasNote ? "补充说明" : "再补一句";
-  }
-
-  if (artifactCount > 0) {
-    return artifactCount > 1 ? `I also used ${artifactCount} extra references` : "I also used this";
-  }
-  if (attachmentCount > 0) {
-    return attachmentCount > 1 ? `Attached context (${attachmentCount})` : "Attached context";
-  }
-  return hasNote ? "A quick note" : "One more note";
-}
-
-function coachVisibleStatusToneLabel(
-  status: "working" | "done" | "blocked" | "degraded",
-  language: ComposerLanguage,
-): string {
-  if (language === "zh-CN") {
-    switch (status) {
-      case "working":
-        return "进行中";
-      case "blocked":
-        return "受阻";
-      case "degraded":
-        return "降级";
-      default:
-        return "已完成";
-    }
-  }
-
-  switch (status) {
-    case "working":
-      return "Working";
-    case "blocked":
-      return "Blocked";
-    case "degraded":
-      return "Degraded";
-    default:
-      return "Done";
-  }
-}
-
-function coachVisibleStatusSourceLabel(
-  source: "agent_loop" | "coach" | "system" | undefined,
-  language: ComposerLanguage,
-): string | undefined {
-  if (!source) {
-    return undefined;
-  }
-
-  if (language === "zh-CN") {
-    if (source === "agent_loop") {
-      return "Agent 循环";
-    }
-    if (source === "system") {
-      return "系统";
-    }
-    return "教练";
-  }
-
-  if (source === "agent_loop") {
-    return "Agent loop";
-  }
-  if (source === "system") {
-    return "System";
-  }
-  return "Coach";
-}
-
-function countLabel(
-  count: number,
-  language: ComposerLanguage,
-  zhUnit: string,
-  enSingular: string,
-  enPlural: string,
-): string {
-  if (language === "zh-CN") {
-    return `${count} ${zhUnit}`;
-  }
-  return `${count} ${count === 1 ? enSingular : enPlural}`;
-}
-
-function coachVisibleStatusDetailsTitle(
-  status: "working" | "done" | "blocked" | "degraded",
-  language: ComposerLanguage,
-): string {
-  if (language === "zh-CN") {
-    if (status === "blocked") {
-      return "查看阻塞与恢复路径";
-    }
-    if (status === "working") {
-      return "查看本轮进度";
-    }
-    return "查看本轮结论";
-  }
-
-  if (status === "blocked") {
-    return "See blocker and recovery path";
-  }
-  if (status === "working") {
-    return "See live run details";
-  }
-  return "See run details";
-}
-
-function coachVisibleStatusDetailsPreview(
-  language: ComposerLanguage,
-  values: {
-    blocker?: string;
-    nextStep?: string;
-    resumeThread?: string;
-    decision?: string;
-    evidenceCount: number;
-    toolCount: number;
-  },
-): string | undefined {
-  if (values.blocker) {
-    return shortenPreview(values.blocker, 54);
-  }
-  if (values.nextStep) {
-    return shortenPreview(values.nextStep, 54);
-  }
-  if (values.resumeThread) {
-    return shortenPreview(values.resumeThread, 54);
-  }
-  if (values.decision) {
-    return shortenPreview(values.decision, 54);
-  }
-  if (values.evidenceCount > 0) {
-    return language === "zh-CN"
-      ? `包含 ${values.evidenceCount} 条证据`
-      : `Includes ${values.evidenceCount} evidence references`;
-  }
-  if (values.toolCount > 0) {
-    return language === "zh-CN"
-      ? `${values.toolCount} 个工具步骤`
-      : `${values.toolCount} tool activities`;
-  }
-  return undefined;
-}
-
-function assistantDetailsSummary(
-  language: ComposerLanguage,
-  message: ConversationMessage,
-  attachmentCount: number,
-  artifactCount: number,
-): string {
-  const firstArtifact = message.artifacts?.[0];
-  const supportPreviewText = supportPreview(message)?.trim();
-  if (language === "zh-CN") {
-    if (artifactCount > 0 && firstArtifact?.title) {
-      return `这次我还参考了：${shortenPreview(firstArtifact.title, 20)}`;
-    }
-    if (attachmentCount > 0) {
-      return attachmentCount > 1 ? `这次一起带上的上下文（${attachmentCount}）` : "这次一起带上的上下文";
-    }
-    if (supportPreviewText) {
-      return `补充说明：${shortenPreview(supportPreviewText, 18)}`;
-    }
-    return "这次我还参考了这些";
-  }
-  if (artifactCount > 0 && firstArtifact?.title) {
-    return `Ref: ${shortenPreview(firstArtifact.title, 26)}`;
-  }
-  if (attachmentCount > 0) {
-    return attachmentCount > 1 ? `Context (${attachmentCount})` : "Context";
-  }
-  if (supportPreviewText) {
-    return `Note: ${shortenPreview(supportPreviewText, 24)}`;
-  }
-  return "Ref";
-}
+/** Part kinds that are agent-run bookkeeping, never part of the readable reply. */
+const HIDDEN_ASSISTANT_PART_TYPES = new Set([
+  "coach_visible_status",
+  "tool_call",
+  "tool_result",
+  "reasoning",
+]);
 
 function avatarGlyph(message: ConversationMessage): string {
   if (message.role === "user") {
@@ -390,7 +141,23 @@ function shouldShowAvatar(message: ConversationMessage): boolean {
   return message.role === "system";
 }
 
-export function CoachMessageBubble({
+/** Quiet one-line summary for the post-run tool trail. */
+function toolTrailSummary(
+  activities: Array<{ status: string }>,
+  language: ComposerLanguage,
+): string {
+  const failed = activities.filter((activity) => activity.status === "failed").length;
+  if (language === "zh-CN") {
+    const base = `已核对 ${activities.length} 项上下文`;
+    return failed > 0 ? `${base}，其中 ${failed} 步需要重试` : base;
+  }
+  const base = `Checked ${activities.length} ${activities.length === 1 ? "item" : "items"}`;
+  return failed > 0
+    ? `${base}, ${failed} ${failed === 1 ? "needs" : "need"} a retry`
+    : base;
+}
+
+function CoachMessageBubbleImpl({
   message,
   children,
   className,
@@ -401,6 +168,7 @@ export function CoachMessageBubble({
   openArtifactLabel = "Open",
   language = "en-US",
   streaming = false,
+  isLatestAssistant = false,
   onArtifactOpen,
   onMessageAction,
   pendingMessageAction,
@@ -441,7 +209,6 @@ export function CoachMessageBubble({
           <CoachArtifactBlock
             key={`${artifact.kind}:${artifact.title}:${index}`}
             artifact={artifact}
-            collapseKey={`${message.id}:${artifact.kind}`}
             language={language}
             openLabel={openArtifactLabel}
             onOpen={
@@ -478,46 +245,7 @@ export function CoachMessageBubble({
   // author/timestamp row; the timestamp remains available as a tooltip.
   const showUserMeta = false;
   const showAssistantRail = false;
-  const coachVisibleStatus =
-    message.role === "assistant" ? findCoachVisibleStatusPart(message.parts) : undefined;
-  const agentActivities =
-    message.role === "assistant" ? deriveTrainerToolActivity(message.parts) : [];
-  const statusSummary = coachVisibleStatus?.summary?.trim();
-  const statusDetailCandidate = coachVisibleStatus?.detail?.trim();
-  const statusDetail =
-    normalizeStatusComparisonText(statusDetailCandidate) === normalizeStatusComparisonText(statusSummary)
-      ? undefined
-      : statusDetailCandidate;
-  const statusDecision = coachVisibleStatus?.decision?.trim();
-  const statusBlocker = coachVisibleStatus?.blocker?.trim();
-  const statusTeachingNote = coachVisibleStatus?.teachingNote?.trim();
-  const statusConfidence = coachVisibleStatus?.confidence?.trim();
-  const statusEvidence = coachVisibleStatus?.evidence?.map((item) => item.trim()).filter(Boolean) ?? [];
-  const hasAgentStatus = Boolean(statusSummary || agentActivities.length > 0);
-  const statusNextStep = coachVisibleStatus?.nextStep?.trim();
-  const statusResumeThreadCandidate = coachVisibleStatus?.resumeThread?.trim();
-  const statusResumeThread = isStatusResumeThreadRedundant(
-    statusResumeThreadCandidate,
-    statusSummary,
-    statusNextStep,
-  )
-    ? undefined
-    : statusResumeThreadCandidate;
-  const visibleBody =
-    message.role === "assistant"
-      ? compactAssistantBody(
-          message.body,
-          [
-            statusSummary,
-            statusDetailCandidate,
-            statusNextStep,
-            statusResumeThreadCandidate,
-            statusBlocker,
-            statusDecision,
-          ],
-          hasAgentStatus,
-        )
-      : message.body;
+  const visibleBody = message.body;
   const hasBody = visibleBody.trim().length > 0;
   const pendingAssistantAction = pendingMessageAction?.startsWith(`${message.id}:`)
     ? (pendingMessageAction.slice(message.id.length + 1) as CoachMessageAction)
@@ -526,125 +254,33 @@ export function CoachMessageBubble({
     message.role === "assistant" &&
     !streaming &&
     Boolean(onMessageAction) &&
-    (hasBody || messageHasArtifacts);
+    (hasBody || messageHasArtifacts || isLatestAssistant);
   const messageActionLabels = COACH_MESSAGE_ACTION_LABELS[language] ?? COACH_MESSAGE_ACTION_LABELS["en-US"];
   const shouldShowUserContextInline =
     message.role === "user" && !messageHasArtifacts && supportDetails.length === 1 && attachmentCount <= 1;
-  // Supplement material folds only when there is genuinely a lot to hide:
-  // a lone artifact or a couple of support lines render inline (artifact cards
-  // already self-collapse their own detail region), while attachments or
-  // multiple supplement blocks still collapse to keep the feed scannable.
-  const shouldCollapseDetails =
-    !shouldShowUserContextInline &&
-    (attachmentCount > 0 || detailBlocks.length > 1 || supportDetails.length > 4);
-  const detailSummary =
-    message.role === "assistant"
-      ? assistantDetailsSummary(language, message, attachmentCount, artifactCount)
-      : supportSummaryLabel(language, attachmentCount, artifactCount, Boolean(message.contextNote || message.support?.preview || message.support?.lines?.length));
   const visibleParts =
     message.role === "assistant" && message.parts?.length
-      ? message.parts.filter((part) => {
-          if (part.type === "coach_visible_status") {
-            return false;
-          }
-          if (
-            hasAgentStatus &&
-            (part.type === "tool_call" || part.type === "tool_result")
-          ) {
-            return false;
-          }
-          return true;
-        })
+      ? message.parts.filter((part) => !HIDDEN_ASSISTANT_PART_TYPES.has(part.type))
       : message.parts;
   const hasParts = (visibleParts?.length ?? 0) > 0;
-  const stopReasonLabel = describeTrainerStopReason(coachVisibleStatus?.stopReason, language);
-  const hasEvidenceFacts = statusEvidence.length > 0;
-  const hasRunningActivities = agentActivities.some((activity) => activity.status === "running");
-  const hasFailedActivities = agentActivities.some((activity) => activity.status === "failed");
-  const statusTone =
-    coachVisibleStatus?.status ??
-    (hasRunningActivities ? "working" : hasFailedActivities ? "degraded" : "done");
-  const statusToneLabel = coachVisibleStatusToneLabel(statusTone, language);
-  const statusSourceLabel = coachVisibleStatusSourceLabel(coachVisibleStatus?.source, language);
-  const statusInlineSummary =
-    statusTone === "blocked"
-      ? statusBlocker ?? statusSummary ?? statusNextStep
-      : statusTone === "working"
-        ? statusSummary ?? statusDetail
-        : !hasBody
-          ? statusSummary ?? statusDetail
-          : undefined;
-  const statusInlineResume = !hasBody && statusResumeThread ? statusResumeThread : undefined;
-  const statusCounters = [
-    coachVisibleStatus?.stepCount
-      ? countLabel(coachVisibleStatus.stepCount, language, "步", "step", "steps")
-      : null,
-    agentActivities.length > 0
-      ? countLabel(agentActivities.length, language, "个工具", "tool", "tools")
-      : null,
-    hasEvidenceFacts
-      ? countLabel(statusEvidence.length, language, "条证据", "evidence ref", "evidence refs")
-      : null,
-  ].filter((value): value is string => Boolean(value));
-  const statusFacts = [
-    statusSourceLabel
-      ? {
-          key: "source",
-          label: language === "zh-CN" ? "来源" : "Source",
-          value: statusSourceLabel,
-        }
-      : null,
-    stopReasonLabel
-      ? {
-          key: "stopReason",
-          label: language === "zh-CN" ? "结束原因" : "Stop reason",
-          value: stopReasonLabel,
-        }
-      : null,
-    statusBlocker
-      ? {
-          key: "blocker",
-          label: language === "zh-CN" ? "阻塞" : "Blocker",
-          value: statusBlocker,
-        }
-      : null,
-    statusDecision
-      ? {
-          key: "decision",
-          label: language === "zh-CN" ? "决策" : "Decision",
-          value: statusDecision,
-        }
-      : null,
-    statusTeachingNote
-      ? {
-          key: "teachingNote",
-          label: language === "zh-CN" ? "教学提示" : "Teaching note",
-          value: statusTeachingNote,
-        }
-      : null,
-    statusConfidence
-      ? {
-          key: "confidence",
-          label: language === "zh-CN" ? "把握" : "Confidence",
-          value: statusConfidence,
-        }
-      : null,
-  ].filter((item): item is { key: string; label: string; value: string } => Boolean(item));
-  const statusDetailsPreview = coachVisibleStatusDetailsPreview(language, {
-    blocker: statusBlocker,
-    nextStep: statusNextStep,
-    resumeThread: statusResumeThread,
-    decision: statusDecision,
-    evidenceCount: statusEvidence.length,
-    toolCount: agentActivities.length,
-  });
-  const hasStatusDetails =
-    Boolean(statusDecision) ||
-    Boolean(statusBlocker) ||
-    Boolean(statusTeachingNote) ||
-    Boolean(statusConfidence) ||
-    hasEvidenceFacts ||
-    agentActivities.length > 0;
+  const hasRunningActivities =
+    message.role === "assistant" &&
+    (message.parts ?? []).some(
+      (part) =>
+        (part.type === "tool_call" || part.type === "tool_result") && part.status === "running",
+    );
+  // After the run finishes, keep the tool trail inspectable but quiet: one
+  // muted line that expands to the per-step strip. Nothing disappears.
+  const toolTrailActivities =
+    message.role === "assistant" && !streaming
+      ? deriveTrainerToolActivity(message.parts)
+      : [];
+  // Degraded turns may carry only a status part with no readable body; keep a
+  // quiet one-line summary so the bubble never renders as an empty card.
+  const fallbackStatusSummary =
+    message.role === "assistant" && !hasBody && !hasParts && !hasRunningActivities
+      ? findCoachVisibleStatusPart(message.parts)?.summary?.trim()
+      : undefined;
 
   return (
     <article
@@ -680,121 +316,21 @@ export function CoachMessageBubble({
             ) : null}
           </div>
         ) : null}
-        {hasAgentStatus ? (
-          <div
-            className={`message-bubble__agent-status message-bubble__agent-status--${statusTone}`}
-            title={statusDetail && statusDetail !== statusSummary ? statusDetail : undefined}
-          >
-            {statusInlineSummary ? (
-              <p className="message-bubble__agent-status-summary">{statusInlineSummary}</p>
-            ) : null}
-            {statusInlineResume ? (
-              <p className="message-bubble__agent-status-resume">{statusInlineResume}</p>
-            ) : null}
-            {hasStatusDetails ? (
-              <CollapsibleBlock
-                className="message-bubble__agent-status-disclosure"
-                defaultOpen={statusTone === "blocked"}
-                summary={
-                  <div
-                    className="message-bubble__agent-status-line"
-                    aria-label={coachVisibleStatusDetailsTitle(statusTone, language)}
-                  >
-                    <span
-                      className={`message-bubble__agent-status-tone message-bubble__agent-status-tone--${statusTone}`}
-                    >
-                      {statusToneLabel}
-                    </span>
-                    {statusCounters.length > 0 ? (
-                      <span className="message-bubble__agent-status-line-counters coach-meta-nums">
-                        {statusCounters.join(" · ")}
-                      </span>
-                    ) : null}
-                    {statusDetailsPreview ? (
-                      <span className="message-bubble__agent-status-line-preview">
-                        {statusDetailsPreview}
-                      </span>
-                    ) : null}
-                  </div>
-                }
-              >
-                <div className="message-bubble__agent-status-details-body">
-                  {!statusInlineSummary && statusSummary ? (
-                    <p className="message-bubble__agent-status-summary">{statusSummary}</p>
-                  ) : null}
-                  {statusDetail ? (
-                    <p className="message-bubble__agent-status-detail">{statusDetail}</p>
-                  ) : null}
-                  {statusNextStep && statusNextStep !== statusInlineSummary ? (
-                    <p className="message-bubble__agent-status-next">
-                      <strong>{language === "zh-CN" ? "\u4e0b\u4e00\u6b65" : "Next"}</strong>
-                      <span>{statusNextStep}</span>
-                    </p>
-                  ) : null}
-                  {statusResumeThread && statusResumeThread !== statusInlineResume ? (
-                    <p className="message-bubble__agent-status-resume">{statusResumeThread}</p>
-                  ) : null}
-                  {statusFacts.length ? (
-                    <div className="message-bubble__agent-status-facts">
-                      {statusFacts.map((fact) => (
-                        <span
-                          key={fact.key}
-                          className={`message-bubble__agent-status-fact message-bubble__agent-status-fact--${fact.key}`}
-                        >
-                          <strong>{fact.label}</strong>
-                          <span>{fact.value}</span>
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {hasEvidenceFacts ? (
-                    <div className="message-bubble__agent-status-facts message-bubble__agent-status-facts--evidence">
-                      <span className="message-bubble__agent-status-evidence-label">
-                        {language === "zh-CN" ? "\u8bc1\u636e" : "Evidence"}
-                      </span>
-                      {statusEvidence.map((item) => (
-                        <span
-                          key={item}
-                          className="message-bubble__agent-status-fact message-bubble__agent-status-fact--evidence"
-                        >
-                          {item}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {agentActivities.length > 0 ? (
-                    <AgentActivityStrip
-                      activities={agentActivities}
-                      language={language}
-                      stopReason={coachVisibleStatus?.stopReason}
-                    />
-                  ) : null}
-                </div>
-              </CollapsibleBlock>
-            ) : (
-              <div className="message-bubble__agent-status-line message-bubble__agent-status-line--static">
-                <span
-                  className={`message-bubble__agent-status-tone message-bubble__agent-status-tone--${statusTone}`}
-                >
-                  {statusToneLabel}
-                </span>
-                {statusCounters.length > 0 ? (
-                  <span className="message-bubble__agent-status-line-counters coach-meta-nums">
-                    {statusCounters.join(" · ")}
-                  </span>
-                ) : null}
-              </div>
-            )}
-          </div>
+        {hasRunningActivities ? (
+          <p className="message-bubble__agent-status message-bubble__agent-status--working" role="status">
+            {language === "zh-CN" ? "正在核对上下文…" : "Checking context…"}
+          </p>
+        ) : null}
+        {!hasBody && fallbackStatusSummary ? (
+          <p className="message-bubble__agent-status-summary">
+            {sanitizeErrorSurfaceText(fallbackStatusSummary, language)}
+          </p>
         ) : null}
         {hasBody ? (
           <MessageRichContent
             body={visibleBody}
             language={language}
             streaming={streaming}
-            preferCollapse={!hasAgentStatus && statusTone !== "working"}
-            summaryOverride={undefined}
-            suppressPreviewItems={message.role === "assistant" && artifactCount > 0}
           />
         ) : null}
         {hasParts ? <CoachMessageParts parts={visibleParts ?? []} language={language} /> : null}
@@ -813,15 +349,7 @@ export function CoachMessageBubble({
       </div>
 
       {hasSupplementMaterial ? (
-        shouldCollapseDetails ? (
-          <CollapsibleBlock
-            className={`message-bubble__details ${message.role === "user" ? "message-bubble__details--user" : ""}`}
-            summary={detailSummary}
-            defaultOpen={false}
-          >
-            <div className="message-bubble__details-body">{detailBlocks}</div>
-          </CollapsibleBlock>
-        ) : shouldShowUserContextInline ? (
+        shouldShowUserContextInline ? (
           <p className={`message-bubble__context ${message.role === "user" ? "message-bubble__context--user" : ""}`}>
             {supportDetails[0]}
           </p>
@@ -832,6 +360,13 @@ export function CoachMessageBubble({
         )
       ) : null}
 
+      {toolTrailActivities.length > 0 ? (
+        <details className="message-bubble__tool-trail">
+          <summary>{toolTrailSummary(toolTrailActivities, language)}</summary>
+          <AgentActivityStrip activities={toolTrailActivities} language={language} />
+        </details>
+      ) : null}
+
       {showAssistantActions ? (
         <div
           className="message-bubble__actions"
@@ -840,6 +375,19 @@ export function CoachMessageBubble({
             language === "zh-CN" ? "这条回复的快捷操作" : "Quick actions for this reply"
           }
         >
+          {isLatestAssistant ? (
+            <button
+              type="button"
+              className="message-bubble__action"
+              disabled={pendingAssistantAction === "retry"}
+              aria-label={messageActionLabels.retry}
+              title={messageActionLabels.retry}
+              onClick={() => onMessageAction?.("retry", message)}
+            >
+              <RefreshIcon size={13} aria-hidden="true" />
+              <span>{messageActionLabels.retry}</span>
+            </button>
+          ) : null}
           <button
             type="button"
             className="message-bubble__action"
@@ -878,3 +426,5 @@ export function CoachMessageBubble({
     </article>
   );
 }
+
+export const CoachMessageBubble = memo(CoachMessageBubbleImpl);

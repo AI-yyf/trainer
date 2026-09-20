@@ -152,6 +152,12 @@ export const SIDECAR_DEFAULTS = {
   portStart: 34891,
   portEnd: 34911,
   healthPath: '/health',
+  // Health probes answer "is the HTTP endpoint up" — they must fail fast so a
+  // busy sidecar event loop cannot stall UI actions for a full request window.
+  healthProbeTimeoutMs: 2_000,
+  // When the sidecar reported ready recently, skip re-probing before each
+  // command and trust the cached status.
+  healthCheckTtlMs: 10_000,
   // The PyInstaller onedir binary can take several seconds on its very first
   // macOS launch (Gatekeeper signature validation is silent and load-sensitive),
   // so darwin gets a wider health window than the default 20s.

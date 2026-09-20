@@ -6,15 +6,12 @@ import {
   resolveCoachToolResultCopy,
   summarizeSafeCoachToolResult,
 } from "./coachToolResultCopy";
-import { CollapsibleBlock } from "./CollapsibleBlock";
 
 export interface AgentActivityStripProps {
   activities: AgentToolActivity[];
   step?: number;
   language?: ComposerLanguage;
   stopReason?: string;
-  /** Keep live tool activity readable without pinning every result open. */
-  collapsible?: boolean;
 }
 
 const TOOL_LABELS: Record<string, { zh: string; en: string }> = {
@@ -104,13 +101,6 @@ function summarizeActivitySet(
   return language === "zh-CN" ? "正在准备回复" : "Trainer is preparing a reply";
 }
 
-function activityDetailsLabel(language: ComposerLanguage, count: number): string {
-  if (language === "zh-CN") {
-    return `运行详情 · ${count} 个步骤`;
-  }
-  return `Run details · ${count} step${count === 1 ? "" : "s"}`;
-}
-
 function activityPills(activities: AgentToolActivity[], language: ComposerLanguage) {
   return (
     <div className="agent-activity-strip__pills">
@@ -148,12 +138,25 @@ function stopReasonLine(stopReason: string | undefined, language: ComposerLangua
   );
 }
 
+function activityDetails(activities: AgentToolActivity[], language: ComposerLanguage) {
+  const hasRunningItems = activities.some((item) => item.status === "running");
+  return (
+    <>
+      {hasRunningItems ? (
+        <span className="agent-activity-strip__working">
+          {language === "zh-CN" ? "正在核对上下文..." : "Checking context..."}
+        </span>
+      ) : null}
+      {activityPills(activities, language)}
+    </>
+  );
+}
+
 export function AgentActivityStrip({
   activities,
   step,
   language = "en-US",
   stopReason,
-  collapsible = false,
 }: AgentActivityStripProps) {
   if (activities.length === 0) {
     return null;
@@ -161,25 +164,13 @@ export function AgentActivityStrip({
 
   const isZh = language === "zh-CN";
   const summary = summarizeActivitySet(activities, language);
-  const hasRunningItems = activities.some((item) => item.status === "running");
   const displayStep =
     typeof step === "number"
       ? Math.max(1, step >= activities.length ? step : step + 1)
       : undefined;
-  const details = (
-    <>
-      {hasRunningItems ? (
-        <span className="agent-activity-strip__working" aria-live="polite">
-          {isZh ? "正在核对上下文..." : "Checking context..."}
-        </span>
-      ) : null}
-      {activityPills(activities, language)}
-      {stopReasonLine(stopReason, language)}
-    </>
-  );
 
   return (
-    <div className="agent-activity-strip" role="status" aria-live="polite">
+    <div className="agent-activity-strip" role="status">
       <div className="agent-activity-strip__summary">
         {typeof displayStep === "number" ? (
           <span className="agent-activity-strip__step">
@@ -188,17 +179,10 @@ export function AgentActivityStrip({
         ) : null}
         <span className="agent-activity-strip__lead">{summary}</span>
       </div>
-      {collapsible ? (
-        <CollapsibleBlock
-          className="agent-activity-strip__details"
-          summary={activityDetailsLabel(language, activities.length)}
-          defaultOpen={hasRunningItems}
-        >
-          {details}
-        </CollapsibleBlock>
-      ) : (
-        details
-      )}
+      <div className="agent-activity-strip__details">
+        {activityDetails(activities, language)}
+        {stopReasonLine(stopReason, language)}
+      </div>
     </div>
   );
 }

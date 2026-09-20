@@ -111,14 +111,15 @@ test('custom skills persist the normalized, capped list', () => {
   );
 });
 
-test('message supplements stay inline unless there is a lot to hide', () => {
+test('message supplements always render inline with no fold', () => {
   const source = fs.readFileSync(bubblePath, 'utf8');
-  const collapseStart = source.indexOf('const shouldCollapseDetails');
-  assert.ok(collapseStart > -1, 'expected shouldCollapseDetails declaration');
-  const collapseBlock = source.slice(collapseStart, collapseStart + 400);
 
-  assert.doesNotMatch(collapseBlock, /hasBody\)/, 'a message body alone must not fold supplements');
-  assert.match(collapseBlock, /attachmentCount > 0/);
+  // Supplement material (artifacts, attachments, context notes) renders flat:
+  // a collapsed "I also used these" region read as a broken/empty card.
+  assert.doesNotMatch(source, /shouldCollapseDetails/);
+  assert.doesNotMatch(source, /CollapsibleBlock/);
+  assert.match(source, /hasSupplementMaterial \?/);
+  assert.match(source, /message-bubble__details-body">\{detailBlocks\}/);
 });
 
 test('message reply action buttons use token-driven styling', () => {

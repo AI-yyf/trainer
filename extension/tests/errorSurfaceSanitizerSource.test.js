@@ -18,7 +18,9 @@ test('Coach tool and reasoning surfaces sanitize errors instead of dumping JSON'
   const toolCall = read('components/coach/parts/ToolCallRenderer.tsx');
 
   assert.match(messageParts, /sanitizeErrorSurface/);
-  assert.match(messageParts, /isAuthoritativeAck\(part\.result\)/);
+  // Tool results are suppressed unless they failed, and failures are shown
+  // through the sanitizer only.
+  assert.match(messageParts, /if \(!hasFailure\) \{\s*return null;/);
   assert.doesNotMatch(messageParts, /renderJson\(part\.result\)/);
   assert.doesNotMatch(messageParts, /\{part\.error\}/);
   assert.match(coachParts, /sanitizeErrorSurfaceText\(part\.error/);

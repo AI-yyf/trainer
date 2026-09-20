@@ -32,7 +32,8 @@ test('conversation, settings, and training do not paint raw JSON, traceback, key
   const reliabilityOps = read('operationReliabilityGovernance.ts', sharedRoot);
 
   assert.match(parts, /sanitizeErrorSurface/);
-  assert.match(parts, /isAuthoritativeAck\(part\.result\)/);
+  // Tool results render nothing unless they failed; failures stay sanitized.
+  assert.match(parts, /if \(!hasFailure\) \{\s*return null;/);
   assert.doesNotMatch(parts, /renderJson\(part\.result\)/);
   assert.match(settings, /sanitizeErrorSurfaceText/);
   assert.match(training, /sanitizeErrorSurfaceText\(latestTrainingReliability\.error/);

@@ -86,7 +86,7 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
 
   assert.match(
     source,
-    /const shouldShowNeutralEmptyState =\s*data\.conversation\.length === 0 && \(!providerCanCoachNow \|\| displayConnectionState !== "connected"\);/,
+    /const shouldShowNeutralEmptyState =\s*data\.conversation\.length === 0 && \(!providerCanCoachNow \|\| Boolean\(providerBlockReason\)\);/,
   );
   assert.match(source, /const hasDurableCoachContext = Boolean\(/);
   assert.match(source, /data\.memory\.activeThread/);
@@ -174,7 +174,7 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
     source,
     /className="composer-presencebar__blocked"[\s\S]*?onClick=\{\(\) => \{\s*if \(workspaceSessionBlocked\) \{\s*openWorkspaceAdmission\(\);\s*return;\s*\}\s*setActiveView\("settings"\);\s*\}\}/,
   );
-  assert.match(source, /summaryBar=\{coachConversationSummaryBar\}/);
+  assert.doesNotMatch(source, /summaryBar=\{/);
   assert.match(
     source,
     /emptyState=\{embedded \|\| workspaceSessionBlocked \? null : coachSuperEntryContent\(false\)\}/,

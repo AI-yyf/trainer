@@ -1,4 +1,4 @@
-import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useMemo, useState } from "react";
+import { memo, Suspense, createContext, lazy, useContext, useEffect, useId, useMemo, useState } from "react";
 import type { Element } from "hast";
 
 import type { ComposerLanguage } from "../../lib/types";
@@ -112,113 +112,15 @@ function richTableContext(
   return { cellByOffset, headerByOffset };
 }
 
-const MAX_LENGTH = 1200;
-const MAX_LINES = 20;
-const HARD_COLLAPSE_LENGTH = 6800;
-const HARD_COLLAPSE_LINES = 108;
-const SOFT_COLLAPSE_LENGTH = 5600;
-const SOFT_COLLAPSE_LINES = 88;
-const STRUCTURED_COLLAPSE_LENGTH = 6200;
-const STRUCTURED_COLLAPSE_LINES = 92;
-const SUMMARY_MAX_LENGTH = 210;
-const STRUCTURED_PREVIEW_MAX = 2;
-
-function countLines(value: string): number {
-  return value.split("\n").length;
-}
-
-function truncateText(value: string, maxLength: number): string {
-  return value.length > maxLength ? `${value.slice(0, maxLength).trim()}…` : value;
-}
-
-function stripStructuredContent(value: string): string {
-  return value
-    .replace(/```[\s\S]*?```/g, "\n")
-    .replace(/\$\$[\s\S]*?\$\$/g, "\n")
-    .replace(/^\|.*\|$/gm, "")
-    .trim();
-}
-
-function hasStructuredContent(value: string): boolean {
-  return (
-    /```[\s\S]*?```/.test(value) ||
-    /\$\$[\s\S]*?\$\$/.test(value) ||
-    /^\|.*\|$/m.test(value)
-  );
-}
-
-function normalizeInlineText(line: string): string {
-  return line
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
-    .replace(/^#{1,6}\s+/, "")
-    .replace(/^>\s+/, "")
-    .replace(/^[-*+]\s+/, "")
-    .replace(/^\d+[.)]\s+/, "")
-    .replace(/[:：]$/, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function extractLeadParagraph(value: string): string | undefined {
-  const normalized = stripStructuredContent(value);
-  if (!normalized) {
-    return undefined;
-  }
-
-  const [firstBlock] = normalized.split(/\n\s*\n/);
-  const lead = firstBlock
-    ?.split("\n")
-    .map((line) => normalizeInlineText(line))
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-
-  if (!lead) {
-    return undefined;
-  }
-
-  return truncateText(lead, SUMMARY_MAX_LENGTH);
-}
-
-function extractStructuredPreview(value: string, language: ComposerLanguage): string[] {
-  const copy = labels(language);
-  const previews: string[] = [];
-  const codeBlocks = value.match(/```([\w-]+)?\n[\s\S]*?```/g) ?? [];
-  for (const block of codeBlocks.slice(0, STRUCTURED_PREVIEW_MAX)) {
-    const match = /^```([\w-]+)?\n([\s\S]*?)```$/.exec(block.trim());
-    const languageId = match?.[1]?.trim() || copy.code;
-    const body = match?.[2]?.trim() || "";
-    const firstLine = body.split("\n").map((line) => line.trim()).find(Boolean) || "";
-    previews.push(`${languageId} · ${truncateText(firstLine || copy.code, 72)}`);
-  }
-
-  if (/^\|.*\|$/m.test(value)) {
-    previews.push(language === "zh-CN" ? "包含表格内容" : "Includes table content");
-  }
-
-  if (/```mermaid[\s\S]*?```/.test(value)) {
-    previews.push(language === "zh-CN" ? "包含图表或思维导图" : "Includes diagram or mind map");
-  }
-
-  return previews.slice(0, STRUCTURED_PREVIEW_MAX);
-}
-
 function labels(language: ComposerLanguage) {
   const codeBlockCopy = resolveCodeBlockCopy(language);
   if (language === "zh-CN") {
     return {
-      expand: "继续看",
-      collapse: "收起",
       code: codeBlockCopy.code,
       diagram: "图表",
       mindmap: "思维导图",
       table: "表格",
       renderError: "图表渲染失败，已回退为原始内容。",
-      foldedLeadFallback: "先看前面这一段。",
-      foldedMetaFallback: "展开剩下的内容",
       loading: "正在整理显示…",
       copy: codeBlockCopy.copy,
       copied: codeBlockCopy.copied,
@@ -226,15 +128,11 @@ function labels(language: ComposerLanguage) {
   }
 
   return {
-    expand: "Continue",
-    collapse: "Hide",
     code: codeBlockCopy.code,
     diagram: "Diagram",
     mindmap: "Mind map",
     table: "Table",
     renderError: "Diagram render failed. Showing the raw content instead.",
-    foldedLeadFallback: "Start with the opening.",
-    foldedMetaFallback: "Open the rest",
     loading: "Rendering…",
     copy: codeBlockCopy.copy,
     copied: codeBlockCopy.copied,
@@ -251,48 +149,6 @@ function renderPlainText(body: string) {
   );
 }
 
-// 代码块组件，带复制功能
-function CodeBlock({
-  code,
-  languageId,
-  language
-}: {
-  code: string;
-  languageId: string;
-  language: ComposerLanguage;
-}) {
-  const [copied, setCopied] = useState(false);
-  const copy = labels(language);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // 复制失败静默处理
-    }
-  }, [code]);
-
-  return (
-    <div className="code-block-wrapper">
-      <div className="code-block-header">
-        <span className="code-block-lang">{languageId || copy.code}</span>
-        <button
-          className="code-block-copy-btn"
-          onClick={handleCopy}
-          title={copied ? copy.copied : copy.copy}
-        >
-          {copied ? "OK" : "C"}
-        </button>
-      </div>
-      <pre className="message-markdown__code-block">
-        <code>{code}</code>
-      </pre>
-    </div>
-  );
-}
-
 // 行内代码组件
 function InlineCode({ children }: { children: React.ReactNode }) {
   return <code className="message-markdown__inline-code">{children}</code>;
@@ -301,9 +157,12 @@ function InlineCode({ children }: { children: React.ReactNode }) {
 function RichMarkdownRenderer({
   body,
   language,
+  streaming = false,
 }: {
   body: string;
   language: ComposerLanguage;
+  /** Live tail of a streaming reply: long growing code blocks stay unhighlighted. */
+  streaming?: boolean;
 }) {
   const [plugins, setPlugins] = useState<{
     rehypeKatex: RehypeKatexPlugin;
@@ -325,12 +184,7 @@ function RichMarkdownRenderer({
   }, []);
 
   if (!plugins) {
-    return (
-      <>
-        {renderPlainText(body)}
-        <p className="message-rich-content__loading">{copy.loading}</p>
-      </>
-    );
+    return renderPlainText(body);
   }
 
   return (
@@ -343,10 +197,10 @@ function RichMarkdownRenderer({
           const value = String(children ?? "").replace(/\n$/, "");
           const match = /language-(\w+)/.exec(className || "");
           const languageId = match ? match[1] : "";
-          
+
           // 如果没有语言标识且没有换行，认为是行内代码
           const isInline = !languageId && !value.includes("\n");
-          
+
           if (isInline) {
             return <InlineCode>{value}</InlineCode>;
           }
@@ -369,6 +223,7 @@ function RichMarkdownRenderer({
               code={value}
               languageId={languageId}
               language={language}
+              streaming={streaming}
             />
           );
         },
@@ -446,91 +301,110 @@ export interface MessageRichContentProps {
   body: string;
   language: ComposerLanguage;
   streaming?: boolean;
-  preferCollapse?: boolean;
-  forceCollapse?: boolean;
-  summaryOverride?: string;
-  suppressPreviewItems?: boolean;
-  onCopy?: () => void;
 }
 
-export function MessageRichContent({
+/**
+ * While streaming, only the tail after the last completed markdown block
+ * (paragraph boundary, closed code fence, or closed math block) changes from
+ * frame to frame. Splitting there lets completed blocks render through
+ * memoized components — one parse per block for the whole stream instead of a
+ * full-document re-parse per frame (O(n²) over long replies).
+ */
+function splitStreamingBody(body: string): { stableBlocks: string[]; tail: string } {
+  const lines = body.split("\n");
+  let inFence = false;
+  let fence = "";
+  let inMath = false;
+  let lastStableLine = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (inFence) {
+      if (trimmed.startsWith(fence)) {
+        inFence = false;
+        lastStableLine = i;
+      }
+      continue;
+    }
+    if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+      inFence = true;
+      fence = trimmed.slice(0, 3);
+      continue;
+    }
+    if (trimmed === "$$") {
+      if (inMath) {
+        inMath = false;
+        lastStableLine = i;
+      } else {
+        inMath = true;
+      }
+      continue;
+    }
+    if (trimmed === "") {
+      let previous = i - 1;
+      while (previous >= 0 && lines[previous].trim() === "") {
+        previous--;
+      }
+      if (previous >= 0) {
+        lastStableLine = previous;
+      }
+    }
+  }
+  if (lastStableLine < 0) {
+    return { stableBlocks: [], tail: body };
+  }
+  const stable = lines.slice(0, lastStableLine + 1).join("\n");
+  const tail = lines.slice(lastStableLine + 1).join("\n");
+  const stableBlocks = stable
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  return { stableBlocks, tail };
+}
+
+const StreamedStableBlock = memo(function StreamedStableBlock({
+  body,
+  language,
+}: {
+  body: string;
+  language: ComposerLanguage;
+}) {
+  return <RichMarkdownRenderer body={body} language={language} />;
+});
+
+function MessageRichContentImpl({
   body,
   language,
   streaming = false,
-  preferCollapse = false,
-  forceCollapse = false,
-  summaryOverride,
-  suppressPreviewItems = false,
-  onCopy,
 }: MessageRichContentProps) {
-  const copy = labels(language);
-  const plainTextBody = stripStructuredContent(body);
-  const containsStructuredContent = hasStructuredContent(body);
-  const leadParagraph = useMemo(() => extractLeadParagraph(body), [body]);
-  const structuredPreview = useMemo(() => extractStructuredPreview(body, language), [body, language]);
-  const [expanded, setExpanded] = useState(false);
-  const plainTextLines = countLines(plainTextBody);
-  const totalLines = countLines(body);
-  const shouldCollapse =
-    !streaming &&
-    (forceCollapse ||
-      (preferCollapse &&
-        (body.length > HARD_COLLAPSE_LENGTH ||
-          totalLines > HARD_COLLAPSE_LINES ||
-          (containsStructuredContent &&
-            (body.length > STRUCTURED_COLLAPSE_LENGTH ||
-              totalLines > STRUCTURED_COLLAPSE_LINES)) ||
-          (!containsStructuredContent &&
-            (plainTextBody.length > SOFT_COLLAPSE_LENGTH ||
-              plainTextLines > SOFT_COLLAPSE_LINES)) ||
-          (!containsStructuredContent &&
-            (body.length > MAX_LENGTH * 1.65 || totalLines > MAX_LINES + 8)))));
-
-  useEffect(() => {
-    setExpanded(false);
-  }, [body, shouldCollapse]);
-
+  // Split per frame: cheap line scan keeps completed blocks byte-stable so
+  // their memoized renderers never re-parse.
+  const split = useMemo(
+    () => (streaming ? splitStreamingBody(body) : null),
+    [body, streaming],
+  );
   const content = (
     <div
       className={`message-markdown ${language === "zh-CN" ? "is-zh" : "is-en"} ${
         streaming ? "is-streaming" : ""
       }`}
     >
-      <Suspense fallback={renderPlainText(body)}>
-        <RichMarkdownRenderer body={body} language={language} />
-      </Suspense>
+      {split ? (
+        <>
+          {split.stableBlocks.map((block, index) => (
+            <StreamedStableBlock key={index} body={block} language={language} />
+          ))}
+          <Suspense fallback={renderPlainText(split.tail)}>
+            <RichMarkdownRenderer body={split.tail} language={language} streaming />
+          </Suspense>
+        </>
+      ) : (
+        <Suspense fallback={renderPlainText(body)}>
+          <RichMarkdownRenderer body={body} language={language} />
+        </Suspense>
+      )}
     </div>
   );
-
-  if (!shouldCollapse) {
-    return content;
-  }
-
-  const previewLead = summaryOverride ?? leadParagraph ?? copy.foldedLeadFallback;
-  const helperText = suppressPreviewItems ? copy.foldedMetaFallback : copy.expand;
-
-  return (
-    <details
-      className="message-rich-content__fold"
-      open={expanded}
-      onToggle={(event) => {
-        setExpanded(event.currentTarget.open);
-      }}
-    >
-      <summary>
-        <span className="message-rich-content__summary-shell">
-          <span className="message-rich-content__summary-lead">{previewLead}</span>
-          {!expanded && structuredPreview.length > 0 ? (
-            <span className="message-rich-content__summary-detail">
-              {structuredPreview.join(" · ")}
-            </span>
-          ) : null}
-          <span className="message-rich-content__summary-meta">
-            {expanded ? copy.collapse : helperText}
-          </span>
-        </span>
-      </summary>
-      <div className="message-rich-content__fold-body">{content}</div>
-    </details>
-  );
+  return content;
 }
+
+export const MessageRichContent = memo(MessageRichContentImpl);

@@ -1,5 +1,4 @@
 import {
-  isAuthoritativeAck,
   sanitizeErrorSurface,
   sanitizeErrorSurfaceJson,
   sanitizeErrorSurfaceText,
@@ -11,16 +10,10 @@ import {
 } from "../../../../../shared/src/protocol";
 import type { ComposerLanguage } from "../../lib/types";
 
-import { CollapsibleBlock } from "./CollapsibleBlock";
 import { MermaidBlock } from "./MermaidBlock";
 import { MessageRichContent } from "./MessageRichContent";
 import { RichCodeBlock } from "./RichCodeBlock";
-import {
-  hasCoachToolResultFailure,
-  resolveCoachToolResultCopy,
-  safeCoachResultText,
-  summarizeSafeCoachToolResult,
-} from "./coachToolResultCopy";
+import { hasCoachToolResultFailure, resolveCoachToolResultCopy } from "./coachToolResultCopy";
 import { StructuredTable } from "./parts/StructuredTable";
 import { DocxPreview } from "../preview/DocxPreview";
 
@@ -117,35 +110,6 @@ function humanizeToolName(name: string): string {
   return normalized.length > 0 ? normalized : name;
 }
 
-function practiceVerificationStatusLabel(
-  status: string | undefined,
-  language: ComposerLanguage,
-): string {
-  if (status === "passed") {
-    return copy(language, "\u5df2\u901a\u8fc7", "Passed");
-  }
-  if (status === "blocked") {
-    return copy(language, "\u53d7\u963b", "Blocked");
-  }
-  if (status === "needs_review") {
-    return copy(language, "\u9700\u590d\u6838", "Needs review");
-  }
-  return copy(language, "\u5df2\u9a8c\u8bc1", "Verified");
-}
-
-function practiceVerificationTone(
-  status: string | undefined,
-  passed: boolean | undefined,
-): "done" | "blocked" | "degraded" {
-  if (passed || status === "passed") {
-    return "done";
-  }
-  if (status === "blocked") {
-    return "blocked";
-  }
-  return "degraded";
-}
-
 function visibleTrainingCardText(
   value: string | undefined,
   language: ComposerLanguage,
@@ -176,7 +140,7 @@ function renderPart(
     case "markdown":
       return (
         <div key={`part-${index}`} className="message-part message-part--markdown">
-          <MessageRichContent body={part.content} language={language} preferCollapse={false} />
+          <MessageRichContent body={part.content} language={language} />
         </div>
       );
     case "code":
@@ -213,7 +177,6 @@ function renderPart(
           <MessageRichContent
             body={mathMarkdown(part.tex, Boolean(part.display))}
             language={language}
-            preferCollapse={false}
           />
         </div>
       );
@@ -263,124 +226,30 @@ function renderPart(
         </div>
       );
     case "tool_call":
-      return (
-        <CollapsibleBlock
-          key={`part-${index}`}
-          className="message-part message-part--tool-call"
-          summary={copy(language, `调用工具：${part.name}`, `Tool call: ${part.name}`)}
-          defaultOpen={false}
-        >
-          <p className="message-part__meta">
-            <code>{part.id}</code>
-            <span>{` | ${part.status}`}</span>
-            {typeof part.step === "number" ? <span>{` | step ${part.step}`}</span> : null}
-          </p>
-          <RichCodeBlock
-            code={renderSafeJson(part.args, language)}
-            language={language}
-            languageId="json"
-          />
-        </CollapsibleBlock>
-      );
+      // Tool-call bookkeeping is run metadata, not reply content — keep the
+      // feed clean (the activity strip surfaces progress while streaming).
+      return null;
     case "tool_result": {
       const toolCopy = resolveCoachToolResultCopy(language);
       const hasFailure = hasCoachToolResultFailure(part.error, part.result);
-      if (part.displayKind === "practice_verification") {
-        const tone = practiceVerificationTone(part.status, part.passed);
-        const safeSummary = safeCoachResultText(part.summary);
-        const safeNextStep = safeCoachResultText(part.nextStep);
-        return (
-          <CollapsibleBlock
-            key={`part-${index}`}
-            className={`message-part message-part--tool-result message-part--practice-verification message-part--coach-visible-status-${tone}`}
-            summary={
-              hasFailure
-                ? `${toolCopy.failed}. ${toolCopy.retry}`
-                : `${copy(language, "\u5b9e\u6218\u9a8c\u8bc1", "Practice verification")}: ${practiceVerificationStatusLabel(part.status, language)}`
-            }
-            defaultOpen={false}
-          >
-            <div className="message-part__header">
-              <strong>{copy(language, "\u5f53\u524d IDE \u6587\u4ef6", "Current IDE file")}</strong>
-              <span className={`message-part__status-chip message-part__status-chip--${tone}`}>
-                {practiceVerificationStatusLabel(part.status, language)}
-              </span>
-            </div>
-            {hasFailure ? <p>{toolCopy.failed}</p> : safeSummary ? <p>{safeSummary}</p> : null}
-            {hasFailure || safeNextStep ? (
-              <p className="message-part__meta">
-                {toolCopy.next}
-                {hasFailure ? toolCopy.retry : safeNextStep}
-              </p>
-            ) : null}
-          </CollapsibleBlock>
-        );
+      if (!hasFailure) {
+        return null;
       }
-      const safeSummary = summarizeSafeCoachToolResult(part.result, language);
-      const acknowledged = !hasFailure && isAuthoritativeAck(part.result);
-      const errorSurface = hasFailure
-        ? sanitizeErrorSurface(part.error, { language })
-        : undefined;
+      const errorSurface = sanitizeErrorSurface(part.error, { language });
       return (
-        <CollapsibleBlock
+        <div
           key={`part-${index}`}
-          className="message-part message-part--tool-result"
-          summary={hasFailure ? `${toolCopy.failed}. ${toolCopy.retry}` : toolCopy.update}
-          defaultOpen={false}
+          className="message-part message-part--tool-result message-part--tool-result-failed"
+          role="alert"
         >
-          <p>
-            {hasFailure
-              ? errorSurface?.message ?? toolCopy.failed
-              : acknowledged
-                ? safeSummary ?? toolCopy.completed
-                : sanitizeErrorSurface(undefined, { language, acknowledged: false }).message}
-          </p>
-          {hasFailure ? (
-            <p className="message-part__meta">
-              {toolCopy.next}
-              {toolCopy.retry}
-            </p>
-          ) : null}
-        </CollapsibleBlock>
+          <p>{errorSurface.message ?? toolCopy.failed}</p>
+          <p className="message-part__meta">{toolCopy.retry}</p>
+        </div>
       );
     }
     case "reasoning":
-      return (
-        <CollapsibleBlock
-          key={`part-${index}`}
-          className="message-part message-part--reasoning"
-          summary={copy(language, "推理摘要", "Reasoning summary")}
-          defaultOpen={!part.redacted}
-        >
-          <p>{sanitizeErrorSurfaceText(part.summary, language)}</p>
-          {part.detail && !part.redacted ? (
-            <p className="message-part__meta">{sanitizeErrorSurfaceText(part.detail, language)}</p>
-          ) : null}
-          {part.sourceChain?.length ? (
-            <div className="message-part__facts">
-              {part.sourceChain.map((item) => (
-                <span key={item} className="message-part__fact-pill">
-                  {item}
-                </span>
-              ))}
-            </div>
-          ) : null}
-          {part.hintLadder?.length ? (
-            <ul className="message-part__list">
-              {part.hintLadder.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          ) : null}
-          {part.verificationSteps?.length ? (
-            <ul className="message-part__list">
-              {part.verificationSteps.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          ) : null}
-        </CollapsibleBlock>
-      );
+      // Internal reasoning stays out of the transcript.
+      return null;
     case "coach_visible_status": {
       const stopReasonLabel = describeTrainerStopReason(part.stopReason, language);
       const decision = part.decision?.trim();
@@ -529,16 +398,12 @@ function renderPart(
         isDocxPreviewPath(part.path);
 
       return (
-        <CollapsibleBlock
+        <div
           key={`part-${index}`}
           className="message-part message-part--file-preview"
-          summary={copy(language, `文件预览：${part.title || part.path}`, `File preview: ${part.title || part.path}`)}
-          defaultOpen={false}
         >
           <p className="message-part__meta">
-            <code>{part.path}</code>
-            {part.previewTier ? <span>{` | ${part.previewTier}`}</span> : null}
-            {previewKind ? <span>{` | ${previewKind}`}</span> : null}
+            <code>{part.title || part.path}</code>
           </p>
           {canRenderDocxPreview && assetUri ? (
             <DocxPreview
@@ -553,7 +418,7 @@ function renderPart(
               languageId={inferCodeLanguage(part.path)}
             />
           ) : null}
-        </CollapsibleBlock>
+        </div>
       );
     }
     case "checklist":
@@ -580,27 +445,9 @@ function renderPart(
           {part.detail ? <p>{sanitizeErrorSurfaceText(part.detail, language)}</p> : null}
         </div>
       );
-    default: {
-      const unknownPart = part as { type: string };
-      return (
-        <CollapsibleBlock
-          key={`part-${index}`}
-          className="message-part message-part--unknown"
-          summary={copy(
-            language,
-            `消息片段：${unknownPart.type}`,
-            `Message part: ${unknownPart.type}`,
-          )}
-          defaultOpen={false}
-        >
-          <RichCodeBlock
-            code={sanitizeErrorSurfaceText(part, language)}
-            language={language}
-            languageId="json"
-          />
-        </CollapsibleBlock>
-      );
-    }
+    default:
+      // Unknown part kinds carry no user-facing value; skip them quietly.
+      return null;
   }
 }
 

@@ -105,7 +105,9 @@ test('coach tool status UI uses safe summaries and never reads activity error de
   const activitySource = fs.readFileSync(activityStripPath, 'utf8');
 
   assert.ok(toolResultStart >= 0 && toolResultEnd > toolResultStart, 'expected generic tool result case');
-  assert.match(toolResult, /summarizeSafeCoachToolResult\(part\.result, language\)/);
+  // Successful tool results render nothing; failures go through the sanitizer.
+  assert.match(toolResult, /if \(!hasFailure\) \{\s*return null;/);
+  assert.match(toolResult, /sanitizeErrorSurface\(part\.error, \{ language \}\)/);
   assert.doesNotMatch(toolResult, /renderJson\(part\.result\)/);
   assert.doesNotMatch(toolResult, /\{part\.error\}/);
   assert.doesNotMatch(toolResult, /\{part\.result\}/);

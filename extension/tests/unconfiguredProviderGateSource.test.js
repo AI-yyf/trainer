@@ -22,7 +22,10 @@ test('untested or unconfigured providers cannot send as a live coach', () => {
   assert.match(status, /if \(!provider\.configured \|\| transportMissing\) \{[\s\S]*?blocked:\s*true/);
   assert.match(status, /if \(!provider\.apiKeyConfigured\) \{[\s\S]*?blocked:\s*true/);
 
-  assert.match(app, /const providerCanCoachNow = providerTransportConnected && !providerSendState\.blocked;/);
+  // The sidecar connection pill is informational only: sending is gated by
+  // provider configuration/health, never by transport state.
+  assert.match(app, /const providerCanCoachNow = !providerSendState\.blocked;/);
+  assert.doesNotMatch(app, /providerTransportConnected && !providerSendState/);
   const sendTurn = app.slice(app.indexOf('const sendTurn = ('), app.indexOf('const handleBrowserUploads'));
   assert.match(
     sendTurn,

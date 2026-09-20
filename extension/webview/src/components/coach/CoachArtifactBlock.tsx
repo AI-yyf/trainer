@@ -1,9 +1,6 @@
 import type { ReactNode } from "react";
 
-import { CollapseSection } from "../common/CollapseSection";
 import type { ComposerLanguage } from "../../lib/types";
-import { resolveCopy } from "../../lib/i18n/copy";
-import { CollapsibleBlock } from "./CollapsibleBlock";
 import { MessageRichContent } from "./MessageRichContent";
 
 export type CoachArtifactKind =
@@ -34,11 +31,6 @@ export interface CoachArtifactBlockProps {
   language?: ComposerLanguage;
   icon?: ReactNode;
   interactive?: boolean;
-  /**
-   * Stable "messageId:kind" identity of the hosting message. Used to
-   * persist the open/closed state of the long-content CollapseSection.
-   */
-  collapseKey?: string;
   onOpen?: (artifact: CoachArtifactBlockData) => void;
 }
 
@@ -187,21 +179,15 @@ function actionButtonLabel(
 function contentSummaryLabel(kind: CoachArtifactKind, language: ComposerLanguage): string {
   if (language === "zh-CN") {
     if (kind === "review" || kind === "evaluation") {
-      return "看看判断依据";
+      return "判断依据";
     }
-    if (kind === "plan_update" || kind === "next_step") {
-      return "看看展开说明";
-    }
-    return "看看补充内容";
+    return "补充说明";
   }
 
   if (kind === "review" || kind === "evaluation") {
-    return "See why";
+    return "Why";
   }
-  if (kind === "plan_update" || kind === "next_step") {
-    return "See the note";
-  }
-  return "See more";
+  return "Note";
 }
 
 function verificationLead(
@@ -266,23 +252,9 @@ function artifactTeaser(
 }
 
 /**
- * Detail prose above this many characters is hosted in a persisted
- * CollapseSection (level 2) instead of being rendered flat.
+ * Artifact details render flat: folding supplementary reasoning away hid the
+ * coach's actual answer and read as broken/empty cards.
  */
-const COACH_ARTIFACT_COLLAPSE_THRESHOLD = 400;
-
-function artifactDetailLength(artifact: CoachArtifactBlockData, evidence: string[]): number {
-  return [
-    artifact.summary,
-    artifact.content,
-    artifact.rationale,
-    ...(artifact.bullets ?? []),
-    ...evidence,
-  ]
-    .map((value) => (typeof value === "string" ? value.trim() : ""))
-    .filter(Boolean)
-    .join(" ").length;
-}
 
 export function CoachArtifactBlock({
   artifact,
@@ -290,7 +262,6 @@ export function CoachArtifactBlock({
   openLabel = "Open",
   language = "en-US",
   icon,
-  collapseKey,
   interactive =
     Boolean(artifact.recommendedAction) ||
     !["note", "idea_implementation", "project_idea", "project_adaptation", "principle", "review", "plan_update", "next_step"].includes(artifact.kind),
@@ -335,22 +306,13 @@ export function CoachArtifactBlock({
     artifact.kind === "next_step";
   const kindLabel = artifactKindLabel(artifact.kind, language);
   const showKindLabel = Boolean(kindLabel) && !isPrimaryLaneArtifact;
-  const detailSummary =
-    artifact.recommendedAction && !artifact.content
-      ? actionButtonLabel(artifact.recommendedAction, language)
-      : contentSummaryLabel(artifact.kind, language);
+  const detailSummary = contentSummaryLabel(artifact.kind, language);
   const teaser = artifactTeaser(artifact, language);
   const showInlineDetails = isPrimaryLaneArtifact;
   const showTeaser =
     Boolean(teaser) &&
     teaser?.trim() !== artifact.summary?.trim() &&
     teaser?.trim() !== artifact.title.trim();
-  // Long artifact prose folds into a persisted CollapseSection (level 2)
-  // keyed by the hosting message id + artifact kind.
-  const useCollapseSection =
-    artifactDetailLength(artifact, evidence) > COACH_ARTIFACT_COLLAPSE_THRESHOLD;
-  const detailsTitle = resolveCopy(language).coachArtifactFullDetails;
-  const detailsPersistenceKey = collapseKey ? `coach-artifact:${collapseKey}` : "";
   const detailBody: ReactNode = (
     <>
       {artifact.focusArea ? (
@@ -449,32 +411,15 @@ export function CoachArtifactBlock({
           ))}
         </ul>
       ) : null}
-      {showDetailBlock && showInlineDetails ? (
-        useCollapseSection ? (
-          <CollapseSection level={2} title={detailsTitle} persistenceKey={detailsPersistenceKey}>
-            <div className="artifact-card__details-body artifact-card__details-body--inline coach-artifact-details">
-              {detailBody}
-            </div>
-          </CollapseSection>
-        ) : (
-          <div className="artifact-card__details-body artifact-card__details-body--inline">
-            {detailBody}
-          </div>
-        )
-      ) : null}
-      {showDetailBlock && !showInlineDetails ? (
-        useCollapseSection ? (
-          <CollapseSection level={2} title={detailsTitle} persistenceKey={detailsPersistenceKey}>
-            <div className="artifact-card__details-body coach-artifact-details">{detailBody}</div>
-          </CollapseSection>
-        ) : (
-          <CollapsibleBlock
-            className="artifact-card__details"
-            summary={detailSummary}
-          >
-            <div className="artifact-card__details-body">{detailBody}</div>
-          </CollapsibleBlock>
-        )
+      {showDetailBlock ? (
+        <div
+          className={`artifact-card__details-body${showInlineDetails ? " artifact-card__details-body--inline" : ""}${
+            showInlineDetails ? " coach-artifact-details" : ""
+          }`}
+          aria-label={detailSummary}
+        >
+          {detailBody}
+        </div>
       ) : null}
       {!showDetailBlock && evidence.length ? (
         <p className="artifact-card__next-note">

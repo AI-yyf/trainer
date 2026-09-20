@@ -21009,3 +21009,47 @@ details[open] > :not(summary) {
   outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
 }
+
+/* Quiet post-run tool trail: one muted line under a finished assistant
+   reply that expands to the per-step activity strip. */
+.message-bubble__tool-trail {
+  margin-top: 6px;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-muted);
+}
+
+.message-bubble__tool-trail summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+  list-style: none;
+  opacity: 0.75;
+  user-select: none;
+}
+
+.message-bubble__tool-trail summary::-webkit-details-marker {
+  display: none;
+}
+
+.message-bubble__tool-trail summary::before {
+  content: "▸";
+  font-size: var(--trainer-font-3xs);
+  transition: transform var(--motion-fast, 120ms) var(--ease-out, ease-out);
+}
+
+.message-bubble__tool-trail[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.message-bubble__tool-trail .agent-activity-strip {
+  margin-top: 4px;
+  border-left-color: var(--line);
+}
+
+/* Long sessions: let the compositor skip offscreen message items instead of
+   laying out the whole transcript. */
+.coach-conversation-view__item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}

@@ -228,6 +228,19 @@ export class SidecarProcessManager implements vscode.Disposable {
       return this.startPromise;
     }
 
+    // Fresh health check: skip the probe entirely so back-to-back commands
+    // never pay a round-trip (or a busy-loop stall) per action.
+    const lastCheckAge = this.status.lastHealthcheckAt
+      ? Date.now() - new Date(this.status.lastHealthcheckAt).getTime()
+      : Number.POSITIVE_INFINITY;
+    if (
+      this.status.lifecycle === 'ready' &&
+      this.status.port &&
+      lastCheckAge < SIDECAR_DEFAULTS.healthCheckTtlMs
+    ) {
+      return this.getStatus();
+    }
+
     if (this.status.port) {
       const healthy = await this.client.probeHealth(this.status.port);
       if (healthy) {
@@ -246,6 +259,7 @@ export class SidecarProcessManager implements vscode.Disposable {
           // probe to miss. Keep the live process routable so follow-up commands
           // are not rejected before it has a chance to finish the active request.
           lifecycle: 'ready',
+          lastHealthcheckAt: new Date().toISOString(),
           detail:
             'Sidecar is still running and may be processing a request. Its health check did not answer yet; it will be checked again before a restart.',
         });

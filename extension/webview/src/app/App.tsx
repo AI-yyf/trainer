@@ -149,12 +149,10 @@ import {
   blockedComposerPresenceMessage,
   blockedComposerSetupMessage,
   providerCoachBanner,
-  providerHasVerifiedStreamingProbe,
   providerRecoveryLocale,
   providerRecoverySummary,
   providerRecoveryStatusLabel,
   providerSetupSummary,
-  streamingCapabilityBlockReason,
 } from "./providerRecoveryCopy";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
 import {
@@ -2905,11 +2903,12 @@ function providerBlockingReason(
   connectionState?: "starting" | "connected" | "offline",
 ): string | undefined {
   const sendState = describeProviderSendState(provider, language);
-  if (connectionState === "offline" || connectionState === "starting" || sendState.blocked) {
+  // Sidecar connection state is informational only: the host lazy-starts and
+  // retries per request, so it must never block composing or sending. A
+  // missing streaming probe is likewise not a gate — the stream path already
+  // degrades gracefully at runtime.
+  if (sendState.blocked) {
     return providerRecoverySummary(provider, language, connectionState).detail;
-  }
-  if (provider.configured && provider.apiKeyConfigured && !providerHasVerifiedStreamingProbe(provider)) {
-    return streamingCapabilityBlockReason(language);
   }
   return undefined;
 }
@@ -2979,34 +2978,6 @@ function toPlanReviewItem(
     intervalDays: item.intervalDays,
     masteryScore: item.masteryScore,
   };
-}
-
-function warningText(
-  id: ReturnType<typeof analyzeSendIntent>["warnings"][number]["id"],
-  t: Copy,
-): string {
-  if (id === "review-needs-file") {
-    return t.reviewNeedsFile;
-  }
-  if (id === "review-file-disabled") {
-    return t.reviewFileDisabled;
-  }
-  if (id === "selection-enabled-without-selection") {
-    return t.selectionMissing;
-  }
-  if (id === "selection-available-but-disabled") {
-    return t.selectionDisabled;
-  }
-  if (id === "related-enabled-without-files") {
-    return t.relatedMissing;
-  }
-  if (id === "related-available-but-disabled") {
-    return t.relatedDisabled;
-  }
-  if (id === "diagnostics-enabled-without-signals") {
-    return t.diagnosticsMissing;
-  }
-  return t.reviewNotFull;
 }
 
 function localizeAttachmentLabel(label: string, t: Copy): string {
@@ -3301,7 +3272,9 @@ function sendContextSummary(
     );
   }
 
-  return parts.length > 0 ? parts.join(" · ") : t.noContext;
+  // No announcement when nothing is attached: whether context is needed is
+  // the coach's call at turn time, not a composer warning.
+  return parts.length > 0 ? parts.join(" · ") : "";
 }
 
 function sendContextShortSummary(
@@ -3324,7 +3297,7 @@ function sendContextShortSummary(
   ].filter((value): value is string => Boolean(value));
 
   if (activeLabels.length === 0) {
-    return t.noContext;
+    return "";
   }
   if (activeLabels.length >= 3) {
     return layout.composerLanguage === "zh-CN" ? "当前代码线索" : "current code context";
@@ -3439,11 +3412,10 @@ function sendStatuslineText(
   }
 
   if (analysis.target === "local_command") {
-    return `${t.runLocalCommand} · ${
-      analysis.localCommandId
-        ? sidebarControlCommandLabel(analysis.localCommandId, layout.composerLanguage)
-        : t.noContext
-    }`;
+    const commandLabel = analysis.localCommandId
+      ? sidebarControlCommandLabel(analysis.localCommandId, layout.composerLanguage)
+      : "";
+    return commandLabel ? `${t.runLocalCommand} · ${commandLabel}` : t.runLocalCommand;
   }
 
   const intentLabel =
@@ -4204,6 +4176,28 @@ export function App() {
   const [trainingPersistencePending, setTrainingPersistencePending] = useState(false);
   const [pendingMessageAction, setPendingMessageAction] = useState<string | null>(null);
   const pendingMessageActionTimeoutRef = useRef<number | undefined>(undefined);
+  const coachAutoScrollPinnedRef = useRef(true);
+  // Locally echoed user turns: shown the moment sendTurn fires, replaced
+  // in place by the server-confirmed message at the same list position.
+  const [optimisticTurns, setOptimisticTurns] = useState<
+    Array<{ id: string; body: string; baseLength: number; createdAt: number }>
+  >([]);
+  const appendOptimisticTurn = useCallback((body: string) => {
+    const trimmed = body.trim();
+    if (!trimmed) {
+      return;
+    }
+    setOptimisticTurns((current) => [
+      ...current,
+      {
+        id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        body: trimmed,
+        baseLength: useWorkbenchState.getState().data.conversation.length,
+        createdAt: Date.now(),
+      },
+    ]);
+    coachAutoScrollPinnedRef.current = true;
+  }, []);
   const [userFeedbackState, setUserFeedbackState] = useState<{
     busy: boolean;
     submittedKind?: UserFeedbackKind;
@@ -4395,6 +4389,41 @@ export function App() {
   const handleCoachMessageAction = useCallback(
     async (action: CoachMessageAction, message: ConversationMessage) => {
       const zh = layout.composerLanguage === "zh-CN";
+      if (action === "retry") {
+        // Regenerate: re-send the user prompt that produced this reply.
+        const conversation = useWorkbenchState.getState().data.conversation;
+        const index = conversation.findIndex((item) => item.id === message.id);
+        let prompt: string | undefined;
+        for (let i = index - 1; index > 0 && i >= 0; i--) {
+          const candidate = conversation[i];
+          if (candidate.role === "user" && candidate.body.trim()) {
+            prompt = candidate.body;
+            break;
+          }
+        }
+        if (!prompt) {
+          return;
+        }
+        appendOptimisticTurn(prompt);
+        postMessage({
+          type: "session/sendStreamMessage",
+          payload: {
+            text: prompt,
+            intent: "coach",
+            stream: true,
+            resourceIds: [],
+            includeCurrentFile: false,
+            includeSelection: false,
+            includeDiagnostics: false,
+            includeRelatedFiles: false,
+            contextDetail: "balanced",
+            responseLanguage: layout.composerLanguage,
+            activeView: "coach",
+            requestId: `coach-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+          },
+        });
+        return;
+      }
       const replyDoc = coachReplyMarkdown(message, layout.composerLanguage);
       if (action === "share") {
         try {
@@ -5110,7 +5139,7 @@ export function App() {
       ),
     [data.providerConfig, scopedProviderLastTest, layout.composerLanguage, providerTestClock],
   );
-  const providerTransportConnected = data.connection.state === "connected";
+  // Connection state stays a status pill only; it never gates features.
   const capabilityVerdict = useMemo(
     () => deriveTrainerCapabilityVerdict({
       connectionState: data.connection.state,
@@ -5141,7 +5170,7 @@ export function App() {
       providerImageInputState.supported,
     ],
   );
-  const providerCanCoachNow = providerTransportConnected && !providerSendState.blocked;
+  const providerCanCoachNow = !providerSendState.blocked;
   const providerSupportsFormalPlanTools = providerHasVerifiedToolsProbe({
     lastTestResult: scopedProviderLastTest,
   });
@@ -5245,8 +5274,10 @@ export function App() {
     [data.connection.state, data.providerConfig, layout.composerLanguage],
   );
   const displayConnectionState = effectiveConnectionState(data.connection.state);
+  // The neutral takeover is reserved for a provider that genuinely cannot run
+  // (not configured / blocked) — never for a connecting or offline sidecar.
   const shouldShowNeutralEmptyState =
-    data.conversation.length === 0 && (!providerCanCoachNow || displayConnectionState !== "connected");
+    data.conversation.length === 0 && (!providerCanCoachNow || Boolean(providerBlockReason));
   const hasDurableCoachContext = Boolean(
     data.memory.activeThread ||
       data.memory.memoryEvidence.length > 0 ||
@@ -6262,24 +6293,31 @@ export function App() {
       return;
     }
 
-    const hasCoachThreadContent =
-      data.conversation.length > 0 ||
-      streaming.isStreaming ||
-      Boolean(streaming.streamedContent.trim());
-    if (!hasCoachThreadContent) {
-      return;
-    }
-
     const container = viewContentRef.current;
     if (!container) {
       return;
     }
 
+    // Stick-to-bottom only while the reader is already at (or near) the
+    // bottom; scrolling up during a stream must stay respected.
+    const isPinnedToBottom = () =>
+      container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+
+    const handleScroll = () => {
+      coachAutoScrollPinnedRef.current = isPinnedToBottom();
+    };
+    container.addEventListener("scroll", handleScroll, { passive: true });
+
     const handle = window.requestAnimationFrame(() => {
-      container.scrollTop = container.scrollHeight;
+      if (coachAutoScrollPinnedRef.current) {
+        container.scrollTop = container.scrollHeight;
+      }
     });
 
-    return () => window.cancelAnimationFrame(handle);
+    return () => {
+      window.cancelAnimationFrame(handle);
+      container.removeEventListener("scroll", handleScroll);
+    };
   }, [activeView, data.conversation.length, streaming.isStreaming, streaming.streamedContent]);
 
   const streamingPlaceholderBody = useMemo(() => {
@@ -6393,6 +6431,70 @@ export function App() {
     () => liveConversation.map((message) => localizeConversationMessage(message, t, layout.composerLanguage)),
     [layout.composerLanguage, liveConversation, t],
   );
+  // Conversation length when the current stream started. The completion patch
+  // merges the finished turn into the conversation while the streaming UI is
+  // still up; entries past this base are represented by the optimistic echo
+  // and the live streaming slot so nothing remounts at completion.
+  const streamBaseLengthRef = useRef<number | null>(null);
+  if (streaming.isStreaming) {
+    if (streamBaseLengthRef.current === null) {
+      streamBaseLengthRef.current = data.conversation.length;
+    }
+  } else {
+    streamBaseLengthRef.current = null;
+  }
+  useEffect(() => {
+    setOptimisticTurns((current) => {
+      if (current.length === 0) {
+        return current;
+      }
+      const now = Date.now();
+      const next = current.filter((entry) => {
+        if (now - entry.createdAt > 120_000) {
+          return false;
+        }
+        if (entry.baseLength >= data.conversation.length) {
+          return true;
+        }
+        const tail = data.conversation.slice(entry.baseLength);
+        return !tail.some(
+          (item) => item.role === "user" && item.body.trim() === entry.body.trim(),
+        );
+      });
+      return next.length === current.length ? current : next;
+    });
+  }, [data.conversation]);
+  const coachRenderConversation = useMemo(() => {
+    let list = localizedConversation;
+    if (
+      streaming.isStreaming &&
+      streamBaseLengthRef.current !== null &&
+      list.length > streamBaseLengthRef.current
+    ) {
+      list = list.slice(0, streamBaseLengthRef.current);
+    }
+    const now = Date.now();
+    const pendingTurns = optimisticTurns.filter((entry) => now - entry.createdAt <= 120_000);
+    const pendingMessages = pendingTurns
+      .filter((entry) => {
+        // Confirm against the raw server conversation; the localized list may
+        // rewrite bodies but never reorders or drops entries.
+        if (entry.baseLength >= liveConversation.length) {
+          return true;
+        }
+        return !liveConversation
+          .slice(entry.baseLength)
+          .some((item) => item.role === "user" && item.body.trim() === entry.body.trim());
+      })
+      .map((entry) => ({
+        id: entry.id,
+        role: "user" as const,
+        author: t.you,
+        body: entry.body,
+        timestamp: "",
+      }));
+    return pendingMessages.length > 0 ? [...list, ...pendingMessages] : list;
+  }, [liveConversation, localizedConversation, optimisticTurns, streaming.isStreaming, t]);
   const liveCoachTaskChrome = preferRecoveredCoachTaskChrome({
     recovered: recoveredRuntime,
     runtimeCurrentStep: planRuntimeStatus?.currentStep ?? runtimeCurrentThread?.currentStep,
@@ -7523,7 +7625,6 @@ export function App() {
     layout.composerLanguage,
     resourceConversationContextIds,
   ]);
-  const coachConversationSummaryBar = undefined;
   const trainingState = data.workspaceTrainingState;
   const selectedTrainingRouteCard = trainingState?.activeTrainingCardRouting?.selectedCard;
   const normalizedTrainingSubmode = normalizeSharedTrainingSubmode(
@@ -9038,10 +9139,6 @@ export function App() {
     activeItem?.scrollIntoView({ block: "nearest" });
   }, [dismissedComposerDeck, normalizedDraft, selectedCommandIndex]);
 
-  const visibleWarnings = useMemo(
-    () => sendAnalysis.warnings.filter((warning) => warning.id !== "diagnostics-enabled-without-signals"),
-    [sendAnalysis.warnings],
-  );
   const sendBlocked =
     workspaceSessionBlocked || !providerCanCoachNow || Boolean(providerBlockReason);
   const capabilitySendBlocked = !capabilityVerdict.chat;
@@ -9249,6 +9346,9 @@ export function App() {
     };
     setLastTurnView(turnActiveView);
     streamResumeDraftRef.current = text;
+    // Local echo: the user's turn shows up instantly; the server-confirmed
+    // copy lands at the same list position when the snapshot merges.
+    appendOptimisticTurn(text);
 
     if (isBrowserPreview) {
       if (stream) {
@@ -11843,7 +11943,9 @@ export function App() {
       <section className="composer-menu-panel">
         <div className="composer-menu-panel__header">
           <span className="eyebrow">{t.currentContext}</span>
-          <strong>{sendContextShortSummary(data, layout, t)}</strong>
+          {sendContextShortSummary(data, layout, t) ? (
+            <strong>{sendContextShortSummary(data, layout, t)}</strong>
+          ) : null}
         </div>
         <div className="composer-menu-panel__section">
           <MenuToggleRow
@@ -12610,7 +12712,7 @@ export function App() {
         </div>
       );
     }
-    if (isFirstCoachConversation && providerCanCoachNow && displayConnectionState === "connected") {
+    if (isFirstCoachConversation && providerCanCoachNow) {
       return (
         <div className="coach-empty-state coach-empty-state--welcome">
           <p>
@@ -12647,6 +12749,14 @@ export function App() {
       });
     }
   };
+  // Stable identity for memoized conversation children; behavior stays fresh
+  // through the ref so memo never serves a stale closure.
+  const handleCoachArtifactOpenRef = useRef(handleCoachArtifactOpen);
+  handleCoachArtifactOpenRef.current = handleCoachArtifactOpen;
+  const stableHandleCoachArtifactOpen = useCallback(
+    (artifact: CoachArtifactBlockData) => handleCoachArtifactOpenRef.current(artifact),
+    [],
+  );
 
   const coachCheckpointRecovery =
     leftoverStreamingCheckpointNotLive ? false : isCoachCheckpointRecoveryState(streaming);
@@ -12694,13 +12804,12 @@ export function App() {
 
   const renderCoachConversationPane = (className: string, embedded = false) => (
     <CoachConversationView
-      messages={localizedConversation}
+      messages={coachRenderConversation}
       className={className}
       surfaceTone="quiet"
       eyebrow={undefined}
       title={undefined}
       subtitle={undefined}
-      summaryBar={coachConversationSummaryBar}
       openArtifactLabel={layout.composerLanguage === "zh-CN" ? "\u5c55\u5f00" : "Open"}
       userLabel={t.you}
       assistantLabel={t.trainer}
@@ -12721,7 +12830,7 @@ export function App() {
       }
       agentActivity={streaming.agentActivity}
       agentStep={streaming.agentStep}
-      onArtifactOpen={handleCoachArtifactOpen}
+      onArtifactOpen={stableHandleCoachArtifactOpen}
       onMessageAction={handleCoachMessageAction}
       pendingMessageAction={pendingMessageAction}
     />
@@ -12915,7 +13024,7 @@ export function App() {
             systemLabel={layout.composerLanguage === "zh-CN" ? "系统" : "System"}
             userLabel={t.you}
             streaming={isStreamingForView}
-            onArtifactOpen={handleCoachArtifactOpen}
+            onArtifactOpen={stableHandleCoachArtifactOpen}
             onMessageAction={handleCoachMessageAction}
             pendingMessageAction={pendingMessageAction}
           />
@@ -14851,33 +14960,6 @@ export function App() {
                     />
                   </button>
                 ) : null}
-              </div>
-            ) : null}
-
-            {!sendBlocked && !sendAnalysis.isEmpty && visibleWarnings.length > 0 ? (
-              <div className="composer-meta composer-meta--compact">
-                <div className="composer-inline-warnings">
-                  {visibleWarnings.slice(0, 1).map((warning) => (
-                    <button
-                      key={warning.id}
-                      className="inline-warning"
-                      type="button"
-                      onClick={() => {
-                        if (warning.id === "review-file-disabled" || warning.id === "review-needs-file") {
-                          setIncludeCurrentFile(true);
-                        } else if (warning.id === "selection-available-but-disabled") {
-                          setIncludeSelection(true);
-                        } else if (warning.id === "related-available-but-disabled") {
-                          setIncludeRelatedFiles(true);
-                        } else if (warning.id === "review-not-full-context") {
-                          setContextDetail("full");
-                        }
-                      }}
-                    >
-                      {warningText(warning.id, t)}
-                    </button>
-                  ))}
-                </div>
               </div>
             ) : null}
 

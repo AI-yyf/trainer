@@ -111,7 +111,7 @@ test('training-card action sends the reply through the real card generator', () 
   const source = fs.readFileSync(appPath, 'utf8');
   const handlerStart = source.indexOf('const handleCoachMessageAction');
   assert.ok(handlerStart > -1, 'expected handleCoachMessageAction');
-  const handler = source.slice(handlerStart, handlerStart + 4000);
+  const handler = source.slice(handlerStart, handlerStart + 8000);
 
   assert.match(handler, /commandId: trainerCommands\.trainingGenerateCard/);
   assert.match(handler, /source: "conversation_gap"/);

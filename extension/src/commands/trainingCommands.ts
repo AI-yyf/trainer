@@ -1039,6 +1039,10 @@ export async function trainingGenerateCardCommand(
 
     let response: TrainingCardGenerationResponse | undefined;
     let tokenCount = 0;
+    // Coalesce token deltas into ~66ms frames (same as the coach stream).
+    const CHUNK_COALESCE_WINDOW_MS = 66;
+    let pendingChunkText = "";
+    let lastChunkFlushAt = 0;
     for await (const event of context.sidecarClient.fetchSSE(
       status.port,
       "/training/generate-card/stream",
@@ -1074,19 +1078,41 @@ export async function trainingGenerateCardCommand(
       }
       tokenCount += 1;
       if (generateCardOwnsStreamMessageId(context, messageId)) {
+        pendingChunkText += chunk;
+        const now = Date.now();
+        if (now - lastChunkFlushAt < CHUNK_COALESCE_WINDOW_MS) {
+          continue;
+        }
+        const frame = pendingChunkText;
+        pendingChunkText = "";
+        lastChunkFlushAt = now;
         await writeTrainerStreamingState(context, {
           ...readTrainerStreamingState(context),
           isStreaming: true,
-          streamedContent: readTrainerStreamingState(context).streamedContent + chunk,
+          streamedContent: readTrainerStreamingState(context).streamedContent + frame,
         });
         if (!isCurrentTrainingCardStream(context, activeTrainingStream)) {
           return { ok: true, message: "Training stream invalidated." };
         }
         await context.workbench.postMessage({
           type: "stream/chunk",
-          payload: { messageId, chunk },
+          payload: { messageId, chunk: frame },
         });
       }
+    }
+    if (pendingChunkText && generateCardOwnsStreamMessageId(context, messageId)) {
+      await writeTrainerStreamingState(context, {
+        ...readTrainerStreamingState(context),
+        isStreaming: true,
+        streamedContent: readTrainerStreamingState(context).streamedContent + pendingChunkText,
+      });
+      if (!isCurrentTrainingCardStream(context, activeTrainingStream)) {
+        return { ok: true, message: "Training stream invalidated." };
+      }
+      await context.workbench.postMessage({
+        type: "stream/chunk",
+        payload: { messageId, chunk: pendingChunkText },
+      });
     }
     if (!response) {
       throw new Error("Training card stream ended before completion.");

@@ -24,7 +24,8 @@ test('workspace admission takes priority over provider recovery across coaching 
     '  const renderSettingsView = () => (',
   );
 
-  assert.match(source, /const providerCanCoachNow = providerTransportConnected && !providerSendState\.blocked;/);
+  // Connection state never gates sending; provider configuration does.
+  assert.match(source, /const providerCanCoachNow = !providerSendState\.blocked;/);
   assert.match(source, /const providerBlockReason = useMemo\(/);
   assert.match(
     source,

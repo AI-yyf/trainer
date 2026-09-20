@@ -2396,6 +2396,40 @@ export async function sendStreamMessageCommand(
     let completionResponse: unknown;
     let sawCompletion = false;
 
+    // Coalesce token deltas into ~66ms frames so the webview receives one
+    // postMessage (and the host persists streaming state once) per frame
+    // instead of per token.
+    const CHUNK_COALESCE_WINDOW_MS = 66;
+    let pendingChunkText = '';
+    let lastChunkFlushAt = 0;
+    const flushChunkFrame = async (force = false): Promise<void> => {
+      if (!pendingChunkText) {
+        return;
+      }
+      const now = Date.now();
+      if (!force && now - lastChunkFlushAt < CHUNK_COALESCE_WINDOW_MS) {
+        return;
+      }
+      const frame = pendingChunkText;
+      pendingChunkText = '';
+      lastChunkFlushAt = now;
+      if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
+        return;
+      }
+      await updateStreamingState(context, (state) => ({
+        ...state,
+        isStreaming: true,
+        streamedContent: state.streamedContent + frame,
+      }));
+      if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
+        return;
+      }
+      await context.workbench.postMessage({
+        type: 'stream/chunk',
+        payload: { messageId, chunk: frame },
+      });
+    };
+
     for await (const event of context.sidecarClient.fetchSSE(
       status.port,
       requestPath,
@@ -2650,37 +2684,16 @@ export async function sendStreamMessageCommand(
       const chunkText = typeof parsed?.chunk === 'string' ? parsed.chunk : undefined;
       if (chunkText) {
         totalTokens += 1;
-        if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
-          return { ok: true, message: 'Stream invalidated.' };
-        }
-        await updateStreamingState(context, (state) => ({
-          ...state,
-          isStreaming: true,
-          streamedContent: state.streamedContent + chunkText,
-        }));
-        if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
-          return { ok: true, message: 'Stream invalidated.' };
-        }
-        await context.workbench.postMessage({
-          type: 'stream/chunk',
-          payload: { messageId, chunk: chunkText },
-        });
+        pendingChunkText += chunkText;
+        await flushChunkFrame();
         continue;
       }
 
-      await updateStreamingState(context, (state) => ({
-        ...state,
-        isStreaming: true,
-        streamedContent: state.streamedContent + event.data,
-      }));
-      if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
-        return { ok: true, message: 'Stream invalidated.' };
-      }
-      await context.workbench.postMessage({
-        type: 'stream/chunk',
-        payload: { messageId, chunk: event.data },
-      });
+      pendingChunkText += event.data;
+      await flushChunkFrame();
     }
+
+    await flushChunkFrame(true);
 
     if (!sawCompletion || completionResponse === undefined) {
       throw new Error('SSE stream ended before a valid completion event.');

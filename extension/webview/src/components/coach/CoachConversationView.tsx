@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { memo } from "react";
 
 import type { ConversationMessage } from "../../lib/types";
 import type { ComposerLanguage } from "../../lib/types";
@@ -23,9 +23,8 @@ export interface CoachConversationViewProps {
   eyebrow?: string;
   title?: string;
   subtitle?: string;
-  summaryBar?: ReactNode;
-  emptyState?: ReactNode;
-  footer?: ReactNode;
+  emptyState?: React.ReactNode;
+  footer?: React.ReactNode;
   openArtifactLabel?: string;
   userLabel?: string;
   assistantLabel?: string;
@@ -37,17 +36,22 @@ export interface CoachConversationViewProps {
   onArtifactOpen?: (artifact: CoachArtifactBlockData, message: ConversationMessage) => void;
   onMessageAction?: (action: CoachMessageAction, message: ConversationMessage) => void;
   pendingMessageAction?: string | null;
-  renderMessageSupplement?: (message: ConversationMessage) => ReactNode;
 }
 
-export function CoachConversationView({
+interface CoachConversationItem {
+  key: number;
+  message: ConversationMessage;
+  streaming: boolean;
+  isLatestAssistant: boolean;
+}
+
+function CoachConversationViewImpl({
   messages,
   className,
   surfaceTone = "thread",
   eyebrow,
   title,
   subtitle,
-  summaryBar,
   emptyState,
   footer,
   openArtifactLabel,
@@ -61,7 +65,6 @@ export function CoachConversationView({
   onArtifactOpen,
   onMessageAction,
   pendingMessageAction,
-  renderMessageSupplement,
 }: CoachConversationViewProps) {
   const classes = [
     surfaceTone === "thread" ? "section-block" : "coach-conversation-view--open",
@@ -76,21 +79,39 @@ export function CoachConversationView({
     .join(" ");
   const showHeader = Boolean(eyebrow || title || subtitle);
   const hasMessages = messages.length > 0 || Boolean(streamingMessage);
-  const latestMessage = messages[messages.length - 1];
-  const latestAssistantHasStatus = Boolean(
-    latestMessage?.role === "assistant" &&
-      latestMessage.parts?.some(
-        (part) =>
-          part.type === "coach_visible_status" ||
-          part.type === "tool_call" ||
-          part.type === "tool_result",
-      ),
-  );
-  const showSummaryBar = Boolean(summaryBar) && (Boolean(streamingMessage) || !latestAssistantHasStatus);
-  const items = messages.map((message) => {
-    const supplement = renderMessageSupplement ? renderMessageSupplement(message) : null;
-    return { message, supplement };
-  });
+
+  // One flat, append-only list. Keys are positional so the streaming slot and
+  // the server-confirmed assistant message that later lands at the same index
+  // share one React instance: the reply finishes in place, with no remount and
+  // no entrance-animation replay.
+  const items: CoachConversationItem[] = messages.map((message, index) => ({
+    key: index,
+    message,
+    streaming: false,
+    isLatestAssistant: false,
+  }));
+  for (let index = items.length - 1; index >= 0; index--) {
+    if (items[index].message.role === "assistant") {
+      items[index].isLatestAssistant = true;
+      break;
+    }
+  }
+  if (streamingMessage) {
+    items.push({
+      key: items.length,
+      streaming: true,
+      isLatestAssistant: false,
+      message: {
+        id: "coach-streaming",
+        role: streamingMessage.role ?? "assistant",
+        author: streamingMessage.author ?? "Trainer",
+        body: streamingMessage.body,
+        timestamp: streamingMessage.timestamp ?? "Streaming...",
+        contextNote: streamingMessage.note,
+      },
+    });
+  }
+  const streamingStripVisible = Boolean(streamingMessage && agentActivity && agentActivity.length > 0);
 
   return (
     <section
@@ -108,16 +129,6 @@ export function CoachConversationView({
         </div>
       ) : null}
 
-      {showSummaryBar ? (
-        <div
-          className="coach-conversation-view__summary coach-conversation-view__summary--context"
-          role="status"
-          aria-live={streamingMessage ? "polite" : undefined}
-        >
-          {summaryBar}
-        </div>
-      ) : null}
-
       <div
         className={`message-list coach-conversation-view__list ${
           hasMessages ? "coach-conversation-view__list--active" : "coach-conversation-view__list--empty"
@@ -125,67 +136,50 @@ export function CoachConversationView({
       >
         {messages.length === 0 && emptyState ? emptyState : null}
 
-        {items.map(({ message, supplement }) => (
+        {items.map((item, itemIndex) => (
           <div
-            key={message.id}
+            key={item.key}
             className={`coach-conversation-view__item coach-conversation-view__item--${
-              message.role === "user" ? "user" : message.role === "system" ? "system" : "assistant"
+              item.message.role === "user" ? "user" : item.message.role === "system" ? "system" : "assistant"
             }`}
           >
             <div className="coach-conversation-view__message-lane">
-              <CoachMessageBubble
-                assistantLabel={assistantLabel}
-                message={message}
-                openArtifactLabel={openArtifactLabel}
-                systemLabel={systemLabel}
-                userLabel={userLabel}
-                language={language}
-                onArtifactOpen={onArtifactOpen}
-                onMessageAction={onMessageAction}
-                pendingMessageAction={pendingMessageAction}
-              />
-            </div>
-            {supplement ? <div className="coach-conversation-view__supplement">{supplement}</div> : null}
-          </div>
-        ))}
-
-        {streamingMessage ? (
-          <div className="coach-conversation-view__item coach-conversation-view__item--assistant">
-            <div className="coach-conversation-view__message-lane">
-              {agentActivity && agentActivity.length > 0 ? (
+              {item.streaming && streamingStripVisible ? (
                 <AgentActivityStrip
-                  activities={agentActivity}
-                  collapsible
+                  activities={agentActivity ?? []}
                   step={agentStep}
                   language={language}
                 />
               ) : null}
               <CoachMessageBubble
-                assistantLabel={streamingMessage.roleLabel ?? assistantLabel}
-                className="message-bubble--streaming"
-                message={{
-                  id: "streaming",
-                  role: streamingMessage.role ?? "assistant",
-                  author: streamingMessage.author ?? "Trainer",
-                  body: streamingMessage.body,
-                  timestamp: streamingMessage.timestamp ?? "Streaming...",
-                  contextNote: streamingMessage.note,
-                }}
+                assistantLabel={
+                  item.streaming ? streamingMessage?.roleLabel ?? assistantLabel : assistantLabel
+                }
+                className={item.streaming ? "message-bubble--streaming" : undefined}
+                message={item.message}
                 systemLabel={systemLabel}
                 userLabel={userLabel}
                 language={language}
-                streaming
+                streaming={item.streaming}
+                isLatestAssistant={item.isLatestAssistant}
+                onArtifactOpen={onArtifactOpen}
+                onMessageAction={onMessageAction}
+                pendingMessageAction={pendingMessageAction}
               >
-                <div className="coach-streaming-dots" aria-hidden>
-                  <span /><span /><span />
-                </div>
+                {item.streaming ? (
+                  <div className="coach-streaming-dots" aria-hidden>
+                    <span /><span /><span />
+                  </div>
+                ) : null}
               </CoachMessageBubble>
             </div>
           </div>
-        ) : null}
+        ))}
       </div>
 
       {footer ? <div className="coach-conversation-view__footer">{footer}</div> : null}
     </section>
   );
 }
+
+export const CoachConversationView = memo(CoachConversationViewImpl);

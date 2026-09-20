@@ -13,6 +13,9 @@ const SHIKI_THEME_BY_THEME: Record<string, ThemeName> = {
 };
 
 const shikiHtmlCache = new Map<string, string>();
+// Streaming re-highlights every intermediate prefix of a growing code block;
+// without a cap the cache grows once per delta. Evict the oldest entries.
+const SHIKI_HTML_CACHE_LIMIT = 240;
 
 function getWorkbenchThemeName(): ThemeName {
   if (typeof document === "undefined") {
@@ -57,6 +60,13 @@ async function highlightCode(code: string, languageId: string, themeName: ThemeN
     theme: themeName,
   });
   shikiHtmlCache.set(key, html);
+  while (shikiHtmlCache.size > SHIKI_HTML_CACHE_LIMIT) {
+    const oldest = shikiHtmlCache.keys().next();
+    if (oldest.done) {
+      break;
+    }
+    shikiHtmlCache.delete(oldest.value);
+  }
   return html;
 }
 
@@ -64,9 +74,15 @@ export interface ShikiCodeBlockProps {
   code: string;
   languageId?: string;
   className?: string;
+  /** Live tail of a streaming reply: skip re-highlighting long growing code. */
+  streaming?: boolean;
 }
 
-export function ShikiCodeBlock({ code, languageId = "text", className }: ShikiCodeBlockProps) {
+// Async Shiki highlighting of a code block that grows every frame is quadratic
+// over the stream; long live code renders plain and highlights once it closes.
+const STREAMING_HIGHLIGHT_LIMIT = 1200;
+
+export function ShikiCodeBlock({ code, languageId = "text", className, streaming = false }: ShikiCodeBlockProps) {
   const [html, setHtml] = useState<string>();
   const themeName = getWorkbenchThemeName();
   const normalizedLanguageId = useMemo(() => normalizeLanguage(languageId), [languageId]);
@@ -77,6 +93,10 @@ export function ShikiCodeBlock({ code, languageId = "text", className }: ShikiCo
   );
 
   useEffect(() => {
+    if (streaming && code.length > STREAMING_HIGHLIGHT_LIMIT) {
+      setHtml(undefined);
+      return;
+    }
     let cancelled = false;
 
     const cached = shikiHtmlCache.get(codeKey);
@@ -102,7 +122,7 @@ export function ShikiCodeBlock({ code, languageId = "text", className }: ShikiCo
     return () => {
       cancelled = true;
     };
-  }, [code, codeKey, normalizedLanguageId, themeName]);
+  }, [code, codeKey, normalizedLanguageId, streaming, themeName]);
 
   if (!html) {
     return (

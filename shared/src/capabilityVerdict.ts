@@ -11,6 +11,7 @@ export interface TrainerCapabilityVerdict {
 }
 
 export interface TrainerCapabilityVerdictInput {
+  /** Informational only — features must not be gated on sidecar health. */
   connectionState?: string;
   providerConfigured?: boolean;
   apiKeyConfigured?: boolean;
@@ -34,21 +35,22 @@ export interface TrainerCapabilityVerdictInput {
 /**
  * Single conservative capability contract shared by all workbench surfaces.
  * Declared provider flags never promote a capability to usable without a live observation.
+ * Sidecar connection state is deliberately NOT part of the verdict: the host
+ * lazy-starts the sidecar per request, so an offline pill must not lock the UI.
  */
 export function deriveTrainerCapabilityVerdict(
   input: TrainerCapabilityVerdictInput,
 ): TrainerCapabilityVerdict {
   const configured = input.providerConfigured === true;
   const credentials = input.apiKeyConfigured === true;
-  const connected = input.connectionState === "connected";
   const lastTestOk = input.lastTestOk === true;
-  const connectedTransport =
-    configured && credentials && connected && input.sendBlocked !== true && lastTestOk;
-  const chat = connectedTransport;
-  const streaming = connectedTransport && input.capabilityTruth?.streamingReady === true;
-  const verifiedTools = connectedTransport && input.capabilityTruth?.toolsReady === true;
+  const transportReady =
+    configured && credentials && input.sendBlocked !== true && lastTestOk;
+  const chat = transportReady;
+  const streaming = transportReady && input.capabilityTruth?.streamingReady === true;
+  const verifiedTools = transportReady && input.capabilityTruth?.toolsReady === true;
   const imageInput =
-    connectedTransport &&
+    transportReady &&
     input.capabilityTruth?.visionReady === true &&
     input.imageProtocolSupported === true;
   const authorityEvidence = input.authority?.resourceWriteEvidence;
@@ -59,7 +61,7 @@ export function deriveTrainerCapabilityVerdict(
     authorityEvidence.scope === "trainer_sandbox" &&
     authorityEvidence.allowed === true;
   const workspaceWritable = resourceWrite;
-  const formalPlan = connectedTransport && verifiedTools && workspaceWritable;
+  const formalPlan = transportReady && verifiedTools && workspaceWritable;
 
   return {
     chat,
@@ -72,16 +74,14 @@ export function deriveTrainerCapabilityVerdict(
       ? "provider_not_configured"
       : !credentials
         ? "provider_api_key_missing"
-        : !connected
-          ? "provider_not_connected"
-          : input.sendBlocked
-            ? "provider_send_blocked"
-            : !lastTestOk
-              ? "provider_not_tested"
-              : !verifiedTools
-                ? "tools_not_verified"
-                : !workspaceWritable
-                  ? "workspace_not_admitted"
-                  : "ready",
+        : input.sendBlocked
+          ? "provider_send_blocked"
+          : !lastTestOk
+            ? "provider_not_tested"
+            : !verifiedTools
+              ? "tools_not_verified"
+              : !workspaceWritable
+                ? "workspace_not_admitted"
+                : "ready",
   };
 }

@@ -10,6 +10,8 @@ export interface RichCodeBlockProps {
   languageId?: string;
   className?: string;
   showCopyButton?: boolean;
+  /** Inside the live tail of a streaming reply: long code stays plain until closed. */
+  streaming?: boolean;
 }
 
 function copyLabel(language: ComposerLanguage, copied: boolean): string {
@@ -31,6 +33,7 @@ export function RichCodeBlock({
   languageId,
   className,
   showCopyButton = true,
+  streaming = false,
 }: RichCodeBlockProps) {
   const [copied, setCopied] = useState(false);
   const headerLabel = useMemo(
@@ -68,7 +71,7 @@ export function RichCodeBlock({
           </button>
         ) : null}
       </div>
-      <ShikiCodeBlock code={code} languageId={languageId} />
+      <ShikiCodeBlock code={code} languageId={languageId} streaming={streaming} />
     </div>
   );
 }
