@@ -24,7 +24,10 @@ test('workspace admission takes priority over provider recovery across coaching 
     '  const renderSettingsView = () => (',
   );
 
-  assert.match(source, /const providerCanCoachNow = providerTransportConnected && !providerSendState\.blocked;/);
+  assert.match(
+    source,
+    /const providerCanCoachNow =\s*providerTransportConnected && \(!providerSendState\.blocked \|\| providerProofMayRevalidateOnSend\);/,
+  );
   assert.match(source, /const providerBlockReason = useMemo\(/);
   assert.match(
     source,

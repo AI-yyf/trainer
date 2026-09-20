@@ -46,8 +46,9 @@ test('training card-only mode keeps one current card and moves response controls
   const appSource = fs.readFileSync(appSourcePath, 'utf8');
   const cardOnly = cardOnlyRender(source);
   const trainingCardHandler = trainingCardGenerationHandler(appSource);
-  const cardSectionsStart = source.indexOf('const cardOnlyBodySections');
-  const cardSectionsEnd = source.indexOf('const hasAdjustmentOutcome', cardSectionsStart);
+  // The card-only body data now lives in the route strip items.
+  const cardSectionsStart = source.indexOf('const routeStripItems = [');
+  const cardSectionsEnd = source.indexOf('];', cardSectionsStart);
   const cardSections = source.slice(cardSectionsStart, cardSectionsEnd);
 
   assert.match(source, /type TrainingLoopStepKey = "learn" \| "try" \| "verify" \| "reflect" \| "return";/);
@@ -62,12 +63,14 @@ test('training card-only mode keeps one current card and moves response controls
   assert.match(cardOnly, /data-view-object=""/);
   assert.match(cardOnly, /data-view-why=""/);
   assert.match(cardOnly, /data-view-primary=""/);
-  assert.match(cardOnly, /training-current__card-section/);
-  assert.match(cardOnly, /cardOnlyBodySections/);
+  assert.doesNotMatch(cardOnly, /training-current__card-section/);
+  assert.doesNotMatch(cardOnly, /data-training-card-fact/);
+  assert.doesNotMatch(cardOnly, /cardOnlyBodySections/);
+  assert.match(cardSections, /key: "why-now"/);
+  assert.match(cardSections, /key: "deliverable"/);
   assert.doesNotMatch(cardOnly, /training-current__more/);
   assert.doesNotMatch(cardOnly, /training-loop-rail/);
   assert.doesNotMatch(cardOnly, /TrainingNextHopLine/);
-  assert.match(cardOnly, /data-training-card-fact=\{section\.key\}/);
   assert.match(source, /export function interpretTrainingComposerCardCommand/);
   assert.match(source, /export function applyTrainingCardSkip/);
   assert.match(appSource, /interpretTrainingComposerCardCommand\(normalizedDraft\)/);
@@ -75,13 +78,10 @@ test('training card-only mode keeps one current card and moves response controls
     source,
     /\{cardOnly && nextHop \? \(\s*<div className="training-carryover-stack">\s*<TrainingCarryoverRow card=\{nextHop\}/,
   );
-  assert.match(cardSections, /key: "current"/);
   assert.match(cardSections, /key: "why-now"/);
   assert.match(cardSections, /key: "deliverable"/);
   assert.match(cardSections, /key: "verify"/);
   assert.match(cardSections, /key: "return"/);
-  assert.match(cardSections, /detail: routeVerifySummary/);
-  assert.match(cardSections, /detail: routeReturnSummary/);
   assert.doesNotMatch(cardOnlyFace(source), /<(?:button|input|textarea|form)\b/);
   assert.doesNotMatch(cardOnly, /(?:flashProofSurface|practiceProofSurface|training-current__response-shell)/);
   assert.match(appSource, /const trainingComposerEnabled = activeView === "training" && hasTrainingCard;/);

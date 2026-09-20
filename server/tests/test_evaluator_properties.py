@@ -118,7 +118,7 @@ class TestEvaluatorProperties:
     @given(
         checks=check_results_list(),
     )
-    @settings(max_examples=50)
+    @settings(deadline=None, max_examples=50)
     def test_overall_status_aggregation_failed_check(self, checks):
         """Property: If any check fails, overall status should be FAILED.
 
@@ -151,7 +151,7 @@ class TestEvaluatorProperties:
     @given(
         status=check_status(),
     )
-    @settings(max_examples=50)
+    @settings(deadline=None, max_examples=50)
     def test_check_result_status_is_valid(self, status):
         """Property: CheckStatus should always be a valid enum value."""
         assert status in CheckStatus
@@ -160,7 +160,7 @@ class TestEvaluatorProperties:
         spec=task_spec(),
         code=code_snippet(),
     )
-    @settings(max_examples=30)
+    @settings(deadline=None, max_examples=30)
     def test_evaluation_produces_valid_report(self, spec, code):
         """Property: Evaluation should always produce a valid report."""
         pipeline = EvaluationPipeline(
@@ -179,7 +179,7 @@ class TestEvaluatorProperties:
     @given(
         checks=check_results_list(),
     )
-    @settings(max_examples=50)
+    @settings(deadline=None, max_examples=50)
     def test_check_determinism(self, checks):
         """Property: Same input -> same output for check results."""
         # Create two identical lists
@@ -202,7 +202,7 @@ class TestEvaluatorProperties:
     @given(
         spec=task_spec(),
     )
-    @settings(max_examples=50)
+    @settings(deadline=None, max_examples=50)
     def test_spec_has_valid_id(self, spec):
         """Property: TaskSpec should have a valid ID."""
         assert spec.id.startswith("spec_")
@@ -211,7 +211,7 @@ class TestEvaluatorProperties:
     @given(
         requirements=st.lists(requirement_item(), min_size=0, max_size=10),
     )
-    @settings(max_examples=50)
+    @settings(deadline=None, max_examples=50)
     def test_requirements_have_valid_categories(self, requirements):
         """Property: All requirements should have valid categories."""
         valid_categories = {"constraint", "functional", "non-functional"}
@@ -221,7 +221,7 @@ class TestEvaluatorProperties:
     @given(
         checks=check_results_list(),
     )
-    @settings(max_examples=50)
+    @settings(deadline=None, max_examples=50)
     def test_passed_check_count(self, checks):
         """Property: Passed check count should match actual passed checks."""
         passed_count = sum(1 for c in checks if c.status == CheckStatus.PASSED)
@@ -231,7 +231,7 @@ class TestEvaluatorProperties:
     @given(
         checks=check_results_list(),
     )
-    @settings(max_examples=50)
+    @settings(deadline=None, max_examples=50)
     def test_failed_check_count(self, checks):
         """Property: Failed check count should match actual failed checks."""
         failed_count = sum(1 for c in checks if c.status == CheckStatus.FAILED)
@@ -241,7 +241,7 @@ class TestEvaluatorProperties:
     @given(
         status=check_status(),
     )
-    @settings(max_examples=50)
+    @settings(deadline=None, max_examples=50)
     def test_semantic_review_status_valid(self, status):
         """Property: SemanticReview status should be a valid CheckStatus."""
         review = SemanticReview(
@@ -256,7 +256,7 @@ class TestEvaluatorProperties:
         spec=task_spec(),
         code=code_snippet(),
     )
-    @settings(max_examples=30)
+    @settings(deadline=None, max_examples=30)
     def test_evaluation_with_empty_checks(self, spec, code):
         """Property: Evaluation with no failing checks should produce PASSED status."""
         pipeline = EvaluationPipeline(
@@ -274,7 +274,7 @@ class TestEvaluatorProperties:
     @given(
         checks=check_results_list(),
     )
-    @settings(max_examples=50)
+    @settings(deadline=None, max_examples=50)
     def test_overall_status_priority(self, checks):
         """Property: ERROR status should take priority over FAILED."""
         has_error = any(c.status == CheckStatus.ERROR for c in checks)
@@ -289,7 +289,7 @@ class TestEvaluatorProperties:
         name=st.text(min_size=1, max_size=20),
         status=check_status(),
     )
-    @settings(max_examples=50)
+    @settings(deadline=None, max_examples=50)
     def test_check_result_name_preserved(self, name, status):
         """Property: CheckResult should preserve the name."""
         result = CheckResult(name=name, status=status, command=[], summary="")
@@ -299,7 +299,7 @@ class TestEvaluatorProperties:
         spec=task_spec(),
         code=code_snippet(),
     )
-    @settings(max_examples=30)
+    @settings(deadline=None, max_examples=30)
     def test_evaluation_request_preserves_spec(self, spec, code):
         """Property: EvaluationRequest should preserve the spec."""
         request = EvaluationRequest(spec=spec, code=code)

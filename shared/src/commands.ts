@@ -24,6 +24,8 @@ export const trainerCommands = {
   resumeLatestCoachCheckpoint: "trainer.session.resumeLatestCoachCheckpoint",
   replayLatestCoachCheckpoint: "trainer.session.replayLatestCoachCheckpoint",
   listCoachSessions: "trainer.session.listSessions",
+  libraryOverview: "trainer.library.overview",
+  libraryDelete: "trainer.library.delete",
   activateCoachSession: "trainer.session.activateSession",
   coachRemoteBoundary: "trainer.coach.remoteBoundary",
   coachDebugLoop: "trainer.coach.debugLoop",

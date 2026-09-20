@@ -152,7 +152,7 @@ export function CoachConversationView({
         {streamingMessage ? (
           <div className="coach-conversation-view__item coach-conversation-view__item--assistant">
             <div className="coach-conversation-view__message-lane">
-              {agentActivity && agentActivity.length > 0 ? (
+              {agentActivity ? (
                 <AgentActivityStrip
                   activities={agentActivity}
                   collapsible

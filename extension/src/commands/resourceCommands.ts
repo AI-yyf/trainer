@@ -3073,3 +3073,198 @@ export async function cancelResourceOrganizationCommand(
   }
   return { ok: true };
 }
+export interface LibraryItemView {
+  id: string;
+  title: string;
+  status?: string;
+  messageCount?: number;
+  isActive?: boolean;
+  frozen?: boolean;
+  focusArea?: string;
+  updatedAt?: string;
+}
+
+export interface LibraryOverviewView {
+  workspaceId: string;
+  sessions: LibraryItemView[];
+  plans: LibraryItemView[];
+  cards: LibraryItemView[];
+  resources: LibraryItemView[];
+  activity: LibraryActivityView[];
+}
+
+export interface LibraryActivityView {
+  eventId: string;
+  type: 'card' | 'plan' | 'session';
+  id: string;
+  action: 'deleted';
+  occurredAt: string;
+  title: string;
+}
+
+function normalizeLibraryActivity(value: unknown): LibraryActivityView[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item): LibraryActivityView[] => {
+    if (!item || typeof item !== 'object') {
+      return [];
+    }
+    const record = item as Record<string, unknown>;
+    const payload = record.payload && typeof record.payload === 'object'
+      ? (record.payload as Record<string, unknown>)
+      : {};
+    if (
+      typeof record.eventId !== 'string' ||
+      !['card', 'plan', 'session'].includes(String(record.type)) ||
+      record.action !== 'deleted' ||
+      typeof record.id !== 'string'
+    ) {
+      return [];
+    }
+    return [{
+      eventId: record.eventId,
+      type: record.type as LibraryActivityView['type'],
+      id: record.id,
+      action: 'deleted',
+      occurredAt: typeof record.occurredAt === 'string' ? record.occurredAt : '',
+      title: typeof payload.title === 'string' ? payload.title : record.id,
+    }];
+  });
+}
+
+function normalizeLibraryItems(value: unknown): LibraryItemView[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item): LibraryItemView[] => {
+    if (!item || typeof item !== 'object') {
+      return [];
+    }
+    const record = item as Record<string, unknown>;
+    const id = typeof record.id === 'string' ? record.id : '';
+    if (!id) {
+      return [];
+    }
+    return [
+      {
+        id,
+        title: typeof record.title === 'string' ? record.title : '',
+        status: typeof record.status === 'string' ? record.status : undefined,
+        messageCount: typeof record.messageCount === 'number' ? record.messageCount : undefined,
+        isActive: record.isActive === true,
+        frozen: typeof record.frozen === 'boolean' ? record.frozen : undefined,
+        focusArea: typeof record.focusArea === 'string' ? record.focusArea : undefined,
+        updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : undefined,
+      },
+    ];
+  });
+}
+
+export async function libraryOverviewCommand(
+  context: CommandContext,
+): Promise<CommandExecutionResult> {
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: status.detail ?? 'Trainer could not reach the library service.' };
+  }
+  const query = withWorkspaceQuery('/library/overview', context);
+  try {
+    const response = await context.sidecarClient.getJson<unknown>(
+      status.port,
+      query,
+    );
+    const record = (response ?? {}) as Record<string, unknown>;
+    const overview: LibraryOverviewView = {
+      workspaceId: typeof record.workspaceId === 'string' ? record.workspaceId : '',
+      sessions: normalizeLibraryItems(record.sessions),
+      plans: normalizeLibraryItems(record.plans),
+      cards: normalizeLibraryItems(record.cards),
+      resources: normalizeLibraryItems(record.resources),
+      activity: normalizeLibraryActivity(record.activity),
+    };
+    return { ok: true, data: { overview } };
+  } catch (error) {
+    return { ok: false, message: 'Trainer could not load the library overview.' };
+  }
+}
+
+export interface LibraryDeletePayload {
+  type?: string;
+  itemType?: string;
+  id?: string;
+  itemId?: string;
+  requestId?: string;
+}
+
+export async function libraryDeleteCommand(
+  context: CommandContext,
+  payload?: LibraryDeletePayload,
+): Promise<CommandExecutionResult> {
+  if (!(await context.trustGuard.ensureTrusted('delete a Trainer library item'))) {
+    return { ok: false, message: 'Workspace trust is required to delete library items.' };
+  }
+  const itemType = (payload?.type ?? payload?.itemType ?? '').trim();
+  const itemId = (payload?.id ?? payload?.itemId ?? '').trim();
+  const requestId = (payload?.requestId ?? '').trim();
+  if (!itemType || !itemId) {
+    return { ok: false, message: 'A library item type and id are required.' };
+  }
+  if (!['card', 'plan', 'session'].includes(itemType)) {
+    return { ok: false, message: 'Unknown library item type.' };
+  }
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: status.detail ?? 'Trainer could not reach the library service.' };
+  }
+  let activity: LibraryActivityView | undefined;
+  try {
+    const response = await context.sidecarClient.postJson<unknown>(status.port, '/library/delete', {
+      session_id: context.getSessionId(),
+      workspace_id: getRuntimeWorkspaceId(context),
+      type: itemType,
+      id: itemId,
+      request_id: requestId,
+    });
+    const responseRecord = response && typeof response === 'object'
+      ? (response as Record<string, unknown>)
+      : {};
+    activity = normalizeLibraryActivity(
+      responseRecord.activity ? [responseRecord.activity] : [],
+    )[0];
+  } catch {
+    return {
+      ok: false,
+      message:
+        itemType === 'session' && itemId === context.getSessionId()
+          ? 'Switch to another conversation before deleting the current one.'
+          : 'Trainer could not delete that library item.',
+      data: { mutation: { requestId, type: itemType, id: itemId } },
+    };
+  }
+  try {
+    const summary = await context.sidecarClient.getJson<unknown>(
+      status.port,
+      withWorkspaceQuery('/memory/summary', context),
+    );
+    await context.patchWorkbenchData(
+      mergeMemorySummarySnapshot(
+        context.getHostState().bootstrap,
+        summary,
+        getRuntimeWorkspaceId(context),
+      ),
+    );
+  } catch {
+    return {
+      ok: false,
+      message: 'The library item was deleted, but Trainer could not refresh the workbench.',
+      data: { mutation: { requestId, type: itemType, id: itemId, deleted: true, activity } },
+    };
+  }
+  await context.workbench.syncState();
+  return {
+    ok: true,
+    message: 'Library item deleted.',
+    data: { mutation: { requestId, type: itemType, id: itemId, deleted: true, activity } },
+  };
+}

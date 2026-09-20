@@ -73,7 +73,7 @@ test('composer model switch becomes an accessible icon action in a narrow sideba
 
   assert.match(source, /density=\{composerModelActionDensity\}/);
   assert.match(source, /id: "model-switch",\s*compact: composerModelActionDensity === "compact",/);
-  assert.match(source, /icon: <BrainIcon size=\{16\} \/>/);
+  assert.match(source, /icon: <ModelSwitchIcon size=\{16\} \/>/);
   assert.match(source, /ariaLabel: composerModelButtonTitle/);
   assert.match(source, /setComposerModelActionDensity\(width < 430 \? "compact" : "default"\)/);
 });

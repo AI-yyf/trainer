@@ -494,13 +494,6 @@ interface TrainingLoopStep {
   state: TrainingLoopStepState;
 }
 
-interface TrainingCardOnlySection {
-  key: "current" | "why-now" | "deliverable" | "verify" | "return" | "reliability";
-  label: string;
-  title?: string;
-  detail?: string;
-}
-
 function trainingLoopStepLabel(step: TrainingLoopStepKey, language: ComposerLanguage): string {
   const labels: Record<ComposerLanguage, Record<TrainingLoopStepKey, string>> = {
     "zh-CN": { learn: "\u5b66\u4e60", try: "\u52a8\u624b", verify: "\u9a8c\u8bc1", reflect: "\u590d\u76d8", return: "\u56de\u6d41" },
@@ -1418,43 +1411,6 @@ export function TrainingWorkbenchView({
           ? "\u5148\u52a8\u624b\uff0c\u518d\u7528\u4e0b\u65b9\u8f93\u5165\u6846\u8bb0\u5f55\u7ed3\u679c\u6216 blocker\u3002\u771f\u6b63\u901a\u8fc7\u8981\u9760\u8f93\u5165\u6846\u533a\u57df\u91cc\u7684 Verify current file\u3002"
           : "Try the task first, then use the composer below to record the result or blocker. Real pass/fail still comes from Verify current file.")
       : manualPracticeCopy.composerHint;
-  const cardOnlyBodySections: TrainingCardOnlySection[] = [
-    ...(reliabilityCopy
-      ? [
-          {
-            key: "reliability",
-            label: isZh ? "保存状态" : "Save status",
-            title: reliabilityCopy.what,
-            detail: `${reliabilityCopy.why} ${reliabilityCopy.next}`,
-          } satisfies TrainingCardOnlySection,
-        ]
-      : []),
-    {
-      key: "current",
-      label: t.currentTask,
-      title: cardOnlyTask,
-    },
-    {
-      key: "why-now",
-      label: t.trainingWhyNow,
-      detail: cardOnlyWhyNowSummary,
-    },
-    {
-      key: "deliverable",
-      label: t.trainingDeliverable,
-      title: cardOnlyDeliverable,
-    },
-    {
-      key: "verify",
-      label: trainingLoopStepLabel("verify", language),
-      detail: routeVerifySummary,
-    },
-    {
-      key: "return",
-      label: trainingLoopStepLabel("return", language),
-      detail: routeReturnSummary,
-    },
-  ];
   const flashDeckActionLabel = isFlashCard
     ? isZh
       ? "\u6362\u4e00\u5f20\u95ea\u5361"
@@ -1666,32 +1622,12 @@ export function TrainingWorkbenchView({
                       normalizeCardText(cardOnlyTask) !== normalizeCardText(displayTitle) ? (
                         <p data-view-why="">{cardOnlyTask}</p>
                       ) : null}
+                      {scenario?.trim() &&
+                      normalizeCardText(scenario) !== normalizeCardText(cardOnlyTask) &&
+                      normalizeCardText(scenario) !== normalizeCardText(displayTitle) ? (
+                        <p className="training-current__scenario">{scenario}</p>
+                      ) : null}
                     </div>
-                    {cardOnlyBodySections
-                      .filter((section) => {
-                        const title = section.title?.trim();
-                        const detail = section.detail?.trim();
-                        if (!title && !detail) {
-                          return false;
-                        }
-                        if (
-                          section.key === "current" &&
-                          title &&
-                          normalizeCardText(title) === normalizeCardText(displayTitle)
-                        ) {
-                          return false;
-                        }
-                        return true;
-                      })
-                      .map((section) => (
-                        <article key={section.key} className="training-current__card-section" data-training-card-fact={section.key}>
-                          <span className="training-current__card-label">{section.label}</span>
-                          {section.title ? (
-                            <p className="training-current__card-value">{section.title}</p>
-                          ) : null}
-                          {section.detail ? <p>{section.detail}</p> : null}
-                        </article>
-                      ))}
                     {cardOnlyDoneText ? (
                       <p className="training-current__done">{cardOnlyDoneText}</p>
                     ) : null}

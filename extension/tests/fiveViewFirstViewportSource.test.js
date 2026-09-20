@@ -114,8 +114,12 @@ test('training first viewport is the current card plus one primary, with skip/gr
   assert.match(cardOnly, /data-view-object=""/);
   assert.match(cardOnly, /data-view-why=""/);
   assert.match(cardOnly, /data-view-primary=""/);
-  assert.match(cardOnly, /training-current__card-section/);
+  // Question-only card: fact sections and guidance stay off the face; the
+  // scenario line may add question context, but no fact articles render.
+  assert.doesNotMatch(cardOnly, /training-current__card-section/);
+  assert.doesNotMatch(cardOnly, /data-training-card-fact/);
   assert.doesNotMatch(cardOnly, /training-current__more/);
+  assert.doesNotMatch(cardOnly, /training-current__full/);
   assert.doesNotMatch(cardOnly, /training-loop-rail/);
   assert.doesNotMatch(cardOnly, /card-status-nav/);
   assert.doesNotMatch(cardOnly, /handleSkipCard/);

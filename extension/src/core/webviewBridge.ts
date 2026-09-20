@@ -485,6 +485,44 @@ export class WorkbenchSidebarController
             },
           });
         }
+        // The library overview is panel data for the Resources view; it rides
+        // its own ack channel exactly like the session list above.
+        if (command.commandId === COMMAND_IDS.libraryOverview) {
+          await this.postMessage({
+            type: 'library/overview',
+            payload: {
+              ok: result.ok,
+              overview:
+                result.ok && result.data
+                  ? (result.data as { overview?: unknown }).overview ?? null
+                  : null,
+              ...(!result.ok ? { message: result.message ?? 'Trainer could not load the library.' } : {}),
+            },
+          });
+        }
+        if (command.commandId === COMMAND_IDS.libraryDelete) {
+          const resultMutation =
+            result.data && typeof result.data === 'object' && 'mutation' in result.data
+              ? (result.data as { mutation?: unknown }).mutation
+              : null;
+          const commandPayload =
+            command.payload && typeof command.payload === 'object'
+              ? (command.payload as Record<string, unknown>)
+              : {};
+          const mutation = resultMutation ?? {
+            requestId: typeof commandPayload.requestId === 'string' ? commandPayload.requestId : '',
+            type: typeof commandPayload.type === 'string' ? commandPayload.type : '',
+            id: typeof commandPayload.id === 'string' ? commandPayload.id : '',
+          };
+          await this.postMessage({
+            type: 'library/mutation',
+            payload: {
+              ok: result.ok,
+              mutation,
+              ...(!result.ok ? { message: result.message ?? 'Trainer could not delete that library item.' } : {}),
+            },
+          });
+        }
         await this.syncState();
         return;
       }

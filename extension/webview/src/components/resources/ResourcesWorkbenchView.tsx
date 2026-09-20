@@ -43,9 +43,42 @@ export interface ResourceWriteAccess {
   reason?: string;
 }
 
+export interface LibraryItemData {
+  id: string;
+  title: string;
+  status?: string;
+  messageCount?: number;
+  isActive?: boolean;
+  frozen?: boolean;
+  focusArea?: string;
+  updatedAt?: string;
+}
+
+export interface LibraryOverviewData {
+  sessions: LibraryItemData[];
+  plans: LibraryItemData[];
+  cards: LibraryItemData[];
+  resources: LibraryItemData[];
+  activity?: LibraryActivityData[];
+}
+
+export interface LibraryActivityData {
+  eventId: string;
+  type: "card" | "plan" | "session";
+  id: string;
+  action: "deleted";
+  occurredAt: string;
+  title: string;
+}
+
 export interface ResourcesWorkbenchViewProps {
   language: ComposerLanguage;
   resources: ResourceRecord[];
+  libraryOverview?: LibraryOverviewData | null;
+  libraryStatus?: "idle" | "loading" | "ready" | "error";
+  libraryPendingDeleteId?: string;
+  onLibraryRefresh?: () => void;
+  onLibraryDelete?: (itemType: "card" | "plan" | "session", itemId: string) => void;
   resourceSearch?: ResourceSearchState;
   deletedResources?: DeletedResource[];
   sandboxState?: SandboxState;
@@ -1879,6 +1912,11 @@ function orientationStateLabel(state: CoachOrientationState, language: ComposerL
 export function ResourcesWorkbenchView({
   language,
   resources,
+  libraryOverview,
+  libraryStatus = "idle",
+  libraryPendingDeleteId,
+  onLibraryRefresh,
+  onLibraryDelete,
   resourceSearch,
   deletedResources,
   sandboxState,
@@ -1935,6 +1973,7 @@ export function ResourcesWorkbenchView({
   const [trainingStartState, setTrainingStartState] = useState<ResourceTrainingStartState | null>(null);
   const [mutationResult, setMutationResult] = useState<ResourceMutationResult | null>(null);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [libraryDeleteConfirmation, setLibraryDeleteConfirmation] = useState<string>();
   const [expandedCollectionIds, setExpandedCollectionIds] = useState<Set<string>>(
     readPersistedExpandedCollectionIds,
   );
@@ -2196,6 +2235,154 @@ export function ResourcesWorkbenchView({
   const searchFailure = searchRequestState.phase === "failed" ? searchRequestState : undefined;
   const isServerSearchPending =
     hasSearchQuery && usesRemoteSearch && !currentServerSearch && !searchFailure;
+  const libraryManagerSection = (
+    <details className="library-manager">
+      <summary
+        onClick={() => {
+          if (libraryStatus === "idle" && onLibraryRefresh) {
+            onLibraryRefresh();
+          }
+        }}
+      >
+        {language === "zh-CN" ? "内容管理（对话 · 计划 · 卡片）" : "Manage library (chats · plans · cards)"}
+      </summary>
+      <div className="library-manager__body">
+        <div className="library-manager__toolbar">
+          <span className="library-manager__hint">
+            {language === "zh-CN"
+              ? "在这里永久删除不再需要的历史、计划或训练卡；操作会保留审计记录，资料在上面列表中管理。"
+              : "Permanently delete unneeded history, plans, or training cards here; an audit record remains, while materials stay in the list above."}
+          </span>
+          {onLibraryRefresh ? (
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={onLibraryRefresh}
+              disabled={libraryStatus === "loading"}
+            >
+              {libraryStatus === "loading"
+                ? language === "zh-CN" ? "刷新中…" : "Refreshing…"
+                : language === "zh-CN" ? "刷新" : "Refresh"}
+            </button>
+          ) : null}
+        </div>
+        {libraryOverview ? (
+          [
+            {
+              key: "sessions" as const,
+              itemType: "session" as const,
+              label: language === "zh-CN" ? "对话历史" : "Conversations",
+              items: libraryOverview.sessions,
+            },
+            {
+              key: "plans" as const,
+              itemType: "plan" as const,
+              label: language === "zh-CN" ? "学习计划" : "Plans",
+              items: libraryOverview.plans,
+            },
+            {
+              key: "cards" as const,
+              itemType: "card" as const,
+              label: language === "zh-CN" ? "训练卡" : "Training cards",
+              items: libraryOverview.cards,
+            },
+          ].map((group) => (
+            <section className="library-manager__group" key={group.key}>
+              <span className="library-manager__group-label">
+                {group.label} · {group.items.length}
+              </span>
+              {group.items.length === 0 ? (
+                <p className="library-manager__empty">
+                  {language === "zh-CN" ? "暂无内容" : "Nothing here yet"}
+                </p>
+              ) : (
+                <ul className="library-manager__list">
+                  {group.items.map((item) => (
+                    <li className="library-manager__item" key={item.id}>
+                      <span className="library-manager__item-copy" title={item.title}>
+                        <strong>{item.title}</strong>
+                        <span>
+                          {group.key === "sessions" && typeof item.messageCount === "number"
+                            ? `${item.messageCount} ${language === "zh-CN" ? "条" : "msgs"}${
+                                item.isActive ? language === "zh-CN" ? " · 当前" : " · current" : ""
+                              }`
+                            : group.key === "cards" && item.status
+                              ? item.status
+                              : group.key === "plans" && item.frozen
+                                ? language === "zh-CN" ? "已冻结" : "frozen"
+                                : ""}
+                        </span>
+                      </span>
+                      {onLibraryDelete ? (
+                        <button
+                          type="button"
+                          className="button button--ghost library-manager__delete"
+                          aria-label={`${language === "zh-CN" ? "删除" : "Delete"} ${item.title}`}
+                          title={
+                            item.isActive
+                              ? language === "zh-CN"
+                                ? "请先切换到另一个对话"
+                                : "Switch to another conversation first"
+                              : language === "zh-CN"
+                                ? "删除"
+                                : "Delete"
+                          }
+                          disabled={item.isActive || libraryPendingDeleteId === item.id}
+                          onClick={() => {
+                            const confirmationKey = `${group.itemType}:${item.id}`;
+                            if (libraryDeleteConfirmation !== confirmationKey) {
+                              setLibraryDeleteConfirmation(confirmationKey);
+                              return;
+                            }
+                            setLibraryDeleteConfirmation(undefined);
+                            onLibraryDelete(group.itemType, item.id);
+                          }}
+                        >
+                          {libraryPendingDeleteId === item.id
+                            ? language === "zh-CN" ? "删除中…" : "Deleting…"
+                            : libraryDeleteConfirmation === `${group.itemType}:${item.id}`
+                              ? language === "zh-CN" ? "确认删除" : "Confirm delete"
+                              : language === "zh-CN" ? "删除" : "Delete"}
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ))
+        ) : (
+          <p className="library-manager__empty">
+            {libraryStatus === "error"
+              ? language === "zh-CN" ? "资料库暂时加载不出来，稍后再试。" : "The library could not load; try again."
+              : language === "zh-CN" ? "展开后自动加载。" : "Loads when expanded."}
+          </p>
+        )}
+        {libraryOverview?.activity?.length ? (
+          <section className="library-manager__group library-manager__activity">
+            <span className="library-manager__group-label">
+              {language === "zh-CN" ? "最近操作" : "Recent activity"}
+            </span>
+            <ul className="library-manager__list">
+              {libraryOverview.activity.slice(0, 5).map((entry) => (
+                <li className="library-manager__item" key={entry.eventId}>
+                  <span className="library-manager__item-copy" title={entry.title}>
+                    <strong>{entry.title}</strong>
+                    <span>
+                      {language === "zh-CN" ? "已删除" : "Deleted"} · {language === "zh-CN"
+                        ? entry.type === "session" ? "对话" : entry.type === "plan" ? "计划" : "训练卡"
+                        : entry.type === "session" ? "conversation" : entry.type === "plan" ? "plan" : "training card"}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </div>
+    </details>
+  );
+
   const searchStatus = !hasSearchQuery
     ? undefined
     : !usesRemoteSearch
@@ -3014,7 +3201,7 @@ export function ResourcesWorkbenchView({
         </div>
       ) : null}
 
-      {null}
+      {libraryManagerSection}
 
       {leftoverStoredNote ? null : restoreContext?.surface === "sandbox" ? (
         <div className="resources-inline-context" role="status">

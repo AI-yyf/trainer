@@ -85,7 +85,7 @@ import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
-import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, NavAdvancedIcon, NavConnectionIcon, NavResourcesIcon, NavTeachingIcon, NavTrainingIcon, NavWorkspaceIcon, PlusIcon, RefreshIcon, ShareIcon, TrashIcon } from "../icons";
+import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, NavAdvancedIcon, NavConnectionIcon, NavTeachingIcon, NavWorkspaceIcon, PlusIcon, RefreshIcon, TrashIcon } from "../icons";
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type {
@@ -1447,7 +1447,6 @@ export interface CoachSettingsViewProps {
   onIncludeSelectionChange?: (value: boolean) => void;
   onIncludeDiagnosticsChange?: (value: boolean) => void;
   onIncludeRelatedFilesChange?: (value: boolean) => void;
-  onSaveCoachSettings?: () => void;
   onGrantMemoryShare?: () => void;
   onRevokeMemoryShare?: (sourceWorkspaceId: string) => void;
   personalAccountTrusted?: boolean;
@@ -1476,8 +1475,6 @@ export interface CoachSettingsViewProps {
   onResetManagedDataFolder?: () => void;
   onRefreshMemory?: () => void;
   onResetDefaults?: () => void;
-  onNavigateToView?: (view: "resources" | "training") => void;
-  onShareSession?: () => void;
 }
 
 const defaultLabels: Partial<CoachSettingsLabels> = {
@@ -2060,9 +2057,6 @@ type SettingsPhraseKey =
   | "startFromTemplate"
   | "startFromTemplateDetail"
   | "currentConnectionPrefix"
-  | "navShare"
-  | "navResources"
-  | "navTraining"
   | "navWorkspace";
 
 const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, string>> = {
@@ -2116,9 +2110,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "或从供应商模板开始",
     startFromTemplateDetail: "自动填好服务地址与默认模型，只需补上密钥",
     currentConnectionPrefix: "当前连接",
-    navShare: "分享会话",
-    navResources: "资料库",
-    navTraining: "训练卡",
     navWorkspace: "工作区",
   },
   "en-US": {
@@ -2171,9 +2162,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "Or start from a provider template",
     startFromTemplateDetail: "Pre-fills the service root and default model; just add your key",
     currentConnectionPrefix: "Current connection",
-    navShare: "Share session",
-    navResources: "Library",
-    navTraining: "Training card",
     navWorkspace: "Workspace",
   },
   "es-ES": {
@@ -2226,9 +2214,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "O empieza desde una plantilla de proveedor",
     startFromTemplateDetail: "Rellena la dirección del servicio y el modelo por defecto; solo añade tu clave",
     currentConnectionPrefix: "Conexión actual",
-    navShare: "Compartir sesión",
-    navResources: "Biblioteca",
-    navTraining: "Tarjeta de entrenamiento",
     navWorkspace: "Espacio",
   },
   "fr-FR": {
@@ -2281,9 +2266,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "Ou partir d'un modèle de fournisseur",
     startFromTemplateDetail: "Préremplit l'adresse du service et le modèle par défaut ; ajoutez seulement votre clé",
     currentConnectionPrefix: "Connexion actuelle",
-    navShare: "Partager la session",
-    navResources: "Bibliothèque",
-    navTraining: "Carte d’entraînement",
     navWorkspace: "Espace",
   },
   "de-DE": {
@@ -2336,9 +2318,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "Oder mit einer Anbietervorlage beginnen",
     startFromTemplateDetail: "Füllt Dienstadresse und Standardmodell vor; nur der Schlüssel fehlt",
     currentConnectionPrefix: "Aktuelle Verbindung",
-    navShare: "Sitzung teilen",
-    navResources: "Bibliothek",
-    navTraining: "Übungskarte",
     navWorkspace: "Bereich",
   },
   "ja-JP": {
@@ -2391,9 +2370,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "またはプロバイダーテンプレートから開始",
     startFromTemplateDetail: "サービスアドレスと既定モデルを自動入力。キーだけ追加",
     currentConnectionPrefix: "現在の接続",
-    navShare: "セッションを共有",
-    navResources: "ライブラリ",
-    navTraining: "トレーニングカード",
     navWorkspace: "ワークスペース",
   },
   "ko-KR": {
@@ -2446,9 +2422,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "또는 공급자 템플릿에서 시작",
     startFromTemplateDetail: "서비스 주소와 기본 모델을 자동 입력합니다. 키만 추가하세요",
     currentConnectionPrefix: "현재 연결",
-    navShare: "세션 공유",
-    navResources: "라이브러리",
-    navTraining: "훈련 카드",
     navWorkspace: "작업 영역",
   },
   "pt-BR": {
@@ -2501,9 +2474,6 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     startFromTemplate: "Ou comece por um modelo de provedor",
     startFromTemplateDetail: "Preenche o endereço do serviço e o modelo padrão; basta adicionar sua chave",
     currentConnectionPrefix: "Conexão atual",
-    navShare: "Compartilhar sessão",
-    navResources: "Biblioteca",
-    navTraining: "Cartão de treino",
     navWorkspace: "Espaço",
   },
 };
@@ -3875,7 +3845,6 @@ export function CoachSettingsView({
   onIncludeSelectionChange,
   onIncludeDiagnosticsChange,
   onIncludeRelatedFilesChange,
-  onSaveCoachSettings,
   onGrantMemoryShare,
   onRevokeMemoryShare,
   personalAccountTrusted,
@@ -3904,8 +3873,6 @@ export function CoachSettingsView({
   onResetManagedDataFolder,
   onRefreshMemory,
   onResetDefaults,
-  onNavigateToView,
-  onShareSession,
 }: CoachSettingsViewProps) {
   const baseLabels = {
     ...(language === "zh-CN" ? defaultLabels : englishLabels),
@@ -4126,9 +4093,11 @@ export function CoachSettingsView({
   const canManageMemoryShares =
     trainerWorkspace?.status === "managed" && Boolean(onGrantMemoryShare);
   const memorySharingSummary =
-    memoryShareGrants.length > 0
+    personalAccountTrusted
+      ? `${copy.memoryPersonalTrustTitle}: ${copy.memoryScopePersonal}`
+      : memoryShareGrants.length > 0
       ? `${memoryShareGrants.length} ${copy.memorySharingActive}`
-      : copy.memorySharingNone;
+      : `${copy.memoryPersonalTrustTitle}: ${copy.memoryScopeProject}`;
   const workingSetLabel =
     workingSetMode === "focused"
       ? copy.workingSetFocused
@@ -8377,42 +8346,7 @@ export function CoachSettingsView({
                 ) : null}
               </button>
             ))}
-          </nav>
-            <div className="settings-nav__actions" role="group" aria-label={settingsPhrase(language, "navShare")}>
-              {onShareSession ? (
-                <button
-                  type="button"
-                  className="settings-nav__action"
-                  aria-label={settingsPhrase(language, "navShare")}
-                  title={settingsPhrase(language, "navShare")}
-                  onClick={onShareSession}
-                >
-                  <ShareIcon size={14} aria-hidden="true" />
-                </button>
-              ) : null}
-              {onNavigateToView ? (
-                <button
-                  type="button"
-                  className="settings-nav__action"
-                  aria-label={settingsPhrase(language, "navResources")}
-                  title={settingsPhrase(language, "navResources")}
-                  onClick={() => onNavigateToView("resources")}
-                >
-                  <NavResourcesIcon size={14} aria-hidden="true" />
-                </button>
-              ) : null}
-              {onNavigateToView ? (
-                <button
-                  type="button"
-                  className="settings-nav__action"
-                  aria-label={settingsPhrase(language, "navTraining")}
-                  title={settingsPhrase(language, "navTraining")}
-                  onClick={() => onNavigateToView("training")}
-                >
-                  <NavTrainingIcon size={14} aria-hidden="true" />
-                </button>
-              ) : null}
-            </div>
+            </nav>
           </div>
         </div>
       </div>

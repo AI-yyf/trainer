@@ -375,6 +375,17 @@ export function BrainIcon(props: CoachIconProps) {
   );
 }
 
+export function ModelSwitchIcon(props: CoachIconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M3.2 5.8h9.6" />
+      <path d="m10.4 3.4 2.4 2.4-2.4 2.4" />
+      <path d="M12.8 10.2H3.2" />
+      <path d="m5.6 7.8-2.4 2.4 2.4 2.4" />
+    </IconBase>
+  );
+}
+
 export function LightBulbIcon(props: CoachIconProps) {
   return (
     <IconBase {...props}>

@@ -11,6 +11,7 @@ from ...core.models import (
     LibraryAssetLifecycleRequest,
     LibraryAssetLinkRequest,
     LibraryAssetUpsertRequest,
+    LibraryDeleteRequest,
     ResourceDeleteRequest,
     ResourceIndexRequest,
     ResourceRecord,
@@ -478,5 +479,171 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 exc_info=True,
             )
         return restoration
+
+    @router.get("/library/overview")
+    def library_overview(
+        session_id: str | None = None,
+        workspace_id: str | None = None,
+    ) -> dict[str, object]:
+        """One management surface for everything the learner owns:
+        conversation history, learning plans, training cards, and materials."""
+        resolved_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
+
+        sessions: list[dict[str, object]] = []
+        active_session_id = str(session_id or getattr(runtime.latest_session(), "session_id", "") or "").strip()
+        for stored in runtime.repository.list_sessions_for_workspace(resolved_workspace_id, limit=30):
+            snapshot = stored.get("snapshot")
+            messages = snapshot.get("messages") if isinstance(snapshot, dict) else None
+            message_items = messages if isinstance(messages, list) else []
+            latest_user = next(
+                (
+                    str(item.get("content") or item.get("body") or "").strip()
+                    for item in reversed(message_items)
+                    if isinstance(item, dict) and item.get("role") == "user"
+                ),
+                "",
+            )
+            updated_at = ""
+            if message_items and isinstance(message_items[-1], dict):
+                updated_at = str(
+                    message_items[-1].get("created_at")
+                    or message_items[-1].get("timestamp")
+                    or ""
+                ).strip()
+            stored_session_id = str(stored.get("session_id") or "")
+            sessions.append(
+                {
+                    "id": stored_session_id,
+                    "title": (latest_user[:80] or str(stored.get("workspace_name") or "").strip() or "Trainer session"),
+                    "messageCount": len(message_items),
+                    "updatedAt": updated_at,
+                    "isActive": bool(active_session_id and stored_session_id == active_session_id),
+                },
+            )
+
+        plans: list[dict[str, object]] = []
+        for plan in runtime.repository.list_plans(resolved_workspace_id):
+            plans.append(
+                {
+                    "id": str(plan.plan_id or plan.id or ""),
+                    "title": str(getattr(plan, "title", "") or getattr(plan, "objective", "") or "Learning plan")[:100],
+                    "frozen": bool(getattr(plan, "frozen", False)),
+                    "updatedAt": str(getattr(plan, "updated_at", None) or getattr(plan, "created_at", None) or ""),
+                },
+            )
+
+        cards: list[dict[str, object]] = []
+        for card in runtime.memory_service.get_cards(resolved_workspace_id):
+            cards.append(
+                {
+                    "id": card.card_id,
+                    "title": card.title or card.focus_area or "Training card",
+                    "status": card.status,
+                    "focusArea": card.focus_area,
+                    "cardType": card.card_type,
+                    "updatedAt": card.updated_at if isinstance(card.updated_at, str) else str(card.updated_at),
+                },
+            )
+
+        return {
+            "workspaceId": resolved_workspace_id,
+            "sessions": sessions,
+            "plans": plans,
+            "cards": cards,
+            "resources": [
+                {"id": item.id, "title": item.name, "kind": item.kind}
+                for item in runtime.repository.list_resources(resolved_workspace_id)
+            ],
+            "activity": runtime.repository.list_library_activity(resolved_workspace_id),
+        }
+
+    @router.post("/library/delete")
+    def library_delete(request: LibraryDeleteRequest) -> dict[str, object]:
+        """Delete one library item. Cards are removed from training routing,
+        plans drop with their subplans, sessions remove their history."""
+        item_type = request.item_type
+        item_id = request.item_id
+        workspace_id = current_workspace_id(
+            session_id=request.session_id,
+            workspace_id=request.workspace_id,
+        )
+
+        item_title = item_id
+        if item_type == "card":
+            existing_card = runtime.memory_service.get_card(workspace_id, item_id)
+            if existing_card is not None:
+                item_title = existing_card.title or existing_card.focus_area or item_id
+            deleted = runtime.memory_service.delete_training_card(workspace_id, item_id)
+        elif item_type == "plan":
+            existing_plan = runtime.repository.get_plan_by_id(item_id)
+            if existing_plan is not None and existing_plan[0] == workspace_id:
+                plan = existing_plan[1]
+                item_title = str(plan.title or plan.objective or item_id)
+            deleted = runtime.repository.delete_plan(workspace_id, item_id)
+        elif item_type == "session":
+            if request.session_id and request.session_id == item_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Switch to another conversation before deleting the current one.",
+                )
+            stored_session = next(
+                (
+                    item
+                    for item in runtime.repository.list_sessions_for_workspace(workspace_id)
+                    if str(item.get("session_id") or "") == item_id
+                ),
+                None,
+            )
+            if stored_session is not None:
+                snapshot = stored_session.get("snapshot")
+                messages = snapshot.get("messages") if isinstance(snapshot, dict) else None
+                if isinstance(messages, list):
+                    item_title = next(
+                        (
+                            str(item.get("content") or item.get("body") or "").strip()
+                            for item in reversed(messages)
+                            if isinstance(item, dict) and item.get("role") == "user"
+                        ),
+                        item_id,
+                    )
+            deleted = runtime.repository.delete_session(workspace_id, item_id)
+            if deleted:
+                runtime.sessions.pop(item_id, None)
+        else:
+            raise HTTPException(status_code=422, detail="Unknown library item type.")
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Library item was not found.")
+
+        activity = runtime.repository.record_library_activity(
+            workspace_id,
+            item_type=item_type,
+            item_id=item_id,
+            action="deleted",
+            payload={"title": item_title[:100]},
+        )
+        if runtime.event_ledger is not None:
+            ledger_event_type = {
+                "card": "training_card_deleted",
+                "plan": "training_plan_deleted",
+                "session": "coach_session_deleted",
+            }[item_type]
+            runtime.event_ledger.record_event(
+                ledger_event_type,
+                actor="learner",
+                scope="library",
+                project_id=workspace_id,
+                payload_ref={"type": item_type, "id": item_id, "title": item_title[:100]},
+                reversibility="irreversible",
+                audit_note="Deleted from the learner's library management surface.",
+            )
+        refresh_workspace_sessions(workspace_id)
+        return {
+            "ok": True,
+            "type": item_type,
+            "id": item_id,
+            "requestId": request.request_id,
+            "activity": activity,
+        }
 
     return router

@@ -147,6 +147,17 @@ class TrainerRepository:
                     workspace_id TEXT NOT NULL,
                     payload TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS library_activity (
+                    event_id TEXT PRIMARY KEY,
+                    workspace_id TEXT NOT NULL,
+                    item_type TEXT NOT NULL,
+                    item_id TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    occurred_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_library_activity_workspace_time
+                ON library_activity(workspace_id, occurred_at DESC);
                 CREATE TABLE IF NOT EXISTS agent_turn_checkpoints (
                     checkpoint_id TEXT PRIMARY KEY,
                     workspace_id TEXT NOT NULL,
@@ -210,6 +221,10 @@ class TrainerRepository:
                 );
                 CREATE INDEX IF NOT EXISTS idx_memory_share_grants_target
                 ON memory_share_grants(target_workspace_id);
+                CREATE TABLE IF NOT EXISTS memory_settings (
+                    setting_key TEXT PRIMARY KEY,
+                    setting_value TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS local_owners (
                     owner_id TEXT PRIMARY KEY,
                     payload TEXT NOT NULL
@@ -381,6 +396,106 @@ class TrainerRepository:
                 (workspace_id,),
             ).fetchall()
         return [LearningPlan.model_validate_json(row["payload"]) for row in rows]
+
+    def delete_plan(self, workspace_id: str, plan_id: str) -> bool:
+        cleaned_plan_id = plan_id.strip()
+        if not cleaned_plan_id:
+            return False
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM subplans WHERE workspace_id = ? AND parent_plan_id = ?",
+                (workspace_id, cleaned_plan_id),
+            )
+            cursor = connection.execute(
+                "DELETE FROM learning_plan WHERE workspace_id = ? AND plan_id = ?",
+                (workspace_id, cleaned_plan_id),
+            )
+        return bool(cursor.rowcount and cursor.rowcount > 0)
+
+    def delete_session(self, workspace_id: str, session_id: str) -> bool:
+        cleaned_session_id = session_id.strip()
+        if not cleaned_session_id:
+            return False
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM sessions WHERE workspace_id = ? AND session_id = ?",
+                (workspace_id, cleaned_session_id),
+            )
+        return bool(cursor.rowcount and cursor.rowcount > 0)
+
+    def record_library_activity(
+        self,
+        workspace_id: str,
+        *,
+        item_type: str,
+        item_id: str,
+        action: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Append one durable audit entry for a learner-owned library mutation."""
+        entry = {
+            "eventId": f"library-{uuid4().hex}",
+            "workspaceId": workspace_id,
+            "type": item_type,
+            "id": item_id,
+            "action": action,
+            "occurredAt": utc_now_iso(),
+            "payload": dict(payload or {}),
+        }
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO library_activity
+                    (event_id, workspace_id, item_type, item_id, action, occurred_at, payload)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    entry["eventId"],
+                    workspace_id,
+                    item_type,
+                    item_id,
+                    action,
+                    entry["occurredAt"],
+                    json.dumps(entry["payload"], ensure_ascii=False),
+                ),
+            )
+        return entry
+
+    def list_library_activity(
+        self,
+        workspace_id: str,
+        *,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT event_id, item_type, item_id, action, occurred_at, payload
+                FROM library_activity
+                WHERE workspace_id = ?
+                ORDER BY occurred_at DESC, rowid DESC
+                LIMIT ?
+                """,
+                (workspace_id, max(0, min(limit, 100))),
+            ).fetchall()
+        entries: list[dict[str, Any]] = []
+        for row in rows:
+            try:
+                payload = json.loads(row["payload"])
+            except (TypeError, ValueError):
+                payload = {}
+            entries.append(
+                {
+                    "eventId": str(row["event_id"]),
+                    "workspaceId": workspace_id,
+                    "type": str(row["item_type"]),
+                    "id": str(row["item_id"]),
+                    "action": str(row["action"]),
+                    "occurredAt": str(row["occurred_at"]),
+                    "payload": payload if isinstance(payload, dict) else {},
+                }
+            )
+        return entries
 
     def save_plan_change_candidate(self, candidate) -> None:
         with self._connect() as connection:
@@ -2327,6 +2442,31 @@ class TrainerRepository:
                 (source_workspace_id, target_workspace_id),
             )
         return bool(cursor.rowcount and cursor.rowcount > 0)
+
+    def load_memory_setting(self, setting_key: str) -> str | None:
+        cleaned_key = setting_key.strip()
+        if not cleaned_key:
+            return None
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT setting_value FROM memory_settings WHERE setting_key = ?",
+                (cleaned_key,),
+            ).fetchone()
+        return str(row["setting_value"]) if row else None
+
+    def save_memory_setting(self, setting_key: str, setting_value: str) -> None:
+        cleaned_key = setting_key.strip()
+        if not cleaned_key:
+            return
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO memory_settings (setting_key, setting_value)
+                VALUES (?, ?)
+                ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value
+                """,
+                (cleaned_key, setting_value),
+            )
 
     def list_profiles(self) -> list[tuple[str, UserProfile]]:
         with self._connect() as connection:

@@ -30,6 +30,8 @@ export const COMMAND_IDS = {
   resumeLatestCoachCheckpoint: trainerCommands.resumeLatestCoachCheckpoint,
   replayLatestCoachCheckpoint: trainerCommands.replayLatestCoachCheckpoint,
   listCoachSessions: trainerCommands.listCoachSessions,
+  libraryOverview: trainerCommands.libraryOverview,
+  libraryDelete: trainerCommands.libraryDelete,
   activateCoachSession: trainerCommands.activateCoachSession,
   coachRemoteBoundary: trainerCommands.coachRemoteBoundary,
   coachDebugLoop: trainerCommands.coachDebugLoop,

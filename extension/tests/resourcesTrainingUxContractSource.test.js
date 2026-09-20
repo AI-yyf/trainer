@@ -84,16 +84,14 @@ test('training defaults to a five-stage single-card loop with one visible, state
   const source = fs.readFileSync(trainingPath, 'utf8');
   const appSource = fs.readFileSync(appPath, 'utf8');
   const cardOnly = cardOnlyRender(source);
-  const cardSectionsStart = source.indexOf('const cardOnlyBodySections');
-  const cardSectionsEnd = source.indexOf('const hasAdjustmentOutcome', cardSectionsStart);
-  const cardSections = source.slice(cardSectionsStart, cardSectionsEnd);
-
-  assert.match(cardSections, /key: "current"/);
-  assert.match(cardSections, /key: "why-now"/);
-  assert.match(cardSections, /key: "deliverable"/);
-  assert.match(cardSections, /key: "verify"/);
-  assert.match(cardSections, /key: "return"/);
-  assert.match(cardSections, /title: cardOnlyTask/);
+  // Question-only card design: the loop still drives routing and the composer
+  // phases via the route strip items; no fact sections render on the card face.
+  const routeItemsStart = source.indexOf("const routeStripItems = [");
+  const routeItems = routeItemsStart >= 0 ? source.slice(routeItemsStart, source.indexOf("];", routeItemsStart)) : "";
+  assert.match(routeItems, /key: "why-now"/);
+  assert.match(routeItems, /key: "deliverable"/);
+  assert.match(routeItems, /key: "verify"/);
+  assert.match(routeItems, /key: "return"/);
   assert.doesNotMatch(cardOnly, /training-loop-rail--card-only/);
   assert.match(source, /const order: TrainingLoopStepKey\[\] = \["learn", "try", "verify", "reflect", "return"\];/);
   assert.doesNotMatch(cardOnly, /trainingLoopSteps\.map/);

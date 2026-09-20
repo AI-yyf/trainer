@@ -232,6 +232,7 @@ export function createDefaultBootstrapData(
         nextStep: '先完成模型连接。',
       },
       memory: {
+        crossWorkspaceMemory: 'global',
         currentFocus: '先完成连接。',
         weakSpots: [],
         recentWins: [],
@@ -3347,6 +3348,12 @@ function mapMemory(
         ? []
         : fallback.recentWins);
   return {
+    crossWorkspaceMemory:
+      record.memory_scope === 'isolated' || record.memoryScope === 'isolated'
+        ? 'isolated'
+        : record.memory_scope === 'global' || record.memoryScope === 'global'
+          ? 'global'
+          : fallback.crossWorkspaceMemory,
     currentFocus: mapCurrentFocus(
       record.current_focus ?? record.currentFocus ?? record.recent_summary,
       fallback.currentFocus,

@@ -1215,7 +1215,7 @@ body,
   height: 6px;
   margin-top: 5px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--fg-muted);
 }
 
 button.coach-inline-notice {
@@ -1239,8 +1239,13 @@ button.coach-inline-notice:hover {
 
 .notice--info,
 .coach-inline-notice--info {
-  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
-  background: color-mix(in srgb, var(--accent) 6%, var(--bg-1));
+  border-color: color-mix(in srgb, var(--line) 64%, transparent);
+  background: color-mix(in srgb, var(--bg-1) 92%, var(--bg-0));
+}
+
+.notice--info::before,
+.coach-inline-notice--info::before {
+  background: var(--fg-muted);
 }
 
 .notice--success,
@@ -1262,8 +1267,8 @@ button.coach-inline-notice:hover {
 }
 
 button.coach-inline-notice:hover.coach-inline-notice--info {
-  border-color: color-mix(in srgb, var(--accent) 46%, transparent);
-  background: color-mix(in srgb, var(--accent) 9%, var(--bg-1));
+  border-color: color-mix(in srgb, var(--fg-3) 42%, transparent);
+  background: color-mix(in srgb, var(--bg-2) 48%, var(--bg-1));
 }
 
 button.coach-inline-notice:hover.coach-inline-notice--fail {
@@ -1720,6 +1725,31 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
 
 .view-stack--single {
   grid-template-rows: minmax(0, 1fr);
+}
+
+/* Learning surface alignment: in wide hosts (e.g. the Trainer view dragged
+   into the VS Code bottom panel) the readable content column is capped and
+   leaned toward the chosen side. Narrow sidebars are unaffected. */
+@media (min-width: 640px) {
+  .view-stack--content-left .view-stack__primary,
+  .view-stack--content-right .view-stack__primary {
+    display: flex;
+    min-width: 0;
+  }
+
+  .view-stack--content-left .view-stack__primary > *,
+  .view-stack--content-right .view-stack__primary > * {
+    flex: 0 1 620px;
+    min-width: 0;
+  }
+
+  .view-stack--content-left .view-stack__primary {
+    justify-content: flex-start;
+  }
+
+  .view-stack--content-right .view-stack__primary {
+    justify-content: flex-end;
+  }
 }
 
 .view-stack--resources,
@@ -4066,6 +4096,123 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
 .resources-knowledge__import-menu .menu-list__item {
   min-height: 28px;
   padding: 5px 7px;
+}
+
+.library-manager {
+  border: 1px solid color-mix(in srgb, var(--line) 52%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-1) 88%, var(--bg-0));
+}
+
+.library-manager > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 8px 10px;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+  user-select: none;
+}
+
+.library-manager > summary::-webkit-details-marker {
+  display: none;
+}
+
+.library-manager > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-inline-end: 6px;
+  color: var(--fg-muted);
+  transition: transform 0.12s var(--motion-ease);
+}
+
+.library-manager[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.library-manager__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 10px 10px;
+}
+
+.library-manager__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.library-manager__hint {
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.4;
+}
+
+.library-manager__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.library-manager__group-label {
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+}
+
+.library-manager__empty {
+  margin: 0;
+  color: var(--fg-3);
+  font-size: var(--trainer-font-3xs);
+}
+
+.library-manager__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.library-manager__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.library-manager__item:hover {
+  background: color-mix(in srgb, var(--bg-2) 55%, transparent);
+}
+
+.library-manager__item-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.library-manager__item-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+  font-weight: 400;
+}
+
+.library-manager__item-copy span {
+  color: var(--fg-3);
+  font-size: var(--trainer-font-3xs);
+}
+
+.library-manager__delete {
+  flex: none;
+  min-height: 22px;
+  padding: 2px 8px;
+  font-size: var(--trainer-font-3xs);
 }
 
 .resources-knowledge__toolbar {
@@ -7195,6 +7342,14 @@ button.resources-sandbox-layout__chip:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.training-current__scenario {
+  margin: 2px 0 0;
+  color: var(--fg-3);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .training-current__card-face h2 {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -9226,9 +9381,9 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .composer__accessory > :is(.composer-menu-panel, .command-deck, .skill-deck) {
-  inline-size: min(calc(100% - 12px), 320px);
+  inline-size: min(calc(100% - 12px), 640px);
   max-inline-size: calc(100% - 12px);
-  max-block-size: min(36vh, 220px);
+  max-block-size: min(48vh, 420px);
   margin: 0;
   overflow: auto;
   overflow-x: hidden;
@@ -9236,8 +9391,14 @@ button.resources-sandbox-layout__chip:focus-visible {
   box-shadow: none;
 }
 
-.composer__accessory :is(.command-deck__header, .skill-deck__header, .skill-deck__empty) {
-  display: none;
+.composer__accessory > .skill-deck {
+  inline-size: min(calc(100% - 12px), 420px);
+  max-block-size: min(40vh, 280px);
+}
+
+.composer__accessory .skill-deck__header,
+.composer__accessory .skill-deck__empty {
+  display: flex;
 }
 
 .composer__accessory .composer-menu-panel__header > strong,
@@ -9249,7 +9410,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   white-space: nowrap;
 }
 
-.composer__accessory :is(.command-deck__body span, .skill-deck__body span) {
+.composer__accessory .command-deck__body span {
   -webkit-line-clamp: 1;
 }
 
@@ -14887,40 +15048,6 @@ button.resources-sandbox-layout__chip:focus-visible {
   right: calc(50% - 14px);
 }
 
-.settings-nav__actions {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: auto;
-  padding: 0 4px 0 6px;
-  border-left: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
-}
-
-.settings-nav__action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--fg-muted);
-  cursor: pointer;
-}
-
-.settings-nav__action:hover {
-  color: var(--fg-0);
-  background: color-mix(in srgb, var(--fg-0) 5%, transparent);
-}
-
-.settings-nav__action:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -1px;
-}
-
 .settings-nav__item:hover {
   color: var(--fg-0);
   background: color-mix(in srgb, var(--fg-0) 5%, transparent);
@@ -17038,12 +17165,12 @@ button.resources-sandbox-layout__chip:focus-visible {
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .skill-deck__hint,
 .skill-deck__empty {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   font-size: var(--trainer-font-3xs);
   line-height: 1.45;
   color: var(--fg-muted);
@@ -17052,19 +17179,20 @@ button.resources-sandbox-layout__chip:focus-visible {
 .skill-deck__list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
 }
 
 .skill-deck__item {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 6px;
+  padding: 5px 7px;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   background: transparent;
   color: var(--fg-1);
+  text-align: start;
   cursor: pointer;
 }
 
@@ -17084,13 +17212,20 @@ button.resources-sandbox-layout__chip:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 50px;
+  min-width: 0;
   padding: 0;
   border-radius: 0;
   background: transparent;
   border: 0;
   font-family: var(--font-mono);
   font-size: var(--trainer-font-3xs);
+  color: var(--fg-muted);
+}
+
+.skill-deck__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--fg-1);
 }
 
@@ -17098,7 +17233,9 @@ button.resources-sandbox-layout__chip:focus-visible {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: start;
 }
 
 .skill-deck__body strong {
@@ -17108,7 +17245,46 @@ button.resources-sandbox-layout__chip:focus-visible {
   color: inherit;
 }
 
-.skill-deck__body span {
+.skill-deck__headline {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.skill-deck__headline strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-deck__description {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.35;
+}
+
+.skill-deck__source {
+  color: var(--fg-3);
+}
+
+.skill-deck__footer-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 4px 3px 1px;
+  padding-top: 5px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+}
+
+.skill-deck__body > .skill-deck__description {
   min-width: 0;
   font-size: var(--trainer-font-2xs);
   line-height: 1.35;
@@ -17595,7 +17771,7 @@ button.resources-sandbox-layout__chip:focus-visible {
 
 .agent-activity-strip {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: flex-start;
   gap: 5px 6px;
   padding: 4px 0 5px 8px;
@@ -17608,6 +17784,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   line-height: 1.35;
   color: var(--fg-muted);
   box-shadow: none;
+  width: 100%;
 }
 
 .agent-activity-strip__summary {
@@ -17617,6 +17794,16 @@ button.resources-sandbox-layout__chip:focus-visible {
   gap: 3px 6px;
   width: 100%;
   min-width: 0;
+}
+
+.agent-activity-strip__pulse {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--fg-1);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--fg-1) 22%, transparent);
+  animation: trainer-activity-pulse 1.6s var(--motion-ease) infinite;
 }
 
 .agent-activity-strip__step {
@@ -17681,10 +17868,88 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .agent-activity-strip__details > .collapsible-block__body {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px 6px;
+  display: block;
   padding: 4px 0 0;
+}
+
+.agent-activity-strip__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-activity-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 0 7px;
+}
+
+.agent-activity-stage:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 13px;
+  bottom: -1px;
+  left: 5px;
+  width: 1px;
+  background: color-mix(in srgb, var(--line) 58%, transparent);
+}
+
+.agent-activity-stage__marker {
+  position: relative;
+  z-index: 1;
+  width: 7px;
+  height: 7px;
+  margin: 3px 0 0 2px;
+  border-radius: 50%;
+  background: var(--fg-muted);
+  border: 1px solid color-mix(in srgb, var(--bg-1) 86%, transparent);
+}
+
+.agent-activity-stage--running .agent-activity-stage__marker {
+  background: var(--fg-0);
+  animation: trainer-activity-pulse 1.4s var(--motion-ease) infinite;
+}
+
+.agent-activity-stage--succeeded .agent-activity-stage__marker {
+  background: var(--success);
+}
+
+.agent-activity-stage--failed .agent-activity-stage__marker {
+  background: var(--danger);
+}
+
+.agent-activity-stage__copy {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agent-activity-stage__copy strong {
+  flex: none;
+  color: var(--fg-0);
+  font-size: var(--trainer-font-2xs);
+  font-weight: 400;
+}
+
+.agent-activity-stage__copy > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+}
+
+@keyframes trainer-activity-pulse {
+  0%, 100% { opacity: 0.48; box-shadow: 0 0 0 0 color-mix(in srgb, var(--fg-1) 20%, transparent); }
+  50% { opacity: 1; box-shadow: 0 0 0 4px transparent; }
 }
 
 .agent-activity-pill {
@@ -18745,30 +19010,78 @@ details[open] > :not(summary) {
   position: absolute;
   left: 0;
   bottom: calc(100% + 6px);
-  z-index: 8;
-  min-width: 168px;
-  inline-size: min(240px, calc(100vw - 32px));
-  padding: 4px;
+  /* Above .composer__accessory (z-index 20): the just-opened add menu must stay
+     clickable when a context or resources panel is already expanded. */
+  z-index: 21;
+  min-width: 280px;
+  inline-size: min(520px, calc(100vw - 32px));
+  max-block-size: min(62vh, 520px);
+  overflow: auto;
+  padding: 8px;
   border-radius: var(--radius-lg);
   border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
   background: var(--bg-1);
   box-shadow: none;
 }
 
+.composer-plus-menu__title {
+  padding: 4px 8px 8px;
+  color: var(--fg-0);
+  font-size: var(--trainer-font-xs);
+  font-weight: 400;
+}
+
+.composer-plus-menu__section {
+  padding: 8px 8px 4px;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+}
+
 .composer-plus-menu__option {
-  display: flex;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 18px;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  min-height: 28px;
-  padding: 4px 8px;
+  min-height: 46px;
+  padding: 7px 8px;
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--fg-1);
   text-align: left;
   cursor: pointer;
+}
+
+.composer-plus-menu__icon {
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 2px;
+  color: var(--fg-1);
+}
+
+.composer-plus-menu__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.composer-plus-menu__copy strong {
+  color: var(--fg-0);
+  font-size: var(--trainer-font-2xs);
+  font-weight: 400;
+}
+
+.composer-plus-menu__copy span {
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .composer-plus-menu__option.is-active,
