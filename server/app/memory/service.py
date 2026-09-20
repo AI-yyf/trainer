@@ -1708,7 +1708,7 @@ class MemoryService:
 
     MEMORY_SCOPE_GLOBAL = "global"
     MEMORY_SCOPE_ISOLATED = "isolated"
-    _memory_scope_cache: str | None = None
+    _memory_scope_cache: Literal["global", "isolated"] | None = None
 
     # Project/runtime context must never cross workspaces, even when a learner
     # enables personal memory. Durable preferences remain globally reusable;
@@ -1728,25 +1728,27 @@ class MemoryService:
         }
     )
     CROSS_WORKSPACE_EXCLUDED_PREFERENCE_PREFIXES = ("latest_",)
-    def memory_scope(self) -> str:
+    def memory_scope(self) -> Literal["global", "isolated"]:
         """Trainer defaults to the strongest memory mode: every workspace reads
         the learner's durable preferences and mastery signals across projects.
         The setting is global (one flag for the whole learner), persisted in the
         sidecar database, and can be switched back to per-workspace isolation."""
         if self._memory_scope_cache is None:
             stored = self.repository.load_memory_setting("memory_scope")
-            self._memory_scope_cache = (
-                stored if stored in {self.MEMORY_SCOPE_GLOBAL, self.MEMORY_SCOPE_ISOLATED} else self.MEMORY_SCOPE_GLOBAL
-            )
+            self._memory_scope_cache = "isolated" if stored == "isolated" else "global"
         return self._memory_scope_cache
 
-    def set_memory_scope(self, scope: str) -> str:
+    def set_memory_scope(self, scope: str) -> Literal["global", "isolated"]:
         cleaned = scope.strip().lower()
-        if cleaned not in {self.MEMORY_SCOPE_GLOBAL, self.MEMORY_SCOPE_ISOLATED}:
+        if cleaned == "global":
+            normalized: Literal["global", "isolated"] = "global"
+        elif cleaned == "isolated":
+            normalized = "isolated"
+        else:
             raise ValueError("memory scope must be 'global' or 'isolated'")
-        self.repository.save_memory_setting("memory_scope", cleaned)
-        self._memory_scope_cache = cleaned
-        return cleaned
+        self.repository.save_memory_setting("memory_scope", normalized)
+        self._memory_scope_cache = normalized
+        return normalized
 
     def save_memory_share_grant(
         self,
@@ -3389,7 +3391,7 @@ class MemoryService:
             assetCatalog=asset_catalog,
             teaching_assets=teaching_asset_items,
             memory_share_grants=self.list_memory_share_grants(workspace_id),
-            memory_scope=self.memory_scope(),
+            memoryScope=self.memory_scope(),
             coaching_adaptation=coaching_adaptation,
             teaching_strategy_effectiveness=teaching_strategy_items,
             learning_outcomes=learning_outcome_items,
