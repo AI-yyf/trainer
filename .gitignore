@@ -94,3 +94,10 @@ server/.tmp_*
 /resource-preview-300px.png
 /trainer符号标.png
 /横向字标.png
+
+# local working assets
+.zcodeignore
+docs/plans/
+ds*.jpg
+extension/test-results/
+scripts/gen_subimages.py
