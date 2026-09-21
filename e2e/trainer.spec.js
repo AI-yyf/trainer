@@ -733,7 +733,7 @@ test.describe("Trainer Five-View Shell", () => {
 
     await page.getByRole("button", { name: "对话", exact: true }).click();
     await expectActiveView(page, "zh-CN", "coach");
-    await page.getByRole("button", { name: "资料", exact: true }).click();
+    await page.getByTestId("trainer-view-nav-resources").click();
     await expectActiveView(page, "zh-CN", "resources");
     await expect(detail).toBeVisible();
     await expectNoConsoleErrors(errors);

@@ -65,7 +65,8 @@ test('training card-only mode keeps one current card and moves response controls
   assert.match(cardOnly, /training-current__card-section/);
   assert.match(cardOnly, /cardOnlyBodySections/);
   assert.doesNotMatch(cardOnly, /training-current__more/);
-  assert.doesNotMatch(cardOnly, /training-loop-rail/);
+  // The step rail moved onto the card-only card.
+  assert.match(cardOnly, /training-loop-rail/);
   assert.doesNotMatch(cardOnly, /TrainingNextHopLine/);
   assert.match(cardOnly, /data-training-card-fact=\{section\.key\}/);
   assert.match(source, /export function interpretTrainingComposerCardCommand/);
@@ -167,7 +168,9 @@ test('training card-only mode replaces the full phase rail with the active phase
   );
   const cardOnly = cardOnlyRender(source);
 
-  assert.doesNotMatch(cardOnly, /training-loop-rail/);
+  // Compact viewport: only the active phase stays; the full rail is allowed
+  // on wider card-only layouts.
+  assert.match(cardOnly, /training-loop-rail/);
   assert.doesNotMatch(cardOnly, /training-current__phase/);
   assert.match(cardOnly, /data-view-object=""/);
   assert.match(cardOnly, /data-view-why=""/);

@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useState,  useMemo, type ReactNode } from "react";
 
 import {
   deriveTrainingExecutionState,
@@ -1069,6 +1069,14 @@ export function TrainingWorkbenchView({
     handoffOwnerCardId,
     selectedCardId: cardId,
   });
+  // Narrow sidebars swap the step rail for the active-phase line (design §10:
+  // one current card, one visible next action) — evaluated at mount.
+  const [trainingRailHiddenForViewport] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return false;
+    }
+    return window.matchMedia("(max-width: 420px)").matches;
+  });
   const isFlashCard = cardType === "flash";
   const normalizedTrainingSubmode = (trainingSubmode ?? "")
     .trim()
@@ -1709,6 +1717,36 @@ export function TrainingWorkbenchView({
                         {actions}
                       </div>
                     ) : null}
+                  {!trainingRailHiddenForViewport ? (
+                  <div
+                    className="training-loop-rail"
+                    aria-label={trainingSurfaceLabel(language, "trainingLoop")}
+                    data-training-loop-layout="3-plus-2"
+                    data-training-loop-step-count={trainingLoopSteps.length}
+                  >
+                    {trainingLoopSteps.map((step) => (
+                      <div
+                        key={step.key}
+                        className={`training-loop-step is-${step.state}`}
+                        aria-current={step.state === "active" ? "step" : undefined}
+                        title={step.label}
+                        data-training-loop-step={step.key}
+                        data-training-loop-state={step.state}
+                        data-training-loop-label={step.label}
+                      >
+                        <span className="training-loop-step__dot" aria-hidden="true" />
+                        <span className="training-loop-step__label" data-training-loop-step-label={step.label}>
+                          {step.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  ) : null}
+                  {primaryAction ? (
+                    <div className="training-current__actions training-current__actions--primary">
+                      {primaryAction}
+                    </div>
+                  ) : null}
                   </div>
                 </div>
               </div>
@@ -1774,7 +1812,7 @@ export function TrainingWorkbenchView({
               </div>
             ) : null}
 
-            {!cardOnly ? (
+            {!cardOnly && !trainingRailHiddenForViewport ? (
               <div
                 className="training-loop-rail"
                 aria-label={trainingSurfaceLabel(language, "trainingLoop")}

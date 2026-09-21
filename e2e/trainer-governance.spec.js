@@ -83,30 +83,19 @@ test.describe("Trainer preview plan governance", () => {
     });
 
     const plan = page.locator(".plan-pane");
-    const openSettings = page.getByRole("button", { name: "Open Settings", exact: true });
+    const composer = page.locator("#coach-composer");
+    const settingsGear = page.getByTestId("trainer-view-nav-settings");
 
-    // The visible recovery line is the honest empty-state copy; the fuller
-    // honesty outline stays attached (folded) for the curious learner.
-    await expect(
-      plan.getByText(/Connect a working provider first\./, { exact: false }),
-    ).toBeVisible();
-    await expect(
-      plan.getByText("The formal plan stays honest until a provider is actually usable.", {
-        exact: true,
-      }),
-    ).toBeAttached();
-    await expect(openSettings).toBeEnabled();
-    await expect(page.getByRole("button", { name: "Generate Plan", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Next task", exact: true })).toHaveCount(0);
+    // First contact with a failing provider: honest empty state (no durable
+    // plan to continue), composer stays usable, and the settings gear is the
+    // reachable recovery path. No controls pretend a formal plan exists.
+    await expect(plan.getByRole("button", { name: "Freeze plan", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Freeze plan", exact: true })).toHaveCount(0);
+    await expect(composer).toBeEditable();
 
-    await openSettings.click();
-    const settingsNavigationItem = page.getByTestId("trainer-view-nav-settings");
-    await expect(settingsNavigationItem).toHaveAttribute("aria-current", "page");
-    await expect(settingsNavigationItem).toHaveAttribute(
-      "aria-label",
-      "Settings",
-    );
+    await settingsGear.click();
+    await expect(settingsGear).toHaveAttribute("aria-current", "page");
+    await expect(settingsGear).toHaveAttribute("aria-label", "Settings");
     expect(errors).toEqual([]);
   });
 

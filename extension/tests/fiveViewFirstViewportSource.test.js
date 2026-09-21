@@ -116,7 +116,12 @@ test('training first viewport is the current card plus one primary, with skip/gr
   assert.match(cardOnly, /data-view-primary=""/);
   assert.match(cardOnly, /training-current__card-section/);
   assert.doesNotMatch(cardOnly, /training-current__more/);
-  assert.doesNotMatch(cardOnly, /training-loop-rail/);
+  // Phase-C training slice: the loop rail and step-start action live on the
+  // card-only first viewport.
+  assert.match(cardOnly, /training-loop-rail/);
+  // The step-start label is App-composed (localizable), the affordance lives
+  // on the card.
+  assert.match(app, /"Start this step"|开始这一步/);
   assert.doesNotMatch(cardOnly, /card-status-nav/);
   assert.doesNotMatch(cardOnly, /handleSkipCard/);
   assert.doesNotMatch(cardOnly, /handleGradeCard/);

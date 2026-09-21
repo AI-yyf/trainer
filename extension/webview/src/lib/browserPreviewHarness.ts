@@ -4813,9 +4813,30 @@ function applyPreviewScenario(bootstrap: typeof mockBootstrapData, state: Browse
           ];
     if (scenario === "provider-failure-empty") {
       bootstrap.workspaceTrainingState = undefined;
+      // A true "empty" preview: no durable learner memory of any kind, so the
+      // workbench renders the genuine first-contact recovery state.
       bootstrap.memory = {
         ...bootstrap.memory,
         currentFocus: "",
+        reviewRhythm: "",
+        activeThread: undefined,
+        memoryEvidence: [],
+        recentWins: [],
+        teachingObservations: [],
+        dueReviews: [],
+        dueReviewCount: 0,
+        workspaceUnderstanding: undefined,
+        workspace: {
+          ...bootstrap.memory.workspace,
+          projectContext: "",
+          latestPlanRuntime: undefined,
+        },
+      };
+      bootstrap.profile = {
+        ...bootstrap.profile,
+        goals: [],
+        targetProject: "",
+        projectContext: "",
       };
       // "empty" also means no formal plan: the recovery path must present the
       // honest no-plan state instead of a leftover demo plan. A blank identity
@@ -4936,6 +4957,29 @@ function applyPreviewScenario(bootstrap: typeof mockBootstrapData, state: Browse
     applyConnectedProviderBootstrap(bootstrap, language);
     bootstrap.resources = [];
     bootstrap.conversation = [];
+    // Empty canvas: no durable learner memory — the first-contact hint is the
+    // honest entry (no "project ready" claims).
+    bootstrap.memory = {
+      ...bootstrap.memory,
+      currentFocus: "",
+      activeThread: undefined,
+      memoryEvidence: [],
+      recentWins: [],
+      teachingObservations: [],
+      dueReviews: [],
+      dueReviewCount: 0,
+      reviewRhythm: "",
+      workspaceUnderstanding: undefined,
+    };
+    bootstrap.profile = {
+      ...bootstrap.profile,
+      goals: [],
+      targetProject: "",
+      projectContext: "",
+    };
+    bootstrap.plan = bootstrap.plan
+      ? { ...bootstrap.plan, id: "", title: "", summary: "", currentStep: "", stages: [] }
+      : bootstrap.plan;
     bootstrap.suggestedActions = [];
     bootstrap.workspaceTrainingState = undefined;
     bootstrap.memory = {

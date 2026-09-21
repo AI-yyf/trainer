@@ -96,11 +96,15 @@ test('training defaults to a five-stage single-card loop with one visible, state
   assert.match(cardSections, /title: cardOnlyTask/);
   assert.doesNotMatch(cardOnly, /training-loop-rail--card-only/);
   assert.match(source, /const order: TrainingLoopStepKey\[\] = \["learn", "try", "verify", "reflect", "return"\];/);
-  assert.doesNotMatch(cardOnly, /trainingLoopSteps\.map/);
-  assert.doesNotMatch(cardOnly, /data-training-loop-step=\{step\.key\}/);
+  // Phase-C: the five-step loop renders on the card-only card.
+  assert.match(cardOnly, /trainingLoopSteps\.map/);
+  assert.match(cardOnly, /data-training-loop-step=\{step\.key\}/);
   assert.match(cardOnly, /data-view-primary=""/);
   assert.match(cardOnly, /training-current__done/);
-  assert.doesNotMatch(cardOnly, /flashProofSurface|practiceProofSurface|Verify current file/);
+  assert.doesNotMatch(cardOnly, /flashProofSurface|practiceProofSurface/);
+  // File verification is owned by the card; its localized label lives on the
+  // App-composed primary action.
+  assert.match(appSource, /"Verify current file"|验证当前文件/);
   assert.match(appSource, /<TrainingWorkbenchView[\s\S]*?cardOnly=\{true\}/);
   assert.match(appSource, /primaryAction=\{/);
   assert.match(appSource, /trainingPrimaryAction/);

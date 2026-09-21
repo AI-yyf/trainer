@@ -13425,8 +13425,61 @@ export function App() {
     trainingComposerReturnMode &&
     trainingHandoffReturnRequired &&
     Boolean(activeTrainingCardId);
-  const trainingPrimaryAction = !hasTrainingCard ? undefined : undefined;
+  // Compact single-card action surface (Phase-C training slice): the card
+  // carries its own step-start and file-verification affordances.
+  const trainingStartStepLabel =
+    layout.composerLanguage === "zh-CN" ? "开始这一步" : "Start this step";
+  const trainingVerifyFileLabel =
+    layout.composerLanguage === "zh-CN" ? "验证当前文件" : "Verify current file";
+  const trainingCardReadyToStart = hasTrainingCard;
+  const trainingVerifyFileVisible =
+    hasTrainingCard &&
+    trainingCardType === "practice" &&
+    effectiveTrainingSubmode !== "learn-primer";
+  const trainingPrimaryAction = !hasTrainingCard ? undefined : (
+    <div
+      className="training-current__actions training-current__actions--primary"
+      role="group"
+      aria-label={layout.composerLanguage === "zh-CN" ? "训练操作" : "Training actions"}
+    >
+      {trainingCardReadyToStart ? (
+        <button
+          className="button button--accent"
+          type="button"
+          onClick={() => {
+            if (!activeTrainingCardId) {
+              return;
+            }
+            if (
+              effectiveSelectedTrainingCardStatus === "needs_primer" ||
+              effectiveSelectedTrainingCardStatus === "candidate" ||
+              !effectiveSelectedTrainingCardStatus
+            ) {
+              handleTrainingCardStatusTransition(activeTrainingCardId, "active", "start_step");
+            }
+          }}
+        >
+          {trainingStartStepLabel}
+        </button>
+      ) : null}
+      {trainingVerifyFileVisible ? (
+        <button
+          className="button button--ghost"
+          type="button"
+          onClick={() =>
+            postMessage({
+              type: "command/execute",
+              payload: { commandId: trainerCommands.evaluateCurrentFile },
+            })
+          }
+        >
+          {trainingVerifyFileLabel}
+        </button>
+      ) : null}
+    </div>
+  );
   const showComposerTrainingVerify =
+    !trainingVerifyFileVisible &&
     activeView === "training" &&
     Boolean(hasTrainingCard) &&
     !leftoverTrainingHandoffChromeNotLive &&
@@ -15299,6 +15352,7 @@ export function App() {
                   id: "context",
                   label: t.currentContext,
                   icon: <ContextLayersIcon size={16} />,
+                  pinned: true,
                   active: openMenu === "context",
                   onClick: () => setOpenMenu(openMenu === "context" ? undefined : "context"),
                 },
@@ -15309,6 +15363,7 @@ export function App() {
                         id: "resources",
                         label: t.resourcesMenu,
                         icon: <ResourcesIcon size={16} />,
+                        pinned: true,
                         active: openMenu === "resources",
                         onClick: () => {
                           setOpenMenu(openMenu === "resources" ? undefined : "resources");
