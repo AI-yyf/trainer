@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.settings import AppSettings
 from app.main import create_app
 from app.training.attempt_store import AttemptStore
-from app.core.settings import AppSettings
 
 
 def _settings(tmp_path: Path) -> AppSettings:
