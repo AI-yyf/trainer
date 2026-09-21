@@ -173,6 +173,7 @@ export class WorkbenchSidebarController
    */
   private lastSyncedPayload?: Record<string, unknown>;
   private readonly syncedKeyFingerprints = new Map<string, string>();
+  private lastSeenHostState?: TrainerHostState;
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -230,7 +231,7 @@ export class WorkbenchSidebarController
           this.outputChannel.appendLine(
             `[webview] visible -> rehydrating state ${formatRuntimeMetrics(snapshotRuntimeMetrics())}`,
           );
-          void this.rehydrateVisibleView(webviewView, 'visibility');
+          void this.syncVisibleState(webviewView, 'visibility');
           return;
         }
         this.clearVisibilityRecoveryTimer();
@@ -336,6 +337,7 @@ export class WorkbenchSidebarController
     }
     const message = { type: 'state/patch', payload: partial };
     recordWebviewSync({ full: false, bytes: JSON.stringify(message).length });
+    this.markHostStateSeen();
     await this.postMessage(message);
   }
 
@@ -344,10 +346,24 @@ export class WorkbenchSidebarController
     this.syncedKeyFingerprints.clear();
   }
 
+  /**
+   * Dirty-revision check: the host state object is rebuilt immutably on every
+   * change, so an identical reference means nothing changed since the last
+   * delivery and visibility can skip derivation entirely.
+   */
+  private isHostStateDirty(): boolean {
+    return this.lastSeenHostState !== this.getState();
+  }
+
+  private markHostStateSeen(): void {
+    this.lastSeenHostState = this.getState();
+  }
+
   /** Align incremental-sync bookkeeping with a full bootstrap delivery. */
   private adoptSyncedPayload(): void {
     this.lastSyncedPayload = toBootstrapPayload(this.getState()) as unknown as Record<string, unknown>;
     this.syncedKeyFingerprints.clear();
+    this.markHostStateSeen();
   }
 
   async postMessage(message: unknown): Promise<void> {
@@ -710,7 +726,7 @@ export class WorkbenchSidebarController
     await this.refreshHtml(view, reason);
   }
 
-  private async rehydrateVisibleView(
+  private async syncVisibleState(
     view: vscode.WebviewView,
     reason: string,
     forceRefresh = false,
@@ -725,12 +741,22 @@ export class WorkbenchSidebarController
 
     if (shouldRefreshHtml) {
       await this.refreshHtml(view, reason);
+      // A rebuilt page has an empty store: the full payload is mandatory.
+      this.resetSyncedPayload();
       await this.refreshHostAndSync(reason);
       this.scheduleVisibilityRecovery(view, reason);
       return;
     }
 
+    // Healthy page + unchanged host state: the last incremental delivery is
+    // still authoritative — visibility itself must not cost a derivation.
+    if (!this.isHostStateDirty()) {
+      this.scheduleVisibilityRecovery(view, reason);
+      return;
+    }
+
     await this.refreshHostAndSync(reason);
+    this.markHostStateSeen();
     this.scheduleVisibilityRecovery(view, reason);
   }
 
