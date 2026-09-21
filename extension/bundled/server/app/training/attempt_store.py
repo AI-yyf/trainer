@@ -82,6 +82,17 @@ class AttemptStore:
         file_version: int = 1,
         assistance_level: str = "independent",
     ) -> dict[str, Any]:
+        # Idempotent enter: an in-flight attempt for the same workspace+card is
+        # resumed, never duplicated (return/close retires it first).
+        active = self.find_active_attempt(workspace_id, card_id)
+        if active is not None:
+            refreshed = self.update_attempt(
+                active["attempt_id"],
+                file_path=file_path,
+                file_hash=file_hash,
+                file_version=file_version,
+            )
+            return refreshed or active
         attempt_id = f"attempt-{uuid.uuid4().hex}"
         now = utc_now()
         payload = {
@@ -108,10 +119,46 @@ class AttemptStore:
             connection.close()
         return payload
 
+    def find_active_attempt(self, workspace_id: str, card_id: str) -> dict[str, Any] | None:
+        connection = self._connect()
+        try:
+            rows = connection.execute(
+                "SELECT payload FROM training_attempts WHERE workspace_id = ? AND card_id = ? ORDER BY rowid",
+                (workspace_id, card_id),
+            ).fetchall()
+        finally:
+            connection.close()
+        for row in rows:
+            payload = json.loads(row["payload"])
+            if payload.get("status") in ("active", "answered", "implemented"):
+                return payload
+        return None
+
+    def close_attempt(self, attempt_id: str, *, workspace_id: str) -> dict[str, Any] | None:
+        # Return retires the attempt lifecycle without deleting history.
+        return self.update_attempt_for_workspace(
+            attempt_id, workspace_id=workspace_id, status="returned"
+        )
+
+    def update_attempt_for_workspace(
+        self,
+        attempt_id: str,
+        *,
+        workspace_id: str,
+        **updates: Any,
+    ) -> dict[str, Any] | None:
+        # Workspace isolation: a caller bound to another workspace can neither
+        # read nor write this attempt — fail closed.
+        attempt = self.get_attempt_payload_for_workspace(attempt_id, workspace_id)
+        if attempt is None:
+            return None
+        return self.update_attempt(attempt_id, **updates)
+
     def update_attempt(
         self,
         attempt_id: str,
         *,
+        workspace_id: str | None = None,
         answer_draft: str | None = None,
         assistance_level: str | None = None,
         status: str | None = None,
@@ -121,6 +168,12 @@ class AttemptStore:
     ) -> dict[str, Any] | None:
         existing = self._read_attempt_row(attempt_id)
         if existing is None:
+            return None
+        # Workspace isolation: cross-workspace writes fail closed.
+        if (
+            workspace_id is not None
+            and json.loads(existing["payload"]).get("workspace_id") != workspace_id
+        ):
             return None
         payload = json.loads(existing["payload"])
         if answer_draft is not None:
@@ -147,12 +200,17 @@ class AttemptStore:
             connection.close()
         return payload
 
-    def get_attempt(self, attempt_id: str) -> dict[str, Any] | None:
-        row = self._read_attempt_row(attempt_id)
-        if row is None:
+    def get_attempt(
+        self, attempt_id: str, *, workspace_id: str | None = None
+    ) -> dict[str, Any] | None:
+        payload = self.get_attempt_payload(attempt_id)
+        if payload is None:
             return None
-        payload = json.loads(row["payload"])
-        payload["evidence"] = self.list_evidence(attempt_id)
+        if workspace_id is not None and payload.get("workspace_id") != workspace_id:
+            return None
+        evidence = self.list_evidence(attempt_id)
+        payload["evidence"] = evidence
+        payload["has_current_evidence"] = any(item.get("is_current") for item in evidence)
         return payload
 
     # -- evidence -----------------------------------------------------------
@@ -161,8 +219,6 @@ class AttemptStore:
         self,
         *,
         attempt_id: str,
-        workspace_id: str,
-        card_id: str,
         artifact_hash: str,
         result: str,
         runner_version: str = "trainer-sidecar",
@@ -170,9 +226,13 @@ class AttemptStore:
         trust_level: str = "controlled_check",
         limitations: list[str] | None = None,
     ) -> dict[str, Any] | None:
+        # Identity derives from the stored attempt — the client cannot forge
+        # another workspace's or card's evidence.
         attempt = self.get_attempt_payload(attempt_id)
         if attempt is None:
             return None
+        workspace_id = attempt["workspace_id"]
+        card_id = attempt["card_id"]
         now = utc_now()
         evidence_id = f"evidence-{uuid.uuid4().hex}"
 
@@ -257,6 +317,14 @@ class AttemptStore:
         if row is None:
             return None
         return json.loads(row["payload"])
+
+    def get_attempt_payload_for_workspace(
+        self, attempt_id: str, workspace_id: str
+    ) -> dict[str, Any] | None:
+        payload = self.get_attempt_payload(attempt_id)
+        if payload is None or payload.get("workspace_id") != workspace_id:
+            return None
+        return payload
 
     def _read_attempt_row(self, attempt_id: str) -> sqlite3.Row | None:
         connection = self._connect()

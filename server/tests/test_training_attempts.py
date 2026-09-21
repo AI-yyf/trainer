@@ -73,8 +73,6 @@ def test_evidence_supersedes_previous_and_flags_expiry_on_hash_change(tmp_path: 
 
     first = store.record_evidence(
         attempt_id=attempt["attempt_id"],
-        workspace_id="ws-1",
-        card_id="card-1",
         artifact_hash="hash-version-A",
         result="passed",
         runner_version="pytest/8",
@@ -94,8 +92,6 @@ def test_evidence_supersedes_previous_and_flags_expiry_on_hash_change(tmp_path: 
 
     second = store.record_evidence(
         attempt_id=attempt["attempt_id"],
-        workspace_id="ws-1",
-        card_id="card-1",
         artifact_hash="hash-version-B",
         result="passed",
     )
@@ -113,8 +109,6 @@ def test_evidence_record_requires_known_attempt(tmp_path: Path) -> None:
     assert (
         store.record_evidence(
             attempt_id="attempt-missing",
-            workspace_id="ws-1",
-            card_id="card-1",
             artifact_hash="hash",
             result="passed",
         )

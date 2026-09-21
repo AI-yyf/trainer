@@ -17,6 +17,7 @@ class AttemptStartRequest(BaseModel):
 
 class AttemptUpdateRequest(BaseModel):
     attempt_id: str
+    workspace_id: str | None = None
     answer_draft: str | None = None
     assistance_level: str | None = None
     status: str | None = None
@@ -27,8 +28,6 @@ class AttemptUpdateRequest(BaseModel):
 
 class AttemptEvidenceRequest(BaseModel):
     attempt_id: str
-    workspace_id: str
-    card_id: str
     artifact_hash: str
     result: str
     runner_version: str = "trainer-sidecar"
@@ -47,6 +46,7 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
 
     @router.post("/training/attempt/start")
     def start_attempt(request: AttemptStartRequest) -> dict:
+        # Idempotent: entering a card twice resumes the same attempt.
         store = require_store()
         kwargs: dict = {}
         if request.file_path is not None:
@@ -69,6 +69,7 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
         store = require_store()
         attempt = store.update_attempt(
             request.attempt_id,
+            workspace_id=request.workspace_id,
             answer_draft=request.answer_draft,
             status=request.status,
             file_path=request.file_path,
@@ -84,8 +85,6 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
         store = require_store()
         evidence = store.record_evidence(
             attempt_id=request.attempt_id,
-            workspace_id=request.workspace_id,
-            card_id=request.card_id,
             artifact_hash=request.artifact_hash,
             result=request.result,
             runner_version=request.runner_version,
@@ -98,11 +97,35 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
         return {"ok": True, "evidence": evidence}
 
     @router.get("/training/attempt/{attempt_id}")
-    def get_attempt(attempt_id: str) -> dict:
+    def get_attempt(attempt_id: str, workspace_id: str | None = None) -> dict:
         store = require_store()
-        attempt = store.get_attempt(attempt_id)
+        attempt = store.get_attempt(attempt_id, workspace_id=workspace_id)
         if attempt is None:
             raise HTTPException(status_code=404, detail="Training attempt not found.")
         return {"ok": True, "attempt": attempt}
+
+    class AttemptRecoverRequest(BaseModel):
+        workspace_id: str
+        card_id: str
+
+    @router.post("/training/attempt/recover")
+    def recover_attempt(request: AttemptRecoverRequest) -> dict:
+        """Re-entering a card resumes the in-flight attempt, if any."""
+        store = require_store()
+        active = store.find_active_attempt(request.workspace_id, request.card_id)
+        return {"ok": True, "attempt": active}
+
+    class AttemptCloseRequest(BaseModel):
+        attempt_id: str
+        workspace_id: str
+
+    @router.post("/training/attempt/close")
+    def close_attempt(request: AttemptCloseRequest) -> dict:
+        # Return retires the lifecycle; history stays queryable.
+        store = require_store()
+        closed = store.close_attempt(request.attempt_id, workspace_id=request.workspace_id)
+        if closed is None:
+            raise HTTPException(status_code=404, detail="Training attempt not found.")
+        return {"ok": True, "attempt": closed}
 
     return router
