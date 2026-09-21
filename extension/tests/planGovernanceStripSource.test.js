@@ -269,11 +269,11 @@ test('App shows an honest empty Plan and supplies every compact Plan label from 
   for (const language of ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR']) {
     assert.match(planViewCopySource, new RegExp(`"${language}": \\{`));
   }
-  assert.match(planSource, /plan=\{shouldShowNeutralEmptyState \? null : visibleFormalPlan\}/);
+  assert.match(planSource, /plan=\{workspaceSessionBlocked \? null : visibleFormalPlan\}/);
   assert.match(planSource, /compactPrimary/);
   assert.match(
     planSource,
-    /title=\{\s*shouldShowNeutralEmptyState \|\| !hasFormalPlan\s*\?\s*t\.plan\s*:\s*formalPlanLive\s*\?\s*data\.plan\.title\s*:\s*livePlanTitle\s*\}/,
+    /title=\{\s*workspaceSessionBlocked \|\| !hasFormalPlan\s*\?\s*t\.plan\s*:\s*formalPlanLive\s*\?\s*data\.plan\.title\s*:\s*livePlanTitle\s*\}/,
   );
   assert.match(planSource, /goalLabel=\{t\.currentFocus\}/);
   assert.match(planSource, /emptyState=\{[\s\S]*?planText\.emptyState\(coachViewLabel\(layout\.composerLanguage\)\)/);

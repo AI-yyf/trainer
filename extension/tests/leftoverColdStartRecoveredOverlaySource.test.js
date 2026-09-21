@@ -79,7 +79,7 @@ test('cold-start recovered stamp lights leftover overlay without leftover plan o
   );
   assert.match(
     appSource,
-    /plan=\{shouldShowNeutralEmptyState \? null : visibleFormalPlan\}/,
+    /plan=\{workspaceSessionBlocked \? null : visibleFormalPlan\}/,
   );
 
   // CoachPlanView: null plan + leftoverNote → leftover sentence (no plan object required).
@@ -174,7 +174,7 @@ test('recovered true + matching live plan_id keeps leftover overlay off (source)
   );
   assert.match(
     appSource,
-    /plan=\{shouldShowNeutralEmptyState \? null : visibleFormalPlan\}/,
+    /plan=\{workspaceSessionBlocked \? null : visibleFormalPlan\}/,
   );
 
   // Matching live plan_id → formalPlanLive true → leftoverPlanNotLive false → leftoverNote absent.
@@ -198,7 +198,7 @@ test('recovered true + matching live plan_id keeps leftover overlay off (source)
   assert.match(appSource, /const visibleFormalPlan = useMemo\(\(\) => \{/);
   assert.match(
     appSource,
-    /shouldShowNeutralEmptyState \|\| !hasFormalPlan\s*\?\s*t\.plan\s*:\s*formalPlanLive\s*\?\s*data\.plan\.title/,
+    /workspaceSessionBlocked \|\| !hasFormalPlan\s*\?\s*t\.plan\s*:\s*formalPlanLive\s*\?\s*data\.plan\.title/,
   );
 
   // CoachPlanView only paints leftover sentence when leftoverNote is truthy.

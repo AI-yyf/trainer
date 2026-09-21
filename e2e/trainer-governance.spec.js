@@ -85,7 +85,16 @@ test.describe("Trainer preview plan governance", () => {
     const plan = page.locator(".plan-pane");
     const openSettings = page.getByRole("button", { name: "Open Settings", exact: true });
 
-    await expect(plan.getByText("The formal plan stays honest until a provider is actually usable.", { exact: true })).toBeVisible();
+    // The visible recovery line is the honest empty-state copy; the fuller
+    // honesty outline stays attached (folded) for the curious learner.
+    await expect(
+      plan.getByText(/Connect a working provider first\./, { exact: false }),
+    ).toBeVisible();
+    await expect(
+      plan.getByText("The formal plan stays honest until a provider is actually usable.", {
+        exact: true,
+      }),
+    ).toBeAttached();
     await expect(openSettings).toBeEnabled();
     await expect(page.getByRole("button", { name: "Generate Plan", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Next task", exact: true })).toHaveCount(0);

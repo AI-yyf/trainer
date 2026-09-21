@@ -1896,7 +1896,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                   })}
                 </div>
               ) : null}
-              {shouldShowDecisionCard && !compactPrimary ? (
+              {shouldShowDecisionCard ? (
                 <div
                   className={`coach-plan-view__decision-strip is-${planDecisionStrip.tone}`}
                   role="status"

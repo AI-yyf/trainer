@@ -191,7 +191,7 @@ test('recovered runtime makes orientation the primary Plan action and folds gene
   assert.match(bundledPlanOrientation, /def derive_plan_orientation\(/);
   assert.match(bundledPlanOrientation, /continue_without_plan/);
   assert.match(bundledPlanOrientation, /first_look_recommended_next/);
-  assert.match(planView, /plan=\{shouldShowNeutralEmptyState \? null : visibleFormalPlan\}/);
+  assert.match(planView, /plan=\{workspaceSessionBlocked \? null : visibleFormalPlan\}/);
   assert.match(source, /preferRecoveredPlanRuntimeFacts\(/);
   assert.match(source, /lockRecoveredPlanVerifyItems\(/);
   assert.match(source, /scopeEvidenceQueueToRuntimeStep\(/);
@@ -268,7 +268,7 @@ test('recovered runtime makes orientation the primary Plan action and folds gene
   assert.match(source, /summary: livePlanSummary/);
   assert.match(source, /cadence: livePlanCadence/);
   assert.match(source, /stages: livePlanStages/);
-  assert.match(source, /formalPlanLive && !recoveredAdoptPrimary && !shouldShowNeutralEmptyState/);
+  assert.match(source, /formalPlanLive && !recoveredAdoptPrimary && !workspaceSessionBlocked/);
   assert.match(
     planView,
     /recoveredRuntime \? null : liveCoachTaskChrome\.scopeBoundary/,
@@ -383,7 +383,7 @@ test('a frozen plan does not offer the replacement generation action', () => {
   );
   assert.match(
     source,
-    /hasFormalPlan && formalPlanLive && !recoveredAdoptPrimary && !shouldShowNeutralEmptyState[\s\S]*?id: livePlanFrozen \? "resume-plan" : "freeze-plan"/,
+    /hasFormalPlan && formalPlanLive && !recoveredAdoptPrimary && !workspaceSessionBlocked[\s\S]*?id: livePlanFrozen \? "resume-plan" : "freeze-plan"/,
   );
 });
 

@@ -13883,14 +13883,13 @@ export function App() {
     <section className="plan-view">
       <Suspense fallback={<ViewFallback label={t.plan} language={layout.composerLanguage} />}>
         <CoachPlanView
-        plan={shouldShowNeutralEmptyState ? null : visibleFormalPlan}
+        plan={workspaceSessionBlocked ? null : visibleFormalPlan}
         className="plan-pane"
         compactPrimary
         leftoverNote={leftoverPlanNotLive ? t.leftoverNotLive : undefined}
-        hideDecisionStrip
         eyebrow=""
         title={
-          shouldShowNeutralEmptyState || !hasFormalPlan
+          workspaceSessionBlocked || !hasFormalPlan
             ? t.plan
             : formalPlanLive
               ? data.plan.title
@@ -14055,7 +14054,7 @@ export function App() {
                   ]
                   : []),
               ]),
-          ...(hasFormalPlan && formalPlanLive && !recoveredAdoptPrimary && !shouldShowNeutralEmptyState
+          ...(hasFormalPlan && formalPlanLive && !recoveredAdoptPrimary && !workspaceSessionBlocked
             ? [
                 {
                   id: livePlanFrozen ? "resume-plan" : "freeze-plan",
