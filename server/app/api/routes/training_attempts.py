@@ -128,4 +128,15 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
             raise HTTPException(status_code=404, detail="Training attempt not found.")
         return {"ok": True, "attempt": closed}
 
+    @router.get("/training/attempt/{attempt_id}/projection")
+    def get_skill_projection(attempt_id: str, workspace_id: str | None = None) -> dict:
+        """Evidence → skill state projection (Phase-D capability model)."""
+        from app.training.skill_projection import project_skills
+        store = require_store()
+        attempt = store.get_attempt(attempt_id, workspace_id=workspace_id)
+        if attempt is None:
+            raise HTTPException(status_code=404, detail="Training attempt not found.")
+        projection = project_skills(attempt.get("evidence", []), card_id=attempt.get("card_id"))
+        return {"ok": True, "card_id": attempt.get("card_id"), "projection": projection}
+
     return router
