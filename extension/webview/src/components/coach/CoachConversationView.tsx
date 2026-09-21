@@ -102,7 +102,9 @@ function CoachConversationViewImpl({
       streaming: true,
       isLatestAssistant: false,
       message: {
-        id: "coach-streaming",
+        // Canonical streaming bubble id: the webview-recovery contract and
+        // host tooling locate the in-flight reply by it.
+        id: "streaming",
         role: streamingMessage.role ?? "assistant",
         author: streamingMessage.author ?? "Trainer",
         body: streamingMessage.body,
