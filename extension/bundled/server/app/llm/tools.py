@@ -865,16 +865,12 @@ async def _handle_search_learning_materials(
         }
     if not required_facets:
         required_facets = requested_facets
+    raw_requested_domains = args.get("preferred_domains")
     requested_domains = (
-        list(args.get("preferred_domains"))
-        if isinstance(args.get("preferred_domains"), list)
-        else []
+        list(raw_requested_domains) if isinstance(raw_requested_domains, list) else []
     )
-    prior_domains = (
-        list(state.get("preferred_domains"))
-        if isinstance(state.get("preferred_domains"), list)
-        else []
-    )
+    raw_prior_domains = state.get("preferred_domains")
+    prior_domains = list(raw_prior_domains) if isinstance(raw_prior_domains, list) else []
     preferred_domains = _normalized_research_domains(
         [*prior_domains, *requested_domains],
         query,
