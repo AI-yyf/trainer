@@ -784,7 +784,7 @@ test.describe("Trainer Five-View Shell", () => {
     });
 
     const card = page.getByRole("group", { name: "Current training card", exact: true });
-    const returnAction = card.getByRole("button", { name: "Return result to Coach", exact: true });
+    const returnAction = card.getByRole("button", { name: "Return result to Coach", exact: true }).first();
     await expect(card).toBeVisible();
     await expect(returnAction).toBeVisible();
 
@@ -897,7 +897,7 @@ test.describe("Trainer Five-View Shell", () => {
 
   });
 
-  test.fixme("reflect pass records a local reflection and flows to return (Reflect composer UI pending)", async ({ page }) => {
+  test("reflect pass records a local reflection and flows to return", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
     const previewCommands = collectPreviewCommands(page);
 
@@ -907,7 +907,7 @@ test.describe("Trainer Five-View Shell", () => {
       submode: "review",
       connection: "offline",
     });
-    const card = page.getByRole("group", { name: "Current training card", exact: true });
+    let card = page.getByRole("group", { name: "Current training card", exact: true });
     await expectTrainingLoop(card, "reflect");
     await expectTrainingCardFacts(card);
     await card.getByRole("button", { name: "Record this step", exact: true }).click();
@@ -966,7 +966,7 @@ test.describe("Trainer Five-View Shell", () => {
     await expect(card.locator('[data-training-card-fact="return"]')).toContainText(
       "Return with the repro step",
     );
-    await card.getByRole("button", { name: TRAINING_COPY["en-US"].returnToCoach, exact: true }).click();
+    await card.getByRole("button", { name: TRAINING_COPY["en-US"].returnToCoach, exact: true }).first().click();
     await expect.poll(() =>
       page.evaluate(() => {
         const state = window.__TRAINER_BOOTSTRAP__?.workspaceTrainingState;

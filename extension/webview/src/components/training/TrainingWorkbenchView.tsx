@@ -1748,6 +1748,15 @@ export function TrainingWorkbenchView({
                     ))}
                   </div>
                   ) : null}
+                  {actions ? (
+                    <div
+                      className="training-current__actions training-current__actions--primary"
+                      role="group"
+                      aria-label={t.openCoach}
+                    >
+                      {actions}
+                    </div>
+                  ) : null}
                   <div
                     className="training-current__actions training-current__actions--primary"
                   >
