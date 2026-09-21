@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +12,7 @@ from .affect.service import AffectService
 from .api.admission import browse_only_rejection
 from .api.routers import build_router
 from .api.routes.research import build_research_router
+from .api.routes.training_attempts import build_training_attempts_router
 from .api.routes.training_handoff import build_training_handoff_router
 from .api.runtime import TrainerRuntime
 from .core.config import Settings
@@ -33,7 +33,6 @@ from .specs.service import SpecService
 from .training.attempt_store import AttemptStore
 from .training.card_generator import CardGenerationService
 from .training.card_router import CardRouterService
-from .api.routes.training_attempts import build_training_attempts_router
 
 
 def create_app(settings_override: Settings | AppSettings | None = None) -> FastAPI:

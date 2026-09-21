@@ -82,6 +82,9 @@ jobs:
         run: >-
           node -e "require('node:fs').rmSync('extension/bundled/bin', { recursive: true, force: true })"
 
+      - name: Build the native sidecar binary
+        run: npm run bundle:sidecar:binary --prefix extension
+
       - name: Build and verify a native VSIX delivery artifact
         id: package-vsix
         run: npm run package:vsix

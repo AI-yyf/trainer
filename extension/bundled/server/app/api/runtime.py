@@ -63,7 +63,9 @@ def _checkpoint_safe_value(value: Any, *, depth: int = 0) -> Any:
         for raw_key, raw_value in value.items():
             key = str(raw_key)
             lowered = key.lower().replace("-", "_")
-            if lowered == "data_base64" or any(part in lowered for part in _CHECKPOINT_SECRET_KEY_PARTS):
+            if lowered == "data_base64" or any(
+                part in lowered for part in _CHECKPOINT_SECRET_KEY_PARTS
+            ):
                 result[key] = _CHECKPOINT_REDACTED_VALUE
             else:
                 result[key] = _checkpoint_safe_value(raw_value, depth=depth + 1)
@@ -173,7 +175,6 @@ class SessionState:
 @dataclass
 class TrainerRuntime:
     repository: TrainerRepository
-    attempt_store: AttemptStore
     provider_service: ProviderService
     planner_service: PlannerService
     memory_service: MemoryService
@@ -182,8 +183,11 @@ class TrainerRuntime:
     evaluator_service: EvaluatorService
     pedagogy_service: PedagogyService = field(default_factory=PedagogyService)
     affect_service: AffectService = field(default_factory=AffectService)
+    attempt_store: AttemptStore | None = None
     research_repository: ResearchRepository | None = None
-    research_service: ResearchOrchestratorService = field(default_factory=ResearchOrchestratorService)
+    research_service: ResearchOrchestratorService = field(
+        default_factory=ResearchOrchestratorService
+    )
     research_network_fetch_enabled: bool = False
     sessions: dict[str, SessionState] = field(default_factory=dict)
     provider_config: ProviderConfig | None = None
@@ -299,10 +303,14 @@ class TrainerRuntime:
 
     def _restore_session(self, payload: dict[str, Any]) -> SessionState | None:
         session_id = str(payload.get("session_id") or "").strip()
-        workspace_id = self.repository.resolve_context_id(payload.get("workspace_id")) or str(
-            payload.get("workspace_id") or ""
-        ).strip()
-        workspace_name = str(payload.get("workspace_name") or DEFAULT_WORKSPACE_NAME).strip() or DEFAULT_WORKSPACE_NAME
+        workspace_id = (
+            self.repository.resolve_context_id(payload.get("workspace_id"))
+            or str(payload.get("workspace_id") or "").strip()
+        )
+        workspace_name = (
+            str(payload.get("workspace_name") or DEFAULT_WORKSPACE_NAME).strip()
+            or DEFAULT_WORKSPACE_NAME
+        )
         snapshot_payload = payload.get("snapshot")
         if not session_id or not workspace_id or not isinstance(snapshot_payload, dict):
             return None
@@ -410,7 +418,9 @@ class TrainerRuntime:
         }
 
         if self.sandbox_service is not None:
-            set_resolver = getattr(self.sandbox_service, "set_workspace_sandbox_root_resolver", None)
+            set_resolver = getattr(
+                self.sandbox_service, "set_workspace_sandbox_root_resolver", None
+            )
             if callable(set_resolver):
                 set_resolver(self.resolve_workspace_sandbox_root)
             before_path = str(indexed.sandbox_path or "")
@@ -465,7 +475,9 @@ class TrainerRuntime:
                     focus_area=focus_area,
                     source=str(fragment.get("source", indexed.canonical_source or indexed.source)),
                     content=str(fragment.get("snippet", indexed.summary or indexed.name)),
-                    trust_score=float(fragment.get("trust_score", indexed.trust_score) or indexed.trust_score),
+                    trust_score=float(
+                        fragment.get("trust_score", indexed.trust_score) or indexed.trust_score
+                    ),
                     tags=[
                         "resource-index",
                         indexed.kind,
@@ -614,7 +626,9 @@ class TrainerRuntime:
         limit: int = 20,
     ) -> list[dict[str, Any]]:
         requested_workspace_id = self._validate_checkpoint_workspace_id(workspace_id)
-        resolved_workspace_id = self.repository.resolve_context_id(requested_workspace_id) or requested_workspace_id
+        resolved_workspace_id = (
+            self.repository.resolve_context_id(requested_workspace_id) or requested_workspace_id
+        )
         if session_id and "\x00" in session_id:
             raise ValueError("Session id is invalid.")
         records = self.repository.list_agent_turn_checkpoints(
@@ -656,8 +670,12 @@ class TrainerRuntime:
     ) -> dict[str, Any] | None:
         normalized_id = self._validate_agent_checkpoint_id(checkpoint_id)
         requested_workspace_id = self._validate_checkpoint_workspace_id(workspace_id)
-        resolved_workspace_id = self.repository.resolve_context_id(requested_workspace_id) or requested_workspace_id
-        checkpoint = self.repository.load_agent_turn_checkpoint(normalized_id, resolved_workspace_id)
+        resolved_workspace_id = (
+            self.repository.resolve_context_id(requested_workspace_id) or requested_workspace_id
+        )
+        checkpoint = self.repository.load_agent_turn_checkpoint(
+            normalized_id, resolved_workspace_id
+        )
         if checkpoint is None:
             return None
         if (
@@ -727,7 +745,9 @@ class TrainerRuntime:
             "executed": False,
         }
 
-    def hydrate_plan_context(self, snapshot: WorkbenchSnapshot, workspace_id: str) -> WorkbenchSnapshot:
+    def hydrate_plan_context(
+        self, snapshot: WorkbenchSnapshot, workspace_id: str
+    ) -> WorkbenchSnapshot:
         """Refresh the authoritative project plan, global plan, and their current link.
 
         Empty / recovered-without-plan restore must not resurrect leftover stored
@@ -738,8 +758,8 @@ class TrainerRuntime:
             self.repository.get_latest_plan(workspace_id),
             workspace_id,
         )
-        leftover_plan, leftover_runtime, _leftover_task = self.memory_service._leftover_persist_context(
-            workspace_id
+        leftover_plan, leftover_runtime, _leftover_task = (
+            self.memory_service._leftover_persist_context(workspace_id)
         )
         # leftover_formal_plan_is_live_for_fill treats no-runtime as first-persist
         # live; hydrate/start must fail closed instead of auto-binding leftover.
@@ -762,10 +782,14 @@ class TrainerRuntime:
         )
         return snapshot
 
-    def resolve_workspace_id(self, session_id: str | None = None, workspace_id: str | None = None) -> str:
+    def resolve_workspace_id(
+        self, session_id: str | None = None, workspace_id: str | None = None
+    ) -> str:
         explicit_workspace_id = (workspace_id or "").strip()
         if explicit_workspace_id:
-            return self.repository.resolve_context_id(explicit_workspace_id) or explicit_workspace_id
+            return (
+                self.repository.resolve_context_id(explicit_workspace_id) or explicit_workspace_id
+            )
         if session_id:
             state = self.get_session(session_id)
             if state:
@@ -815,7 +839,9 @@ class TrainerRuntime:
         workspace_id: str | None = None,
         workspace_name: str = DEFAULT_WORKSPACE_NAME,
     ) -> SessionState:
-        explicit_workspace_id = self.repository.resolve_context_id(workspace_id) or (workspace_id or "").strip()
+        explicit_workspace_id = (
+            self.repository.resolve_context_id(workspace_id) or (workspace_id or "").strip()
+        )
         if session_id and session_id in self.sessions:
             state = self.sessions[session_id]
             if not explicit_workspace_id or state.workspace_id == explicit_workspace_id:
@@ -1140,7 +1166,9 @@ class TrainerRuntime:
         """
         if provider_config is None:
             return
-        if isinstance(last_test, dict) and self._last_test_targets_provider(provider_config, last_test):
+        if isinstance(last_test, dict) and self._last_test_targets_provider(
+            provider_config, last_test
+        ):
             self.remember_provider_capability_test(provider_config, api_key, last_test)
             return
         workspace = str(workspace_id or "").strip()
@@ -1255,7 +1283,9 @@ class TrainerRuntime:
         )
         return authority
 
-    def register_workspace_sandbox_root(self, workspace_id: str, sandbox_root_path: str | None) -> None:
+    def register_workspace_sandbox_root(
+        self, workspace_id: str, sandbox_root_path: str | None
+    ) -> None:
         if not workspace_id:
             return
         resolved_workspace_id = self.repository.resolve_context_id(workspace_id) or workspace_id
