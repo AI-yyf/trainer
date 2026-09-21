@@ -1942,6 +1942,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                     data-plan-fact="next"
                     title={inlineText(currentLane.body)}
                   >
+                    <span className="coach-plan-view__now-label">{currentLane.label}</span>
                     <strong>{currentLane.body}</strong>
                     {currentLane.detail &&
                     inlineText(currentLane.detail) !== inlineText(currentLane.body) ? (
@@ -2067,9 +2068,9 @@ export function CoachPlanView(props: CoachPlanViewProps) {
               </div>
             </details>
           ) : null}
-          {compactPrimary ? null : hasDetails ? (
+          {hasDetails ? (
           <details className="coach-plan-view__details">
-            <summary>{detailsSummary}</summary>
+            <summary>{compactPrimary ? resolvedDetailsSummaryLabel : detailsSummary}</summary>
             {hasDetails ? (
             <div className="coach-plan-view__details-body">
               <div className="coach-plan-view__details-intro">

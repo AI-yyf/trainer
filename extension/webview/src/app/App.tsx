@@ -12702,7 +12702,11 @@ export function App() {
       // Scenario-aware, localized setup copy (first-run "连接模型", missing key,
       // backend starting, …) instead of a single error-flavoured sentence.
       const setupTitle = providerSetupState.title;
-      const setupDetail = providerSetupState.detail;
+      // A categorized provider failure names its class (invalid key, rate
+      // limit, …) instead of the generic check-connection line.
+      const setupDetail =
+        (providerSendState.blocked ? providerSendState.reason?.trim() : undefined) ||
+        providerSetupState.detail;
       const setupActionLabel =
         providerSetupState.actionLabel ||
         (layout.composerLanguage === "zh-CN" ? "检查连接" : providerSetupAction.primary.label);

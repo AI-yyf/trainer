@@ -4817,6 +4817,12 @@ function applyPreviewScenario(bootstrap: typeof mockBootstrapData, state: Browse
         ...bootstrap.memory,
         currentFocus: "",
       };
+      // "empty" also means no formal plan: the recovery path must present the
+      // honest no-plan state instead of a leftover demo plan. A blank identity
+      // reads as not-live, so the workbench renders the no-plan recovery.
+      bootstrap.plan = bootstrap.plan
+        ? { ...bootstrap.plan, id: "", title: "", summary: "", currentStep: "", stages: [] }
+        : bootstrap.plan;
     }
     bootstrap.suggestedActions = [];
     return;
