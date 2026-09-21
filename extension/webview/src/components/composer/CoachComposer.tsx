@@ -293,6 +293,10 @@ export function CoachComposer({
   const resolvedCancelLabel = cancelLabel ?? localizedCopy.cancelLabel;
   const resolvedAccessibilityLabel = accessibilityLabel ?? localizedCopy.accessibilityLabel;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // IME guard (release-blocking): while a CJK input method is composing,
+  // Enter confirms the candidate — it must never submit the form. Tracked on
+  // the element (not the event) so the form's implicit submission is covered.
+  const imComposingRef = useRef(false);
   const modeControlRef = useRef<HTMLDivElement | null>(null);
   const modeOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const plusControlRef = useRef<HTMLDivElement | null>(null);
@@ -316,8 +320,7 @@ export function CoachComposer({
   const submitBlockedReasonId = `${textareaId}-submit-blocked-reason`;
   const composerStatusId = `${textareaId}-status`;
   const revealAttachmentCapabilityNote = useCallback(() => {
-    setShowAttachmentCapabilityNote(true);
-  }, []);
+    setShowAttachmentCapabilityNote(true);  }, []);
 
   useEffect(() => {
     if (attachmentsInteractive) {
@@ -741,12 +744,31 @@ export function CoachComposer({
     }
   }, [areActionsDisabled, hasPlusMenu]);
 
+  const handleCompositionStart = useCallback(() => {
+    imComposingRef.current = true;
+  }, []);
+  const handleCompositionEnd = useCallback(() => {
+    // On some engines the confirming Enter keydown arrives after
+    // compositionend in the same task queue; clear on the next macrotask so
+    // that Enter is still swallowed.
+    window.setTimeout(() => {
+      imComposingRef.current = false;
+    }, 0);
+  }, []);
+
   const handleTextareaKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
       onKeyDown?.(event);
+      // keyCode 229 is the legacy IME-composition marker; isComposing alone
+      // misses the first Enter on some engines.
+      if (event.nativeEvent.isComposing || event.keyCode === 229 || imComposingRef.current) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+        }
+        return;
+      }
       if (
         event.defaultPrevented ||
-        event.nativeEvent.isComposing ||
         !onNavigateHistory ||
         event.altKey ||
         event.ctrlKey ||
@@ -845,6 +867,9 @@ export function CoachComposer({
       onMouseDown={handleComposerMouseDown}
       onSubmit={(event) => {
         event.preventDefault();
+        if (imComposingRef.current) {
+          return;
+        }
         if (canSubmit) {
           onSubmit();
         }
@@ -928,6 +953,8 @@ export function CoachComposer({
             placeholder={resolvedPlaceholder}
             onChange={(event) => onChange(event.target.value.slice(0, maxLength))}
             onKeyDown={handleTextareaKeyDown}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
             onPaste={attachmentsEnabled ? handlePaste : undefined}
           />
           {isDragActive ? (

@@ -51,6 +51,14 @@ const hostMessageSchema = z.discriminatedUnion("type", [
       message: z.string(),
       phase: z.string().optional(),
       surface: z.enum(["global", "stream"]).optional(),
+      providerTest: z
+        .object({
+          ok: z.boolean().optional(),
+          errorCategory: z.string().optional(),
+          statusCode: z.number().optional(),
+          retryable: z.boolean().optional(),
+        })
+        .optional(),
     }),
   }),
   z.object({

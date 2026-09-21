@@ -246,13 +246,13 @@ export class WorkbenchSidebarController
     }
   }
 
-  async syncState(): Promise<void> {
+  async syncState(options?: { forceFull?: boolean }): Promise<void> {
     if (!this.view) {
       return;
     }
 
     await this.ensureRendered(this.view, 'syncState');
-    await this.postIncrementalPatch();
+    await this.postIncrementalPatch(options);
   }
 
   async syncLiveContext(): Promise<void> {
@@ -269,40 +269,48 @@ export class WorkbenchSidebarController
    * key (host state is rebuilt immutably); a serialized fingerprint guards
    * against equal-content rebuilds.
    */
-  private async postIncrementalPatch(): Promise<void> {
+  private async postIncrementalPatch(
+    options?: { forceFull?: boolean },
+  ): Promise<void> {
+    const forceFull = options?.forceFull === true;
     const next = toBootstrapPayload(this.getState()) as unknown as Record<string, unknown>;
     const previous = this.lastSyncedPayload;
     const changedKeys: string[] = [];
-    const keys = new Set<string>([
-      ...Object.keys(next),
-      ...(previous ? Object.keys(previous) : []),
-    ]);
-    for (const key of keys) {
-      const nextValue = next[key];
-      if (previous && Object.prototype.hasOwnProperty.call(previous, key)) {
-        if (nextValue === previous[key]) {
-          continue;
+    if (!forceFull) {
+      const keys = new Set<string>([
+        ...Object.keys(next),
+        ...(previous ? Object.keys(previous) : []),
+      ]);
+      for (const key of keys) {
+        const nextValue = next[key];
+        if (previous && Object.prototype.hasOwnProperty.call(previous, key)) {
+          if (nextValue === previous[key]) {
+            continue;
+          }
+          const fingerprint = JSON.stringify(nextValue ?? null);
+          if (this.syncedKeyFingerprints.get(key) === fingerprint) {
+            // Rebuilt object with identical content: keep the last-delivered
+            // reference so subsequent syncs stay on the fast path.
+            this.lastSyncedPayload = { ...this.lastSyncedPayload, [key]: nextValue };
+            continue;
+          }
+          this.syncedKeyFingerprints.set(key, fingerprint);
+        } else {
+          this.syncedKeyFingerprints.set(key, JSON.stringify(nextValue ?? null));
         }
-        const fingerprint = JSON.stringify(nextValue ?? null);
-        if (this.syncedKeyFingerprints.get(key) === fingerprint) {
-          // Rebuilt object with identical content: keep the last-delivered
-          // reference so subsequent syncs stay on the fast path.
-          this.lastSyncedPayload = { ...this.lastSyncedPayload, [key]: nextValue };
-          continue;
-        }
-        this.syncedKeyFingerprints.set(key, fingerprint);
-      } else {
-        this.syncedKeyFingerprints.set(key, JSON.stringify(nextValue ?? null));
+        changedKeys.push(key);
       }
-      changedKeys.push(key);
+    } else {
+      this.syncedKeyFingerprints.clear();
     }
 
-    if (changedKeys.length === 0) {
+    if (changedKeys.length === 0 && !forceFull) {
       return;
     }
 
-    if (!previous) {
-      // Fresh webview (new html): deliver the complete payload once.
+    if (!previous || forceFull) {
+      // Fresh webview (new html) or explicit repair request: deliver the
+      // complete payload.
       this.lastSyncedPayload = next;
       await this.postMessage(toHostPatchMessage(this.getState()));
       return;
@@ -422,7 +430,7 @@ export class WorkbenchSidebarController
 
       if (message.type === 'request/bootstrap') {
         this.outputChannel.appendLine('[webview] lifecycle request/bootstrap');
-        await this.refreshHostAndSync('request/bootstrap');
+        await this.refreshHostAndSync('request/bootstrap', { forceFull: true });
         return;
       }
 
@@ -781,7 +789,10 @@ export class WorkbenchSidebarController
     }
   }
 
-  private async refreshHostAndSync(reason: string): Promise<void> {
+  private async refreshHostAndSync(
+    reason: string,
+    options?: { forceFull?: boolean },
+  ): Promise<void> {
     if (!this.view) {
       return;
     }
@@ -798,8 +809,9 @@ export class WorkbenchSidebarController
       }
     }
     // A refresh re-derives host state and ships one incremental patch; the
-    // full bootstrap channel is reserved for fresh webview instances.
-    await this.syncState();
+    // full payload is reserved for fresh webviews and explicit repair
+    // requests (request/bootstrap).
+    await this.syncState(options);
   }
 
   private resolveCommand(

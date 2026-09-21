@@ -13,6 +13,7 @@ import type {
   ProviderLastTestResult,
 } from '../core/types';
 import { defaultProviderCredentialMode, normalizeProviderRequestDefaults } from '../core/providerDefaults';
+import { toOperationStatus } from '../core/workbenchData';
 import { resolveProviderApiKeyRef } from '../provider/providerConfigStore';
 import { applyDerivedHostState } from '../core/workbenchData';
 import { getRuntimeWorkspaceId } from './workspaceContext';
@@ -867,24 +868,74 @@ export async function saveProviderFromWebviewCommand(
   });
   await context.workbench.syncState();
 
-  let finalConfig = savedConfig;
-  let finalLastTestResult = storedLastTestResult(context, savedConfig);
   const responseLanguage = resolveProviderResponseLanguage(context, input.responseLanguage);
-  let message = hasApiKey
+  const message = hasApiKey
     ? providerHostCopy(responseLanguage, 'saveChecking')
     : providerBaseUrlIsLocalService(baseUrl)
       ? providerHostCopy(responseLanguage, 'saveLocalNoKey')
       : providerHostCopy(responseLanguage, 'saveNoKey');
 
-  if (hasApiKey) {
-    const modelLookup = await fetchProviderModels(context, savedConfig, apiKey ?? '', {
+  // TR-014: the connection is persisted and live in host state above. Model
+  // discovery and the verification request are explicit network operations —
+  // they complete in the background and report through operation/status with
+  // a structured providerTest outcome, so "save" never waits on the network.
+  void finalizeSavedProviderConnection(context, {
+    savedConfig,
+    existing,
+    apiKey,
+    hasApiKey,
+    hasExplicitModel,
+    providerChangeGeneration,
+    responseLanguage,
+  }).catch((error) => {
+    const detail = error instanceof Error ? error.stack ?? error.message : String(error);
+    context.outputChannel.appendLine(
+      `[provider] background connection verification failed: ${detail}`,
+    );
+  });
+
+  return {
+    ok: true,
+    message,
+    data: savedConfig,
+  };
+}
+
+async function finalizeSavedProviderConnection(
+  context: CommandContext,
+  inputs: {
+    savedConfig: ProviderConfig;
+    existing: ProviderConfig | undefined;
+    apiKey: string | undefined;
+    hasApiKey: boolean;
+    hasExplicitModel: boolean;
+    providerChangeGeneration: number;
+    responseLanguage?: ComposerLanguage;
+  },
+): Promise<void> {
+  const {
+    savedConfig,
+    existing,
+    apiKey,
+    hasApiKey,
+    hasExplicitModel,
+    providerChangeGeneration,
+    responseLanguage,
+  } = inputs;
+  let finalConfig = savedConfig;
+  let finalLastTestResult = storedLastTestResult(context, savedConfig);
+  let message = hasApiKey ? providerHostCopy(responseLanguage, 'saveChecking') : '';
+
+  if (hasApiKey && apiKey?.trim()) {
+    const modelLookup = await fetchProviderModels(context, savedConfig, apiKey, {
       preferCache: true,
       backgroundRefresh: true,
       responseLanguage,
       generation: providerChangeGeneration,
     });
-    if (!(await isCurrentProviderModelLookup(context, savedConfig, apiKey ?? '', providerChangeGeneration))) {
-      return staleModelLookupResult(context, savedConfig);
+    if (!(await isCurrentProviderModelLookup(context, savedConfig, apiKey, providerChangeGeneration))) {
+      // A newer save superseded this one; it owns the outcome.
+      return;
     }
     // CC-Switch-style adoption: when the save did not name a model (a fresh
     // relay paste, or a switched connection whose old model is not offered),
@@ -944,8 +995,9 @@ export async function saveProviderFromWebviewCommand(
       finalLastTestResult = storedLastTestResult(context, finalConfig);
     }
 
-    if (!(await isCurrentProviderModelLookup(context, finalConfig, apiKey ?? '', providerChangeGeneration))) {
-      return staleModelLookupResult(context, finalConfig);
+    if (!(await isCurrentProviderModelLookup(context, finalConfig, apiKey, providerChangeGeneration))) {
+      // A newer save superseded this one; it owns the outcome.
+      return;
     }
 
     const finalViewState = applyDerivedHostState(
@@ -1032,21 +1084,27 @@ export async function saveProviderFromWebviewCommand(
     }
   }
 
-  return {
-    ok: true,
-    message,
-    data: finalConfig,
-    ...(finalLastTestResult && !finalLastTestResult.ok
-      ? {
-          providerTest: {
-            ok: false,
-            errorCategory: finalLastTestResult.errorCategory,
-            statusCode: finalLastTestResult.statusCode,
-            retryable: finalLastTestResult.retryable,
-          },
-        }
-      : {}),
-  };
+  // The save itself already succeeded; the verification outcome rides on the
+  // structured providerTest field so "saved but not verified" never reads as
+  // a failed save. Tone stays success for exactly that reason.
+  await context.workbench.postMessage(
+    toOperationStatus(true, message, {
+      ...(finalLastTestResult
+        ? {
+            ok: finalLastTestResult.ok,
+            ...(finalLastTestResult.errorCategory
+              ? { errorCategory: finalLastTestResult.errorCategory }
+              : {}),
+            ...(typeof finalLastTestResult.statusCode === 'number'
+              ? { statusCode: finalLastTestResult.statusCode }
+              : {}),
+            ...(typeof finalLastTestResult.retryable === 'boolean'
+              ? { retryable: finalLastTestResult.retryable }
+              : {}),
+          }
+        : {}),
+    }),
+  );
 }
 
 export async function openWorkspaceConfigCommand(

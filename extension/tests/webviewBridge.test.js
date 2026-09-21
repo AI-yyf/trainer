@@ -379,8 +379,9 @@ test('request/bootstrap posts a full state patch without executing host commands
 
   assert.equal(executedCommands.length, 0);
   assert.equal(refreshCalls, 1);
-  assert.equal(harness.postedMessages[0].type, 'bootstrap');
-  assert.equal(harness.postedMessages[1].type, 'state/patch');
+  // An explicit repair request ships exactly one full state patch.
+  assert.equal(harness.postedMessages.length, 1);
+  assert.equal(harness.postedMessages[0].type, 'state/patch');
 });
 
 test('settings auto-prime executes quietly without posting operation status', async () => {
@@ -451,8 +452,9 @@ test('visibility recovery rehydrates empty html and syncs state again', async ()
 
   assert.match(harness.view.webview.html, /window\.__TRAINER_BOOTSTRAP__/);
   assert.ok(refreshCalls >= 1);
-  assert.ok(harness.postedMessages.some((message) => message.type === 'bootstrap'));
+  // A rebuilt webview gets one full state patch — never a bootstrap re-post.
   assert.ok(harness.postedMessages.some((message) => message.type === 'state/patch'));
+  assert.ok(!harness.postedMessages.some((message) => message.type === 'bootstrap'));
   assert.ok(outputLines.some((line) => /\[webview\] visible -> rehydrating state/.test(line)));
 });
 
@@ -486,8 +488,9 @@ test('visibility rehydration keeps rendered html when the lifecycle is already h
 
   assert.equal(harness.view.webview.html, initialHtml);
   assert.ok(refreshCalls >= 1);
-  assert.ok(harness.postedMessages.some((message) => message.type === 'bootstrap'));
-  assert.ok(harness.postedMessages.some((message) => message.type === 'state/patch'));
+  // Incremental contract: with no state change since the last delivery,
+  // visibility ships nothing at all.
+  assert.equal(harness.postedMessages.length, 0);
 });
 
 test('visibility rehydration posts the latest in-progress streaming truth', async () => {
@@ -538,21 +541,21 @@ test('visibility rehydration posts the latest in-progress streaming truth', asyn
   await sleep(320);
   await flushAsyncBridgeWork();
 
-  const bootstrap = harness.postedMessages.find((message) => message.type === 'bootstrap');
   const patch = harness.postedMessages.find((message) => message.type === 'state/patch');
   assert.equal(harness.view.webview.html, initialHtml);
-  assert.equal(bootstrap.payload.streamingState.isStreaming, true);
-  assert.equal(bootstrap.payload.streamingState.streamMessageId, 'msg-running-visibility');
-  assert.equal(bootstrap.payload.streamingState.streamedContent, 'Checking the workspace context...');
-  assert.equal(bootstrap.payload.streamingState.agentStep, 1);
-  assert.equal(bootstrap.payload.streamingState.agentActivity[0].name, 'inspect_plan');
+  assert.ok(patch, 'expected an incremental state patch');
+  assert.ok(!harness.postedMessages.some((message) => message.type === 'bootstrap'));
+  assert.equal(patch.payload.streamingState.isStreaming, true);
+  assert.equal(patch.payload.streamingState.streamMessageId, 'msg-running-visibility');
+  assert.equal(patch.payload.streamingState.streamedContent, 'Checking the workspace context...');
+  assert.equal(patch.payload.streamingState.agentStep, 1);
+  assert.equal(patch.payload.streamingState.agentActivity[0].name, 'inspect_plan');
   assert.equal(
-    bootstrap.payload.streamingState.agentActivity[0].result.summary,
+    patch.payload.streamingState.agentActivity[0].result.summary,
     'Plan anchor found.',
   );
-  assert.equal(bootstrap.payload.streamingState.agentActivity[1].name, 'recall_memory');
-  assert.equal(bootstrap.payload.streamingState.agentActivity[1].status, 'running');
-  assert.deepEqual(patch.payload.streamingState, bootstrap.payload.streamingState);
+  assert.equal(patch.payload.streamingState.agentActivity[1].name, 'recall_memory');
+  assert.equal(patch.payload.streamingState.agentActivity[1].status, 'running');
 });
 
 test('visibility recovery with empty html rehydrates the latest completed streaming snapshot', async () => {
@@ -602,25 +605,25 @@ test('visibility recovery with empty html rehydrates the latest completed stream
   await sleep(320);
   await flushAsyncBridgeWork();
 
-  const bootstrap = harness.postedMessages.find((message) => message.type === 'bootstrap');
   const patch = harness.postedMessages.find((message) => message.type === 'state/patch');
   assert.match(harness.view.webview.html, /window\.__TRAINER_BOOTSTRAP__/);
   assert.ok(refreshCalls >= 1);
   assert.ok(outputLines.some((line) => /\[webview\] visible -> rehydrating state/.test(line)));
-  assert.equal(bootstrap.payload.streamingState.isStreaming, false);
-  assert.equal(bootstrap.payload.streamingState.streamMessageId, 'msg-complete-visibility');
+  assert.ok(!harness.postedMessages.some((message) => message.type === 'bootstrap'));
+  assert.ok(patch, 'expected a full state patch after html rebuild');
+  assert.equal(patch.payload.streamingState.isStreaming, false);
+  assert.equal(patch.payload.streamingState.streamMessageId, 'msg-complete-visibility');
   assert.equal(
-    bootstrap.payload.streamingState.completionSummary,
+    patch.payload.streamingState.completionSummary,
     'Checked the workspace context first.',
   );
   assert.equal(
-    bootstrap.payload.streamingState.completionNextStep,
+    patch.payload.streamingState.completionNextStep,
     'Apply the smallest verified patch.',
   );
-  assert.equal(bootstrap.payload.streamingState.toolCount, 2);
-  assert.equal(bootstrap.payload.streamingState.agentic, true);
-  assert.equal(bootstrap.payload.streamingState.agentActivity[0].result.summary, 'Plan anchor found.');
-  assert.deepEqual(patch.payload.streamingState, bootstrap.payload.streamingState);
+  assert.equal(patch.payload.streamingState.toolCount, 2);
+  assert.equal(patch.payload.streamingState.agentic, true);
+  assert.equal(patch.payload.streamingState.agentActivity[0].result.summary, 'Plan anchor found.');
 });
 
 test('plan freeze messages route through the registry and emit status then patch', async () => {

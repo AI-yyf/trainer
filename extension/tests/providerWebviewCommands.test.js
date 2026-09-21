@@ -3211,10 +3211,10 @@ test('refreshProviderModelsCommand restores saved per-model limits when live ref
   assert.equal(patches[1].providerConfig.resolvedModel, 'MiniMax-M2.7-highspeed');
 });
 
-test('primeProviderModelsState quietly warms the saved provider model list for Settings', async () => {
+test('primeProviderModelsState never touches the network without a cached catalog', async () => {
   const patches = [];
   const syncs = [];
-  const savedCaches = [];
+  const modelRequests = [];
   let currentConfig = {
     name: 'MiniMax',
     label: 'MiniMax',
@@ -3271,16 +3271,8 @@ test('primeProviderModelsState quietly warms the saved provider model list for S
       isModelCacheCompatible() {
         return false;
       },
-      async saveModelCache(_config, payload) {
-        savedCaches.push({ config: _config, payload });
-        return {
-          availableModels: payload.availableModels,
-          resolvedModel: payload.resolvedModel,
-          fetchedAt: payload.fetchedAt,
-          expiresAt: '2026-07-06T12:00:00.000Z',
-          source: payload.source,
-          modelTokenLimits: payload.modelTokenLimits,
-        };
+      async saveModelCache() {
+        throw new Error('prime must not write a model cache');
       },
       async saveConfig(config) {
         currentConfig = { ...currentConfig, ...config };
@@ -3296,25 +3288,13 @@ test('primeProviderModelsState quietly warms the saved provider model list for S
     },
     sidecarManager: {
       async ensureRunning() {
-        return { lifecycle: 'ready', port: 34891 };
+        throw new Error('prime must not start the sidecar');
       },
     },
     sidecarClient: {
-      async postJson(_port, route, body) {
-        assert.equal(route, '/provider/models');
-        assert.equal(body.provider.protocol, 'anthropic_messages');
-        return {
-          ok: true,
-          detail: 'Loaded 2 live models.',
-          available_models: ['MiniMax-M2.7-highspeed', 'MiniMax-M3'],
-          resolved_model: 'MiniMax-M3',
-          model_token_limits: {
-            'MiniMax-M3': {
-              context_window_tokens: 1048576,
-              max_output_tokens: 16384,
-            },
-          },
-        };
+      async postJson(_port, route) {
+        modelRequests.push(route);
+        throw new Error(`prime must not contact ${route}`);
       },
     },
     getHostState() {
@@ -3342,14 +3322,146 @@ test('primeProviderModelsState quietly warms the saved provider model list for S
 
   await primeProviderModelsState(context);
 
-  assert.equal(savedCaches.length, 1);
+  // No cached catalog and no explicit refresh request: priming is a no-op and
+  // must not discover models behind the user's back.
+  assert.equal(modelRequests.length, 0);
+  assert.equal(patches.length, 0);
+  assert.equal(syncs.length, 0);
+});
+
+test('primeProviderModelsState syncs the cached catalog to Settings without contacting the provider', async () => {
+  const patches = [];
+  const syncs = [];
+  const modelRequests = [];
+  let currentConfig = {
+    name: 'MiniMax',
+    label: 'MiniMax',
+    protocol: 'anthropic_messages',
+    baseUrl: 'http://minimax-gateway.test',
+    apiKeyRef: 'anthropic.default',
+    model: 'MiniMax-M3',
+    capabilities: {
+      chat: true,
+      responses: false,
+      vision: true,
+      embeddings: false,
+      tools: true,
+      jsonSchema: false,
+      structuredOutput: false,
+      streaming: true,
+    },
+    availableModels: [],
+  };
+  const bootstrap = createDefaultBootstrapData(
+    {
+      trusted: true,
+      workspaceFolder: 'F:\\trainer\\workspace-a',
+    },
+    currentConfig,
+    {
+      lifecycle: 'ready',
+      host: '127.0.0.1',
+      port: 34891,
+      canStart: true,
+    },
+  );
+  bootstrap.providerConfig.availableModels = [];
+  bootstrap.providerConfig.modelListStatus = 'idle';
+
+  const { primeProviderModelsState } = loadWithVscodeMock(
+    providerWebviewCommandsModulePath,
+    {},
+  );
+  const context = {
+    providerStore: {
+      getConfig() {
+        return currentConfig;
+      },
+      async getApiKey() {
+        return 'sk-test';
+      },
+      getModelCache() {
+        return {
+          availableModels: ['MiniMax-M2.7-highspeed', 'MiniMax-M3'],
+          resolvedModel: 'MiniMax-M3',
+          modelTokenLimits: {
+            'MiniMax-M3': {
+              context_window_tokens: 1048576,
+              max_output_tokens: 16384,
+            },
+          },
+          fetchedAt: '2026-07-06T08:00:00.000Z',
+          expiresAt: '2026-07-06T20:00:00.000Z',
+          source: 'live',
+        };
+      },
+      isModelCacheFresh() {
+        return true;
+      },
+      isModelCacheCompatible() {
+        return true;
+      },
+      async saveModelCache() {
+        throw new Error('priming a fresh cache must not rewrite it');
+      },
+      async saveConfig(config) {
+        currentConfig = { ...currentConfig, ...config };
+      },
+      getLastTestResult() {
+        return undefined;
+      },
+    },
+    trustGuard: {
+      async ensureTrusted() {
+        return true;
+      },
+    },
+    sidecarManager: {
+      async ensureRunning() {
+        throw new Error('prime must not start the sidecar');
+      },
+    },
+    sidecarClient: {
+      async postJson(_port, route) {
+        modelRequests.push(route);
+        throw new Error(`prime must not contact ${route}`);
+      },
+    },
+    getHostState() {
+      return {
+        bootstrap,
+        sidecar: { lifecycle: 'ready', port: 34891, host: '127.0.0.1', canStart: true },
+        workspace: {
+          trusted: true,
+          workspaceFolder: 'F:\\trainer\\workspace-a',
+        },
+      };
+    },
+    getSessionId() {
+      return 'session-1';
+    },
+    async patchWorkbenchData(patch) {
+      patches.push(patch);
+    },
+    workbench: {
+      async syncState() {
+        syncs.push(true);
+      },
+    },
+  };
+
+  await primeProviderModelsState(context);
+
+  assert.equal(modelRequests.length, 0);
   assert.equal(syncs.length, 1);
+  assert.equal(patches.length, 1);
   assert.equal(patches[0].providerConfig.modelListStatus, 'ready');
   assert.equal(patches[0].providerConfig.model, 'MiniMax-M3');
   assert.deepEqual(patches[0].providerConfig.availableModels, [
     'MiniMax-M2.7-highspeed',
     'MiniMax-M3',
   ]);
+  assert.equal(patches[0].providerConfig.cacheSource, 'cache');
   assert.equal(patches[0].providerConfig.contextWindowTokens, 1048576);
   assert.equal(patches[0].providerConfig.maxOutputTokens, 16384);
   assert.equal(
