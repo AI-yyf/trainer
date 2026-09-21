@@ -39,7 +39,7 @@ const trainingViewSourcePath = path.resolve(
   'TrainingWorkbenchView.tsx',
 );
 
-test('app shell renders a text-only top navigation for the five fixed views', () => {
+test('app shell renders a text-only top navigation for the daily views', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
   const viewTypes = fs.readFileSync(viewTypesPath, 'utf8');
 
@@ -47,14 +47,21 @@ test('app shell renders a text-only top navigation for the five fixed views', ()
     viewTypes,
     /export const COACH_FIRST_SIDEBAR_VIEWS = \[\s*"coach",\s*"plan",\s*"resources",\s*"training",\s*"settings",\s*\] as const;/s,
   );
-  assert.match(source, /const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS\.map\(/);
+  // Phase-C nav: three daily tabs, training appears on activity, Settings
+  // lives in the header gear. All five views stay routable.
+  assert.match(
+    source,
+    /const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS\.filter\(\(view\) =>\s*view === "training" \? trainingNavVisible : view !== "settings",\s*\)\.map\(\(view\) => \{/,
+  );
+  assert.match(source, /const trainingNavVisible =\s*activeView === "training" \|\|/);
   assert.match(source, /const label = coachViewLabel\(layout\.composerLanguage\);/);
   // The plan-composer mode menu keeps the dedicated composer word (计划/Plan)
   // while the sidebar tab itself switched to the 学习/Learning label.
   assert.match(source, /label: resolvePlanComposerCopy\(layout\.composerLanguage\)\.planLabel,/);
   assert.match(source, /const label = resourcesViewLabel\(layout\.composerLanguage\);/);
   assert.match(source, /const label = trainingViewLabel\(layout\.composerLanguage\);/);
-  assert.match(source, /const label = settingsViewLabel\(layout\.composerLanguage\);/);
+  assert.match(source, /data-testid="trainer-view-nav-settings"/);
+  assert.match(source, /aria-label=\{settingsViewLabel\(layout\.composerLanguage\)\}/);
   assert.match(source, /className=\{`header-switcher header-switcher--\$\{headerSwitcherDensity\}`\}/);
   assert.match(source, /aria-label=\{t\.viewNavigation\}/);
   assert.match(source, /\{sidebarViewTabs\.map\(\(\{ view, label, compactLabel \}\) => \{/);
@@ -75,7 +82,7 @@ test('top navigation swaps squeezed text for per-view icons', () => {
   const switcherBlock = styles.slice(switcherStart, switcherStart + 520);
 
   assert.match(switcherBlock, /display:\s*grid;/);
-  assert.match(switcherBlock, /grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(switcherBlock, /grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(0,\s*1fr\)\);/);
   assert.match(switcherBlock, /width:\s*100%;/);
   assert.match(switcherBlock, /padding:\s*8px 0 0;/);
   assert.match(styles, /\.header-switcher__item\s*\{[\s\S]*?border-bottom:\s*1px solid transparent;[\s\S]*?background:\s*transparent;[\s\S]*?border-radius:\s*0;[\s\S]*?font-size:\s*var\(--trainer-font-xs\);/);

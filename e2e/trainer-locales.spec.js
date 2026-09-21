@@ -48,16 +48,25 @@ async function openStandaloneTrainingPreview(page, language, width) {
 }
 
 async function expectFiveLocalizedTopLevelViews(page, language) {
-  const tabs = page.getByTestId(/^trainer-view-nav-(coach|plan|resources|training|settings)$/);
-  await expect(tabs).toHaveCount(5);
-  for (let index = 0; index < 5; index += 1) {
+  // Phase-C IA: visible switcher tabs are a prefix of the five view labels;
+  // Settings moved to the header gear (its label is the fifth entry).
+  const switcher = page.locator(".header-switcher");
+  const tabs = switcher.getByTestId(/^trainer-view-nav-(coach|plan|resources|training)$/);
+  await expect(tabs.first()).toBeVisible();
+  const count = await tabs.count();
+  expect([3, 4]).toContain(count);
+  for (let index = 0; index < count; index += 1) {
     await expect(tabs.nth(index)).toBeVisible();
   }
 
   const labels = await tabs.evaluateAll((nodes) =>
     nodes.map((node) => node.getAttribute("aria-label")),
   );
-  expect(labels).toEqual(VIEW_LABELS[language]);
+  expect(labels).toEqual(VIEW_LABELS[language].slice(0, count));
+  await expect(page.getByTestId("trainer-view-nav-settings")).toHaveAttribute(
+    "aria-label",
+    VIEW_LABELS[language][4],
+  );
 }
 
 async function expectCurrentTrainingCardFacts(page) {

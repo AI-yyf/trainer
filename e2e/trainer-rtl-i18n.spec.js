@@ -28,7 +28,10 @@ test("RTL preview keeps the 360px Trainer shell readable and bounded", async ({ 
   await expect(page.locator(".trainer-shell")).toHaveAttribute("dir", "rtl");
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   await expect(page.locator("body")).toHaveAttribute("dir", "rtl");
-  await expect(page.getByTestId(/^trainer-view-nav-(coach|plan|resources|training|settings)$/)).toHaveCount(5);
+  const rtlSwitcher = page.locator(".header-switcher");
+  await expect(rtlSwitcher.getByTestId("trainer-view-nav-coach")).toBeVisible();
+  await expect(rtlSwitcher.getByTestId("trainer-view-nav-plan")).toBeVisible();
+  await expect(rtlSwitcher.getByTestId("trainer-view-nav-resources")).toBeVisible();
   await expect(page.locator(".composer-shell textarea").first()).toBeVisible();
   await expectNoHorizontalOverflow(page);
 

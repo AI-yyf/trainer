@@ -22,7 +22,7 @@ test('five views stay the Codex three-layer shell without identity chrome', () =
     /export const COACH_FIRST_SIDEBAR_VIEWS = \[\s*"coach",\s*"plan",\s*"resources",\s*"training",\s*"settings",\s*\] as const;/s,
   );
   assert.doesNotMatch(types, /"research"/);
-  assert.match(app, /const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS\.map\(/);
+  assert.match(app, /const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS\.filter\(/);
   assert.match(app, /data-testid=\{`trainer-view-nav-\$\{view\}`\}/);
   assert.doesNotMatch(app, /from ["'].*mockData["']/);
   assert.doesNotMatch(app, /<CoachOrientationRail/);

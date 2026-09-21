@@ -1340,7 +1340,9 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
 
 .header-switcher {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* Phase-C nav: 3 primary tabs (+ conditional training) — columns follow
+     the rendered count instead of a fixed five. */
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   align-items: stretch;
   gap: 0;
   width: 100%;
@@ -1462,7 +1464,7 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
 
   .header-switcher {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
     gap: 0;
     width: 100%;
     overflow: hidden;
@@ -16588,7 +16590,7 @@ button.resources-sandbox-layout__chip:focus-visible {
 
   .header-switcher {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
     gap: 0;
     overflow: hidden;
     white-space: nowrap;
@@ -21052,4 +21054,13 @@ details[open] > :not(summary) {
 .coach-conversation-view__item {
   content-visibility: auto;
   contain-intrinsic-size: auto 120px;
+}
+
+/* Phase-C navigation: Settings lives in the header as an icon-only gear. */
+.header-switcher__item--gear {
+  padding-inline: 7px;
+}
+
+.header-switcher__item--gear .header-switcher__label {
+  display: none;
 }

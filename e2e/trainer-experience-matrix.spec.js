@@ -120,14 +120,26 @@ async function openScenario(page, scenario) {
   await page.setViewportSize(scenario.viewport);
   await page.goto(scenarioUrl(scenario));
   await expect(page.locator("body")).toBeVisible();
-  await expect(page.getByTestId(TOP_LEVEL_VIEW_TEST_ID)).toHaveCount(5);
+  await expectPrimaryNavigation(page);
   await expect(page.locator(ACTIVE_TOP_LEVEL_VIEW_SELECTOR)).toHaveCount(1);
+}
+
+async function expectPrimaryNavigation(page) {
+  // Phase-C IA: three daily tabs (training appears on activity) plus the
+  // Settings gear in the header.
+  const switcher = page.locator(".header-switcher");
+  await expect(switcher.getByTestId("trainer-view-nav-coach")).toBeVisible();
+  await expect(switcher.getByTestId("trainer-view-nav-plan")).toBeVisible();
+  await expect(switcher.getByTestId("trainer-view-nav-resources")).toBeVisible();
+  await expect(page.getByTestId("trainer-view-nav-settings")).toBeVisible();
+  const switcherTabs = switcher.getByTestId(TOP_LEVEL_VIEW_TEST_ID);
+  expect(await switcherTabs.count()).toBeLessThanOrEqual(4);
 }
 
 async function assertVisibleContract(page, scenario, contract) {
   switch (contract.id) {
     case "five_top_level_views":
-      await expect(page.getByTestId(TOP_LEVEL_VIEW_TEST_ID)).toHaveCount(5);
+      await expectPrimaryNavigation(page);
       return;
     case "one_active_view":
       await expect(page.locator(ACTIVE_TOP_LEVEL_VIEW_SELECTOR)).toHaveCount(1);
@@ -456,9 +468,14 @@ async function assertForbiddenContracts(page, scenario, consoleErrors) {
       continue;
     }
     switch (forbidden.id) {
-      case "no_sixth_top_level_view":
-        await expect(page.getByTestId(TOP_LEVEL_VIEW_TEST_ID)).toHaveCount(5);
+      case "no_sixth_top_level_view": {
+        const extraViews = page
+          .locator(".header-switcher")
+          .getByTestId(TOP_LEVEL_VIEW_TEST_ID);
+        expect(await extraViews.count()).toBeLessThanOrEqual(4);
+        await expect(page.getByTestId("trainer-view-nav-settings")).toBeVisible();
         break;
+      }
       case "no_horizontal_overflow":
         await expectNoHorizontalOverflow(page);
         break;

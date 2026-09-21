@@ -60,11 +60,13 @@ test.describe("Trainer preview plan governance", () => {
       connection: "connected",
     });
 
-    const emptyState = page.locator(".coach-empty-state--welcome");
     const composer = page.locator("#coach-composer");
     const sendButton = page.locator(".composer__send");
 
-    await expect(emptyState.getByRole("heading", { name: "Start with what you want to achieve" })).toBeVisible();
+    // Phase-C product contract (design §16): first use stays honest — no
+    // onboarding wizard chrome, no blocked takeover, just a usable composer.
+    await expect(page.locator(".onboarding-wizard")).toHaveCount(0);
+    await expect(page.locator(".coach-empty-state--blocked")).toHaveCount(0);
     await expect(composer).toBeEditable();
     await expect(sendButton).toBeDisabled();
     await composer.fill("Help me start with a small repository slice.");

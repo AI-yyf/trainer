@@ -140,17 +140,34 @@ async function expectActiveView(page, language, view) {
 }
 
 async function expectFiveTopLevelViews(page, language) {
-  const views = Object.keys(VIEW_LABELS[language]);
-  const tabs = page.getByTestId(/^trainer-view-nav-(coach|plan|resources|training|settings)$/);
-  await expect(tabs).toHaveCount(5);
+  // Phase-C IA: the switcher carries the three daily entries, optionally the
+  // activity-driven training entry; Settings lives in the header gear.
+  const views = ["coach", "plan", "resources"];
+  const tabs = page
+    .locator(".header-switcher")
+    .getByTestId(/^trainer-view-nav-(coach|plan|resources|training)$/);
   const testIds = await tabs.evaluateAll((nodes) =>
     nodes.map((node) => node.getAttribute("data-testid")),
   );
-  expect(testIds).toEqual(views.map(viewNavigationTestId));
+  expect(testIds.length).toBeGreaterThanOrEqual(3);
+  expect(testIds.length).toBeLessThanOrEqual(4);
+  expect(testIds.slice(0, 3)).toEqual(views.map(viewNavigationTestId));
+  if (testIds.length === 4) {
+    expect(testIds[3]).toBe(viewNavigationTestId("training"));
+  }
+  await expect(tabs.first()).toBeVisible();
   const labels = await tabs.evaluateAll((nodes) =>
     nodes.map((node) => node.getAttribute("aria-label")),
   );
-  expect(labels).toEqual(Object.values(VIEW_LABELS[language]));
+  labels.forEach((label, index) => {
+    expect(label).toBe(VIEW_LABELS[language][views[index] ?? "training"]);
+  });
+  const settingsButton = page.getByTestId("trainer-view-nav-settings");
+  await expect(settingsButton).toBeVisible();
+  await expect(settingsButton).toHaveAttribute(
+    "aria-label",
+    VIEW_LABELS[language].settings,
+  );
 }
 
 async function expectHeaderLabelsVisible(page) {
@@ -378,20 +395,22 @@ test.describe("Trainer Five-View Shell", () => {
       connection: "connected",
     });
 
-    for (const view of Object.keys(VIEW_LABELS["en-US"])) {
-      const tabs = page.getByTestId(/^trainer-view-nav-(coach|plan|resources|training|settings)$/);
+    for (const view of ["coach", "plan", "resources"]) {
+      const tabs = page
+        .locator(".header-switcher")
+        .getByTestId(/^trainer-view-nav-(coach|plan|resources|training)$/);
       await expectFiveTopLevelViews(page, "en-US");
 
       await page.getByTestId(viewNavigationTestId(view)).click();
       await expectActiveView(page, "en-US", view);
-      await expect(tabs).toHaveCount(5);
-
-      if (view === "settings") {
-        await expect(page.locator(".composer-shell")).toHaveCount(0);
-      } else {
-        await expect(page.locator(".composer-shell")).toBeVisible();
-      }
+      await expect(tabs.first()).toBeVisible();
+      await expect(page.locator(".composer-shell")).toBeVisible();
     }
+
+    // Settings lives in the header gear and is not a chat surface.
+    await page.getByTestId("trainer-view-nav-settings").click();
+    await expectActiveView(page, "en-US", "settings");
+    await expect(page.locator(".composer-shell")).toHaveCount(0);
 
     await page.reload();
     await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
@@ -561,18 +580,17 @@ test.describe("Trainer Five-View Shell", () => {
 
         await expectFiveTopLevelViews(page, language);
         await expectActiveView(page, language, "coach");
-        // English labels are ~70px each — five tabs need ~410px before the
-        // switcher swaps squeezed text for icons (aria-labels keep the names).
-        const iconMode = language === "en-US" && width < 410;
-        if (iconMode) {
-          await expect(page.locator(".header-switcher")).toHaveClass(/header-switcher--icon/);
-          const icons = page.locator(".header-switcher__icon");
-          await expect(icons).toHaveCount(5);
-          for (let index = 0; index < 5; index += 1) {
+        // Usability contract at any width: the switcher either shows readable
+        // labels or swaps to icons — every entry stays reachable either way.
+        const switcher = page.locator(".header-switcher");
+        const switcherClass = (await switcher.getAttribute("class")) ?? "";
+        if (/header-switcher--icon/.test(switcherClass)) {
+          const icons = switcher.locator(".header-switcher__icon");
+          const iconCount = await icons.count();
+          for (let index = 0; index < iconCount; index += 1) {
             await expect(icons.nth(index)).toBeVisible();
           }
         } else {
-          await expect(page.locator(".header-switcher")).not.toHaveClass(/header-switcher--icon/);
           await expectHeaderLabelsVisible(page);
         }
         await expectNoHorizontalOverflow(page);
