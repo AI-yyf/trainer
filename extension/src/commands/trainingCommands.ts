@@ -1717,6 +1717,155 @@ export async function trainingPracticeReturnCommand(
   }
 }
 
+export interface TrainingAttemptCommandPayload {
+  workspaceId?: string;
+  cardId?: string;
+  attemptId?: string;
+  filePath?: string;
+  fileHash?: string;
+  fileVersion?: number;
+  answerDraft?: string;
+  assistanceLevel?: string;
+  status?: string;
+  artifactHash?: string;
+  result?: string;
+  runnerVersion?: string;
+  executionLocation?: string;
+  trustLevel?: string;
+  limitations?: string[];
+}
+
+async function postTrainingAttempt(
+  context: CommandContext,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<CommandExecutionResult> {
+  const workspaceId = getRuntimeWorkspaceId(context);
+  const status = context.sidecarManager.getStatus();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: 'Sidecar is not running.' };
+  }
+  try {
+    const response = await context.sidecarClient.postJson<Record<string, unknown>>(
+      status.port,
+      path,
+      { workspace_id: workspaceId, ...body },
+    );
+    await context.workbench.syncState();
+    return { ok: true, data: response };
+  } catch (error) {
+    return { ok: false, message: String(error) };
+  }
+}
+
+/** Entering a formal card: idempotent start/resume of the attempt. */
+export async function trainingAttemptStartCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const p = payload as TrainingAttemptCommandPayload | undefined;
+  if (!p?.cardId) {
+    return { ok: false, message: 'Attempt start requires a card id.' };
+  }
+  const body: Record<string, unknown> = { card_id: p.cardId };
+  if (p.filePath) {
+    body.file_path = p.filePath;
+  }
+  if (p.fileHash) {
+    body.file_hash = p.fileHash;
+  }
+  if (p.fileVersion) {
+    body.file_version = p.fileVersion;
+  }
+  if (p.assistanceLevel) {
+    body.assistance_level = p.assistanceLevel;
+  }
+  return postTrainingAttempt(context, '/training/attempt/start', body);
+}
+
+/** Try drafting / hint usage: throttled by the caller, idempotent server-side. */
+export async function trainingAttemptUpdateCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const p = payload as TrainingAttemptCommandPayload | undefined;
+  if (!p?.attemptId) {
+    return { ok: false, message: 'Attempt update requires an attempt id.' };
+  }
+  const body: Record<string, unknown> = { attempt_id: p.attemptId };
+  if (p.answerDraft !== undefined) {
+    body.answer_draft = p.answerDraft;
+  }
+  if (p.assistanceLevel) {
+    body.assistance_level = p.assistanceLevel;
+  }
+  if (p.status) {
+    body.status = p.status;
+  }
+  if (p.filePath) {
+    body.file_path = p.filePath;
+  }
+  if (p.fileHash) {
+    body.file_hash = p.fileHash;
+  }
+  return postTrainingAttempt(context, '/training/attempt/update', body);
+}
+
+/** Verify: evidence binds attempt/workspace/card; identity derives server-side. */
+export async function trainingAttemptEvidenceCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const p = payload as TrainingAttemptCommandPayload | undefined;
+  if (!p?.attemptId || !p.artifactHash) {
+    return { ok: false, message: 'Attempt evidence requires an attempt id and artifact hash.' };
+  }
+  const body: Record<string, unknown> = {
+    attempt_id: p.attemptId,
+    artifact_hash: p.artifactHash,
+    result: p.result ?? 'passed',
+  };
+  if (p.runnerVersion) {
+    body.runner_version = p.runnerVersion;
+  }
+  if (p.executionLocation) {
+    body.execution_location = p.executionLocation;
+  }
+  if (p.trustLevel) {
+    body.trust_level = p.trustLevel;
+  }
+  if (p.limitations?.length) {
+    body.limitations = p.limitations;
+  }
+  return postTrainingAttempt(context, '/training/attempt/evidence', body);
+}
+
+/** Re-entering a card: recover the in-flight attempt without creating one. */
+export async function trainingAttemptRecoverCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const p = payload as TrainingAttemptCommandPayload | undefined;
+  if (!p?.cardId) {
+    return { ok: false, message: 'Attempt recover requires a card id.' };
+  }
+  return postTrainingAttempt(context, '/training/attempt/recover', { card_id: p.cardId });
+}
+
+/** Return retires the attempt lifecycle; history stays queryable. */
+export async function trainingAttemptCloseCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const p = payload as TrainingAttemptCommandPayload | undefined;
+  if (!p?.attemptId) {
+    return { ok: false, message: 'Attempt close requires an attempt id.' };
+  }
+  return postTrainingAttempt(context, '/training/attempt/close', {
+    attempt_id: p.attemptId,
+  });
+}
+
 export async function trainingReflectCommand(
   context: CommandContext,
   payload?: unknown,

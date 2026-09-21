@@ -263,7 +263,7 @@ import {
   type TrainingFeedbackPromptInput,
 } from "../lib/universalLearningPrompts";
 import { isBrowserPreviewFixtureMode } from "../lib/browserSidecar";
-import { useTrainingCommands } from "./useTrainingCommands";
+import { useTrainingCommands, useTrainingAttemptLifecycle } from "./useTrainingCommands";
 import { type TrainingRestoreContext, useWorkbenchState } from "./useWorkbenchState";
 import type { PlanReviewItem } from "../components/plan/CoachPlanView";
 import type {
@@ -10721,6 +10721,29 @@ export function App() {
     previewSessionId,
     setOperationMessage,
   ]);
+
+  // Phase-D training attempt lifecycle: entering a formal card starts/resumes
+  // an attempt; the Try draft is throttled into attempt updates; hints bump
+  // the assistance level; return closes the lifecycle. Identity fields are
+  // derived server-side from the persisted attempt.
+  const currentWorkspaceIdForAttempt =
+    data.memory.workspace?.workspaceId ?? data.workspaceTrainingState?.workspaceId ?? "";
+  const attemptLifecycle = useMemo(() => useTrainingAttemptLifecycle(), []);
+  const trainingAttemptIdRef = useRef<string | undefined>(undefined);
+  const trainingAttemptCardRef = useRef<string | undefined>(undefined);
+
+  // When a formal training card becomes active, start or resume its attempt.
+  useEffect(() => {
+    if (activeView !== "training" || !activeTrainingCardId || isBrowserPreview) {
+      return;
+    }
+    attemptLifecycle.startOrRecover(activeTrainingCardId, {
+      filePath: data.liveContext?.activeFile ?? undefined,
+    });
+    trainingAttemptIdRef.current = undefined; // server assigns/resumes
+    trainingAttemptCardRef.current = activeTrainingCardId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, activeTrainingCardId, attemptLifecycle, isBrowserPreview]);
 
   const handleVerifyTrainingFromIde = useCallback(() => {
     if (isBrowserPreview || leftoverTrainingHandoffChromeNotLive || !activeTrainingCardId) {

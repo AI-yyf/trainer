@@ -10,6 +10,11 @@ const DURABLE_TRAINING_COMMAND_IDS = new Set<string>([
   trainerCommands.trainingCardStatusTransition,
   trainerCommands.trainingReflect,
   trainerCommands.trainingReturn,
+  trainerCommands.trainingAttemptStart,
+  trainerCommands.trainingAttemptUpdate,
+  trainerCommands.trainingAttemptEvidence,
+  trainerCommands.trainingAttemptRecover,
+  trainerCommands.trainingAttemptClose,
 ]);
 
 function sendTrainingCommand(commandId: string, payload: Record<string, unknown>): void {
@@ -17,6 +22,57 @@ function sendTrainingCommand(commandId: string, payload: Record<string, unknown>
     type: "command/execute",
     payload: { commandId, payload },
   });
+}
+
+export interface TrainingAttemptLifecycle {
+  /** 进入/恢复正式卡片时调用:幂等 start/recover。 */
+  startOrRecover: (cardId: string, options?: { filePath?: string; fileHash?: string; fileVersion?: number }) => void;
+  /** Try 草稿变化:由调用方节流后调用。 */
+  updateDraft: (attemptId: string, answerDraft: string) => void;
+  /** 使用提示后:推进 assistance level。 */
+  updateAssistance: (attemptId: string, assistanceLevel: string) => void;
+  /** Verify 完成:提交证据绑定(身份服务端从 attempt 派生)。 */
+  submitEvidence: (
+    attemptId: string,
+    evidence: { artifactHash: string; result: string; runnerVersion?: string; executionLocation?: string; trustLevel?: string; limitations?: string[] },
+  ) => void;
+  /** Reflect 提交后保持同一 attempt(无需新调用,占位语义清晰)。 */
+  keepSameAttempt: () => void;
+  /** Return:关闭生命周期,历史保留。 */
+  close: (attemptId: string) => void;
+}
+
+export function useTrainingAttemptLifecycle(): TrainingAttemptLifecycle {
+  return {
+    startOrRecover: (cardId, options) => {
+      sendTrainingCommand(trainerCommands.trainingAttemptStart, {
+        cardId,
+        ...(options ?? {}),
+      });
+    },
+    updateDraft: (attemptId, answerDraft) => {
+      sendTrainingCommand(trainerCommands.trainingAttemptUpdate, {
+        attemptId,
+        answerDraft,
+      });
+    },
+    updateAssistance: (attemptId, assistanceLevel) => {
+      sendTrainingCommand(trainerCommands.trainingAttemptUpdate, {
+        attemptId,
+        assistanceLevel,
+      });
+    },
+    submitEvidence: (attemptId, evidence) => {
+      sendTrainingCommand(trainerCommands.trainingAttemptEvidence, {
+        attemptId,
+        ...evidence,
+      });
+    },
+    keepSameAttempt: () => undefined,
+    close: (attemptId) => {
+      sendTrainingCommand(trainerCommands.trainingAttemptClose, { attemptId });
+    },
+  };
 }
 
 type TrainingCoachBridgeInput = {
