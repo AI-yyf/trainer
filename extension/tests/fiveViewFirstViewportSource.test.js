@@ -121,7 +121,7 @@ test('training first viewport is the current card plus one primary, with skip/gr
   assert.match(cardOnly, /training-loop-rail/);
   // The step-start label is App-composed (localizable), the affordance lives
   // on the card.
-  assert.match(app, /"Start this step"|开始这一步/);
+  assert.match(training, /startStep: "Start this step"/);
   assert.doesNotMatch(cardOnly, /card-status-nav/);
   assert.doesNotMatch(cardOnly, /handleSkipCard/);
   assert.doesNotMatch(cardOnly, /handleGradeCard/);

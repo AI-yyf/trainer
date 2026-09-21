@@ -47,9 +47,25 @@ export class SidecarHttpError extends Error {
 
 export class SidecarHttpClient {
   private trainerAdmissionMode: 'browse' | 'ignored' | undefined;
+  // TR-077: per-instance token the extension handed to the sidecar process.
+  private instanceToken: string | undefined;
+  private instanceTokenProvider?: () => string | undefined;
 
   setTrainerAdmissionMode(mode: string | undefined): void {
     this.trainerAdmissionMode = mode === 'browse' || mode === 'ignored' ? mode : undefined;
+  }
+
+  setInstanceToken(token: string | undefined): void {
+    this.instanceToken = token;
+  }
+
+  /** Late-bound token source for clients created before the sidecar launches. */
+  setInstanceTokenProvider(provider: () => string | undefined): void {
+    this.instanceTokenProvider = provider;
+  }
+
+  private resolveInstanceToken(): string | undefined {
+    return this.instanceToken ?? this.instanceTokenProvider?.() ?? undefined;
   }
 
   async getJson<T>(port: number, path: string, options?: SidecarRequestOptions): Promise<T> {
@@ -367,9 +383,13 @@ export class SidecarHttpClient {
   }
 
   private trainerAdmissionHeaders(): Record<string, string> {
-    return this.trainerAdmissionMode
-      ? { 'x-trainer-admission-mode': this.trainerAdmissionMode }
-      : {};
+    const instanceToken = this.resolveInstanceToken();
+    return {
+      ...(instanceToken ? { 'x-trainer-token': instanceToken } : {}),
+      ...(this.trainerAdmissionMode
+        ? { 'x-trainer-admission-mode': this.trainerAdmissionMode }
+        : {}),
+    };
   }
 }
 

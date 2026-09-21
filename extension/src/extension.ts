@@ -49,6 +49,7 @@ export async function activate(
   const providerStore = new ProviderConfigStore(extensionContext);
   const sidecarClient = new SidecarHttpClient();
   const sidecarManager = new SidecarProcessManager(extensionContext, outputChannel);
+  sidecarClient.setInstanceTokenProvider(() => sidecarManager.getInstanceToken());
   const trustGuard = new WorkspaceTrustGuard();
   const trainerWorkspace = new TrainerWorkspaceService(extensionContext);
   trustGuard.rememberActiveEditor();

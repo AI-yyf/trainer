@@ -65,7 +65,7 @@ test('training pasted proof stays hidden until it can change the verdict', () =>
     appSource,
     /setTrainingComposerPracticeReturnMode\(\s*trainingCardBlocked && !trainingCardVerified \? "blocked" : "result",/,
   );
-  assert.match(appSource, /const trainingPrimaryAction = !hasTrainingCard \? undefined : \(/);
+  assert.match(appSource, /const trainingPrimaryAction = !hasTrainingCard \? undefined : undefined;/);
   assert.match(appSource, /id: "composer-verify-file"/);
   assert.match(appSource, /onClick: handleVerifyTrainingFromIde/);
   assert.doesNotMatch(appSource, /onClick=\{handleVerifyTrainingFromIde\}/);

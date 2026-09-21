@@ -43,8 +43,9 @@ from ..workspace.provisioning import ProjectProvisioningService
 if TYPE_CHECKING:
     from ..db.research_repository import ResearchRepository
     from ..sandbox.service import SandboxService
-    from ..training.card_generator import CardGenerationService
-    from ..training.card_router import CardRouterService
+from ..training.attempt_store import AttemptStore
+from ..training.card_generator import CardGenerationService
+from ..training.card_router import CardRouterService
 
 DEFAULT_WORKSPACE_ID = "workspace-default"
 DEFAULT_WORKSPACE_NAME = "Trainer"
@@ -172,6 +173,7 @@ class SessionState:
 @dataclass
 class TrainerRuntime:
     repository: TrainerRepository
+    attempt_store: AttemptStore
     provider_service: ProviderService
     planner_service: PlannerService
     memory_service: MemoryService

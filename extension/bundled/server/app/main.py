@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+import os
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import RequestResponseEndpoint
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 from .affect.service import AffectService
 from .api.admission import browse_only_rejection
@@ -28,8 +30,10 @@ from .planner.service import PlannerService
 from .resources.service import ResourceService
 from .sandbox.service import SandboxService
 from .specs.service import SpecService
+from .training.attempt_store import AttemptStore
 from .training.card_generator import CardGenerationService
 from .training.card_router import CardRouterService
+from .api.routes.training_attempts import build_training_attempts_router
 
 
 def create_app(settings_override: Settings | AppSettings | None = None) -> FastAPI:
@@ -39,6 +43,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     data_dir.mkdir(parents=True, exist_ok=True)
 
     repository = TrainerRepository(database_path)
+    attempt_store = AttemptStore(database_path)
     research_db_path = data_dir / "research.db"
     research_repository = ResearchRepository(research_db_path)
     qdrant_path = settings.qdrant_path if isinstance(settings, Settings) else data_dir / "qdrant"
@@ -58,6 +63,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
 
     runtime = TrainerRuntime(
         repository=repository,
+        attempt_store=attempt_store,
         research_repository=research_repository,
         research_network_fetch_enabled=network_fetch_enabled,
         provider_service=provider_service,
@@ -92,6 +98,23 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
 
     app = FastAPI(title="Trainer Sidecar", version="0.1.0", lifespan=lifespan)
 
+    # TR-077 (per-instance auth token): the extension generates a random token
+    # per sidecar launch and passes it via TRAINER_SIDECAR_TOKEN; every request
+    # must carry it. When unset (manual dev launch), the guard stays open.
+    instance_token = os.getenv("TRAINER_SIDECAR_TOKEN", "").strip()
+
+    @app.middleware("http")
+    async def instance_token_guard(
+        request: Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
+        if instance_token and request.headers.get("x-trainer-token") != instance_token:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Trainer sidecar requires the per-instance token."},
+            )
+        return await call_next(request)
+
     @app.middleware("http")
     async def browse_only_admission_guard(
         request: Request,
@@ -112,6 +135,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     app.include_router(build_router(runtime))
     app.include_router(build_research_router(runtime.research_service, runtime.provider_service))
     app.include_router(build_training_handoff_router(runtime))
+    app.include_router(build_training_attempts_router(runtime))
     app.state.runtime = runtime
     app.state.settings = settings
     return app

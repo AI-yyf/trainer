@@ -4,6 +4,7 @@ import * as net from 'node:net';
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
+import { randomUUID } from 'node:crypto';
 
 import { SIDECAR_DEFAULTS, STORAGE_KEYS } from './constants';
 import { recordSidecarStart } from './runtimeMetrics';
@@ -49,6 +50,7 @@ export interface ManagedDataRootScope {
 export class SidecarProcessManager implements vscode.Disposable {
   private readonly statusEmitter = new vscode.EventEmitter<SidecarStatus>();
   private readonly client = new SidecarHttpClient();
+  private instanceToken?: string;
   private readonly managedDataFolderFallback = new Map<string, string | undefined>();
 
   private managedDataRootId?: string;
@@ -74,6 +76,11 @@ export class SidecarProcessManager implements vscode.Disposable {
 
   getStatus(): SidecarStatus {
     return { ...this.status };
+  }
+
+  /** Per-instance token for the most recent launch (TR-077). */
+  getInstanceToken(): string | undefined {
+    return this.instanceToken;
   }
 
   async setManagedDataRootScope(scope: ManagedDataRootScope = {}): Promise<boolean> {
@@ -378,6 +385,11 @@ export class SidecarProcessManager implements vscode.Disposable {
   }
 
   private async launchCandidate(candidate: LaunchCandidate, port: number): Promise<SidecarStatus> {
+    // TR-077: every sidecar launch gets a fresh per-instance token; the child
+    // enforces it and every HTTP client we own presents it.
+    this.instanceToken = randomUUID();
+    this.client.setInstanceToken(this.instanceToken);
+
     this.outputChannel.appendLine(
       `[sidecar] starting (${candidate.label}): ${candidate.command} ${candidate.args.join(' ')}`,
     );
@@ -395,6 +407,7 @@ export class SidecarProcessManager implements vscode.Disposable {
         TRAINER_HOST: SIDECAR_DEFAULTS.host,
         PYTHONUNBUFFERED: '1',
         TRAINER_PORT: String(port),
+        TRAINER_SIDECAR_TOKEN: this.instanceToken ?? '',
         TRAINER_DATA_DIR: this.resolveSidecarDataDirectory(),
         TRAINER_ENABLE_NETWORK_FETCH: vscode.workspace
           .getConfiguration('trainer')
