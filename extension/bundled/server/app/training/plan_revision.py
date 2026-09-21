@@ -1,6 +1,4 @@
 
-from __future__ import annotations
-
 """
 Phase-D: plan proposal versioning with optimistic locking (design §9).
 
@@ -14,6 +12,7 @@ Only confirmed proposals mutate the live plan; drafts live in a separate
 table and are never merged into the learning_plan silently.
 """
 
+from __future__ import annotations
 
 import json
 import sqlite3

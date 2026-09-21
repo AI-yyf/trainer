@@ -1,6 +1,4 @@
 
-from __future__ import annotations
-
 """
 Phase-D: evidence → skill projection (design §10/§11).
 
@@ -18,6 +16,7 @@ Skill dimensions follow the design:
 Skill state ladder: not_verified → assisted → independent → repeat_verified → needs_review
 """
 
+from __future__ import annotations
 
 from typing import Any
 

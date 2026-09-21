@@ -219,6 +219,7 @@ class AttemptStore:
         self,
         *,
         attempt_id: str,
+        caller_workspace_id: str | None = None,
         artifact_hash: str,
         result: str,
         runner_version: str = "trainer-sidecar",
@@ -233,6 +234,8 @@ class AttemptStore:
             return None
         workspace_id = attempt["workspace_id"]
         card_id = attempt["card_id"]
+        if caller_workspace_id is not None and caller_workspace_id != workspace_id:
+            return None
         now = utc_now()
         evidence_id = f"evidence-{uuid.uuid4().hex}"
 
@@ -247,6 +250,7 @@ class AttemptStore:
         payload = {
             "evidence_id": evidence_id,
             "attempt_id": attempt_id,
+            "workspace_id": workspace_id,
             "card_id": card_id,
             "artifact_hash": artifact_hash,
             "artifact_version": attempt.get("file_version", 1),
