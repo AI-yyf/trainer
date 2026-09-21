@@ -26,6 +26,26 @@ const workbenchDataModulePath = path.resolve(
 );
 const { createDefaultBootstrapData } = require(workbenchDataModulePath);
 
+async function flushDetachedSaveVerification() {
+  const { settleProviderSaveVerificationForTests } = require(providerWebviewCommandsModulePath);
+  await settleProviderSaveVerificationForTests();
+}
+
+function lastSaveOperationStatus(postedStatuses) {
+  const list = (postedStatuses || []).filter((entry) => entry && entry.type === 'operation/status');
+  return list[list.length - 1];
+}
+
+function captureSaveStatuses(context) {
+  const postedStatuses = [];
+  context.workbench.postMessage = async (message) => {
+    postedStatuses.push(message);
+    return true;
+  };
+  return postedStatuses;
+}
+
+
 function createContext() {
   const patches = [];
   const syncs = [];
@@ -649,6 +669,7 @@ test('saveProviderFromWebviewCommand keeps the model list ready but blocks coach
     },
   };
 
+  const postedStatuses = captureSaveStatuses(context);
   const result = await saveProviderFromWebviewCommand(context, {
     name: 'minimax-smoke',
     baseUrl: 'http://minimax-gateway.test/v1',
@@ -672,6 +693,7 @@ test('saveProviderFromWebviewCommand keeps the model list ready but blocks coach
     },
   });
 
+  await flushDetachedSaveVerification();
   assert.equal(result.ok, true);
   assert.equal(savedConfigs[0].model, 'MiniMax-M3');
   assert.equal(savedLastTests.length, 1);
@@ -681,9 +703,10 @@ test('saveProviderFromWebviewCommand keeps the model list ready but blocks coach
   assert.equal(savedLastTests[0].toolProbeStatus, 'unsupported');
   assert.deepEqual(requestOptions.get('/provider/models'), { timeoutMs: 90_000 });
   assert.deepEqual(requestOptions.get('/provider/test'), { timeoutMs: 90_000 });
-  assert.match(result.message ?? '', /Loaded 2 live models/i);
-  assert.match(result.message ?? '', /cannot coach with this connection yet/i);
-  assert.match(result.message ?? '', /question marks/i);
+  const savedMessage = lastSaveOperationStatus(postedStatuses)?.payload.message ?? '';
+  assert.match(savedMessage, /Loaded 2 live models/i);
+  assert.match(savedMessage, /cannot coach with this connection yet/i);
+  assert.match(savedMessage, /question marks/i);
   assert.equal(syncs.length, 2);
   assert.equal(patches[1].providerConfig.modelListStatus, 'ready');
   assert.equal(patches[1].providerConfig.lastTestResult.status, 'language_corruption');
@@ -820,6 +843,7 @@ test('saveProviderFromWebviewCommand keeps the model list ready when zh-CN integ
     },
   };
 
+  const postedStatuses = captureSaveStatuses(context);
   const result = await saveProviderFromWebviewCommand(context, {
     name: 'minimax-smoke',
     baseUrl: 'http://minimax-gateway.test/v1',
@@ -843,14 +867,16 @@ test('saveProviderFromWebviewCommand keeps the model list ready when zh-CN integ
     },
   });
 
+  await flushDetachedSaveVerification();
   assert.equal(result.ok, true);
   assert.equal(savedConfigs[0].model, 'MiniMax-M3');
   assert.equal(savedLastTests.length, 1);
   assert.equal(savedLastTests[0].status, 'language_probe_inconclusive');
   assert.equal(savedLastTests[0].errorCategory, 'language_probe_inconclusive');
-  assert.match(result.message ?? '', /Loaded 2 live models/i);
-  assert.match(result.message ?? '', /zh-cn integrity still needs verification/i);
-  assert.doesNotMatch(result.message ?? '', /cannot coach with this connection yet/i);
+  const savedMessage = lastSaveOperationStatus(postedStatuses)?.payload.message ?? '';
+  assert.match(savedMessage, /Loaded 2 live models/i);
+  assert.match(savedMessage, /zh-cn integrity still needs verification/i);
+  assert.doesNotMatch(savedMessage, /cannot coach with this connection yet/i);
   assert.equal(syncs.length, 2);
   assert.equal(patches[1].providerConfig.modelListStatus, 'ready');
   assert.equal(patches[1].providerConfig.lastTestResult.status, 'language_probe_inconclusive');
@@ -1073,6 +1099,7 @@ test('saveProviderFromWebviewCommand tests the saved model when live discovery i
     },
   };
 
+  const postedStatuses = captureSaveStatuses(context);
   const result = await saveProviderFromWebviewCommand(context, {
     name: 'minimax-compatible',
     protocol: 'anthropic_messages',
@@ -1082,6 +1109,7 @@ test('saveProviderFromWebviewCommand tests the saved model when live discovery i
     replaceApiKey: true,
     responseLanguage: 'zh-CN',
   });
+  await flushDetachedSaveVerification();
 
   assert.equal(result.ok, true);
   assert.equal(savedLastTests.length, 1);
@@ -1093,7 +1121,10 @@ test('saveProviderFromWebviewCommand tests the saved model when live discovery i
   assert.equal(patches[1].providerConfig.lastTestResult.responseLanguage, 'zh-CN');
   // The test explicitly requests zh-CN, so the no-list success copy comes back
   // localized; match either language to pin the branch, not the wording.
-  assert.match(result.message ?? '', /current model is connected and ready|当前模型已连通可用/);
+  assert.match(
+    lastSaveOperationStatus(postedStatuses)?.payload.message ?? '',
+    /current model is connected and ready|当前模型已连通可用/,
+  );
   assert.doesNotMatch(JSON.stringify(patches), /test-only-key/);
 });
 
@@ -3479,6 +3510,7 @@ test('saveProviderFromWebviewCommand never sends a newly saved key from an untru
   let savedApiKey;
   let sidecarStarts = 0;
   let requests = 0;
+  const postedStatuses = [];
   const bootstrap = createDefaultBootstrapData(
     {
       trusted: false,
@@ -3550,6 +3582,10 @@ test('saveProviderFromWebviewCommand never sends a newly saved key from an untru
       async syncState() {
         return undefined;
       },
+      async postMessage(message) {
+        postedStatuses.push(message);
+        return true;
+      },
     },
   };
 
@@ -3565,9 +3601,15 @@ test('saveProviderFromWebviewCommand never sends a newly saved key from an untru
   assert.equal(result.ok, true);
   assert.equal(savedApiKey, 'sk-local-only');
   assert.match(currentConfig.apiKeyRef, /^trainer\.provider\.[0-9a-f-]{36}$/i);
+  await flushDetachedSaveVerification();
   assert.equal(sidecarStarts, 0);
   assert.equal(requests, 0);
-  assert.match(result.message ?? '', /workspace trust/i);
+  // The trust outcome rides the background operation/status post, not the
+  // synchronous save result.
+  assert.match(
+    lastSaveOperationStatus(postedStatuses)?.payload.message ?? result.message ?? '',
+    /workspace trust/i,
+  );
 });
 
 test('saveProviderFromWebviewCommand adopts a live model when the save names none (CC-Switch flow)', async () => {
@@ -3609,16 +3651,21 @@ test('saveProviderFromWebviewCommand adopts a live model when the save names non
   };
 
   // No `model` in the payload: the fresh relay paste flow.
+  const postedStatuses = captureSaveStatuses(context);
   const result = await saveProviderFromWebviewCommand(context, {
     name: 'Relay',
     baseUrl: 'http://minimax.relay.example.test',
     protocol: 'openai_chat_completions_compatible',
   });
+  await flushDetachedSaveVerification();
 
   assert.equal(result.ok, true);
   const lastSaved = savedConfigs[savedConfigs.length - 1];
   assert.equal(lastSaved.model, 'MiniMax-M2.7-highspeed');
-  assert.match(result.message, /MiniMax-M2\.7-highspeed/);
+  assert.match(
+    lastSaveOperationStatus(postedStatuses)?.payload.message ?? '',
+    /MiniMax-M2\.7-highspeed/,
+  );
 });
 
 function createThinkingTestContext(existingConfig) {

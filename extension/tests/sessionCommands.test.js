@@ -34,6 +34,11 @@ const providerWebviewCommandsModulePath = path.resolve(
   'providerWebviewCommands.js',
 );
 
+async function flushDetachedProviderSaveVerification() {
+  const { settleProviderSaveVerificationForTests } = require(providerWebviewCommandsModulePath);
+  await settleProviderSaveVerificationForTests();
+}
+
 function createStreamingState(overrides = {}) {
   return {
     isStreaming: false,
@@ -998,6 +1003,7 @@ test('saveProviderFromWebviewCommand syncs runtime preferences into sidecar memo
       allowBackgroundResearch: false,
     },
   });
+  await flushDetachedProviderSaveVerification();
 
   assert.equal(result.ok, true);
   // Provider save command fetches models and patches workbench; runtimePreferences
@@ -1121,6 +1127,7 @@ test('saveProviderFromWebviewCommand defaults remote workspaces to workspace_sec
       streaming: true,
     },
   });
+  await flushDetachedProviderSaveVerification();
 
   assert.equal(result.ok, true);
   assert.equal(savedConfigs[0].credentialMode, 'workspace_secret');
@@ -1259,6 +1266,7 @@ test('saveProviderFromWebviewCommand keeps workspace_secret keys in SecretStorag
       streaming: true,
     },
   });
+  await flushDetachedProviderSaveVerification();
 
   assert.equal(result.ok, true);
   assert.equal(savedConfigs[0].credentialMode, 'workspace_secret');

@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { SIDECAR_DEFAULTS, STORAGE_KEYS } from './constants';
+import { recordSidecarStart } from './runtimeMetrics';
 import { SidecarHttpClient } from './httpClient';
 import type { ManagedDataFolderView, SidecarStatus } from './types';
 
@@ -333,6 +334,9 @@ export class SidecarProcessManager implements vscode.Disposable {
   }
 
   private async start(): Promise<SidecarStatus> {
+    // Phase-A metric: engine process starts must stay at zero during pure UI
+    // activity (visibility toggles, view switches, state syncs).
+    recordSidecarStart();
     const port = await this.resolveLaunchPort();
     const candidates = this.buildLaunchCandidates(port);
     if (candidates.length === 0) {

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { getRuntimeWorkspaceContext } from '../commands/workspaceContext';
+import { recordRuntimeRehydration } from './runtimeMetrics';
 import type { CommandContext } from './commandContext';
 import type { SidecarStatus } from './types';
 import { flushPendingTransferPromotionScope } from './transferPromotionScope';
@@ -441,6 +442,9 @@ export async function rehydrateWorkbenchRuntime(
   const workspaceIdAtStart = requestedWorkspaceId;
 
   const rehydration = (async (): Promise<SidecarStatus> => {
+    // Phase-A metric: rehydrations belong to activation, workspace changes,
+    // and engine-ready transitions — never to plain visibility changes.
+    recordRuntimeRehydration();
     let status = context.sidecarManager.getStatus();
     const runtimeWorkspace = getRuntimeWorkspaceContext(context);
     await context.sidecarManager.setManagedDataRootScope?.({

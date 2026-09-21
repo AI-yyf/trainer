@@ -9,6 +9,12 @@ import type {
   TrainerWebviewMessage,
 } from './types';
 import { sanitizeErrorSurfaceJson, sanitizeErrorSurfaceText } from '../../../shared/src/errorSurfaceSanitizer';
+import {
+  formatRuntimeMetrics,
+  recordWebviewSync,
+  recordWebviewVisibilityShow,
+  snapshotRuntimeMetrics,
+} from './runtimeMetrics';
 import { toBootstrapPayload, toHostBootstrapMessage, toHostPatchMessage, toOperationStatus } from './workbenchData';
 
 const RESOURCE_OPERATION_REQUEST_ID_KEY = '__trainerResourceOperationId';
@@ -218,7 +224,12 @@ export class WorkbenchSidebarController
 
       webviewView.onDidChangeVisibility(() => {
         if (webviewView.visible) {
-          this.outputChannel.appendLine('[webview] visible -> rehydrating state');
+          // Phase-A metric: a show must never fan out into provider, catalog,
+          // or engine work. The counters make regressions measurable.
+          recordWebviewVisibilityShow();
+          this.outputChannel.appendLine(
+            `[webview] visible -> rehydrating state ${formatRuntimeMetrics(snapshotRuntimeMetrics())}`,
+          );
           void this.rehydrateVisibleView(webviewView, 'visibility');
           return;
         }
@@ -312,7 +323,9 @@ export class WorkbenchSidebarController
       // Fresh webview (new html) or explicit repair request: deliver the
       // complete payload.
       this.lastSyncedPayload = next;
-      await this.postMessage(toHostPatchMessage(this.getState()));
+      const payload = toHostPatchMessage(this.getState());
+      recordWebviewSync({ full: true, bytes: JSON.stringify(payload).length });
+      await this.postMessage(payload);
       return;
     }
 
@@ -321,7 +334,9 @@ export class WorkbenchSidebarController
       partial[key] = next[key];
       this.lastSyncedPayload = { ...this.lastSyncedPayload, [key]: next[key] };
     }
-    await this.postMessage({ type: 'state/patch', payload: partial });
+    const message = { type: 'state/patch', payload: partial };
+    recordWebviewSync({ full: false, bytes: JSON.stringify(message).length });
+    await this.postMessage(message);
   }
 
   private resetSyncedPayload(): void {

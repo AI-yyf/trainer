@@ -13,6 +13,7 @@ import type {
   ProviderLastTestResult,
 } from '../core/types';
 import { defaultProviderCredentialMode, normalizeProviderRequestDefaults } from '../core/providerDefaults';
+import { recordModelCatalogRequest, recordProviderHttpRequest } from '../core/runtimeMetrics';
 import { toOperationStatus } from '../core/workbenchData';
 import { resolveProviderApiKeyRef } from '../provider/providerConfigStore';
 import { applyDerivedHostState } from '../core/workbenchData';
@@ -498,18 +499,23 @@ async function verifyProviderAfterSave(
     };
   }
   let lastTestResult: ProviderLastTestResult;
+  // Phase-A metric: a real upstream verification attempt (the sidecar will
+  // contact the provider endpoint). Pure UI activity must keep this at 0.
+  let verifyStartedAt = 0;
   try {
     const status = await context.sidecarManager.ensureRunning();
     if (status.lifecycle !== 'ready' || !status.port) {
       throw new Error('sidecar unavailable');
     }
 
+    verifyStartedAt = Date.now();
     const response = await context.sidecarClient.postJson<ProviderTestResponse>(
       status.port,
       '/provider/test',
       providerModelsRequestBody(context, config, apiKey, responseLanguage),
       { timeoutMs: SIDECAR_DEFAULTS.providerRequestTimeoutMs },
     );
+    recordProviderHttpRequest(Date.now() - verifyStartedAt);
     const capabilityTruth = normalizeProviderCapabilityTruth(response);
     lastTestResult = {
       ok: Boolean(response.ok),
@@ -543,6 +549,7 @@ async function verifyProviderAfterSave(
       thinkingProbeStatus: capabilityTruth.thinkingProbeStatus,
     };
   } catch {
+    recordProviderHttpRequest(Date.now() - verifyStartedAt);
     lastTestResult = {
       ok: false,
       status: 'sidecar_unavailable',
@@ -879,7 +886,7 @@ export async function saveProviderFromWebviewCommand(
   // discovery and the verification request are explicit network operations —
   // they complete in the background and report through operation/status with
   // a structured providerTest outcome, so "save" never waits on the network.
-  void finalizeSavedProviderConnection(context, {
+  const verification = finalizeSavedProviderConnection(context, {
     savedConfig,
     existing,
     apiKey,
@@ -889,16 +896,36 @@ export async function saveProviderFromWebviewCommand(
     responseLanguage,
   }).catch((error) => {
     const detail = error instanceof Error ? error.stack ?? error.message : String(error);
-    context.outputChannel.appendLine(
+    context.outputChannel?.appendLine(
       `[provider] background connection verification failed: ${detail}`,
     );
   });
+  trackSaveVerificationForTests(verification);
 
   return {
     ok: true,
     message,
     data: savedConfig,
   };
+}
+
+const inflightSaveVerifications = new Set<Promise<void>>();
+
+function trackSaveVerificationForTests(promise: Promise<void>): void {
+  inflightSaveVerifications.add(promise);
+  void promise.finally(() => {
+    inflightSaveVerifications.delete(promise);
+  });
+}
+
+/**
+ * Test hook: resolves once every detached save verification has settled, so
+ * behavior tests can assert on background outcomes deterministically.
+ */
+export async function settleProviderSaveVerificationForTests(): Promise<void> {
+  for (let guard = 0; guard < 50 && inflightSaveVerifications.size > 0; guard += 1) {
+    await Promise.allSettled([...inflightSaveVerifications]);
+  }
 }
 
 async function finalizeSavedProviderConnection(
@@ -1087,6 +1114,9 @@ async function finalizeSavedProviderConnection(
   // The save itself already succeeded; the verification outcome rides on the
   // structured providerTest field so "saved but not verified" never reads as
   // a failed save. Tone stays success for exactly that reason.
+  if (typeof context.workbench.postMessage !== 'function') {
+    return;
+  }
   await context.workbench.postMessage(
     toOperationStatus(true, message, {
       ...(finalLastTestResult
@@ -1678,13 +1708,18 @@ export async function fetchProviderModels(
 
   const lookupPromise = (async (): Promise<ProviderModelLookupResult> => {
     const fetchedAt = new Date().toISOString();
+    // Phase-A metric: a catalog request is metadata traffic — visibility
+    // and restore paths must keep this counter at zero.
+    let catalogRequestStartedAt = 0;
     try {
+      catalogRequestStartedAt = Date.now();
       const response = await context.sidecarClient.postJson<ProviderModelsResponse>(
         port,
         '/provider/models',
         providerModelsRequestBody(context, config, apiKey, options?.responseLanguage),
         { timeoutMs: SIDECAR_DEFAULTS.providerRequestTimeoutMs },
       );
+      recordModelCatalogRequest(Date.now() - catalogRequestStartedAt);
 
       const availableModels = Array.isArray(response.available_models) ? response.available_models : [];
       const resolvedModel =
@@ -1740,6 +1775,7 @@ export async function fetchProviderModels(
         expiresAt: savedCache.expiresAt,
       };
     } catch {
+      recordModelCatalogRequest(Date.now() - catalogRequestStartedAt);
       if (options?.transient) {
         return {
           ok: false,
