@@ -1022,7 +1022,7 @@ const trainingFilePracticeCopy: Record<
     submitBlocker: "Submit the current training blocker",
   },
   "es-ES": {
-    resultPlaceholder: "Registra el resultado o la evidencia.",
+    resultPlaceholder: "Primero logra el resultado más pequeño y registra qué verificaste.",
     blockerPlaceholder: "Indica el blocker, la comprobación que falló y el siguiente paso más pequeño.",
     verifyCurrentFile: "Verificar archivo actual",
     submitTry: "Enviar la nota de práctica actual",
@@ -13425,61 +13425,34 @@ export function App() {
     trainingComposerReturnMode &&
     trainingHandoffReturnRequired &&
     Boolean(activeTrainingCardId);
-  // Compact single-card action surface (Phase-C training slice): the card
-  // carries its own step-start and file-verification affordances.
-  const trainingStartStepLabel =
-    layout.composerLanguage === "zh-CN" ? "开始这一步" : "Start this step";
-  const trainingVerifyFileLabel =
-    layout.composerLanguage === "zh-CN" ? "验证当前文件" : "Verify current file";
-  const trainingCardReadyToStart = hasTrainingCard;
+  // Compact single-card action surface (Phase-C training slice): the Start/
+  // Verify buttons are rendered inside TrainingWorkbenchView from the
+  // eight-language surface labels; the card reports status transitions and
+  // verification requests through the handler below.
+  const handleVerifyCurrentFileFromCard = () => {
+    if (isBrowserPreview) {
+      setTrainingVerifyNotice(
+        layout.composerLanguage === "zh-CN"
+          ? "预览不能验证当前文件；真实工作区中将运行验证。"
+          : "Previews cannot verify the current file; verification runs in a real workspace.",
+      );
+      return;
+    }
+    setTrainingVerifyNotice(
+      layout.composerLanguage === "zh-CN"
+        ? "已提交当前文件验证，等待结果。"
+        : "Verification submitted; waiting for the result.",
+    );
+    postMessage({
+      type: "command/execute",
+      payload: { commandId: trainerCommands.evaluateCurrentFile },
+    });
+  };
   const trainingVerifyFileVisible =
-    hasTrainingCard &&
-    trainingCardType === "practice" &&
-    effectiveTrainingSubmode !== "learn-primer";
-  const trainingPrimaryAction = !hasTrainingCard ? undefined : (
-    <div
-      className="training-current__actions training-current__actions--primary"
-      role="group"
-      aria-label={layout.composerLanguage === "zh-CN" ? "训练操作" : "Training actions"}
-    >
-      {trainingCardReadyToStart ? (
-        <button
-          className="button button--accent"
-          type="button"
-          onClick={() => {
-            if (!activeTrainingCardId) {
-              return;
-            }
-            if (
-              effectiveSelectedTrainingCardStatus === "needs_primer" ||
-              effectiveSelectedTrainingCardStatus === "candidate" ||
-              !effectiveSelectedTrainingCardStatus
-            ) {
-              handleTrainingCardStatusTransition(activeTrainingCardId, "active", "start_step");
-            }
-          }}
-        >
-          {trainingStartStepLabel}
-        </button>
-      ) : null}
-      {trainingVerifyFileVisible ? (
-        <button
-          className="button button--ghost"
-          type="button"
-          onClick={() =>
-            postMessage({
-              type: "command/execute",
-              payload: { commandId: trainerCommands.evaluateCurrentFile },
-            })
-          }
-        >
-          {trainingVerifyFileLabel}
-        </button>
-      ) : null}
-    </div>
-  );
+    hasTrainingCard && trainingCardType === "practice" && effectiveTrainingSubmode !== "learn-primer";
+  const trainingPrimaryAction = !hasTrainingCard ? undefined : undefined;
+
   const showComposerTrainingVerify =
-    !trainingVerifyFileVisible &&
     activeView === "training" &&
     Boolean(hasTrainingCard) &&
     !leftoverTrainingHandoffChromeNotLive &&
@@ -13768,6 +13741,7 @@ export function App() {
           cardId={activeTrainingCardId}
           selectedCardStatus={effectiveSelectedTrainingCardStatus}
           onCardStatusTransition={leftoverTrainingHandoffChromeNotLive ? undefined : handleTrainingCardStatusTransition}
+          onVerifyCurrentFile={handleVerifyCurrentFileFromCard}
           title={title}
           currentStep={currentStep}
           learningFamily={trainingLearningFamily}
@@ -15370,7 +15344,7 @@ export function App() {
                         },
                       },
                     ]),
-                ...(showComposerTrainingVerify
+                ...(showComposerTrainingVerify && !trainingVerifyFileVisible
                   ? [
                       {
                         id: "composer-verify-file",

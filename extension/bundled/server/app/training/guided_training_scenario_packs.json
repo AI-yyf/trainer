@@ -4,8 +4,16 @@
       "id": "remote_workspace",
       "previewScenario": "training-remote",
       "sourceChain": {
-        "zh-CN": ["远程工作区元数据", "凭据模式策略", "当前工作区路径"],
-        "en-US": ["Remote workspace metadata", "Credential-mode policy", "Current workspace path"]
+        "zh-CN": [
+          "远程工作区元数据",
+          "凭据模式策略",
+          "当前工作区路径"
+        ],
+        "en-US": [
+          "Remote workspace metadata",
+          "Credential-mode policy",
+          "Current workspace path"
+        ]
       },
       "currentFocus": {
         "zh-CN": "远程工作区边界",
@@ -304,8 +312,16 @@
       "id": "debug_loop",
       "previewScenario": "training-debug",
       "sourceChain": {
-        "zh-CN": ["最小复现", "断点边界", "验证过的异常状态"],
-        "en-US": ["Minimal repro", "Breakpoint boundary", "Verified bad state"]
+        "zh-CN": [
+          "最小复现",
+          "断点边界",
+          "验证过的异常状态"
+        ],
+        "en-US": [
+          "Minimal repro",
+          "Breakpoint boundary",
+          "Verified bad state"
+        ]
       },
       "currentFocus": {
         "zh-CN": "最小调试闭环",
@@ -604,8 +620,16 @@
       "id": "function_guidance",
       "previewScenario": "training-function",
       "sourceChain": {
-        "zh-CN": ["悬停信息", "签名提示", "定义与真实调用点"],
-        "en-US": ["Hover summary", "Signature help", "Definition and real call site"]
+        "zh-CN": [
+          "悬停信息",
+          "签名提示",
+          "定义与真实调用点"
+        ],
+        "en-US": [
+          "Hover summary",
+          "Signature help",
+          "Definition and real call site"
+        ]
       },
       "currentFocus": {
         "zh-CN": "函数契约恢复",
@@ -636,7 +660,7 @@
         "type": "practice",
         "title": {
           "zh-CN": "看清这个函数接收什么、返回什么",
-          "en-US": "See what this function takes and returns"
+          "en-US": "Recover a function contract with editor guidance"
         },
         "whyNow": {
           "zh-CN": "如果函数契约仍靠猜，后面的实现和重构就都不稳。",
@@ -906,8 +930,16 @@
       "id": "resource_knowledge",
       "previewScenario": "training-resource",
       "sourceChain": {
-        "zh-CN": ["已索引资料标识", "资料可信状态", "知识焦点"],
-        "en-US": ["Indexed resource identifier", "Resource trust state", "Knowledge focus"]
+        "zh-CN": [
+          "已索引资料标识",
+          "资料可信状态",
+          "知识焦点"
+        ],
+        "en-US": [
+          "Indexed resource identifier",
+          "Resource trust state",
+          "Knowledge focus"
+        ]
       },
       "currentFocus": {
         "zh-CN": "资源到可信知识",
@@ -964,44 +996,94 @@
           "zh-CN": "先确认资料可信，再定位一个概念、规则或示例，并把它压缩成可核对的知识原子。",
           "en-US": "Confirm the resource is trusted, then locate one concept, rule, or example and compress it into a checkable knowledge atom."
         },
-        "apiHints": ["resource search", "resource preview", "source trust metadata"],
+        "apiHints": [
+          "resource search",
+          "resource preview",
+          "source trust metadata"
+        ],
         "constraints": {
-          "zh-CN": ["不要把目录示例当作真实资料。", "不要从未确认可信度的资料中记忆结论。"],
-          "en-US": ["Do not treat catalog examples as real resources.", "Do not memorize conclusions from an untrusted resource."]
+          "zh-CN": [
+            "不要把目录示例当作真实资料。",
+            "不要从未确认可信度的资料中记忆结论。"
+          ],
+          "en-US": [
+            "Do not treat catalog examples as real resources.",
+            "Do not memorize conclusions from an untrusted resource."
+          ]
         },
         "deliverable": {
           "zh-CN": "一个带资料标识和可信状态的知识原子，以及一张下一步卡片。",
           "en-US": "One knowledge atom with its resource identifier and trust state, plus one next card."
         },
         "selfCheck": {
-          "zh-CN": ["你能指出知识原子来自哪份资料吗？", "你确认过资料的可信状态吗？"],
-          "en-US": ["Can you point to the resource that produced the knowledge atom?", "Did you confirm the resource's trust state?"]
+          "zh-CN": [
+            "你能指出知识原子来自哪份资料吗？",
+            "你确认过资料的可信状态吗？"
+          ],
+          "en-US": [
+            "Can you point to the resource that produced the knowledge atom?",
+            "Did you confirm the resource's trust state?"
+          ]
         },
         "validationMethod": {
           "zh-CN": "核对资料标识、可信状态和被提取的概念是否仍然一致。",
           "en-US": "Check that the resource identifier, trust state, and extracted concept still agree."
         },
         "learnerDeliverables": {
-          "zh-CN": ["一个知识原子。", "资料来源和可信状态。", "一张应当跟进的卡片。"],
-          "en-US": ["One knowledge atom.", "The resource provenance and trust state.", "One card that should follow it."]
+          "zh-CN": [
+            "一个知识原子。",
+            "资料来源和可信状态。",
+            "一张应当跟进的卡片。"
+          ],
+          "en-US": [
+            "One knowledge atom.",
+            "The resource provenance and trust state.",
+            "One card that should follow it."
+          ]
         },
         "verificationSteps": {
-          "zh-CN": ["确认资料已索引且可信。", "指出知识原子的准确概念或规则。", "说明下一张卡为什么由它产生。"],
-          "en-US": ["Confirm that the resource is indexed and trusted.", "Name the knowledge atom's exact concept or rule.", "Explain why it creates the next card."]
+          "zh-CN": [
+            "确认资料已索引且可信。",
+            "指出知识原子的准确概念或规则。",
+            "说明下一张卡为什么由它产生。"
+          ],
+          "en-US": [
+            "Confirm that the resource is indexed and trusted.",
+            "Name the knowledge atom's exact concept or rule.",
+            "Explain why it creates the next card."
+          ]
         },
         "successSignal": {
           "zh-CN": "你能从可信资料中提取一个可追溯知识点，而不是只给出泛化摘要。",
           "en-US": "You can extract one traceable knowledge point from a trusted resource instead of giving a generic summary."
         },
-        "expectedSymbols": ["resource ID", "trust state", "knowledge atom"],
+        "expectedSymbols": [
+          "resource ID",
+          "trust state",
+          "knowledge atom"
+        ],
         "filesToTouch": [],
         "hintLadder": {
-          "zh-CN": ["先确认资料可信。", "再找一个可独立表达的概念或规则。", "最后说明它应当触发哪张下一步卡。"],
-          "en-US": ["Confirm the resource is trusted first.", "Then find one independently expressible concept or rule.", "Finally name the next card it should trigger."]
+          "zh-CN": [
+            "先确认资料可信。",
+            "再找一个可独立表达的概念或规则。",
+            "最后说明它应当触发哪张下一步卡。"
+          ],
+          "en-US": [
+            "Confirm the resource is trusted first.",
+            "Then find one independently expressible concept or rule.",
+            "Finally name the next card it should trigger."
+          ]
         },
         "commonMistakes": {
-          "zh-CN": ["只总结资料标题，不提取知识点。", "忽略资料过期或不可信状态。"],
-          "en-US": ["Summarizing only the resource title instead of extracting a knowledge point.", "Ignoring that the resource is stale or untrusted."]
+          "zh-CN": [
+            "只总结资料标题，不提取知识点。",
+            "忽略资料过期或不可信状态。"
+          ],
+          "en-US": [
+            "Summarizing only the resource title instead of extracting a knowledge point.",
+            "Ignoring that the resource is stale or untrusted."
+          ]
         },
         "stuckRecovery": {
           "zh-CN": "先只确认资料标识和可信状态，再回到一个最小概念。",
@@ -1047,36 +1129,75 @@
           "zh-CN": "先说资料标识和可信状态，再说核心概念和下一张卡。",
           "en-US": "Name the resource identifier and trust state before the core concept and next card."
         },
-        "apiHints": ["resource ID", "trust state", "knowledge atom"],
+        "apiHints": [
+          "resource ID",
+          "trust state",
+          "knowledge atom"
+        ],
         "constraints": {
-          "zh-CN": ["回答必须包含来源，不要只说概念定义。"],
-          "en-US": ["Include provenance in the answer, not only a concept definition."]
+          "zh-CN": [
+            "回答必须包含来源，不要只说概念定义。"
+          ],
+          "en-US": [
+            "Include provenance in the answer, not only a concept definition."
+          ]
         },
         "validationMethod": {
           "zh-CN": "用资料标识、可信状态、概念和下一张卡的四段结构核对答案。",
           "en-US": "Check the answer against resource identifier, trust state, concept, and next card."
         },
         "learnerDeliverables": {
-          "zh-CN": ["资料标识。", "可信状态。", "核心概念和下一张卡。"],
-          "en-US": ["The resource identifier.", "Its trust state.", "The core concept and next card."]
+          "zh-CN": [
+            "资料标识。",
+            "可信状态。",
+            "核心概念和下一张卡。"
+          ],
+          "en-US": [
+            "The resource identifier.",
+            "Its trust state.",
+            "The core concept and next card."
+          ]
         },
         "verificationSteps": {
-          "zh-CN": ["先说来源。", "再说明可信状态。", "最后说明概念与后续卡。"],
-          "en-US": ["State provenance first.", "Then state trust.", "Finish with the concept and follow-up card."]
+          "zh-CN": [
+            "先说来源。",
+            "再说明可信状态。",
+            "最后说明概念与后续卡。"
+          ],
+          "en-US": [
+            "State provenance first.",
+            "Then state trust.",
+            "Finish with the concept and follow-up card."
+          ]
         },
         "successSignal": {
           "zh-CN": "你能解释来源、可信状态和概念之间的关系。",
           "en-US": "You can connect provenance, trust state, and concept."
         },
-        "expectedSymbols": ["resource ID", "trust state"],
+        "expectedSymbols": [
+          "resource ID",
+          "trust state"
+        ],
         "filesToTouch": [],
         "hintLadder": {
-          "zh-CN": ["不要跳过资料标识。", "再确认可信状态。", "最后命名概念和下一张卡。"],
-          "en-US": ["Do not skip the resource identifier.", "Confirm the trust state next.", "Then name the concept and next card."]
+          "zh-CN": [
+            "不要跳过资料标识。",
+            "再确认可信状态。",
+            "最后命名概念和下一张卡。"
+          ],
+          "en-US": [
+            "Do not skip the resource identifier.",
+            "Confirm the trust state next.",
+            "Then name the concept and next card."
+          ]
         },
         "commonMistakes": {
-          "zh-CN": ["把来源不明的摘要当作知识。"],
-          "en-US": ["Treating a summary with unknown provenance as knowledge."]
+          "zh-CN": [
+            "把来源不明的摘要当作知识。"
+          ],
+          "en-US": [
+            "Treating a summary with unknown provenance as knowledge."
+          ]
         },
         "stuckRecovery": {
           "zh-CN": "回到资料标识，再补上可信状态。",
@@ -1126,8 +1247,16 @@
       "id": "dependency_mastery",
       "previewScenario": "training-dependency",
       "sourceChain": {
-        "zh-CN": ["依赖或 API 名称", "真实使用上下文", "验证目标"],
-        "en-US": ["Dependency or API name", "Real usage context", "Verification target"]
+        "zh-CN": [
+          "依赖或 API 名称",
+          "真实使用上下文",
+          "验证目标"
+        ],
+        "en-US": [
+          "Dependency or API name",
+          "Real usage context",
+          "Verification target"
+        ]
       },
       "currentFocus": {
         "zh-CN": "依赖与 API 掌握",
@@ -1184,44 +1313,96 @@
           "zh-CN": "将练习限制为一次 API 调用和一次可重复检查。",
           "en-US": "Keep the exercise to one API call and one repeatable check."
         },
-        "apiHints": ["dependency documentation", "real call site", "focused assertion or output"],
+        "apiHints": [
+          "dependency documentation",
+          "real call site",
+          "focused assertion or output"
+        ],
         "constraints": {
-          "zh-CN": ["不要把文档示例当作当前项目事实。", "不要在没有验证输出前声明掌握。"],
-          "en-US": ["Do not treat a documentation example as a current-project fact.", "Do not claim mastery before an output is verified."]
+          "zh-CN": [
+            "不要把文档示例当作当前项目事实。",
+            "不要在没有验证输出前声明掌握。"
+          ],
+          "en-US": [
+            "Do not treat a documentation example as a current-project fact.",
+            "Do not claim mastery before an output is verified."
+          ]
         },
         "deliverable": {
           "zh-CN": "一个已验证输出和一条安全使用规则。",
           "en-US": "One verified output and one safe usage rule."
         },
         "selfCheck": {
-          "zh-CN": ["你实际调用了哪个能力？", "哪个输出或断言证明了它？", "你检查了哪个边缘条件？"],
-          "en-US": ["Which capability did you actually call?", "Which output or assertion proved it?", "Which sharp edge did you check?"]
+          "zh-CN": [
+            "你实际调用了哪个能力？",
+            "哪个输出或断言证明了它？",
+            "你检查了哪个边缘条件？"
+          ],
+          "en-US": [
+            "Which capability did you actually call?",
+            "Which output or assertion proved it?",
+            "Which sharp edge did you check?"
+          ]
         },
         "validationMethod": {
           "zh-CN": "重新运行一次最小检查，并核对 API 输出或断言。",
           "en-US": "Repeat one minimal check and inspect the API output or assertion."
         },
         "learnerDeliverables": {
-          "zh-CN": ["一次真实 API 调用。", "一个已验证输出或断言。", "一条安全使用规则。"],
-          "en-US": ["One real API call.", "One verified output or assertion.", "One safe usage rule."]
+          "zh-CN": [
+            "一次真实 API 调用。",
+            "一个已验证输出或断言。",
+            "一条安全使用规则。"
+          ],
+          "en-US": [
+            "One real API call.",
+            "One verified output or assertion.",
+            "One safe usage rule."
+          ]
         },
         "verificationSteps": {
-          "zh-CN": ["确认当前上下文确实使用该依赖/API。", "运行最小调用并记录输出。", "检查一个可能误用的边缘条件。"],
-          "en-US": ["Confirm that the current context really uses the dependency/API.", "Run the smallest call and record its output.", "Check one sharp edge that could cause misuse."]
+          "zh-CN": [
+            "确认当前上下文确实使用该依赖/API。",
+            "运行最小调用并记录输出。",
+            "检查一个可能误用的边缘条件。"
+          ],
+          "en-US": [
+            "Confirm that the current context really uses the dependency/API.",
+            "Run the smallest call and record its output.",
+            "Check one sharp edge that could cause misuse."
+          ]
         },
         "successSignal": {
           "zh-CN": "你能用一个已验证输出说明 API 能力，而不是只重复定义。",
           "en-US": "You can explain the API capability with one verified output instead of only repeating a definition."
         },
-        "expectedSymbols": ["dependency/API", "verified output", "safe usage rule"],
+        "expectedSymbols": [
+          "dependency/API",
+          "verified output",
+          "safe usage rule"
+        ],
         "filesToTouch": [],
         "hintLadder": {
-          "zh-CN": ["先确定真实调用点。", "再缩小到一个 API 能力。", "最后记录一个输出和一个边缘条件。"],
-          "en-US": ["Locate the real call site first.", "Then shrink to one API capability.", "Finally record one output and one sharp edge."]
+          "zh-CN": [
+            "先确定真实调用点。",
+            "再缩小到一个 API 能力。",
+            "最后记录一个输出和一个边缘条件。"
+          ],
+          "en-US": [
+            "Locate the real call site first.",
+            "Then shrink to one API capability.",
+            "Finally record one output and one sharp edge."
+          ]
         },
         "commonMistakes": {
-          "zh-CN": ["只背 API 名称，不运行调用。", "忽略空值、超时、异常或版本边界。"],
-          "en-US": ["Memorizing an API name without running a call.", "Ignoring null, timeout, error, or version boundaries."]
+          "zh-CN": [
+            "只背 API 名称，不运行调用。",
+            "忽略空值、超时、异常或版本边界。"
+          ],
+          "en-US": [
+            "Memorizing an API name without running a call.",
+            "Ignoring null, timeout, error, or version boundaries."
+          ]
         },
         "stuckRecovery": {
           "zh-CN": "退回到一次最小调用和一个可观察输出。",
@@ -1267,36 +1448,76 @@
           "zh-CN": "先命名真实 API，再说明它的能力、边缘和规则。",
           "en-US": "Name the real API first, then state its capability, sharp edge, and rule."
         },
-        "apiHints": ["core capability", "sharp edge", "safe usage rule"],
+        "apiHints": [
+          "core capability",
+          "sharp edge",
+          "safe usage rule"
+        ],
         "constraints": {
-          "zh-CN": ["不要只给泛化定义，回答必须绑定真实 API。"],
-          "en-US": ["Do not give only a generic definition; bind the answer to a real API."]
+          "zh-CN": [
+            "不要只给泛化定义，回答必须绑定真实 API。"
+          ],
+          "en-US": [
+            "Do not give only a generic definition; bind the answer to a real API."
+          ]
         },
         "validationMethod": {
           "zh-CN": "将三段答案与真实调用点或文档中的验证输出核对。",
           "en-US": "Check the three-part answer against a real call site or verified documentation output."
         },
         "learnerDeliverables": {
-          "zh-CN": ["核心能力。", "一个边缘条件。", "一条安全规则。"],
-          "en-US": ["The core capability.", "One sharp edge.", "One safe rule."]
+          "zh-CN": [
+            "核心能力。",
+            "一个边缘条件。",
+            "一条安全规则。"
+          ],
+          "en-US": [
+            "The core capability.",
+            "One sharp edge.",
+            "One safe rule."
+          ]
         },
         "verificationSteps": {
-          "zh-CN": ["先命名依赖/API。", "说明一个输出证明的能力。", "补上一条安全规则。"],
-          "en-US": ["Name the dependency/API first.", "State one capability proven by an output.", "Add one safe usage rule."]
+          "zh-CN": [
+            "先命名依赖/API。",
+            "说明一个输出证明的能力。",
+            "补上一条安全规则。"
+          ],
+          "en-US": [
+            "Name the dependency/API first.",
+            "State one capability proven by an output.",
+            "Add one safe usage rule."
+          ]
         },
         "successSignal": {
           "zh-CN": "你能在真实上下文中说清 API 的能力、边缘和安全规则。",
           "en-US": "You can state the API's capability, sharp edge, and safe rule in real context."
         },
-        "expectedSymbols": ["dependency/API", "sharp edge", "safe usage rule"],
+        "expectedSymbols": [
+          "dependency/API",
+          "sharp edge",
+          "safe usage rule"
+        ],
         "filesToTouch": [],
         "hintLadder": {
-          "zh-CN": ["先说 API 的作用。", "再说最容易误用的边缘。", "最后说安全规则。"],
-          "en-US": ["State what the API does first.", "Then name the sharp edge most likely to cause misuse.", "Finish with the safe rule."]
+          "zh-CN": [
+            "先说 API 的作用。",
+            "再说最容易误用的边缘。",
+            "最后说安全规则。"
+          ],
+          "en-US": [
+            "State what the API does first.",
+            "Then name the sharp edge most likely to cause misuse.",
+            "Finish with the safe rule."
+          ]
         },
         "commonMistakes": {
-          "zh-CN": ["把一个 API 的能力套用到不兼容的上下文。"],
-          "en-US": ["Applying one API capability to an incompatible context."]
+          "zh-CN": [
+            "把一个 API 的能力套用到不兼容的上下文。"
+          ],
+          "en-US": [
+            "Applying one API capability to an incompatible context."
+          ]
         },
         "stuckRecovery": {
           "zh-CN": "回到一个真实调用点，再说出最小安全规则。",

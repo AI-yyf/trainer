@@ -11,6 +11,7 @@ import {
 } from "../../../../../shared/src/trainingReliabilityGovernance";
 import type { TrainingReliability } from "../../lib/types";
 import { CheckMarkIcon, ChevronRightIcon, SparklesIcon, TargetIcon } from "../icons";
+import { ActionButton } from "../common/ActionButton";
 import { CollapseSection } from "../common/CollapseSection";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type { ComposerLanguage, TrainingCardType } from "../../lib/types";
@@ -120,6 +121,8 @@ export interface TrainingWorkbenchViewProps {
   recentWins?: string[];
   weakSpots?: string[];
   primaryAction?: ReactNode;
+  /** Card-owned verification affordance (preview/workspace verify flow). */
+  onVerifyCurrentFile?: () => void;
   leftoverNote?: string;
   actions?: ReactNode;
   emptyState?: ReactNode;
@@ -529,7 +532,9 @@ type TrainingSurfaceLabelKey =
   | "currentTrainingCard"
   | "trainingLoop"
   | "codeSymbols"
-  | "checks";
+  | "checks"
+  | "startStep"
+  | "verifyCurrentFile";
 
 const trainingSurfaceLabels: Record<
   ComposerLanguage,
@@ -538,42 +543,42 @@ const trainingSurfaceLabels: Record<
   "zh-CN": {
     currentCard: "当前卡片", flash: "闪记", practice: "实战", primer: "学习", review: "复盘",
     scenario: "场景", transfer: "迁移", theory: "理论", code: "代码", requirements: "具体要求",
-    currentTrainingCard: "当前训练卡片", trainingLoop: "学习循环", codeSymbols: "将检查的代码符号", checks: "检查",
+    currentTrainingCard: "当前训练卡片", trainingLoop: "学习循环", codeSymbols: "将检查的代码符号", checks: "检查", startStep: "开始这一步", verifyCurrentFile: "验证当前文件",
   },
   "en-US": {
     currentCard: "Current card", flash: "Flash", practice: "Practice", primer: "Primer", review: "Review",
     scenario: "Scenario", transfer: "Transfer", theory: "Theory", code: "Code", requirements: "Requirements",
-    currentTrainingCard: "Current training card", trainingLoop: "Training loop", codeSymbols: "Code symbols to check", checks: "Checks",
+    currentTrainingCard: "Current training card", trainingLoop: "Training loop", codeSymbols: "Code symbols to check", checks: "Checks", startStep: "Start this step", verifyCurrentFile: "Verify current file",
   },
   "es-ES": {
     currentCard: "Tarjeta actual", flash: "Tarjeta", practice: "Práctica", primer: "Base", review: "Repaso",
     scenario: "Escenario", transfer: "Transferencia", theory: "Teoría", code: "Código", requirements: "Requisitos",
-    currentTrainingCard: "Tarjeta de entrenamiento actual", trainingLoop: "Ciclo de aprendizaje", codeSymbols: "Símbolos de código a comprobar", checks: "Comprobaciones",
+    currentTrainingCard: "Tarjeta de entrenamiento actual", trainingLoop: "Ciclo de aprendizaje", codeSymbols: "Símbolos de código a comprobar", checks: "Comprobaciones", startStep: "Comenzar este paso", verifyCurrentFile: "Verificar archivo actual",
   },
   "fr-FR": {
     currentCard: "Carte actuelle", flash: "Carte", practice: "Exercice", primer: "Base", review: "Révision",
     scenario: "Scénario", transfer: "Transfert", theory: "Théorie", code: "Code", requirements: "Exigences",
-    currentTrainingCard: "Carte d'entraînement actuelle", trainingLoop: "Boucle d'apprentissage", codeSymbols: "Symboles de code à vérifier", checks: "Vérifications",
+    currentTrainingCard: "Carte d'entraînement actuelle", trainingLoop: "Boucle d'apprentissage", codeSymbols: "Symboles de code à vérifier", checks: "Vérifications", startStep: "Commencer cette étape", verifyCurrentFile: "Vérifier le fichier actuel",
   },
   "de-DE": {
     currentCard: "Aktuelle Karte", flash: "Karte", practice: "Übung", primer: "Grundlage", review: "Wiederholung",
     scenario: "Szenario", transfer: "Transfer", theory: "Theorie", code: "Code", requirements: "Anforderungen",
-    currentTrainingCard: "Aktuelle Trainingskarte", trainingLoop: "Lernzyklus", codeSymbols: "Zu prüfende Codesymbole", checks: "Prüfungen",
+    currentTrainingCard: "Aktuelle Trainingskarte", trainingLoop: "Lernzyklus", codeSymbols: "Zu prüfende Codesymbole", checks: "Prüfungen", startStep: "Diesen Schritt starten", verifyCurrentFile: "Aktuelle Datei prüfen",
   },
   "ja-JP": {
     currentCard: "現在のカード", flash: "カード", practice: "練習", primer: "導入", review: "復習",
     scenario: "場面", transfer: "転移", theory: "理論", code: "コード", requirements: "要件",
-    currentTrainingCard: "現在のトレーニングカード", trainingLoop: "学習サイクル", codeSymbols: "確認するコードシンボル", checks: "確認",
+    currentTrainingCard: "現在のトレーニングカード", trainingLoop: "学習サイクル", codeSymbols: "確認するコードシンボル", checks: "確認", startStep: "このステップを開始", verifyCurrentFile: "現在のファイルを検証",
   },
   "ko-KR": {
     currentCard: "현재 카드", flash: "카드", practice: "연습", primer: "기초", review: "복습",
     scenario: "시나리오", transfer: "전이", theory: "이론", code: "코드", requirements: "요구 사항",
-    currentTrainingCard: "현재 훈련 카드", trainingLoop: "학습 순환", codeSymbols: "확인할 코드 기호", checks: "확인",
+    currentTrainingCard: "현재 훈련 카드", trainingLoop: "학습 순환", codeSymbols: "확인할 코드 기호", checks: "확인", startStep: "이 단계 시작", verifyCurrentFile: "현재 파일 검증",
   },
   "pt-BR": {
     currentCard: "Cartão atual", flash: "Cartão", practice: "Prática", primer: "Base", review: "Revisão",
     scenario: "Cenário", transfer: "Transferência", theory: "Teoria", code: "Código", requirements: "Requisitos",
-    currentTrainingCard: "Cartão de treinamento atual", trainingLoop: "Ciclo de aprendizagem", codeSymbols: "Símbolos de código para verificar", checks: "Verificações",
+    currentTrainingCard: "Cartão de treinamento atual", trainingLoop: "Ciclo de aprendizagem", codeSymbols: "Símbolos de código para verificar", checks: "Verificações", startStep: "Iniciar esta etapa", verifyCurrentFile: "Verificar arquivo atual",
   },
 };
 
@@ -1021,6 +1026,7 @@ export function TrainingWorkbenchView({
   recentWins = [],
   weakSpots = [],
   primaryAction,
+  onVerifyCurrentFile,
   leftoverNote,
   actions,
   emptyState,
@@ -1742,11 +1748,32 @@ export function TrainingWorkbenchView({
                     ))}
                   </div>
                   ) : null}
-                  {primaryAction ? (
-                    <div className="training-current__actions training-current__actions--primary">
-                      {primaryAction}
-                    </div>
-                  ) : null}
+                  <div
+                    className="training-current__actions training-current__actions--primary"
+                  >
+                    {onCardStatusTransition && cardId ? (
+                      <ActionButton
+                        tone={selectedCardStatus === "needs_primer" ? "accent" : "ghost"}
+                        label={trainingSurfaceLabel(language, "startStep")}
+                        onClick={() => {
+                          if (
+                            selectedCardStatus === "needs_primer" ||
+                            selectedCardStatus === "candidate" ||
+                            !selectedCardStatus
+                          ) {
+                            onCardStatusTransition(cardId, "active", "start_step");
+                          }
+                        }}
+                      />
+                    ) : null}
+                    {onVerifyCurrentFile && cardType === "practice" && trainingSubmode !== "learn-primer" ? (
+                      <ActionButton
+                        tone="ghost"
+                        label={trainingSurfaceLabel(language, "verifyCurrentFile")}
+                        onClick={() => onVerifyCurrentFile()}
+                      />
+                    ) : null}
+                  </div>
                   </div>
                 </div>
               </div>
