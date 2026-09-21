@@ -34,7 +34,6 @@ class AttemptEvidenceRequest(BaseModel):
     runner_version: str = "trainer-sidecar"
     execution_location: str = "workspace"
     trust_level: str = "controlled_check"
-    assistance_level: str | None = None
     limitations: list[str] = Field(default_factory=list)
 
 
@@ -71,7 +70,6 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
         attempt = store.update_attempt(
             request.attempt_id,
             answer_draft=request.answer_draft,
-            assistance_level=request.assistance_level,
             status=request.status,
             file_path=request.file_path,
             file_hash=request.file_hash,
@@ -93,7 +91,6 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
             runner_version=request.runner_version,
             execution_location=request.execution_location,
             trust_level=request.trust_level,
-            assistance_level=request.assistance_level,
             limitations=list(request.limitations),
         )
         if evidence is None:

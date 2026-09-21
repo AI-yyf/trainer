@@ -168,7 +168,6 @@ class AttemptStore:
         runner_version: str = "trainer-sidecar",
         execution_location: str = "workspace",
         trust_level: str = "controlled_check",
-        assistance_level: str = "independent",
         limitations: list[str] | None = None,
     ) -> dict[str, Any] | None:
         attempt = self.get_attempt_payload(attempt_id)

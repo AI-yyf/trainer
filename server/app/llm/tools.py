@@ -984,14 +984,18 @@ async def _handle_search_learning_materials(
     prior_assessment = [
         item for item in state_raw.get("assessment", []) if isinstance(item, dict)
     ] if isinstance(state_raw, dict) else []
-    prior_covered_facets = _normalized_research_facets(
+    raw_covered_facets = (
         state_raw.get("covered_facets") if isinstance(state_raw, dict) else None
     )
+    covered_facets_list: list[Any] = (
+        list(raw_covered_facets) if isinstance(raw_covered_facets, list) else []
+    )
+    prior_covered_facets = _normalized_research_facets(covered_facets_list)
+    raw_evidence_standard = (
+        state_raw.get("evidence_standard") if isinstance(state_raw, dict) else None
+    )
     prior_evidence_standard = (
-        dict(state_raw.get("evidence_standard"))
-        if isinstance(state_raw, dict)
-        and isinstance(state_raw.get("evidence_standard"), dict)
-        else {}
+        dict(raw_evidence_standard) if isinstance(raw_evidence_standard, dict) else {}
     )
     if prior_assessment:
         state["assessment"] = prior_assessment
@@ -1062,8 +1066,9 @@ async def _handle_assess_research_evidence(
     risk_level = str(evidence_standard.get("risk_level") or "").strip()
     stopping_rule = " ".join(str(evidence_standard.get("stopping_rule") or "").split())
     try:
-        minimum_independent_sources = int(
-            evidence_standard.get("minimum_independent_sources")
+        raw_min_sources = evidence_standard.get("minimum_independent_sources")
+        minimum_independent_sources = (
+            int(raw_min_sources) if isinstance(raw_min_sources, (int, float)) else 0
         )
     except (TypeError, ValueError):
         minimum_independent_sources = 0
