@@ -729,7 +729,12 @@ async function injectPreviewHostMessage(page, message) {
 
 async function readNotice(page) {
   return await page.evaluate(() => ({
-    text: document.querySelector(".notice")?.textContent?.trim() ?? null,
+    // Read the dedicated text node: the notice may also carry a dismiss
+    // button whose glyph ("×") would otherwise pollute textContent.
+    text:
+      document.querySelector(".notice .notice__text")?.textContent?.trim() ??
+      document.querySelector(".notice")?.textContent?.trim() ??
+      null,
     className: document.querySelector(".notice")?.className ?? null,
   }));
 }

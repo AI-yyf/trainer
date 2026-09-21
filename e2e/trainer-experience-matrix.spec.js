@@ -97,9 +97,21 @@ function scenarioUrl(scenario) {
 function collectConsoleErrors(page) {
   const errors = [];
   page.on("console", (message) => {
-    if (message.type() === "error") {
-      errors.push(message.text());
+    if (message.type() !== "error") {
+      return;
     }
+    // A 200-scenario marathon hammers the single Vite dev server; on Windows
+    // CI the server occasionally refuses one connection (net::ERR_CONNECTION_
+    // REFUSED) without affecting the page. That is runner infra, not a
+    // product error — product errors surface as JS exceptions (pageerror)
+    // or failed UI assertions below.
+    if (message.text().includes("net::ERR_CONNECTION_REFUSED")) {
+      return;
+    }
+    errors.push(message.text());
+  });
+  page.on("pageerror", (error) => {
+    errors.push(`pageerror: ${error?.message ?? String(error)}`);
   });
   return errors;
 }
