@@ -762,6 +762,9 @@ class ResourceRecord(BaseModel):
     sandbox_synced_at: str | None = None
     sandbox_dirty: bool = False
     extracted_artifact_path: str | None = None
+    # TR-059: SHA-256 of the uploaded content, pinned at upload time so
+    # evidence records can cite the exact content version they were built on.
+    content_hash: str | None = None
 
     @computed_field(return_type=ResourceTrustState)
     @property

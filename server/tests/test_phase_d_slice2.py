@@ -3,17 +3,12 @@ optimistic locking, cross-workspace isolation, and version expiry."""
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
-
-import pytest
 
 from app.core.models import LearningPlan
 from app.db.repository import TrainerRepository
 from app.training.attempt_store import AttemptStore
-from app.training.plan_revision import PlanRevisionConflict, PlanRevisionStore
 from app.training.skill_projection import project_skills
-
 
 # ---------------------------------------------------------------------------
 # Skill projection
@@ -129,13 +124,23 @@ class TestPlanRevisionOptimisticLock:
 
     def test_different_workspace_no_conflict(self, tmp_path: Path) -> None:
         repo = TrainerRepository(tmp_path / "t.db")
-        plan = LearningPlan(id="plan-1", title="Test")
-        repo.save_plan_with_revision("ws-1", plan, expected_revision=0)
+        plan_a = LearningPlan(id="plan-a", title="A")
+        plan_b = LearningPlan(id="plan-b", title="B")
+        repo.save_plan_with_revision("ws-1", plan_a, expected_revision=0)
+        repo.save_plan_with_revision("ws-2", plan_b, expected_revision=0)
+        assert repo.get_plan_revision("ws-1", "plan-a") == 1
+        assert repo.get_plan_revision("ws-2", "plan-b") == 1
 
-        # Different workspace: no conflict.
-        repo.save_plan_with_revision("ws-2", plan, expected_revision=0)
-        r = repo.get_plan_revision("ws-2", "plan-1")
-        assert r == 1
+    def test_cross_workspace_plan_id_collision_rejected(self, tmp_path: Path) -> None:
+        repo = TrainerRepository(tmp_path / "t.db")
+        plan = LearningPlan(id="plan-1", title="Test")
+        saved = repo.save_plan_with_revision("ws-1", plan, expected_revision=0)
+        assert saved is not None
+        # Plan ids are globally unique: another workspace using the same id
+        # is a collision, rejected instead of a silent overwrite.
+        assert repo.save_plan_with_revision("ws-2", plan, expected_revision=0) is None
+        assert repo.get_plan_revision("ws-1", "plan-1") == 1
+        assert repo.get_plan_revision("ws-2", "plan-1") == 0
 
     def test_revision_survives_save_plan_roundtrip(self, tmp_path: Path) -> None:
         repo = TrainerRepository(tmp_path / "t.db")

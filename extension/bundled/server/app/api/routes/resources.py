@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
 import logging
 import re
+from pathlib import Path
 from typing import cast
 
 from fastapi import APIRouter, HTTPException
@@ -29,6 +31,38 @@ from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 
 logger = logging.getLogger(__name__)
+
+
+def _record_resource_version(
+    runtime: TrainerRuntime,
+    workspace_id: str,
+    request: ResourceUploadRequest,
+    record: ResourceRecord,
+) -> None:
+    """TR-059: pin the uploaded content's SHA-256 so evidence citing it can
+    later be flagged when the source is deleted. Best-effort: version tracking
+    must never fail an upload."""
+    store = runtime.resource_version_store
+    if store is None:
+        return
+    try:
+        if request.content and request.content_encoding == "base64":
+            content: str | bytes = base64.b64decode(request.content)
+        elif request.content:
+            content = request.content.encode("utf-8")
+        else:
+            source = record.source
+            if source.startswith(("http://", "https://")) or not Path(source).is_file():
+                return
+            content = Path(source).read_bytes()
+        versioned = store.record_version(
+            workspace_id=workspace_id,
+            resource_id=record.id,
+            content=content,
+        )
+    except (OSError, ValueError):
+        return
+    record.content_hash = versioned["content_hash"]
 
 
 def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
@@ -324,7 +358,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
     def resource_upload(request: ResourceUploadRequest) -> ResourceRecord:
         workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
         try:
-            return runtime.resource_service.upload(workspace_id, request)
+            record = runtime.resource_service.upload(workspace_id, request)
         except PermissionError as exc:
             raise HTTPException(
                 status_code=403,
@@ -332,6 +366,12 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             ) from exc
         except (FileNotFoundError, IsADirectoryError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        _record_resource_version(runtime, workspace_id, request, record)
+        if record.content_hash:
+            # upload() saved the record before hashing; persist the pinned
+            # hash so later reads see the same content version.
+            runtime.repository.save_resource(workspace_id, record)
+        return record
 
     @router.post("/resource/index", response_model=ResourceRecord)
     def resource_index(request: ResourceIndexRequest) -> ResourceRecord:
@@ -418,6 +458,18 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
 
         if not deletion.get("removed"):
             raise HTTPException(status_code=409, detail="Resource deletion did not complete.")
+
+        # Phase-E: propagate deletion to evidence records bound to this
+        # resource's content hash, so old citations show "deleted source".
+        attempt_store = getattr(runtime, "attempt_store", None)
+        version_store = getattr(runtime, "resource_version_store", None)
+        if attempt_store is not None and version_store is not None:
+            content_hash = version_store.current_content_hash(workspace_id, resource_id)
+            if content_hash:
+                attempt_store.mark_evidence_source_deleted(
+                    workspace_id=workspace_id,
+                    content_hash=content_hash,
+                )
 
         refresh_workspace_sessions(workspace_id)
         return deletion

@@ -300,6 +300,8 @@ export type ResourceRecord = {
   sandboxSyncedAt?: string;
   sandboxDirty?: boolean;
   extractedArtifactPath?: string;
+  /** TR-059: SHA-256 of the uploaded content, pinned at upload time. */
+  contentHash?: string | null;
   knowledgeFragments?: Array<{
     id: string;
     snippet: string;

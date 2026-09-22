@@ -35,6 +35,7 @@ from ..pedagogy.service import PedagogyService
 from ..planner.service import PlannerService
 from ..research.service import ResearchOrchestratorService
 from ..resources.service import ResourceService
+from ..resources.versioning import ResourceVersionStore
 from ..specs.service import SpecService
 from ..workspace.adoption_index import ProjectAdoptionIndexService, ProjectAdoptionJobRecord
 from ..workspace.authority import PermissionLevel, WorkspaceAuthority
@@ -44,9 +45,9 @@ if TYPE_CHECKING:
     from ..db.research_repository import ResearchRepository
     from ..sandbox.service import SandboxService
 from ..training.attempt_store import AttemptStore
-from ..training.plan_revision import PlanRevisionStore
 from ..training.card_generator import CardGenerationService
 from ..training.card_router import CardRouterService
+from ..training.plan_revision import PlanRevisionStore
 
 DEFAULT_WORKSPACE_ID = "workspace-default"
 DEFAULT_WORKSPACE_NAME = "Trainer"
@@ -186,6 +187,7 @@ class TrainerRuntime:
     affect_service: AffectService = field(default_factory=AffectService)
     attempt_store: AttemptStore | None = None
     plan_revision_store: PlanRevisionStore | None = None
+    resource_version_store: ResourceVersionStore | None = None
     research_repository: ResearchRepository | None = None
     research_service: ResearchOrchestratorService = field(
         default_factory=ResearchOrchestratorService

@@ -378,16 +378,26 @@ class TrainerRepository:
     ) -> dict[str, Any] | None:
         """Optimistic-lock plan save: rejects if the stored revision differs.
 
-        Returns {'revision': new_rev} on success, None on conflict.
+        Returns {'revision': new_rev} on success, None on conflict. Plan ids
+        are globally unique in this schema, so a save arriving from a
+        different workspace than the stored row is rejected instead of
+        silently overwriting the other workspace's plan.
         """
         current = self.get_plan_revision(workspace_id, plan.id)
         if current != expected_revision:
+            return None
+        with self._connect() as connection:
+            owner = connection.execute(
+                "SELECT workspace_id FROM learning_plan WHERE plan_id = ?",
+                (plan.id,),
+            ).fetchone()
+        if owner is not None and str(owner["workspace_id"]) != workspace_id:
             return None
         new_revision = current + 1
         plan_payload = plan.model_dump()
         plan_payload["_plan_revision"] = new_revision
         with self._connect() as connection:
-            cursor = connection.execute(
+            connection.execute(
                 """
                 INSERT INTO learning_plan (plan_id, workspace_id, payload)
                 VALUES (?, ?, ?)

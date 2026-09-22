@@ -28,12 +28,13 @@ from .memory.service import MemoryService
 from .pedagogy.service import PedagogyService
 from .planner.service import PlannerService
 from .resources.service import ResourceService
+from .resources.versioning import ResourceVersionStore
 from .sandbox.service import SandboxService
 from .specs.service import SpecService
 from .training.attempt_store import AttemptStore
-from .training.plan_revision import PlanRevisionStore
 from .training.card_generator import CardGenerationService
 from .training.card_router import CardRouterService
+from .training.plan_revision import PlanRevisionStore
 
 
 def create_app(settings_override: Settings | AppSettings | None = None) -> FastAPI:
@@ -45,6 +46,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     repository = TrainerRepository(database_path)
     attempt_store = AttemptStore(database_path)
     plan_revision_store = PlanRevisionStore(database_path)
+    resource_version_store = ResourceVersionStore(database_path)
     research_db_path = data_dir / "research.db"
     research_repository = ResearchRepository(research_db_path)
     qdrant_path = settings.qdrant_path if isinstance(settings, Settings) else data_dir / "qdrant"
@@ -66,6 +68,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         repository=repository,
         attempt_store=attempt_store,
         plan_revision_store=plan_revision_store,
+        resource_version_store=resource_version_store,
         research_repository=research_repository,
         research_network_fetch_enabled=network_fetch_enabled,
         provider_service=provider_service,
