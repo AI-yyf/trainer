@@ -357,6 +357,47 @@ class TrainerRepository:
                 (plan.id, workspace_id, plan.model_dump_json()),
             )
 
+    def get_plan_revision(self, workspace_id: str, plan_id: str) -> int:
+        """Read the current plan revision for optimistic locking."""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM learning_plan WHERE workspace_id = ? AND plan_id = ?",
+                (workspace_id, plan_id),
+            ).fetchone()
+        if row is None:
+            return 0
+        payload = json.loads(row["payload"])
+        return payload.get("_plan_revision", 0)
+
+    def save_plan_with_revision(
+        self,
+        workspace_id: str,
+        plan: LearningPlan,
+        *,
+        expected_revision: int,
+    ) -> dict[str, Any] | None:
+        """Optimistic-lock plan save: rejects if the stored revision differs.
+
+        Returns {'revision': new_rev} on success, None on conflict.
+        """
+        current = self.get_plan_revision(workspace_id, plan.id)
+        if current != expected_revision:
+            return None
+        new_revision = current + 1
+        plan_payload = plan.model_dump()
+        plan_payload["_plan_revision"] = new_revision
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO learning_plan (plan_id, workspace_id, payload)
+                VALUES (?, ?, ?)
+                ON CONFLICT(plan_id) DO UPDATE SET payload = excluded.payload
+                """,
+                (plan.id, workspace_id, json.dumps(plan_payload, ensure_ascii=False, default=str)),
+            )
+            connection.commit()
+        return {"revision": new_revision}
+
     def get_latest_plan(self, workspace_id: str) -> LearningPlan | None:
         with self._connect() as connection:
             row = connection.execute(
