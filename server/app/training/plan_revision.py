@@ -145,3 +145,25 @@ class PlanRevisionStore:
         finally:
             connection.close()
         return json.loads(row["payload"]) if row else None
+
+
+def save_plan_checked(
+    repository: Any,
+    workspace_id: str,
+    plan: Any,
+    *,
+    expected_revision: int,
+) -> dict[str, Any]:
+    """Persist a plan under optimistic locking, raising on conflict.
+
+    Thin wrapper over TrainerRepository.save_plan_with_revision that turns a
+    rejected save into PlanRevisionConflict carrying the current head
+    revision, so callers can tell the other window exactly what it lost to.
+    """
+    saved = repository.save_plan_with_revision(
+        workspace_id, plan, expected_revision=expected_revision
+    )
+    if saved is None:
+        current = repository.get_plan_revision(workspace_id, plan.id)
+        raise PlanRevisionConflict(workspace_id, plan.id, expected_revision, current)
+    return saved

@@ -21064,3 +21064,79 @@ details[open] > :not(summary) {
 .header-switcher__item--gear .header-switcher__label {
   display: none;
 }
+
+/* ------------------------------------------------------------------ */
+/* Phase-D skill projection (evidence → capability ladder)            */
+/* ------------------------------------------------------------------ */
+
+.skill-projection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+.skill-projection-title {
+  font-size: 11px;
+  font-weight: var(--trainer-font-weight-medium);
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+  text-transform: uppercase;
+}
+
+.skill-projection-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.skill-projection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-1) 85%, var(--bg-0));
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-projection-dimension {
+  font-weight: var(--trainer-font-weight-medium);
+  color: var(--text-1);
+}
+
+.skill-projection-state {
+  color: var(--text-2);
+}
+
+.skill-projection-chip[data-skill-state="independent"],
+.skill-projection-chip[data-skill-state="repeat_verified"] {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.skill-projection-chip[data-skill-state="independent"] .skill-projection-state,
+.skill-projection-chip[data-skill-state="repeat_verified"] .skill-projection-state {
+  color: var(--accent);
+}
+
+.skill-projection-chip[data-skill-state="needs_review"] {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.skill-projection-chip[data-skill-state="needs_review"] .skill-projection-state {
+  color: var(--danger);
+}
+
+.skill-projection[data-variant="full"] {
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-1) 70%, transparent);
+}

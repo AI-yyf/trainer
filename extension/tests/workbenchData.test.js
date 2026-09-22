@@ -94,6 +94,56 @@ function createBootstrap() {
   );
 }
 
+test('skill projection mirrors from snapshot workspace memory into training state', () => {
+  const patch = mergeMemorySummary(createBootstrap(), {
+    memory: {
+      workspace: {
+        workspace_id: 'workspace-1',
+        training_skill_projection: {
+          workspace_id: 'workspace-1',
+          attempt_id: 'attempt-1',
+          card_id: 'card-1',
+          dimensions: {
+            comprehension: { state: 'not_verified', score: 0, verified_count: 0 },
+            implementation: { state: 'independent', score: 3, verified_count: 2 },
+            debugging: { state: 'assisted', score: 1, verified_count: 1 },
+            transfer: { state: 'not_verified', score: 0, verified_count: 0 },
+          },
+        },
+      },
+    },
+  });
+
+  const projection = patch.workspaceTrainingState?.skillProjection;
+  assert.ok(projection, 'projection should surface on the training state view');
+  assert.equal(projection.attemptId, 'attempt-1');
+  assert.equal(projection.cardId, 'card-1');
+  assert.equal(projection.dimensions.implementation.state, 'independent');
+  assert.equal(projection.dimensions.implementation.verifiedCount, 2);
+  assert.equal(projection.dimensions.debugging.state, 'assisted');
+});
+
+test('skill projection with an unknown workspace is not adopted', () => {
+  const patch = mergeMemorySummary(createBootstrap(), {
+    memory: {
+      workspace: {
+        workspace_id: 'workspace-1',
+        training_skill_projection: {
+          workspace_id: 'workspace-other',
+          attempt_id: 'attempt-2',
+          dimensions: {
+            implementation: { state: 'repeat_verified', score: 5, verified_count: 3 },
+          },
+        },
+      },
+    },
+  });
+
+  const projection = patch.workspaceTrainingState?.skillProjection;
+  assert.ok(!projection || projection.attemptId !== 'attempt-2',
+    'a projection from another workspace must not leak into the current view');
+});
+
 test('memory summary keeps a camel-case response language so the restored UI stays in the chosen language', () => {
   const patch = mergeMemorySummary(createBootstrap(), {
     memory: {

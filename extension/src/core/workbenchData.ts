@@ -4400,6 +4400,75 @@ function scopedLatestTransferState(
   return incoming.workspaceIds.includes(incomingWorkspaceId) ? incoming : undefined;
 }
 
+const SKILL_DIMENSION_KEYS = ['comprehension', 'implementation', 'debugging', 'transfer'] as const;
+const SKILL_STATE_VALUES = new Set([
+  'not_verified',
+  'assisted',
+  'independent',
+  'repeat_verified',
+  'needs_review',
+]);
+
+function mapTrainingSkillProjection(
+  value: unknown,
+  fallback: WorkspaceTrainingStateView['skillProjection'],
+  incomingWorkspaceId: string | undefined,
+): WorkspaceTrainingStateView['skillProjection'] {
+  const record = asRecord(value);
+  const dimensionsRecord = asRecord(record?.dimensions);
+  if (!record || !dimensionsRecord) {
+    return fallback;
+  }
+  // Workspace scoping: a projection recorded under another workspace must
+  // never leak into this workspace's view (same contract as training handoffs).
+  const projectionWorkspaceId = asString(record.workspace_id) ?? asString(record.workspaceId);
+  if (incomingWorkspaceId && projectionWorkspaceId && projectionWorkspaceId !== incomingWorkspaceId) {
+    return undefined;
+  }
+  const dimensions: NonNullable<WorkspaceTrainingStateView['skillProjection']>['dimensions'] = {};
+  let hasDimension = false;
+  for (const dimension of SKILL_DIMENSION_KEYS) {
+    const raw = asRecord(dimensionsRecord[dimension]);
+    if (!raw) {
+      continue;
+    }
+    const state = asString(raw.state);
+    if (!state || !SKILL_STATE_VALUES.has(state)) {
+      continue;
+    }
+    const dimensionView: NonNullable<
+      WorkspaceTrainingStateView['skillProjection']
+    >['dimensions'][typeof dimension] = {
+      state: state as 'not_verified' | 'assisted' | 'independent' | 'repeat_verified' | 'needs_review',
+      score: typeof raw.score === 'number' ? raw.score : undefined,
+      verifiedCount: typeof raw.verified_count === 'number' ? raw.verified_count : undefined,
+      cardId: asString(raw.card_id),
+    };
+    hasDimension = true;
+    dimensions[dimension] = dimensionView;
+  }
+  if (!hasDimension) {
+    const incomingWorkspaceId = asString(record.workspace_id) ?? asString(record.workspaceId);
+    const fallbackWorkspaceId = fallback?.workspaceId;
+    if (
+      fallback &&
+      incomingWorkspaceId &&
+      fallbackWorkspaceId &&
+      incomingWorkspaceId === fallbackWorkspaceId
+    ) {
+      return fallback;
+    }
+    return undefined;
+  }
+  return {
+    workspaceId: asString(record.workspace_id) ?? asString(record.workspaceId),
+    attemptId: asString(record.attempt_id) ?? asString(record.attemptId),
+    cardId: asString(record.card_id) ?? asString(record.cardId),
+    updatedAt: asString(record.updated_at) ?? asString(record.updatedAt),
+    dimensions,
+  };
+}
+
 function mapWorkspaceTrainingState(
   value: unknown,
   fallback: BootstrapData['workspaceTrainingState'],
@@ -4574,6 +4643,11 @@ function mapWorkspaceTrainingState(
             incomingWorkspaceId,
             !sameWorkspace,
           ),
+    skillProjection: mapTrainingSkillProjection(
+      workspaceRecord?.training_skill_projection ?? workspaceRecord?.trainingSkillProjection,
+      sameWorkspace ? fallback?.skillProjection : undefined,
+      incomingWorkspaceId,
+    ),
   };
 
   if (!hasWorkspaceTrainingStateContent(mapped)) {
@@ -5412,7 +5486,8 @@ function hasWorkspaceTrainingStateContent(value: WorkspaceTrainingStateView): bo
       value.reviewArtifact ||
       value.scenarioLab ||
       value.theoryDrill ||
-      value.dueReviews?.length,
+      value.dueReviews?.length ||
+      value.skillProjection,
   );
 }
 

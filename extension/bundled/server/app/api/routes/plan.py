@@ -51,6 +51,44 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
     structured_suggested_actions = deps.structured_suggested_actions
     workspace_first_look_summary = deps.workspace_first_look_summary
 
+    def save_plan_or_conflict(
+        workspace_id: str,
+        plan: LearningPlan,
+        *,
+        expected_revision: int,
+    ) -> int:
+        """Persist under optimistic locking; 409 with the current revision on
+        conflict so the losing window can re-read and re-apply its change."""
+        from ...training.plan_revision import PlanRevisionConflict, save_plan_checked
+
+        try:
+            saved = save_plan_checked(
+                runtime.repository,
+                workspace_id,
+                plan,
+                expected_revision=expected_revision,
+            )
+        except PlanRevisionConflict as conflict:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "plan_revision_conflict",
+                    "message": localized_text(
+                        "This plan changed in another window. Re-read the plan and re-apply your change; nothing was overwritten.",
+                        "计划已在另一个窗口被修改。请重新读取计划后再次应用你的修改；本次没有覆盖任何内容。",
+                        None,
+                    ),
+                    "plan_id": plan.id,
+                    "expected_revision": conflict.expected_revision,
+                    "current_revision": conflict.actual_revision,
+                },
+            ) from conflict
+        return saved["revision"]
+
+    def head_plan_revision(workspace_id: str, plan_id: str) -> int:
+        return runtime.repository.get_plan_revision(workspace_id, plan_id)
+
+
     def first_look_goal_hint(workspace_id: str) -> str | None:
         summary = workspace_first_look_summary(workspace_id)
         if summary is None:
@@ -474,7 +512,14 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
                 ) from None
             plan.session_id = session_id
             runtime.memory_service.record_profile(state.workspace_id, profile)
-            runtime.repository.save_plan(state.workspace_id, plan)
+            # Generation is authoritative replacement of a fresh plan id, so
+            # the save is guarded but expected from the current head (0 for a
+            # genuinely new plan).
+            save_plan_or_conflict(
+                state.workspace_id,
+                plan,
+                expected_revision=head_plan_revision(state.workspace_id, plan.id),
+            )
             runtime.memory_service.bind_explicit_generated_plan(state.workspace_id, plan)
             auto_link_project_plan_to_global_plan(
                 workspace_id=state.workspace_id,
@@ -552,7 +597,11 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
                 detail="Plan generation failed. The stored plan and recovered runtime were left unchanged.",
             ) from None
         runtime.memory_service.record_profile(workspace_id, request.profile)
-        runtime.repository.save_plan(workspace_id, plan)
+        save_plan_or_conflict(
+            workspace_id,
+            plan,
+            expected_revision=head_plan_revision(workspace_id, plan.id),
+        )
         runtime.memory_service.bind_explicit_generated_plan(workspace_id, plan)
         auto_link_project_plan_to_global_plan(
             workspace_id=workspace_id,
@@ -609,6 +658,14 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
             current = runtime.repository.get_latest_plan(workspace_id)
         if not current:
             raise HTTPException(status_code=404, detail="No learning plan is available yet.")
+        # Optimistic locking (design §9): a window that sends the revision it
+        # based its edit on gets a 409 when another window moved the plan.
+        # Absent expected_revision keeps the legacy permissive save.
+        expected_revision = (
+            request.expected_revision
+            if request.expected_revision is not None
+            else head_plan_revision(workspace_id, current.id)
+        )
         # Explicit mutate by plan_id only when recovered runtime still matches that id.
         # Leftover stored plan with empty/mismatched recovered plan_id must not fill snapshot.plan.
         leftover_plan, leftover_runtime = leftover_runtime_for_workspace(workspace_id)
@@ -685,7 +742,9 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
         )
         updated = runtime.planner_service.update_plan(current, request)
         updated = runtime.planner_service.localize_plan(updated, workspace_response_language)
-        runtime.repository.save_plan(workspace_id, updated)
+        new_revision = save_plan_or_conflict(
+            workspace_id, updated, expected_revision=expected_revision
+        )
         # Keep the recovered runtime identity in sync with the mutated plan:
         # update_plan may rewrite current_step/why_now, and a stale runtime record
         # would make /task/next and /task/specify see this live plan as leftover-not-live.
@@ -751,6 +810,9 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
             diagnostics.append("Plan is now frozen for execution focus.")
         response_payload = {
             "plan": updated_plan.model_dump(),
+            # Surface the post-save revision so editing windows can chain
+            # expected_revision on their next update without re-reading.
+            "plan_revision": new_revision,
             "plan_runtime_status": runtime_status,
             "coach_turn": CoachTurnSummary(
                 scenario="plan",

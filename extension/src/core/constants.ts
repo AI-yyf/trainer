@@ -105,6 +105,7 @@ export const COMMAND_IDS = {
   trainingAttemptEvidence: trainerCommands.trainingAttemptEvidence,
   trainingAttemptRecover: trainerCommands.trainingAttemptRecover,
   trainingAttemptClose: trainerCommands.trainingAttemptClose,
+  trainingAttemptProjection: trainerCommands.trainingAttemptProjection,
   trainingReturn: trainerCommands.trainingReturn,
   trainingReliabilityControl: trainerCommands.trainingReliabilityControl,
   trainingDependencySkillMapAction: trainerCommands.trainingDependencySkillMapAction,

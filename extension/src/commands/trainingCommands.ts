@@ -1866,6 +1866,33 @@ export async function trainingAttemptCloseCommand(
   });
 }
 
+/** Phase-D capability model: read-only evidence → skill-state projection. */
+export async function trainingAttemptProjectionCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const p = payload as TrainingAttemptCommandPayload | undefined;
+  if (!p?.attemptId) {
+    return { ok: false, message: 'Attempt projection requires an attempt id.' };
+  }
+  const status = context.sidecarManager.getStatus();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: 'Sidecar is not running.' };
+  }
+  try {
+    const response = await context.sidecarClient.getJson<Record<string, unknown>>(
+      status.port,
+      withWorkspaceQuery(
+        `/training/attempt/${encodeURIComponent(p.attemptId)}/projection`,
+        context,
+      ),
+    );
+    return { ok: true, data: response };
+  } catch (error) {
+    return { ok: false, message: String(error) };
+  }
+}
+
 export async function trainingReflectCommand(
   context: CommandContext,
   payload?: unknown,

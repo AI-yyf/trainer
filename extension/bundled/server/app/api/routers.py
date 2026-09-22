@@ -802,6 +802,40 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     completed_training_card_requests_guard = Lock()
     inflight_training_card_requests: dict[tuple[str, str, str], asyncio.Future] = {}
 
+    def save_plan_or_conflict(
+        workspace_id: str,
+        plan: LearningPlan,
+        *,
+        expected_revision: int,
+    ) -> int:
+        """Optimistic-lock plan persistence: 409 with the current revision
+        when another writer moved the plan between this request's read and
+        write (design §9)."""
+        from ..training.plan_revision import PlanRevisionConflict, save_plan_checked
+
+        try:
+            saved = save_plan_checked(
+                runtime.repository,
+                workspace_id,
+                plan,
+                expected_revision=expected_revision,
+            )
+        except PlanRevisionConflict as conflict:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "plan_revision_conflict",
+                    "plan_id": plan.id,
+                    "expected_revision": conflict.expected_revision,
+                    "current_revision": conflict.actual_revision,
+                },
+            ) from conflict
+        return saved["revision"]
+
+    def head_plan_revision(workspace_id: str, plan_id: str) -> int:
+        return runtime.repository.get_plan_revision(workspace_id, plan_id)
+
+
     def resolve_stream_id(payload: object) -> str:
         value = None
         if isinstance(payload, dict):
@@ -18622,6 +18656,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             return
         leftover_plan, leftover_runtime = leftover_runtime_for_workspace(workspace_id)
         plan = leftover_plan or state.snapshot.plan or runtime.repository.get_latest_plan(workspace_id)
+        # Lock window: the revision this request based its advance decision on.
+        plan_revision_at_load = (
+            head_plan_revision(workspace_id, plan.id) if plan is not None else 0
+        )
         if plan is None:
             stamp_verify_plan_advance(
                 advanced=False,
@@ -18715,7 +18753,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         state.snapshot.plan = updated
         formal_id = str(getattr(updated, "id", "") or getattr(updated, "plan_id", "") or "").strip()
         if updated.model_dump() != plan.model_dump():
-            runtime.repository.save_plan(workspace_id, updated)
+            save_plan_or_conflict(
+                workspace_id, updated, expected_revision=plan_revision_at_load
+            )
             persist_plan_to_sandbox(workspace_id, updated, reason="evaluation")
         synced = runtime.memory_service.persist_plan_runtime_advance_after_verify(
             workspace_id,
@@ -24068,9 +24108,18 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             workspace_id,
         )
         updated_plan = None
+        signal_base_plan = (
+            state.snapshot.plan or runtime.repository.get_latest_plan(workspace_id)
+        )
+        # Lock window: the revision this request's advance decision builds on.
+        signal_base_revision = (
+            head_plan_revision(workspace_id, signal_base_plan.id)
+            if signal_base_plan is not None
+            else 0
+        )
         if request.outcome not in {"code_landed", "tests_passed"}:
             updated_plan = runtime.planner_service.advance_plan_from_learning_signal(
-                state.snapshot.plan or runtime.repository.get_latest_plan(workspace_id),
+                signal_base_plan,
                 state.snapshot.current_task,
                 outcome=request.outcome,
                 summary=request.summary,
@@ -24085,7 +24134,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             )
         if updated_plan is not None:
             state.snapshot.plan = updated_plan
-            runtime.repository.save_plan(workspace_id, updated_plan)
+            save_plan_or_conflict(
+                workspace_id, updated_plan, expected_revision=signal_base_revision
+            )
             persist_plan_to_sandbox(workspace_id, updated_plan, reason="learning-signal")
         state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
         runtime.save_session_state(state.session_id)

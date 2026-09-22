@@ -603,6 +603,18 @@ export type CopyKey =
   | "masteryTransferable"
   | "masteryNotEstablished"
 
+  // Phase-D 技能投影 (evidence → skill states)
+  | "skillProjectionTitle"
+  | "skillDimComprehension"
+  | "skillDimImplementation"
+  | "skillDimDebugging"
+  | "skillDimTransfer"
+  | "skillStateNotVerified"
+  | "skillStateAssisted"
+  | "skillStateIndependent"
+  | "skillStateRepeatVerified"
+  | "skillStateNeedsReview"
+
   // 学习旅程
   | "learningJourney"
   | "learningJourneyProgress"
@@ -1522,6 +1534,18 @@ export const copyTable = {
     masteryTransferable: "可迁移",
     masteryNotEstablished: "待建立",
 
+    // Phase-D 技能投影
+    skillProjectionTitle: "技能投影",
+    skillDimComprehension: "理解",
+    skillDimImplementation: "实现",
+    skillDimDebugging: "调试",
+    skillDimTransfer: "迁移",
+    skillStateNotVerified: "未验证",
+    skillStateAssisted: "需辅助",
+    skillStateIndependent: "可独立",
+    skillStateRepeatVerified: "已重复验证",
+    skillStateNeedsReview: "需复查",
+
     // 学习旅程
     learningJourney: "学习旅程",
     learningJourneyProgress: "学习进度",
@@ -2302,6 +2326,18 @@ export const copyTable = {
     masteryTransferable: "Transferable",
     masteryNotEstablished: "Not established",
 
+    // Phase-D skill projection
+    skillProjectionTitle: "Skill projection",
+    skillDimComprehension: "Comprehension",
+    skillDimImplementation: "Implementation",
+    skillDimDebugging: "Debugging",
+    skillDimTransfer: "Transfer",
+    skillStateNotVerified: "Not verified",
+    skillStateAssisted: "Needs help",
+    skillStateIndependent: "Independent",
+    skillStateRepeatVerified: "Repeat verified",
+    skillStateNeedsReview: "Needs review",
+
     // Learning journey
     learningJourney: "Learning journey",
     learningJourneyProgress: "Learning progress",
@@ -2846,6 +2882,18 @@ export const copyTable = {
     masteryTransferable: "Transferible",
     masteryNotEstablished: "Por establecer",
 
+    // Proyección de habilidades (Phase-D)
+    skillProjectionTitle: "Proyección de habilidades",
+    skillDimComprehension: "Comprensión",
+    skillDimImplementation: "Implementación",
+    skillDimDebugging: "Depuración",
+    skillDimTransfer: "Transferencia",
+    skillStateNotVerified: "Sin verificar",
+    skillStateAssisted: "Necesita ayuda",
+    skillStateIndependent: "Independiente",
+    skillStateRepeatVerified: "Verificado repetidamente",
+    skillStateNeedsReview: "Necesita repaso",
+
     // CoachSettingsView labels
     settingsSetupSection: "Conexión del modelo",
     settingsSetupTitleReady: "Trainer está listo para comenzar",
@@ -2979,6 +3027,18 @@ export const copyTable = {
   // ==========================================================================
   "fr-FR": {
     settingsStatusRegionLabel: "État actuel",
+
+    // Projection des compétences (Phase-D)
+    skillProjectionTitle: "Projection des compétences",
+    skillDimComprehension: "Compréhension",
+    skillDimImplementation: "Implémentation",
+    skillDimDebugging: "Débogage",
+    skillDimTransfer: "Transfert",
+    skillStateNotVerified: "Non vérifié",
+    skillStateAssisted: "Aide nécessaire",
+    skillStateIndependent: "Indépendant",
+    skillStateRepeatVerified: "Vérifié à répétition",
+    skillStateNeedsReview: "À revoir",
     settingsStatusConnected: "Connecté",
     settingsStatusNotConnected: "Non connecté",
     settingsStatusLanguage: "Langue",
@@ -3306,6 +3366,18 @@ export const copyTable = {
   // ==========================================================================
   "de-DE": {
     settingsStatusRegionLabel: "Aktueller Status",
+
+    // Fähigkeitsprojektion (Phase-D)
+    skillProjectionTitle: "Fähigkeitsprojektion",
+    skillDimComprehension: "Verständnis",
+    skillDimImplementation: "Implementierung",
+    skillDimDebugging: "Fehlersuche",
+    skillDimTransfer: "Transfer",
+    skillStateNotVerified: "Nicht verifiziert",
+    skillStateAssisted: "Hilfe nötig",
+    skillStateIndependent: "Eigenständig",
+    skillStateRepeatVerified: "Wiederholt verifiziert",
+    skillStateNeedsReview: "Überarbeitung nötig",
     settingsStatusConnected: "Verbunden",
     settingsStatusNotConnected: "Nicht verbunden",
     settingsStatusLanguage: "Sprache",
@@ -3633,6 +3705,18 @@ export const copyTable = {
   // ==========================================================================
   "ja-JP": {
     settingsStatusRegionLabel: "現在の状態",
+
+    // Phase-D スキル投影
+    skillProjectionTitle: "スキル投影",
+    skillDimComprehension: "理解",
+    skillDimImplementation: "実装",
+    skillDimDebugging: "デバッグ",
+    skillDimTransfer: "転移",
+    skillStateNotVerified: "未検証",
+    skillStateAssisted: "支援が必要",
+    skillStateIndependent: "自力で可能",
+    skillStateRepeatVerified: "反復検証済み",
+    skillStateNeedsReview: "要復習",
     settingsStatusConnected: "接続済み",
     settingsStatusNotConnected: "未接続",
     settingsStatusLanguage: "言語",
@@ -3960,6 +4044,18 @@ export const copyTable = {
   // ==========================================================================
   "ko-KR": {
     settingsStatusRegionLabel: "현재 상태",
+
+    // Phase-D 스킬 프로젝션
+    skillProjectionTitle: "스킬 프로젝션",
+    skillDimComprehension: "이해",
+    skillDimImplementation: "구현",
+    skillDimDebugging: "디버깅",
+    skillDimTransfer: "전이",
+    skillStateNotVerified: "미검증",
+    skillStateAssisted: "도움 필요",
+    skillStateIndependent: "독립 수행",
+    skillStateRepeatVerified: "반복 검증됨",
+    skillStateNeedsReview: "복습 필요",
     settingsStatusConnected: "연결됨",
     settingsStatusNotConnected: "연결 안 됨",
     settingsStatusLanguage: "언어",
@@ -4287,6 +4383,18 @@ export const copyTable = {
   // ==========================================================================
   "pt-BR": {
     settingsStatusRegionLabel: "Estado atual",
+
+    // Projeção de habilidades (Phase-D)
+    skillProjectionTitle: "Projeção de habilidades",
+    skillDimComprehension: "Compreensão",
+    skillDimImplementation: "Implementação",
+    skillDimDebugging: "Depuração",
+    skillDimTransfer: "Transferência",
+    skillStateNotVerified: "Não verificado",
+    skillStateAssisted: "Precisa de ajuda",
+    skillStateIndependent: "Independente",
+    skillStateRepeatVerified: "Verificado repetidamente",
+    skillStateNeedsReview: "Precisa de revisão",
     settingsStatusConnected: "Conectado",
     settingsStatusNotConnected: "Não conectado",
     settingsStatusLanguage: "Idioma",

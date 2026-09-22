@@ -96,6 +96,7 @@ import {
   trainingPracticeReturnCommand,
   trainingAttemptCloseCommand,
   trainingAttemptEvidenceCommand,
+  trainingAttemptProjectionCommand,
   trainingAttemptRecoverCommand,
   trainingAttemptStartCommand,
   trainingAttemptUpdateCommand,
@@ -375,6 +376,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.trainingAttemptEvidence, register: (ctx, payload) => trainingAttemptEvidenceCommand(ctx, payload) },
     { commandId: COMMAND_IDS.trainingAttemptRecover, register: (ctx, payload) => trainingAttemptRecoverCommand(ctx, payload) },
     { commandId: COMMAND_IDS.trainingAttemptClose, register: (ctx, payload) => trainingAttemptCloseCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.trainingAttemptProjection, register: (ctx, payload) => trainingAttemptProjectionCommand(ctx, payload) },
     { commandId: COMMAND_IDS.trainingReturn, register: (ctx, payload) => trainingReturnCommand(ctx, payload) },
     {
       commandId: COMMAND_IDS.trainingReliabilityControl,

@@ -117,6 +117,27 @@ class ResourceVersionStore:
             connection.close()
         return row["content_hash"] if row else None
 
+    def record_version_if_changed(
+        self,
+        *,
+        workspace_id: str,
+        resource_id: str,
+        content: str | bytes,
+    ) -> dict[str, Any] | None:
+        """Append a version only when content differs from the current head.
+
+        Re-indexing unchanged content must not inflate the version history;
+        a changed hash is what makes old citations historically traceable
+        (TR-059). Returns None when the content is unchanged.
+        """
+        if self.current_content_hash(workspace_id, resource_id) == compute_content_hash(content):
+            return None
+        return self.record_version(
+            workspace_id=workspace_id,
+            resource_id=resource_id,
+            content=content,
+        )
+
 
 def check_remote_runner_boundary(
     *,

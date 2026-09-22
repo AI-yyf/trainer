@@ -1340,6 +1340,23 @@ export interface TrainingReliability {
   learningPhase?: string;
 }
 
+/** Phase-D capability model: one skill dimension projected from evidence. */
+export interface TrainingSkillDimensionState {
+  state: "not_verified" | "assisted" | "independent" | "repeat_verified" | "needs_review";
+  score?: number;
+  verifiedCount?: number;
+  cardId?: string;
+}
+
+/** Evidence → skill-state projection mirrored into workspace memory. */
+export interface TrainingSkillProjection {
+  workspaceId?: string;
+  attemptId?: string;
+  cardId?: string;
+  updatedAt?: string;
+  dimensions: Partial<Record<"comprehension" | "implementation" | "debugging" | "transfer", TrainingSkillDimensionState>>;
+}
+
 export interface WorkspaceTrainingState {
   workspaceId?: string;
   latestConversationHandoff?: TrainingHandoff;
@@ -1365,6 +1382,7 @@ export interface WorkspaceTrainingState {
   scenarioLab?: ScenarioLabSummary;
   theoryDrill?: TheoryDrillSummary;
   dueReviews?: ReviewQueueItem[];
+  skillProjection?: TrainingSkillProjection;
 }
 
 export interface ConversationMessage {

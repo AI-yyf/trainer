@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -39,6 +41,32 @@ class AttemptEvidenceRequest(BaseModel):
 def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
     router = APIRouter(tags=["training"])
 
+    def persist_skill_projection(workspace_id: str, attempt_id: str) -> dict | None:
+        """Phase-D UI closure: project the attempt's evidence into skill
+        states and mirror it into workspace memory so every snapshot (Coach,
+        Plan, Training views) carries the learner's current capability
+        ladder without extra round-trips."""
+        from app.training.skill_projection import project_skills
+
+        store = runtime.attempt_store
+        if store is None:
+            return None
+        attempt = store.get_attempt(attempt_id, workspace_id=workspace_id)
+        if attempt is None:
+            return None
+        projection = project_skills(attempt.get("evidence", []), card_id=attempt.get("card_id"))
+        runtime.memory_service.update_workspace_state(
+            workspace_id,
+            training_skill_projection={
+                "workspace_id": workspace_id,
+                "attempt_id": attempt_id,
+                "card_id": attempt.get("card_id"),
+                "dimensions": projection,
+                "updated_at": datetime.now(UTC).isoformat(),
+            },
+        )
+        return projection
+
     def require_store():
         if runtime.attempt_store is None:
             raise HTTPException(status_code=503, detail="Attempt store is unavailable.")
@@ -62,6 +90,7 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
             card_id=request.card_id,
             **kwargs,
         )
+        persist_skill_projection(request.workspace_id, attempt["attempt_id"])
         return {"ok": True, "attempt": attempt}
 
     @router.post("/training/attempt/update")
@@ -78,6 +107,8 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
         )
         if attempt is None:
             raise HTTPException(status_code=404, detail="Training attempt not found.")
+        if request.workspace_id:
+            persist_skill_projection(request.workspace_id, attempt["attempt_id"])
         return {"ok": True, "attempt": attempt}
 
     @router.post("/training/attempt/evidence")
@@ -94,6 +125,10 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
         )
         if evidence is None:
             raise HTTPException(status_code=404, detail="Training attempt not found.")
+        attempt = store.get_attempt(request.attempt_id)
+        workspace_id = str((attempt or {}).get("workspace_id") or "")
+        if workspace_id:
+            persist_skill_projection(workspace_id, request.attempt_id)
         return {"ok": True, "evidence": evidence}
 
     @router.get("/training/attempt/{attempt_id}")
@@ -113,6 +148,8 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
         """Re-entering a card resumes the in-flight attempt, if any."""
         store = require_store()
         active = store.find_active_attempt(request.workspace_id, request.card_id)
+        if active is not None:
+            persist_skill_projection(request.workspace_id, active["attempt_id"])
         return {"ok": True, "attempt": active}
 
     class AttemptCloseRequest(BaseModel):

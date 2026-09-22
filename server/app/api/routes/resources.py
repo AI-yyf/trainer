@@ -65,6 +65,31 @@ def _record_resource_version(
     record.content_hash = versioned["content_hash"]
 
 
+def _record_indexed_resource_version(
+    runtime: TrainerRuntime,
+    workspace_id: str,
+    record: ResourceRecord,
+) -> None:
+    """TR-059: at index time, advance the content version when the source
+    content changed since the last pin (re-index version history). Best-effort:
+    version tracking must never fail an index."""
+    store = runtime.resource_version_store
+    if store is None:
+        return
+    source = record.source
+    if source.startswith(("http://", "https://")) or not Path(source).is_file():
+        return
+    try:
+        store.record_version_if_changed(
+            workspace_id=workspace_id,
+            resource_id=record.id,
+            content=Path(source).read_bytes(),
+        )
+    except (OSError, ValueError):
+        return
+    record.content_hash = store.current_content_hash(workspace_id, record.id)
+
+
 def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
     router = APIRouter(tags=["resources"])
 
@@ -379,7 +404,6 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         try:
             indexed = runtime.resource_service.index(workspace_id, request)
             indexed, _ = runtime.postprocess_indexed_resource(workspace_id, indexed)
-            return indexed
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except PermissionError as exc:
@@ -389,6 +413,10 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             ) from exc
         except (FileNotFoundError, IsADirectoryError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # TR-059: pin (or advance) the content version at index time so
+        # citation history tracks content changes across re-indexes.
+        _record_indexed_resource_version(runtime, workspace_id, indexed)
+        return indexed
 
     @router.post("/resource/search")
     def resource_search(request: ResourceSearchRequest) -> dict[str, object]:

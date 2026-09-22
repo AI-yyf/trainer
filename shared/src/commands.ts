@@ -98,6 +98,7 @@ export const trainerCommands = {
   trainingAttemptEvidence: "trainer.training.attempt.evidence",
   trainingAttemptRecover: "trainer.training.attempt.recover",
   trainingAttemptClose: "trainer.training.attempt.close",
+  trainingAttemptProjection: "trainer.training.attempt.projection",
   trainingReturn: "trainer.training.return",
   trainingReliabilityControl: "trainer.training.reliabilityControl",
   trainingDependencySkillMapAction: "trainer.training.dependencySkillMapAction",

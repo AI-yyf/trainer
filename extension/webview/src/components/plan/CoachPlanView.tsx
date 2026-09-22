@@ -19,6 +19,7 @@ import {
 } from "../icons";
 import { useTranslation } from "../../lib/i18n/useTranslation";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
+import { SkillProjectionStrip } from "../training/SkillProjectionStrip";
 import { getMotivationalMessage, type MotivationLanguage } from "../../../../../shared/src/motivation";
 import type {
   EvidenceItemView,
@@ -997,6 +998,10 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     onRejectPlanChange,
   } = props;
   const { t, language } = useTranslation();
+  // Phase-D: capability ladder from the active attempt's evidence.
+  const skillProjection = useWorkbenchState(
+    (state) => state.data.workspaceTrainingState?.skillProjection,
+  );
   const [evidenceFilter, setEvidenceFilter] = useState<"all" | "pending" | "deferred" | "adopted" | "rejected" | "history">(
     "pending",
   );
@@ -1825,6 +1830,14 @@ export function CoachPlanView(props: CoachPlanViewProps) {
           onStageSelect && activeStage ? () => onStageSelect(activeStage) : undefined
         }
       />
+
+      {planTab === "progress" ? null : (
+        <SkillProjectionStrip
+          language={language}
+          projection={skillProjection}
+          variant="compact"
+        />
+      )}
 
       {planTab === "progress" ? (
         <PlanDashboard plan={plan} />

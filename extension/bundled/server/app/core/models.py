@@ -2728,6 +2728,10 @@ class PlanUpdateRequest(BaseModel):
     title: str | None = None
     frozen: bool | None = None
     weekly_cadence: str | None = None
+    # Optimistic locking (design §9): the revision the editing window based
+    # its change on. When provided, a save against a moved plan is rejected
+    # with 409 plan_revision_conflict; absent keeps legacy permissive saves.
+    expected_revision: int | None = None
 
 
 class GlobalPlanUpdateRequest(BaseModel):

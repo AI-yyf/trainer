@@ -264,6 +264,7 @@ import {
 } from "../lib/universalLearningPrompts";
 import { isBrowserPreviewFixtureMode } from "../lib/browserSidecar";
 import { useTrainingCommands, useTrainingAttemptLifecycle } from "./useTrainingCommands";
+import { SkillProjectionStrip } from "../components/training/SkillProjectionStrip";
 import { type TrainingRestoreContext, useWorkbenchState } from "./useWorkbenchState";
 import type { PlanReviewItem } from "../components/plan/CoachPlanView";
 import type {
@@ -13899,6 +13900,7 @@ export function App() {
                   trainingState?.latestLearningFollowup,
                 )
           }
+          skillProjection={data.workspaceTrainingState?.skillProjection}
           reviewItems={trainingReviewItems}
           onReviewQueueAction={handleReviewQueueAction}
           reviewSummary={pickLanguageAlignedTrainingText(
@@ -15087,6 +15089,14 @@ export function App() {
                   </button>
                 </div>
               </div>
+            ) : null}
+
+            {activeView === "coach" ? (
+              <SkillProjectionStrip
+                language={layout.composerLanguage}
+                projection={data.workspaceTrainingState?.skillProjection}
+                variant="compact"
+              />
             ) : null}
 
             <CoachComposer

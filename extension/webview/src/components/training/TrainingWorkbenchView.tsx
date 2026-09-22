@@ -9,9 +9,10 @@ import {
   describeTrainingReliability,
   type TrainingReliabilityRecord,
 } from "../../../../../shared/src/trainingReliabilityGovernance";
-import type { TrainingReliability } from "../../lib/types";
+import type { TrainingReliability, TrainingSkillProjection } from "../../lib/types";
 import { CheckMarkIcon, ChevronRightIcon, SparklesIcon, TargetIcon } from "../icons";
 import { ActionButton } from "../common/ActionButton";
+import { SkillProjectionStrip } from "./SkillProjectionStrip";
 import { CollapseSection } from "../common/CollapseSection";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type { ComposerLanguage, TrainingCardType } from "../../lib/types";
@@ -110,6 +111,8 @@ export interface TrainingWorkbenchViewProps {
   latestVerifiedResult?: string;
   latestLearningBlocker?: string;
   latestLearningFollowup?: string;
+  /** Phase-D: evidence-derived skill states for the active attempt. */
+  skillProjection?: TrainingSkillProjection;
   reviewItems?: TrainingReviewItem[];
   reviewSummary?: string;
   onReviewQueueAction?: (payload: {
@@ -1020,6 +1023,7 @@ export function TrainingWorkbenchView({
   latestVerifiedResult,
   latestLearningBlocker,
   latestLearningFollowup,
+  skillProjection,
   reviewItems = [],
   reviewSummary,
   onReviewQueueAction,
@@ -1714,6 +1718,7 @@ export function TrainingWorkbenchView({
                         {latestLearningBlocker}
                       </p>
                     ) : null}
+                    <SkillProjectionStrip language={language} projection={skillProjection} variant="full" />
                     {shouldElevateReturnAction ? (
                       <div
                         className="training-current__actions training-current__actions--primary"
