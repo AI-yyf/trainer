@@ -1259,7 +1259,9 @@ class ResourceService:
         if encoding == "base64":
             file_path.write_bytes(base64.b64decode(inline_content))
         else:
-            file_path.write_text(inline_content, encoding="utf-8")
+            # Byte-exact write: newline translation would make the stored
+            # bytes (and thus the TR-059 content hash) platform-dependent.
+            file_path.write_bytes(inline_content.encode("utf-8"))
         return request.model_copy(
             update={"source": str(file_path), "content": None, "content_encoding": None}
         )

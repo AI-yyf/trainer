@@ -240,7 +240,7 @@ def test_reindex_appends_version_only_when_content_changed(tmp_path: Path) -> No
 
         # Content changes on disk; the re-index appends a second version.
         source_path = Path(first.json()["source"])
-        source_path.write_text("# Versioned resource\nChanged content.\n", encoding="utf-8")
+        source_path.write_bytes("# Versioned resource\nChanged content.\n".encode("utf-8"))
         second = client.post(
             "/resource/index",
             json={"workspace_id": workspace_id, "resource_id": resource_id, "enable_network": False},
