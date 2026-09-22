@@ -289,3 +289,43 @@ def test_evidence_projection_flows_into_workspace_memory(tmp_path: Path) -> None
         # A passed controlled check lifts implementation above not_verified.
         assert dimensions["implementation"]["state"] in {"assisted", "independent", "repeat_verified"}
         assert dimensions["implementation"]["verified_count"] >= 1
+
+
+def test_resource_restore_clears_source_deleted_flags(tmp_path: Path) -> None:
+    """TR-076 symmetry: delete flags citing evidence, restore un-flags it."""
+    workspace_id = "workspace-evidence-restore"
+    content = "# Restorable source\nEvidence cites this content.\n"
+    with build_client(tmp_path) as client:
+        runtime = client.app.state.runtime
+        record = upload_resource(client, workspace_id=workspace_id, content=content)
+        content_hash = record["content_hash"]
+        assert content_hash
+
+        attempt = start_attempt(client, workspace_id=workspace_id, card_id="card-1")
+        evidence_resp = client.post(
+            "/training/attempt/evidence",
+            json={
+                "attempt_id": attempt["attempt_id"],
+                "artifact_hash": content_hash,
+                "result": "passed",
+            },
+        )
+        assert evidence_resp.status_code == 200, evidence_resp.text
+        evidence_id = evidence_resp.json()["evidence"]["evidence_id"]
+
+        deleted = client.post(
+            "/resource/delete",
+            json={"workspace_id": workspace_id, "resource_id": record["id"]},
+        )
+        assert deleted.status_code == 200, deleted.text
+        evidence = find_evidence(runtime, attempt["attempt_id"], evidence_id)
+        assert evidence["source_deleted"] is True
+
+        restored = client.post(
+            "/resource/restore",
+            json={"workspace_id": workspace_id, "resource_id": record["id"]},
+        )
+        assert restored.status_code == 200, restored.text
+        evidence = find_evidence(runtime, attempt["attempt_id"], evidence_id)
+        assert evidence["source_deleted"] is False
+        assert "source deleted" not in evidence["limitations"]

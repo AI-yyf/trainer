@@ -310,6 +310,39 @@ class AttemptStore:
             connection.close()
         return updated
 
+    def clear_evidence_source_deleted(self, *, workspace_id: str, content_hash: str) -> int:
+        """Undo TR-076 flags when a deleted resource is restored: citations
+        point at real content again. Returns the number of records cleared."""
+        connection = self._connect()
+        updated = 0
+        try:
+            rows = connection.execute(
+                "SELECT evidence_id, payload FROM training_evidence WHERE workspace_id = ?",
+                (workspace_id,),
+            ).fetchall()
+            for row in rows:
+                payload = json.loads(row["payload"])
+                if not payload.get("source_deleted"):
+                    continue
+                if payload.get("artifact_hash") != content_hash:
+                    continue
+                payload["source_deleted"] = False
+                limitations = [
+                    item
+                    for item in (payload.get("limitations") or [])
+                    if item != "source deleted"
+                ]
+                payload["limitations"] = limitations
+                connection.execute(
+                    "UPDATE training_evidence SET payload = ? WHERE evidence_id = ?",
+                    (json.dumps(payload, ensure_ascii=False), row["evidence_id"]),
+                )
+                updated += 1
+            connection.commit()
+        finally:
+            connection.close()
+        return updated
+
     def list_evidence(self, attempt_id: str) -> list[dict[str, Any]]:
         rows = self.list_evidence_rows(attempt_id)
         items = [json.loads(row["payload"]) for row in rows]

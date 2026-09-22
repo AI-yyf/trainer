@@ -549,6 +549,18 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         if not restoration.get("restored"):
             raise HTTPException(status_code=409, detail="Resource restoration did not complete.")
 
+        # TR-076 symmetry: the content is back, so citations flagged at delete
+        # time point at real content again.
+        attempt_store = getattr(runtime, "attempt_store", None)
+        version_store = getattr(runtime, "resource_version_store", None)
+        if attempt_store is not None and version_store is not None:
+            content_hash = version_store.current_content_hash(workspace_id, resource_id)
+            if content_hash:
+                attempt_store.clear_evidence_source_deleted(
+                    workspace_id=workspace_id,
+                    content_hash=content_hash,
+                )
+
         try:
             refresh_workspace_sessions(workspace_id)
         except Exception:
