@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from ..db.research_repository import ResearchRepository
     from ..sandbox.service import SandboxService
 from ..training.attempt_store import AttemptStore
+from ..training.plan_revision import PlanRevisionStore
 from ..training.card_generator import CardGenerationService
 from ..training.card_router import CardRouterService
 
@@ -184,6 +185,7 @@ class TrainerRuntime:
     pedagogy_service: PedagogyService = field(default_factory=PedagogyService)
     affect_service: AffectService = field(default_factory=AffectService)
     attempt_store: AttemptStore | None = None
+    plan_revision_store: PlanRevisionStore | None = None
     research_repository: ResearchRepository | None = None
     research_service: ResearchOrchestratorService = field(
         default_factory=ResearchOrchestratorService

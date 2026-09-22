@@ -274,6 +274,42 @@ class AttemptStore:
         payload["is_current"] = True
         return payload
 
+    def mark_evidence_source_deleted(
+        self, *, workspace_id: str, content_hash: str
+    ) -> int:
+        """Mark evidence records referencing a deleted resource's content hash.
+
+        TR-076: old citations show "deleted source" instead of silently
+        pointing to nothing. Returns the number of records flagged.
+        """
+        connection = self._connect()
+        updated = 0
+        try:
+            rows = connection.execute(
+                "SELECT evidence_id, payload FROM training_evidence WHERE workspace_id = ?",
+                (workspace_id,),
+            ).fetchall()
+            for row in rows:
+                payload = json.loads(row["payload"])
+                if payload.get("source_deleted"):
+                    continue
+                # Match on artifact hash — the evidence is bound to the
+                # content version that was deleted.
+                if payload.get("artifact_hash") == content_hash:
+                    payload["source_deleted"] = True
+                    payload["limitations"] = list(
+                        payload.get("limitations") or []
+                    ) + ["source deleted"]
+                    connection.execute(
+                        "UPDATE training_evidence SET payload = ? WHERE evidence_id = ?",
+                        (json.dumps(payload, ensure_ascii=False), row["evidence_id"]),
+                    )
+                    updated += 1
+            connection.commit()
+        finally:
+            connection.close()
+        return updated
+
     def list_evidence(self, attempt_id: str) -> list[dict[str, Any]]:
         rows = self.list_evidence_rows(attempt_id)
         items = [json.loads(row["payload"]) for row in rows]
