@@ -10745,7 +10745,23 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView, activeTrainingCardId, attemptLifecycle, isBrowserPreview]);
 
+  const checkRemoteRunnerBoundary = useCallback((): string | null => {
+    // TR-100: remote workspace without a runner must not silently verify.
+    const wsRoot = data.memory.workspace?.workspaceId ?? "";
+    if (!wsRoot) return null;
+    // VS Code remote workspaces use vscode-remote:// or ssh:// URI schemes.
+    const isRemote = wsRoot.startsWith("vscode-remote://") || wsRoot.startsWith("ssh://");
+    if (!isRemote) return null;
+    return "Remote workspace detected but no remote verification runner is available. Trainer will not run local checks against a remote project.";
+  }, [data.memory.workspace?.workspaceId]);
+
   const handleVerifyTrainingFromIde = useCallback(() => {
+    const boundaryNotice = checkRemoteRunnerBoundary();
+    if (boundaryNotice) {
+      setTrainingVerifyNotice(boundaryNotice);
+      setOperationMessageSurface("training");
+      return;
+    }
     if (isBrowserPreview || leftoverTrainingHandoffChromeNotLive || !activeTrainingCardId) {
       const notice =
         layout.composerLanguage === "zh-CN"
