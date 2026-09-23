@@ -43,6 +43,7 @@ from .source_governance import (
 from .source_governance import (
     is_commercial_reuse_eligible as source_is_commercial_reuse_eligible,
 )
+from .versioning import ResourceVersionStore, provenance_payload
 
 _REFERENCE_STOPWORDS = {
     "a",
@@ -147,6 +148,7 @@ class ResourceService:
         self.semantic_memory = semantic_memory
         self.enable_network_fetch = enable_network_fetch
         self.data_root = data_root or repository.database_path.parent
+        self.version_store = ResourceVersionStore(repository.database_path)
         self.registry = ResourceRegistry()
         self.ingestor = ResourceIngestor(self.registry, ingest_service)
         self._workspace_path_resolver: Callable[[str], str | None] | None = None
@@ -164,6 +166,23 @@ class ResourceService:
         close = getattr(self.semantic_memory, "close", None)
         if callable(close):
             close()
+
+    def _record_resource_version(
+        self,
+        workspace_id: str,
+        resource: ApiResourceRecord,
+        content: str | bytes,
+    ) -> dict[str, Any] | None:
+        version = self.version_store.record_version_if_changed(
+            workspace_id=workspace_id,
+            resource_id=resource.id,
+            content=content,
+            location={"path": resource.canonical_source or resource.source},
+        )
+        current = version or self.version_store.current_version(workspace_id, resource.id)
+        if current is not None:
+            resource.content_hash = current["content_hash"]
+        return current
 
     def upload(
         self,
@@ -216,6 +235,16 @@ class ResourceService:
             source_declaration=request.source_declaration,
             source_governance=source_governance,
         )
+        source_path = self._local_source_path(resource.source)
+        if source_path is not None and source_path.is_file():
+            try:
+                self._record_resource_version(
+                    workspace_id,
+                    resource,
+                    source_path.read_bytes(),
+                )
+            except (OSError, ValueError):
+                pass
         self.repository.save_resource(workspace_id, resource)
         self._ensure_registry_resource(resource)
         return resource
@@ -257,6 +286,14 @@ class ResourceService:
             for chunk in ingest_result.chunks
         ]
         combined_text = "\n\n".join(chunk.text for chunk in normalized_chunks if chunk.text)
+        version_content: str | bytes = combined_text
+        source_path = self._local_source_path(resource.source)
+        if not self._is_folder_resource(resource) and source_path is not None and source_path.is_file():
+            try:
+                version_content = source_path.read_bytes()
+            except OSError:
+                pass
+        current_version = self._record_resource_version(workspace_id, resource, version_content)
         source_provenance = getattr(ingest_result, "source_provenance", {})
         if not isinstance(source_provenance, dict):
             source_provenance = {}
@@ -329,6 +366,8 @@ class ResourceService:
             chunks=normalized_chunks,
             quality_flags=quality_flags,
             duplicate_key=duplicate_key,
+            version=current_version,
+            workspace_id=workspace_id,
         )
         if canonical_duplicate is not None:
             knowledge_fragments = []
@@ -394,6 +433,7 @@ class ResourceService:
                 "warnings": list(warnings),
                 "knowledge_fragments": knowledge_fragments,
                 "source_governance": source_governance,
+                "content_hash": (current_version or {}).get("content_hash") or resource.content_hash,
             }
         )
         if canonical_duplicate is not None:
@@ -614,7 +654,8 @@ class ResourceService:
                 "parse_status": "pending",
                 "index_status": "pending",
                 "fetched_at": None,
-                "knowledge_fragments": [],
+                # Keep historical fragments and their provenance while the
+                # resource is tombstoned; re-index may replace them later.
                 "warnings": warnings,
             }
         )
@@ -1114,6 +1155,7 @@ class ResourceService:
             or resource.name
         )
         search_path = str(resource.sandbox_path or resource.source or "")
+        current_version = self.version_store.current_version(workspace_id, resource.id)
         self._search_index(workspace_id).index_document(
             path=search_path,
             title=resource.name,
@@ -1137,6 +1179,9 @@ class ResourceService:
                 "resource_preview_tier": preview_tier,
                 "resource_preview_kind": preview_kind,
                 "resource_source_extension": source_extension,
+                "version_id": current_version.get("version_id") if current_version else "",
+                "content_hash": resource.content_hash or "",
+                "location": {"path": search_path},
             },
         )
 
@@ -1697,6 +1742,8 @@ class ResourceService:
         chunks: list[ResourceChunk],
         quality_flags: list[str],
         duplicate_key: str,
+        version: dict[str, Any] | None = None,
+        workspace_id: str = "",
     ) -> list[dict[str, Any]]:
         blocking_flags = {"duplicate", "source_conflict", "fetch_failed", "blocked_source", "network_disabled", "placeholder", "no_content"}
         if any(flag in blocking_flags for flag in quality_flags):
@@ -1706,31 +1753,60 @@ class ResourceService:
             snippet = self._truncate(chunk.text.strip(), max_chars=180)
             if not snippet:
                 continue
-            fragments.append(
-                {
-                    "id": chunk.chunk_id,
-                    "resource_id": resource.id,
-                    "title": resource.name.strip() or resource.id,
-                    "snippet": snippet,
-                    "summary": self._truncate(snippet, max_chars=96),
-                    "evidence_summary": self._truncate(
-                        self._evidence_summary(chunk.text, title=resource.name),
-                        max_chars=160,
-                    ),
-                    "source": canonical_source,
-                    "source_type": resource.source_type or self._source_type(resource.kind, resource.source),
-                    "kind": resource.kind,
-                    "trust_score": trust_score,
-                    "freshness": freshness,
-                    "fetched_at": datetime.now(UTC).isoformat() if resource.kind == "url" else None,
-                    "duplicate_key": duplicate_key,
-                    "quality_flags": list(quality_flags),
-                    "focus_area": resource.name.strip() or resource.kind,
+            fragment_payload = {
+                "id": chunk.chunk_id,
+                "resource_id": resource.id,
+                "title": resource.name.strip() or resource.id,
+                "snippet": snippet,
+                "summary": self._truncate(snippet, max_chars=96),
+                "evidence_summary": self._truncate(
+                    self._evidence_summary(chunk.text, title=resource.name),
+                    max_chars=160,
+                ),
+                "source": canonical_source,
+                "source_type": resource.source_type or self._source_type(resource.kind, resource.source),
+                "kind": resource.kind,
+                "trust_score": trust_score,
+                "freshness": freshness,
+                "fetched_at": datetime.now(UTC).isoformat() if resource.kind == "url" else None,
+                "duplicate_key": duplicate_key,
+                "quality_flags": list(quality_flags),
+                "focus_area": resource.name.strip() or resource.kind,
+                "line_start": chunk.start_line,
+                "line_end": chunk.end_line,
+                "location": {
+                    "path": canonical_source,
+                    "chunk_id": chunk.chunk_id,
                     "line_start": chunk.start_line,
                     "line_end": chunk.end_line,
-                    "why_it_matters": self._why_it_matters(resource, chunk),
-                }
-            )
+                },
+                "why_it_matters": self._why_it_matters(resource, chunk),
+                **provenance_payload(
+                    resource_id=resource.id,
+                    version_id=(version or {}).get("version_id"),
+                    content_hash=(version or {}).get("content_hash") or resource.content_hash,
+                    location={
+                        "path": canonical_source,
+                        "chunk_id": chunk.chunk_id,
+                        "line_start": chunk.start_line,
+                        "line_end": chunk.end_line,
+                    },
+                ),
+            }
+            if workspace_id:
+                # Version-scoped stable citation id (resource+version+location);
+                # dropping the legacy resource-only override keeps each
+                # fragment's citation distinct and deletion-verifiable.
+                citation = self.version_store.record_citation(
+                    workspace_id=workspace_id,
+                    resource_id=resource.id,
+                    version_id=fragment_payload.get("version_id"),
+                    content_hash=fragment_payload.get("content_hash"),
+                    location=fragment_payload.get("location"),
+                    payload={"fragment_id": chunk.chunk_id},
+                )
+                fragment_payload["citation_id"] = citation["citation_id"]
+            fragments.append(fragment_payload)
         return fragments
 
     def _canonical_resource_for_duplicate_key(
@@ -2248,9 +2324,28 @@ class ResourceService:
             for flag in quality_flags
         ):
             return None
+        source = str(fragment.get("source", resource.canonical_source or resource.source))
+        location = fragment.get("location")
+        if not isinstance(location, dict):
+            location = {
+                "path": source,
+                "chunk_id": str(fragment.get("id", "") or "").strip() or None,
+                "line_start": fragment.get("line_start"),
+                "line_end": fragment.get("line_end"),
+            }
+        normalized_provenance = provenance_payload(
+            resource_id=str(fragment.get("resource_id", "") or resource.id),
+            version_id=str(fragment.get("version_id", "") or "").strip() or None,
+            content_hash=(
+                str(fragment.get("content_hash", "") or "").strip()
+                or resource.content_hash
+            ),
+            location=location,
+            fallback_path=source,
+        )
         return {
             "id": str(fragment.get("id", "") or resource.id),
-            "resource_id": str(fragment.get("resource_id", "") or resource.id),
+            "resource_id": normalized_provenance["resource_id"],
             "title": str(fragment.get("title", "") or resource.name.strip() or resource.id),
             "snippet": snippet,
             "summary": self._truncate(str(fragment.get("summary", "") or snippet), max_chars=96),
@@ -2258,7 +2353,7 @@ class ResourceService:
                 str(fragment.get("evidence_summary", "") or self._evidence_summary(snippet, title=resource.name)),
                 max_chars=160,
             ),
-            "source": str(fragment.get("source", resource.canonical_source or resource.source)),
+            "source": source,
             "source_type": str(fragment.get("source_type", resource.source_type or self._source_type(resource.kind, resource.source))),
             "kind": str(fragment.get("kind", resource.kind)),
             "trust_score": self._float_or_default(
@@ -2272,11 +2367,13 @@ class ResourceService:
             "focus_area": str(fragment.get("focus_area", resource.name.strip() or resource.kind)),
             "line_start": fragment.get("line_start"),
             "line_end": fragment.get("line_end"),
+            "location": normalized_provenance["location"],
             "why_it_matters": str(
                 fragment.get("why_it_matters")
                 or f"Grounds follow-up coaching with {resource.name}."
             ).strip(),
             "source_governance": resource.source_governance.model_dump(mode="json"),
+            **normalized_provenance,
         }
 
     def _why_it_matters(self, resource: ApiResourceRecord, chunk: ResourceChunk) -> str:

@@ -348,14 +348,30 @@ class TrainerRepository:
         if scope and not (existing and existing != scope):
             plan.workspace_id = existing or scope
         with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT payload FROM learning_plan WHERE plan_id = ?",
+                (plan.id,),
+            ).fetchone()
+            current = 0
+            if row is not None:
+                try:
+                    current = int(json.loads(row["payload"]).get("_plan_revision", 0) or 0)
+                except (TypeError, ValueError):
+                    current = 0
+            # Legacy unconditional write still advances the revision counter so
+            # a direct save can never silently reset another window's base.
+            plan_payload = plan.model_dump()
+            plan_payload["_plan_revision"] = current + 1
             connection.execute(
                 """
                 INSERT INTO learning_plan (plan_id, workspace_id, payload)
                 VALUES (?, ?, ?)
                 ON CONFLICT(plan_id) DO UPDATE SET payload = excluded.payload
                 """,
-                (plan.id, workspace_id, plan.model_dump_json()),
+                (plan.id, scope, json.dumps(plan_payload, ensure_ascii=False, default=str)),
             )
+            connection.commit()
 
     def get_plan_revision(self, workspace_id: str, plan_id: str) -> int:
         """Read the current plan revision for optimistic locking."""
@@ -375,35 +391,42 @@ class TrainerRepository:
         plan: LearningPlan,
         *,
         expected_revision: int,
+        allow_legacy: bool = False,
     ) -> dict[str, Any] | None:
-        """Optimistic-lock plan save: rejects if the stored revision differs.
+        """Atomically compare and write a plan revision.
 
-        Returns {'revision': new_rev} on success, None on conflict. Plan ids
-        are globally unique in this schema, so a save arriving from a
-        different workspace than the stored row is rejected instead of
-        silently overwriting the other workspace's plan.
+        SQLite's write lock makes the revision check and UPSERT one operation;
+        two windows cannot both pass the same expected revision.
         """
-        current = self.get_plan_revision(workspace_id, plan.id)
-        if current != expected_revision:
-            return None
+        scope = (workspace_id or "").strip()
         with self._connect() as connection:
-            owner = connection.execute(
-                "SELECT workspace_id FROM learning_plan WHERE plan_id = ?",
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT workspace_id, payload FROM learning_plan WHERE plan_id = ?",
                 (plan.id,),
             ).fetchone()
-        if owner is not None and str(owner["workspace_id"]) != workspace_id:
-            return None
-        new_revision = current + 1
-        plan_payload = plan.model_dump()
-        plan_payload["_plan_revision"] = new_revision
-        with self._connect() as connection:
+            if row is not None and str(row["workspace_id"]) != scope:
+                connection.rollback()
+                return None
+            current = 0
+            if row is not None:
+                payload = json.loads(row["payload"])
+                current = int(payload.get("_plan_revision", 0) or 0)
+            if expected_revision != current:
+                connection.rollback()
+                return None
+            new_revision = current + 1
+            plan_payload = plan.model_dump()
+            plan_payload["_plan_revision"] = new_revision
             connection.execute(
                 """
                 INSERT INTO learning_plan (plan_id, workspace_id, payload)
                 VALUES (?, ?, ?)
-                ON CONFLICT(plan_id) DO UPDATE SET payload = excluded.payload
+                ON CONFLICT(plan_id) DO UPDATE SET
+                  workspace_id = excluded.workspace_id,
+                  payload = excluded.payload
                 """,
-                (plan.id, workspace_id, json.dumps(plan_payload, ensure_ascii=False, default=str)),
+                (plan.id, scope, json.dumps(plan_payload, ensure_ascii=False, default=str)),
             )
             connection.commit()
         return {"revision": new_revision}

@@ -5817,7 +5817,9 @@ class MemoryService:
                             plan_change_summary=plan_change_summary,
                         )["plan_change_summary"]
                     plan_updated = True
-                    self.repository.save_plan(workspace_id, plan)
+                    from ..training.plan_revision import save_plan_advancing_revision
+
+                    save_plan_advancing_revision(self.repository, workspace_id, plan)
         advanced = self.persist_plan_runtime_advance_after_adopt(workspace_id, adopted)
         self._refresh_training_next_challenge_after_runtime_advance(
             workspace_id,

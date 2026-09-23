@@ -2728,9 +2728,9 @@ class PlanUpdateRequest(BaseModel):
     title: str | None = None
     frozen: bool | None = None
     weekly_cadence: str | None = None
-    # Optimistic locking (design §9): the revision the editing window based
-    # its change on. When provided, a save against a moved plan is rejected
-    # with 409 plan_revision_conflict; absent keeps legacy permissive saves.
+    # Formal UI saves must provide expected_revision; legacy callers can opt
+    # into the compatibility path until their transport is migrated.
+    formal_plan_mutation: bool = False
     expected_revision: int | None = None
 
 

@@ -20,6 +20,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .skill_projection import normalize_evidence_result
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS training_attempts (
     attempt_id TEXT PRIMARY KEY,
@@ -200,6 +202,37 @@ class AttemptStore:
             connection.close()
         return payload
 
+    def list_attempts(
+        self,
+        *,
+        workspace_id: str,
+        card_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List attempt history for capability aggregation.
+
+        The projection needs distinct attempts, while the active-attempt API
+        still remains idempotent.  Return payloads without evidence here so
+        callers can choose the evidence view they need and workspace scope is
+        explicit at the query boundary.
+        """
+        connection = self._connect()
+        try:
+            if card_id is None:
+                rows = connection.execute(
+                    "SELECT payload FROM training_attempts "
+                    "WHERE workspace_id = ? ORDER BY rowid",
+                    (workspace_id,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    "SELECT payload FROM training_attempts "
+                    "WHERE workspace_id = ? AND card_id = ? ORDER BY rowid",
+                    (workspace_id, card_id),
+                ).fetchall()
+        finally:
+            connection.close()
+        return [json.loads(row["payload"]) for row in rows]
+
     def get_attempt(
         self, attempt_id: str, *, workspace_id: str | None = None
     ) -> dict[str, Any] | None:
@@ -226,6 +259,18 @@ class AttemptStore:
         execution_location: str = "workspace",
         trust_level: str = "controlled_check",
         limitations: list[str] | None = None,
+        execution_status: str | None = None,
+        error_category: str | None = None,
+        failure_reason: str | None = None,
+        error_code: str | None = None,
+        scenario: Any = None,
+        environment: Any = None,
+        constraints: Any = None,
+        transfer_metadata: dict[str, Any] | None = None,
+        resource_id: str | None = None,
+        resource_version_id: str | None = None,
+        resource_content_hash: str | None = None,
+        resource_location: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         # Identity derives from the stored attempt — the client cannot forge
         # another workspace's or card's evidence.
@@ -238,6 +283,14 @@ class AttemptStore:
             return None
         now = utc_now()
         evidence_id = f"evidence-{uuid.uuid4().hex}"
+        canonical_result = normalize_evidence_result(
+            result,
+            execution_status=execution_status,
+            error_category=error_category,
+            failure_reason=failure_reason,
+            error_code=error_code,
+            limitations=limitations,
+        )
 
         # Honesty contract: recording new evidence supersedes the previous
         # current record for this attempt.
@@ -254,19 +307,37 @@ class AttemptStore:
             "card_id": card_id,
             "artifact_hash": artifact_hash,
             "artifact_version": attempt.get("file_version", 1),
+            "resource_id": resource_id,
+            "resource_version_id": resource_version_id,
+            "resource_content_hash": resource_content_hash,
+            "resource_location": resource_location or {},
             "runner_version": runner_version,
             "execution_location": execution_location,
             "trust_level": trust_level,
             "assistance_level": attempt.get("assistance_level", "independent"),
-            "result": result,
+            "result": canonical_result,
             "limitations": limitations or [],
             "created_at": now,
             "superseded_by_evidence_id": None,
         }
+        if canonical_result != str(result or "").strip().lower().replace("-", "_").replace(" ", "_"):
+            payload["original_result"] = result
+        for key, value in (
+            ("execution_status", execution_status),
+            ("error_category", error_category),
+            ("failure_reason", failure_reason),
+            ("error_code", error_code),
+            ("scenario", scenario),
+            ("environment", environment),
+            ("constraints", constraints),
+            ("transfer_metadata", transfer_metadata),
+        ):
+            if value is not None:
+                payload[key] = value
         self._write_evidence_row(evidence_id, payload)
         self.update_attempt(
             attempt_id,
-            status="verified" if result == "passed" else attempt.get("status"),
+            status="verified" if canonical_result == "passed" else attempt.get("status"),
             file_hash=artifact_hash,
         )
         # The brand-new record is current by definition: the attempt's bound
@@ -275,7 +346,7 @@ class AttemptStore:
         return payload
 
     def mark_evidence_source_deleted(
-        self, *, workspace_id: str, content_hash: str
+        self, *, workspace_id: str, content_hash: str, resource_id: str | None = None
     ) -> int:
         """Mark evidence records referencing a deleted resource's content hash.
 
@@ -293,24 +364,27 @@ class AttemptStore:
                 payload = json.loads(row["payload"])
                 if payload.get("source_deleted"):
                     continue
-                # Match on artifact hash — the evidence is bound to the
-                # content version that was deleted.
-                if payload.get("artifact_hash") == content_hash:
-                    payload["source_deleted"] = True
-                    payload["limitations"] = list(
-                        payload.get("limitations") or []
-                    ) + ["source deleted"]
-                    connection.execute(
-                        "UPDATE training_evidence SET payload = ? WHERE evidence_id = ?",
-                        (json.dumps(payload, ensure_ascii=False), row["evidence_id"]),
-                    )
-                    updated += 1
+                if payload.get("artifact_hash") != content_hash:
+                    continue
+                recorded_resource_id = payload.get("resource_id")
+                if resource_id and recorded_resource_id and recorded_resource_id != resource_id:
+                    continue
+                payload["source_deleted"] = True
+                payload["source_deleted_resource_id"] = resource_id or recorded_resource_id
+                payload["limitations"] = list(payload.get("limitations") or []) + ["source deleted"]
+                connection.execute(
+                    "UPDATE training_evidence SET payload = ? WHERE evidence_id = ?",
+                    (json.dumps(payload, ensure_ascii=False), row["evidence_id"]),
+                )
+                updated += 1
             connection.commit()
         finally:
             connection.close()
         return updated
 
-    def clear_evidence_source_deleted(self, *, workspace_id: str, content_hash: str) -> int:
+    def clear_evidence_source_deleted(
+        self, *, workspace_id: str, content_hash: str, resource_id: str | None = None
+    ) -> int:
         """Undo TR-076 flags when a deleted resource is restored: citations
         point at real content again. Returns the number of records cleared."""
         connection = self._connect()
@@ -326,7 +400,15 @@ class AttemptStore:
                     continue
                 if payload.get("artifact_hash") != content_hash:
                     continue
+                recorded_resource_id = payload.get("resource_id")
+                deleted_resource_id = payload.get("source_deleted_resource_id")
+                if resource_id and (recorded_resource_id or deleted_resource_id) and resource_id not in {
+                    recorded_resource_id,
+                    deleted_resource_id,
+                }:
+                    continue
                 payload["source_deleted"] = False
+                payload.pop("source_deleted_resource_id", None)
                 limitations = [
                     item
                     for item in (payload.get("limitations") or [])
@@ -351,6 +433,7 @@ class AttemptStore:
         for item in items:
             item["is_current"] = bool(
                 item.get("superseded_by_evidence_id") is None
+                and not item.get("source_deleted")
                 and current_hash
                 and item.get("artifact_hash") == current_hash
             )
