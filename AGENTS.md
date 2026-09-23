@@ -40,8 +40,14 @@ trainer/                            # Repository root
 │   │   │   └── types.ts           # TrainerHostState, ProviderConfig, etc.
 │   │   ├── provider/               # Provider config store
 │   │   │   └── providerConfigStore.ts  # SecretStorage-backed provider config
+│   │   ├── workspace/              # Workspace gateway (URI + local/remote fs)
+│   │   │   ├── remoteUri.ts        # Strict workspace URI parsing/DTO helpers
+│   │   │   ├── workspaceGateway.ts # WorkspaceGateway interface + protocol DTOs
+│   │   │   ├── localWorkspaceGateway.ts  # vscode.workspace.fs implementation
+│   │   │   └── remoteWorkspaceGateway.ts # Companion command-bridge client
 │   │   ├── testing/                # VS Code Testing API
-│   │   │   └── testController.ts   # TrainerTestController
+│   │   │   ├── testController.ts   # TrainerTestController
+│   │   │   └── trainingAttestation.ts  # Host-trusted /training/verification/attest
 │   │   └── views/                  # Native VS Code tree views
 │   ├── webview/                    # React workbench UI (Vite + Zustand + i18n)
 │   │   └── src/
@@ -82,9 +88,14 @@ trainer/                            # Repository root
 │   │       │       └── copy.ts     # 8-language i18n (~5.2k lines)
 │   │       └── styles.css          # ~20k lines — token-driven design system
 │   ├── bundled/                    # Bundled Python sidecar (~245 MB, 98 .py files)
+│   │   └── remote/                 # trainer-workspace-companion.vsix (build output, gitignored)
 │   ├── tests/                      # 215 node:test files (node --test)
 │   ├── dist/                       # Build output
 │   └── package.json                # Extension manifest (24 commands, 1 webview view)
+├── remote-extension/               # Trainer Workspace Companion (extensionKind: ["workspace"])
+│   ├── src/extension.ts            # File/search/hash/diagnostics/environment/verify ops
+│   ├── package.json                # Serialized via trainer.remote.capabilities/request commands
+│   └── tsconfig.json               # Compiles shared/src/remoteProtocol.ts into dist/
 ├── server/                         # FastAPI Python sidecar
 │   ├── app/                        # Application package
 │   │   ├── __init__.py
@@ -351,13 +362,16 @@ FastAPI sidecar (port 8765, extension-managed range 34891-34911):
 - **Training**: FSRS-based spaced repetition (`py-fsrs`), dual definition in Python and TS
 
 ## UNIQUE PATTERNS
+- **Local Brain + Remote Hands**: identity/memory/plans/resources/evidence stay on the local UI host; remote project access goes through the `WorkspaceGateway` (`extension/src/workspace/`) and the separate workspace-kind Companion (`remote-extension/`, `trainer.remote.capabilities` / `trainer.remote.request`)
 - `LearningPlan` dual-field sync (`id`/`plan_id`, `cadence`/`weekly_cadence`, `stages`/`phases`) — `server/app/core/models.py`
+- Formal plan saves are optimistic-locked: every plan write advances `_plan_revision` under the SQLite write lock (`save_plan_with_revision` / `save_plan_advancing_revision`); clients must send `expected_revision`, conflicts return 409 `plan_revision_conflict`
+- Evidence honesty: `/training/attempt/evidence` always records `self_reported` (client `trust_level` is ignored); host-trusted evidence only via `/training/verification/attest`; evidence citations resolve `resource_id`/`version_id`/`content_hash`/`location` server-side, and a deleted source flags citations until a same-hash re-index clears them
 - Typed Parts Registry: 16+ message artifact kinds, rendered via `shared/src/partsRendererRegistry.ts`
 - Coach agent loop: ReAct pattern with tool calling (`server/app/llm/agent_loop.py`)
 - Training handoff state machine: card generation → routing → feedback → next card
 - Research uses `dataclass(slots=True)`, core uses `BaseModel` (Pydantic) — intentional separation
 - `WorkbenchSnapshot` is the universal response envelope across most API endpoints
-- Apple ._ metadata files (`._*.py`, `._*.ts`) are byproducts of macOS copy tools — safe to ignore on Windows/Linux
+- Apple ._ metadata files (`._*.py`, `._*.ts`) are byproducts of macOS copy tools — already covered by `.gitignore` (`._*`), safe to ignore on Windows/Linux
 
 ## CROSS-PLATFORM GUIDE
 
@@ -439,6 +453,11 @@ npm run verify
 npm run package:vsix
 npm run verify:delivery  # verify + experience matrix + package
 
+# Remote Workspace Companion (built automatically by vscode:prepublish)
+npm run build:remote-companion --prefix extension
+npm run package:remote-companion --prefix extension
+./extension/node_modules/.bin/tsc -p remote-extension/tsconfig.json --noEmit
+
 # Windows-only helpers (PowerShell)
 powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
 powershell -ExecutionPolicy Bypass -File scripts/dev.ps1
@@ -457,5 +476,7 @@ cd extension/webview && npm run dev   # then open the printed URL
 - Browser preview: `extension/webview/src/lib/browserPreviewHarness.ts` — standalone Vite dev without VS Code
 - Workspace data stored under VS Code global storage directory, not in repo
 - Bundled sidecar: `extension/bundled/` (~245 MB, 98 .py files) — for .vsix distribution
+- Companion VSIX (`extension/bundled/remote/`) and native sidecar binaries are build-time artifacts (gitignored, `*.vsix`); `vscode:prepublish` rebuilds the companion before packaging, and `verify-package.mjs` asserts its presence and entrypoint
+- Provider API keys always live in the local UI host's SecretStorage (`ui_proxy`); the remote Companion never receives credentials
 - Largest files: `routers.py` (~25.5k lines), `styles.css` (~20k lines), `App.tsx` (~14.1k lines), `provider_service.py` (~14k lines), `memory/service.py` (~11.5k lines), `test_api.py` (~10.9k lines), `CoachSettingsView.tsx` (~8.2k lines)
 - i18n covered: zh-CN, en-US, es-ES, fr-FR, de-DE, ja-JP, ko-KR, pt-BR
