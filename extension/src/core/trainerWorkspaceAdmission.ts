@@ -4,6 +4,7 @@ import type {
   WorkspaceSnapshot,
 } from './types';
 import { basenameFs, resolveSovereignWorkspaceRootPath } from './workspaceRoots';
+import { isRemoteWorkspaceSnapshot, resolveWorkspaceUri } from '../commands/workspaceContext';
 import type {
   TrainerWorkspacePendingReconciliation,
   TrainerWorkspaceService,
@@ -12,7 +13,9 @@ import type {
 export function resolveCurrentTrainerProjectPath(
   workspace: WorkspaceSnapshot,
 ): string | undefined {
-  return resolveSovereignWorkspaceRootPath(workspace);
+  return isRemoteWorkspaceSnapshot(workspace)
+    ? resolveWorkspaceUri(workspace)
+    : resolveSovereignWorkspaceRootPath(workspace);
 }
 
 function toReconciliationView(
@@ -35,7 +38,9 @@ export async function resolveTrainerWorkspaceAdmission(
   workspace: WorkspaceSnapshot,
 ): Promise<TrainerWorkspaceAdmissionView | undefined> {
   const projectPath = resolveCurrentTrainerProjectPath(workspace);
-  const snapshot = await trainerWorkspace.toSnapshot(projectPath);
+  const snapshot = await trainerWorkspace.toSnapshot(projectPath, {
+    remote: isRemoteWorkspaceSnapshot(workspace),
+  });
 
   if (!snapshot.workspaceReady) {
     return {

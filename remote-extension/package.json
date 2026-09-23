@@ -1,0 +1,29 @@
+{
+  "name": "trainer-workspace-companion",
+  "displayName": "Trainer Workspace Companion",
+  "description": "Remote workspace capabilities for the local Trainer extension.",
+  "version": "1.0.0",
+  "publisher": "local",
+  "private": true,
+  "engines": { "vscode": "^1.96.0" },
+  "extensionKind": ["workspace"],
+  "activationEvents": ["onCommand:trainer.remote.capabilities", "onCommand:trainer.remote.request"],
+  "main": "./dist/remote-extension/src/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "trainer.remote.capabilities", "title": "Trainer: Remote Workspace Capabilities" },
+      { "command": "trainer.remote.request", "title": "Trainer: Remote Workspace Request" }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "package:vsix": "npm exec --yes --package @vscode/vsce -- vsce package --out trainer-workspace-companion.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "@types/vscode": "^1.96.0",
+    "typescript": "^5.8.3"
+  },
+  "license": "MIT"
+}

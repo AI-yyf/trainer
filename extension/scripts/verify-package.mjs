@@ -374,6 +374,57 @@ export function verifyWebviewDist({
   };
 }
 
+const REMOTE_COMPANION_RELATIVE_PATH = path.join("bundled", "remote", "trainer-workspace-companion.vsix");
+const REMOTE_COMPANION_PACKAGE_RELATIVE_PATH = path.join("..", "remote-extension", "package.json");
+
+/**
+ * The bundled Remote Workspace Companion VSIX must exist and contain the
+ * compiled entrypoint its manifest `main` field promises. ZIP file names are
+ * stored uncompressed, so a byte scan for the entry path is sufficient here.
+ */
+export function verifyRemoteCompanionBundle({ extensionDir } = {}) {
+  const vsixPath = path.join(extensionDir, REMOTE_COMPANION_RELATIVE_PATH);
+  if (!fs.existsSync(vsixPath)) {
+    return {
+      ok: false,
+      vsixRelativePath: REMOTE_COMPANION_RELATIVE_PATH,
+      errors: [
+        `Bundled Remote Workspace Companion VSIX is missing: ${REMOTE_COMPANION_RELATIVE_PATH}. Run "npm run package:remote-companion" first.`,
+      ],
+    };
+  }
+  const manifestPath = path.resolve(extensionDir, REMOTE_COMPANION_PACKAGE_RELATIVE_PATH);
+  let mainField = "";
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    mainField = String(manifest.main ?? "").trim();
+  } catch (error) {
+    return {
+      ok: false,
+      vsixRelativePath: REMOTE_COMPANION_RELATIVE_PATH,
+      errors: [`Remote companion package.json is unreadable: ${error instanceof Error ? error.message : String(error)}`],
+    };
+  }
+  if (!mainField) {
+    return {
+      ok: false,
+      vsixRelativePath: REMOTE_COMPANION_RELATIVE_PATH,
+      errors: ["Remote companion package.json has no main entrypoint."],
+    };
+  }
+  const entryName = `extension/${mainField.replace(/^\.\//, "")}`;
+  const bytes = fs.readFileSync(vsixPath);
+  const needle = Buffer.from(entryName, "utf8");
+  const entryPresent = bytes.indexOf(needle) !== -1;
+  return {
+    ok: entryPresent,
+    vsixRelativePath: REMOTE_COMPANION_RELATIVE_PATH,
+    errors: entryPresent
+      ? []
+      : [`Bundled Remote Workspace Companion VSIX lacks its entrypoint ${entryName}.`],
+  };
+}
+
 export function verifyPackage({
   extensionDir = path.resolve(__dirname, ".."),
   repoRoot = path.resolve(extensionDir, ".."),
@@ -423,6 +474,7 @@ export function verifyPackage({
   const webviewDist = verifyWebviewDist({
     webviewDistDir: path.join(extensionDir, "webview", "dist"),
   });
+  const remoteCompanion = verifyRemoteCompanionBundle({ extensionDir });
   const sidecarParity = verifySidecarBundleParity({ extensionDir, repoRoot });
   const binaryManifest = verifyBundledBinaryManifest({
     extensionDir,
@@ -444,6 +496,7 @@ export function verifyPackage({
   const ok =
     missingRequiredPaths.length === 0 &&
     webviewDist.ok &&
+    remoteCompanion.ok &&
     metadataJunk.length === 0 &&
     sidecarParity.missingBundledFiles.length === 0 &&
     sidecarParity.unexpectedBundledFiles.length === 0 &&
@@ -456,6 +509,7 @@ export function verifyPackage({
     repoRoot,
     missingRequiredPaths,
     webviewDist,
+    remoteCompanion,
     metadataJunk,
     sidecarParity,
     binaryManifest,
@@ -493,6 +547,9 @@ export function formatPackageVerificationErrors(report) {
   }
   for (const item of report.webviewDist?.invalidReferences ?? []) {
     lines.push(`- Invalid webview asset reference in ${item.entry}: ${item.reference}`);
+  }
+  for (const message of report.remoteCompanion?.errors ?? []) {
+    lines.push(`- ${message}`);
   }
   for (const item of report.metadataJunk) {
     lines.push(`- Metadata junk in ${item.scope}: ${item.relativePath}`);

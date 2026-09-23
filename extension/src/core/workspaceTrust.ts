@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { detectRemoteWorkspaceTypeFromContext } from '../../../shared/src/remoteWorkspace';
 import {
   resolveWorkspaceFolderPathForFile,
   resolveWorkspaceFolderPathForKnownFiles,
@@ -152,6 +153,11 @@ export class WorkspaceTrustGuard {
 
   getSnapshot(): {
     trusted: boolean;
+    workspaceUri?: string;
+    scheme?: string;
+    authority?: string;
+    displayPath?: string;
+    remoteType?: import('../../../shared/src/remoteWorkspace').RemoteWorkspaceType;
     workspaceFolder?: string;
     activeWorkspaceRoot?: string;
     activeFile?: string;
@@ -190,18 +196,37 @@ export class WorkspaceTrustGuard {
       resolveWorkspaceFolderPathForFile(activeFile) ??
       resolveWorkspaceFolderPathForKnownFiles(this.recentFiles);
     const remoteName = vscode.env?.remoteName?.trim() || undefined;
-    const workspaceFolder = activeWorkspaceRoot ?? (workspaceFolders.length === 1
-      ? workspaceFolders[0]?.uri.fsPath
-      : undefined);
+    const folder = workspaceFolders.length === 1 ? workspaceFolders[0] : undefined;
+    const folderUri = folder?.uri;
+    const workspaceUri = folderUri && typeof folderUri.toString === 'function'
+      ? folderUri.toString()
+      : undefined;
+    const scheme = folderUri?.scheme?.trim() || undefined;
+    const authority = folderUri?.authority?.trim() || undefined;
+    const remoteType = detectRemoteWorkspaceTypeFromContext({
+      uri: workspaceUri,
+      authority,
+      remoteName,
+    });
+    const isRemoteWorkspace = remoteType !== 'local' || Boolean(remoteName);
+    const workspaceFolder = activeWorkspaceRoot ?? folderUri?.fsPath;
+    const displayPath = isRemoteWorkspace
+      ? folderUri?.path || folderUri?.fsPath
+      : workspaceFolder;
 
     return {
       trusted: vscode.workspace.isTrusted,
+      workspaceUri,
+      scheme,
+      authority,
+      displayPath,
+      remoteType,
       workspaceFolder,
       activeWorkspaceRoot,
       activeFile,
       activeLanguageId: document?.languageId,
       remoteName,
-      isRemoteWorkspace: Boolean(remoteName),
+      isRemoteWorkspace,
       selectionRange,
       selectionText,
       diagnosticErrors,
@@ -209,7 +234,7 @@ export class WorkspaceTrustGuard {
       documentVersion: document?.version,
       recentFiles: [...this.recentFiles],
       recentEditedFiles: [...this.recentEditedFiles],
-      relatedFiles: document ? this.resolveRelatedFiles(document) : [],
+      relatedFiles: !isRemoteWorkspace && document ? this.resolveRelatedFiles(document) : [],
     };
   }
 

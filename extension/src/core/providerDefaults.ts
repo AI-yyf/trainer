@@ -4,7 +4,9 @@ import { normalizeProviderRequestDefaults } from '../../../shared/src/providerRe
 export function defaultProviderCredentialMode(
   workspace: Pick<WorkspaceSnapshot, 'remoteName' | 'isRemoteWorkspace'> | undefined,
 ): ProviderCredentialMode {
-  return workspace?.isRemoteWorkspace || workspace?.remoteName ? 'workspace_secret' : 'ui_proxy';
+  // The UI extension's SecretStorage is always local to this host. Remote
+  // workspace detection therefore cannot justify claiming remote secret storage.
+  return 'ui_proxy';
 }
 
 export { normalizeProviderRequestDefaults };

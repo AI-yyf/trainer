@@ -71,6 +71,7 @@ import {
   updatePlanCommand,
 } from './sessionCommands';
 import { generateStageMaterialCommand } from './stageMaterialCommands';
+import { installRemoteCompanionCommand } from './remoteCompanionCommands';
 import { restartSidecarCommand, stopSidecarCommand } from './sidecarCommands';
 import {
   createResearchHandler,
@@ -216,6 +217,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
         activateCoachSessionCommand(ctx, payload as Parameters<typeof activateCoachSessionCommand>[1]),
     },
     { commandId: COMMAND_IDS.coachRemoteBoundary, register: (ctx) => openCoachScenarioCommand(ctx, 'remoteBoundary') },
+    { commandId: COMMAND_IDS.installRemoteCompanion, register: (ctx) => installRemoteCompanionCommand(ctx) },
     { commandId: COMMAND_IDS.coachDebugLoop, register: (ctx) => openCoachScenarioCommand(ctx, 'debugLoop') },
     {
       commandId: COMMAND_IDS.coachFunctionContract,

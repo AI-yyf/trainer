@@ -101,6 +101,10 @@ export interface TrainerWorkspaceSnapshot {
   currentProject?: TrainerWorkspaceProjectState;
 }
 
+export interface TrainerWorkspaceSnapshotOptions {
+  remote?: boolean;
+}
+
 export interface TrainerWorkspaceRootTransfer {
   sourceRoot: string;
   targetRoot: string;
@@ -349,6 +353,48 @@ function identityRequiresReconciliation(identity: TrainerManagedProjectIdentity)
   return false;
 }
 
+function isRemoteWorkspaceIdentity(value: string | undefined): boolean {
+  return Boolean(value?.trim().includes('://'));
+}
+
+function normalizeRemoteWorkspaceIdentity(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || !trimmed.includes('://')) {
+    throw new Error('A remote workspace URI is required.');
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (!parsed.protocol || !parsed.hostname) {
+      throw new Error('The remote workspace URI must include a scheme and authority.');
+    }
+    parsed.hash = '';
+    return parsed.toString();
+  } catch (error) {
+    throw new Error('The remote workspace URI is invalid.', { cause: error });
+  }
+}
+
+function remoteWorkspaceProjectState(
+  projectUri: string,
+  adoptionMode: TrainerProjectAdoptionMode,
+): TrainerWorkspaceProjectState {
+  const normalized = normalizeRemoteWorkspaceIdentity(projectUri);
+  const fingerprint = crypto.createHash('sha256').update(normalized).digest('hex');
+  const now = new Date().toISOString();
+  return {
+    fingerprint,
+    projectPath: normalized,
+    workspaceRoot: normalized,
+    adoptionMode,
+    canonicalProjectPath: normalized,
+    legacyAliases: [],
+    manifestRevision: 0,
+    pathRevision: 0,
+    identityStatus: 'pending',
+    updatedAt: now,
+  };
+}
+
 function isNotFoundError(error: unknown): boolean {
   return isRecord(error) && error.code === 'ENOENT';
 }
@@ -371,6 +417,9 @@ function chooseNewestProjectState(
 }
 
 export function fingerprintTrainerProjectPath(projectPath: string): string {
+  if (isRemoteWorkspaceIdentity(projectPath)) {
+    return crypto.createHash('sha256').update(normalizeRemoteWorkspaceIdentity(projectPath)).digest('hex');
+  }
   const normalizedPath = normalizeRequiredDirectoryPath(projectPath);
   return crypto.createHash('sha256').update(canonicalPathForComparison(normalizedPath)).digest('hex');
 }
@@ -592,6 +641,17 @@ export class TrainerWorkspaceService {
   }
 
   async getProjectState(projectPath: string): Promise<TrainerWorkspaceProjectState | undefined> {
+    if (isRemoteWorkspaceIdentity(projectPath)) {
+      const rootPath = this.getWorkspaceRoot();
+      if (!rootPath) {
+        return undefined;
+      }
+      const fingerprint = fingerprintTrainerProjectPath(projectPath);
+      const state = this.readProjectRegistry()[fingerprint];
+      return state && state.projectPath === normalizeRemoteWorkspaceIdentity(projectPath)
+        ? { ...state }
+        : undefined;
+    }
     const rootPath = this.getWorkspaceRoot();
     const normalizedProjectPath = normalizeOptionalDirectoryPath(projectPath);
     if (!rootPath || !normalizedProjectPath || !(await this.hasWorkspaceScaffold(rootPath))) {
@@ -625,6 +685,35 @@ export class TrainerWorkspaceService {
     adoptionMode: TrainerProjectAdoptionMode,
     managedIdentity?: TrainerManagedProjectIdentity,
   ): Promise<TrainerWorkspaceProjectState> {
+    if (isRemoteWorkspaceIdentity(projectPath)) {
+      if (adoptionMode === 'managed') {
+        throw new Error('Managed adoption requires a local Trainer companion workspace for remote projects.');
+      }
+      const normalizedProjectUri = normalizeRemoteWorkspaceIdentity(projectPath);
+      const rootPath = this.getWorkspaceRoot();
+      if (!rootPath) {
+        throw new Error('Configure a valid Trainer workspace root before registering a project.');
+      }
+      const registry = this.readProjectRegistry();
+      const fingerprint = fingerprintTrainerProjectPath(normalizedProjectUri);
+      const existing = registry[fingerprint];
+      if (existing?.adoptionMode === 'managed') {
+        throw new Error(
+          'This project is already managed by Trainer and cannot be changed to browse or ignored locally.',
+        );
+      }
+      const state = {
+        ...(existing ?? remoteWorkspaceProjectState(normalizedProjectUri, adoptionMode)),
+        projectPath: normalizedProjectUri,
+        workspaceRoot: rootPath,
+        adoptionMode,
+        canonicalProjectPath: normalizedProjectUri,
+        updatedAt: new Date().toISOString(),
+      };
+      registry[fingerprint] = state;
+      await this.extensionContext.globalState.update(TRAINER_WORKSPACE_PROJECTS_STORAGE_KEY, registry);
+      return { ...state };
+    }
     if (!isAdoptionMode(adoptionMode)) {
       throw new Error(`Unsupported Trainer project adoption mode: ${String(adoptionMode)}.`);
     }
@@ -887,7 +976,21 @@ export class TrainerWorkspaceService {
     await this.clearPendingReconciliation(projectPath);
   }
 
-  async toSnapshot(currentWorkspacePath?: string): Promise<TrainerWorkspaceSnapshot> {
+  async toSnapshot(
+    currentWorkspacePath?: string,
+    options: TrainerWorkspaceSnapshotOptions = {},
+  ): Promise<TrainerWorkspaceSnapshot> {
+    if (options.remote || isRemoteWorkspaceIdentity(currentWorkspacePath)) {
+      const projectPath = currentWorkspacePath
+        ? normalizeRemoteWorkspaceIdentity(currentWorkspacePath)
+        : undefined;
+      const currentProject = projectPath ? await this.getProjectState(projectPath) : undefined;
+      return {
+        workspaceReady: Boolean(this.getWorkspaceRoot()),
+        rootPath: this.getWorkspaceRoot(),
+        currentProject,
+      };
+    }
     const rootPath = this.getWorkspaceRoot();
     if (!rootPath || !(await this.hasWorkspaceScaffold(rootPath))) {
       return { rootPath, workspaceReady: false };
@@ -1733,12 +1836,30 @@ export class TrainerWorkspaceService {
       return undefined;
     }
 
-    const projectPath = normalizeOptionalDirectoryPath(value.projectPath);
+    const projectPath = isRemoteWorkspaceIdentity(value.projectPath)
+      ? (() => {
+          try {
+            return normalizeRemoteWorkspaceIdentity(value.projectPath);
+          } catch {
+            return undefined;
+          }
+        })()
+      : normalizeOptionalDirectoryPath(value.projectPath);
     const workspaceRoot = normalizeOptionalDirectoryPath(value.workspaceRoot);
     if (!projectPath || !workspaceRoot || value.fingerprint !== fingerprintTrainerProjectPath(projectPath)) {
       return undefined;
     }
-    const canonicalProjectPath = normalizeOptionalDirectoryPath(value.canonicalProjectPath) ?? projectPath;
+    const canonicalProjectPath = isRemoteWorkspaceIdentity(projectPath)
+      ? (() => {
+          try {
+            return normalizeRemoteWorkspaceIdentity(
+              typeof value.canonicalProjectPath === 'string' ? value.canonicalProjectPath : projectPath,
+            );
+          } catch {
+            return projectPath;
+          }
+        })()
+      : normalizeOptionalDirectoryPath(value.canonicalProjectPath) ?? projectPath;
     const rootId = value.rootId;
     const projectId = value.projectId;
     const contextId = value.contextId;

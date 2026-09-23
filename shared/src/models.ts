@@ -302,6 +302,10 @@ export type ResourceRecord = {
   extractedArtifactPath?: string;
   /** TR-059: SHA-256 of the uploaded content, pinned at upload time. */
   contentHash?: string | null;
+  /** Content version that produced this resource projection. */
+  versionId?: string | null;
+  /** Stable source coordinates for citations and evidence. */
+  location?: Record<string, unknown>;
   knowledgeFragments?: Array<{
     id: string;
     snippet: string;

@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/src/models';
 import type { TrainerMessagePart, TrainerStreamingState } from '../../../shared/src/protocol';
 import type { ResourceSearchMode } from '../../../shared/src/resourceSearch';
+import type { RemoteWorkspaceType } from '../../../shared/src/remoteWorkspace';
 import type { TrainerCustomSkill } from '../../../shared/src/skillCatalog';
 import type { ComposerLanguage } from '../../../shared/src/types';
 import type { TransferSkillStateRecord } from '../../../shared/src/transferSkillGovernance';
@@ -160,6 +161,16 @@ export interface SidecarStatus {
 
 export interface WorkspaceSnapshot {
   trusted: boolean;
+  /** Serialized workspace-folder URI. For remote workspaces this is the identity. */
+  workspaceUri?: string;
+  /** URI scheme for the active workspace folder (for example vscode-remote). */
+  scheme?: string;
+  /** URI authority for the active workspace folder (for example ssh-remote+host). */
+  authority?: string;
+  /** Human-readable URI path, kept separate from the legacy fsPath fields. */
+  displayPath?: string;
+  /** Detected workspace transport, with local retained as the default. */
+  remoteType?: RemoteWorkspaceType;
   workspaceFolder?: string;
   activeWorkspaceRoot?: string;
   activeFile?: string;
@@ -518,6 +529,7 @@ export interface LearningPlanView {
   verifyMethod?: string[];
   blockedReason?: string;
   nextAfterCurrent?: string;
+  revision?: number;
 }
 
 export interface GlobalPlanView {

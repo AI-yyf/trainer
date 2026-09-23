@@ -32,6 +32,7 @@ export const COMMAND_IDS = {
   listCoachSessions: trainerCommands.listCoachSessions,
   activateCoachSession: trainerCommands.activateCoachSession,
   coachRemoteBoundary: trainerCommands.coachRemoteBoundary,
+  installRemoteCompanion: 'trainer.remote.installCompanion',
   coachDebugLoop: trainerCommands.coachDebugLoop,
   coachFunctionContract: trainerCommands.coachFunctionContract,
   coachConceptMastery: trainerCommands.coachConceptMastery,

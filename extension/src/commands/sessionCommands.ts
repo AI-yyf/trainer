@@ -1,4 +1,3 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
@@ -2127,7 +2126,7 @@ export async function sendMessageCommand(
     provider: providerConfig,
     resource_ids: sessionPayload?.resourceIds ?? [],
     resource_composer_intent: resourceComposerIntentWire(sessionPayload?.resourceComposerIntent),
-    current_file: getCurrentFilePayload(context, sessionPayload, message),
+    current_file: await getCurrentFilePayload(context, sessionPayload, message),
     workspace_file_snapshot: workspaceFileSnapshot,
     response_language: sessionPayload?.responseLanguage,
     answer_mode: normalizeAnswerMode(sessionPayload?.answerMode),
@@ -2371,7 +2370,7 @@ export async function sendStreamMessageCommand(
       provider: providerConfig,
       resource_ids: streamPayload.resourceIds ?? [],
       resource_composer_intent: resourceComposerIntentWire(streamPayload.resourceComposerIntent),
-      current_file: getCurrentFilePayload(context, streamPayload, streamPayload.text),
+      current_file: await getCurrentFilePayload(context, streamPayload, streamPayload.text),
       workspace_file_snapshot: workspaceFileSnapshot,
       response_language: streamPayload.responseLanguage,
       answer_mode: normalizeAnswerMode(streamPayload.answerMode),
@@ -2951,17 +2950,22 @@ export async function updatePlanCommand(
       : undefined;
 
   if (restorePlanHistoryEntryId !== undefined || restorePlanHistoryVersion !== undefined) {
+    const revision = context.getHostState().bootstrap.plan.revision;
+    const restorePayload: Record<string, unknown> = {
+      plan_id: planId,
+      workspace_id: getRuntimeWorkspaceId(context),
+      instructions,
+      restorePlanHistoryEntryId,
+      restorePlanHistoryVersion,
+    };
+    if (revision !== undefined && revision > 0) {
+      restorePayload.expected_revision = revision;
+    }
     const restoreResult = await runPlanCommand(
       context,
       '/plan/update',
       'Update Trainer plan',
-      {
-        plan_id: planId,
-        workspace_id: getRuntimeWorkspaceId(context),
-        instructions,
-        restorePlanHistoryEntryId,
-        restorePlanHistoryVersion,
-      },
+      restorePayload,
     );
     if (restoreResult.ok) {
       await context.patchWorkbenchData(
@@ -2979,17 +2983,22 @@ export async function updatePlanCommand(
     payloadRecord && 'frozen' in payloadRecord
       ? Boolean(payloadRecord.frozen)
       : true;
+  const revision = context.getHostState().bootstrap.plan.revision;
+  const planPayload: Record<string, unknown> = {
+    plan_id: planId,
+    workspace_id: getRuntimeWorkspaceId(context),
+    instructions,
+    freeze: frozen,
+    frozen,
+  };
+  if (revision !== undefined && revision > 0) {
+    planPayload.expected_revision = revision;
+  }
   const result = await runPlanCommand(
     context,
     '/plan/update',
     'Update Trainer plan',
-    {
-      plan_id: planId,
-      workspace_id: getRuntimeWorkspaceId(context),
-      instructions,
-      freeze: frozen,
-      frozen,
-    },
+    planPayload,
   );
   if (result.ok) {
     await context.patchWorkbenchData(
@@ -3914,11 +3923,11 @@ function extractGoals(payload: unknown): string[] | undefined {
   return undefined;
 }
 
-function getCurrentFilePayload(
+async function getCurrentFilePayload(
   context: CommandContext,
   payload?: SessionMessagePayload,
   message?: string,
-):
+): Promise<
   | {
       path: string;
       language_id: string;
@@ -3933,7 +3942,7 @@ function getCurrentFilePayload(
       recent_edited_files?: string[];
       related_files?: Array<{ path: string; reason: string; excerpt?: string; line_span?: string }>;
     }
-  | undefined {
+  | undefined> {
   const editor = vscode.window?.activeTextEditor;
   if (!editor) {
     return undefined;
@@ -3965,7 +3974,7 @@ function getCurrentFilePayload(
     : undefined;
   const relatedFiles =
     !selectionOnly && includeRelatedFiles
-      ? resolveRelatedFiles(editor.document, contextDetail, workingSetMode)
+      ? await resolveRelatedFiles(editor.document, contextDetail, workingSetMode)
       : undefined;
   const workspace = !selectionOnly ? context.getHostState().workspace : undefined;
 
@@ -3991,34 +4000,40 @@ function getCurrentFilePayload(
   };
 }
 
-function resolveRelatedFiles(
+async function resolveRelatedFiles(
   document: vscode.TextDocument,
   contextDetail: 'focused' | 'balanced' | 'full',
   workingSetMode?: 'focused' | 'balanced' | 'broad',
-): Array<{ path: string; reason: string; excerpt?: string; line_span?: string }> | undefined {
-  const baseDir = path.dirname(document.uri.fsPath);
+): Promise<Array<{ path: string; reason: string; excerpt?: string; line_span?: string }> | undefined> {
   const language = document.languageId;
-  const matches = new Map<string, string>();
+  const matches = new Map<string, { uri: vscode.Uri; reason: string }>();
 
   for (const reference of extractImportReferences(document.getText(), language)) {
-    const resolved = resolveImportReference(baseDir, language, reference);
-    if (!resolved || resolved.path === document.uri.fsPath) {
+    const resolved = await resolveImportReference(document.uri, language, reference);
+    if (!resolved || resolved.uri.toString() === document.uri.toString()) {
       continue;
     }
-    if (!matches.has(resolved.path)) {
-      matches.set(resolved.path, reference.reason);
+    const key = resolved.uri.toString();
+    if (!matches.has(key)) {
+      matches.set(key, { uri: resolved.uri, reason: reference.reason });
     }
   }
 
-  return matches.size > 0
-    ? Array.from(matches.entries())
-        .slice(0, workingSetMode === 'focused' ? 2 : workingSetMode === 'broad' ? 6 : 4)
-        .map(([resolvedPath, reason]) => ({
-          path: resolvedPath,
-          reason,
-          ...buildRelatedFileExcerpt(resolvedPath, contextDetail),
-        }))
-    : undefined;
+  if (matches.size === 0) {
+    return undefined;
+  }
+
+  const limit = workingSetMode === 'focused' ? 2 : workingSetMode === 'broad' ? 6 : 4;
+  const related: Array<{ path: string; reason: string; excerpt?: string; line_span?: string }> = [];
+  for (const { uri, reason } of Array.from(matches.values()).slice(0, limit)) {
+    const excerpt = await buildRelatedFileExcerpt(uri, contextDetail);
+    related.push({
+      path: vscode.workspace.asRelativePath(uri, false).replace(/\\/g, '/'),
+      reason,
+      ...excerpt,
+    });
+  }
+  return related.length > 0 ? related : undefined;
 }
 
 function buildPrimaryExcerpt(
@@ -4085,27 +4100,34 @@ function extractImportReferences(
   return results;
 }
 
-function resolveImportReference(
-  baseDir: string,
+async function resolveImportReference(
+  documentUri: vscode.Uri,
   languageId: string,
   reference: { specifier: string; reason: string },
-): { path: string; reason: string } | undefined {
+): Promise<{ uri: vscode.Uri; reason: string } | undefined> {
+  const baseDir = documentUri.with({ path: path.posix.dirname(documentUri.path) });
   const candidateBases =
     languageId === 'python'
       ? resolvePythonSpecifier(baseDir, reference.specifier)
-      : [path.resolve(baseDir, reference.specifier)];
+      : [vscode.Uri.joinPath(baseDir, ...reference.specifier.split('/').filter(Boolean))];
 
   const extensions =
     languageId === 'python'
-      ? ['.py', path.sep + '__init__.py']
-      : ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', path.sep + 'index.ts', path.sep + 'index.tsx', path.sep + 'index.js'];
+      ? ['.py', '/__init__.py']
+      : ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '/index.ts', '/index.tsx', '/index.js'];
 
   for (const candidateBase of candidateBases) {
     for (const extension of extensions) {
-      const candidatePath =
-        extension.startsWith(path.sep) ? `${candidateBase}${extension}` : `${candidateBase}${extension}`;
-      if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
-        return { path: candidatePath, reason: reference.reason };
+      const candidateUri = candidateBase.with({
+        path: `${candidateBase.path}${extension}`,
+      });
+      try {
+        const stat = await vscode.workspace.fs.stat(candidateUri);
+        if ((stat.type & vscode.FileType.File) !== 0) {
+          return { uri: candidateUri, reason: reference.reason };
+        }
+      } catch {
+        // Missing import candidates are expected while probing extensions.
       }
     }
   }
@@ -4113,22 +4135,24 @@ function resolveImportReference(
   return undefined;
 }
 
-function resolvePythonSpecifier(baseDir: string, specifier: string): string[] {
+function resolvePythonSpecifier(baseDir: vscode.Uri, specifier: string): vscode.Uri[] {
   const leadingDots = specifier.match(/^\.+/)?.[0].length ?? 0;
-  const remainder = specifier.slice(leadingDots).replace(/\./g, path.sep);
+  const remainder = specifier.slice(leadingDots).replace(/\./g, '/');
   let resolvedBase = baseDir;
   for (let index = 1; index < leadingDots; index += 1) {
-    resolvedBase = path.dirname(resolvedBase);
+    resolvedBase = resolvedBase.with({ path: path.posix.dirname(resolvedBase.path) });
   }
-  return [path.resolve(resolvedBase, remainder)];
+  return [vscode.Uri.joinPath(resolvedBase, ...remainder.split('/').filter(Boolean))];
 }
 
-function buildRelatedFileExcerpt(
-  filePath: string,
+async function buildRelatedFileExcerpt(
+  fileUri: vscode.Uri,
   contextDetail: 'focused' | 'balanced' | 'full',
-): { excerpt?: string; line_span?: string } {
+): Promise<{ excerpt?: string; line_span?: string }> {
   try {
-    const content = fs.readFileSync(filePath, 'utf8');
+    const content = new TextDecoder('utf-8', { fatal: false }).decode(
+      await vscode.workspace.fs.readFile(fileUri),
+    );
     const lines = content.split(/\r?\n/);
     const endLine = Math.min(lines.length, contextDetail === 'focused' ? 20 : contextDetail === 'full' ? 80 : 40);
     return {

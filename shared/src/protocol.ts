@@ -410,6 +410,10 @@ export type PlanUpdateRequest = {
   planId: string;
   instructions: string;
   freeze?: boolean;
+  expectedRevision?: number;
+  /** Explicit compatibility marker for pre-revision/migration callers. */
+  legacy?: boolean;
+  migration?: boolean;
 };
 
 export type TaskSpecifyRequest = {
@@ -501,6 +505,9 @@ export type TablePart = {
 export type CitationPart = {
   type: "citation";
   resourceId: string;
+  versionId?: string;
+  contentHash?: string;
+  location?: Record<string, unknown>;
   chunkId?: string;
   label: string;
   title?: string;
@@ -1276,6 +1283,11 @@ function normalizeTrainerMessagePart(value: unknown): TrainerMessagePart | undef
         ? {
             type,
             resourceId,
+            versionId: asString(record.versionId) ?? asString(record.version_id),
+            contentHash: asString(record.contentHash) ?? asString(record.content_hash),
+            location:
+              asObjectRecord(record.location) ??
+              (asString(record.path) ? { path: asString(record.path) } : undefined),
             chunkId: asString(record.chunkId) ?? asString(record.chunk_id),
             label,
             title: asString(record.title),

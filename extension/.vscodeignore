@@ -17,3 +17,4 @@ tsconfig.json
 !scripts/bundle-sidecar.mjs
 !scripts/bundle-sidecar-binary.mjs
 !bundled/**
+!bundled/remote/**

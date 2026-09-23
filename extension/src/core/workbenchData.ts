@@ -1715,6 +1715,7 @@ function mapPlan(
     verifyMethod: asStringArray(record.verify_method) ?? (useFallback ? fallback.verifyMethod : undefined),
     blockedReason: asString(record.blocked_reason) ?? (useFallback ? fallback.blockedReason : undefined),
     nextAfterCurrent: asString(record.next_after_current) ?? (useFallback ? fallback.nextAfterCurrent : undefined),
+    revision: asNumber(record._plan_revision) ?? asNumber(record.revision) ?? (useFallback ? fallback.revision : undefined),
     stages: stages.map((stage, index) => mapPlanStage(stage, index)),
   };
 }

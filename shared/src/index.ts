@@ -30,3 +30,5 @@ export * from "./tokens";
 export * from "./types";
 export * from "./resourceOpen";
 export * from "./workspaceTrustState";
+export * from "./remoteProtocol";
+export * from "./remoteWorkspace";

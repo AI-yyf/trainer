@@ -93,6 +93,10 @@
         "title": "Trainer: Coach Remote Workspace Boundary"
       },
       {
+        "command": "trainer.remote.installCompanion",
+        "title": "Trainer: Install Remote Workspace Support"
+      },
+      {
         "command": "trainer.coach.debugLoop",
         "title": "Trainer: Coach Minimal Debug Loop"
       },
@@ -317,8 +321,12 @@
     "verify:sidecar-runtime": "node ./scripts/verify-bundled-sidecar-runtime.mjs",
     "verify:coach-recovery": "node --test ./tests/webviewBridge.test.js && npm run verify:webview-recovery",
     "verify:webview-recovery": "npm exec --yes --package playwright -- node ./scripts/verify-webview-recovery.mjs",
-    "vscode:prepublish": "node ./scripts/prepublish-vsix.mjs",
+    "build:remote-companion": "npm run build --prefix ../remote-extension",
+    "package:remote-companion": "npm run build:remote-companion && npm run package:vsix --prefix ../remote-extension && node ./scripts/copy-remote-companion.mjs",
+    "vscode:prepublish": "node ./scripts/prepublish-vsix.mjs && npm run package:remote-companion",
     "build": "npm run sync:server && npm run clean && tsc -p tsconfig.json",
+    "build:remote-companion": "npm run build --prefix ../remote-extension",
+    "package:remote-companion": "npm run build:remote-companion && npm run package:vsix --prefix ../remote-extension && node ./scripts/copy-remote-companion.mjs",
     "build:webview": "node ./scripts/build-webview-package.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",

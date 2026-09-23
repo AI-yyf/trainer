@@ -8,6 +8,7 @@ import type { BootstrapData, TrainerHostState } from './types';
 import type { WorkspaceTrustGuard } from './workspaceTrust';
 import type { TrainerWorkspaceService } from './trainerWorkspaceService';
 import type { TrainerStreamingState } from '../../../shared/src/protocol';
+import type { WorkspaceGateway } from '../workspace/workspaceGateway';
 
 export interface TrainerRuntimeWorkspaceContext {
   workspaceId: string;
@@ -34,6 +35,7 @@ export interface CommandContext {
   sidecarManager: SidecarProcessManager;
   trustGuard: WorkspaceTrustGuard;
   trainerWorkspace: TrainerWorkspaceService;
+  workspaceGateway: WorkspaceGateway;
   tests: TrainerTestController;
   workbench: WorkbenchHost;
   getHostState(): TrainerHostState;

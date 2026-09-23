@@ -27,6 +27,9 @@ import {
   rehydrateWorkbenchRuntime,
 } from './core/runtimeRehydration';
 import { createEmptyTrainerStreamingState } from '../../shared/src/protocol';
+import { LocalWorkspaceGateway } from './workspace/localWorkspaceGateway';
+import { RemoteWorkspaceGateway } from './workspace/remoteWorkspaceGateway';
+import type { WorkspaceGateway } from './workspace/workspaceGateway';
 
 let sidecarManagerRef: SidecarProcessManager | undefined;
 
@@ -59,6 +62,9 @@ export async function activate(
 
   const initialApiKey = await providerStore.getApiKey();
   const initialWorkspace = trustGuard.getSnapshot();
+  let workspaceGateway: WorkspaceGateway = initialWorkspace.isRemoteWorkspace
+    ? new RemoteWorkspaceGateway(initialWorkspace.remoteName)
+    : new LocalWorkspaceGateway();
   const initialTrainerWorkspaceAdmission = await resolveTrainerWorkspaceAdmission(
     trainerWorkspace,
     initialWorkspace,
@@ -243,6 +249,7 @@ export async function activate(
     sidecarManager,
     trustGuard,
     trainerWorkspace,
+    workspaceGateway,
     tests,
     getHostState,
   };
@@ -347,6 +354,10 @@ export async function activate(
       const previousWorkspaceFolder = hostState.workspace.workspaceFolder;
       const previousSessionId = hostState.sessionId;
       const nextWorkspace = trustGuard.getSnapshot();
+      workspaceGateway = nextWorkspace.isRemoteWorkspace
+        ? new RemoteWorkspaceGateway(nextWorkspace.remoteName)
+        : new LocalWorkspaceGateway();
+      commandContext.workspaceGateway = workspaceGateway;
 
       if (previousWorkspaceFolder === nextWorkspace.workspaceFolder) {
         void workbench.syncLiveContext();

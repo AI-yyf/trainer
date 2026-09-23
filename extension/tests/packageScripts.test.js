@@ -160,14 +160,16 @@ function createSidecarFixture(tempRoot) {
   writeFile(path.join(extensionDir, 'webview', 'dist', 'index.html'), '<html></html>\n');
   writeFile(path.join(extensionDir, 'webview', 'dist', 'vscode-preview.html'), '<html></html>\n');
   writeFile(
-    path.join(
-      extensionDir,
-      'bundled',
-      'bin',
-      `${process.platform}-${process.arch}`,
-      bundledExecutableName(),
-    ),
+    path.join(extensionDir, 'bundled', 'bin', `${process.platform}-${process.arch}`, bundledExecutableName()),
     '',
+  );
+  writeFile(
+    path.join(repoRoot, 'remote-extension', 'package.json'),
+    JSON.stringify({ main: './dist/remote-extension/src/extension.js' }),
+  );
+  writeFile(
+    path.join(extensionDir, 'bundled', 'remote', 'trainer-workspace-companion.vsix'),
+    'PK zip-bytes extension/dist/remote-extension/src/extension.js',
   );
 
   return { repoRoot, extensionDir, serverDir };
@@ -202,7 +204,16 @@ test('webview builds keep the browserSidecar test contract separate from product
 test('package scripts keep VSIX preparation and output routing explicit', () => {
   const packageJson = JSON.parse(fs.readFileSync(extensionPackageJsonPath, 'utf8'));
 
-  assert.equal(packageJson.scripts['vscode:prepublish'], 'node ./scripts/prepublish-vsix.mjs');
+  // The Remote Workspace Companion ships inside the Trainer VSIX, so the
+  // prepublish chain must build and bundle it before vsce runs.
+  assert.equal(
+    packageJson.scripts['vscode:prepublish'],
+    'node ./scripts/prepublish-vsix.mjs && npm run package:remote-companion',
+  );
+  assert.equal(
+    packageJson.scripts['package:remote-companion'],
+    'npm run build:remote-companion && npm run package:vsix --prefix ../remote-extension && node ./scripts/copy-remote-companion.mjs',
+  );
   assert.equal(packageJson.scripts['package:vsix'], 'node ./scripts/package-vsix.mjs');
   assert.equal(
     packageJson.scripts['verify:sidecar-runtime'],
@@ -211,6 +222,12 @@ test('package scripts keep VSIX preparation and output routing explicit', () => 
   assert.equal(fs.existsSync(packageVsixModulePath), true);
   assert.equal(fs.existsSync(prepublishVsixModulePath), true);
   assert.equal(fs.existsSync(verifyBundledSidecarRuntimeScriptPath), true);
+  assert.equal(
+    fs.existsSync(path.resolve(__dirname, '..', 'scripts', 'copy-remote-companion.mjs')),
+    true,
+  );
+  const vscodeIgnore = fs.readFileSync(path.resolve(__dirname, '..', '.vscodeignore'), 'utf8');
+  assert.match(vscodeIgnore, /^!bundled\/remote\/\*\*$/m);
 });
 
 test('VSIX installer handles Windows code command wrappers', () => {
@@ -878,6 +895,39 @@ test('verifyWebviewDist requires both entries and every local asset', async () =
     const invalid = verifyWebviewDist({ webviewDistDir: tempRoot });
     assert.equal(invalid.ok, false);
     assert.deepEqual(invalid.missingAssets, [{ entry: 'vscode-preview.html', reference: './assets/app-123.css' }]);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('verifyRemoteCompanionBundle demands a bundled VSIX with the manifest entrypoint', async () => {
+  const { verifyRemoteCompanionBundle } = await loadPackageScriptModules();
+  const tempRoot = createFixtureRoot();
+  // Mirror the real layout: repoRoot/extension plus repoRoot/remote-extension.
+  const extensionDir = path.join(tempRoot, 'extension');
+  try {
+    const missing = verifyRemoteCompanionBundle({ extensionDir });
+    assert.equal(missing.ok, false);
+    assert.match(missing.errors[0], /package:remote-companion/);
+
+    // A companion VSIX whose entrypoint does not match its manifest fails.
+    writeFile(
+      path.join(tempRoot, 'remote-extension', 'package.json'),
+      JSON.stringify({ main: './dist/remote-extension/src/extension.js' }),
+    );
+    writeFile(path.join(extensionDir, 'bundled', 'remote', 'trainer-workspace-companion.vsix'), 'PK empty');
+    const emptyArchive = verifyRemoteCompanionBundle({ extensionDir });
+    assert.equal(emptyArchive.ok, false);
+    assert.match(emptyArchive.errors[0], /lacks its entrypoint/);
+
+    // A VSIX that carries the manifest entrypoint passes.
+    writeFile(
+      path.join(extensionDir, 'bundled', 'remote', 'trainer-workspace-companion.vsix'),
+      'PK zip bytes: extension/dist/remote-extension/src/extension.js',
+    );
+    const valid = verifyRemoteCompanionBundle({ extensionDir });
+    assert.equal(valid.ok, true);
+    assert.deepEqual(valid.errors, []);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }

@@ -301,7 +301,7 @@ test('built-in templates derive protocol defaults and only narrow where needed',
   assert.deepEqual(openrouter.taskBindings.coach_reply.requiredCapabilities, ['streaming']);
 });
 
-test('template profiles default to workspace secret on remote workspaces', async () => {
+test('template profiles keep remote workspace keys proxied from local storage', async () => {
   const { ProviderProfileRegistry } = loadWithVscodeMock(
     providerProfileRegistryModulePath,
     createVscodeMock('ssh-remote'),
@@ -325,7 +325,9 @@ test('template profiles default to workspace secret on remote workspaces', async
   const profile = await registry.initializeWithTemplate(0, '');
 
   assert.ok(profile);
-  assert.equal(profile.credentialMode, 'workspace_secret');
+  // Remote workspaces have no remote SecretStorage; keys stay local and are
+  // proxied per request, so the default credential mode is ui_proxy.
+  assert.equal(profile.credentialMode, 'ui_proxy');
   assert.equal(registry.getActiveProfileId(), profile.id);
   assert.equal(registry.getActiveProfile()?.id, profile.id);
   assert.equal(registry.getSwitchHistory()[0].toProfileId, profile.id);

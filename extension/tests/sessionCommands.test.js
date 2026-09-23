@@ -1021,7 +1021,7 @@ test('saveProviderFromWebviewCommand syncs runtime preferences into sidecar memo
   assert.equal(savedConfigs[0].providerProfiles, undefined);
 });
 
-test('saveProviderFromWebviewCommand defaults remote workspaces to workspace_secret', async () => {
+test('saveProviderFromWebviewCommand keeps remote workspace keys proxied from local storage', async () => {
   const vscodeMock = {
     commands: {
       async executeCommand() {
@@ -1130,7 +1130,9 @@ test('saveProviderFromWebviewCommand defaults remote workspaces to workspace_sec
   await flushDetachedProviderSaveVerification();
 
   assert.equal(result.ok, true);
-  assert.equal(savedConfigs[0].credentialMode, 'workspace_secret');
+  // Remote workspaces have no remote SecretStorage: keys stay in the local
+  // UI host and are proxied to the sidecar per request (ui_proxy).
+  assert.equal(savedConfigs[0].credentialMode, 'ui_proxy');
   const apiKeyRef = savedConfigs[0].apiKeyRef;
   assert.match(apiKeyRef, /^trainer\.provider\.[0-9a-f-]{36}$/i);
   assert.equal(savedConfigs[0].apiKey, undefined);
