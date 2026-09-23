@@ -397,6 +397,10 @@ function mapLiveGlobalPlanLink(value: unknown): BootstrapData["projectPlanLink"]
   };
 }
 
+function browserPreviewNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 function browserPreviewBoolean(value: unknown): boolean {
   return typeof value === "boolean" ? value : Boolean(value);
 }
@@ -1352,6 +1356,7 @@ async function runBrowserPreviewLiveAction(
         body: JSON.stringify({
           plan_id: planId,
           workspace_id: workspaceId,
+          expected_revision: browserPreviewNumber(snapshot.plan?.revision) ?? 0,
           frozen,
           freeze: frozen,
           instructions: browserPreviewString(payload?.instructions),

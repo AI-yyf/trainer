@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.training.attempt_store import AttemptStore
+from app.training.skill_projection import project_skills
 
 
 def make_store(tmp_path: Path) -> AttemptStore:
@@ -103,6 +104,34 @@ def test_double_evidence_recording_keeps_a_single_current_record(tmp_path: Path)
         item for item in stored_first if item["evidence_id"] == first["evidence_id"]
     )
     assert stored_first_row["superseded_by_evidence_id"] == second["evidence_id"]
+
+
+def test_distinct_attempts_produce_repeat_verified(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    first = store.start_attempt(
+        workspace_id="ws-1", card_id="card-1", file_hash="hash-A"
+    )
+    store.record_evidence(
+        attempt_id=first["attempt_id"], artifact_hash="hash-A", result="passed"
+    )
+
+    # A verified attempt is no longer active, so entering the same card creates
+    # a genuinely new attempt rather than counting a second check on attempt 1.
+    second = store.start_attempt(
+        workspace_id="ws-1", card_id="card-1", file_hash="hash-B"
+    )
+    assert second["attempt_id"] != first["attempt_id"]
+    store.record_evidence(
+        attempt_id=second["attempt_id"], artifact_hash="hash-B", result="passed"
+    )
+
+    records = []
+    for attempt in store.list_attempts(workspace_id="ws-1", card_id="card-1"):
+        records.extend(store.list_evidence(attempt["attempt_id"]))
+
+    projection = project_skills(records)
+    assert projection["implementation"]["state"] == "repeat_verified"
+    assert projection["implementation"]["independent_attempt_count"] == 2
 
 
 def test_assistance_level_and_draft_survive_workspace_scoped_updates(

@@ -8,7 +8,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Protocol, cast
 
 _CJK_CHAR_CLASS = (
     r"\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\U00020000-\U0002fa1f"
@@ -20,6 +20,19 @@ _QUERY_TOKEN_PATTERN = re.compile(rf"[A-Za-z0-9_./:-]+|[{_CJK_CHAR_CLASS}]+")
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def citation_id_for(resource_id: str, version_id: str | None) -> str:
+    """Citation identity anchored to a content version when one exists.
+
+    Legacy rows without a recorded version keep the historical resource-only
+    citation so old clients continue to resolve them.
+    """
+    normalized_resource = str(resource_id or "").strip()
+    normalized_version = str(version_id or "").strip()
+    if normalized_version:
+        return f"citation:{normalized_resource}:{normalized_version}"
+    return f"citation:{normalized_resource}"
 
 
 # Search result with ranking metadata
@@ -51,6 +64,10 @@ class SearchResult:
     rank_reasons: list[str] = field(default_factory=list)
     matched_fields: list[str] = field(default_factory=list)
     match_summary: str = ""
+    # Structured provenance is optional for legacy indexed rows.
+    version_id: str | None = None
+    content_hash: str | None = None
+    location: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -529,9 +546,12 @@ class SearchIndex:
                     for label, matched in field_matches.items()
                     if matched and label in {"title match", "path match", "symbol match", "summary match", "content match"}
                 ]
+                versioned_citation = citation_id_for(
+                    resource_id, str(meta_payload.get("version_id") or "") or None
+                )
                 match_summary = self._match_summary(
                     query_text=query_text,
-                    citation_id=f"citation:{resource_id}",
+                    citation_id=versioned_citation,
                     project_scope=str(meta["project_scope"]),
                     field_matches=field_matches,
                     trust=trust,
@@ -558,7 +578,7 @@ class SearchIndex:
                     project_scope=str(meta["project_scope"]),
                     kind=str(meta["kind"] or meta["file_type"]),
                     index_state=str(meta["index_state"]),
-                    citation_id=f"citation:{resource_id}",
+                    citation_id=versioned_citation,
                     can_inject_training_card=bool(
                         trust >= 0.35 and str(meta["trust_state"]) not in {"blocked", "rejected"}
                     ),
@@ -570,6 +590,13 @@ class SearchIndex:
                     rank_reasons=rank_reasons,
                     matched_fields=matched_fields,
                     match_summary=match_summary,
+                    version_id=str(meta_payload.get("version_id") or "") or None,
+                    content_hash=str(meta_payload.get("content_hash") or "") or None,
+                    location=(
+                        cast(dict[str, Any], meta_payload.get("location"))
+                        if isinstance(meta_payload.get("location"), dict)
+                        else {"path": str(meta["path"])}
+                    ),
                 )
                 filtered_results.append(result)
 
@@ -764,9 +791,12 @@ class SearchIndex:
                 if float(row["trust_score"] or 0.0) >= 0.35 and str(row["trust_state"]) not in {"blocked", "rejected"}:
                     rank_reasons.append("training card eligible")
                 matched_fields = ["filtered result"]
+                filtered_citation = citation_id_for(
+                    str(row["resource_id"]), str(payload.get("version_id") or "") or None
+                )
                 match_summary = self._match_summary(
                     query_text="",
-                    citation_id=f"citation:{row['resource_id']}",
+                    citation_id=filtered_citation,
                     project_scope=str(row["project_scope"]),
                     field_matches={},
                     trust=float(row["trust_score"] or 0.0),
@@ -795,7 +825,7 @@ class SearchIndex:
                         project_scope=str(row["project_scope"]),
                         kind=str(row["kind"] or row["file_type"]),
                         index_state=str(row["index_state"]),
-                        citation_id=f"citation:{row['resource_id']}",
+                        citation_id=filtered_citation,
                         can_inject_training_card=bool(
                             float(row["trust_score"] or 0.0) >= 0.35
                             and str(row["trust_state"]) not in {"blocked", "rejected"}
@@ -811,6 +841,13 @@ class SearchIndex:
                         rank_reasons=rank_reasons,
                         matched_fields=matched_fields,
                         match_summary=match_summary,
+                        version_id=str(payload.get("version_id") or "") or None,
+                        content_hash=str(payload.get("content_hash") or "") or None,
+                        location=(
+                            cast(dict[str, Any], payload.get("location"))
+                            if isinstance(payload.get("location"), dict)
+                            else {"path": str(row["path"])}
+                        ),
                     )
                 )
 

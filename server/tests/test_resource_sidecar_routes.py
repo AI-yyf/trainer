@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.core.models import derive_resource_trust_state
 from app.core.settings import AppSettings
 from app.main import create_app
+from app.resources.versioning import compute_content_hash
 
 
 def build_client(tmp_path: Path) -> TestClient:
@@ -49,6 +50,54 @@ def upload_and_index_markdown(client: TestClient, *, workspace_id: str, text: st
     )
     assert indexed.status_code == 200
     return indexed.json()
+
+
+def test_resource_version_is_recorded_once_and_hash_is_persisted(tmp_path: Path) -> None:
+    workspace_id = "workspace-resource-version-once"
+    content = "# Stable resource\nThe same content must not create another version.\n"
+    expected_hash = compute_content_hash(content)
+    with build_client(tmp_path) as client:
+        uploaded = client.post(
+            "/resource/upload",
+            json={
+                "workspace_id": workspace_id,
+                "kind": "markdown",
+                "name": "stable.md",
+                "source": "inline://stable.md",
+                "content": content,
+            },
+        )
+        assert uploaded.status_code == 200, uploaded.text
+        resource_id = uploaded.json()["id"]
+        assert uploaded.json()["content_hash"] == expected_hash
+        version_store = client.app.state.runtime.resource_version_store
+        uploaded_version = version_store.current_version(workspace_id, resource_id)
+        assert uploaded_version is not None
+        assert uploaded_version["version"] == 1
+
+        first_index = client.post(
+            "/resource/index",
+            json={"workspace_id": workspace_id, "resource_id": resource_id},
+        )
+        assert first_index.status_code == 200, first_index.text
+        first_payload = first_index.json()
+        assert first_payload["content_hash"] == expected_hash
+
+        second_index = client.post(
+            "/resource/index",
+            json={"workspace_id": workspace_id, "resource_id": resource_id},
+        )
+        assert second_index.status_code == 200, second_index.text
+        second_payload = second_index.json()
+        stored = client.app.state.runtime.repository.get_resource(workspace_id, resource_id)
+        current = version_store.current_version(workspace_id, resource_id)
+
+    assert second_payload["content_hash"] == expected_hash
+    assert stored is not None
+    assert stored.content_hash == expected_hash
+    assert current is not None
+    assert current["version"] == 1
+    assert current["content_hash"] == expected_hash
 
 
 def test_resource_trust_state_matches_training_contract() -> None:
@@ -107,7 +156,10 @@ def test_resource_search_route_returns_indexed_hits(tmp_path: Path) -> None:
     top_hit = payload["hits"][0]
     assert top_hit["resource_id"] == indexed["id"]
     assert top_hit["title"] == "coach-notes.md"
-    assert top_hit["citation_id"] == f"citation:{indexed['id']}"
+    # Citation anchors to the recorded content version, not just the resource.
+    assert top_hit["citation_id"].startswith(f"citation:{indexed['id']}:")
+    assert top_hit["citation_id"].endswith(top_hit["version_id"])
+    assert top_hit["content_hash"] == indexed["content_hash"]
     assert top_hit["project_scope"] == workspace_id
     assert top_hit["preview_kind"] in {"markdown", "text"}
     assert top_hit["rank_reasons"]

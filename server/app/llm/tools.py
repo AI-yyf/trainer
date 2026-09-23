@@ -3807,7 +3807,9 @@ async def _handle_save_formal_plan(context: ToolContext, args: dict[str, Any]) -
         ),
     )
     try:
-        repository.save_plan(context.workspace_id, plan)
+        from ..training.plan_revision import save_plan_advancing_revision
+
+        save_plan_advancing_revision(repository, context.workspace_id, plan)
         bind_generated = getattr(getattr(runtime, "memory_service", None), "bind_explicit_generated_plan", None)
         if callable(bind_generated):
             bind_generated(context.workspace_id, plan)

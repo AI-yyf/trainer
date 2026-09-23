@@ -291,8 +291,12 @@ def test_evidence_projection_flows_into_workspace_memory(tmp_path: Path) -> None
         assert dimensions["implementation"]["verified_count"] >= 1
 
 
-def test_resource_restore_clears_source_deleted_flags(tmp_path: Path) -> None:
-    """TR-076 symmetry: delete flags citing evidence, restore un-flags it."""
+def test_resource_restore_requires_same_hash_reindex_before_unflagging(tmp_path: Path) -> None:
+    """TR-076 honesty: restore alone only re-activates the resource as pending.
+
+    A flagged citation keeps its ``source_deleted`` marker until a successful
+    re-index confirms the same content hash is really back on disk.
+    """
     workspace_id = "workspace-evidence-restore"
     content = "# Restorable source\nEvidence cites this content.\n"
     with build_client(tmp_path) as client:
@@ -326,6 +330,129 @@ def test_resource_restore_clears_source_deleted_flags(tmp_path: Path) -> None:
             json={"workspace_id": workspace_id, "resource_id": record["id"]},
         )
         assert restored.status_code == 200, restored.text
+        assert restored.json()["reindex_required"] is True
+        evidence = find_evidence(runtime, attempt["attempt_id"], evidence_id)
+        assert evidence["source_deleted"] is True, (
+            "restore alone must not revalidate a citation; re-index confirmation is required"
+        )
+
+        reindexed = client.post(
+            "/resource/index",
+            json={"workspace_id": workspace_id, "resource_id": record["id"], "enable_network": False},
+        )
+        assert reindexed.status_code == 200, reindexed.text
         evidence = find_evidence(runtime, attempt["attempt_id"], evidence_id)
         assert evidence["source_deleted"] is False
         assert "source deleted" not in evidence["limitations"]
+
+
+def test_delete_flags_only_the_deleted_resources_evidence(tmp_path: Path) -> None:
+    """Identical content in two resources: deleting one must not invalidate the
+    other's evidence. Resource-scoped citation anchors keep the propagation
+    honest even when content hashes collide."""
+    workspace_id = "workspace-evidence-resource-scope"
+    content = "# Shared content\nTwo resources carry the exact same bytes.\n"
+    with build_client(tmp_path) as client:
+        runtime = client.app.state.runtime
+        first = upload_resource(client, workspace_id=workspace_id, content=content)
+        second = upload_resource(client, workspace_id=workspace_id, content=content)
+        assert first["id"] != second["id"]
+        assert first["content_hash"] == second["content_hash"]
+
+        attempt = start_attempt(client, workspace_id=workspace_id, card_id="card-1")
+        first_evidence = client.post(
+            "/training/attempt/evidence",
+            json={
+                "attempt_id": attempt["attempt_id"],
+                "artifact_hash": first["content_hash"],
+                "result": "passed",
+                "resource_id": first["id"],
+            },
+        )
+        assert first_evidence.status_code == 200, first_evidence.text
+        first_evidence_id = first_evidence.json()["evidence"]["evidence_id"]
+        first_recorded = first_evidence.json()["evidence"]
+        assert first_recorded["resource_id"] == first["id"]
+        assert first_recorded["resource_version_id"]
+        assert first_recorded["resource_content_hash"] == first["content_hash"]
+
+        second_evidence = client.post(
+            "/training/attempt/evidence",
+            json={
+                "attempt_id": attempt["attempt_id"],
+                "artifact_hash": second["content_hash"],
+                "result": "passed",
+                "resource_id": second["id"],
+            },
+        )
+        assert second_evidence.status_code == 200, second_evidence.text
+        second_evidence_id = second_evidence.json()["evidence"]["evidence_id"]
+
+        deleted = client.post(
+            "/resource/delete",
+            json={"workspace_id": workspace_id, "resource_id": first["id"]},
+        )
+        assert deleted.status_code == 200, deleted.text
+
+        flagged = find_evidence(runtime, attempt["attempt_id"], first_evidence_id)
+        assert flagged["source_deleted"] is True
+        untouched = find_evidence(runtime, attempt["attempt_id"], second_evidence_id)
+        assert untouched.get("source_deleted") is not True
+
+
+def test_evidence_with_stale_resource_version_is_rejected(tmp_path: Path) -> None:
+    workspace_id = "workspace-evidence-version-conflict"
+    source_file = tmp_path / "cited-source.md"
+    source_file.write_text("# v1\n", encoding="utf-8")
+    with build_client(tmp_path) as client:
+        runtime = client.app.state.runtime
+        store = runtime.resource_version_store
+        assert store is not None
+        uploaded = client.post(
+            "/resource/upload",
+            json={
+                "workspace_id": workspace_id,
+                "kind": "markdown",
+                "name": "cited-source.md",
+                "source": str(source_file),
+            },
+        )
+        assert uploaded.status_code == 200, uploaded.text
+        record = uploaded.json()
+        stale_version_id = store.current_version(workspace_id, record["id"])["version_id"]
+
+        # Change the source on disk, then re-index: the content version advances.
+        source_file.write_text("# v2 changed\n", encoding="utf-8")
+        changed = client.post(
+            "/resource/index",
+            json={"workspace_id": workspace_id, "resource_id": record["id"], "enable_network": False},
+        )
+        assert changed.status_code == 200, changed.text
+        assert store.current_version(workspace_id, record["id"])["version_id"] != stale_version_id
+
+        attempt = start_attempt(client, workspace_id=workspace_id, card_id="card-1")
+        conflict = client.post(
+            "/training/attempt/evidence",
+            json={
+                "attempt_id": attempt["attempt_id"],
+                "artifact_hash": hashlib.sha256(b"artifact").hexdigest(),
+                "result": "passed",
+                "resource_id": record["id"],
+                "resource_version_id": stale_version_id,
+            },
+        )
+        assert conflict.status_code == 409, conflict.text
+        detail = conflict.json()["detail"]
+        assert detail["code"] == "resource_version_conflict"
+        assert detail["current_version_id"] != stale_version_id
+
+        unknown = client.post(
+            "/training/attempt/evidence",
+            json={
+                "attempt_id": attempt["attempt_id"],
+                "artifact_hash": hashlib.sha256(b"artifact").hexdigest(),
+                "result": "passed",
+                "resource_id": "resource-does-not-exist",
+            },
+        )
+        assert unknown.status_code == 422, unknown.text

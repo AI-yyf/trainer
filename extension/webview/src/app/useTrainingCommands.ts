@@ -31,10 +31,19 @@ export interface TrainingAttemptLifecycle {
   updateDraft: (attemptId: string, answerDraft: string) => void;
   /** 使用提示后:推进 assistance level。 */
   updateAssistance: (attemptId: string, assistanceLevel: string) => void;
-  /** Verify 完成:提交证据绑定(身份服务端从 attempt 派生)。 */
+  /** Verify 完成:提交证据绑定(身份服务端从 attempt 派生;trust 级别由服务端定)。 */
   submitEvidence: (
     attemptId: string,
-    evidence: { artifactHash: string; result: string; runnerVersion?: string; executionLocation?: string; trustLevel?: string; limitations?: string[] },
+    evidence: {
+      artifactHash: string;
+      result: string;
+      runnerVersion?: string;
+      executionLocation?: string;
+      limitations?: string[];
+      /** Optional citation anchor; the server resolves version/hash/location. */
+      resourceId?: string;
+      resourceVersionId?: string;
+    },
   ) => void;
   /** Reflect 提交后保持同一 attempt(无需新调用,占位语义清晰)。 */
   keepSameAttempt: () => void;

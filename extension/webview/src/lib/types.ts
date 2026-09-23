@@ -219,6 +219,7 @@ export interface LearningPlan {
   verifyMethod?: string[];
   blockedReason?: string;
   nextAfterCurrent?: string;
+  revision?: number;
 }
 
 export interface GlobalPlan {
@@ -644,6 +645,9 @@ export interface ResourceRecord {
   freshness?: "fresh" | "stale" | "unknown";
   indexState?: string;
   citationId?: string;
+  versionId?: string;
+  contentHash?: string;
+  location?: Record<string, unknown>;
   previewTier?: "rich" | "converted" | "metadata";
   previewKind?: string;
   rankScore?: number;

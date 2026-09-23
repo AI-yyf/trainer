@@ -167,6 +167,79 @@ def test_attempt_endpoints_require_and_accept_the_instance_token(tokened_client:
     assert fetched.json()["attempt"]["card_id"] == "card-1"
 
 
+def test_projection_aggregates_distinct_attempts_for_repeat_verification(
+    tokened_client: TestClient,
+) -> None:
+    headers = {"x-trainer-token": "unit-test-token"}
+    first_start = tokened_client.post(
+        "/training/attempt/start",
+        headers=headers,
+        json={
+            "workspace_id": "ws-repeat",
+            "card_id": "card-repeat",
+            "file_hash": "hash-1",
+        },
+    )
+    assert first_start.status_code == 200
+    first = first_start.json()["attempt"]
+
+    first_evidence = tokened_client.post(
+        "/training/attempt/evidence",
+        headers=headers,
+        json={
+            "attempt_id": first["attempt_id"],
+            "artifact_hash": "hash-1",
+            "result": "passed",
+        },
+    )
+    assert first_evidence.status_code == 200
+
+    closed = tokened_client.post(
+        "/training/attempt/update",
+        headers=headers,
+        json={
+            "workspace_id": "ws-repeat",
+            "attempt_id": first["attempt_id"],
+            "status": "returned",
+        },
+    )
+    assert closed.status_code == 200, closed.text
+
+    second_start = tokened_client.post(
+        "/training/attempt/start",
+        headers=headers,
+        json={
+            "workspace_id": "ws-repeat",
+            "card_id": "card-repeat",
+            "file_hash": "hash-2",
+        },
+    )
+    assert second_start.status_code == 200
+    second = second_start.json()["attempt"]
+    assert second["attempt_id"] != first["attempt_id"]
+
+    second_evidence = tokened_client.post(
+        "/training/attempt/evidence",
+        headers=headers,
+        json={
+            "attempt_id": second["attempt_id"],
+            "artifact_hash": "hash-2",
+            "result": "passed",
+        },
+    )
+    assert second_evidence.status_code == 200
+
+    projection = tokened_client.get(
+        f"/training/attempt/{second['attempt_id']}/projection",
+        headers=headers,
+        params={"workspace_id": "ws-repeat"},
+    )
+    assert projection.status_code == 200
+    implementation = projection.json()["projection"]["implementation"]
+    assert implementation["state"] == "repeat_verified"
+    assert implementation["independent_attempt_count"] == 2
+
+
 def test_attempt_evidence_roundtrip_over_rpc(tokened_client: TestClient) -> None:
     headers = {"x-trainer-token": "unit-test-token"}
     started = tokened_client.post(
@@ -187,6 +260,8 @@ def test_attempt_evidence_roundtrip_over_rpc(tokened_client: TestClient) -> None
             "result": "passed",
             "runner_version": "pytest/8",
             "execution_location": "workspace",
+            # A client claiming controlled_check over the self-report channel
+            # must be downgraded: only the host attestation channel is trusted.
             "trust_level": "controlled_check",
         },
     )
@@ -195,7 +270,7 @@ def test_attempt_evidence_roundtrip_over_rpc(tokened_client: TestClient) -> None
     assert body["artifact_hash"] == "hash-A"
     assert body["runner_version"] == "pytest/8"
     assert body["execution_location"] == "workspace"
-    assert body["trust_level"] == "controlled_check"
+    assert body["trust_level"] == "self_reported"
     assert body["is_current"] is True
 
     fetched = tokened_client.get(

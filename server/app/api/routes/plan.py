@@ -51,15 +51,34 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
     structured_suggested_actions = deps.structured_suggested_actions
     workspace_first_look_summary = deps.workspace_first_look_summary
 
+    def explicit_legacy_plan_save(payload: dict) -> bool:
+        """Allow compatibility saves only when the caller labels the mode."""
+        return any(
+            payload.get(key) is True
+            for key in (
+                "legacy",
+                "legacy_save",
+                "legacySave",
+                "migration",
+                "migration_mode",
+                "migrationMode",
+            )
+        )
+
     def save_plan_or_conflict(
         workspace_id: str,
         plan: LearningPlan,
         *,
         expected_revision: int,
+        allow_legacy: bool = False,
     ) -> int:
         """Persist under optimistic locking; 409 with the current revision on
         conflict so the losing window can re-read and re-apply its change."""
-        from ...training.plan_revision import PlanRevisionConflict, save_plan_checked
+        from ...training.plan_revision import (
+            PlanRevisionConflict,
+            PlanRevisionPreconditionRequired,
+            save_plan_checked,
+        )
 
         try:
             saved = save_plan_checked(
@@ -67,7 +86,18 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
                 workspace_id,
                 plan,
                 expected_revision=expected_revision,
+                allow_legacy=allow_legacy,
             )
+        except PlanRevisionPreconditionRequired as precondition:
+            raise HTTPException(
+                status_code=428,
+                detail={
+                    "code": "plan_revision_required",
+                    "message": "expected_revision is required for a formal plan save.",
+                    "plan_id": plan.id,
+                    "current_revision": precondition.actual_revision,
+                },
+            ) from precondition
         except PlanRevisionConflict as conflict:
             raise HTTPException(
                 status_code=409,
@@ -658,13 +688,29 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
             current = runtime.repository.get_latest_plan(workspace_id)
         if not current:
             raise HTTPException(status_code=404, detail="No learning plan is available yet.")
-        # Optimistic locking (design §9): a window that sends the revision it
-        # based its edit on gets a 409 when another window moved the plan.
-        # Absent expected_revision keeps the legacy permissive save.
+        # Formal UI/API saves must carry the revision observed by the caller.
+        # A zero-head compatibility seed is still accepted for internal
+        # initialization; once a revision exists, omission is rejected unless
+        # the caller explicitly labels legacy/migration mode.
+        current_head_revision = head_plan_revision(workspace_id, current.id)
+        if (
+            request.formal_plan_mutation
+            and request.expected_revision is None
+            and not explicit_legacy_plan_save(payload)
+        ):
+            raise HTTPException(
+                status_code=428,
+                detail={
+                    "code": "plan_revision_required",
+                    "message": "expected_revision is required for a formal plan save.",
+                    "plan_id": current.id,
+                    "current_revision": current_head_revision,
+                },
+            )
         expected_revision = (
             request.expected_revision
             if request.expected_revision is not None
-            else head_plan_revision(workspace_id, current.id)
+            else current_head_revision
         )
         # Explicit mutate by plan_id only when recovered runtime still matches that id.
         # Leftover stored plan with empty/mismatched recovered plan_id must not fill snapshot.plan.

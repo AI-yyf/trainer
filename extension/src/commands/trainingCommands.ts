@@ -1731,8 +1731,10 @@ export interface TrainingAttemptCommandPayload {
   result?: string;
   runnerVersion?: string;
   executionLocation?: string;
-  trustLevel?: string;
   limitations?: string[];
+  /** Optional citation anchor; the server resolves version/hash/location. */
+  resourceId?: string;
+  resourceVersionId?: string;
 }
 
 async function postTrainingAttempt(
@@ -1831,11 +1833,14 @@ export async function trainingAttemptEvidenceCommand(
   if (p.executionLocation) {
     body.execution_location = p.executionLocation;
   }
-  if (p.trustLevel) {
-    body.trust_level = p.trustLevel;
-  }
   if (p.limitations?.length) {
     body.limitations = p.limitations;
+  }
+  if (p.resourceId) {
+    body.resource_id = p.resourceId;
+  }
+  if (p.resourceVersionId) {
+    body.resource_version_id = p.resourceVersionId;
   }
   return postTrainingAttempt(context, '/training/attempt/evidence', body);
 }

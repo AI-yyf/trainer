@@ -8,6 +8,9 @@ export interface SearchHitTeachingSummary {
   trustScore?: number;
   freshness?: string;
   citationId?: string;
+  versionId?: string;
+  contentHash?: string;
+  location?: Record<string, unknown>;
   rankScore?: number;
   matchSummary?: string;
   previewTier?: "rich" | "converted" | "metadata";
@@ -125,6 +128,10 @@ export function summarizeSearchHitTeachingSignal(hit: unknown): SearchHitTeachin
   const trustScore = asNumber(record.trust_score) ?? asNumber(record.trustScore);
   const freshness = asString(record.freshness);
   const citationId = asString(record.citation_id) ?? asString(record.citationId);
+  const versionId = asString(record.version_id) ?? asString(record.versionId);
+  const contentHash = asString(record.content_hash) ?? asString(record.contentHash);
+  const location = asRecord(record.location) ??
+    (source ? { path: source } : undefined);
   const rankScore = asNumber(record.rank_score) ?? asNumber(record.rankScore);
   const matchSummary = asString(record.match_summary) ?? asString(record.matchSummary);
   const previewTier = asPreviewTier(record.preview_tier) ?? asPreviewTier(record.previewTier);
@@ -144,6 +151,9 @@ export function summarizeSearchHitTeachingSignal(hit: unknown): SearchHitTeachin
     trustScore,
     freshness: freshness || undefined,
     citationId: citationId || undefined,
+    versionId: versionId || undefined,
+    contentHash: contentHash || undefined,
+    location,
     rankScore,
     matchSummary: matchSummary || undefined,
     previewTier,

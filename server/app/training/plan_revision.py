@@ -19,7 +19,7 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, cast
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS plan_revisions (
@@ -51,6 +51,19 @@ class PlanRevisionConflict(Exception):
         self.workspace_id = workspace_id
         self.plan_id = plan_id
         self.expected_revision = expected
+        self.actual_revision = actual
+
+
+class PlanRevisionPreconditionRequired(Exception):
+    """Raised when a formal save omits its optimistic-lock base revision."""
+
+    def __init__(self, workspace_id: str, plan_id: str, actual: int) -> None:
+        super().__init__(
+            f"Plan revision is required for workspace={workspace_id} plan={plan_id}; "
+            f"current revision is {actual}"
+        )
+        self.workspace_id = workspace_id
+        self.plan_id = plan_id
         self.actual_revision = actual
 
 
@@ -94,6 +107,7 @@ class PlanRevisionStore:
         payload: dict[str, Any],
         expected_revision: int | None = None,
         created_by: str = "learner",
+        allow_legacy: bool = True,
     ) -> dict[str, Any]:
         """Persist a plan mutation with optimistic locking.
 
@@ -103,9 +117,18 @@ class PlanRevisionStore:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
-            current = self.current_revision(workspace_id, plan_id)
+            # Read the head revision on the SAME connection that holds the
+            # write lock; a second connection here would self-deadlock.
+            row = connection.execute(
+                "SELECT MAX(revision) AS rev FROM plan_revisions WHERE workspace_id = ? AND plan_id = ?",
+                (workspace_id, plan_id),
+            ).fetchone()
+            current = row["rev"] if row and row["rev"] is not None else 0
             new_revision = current + 1
 
+            if expected_revision is None and not allow_legacy and current > 0:
+                connection.rollback()
+                raise PlanRevisionPreconditionRequired(workspace_id, plan_id, current)
             if expected_revision is not None and expected_revision != current:
                 connection.rollback()
                 raise PlanRevisionConflict(workspace_id, plan_id, expected_revision, current)
@@ -153,6 +176,7 @@ def save_plan_checked(
     plan: Any,
     *,
     expected_revision: int,
+    allow_legacy: bool = False,
 ) -> dict[str, Any]:
     """Persist a plan under optimistic locking, raising on conflict.
 
@@ -161,9 +185,50 @@ def save_plan_checked(
     revision, so callers can tell the other window exactly what it lost to.
     """
     saved = repository.save_plan_with_revision(
-        workspace_id, plan, expected_revision=expected_revision
+        workspace_id,
+        plan,
+        expected_revision=expected_revision,
+        allow_legacy=allow_legacy,
     )
     if saved is None:
         current = repository.get_plan_revision(workspace_id, plan.id)
         raise PlanRevisionConflict(workspace_id, plan.id, expected_revision, current)
     return saved
+
+
+def save_plan_advancing_revision(
+    repository: Any,
+    workspace_id: str,
+    plan: Any,
+    *,
+    max_attempts: int = 4,
+) -> int | None:
+    """Persist an internal plan mutation without losing concurrent writes.
+
+    Internal writers (coach tool commit, evidence-adopt stage advance) hold no
+    client base revision, so instead of an unconditional overwrite they
+    compare-and-write against the head revision under the SQLite write lock,
+    retrying when another writer moved the plan first. Repositories without
+    revision support (test doubles) fall back to the legacy save. Returns the
+    new head revision when known.
+    """
+    save_method = getattr(repository, "save_plan_with_revision", None)
+    read_method = getattr(repository, "get_plan_revision", None)
+    if not callable(save_method) or not callable(read_method):
+        repository.save_plan(workspace_id, plan)
+        legacy_read = getattr(repository, "get_plan_revision", None)
+        if callable(legacy_read):
+            return cast(int, legacy_read(workspace_id, plan.id))
+        return None
+    read_revision = cast(Callable[[str, str], int], read_method)
+    save_with_revision = cast(Callable[..., dict[str, Any] | None], save_method)
+    for _ in range(max(1, max_attempts)):
+        current = read_revision(workspace_id, plan.id)
+        saved = save_with_revision(workspace_id, plan, expected_revision=current)
+        if saved is not None:
+            return int(saved.get("revision") or (current + 1))
+    # Every attempt lost the race. The legacy save still advances the
+    # revision counter under the write lock, so other windows detect the
+    # change instead of silently keeping a stale base.
+    repository.save_plan(workspace_id, plan)
+    return read_revision(workspace_id, plan.id)

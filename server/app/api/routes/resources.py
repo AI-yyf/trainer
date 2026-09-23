@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import base64
 import logging
 import re
-from pathlib import Path
 from typing import cast
 
 from fastapi import APIRouter, HTTPException
@@ -31,63 +29,6 @@ from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 
 logger = logging.getLogger(__name__)
-
-
-def _record_resource_version(
-    runtime: TrainerRuntime,
-    workspace_id: str,
-    request: ResourceUploadRequest,
-    record: ResourceRecord,
-) -> None:
-    """TR-059: pin the uploaded content's SHA-256 so evidence citing it can
-    later be flagged when the source is deleted. Best-effort: version tracking
-    must never fail an upload."""
-    store = runtime.resource_version_store
-    if store is None:
-        return
-    try:
-        if request.content and request.content_encoding == "base64":
-            content: str | bytes = base64.b64decode(request.content)
-        elif request.content:
-            content = request.content.encode("utf-8")
-        else:
-            source = record.source
-            if source.startswith(("http://", "https://")) or not Path(source).is_file():
-                return
-            content = Path(source).read_bytes()
-        versioned = store.record_version(
-            workspace_id=workspace_id,
-            resource_id=record.id,
-            content=content,
-        )
-    except (OSError, ValueError):
-        return
-    record.content_hash = versioned["content_hash"]
-
-
-def _record_indexed_resource_version(
-    runtime: TrainerRuntime,
-    workspace_id: str,
-    record: ResourceRecord,
-) -> None:
-    """TR-059: at index time, advance the content version when the source
-    content changed since the last pin (re-index version history). Best-effort:
-    version tracking must never fail an index."""
-    store = runtime.resource_version_store
-    if store is None:
-        return
-    source = record.source
-    if source.startswith(("http://", "https://")) or not Path(source).is_file():
-        return
-    try:
-        store.record_version_if_changed(
-            workspace_id=workspace_id,
-            resource_id=record.id,
-            content=Path(source).read_bytes(),
-        )
-    except (OSError, ValueError):
-        return
-    record.content_hash = store.current_content_hash(workspace_id, record.id)
 
 
 def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
@@ -189,6 +130,9 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                     "kind": str(getattr(item, "kind", "") or ""),
                     "index_state": str(getattr(item, "index_state", "") or ""),
                     "citation_id": str(getattr(item, "citation_id", "") or ""),
+                    "version_id": str(getattr(item, "version_id", "") or "") or None,
+                    "content_hash": str(getattr(item, "content_hash", "") or "") or None,
+                    "location": dict(getattr(item, "location", {}) or {}),
                     "can_inject_training_card": bool(getattr(item, "can_inject_training_card", False)),
                     "preview_tier": str(getattr(item, "preview_tier", "") or ""),
                     "preview_kind": str(getattr(item, "preview_kind", "") or ""),
@@ -391,11 +335,6 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             ) from exc
         except (FileNotFoundError, IsADirectoryError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        _record_resource_version(runtime, workspace_id, request, record)
-        if record.content_hash:
-            # upload() saved the record before hashing; persist the pinned
-            # hash so later reads see the same content version.
-            runtime.repository.save_resource(workspace_id, record)
         return record
 
     @router.post("/resource/index", response_model=ResourceRecord)
@@ -404,6 +343,16 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         try:
             indexed = runtime.resource_service.index(workspace_id, request)
             indexed, _ = runtime.postprocess_indexed_resource(workspace_id, indexed)
+            attempt_store = getattr(runtime, "attempt_store", None)
+            version_store = getattr(runtime, "resource_version_store", None)
+            if not indexed.quality_flags and attempt_store is not None and version_store is not None:
+                content_hash = version_store.current_content_hash(workspace_id, request.resource_id)
+                if content_hash:
+                    attempt_store.clear_evidence_source_deleted(
+                        workspace_id=workspace_id,
+                        content_hash=content_hash,
+                        resource_id=request.resource_id,
+                    )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except PermissionError as exc:
@@ -413,9 +362,6 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             ) from exc
         except (FileNotFoundError, IsADirectoryError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        # TR-059: pin (or advance) the content version at index time so
-        # citation history tracks content changes across re-indexes.
-        _record_indexed_resource_version(runtime, workspace_id, indexed)
         return indexed
 
     @router.post("/resource/search")
@@ -497,6 +443,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 attempt_store.mark_evidence_source_deleted(
                     workspace_id=workspace_id,
                     content_hash=content_hash,
+                    resource_id=resource_id,
                 )
 
         refresh_workspace_sessions(workspace_id)
@@ -548,18 +495,6 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
 
         if not restoration.get("restored"):
             raise HTTPException(status_code=409, detail="Resource restoration did not complete.")
-
-        # TR-076 symmetry: the content is back, so citations flagged at delete
-        # time point at real content again.
-        attempt_store = getattr(runtime, "attempt_store", None)
-        version_store = getattr(runtime, "resource_version_store", None)
-        if attempt_store is not None and version_store is not None:
-            content_hash = version_store.current_content_hash(workspace_id, resource_id)
-            if content_hash:
-                attempt_store.clear_evidence_source_deleted(
-                    workspace_id=workspace_id,
-                    content_hash=content_hash,
-                )
 
         try:
             refresh_workspace_sessions(workspace_id)
