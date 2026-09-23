@@ -117,9 +117,11 @@ test.describe("Trainer error-surface contract", () => {
     });
 
     await expect(page.getByText("The last tool step did not finish.")).toBeVisible();
-    const runDetails = page.getByText("See run details", { exact: false }).first();
-    await expect(runDetails).toBeVisible();
-    await runDetails.click();
+    // The tool trail expander summarizes failed steps ("Checked 1 item, 1
+    // needs a retry"); expanding it reveals the sanitized activity strip.
+    const toolTrail = page.getByText(/Checked \d+ item/).first();
+    await expect(toolTrail).toBeVisible();
+    await toolTrail.click();
     const activity = page.locator(".agent-activity-strip, .message-part--tool-result").first();
     await expect(activity).toBeVisible();
     await expect(page.getByText(/Needs another try|did not finish|keep asking|try again/i).first()).toBeVisible();
