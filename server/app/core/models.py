@@ -361,7 +361,10 @@ class PlanStage(BaseModel):
 
 
 class LearningPlan(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    # extra="allow" keeps the stored `_plan_revision` optimistic-lock anchor
+    # alive through parse/dump round-trips, so every snapshot carries the
+    # revision the client must base its next formal save on.
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
     id: str = ""
     title: str

@@ -342,6 +342,14 @@ class TrainerRepository:
             ).fetchone()
         return UserProfile.model_validate_json(row["payload"]) if row else None
 
+    @staticmethod
+    def _stamp_plan_revision(plan: LearningPlan, revision: int) -> None:
+        """Mirror the stored revision anchor onto the in-memory plan so
+        callers (and snapshot serializations) see the real head."""
+        extras = getattr(plan, "__pydantic_extra__", None)
+        if isinstance(extras, dict):
+            extras["_plan_revision"] = revision
+
     def save_plan(self, workspace_id: str, plan: LearningPlan) -> None:
         scope = (workspace_id or "").strip()
         existing = (getattr(plan, "workspace_id", None) or "").strip()
@@ -361,8 +369,10 @@ class TrainerRepository:
                     current = 0
             # Legacy unconditional write still advances the revision counter so
             # a direct save can never silently reset another window's base.
+            new_revision = current + 1
             plan_payload = plan.model_dump()
-            plan_payload["_plan_revision"] = current + 1
+            plan_payload["_plan_revision"] = new_revision
+            self._stamp_plan_revision(plan, new_revision)
             connection.execute(
                 """
                 INSERT INTO learning_plan (plan_id, workspace_id, payload)
@@ -418,6 +428,7 @@ class TrainerRepository:
             new_revision = current + 1
             plan_payload = plan.model_dump()
             plan_payload["_plan_revision"] = new_revision
+            self._stamp_plan_revision(plan, new_revision)
             connection.execute(
                 """
                 INSERT INTO learning_plan (plan_id, workspace_id, payload)

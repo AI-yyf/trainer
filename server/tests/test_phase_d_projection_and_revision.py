@@ -302,6 +302,22 @@ def test_legacy_save_plan_never_resets_the_revision_counter(tmp_path: Path) -> N
     assert stored.title == "v3"
 
 
+def test_plan_roundtrip_surfaces_the_revision_anchor_in_snapshots(tmp_path: Path) -> None:
+    """Snapshots serialize the plan's revision anchor so clients can base
+    their next formal save on the real head (restart-safe optimistic lock)."""
+    from app.core.models import LearningPlan
+    from app.db.repository import TrainerRepository
+
+    repository = TrainerRepository(tmp_path / "plans.db")
+    plan = LearningPlan(id="plan-anchor", title="Anchor", summary="s", stages=[])
+    repository.save_plan_with_revision("ws-anchor", plan, expected_revision=0)
+
+    revived = repository.get_latest_plan("ws-anchor")
+    assert revived is not None
+    dumped = revived.model_dump(mode="json")
+    assert dumped.get("_plan_revision") == 1
+
+
 def test_evidence_is_current_for_hash_helper(tmp_path: Path) -> None:
     assert evidence_is_current_for_hash({"artifact_hash": "h1"}, "h1") is True
     assert evidence_is_current_for_hash({"artifact_hash": "h1"}, "h2") is False

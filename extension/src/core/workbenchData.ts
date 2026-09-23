@@ -710,13 +710,12 @@ function planCandidateFromPayload(payload: unknown): unknown {
     return undefined;
   }
   const snapshot = asRecord(record.snapshot);
+  let candidate: unknown;
   if (record.plan !== undefined) {
-    return record.plan;
-  }
-  if (snapshot?.plan !== undefined) {
-    return snapshot.plan;
-  }
-  if (
+    candidate = record.plan;
+  } else if (snapshot?.plan !== undefined) {
+    candidate = snapshot.plan;
+  } else if (
     asString(record.id) !== undefined ||
     asString(record.plan_id) !== undefined ||
     asString(record.planId) !== undefined ||
@@ -724,9 +723,18 @@ function planCandidateFromPayload(payload: unknown): unknown {
     Array.isArray(record.stages) ||
     Array.isArray(record.phases)
   ) {
-    return payload;
+    candidate = payload;
+  } else {
+    return undefined;
   }
-  return undefined;
+  // /plan/update reports the new optimistic-lock head at the top level;
+  // stamp it onto the plan so the next formal save bases on it.
+  const candidateRecord = asRecord(candidate);
+  const topRevision = asNumber(record.plan_revision);
+  if (candidateRecord && topRevision !== undefined && asNumber(candidateRecord._plan_revision) === undefined) {
+    return { ...candidateRecord, _plan_revision: topRevision };
+  }
+  return candidate;
 }
 
 function taskCandidateFromPayload(payload: unknown): unknown {

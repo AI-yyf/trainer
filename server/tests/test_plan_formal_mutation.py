@@ -406,7 +406,13 @@ def test_plan_discussion_without_explicit_mutation_stays_coaching_and_preserves_
         assert state.snapshot.plan.workspace_id == workspace_id
         assert state.snapshot.plan.id == seeded_plan.id
         assert state.snapshot.plan.current_step == seeded_plan.current_step
-        assert state.snapshot.plan.model_dump() == seeded_plan.model_dump()
+
+        def _content(plan):
+            dumped = plan.model_dump()
+            dumped.pop("_plan_revision", None)
+            return dumped
+
+        assert _content(state.snapshot.plan) == _content(seeded_plan)
     assert persisted_plan is not None
     assert persisted_plan.workspace_id == workspace_id
     assert persisted_plan.model_dump() == seeded_plan.model_dump()
