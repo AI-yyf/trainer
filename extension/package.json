@@ -97,6 +97,10 @@
         "title": "Trainer: Install Remote Workspace Support"
       },
       {
+        "command": "trainer.remote.verify",
+        "title": "Trainer: Verify in Remote Workspace"
+      },
+      {
         "command": "trainer.coach.debugLoop",
         "title": "Trainer: Coach Minimal Debug Loop"
       },

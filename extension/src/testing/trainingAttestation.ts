@@ -139,12 +139,14 @@ export function buildTestRunAttestationBody(input: {
   card: LivePracticeCard;
   summary: string;
   testsOutput: string;
+  /** Host-trusted outcome; defaults to true for successful test runs. */
+  passed?: boolean;
   sessionId?: string;
   workspaceId?: string;
 }): TrainingVerificationAttestationBody {
   return {
     card_id: input.card.cardId,
-    passed: true,
+    passed: input.passed ?? true,
     evidence_source: TEST_RUNNER_EVIDENCE_SOURCE,
     summary: input.summary,
     tests_output: truncateTestsOutput(input.testsOutput),
