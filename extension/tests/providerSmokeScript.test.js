@@ -221,6 +221,7 @@ test('provider smoke script requires explicit endpoint and model for real UTF-8 
 
 test('provider smoke script reports missing live configuration without contacting a default provider', async () => {
   const result = await runSmokeScript({
+    TRAINER_TEST_BASE_URL: '',
     TRAINER_PROVIDER_SMOKE_BASE_URL: '',
     TRAINER_PROVIDER_SMOKE_MODEL: '',
   });
@@ -228,8 +229,9 @@ test('provider smoke script reports missing live configuration without contactin
   assert.equal(result.code, 1);
   const report = JSON.parse(result.stderr);
   assert.equal(report.category, 'configuration_missing');
+  // §23 canonical credential names are what the script asks for.
   assert.deepEqual(report.missing, [
-    'TRAINER_PROVIDER_SMOKE_BASE_URL',
+    'TRAINER_TEST_BASE_URL',
     'TRAINER_PROVIDER_SMOKE_MODEL',
   ]);
   assert.doesNotMatch(result.stderr, /api\.minimaxi\.com/);

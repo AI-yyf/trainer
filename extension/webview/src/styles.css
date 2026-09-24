@@ -10454,8 +10454,52 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .composer-menu-panel--history {
-  max-height: min(48vh, 288px);
+  max-height: min(60vh, 420px);
   overflow: auto;
+}
+
+.composer-history-new {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--trainer-font-2xs);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.composer-history-new:hover {
+  background: var(--surface-2);
+}
+
+.composer-history-search {
+  padding: 4px 10px 8px;
+}
+
+.composer-history-search input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-0);
+  background: var(--surface-1);
+  border: 1px solid var(--fg-muted);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.composer-history-search input:focus-visible {
+  border-color: var(--accent);
+}
+
+.composer-history-group + .composer-history-group {
+  margin-top: 10px;
+}
+
+.composer-history-group__label {
+  margin: 0 0 4px;
+  font-size: var(--trainer-font-3xs);
+  color: var(--fg-muted);
 }
 
 .composer-session-list__title {

@@ -1500,4 +1500,23 @@ test.describe("Trainer Five-View Shell", () => {
     await expectNoHorizontalOverflow(page);
     await expectNoConsoleErrors(errors);
   });
+
+  test("history drawer groups sessions and offers a new chat entry", async ({ page }) => {
+    const errors = attachConsoleErrorCollector(page);
+
+    await openPreview(page, "coach", { lang: "zh-CN", connection: "connected" });
+
+    await page.getByRole("button", { name: "会话历史", exact: true }).click();
+    const panel = page.locator(".composer-menu-panel--history");
+    await expect(panel).toBeVisible();
+    // ChatGPT-style header: new chat on top, search below.
+    await expect(panel.getByText("+ 新对话", { exact: true })).toBeVisible();
+    await expect(panel.getByPlaceholder("搜索会话…")).toBeVisible();
+    // The preview session bucket lands in the "Today" group.
+    await expect(panel.getByText("今天", { exact: true })).toBeVisible();
+    // Searching hides the non-matching current session list but keeps the group shell honest.
+    await panel.getByPlaceholder("搜索会话…").fill("绝对不存在的会话关键字");
+    await expect(panel.getByText("没有匹配的会话。", { exact: true })).toBeVisible();
+    await expectNoConsoleErrors(errors);
+  });
 });

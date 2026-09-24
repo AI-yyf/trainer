@@ -155,6 +155,7 @@ import {
   providerSetupSummary,
 } from "./providerRecoveryCopy";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
+import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
 import {
   planRuntimeStatusFromRecovery,
   selectStreamingCheckpointForScope,
@@ -10446,6 +10447,24 @@ export function App() {
     [isBrowserPreview],
   );
 
+  const startNewCoachChat = useCallback(() => {
+    setOpenMenu(undefined);
+    if (isBrowserPreview) {
+      setOperationMessage({
+        tone: "info",
+        message:
+          layout.composerLanguage === "zh-CN"
+            ? "预览模式不会创建新会话。"
+            : "Preview mode does not create new conversations.",
+      });
+      return;
+    }
+    postMessage({
+      type: "command/execute",
+      payload: { commandId: trainerCommands.newCoachSession },
+    });
+  }, [isBrowserPreview, layout.composerLanguage]);
+
   const setComposerThinking = useCallback(
     (thinking: ProviderThinkingConfig) => {
       if (isBrowserPreview) {
@@ -11554,100 +11573,18 @@ export function App() {
 
     if (openMenu === "history") {
       const zh = layout.composerLanguage === "zh-CN";
-      const sessionCountLabel = (count: number) =>
-        zh ? `${count} 条消息` : `${count} message${count === 1 ? "" : "s"}`;
-      const formatSessionTime = (value?: string | null) => {
-        if (!value) {
-          return "";
-        }
-        const stamp = new Date(value);
-        if (Number.isNaN(stamp.getTime())) {
-          return "";
-        }
-        return stamp.toLocaleString(zh ? "zh-CN" : undefined, {
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-      };
       return (
         <section className="composer-menu-panel composer-menu-panel--history">
-          <div className="composer-menu-panel__header">
-            <span className="eyebrow">{zh ? "历史会话" : "Conversations"}</span>
-            <div className="composer-menu-panel__header-actions">
-              <ComposerIconButton
-                icon={<RefreshIcon size={14} />}
-                label={zh ? "刷新" : "Refresh"}
-                ariaLabel={zh ? "刷新会话列表" : "Refresh conversation list"}
-                title={zh ? "刷新会话列表" : "Refresh conversation list"}
-                active={coachSessionsStatus === "loading"}
-                disabled={coachSessionsStatus === "loading"}
-                onClick={requestCoachSessions}
-              />
-            </div>
-          </div>
-          <div className="composer-menu-panel__section">
-            {coachSessionsStatus === "loading" ? (
-              <p className="composer-menu-panel__hint">
-                {zh ? "正在读取会话…" : "Loading conversations…"}
-              </p>
-            ) : coachSessionsStatus === "error" ? (
-              <p className="composer-menu-panel__hint">
-                {coachSessionsMessage ??
-                  (zh ? "暂时读不到会话，稍后再试。" : "Couldn't load conversations. Try again.")}
-              </p>
-            ) : coachSessions.length === 0 ? (
-              <p className="composer-menu-panel__hint">
-                {zh
-                  ? "还没有历史会话。新的对话会出现在这里。"
-                  : "No past conversations yet. New chats will appear here."}
-              </p>
-            ) : (
-              <div className="composer-provider-list composer-session-list" role="list">
-                {coachSessions.map((session) => {
-                  const active = session.is_active === true;
-                  const title =
-                    session.summary?.trim() ||
-                    session.latest_user_message?.trim() ||
-                    (zh ? "未命名会话" : "Untitled conversation");
-                  const time = formatSessionTime(session.updated_at);
-                  return (
-                    <button
-                      key={session.session_id}
-                      className={`composer-provider-list__item composer-session-list__item ${
-                        active ? "is-active" : ""
-                      }`}
-                      type="button"
-                      disabled={active}
-                      aria-current={active ? "true" : undefined}
-                      title={title}
-                      onClick={() => activateCoachSession(session.session_id)}
-                    >
-                      <div className="composer-provider-list__row">
-                        <span className="composer-provider-list__stack">
-                          <span className="composer-provider-list__model composer-session-list__title">
-                            {title}
-                          </span>
-                          <span className="composer-provider-list__label">
-                            {[sessionCountLabel(session.message_count), time]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </span>
-                        </span>
-                        {active ? (
-                          <span className="composer-provider-list__state">
-                            <CheckMarkIcon size={12} />
-                            <span className="sr-only">{zh ? "当前会话" : "Current"}</span>
-                          </span>
-                        ) : null}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          <CoachHistoryDrawer
+            zh={zh}
+            sessions={coachSessions}
+            status={coachSessionsStatus}
+            statusMessage={coachSessionsMessage}
+            onActivate={activateCoachSession}
+            onRefresh={requestCoachSessions}
+            onNewChat={startNewCoachChat}
+            onClose={() => setOpenMenu(undefined)}
+          />
         </section>
       );
     }

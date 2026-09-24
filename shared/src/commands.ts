@@ -25,6 +25,7 @@ export const trainerCommands = {
   replayLatestCoachCheckpoint: "trainer.session.replayLatestCoachCheckpoint",
   listCoachSessions: "trainer.session.listSessions",
   activateCoachSession: "trainer.session.activateSession",
+  newCoachSession: "trainer.session.new",
   coachRemoteBoundary: "trainer.coach.remoteBoundary",
   remoteVerify: "trainer.remote.verify",
   remoteInstallCompanion: "trainer.remote.installCompanion",

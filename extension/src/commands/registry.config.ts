@@ -61,6 +61,7 @@ import {
   nextTaskCommand,
   activateCoachSessionCommand,
   listCoachSessionsCommand,
+  restartSessionCommand,
   replayLatestCoachCheckpointCommand,
   resumeLatestCoachCheckpointCommand,
   saveCoachSettingsCommand,
@@ -217,6 +218,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
       register: (ctx, payload) =>
         activateCoachSessionCommand(ctx, payload as Parameters<typeof activateCoachSessionCommand>[1]),
     },
+    { commandId: COMMAND_IDS.newCoachSession, register: (ctx) => restartSessionCommand(ctx) },
     { commandId: COMMAND_IDS.coachRemoteBoundary, register: (ctx) => openCoachScenarioCommand(ctx, 'remoteBoundary') },
     { commandId: COMMAND_IDS.installRemoteCompanion, register: (ctx) => installRemoteCompanionCommand(ctx) },
     { commandId: COMMAND_IDS.remoteVerify, register: (ctx, payload) => remoteVerifyCommand(ctx, payload) },

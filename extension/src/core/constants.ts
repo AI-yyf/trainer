@@ -31,6 +31,7 @@ export const COMMAND_IDS = {
   replayLatestCoachCheckpoint: trainerCommands.replayLatestCoachCheckpoint,
   listCoachSessions: trainerCommands.listCoachSessions,
   activateCoachSession: trainerCommands.activateCoachSession,
+  newCoachSession: trainerCommands.newCoachSession,
   coachRemoteBoundary: trainerCommands.coachRemoteBoundary,
   remoteVerify: trainerCommands.remoteVerify,
   installRemoteCompanion: trainerCommands.remoteInstallCompanion,
