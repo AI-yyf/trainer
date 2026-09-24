@@ -32,20 +32,28 @@ baseline the IA refactor proceeds from — no speculative redesign.
 
 ## PR-1 incremental plan (behavior-preserving, each step shippable)
 
-- **Step 1 — History drawer (§63).** Promote the existing history menu
-  into a drawer/overlay with grouped sessions + search. Session data and
-  activation flow already exist; this is presentation + grouping only.
-- **Step 2 — Progress view (§十二).** New read-only view fed by the
-  existing `skillProjection` snapshot data (dimensions + evidence list).
-  No new server surface required. Added as a sixth tab; keep legacy IDs
-  (`coach/plan/resources/training`) so snapshots/e2e stay stable.
-- **Step 3 — Presentation labels (§四).** Rename displayed labels only
-  (Plan→学习, Training→训练场, new Progress→成长) across all 8 locales;
-  internal view IDs unchanged.
-- **Step 4 — Settings categories (§64).** Add `skills` + `advanced`
-  categories; move diagnostics/hashes/internal ids under Advanced.
-- **Step 5 — Nav order (§六十二).** Settings moves to a bottom group
-  with a divider; verify all 6 widths (300–700px) from §59.
+- **Step 1 — History drawer (§63). DONE** (`4b42503`): grouped drawer +
+  search + "+ New chat" wiring the previously unregistered
+  `restartSessionCommand`; extracted into `CoachHistoryDrawer`.
+- **Step 2 — Progress view (§十二). DONE** (`2cf4b80`): shipped as the
+  sixth top-level view fed by the existing `skillProjection` snapshot
+  data — calm text rows, evidence counts, no gamification; verified by
+  trainer.spec (52 cases) and the 200-case experience matrix.
+- **Step 3 — Presentation labels (§四). DONE** (within `2cf4b80`):
+  `progress` labels shipped across all 8 locales via `viewLabels` and
+  `CopyKey`; existing view labels unchanged.
+- **Step 4 — Settings categories (§64). MOSTLY DONE** (`7d7cbb5`):
+  six-category nav (Connection / Workspace / Teaching / Skills /
+  Preferences / Advanced); Skills renders the real skill catalog
+  (trigger + title + detail per §38, auto-selection note per §39,
+  no fake toggles); Advanced hosts internal identifiers. Deferred to
+  PR-7: moving the teaching "advanced context" knobs wholesale into
+  Advanced — the block is coupled to teaching-section state and refs,
+  unsafe to relocate before the CoachSettingsView decomposition.
+- **Step 5 — Nav order (§六十二). DONE** (no change needed): the
+  switcher already carries the daily entries with Settings in the
+  header gear — matching the spec's "Settings separated at the bottom"
+  intent; Progress joined the daily group.
 
 ## Explicitly out of scope for PR-1 (later PRs)
 
