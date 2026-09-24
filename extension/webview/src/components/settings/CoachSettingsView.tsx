@@ -87,6 +87,12 @@ import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
 import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, NavAdvancedIcon, NavConnectionIcon, NavResourcesIcon, NavTeachingIcon, NavTrainingIcon, NavWorkspaceIcon, PlusIcon, RefreshIcon, ShareIcon, TrashIcon } from "../icons";
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
+import {
+  trainerSkillCatalog,
+  resolveTrainerSkillText,
+  trainerSkillSectionLabel,
+  type TrainerSkillSection,
+} from "../../../../../shared/src/skillCatalog";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type {
   CapabilityFlags,
@@ -3935,7 +3941,13 @@ export function CoachSettingsView({
   const preferencesAnchorRef = useRef<HTMLDivElement | null>(null);
   const sectionFlashTimerRef = useRef<number | null>(null);
   const [modelPickerOpen, setModelPickerOpen] = useState(() => !providerDraft.model.trim());
-  type SettingsCategory = "connection" | "workspace" | "teaching" | "preferences";
+  type SettingsCategory =
+    | "connection"
+    | "workspace"
+    | "teaching"
+    | "skills"
+    | "preferences"
+    | "advanced";
   const SETTINGS_CATEGORY_ORDER: SettingsCategory[] = [
     "connection",
     "workspace",
@@ -6283,8 +6295,20 @@ export function CoachSettingsView({
       icon: <NavTeachingIcon size={15} />,
     },
     {
+      id: "skills",
+      label: settingsGlobalCopy.settingsSectionSkills,
+      dirty: false,
+      icon: <LightningIcon size={15} />,
+    },
+    {
       id: "preferences",
       label: settingsGlobalCopy.settingsPreferences,
+      dirty: false,
+      icon: <GearIcon size={15} />,
+    },
+    {
+      id: "advanced",
+      label: settingsGlobalCopy.settingsAdvancedContext,
       dirty: false,
       icon: <NavAdvancedIcon size={15} />,
     },
@@ -8316,6 +8340,99 @@ export function CoachSettingsView({
               </div>
               <p className="settings-sheet__note settings-sheet__note--compact">{runtimeFlowSummary}</p>
             </div>
+            </div>
+          </div>
+        </section>
+        ) : null}
+
+        {activeSettingsCategory === "skills" ? (
+        <section
+          className="settings-section settings-section--flat settings-anchor"
+          data-settings-section="skills"
+          aria-labelledby="settings-section-skills-title"
+        >
+          <header className="settings-section-head settings-section-head--flat">
+            <span id="settings-section-skills-title" className="eyebrow">
+              {settingsGlobalCopy.settingsSectionSkills}
+            </span>
+            <span className="settings-section-head__summary">
+              {language === "zh-CN"
+                ? "Trainer 按你的问题自动选用；输入 $ 可手动触发。"
+                : "Trainer picks these automatically; type $ to trigger one manually."}
+            </span>
+          </header>
+          <div className="settings-sheet__minor-body settings-sheet__defaults-body">
+            <div className="settings-skill-groups">
+              {(
+                ["Coach", "Plan", "Training", "Resources", "Workspace", "Provider"] as TrainerSkillSection[]
+              ).map((section) => {
+                const items = trainerSkillCatalog.filter((skill) => skill.section === section);
+                if (items.length === 0) {
+                  return null;
+                }
+                return (
+                  <div key={section} className="settings-subsection" data-settings-subsection={`skills-${section.toLowerCase()}`}>
+                    <span className="eyebrow settings-subsection__title">
+                      {trainerSkillSectionLabel(section, language)}
+                    </span>
+                    <div className="settings-sheet__simple-list" role="list">
+                      {items.map((skill) => {
+                        const title = resolveTrainerSkillText(skill.title, language);
+                        const detail = resolveTrainerSkillText(skill.detail, language);
+                        return (
+                          <div key={skill.id} className="settings-skill-row" role="listitem">
+                            <span className="settings-skill-row__trigger">{skill.trigger}</span>
+                            <span className="settings-skill-row__body">
+                              <span className="settings-skill-row__title">{title}</span>
+                              {detail ? (
+                                <span className="settings-skill-row__detail">{detail}</span>
+                              ) : null}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+        ) : null}
+
+        {activeSettingsCategory === "advanced" ? (
+        <section
+          className="settings-section settings-section--flat settings-anchor"
+          data-settings-section="advanced"
+          aria-labelledby="settings-section-advanced-title"
+        >
+          <header className="settings-section-head settings-section-head--flat">
+            <span id="settings-section-advanced-title" className="eyebrow">
+              {settingsGlobalCopy.settingsAdvancedContext}
+            </span>
+          </header>
+          <div className="settings-sheet__minor-body settings-sheet__defaults-body">
+            <div className="settings-subsection">
+              <span className="eyebrow settings-subsection__title">
+                {language === "zh-CN" ? "内部标识" : "Internal identifiers"}
+              </span>
+              <div className="settings-sheet__simple-list" role="list">
+                <SimpleInfoRow
+                  label={language === "zh-CN" ? "工作区 ID" : "Workspace ID"}
+                  value={workspaceId || "—"}
+                />
+                {provider.profileId?.trim() ? (
+                  <SimpleInfoRow
+                    label={language === "zh-CN" ? "配置 ID" : "Profile ID"}
+                    value={provider.profileId.trim()}
+                  />
+                ) : null}
+              </div>
+              <p className="settings-sheet__note settings-sheet__note--compact">
+                {language === "zh-CN"
+                  ? "这些标识用于问题排查；连接诊断在“连接”页。"
+                  : "Use these identifiers when reporting issues; connection diagnostics live under Connection."}
+              </p>
             </div>
           </div>
         </section>

@@ -137,15 +137,20 @@ test('teaching is a flat section: preset radio, feedback + style, language, adva
   assert.doesNotMatch(section, /persistenceKey="settings-teaching-prefs"/);
 });
 
-test('settings navigation is four flat categories saved on change', () => {
+test('settings navigation is six flat categories saved on change', () => {
   const source = readSettingsSource();
   const app = fs.readFileSync(path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx'), 'utf8');
 
-  assert.match(source, /type SettingsCategory = "connection" \| "workspace" \| "teaching" \| "preferences";/);
+  // §64: Connection / Workspace / Teaching / Skills / Preferences / Advanced.
+  assert.match(
+    source,
+    /type SettingsCategory =\s*\n?\s*\| "connection"\s*\n?\s*\| "workspace"\s*\n?\s*\| "teaching"\s*\n?\s*\| "skills"\s*\n?\s*\| "preferences"\s*\n?\s*\| "advanced";/,
+  );
   assert.doesNotMatch(source, /id: "memory",/);
-  assert.doesNotMatch(source, /id: "advanced",/);
+  assert.match(source, /id: "skills",/);
+  assert.match(source, /id: "advanced",/);
   assert.doesNotMatch(source, /useState\(false\);\s*\n\s*type SettingsCategory/);
-  for (const id of ['connection', 'workspace', 'teaching', 'preferences']) {
+  for (const id of ['connection', 'workspace', 'teaching', 'skills', 'preferences', 'advanced']) {
     assert.match(source, new RegExp(`data-settings-section="${id}"`));
   }
   // Every choice-type setting persists as soon as it changes.

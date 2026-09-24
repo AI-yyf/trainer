@@ -838,6 +838,7 @@ export type CopyKey =
   | "settingsStatusTrust"
   | "settingsStatusUnsaved"
   | "settingsSectionConnection"
+  | "settingsSectionSkills"
   | "settingsTeachingPrefs"
   | "settingsAnswerStyle"
   | "answerStyleSimple"
@@ -878,6 +879,7 @@ export const copyTable = {
     settingsStatusTrust: "工作区不受信",
     settingsStatusUnsaved: "有未保存更改",
     settingsSectionConnection: "连接",
+    settingsSectionSkills: "技能",
     settingsTeachingPrefs: "教学偏好",
     settingsAnswerStyle: "回答风格",
     answerStyleSimple: "简单",
@@ -1691,6 +1693,7 @@ export const copyTable = {
     settingsStatusTrust: "Workspace not trusted",
     settingsStatusUnsaved: "Unsaved changes",
     settingsSectionConnection: "Connection",
+    settingsSectionSkills: "Skills",
     settingsTeachingPrefs: "Teaching preferences",
     settingsAnswerStyle: "Answer style",
     answerStyleSimple: "Simple",
@@ -2482,6 +2485,7 @@ export const copyTable = {
     settingsStatusTrust: "Espacio no confiable",
     settingsStatusUnsaved: "Cambios sin guardar",
     settingsSectionConnection: "Conexión",
+    settingsSectionSkills: "Habilidades",
     settingsTeachingPrefs: "Preferencias de enseñanza",
     settingsAnswerStyle: "Estilo de respuesta",
     answerStyleSimple: "Sencillo",
@@ -3052,6 +3056,7 @@ export const copyTable = {
     settingsStatusTrust: "Espace non approuvé",
     settingsStatusUnsaved: "Modifications non enregistrées",
     settingsSectionConnection: "Connexion",
+    settingsSectionSkills: "Compétences",
     settingsTeachingPrefs: "Préférences pédagogiques",
     settingsAnswerStyle: "Style de réponse",
     answerStyleSimple: "Simple",
@@ -3392,6 +3397,7 @@ export const copyTable = {
     settingsStatusTrust: "Workspace nicht vertraut",
     settingsStatusUnsaved: "Ungespeicherte Änderungen",
     settingsSectionConnection: "Verbindung",
+    settingsSectionSkills: "Fähigkeiten",
     settingsTeachingPrefs: "Unterrichtspräferenzen",
     settingsAnswerStyle: "Antwortstil",
     answerStyleSimple: "Einfach",
@@ -3732,6 +3738,7 @@ export const copyTable = {
     settingsStatusTrust: "ワークスペース未信頼",
     settingsStatusUnsaved: "未保存の変更があります",
     settingsSectionConnection: "接続",
+    settingsSectionSkills: "スキル",
     settingsTeachingPrefs: "指導の設定",
     settingsAnswerStyle: "回答スタイル",
     answerStyleSimple: "かんたん",
@@ -4072,6 +4079,7 @@ export const copyTable = {
     settingsStatusTrust: "작업 영역 미신뢰",
     settingsStatusUnsaved: "저장하지 않은 변경 있음",
     settingsSectionConnection: "연결",
+    settingsSectionSkills: "스킬",
     settingsTeachingPrefs: "학습 취향",
     settingsAnswerStyle: "답변 스타일",
     answerStyleSimple: "간단",
@@ -4412,6 +4420,7 @@ export const copyTable = {
     settingsStatusTrust: "Workspace não confiável",
     settingsStatusUnsaved: "Alterações não salvas",
     settingsSectionConnection: "Conexão",
+    settingsSectionSkills: "Habilidades",
     settingsTeachingPrefs: "Preferências de ensino",
     settingsAnswerStyle: "Estilo de resposta",
     answerStyleSimple: "Simples",
