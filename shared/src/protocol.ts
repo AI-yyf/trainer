@@ -302,7 +302,7 @@ export type SessionMessageRequest = {
   sessionId?: string;
   message: string;
   formalPlanMutation?: boolean;
-  activeView?: "coach" | "plan" | "resources" | "training" | "settings";
+  activeView?: "coach" | "plan" | "resources" | "training" | "progress" | "settings";
   resourceIds?: string[];
   currentFile?: {
     path: string;

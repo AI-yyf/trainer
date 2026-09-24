@@ -2760,6 +2760,7 @@ function loadPreviewActiveView(): PersistedWorkbenchState["activeView"] | undefi
       activeView === "plan" ||
       activeView === "resources" ||
       activeView === "training" ||
+      activeView === "progress" ||
       activeView === "settings"
       ? activeView
       : undefined;
@@ -3774,6 +3775,7 @@ function resolvePreviewState(): BrowserPreviewState {
       : requestedView === "plan" ||
           requestedView === "training" ||
           requestedView === "resources" ||
+          requestedView === "progress" ||
           requestedView === "settings"
         ? requestedView
         : requestedView === null

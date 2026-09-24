@@ -530,6 +530,18 @@ export function NavTrainingIcon(props: CoachIconProps) {
   );
 }
 
+export function NavProgressIcon(props: CoachIconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M2.8 12.9h2.4" />
+      <path d="M6.8 9.6h2.4" />
+      <path d="M10.8 6.3h2.4" />
+      <path d="M3.4 11.2 7 7.4l2.4 1.9 3.6-4.6" />
+      <path d="M10.4 4.7h2.6v2.6" />
+    </IconBase>
+  );
+}
+
 export function NavConnectionIcon(props: CoachIconProps) {
   return (
     <IconBase {...props}>

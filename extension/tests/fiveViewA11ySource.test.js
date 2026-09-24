@@ -26,7 +26,7 @@ test('composer and five-view navigation have accessible names and visible focus'
   assert.match(app, /data-testid=\{`trainer-view-nav-\$\{view\}`\}/);
   assert.match(
     types,
-    /export const COACH_FIRST_SIDEBAR_VIEWS = \[\s*"coach",\s*"plan",\s*"resources",\s*"training",\s*"settings",\s*\] as const;/s,
+    /export const COACH_FIRST_SIDEBAR_VIEWS = \[\s*"coach",\s*"plan",\s*"resources",\s*"training",\s*"progress",\s*"settings",\s*\] as const;/s,
   );
   assert.doesNotMatch(app, /<CoachOrientationRail/);
 

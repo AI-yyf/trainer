@@ -549,6 +549,18 @@ export const mockBootstrapData: BootstrapData = {
     },
   },
   workspaceTrainingState: {
+    skillProjection: {
+      workspaceId: "workspace-ui-preview",
+      attemptId: "attempt-ui-preview-1",
+      cardId: "card-ui-training-1",
+      updatedAt: "2026-09-24T10:30:00.000Z",
+      dimensions: {
+        comprehension: { state: "repeat_verified", verifiedCount: 9 },
+        implementation: { state: "assisted", verifiedCount: 4 },
+        debugging: { state: "independent", verifiedCount: 6 },
+        transfer: { state: "not_verified", verifiedCount: 0 },
+      },
+    },
     latestTrainingHandoff: {
       candidateId: "candidate-ui-training-1",
       continueIn: "training",

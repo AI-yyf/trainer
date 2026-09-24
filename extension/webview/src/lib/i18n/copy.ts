@@ -14,6 +14,7 @@ export type CopyKey =
   | "trainer"
   | "you"
   | "plan"
+  | "progress"
   | "settings"
   | "chat"
   | "workspace"
@@ -907,6 +908,7 @@ export const copyTable = {
     you: "你",
     plan: "学习",
     settings: "设置",
+    progress: "成长",
     chat: "对话",
     workspace: "工作区",
     viewNavigation: "Trainer 视图导航",
@@ -1718,6 +1720,7 @@ export const copyTable = {
     you: "You",
     plan: "Learning",
     settings: "Settings",
+    progress: "Progress",
     chat: "Chat",
     workspace: "Workspace",
     viewNavigation: "Trainer views",
@@ -2499,6 +2502,7 @@ export const copyTable = {
     you: "Tú",
     plan: "Plan",
     settings: "Ajustes",
+    progress: "Progreso",
     chat: "Chat",
     workspace: "Espacio",
     viewNavigation: "Vistas de Trainer",
@@ -3068,6 +3072,7 @@ export const copyTable = {
     you: "Vous",
     plan: "Plan",
     settings: "Paramètres",
+    progress: "Progrès",
     chat: "Discussion",
     workspace: "Espace de travail",
     viewNavigation: "Vues Trainer",
@@ -3407,6 +3412,7 @@ export const copyTable = {
     you: "Du",
     plan: "Plan",
     settings: "Einstellungen",
+    progress: "Fortschritt",
     chat: "Chat",
     workspace: "Arbeitsbereich",
     viewNavigation: "Trainer-Ansichten",
@@ -3746,6 +3752,7 @@ export const copyTable = {
     you: "あなた",
     plan: "計画",
     settings: "設定",
+    progress: "成長",
     chat: "チャット",
     workspace: "ワークスペース",
     viewNavigation: "Trainer のビュー",
@@ -4085,6 +4092,7 @@ export const copyTable = {
     you: "너",
     plan: "계획",
     settings: "설정",
+    progress: "성장",
     chat: "챗",
     workspace: "워크스페이스",
     viewNavigation: "Trainer 보기",
@@ -4424,6 +4432,7 @@ export const copyTable = {
     you: "Você",
     plan: "Plano",
     settings: "Configurações",
+    progress: "Progresso",
     chat: "Chat",
     workspace: "Workspace",
     viewNavigation: "Vistas do Trainer",

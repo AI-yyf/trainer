@@ -14,6 +14,7 @@ export type SidebarViewName =
   | "plan"
   | "resources"
   | "training"
+  | "progress"
   | "settings";
 export type LegacyIntentHint = "task" | "review" | "memory" | "next_task";
 

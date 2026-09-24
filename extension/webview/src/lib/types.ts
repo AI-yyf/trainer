@@ -1516,6 +1516,7 @@ export const COACH_FIRST_SIDEBAR_VIEWS = [
   "plan",
   "resources",
   "training",
+  "progress",
   "settings",
 ] as const;
 export type SidebarView = (typeof COACH_FIRST_SIDEBAR_VIEWS)[number];
@@ -1531,6 +1532,7 @@ export function normalizeSidebarView(
     value === "plan" ||
     value === "resources" ||
     value === "training" ||
+    value === "progress" ||
     value === "settings"
   ) {
     return value;

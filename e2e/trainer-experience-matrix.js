@@ -10,7 +10,7 @@ const PREVIEW_EVIDENCE = Object.freeze({
     "Preview fixtures exercise the webview only; VSIX host, workspace filesystem, and live model behavior need a separate run.",
 });
 
-const VIEW_ORDER = ["coach", "plan", "resources", "training", "settings"];
+const VIEW_ORDER = ["coach", "plan", "resources", "training", "progress", "settings"];
 
 const PAIR_VARIANTS = [
   { language: "zh-CN", viewport: { width: 360, height: 900 }, theme: "dark" },
@@ -126,7 +126,7 @@ const PERSONAS = Object.freeze({
 });
 
 const VISIBLE_CONTRACTS = Object.freeze({
-  five_top_level_views: "five fixed top-level views are visible",
+  five_top_level_views: "the fixed top-level views (coach/learn/resources/training/progress) are visible",
   one_active_view: "exactly one top-level view is active",
   coach_composer: "the Coach composer is visible and can receive a user request",
   coach_recovery_surface: "the Coach recovery surface remains visible instead of silently failing",

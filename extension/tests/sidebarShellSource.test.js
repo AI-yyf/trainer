@@ -45,7 +45,7 @@ test('app shell renders a text-only top navigation for the daily views', () => {
 
   assert.match(
     viewTypes,
-    /export const COACH_FIRST_SIDEBAR_VIEWS = \[\s*"coach",\s*"plan",\s*"resources",\s*"training",\s*"settings",\s*\] as const;/s,
+    /export const COACH_FIRST_SIDEBAR_VIEWS = \[\s*"coach",\s*"plan",\s*"resources",\s*"training",\s*"progress",\s*"settings",\s*\] as const;/s,
   );
   // Phase-C nav: three daily tabs, training appears on activity, Settings
   // lives in the header gear. All five views stay routable.

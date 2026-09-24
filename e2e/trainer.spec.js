@@ -13,6 +13,7 @@ const VIEW_LABELS = {
     plan: "学习",
     resources: "资料",
     training: "训练",
+    progress: "成长",
     settings: "设置",
   },
   "en-US": {
@@ -20,6 +21,7 @@ const VIEW_LABELS = {
     plan: "Learning",
     resources: "Resources",
     training: "Training",
+    progress: "Progress",
     settings: "Settings",
   },
   "es-ES": {
@@ -27,6 +29,7 @@ const VIEW_LABELS = {
     plan: "Plan",
     resources: "Recursos",
     training: "Entrenamiento",
+    progress: "Progreso",
     settings: "Ajustes",
   },
 };
@@ -140,19 +143,21 @@ async function expectActiveView(page, language, view) {
 }
 
 async function expectFiveTopLevelViews(page, language) {
-  // Phase-C IA: the switcher carries the three daily entries, optionally the
-  // activity-driven training entry; Settings lives in the header gear.
+  // PR-1 IA: the switcher carries the daily entries (coach/learn/resources +
+  // progress) plus the activity-driven training entry; Settings lives in the
+  // header gear.
   const views = ["coach", "plan", "resources"];
   const tabs = page
     .locator(".header-switcher")
-    .getByTestId(/^trainer-view-nav-(coach|plan|resources|training)$/);
+    .getByTestId(/^trainer-view-nav-(coach|plan|resources|training|progress)$/);
   const testIds = await tabs.evaluateAll((nodes) =>
     nodes.map((node) => node.getAttribute("data-testid")),
   );
-  expect(testIds.length).toBeGreaterThanOrEqual(3);
-  expect(testIds.length).toBeLessThanOrEqual(4);
+  expect(testIds.length).toBeGreaterThanOrEqual(4);
+  expect(testIds.length).toBeLessThanOrEqual(5);
   expect(testIds.slice(0, 3)).toEqual(views.map(viewNavigationTestId));
-  if (testIds.length === 4) {
+  expect(testIds[testIds.length - 1]).toBe(viewNavigationTestId("progress"));
+  if (testIds.length === 5) {
     expect(testIds[3]).toBe(viewNavigationTestId("training"));
   }
   await expect(tabs.first()).toBeVisible();
@@ -160,7 +165,9 @@ async function expectFiveTopLevelViews(page, language) {
     nodes.map((node) => node.getAttribute("aria-label")),
   );
   labels.forEach((label, index) => {
-    expect(label).toBe(VIEW_LABELS[language][views[index] ?? "training"]);
+    const expectedView =
+      index < views.length ? views[index] : testIds[index] === viewNavigationTestId("training") ? "training" : "progress";
+    expect(label).toBe(VIEW_LABELS[language][expectedView]);
   });
   const settingsButton = page.getByTestId("trainer-view-nav-settings");
   await expect(settingsButton).toBeVisible();
@@ -1517,6 +1524,24 @@ test.describe("Trainer Five-View Shell", () => {
     // Searching hides the non-matching current session list but keeps the group shell honest.
     await panel.getByPlaceholder("搜索会话…").fill("绝对不存在的会话关键字");
     await expect(panel.getByText("没有匹配的会话。", { exact: true })).toBeVisible();
+    await expectNoConsoleErrors(errors);
+  });
+
+  test("progress view presents capability states with evidence counts", async ({ page }) => {
+    const errors = attachConsoleErrorCollector(page);
+
+    await openPreview(page, "progress", { lang: "zh-CN", connection: "connected" });
+
+    await expect(page.getByRole("region", { name: "你的成长" })).toBeVisible();
+    await expect(page.getByText("理解", { exact: true })).toBeVisible();
+    await expect(page.getByText("反复验证", { exact: true })).toBeVisible();
+    await expect(page.getByText("调试", { exact: true })).toBeVisible();
+    await expect(page.getByText("独立完成", { exact: true })).toBeVisible();
+    await expect(page.getByText("迁移", { exact: true })).toBeVisible();
+    await expect(page.getByText("证据 9 条", { exact: true })).toBeVisible();
+    // §66 restraint: no gamified score bars on this surface.
+    await expect(page.locator(".progress-view__dimensions .progress-bar")).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
     await expectNoConsoleErrors(errors);
   });
 });

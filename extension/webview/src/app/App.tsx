@@ -193,6 +193,7 @@ import {
   NavPlanIcon,
   NavResourcesIcon,
   NavTrainingIcon,
+  NavProgressIcon,
   RefreshIcon,
   ResourcesIcon,
   SettingsIcon,
@@ -302,7 +303,7 @@ type WorkbenchDataSnapshot = ReturnType<typeof useWorkbenchState.getState>["data
 type WorkspaceSettingsSnapshot = NonNullable<
   ReturnType<typeof useWorkbenchState.getState>["data"]["memory"]["workspace"]
 >;
-type DockedView = "plan" | "resources" | "training" | "settings";
+type DockedView = "plan" | "resources" | "training" | "progress" | "settings";
 type OperationMessage = TrainerOperationMessage;
 type ResourceOperationKind = "delete" | "restore" | "search" | "index" | "upload";
 type ResourceMutationOperationKind = "delete" | "restore";
@@ -825,6 +826,10 @@ const TrainingWorkbenchView = lazy(async () => {
   const module = await import("../components/training/TrainingWorkbenchView");
   return { default: module.TrainingWorkbenchView };
 });
+const ProgressView = lazy(async () => {
+  const module = await import("../components/progress/ProgressView");
+  return { default: module.ProgressView };
+});
 
 let browserPreviewModulePromise: Promise<BrowserPreviewModule> | undefined;
 let bootstrapRequestSent = false;
@@ -862,6 +867,7 @@ function readBrowserPreviewLocationOverrides(): {
       requestedView === "plan" ||
       requestedView === "resources" ||
       requestedView === "training" ||
+      requestedView === "progress" ||
       requestedView === "settings"
         ? requestedView
         : requestedView === "practice"
@@ -920,16 +926,16 @@ function ViewFallback({
 
 const viewLabels: Record<
   ComposerLanguage,
-  Record<"coach" | "plan" | "resources" | "training" | "settings", string>
+  Record<"coach" | "plan" | "resources" | "training" | "progress" | "settings", string>
 > = {
-  "zh-CN": { coach: "\u5bf9\u8bdd", plan: "\u5b66\u4e60", resources: "\u8d44\u6599", training: "\u8bad\u7ec3", settings: "\u8bbe\u7f6e" },
-  "en-US": { coach: "Chat", plan: "Learning", resources: "Resources", training: "Training", settings: "Settings" },
-  "es-ES": { coach: "Chat", plan: "Plan", resources: "Recursos", training: "Entrenamiento", settings: "Ajustes" },
-  "fr-FR": { coach: "Chat", plan: "Plan", resources: "Ressources", training: "Entra\u00eenement", settings: "Param\u00e8tres" },
-  "de-DE": { coach: "Chat", plan: "Plan", resources: "Materialien", training: "Training", settings: "Einstellungen" },
-  "ja-JP": { coach: "\u5bfe\u8a71", plan: "\u8a08\u753b", resources: "\u8cc7\u6599", training: "\u8a13\u7df4", settings: "\u8a2d\u5b9a" },
-  "ko-KR": { coach: "\ub300\ud654", plan: "\uacc4\ud68d", resources: "\uc790\ub8cc", training: "\ud6c8\ub828", settings: "\uc124\uc815" },
-  "pt-BR": { coach: "Chat", plan: "Plano", resources: "Recursos", training: "Treinamento", settings: "Configura\u00e7\u00f5es" },
+  "zh-CN": { coach: "\u5bf9\u8bdd", plan: "\u5b66\u4e60", resources: "\u8d44\u6599", training: "\u8bad\u7ec3", progress: "\u6210\u957f", settings: "\u8bbe\u7f6e" },
+  "en-US": { coach: "Chat", plan: "Learning", resources: "Resources", training: "Training", progress: "Progress", settings: "Settings" },
+  "es-ES": { coach: "Chat", plan: "Plan", resources: "Recursos", training: "Entrenamiento", progress: "Progreso", settings: "Ajustes" },
+  "fr-FR": { coach: "Chat", plan: "Plan", resources: "Ressources", training: "Entra\u00eenement", progress: "Progr\u00e8s", settings: "Param\u00e8tres" },
+  "de-DE": { coach: "Chat", plan: "Plan", resources: "Materialien", training: "Training", progress: "Fortschritt", settings: "Einstellungen" },
+  "ja-JP": { coach: "\u5bfe\u8a71", plan: "\u8a08\u753b", resources: "\u8cc7\u6599", training: "\u8a13\u7df4", progress: "\u6210\u9577", settings: "\u8a2d\u5b9a" },
+  "ko-KR": { coach: "\ub300\ud654", plan: "\uacc4\ud68d", resources: "\uc790\ub8cc", training: "\ud6c8\ub828", progress: "\uc131\uc7a5", settings: "\uc124\uc815" },
+  "pt-BR": { coach: "Chat", plan: "Plano", resources: "Recursos", training: "Treinamento", progress: "Progresso", settings: "Configura\u00e7\u00f5es" },
 };
 
 const COACH_REPLY_BODY_MAX_CHARS = 4000;
@@ -997,6 +1003,10 @@ function trainingViewLabel(language: ComposerLanguage): string {
 
 function settingsViewLabel(language: ComposerLanguage): string {
   return viewLabels[language].settings;
+}
+
+function progressViewLabel(language: ComposerLanguage): string {
+  return viewLabels[language].progress;
 }
 
 const trainingFilePracticeCopy: Record<
@@ -1702,6 +1712,7 @@ const SIDEBAR_VIEW_ICONS: Record<ActiveWorkbenchView, ReactNode> = {
   plan: <NavPlanIcon size={15} />,
   resources: <NavResourcesIcon size={15} />,
   training: <NavTrainingIcon size={15} />,
+  progress: <NavProgressIcon size={15} />,
   settings: <SettingsIcon size={15} />,
 };
 
@@ -6246,6 +6257,14 @@ export function App() {
     }
     if (view === "training") {
       const label = trainingViewLabel(layout.composerLanguage);
+      return {
+        view,
+        label,
+        compactLabel: compactSidebarViewLabel(view, layout.composerLanguage, label),
+      };
+    }
+    if (view === "progress") {
+      const label = progressViewLabel(layout.composerLanguage);
       return {
         view,
         label,
@@ -14777,6 +14796,18 @@ export function App() {
     </section>
   );
 
+  const renderProgressView = () => (
+    <section className="progress-view-section">
+      <Suspense fallback={<ViewFallback label={t.progress} language={layout.composerLanguage} />}>
+        <ProgressView
+          zh={layout.composerLanguage === "zh-CN"}
+          projection={data.workspaceTrainingState?.skillProjection}
+          onOpenTraining={() => setActiveView("training")}
+        />
+      </Suspense>
+    </section>
+  );
+
   let activeViewContent = renderCoachRootView();
   switch (activeView) {
     case "plan":
@@ -14787,6 +14818,9 @@ export function App() {
       break;
     case "training":
       activeViewContent = renderDockedView("training", renderTrainingView());
+      break;
+    case "progress":
+      activeViewContent = renderDockedView("progress", renderProgressView());
       break;
     case "settings":
       activeViewContent = renderDockedView("settings", renderSettingsView());
