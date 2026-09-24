@@ -59,5 +59,10 @@ baseline the IA refactor proceeds from — no speculative redesign.
 - `smoke:provider` against the spec §23 test endpoint: **pass** (6.0s,
   MiniMax-M2.7 via `openai_chat_completions_compatible`).
 - Full real coaching turn through a locally running sidecar: **pass**
-  (263s, complete turn with tool calling). Finding: the gateway streams
-  the whole turn as one chunk — tracked as a §35 streaming-UX risk.
+  (263s, complete turn with tool calling).
+- Single-chunk finding, diagnosed: the turn smoke runs the
+  `use_agent_loop` lane, which emits the final reply as one event after
+  tools complete — expected for that lane. The plain chat lane
+  (`coaching_reply_stream`) already streams provider deltas. Follow-up
+  for PR-2: stream the agent loop's final reply (and tool activity)
+  instead of one silent 4-minute wait, so §35 holds on every lane.
