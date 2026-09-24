@@ -16,12 +16,18 @@ const sidecarUrl = (process.env.TRAINER_TURN_SMOKE_SIDECAR_URL ?? defaultSidecar
   .trim()
   .replace(/\/+$/, "");
 const providerBaseUrl = (
-  process.env.TRAINER_TURN_SMOKE_PROVIDER_BASE_URL ?? process.env.TRAINER_PROVIDER_SMOKE_BASE_URL ?? ""
+  process.env.TRAINER_TURN_SMOKE_PROVIDER_BASE_URL ??
+  process.env.TRAINER_TEST_BASE_URL ??
+  process.env.TRAINER_PROVIDER_SMOKE_BASE_URL ??
+  ""
 )
   .trim()
   .replace(/\/+$/, "");
 const providerApiKey = (
-  process.env.TRAINER_TURN_SMOKE_PROVIDER_API_KEY ?? process.env.TRAINER_PROVIDER_SMOKE_API_KEY ?? ""
+  process.env.TRAINER_TURN_SMOKE_PROVIDER_API_KEY ??
+  process.env.TRAINER_TEST_API_KEY ??
+  process.env.TRAINER_PROVIDER_SMOKE_API_KEY ??
+  ""
 ).trim();
 const providerModel = (
   process.env.TRAINER_TURN_SMOKE_PROVIDER_MODEL ?? process.env.TRAINER_PROVIDER_SMOKE_MODEL ?? defaultModel

@@ -11,10 +11,20 @@ const SUPPORTED_PROTOCOLS = new Set([
   "gemini_generate_content",
 ]);
 
-const baseUrl = (process.env.TRAINER_PROVIDER_SMOKE_BASE_URL ?? "")
+// Spec §23 names (TRAINER_TEST_*) are the canonical credential variables;
+// the TRAINER_PROVIDER_SMOKE_* names stay supported for existing callers.
+const baseUrl = (
+  process.env.TRAINER_TEST_BASE_URL ??
+  process.env.TRAINER_PROVIDER_SMOKE_BASE_URL ??
+  ""
+)
   .trim()
   .replace(/\/+$/, "");
-const apiKey = (process.env.TRAINER_PROVIDER_SMOKE_API_KEY ?? "").trim();
+const apiKey = (
+  process.env.TRAINER_TEST_API_KEY ??
+  process.env.TRAINER_PROVIDER_SMOKE_API_KEY ??
+  ""
+).trim();
 const model = (process.env.TRAINER_PROVIDER_SMOKE_MODEL ?? "").trim();
 const protocol = normalizeProtocol(
   (process.env.TRAINER_PROVIDER_SMOKE_PROTOCOL ?? defaultProtocol).trim(),
@@ -1096,10 +1106,10 @@ async function runProtocolProbe(diagnostics, modelIds) {
 async function main() {
   const missingConfiguration = [];
   if (!apiKey) {
-    missingConfiguration.push("TRAINER_PROVIDER_SMOKE_API_KEY");
+    missingConfiguration.push("TRAINER_TEST_API_KEY");
   }
-  if (!(process.env.TRAINER_PROVIDER_SMOKE_BASE_URL ?? "").trim()) {
-    missingConfiguration.push("TRAINER_PROVIDER_SMOKE_BASE_URL");
+  if (!(process.env.TRAINER_TEST_BASE_URL ?? process.env.TRAINER_PROVIDER_SMOKE_BASE_URL ?? "").trim()) {
+    missingConfiguration.push("TRAINER_TEST_BASE_URL");
   }
   if (!(process.env.TRAINER_PROVIDER_SMOKE_MODEL ?? "").trim()) {
     missingConfiguration.push("TRAINER_PROVIDER_SMOKE_MODEL");
