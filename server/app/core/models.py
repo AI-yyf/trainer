@@ -2491,7 +2491,14 @@ class SessionMessageRequest(BaseModel):
     session_id: str | None = None
     workspace_id: str | None = None
     message: str
-    active_view: Literal["coach", "plan", "resources", "training", "settings"] | None = Field(
+    active_view: Literal[
+        "coach",
+        "plan",
+        "resources",
+        "training",
+        "progress",
+        "settings",
+    ] | None = Field(
         default=None,
         alias="activeView",
     )
