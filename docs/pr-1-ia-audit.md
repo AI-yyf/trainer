@@ -68,9 +68,13 @@ baseline the IA refactor proceeds from — no speculative redesign.
   MiniMax-M2.7 via `openai_chat_completions_compatible`).
 - Full real coaching turn through a locally running sidecar: **pass**
   (263s, complete turn with tool calling).
-- Single-chunk finding, diagnosed: the turn smoke runs the
-  `use_agent_loop` lane, which emits the final reply as one event after
-  tools complete — expected for that lane. The plain chat lane
-  (`coaching_reply_stream`) already streams provider deltas. Follow-up
-  for PR-2: stream the agent loop's final reply (and tool activity)
-  instead of one silent 4-minute wait, so §35 holds on every lane.
+- Single-chunk finding, fully diagnosed (2026-09-25): Trainer's lanes
+  already stream incrementally — the plain lane releases visible prefixes
+  with a holdback tail and the agent lane emits
+  ``tool_call``/``tool_result``/``step`` frames plus safe visible deltas
+  (pinned by ``test_session_agent_e2e.py`` and the new
+  ``test_coaching_reply_stream_incremental.py``). The observed single
+  chunk is the reasoning-first model: MiniMax spends the stream inside
+  ``<think>`` and only emits visible text at the end, which the pipeline
+  correctly refuses to leak. Remaining §35 work is presentation polish
+  (e.g. a reasoning-in-progress affordance), not transport.
