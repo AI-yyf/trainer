@@ -92,6 +92,10 @@ class TeachingDecision:
     tone_profile: str = "steady"
     scenario: str = "guided"
     focus_area: str = ""
+    depth_level: int = 1
+    depth_label: str = ""
+    direct_answer_override: bool = False
+    offer_light_practice: bool = False
     evidence: list[str] = field(default_factory=list)
 
 
@@ -491,6 +495,7 @@ class PedagogyService:
         profile: UserProfile | None = None,
         memory_snapshot: MemorySnapshot | None = None,
         affect_state: CoreAffectState | None = None,
+        skill_state: str | None = None,
     ) -> TeachingDecision:
         scenario, focus_area, scenario_evidence = self._classify_scenario(
             request=request,
@@ -695,6 +700,18 @@ class PedagogyService:
         reason_parts = scenario_evidence + learner_state.evidence + affect_evidence
         reason = "; ".join(reason_parts) if reason_parts else "default_guided_progression"
 
+        from .teaching_depth import resolve_teaching_depth
+
+        depth = resolve_teaching_depth(
+            message=request.message,
+            skill_state=skill_state,
+            affect_urgency=(
+                str(getattr(affect_state, "urgency_level", "") or "") if affect_state else None
+            ),
+            needs_rescue=learner_state.needs_rescue,
+        )
+        evidence = list(dict.fromkeys(reason_parts + depth.evidence))
+
         return TeachingDecision(
             mode=mode,
             reason=reason,
@@ -713,7 +730,11 @@ class PedagogyService:
             tone_profile=tone_profile,
             scenario=scenario,
             focus_area=focus_area,
-            evidence=reason_parts,
+            depth_level=depth.level,
+            depth_label=depth.label,
+            direct_answer_override=depth.direct_answer_override,
+            offer_light_practice=depth.offer_light_practice,
+            evidence=evidence,
         )
 
     def _mode_playbook(

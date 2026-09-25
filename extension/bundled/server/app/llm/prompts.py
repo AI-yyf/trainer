@@ -2935,6 +2935,26 @@ def infer_learner_signal(
     return "steady"
 
 
+def _append_depth_clauses(teaching_decision: dict[str, Any], clauses: list[str]) -> None:
+    """§八/§九: render the depth ladder and suppression rules into the prompt."""
+
+    level = teaching_decision.get("depth_level")
+    depth_label = _compact_text(teaching_decision.get("depth_label"), 40)
+    if isinstance(level, int):
+        clauses.append(f"Teaching depth: L{level} {depth_label or 'explain'}.")
+    if teaching_decision.get("direct_answer_override") is True:
+        clauses.append("The learner explicitly asked for the direct answer.")
+        clauses.append("Do not quiz or attach practice.")
+    elif isinstance(level, int) and level >= 4:
+        clauses.append(
+            "Do not hand over the finished solution; guide with hints and let the learner write it."
+        )
+    if teaching_decision.get("offer_light_practice") is True:
+        clauses.append(
+            "After unblocking the learner, optionally offer one short practice; keep it optional."
+        )
+
+
 def _prompt_visible_teaching_mode(context: dict[str, Any]) -> str | None:
     teaching_decision = context.get("teaching_decision")
     if not isinstance(teaching_decision, dict):
@@ -3130,6 +3150,7 @@ def _build_context_block(context: dict[str, Any]) -> str:
             coaching_bias_clauses.append(f"Primary teaching goal: {primary_goal}.")
         if reason:
             coaching_bias_clauses.append(f"Why this fits: {reason}.")
+        _append_depth_clauses(teaching_decision, coaching_bias_clauses)
     if isinstance(coaching_adaptation, dict):
         adaptation_summary = _compact_text(coaching_adaptation.get("summary"), 140)
         if adaptation_summary:
@@ -3410,6 +3431,7 @@ def _build_learner_context_block(context: dict[str, Any]) -> str:
             bias_clauses.append(f"Teaching mode: {mode}.")
         if primary_goal:
             bias_clauses.append(f"Teaching goal: {primary_goal}.")
+        _append_depth_clauses(teaching_decision, bias_clauses)
     if isinstance(coaching_adaptation, dict):
         adaptation_summary = _compact_text(coaching_adaptation.get("summary"), 140)
         if adaptation_summary:

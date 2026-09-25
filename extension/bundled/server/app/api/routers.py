@@ -14955,7 +14955,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         normalized = str(active_view or "").strip().lower()
         return (
             normalized
-            if normalized in {"coach", "plan", "resources", "training", "settings"}
+            if normalized in {"coach", "plan", "resources", "training", "progress", "settings"}
             else ""
         )
 
@@ -18000,7 +18000,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         normalized_active_view_text = str(active_view or "").strip().lower()
         normalized_active_view = (
             normalized_active_view_text
-            if normalized_active_view_text in {"coach", "plan", "resources", "training", "settings"}
+            if normalized_active_view_text in {"coach", "plan", "resources", "training", "progress", "settings"}
             else None
         )
         coach_context = {
