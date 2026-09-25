@@ -18,7 +18,10 @@ import pytest
 from app.core.models import MemorySnapshot, TurnRequest, UserProfile
 from app.llm.prompts import _build_context_block, _build_learner_context_block
 from app.pedagogy.service import PedagogyService
-from app.pedagogy.teaching_depth import resolve_teaching_depth
+from app.pedagogy.teaching_depth import (
+    resolve_teaching_depth,
+    resolve_teaching_depth_skill_state,
+)
 
 
 def test_direct_answer_request_overrides_to_level_zero() -> None:
@@ -160,3 +163,73 @@ def test_prompt_blocks_render_the_optional_practice_offer() -> None:
 
     for block in (_build_context_block(context), _build_learner_context_block(context)):
         assert "optionally offer one short practice" in block
+
+
+def test_select_skill_state_prefers_the_scenario_dimension() -> None:
+    projection = {
+        "dimensions": {
+            "comprehension": {"state": "repeat_verified"},
+            "debugging": {"state": "assisted"},
+        }
+    }
+    assert (
+        resolve_teaching_depth_skill_state(
+            skill_projection=projection, scenario="debug_loop"
+        )
+        == "assisted"
+    )
+    assert (
+        resolve_teaching_depth_skill_state(
+            skill_projection=projection, scenario="concept_teaching"
+        )
+        == "repeat_verified"
+    )
+
+
+def test_select_skill_state_falls_back_to_the_weakest_dimension() -> None:
+    projection = {
+        "dimensions": {
+            "comprehension": {"state": "repeat_verified"},
+            "debugging": {"state": "assisted"},
+            "transfer": {"state": "not_verified"},
+        }
+    }
+    assert (
+        resolve_teaching_depth_skill_state(skill_projection=projection, scenario=None)
+        == "not_verified"
+    )
+    assert resolve_teaching_depth_skill_state(skill_projection=None, scenario=None) is None
+    assert (
+        resolve_teaching_depth_skill_state(
+            skill_projection={"dimensions": {}}, scenario="debug_loop"
+        )
+        is None
+    )
+
+
+def test_ladder_honors_the_real_projection_state() -> None:
+    decision = resolve_teaching_depth(
+        message="这块我想继续深入。",
+        skill_state="assisted",
+    )
+    assert decision.level == 3
+
+
+def test_decide_teaching_uses_the_projection_state() -> None:
+    service = PedagogyService()
+    request = TurnRequest(message="这块我想继续深入练一练。", current_file=None)
+    learner_state = service.infer_learner_state(
+        request=request,
+        profile=UserProfile(),
+        memory_snapshot=MemorySnapshot(),
+    )
+    decision = service.decide_teaching(
+        request=request,
+        learner_state=learner_state,
+        profile=UserProfile(),
+        memory_snapshot=MemorySnapshot(),
+        skill_state="independent",
+    )
+    assert decision.depth_level == 4
+    assert decision.depth_label == "independent practice"
+    assert any("skill_state:independent" in item for item in decision.evidence)

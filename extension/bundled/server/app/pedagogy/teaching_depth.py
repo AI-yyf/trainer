@@ -116,6 +116,74 @@ _PRACTICE_REQUEST_CUES = (
 
 _LADDER_FLOOR_CUES = _PRACTICE_REQUEST_CUES
 
+# Ladder ranks used for the conservative fallback: the dimension with the
+# LEAST mastery anchors the depth, so the coach never over-teaches a weak
+# dimension while another is strong.
+_SKILL_RANKS: dict[str, int] = {
+    "needs_review": 0,
+    "not_verified": 1,
+    "assisted": 2,
+    "independent": 3,
+    "repeat_verified": 4,
+}
+
+_SCENARIO_DIMENSIONS: tuple[tuple[str, str], ...] = (
+    ("debug", "debugging"),
+    ("debugging", "debugging"),
+    ("implementation", "implementation"),
+    ("idea", "implementation"),
+    ("project_adaptation", "implementation"),
+    ("concept", "comprehension"),
+    ("principle", "comprehension"),
+    ("planning", "comprehension"),
+    ("reading", "comprehension"),
+    ("transfer", "transfer"),
+)
+
+
+def resolve_teaching_depth_skill_state(
+    *,
+    skill_projection: object | None,
+    scenario: str | None = None,
+) -> SkillState:
+    """Pick the skill-projection state this turn's depth should anchor on.
+
+    The scenario's dimension wins when the projection tracks it; otherwise
+    the weakest tracked dimension anchors the depth (§九: never over-teach
+    a weak dimension while another is strong).
+    """
+
+    if not isinstance(skill_projection, dict):
+        return None
+    dimensions = skill_projection.get("dimensions")
+    if not isinstance(dimensions, dict) or not dimensions:
+        return None
+
+    def _state(name: str) -> str | None:
+        record = dimensions.get(name)
+        if not isinstance(record, dict):
+            return None
+        state = str(record.get("state") or "").strip().lower()
+        return state or None
+
+    normalized_scenario = str(scenario or "").strip().lower()
+    for cue, dimension in _SCENARIO_DIMENSIONS:
+        if cue in normalized_scenario:
+            preferred = _state(dimension)
+            if preferred:
+                return preferred
+            break
+
+    ranked = [
+        (_SKILL_RANKS.get(state, 1), name, state)
+        for name, state in ((name, _state(name)) for name in dimensions)
+        if state
+    ]
+    if not ranked:
+        return None
+    ranked.sort(key=lambda item: (item[0], item[1]))
+    return ranked[0][2]
+
 
 def _matches(message: str, cues: tuple[str, ...]) -> str | None:
     lowered = message.lower()

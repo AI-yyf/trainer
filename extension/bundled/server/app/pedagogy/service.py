@@ -496,6 +496,7 @@ class PedagogyService:
         memory_snapshot: MemorySnapshot | None = None,
         affect_state: CoreAffectState | None = None,
         skill_state: str | None = None,
+        skill_projection: dict[str, Any] | None = None,
     ) -> TeachingDecision:
         scenario, focus_area, scenario_evidence = self._classify_scenario(
             request=request,
@@ -700,11 +701,18 @@ class PedagogyService:
         reason_parts = scenario_evidence + learner_state.evidence + affect_evidence
         reason = "; ".join(reason_parts) if reason_parts else "default_guided_progression"
 
-        from .teaching_depth import resolve_teaching_depth
+        from .teaching_depth import (
+            resolve_teaching_depth,
+            resolve_teaching_depth_skill_state,
+        )
 
+        effective_skill_state = skill_state or resolve_teaching_depth_skill_state(
+            skill_projection=skill_projection,
+            scenario=scenario,
+        )
         depth = resolve_teaching_depth(
             message=request.message,
-            skill_state=skill_state,
+            skill_state=effective_skill_state,
             affect_urgency=(
                 str(getattr(affect_state, "urgency_level", "") or "") if affect_state else None
             ),

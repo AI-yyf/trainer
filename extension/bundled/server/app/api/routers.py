@@ -7742,12 +7742,22 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             learner_state=modeled_learner_state or LearnerState(),
             memory_snapshot=state.snapshot.memory,
         )
+        memory_workspace_payload = (
+            state.snapshot.memory.workspace
+            if isinstance(getattr(state.snapshot.memory, "workspace", None), dict)
+            else {}
+        )
         pedagogy_decision_raw = runtime.pedagogy_service.decide_teaching(
             request=pedagogy_request,
             learner_state=pedagogy_learner_state_raw,
             profile=profile,
             memory_snapshot=state.snapshot.memory,
             affect_state=modeled_affect_state,
+            skill_projection=(
+                memory_workspace_payload.get("training_skill_projection")
+                if isinstance(memory_workspace_payload, dict)
+                else None
+            ),
         )
         lowered_message = request.message.lower()
         first_user_turn = sum(
