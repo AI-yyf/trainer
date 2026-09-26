@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import {
   isAuthoritativeAck,
@@ -474,7 +474,10 @@ function AcceptanceFeedbackBlock({
         <span className="acceptance-progress__percent">{percent}%</span>
       </div>
       <div className="acceptance-progress__bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-        <div className={`acceptance-progress__fill ${progressState}`} style={{ width: `${percent}%` }} />
+        <div
+          className={`acceptance-progress__fill ${progressState}`}
+          style={{ "--bar-fill": String(percent / 100) } as CSSProperties}
+        />
       </div>
       {feedback.matchedItems.length > 0 ? (
         <div className="acceptance-progress__items">

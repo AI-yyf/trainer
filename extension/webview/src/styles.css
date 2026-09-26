@@ -5646,8 +5646,11 @@ button.resources-sandbox-layout__chip:focus-visible {
   height: 6px;
   border-radius: 2px;
   background: color-mix(in srgb, var(--fg-0) 78%, var(--line));
-  transform: scale(0);
-  transition: transform var(--motion-fast) var(--motion-ease);
+  transform: scale(0.4);
+  opacity: 0;
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    opacity var(--motion-fast) var(--motion-ease);
 }
 
 .resources-sandbox-row__checkbox input:hover,
@@ -5664,6 +5667,7 @@ button.resources-sandbox-layout__chip:focus-visible {
 
 .resources-sandbox-row__checkbox input:checked::before {
   transform: scale(1);
+  opacity: 1;
 }
 
 .resources-sandbox-row__indent {
@@ -8674,8 +8678,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   color: var(--fg-muted);
   font-size: var(--trainer-font-3xs);
   line-height: 1.35;
-  text-transform: uppercase;
-  letter-spacing: .06em;
+  letter-spacing: 0.02em;
 }
 
 .training-guidance-details__nested,
@@ -9919,7 +9922,7 @@ button.resources-sandbox-layout__chip:focus-visible {
   font-size: var(--trainer-font-2xs);
   line-height: 1.2;
   pointer-events: none;
-  animation: composer-drop-prompt-in var(--motion-in) var(--motion-ease)-out;
+  animation: composer-drop-prompt-in var(--motion-in) var(--ease-out);
 }
 
 .composer__drop-prompt--unavailable {
@@ -12117,7 +12120,6 @@ button.resources-sandbox-layout__chip:focus-visible {
 .artifact-card__kind {
   font-size: var(--trainer-font-2xs);
   font-weight: 400;
-  text-transform: uppercase;
   color: var(--fg-muted);
 }
 
@@ -13080,8 +13082,7 @@ button.resources-sandbox-layout__chip:focus-visible {
 .firstlook-panel__row-label {
   font-size: var(--trainer-font-3xs);
   font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   color: var(--fg-muted);
 }
 
@@ -15352,6 +15353,15 @@ button.resources-sandbox-layout__chip:focus-visible {
   cursor: pointer;
   transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease),
     transform var(--motion-fast) var(--motion-ease);
+}
+
+.toolbar-button:active:not(:disabled),
+.settings-sheet__choice-pill:active:not(:disabled),
+.context-chip:active:not(:disabled),
+.header-switcher__item:active:not(:disabled),
+.menu-list__item:active:not(:disabled),
+.composer-session-list__item:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .toolbar-button:hover,
@@ -18730,7 +18740,7 @@ details[open] > :not(summary) {
   *::before,
   *::after {
     animation: none !important;
-    transition: none !important;
+    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
 
@@ -19246,7 +19256,9 @@ details[open] > :not(summary) {
 }
 
 .plan-dashboard__bar-fill {
-  transition: width var(--motion-slow, 280ms) var(--motion-ease);
+  transform: scaleX(var(--bar-fill, 1));
+  transform-origin: 0 50%;
+  transition: transform var(--motion-slow, 280ms) var(--motion-ease);
   height: 100%;
   border-radius: inherit;
   background: var(--accent);
@@ -19422,7 +19434,6 @@ details[open] > :not(summary) {
   min-height: 0;
   overflow: hidden;
   padding: 0 10px;
-  transition: padding var(--motion-base) var(--ease-out);
 }
 
 .collapse-section.is-open > .collapse-section__body-wrap > .collapse-section__body {
@@ -19760,8 +19771,13 @@ details[open] > :not(summary) {
     border-color var(--motion-fast) var(--ease-out);
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .coach-artifact-card:hover {
+    transform: translateY(-1px);
+  }
+}
+
 .coach-artifact-card:hover {
-  transform: translateY(-1px);
   border-color: var(--accent);
 }
 
@@ -19906,7 +19922,9 @@ details[open] > :not(summary) {
 
 /* Dashboard progress bars share the stage ring's motion contract. */
 .plan-dashboard__bar-fill {
-  transition: width var(--motion-slow) var(--ease-out);
+  transform: scaleX(var(--bar-fill, 1));
+  transform-origin: 0 50%;
+  transition: transform var(--motion-slow) var(--ease-out);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -20368,8 +20386,6 @@ details[open] > :not(summary) {
 }
 
 .view-content--enter > * {
-  animation: trainer-view-in var(--motion-slow, 280ms) var(--motion-ease) both;
-}
 
 /* CC Switch-style quick setup card (Settings → provider form top) */
 .settings-quick-setup {
@@ -20899,7 +20915,9 @@ details[open] > :not(summary) {
   height: 100%;
   border-radius: var(--radius-full);
   background: var(--accent);
-  transition: width 0.2s ease;
+  transform: scaleX(var(--bar-fill, 1));
+  transform-origin: 0 50%;
+  transition: transform 0.2s var(--ease-out);
 }
 
 .acceptance-progress__items {
@@ -21241,11 +21259,10 @@ details[open] > :not(summary) {
 }
 
 .skill-projection-title {
-  font-size: 11px;
+  font-size: var(--trainer-font-3xs);
   font-weight: var(--trainer-font-weight-medium);
   letter-spacing: 0.02em;
-  color: var(--text-2);
-  text-transform: uppercase;
+  color: var(--fg-muted);
 }
 
 .skill-projection-row {

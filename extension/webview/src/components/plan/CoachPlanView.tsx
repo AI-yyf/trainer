@@ -1,4 +1,12 @@
-import { isValidElement, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  isValidElement,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 import {
   describeSafeStructuredValue,
@@ -2633,7 +2641,10 @@ function PlanDashboard({ plan }: { plan: LearningPlan }) {
             aria-valuemax={100}
             aria-valuenow={stagePercent}
           >
-            <div className="plan-dashboard__bar-fill" style={{ width: `${stagePercent}%` }} />
+            <div
+              className="plan-dashboard__bar-fill"
+              style={{ "--bar-fill": String(stagePercent / 100) } as CSSProperties}
+            />
           </div>
         </article>
 
@@ -2653,7 +2664,10 @@ function PlanDashboard({ plan }: { plan: LearningPlan }) {
                       {entry.concept}
                     </span>
                     <div className="plan-dashboard__bar">
-                      <div className="plan-dashboard__bar-fill" style={{ width: `${percent}%` }} />
+                      <div
+                        className="plan-dashboard__bar-fill"
+                        style={{ "--bar-fill": String(percent / 100) } as CSSProperties}
+                      />
                     </div>
                     <span className="plan-dashboard__mastery-score">{percent}%</span>
                   </li>

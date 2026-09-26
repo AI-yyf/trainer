@@ -22,7 +22,9 @@ test('Codex-quiet motion tokens and required transitions live in styles.css', ()
   assert.match(styles, /\.composer__send:active:not\(:disabled\)[\s\S]{0,80}transform:\s*scale\(0\.96\)/);
   assert.match(styles, /@media \(prefers-reduced-motion:\s*reduce\)/);
   assert.match(styles, /animation:\s*none !important;/);
-  assert.match(styles, /transition:\s*none !important;/);
+  // Reduced motion is gentler, not zero: property changes stay wired but
+  // land instantly, and movement keyframes are dropped.
+  assert.match(styles, /transition-duration:\s*0\.01ms !important;/);
   assert.doesNotMatch(styles, /\.coach-action-pill__dot--pulse[\s\S]{0,80}animation:\s*coach-action-pulse/);
   assert.doesNotMatch(styles, /\.agent-activity-pill__dot--running[\s\S]{0,80}animation:\s*agent-activity-pulse/);
 
