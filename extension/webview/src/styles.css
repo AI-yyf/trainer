@@ -1192,7 +1192,21 @@ body,
 
 .notice,
 .coach-inline-notice {
-  animation: trainer-notice-in var(--motion-in) var(--motion-ease);
+  transition:
+    opacity var(--motion-in) var(--motion-ease),
+    transform var(--motion-in) var(--motion-ease);
+}
+
+@starting-style {
+  .notice,
+  .coach-inline-notice {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.notice,
+.coach-inline-notice {
   margin: 8px 10px 0;
   padding: 8px 10px;
   width: auto;
@@ -3219,17 +3233,6 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
 
 .trainer-citation .freshness-icon--unknown {
   color: var(--fg-muted);
-}
-
-@keyframes trainer-notice-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 @keyframes trainer-pop-in {
@@ -18746,34 +18749,30 @@ button.resources-sandbox-layout__chip:focus-visible {
   color: var(--fg-0);
 }
 
-@keyframes trainer-disclose {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes trainer-menu-in {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 .composer__mode-menu,
 .menu-list {
   transform-origin: bottom left;
-  animation: trainer-menu-in var(--motion-in) var(--motion-ease);
+  transition:
+    opacity var(--motion-in) var(--motion-ease),
+    transform var(--motion-in) var(--motion-ease);
+}
+
+@starting-style {
+  .composer__mode-menu,
+  .menu-list {
+    opacity: 0;
+    transform: scale(0.98);
+  }
 }
 
 details[open] > :not(summary) {
-  animation: trainer-disclose var(--motion-in) var(--motion-ease);
+  transition: opacity var(--motion-in) var(--motion-ease);
+}
+
+@starting-style {
+  details[open] > :not(summary) {
+    opacity: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
