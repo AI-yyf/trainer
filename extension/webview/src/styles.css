@@ -15337,6 +15337,47 @@ button.resources-sandbox-layout__chip:focus-visible {
   gap: 6px;
 }
 
+.training-hint-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.training-hint-reveal__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.training-hint-reveal__list li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-1);
+}
+
+.training-hint-reveal__index {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+  font-size: var(--trainer-font-3xs);
+  color: var(--fg-muted);
+}
+
+.training-hint-reveal__button {
+  align-self: flex-start;
+}
+
 .toolbar-button,
 .settings-sheet__choice-pill,
 .context-chip {

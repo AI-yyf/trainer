@@ -19,7 +19,10 @@ class AttemptStartRequest(BaseModel):
 
 
 class AttemptUpdateRequest(BaseModel):
-    attempt_id: str
+    attempt_id: str = ""
+    # §五: hint usage may arrive with only the card id; the server resolves
+    # the workspace's active attempt (fail-closed, workspace-scoped).
+    card_id: str | None = None
     workspace_id: str | None = None
     answer_draft: str | None = None
     assistance_level: str | None = None
@@ -124,8 +127,21 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
     @router.post("/training/attempt/update")
     def update_attempt(request: AttemptUpdateRequest) -> dict:
         store = require_store()
+        attempt_id = str(request.attempt_id or "").strip()
+        if not attempt_id and request.card_id:
+            # §五: resolve the workspace's active attempt for this card so the
+            # client can record hint usage without tracking attempt ids.
+            resolved = store.find_active_attempt(
+                request.workspace_id or "", request.card_id
+            )
+            if resolved is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="No active training attempt for this card in the workspace.",
+                )
+            attempt_id = str(resolved.get("attempt_id") or "")
         attempt = store.update_attempt(
-            request.attempt_id,
+            attempt_id,
             workspace_id=request.workspace_id,
             answer_draft=request.answer_draft,
             assistance_level=request.assistance_level,

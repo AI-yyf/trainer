@@ -10784,6 +10784,17 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView, activeTrainingCardId, attemptLifecycle, isBrowserPreview]);
 
+  const handleHintReveal = useCallback(
+    (hintLevel: number) => {
+      if (!activeTrainingCardId || isBrowserPreview) {
+        return;
+      }
+      const clamped = Math.min(3, Math.max(1, hintLevel));
+      attemptLifecycle.updateAssistance(activeTrainingCardId, `hint_level_${clamped}`);
+    },
+    [activeTrainingCardId, attemptLifecycle, isBrowserPreview],
+  );
+
   const checkRemoteRunnerBoundary = useCallback((): string | null => {
     // TR-100: remote workspace without a runner must not silently verify.
     const wsRoot = data.memory.workspace?.workspaceId ?? "";
@@ -13738,6 +13749,7 @@ export function App() {
           selectedCardStatus={effectiveSelectedTrainingCardStatus}
           onCardStatusTransition={leftoverTrainingHandoffChromeNotLive ? undefined : handleTrainingCardStatusTransition}
           onVerifyCurrentFile={handleVerifyCurrentFileFromCard}
+          onHintReveal={handleHintReveal}
           title={title}
           currentStep={currentStep}
           learningFamily={trainingLearningFamily}

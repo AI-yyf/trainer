@@ -279,3 +279,50 @@ def test_attempt_evidence_roundtrip_over_rpc(tokened_client: TestClient) -> None
     )
     items = fetched.json()["attempt"]["evidence"]
     assert [item["is_current"] for item in items] == [True]
+
+
+def test_attempt_update_resolves_the_active_attempt_by_card(tmp_path: Path) -> None:
+    """§五 honesty: revealing a hint must reach the card's active attempt even
+    when the client only knows the card id — workspace-scoped, fail-closed."""
+    from fastapi.testclient import TestClient
+
+    with TestClient(create_app(_settings(tmp_path))) as client:
+        started = client.post(
+            "/training/attempt/start",
+            json={"workspace_id": "ws-card-update", "card_id": "card-hints"},
+        )
+        assert started.status_code == 200
+        attempt_id = started.json()["attempt"]["attempt_id"]
+
+        updated = client.post(
+            "/training/attempt/update",
+            json={
+                "workspace_id": "ws-card-update",
+                "card_id": "card-hints",
+                "assistance_level": "hint_level_1",
+            },
+        )
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["attempt"]["attempt_id"] == attempt_id
+        assert updated.json()["attempt"]["assistance_level"] == "hint_level_1"
+
+        missing = client.post(
+            "/training/attempt/update",
+            json={
+                "workspace_id": "ws-card-update",
+                "card_id": "card-never-started",
+                "assistance_level": "hint_level_2",
+            },
+        )
+        assert missing.status_code == 404, missing.text
+
+        # Workspace isolation holds for card-based resolution too.
+        foreign = client.post(
+            "/training/attempt/update",
+            json={
+                "workspace_id": "ws-other",
+                "card_id": "card-hints",
+                "assistance_level": "hint_level_2",
+            },
+        )
+        assert foreign.status_code == 404, foreign.text

@@ -126,6 +126,8 @@ export interface TrainingWorkbenchViewProps {
   primaryAction?: ReactNode;
   /** Card-owned verification affordance (preview/workspace verify flow). */
   onVerifyCurrentFile?: () => void;
+  /** §五: record honest assistance usage when the learner reveals a hint. */
+  onHintReveal?: (hintLevel: number) => void;
   leftoverNote?: string;
   actions?: ReactNode;
   emptyState?: ReactNode;
@@ -1031,6 +1033,7 @@ export function TrainingWorkbenchView({
   weakSpots = [],
   primaryAction,
   onVerifyCurrentFile,
+  onHintReveal,
   leftoverNote,
   actions,
   emptyState,
@@ -1787,6 +1790,9 @@ export function TrainingWorkbenchView({
                         onClick={() => onVerifyCurrentFile()}
                       />
                     ) : null}
+                    {hintLadder.length > 0 && cardType === "practice" ? (
+                      <HintLadderReveal hints={hintLadder} onReveal={onHintReveal} isZh={isZh} />
+                    ) : null}
                   </div>
                   </div>
                 </div>
@@ -2287,5 +2293,47 @@ export function TrainingWorkbenchView({
         </>
       )}
     </section>
+  );
+}
+
+
+function HintLadderReveal({
+  hints,
+  onReveal,
+  isZh,
+}: {
+  hints: string[];
+  onReveal?: (hintLevel: number) => void;
+  isZh: boolean;
+}) {
+  const [revealed, setRevealed] = useState(0);
+  const total = hints.length;
+  const allRevealed = revealed >= total;
+  return (
+    <div className="training-hint-reveal" role="group" aria-label={isZh ? "提示阶梯" : "Hint ladder"}>
+      {revealed > 0 ? (
+        <ul className="training-hint-reveal__list">
+          {hints.slice(0, revealed).map((hint, index) => (
+            <li key={hint}>
+              <span className="training-hint-reveal__index">{index + 1}</span>
+              {hint}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {!allRevealed ? (
+        <button
+          type="button"
+          className="toolbar-button training-hint-reveal__button"
+          onClick={() => {
+            const next = Math.min(revealed + 1, total);
+            setRevealed(next);
+            onReveal?.(next);
+          }}
+        >
+          {isZh ? `提示 ${revealed + 1}/${total}` : `Hint ${revealed + 1}/${total}`}
+        </button>
+      ) : null}
+    </div>
   );
 }

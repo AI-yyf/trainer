@@ -30,7 +30,8 @@ export interface TrainingAttemptLifecycle {
   /** Try 草稿变化:由调用方节流后调用。 */
   updateDraft: (attemptId: string, answerDraft: string) => void;
   /** 使用提示后:推进 assistance level。 */
-  updateAssistance: (attemptId: string, assistanceLevel: string) => void;
+  /** §五: record hint usage against the card's active attempt (server resolves it). */
+  updateAssistance: (cardId: string, assistanceLevel: string) => void;
   /** Verify 完成:提交证据绑定(身份服务端从 attempt 派生;trust 级别由服务端定)。 */
   submitEvidence: (
     attemptId: string,
@@ -65,9 +66,9 @@ export function useTrainingAttemptLifecycle(): TrainingAttemptLifecycle {
         answerDraft,
       });
     },
-    updateAssistance: (attemptId, assistanceLevel) => {
+    updateAssistance: (cardId, assistanceLevel) => {
       sendTrainingCommand(trainerCommands.trainingAttemptUpdate, {
-        attemptId,
+        cardId,
         assistanceLevel,
       });
     },

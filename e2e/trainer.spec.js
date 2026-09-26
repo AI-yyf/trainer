@@ -1527,6 +1527,32 @@ test.describe("Trainer Five-View Shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
+  test("hint ladder reveals one hint at a time on the practice surface", async ({ page }) => {
+    const errors = attachConsoleErrorCollector(page);
+
+    await openPreview(page, "training", {
+      lang: "zh-CN",
+      scenario: "training-debug",
+      connection: "connected",
+    });
+
+    // §五: hidden by default, advanced one step at a time.
+    const revealGroup = page.getByRole("group", { name: "提示阶梯" });
+    await expect(revealGroup).toBeVisible();
+    await expect(revealGroup.locator("li")).toHaveCount(0);
+    const revealButton = revealGroup.getByRole("button");
+    const labelText = (await revealButton.textContent()) || "";
+    const total = Number(labelText.match(/\d+$/)?.[0]) || 0;
+    expect(total).toBeGreaterThan(0);
+    for (let revealed = 1; revealed <= total; revealed += 1) {
+      await revealButton.click();
+      await expect(revealGroup.locator("li")).toHaveCount(revealed);
+    }
+    await expect(revealButton).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
+    await expectNoConsoleErrors(errors);
+  });
+
   test("progress view presents capability states with evidence counts", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 
