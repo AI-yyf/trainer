@@ -1,0 +1,173 @@
+/* ==========================================================================
+   Plan stage learning materials (F1) + training card mismatch recovery (F2)
+   Additive, token-driven styles only.
+   ========================================================================== */
+
+.coach-plan-view__stage-material-group {
+  min-width: 0;
+}
+
+.coach-plan-view__stage-materials {
+  margin: 0 0 6px 22px;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-1) 62%, transparent);
+}
+
+.coach-plan-view__stage-materials-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--trainer-space-2);
+}
+
+.coach-plan-view__stage-materials-label {
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+  letter-spacing: 0.02em;
+}
+
+.coach-plan-view__stage-materials-empty {
+  margin: 4px 0 0;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+}
+
+.coach-plan-view__stage-material-list {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.coach-plan-view__stage-material-item {
+  min-width: 0;
+}
+
+.coach-plan-view__stage-material-toggle {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.coach-plan-view__stage-material-toggle:hover {
+  background: color-mix(in srgb, var(--bg-2) 52%, transparent);
+}
+
+.coach-plan-view__stage-material-toggle:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
+.coach-plan-view__stage-material-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.coach-plan-view__stage-material-title strong {
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.3;
+}
+
+.stage-material-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  color: color-mix(in srgb, var(--accent) 78%, var(--fg-1));
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.4;
+}
+
+.stage-material-badge--study-guide {
+  border-color: color-mix(in srgb, var(--accent) 52%, transparent);
+  color: color-mix(in srgb, var(--accent) 82%, var(--fg-1));
+}
+
+.stage-material-badge--cheat-sheet {
+  border-color: color-mix(in srgb, var(--success) 48%, transparent);
+  color: color-mix(in srgb, var(--success) 82%, var(--fg-1));
+}
+
+.stage-material-badge--exercise-set {
+  border-color: color-mix(in srgb, var(--warning) 48%, transparent);
+  color: color-mix(in srgb, var(--warning) 82%, var(--fg-1));
+}
+
+.stage-material-badge--code-examples {
+  border-color: color-mix(in srgb, var(--fg-muted) 46%, transparent);
+  color: color-mix(in srgb, var(--fg-muted) 88%, var(--fg-1));
+}
+
+.stage-material-badge--other {
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  color: var(--fg-muted);
+}
+
+.coach-plan-view__stage-material-summary {
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.4;
+}
+
+.coach-plan-view__stage-material-action {
+  color: color-mix(in srgb, var(--accent) 78%, var(--fg-1));
+  font-size: var(--trainer-font-2xs);
+}
+
+.coach-plan-view__stage-material-content {
+  margin: 4px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-0) 72%, transparent);
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.training-card-recovery {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--trainer-space-2);
+  margin: 0 0 var(--trainer-space-2);
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 46%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--danger) 62%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.training-card-recovery p {
+  margin: 0;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.4;
+}
+
+.training-card-recovery button:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+

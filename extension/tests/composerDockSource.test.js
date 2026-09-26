@@ -1,6 +1,19 @@
 'use strict';
 
 const test = require('node:test');
+
+// PR-7: styles.css is an @import aggregator; rules live in styles/sections/*.
+function readStylesSource() {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
+}
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -12,7 +25,7 @@ function read(relativePath) {
 }
 
 test('composer dock unifies footer hit size, radius, gap, and icon box', () => {
-  const styles = read('styles.css');
+  const styles = readStylesSource();
   const composer = read('components/composer/CoachComposer.tsx');
   const app = read('app/App.tsx');
 
@@ -52,7 +65,7 @@ test('composer dock unifies footer hit size, radius, gap, and icon box', () => {
 });
 
 test('conversation markdown headings are distinguishable inside message-markdown', () => {
-  const styles = read('styles.css');
+  const styles = readStylesSource();
   assert.match(styles, /\.trainer-shell \.message-markdown h1\s*\{[\s\S]*?font-size:\s*1\.22rem/);
   assert.match(styles, /\.trainer-shell \.message-markdown h1\s*\{[\s\S]*?font-weight:\s*700 !important/);
   assert.match(styles, /\.trainer-shell \.message-markdown h2\s*\{[\s\S]*?font-size:\s*1\.08rem/);
@@ -69,7 +82,7 @@ test('conversation markdown headings are distinguishable inside message-markdown
 });
 
 test('compact nav labels are not ellipsized to a single character', () => {
-  const styles = read('styles.css');
+  const styles = readStylesSource();
   const labelStart = styles.indexOf('.header-switcher__label {');
   const labelBlock = styles.slice(labelStart, labelStart + 180);
   assert.match(labelBlock, /overflow:\s*visible;/);

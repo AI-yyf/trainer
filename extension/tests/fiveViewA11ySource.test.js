@@ -1,6 +1,19 @@
 'use strict';
 
 const test = require('node:test');
+
+// PR-7: styles.css is an @import aggregator; rules live in styles/sections/*.
+function readStylesSource() {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
+}
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -18,7 +31,7 @@ test('composer and five-view navigation have accessible names and visible focus'
   const settings = read('components/settings/CoachSettingsView.tsx');
   const composer = read('components/composer/CoachComposer.tsx');
   const action = read('components/common/ActionButton.tsx');
-  const styles = read('styles.css');
+  const styles = readStylesSource();
   const types = read('lib/types.ts');
 
   assert.match(app, /aria-label=\{t\.viewNavigation\}/);

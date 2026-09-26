@@ -1,0 +1,63 @@
+/* ==========================================================================
+   W4+W1 (Training): unified card texture + motion.
+   One chrome spec for practice / flash / drill card roots — every card
+   surface consumes `.training-card` so border/radius/padding stay identical
+   across views. Tokens only.
+   ========================================================================== */
+
+.training-card {
+  border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+  border-radius: var(--radius-md);
+  padding: var(--trainer-space-3);
+  background: var(--surface-1);
+  min-width: 0;
+}
+
+/* Flash answer reveal: rotateX flip-up under a shared perspective.
+   Runs once on mount (when the answer is revealed). */
+.training-flash-reveal-viewport {
+  perspective: 600px;
+}
+
+.training-flash-reveal {
+  transform-origin: top center;
+  animation: training-flash-reveal-in var(--motion-base) var(--ease-out) 1 both;
+}
+
+@keyframes training-flash-reveal-in {
+  from {
+    transform: rotateX(90deg);
+    opacity: 0;
+  }
+  to {
+    transform: rotateX(0deg);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .training-flash-reveal {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Loading / generating placeholders — consume the shared `.skeleton`. */
+.training-skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--trainer-space-2);
+  width: 100%;
+}
+
+.training-skeleton-line {
+  display: block;
+  width: 100%;
+  height: 10px;
+}
+
+.training-skeleton-line--short {
+  width: 62%;
+}
+

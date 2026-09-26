@@ -1,3 +1,18 @@
+
+// PR-7: styles.css is an @import aggregator; the real rules live in
+// styles/sections/*.css. Read them concatenated in manifest order so
+// assertions see the same bytes the browser gets after bundling.
+function readStylesSource() {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
+}
+
 'use strict';
 
 const test = require('node:test');
@@ -80,7 +95,7 @@ test('training pasted proof stays hidden until it can change the verdict', () =>
 test('training single-card keeps the knowledge card separate from composer verification', () => {
   const appSource = fs.readFileSync(appSourcePath, 'utf8');
   const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
-  const stylesSource = fs.readFileSync(stylesSourcePath, 'utf8');
+  const stylesSource = readStylesSource();
 
   const cardFaceIndex = trainingViewSource.indexOf('className="training-current__card-face"');
   const whyIndex = trainingViewSource.indexOf('data-view-why=""');
@@ -122,7 +137,7 @@ test('training single-card keeps the knowledge card separate from composer verif
 test('training structured guidance is wired from App into a collapsed single-card helper layer', () => {
   const appSource = fs.readFileSync(appSourcePath, 'utf8');
   const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
-  const stylesSource = fs.readFileSync(stylesSourcePath, 'utf8');
+  const stylesSource = readStylesSource();
 
   assert.match(appSource, /suggestedWorkspaceAction=\{localizedSuggestedWorkspaceAction\}/);
   assert.match(appSource, /scenario=\{localizedScenario\}/);
@@ -160,7 +175,7 @@ test('training structured guidance is wired from App into a collapsed single-car
 test('training verification-return strip is driven by snapshot status, not summary guessing', () => {
   const appSource = fs.readFileSync(appSourcePath, 'utf8');
   const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
-  const stylesSource = fs.readFileSync(stylesSourcePath, 'utf8');
+  const stylesSource = readStylesSource();
 
   assert.match(appSource, /selectedCardStatus=\{effectiveSelectedTrainingCardStatus\}/);
   assert.match(
@@ -254,7 +269,7 @@ test('training composer uses explicit try reflect return phases for practice', (
 test('training return is an empty-draft command and handoff composer copy is localized', () => {
   const appSource = fs.readFileSync(appSourcePath, 'utf8');
   const composerSource = fs.readFileSync(composerSourcePath, 'utf8');
-  const stylesSource = fs.readFileSync(stylesSourcePath, 'utf8');
+  const stylesSource = readStylesSource();
 
   assert.match(appSource, /const trainingHandoffComposerCopy: Record<ComposerLanguage, TrainingHandoffComposerCopy>/);
   for (const language of ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR']) {
@@ -286,7 +301,7 @@ test('training return is an empty-draft command and handoff composer copy is loc
 test('training practice verification sends expected symbols while flash stays local-answer based', () => {
   const appSource = fs.readFileSync(appSourcePath, 'utf8');
   const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
-  const stylesSource = fs.readFileSync(stylesSourcePath, 'utf8');
+  const stylesSource = readStylesSource();
 
   assert.match(appSource, /function trainingExpectedSymbols/);
   assert.match(appSource, /selectedTrainingCardCandidate\?\.expectedSymbols/);

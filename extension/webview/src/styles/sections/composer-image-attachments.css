@@ -1,0 +1,302 @@
+/* ==========================================================================
+   Composer image attachments
+   Staged image chips above the textarea + paperclip button in actions row.
+   ========================================================================== */
+
+.composer__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0 0;
+}
+
+.composer__capability-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 3px 0 1px;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.35;
+}
+
+.composer__capability-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: color-mix(in srgb, var(--warning) 74%, var(--fg-1));
+}
+
+.composer__capability-note span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.composer__attachment-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Disclosure reveal: details panels fade/slide their content on open.
+   CollapseSection handles grid-rows disclosure; this covers raw <details>
+   disclosures (model picker, route panels) in the settings sheet. */
+.settings-sheet details[open] > *:not(summary),
+.settings-endpoint-speed {
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
+}
+
+.settings-endpoint-speed__row {
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease) both;
+}
+
+.composer__attachment-chip {
+  animation: trainer-pop-in var(--motion-fast) var(--motion-ease);
+  transition: border-color var(--motion-fast) var(--motion-ease);  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: var(--radius-md);
+  background: var(--bg-2);
+  border: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-1);
+  max-width: 180px;
+}
+
+.composer__attachment-icon {
+  font-size: var(--trainer-font-2xs);
+  line-height: 1;
+}
+
+.composer__attachment-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer__attachment-remove {
+  transition: color var(--motion-fast) var(--motion-ease);  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+}
+
+.composer__attachment-remove:hover:not(:disabled) {
+  color: var(--fg-0);
+  background: color-mix(in srgb, var(--bg-1) 70%, transparent);
+}
+
+.composer__attachment-remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.composer__clear-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Keep the five-view shell on one quiet VS Code-sized title track. */
+.coach-view :where(h1, h2, h3, h4, h5, h6),
+.plan-view :where(h1, h2, h3, h4, h5, h6),
+.resources-view :where(h1, h2, h3, h4, h5, h6),
+.training-view :where(h1, h2, h3, h4, h5, h6),
+.settings-view :where(h1, h2, h3, h4, h5, h6),
+.header-switcher__item,
+.header-switcher__label,
+.section-block__header h2,
+.workbench-pane__heading h2,
+.settings-sheet__header h2,
+.coach-conversation-view__heading,
+.resource-library-view__title,
+.practice-card__title,
+.training-state__title,
+.training-active-card-route__pill-title,
+.card-title,
+.tip-title,
+.rhythm-title,
+.memory-title,
+.schedule-title,
+.resources-inline-context__title,
+.practice-card__section-label,
+.training-current h2,
+.training-current h3,
+.training-carryover-row h4,
+.training-loop-card h3,
+.training-signal-card h4,
+.training-review-row h4,
+.flash-state__title,
+.flash-create-form__title,
+.flash-empty__title,
+.flash-complete__title,
+.humanized-empty-state__title,
+.quick-actions-panel__title,
+.coach-empty-state__lead,
+.coach-super-entry__copy h3,
+.coach-super-entry__status span,
+.coach-super-entry__status strong,
+.coach-turn-recap__title,
+.coach-turn-recap__fact-label,
+.coach-turn-recap__fact-value,
+.composer-presencebar__copy strong,
+.composer-presencebar__provider span,
+.composer-presencebar__provider strong,
+.resource-preview-pane__tab-title,
+.tool-call-renderer__name,
+.file-preview-renderer__filename,
+.command-deck__header strong,
+.command-deck__body strong,
+.skill-deck__header strong,
+.skill-deck__body strong,
+.skill-deck__section {
+  font-size: var(--trainer-font-xs) !important;
+  line-height: 1.35;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.trainer-shell .message-markdown h1 {
+  font-size: 1.22rem !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--fg-0) !important;
+}
+
+.trainer-shell .message-markdown h2 {
+  font-size: 1.08rem !important;
+  font-weight: 650 !important;
+  line-height: 1.32 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--fg-0) !important;
+}
+
+.trainer-shell .message-markdown h3 {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--fg-0) !important;
+}
+
+.trainer-shell .message-markdown h4 {
+  font-size: 0.94rem !important;
+  font-weight: 550 !important;
+  line-height: 1.35 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--fg-0) !important;
+}
+
+.section-block__header h2,
+.workbench-pane__heading h2,
+.settings-sheet__header h2,
+.coach-conversation-view__heading,
+.resource-library-view__title {
+  color: var(--fg-0) !important;
+}
+
+/* Keep secondary titles and value rows visually below the pane title. */
+.coach-view :where(
+    .coach-empty-state__lead,
+    .coach-super-entry__copy h3,
+    .coach-turn-recap__title,
+    .coach-turn-recap__fact-value,
+    .coach-empty-state__starter-title,
+    .command-deck__header strong,
+    .command-deck__body strong,
+    .skill-deck__header strong,
+    .skill-deck__body strong,
+    .skill-deck__section
+  ),
+.plan-view :where(
+    .coach-plan-view__main-card-title,
+    .coach-plan-view__goal-title,
+    .coach-plan-view__resume-copy,
+    .coach-plan-view__mainline-digest,
+    .coach-plan-view__governance-item strong,
+    .coach-plan-view__decision-copy strong,
+    .coach-plan-view__blocked-copy > strong,
+    .coach-plan-view__read-rail-item strong,
+    .coach-plan-view__now-card strong,
+    .coach-plan-view__empty-outline-row strong
+  ),
+.resources-view :where(
+    .resource-library-row__copy h3,
+    .resources-library-stat strong,
+    .resource-preview-pane__tab-title,
+    .resources-inline-context__title
+  ),
+.training-view :where(
+    .practice-card__title,
+    .practice-card__next-hop-title,
+    .practice-card__section-label,
+    .training-state__title,
+    .training-active-card-route__pill-title,
+    .training-current h2,
+    .training-current h3,
+    .training-current__section-label,
+    .training-carryover-row h4,
+    .training-loop-card h3,
+    .training-signal-card h4,
+    .training-review-row h4,
+    .training-card-route-details__section h3,
+    .training-guidance-details__section h3,
+    .flash-state__title,
+    .flash-create-form__title,
+    .flash-empty__title,
+    .flash-complete__title,
+    .training-next-move strong,
+    .training-verification-return strong,
+    .training-active-card-route__factor strong
+  ),
+.settings-view :where(
+    .settings-section__title,
+    .settings-sheet__summary-card-value,
+    .settings-availability-strip__copy > strong,
+    .settings-availability-fact > strong,
+    .settings-sheet__simple-row > strong,
+    .settings-setup-check strong,
+    .workspace-authority-summary__item strong,
+    .settings-field label
+  ),
+.humanized-empty-state__title {
+  color: color-mix(in srgb, var(--fg-0) 66%, var(--fg-muted)) !important;
+}
+
+.coach-plan-view__governance-item strong,
+.coach-plan-view__decision-copy strong,
+.coach-plan-view__read-rail-item strong,
+.coach-plan-view__now-card strong,
+.coach-plan-view__empty-outline-row strong,
+.training-next-move strong,
+.training-verification-return strong,
+.workspace-authority-summary__item strong {
+  font-size: var(--trainer-font-2xs);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.settings-sheet__simple-row > strong,
+.settings-availability-strip__copy > strong,
+.settings-availability-fact > strong,
+.settings-setup-check strong {
+  font-size: var(--trainer-font-xs);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+

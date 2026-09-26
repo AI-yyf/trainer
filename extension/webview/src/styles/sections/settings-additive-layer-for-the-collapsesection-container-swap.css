@@ -1,0 +1,17 @@
+/* ============================================================
+   Settings: additive layer for the CollapseSection container swap.
+   Counts inside section headers stay width-stable (tabular numerals);
+   nested empty states keep the shared `.empty-state` proportions.
+   ============================================================ */
+.settings-section-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-memory-sharing__empty {
+  padding: 12px 8px;
+}
+
+.settings-sheet__authority-empty {
+  padding: 12px 8px;
+}
+

@@ -1,0 +1,96 @@
+/* ==========================================================================
+   Settings Section
+   ========================================================================== */
+
+.settings-section {
+  margin-bottom: 10px;
+}
+
+.settings-section__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  gap: 10px;
+}
+
+.settings-section__header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-section__title {
+  font-size: var(--trainer-font-xs);
+  font-weight: 400;
+  color: var(--fg-1);
+}
+
+.settings-section__desc {
+  font-size: var(--trainer-font-3xs);
+  color: var(--fg-muted);
+  line-height: 1.35;
+}
+
+.settings-section__header > .status-pill {
+  margin-top: 1px;
+  padding: 2px 7px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.settings-section--panel {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  border-radius: 0;
+  padding: 8px 0 0;
+  box-shadow: none;
+}
+
+/* A minor panel that opens the section would stack its own hairline 8px below
+   the section divider (double rule); the section divider alone separates. */
+.settings-section--panel > .settings-sheet__minor-panel:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.settings-section--setup {
+  background: transparent;
+  border: 0;
+  border-top: 0;
+  border-radius: 0;
+  padding: 4px 0 0;
+  box-shadow: none;
+}
+
+.settings-section--setup > .settings-sheet__state-panel {
+  display: none;
+}
+
+.settings-section--setup > .settings-sheet__summary-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 4px 0 2px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 34%, transparent);
+}
+
+.settings-section--setup > .settings-sheet__summary-grid .settings-sheet__summary-card {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 5px 0;
+  border-top-color: color-mix(in srgb, var(--line) 28%, transparent);
+}
+
+.settings-section--setup > .settings-sheet__summary-grid .settings-sheet__summary-card:first-child {
+  border-top: 0;
+}
+
+.settings-section--setup > .settings-sheet__summary-grid .settings-sheet__note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+

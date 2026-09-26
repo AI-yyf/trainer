@@ -1,0 +1,409 @@
+/* ==========================================================================
+   Surface materials: document column, hairline chrome, crafted disclosure
+   ========================================================================== */
+
+.coach-empty-state .button,
+.coach-empty-state .button--accent {
+  width: auto;
+  min-height: 30px;
+  padding: 5px 12px;
+  justify-content: flex-start;
+}
+
+.coach-plan-view__main-card[data-plan-primary="true"] .coach-plan-view__now-card {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.coach-plan-view__compact-more > summary,
+.training-current__more > summary,
+.settings-availability-strip__more > summary,
+.coach-plan-view__details > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 2px 0;
+  font-size: 12px;
+  line-height: var(--leading-meta);
+  color: var(--fg-muted);
+  list-style: none;
+}
+
+.coach-plan-view__compact-more > summary::-webkit-details-marker,
+.training-current__more > summary::-webkit-details-marker,
+.settings-availability-strip__more > summary::-webkit-details-marker,
+.coach-plan-view__details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.coach-plan-view__compact-more > summary::before,
+.training-current__more > summary::before,
+.settings-availability-strip__more > summary::before,
+.coach-plan-view__details > summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(-45deg);
+  transform-origin: 50% 50%;
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.coach-plan-view__compact-more[open] > summary::before,
+.training-current__more[open] > summary::before,
+.settings-availability-strip__more[open] > summary::before,
+.coach-plan-view__details[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.coach-plan-view__compact-more[open] > summary,
+.training-current__more[open] > summary,
+.settings-availability-strip__more[open] > summary {
+  color: var(--fg-1);
+}
+
+.settings-availability-strip__next[data-view-next],
+.settings-availability-strip__copy > p:not(.settings-availability-strip__trust) {
+  display: none;
+}
+
+[data-settings-language] .settings-sheet__choices {
+  gap: 2px 4px;
+}
+
+[data-settings-language] .settings-sheet__choice-pill {
+  min-height: 28px;
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg-muted);
+}
+
+[data-settings-language] .settings-sheet__choice-pill::before {
+  display: none;
+}
+
+[data-settings-language] .settings-sheet__choice-pill:hover {
+  background: transparent;
+  color: var(--fg-0);
+}
+
+[data-settings-language] .settings-sheet__choice-pill.is-active {
+  color: var(--fg-0);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.training-next-hop {
+  margin: 10px 0 0;
+  color: var(--fg-muted);
+  font-size: var(--type-meta);
+  line-height: var(--leading-meta);
+}
+
+.training-next-hop strong {
+  font-weight: 400;
+  color: var(--fg-1);
+}
+
+.message-bubble__meta {
+  font-size: var(--type-meta);
+  color: var(--fg-muted);
+  line-height: var(--leading-meta);
+}
+
+.coach-conversation-view--quiet-surface .message-bubble__body,
+.coach-conversation-view--quiet-surface .message-bubble__body p {
+  font-size: var(--type-ui);
+  line-height: var(--leading-body);
+  color: var(--fg-0);
+}
+
+.composer__mode-menu,
+.menu-list {
+  transform-origin: bottom left;
+  transition:
+    opacity var(--motion-in) var(--motion-ease),
+    transform var(--motion-in) var(--motion-ease);
+}
+
+@starting-style {
+  .composer__mode-menu,
+  .menu-list {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+details[open] > :not(summary) {
+  transition: opacity var(--motion-in) var(--motion-ease);
+}
+
+@starting-style {
+  details[open] > :not(summary) {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .training-state__spinner,
+  .composer__send .trainer-spin,
+  [class*="spinner"] {
+    animation: trainer-spin 0.65s linear infinite !important;
+  }
+}
+
+/* Crafted first surface: one input object, no leftover chrome. */
+.coach-conversation-view--quiet-surface .message-bubble__assistant-rail {
+  display: none;
+}
+
+.settings-availability-strip__state {
+  display: none;
+}
+
+.settings-section--summary {
+  border-top: 0;
+  padding-top: 4px;
+}
+
+.settings-sheet__body--hierarchical > .workspace-root-recovery,
+.settings-sheet__body--hierarchical > .settings-section--panel:not(.settings-section--summary) {
+  border-top-color: color-mix(in srgb, var(--line) 24%, transparent);
+  margin-bottom: 0;
+  padding-top: 6px;
+}
+
+.settings-section--summary > .collapsible-block > summary,
+.settings-sheet__defaults-summary--inline {
+  min-height: 28px;
+  padding: 4px 0;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+}
+
+.composer-shell--quiet .composer-secondary-button {
+  border-color: transparent;
+  background: transparent;
+}
+
+.composer-shell--quiet .composer-secondary-button:hover {
+  border-color: color-mix(in srgb, var(--line) 48%, transparent);
+  background: color-mix(in srgb, var(--bg-2) 54%, transparent);
+}
+
+.header-switcher__item.is-active {
+  font-weight: 400;
+}
+
+.coach-empty-state--welcome {
+  padding: 0 4px 8px;
+}
+
+.coach-empty-state--welcome p {
+  color: var(--fg-muted);
+  font-size: var(--type-ui);
+  line-height: var(--leading-body);
+}
+
+.training-current__actions--primary .button,
+.training-current__actions--primary .button.button--accent,
+.coach-plan-view__compact-primary-action .action-button,
+.coach-plan-view__compact-primary-action .action-button--ghost,
+.coach-plan-view__compact-primary-action .action-button--accent {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--line) 62%, transparent);
+}
+
+.training-current__actions--primary .button:hover,
+.coach-plan-view__compact-primary-action .action-button:hover {
+  background: color-mix(in srgb, var(--bg-2) 54%, transparent);
+}
+
+/* Browser preview: sit in a VS Code sidebar, not a 1280 desktop canvas. */
+.trainer-preview-workbench {
+  --trainer-preview-sidebar-width: 400px;
+  display: grid;
+  grid-template-columns: var(--trainer-preview-sidebar-width) minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+  background: color-mix(in srgb, var(--bg-1) 88%, var(--bg-0));
+  overflow: hidden;
+}
+
+.trainer-preview-sidebar {
+  min-width: 0;
+  width: var(--trainer-preview-sidebar-width);
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-0);
+  border-right: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
+}
+
+.trainer-preview-sidebar .trainer-shell {
+  width: 100%;
+  height: 100%;
+}
+
+.trainer-preview-editor {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--bg-1) 92%, var(--bg-0));
+}
+
+.trainer-preview-editor__chrome {
+  flex: 0 0 35px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 36%, transparent);
+  background: color-mix(in srgb, var(--bg-0) 72%, var(--bg-1));
+}
+
+.trainer-preview-editor__canvas {
+  flex: 1 1 auto;
+  margin: 16px 18px;
+  opacity: 0.28;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 17px,
+    color-mix(in srgb, var(--line) 48%, transparent) 17px 18px
+  );
+}
+
+@media (max-width: 720px) {
+  .trainer-preview-workbench {
+    display: block;
+    min-height: 100%;
+  }
+
+  .trainer-preview-editor {
+    display: none;
+  }
+
+  .trainer-preview-sidebar {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.composer-mode-control__trigger--label,
+.composer-shell--quiet .composer-mode-control__trigger--label,
+.composer-shell--quiet .composer--compact .composer-mode-control__trigger--label {
+  width: auto;
+  min-width: var(--composer-dock-hit, 28px);
+  min-height: var(--composer-dock-hit, 28px);
+  height: var(--composer-dock-hit, 28px);
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--composer-dock-radius, 8px);
+  background: transparent;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.2;
+  max-width: 8.5em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer__plus-control {
+  position: relative;
+}
+
+.composer-mode-control__label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-plus-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 8;
+  min-width: 168px;
+  inline-size: min(240px, calc(100vw - 32px));
+  padding: 4px;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+  background: var(--bg-1);
+  box-shadow: none;
+}
+
+.composer-plus-menu__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg-1);
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-plus-menu__option.is-active,
+.composer-plus-menu__option:hover {
+  background: color-mix(in srgb, var(--bg-2) 72%, transparent);
+  color: var(--fg-0);
+}
+
+.coach-plan-view__now-done,
+.coach-plan-view__now-next,
+.training-current__done {
+  margin: 6px 0 0;
+  color: var(--fg-muted);
+  font-size: var(--type-ui);
+  line-height: var(--leading-body);
+}
+
+.training-current__lead--card-face h2 {
+  font-size: var(--trainer-font-xs);
+  font-weight: 400;
+  color: var(--fg-0);
+}
+
+.training-current__sentence p {
+  margin: 6px 0 0;
+  color: var(--fg-1);
+  font-size: var(--type-ui);
+  line-height: var(--leading-body);
+}
+
+.settings-sheet__defaults-summary--inline {
+  display: grid;
+  grid-template-columns: minmax(5.5em, 0.34fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 0;
+}
+
+.settings-sheet__defaults-summary-main {
+  display: contents;
+}
+
+.settings-availability-strip__copy > p {
+  max-width: 42ch;
+}
+

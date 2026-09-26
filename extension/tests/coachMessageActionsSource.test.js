@@ -1,3 +1,18 @@
+
+// PR-7: styles.css is an @import aggregator; the real rules live in
+// styles/sections/*.css. Read them concatenated in manifest order so
+// assertions see the same bytes the browser gets after bundling.
+function readStylesSource() {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
+}
+
 'use strict';
 
 const test = require('node:test');
@@ -57,7 +72,7 @@ test('coach reply quick actions render only under assistant messages', () => {
 });
 
 test('coach reply action styles stay on theme tokens', () => {
-  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const styles = readStylesSource();
   const actionsRow = styles.match(/\.message-bubble__actions\s*\{[\s\S]*?\n\}/);
   const action = styles.match(/\.message-bubble__action\s*\{[\s\S]*?\n\}/);
   const actionHover = styles.match(/\.message-bubble__action:hover:not\(:disabled\)\s*\{[\s\S]*?\n\}/);

@@ -1,0 +1,12 @@
+/* ==========================================================================
+   Collapsible Block
+   ========================================================================== */
+
+.collapsible-block__body {
+  padding: 8px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+

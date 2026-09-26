@@ -1,0 +1,247 @@
+[
+ {
+  "file": "styles/sections/preamble.css",
+  "title": "Preamble",
+  "lines": 20
+ },
+ {
+  "file": "styles/sections/trainer-design-tokens-base-styles.css",
+  "title": "Trainer Design Tokens & Base Styles",
+  "lines": 99
+ },
+ {
+  "file": "styles/sections/reset-base.css",
+  "title": "Reset & Base",
+  "lines": 99
+ },
+ {
+  "file": "styles/sections/utilities.css",
+  "title": "Utilities",
+  "lines": 97
+ },
+ {
+  "file": "styles/sections/buttons.css",
+  "title": "Buttons",
+  "lines": 772
+ },
+ {
+  "file": "styles/sections/app-shell.css",
+  "title": "App Shell",
+  "lines": 420
+ },
+ {
+  "file": "styles/sections/views-panes.css",
+  "title": "Views & Panes",
+  "lines": 7252
+ },
+ {
+  "file": "styles/sections/section-blocks.css",
+  "title": "Section Blocks",
+  "lines": 92
+ },
+ {
+  "file": "styles/sections/coach-action-pills.css",
+  "title": "Coach Action Pills",
+  "lines": 113
+ },
+ {
+  "file": "styles/sections/menu-lists.css",
+  "title": "Menu Lists",
+  "lines": 164
+ },
+ {
+  "file": "styles/sections/composer.css",
+  "title": "Composer",
+  "lines": 1659
+ },
+ {
+  "file": "styles/sections/message-bubbles.css",
+  "title": "Message Bubbles",
+  "lines": 852
+ },
+ {
+  "file": "styles/sections/message-markdown.css",
+  "title": "Message Markdown",
+  "lines": 180
+ },
+ {
+  "file": "styles/sections/code-block-with-copy-button.css",
+  "title": "Code Block (with copy button)",
+  "lines": 106
+ },
+ {
+  "file": "styles/sections/message-rich-content.css",
+  "title": "Message Rich Content",
+  "lines": 59
+ },
+ {
+  "file": "styles/sections/message-support-lines.css",
+  "title": "Message Support Lines",
+  "lines": 23
+ },
+ {
+  "file": "styles/sections/message-table.css",
+  "title": "Message Table",
+  "lines": 62
+ },
+ {
+  "file": "styles/sections/mermaid-block.css",
+  "title": "Mermaid Block",
+  "lines": 74
+ },
+ {
+  "file": "styles/sections/artifact-card.css",
+  "title": "Artifact Card",
+  "lines": 90
+ },
+ {
+  "file": "styles/sections/collapsible-block.css",
+  "title": "Collapsible Block",
+  "lines": 12
+ },
+ {
+  "file": "styles/sections/coach-conversation-view.css",
+  "title": "Coach Conversation View",
+  "lines": 678
+ },
+ {
+  "file": "styles/sections/coach-empty-state.css",
+  "title": "Coach Empty State",
+  "lines": 792
+ },
+ {
+  "file": "styles/sections/coach-plan-view.css",
+  "title": "Coach Plan View",
+  "lines": 1219
+ },
+ {
+  "file": "styles/sections/coach-settings-view.css",
+  "title": "Coach Settings View",
+  "lines": 29
+ },
+ {
+  "file": "styles/sections/settings-sheet.css",
+  "title": "Settings Sheet",
+  "lines": 1959
+ },
+ {
+  "file": "styles/sections/settings-section.css",
+  "title": "Settings Section",
+  "lines": 96
+ },
+ {
+  "file": "styles/sections/settings-grid-field.css",
+  "title": "Settings Grid & Field",
+  "lines": 138
+ },
+ {
+  "file": "styles/sections/settings-actions.css",
+  "title": "Settings Actions",
+  "lines": 75
+ },
+ {
+  "file": "styles/sections/command-deck.css",
+  "title": "Command Deck",
+  "lines": 225
+ },
+ {
+  "file": "styles/sections/suggested-actions.css",
+  "title": "Suggested Actions",
+  "lines": 34
+ },
+ {
+  "file": "styles/sections/research-cards.css",
+  "title": "Research Cards",
+  "lines": 31
+ },
+ {
+  "file": "styles/sections/coach-deep-analysis.css",
+  "title": "Coach Deep Analysis",
+  "lines": 11
+ },
+ {
+  "file": "styles/sections/composer-enhancements.css",
+  "title": "Composer Enhancements",
+  "lines": 122
+ },
+ {
+  "file": "styles/sections/message-bubble-v2.css",
+  "title": "Message Bubble V2",
+  "lines": 212
+ },
+ {
+  "file": "styles/sections/trainer-agent-loop-activity-strip.css",
+  "title": "Trainer Agent Loop Activity Strip",
+  "lines": 203
+ },
+ {
+  "file": "styles/sections/composer-image-attachments.css",
+  "title": "Composer image attachments",
+  "lines": 302
+ },
+ {
+  "file": "styles/sections/narrow-sidebar-recovery.css",
+  "title": "Narrow Sidebar Recovery",
+  "lines": 311
+ },
+ {
+  "file": "styles/sections/surface-materials-document-column-hairline-chrome-crafted-disclosure.css",
+  "title": "Surface materials: document column, hairline chrome, crafted disclosure",
+  "lines": 409
+ },
+ {
+  "file": "styles/sections/plan-stage-learning-materials-f1-training-card-mismatch-recovery-f2.css",
+  "title": "Plan stage learning materials (F1) + training card mismatch recovery (F2)",
+  "lines": 173
+ },
+ {
+  "file": "styles/sections/plan-progress-dashboard-plan-view-inner-progress-tab.css",
+  "title": "Plan progress dashboard (Plan view inner \"progress\" tab)",
+  "lines": 160
+ },
+ {
+  "file": "styles/sections/collapsesection-the-unified-multi-level-folding-primitive.css",
+  "title": "CollapseSection — the unified multi-level folding primitive.",
+  "lines": 123
+ },
+ {
+  "file": "styles/sections/shared-design-system-primitives-empty-state-skeleton-shimmer.css",
+  "title": "Shared design-system primitives: empty state, skeleton shimmer,",
+  "lines": 71
+ },
+ {
+  "file": "styles/sections/resources-workbench-w1-collapsesection-collections-row.css",
+  "title": "Resources workbench (W1): CollapseSection collections, row",
+  "lines": 165
+ },
+ {
+  "file": "styles/sections/coach-conversation-polish-w2-additive-coach-classes.css",
+  "title": "Coach conversation polish (W2). Additive `.coach-*` classes",
+  "lines": 120
+ },
+ {
+  "file": "styles/sections/plan-view-staging-w3-w1-stage-collapsesections-with-the.css",
+  "title": "Plan view staging (W3+W1): stage CollapseSections with the",
+  "lines": 133
+ },
+ {
+  "file": "styles/sections/w4-w1-training-unified-card-texture-motion.css",
+  "title": "W4+W1 (Training): unified card texture + motion.",
+  "lines": 63
+ },
+ {
+  "file": "styles/sections/settings-additive-layer-for-the-collapsesection-container-swap.css",
+  "title": "Settings: additive layer for the CollapseSection container swap.",
+  "lines": 17
+ },
+ {
+  "file": "styles/sections/settings-ia-rebuild-status-summary-bar-section-anchors.css",
+  "title": "Settings IA rebuild: status summary bar, section anchors,",
+  "lines": 488
+ },
+ {
+  "file": "styles/sections/message-bubble-refinement-pass-premium-surfaces-calmer-hierarchy.css",
+  "title": "Message bubble refinement pass — premium surfaces, calmer hierarchy",
+  "lines": 816
+ }
+]

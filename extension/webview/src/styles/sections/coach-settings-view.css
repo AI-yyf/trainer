@@ -1,0 +1,29 @@
+/* ==========================================================================
+   Coach Settings View
+   ========================================================================== */
+
+.coach-settings-view__provider-detail {
+  gap: 6px;
+  padding: 8px 0 0;
+  background: transparent;
+  border-radius: 0;
+  margin-bottom: 8px;
+}
+
+.coach-settings-view__provider-detail[open] {
+  display: block;
+}
+
+.coach-settings-view__provider-detail > summary {
+  display: block;
+}
+
+.coach-settings-view__provider-detail-body {
+  font-size: var(--trainer-font-xs);
+  color: var(--fg-1);
+}
+
+.coach-settings-view__provider-detail-body .settings-setup-checks {
+  margin-top: 2px;
+}
+

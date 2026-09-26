@@ -1,0 +1,123 @@
+/* ============================================================
+   CollapseSection — the unified multi-level folding primitive.
+   Consumed by Plan / Resources / Training / Coach / Settings.
+   Animations: chevron rotate + grid-rows height, both GPU-cheap,
+   both driven by the shared motion tokens.
+   ============================================================ */
+.collapse-section {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-1);
+  overflow: hidden;
+}
+
+.collapse-section--level-2 {
+  background: color-mix(in srgb, var(--surface-0) 82%, var(--surface-1));
+}
+
+.collapse-section--level-3 {
+  background: color-mix(in srgb, var(--surface-0) 64%, var(--surface-1));
+}
+
+.collapse-section__header-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.collapse-section__header {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease-out);
+}
+
+.collapse-section__header:hover {
+  background: var(--accent-soft);
+}
+
+.collapse-section__header:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--accent));
+  outline-offset: -2px;
+}
+
+.collapse-section__chevron {
+  flex: none;
+  color: var(--vscode-descriptionForeground, inherit);
+  transform: rotate(0deg);
+  transition: transform var(--motion-base) var(--ease-out);
+}
+
+.collapse-section.is-open > .collapse-section__header-row .collapse-section__chevron {
+  transform: rotate(90deg);
+}
+
+.collapse-section__title {
+  flex: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.collapse-section__badge {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, inherit);
+}
+
+.collapse-section__subtitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--vscode-descriptionForeground, inherit);
+  font-size: 12px;
+}
+
+.collapse-section__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+}
+
+.collapse-section__body-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion-base) var(--ease-out);
+}
+
+.collapse-section.is-open > .collapse-section__body-wrap {
+  grid-template-rows: 1fr;
+}
+
+.collapse-section__body {
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 10px;
+}
+
+.collapse-section.is-open > .collapse-section__body-wrap > .collapse-section__body {
+  padding: 4px 10px 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collapse-section__chevron,
+  .collapse-section__body-wrap,
+  .collapse-section__body,
+  .collapse-section__header {
+    transition: none;
+  }
+}
+

@@ -1,0 +1,31 @@
+/* ==========================================================================
+   Research Cards
+   ========================================================================== */
+
+.research-overview-card {
+  background: color-mix(in srgb, var(--bg-1) 92%, var(--bg-0));
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.research-intro-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.research-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-muted);
+}
+
+.research-meta-line--dense {
+  gap: 4px;
+}
+

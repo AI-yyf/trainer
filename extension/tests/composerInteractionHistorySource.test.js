@@ -1,3 +1,18 @@
+
+// PR-7: styles.css is an @import aggregator; the real rules live in
+// styles/sections/*.css. Read them concatenated in manifest order so
+// assertions see the same bytes the browser gets after bundling.
+function readStylesSource() {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
+}
+
 'use strict';
 
 const test = require('node:test');
@@ -94,7 +109,7 @@ test('Composer side mouse buttons map to history and consume browser navigation 
 
 test('Image drops use the existing attachment staging path and show a transient drag state', () => {
   const source = fs.readFileSync(composerPath, 'utf8');
-  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const styles = readStylesSource();
 
   assert.match(source, /onDragEnter=\{/);
   assert.match(source, /onDragLeave=\{/);
@@ -126,7 +141,7 @@ test('Image drops use the existing attachment staging path and show a transient 
 
 test('Composer expands vertical input room in both densities without changing the narrow-sidebar width contract', () => {
   const source = fs.readFileSync(composerPath, 'utf8');
-  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const styles = readStylesSource();
   const maxBounds = compactAndDefaultBounds(source, 'const maxHeight =');
   const frame = styles.match(/(?:^|\n)\.composer__frame\s*\{[\s\S]*?\n\}/);
   const textarea = styles.match(/(?:^|\n)\.composer__frame textarea\s*\{[\s\S]*?\n\}/);
@@ -145,7 +160,7 @@ test('Composer expands vertical input room in both densities without changing th
 test('View-specific composer modes use a bounded native-style menu instead of an unstructured select', () => {
   const composerSource = fs.readFileSync(composerPath, 'utf8');
   const appSource = fs.readFileSync(appPath, 'utf8');
-  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const styles = readStylesSource();
 
   assert.match(composerSource, /const \[isModeMenuOpen, setIsModeMenuOpen\] = useState\(false\)/);
   assert.match(composerSource, /aria-haspopup="menu"/);

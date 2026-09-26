@@ -1,0 +1,11 @@
+/* ==========================================================================
+   Coach Deep Analysis
+   ========================================================================== */
+
+.coach-deep-analysis-block__bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+

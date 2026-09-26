@@ -1,0 +1,815 @@
+/* ==========================================================================
+   Message bubble refinement pass — premium surfaces, calmer hierarchy
+   ========================================================================== */
+
+.message-bubble-v2 {
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.message-bubble-v2--assistant .message-bubble-v2__content {
+  background: color-mix(in srgb, var(--bg-1) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 38%, var(--line));
+  border-radius: 4px 10px 10px 4px;
+  padding: 10px 12px;
+}
+
+.message-bubble-v2--user .message-bubble-v2__content {
+  border-radius: 10px 10px 4px 10px;
+  padding: 9px 12px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
+}
+
+.message-bubble-v2__avatar {
+  width: 24px;
+  height: 24px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-1));
+  color: var(--fg-0);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.message-bubble-v2__name {
+  letter-spacing: 0.02em;
+  color: var(--fg-1);
+}
+
+.message-bubble-v2__body {
+  line-height: 1.6;
+}
+
+/* Bootstrap skeleton: shown until the host posts its first state snapshot. */
+.workbench-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px var(--trainer-gutter, 12px);
+}
+
+.workbench-skeleton__bar {
+  display: block;
+  height: 14px;
+  border-radius: var(--radius-sm);
+}
+
+/* Availability strip: smooth warn→connected transition + one-shot pop */
+.settings-availability-strip {
+  transition:
+    border-color var(--motion-base, 180ms) var(--motion-ease),
+    background var(--motion-base, 180ms) var(--motion-ease);
+}
+
+.settings-availability-strip--connected {
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
+}
+
+/* Quick setup step completion: checkmark pops in */
+.settings-quick-setup__done {
+  display: inline-block;
+  color: var(--pass, var(--trainer-fallback-success));
+  animation: trainer-step-pop var(--motion-base, 180ms) var(--motion-ease);
+}
+
+@keyframes trainer-step-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Speed test rows: keyboard focus ring matches hover */
+.settings-endpoint-speed__row:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* Save & connect busy indicator */
+.settings-quick-setup__saving-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: trainer-spin 0.65s linear infinite;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.notice__dismiss:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* Coaching reply code blocks — the primary content of a coding coach */
+.message-bubble-v2 .message-markdown pre {
+  background: color-mix(in srgb, var(--bg-0) 78%, var(--bg-2));
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.55;
+}
+
+.message-bubble-v2 .message-markdown code {
+  font-family: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.message-bubble-v2 .message-markdown :not(pre) > code {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
+  border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: var(--trainer-font-2xs);
+}
+
+.settings-quick-setup__connected-dot {
+  animation: trainer-step-pop var(--motion-base, 180ms) var(--motion-ease);
+}
+
+.notice--leaving {
+  animation: trainer-notice-out var(--motion-fast) var(--motion-ease) both;
+}
+
+@keyframes trainer-notice-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* Settings sections: calm staggered entrance on view mount (capped). */
+.settings-view section {
+  animation: trainer-view-in var(--motion-base, 180ms) var(--ease-enter-snappy, var(--motion-ease)) both;
+}
+
+.settings-view section:nth-child(2) { animation-delay: 40ms; }
+.settings-view section:nth-child(3) { animation-delay: 80ms; }
+.settings-view section:nth-child(n + 4) { animation-delay: 120ms; }
+
+/* 流式等待:三点脉冲(Codex token-pulsing-dot 同款) */
+.coach-streaming-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.coach-streaming-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fg-muted);
+  animation: coach-streaming-dot 1.2s var(--motion-ease) infinite;
+}
+
+.coach-streaming-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.coach-streaming-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes coach-streaming-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+/* ---- Onboarding wizard (cold start) ---- */
+.onboarding-wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-inline-size: 460px;
+  padding: var(--space-4, 14px);
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  border-radius: var(--radius-lg);
+  background: var(--bg-1);
+  box-shadow: var(--shadow-soft);
+  text-align: left;
+}
+
+.onboarding-wizard__title {
+  margin: 0;
+  color: var(--fg-0);
+  font-size: 13px;
+}
+
+.onboarding-wizard__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-wizard__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  color: var(--fg-muted);
+}
+
+.onboarding-wizard__step--done {
+  color: var(--pass, var(--fg-1));
+  border-color: var(--pass, var(--fg-1));
+}
+
+.onboarding-wizard__step--active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.onboarding-wizard__marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: var(--bg-2);
+  font-size: 11px;
+}
+
+.onboarding-wizard__step-label {
+  font-size: 12px;
+}
+
+.onboarding-wizard__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.onboarding-wizard__detail {
+  margin: 0;
+  color: var(--fg-1);
+  font-size: 12px;
+}
+
+.onboarding-wizard__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.onboarding-wizard__field input {
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--vscode-input-border, var(--trainer-fallback-border, var(--border, transparent)));
+  background: var(--vscode-input-background, var(--bg-0));
+  color: var(--vscode-input-foreground, var(--fg-0));
+}
+
+.onboarding-wizard__hint {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.onboarding-wizard__inline-trust,
+.onboarding-wizard__trial {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-block-start: 4px;
+  border-block-start: 1px dashed var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  width: 100%;
+}
+
+.onboarding-wizard__link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.coach-onboarding {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 8px;
+}
+
+/* ---- Learning home overview (plan view) ---- */
+.coach-plan-view__home-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-block-end: 10px;
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  border-radius: var(--radius-lg);
+  background: var(--bg-1);
+}
+
+.coach-plan-view__home-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.coach-plan-view__home-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coach-plan-view__home-stat strong {
+  color: var(--fg-0);
+  font-weight: 400;
+}
+
+.coach-plan-view__home-stat--stage {
+  max-inline-size: 220px;
+}
+
+.coach-plan-view__home-message {
+  margin: 0;
+  color: var(--fg-1);
+  font-size: 12px;
+}
+
+.coach-plan-view__home-cta {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---- Practice acceptance progress feedback ---- */
+.acceptance-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+}
+
+.acceptance-progress__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--fg-1);
+  font-size: 12px;
+}
+
+.acceptance-progress__percent {
+  color: var(--fg-muted);
+}
+
+.acceptance-progress__bar {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--bg-2);
+  overflow: hidden;
+}
+
+.acceptance-progress__fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  transform: scaleX(var(--bar-fill, 1));
+  transform-origin: 0 50%;
+  transition: transform 0.2s var(--ease-out);
+}
+
+.acceptance-progress__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.acceptance-progress__item {
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  color: var(--fg-1);
+}
+
+.acceptance-progress__item.is-matched {
+  color: var(--pass, var(--fg-1));
+  border-color: var(--pass, var(--fg-1));
+}
+
+.acceptance-progress__item.is-missing {
+  color: var(--warning, var(--fg-muted));
+  border-color: var(--warning, var(--fg-muted));
+}
+
+.acceptance-progress__next {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.settings-memory-sharing__trust {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+  background: var(--bg-1);
+  color: var(--fg-1);
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-memory-sharing__trust.is-on {
+  border-color: var(--pass, var(--accent));
+}
+
+.settings-memory-sharing__trust span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-memory-sharing__trust small {
+  color: var(--fg-muted);
+}
+
+.settings-memory-sharing__trust em {
+  font-style: normal;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.workspace-root-recovery__privacy {
+  margin: 0 0 6px;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.training-review-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-block-end: 6px;
+}
+
+.training-review-group__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.training-review-group__count {
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
+}
+
+.training-review-row__more {
+  margin-inline-start: auto;
+}
+
+.training-review-row__more summary {
+  color: var(--fg-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.training-review-row__more-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-block-start: 4px;
+}
+
+.skill-deck__create-row {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px dashed color-mix(in srgb, var(--line) 55%, transparent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-deck__create-row:hover {
+  color: var(--fg-0);
+  border-color: color-mix(in srgb, var(--line) 75%, transparent);
+  background: color-mix(in srgb, var(--bg-2) 55%, transparent);
+}
+
+.skill-deck__manage-row {
+  border-style: solid;
+  text-align: center;
+}
+
+.skill-deck__manager {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skill-deck__manager-note {
+  margin: 0;
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.45;
+  color: var(--fg-muted);
+}
+
+.skill-deck__custom-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skill-deck__custom-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-2) 45%, transparent);
+}
+
+.skill-deck__custom-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-1);
+}
+
+.skill-deck__custom-label strong {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  flex: none;
+}
+
+.skill-deck__custom-label span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+}
+
+.skill-deck__form {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.skill-deck__form-row {
+  display: flex;
+  gap: 5px;
+}
+
+.skill-deck__input,
+.skill-deck__textarea {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-0) 65%, transparent);
+  color: var(--fg-0);
+  font-family: inherit;
+  font-size: var(--trainer-font-2xs);
+}
+
+.skill-deck__input--trigger {
+  width: 34%;
+  flex: none;
+  font-family: var(--font-mono);
+}
+
+.skill-deck__textarea {
+  resize: vertical;
+  min-height: 38px;
+  line-height: 1.4;
+}
+
+.skill-deck__input:focus-visible,
+.skill-deck__textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
+.skill-deck__mini-button {
+  align-self: flex-start;
+  padding: 2px 9px;
+  border: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-3xs);
+  cursor: pointer;
+}
+
+.skill-deck__mini-button:hover:not(:disabled) {
+  color: var(--fg-0);
+  background: color-mix(in srgb, var(--fg-0) 6%, transparent);
+}
+
+.skill-deck__mini-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.skill-deck__mini-button--primary {
+  border-color: color-mix(in srgb, var(--accent, var(--fg-0)) 35%, transparent);
+}
+
+.skill-deck__mini-button--danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.skill-deck__mini-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
+/* Quiet post-run tool trail: one muted line under a finished assistant
+   reply that expands to the per-step activity strip. */
+.message-bubble__tool-trail {
+  margin-top: 6px;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-muted);
+}
+
+.message-bubble__tool-trail summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+  list-style: none;
+  opacity: 0.75;
+  user-select: none;
+}
+
+.message-bubble__tool-trail summary::-webkit-details-marker {
+  display: none;
+}
+
+.message-bubble__tool-trail summary::before {
+  content: "▸";
+  font-size: var(--trainer-font-3xs);
+  transition: transform var(--motion-fast, 120ms) var(--ease-out, ease-out);
+}
+
+.message-bubble__tool-trail[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.message-bubble__tool-trail .agent-activity-strip {
+  margin-top: 4px;
+  border-left-color: var(--line);
+}
+
+/* Long sessions: let the compositor skip offscreen message items instead of
+   laying out the whole transcript. */
+.coach-conversation-view__item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
+
+/* Phase-C navigation: Settings lives in the header as an icon-only gear. */
+.header-switcher__item--gear {
+  padding-inline: 7px;
+}
+
+.header-switcher__item--gear .header-switcher__label {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Phase-D skill projection (evidence → capability ladder)            */
+/* ------------------------------------------------------------------ */
+
+.skill-projection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+.skill-projection-title {
+  font-size: var(--trainer-font-3xs);
+  font-weight: var(--trainer-font-weight-medium);
+  letter-spacing: 0.02em;
+  color: var(--fg-muted);
+}
+
+.skill-projection-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.skill-projection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-1) 85%, var(--bg-0));
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-projection-dimension {
+  font-weight: var(--trainer-font-weight-medium);
+  color: var(--text-1);
+}
+
+.skill-projection-state {
+  color: var(--text-2);
+}
+
+.skill-projection-chip[data-skill-state="independent"],
+.skill-projection-chip[data-skill-state="repeat_verified"] {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.skill-projection-chip[data-skill-state="independent"] .skill-projection-state,
+.skill-projection-chip[data-skill-state="repeat_verified"] .skill-projection-state {
+  color: var(--accent);
+}
+
+.skill-projection-chip[data-skill-state="needs_review"] {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.skill-projection-chip[data-skill-state="needs_review"] .skill-projection-state {
+  color: var(--danger);
+}
+
+.skill-projection[data-variant="full"] {
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-1) 70%, transparent);
+}

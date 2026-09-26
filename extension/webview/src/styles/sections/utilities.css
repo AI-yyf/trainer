@@ -1,0 +1,97 @@
+/* ==========================================================================
+   Utilities
+   ========================================================================== */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.trainer-hidden-file-input {
+  display: none;
+}
+
+.muted {
+  color: var(--fg-muted);
+}
+
+.eyebrow {
+  font-size: var(--trainer-font-2xs);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--fg-muted);
+}
+
+.trainer-startup-error,
+.trainer-startup-shell {
+  min-height: 100vh;
+  padding: 14px;
+  background: var(--bg-0);
+  color: var(--fg-0);
+  font-family: var(--font-ui);
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.trainer-startup-error__eyebrow,
+.trainer-startup-shell__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--trainer-font-3xs);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--fg-1);
+}
+
+.trainer-startup-error__panel,
+.trainer-startup-shell__card {
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--bg-1) 92%, transparent);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.trainer-startup-error__heading,
+.trainer-startup-shell__heading {
+  font-size: var(--trainer-font-xs);
+  line-height: 1.4;
+  color: var(--fg-0);
+}
+
+.trainer-startup-error__message,
+.trainer-startup-shell__message {
+  margin: 0;
+  font-size: var(--trainer-font-xs);
+  line-height: 1.5;
+  color: var(--fg-1);
+  white-space: pre-wrap;
+}
+
+.trainer-startup-error__stack {
+  margin: 0;
+  padding: 10px;
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  background: var(--bg-1);
+  color: var(--fg-1);
+  font-family: var(--font-mono);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+

@@ -1,0 +1,99 @@
+/* ==========================================================================
+   Reset & Base
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: var(--trainer-font-base);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--trainer-font-xs);
+  background: var(--bg-0);
+  color: var(--fg-0);
+  line-height: var(--leading-body);
+  text-rendering: optimizeLegibility;
+  font-feature-settings:
+    "kern" 1,
+    "liga" 1,
+    "calt" 1;
+  overflow: hidden;
+  scrollbar-color: color-mix(in srgb, var(--accent) 45%, var(--line)) transparent;
+}
+
+.trainer-shell,
+.trainer-shell * {
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.trainer-shell .training-current h2,
+.trainer-shell .settings-availability-strip__copy > strong {
+  font-weight: 500 !important;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.trainer-shell h1,
+.trainer-shell h2,
+.trainer-shell h3,
+.trainer-shell h4,
+.trainer-shell h5,
+.trainer-shell h6,
+.trainer-startup-error h1,
+.trainer-startup-error h2,
+.trainer-startup-error h3,
+.trainer-startup-error h4,
+.trainer-startup-error h5,
+.trainer-startup-error h6,
+.trainer-startup-shell h1,
+.trainer-startup-shell h2,
+.trainer-startup-shell h3,
+.trainer-startup-shell h4,
+.trainer-startup-shell h5,
+.trainer-startup-shell h6 {
+  font-size: var(--trainer-font-xs);
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+/* Keep the sidebar typography on one calm VS Code-sized track. */
+.trainer-shell .button,
+.trainer-shell .status-pill,
+.trainer-shell .quick-action-btn__label,
+.trainer-shell .action-button__label,
+.trainer-shell .resources-library-stat strong,
+.trainer-shell .resource-preview-pane__pending-copy strong,
+.trainer-shell .resources-empty-file-row__copy strong,
+.trainer-shell .training-next-move strong,
+.trainer-shell .training-verification-return strong,
+.trainer-shell .settings-sheet__simple-row > strong,
+.trainer-shell .message-bubble__agent-status-summary,
+.trainer-shell .message-bubble__agent-status-disclosure-title,
+.trainer-shell .coach-empty-state__lead,
+.trainer-shell .workbench-empty h3,
+.trainer-shell .resource-library-row__copy h3,
+.trainer-shell .coach-empty-state__copy h3,
+.trainer-shell .coach-super-entry__copy h3,
+.trainer-shell .message-markdown strong {
+  font-size: var(--trainer-font-xs);
+  font-weight: 400;
+}
+

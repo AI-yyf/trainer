@@ -1,3 +1,18 @@
+
+// PR-7: styles.css is an @import aggregator; the real rules live in
+// styles/sections/*.css. Read them concatenated in manifest order so
+// assertions see the same bytes the browser gets after bundling.
+function readStylesSource() {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
+}
+
 'use strict';
 
 const test = require('node:test');
@@ -120,7 +135,7 @@ test('Resources does not expose a project file manager or destructive sandbox co
 
 test('Resources collapses imports into one named, keyboard-accessible menu while refresh stays secondary', () => {
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
-  const stylesSource = fs.readFileSync(stylesPath, 'utf8');
+  const stylesSource = readStylesSource();
 
   assert.match(viewSource, /const \[isImportMenuOpen, setIsImportMenuOpen\] = useState\(false\);/);
   assert.match(viewSource, /resources-knowledge__add-resource/);
@@ -151,7 +166,7 @@ test('Resources collapses imports into one named, keyboard-accessible menu while
 
 test('Resources keeps the first screen focused and folds secondary governance actions', () => {
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
-  const stylesSource = fs.readFileSync(stylesPath, 'utf8');
+  const stylesSource = readStylesSource();
 
   assert.match(viewSource, /resources-knowledge__search/);
   assert.match(viewSource, /resources-knowledge__open-action/);
@@ -232,7 +247,7 @@ test('Resources keeps a slow index refresh single-flight across rapid clicks', (
 
 test('Resources treats URL material as webpage snapshots without restoring status filters', () => {
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
-  const stylesSource = fs.readFileSync(stylesPath, 'utf8');
+  const stylesSource = readStylesSource();
 
   assert.match(viewSource, /captureWebSnapshot/);
   assert.match(viewSource, /web-snapshots/);
@@ -351,7 +366,7 @@ test('Resources keeps search-result folders visibly collapsible', () => {
 
 test('Resources derives compact Trash and mutation feedback from persistent host state', () => {
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
-  const stylesSource = fs.readFileSync(stylesPath, 'utf8');
+  const stylesSource = readStylesSource();
 
   assert.match(viewSource, /const trashSnapshotAvailable = deletedResources !== undefined;/);
   assert.match(viewSource, /const trashedResources = deletedResources \?\? \[\];/);

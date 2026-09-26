@@ -1,0 +1,106 @@
+/* ==========================================================================
+   Code Block (with copy button)
+   ========================================================================== */
+
+.code-block-wrapper {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 52%, transparent);
+  background: var(--vscode-editor-background, color-mix(in srgb, var(--bg-0) 88%, var(--bg-1)));
+  margin: 8px 0 6px;
+}
+
+.code-block-header {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-height: 22px;
+  padding: 0 2px;
+  background: transparent;
+  border-bottom: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+.code-block-wrapper:hover .code-block-header,
+.code-block-wrapper:focus-within .code-block-header {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.code-block-lang {
+  font-size: var(--trainer-font-3xs);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.code-block-copy-btn {
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--trainer-font-3xs);
+  background: color-mix(in srgb, var(--bg-1) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+  color: var(--fg-muted);
+}
+
+.code-block-copy-btn:hover {
+  background: color-mix(in srgb, var(--bg-2) 72%, var(--bg-1));
+  border-color: color-mix(in srgb, var(--line) 72%, transparent);
+  color: var(--fg-0);
+}
+
+.code-block-wrapper .message-markdown__code-block {
+  margin: 0;
+  border-radius: 0;
+  max-height: 280px;
+  background: transparent;
+}
+
+@container trainer (max-width: 480px) {
+  .message-markdown__code-block {
+    overflow-x: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .message-markdown__code-block code,
+  .message-markdown__code-block--shiki code {
+    min-width: 0;
+    white-space: inherit;
+  }
+}
+
+@media (max-width: 420px) {
+  .message-markdown__code-block {
+    overflow-x: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .message-markdown__code-block code,
+  .message-markdown__code-block--shiki code {
+    min-width: 0;
+    white-space: inherit;
+  }
+}
+

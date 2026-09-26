@@ -1,3 +1,18 @@
+
+// PR-7: styles.css is an @import aggregator; the real rules live in
+// styles/sections/*.css. Read them concatenated in manifest order so
+// assertions see the same bytes the browser gets after bundling.
+function readStylesSource() {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
+}
+
 'use strict';
 
 const test = require('node:test');
@@ -96,7 +111,7 @@ test('Resources batch deletion confirms and preserves only the visible selection
 
 test('Resources keeps its narrow toolbar and tree dense without reserving an empty workspace panel', () => {
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
-  const stylesSource = fs.readFileSync(stylesPath, 'utf8');
+  const stylesSource = readStylesSource();
 
   assert.match(viewSource, /<div className="resources-knowledge__toolbar">/);
   assert.match(

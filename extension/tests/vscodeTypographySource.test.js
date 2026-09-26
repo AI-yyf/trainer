@@ -1,6 +1,19 @@
 'use strict';
 
 const test = require('node:test');
+
+// PR-7: styles.css is an @import aggregator; rules live in styles/sections/*.
+function readStylesSource() {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
+}
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -20,7 +33,7 @@ function escapeRegex(value) {
 }
 
 test('webview typography tokens stay on one VS Code-sized scale', () => {
-  const stylesSource = fs.readFileSync(stylesSourcePath, 'utf8');
+  const stylesSource = readStylesSource();
   const tokensSource = fs.readFileSync(tokensSourcePath, 'utf8');
 
   assert.match(stylesSource, /--trainer-font-3xs:\s*max\(11px, calc\(var\(--trainer-font-ui\) - 2px\)\);/);
@@ -30,7 +43,7 @@ test('webview typography tokens stay on one VS Code-sized scale', () => {
 });
 
 test('shared eyebrow styles no longer reintroduce uppercase or heavier emphasis', () => {
-  const stylesSource = fs.readFileSync(stylesSourcePath, 'utf8');
+  const stylesSource = readStylesSource();
 
   assert.match(
     stylesSource,
@@ -72,7 +85,7 @@ test('missing-bundle fallback stays a single-column recovery surface', () => {
 });
 
 test('view-owned headings and title-like copy stay capped at the same VS Code-sized track', () => {
-  const stylesSource = fs.readFileSync(stylesSourcePath, 'utf8');
+  const stylesSource = readStylesSource();
   const selectors = [
     '.header-switcher__item',
     '.section-block__header h2',
@@ -124,7 +137,7 @@ test('view-owned headings and title-like copy stay capped at the same VS Code-si
 });
 
 test('in-view summary copy stays visually quieter than the view title track', () => {
-  const stylesSource = fs.readFileSync(stylesSourcePath, 'utf8');
+  const stylesSource = readStylesSource();
   const selectors = [
     '.training-current h2',
     '.training-current h3',
@@ -177,7 +190,7 @@ test('in-view summary copy stays visually quieter than the view title track', ()
 });
 
 test('pane titles stay as the strongest text track in each of the five views', () => {
-  const stylesSource = fs.readFileSync(stylesSourcePath, 'utf8');
+  const stylesSource = readStylesSource();
   const selectors = [
     '.section-block__header h2',
     '.workbench-pane__heading h2',
@@ -195,7 +208,7 @@ test('pane titles stay as the strongest text track in each of the five views', (
 });
 
 test('secondary outline labels stay calm and do not reintroduce uppercase emphasis', () => {
-  const stylesSource = fs.readFileSync(stylesSourcePath, 'utf8');
+  const stylesSource = readStylesSource();
 
   assert.match(
     stylesSource,
@@ -204,7 +217,7 @@ test('secondary outline labels stay calm and do not reintroduce uppercase emphas
 });
 
 test('webview source keeps visible typography at regular weight', () => {
-  const stylesSource = fs.readFileSync(stylesSourcePath, 'utf8');
+  const stylesSource = readStylesSource();
   const heavyWeightMatches = [...stylesSource.matchAll(/font-weight:\s*(500|600|650|700)\s*;/g)].map(
     (match) => match[0],
   );
@@ -214,6 +227,7 @@ test('webview source keeps visible typography at regular weight', () => {
 
 test('webview source keeps literal font sizes on the VS Code track', () => {
   const webviewRoot = path.resolve(__dirname, '..', 'webview', 'src');
+const stylesDir = path.join(webviewRoot, 'styles', 'sections');
   const hits = [];
 
   function walk(dir) {

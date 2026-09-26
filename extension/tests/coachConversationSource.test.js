@@ -1,3 +1,18 @@
+
+// PR-7: styles.css is an @import aggregator; the real rules live in
+// styles/sections/*.css. Read them concatenated in manifest order so
+// assertions see the same bytes the browser gets after bundling.
+function readStylesSource() {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
+}
+
 'use strict';
 
 const test = require('node:test');
@@ -76,7 +91,7 @@ test('coach streaming lane exposes trainer agent activity', () => {
 });
 
 test('coach summary stays a compact horizontal context rail', () => {
-  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const styles = readStylesSource();
   const summaryStrip = styles.match(/\.coach-conversation-view__summary-strip\s*\{[\s\S]*?\n\}/);
   const summaryPill = styles.match(/\.coach-conversation-view__summary-pill\s*\{[\s\S]*?\n\}/);
 
@@ -154,7 +169,7 @@ test('coach next-step artifact exposes finalize metadata without becoming a visi
 
 test('coach agent activity renders as a normalized lightweight progress rail', () => {
   const source = fs.readFileSync(agentActivityPath, 'utf8');
-  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const styles = readStylesSource();
   const activityStrip = styles.match(/(?:^|\n)\.agent-activity-strip\s*\{[\s\S]*?\n\}/);
   assert.ok(activityStrip, 'expected main agent activity strip style block');
   const activityMeta = styles.match(/\.agent-activity-strip__meta\s*\{[\s\S]*?\n\}/);
@@ -218,7 +233,7 @@ test('coach visible status renders an explicit recovery resume line', () => {
 
 test('coach rich content keeps markdown code blocks on the highlighted renderer path', () => {
   const source = fs.readFileSync(messageRichContentPath, 'utf8');
-  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const styles = readStylesSource();
 
   assert.match(source, /import \{ RichCodeBlock \} from "\.\/RichCodeBlock"/);
   assert.match(source, /languageId === "mermaid"/);
@@ -310,7 +325,7 @@ test('docked views retain a compact Coach context rail without docking the full 
     /isTraining && !liveValue\s*\? activitySource\?\.trim\(\)\s*:\s*truncateInlineText\(activitySource, textLimit\)/,
   );
   assert.match(
-    fs.readFileSync(stylesPath, 'utf8'),
+    readStylesSource(),
     /@media \(max-width: 420px\) \{[\s\S]*?\.view-context-rail__fact > strong \{[\s\S]*?white-space: normal;[\s\S]*?overflow-wrap: anywhere;/,
   );
 });
@@ -475,7 +490,7 @@ test('Composer keeps slash and skill discovery on demand, not as persistent cont
 
 test('Composer candidate decks keep Codex-style draft ownership and keyboard dismissal', () => {
   const source = fs.readFileSync(appPath, 'utf8');
-  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const styles = readStylesSource();
   const commandDeck = source.slice(source.indexOf('const renderCommandDeck'), source.indexOf('const renderSkillDeck'));
   const skillDeck = source.slice(source.indexOf('const renderSkillDeck'), source.indexOf('const renderSuggestedActions'));
   const keydown = source.slice(source.indexOf('onKeyDown={(event) =>'), source.indexOf('leadingActions={['));
@@ -541,7 +556,7 @@ test('Composer candidate decks keep Codex-style draft ownership and keyboard dis
 
 test('Composer expansion lists stay anchored, bounded, scrollable, and keyboard-visible', () => {
   const source = fs.readFileSync(appPath, 'utf8');
-  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const styles = readStylesSource();
 
   const accessory = styles.match(/\.composer__accessory\s*\{[\s\S]*?\n\}/);
   const panels = styles.match(
@@ -564,7 +579,7 @@ test('Composer expansion lists stay anchored, bounded, scrollable, and keyboard-
 });
 
 test('Composer expansion decks keep idle rows flat while preserving explicit interaction states', () => {
-  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const styles = readStylesSource();
   const commandItem = styles.match(/\.command-deck__item\s*\{[\s\S]*?\n\}/);
   const skillItem = [...styles.matchAll(/\.skill-deck__item\s*\{[\s\S]*?\n\}/g)].find((match) =>
     match[0].includes('display: grid'),
@@ -590,7 +605,7 @@ test('Composer expansion decks keep idle rows flat while preserving explicit int
 test('Unavailable image capability stays accessible and only surfaces inline after a paste or drop attempt', () => {
   const appSource = fs.readFileSync(appPath, 'utf8');
   const composerSource = fs.readFileSync(composerPath, 'utf8');
-  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const styles = readStylesSource();
 
   assert.match(
     composerSource,

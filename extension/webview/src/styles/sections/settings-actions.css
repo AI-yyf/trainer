@@ -1,0 +1,75 @@
+/* ==========================================================================
+   Settings Actions
+   ========================================================================== */
+
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
+}
+
+.settings-actions--compact {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 0;
+  /* Bordered action rows already supply the top edge; an extra hairline above
+     them reads as a double rule. */
+  border-top: 0;
+}
+
+.settings-actions--compact .action-button {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 100%;
+  min-height: 26px;
+  gap: 4px;
+  padding: 4px 7px;
+  border-color: color-mix(in srgb, var(--line) 34%, transparent);
+  background: color-mix(in srgb, var(--bg-1) 70%, transparent);
+}
+
+.settings-actions--compact .action-button:hover {
+  border-color: color-mix(in srgb, var(--line) 62%, transparent);
+  background: color-mix(in srgb, var(--bg-2) 62%, transparent);
+}
+
+.settings-actions--primary {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 0;
+}
+
+.settings-section--summary .settings-actions--primary {
+  /* No extra hairline above already-bordered action rows; air does the work. */
+  margin-top: 10px;
+}
+
+.settings-actions--compact .action-button__icon {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: transparent;
+}
+
+.settings-actions--compact .action-button__copy {
+  flex: 0 1 auto;
+  display: block;
+}
+
+.settings-actions--compact .action-button__label {
+  display: block;
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.2;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.settings-actions--compact .action-button__detail,
+.settings-actions--compact .action-button__chev {
+  display: none;
+}
+

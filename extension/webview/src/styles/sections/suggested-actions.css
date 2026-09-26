@@ -1,0 +1,34 @@
+/* ==========================================================================
+   Suggested Actions
+   ========================================================================== */
+
+.suggested-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.suggested-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--trainer-font-2xs);
+  background: var(--bg-1);
+  color: var(--fg-1);
+  border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.suggested-inline:hover {
+  background: color-mix(in srgb, var(--bg-2) 62%, var(--bg-1));
+  color: var(--fg-0);
+  border-color: color-mix(in srgb, var(--line) 80%, transparent);
+}
+

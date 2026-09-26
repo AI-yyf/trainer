@@ -1,0 +1,62 @@
+/* ==========================================================================
+   Message Table
+   ========================================================================== */
+
+.message-render-block {
+  margin: 8px 0;
+  width: 100%;
+}
+
+.message-render-block--table {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-1) 94%, var(--bg-0));
+}
+
+.message-table-wrap {
+  display: block;
+  width: 100%;
+  overflow: auto hidden;
+}
+
+.message-table-wrap table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: var(--trainer-font-xs);
+}
+
+.message-table-wrap th,
+.message-table-wrap td {
+  padding: 6px 8px;
+  border-right: 1px solid color-mix(in srgb, var(--line) 64%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+  text-align: left;
+  vertical-align: top;
+}
+
+.message-table-wrap th:last-child,
+.message-table-wrap td:last-child {
+  border-right: 0;
+}
+
+.message-table-wrap th {
+  background: color-mix(in srgb, var(--bg-2) 82%, var(--bg-1));
+  font-weight: 400;
+  color: var(--fg-0);
+  white-space: nowrap;
+}
+
+.message-table-wrap td {
+  color: var(--fg-1);
+}
+
+.message-table-wrap tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.message-table-wrap tr:nth-child(even) {
+  background: color-mix(in srgb, var(--bg-1) 82%, transparent);
+}
+

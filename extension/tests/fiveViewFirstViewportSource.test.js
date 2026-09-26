@@ -1,6 +1,19 @@
 'use strict';
 
 const test = require('node:test');
+
+// PR-7: styles.css is an @import aggregator; rules live in styles/sections/*.
+function readStylesSource() {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
+}
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -15,7 +28,7 @@ function read(relativePath, root = webviewRoot) {
 test('five views stay the Codex three-layer shell without identity chrome', () => {
   const app = read('app/App.tsx');
   const types = read('lib/types.ts');
-  const styles = read('styles.css');
+  const styles = readStylesSource();
 
   assert.match(
     types,
@@ -49,7 +62,7 @@ test('five views stay the Codex three-layer shell without identity chrome', () =
 });
 
 test('production workbench views consume CSS variables rather than hardcoded hex colors', () => {
-  const styles = read('styles.css');
+  const styles = readStylesSource();
   const tokens = read('tokens.ts', sharedRoot);
   const resources = read('components/resources/ResourcesWorkbenchView.tsx');
   const training = read('components/training/TrainingWorkbenchView.tsx');

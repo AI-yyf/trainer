@@ -1,0 +1,203 @@
+/* ==========================================================================
+   Trainer Agent Loop Activity Strip
+   Live tool-call/tool-result pills shown above the streaming bubble.
+   ========================================================================== */
+
+.agent-activity-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 5px 6px;
+  padding: 4px 0 5px 8px;
+  margin: 0 0 6px;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: 0;
+  background: transparent;
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.35;
+  color: var(--fg-muted);
+  box-shadow: none;
+}
+
+.agent-activity-strip__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-activity-strip__step {
+  flex-shrink: 0;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--fg-0);
+}
+
+.agent-activity-strip__lead {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-0);
+  font-weight: 400;
+}
+
+.agent-activity-strip__meta {
+  display: none;
+}
+
+.agent-activity-strip__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 5px;
+  align-items: center;
+}
+
+.agent-activity-strip__details {
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-activity-strip__details > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 0;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.3;
+  cursor: pointer;
+  list-style: none;
+}
+
+.agent-activity-strip__details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.agent-activity-strip__details > summary::before {
+  content: "▶";
+  margin-right: 5px;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.agent-activity-strip__details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.agent-activity-strip__details > .collapsible-block__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 6px;
+  padding: 4px 0 0;
+}
+
+.agent-activity-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-2) 52%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+.agent-activity-pill--running {
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-2));
+  border-color: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.agent-activity-pill--succeeded {
+  background: color-mix(in srgb, var(--success) 10%, var(--bg-2));
+  border-color: color-mix(in srgb, var(--success) 20%, transparent);
+}
+
+.agent-activity-pill--failed {
+  background: color-mix(in srgb, var(--danger) 10%, var(--bg-2));
+  border-color: color-mix(in srgb, var(--danger) 22%, transparent);
+}
+
+.agent-activity-pill__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-muted);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg-1) 78%, transparent);
+}
+
+.agent-activity-pill__dot--running {
+  background: var(--accent);
+}
+
+.agent-activity-pill__dot--succeeded {
+  background: var(--success);
+}
+
+.agent-activity-pill__dot--failed {
+  background: var(--danger);
+}
+
+.agent-activity-pill__label {
+  font-weight: 400;
+  color: var(--fg-0);
+}
+
+.agent-activity-pill__hint {
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-activity-strip__working {
+  display: none;
+}
+
+.agent-activity-strip__stop-reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--bg-2) 54%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.3;
+}
+
+.agent-activity-strip__summary + .agent-activity-strip__pills {
+  margin-top: 0;
+}
+
+@media (max-width: 360px) {
+  .agent-activity-strip__summary {
+    gap: 3px 6px;
+  }
+
+  .agent-activity-pill {
+    gap: 4px;
+    padding-inline: 8px;
+  }
+
+  .agent-activity-pill__hint {
+    display: none;
+  }
+}
+
+@keyframes agent-activity-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.65;
+  }
+}
+

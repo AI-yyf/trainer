@@ -1,0 +1,99 @@
+/* ==========================================================================
+   Trainer Design Tokens & Base Styles
+   ========================================================================== */
+
+:root {
+  --trainer-fallback-bg-0: #101010;
+  --trainer-fallback-bg-1: #171717;
+  --trainer-fallback-bg-2: #1f1f1f;
+  --trainer-fallback-bg-3: #262626;
+  --trainer-fallback-fg-0: #efefef;
+  --trainer-fallback-fg-1: #c8c8c8;
+  --trainer-fallback-fg-muted: #969696;
+  --trainer-fallback-line: #303030;
+  --trainer-fallback-accent: #9d907a;
+  --trainer-fallback-success: #4ec9b0;
+  --trainer-fallback-warning: #d7ba7d;
+  --trainer-fallback-danger: #f48771;
+  --trainer-fallback-focus-ring: rgba(157, 144, 122, 0.28);
+  --trainer-fallback-overlay: rgba(7, 7, 7, 0.58);
+  --trainer-fallback-shadow-soft: none;
+
+  --trainer-font-ui: 13px;
+  --trainer-font-3xs: max(11px, calc(var(--trainer-font-ui) - 2px));
+  --trainer-font-2xs: max(12px, calc(var(--trainer-font-ui) - 1px));
+  --trainer-font-xs: var(--trainer-font-ui);
+  --trainer-font-sm: var(--trainer-font-ui);
+  --trainer-font-base: var(--trainer-font-ui);
+  --trainer-font-md: calc(var(--trainer-font-ui) + 1px);
+  --trainer-font-lg: calc(var(--trainer-font-ui) + 3px);
+  --trainer-font-xl: calc(var(--trainer-font-ui) + 6px);
+  --trainer-font-2xl: calc(var(--trainer-font-ui) + 9px);
+
+  --trainer-space-1: 4px;
+  --trainer-space-2: 8px;
+  --trainer-space-3: 12px;
+  --trainer-space-4: 16px;
+  --trainer-space-5: 20px;
+  --trainer-space-6: 24px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-full: 9999px;
+
+  --motion-fast: 120ms;
+  --motion-in: 160ms;
+  --motion-out: 120ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-enter-snappy: cubic-bezier(0.23, 1, 0.32, 1);
+
+  --type-meta: 11px;
+  --type-ui: 13px;
+  --leading-body: 1.65;
+  --leading-meta: 1.4;
+  --line-hair: color-mix(in srgb, var(--line) 38%, transparent);
+}
+
+:root,
+body {
+  --font-sans: var(--vscode-font-family, "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC";
+  --font-ui: var(--vscode-font-family, var(--font-sans));
+  --font-body: var(--vscode-font-family, var(--font-sans));
+  --font-mono: var(--vscode-editor-font-family, "Cascadia Code", Consolas, monospace), "Noto Sans Mono CJK SC";
+  --trainer-font-ui: var(--vscode-font-size, 13px);
+
+  --bg-0: var(--vscode-sideBar-background, var(--vscode-editor-background, var(--trainer-fallback-bg-0)));
+  --bg-1: var(--vscode-editorWidget-background, var(--vscode-input-background, var(--vscode-sideBarSectionHeader-background, var(--trainer-fallback-bg-1))));
+  --bg-2: var(--vscode-list-hoverBackground, var(--vscode-editorWidget-background, var(--trainer-fallback-bg-2)));
+  --bg-3: var(--vscode-list-activeSelectionBackground, var(--vscode-button-secondaryBackground, var(--trainer-fallback-bg-3)));
+  --fg-0: var(--vscode-sideBar-foreground, var(--vscode-foreground, var(--trainer-fallback-fg-0)));
+  --fg-1: var(--vscode-foreground, var(--vscode-descriptionForeground, var(--trainer-fallback-fg-1)));
+  --fg-muted: var(--vscode-descriptionForeground, var(--vscode-disabledForeground, var(--trainer-fallback-fg-muted)));
+  --line: var(--vscode-sideBar-border, var(--vscode-input-border, var(--vscode-widget-border, var(--trainer-fallback-line))));
+  --accent: var(--vscode-button-background, var(--vscode-textLink-foreground, var(--vscode-focusBorder, var(--trainer-fallback-accent))));
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --success: var(--vscode-testing-iconPassed, var(--vscode-terminal-ansiGreen, var(--trainer-fallback-success)));
+  --warning: var(--vscode-editorWarning-foreground, var(--vscode-testing-iconQueued, var(--vscode-terminal-ansiYellow, var(--trainer-fallback-warning))));
+  --danger: var(--vscode-errorForeground, var(--vscode-testing-iconFailed, var(--vscode-terminal-ansiRed, var(--trainer-fallback-danger))));
+  --focus-ring: var(--vscode-focusBorder, var(--vscode-button-focusBorder, var(--accent, var(--trainer-fallback-focus-ring))));
+  --overlay: var(--vscode-editorWidget-background, var(--vscode-quickInput-background, var(--trainer-fallback-overlay)));
+  --shadow-soft: var(--vscode-widget-shadow, var(--trainer-fallback-shadow-soft));
+
+  --surface-0: var(--bg-0);
+  --surface-1: var(--bg-1);
+  --surface-2: var(--bg-2);
+  --surface-3: var(--bg-3);
+
+  /* Motion system: the only duration/easing tokens in this file. */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 280ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --icon-surface: var(--bg-2);
+  --icon-surface-active: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
+  --chip-surface: var(--bg-2);
+  --chip-surface-active: color-mix(in srgb, var(--accent) 6%, var(--bg-1));
+}
+

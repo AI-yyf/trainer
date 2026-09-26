@@ -1,0 +1,20 @@
+.user-feedback-disclosure {
+  margin-top: 10px;
+  border-top: 1px solid var(--line, var(--trainer-fallback-line));
+  color: var(--fg-muted, var(--trainer-fallback-fg-muted));
+  font-size: var(--trainer-font-2xs);
+}
+.user-feedback-disclosure summary {
+  cursor: pointer;
+  padding: 7px 0;
+  color: var(--fg-muted, var(--trainer-fallback-fg-muted));
+}
+.user-feedback-disclosure__body { padding: 0 0 8px; }
+.user-feedback-disclosure__body p { margin: 0 0 7px; }
+.user-feedback-disclosure__actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.user-feedback-disclosure__action { padding: 3px 7px; font-size: var(--trainer-font-2xs); }
+.user-feedback-disclosure__action.is-selected { border-color: var(--accent, var(--trainer-fallback-accent)); }
+.user-feedback-disclosure__status { display: block; margin-top: 7px; }
+.user-feedback-disclosure__status--success { color: var(--success, var(--trainer-fallback-success)); }
+.user-feedback-disclosure__status--error { color: var(--danger, var(--trainer-fallback-danger)); }
+

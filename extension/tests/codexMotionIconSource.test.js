@@ -1,6 +1,19 @@
 'use strict';
 
 const test = require('node:test');
+
+// PR-7: styles.css is an @import aggregator; rules live in styles/sections/*.
+function readStylesSource() {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
+}
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -12,7 +25,7 @@ function read(relativePath) {
 }
 
 test('Codex-quiet motion tokens and required transitions live in styles.css', () => {
-  const styles = read('styles.css');
+  const styles = readStylesSource();
   assert.match(styles, /--motion-fast:\s*120ms;/);
   assert.match(styles, /--motion-in:\s*160ms;/);
   assert.match(styles, /--motion-out:\s*120ms;/);

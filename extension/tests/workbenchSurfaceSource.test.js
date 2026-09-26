@@ -1,3 +1,18 @@
+
+// PR-7: styles.css is an @import aggregator; the real rules live in
+// styles/sections/*.css. Read them concatenated in manifest order so
+// assertions see the same bytes the browser gets after bundling.
+function readStylesSource() {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
+}
+
 'use strict';
 
 const test = require('node:test');
@@ -123,7 +138,7 @@ test('message supplements always render inline with no fold', () => {
 });
 
 test('message reply action buttons use token-driven styling', () => {
-  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const styles = readStylesSource();
   const block = styles.match(/\.message-bubble__action\s*\{[\s\S]*?\n\}/);
   assert.ok(block, 'expected message-bubble__action styles');
   assert.doesNotMatch(block[0], /#[0-9a-fA-F]{3,8}\b/, 'no hardcoded colors');

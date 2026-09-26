@@ -1,0 +1,59 @@
+/* ==========================================================================
+   Message Rich Content
+   ========================================================================== */
+
+.message-rich-content__fold {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin: 8px 0;
+  width: 100%;
+}
+
+.message-rich-content__fold summary {
+  padding: 10px 12px;
+  cursor: pointer;
+  background: var(--bg-1);
+  font-size: var(--trainer-font-xs);
+  color: var(--fg-1);
+  list-style: none;
+}
+
+.message-rich-content__fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.message-rich-content__summary-shell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.message-rich-content__summary-lead {
+  color: var(--fg-0);
+  font-weight: 400;
+}
+
+.message-rich-content__summary-detail {
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+}
+
+.message-rich-content__summary-meta {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: var(--trainer-font-2xs);
+}
+
+.message-rich-content__fold-body {
+  padding: 12px;
+  background: var(--bg-0);
+}
+
+.message-rich-content__loading {
+  font-size: var(--trainer-font-xs);
+  color: var(--fg-muted);
+  padding: 8px;
+}
+

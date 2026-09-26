@@ -1,0 +1,311 @@
+/* ==========================================================================
+   Narrow Sidebar Recovery
+   Keep governed facts readable before collapsing secondary detail.
+   ========================================================================== */
+
+@media (max-width: 540px) {
+  .header-switcher {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    overflow: hidden;
+    scrollbar-width: none;
+  }
+
+  .header-switcher__item {
+    width: 100%;
+    min-inline-size: 0;
+    padding-inline: 2px;
+    justify-content: center;
+  }
+
+  .header-switcher__label {
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+@media (max-width: 380px) {
+  .header-switcher {
+    gap: 0;
+  }
+
+  .header-switcher__item,
+  .header-switcher--compact .header-switcher__item,
+  .header-switcher--compact .header-switcher__label {
+    font-size: var(--trainer-font-3xs);
+  }
+
+  .composer--compact.composer--with-secondary-actions .composer__frame {
+    min-height: 0;
+  }
+
+  .composer--compact.composer--with-secondary-actions .composer__frame textarea {
+    min-height: 40px;
+    padding-bottom: 4px;
+  }
+
+  .composer--compact.composer--with-secondary-actions .composer__summary {
+    display: none;
+  }
+
+  .composer--compact.composer--with-secondary-actions .composer__actions {
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 3px;
+    row-gap: 2px;
+  }
+
+  .composer-shell--quiet .composer--compact .composer__actions,
+  .composer-shell--quiet .composer--compact.composer--with-secondary-actions .composer__actions {
+    justify-content: flex-start;
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .composer--compact.composer--with-secondary-actions .composer-secondary-button,
+  .composer--compact .composer-mode-control__trigger {
+    max-width: 96px;
+  }
+
+  .composer-shell--quiet .composer-mode-control__trigger,
+  .composer-shell--quiet .composer--compact .composer-mode-control__trigger {
+    max-width: none;
+  }
+
+  .training-loop-rail[data-training-loop-layout="3-plus-2"] {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .training-loop-rail[data-training-loop-layout="3-plus-2"] [data-training-loop-step] {
+    grid-column: span 2;
+    min-height: 30px;
+    padding: 4px;
+  }
+
+  .training-loop-rail[data-training-loop-layout="3-plus-2"] [data-training-loop-step]:nth-child(n + 4) {
+    grid-column: span 3;
+  }
+
+  .training-loop-rail[data-training-loop-layout="3-plus-2"] [data-training-loop-step-label] {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.15;
+  }
+
+  .training-current__topline {
+    align-items: flex-start;
+  }
+
+  .training-current__learning-family,
+  .training-current__meta--context[data-training-context-layout="optional-second-line"] {
+    max-width: none;
+  }
+
+  .training-current__meta--context[data-training-context-layout="optional-second-line"] {
+    flex-basis: 100%;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    line-height: 1.35;
+  }
+}
+
+@media (max-width: 480px) {
+  .training-loop-rail[data-training-loop-layout="3-plus-2"] {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .training-loop-rail[data-training-loop-layout="3-plus-2"] [data-training-loop-step] {
+    grid-column: span 2;
+    min-height: 30px;
+    padding: 4px;
+  }
+
+  .training-loop-rail[data-training-loop-layout="3-plus-2"] [data-training-loop-step]:nth-child(n + 4) {
+    grid-column: span 3;
+  }
+
+  .training-loop-rail[data-training-loop-layout="3-plus-2"] [data-training-loop-step-label] {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.15;
+  }
+}
+
+.coach-plan-view__now-card[data-plan-fact="next"] strong,
+.coach-plan-view__route-item[data-plan-fact] strong {
+  display: block;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: unset;
+}
+
+@media (max-width: 420px) {
+  .coach-plan-view__route-strip {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .coach-plan-view__now-card[data-plan-fact="next"] strong,
+  .coach-plan-view__route-item[data-plan-fact] strong {
+    -webkit-line-clamp: unset;
+  }
+
+  .settings-availability-strip__facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-availability-fact__text {
+    display: block;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .message-render-block--table {
+    overflow: visible;
+  }
+
+  .message-table-wrap {
+    overflow: visible;
+  }
+
+  .message-table-wrap table[data-rich-table],
+  .message-table-wrap tbody,
+  .message-table-wrap tr,
+  .message-table-wrap td[data-column-label] {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .message-table-wrap thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .message-table-wrap tr {
+    padding: 5px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
+  }
+
+  .message-table-wrap tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .message-table-wrap td[data-column-label] {
+    display: grid;
+    grid-template-columns: minmax(76px, 34%) minmax(0, 1fr);
+    gap: 8px;
+    padding: 4px 8px;
+    border: 0;
+    background: transparent;
+    overflow-wrap: anywhere;
+  }
+
+  .message-table-wrap td[data-column-label]::before {
+    content: attr(data-column-label);
+    color: var(--fg-muted);
+    font-size: var(--trainer-font-3xs);
+    line-height: 1.35;
+  }
+}
+
+.resources-knowledge__row .resource-library-row__action {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.resources-knowledge__row .resource-library-row__action:hover,
+.resources-knowledge__row .resource-library-row__action:focus-visible {
+  color: var(--fg-0);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
+}
+
+/* Resources owns the available work canvas; list and preview scroll internally. */
+.view-stack--resources > .view-stack__primary {
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.view-stack--resources > .view-stack__primary > .resources-view {
+  align-self: stretch;
+  height: auto;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.view-stack--resources > .view-stack__primary > .resources-view > .resources-knowledge {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Direction comes from the active UI language. Keep text logical and code LTR. */
+.trainer-shell[dir="rtl"] {
+  direction: rtl;
+}
+
+.trainer-shell[dir="rtl"] :where(
+  button,
+  input,
+  textarea,
+  select,
+  p,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  label,
+  summary,
+  li,
+  td,
+  th
+) {
+  text-align: start;
+}
+
+.trainer-shell[dir="rtl"] .message-bubble-v2--assistant .message-bubble-v2__content {
+  border-left: 0;
+  border-inline-start: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
+  padding-left: 0;
+  padding-inline-start: 10px;
+}
+
+.trainer-shell[dir="rtl"] .agent-activity-strip {
+  border-left: 0;
+  border-inline-start: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  padding-left: 0;
+  padding-inline-start: 8px;
+}
+
+.trainer-shell[dir="rtl"] .resources-library-tree__node {
+  text-align: start;
+}
+
+.trainer-shell[dir="rtl"] .resources-library-tree__count,
+.trainer-shell[dir="rtl"] .resources-library-tree__status {
+  text-align: end;
+}
+
+.trainer-shell :where(pre, code, kbd, samp) {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
+}
+

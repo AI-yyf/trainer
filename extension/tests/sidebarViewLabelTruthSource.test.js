@@ -1,3 +1,18 @@
+
+// PR-7: styles.css is an @import aggregator; the real rules live in
+// styles/sections/*.css. Read them concatenated in manifest order so
+// assertions see the same bytes the browser gets after bundling.
+function readStylesSource() {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
+}
+
 'use strict';
 
 const test = require('node:test');
@@ -23,7 +38,7 @@ test('responsive sidebar labels retain the official five-view names', () => {
 
 test('responsive sidebar density swaps squeezed labels for icons', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
-  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const styles = readStylesSource();
 
   assert.match(styles, /\.header-switcher--compact\s*\{\s*gap:\s*0;/);
   assert.match(styles, /\.header-switcher--compact \.header-switcher__item\s*\{[\s\S]*?padding:\s*6px 2px 8px;[\s\S]*?font-size:\s*var\(--trainer-font-2xs\);/);

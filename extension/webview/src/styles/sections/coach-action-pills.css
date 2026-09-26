@@ -1,0 +1,113 @@
+/* ==========================================================================
+   Coach Action Pills
+   ========================================================================== */
+
+.coach-action-wrapper {
+  display: inline-flex;
+  max-width: 100%;
+}
+
+.coach-action-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px 5px 7px;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  background: var(--bg-1);
+  color: var(--fg-1);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+.coach-action-pill__icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--fg-0);
+  background: var(--icon-surface);
+  border: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
+  box-shadow: none;
+}
+
+.coach-action-pill__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  flex: none;
+  background: var(--fg-muted);
+  box-shadow: none;
+}
+
+.coach-action-pill__dot--pulse {
+  background: var(--accent);
+}
+
+.coach-action-pill__dot--completed {
+  background: var(--success);
+}
+
+.coach-action-pill__dot--failed {
+  background: var(--danger);
+}
+
+.coach-action-pill--active {
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-1));
+  color: var(--fg-0);
+}
+
+.coach-action-pill--completed {
+  border-color: color-mix(in srgb, var(--success) 20%, var(--line));
+  background: color-mix(in srgb, var(--success) 8%, var(--bg-1));
+  color: var(--fg-0);
+}
+
+.coach-action-pill--failed {
+  border-color: color-mix(in srgb, var(--danger) 22%, var(--line));
+  background: color-mix(in srgb, var(--danger) 8%, var(--bg-1));
+  color: var(--fg-0);
+}
+
+.coach-action-pill__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.coach-action-pill__check,
+.coach-action-pill__err {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  font-size: var(--trainer-font-3xs);
+  font-weight: 400;
+}
+
+.coach-action-pill__check {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+
+.coach-action-pill__err {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+@keyframes coach-action-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.72;
+  }
+}
+

@@ -1,0 +1,92 @@
+/* ==========================================================================
+   Section Blocks
+   ========================================================================== */
+
+.section-block {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
+  border-radius: 0;
+  padding: 8px 0 0;
+  margin-bottom: 6px;
+  box-shadow: none;
+}
+
+.section-block__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+  gap: 10px;
+}
+
+.section-block__header h2 {
+  font-size: var(--trainer-font-xs);
+  line-height: 1.3;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.section-block__header .eyebrow {
+  margin-bottom: 2px;
+}
+
+.section-block--placeholder {
+  background: var(--bg-1);
+  border: 1px dashed color-mix(in srgb, var(--line) 76%, transparent);
+  color: var(--fg-muted);
+  text-align: center;
+  padding: 24px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  white-space: nowrap;
+  border-radius: var(--radius-full);
+  border: 1px solid color-mix(in srgb, var(--line) 66%, transparent);
+  background: var(--bg-1);
+  color: var(--fg-1);
+  font-size: var(--trainer-font-3xs);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.status-pill::before {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-pill__dot {
+  display: none;
+}
+
+.status-pill--connected {
+  color: color-mix(in srgb, var(--success) 68%, var(--fg-0));
+  border-color: color-mix(in srgb, var(--success) 16%, var(--line));
+  background: color-mix(in srgb, var(--success) 5%, var(--bg-1));
+}
+
+.status-pill--starting,
+.status-pill--pending {
+  color: color-mix(in srgb, var(--warning) 72%, var(--fg-0));
+  border-color: color-mix(in srgb, var(--warning) 16%, var(--line));
+  background: color-mix(in srgb, var(--warning) 5%, var(--bg-1));
+}
+
+.status-pill--offline,
+.status-pill--fail {
+  color: color-mix(in srgb, var(--danger) 72%, var(--fg-0));
+  border-color: color-mix(in srgb, var(--danger) 18%, var(--line));
+  background: color-mix(in srgb, var(--danger) 5%, var(--bg-1));
+}
+

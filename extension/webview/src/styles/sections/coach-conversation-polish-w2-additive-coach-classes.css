@@ -1,0 +1,120 @@
+/* ============================================================
+   Coach conversation polish (W2). Additive `.coach-*` classes
+   only. Consumes shared motion/surface tokens and the shared
+   `.skeleton` primitive — no private colors, durations, or
+   spinners.
+   ============================================================ */
+
+/* Message bubble entrance: fade + rise, one shot per mount. */
+@keyframes coach-msg-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.coach-msg-enter {
+  animation: coach-msg-enter var(--motion-base) var(--ease-out);
+}
+
+/* Streaming caret: breathing element appended after the streamed
+   body. Replaces the legacy blinking body caret while active. */
+@keyframes coach-cursor-breathe {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.3;
+  }
+}
+
+.coach-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 3px;
+  vertical-align: -0.15em;
+  background: var(--accent);
+  animation: coach-cursor-breathe var(--motion-base) var(--ease-out) alternate infinite;
+}
+
+.coach-msg-streaming .message-bubble__body::after {
+  content: none;
+}
+
+/* Pending streaming state (no tokens yet): skeleton lines instead
+   of any spinner. Uses the shared `.skeleton` shimmer primitive. */
+.coach-msg-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 0;
+}
+
+.coach-msg-pending__line {
+  height: 10px;
+}
+
+.coach-msg-pending__line--short {
+  width: 42%;
+}
+
+.coach-msg-pending__line--mid {
+  width: 72%;
+}
+
+.coach-msg-pending__line--long {
+  width: 92%;
+}
+
+/* Timestamps / token counts / role labels align on a numeric grid. */
+.coach-meta-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Artifact/product cards: subtle lift + accent border on hover. */
+.coach-artifact-card {
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .coach-artifact-card:hover {
+    transform: translateY(-1px);
+  }
+}
+
+.coach-artifact-card:hover {
+  border-color: var(--accent);
+}
+
+.coach-artifact-card:hover .artifact-card__header {
+  border-color: var(--accent);
+}
+
+/* CollapseSection-hosted long artifact details. */
+.coach-artifact-details {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-msg-enter,
+  .coach-cursor,
+  .coach-artifact-card,
+  .coach-artifact-card:hover {
+    animation: none;
+    transition: none;
+  }
+
+  .coach-artifact-card:hover {
+    transform: none;
+  }
+}
+

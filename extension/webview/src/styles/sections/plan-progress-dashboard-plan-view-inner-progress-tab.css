@@ -1,0 +1,160 @@
+/* ==========================================================================
+   Plan progress dashboard (Plan view inner "progress" tab)
+   ========================================================================== */
+
+.plan-dashboard__tabs {
+  display: flex;
+  gap: var(--trainer-space-1);
+  width: fit-content;
+  margin-bottom: var(--trainer-space-3);
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+}
+
+.plan-dashboard__tab {
+  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+  appearance: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--type-meta);
+  line-height: var(--leading-meta);
+  padding: var(--trainer-space-1) var(--trainer-space-3);
+  cursor: pointer;
+}
+
+.plan-dashboard__tab:hover {
+  color: var(--fg-0);
+}
+
+.plan-dashboard__tab:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.plan-dashboard__tab.is-active {
+  background: var(--accent-soft);
+  color: var(--fg-0);
+}
+
+.plan-dashboard__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--trainer-space-3);
+}
+
+.plan-dashboard__block {
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
+  display: flex;
+  flex-direction: column;
+  gap: var(--trainer-space-2);
+  min-width: 0;
+  padding: var(--trainer-space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--bg-1);
+}
+
+.plan-dashboard__block-title {
+  margin: 0;
+  font-size: var(--type-meta);
+  color: var(--fg-muted);
+}
+
+.plan-dashboard__metric {
+  display: flex;
+  align-items: baseline;
+  gap: var(--trainer-space-2);
+  margin: 0;
+  font-size: var(--type-ui);
+  color: var(--fg-0);
+}
+
+.plan-dashboard__stat,
+.plan-dashboard__empty-note {
+  margin: 0;
+  font-size: var(--type-meta);
+  color: var(--fg-muted);
+}
+
+.plan-dashboard__bar {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--line) 46%, transparent);
+  overflow: hidden;
+}
+
+.plan-dashboard__bar-fill {
+  transform: scaleX(var(--bar-fill, 1));
+  transform-origin: 0 50%;
+  transition: transform var(--motion-slow, 280ms) var(--motion-ease);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.plan-dashboard__mastery-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--trainer-space-2);
+  margin: 0;
+  padding: 0;
+}
+
+.plan-dashboard__mastery-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 36px;
+  align-items: center;
+  gap: var(--trainer-space-2);
+}
+
+.plan-dashboard__mastery-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--type-meta);
+  color: var(--fg-1);
+}
+
+.plan-dashboard__mastery-score {
+  font-size: var(--type-meta);
+  color: var(--fg-muted);
+  text-align: right;
+}
+
+.plan-dashboard__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--trainer-space-3);
+  padding: var(--trainer-space-6) var(--trainer-space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--bg-1);
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+.plan-dashboard__empty p {
+  margin: 0;
+  font-size: var(--type-ui);
+  color: var(--fg-0);
+}
+
+.plan-dashboard__empty-action {
+  width: 100%;
+  max-width: 280px;
+}
+
+@media (max-width: 540px) {
+  .plan-dashboard__grid {
+    grid-template-columns: 1fr;
+  }
+}
+

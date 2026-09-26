@@ -53,7 +53,14 @@ function readWorkspaceAuthoritySummarySource() {
 }
 
 function readStylesSource() {
-  return fs.readFileSync(stylesPath, 'utf8');
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  const root = pathMod.resolve(__dirname, '..', 'webview', 'src');
+  const manifest = JSON.parse(fsMod.readFileSync(
+    pathMod.join(root, 'styles', 'sections', 'manifest.json'), 'utf8'));
+  return manifest.map(
+    (entry) => fsMod.readFileSync(pathMod.join(root, entry.file), 'utf8'),
+  ).join('');
 }
 
 function availabilityStripSource(source) {

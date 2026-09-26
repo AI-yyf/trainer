@@ -1,0 +1,23 @@
+/* ==========================================================================
+   Message Support Lines
+   ========================================================================== */
+
+.message-support-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.message-support-list--compact {
+  gap: 2px;
+}
+
+.message-support-line {
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+

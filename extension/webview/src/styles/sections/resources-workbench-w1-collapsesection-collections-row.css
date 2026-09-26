@@ -1,0 +1,165 @@
+/* ============================================================
+   Resources workbench (W1): CollapseSection collections, row
+   hover lift, skeleton loading rows, shared empty states.
+   Additive rules only — consumes the shared design-system
+   primitives (.collapse-section, .skeleton, .empty-state) and
+   motion/surface tokens; no private colors or durations.
+   ============================================================ */
+.resources-library-tree__item > .collapse-section {
+  margin-block-end: 4px;
+}
+
+.resources-library-tree__item > .collapse-section:last-child {
+  margin-block-end: 0;
+}
+
+/* Inside the library tree, collections render as flat tree rows, not cards:
+   the surrounding .collapse-section chrome (border, tinted surface, card
+   padding) is stripped so nesting reads as indentation, not stacked boxes. */
+.resources-knowledge__tree .resources-library-tree__item > .collapse-section {
+  margin-block-end: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.resources-knowledge__tree .collapse-section--level-2,
+.resources-knowledge__tree .collapse-section--level-3 {
+  background: transparent;
+}
+
+.resources-knowledge__tree .collapse-section__header {
+  min-height: 28px;
+  padding: 4px var(--trainer-space-2);
+  gap: 4px;
+  border-left: 1px solid transparent;
+}
+
+.resources-knowledge__tree .collapse-section__header:hover {
+  background: color-mix(in srgb, var(--bg-1) 72%, transparent);
+  border-left-color: color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+.resources-knowledge__tree .collapse-section__actions {
+  padding: 0 var(--trainer-space-2);
+}
+
+.resources-knowledge__tree .collapse-section__body,
+.resources-knowledge__tree .collapse-section.is-open > .collapse-section__body-wrap > .collapse-section__body {
+  padding: 0;
+}
+
+.resources-library-tree__collection-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--fg-1);
+}
+
+.resources-library-tree__collection-label svg {
+  flex: none;
+  color: var(--fg-muted);
+}
+
+.resources-library-tree__collection-label > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resources-row {
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.resources-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  border-left-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  background: var(--surface-1);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--bg-0) 55%, transparent);
+}
+
+.resources-row.is-marked:hover {
+  border-color: transparent;
+  border-left-color: color-mix(in srgb, var(--accent) 56%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-0));
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--bg-0) 55%, transparent);
+}
+
+.resources-row.is-selected:hover {
+  border-color: transparent;
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-0));
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--bg-0) 55%, transparent);
+}
+
+.resources-skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--trainer-space-2) 0;
+}
+
+.resources-skeleton-row {
+  width: 100%;
+  min-height: 28px;
+}
+
+.resources-empty {
+  padding: 16px 10px;
+  color: var(--fg-3);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.5;
+}
+
+.resources-empty__title {
+  margin: 0 0 2px;
+  color: var(--fg-1);
+  font-weight: var(--trainer-font-weight-medium);
+}
+
+.resources-empty__hint {
+  color: var(--fg-3);
+}
+
+.resources-empty--compact {
+  padding: 4px 2px;
+}
+
+.resources-empty p {
+  margin: 0;
+  max-width: 46ch;
+}
+
+.resources-empty__action {
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: var(--trainer-font-weight-medium);
+  cursor: pointer;
+}
+
+.resources-empty__action:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.resources-empty__action:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resources-row {
+    transition: none;
+  }
+}
+
