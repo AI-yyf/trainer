@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import type { CommandContext } from '../core/commandContext';
 import { SIDECAR_DEFAULTS } from '../core/constants';
 import { SidecarHttpError, SidecarRequestAbortedError, type SSEMessage } from '../core/httpClient';
+import { recordSendFirstTokenMs } from '../core/runtimeMetrics';
 import { trainerSessionBlockReason } from '../core/runtimeRehydration';
 import type {
   BootstrapData,
@@ -2394,6 +2395,9 @@ export async function sendStreamMessageCommand(
     let completionMeta: StreamAgentCompletionMeta = { agentic: false };
     let completionResponse: unknown;
     let sawCompletion = false;
+    // §三十六: send → first visible token, for perceived-response tracking.
+    const streamStartedAt = Date.now();
+    let firstTokenRecorded = false;
 
     // Coalesce token deltas into ~66ms frames so the webview receives one
     // postMessage (and the host persists streaming state once) per frame
@@ -2412,6 +2416,10 @@ export async function sendStreamMessageCommand(
       const frame = pendingChunkText;
       pendingChunkText = '';
       lastChunkFlushAt = now;
+      if (!firstTokenRecorded) {
+        firstTokenRecorded = true;
+        recordSendFirstTokenMs(Date.now() - streamStartedAt);
+      }
       if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
         return;
       }

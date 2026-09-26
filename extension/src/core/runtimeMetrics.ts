@@ -25,6 +25,13 @@ export interface RuntimeMetricsSnapshot {
   webviewSyncPatches: number;
   webviewSyncFullPatches: number;
   webviewSyncBytes: number;
+  /** §三十六: send → first visible stream chunk, last sample (ms). */
+  sendFirstTokenLastMs: number;
+  sendFirstTokenSamples: number;
+  /** §三十六: sidecar spawn → ready, last sample (ms). */
+  sidecarReadyLastMs: number;
+  /** §三十六: runtime restore/rehydration duration, last sample (ms). */
+  providerRestoreLastMs: number;
 }
 
 const counters: RuntimeMetricsSnapshot = {
@@ -39,6 +46,10 @@ const counters: RuntimeMetricsSnapshot = {
   webviewSyncPatches: 0,
   webviewSyncFullPatches: 0,
   webviewSyncBytes: 0,
+  sendFirstTokenLastMs: 0,
+  sendFirstTokenSamples: 0,
+  sidecarReadyLastMs: 0,
+  providerRestoreLastMs: 0,
 };
 
 type MetricsListener = (snapshot: RuntimeMetricsSnapshot) => void;
@@ -92,6 +103,22 @@ export function recordWebviewSync(options: { full: boolean; bytes: number }): vo
   emit();
 }
 
+export function recordSendFirstTokenMs(durationMs: number): void {
+  counters.sendFirstTokenLastMs = Math.max(0, Math.round(durationMs));
+  counters.sendFirstTokenSamples += 1;
+  emit();
+}
+
+export function recordSidecarReadyMs(durationMs: number): void {
+  counters.sidecarReadyLastMs = Math.max(0, Math.round(durationMs));
+  emit();
+}
+
+export function recordProviderRestoreMs(durationMs: number): void {
+  counters.providerRestoreLastMs = Math.max(0, Math.round(durationMs));
+  emit();
+}
+
 export function snapshotRuntimeMetrics(): RuntimeMetricsSnapshot {
   return { ...counters };
 }
@@ -115,6 +142,8 @@ export function formatRuntimeMetrics(snapshot: RuntimeMetricsSnapshot): string {
     `models=${snapshot.modelCatalogRequests} sidecarStarts=${snapshot.sidecarStarts} ` +
     `rehydrations=${snapshot.runtimeRehydrations} shows=${snapshot.webviewVisibilityShows} ` +
     `patches=${snapshot.webviewSyncPatches} fullPatches=${snapshot.webviewSyncFullPatches} ` +
-    `syncBytes=${snapshot.webviewSyncBytes}`
+    `syncBytes=${snapshot.webviewSyncBytes} ` +
+    `firstTokenMs=${snapshot.sendFirstTokenLastMs}(n=${snapshot.sendFirstTokenSamples}) ` +
+    `sidecarReadyMs=${snapshot.sidecarReadyLastMs} restoreMs=${snapshot.providerRestoreLastMs}`
   );
 }

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import { getRuntimeWorkspaceContext } from '../commands/workspaceContext';
-import { recordRuntimeRehydration } from './runtimeMetrics';
+import { recordProviderRestoreMs, recordRuntimeRehydration } from './runtimeMetrics';
 import type { CommandContext } from './commandContext';
 import type { SidecarStatus } from './types';
 import { flushPendingTransferPromotionScope } from './transferPromotionScope';
@@ -492,7 +492,10 @@ export async function rehydrateWorkbenchRuntime(
     promise: rehydration,
   });
   try {
+    const restoreStartedAt = Date.now();
     const status = await rehydration;
+    // §三十六: restore/rehydration duration for the startup experience track.
+    recordProviderRestoreMs(Date.now() - restoreStartedAt);
     if (syncWorkbench) {
       await context.workbench.syncState();
     }

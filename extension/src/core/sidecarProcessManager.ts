@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { randomUUID } from 'node:crypto';
 
 import { SIDECAR_DEFAULTS, STORAGE_KEYS } from './constants';
-import { recordSidecarStart } from './runtimeMetrics';
+import { recordSidecarReadyMs, recordSidecarStart } from './runtimeMetrics';
 import { SidecarHttpClient } from './httpClient';
 import type { ManagedDataFolderView, SidecarStatus } from './types';
 
@@ -385,6 +385,8 @@ export class SidecarProcessManager implements vscode.Disposable {
   }
 
   private async launchCandidate(candidate: LaunchCandidate, port: number): Promise<SidecarStatus> {
+    // §三十六: spawn → ready latency for the perceived startup track.
+    const sidecarSpawnStartedAt = Date.now();
     // TR-077: every sidecar launch gets a fresh per-instance token; the child
     // enforces it and every HTTP client we own presents it.
     this.instanceToken = randomUUID();
@@ -496,6 +498,7 @@ export class SidecarProcessManager implements vscode.Disposable {
       }
     });
 
+    recordSidecarReadyMs(Date.now() - sidecarSpawnStartedAt);
     const status: SidecarStatus = {
       lifecycle: 'ready',
       host: SIDECAR_DEFAULTS.host,

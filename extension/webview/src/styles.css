@@ -2316,7 +2316,7 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
   border-radius: var(--radius-full);
   border: 2px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-top-color: var(--accent);
-  animation: trainer-spin 0.9s linear infinite;
+  animation: trainer-spin 0.65s linear infinite;
 }
 
 .training-state__title {
@@ -18787,7 +18787,7 @@ details[open] > :not(summary) {
   .training-state__spinner,
   .composer__send .trainer-spin,
   [class*="spinner"] {
-    animation: trainer-spin 0.9s linear infinite !important;
+    animation: trainer-spin 0.65s linear infinite !important;
   }
 }
 
@@ -20646,7 +20646,7 @@ details[open] > :not(summary) {
   margin-right: 6px;
   border-radius: 50%;
   background: currentColor;
-  animation: trainer-spin 0.9s linear infinite;
+  animation: trainer-spin 0.65s linear infinite;
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 
