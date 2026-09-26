@@ -156,6 +156,7 @@ import {
 } from "./providerRecoveryCopy";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
 import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
+import { useCoachHistory } from "./useCoachHistory";
 import {
   planRuntimeStatusFromRecovery,
   selectStreamingCheckpointForScope,
@@ -4133,11 +4134,6 @@ export function App() {
     });
   }, []);
   const [composerModelQuery, setComposerModelQuery] = useState("");
-  const [coachSessions, setCoachSessions] = useState<CoachSessionSummary[]>([]);
-  const [coachSessionsStatus, setCoachSessionsStatus] = useState<
-    "idle" | "loading" | "ready" | "error"
-  >("idle");
-  const [coachSessionsMessage, setCoachSessionsMessage] = useState<string>();
   const [composerModelActionDensity, setComposerModelActionDensity] =
     useState<ComposerModelActionDensity>("default");
   const [headerSwitcherDensity, setHeaderSwitcherDensity] = useState<HeaderSwitcherDensity>("full");
@@ -4795,9 +4791,7 @@ export function App() {
         return;
       }
       if (message.type === "session/list") {
-        setCoachSessions(message.payload.sessions);
-        setCoachSessionsStatus(message.payload.ok ? "ready" : "error");
-        setCoachSessionsMessage(message.payload.message);
+        applySessionList(message.payload);
         return;
       }
       if (message.type === "operation/status" && message.payload.message.includes("Learning feedback recorded")) {
@@ -10404,85 +10398,23 @@ export function App() {
     setOperationMessage,
   ]);
 
-  const requestCoachSessions = useCallback(() => {
-    setCoachSessionsStatus("loading");
-    setCoachSessionsMessage(undefined);
-    if (isBrowserPreview) {
-      const previewStamp = new Date().toISOString();
-      setCoachSessions([
-        {
-          session_id: previewSessionId || "preview-session",
-          summary:
-            layout.composerLanguage === "zh-CN"
-              ? "当前会话"
-              : "Current conversation",
-          message_count: data.conversation.length,
-          updated_at: previewStamp,
-          is_active: true,
-        },
-      ]);
-      setCoachSessionsStatus("ready");
-      return;
-    }
-    postMessage({
-      type: "command/execute",
-      payload: { commandId: trainerCommands.listCoachSessions },
-    });
-  }, [
-    data.conversation.length,
+  const {
+    coachSessions,
+    coachSessionsStatus,
+    coachSessionsMessage,
+    applySessionList,
+    requestCoachSessions,
+    toggleComposerHistoryMenu,
+    activateCoachSession,
+    startNewCoachChat,
+  } = useCoachHistory({
     isBrowserPreview,
-    layout.composerLanguage,
+    composerLanguage: layout.composerLanguage,
     previewSessionId,
-  ]);
-
-  const toggleComposerHistoryMenu = useCallback(() => {
-    setOpenMenu((current) => {
-      const next = current === "history" ? undefined : "history";
-      if (next === "history") {
-        requestCoachSessions();
-      }
-      return next;
-    });
-  }, [requestCoachSessions]);
-
-  const activateCoachSession = useCallback(
-    (sessionId: string) => {
-      const trimmed = sessionId.trim();
-      if (!trimmed) {
-        return;
-      }
-      setOpenMenu(undefined);
-      if (isBrowserPreview) {
-        return;
-      }
-      postMessage({
-        type: "command/execute",
-        payload: {
-          commandId: trainerCommands.activateCoachSession,
-          payload: { sessionId: trimmed },
-        },
-      });
-    },
-    [isBrowserPreview],
-  );
-
-  const startNewCoachChat = useCallback(() => {
-    setOpenMenu(undefined);
-    if (isBrowserPreview) {
-      setOperationMessage({
-        tone: "info",
-        message:
-          layout.composerLanguage === "zh-CN"
-            ? "预览模式不会创建新会话。"
-            : "Preview mode does not create new conversations.",
-      });
-      return;
-    }
-    postMessage({
-      type: "command/execute",
-      payload: { commandId: trainerCommands.newCoachSession },
-    });
-  }, [isBrowserPreview, layout.composerLanguage]);
+    conversationCount: data.conversation.length,
+    setOpenMenu,
+    setOperationMessage,
+  });
 
   const setComposerThinking = useCallback(
     (thinking: ProviderThinkingConfig) => {
