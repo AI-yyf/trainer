@@ -410,12 +410,23 @@ test('Plan next-step copy prefers the live current step before stale artifact te
   );
 });
 
-test('Coach first-run state does not render recommendation buttons', () => {
+test('Coach first-run starters fill the draft and never auto-send', () => {
+  // §六十一 supersedes the v1.0.0 no-starters decision: the first-conversation
+  // empty state offers three ways to start, but they must only fill the
+  // composer draft — sending stays with the learner (no auto-coaching).
   const source = fs.readFileSync(appPath, 'utf8');
 
-  assert.doesNotMatch(source, /coach-empty-state__starters/);
+  assert.match(source, /coach-empty-state__starters/);
+  assert.match(source, /starters\.map\(\(starter\) =>/);
   assert.doesNotMatch(source, /onboardingStarterPrompts/);
   assert.doesNotMatch(source, /onboardingStarters/);
+
+  const startersStart = source.indexOf('const starters = (');
+  const draftWiring = source.indexOf('setComposerDraft(starter.prompt);', startersStart);
+  assert.ok(draftWiring > startersStart, 'starters must fill the composer draft');
+  // Everything between the starter array and the draft fill must not send.
+  const startersBlock = source.slice(startersStart, draftWiring);
+  assert.doesNotMatch(startersBlock, /sendTrainingCommand|trainerCommands\.sendMessage|handleSend/);
 });
 
 test('Coach first-run state starts from the learner goal before optional code context', () => {

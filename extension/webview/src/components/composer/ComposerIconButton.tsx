@@ -29,7 +29,10 @@ export function ComposerIconButton({
       aria-pressed={active}
       className={classes}
       disabled={disabled}
-      title={title ?? label}
+      // Custom CSS tooltip (data-tip) instead of the native title: it lets
+      // us apply the first-hover delay + adjacent-instant pattern from the
+      // design-engineering skill set. aria-label stays the a11y name.
+      data-tip={title ?? label}
       type="button"
       onClick={onClick}
     >
