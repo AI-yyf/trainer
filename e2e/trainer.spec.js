@@ -1486,7 +1486,11 @@ test.describe("Trainer Five-View Shell", () => {
 
     await expect(page.locator("main")).not.toContainText("当前项目就绪");
     await expect(page.getByText("开始说", { exact: true })).toHaveCount(0);
-    await expect(page.locator(".coach-empty-state")).toContainText("先在下面说你现在卡在哪");
+    // §六十一: starter chips instead of a claim that the project is ready.
+    await expect(page.locator(".coach-empty-state")).toContainText("你在做什么？");
+    await expect(page.getByRole("button", { name: "解释这个项目", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "帮我调试", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "教我一点新东西", exact: true })).toBeVisible();
     await expect(page.locator("#coach-composer")).toBeVisible();
     await expectNoConsoleErrors(errors);
   });

@@ -12736,13 +12736,43 @@ export function App() {
       );
     }
     if (isFirstCoachConversation && providerCanCoachNow) {
+      // §六十一: three starter prompts — not a dashboard. Filling the draft
+      // keeps the learner in control of what gets sent.
+      const starters = (
+        layout.composerLanguage === "zh-CN"
+          ? [
+              { label: "解释这个项目", prompt: "带我理解这个项目的结构和它是做什么的。" },
+              { label: "帮我调试", prompt: "我遇到一个报错，帮我一起定位原因。" },
+              { label: "教我一点新东西", prompt: "结合当前项目，教我一个我还不懂的概念。" },
+            ]
+          : [
+              { label: "Explain this project", prompt: "Walk me through what this project does and how it is structured." },
+              { label: "Help me debug", prompt: "I am stuck on an error — help me find the cause." },
+              { label: "Teach me something", prompt: "Teach me one concept from this project that I may not know." },
+            ]
+      );
       return (
         <div className="coach-empty-state coach-empty-state--welcome">
           <p>
             {layout.composerLanguage === "zh-CN"
-              ? "先在下面说你现在卡在哪。"
-              : "Say where you are stuck below."}
+              ? "你在做什么？"
+              : "What are you working on?"}
           </p>
+          <div className="coach-empty-state__starters" role="group"
+            aria-label={layout.composerLanguage === "zh-CN" ? "开始方式" : "Ways to start"}>
+            {starters.map((starter) => (
+              <button
+                key={starter.label}
+                type="button"
+                className="toolbar-button"
+                onClick={() => {
+                  setComposerDraft(starter.prompt);
+                }}
+              >
+                {starter.label}
+              </button>
+            ))}
+          </div>
         </div>
       );
     }

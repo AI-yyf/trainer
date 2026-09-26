@@ -12883,6 +12883,16 @@ button.resources-sandbox-layout__chip:focus-visible {
   margin-bottom: 0;
 }
 
+.coach-empty-state__starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.coach-empty-state__starters .toolbar-button {
+  border-radius: var(--radius-full);
+}
+
 .coach-empty-state {
   display: flex;
   flex-direction: column;
