@@ -160,6 +160,7 @@ import { composerModelPolicyHint, compactComposerModelLabel } from "../lib/compo
 import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel, progressViewLabel, compactSidebarViewLabel } from "../lib/viewLabels";
 import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
+import { coachReplyTitle, coachReplyMarkdown } from "../lib/shareUtils";
 import { formatTokenCount } from "../lib/formatUtils";
 import {
   planRuntimeStatusFromRecovery,
@@ -930,51 +931,6 @@ function ViewFallback({
 }
 
 const COACH_REPLY_BODY_MAX_CHARS = 4000;
-
-function coachReplyTitle(
-  message: ConversationMessage,
-  language: ComposerLanguage,
-): string {
-  const firstLine = message.body
-    .split("\n")
-    .map((line) => line.replace(/^[#>*`\-\s]+/, "").trim())
-    .find((line) => line.length > 0);
-  const fallback = language === "zh-CN" ? "教练回复" : "Coach reply";
-  if (!firstLine) {
-    return fallback;
-  }
-  return firstLine.length > 48 ? `${firstLine.slice(0, 48)}…` : firstLine;
-}
-
-function coachReplyMarkdown(
-  message: ConversationMessage,
-  language: ComposerLanguage,
-): { title: string; markdown: string } {
-  const zh = language === "zh-CN";
-  const title = coachReplyTitle(message, language);
-  const sections = [`# ${title}`, ""];
-  if (message.body.trim()) {
-    sections.push(message.body.trim(), "");
-  }
-  const artifacts = message.artifacts ?? [];
-  if (artifacts.length > 0) {
-    sections.push(zh ? "## 产物" : "## Artifacts");
-    for (const artifact of artifacts) {
-      const detail = artifact.summary ?? artifact.teaser ?? "";
-      sections.push(`- **${artifact.title}**${detail ? ` — ${detail}` : ""}`);
-    }
-    sections.push("");
-  }
-  const attachments = message.attachments ?? [];
-  if (attachments.length > 0) {
-    sections.push(zh ? "## 引用" : "## References");
-    for (const attachment of attachments) {
-      sections.push(`- ${attachment.label}: ${attachment.value}`);
-    }
-    sections.push("");
-  }
-  return { title, markdown: sections.join("\n").trim() };
-}
 
 const trainingFilePracticeCopy: Record<
   ComposerLanguage,

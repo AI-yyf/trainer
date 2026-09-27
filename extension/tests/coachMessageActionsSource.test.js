@@ -118,8 +118,10 @@ test('save-to-resources posts a markdown inline upload bound to the selected rep
   assert.match(upload, /__trainerResourceOperationId: requestId/);
   assert.match(upload, /kind: "upload"/);
 
-  assert.match(source, /function coachReplyMarkdown\(/);
-  assert.match(source, /function coachReplyTitle\(/);
+  // §四十八: coachReplyMarkdown and coachReplyTitle live in lib/shareUtils.ts.
+  const shareSource = fs.readFileSync(path.resolve(__dirname, "..", "webview", "src", "lib", "shareUtils.ts"), "utf8");
+  assert.match(shareSource, /function coachReplyMarkdown\(/);
+  assert.match(shareSource, /function coachReplyTitle\(/);
 });
 
 test('training-card action sends the reply through the real card generator', () => {
