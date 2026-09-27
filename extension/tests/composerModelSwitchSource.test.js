@@ -4,6 +4,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const webviewRoot = path.resolve(__dirname, '..', 'webview', 'src');
+const helpersSource = fs.readFileSync(path.resolve(webviewRoot, 'lib', 'composerModelHelpers.ts'), 'utf8');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
@@ -61,7 +63,7 @@ test('composer model switch label stays honest about the active model', () => {
   assert.match(source, /const composerProviderProfileLabel = useMemo/);
   assert.match(source, /const resolvedModel = data\.providerConfig\.resolvedModel\?\.trim\(\);/);
   assert.match(source, /const configuredModel = data\.providerConfig\.model\.trim\(\);/);
-  assert.match(source, /function compactComposerModelLabel\(/);
+  assert.match(helpersSource, /function compactComposerModelLabel\(/);
   assert.match(source, /const composerModelButtonDisplayLabel =\s*composerModelActionDensity === "compact"/);
   assert.match(source, /compactComposerModelLabel\(\s*composerModelButtonLabel,/);
   assert.doesNotMatch(source, /const currentSelectionSummaryLabel =/);
@@ -143,7 +145,7 @@ test('Coach composer keeps model selection focused while setup stays in Settings
 test('composer model switch retains a restricted active model but blocks a stale selection before host dispatch', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
 
-  assert.match(source, /function composerModelPolicyHint\(/);
+  assert.match(helpersSource, /function composerModelPolicyHint\(/);
   assert.match(source, /const composerActiveModelPolicy = useMemo\(\(\) => \{/);
   assert.match(source, /const composerActiveModelPolicyHint = composerModelPolicyHint\(/);
   assert.match(source, /composerActiveModelPolicyHint \?\?/);
