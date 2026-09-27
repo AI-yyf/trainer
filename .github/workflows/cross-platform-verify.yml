@@ -58,6 +58,12 @@ jobs:
       - name: Build with the portable lifecycle
         run: npm run dev -- --skip-install
 
+      - name: Run server tests
+        working-directory: server
+        run: |
+          . .venv/bin/activate
+          python -m pytest tests/ -q --tb=short 2>&1 | tail -5
+
       - name: Install Chromium for recovery verification (Linux)
         if: runner.os == 'Linux'
         run: npm exec --yes --package playwright -- playwright install --with-deps chromium
