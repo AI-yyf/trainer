@@ -13443,7 +13443,24 @@ export function App() {
   };
   const trainingVerifyFileVisible =
     hasTrainingCard && trainingCardType === "practice" && effectiveTrainingSubmode !== "learn-primer";
-  const trainingPrimaryAction = !hasTrainingCard ? undefined : undefined;
+  // §26: Learning 下一步 → [开始练习] navigates to Training Focus.
+  const trainingPrimaryAction = !hasTrainingCard ? undefined : (
+    <button
+      className="button button--accent"
+      type="button"
+      onClick={() => {
+        setActiveView("training");
+        const cardId = data.workspaceTrainingState?.selectedCardId?.trim();
+        if (cardId && !isBrowserPreview) {
+          attemptLifecycle.startOrRecover(cardId, {
+            filePath: data.liveContext?.activeFile ?? undefined,
+          });
+        }
+      }}
+    >
+      {layout.composerLanguage === "zh-CN" ? "开始练习" : "Start practicing"}
+    </button>
+  );
 
   const showComposerTrainingVerify =
     activeView === "training" &&
