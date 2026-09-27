@@ -159,6 +159,7 @@ import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
 import { composerModelPolicyHint, compactComposerModelLabel } from "../lib/composerModelHelpers";
 import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel, progressViewLabel, compactSidebarViewLabel } from "../lib/viewLabels";
 import { useCoachHistory } from "./useCoachHistory";
+import { useMenuState } from "./useMenuState";
 import {
   planRuntimeStatusFromRecovery,
   selectStreamingCheckpointForScope,
@@ -278,7 +279,7 @@ import type {
   SettingsSectionStatus,
 } from "../components/settings/CoachSettingsView";
 
-type ContextMenu = "context" | "resources" | "model" | "history" | undefined;
+// ContextMenu type imported from useMenuState
 type ComposerModelActionDensity = "default" | "compact";
 type TrainingPracticeReturnMode = "result" | "blocked";
 type TrainingComposerRoute = "card" | "coach";
@@ -3968,7 +3969,7 @@ export function App() {
     applyHostMessage: applyRawHostMessage,
   } = useWorkbenchState();
 
-  const [openMenu, setOpenMenu] = useState<ContextMenu>();
+  const { openMenu, setOpenMenu } = useMenuState();
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [dismissedComposerDeck, setDismissedComposerDeck] = useState<ComposerDeckKind>();
   const [skillManagerOpen, setSkillManagerOpen] = useState(false);
