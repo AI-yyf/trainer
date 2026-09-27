@@ -102,7 +102,6 @@ test('preset derivation covers every legacy combination without dropping values'
   assert.match(source, /const ANSWER_STYLE_STORAGE_KEY = "trainer\.settings\.answerStyle";/);
   assert.match(source, /window\.localStorage\.setItem\(ANSWER_STYLE_STORAGE_KEY, preset\)/);
   // Manual knob edits switch to 自定义 through the existing callbacks only.
-  assert.match(source, /const tuneAdvancedContextKnob = \(apply: \(\) => void\) => \{\s*setAnswerStyleCustomSelected\(true\);\s*writeStoredAnswerStyle\("custom"\);\s*apply\(\);\s*\};/);
   assert.doesNotMatch(source, /onIncludeCurrentFileChange\?\.\(target\.includeCurrentFile\) : undefined/);
 });
 
@@ -121,11 +120,8 @@ test('teaching is a flat section: preset radio, feedback + style, language, adva
   assert.match(section, /onChange=\{onTeachingStyleChange\}/);
   assert.match(section, /data-settings-language="true"/);
   assert.match(section, /onChange=\{onLanguageChange\}/);
-  assert.match(section, /persistenceKey="settings-advanced-context"/);
-  assert.match(section, /open=\{answerStyle === "custom" \|\| advancedContextPinned\}/);
-  // The five legacy knobs live inside the advanced-context fold, values intact.
-  assert.match(section, /<ContextList rows=\{contextRows\} onLabel=\{copy\.on\} offLabel=\{copy\.off\} \/>/);
-  assert.match(section, /tuneAdvancedContextKnob\(\(\) => onContextDetailChange\?\.\(value\)\)/);
+  // §14: advanced context knobs moved to the Advanced category.
+  assert.doesNotMatch(section, /persistenceKey="settings-advanced-context"/);
   // Save-on-change: no per-section Save button or dirty dot; a live status
   // span reports saving / saved / sanitized failure instead.
   assert.doesNotMatch(section, /onClick=\{onSaveCoachSettings\}/);

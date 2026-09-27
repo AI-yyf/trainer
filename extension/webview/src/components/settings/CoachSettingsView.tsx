@@ -8120,53 +8120,6 @@ export function CoachSettingsView({
                 </div>
               </div>
 
-              <CollapseSection
-                level={2}
-                persistenceKey="settings-advanced-context"
-                open={answerStyle === "custom" || advancedContextPinned}
-                onToggle={setAdvancedContextPinned}
-                title={<span className="eyebrow">{settingsGlobalCopy.settingsAdvancedContext}</span>}
-                subtitle={<span className="settings-sheet__defaults-preview">{contextBehaviorSummary}</span>}
-              >
-                <div className="settings-sheet__minor-body">
-                  <div className="settings-grid settings-grid--compact settings-grid--tight">
-                    <div className="settings-row">
-                      <span className="eyebrow">{copy.followCurrentFile}</span>
-                      <ChoiceList
-                        active={followCurrentFile ? "on" : "off"}
-                        items={[
-                          { label: copy.on, value: "on" },
-                          { label: copy.off, value: "off" },
-                        ]}
-                        onChange={(value) =>
-                          tuneAdvancedContextKnob(() => onFollowCurrentFileChange?.(value === "on"))
-                        }
-                      />
-                    </div>
-                    <div className="settings-row">
-                      <span className="eyebrow">{copy.contextMode}</span>
-                      <ChoiceList
-                        active={contextDetail}
-                        items={[
-                          { label: copy.focused, value: "focused" },
-                          { label: copy.balancedContext, value: "balanced" },
-                          { label: copy.fullContext, value: "full" },
-                        ]}
-                        onChange={(value) =>
-                          tuneAdvancedContextKnob(() => onContextDetailChange?.(value))
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <ContextList rows={contextRows} onLabel={copy.on} offLabel={copy.off} />
-                  {workspaceControlStatus?.saveState === "unsaved" ? (
-                    <p className="settings-sheet__note settings-sheet__note--compact">
-                      {attachedContextSummaryText}
-                    </p>
-                  ) : null}
-                </div>
-              </CollapseSection>
           </div>
         </section>
         ) : null}
@@ -8471,6 +8424,55 @@ export function CoachSettingsView({
                   : "Use these identifiers when reporting issues; connection diagnostics live under Connection."}
               </p>
             </div>
+
+            <CollapseSection
+              level={2}
+              persistenceKey="settings-advanced-context"
+              open={answerStyle === "custom" || advancedContextPinned}
+              onToggle={setAdvancedContextPinned}
+              title={<span className="eyebrow">{settingsGlobalCopy.settingsAdvancedContext}</span>}
+              subtitle={<span className="settings-sheet__defaults-preview">{contextBehaviorSummary}</span>}
+              >
+              <div className="settings-sheet__minor-body">
+                <div className="settings-grid settings-grid--compact settings-grid--tight">
+                <div className="settings-row">
+                    <span className="eyebrow">{copy.followCurrentFile}</span>
+                    <ChoiceList
+                      active={followCurrentFile ? "on" : "off"}
+                      items={[
+                        { label: copy.on, value: "on" },
+                        { label: copy.off, value: "off" },
+                        ]}
+                      onChange={(value) =>
+                        tuneAdvancedContextKnob(() => onFollowCurrentFileChange?.(value === "on"))
+                      }
+                      />
+                </div>
+                <div className="settings-row">
+                    <span className="eyebrow">{copy.contextMode}</span>
+                    <ChoiceList
+                      active={contextDetail}
+                      items={[
+                        { label: copy.focused, value: "focused" },
+                        { label: copy.balancedContext, value: "balanced" },
+                        { label: copy.fullContext, value: "full" },
+                        ]}
+                      onChange={(value) =>
+                        tuneAdvancedContextKnob(() => onContextDetailChange?.(value))
+                      }
+                      />
+                </div>
+                </div>
+
+                <ContextList rows={contextRows} onLabel={copy.on} offLabel={copy.off} />
+                {workspaceControlStatus?.saveState === "unsaved" ? (
+                  <p className="settings-sheet__note settings-sheet__note--compact">
+                    {attachedContextSummaryText}
+                  </p>
+                  ) : null}
+              </div>
+            </CollapseSection>
+
           </div>
         </section>
         ) : null}
