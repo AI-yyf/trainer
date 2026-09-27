@@ -59,3 +59,23 @@ def _visible_model_text(value: object | None) -> str:
     if not isinstance(value, str):
         return ""
     return _strip_reasoning_blocks(value).translate(_VISIBLE_MODEL_PUNCTUATION_MAP)
+
+# ---------------------------------------------------------------------------
+# Script and corruption detection (§五十二 extension)
+# ---------------------------------------------------------------------------
+
+
+def _compact_visible_text(value: object | None, limit: int = 220) -> str:
+    visible = _visible_model_text(value)
+    normalized = " ".join(visible.split()).strip()
+    if len(normalized) <= limit:
+        return normalized
+    return f"{normalized[: max(0, limit - 1)].rstrip()}..."
+
+
+def _normalize_script_token(token: str) -> str:
+    return re.sub(r"^[^A-Za-z\u0400-\u04FF]+|[^A-Za-z\u0400-\u04FF]+$", "", token)
+
+
+def _normalize_cjk_script_token(token: str) -> str:
+    return re.sub(r"^[^\u3400-\u9fff]+|[^\\u3400-\u9fff]+$", "", token)
