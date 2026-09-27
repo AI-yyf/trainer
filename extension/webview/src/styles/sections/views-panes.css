@@ -7280,3 +7280,13 @@ button.resources-sandbox-layout__chip:focus-visible {
 .coach-training-resume__go {
   flex: none;
 }
+
+.progress-view__nudge {
+  border-top: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
+  padding-top: 10px;
+}
+
+.progress-view__nudge .progress-view__state {
+  color: var(--fg-muted);
+  font-style: italic;
+}

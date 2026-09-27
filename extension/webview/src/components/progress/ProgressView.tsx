@@ -96,13 +96,34 @@ export function ProgressView({ zh, projection, onOpenTraining }: ProgressViewPro
                   </span>
                 </div>
                 <span className="progress-view__evidence">
-                  {zh
-                    ? `证据 ${count} 条`
-                    : `${count} ${count === 1 ? "piece" : "pieces"} of evidence`}
+                  {count > 0
+                    ? zh
+                      ? `${count} 次验证通过`
+                      : `${count} verification${count === 1 ? "" : "s"} passed`
+                    : zh
+                      ? "还没有验证记录"
+                      : "No verifications yet"}
                 </span>
               </li>
             );
           })}
+          {(() => {
+            const transfer = dimensionState(projection, "transfer");
+            if (transfer && transfer.verifiedCount && transfer.verifiedCount > 0) return null;
+            const strongest = DIMENSION_KEYS
+              .map((k) => dimensionState(projection, k))
+              .filter((s) => s && (s.verifiedCount ?? 0) > 0);
+            if (strongest.length < 2) return null;
+            return (
+              <li className="progress-view__row progress-view__nudge">
+                <span className="progress-view__state">
+                  {zh
+                    ? "迁移能力还未验证。做一个陌生的练习来检验你真正掌握了吗。"
+                    : "Transfer hasn't been verified yet. Try an unfamiliar exercise to test your real understanding."}
+                </span>
+              </li>
+            );
+          })()}
         </ul>
       ) : (
         <div className="progress-view__empty">

@@ -1566,7 +1566,8 @@ test.describe("Trainer Five-View Shell", () => {
     await expect(page.getByText("调试", { exact: true })).toBeVisible();
     await expect(page.getByText("独立完成", { exact: true })).toBeVisible();
     await expect(page.getByText("迁移", { exact: true })).toBeVisible();
-    await expect(page.getByText("证据 9 条", { exact: true })).toBeVisible();
+    // §25: evidence counts are expressed as coaching language.
+    await expect(page.getByText("9 次验证通过", { exact: true })).toBeVisible();
     // §66 restraint: no gamified score bars on this surface.
     await expect(page.locator(".progress-view__dimensions .progress-bar")).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
