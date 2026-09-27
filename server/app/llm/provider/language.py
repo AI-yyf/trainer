@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from .text import _visible_model_text
+
 _CJK_CHAR_PATTERN = re.compile(r"[\u3400-\u9fff]")
 _LATIN_CHAR_PATTERN = re.compile(r"[A-Za-z]")
 _CYRILLIC_CHAR_PATTERN = re.compile(r"[\u0400-\u04FF]")

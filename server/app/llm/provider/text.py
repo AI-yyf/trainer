@@ -30,6 +30,21 @@ _PSEUDO_TOOL_CALL_BLOCK_PATTERN = re.compile(
 _PSEUDO_TOOL_CALL_TAG_PATTERN = re.compile(r"</?tool_call\b[^>]*>", re.IGNORECASE | re.DOTALL)
 _VISIBLE_MODEL_PUNCTUATION_MAP = str.maketrans({"…": "...", "\u2013": "-", "\u2014": "-"})
 
+_CYRILLIC_CHAR_PATTERN = re.compile(r"[\u0400-\u04FF]")
+_LATIN_CHAR_PATTERN = re.compile(r"[A-Za-z]")
+
+
+def _contains_cyrillic(text: str | None) -> bool:
+    if not text:
+        return False
+    return bool(_CYRILLIC_CHAR_PATTERN.search(text))
+
+
+def _contains_latin(text: str | None) -> bool:
+    if not text:
+        return False
+    return bool(_LATIN_CHAR_PATTERN.search(text))
+
 
 def _looks_like_mojibake_text(value: object) -> bool:
     text = str(value or "")
@@ -79,3 +94,81 @@ def _normalize_script_token(token: str) -> str:
 
 def _normalize_cjk_script_token(token: str) -> str:
     return re.sub(r"^[^\u3400-\u9fff]+|[^\\u3400-\u9fff]+$", "", token)
+
+_VISIBLE_TOKEN_PATTERN = re.compile(r"\S+")
+
+
+def _strip_short_cyrillic_noise(
+    reply: str,
+    *,
+    message: str | None = None,
+) -> str:
+    if not reply or not _contains_cyrillic(reply):
+        return reply
+    if message and _contains_cyrillic(message):
+        return reply
+
+    parts = re.split(r"(\s+)", reply)
+    visible_positions = [index for index, part in enumerate(parts) if part and not part.isspace()]
+    changed = False
+
+    for visible_index, part_index in enumerate(visible_positions):
+        token = parts[part_index]
+        normalized = _normalize_script_token(token)
+        if not normalized or not _contains_cyrillic(normalized):
+            continue
+        if _contains_latin(normalized):
+            updated = re.sub(r"[\u0400-\u04FF]{1,2}", "", token)
+            if updated != token and _contains_latin(updated):
+                parts[part_index] = updated
+                changed = True
+            continue
+
+        cyrillic_only = "".join(char for char in normalized if _contains_cyrillic(char))
+        if len(cyrillic_only) > 2:
+            continue
+        previous_token = parts[visible_positions[visible_index - 1]] if visible_index > 0 else ""
+        next_token = (
+            parts[visible_positions[visible_index + 1]]
+            if visible_index + 1 < len(visible_positions)
+            else ""
+        )
+        if _contains_latin(previous_token) and _contains_latin(next_token):
+            parts[part_index] = token.replace(normalized, "")
+            changed = True
+
+    if not changed:
+        return reply
+    sanitized = "".join(parts)
+    sanitized = re.sub(r"\s{2,}", " ", sanitized).strip()
+    return sanitized or reply
+
+
+def _mixed_script_corruption_fragments(
+    visible: str,
+    visible_token_pattern: "re.Pattern[str]",
+):
+    tokens = visible_token_pattern.findall(visible)
+    fragments = []
+    for token in tokens:
+        normalized = _normalize_script_token(token)
+        if not normalized:
+            continue
+        if _contains_cyrillic(normalized) and _contains_latin(normalized):
+            fragments.append(normalized)
+    return fragments
+
+
+def _mixed_script_reply_corruption_detail(
+    visible: str,
+    *,
+    message: str | None = None,
+    response_language: str | None = None,
+):
+    fragments = _mixed_script_corruption_fragments(
+        visible,
+        _VISIBLE_TOKEN_PATTERN,
+    )
+    if not fragments:
+        return None
+    return f"mixed_script:{','.join(fragments[:3])}"
