@@ -35,6 +35,11 @@ from .prompts import (
     normalize_answer_policy,
 )
 from .provider.errors import ContextBudgetExhaustedError, ProviderRuntimeResponseError
+from .provider.text import (
+    _looks_like_mojibake_text,
+    _strip_reasoning_blocks,
+    _visible_model_text,
+)
 from .provider_gateway import (
     catalog_endpoint_type_claims,
     gateway_fingerprint_diagnostics,
@@ -633,11 +638,7 @@ _LATIN1_MOJIBAKE_PATTERN = re.compile(
 )
 
 
-def _looks_like_mojibake_text(value: object) -> bool:
-    text = str(value or "")
-    return any(marker in text for marker in _MOJIBAKE_FALLBACK_MARKERS) or bool(
-        _LATIN1_MOJIBAKE_PATTERN.search(text)
-    )
+
 
 
 def _localized_text(english: str, chinese: str, response_language: str | None) -> str:
@@ -706,27 +707,13 @@ _INPUT_CORRUPTION_MARKERS = (
 )
 
 
-def _strip_provider_control_markers(text: str) -> str:
-    if not text:
-        return ""
-    cleaned = _PROVIDER_CONTROL_MARKER_PATTERN.sub("", text)
-    cleaned = _PSEUDO_TOOL_CALL_BLOCK_PATTERN.sub("", cleaned)
-    cleaned = _PSEUDO_TOOL_CALL_TAG_PATTERN.sub("", cleaned)
-    return cleaned.strip()
 
 
-def _strip_reasoning_blocks(text: str) -> str:
-    if not text:
-        return ""
-    cleaned = _THINK_BLOCK_PATTERN.sub("", text)
-    cleaned = _THINK_TAG_PATTERN.sub("", cleaned)
-    return _strip_provider_control_markers(cleaned)
 
 
-def _visible_model_text(value: object | None) -> str:
-    if not isinstance(value, str):
-        return ""
-    return _strip_reasoning_blocks(value).translate(_VISIBLE_MODEL_PUNCTUATION_MAP)
+
+
+
 
 
 def _has_hidden_reasoning(value: object | None) -> bool:
