@@ -160,6 +160,7 @@ import { composerModelPolicyHint, compactComposerModelLabel } from "../lib/compo
 import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel, progressViewLabel, compactSidebarViewLabel } from "../lib/viewLabels";
 import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
+import { formatTokenCount } from "../lib/formatUtils";
 import {
   planRuntimeStatusFromRecovery,
   selectStreamingCheckpointForScope,
@@ -1338,16 +1339,6 @@ function localizeUiViewReferences(
 }
 
 
-function formatTokenCount(value: number | undefined): string {
-  const tokens = typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
-  if (tokens >= 1000000) {
-    return `${(tokens / 1000000).toFixed(tokens >= 10000000 ? 0 : 1)}M`;
-  }
-  if (tokens >= 1000) {
-    return `${(tokens / 1000).toFixed(tokens >= 10000 ? 0 : 1)}k`;
-  }
-  return String(tokens);
-}
 
 
 function providerDraftStringArrayKey(values: string[] | undefined): string {
