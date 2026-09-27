@@ -1,74 +1,34 @@
-"""Text sanitization for provider responses (§五十二: extracted from provider_service.py).
+"""Text sanitization for provider responses (§五十二).
 
 Handles reasoning-block stripping, mojibake detection, provider control
-marker removal, and visible-text normalization. These functions are
-self-contained: they depend only on the constants defined here.
+marker removal, and visible-text normalization.
 """
 
 from __future__ import annotations
 
 import re
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
 _MOJIBAKE_FALLBACK_MARKERS = (
-    "\ufffd",
-    "\ue000",
-    "\ue1ec",
-    "锟",
-    "闂",
-    "濠",
-    "閻",
-    "缂",
-    "鈧",
-    "鐢",
-    "鍙",
-    "鏂",
-    "瀹",
-    "涓",
-    "浣",
-    "璇",
-    "骞",
-    "搴",
-    "绠",
-    "鎴",
-    "灏",
-    "鏄",
-    "杩",
-    "鍏",
-    "鐩",
-    "閸",
-    "鐠",
-    "娑",
+    "\ufffd", "\ue000", "\ue1ec",
+    "锟", "闂", "濠", "閻", "缂", "鈧", "鐢", "鍙", "鏂",
+    "瀹", "涓", "浣", "璇", "骞", "搴", "绠", "鎴", "灏",
+    "鏄", "杩", "鍏", "鐩", "閸", "鐠", "娑",
 )
 _LATIN1_MOJIBAKE_PATTERN = re.compile(
-    r"(?:[\u00C2\u00C3\u00C4\u00C5\u00C6\u00C7\u00C8\u00C9\u00CF\u00D0\u00E2\u00E3\u00E4\u00E5\u00E6\u00E7\u00E8\u00E9\u00EF\u00F0][\u0080-\u00BF]{1,2}){2,}"
+    r"(?:[\u00C2\u00C3\u00C4\u00C5\u00C6\u00C7\u00C8\u00C9\u00CF\u00D0"
+    r"\u00E2\u00E3\u00E4\u00E5\u00E6\u00E7\u00E8\u00E9\u00EF\u00F0]"
+    r"[\u0080-\u00BF]{1,2}){2,}"
 )
 _THINK_BLOCK_PATTERN = re.compile(r"<think\b[^>]*>.*?</think\s*>", re.IGNORECASE | re.DOTALL)
-_THINK_CLOSE_TAG_PATTERN = re.compile(r"</think\b[^>]*>", re.IGNORECASE | re.DOTALL)
 _THINK_TAG_PATTERN = re.compile(r"</?think\b[^>]*>", re.IGNORECASE | re.DOTALL)
 _PROVIDER_CONTROL_MARKER_PATTERN = re.compile(
-    r"\]\s*<\]\s*minimax\s*\[>\s*\[",
-    re.IGNORECASE | re.DOTALL,
+    r"\]\s*<\]\s*minimax\s*\[>\s*\[", re.IGNORECASE | re.DOTALL,
 )
 _PSEUDO_TOOL_CALL_BLOCK_PATTERN = re.compile(
-    r"<tool_call\b[^>]*>.*?(?:</tool_call\s*>|$)",
-    re.IGNORECASE | re.DOTALL,
+    r"<tool_call\b[^>]*>.*?(?:</tool_call\s*>|$)", re.IGNORECASE | re.DOTALL,
 )
 _PSEUDO_TOOL_CALL_TAG_PATTERN = re.compile(r"</?tool_call\b[^>]*>", re.IGNORECASE | re.DOTALL)
-_VISIBLE_MODEL_PUNCTUATION_MAP = str.maketrans(
-    {
-        "\u2013": "-",
-        "\u2014": "-",
-        "\u2026": "...",
-    }
-)
-
-# ---------------------------------------------------------------------------
-# Functions
-# ---------------------------------------------------------------------------
+_VISIBLE_MODEL_PUNCTUATION_MAP = str.maketrans({"…": "...", "\u2013": "-", "\u2014": "-"})
 
 
 def _looks_like_mojibake_text(value: object) -> bool:

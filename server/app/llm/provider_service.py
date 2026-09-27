@@ -110,34 +110,6 @@ def _optional_text(value: object | None) -> str | None:
     return None
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 _PROVIDER_SECRET_NAME_PATTERN = re.compile(
     r"(?:api[-_]?key|access[-_]?token|auth(?:orization)?|token|secret|password|client[-_]?secret|key)",
     re.IGNORECASE,
@@ -356,9 +328,6 @@ _LATIN1_MOJIBAKE_PATTERN = re.compile(
 )
 
 
-
-
-
 def _localized_text(english: str, chinese: str, response_language: str | None) -> str:
     if _prefers_chinese(response_language) and _looks_like_mojibake_text(chinese):
         return (
@@ -423,15 +392,6 @@ _INPUT_CORRUPTION_MARKERS = (
     "\u7f16\u7801",
     "\u8f93\u5165\u6cd5",
 )
-
-
-
-
-
-
-
-
-
 
 
 def _has_hidden_reasoning(value: object | None) -> bool:
@@ -1437,7 +1397,6 @@ class ProviderService:
 
     def _record_last_reply_override(self, **payload: Any) -> None:
         self._last_reply_override.set(dict(payload))
-
 
 
     def provider_failure_summary(self, category: str, response_language: str | None) -> str:
