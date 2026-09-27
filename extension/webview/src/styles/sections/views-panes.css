@@ -7250,3 +7250,33 @@ button.resources-sandbox-layout__chip:focus-visible {
   padding: 0 14px 14px;
 }
 
+
+.coach-training-resume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  margin: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-1) 72%, transparent);
+  font-size: var(--trainer-font-2xs);
+}
+
+.coach-training-resume__label {
+  color: var(--fg-muted);
+  flex: none;
+}
+
+.coach-training-resume__title {
+  color: var(--fg-0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.coach-training-resume__go {
+  flex: none;
+}

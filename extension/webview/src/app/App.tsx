@@ -13043,6 +13043,28 @@ export function App() {
 
   const renderCoachRootView = () => (
     <section className="coach-view">
+      {(() => {
+        const ts = data.workspaceTrainingState;
+        const cardId = ts?.selectedCardId?.trim();
+        const cardTitle = ts?.selectedCardTitle?.trim();
+        if (!cardId || !cardTitle) return null;
+        const zh = layout.composerLanguage === "zh-CN";
+        return (
+          <div className="coach-training-resume" role="status">
+            <span className="coach-training-resume__label">
+              {zh ? "进行中" : "In progress"}
+            </span>
+            <span className="coach-training-resume__title">{cardTitle}</span>
+            <button
+              type="button"
+              className="toolbar-button coach-training-resume__go"
+              onClick={() => setActiveView("training")}
+            >
+              {zh ? "继续" : "Continue"}
+            </button>
+          </div>
+        );
+      })()}
       {workspaceSessionBlocked && workspaceAdmissionContent ? (
         <>
           {onboardingWizard ? <div className="coach-onboarding">{onboardingWizard}</div> : null}
