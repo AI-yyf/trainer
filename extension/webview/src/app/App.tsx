@@ -160,6 +160,7 @@ import { composerModelPolicyHint, compactComposerModelLabel } from "../lib/compo
 import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel, progressViewLabel, compactSidebarViewLabel } from "../lib/viewLabels";
 import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
+import { useComposerModelQuery } from "./useComposerModelQuery";
 import { coachReplyTitle, coachReplyMarkdown } from "../lib/shareUtils";
 import { formatTokenCount, providerDraftStringArrayKey } from "../lib/formatUtils";
 import {
@@ -3963,7 +3964,6 @@ export function App() {
       },
     });
   }, []);
-  const [composerModelQuery, setComposerModelQuery] = useState("");
   const [composerModelActionDensity, setComposerModelActionDensity] =
     useState<ComposerModelActionDensity>("default");
   const [headerSwitcherDensity, setHeaderSwitcherDensity] = useState<HeaderSwitcherDensity>("full");
@@ -5571,16 +5571,12 @@ export function App() {
     layout.composerLanguage,
   ]);
 
-  const filteredComposerProviderMenuItems = useMemo(() => {
-    const query = composerModelQuery.trim().toLowerCase();
-    if (!query) {
-      return composerProviderMenuItems;
-    }
-
-    return composerProviderMenuItems.filter((item) =>
-      [item.label, item.model].some((value) => value.toLowerCase().includes(query)),
-    );
-  }, [composerModelQuery, composerProviderMenuItems]);
+  // §四十八: model search state + filtering live in useComposerModelQuery.
+  const {
+    query: composerModelQuery,
+    setQuery: setComposerModelQuery,
+    filtered: filteredComposerProviderMenuItems,
+  } = useComposerModelQuery(composerProviderMenuItems);
 
   const composerThinkingDescriptor = useMemo<ProviderThinkingDescriptor | undefined>(() => {
     const provider = data.providerConfig;
