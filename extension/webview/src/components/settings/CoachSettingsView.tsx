@@ -87,6 +87,8 @@ import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
 import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, NavAdvancedIcon, NavConnectionIcon, NavResourcesIcon, NavTeachingIcon, NavTrainingIcon, NavWorkspaceIcon, PlusIcon, RefreshIcon, ShareIcon, TrashIcon } from "../icons";
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
+import { trainerCommands } from "../../../../../shared/src/commands";
+import { postMessage as postWebviewMessage } from "../../lib/vscode";
 import {
   trainerSkillCatalog,
   resolveTrainerSkillText,
@@ -1440,6 +1442,9 @@ export interface CoachSettingsViewProps {
   providerStatus?: SettingsSectionStatus;
   coachDefaultsStatus?: SettingsSectionStatus;
   workspaceControlStatus?: SettingsSectionStatus;
+  /** §15: remote workspace identity for the Remote Support block. */
+  remoteWorkspaceName?: string;
+  remoteWorkspaceActive?: boolean;
   providerApiKeyFocusRequest?: number;
   onThemePreferenceChange?: (value: ThemePreference) => void;
   onLearningSurfaceAlignmentChange?: (value: LearningSurfaceAlignment) => void;
@@ -3867,6 +3872,8 @@ export function CoachSettingsView({
   providerStatus,
   coachDefaultsStatus,
   workspaceControlStatus,
+  remoteWorkspaceName,
+  remoteWorkspaceActive,
   providerApiKeyFocusRequest,
   onProviderDraftChange,
   onThemePreferenceChange,
@@ -7898,6 +7905,36 @@ export function CoachSettingsView({
               onBackup={onBackupTrainerWorkspace}
               onRestore={onRestoreTrainerWorkspaceBackup}
             />
+            <section className="settings-sheet__workspace-card" data-settings-subsection="remote-support">
+                <div className="settings-sheet__authority-block-head">
+                  <span className="eyebrow">
+                    {language === "zh-CN" ? "远程支持" : "Remote support"}
+                  </span>
+                </div>
+                <div className="settings-sheet__summary-grid">
+                  <SummaryCard
+                    label={language === "zh-CN" ? "远程环境" : "Remote host"}
+                    value={remoteWorkspaceName || "SSH"}
+                  />
+                </div>
+                <p className="settings-sheet__note settings-sheet__note--compact">
+                  {language === "zh-CN"
+                    ? "Trainer 通过 Remote Workspace Companion 读取远端文件、搜索和验证。如果尚未安装，请点击下方按钮。"
+                    : "Trainer uses the Remote Workspace Companion for remote file access, search, and verification. Install it below if not yet available."}
+                </p>
+                <button
+                  type="button"
+                  className="toolbar-button"
+                  onClick={() =>
+                    postWebviewMessage({
+                      type: "command/execute",
+                      payload: { commandId: trainerCommands.remoteInstallCompanion },
+                    })
+                  }
+                >
+                  {language === "zh-CN" ? "安装远程支持" : "Install Remote Support"}
+                </button>
+            </section>
             {resourceSandbox ? (
               <section className="settings-sheet__workspace-card">
                 <div className="settings-sheet__authority-block-head">

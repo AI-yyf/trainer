@@ -14256,6 +14256,7 @@ export function App() {
         className="settings-pane"
         provider={data.providerConfig}
         workspaceId={settingsWorkspaceId}
+
         capabilityVerdict={capabilityVerdict}
         providerImageInputState={providerImageInputState}
         providerDraft={providerDraft}
