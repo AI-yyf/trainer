@@ -156,6 +156,7 @@ import {
 } from "./providerRecoveryCopy";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
 import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
+import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel, progressViewLabel, compactSidebarViewLabel } from "../lib/viewLabels";
 import { useCoachHistory } from "./useCoachHistory";
 import {
   planRuntimeStatusFromRecovery,
@@ -925,20 +926,6 @@ function ViewFallback({
   );
 }
 
-const viewLabels: Record<
-  ComposerLanguage,
-  Record<"coach" | "plan" | "resources" | "training" | "progress" | "settings", string>
-> = {
-  "zh-CN": { coach: "\u5bf9\u8bdd", plan: "\u5b66\u4e60", resources: "\u8d44\u6599", training: "\u8bad\u7ec3", progress: "\u6210\u957f", settings: "\u8bbe\u7f6e" },
-  "en-US": { coach: "Chat", plan: "Learning", resources: "Resources", training: "Training", progress: "Progress", settings: "Settings" },
-  "es-ES": { coach: "Chat", plan: "Plan", resources: "Recursos", training: "Entrenamiento", progress: "Progreso", settings: "Ajustes" },
-  "fr-FR": { coach: "Chat", plan: "Plan", resources: "Ressources", training: "Entra\u00eenement", progress: "Progr\u00e8s", settings: "Param\u00e8tres" },
-  "de-DE": { coach: "Chat", plan: "Plan", resources: "Materialien", training: "Training", progress: "Fortschritt", settings: "Einstellungen" },
-  "ja-JP": { coach: "\u5bfe\u8a71", plan: "\u8a08\u753b", resources: "\u8cc7\u6599", training: "\u8a13\u7df4", progress: "\u6210\u9577", settings: "\u8a2d\u5b9a" },
-  "ko-KR": { coach: "\ub300\ud654", plan: "\uacc4\ud68d", resources: "\uc790\ub8cc", training: "\ud6c8\ub828", progress: "\uc131\uc7a5", settings: "\uc124\uc815" },
-  "pt-BR": { coach: "Chat", plan: "Plano", resources: "Recursos", training: "Treinamento", progress: "Progresso", settings: "Configura\u00e7\u00f5es" },
-};
-
 const COACH_REPLY_BODY_MAX_CHARS = 4000;
 
 function coachReplyTitle(
@@ -984,30 +971,6 @@ function coachReplyMarkdown(
     sections.push("");
   }
   return { title, markdown: sections.join("\n").trim() };
-}
-
-function resourcesViewLabel(language: ComposerLanguage): string {
-  return viewLabels[language].resources;
-}
-
-function coachViewLabel(language: ComposerLanguage): string {
-  return viewLabels[language].coach;
-}
-
-function planViewLabel(language: ComposerLanguage): string {
-  return viewLabels[language].plan;
-}
-
-function trainingViewLabel(language: ComposerLanguage): string {
-  return viewLabels[language].training;
-}
-
-function settingsViewLabel(language: ComposerLanguage): string {
-  return viewLabels[language].settings;
-}
-
-function progressViewLabel(language: ComposerLanguage): string {
-  return viewLabels[language].progress;
 }
 
 const trainingFilePracticeCopy: Record<
@@ -1370,14 +1333,6 @@ function localizeUiViewReferences(
         .replace(/(?<=[\u4e00-\u9fff])\s+(对话|计划|资料|训练|设置)/gu, "$1")
         .replace(/(对话|计划|资料|训练|设置)\s+(?=[\u4e00-\u9fff])/gu, "$1")
     : localized;
-}
-
-function compactSidebarViewLabel(
-  view: ActiveWorkbenchView,
-  language: ComposerLanguage,
-  fullLabel: string,
-): string {
-  return fullLabel;
 }
 
 function compactComposerModelLabel(

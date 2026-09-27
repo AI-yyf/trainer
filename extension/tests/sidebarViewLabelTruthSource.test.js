@@ -26,10 +26,9 @@ const stylesPath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css')
 test('responsive sidebar labels retain the official five-view names', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
 
-  assert.match(
-    source,
-    /function compactSidebarViewLabel\(\s*view: ActiveWorkbenchView,\s*language: ComposerLanguage,\s*fullLabel: string,\s*\): string \{\s*return fullLabel;\s*\}/s,
-  );
+  // §四十八: compactSidebarViewLabel lives in lib/viewLabels.ts.
+  const vlSource = fs.readFileSync(path.resolve(__dirname, "..", "webview", "src", "lib", "viewLabels.ts"), "utf8");
+  assert.match(vlSource, /function compactSidebarViewLabel/);
   assert.match(source, /const displayLabel = headerSwitcherDensity === "compact" \? compactLabel : label;/);
   assert.doesNotMatch(source, /return "Res";/);
   assert.doesNotMatch(source, /return "Train";/);
