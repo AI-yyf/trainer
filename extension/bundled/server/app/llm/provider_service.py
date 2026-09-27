@@ -45,6 +45,7 @@ from .provider.capability import (
     _visible_probe_max_tokens,
 )
 from .provider.errors import ContextBudgetExhaustedError, ProviderRuntimeResponseError
+from .provider.language import _contains_cjk, _contains_cyrillic, _contains_latin
 from .provider.redaction import redact_provider_error
 from .provider.streaming import (
     _await_provider_stream_with_cancellation,
@@ -757,24 +758,6 @@ def _strip_internal_coach_meta(text: str) -> str:
             cleaned = cleaned[len(prefix) :].strip()
             break
     return cleaned
-
-
-def _contains_cjk(text: str | None) -> bool:
-    if not text:
-        return False
-    return bool(_CJK_CHAR_PATTERN.search(text))
-
-
-def _contains_latin(text: str | None) -> bool:
-    if not text:
-        return False
-    return bool(_LATIN_CHAR_PATTERN.search(text))
-
-
-def _contains_cyrillic(text: str | None) -> bool:
-    if not text:
-        return False
-    return bool(_CYRILLIC_CHAR_PATTERN.search(text))
 
 
 def _compact_visible_text(value: object | None, limit: int = 220) -> str:
