@@ -45,6 +45,7 @@ from .provider.capability import (
     _visible_probe_max_tokens,
 )
 from .provider.errors import ContextBudgetExhaustedError, ProviderRuntimeResponseError
+from .provider.redaction import redact_provider_error
 from .provider.streaming import (
     _await_provider_stream_with_cancellation,
     _iterate_provider_stream_with_cancellation,
@@ -204,56 +205,7 @@ def _looks_like_json_error_body(text: str) -> bool:
     )
 
 
-def redact_provider_error(
-    value: object | None,
-    *,
-    api_key: str | None = None,
-    fallback: str = "Provider request failed",
-) -> str:
-    """Return an error detail that is safe to include in diagnostics or SSE output."""
-    if isinstance(value, BaseException):
-        status_code = getattr(value, "status_code", None)
-        response = getattr(value, "response", None)
-        if not isinstance(status_code, int):
-            status_code = getattr(response, "status_code", None)
-        suffix = f" (HTTP {status_code})" if isinstance(status_code, int) else ""
-        return f"{fallback}{suffix}."
-
-    if isinstance(value, dict):
-        lowered_keys = {str(key).lower() for key in value}
-        if any(_PROVIDER_SECRET_NAME_PATTERN.fullmatch(key) for key in lowered_keys):
-            return f"{fallback}; credentials redacted."
-        if lowered_keys & {"body", "payload", "content", "response", "upstream_body"}:
-            return f"{fallback}; upstream response body redacted."
-        try:
-            text = json.dumps(value, default=str, ensure_ascii=True, sort_keys=True)
-        except (TypeError, ValueError):
-            return f"{fallback}."
-    elif value is None:
-        return f"{fallback}."
-    else:
-        text = str(value)
-
-    if _PROVIDER_TRACEBACK_PATTERN.search(text):
-        return f"{fallback}; technical details hidden."
-    if _PROVIDER_THINK_PATTERN.search(text):
-        return f"{fallback}; hidden reasoning redacted."
-    if not isinstance(value, dict) and _looks_like_json_error_body(text):
-        return f"{fallback}; upstream response body redacted."
-
-    if api_key:
-        text = text.replace(api_key, "[REDACTED]")
-    text = _PROVIDER_QUERY_CREDENTIAL_PATTERN.sub(r"\g<prefix>[REDACTED]", text)
-    text = _PROVIDER_BEARER_TOKEN_PATTERN.sub("Bearer [REDACTED]", text)
-    text = _PROVIDER_SECRET_FIELD_PATTERN.sub(
-        lambda match: f"{match.group('name')}{match.group('separator')}[REDACTED]",
-        text,
-    )
-    text = _PROVIDER_UPSTREAM_BODY_PATTERN.sub(
-        lambda match: f"{match.group('prefix')}[REDACTED_UPSTREAM_BODY]",
-        text,
-    )
-    return _compact_text(text, limit=400) or f"{fallback}."
+# redact_provider_error imported from .provider.redaction above (§五十二).
 
 
 def _as_mapping(value: object | None) -> dict[str, object] | None:

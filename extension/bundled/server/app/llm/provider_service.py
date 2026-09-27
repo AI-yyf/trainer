@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import ipaddress
 import json
 import re
 import socket
@@ -34,25 +33,23 @@ from .prompts import (
     infer_learner_signal,
     normalize_answer_policy,
 )
-from .provider.errors import ContextBudgetExhaustedError, ProviderRuntimeResponseError
-from .provider.streaming import (
-    _stream_cancel_event,
-    _iterate_provider_stream_with_cancellation,
-    _await_provider_stream_with_cancellation,
-)
 from .provider.capability import (
     _flatten_minimax_thinking_for_raw_http,
-    _is_loopback_provider_url,
-    _should_fingerprint_gateway,
-    _is_minimax_like_provider,
     _is_kimi_like_provider,
-    _needs_generous_visible_probe_budget,
+    _is_loopback_provider_url,
+    _is_minimax_like_provider,
     _model_looks_reasoning_first,
-    _visible_probe_max_tokens,
-    _minimax_native_thinking_confirmed,
+    _needs_generous_visible_probe_budget,
     _normalized_provider_request_defaults,
-    _REASONING_FIRST_MODEL_PATTERN,
-    _MINIMAX_NATIVE_THINKING_MODEL,
+    _should_fingerprint_gateway,
+    _visible_probe_max_tokens,
+)
+from .provider.errors import ContextBudgetExhaustedError, ProviderRuntimeResponseError
+from .provider.redaction import redact_provider_error
+from .provider.streaming import (
+    _await_provider_stream_with_cancellation,
+    _iterate_provider_stream_with_cancellation,
+    _stream_cancel_event,
 )
 from .provider.text import (
     _looks_like_mojibake_text,
@@ -63,7 +60,6 @@ from .provider_gateway import (
     catalog_endpoint_type_claims,
     gateway_fingerprint_diagnostics,
     inspect_provider_gateway_headers,
-    normalize_provider_connection_type,
 )
 from .provider_protocols import (
     assess_provider_capabilities,
@@ -209,56 +205,7 @@ def _looks_like_json_error_body(text: str) -> bool:
     )
 
 
-def redact_provider_error(
-    value: object | None,
-    *,
-    api_key: str | None = None,
-    fallback: str = "Provider request failed",
-) -> str:
-    """Return an error detail that is safe to include in diagnostics or SSE output."""
-    if isinstance(value, BaseException):
-        status_code = getattr(value, "status_code", None)
-        response = getattr(value, "response", None)
-        if not isinstance(status_code, int):
-            status_code = getattr(response, "status_code", None)
-        suffix = f" (HTTP {status_code})" if isinstance(status_code, int) else ""
-        return f"{fallback}{suffix}."
-
-    if isinstance(value, dict):
-        lowered_keys = {str(key).lower() for key in value}
-        if any(_PROVIDER_SECRET_NAME_PATTERN.fullmatch(key) for key in lowered_keys):
-            return f"{fallback}; credentials redacted."
-        if lowered_keys & {"body", "payload", "content", "response", "upstream_body"}:
-            return f"{fallback}; upstream response body redacted."
-        try:
-            text = json.dumps(value, default=str, ensure_ascii=True, sort_keys=True)
-        except (TypeError, ValueError):
-            return f"{fallback}."
-    elif value is None:
-        return f"{fallback}."
-    else:
-        text = str(value)
-
-    if _PROVIDER_TRACEBACK_PATTERN.search(text):
-        return f"{fallback}; technical details hidden."
-    if _PROVIDER_THINK_PATTERN.search(text):
-        return f"{fallback}; hidden reasoning redacted."
-    if not isinstance(value, dict) and _looks_like_json_error_body(text):
-        return f"{fallback}; upstream response body redacted."
-
-    if api_key:
-        text = text.replace(api_key, "[REDACTED]")
-    text = _PROVIDER_QUERY_CREDENTIAL_PATTERN.sub(r"\g<prefix>[REDACTED]", text)
-    text = _PROVIDER_BEARER_TOKEN_PATTERN.sub("Bearer [REDACTED]", text)
-    text = _PROVIDER_SECRET_FIELD_PATTERN.sub(
-        lambda match: f"{match.group('name')}{match.group('separator')}[REDACTED]",
-        text,
-    )
-    text = _PROVIDER_UPSTREAM_BODY_PATTERN.sub(
-        lambda match: f"{match.group('prefix')}[REDACTED_UPSTREAM_BODY]",
-        text,
-    )
-    return _compact_text(text, limit=400) or f"{fallback}."
+# redact_provider_error imported from .provider.redaction above (§五十二).
 
 
 def _as_mapping(value: object | None) -> dict[str, object] | None:
