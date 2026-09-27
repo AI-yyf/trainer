@@ -13,3 +13,16 @@ export function formatTokenCount(value: number | undefined): string {
   }
   return String(tokens);
 }
+
+export function providerDraftStringArrayKey(values: string[] | undefined): string {
+  return JSON.stringify(
+    Array.from(
+      new Set(
+        (values ?? [])
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .map((value) => value.toLowerCase()),
+      ),
+    ),
+  );
+}

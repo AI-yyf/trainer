@@ -161,7 +161,7 @@ import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, training
 import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
 import { coachReplyTitle, coachReplyMarkdown } from "../lib/shareUtils";
-import { formatTokenCount } from "../lib/formatUtils";
+import { formatTokenCount, providerDraftStringArrayKey } from "../lib/formatUtils";
 import {
   planRuntimeStatusFromRecovery,
   selectStreamingCheckpointForScope,
@@ -1296,19 +1296,6 @@ function localizeUiViewReferences(
 
 
 
-
-function providerDraftStringArrayKey(values: string[] | undefined): string {
-  return JSON.stringify(
-    Array.from(
-      new Set(
-        (values ?? [])
-          .map((value) => value.trim())
-          .filter(Boolean)
-          .map((value) => value.toLowerCase()),
-      ),
-    ).sort(),
-  );
-}
 
 function providerRequestDefaultsKey(value: Record<string, unknown> | undefined): string {
   try {
