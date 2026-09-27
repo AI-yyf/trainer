@@ -81,14 +81,21 @@ test('Composer gives parent key handling first, then only navigates sent history
 
 test('App history uses only this session user sends and preserves a cursor plus scratch draft', () => {
   const source = fs.readFileSync(appPath, 'utf8');
+  // §四十八: the navigation internals live in useComposerHistoryNavigation.ts.
+  const hookSource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'app', 'useComposerHistoryNavigation.ts'),
+    'utf8',
+  );
 
-  assert.match(source, /sessionSentMessageHistory/);
-  assert.match(source, /data\.conversation\s*\.filter\(\(message\) => message\.role === "user"\)/);
-  assert.match(source, /composerHistoryCursorRef/);
-  assert.match(source, /composerHistoryScratchDraftRef/);
-  assert.match(source, /const navigateComposerHistory/);
-  assert.match(source, /composerHistoryScratchDraftRef\.current = draft/);
-  assert.match(source, /setComposerDraft\(composerHistoryScratchDraftRef\.current\)/);
+  assert.match(hookSource, /sessionSentMessageHistory/);
+  assert.match(hookSource, /conversation\s*\.filter\(\(message\) => message\.role === "user"\)/);
+  assert.match(hookSource, /composerHistoryCursorRef/);
+  assert.match(hookSource, /composerHistoryScratchDraftRef/);
+  assert.match(hookSource, /const navigateComposerHistory/);
+  assert.match(hookSource, /composerHistoryScratchDraftRef\.current = draft/);
+  assert.match(hookSource, /setComposerDraft\(composerHistoryScratchDraftRef\.current\)/);
+  assert.match(source, /useComposerHistoryNavigation\(\{/);
+  assert.match(source, /conversation: data\.conversation/);
   assert.match(source, /onNavigateHistory=\{navigateComposerHistory\}/);
 });
 

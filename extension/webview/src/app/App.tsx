@@ -161,6 +161,7 @@ import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, training
 import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
 import { useComposerModelQuery } from "./useComposerModelQuery";
+import { useComposerHistoryNavigation } from "./useComposerHistoryNavigation";
 import { coachReplyTitle, coachReplyMarkdown } from "../lib/shareUtils";
 import { formatTokenCount, providerDraftStringArrayKey } from "../lib/formatUtils";
 import {
@@ -3917,13 +3918,10 @@ export function App() {
   });
   const [skillImportText, setSkillImportText] = useState("");
   const composerDeckRef = useRef<HTMLDivElement | null>(null);
-  const composerHistoryCursorRef = useRef<number | undefined>(undefined);
-  const composerHistoryScratchDraftRef = useRef("");
   const streamResumeDraftRef = useRef("");
   const sendRecoveredPlanResumeRef = useRef<
     (action: "continue_step" | "clear_blocker") => void
   >(() => undefined);
-  const sentMessageHistoryLengthRef = useRef(0);
   const [previewSessionId, setPreviewSessionId] = useState<string>();
   const [composerAttachments, setComposerAttachments] = useState<MessageAttachment[]>([]);
   const [providerDraft, setProviderDraft] = useState<ProviderDraft>({
@@ -4813,67 +4811,13 @@ export function App() {
       focusComposerInput();
     });
   };
-  const sessionSentMessageHistory = useMemo(
-    () =>
-      data.conversation
-        .filter((message) => message.role === "user")
-        .map((message) => message.body.trim())
-        .filter(Boolean),
-    [data.conversation],
-  );
-  const resetComposerHistoryNavigation = useCallback(() => {
-    composerHistoryCursorRef.current = undefined;
-    composerHistoryScratchDraftRef.current = "";
-  }, []);
-  useEffect(() => {
-    if (sentMessageHistoryLengthRef.current === sessionSentMessageHistory.length) {
-      return;
-    }
-    sentMessageHistoryLengthRef.current = sessionSentMessageHistory.length;
-    resetComposerHistoryNavigation();
-  }, [resetComposerHistoryNavigation, sessionSentMessageHistory.length]);
-  const navigateComposerHistory = useCallback(
-    (direction: "previous" | "next") => {
-      if (sessionSentMessageHistory.length === 0) {
-        return false;
-      }
-
-      const currentIndex = composerHistoryCursorRef.current;
-      if (direction === "previous") {
-        const nextIndex =
-          currentIndex === undefined
-            ? sessionSentMessageHistory.length - 1
-            : currentIndex > 0
-              ? currentIndex - 1
-              : undefined;
-        if (nextIndex === undefined) {
-          return false;
-        }
-        if (currentIndex === undefined) {
-          composerHistoryScratchDraftRef.current = draft;
-        }
-        composerHistoryCursorRef.current = nextIndex;
-        setComposerDraft(sessionSentMessageHistory[nextIndex] ?? "");
-        return true;
-      }
-
-      if (currentIndex === undefined) {
-        return false;
-      }
-      const nextIndex = currentIndex + 1;
-      if (nextIndex >= sessionSentMessageHistory.length) {
-        composerHistoryCursorRef.current = undefined;
-        setComposerDraft(composerHistoryScratchDraftRef.current);
-        composerHistoryScratchDraftRef.current = "";
-        return true;
-      }
-
-      composerHistoryCursorRef.current = nextIndex;
-      setComposerDraft(sessionSentMessageHistory[nextIndex] ?? "");
-      return true;
-    },
-    [draft, sessionSentMessageHistory, setComposerDraft],
-  );
+  // §四十八: sent-message history navigation lives in useComposerHistoryNavigation.
+  const { resetComposerHistoryNavigation, navigateComposerHistory } =
+    useComposerHistoryNavigation({
+      conversation: data.conversation,
+      draft,
+      setComposerDraft,
+    });
   const handleComposerDraftChange = useCallback(
     (nextDraft: string) => {
       resetComposerHistoryNavigation();
