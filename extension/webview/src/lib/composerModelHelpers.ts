@@ -5,6 +5,7 @@
 
 import type { ComposerLanguage } from "./types";
 import type { ProviderModelPolicyReason } from "../../../../shared/src/providerModelPolicy";
+import { normalizeProviderProtocol } from "../../../../shared/src/providerProtocols";
 
 export function composerModelPolicyHint(
   language: ComposerLanguage,
@@ -67,4 +68,65 @@ export function compactComposerModelLabel(
       .replace(/[:/](latest|default)$/i, "")
       .trim() || normalized
   );
+}
+
+export interface ComposerModelAutoRefreshInput {
+  configured: boolean;
+  apiKeyConfigured: boolean;
+  modelListStatus: string;
+  availableModels: ReadonlyArray<string> | undefined;
+  cacheExpiresAt?: string | undefined;
+  cacheFetchedAt?: string | undefined;
+  name: string;
+  baseUrl: string;
+  protocol?: string | undefined;
+  model: string;
+}
+
+export interface ComposerModelAutoRefreshDecision {
+  needsRefresh: boolean;
+  refreshKey: string;
+}
+
+/**
+ * Decides whether opening the model menu should trigger a background model
+ * list refresh, and the dedup key that keeps the refresh from re-firing
+ * while the same provider state is on screen (§四十八: extracted from App.tsx).
+ */
+export function composerModelAutoRefreshDecision(
+  provider: ComposerModelAutoRefreshInput,
+): ComposerModelAutoRefreshDecision {
+  if (
+    !provider.configured ||
+    !provider.apiKeyConfigured ||
+    provider.modelListStatus === "loading"
+  ) {
+    return { needsRefresh: false, refreshKey: "" };
+  }
+
+  const availableModelCount = Array.isArray(provider.availableModels)
+    ? provider.availableModels.filter((entry) => entry.trim().length > 0).length
+    : 0;
+  const cacheExpiryMs = provider.cacheExpiresAt
+    ? Date.parse(provider.cacheExpiresAt)
+    : Number.NaN;
+  const cacheExpired = Number.isFinite(cacheExpiryMs) && cacheExpiryMs <= Date.now();
+  const needsRefresh =
+    availableModelCount === 0 ||
+    provider.modelListStatus === "idle" ||
+    cacheExpired;
+
+  const refreshKey = [
+    provider.name.trim().toLowerCase(),
+    provider.baseUrl.trim().toLowerCase(),
+    normalizeProviderProtocol(provider.protocol),
+    provider.model.trim().toLowerCase(),
+    provider.cacheFetchedAt ?? "",
+    provider.cacheExpiresAt ?? "",
+    provider.modelListStatus,
+    availableModelCount,
+    cacheExpired ? "expired" : "fresh",
+  ].join("::");
+
+  return { needsRefresh, refreshKey };
 }

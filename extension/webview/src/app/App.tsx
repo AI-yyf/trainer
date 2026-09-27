@@ -156,7 +156,7 @@ import {
 } from "./providerRecoveryCopy";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
 import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
-import { composerModelPolicyHint, compactComposerModelLabel } from "../lib/composerModelHelpers";
+import { composerModelAutoRefreshDecision, composerModelPolicyHint, compactComposerModelLabel } from "../lib/composerModelHelpers";
 import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel, progressViewLabel, compactSidebarViewLabel } from "../lib/viewLabels";
 import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
@@ -10249,45 +10249,16 @@ export function App() {
       return;
     }
 
-    if (
-      !data.providerConfig.configured ||
-      !data.providerConfig.apiKeyConfigured ||
-      data.providerConfig.modelListStatus === "loading"
-    ) {
+    // §四十八: refresh decision + dedup key live in lib/composerModelHelpers.
+    const decision = composerModelAutoRefreshDecision(data.providerConfig);
+    if (!decision.needsRefresh) {
+      return;
+    }
+    if (composerModelAutoRefreshKeyRef.current === decision.refreshKey) {
       return;
     }
 
-    const availableModelCount = Array.isArray(data.providerConfig.availableModels)
-      ? data.providerConfig.availableModels.filter((entry) => entry.trim().length > 0).length
-      : 0;
-    const cacheExpiryMs = data.providerConfig.cacheExpiresAt
-      ? Date.parse(data.providerConfig.cacheExpiresAt)
-      : Number.NaN;
-    const cacheExpired = Number.isFinite(cacheExpiryMs) && cacheExpiryMs <= Date.now();
-    const needsRefresh =
-      availableModelCount === 0 ||
-      data.providerConfig.modelListStatus === "idle" ||
-      cacheExpired;
-    if (!needsRefresh) {
-      return;
-    }
-
-    const refreshKey = [
-      data.providerConfig.name.trim().toLowerCase(),
-      data.providerConfig.baseUrl.trim().toLowerCase(),
-      normalizeProviderProtocol(data.providerConfig.protocol),
-      data.providerConfig.model.trim().toLowerCase(),
-      data.providerConfig.cacheFetchedAt ?? "",
-      data.providerConfig.cacheExpiresAt ?? "",
-      data.providerConfig.modelListStatus,
-      availableModelCount,
-      cacheExpired ? "expired" : "fresh",
-    ].join("::");
-    if (composerModelAutoRefreshKeyRef.current === refreshKey) {
-      return;
-    }
-
-    composerModelAutoRefreshKeyRef.current = refreshKey;
+    composerModelAutoRefreshKeyRef.current = decision.refreshKey;
     refreshComposerProviderModels();
   }, [
     data.providerConfig.apiKeyConfigured,
