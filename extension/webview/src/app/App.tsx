@@ -6223,7 +6223,9 @@ export function App() {
     Boolean(data.workspaceTrainingState?.activeTrainingCardRouting?.selectedCardId) ||
     Boolean(data.workspaceTrainingState?.selectedCardId);
   const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS.filter((view) =>
-    view === "training" ? trainingNavVisible : view !== "settings",
+    view === "training"
+      ? trainingNavVisible
+      : view !== "settings" && view !== "progress",
   ).map((view) => {
     if (view === "coach") {
       const label = coachViewLabel(layout.composerLanguage);
@@ -13886,6 +13888,7 @@ export function App() {
       <Suspense fallback={<ViewFallback label={t.plan} language={layout.composerLanguage} />}>
         <CoachPlanView
         plan={workspaceSessionBlocked ? null : visibleFormalPlan}
+        onNavigateToView={setActiveView}
         className="plan-pane"
         compactPrimary
         leftoverNote={leftoverPlanNotLive ? t.leftoverNotLive : undefined}

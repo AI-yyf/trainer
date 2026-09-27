@@ -115,6 +115,8 @@ interface PlanDecisionStripState {
 
 export interface CoachPlanViewProps {
   plan: LearningPlan | null;
+  /** §30: navigate to internal routes (progress, training). */
+  onNavigateToView?: (view: "coach" | "plan" | "resources" | "training" | "progress" | "settings") => void;
   className?: string;
   eyebrow?: string;
   title?: string;

@@ -64,7 +64,7 @@ test('app shell renders a text-only top navigation for the daily views', () => {
   // lives in the header gear. All five views stay routable.
   assert.match(
     source,
-    /const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS\.filter\(\(view\) =>\s*view === "training" \? trainingNavVisible : view !== "settings",\s*\)\.map\(\(view\) => \{/,
+    /const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS\.filter\(\(view\) =>\s*view === "training"\s*\? trainingNavVisible\s*: view !== "settings" && view !== "progress",\s*\)\.map\(\(view\) => \{/,
   );
   assert.match(source, /const trainingNavVisible =\s*activeView === "training" \|\|/);
   assert.match(source, /const label = coachViewLabel\(layout\.composerLanguage\);/);

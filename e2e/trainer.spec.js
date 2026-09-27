@@ -149,15 +149,14 @@ async function expectFiveTopLevelViews(page, language) {
   const views = ["coach", "plan", "resources"];
   const tabs = page
     .locator(".header-switcher")
-    .getByTestId(/^trainer-view-nav-(coach|plan|resources|training|progress)$/);
+    .getByTestId(/^trainer-view-nav-(coach|plan|resources|training)$/);
   const testIds = await tabs.evaluateAll((nodes) =>
     nodes.map((node) => node.getAttribute("data-testid")),
   );
-  expect(testIds.length).toBeGreaterThanOrEqual(4);
-  expect(testIds.length).toBeLessThanOrEqual(5);
+  expect(testIds.length).toBeGreaterThanOrEqual(3);
+  expect(testIds.length).toBeLessThanOrEqual(4);
   expect(testIds.slice(0, 3)).toEqual(views.map(viewNavigationTestId));
-  expect(testIds[testIds.length - 1]).toBe(viewNavigationTestId("progress"));
-  if (testIds.length === 5) {
+  if (testIds.length === 4) {
     expect(testIds[3]).toBe(viewNavigationTestId("training"));
   }
   await expect(tabs.first()).toBeVisible();
@@ -165,8 +164,7 @@ async function expectFiveTopLevelViews(page, language) {
     nodes.map((node) => node.getAttribute("aria-label")),
   );
   labels.forEach((label, index) => {
-    const expectedView =
-      index < views.length ? views[index] : testIds[index] === viewNavigationTestId("training") ? "training" : "progress";
+    const expectedView = views[index] ?? "training";
     expect(label).toBe(VIEW_LABELS[language][expectedView]);
   });
   const settingsButton = page.getByTestId("trainer-view-nav-settings");
