@@ -130,3 +130,61 @@ export function composerModelAutoRefreshDecision(
 
   return { needsRefresh, refreshKey };
 }
+
+export interface SettingsModelAutoPrimeInput extends ComposerModelAutoRefreshInput {
+  modelRetryable?: boolean | undefined;
+}
+
+export interface SettingsModelAutoPrimeDecision {
+  needsPrime: boolean;
+  primeKey: string;
+}
+
+/**
+ * Decides whether the settings provider form should auto-prime its model
+ * list (fetch when empty/expired, retry after a retryable error), plus the
+ * dedup key that keeps the prime from re-firing (§四十八: extracted from App.tsx).
+ */
+export function settingsModelAutoPrimeDecision(
+  provider: SettingsModelAutoPrimeInput,
+  providerDraftHasChanges: boolean,
+): SettingsModelAutoPrimeDecision {
+  if (
+    !provider.configured ||
+    !provider.apiKeyConfigured ||
+    providerDraftHasChanges ||
+    provider.modelListStatus === "loading"
+  ) {
+    return { needsPrime: false, primeKey: "" };
+  }
+
+  const availableModelCount = Array.isArray(provider.availableModels)
+    ? provider.availableModels.filter((entry) => entry.trim().length > 0).length
+    : 0;
+  const cacheExpiryMs = provider.cacheExpiresAt
+    ? Date.parse(provider.cacheExpiresAt)
+    : Number.NaN;
+  const cacheExpired = Number.isFinite(cacheExpiryMs) && cacheExpiryMs <= Date.now();
+  const shouldRetryAfterError =
+    provider.modelListStatus === "error" && provider.modelRetryable !== false;
+  const needsPrime =
+    availableModelCount === 0 ||
+    provider.modelListStatus === "idle" ||
+    cacheExpired ||
+    shouldRetryAfterError;
+
+  const primeKey = [
+    provider.name.trim().toLowerCase(),
+    provider.baseUrl.trim().toLowerCase(),
+    normalizeProviderProtocol(provider.protocol),
+    provider.model.trim().toLowerCase(),
+    provider.modelListStatus,
+    provider.cacheFetchedAt ?? "",
+    provider.cacheExpiresAt ?? "",
+    availableModelCount,
+    cacheExpired ? "expired" : "fresh",
+    shouldRetryAfterError ? "retryable-error" : "steady",
+  ].join("::");
+
+  return { needsPrime, primeKey };
+}

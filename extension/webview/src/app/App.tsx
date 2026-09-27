@@ -156,7 +156,7 @@ import {
 } from "./providerRecoveryCopy";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
 import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
-import { composerModelAutoRefreshDecision, composerModelPolicyHint, compactComposerModelLabel } from "../lib/composerModelHelpers";
+import { composerModelAutoRefreshDecision, composerModelPolicyHint, compactComposerModelLabel, settingsModelAutoPrimeDecision } from "../lib/composerModelHelpers";
 import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel, progressViewLabel, compactSidebarViewLabel } from "../lib/viewLabels";
 import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
@@ -10281,51 +10281,19 @@ export function App() {
       return;
     }
 
-    if (
-      !data.providerConfig.configured ||
-      !data.providerConfig.apiKeyConfigured ||
-      providerDraftHasChanges ||
-      data.providerConfig.modelListStatus === "loading"
-    ) {
+    // §四十八: prime decision + dedup key live in lib/composerModelHelpers.
+    const decision = settingsModelAutoPrimeDecision(
+      data.providerConfig,
+      providerDraftHasChanges,
+    );
+    if (!decision.needsPrime) {
+      return;
+    }
+    if (settingsModelAutoPrimeKeyRef.current === decision.primeKey) {
       return;
     }
 
-    const availableModelCount = Array.isArray(data.providerConfig.availableModels)
-      ? data.providerConfig.availableModels.filter((entry) => entry.trim().length > 0).length
-      : 0;
-    const cacheExpiryMs = data.providerConfig.cacheExpiresAt
-      ? Date.parse(data.providerConfig.cacheExpiresAt)
-      : Number.NaN;
-    const cacheExpired = Number.isFinite(cacheExpiryMs) && cacheExpiryMs <= Date.now();
-    const shouldRetryAfterError =
-      data.providerConfig.modelListStatus === "error" &&
-      data.providerConfig.modelRetryable !== false;
-    const needsPrime =
-      availableModelCount === 0 ||
-      data.providerConfig.modelListStatus === "idle" ||
-      cacheExpired ||
-      shouldRetryAfterError;
-    if (!needsPrime) {
-      return;
-    }
-
-    const primeKey = [
-      data.providerConfig.name.trim().toLowerCase(),
-      data.providerConfig.baseUrl.trim().toLowerCase(),
-      normalizeProviderProtocol(data.providerConfig.protocol),
-      data.providerConfig.model.trim().toLowerCase(),
-      data.providerConfig.modelListStatus,
-      data.providerConfig.cacheFetchedAt ?? "",
-      data.providerConfig.cacheExpiresAt ?? "",
-      availableModelCount,
-      cacheExpired ? "expired" : "fresh",
-      shouldRetryAfterError ? "retryable-error" : "steady",
-    ].join("::");
-    if (settingsModelAutoPrimeKeyRef.current === primeKey) {
-      return;
-    }
-
-    settingsModelAutoPrimeKeyRef.current = primeKey;
+    settingsModelAutoPrimeKeyRef.current = decision.primeKey;
     primeSettingsProviderModels();
   }, [
     activeView,
