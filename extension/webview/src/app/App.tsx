@@ -156,7 +156,7 @@ import {
 } from "./providerRecoveryCopy";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
 import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
-import { composerModelAutoRefreshDecision, composerModelPolicyHint, compactComposerModelLabel, settingsModelAutoPrimeDecision } from "../lib/composerModelHelpers";
+import { buildComposerProviderMenuItems, composerModelAutoRefreshDecision, composerModelPolicyHint, compactComposerModelLabel, settingsModelAutoPrimeDecision, type ComposerProviderMenuItem } from "../lib/composerModelHelpers";
 import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel, progressViewLabel, compactSidebarViewLabel } from "../lib/viewLabels";
 import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
@@ -293,15 +293,6 @@ type PlanComposerDraftReplacement = {
   targetTitle: string;
 };
 type ResourcesComposerMode = "locate" | "download" | "organize" | "cards";
-type ComposerProviderMenuItem = {
-  id: string;
-  selectionKind: "profile" | "model";
-  label: string;
-  model: string;
-  isActive: boolean;
-  isSelectable?: boolean;
-  policyReason?: ProviderModelPolicyReason;
-};
 type HeaderSwitcherDensity = "full" | "compact" | "icon";
 const COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT = 6;
 const COACH_SETTINGS_AUTOSAVE_DELAY_MS = 250;
@@ -5361,159 +5352,11 @@ export function App() {
     layout.composerLanguage,
   ]);
 
-  const composerProviderMenuItems = useMemo<ComposerProviderMenuItem[]>(() => {
-    const providerApplied = data.providerConfig.configured;
-    const activeProfileId = providerApplied ? data.providerConfig.profileId?.trim() : undefined;
-    const resolvedModel = data.providerConfig.resolvedModel?.trim() ?? "";
-    const configuredModel = data.providerConfig.model.trim();
-    const activeModel = providerApplied ? resolvedModel || configuredModel : "";
-    const activeModelKey = activeModel.toLowerCase();
-    const resolvedModelKey = resolvedModel.toLowerCase();
-    const configuredModelKey = configuredModel.toLowerCase();
-    const configuredModelIsAlias = Boolean(
-      resolvedModelKey && configuredModelKey && resolvedModelKey !== configuredModelKey,
-    );
-    const liveModels = Array.isArray(data.providerConfig.availableModels)
-      ? data.providerConfig.availableModels
-      : [];
-    const fallbackModels = [
-      ...(Array.isArray(data.providerConfig.catalogModels) ? data.providerConfig.catalogModels : []),
-      ...Object.keys(data.providerConfig.modelTokenLimits ?? {}),
-    ];
-    const modelCandidates = providerApplied
-      ? [
-          ...(liveModels.length > 0 ? liveModels : fallbackModels),
-          resolvedModel,
-          ...(resolvedModel ? [] : [configuredModel]),
-        ]
-      : [];
-    const currentProviderModelPolicy = {
-      allowedModels: data.providerConfig.allowedModels,
-      deniedModels: data.providerConfig.deniedModels,
-    };
-    const filteredModelCandidates = filterProviderModelOptions(
-      modelCandidates,
-      currentProviderModelPolicy,
-      { retainModels: activeModel ? [activeModel] : [] },
-    );
-    const knownModelMap = new Map<string, string>();
-    for (const candidate of filteredModelCandidates) {
-      const modelName = typeof candidate === "string" ? candidate.trim() : "";
-      const modelKey = modelName.toLowerCase();
-      if (
-        !modelName ||
-        (configuredModelIsAlias && modelKey === configuredModelKey) ||
-        knownModelMap.has(modelKey)
-      ) {
-        continue;
-      }
-      knownModelMap.set(modelKey, modelName);
-    }
-    const knownModels = Array.from(knownModelMap.values());
-    const activeProviderLabel =
-      data.providerConfig.profileLabel?.trim() ??
-      data.providerConfig.name?.trim() ??
-      (layout.composerLanguage === "zh-CN" ? "当前连接" : "Current connection");
-    const activeProviderModelItems =
-      knownModels.length > 0
-        ? knownModels.map((modelName) => {
-            const modelPolicy = evaluateProviderModelPolicy(modelName, currentProviderModelPolicy);
-            const isActive = modelName.toLowerCase() === activeModelKey;
-            return {
-              id: `model:${modelName}`,
-              selectionKind: "model" as const,
-              label: modelName,
-              model: modelName,
-              isActive,
-              isSelectable: modelPolicy.allowed && !isActive,
-              policyReason: modelPolicy.reason,
-            };
-          })
-        : [];
-    const profileRecords = Array.isArray(data.providerConfig.providerProfiles)
-      ? data.providerConfig.providerProfiles
-      : [];
-    const items = profileRecords
-      .map((profile) => {
-        if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
-          return undefined;
-        }
-
-        const record = profile as Record<string, unknown>;
-        const id = typeof record.id === "string" ? record.id.trim() : "";
-        if (!id) {
-          return undefined;
-        }
-
-        const label =
-          typeof record.label === "string" && record.label.trim()
-            ? record.label.trim()
-            : typeof record.name === "string" && record.name.trim()
-              ? record.name.trim()
-              : id;
-        const model =
-          typeof record.model === "string" && record.model.trim()
-            ? record.model.trim()
-            : data.providerConfig.model;
-        return {
-          id,
-          selectionKind: "profile",
-          label,
-          model,
-          isActive: activeProfileId ? activeProfileId === id : false,
-        };
-      })
-      .filter(Boolean) as ComposerProviderMenuItem[];
-
-    if (items.length > 0) {
-      const activeIndex = items.findIndex((item) => item.isActive);
-      if (activeIndex > 0) {
-        const [activeItem] = items.splice(activeIndex, 1);
-        if (activeItem) {
-          items.unshift(activeItem);
-        }
-      }
-      if (activeProviderModelItems.length > 0) {
-        return [
-          ...activeProviderModelItems,
-          ...items.filter((item) => !item.isActive),
-        ];
-      }
-      return items;
-    }
-
-    if (!providerApplied) {
-      return [];
-    }
-
-    if (activeProviderModelItems.length > 0) {
-      return activeProviderModelItems;
-    }
-
-    return [
-      {
-        id: activeProfileId ?? data.providerConfig.name ?? "provider",
-        selectionKind: "profile",
-        label: activeProviderLabel,
-        model: activeModel,
-        isActive: true,
-      },
-    ];
-  }, [
-    data.providerConfig.configured,
-    data.providerConfig.availableModels,
-    data.providerConfig.allowedModels,
-    data.providerConfig.catalogModels,
-    data.providerConfig.deniedModels,
-    data.providerConfig.model,
-    data.providerConfig.name,
-    data.providerConfig.profileId,
-    data.providerConfig.profileLabel,
-    data.providerConfig.providerProfiles,
-    data.providerConfig.resolvedModel,
-    data.providerConfig.modelTokenLimits,
-    layout.composerLanguage,
-  ]);
+  // §四十八: menu item construction lives in lib/composerModelHelpers.
+  const composerProviderMenuItems = useMemo(
+    () => buildComposerProviderMenuItems(data.providerConfig, layout.composerLanguage),
+    [data.providerConfig, layout.composerLanguage],
+  );
 
   // §四十八: model search state + filtering live in useComposerModelQuery.
   const {

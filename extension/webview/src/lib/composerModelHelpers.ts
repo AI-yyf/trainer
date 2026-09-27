@@ -3,9 +3,23 @@
  * Pure functions — no React or state dependencies.
  */
 
-import type { ComposerLanguage } from "./types";
+import type { ComposerLanguage, ProviderConfigView } from "./types";
 import type { ProviderModelPolicyReason } from "../../../../shared/src/providerModelPolicy";
+import {
+  evaluateProviderModelPolicy,
+  filterProviderModelOptions,
+} from "../../../../shared/src/providerModelPolicy";
 import { normalizeProviderProtocol } from "../../../../shared/src/providerProtocols";
+
+export type ComposerProviderMenuItem = {
+  id: string;
+  selectionKind: "profile" | "model";
+  label: string;
+  model: string;
+  isActive: boolean;
+  isSelectable?: boolean;
+  policyReason?: ProviderModelPolicyReason;
+};
 
 export function composerModelPolicyHint(
   language: ComposerLanguage,
@@ -187,4 +201,148 @@ export function settingsModelAutoPrimeDecision(
   ].join("::");
 
   return { needsPrime, primeKey };
+}
+
+/**
+ * Builds the model-menu entries: one item per known model for the active
+ * connection, then saved connection profiles (active one first). Falls back
+ * to a single synthetic profile entry when nothing else is available
+ * (§四十八: extracted from App.tsx).
+ */
+export function buildComposerProviderMenuItems(
+  provider: ProviderConfigView,
+  language: ComposerLanguage,
+): ComposerProviderMenuItem[] {
+  const providerApplied = provider.configured;
+  const activeProfileId = providerApplied ? provider.profileId?.trim() : undefined;
+  const resolvedModel = provider.resolvedModel?.trim() ?? "";
+  const configuredModel = provider.model.trim();
+  const activeModel = providerApplied ? resolvedModel || configuredModel : "";
+  const activeModelKey = activeModel.toLowerCase();
+  const resolvedModelKey = resolvedModel.toLowerCase();
+  const configuredModelKey = configuredModel.toLowerCase();
+  const configuredModelIsAlias = Boolean(
+    resolvedModelKey && configuredModelKey && resolvedModelKey !== configuredModelKey,
+  );
+  const liveModels = Array.isArray(provider.availableModels) ? provider.availableModels : [];
+  const fallbackModels = [
+    ...(Array.isArray(provider.catalogModels) ? provider.catalogModels : []),
+    ...Object.keys(provider.modelTokenLimits ?? {}),
+  ];
+  const modelCandidates = providerApplied
+    ? [
+        ...(liveModels.length > 0 ? liveModels : fallbackModels),
+        resolvedModel,
+        ...(resolvedModel ? [] : [configuredModel]),
+      ]
+    : [];
+  const currentProviderModelPolicy = {
+    allowedModels: provider.allowedModels,
+    deniedModels: provider.deniedModels,
+  };
+  const filteredModelCandidates = filterProviderModelOptions(
+    modelCandidates,
+    currentProviderModelPolicy,
+    { retainModels: activeModel ? [activeModel] : [] },
+  );
+  const knownModelMap = new Map<string, string>();
+  for (const candidate of filteredModelCandidates) {
+    const modelName = typeof candidate === "string" ? candidate.trim() : "";
+    const modelKey = modelName.toLowerCase();
+    if (
+      !modelName ||
+      (configuredModelIsAlias && modelKey === configuredModelKey) ||
+      knownModelMap.has(modelKey)
+    ) {
+      continue;
+    }
+    knownModelMap.set(modelKey, modelName);
+  }
+  const knownModels = Array.from(knownModelMap.values());
+  const activeProviderLabel =
+    provider.profileLabel?.trim() ??
+    provider.name?.trim() ??
+    (language === "zh-CN" ? "当前连接" : "Current connection");
+  const activeProviderModelItems =
+    knownModels.length > 0
+      ? knownModels.map((modelName) => {
+          const modelPolicy = evaluateProviderModelPolicy(modelName, currentProviderModelPolicy);
+          const isActive = modelName.toLowerCase() === activeModelKey;
+          return {
+            id: `model:${modelName}`,
+            selectionKind: "model" as const,
+            label: modelName,
+            model: modelName,
+            isActive,
+            isSelectable: modelPolicy.allowed && !isActive,
+            policyReason: modelPolicy.reason,
+          };
+        })
+      : [];
+  const profileRecords = Array.isArray(provider.providerProfiles)
+    ? provider.providerProfiles
+    : [];
+  const items = profileRecords
+    .map((profile) => {
+      if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
+        return undefined;
+      }
+
+      const record = profile as Record<string, unknown>;
+      const id = typeof record.id === "string" ? record.id.trim() : "";
+      if (!id) {
+        return undefined;
+      }
+
+      const label =
+        typeof record.label === "string" && record.label.trim()
+          ? record.label.trim()
+          : typeof record.name === "string" && record.name.trim()
+            ? record.name.trim()
+            : id;
+      const model =
+        typeof record.model === "string" && record.model.trim()
+          ? record.model.trim()
+          : provider.model;
+      return {
+        id,
+        selectionKind: "profile" as const,
+        label,
+        model,
+        isActive: activeProfileId ? activeProfileId === id : false,
+      };
+    })
+    .filter(Boolean) as ComposerProviderMenuItem[];
+
+  if (items.length > 0) {
+    const activeIndex = items.findIndex((item) => item.isActive);
+    if (activeIndex > 0) {
+      const [activeItem] = items.splice(activeIndex, 1);
+      if (activeItem) {
+        items.unshift(activeItem);
+      }
+    }
+    if (activeProviderModelItems.length > 0) {
+      return [...activeProviderModelItems, ...items.filter((item) => !item.isActive)];
+    }
+    return items;
+  }
+
+  if (!providerApplied) {
+    return [];
+  }
+
+  if (activeProviderModelItems.length > 0) {
+    return activeProviderModelItems;
+  }
+
+  return [
+    {
+      id: activeProfileId ?? provider.name ?? "provider",
+      selectionKind: "profile",
+      label: activeProviderLabel,
+      model: activeModel,
+      isActive: true,
+    },
+  ];
 }

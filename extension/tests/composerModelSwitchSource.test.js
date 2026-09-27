@@ -11,50 +11,53 @@ const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'Ap
 
 test('composer model switch prioritizes live models and excludes configured aliases after resolution', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
+  // §四十八: menu item construction lives in lib/composerModelHelpers.ts.
+  const helpers = helpersSource;
 
-  assert.match(source, /const liveModels = Array\.isArray\(data\.providerConfig\.availableModels\)/);
-  assert.match(source, /const fallbackModels = \[/);
+  assert.match(helpers, /const liveModels = Array\.isArray\(provider\.availableModels\)/);
+  assert.match(helpers, /const fallbackModels = \[/);
   assert.match(
-    source,
+    helpers,
     /\.\.\.\(liveModels\.length > 0 \? liveModels : fallbackModels\),/,
   );
-  assert.match(source, /\.\.\.\(Array\.isArray\(data\.providerConfig\.catalogModels\)/);
-  assert.match(source, /\.\.\.Object\.keys\(data\.providerConfig\.modelTokenLimits \?\? \{\}\)/);
-  assert.match(source, /const resolvedModel = data\.providerConfig\.resolvedModel\?\.trim\(\) \?\? "";/);
-  assert.match(source, /const configuredModel = data\.providerConfig\.model\.trim\(\);/);
-  assert.match(source, /\.\.\.\(resolvedModel \? \[\] : \[configuredModel\]\),/);
-  assert.match(source, /const configuredModelIsAlias = Boolean\(/);
-  assert.match(source, /\(configuredModelIsAlias && modelKey === configuredModelKey\)/);
-  assert.match(source, /evaluateProviderModelPolicy,/);
-  assert.match(source, /filterProviderModelOptions,/);
-  assert.match(source, /const currentProviderModelPolicy = \{/);
+  assert.match(helpers, /\.\.\.\(Array\.isArray\(provider\.catalogModels\)/);
+  assert.match(helpers, /\.\.\.Object\.keys\(provider\.modelTokenLimits \?\? \{\}\)/);
+  assert.match(helpers, /const resolvedModel = provider\.resolvedModel\?\.trim\(\) \?\? "";/);
+  assert.match(helpers, /const configuredModel = provider\.model\.trim\(\);/);
+  assert.match(helpers, /\.\.\.\(resolvedModel \? \[\] : \[configuredModel\]\),/);
+  assert.match(helpers, /const configuredModelIsAlias = Boolean\(/);
+  assert.match(helpers, /\(configuredModelIsAlias && modelKey === configuredModelKey\)/);
+  assert.match(helpers, /evaluateProviderModelPolicy,/);
+  assert.match(helpers, /filterProviderModelOptions,/);
+  assert.match(helpers, /const currentProviderModelPolicy = \{/);
   assert.match(
-    source,
+    helpers,
     /const filteredModelCandidates = filterProviderModelOptions\(\s*modelCandidates,\s*currentProviderModelPolicy,\s*\{ retainModels: activeModel \? \[activeModel\] : \[\] \},\s*\);/,
   );
-  assert.match(source, /for \(const candidate of filteredModelCandidates\)/);
-  assert.match(source, /const knownModelMap = new Map<string, string>\(\);/);
-  assert.match(source, /knownModelMap\.has\(modelKey\)/);
-  assert.match(source, /const knownModels = Array\.from\(knownModelMap\.values\(\)\);/);
-  assert.doesNotMatch(source, /knownModelMap\.values\(\)\)\.sort\(/);
-  assert.match(source, /data\.providerConfig\.availableModels/);
-  assert.match(source, /knownModels\.length > 0/);
-  assert.match(source, /const modelPolicy = evaluateProviderModelPolicy\(modelName, currentProviderModelPolicy\);/);
-  assert.match(source, /isSelectable: modelPolicy\.allowed && !isActive,/);
-  assert.match(source, /policyReason: modelPolicy\.reason,/);
-  assert.match(source, /selectionKind:\s*"model"/);
+  assert.match(helpers, /for \(const candidate of filteredModelCandidates\)/);
+  assert.match(helpers, /const knownModelMap = new Map<string, string>\(\);/);
+  assert.match(helpers, /knownModelMap\.has\(modelKey\)/);
+  assert.match(helpers, /const knownModels = Array\.from\(knownModelMap\.values\(\)\);/);
+  assert.doesNotMatch(helpers, /knownModelMap\.values\(\)\)\.sort\(/);
+  assert.match(helpers, /knownModels\.length > 0/);
+  assert.match(helpers, /const modelPolicy = evaluateProviderModelPolicy\(modelName, currentProviderModelPolicy\);/);
+  assert.match(helpers, /isSelectable: modelPolicy\.allowed && !isActive,/);
+  assert.match(helpers, /policyReason: modelPolicy\.reason,/);
+  assert.match(helpers, /selectionKind:\s*"model"/);
+  assert.match(source, /buildComposerProviderMenuItems\(data\.providerConfig, layout\.composerLanguage\)/);
   assert.match(source, /commandId:\s*trainerCommands\.switchProviderModel/);
   assert.match(source, /reason:\s*"composer_model_switch"/);
   assert.match(source, /profile\.selectionKind === "profile"/);
 });
 
 test('composer model switch keeps current provider models visible even when saved profiles exist', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const helpers = helpersSource;
 
-  assert.match(source, /const activeProviderModelItems =/);
-  assert.match(source, /knownModels\.length > 0/);
-  assert.match(source, /return \[\s*\.\.\.activeProviderModelItems,/);
-  assert.match(source, /items\.filter\(\(item\) => !item\.isActive\)/);
+  assert.match(helpers, /export function buildComposerProviderMenuItems/);
+  assert.match(helpers, /const activeProviderModelItems =/);
+  assert.match(helpers, /knownModels\.length > 0/);
+  assert.match(helpers, /return \[\s*\.\.\.activeProviderModelItems,/);
+  assert.match(helpers, /items\.filter\(\(item\) => !item\.isActive\)/);
 });
 
 test('composer model switch label stays honest about the active model', () => {

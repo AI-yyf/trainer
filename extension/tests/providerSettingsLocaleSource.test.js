@@ -28,7 +28,7 @@ test('provider settings actions and model menu use the complete locale copy', ()
   const modelMenu = sourceBetween(
     source,
     '  const composerProviderCopy = providerSettingsLocale(layout.composerLanguage);',
-    '  const composerProviderMenuItems = useMemo<ComposerProviderMenuItem[]>(() => {',
+    '  const composerProviderMenuItems = useMemo(',
   );
 
   assert.match(source, /const providerSettingsCopy: Record<ComposerLanguage, ProviderSettingsLocale> = \{/);
