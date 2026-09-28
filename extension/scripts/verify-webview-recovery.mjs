@@ -899,6 +899,10 @@ function startWebviewDevServer(port) {
               BROWSER: "none",
             },
             stdio: ["ignore", "pipe", "pipe"],
+            // Own process group so the stop path can signal the whole
+            // npm -> vite -> esbuild tree; a lone SIGTERM to npm leaves
+            // children holding the stdio pipes and CI steps never end.
+            detached: process.platform !== "win32",
           },
         );
   child.stdout?.setEncoding("utf8");
@@ -970,7 +974,14 @@ async function stopWebviewDevServer(child) {
     });
     return;
   }
-  child.kill("SIGTERM");
+  // The detached child leads its own process group; signal the group so
+  // vite/esbuild grandchildren die with it instead of holding the step's
+  // stdio pipes open forever.
+  try {
+    process.kill(-child.pid, "SIGTERM");
+  } catch {
+    child.kill("SIGTERM");
+  }
 }
 
 function assertEqual(actual, expected, message) {
