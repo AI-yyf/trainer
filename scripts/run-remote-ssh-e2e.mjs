@@ -197,7 +197,11 @@ async function main() {
       ].join("\n"),
     );
     fs.writeFileSync(path.join(workspaceDir, "notes.md"), "# practice notes\n\nThe quiet fix works.\n");
-    runSsh(["touch", path.join(workspaceDir, "practice_check.py")]);
+    // e2e has read+traverse only — assert that explicitly instead of touching.
+    const probe = sshExitCode([`cat ${workspaceDir}/practice_check.py > /dev/null`]);
+    if (probe !== 0) {
+      throw new Error(`e2e cannot read the seeded practice file (exit ${probe})`);
+    }
   });
 
   // 3. Remote file read — bytes must survive the transport untouched.
@@ -211,7 +215,7 @@ async function main() {
 
   // 4. Remote search — the resources story depends on grep-grade matching.
   step("search remote workspace", () => {
-    const out = runSsh(["grep", "-rn", "quiet fix", workspaceDir]);
+    const out = runSsh(["grep", "-rn", "'quiet fix'", workspaceDir]);
     if (!out.includes("notes.md") || !out.includes("The quiet fix works.")) {
       throw new Error(`search did not find the expected match: ${out}`);
     }
@@ -228,7 +232,7 @@ async function main() {
 
   // 6. Verification run: completed → honest pass with exit code.
   step("verification completes and passes", () => {
-    const code = sshExitCode([`${workspaceDir}/practice_check.py`, "1", "2"].join(" "));
+    const code = sshExitCode([`python3 ${workspaceDir}/practice_check.py 1 2`]);
     if (code !== 0) {
       throw new Error(`expected exit 0, got ${code}`);
     }
@@ -238,7 +242,7 @@ async function main() {
   step("artifact change makes the same verification fail", () => {
     fs.writeFileSync(practiceFile, fs.readFileSync(practiceFile, "utf8").replace("check > 0", "check > 99"));
     execFileSync("chmod", ["a+r", practiceFile]);
-    const code = sshExitCode([`${workspaceDir}/practice_check.py`, "1", "2"].join(" "));
+    const code = sshExitCode([`python3 ${workspaceDir}/practice_check.py 1 2`]);
     if (code !== 1) {
       throw new Error(`expected exit 1 after artifact change, got ${code}`);
     }
