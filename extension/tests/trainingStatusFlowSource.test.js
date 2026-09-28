@@ -77,6 +77,10 @@ test('TrainingWorkbenchView skip uses hooked onCardStatusTransition persistence 
   const workbenchPath = path.join(webviewRoot, 'components', 'training', 'TrainingWorkbenchView.tsx');
   const cardPanelPath = path.join(webviewRoot, 'components', 'training', 'TrainingCardPanel.tsx');
   const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
+  const actionsSource = fs.readFileSync(
+    path.join(webviewRoot, 'components', 'training', 'trainingCardActions.ts'),
+    'utf8',
+  );
   const cardPanelSource = fs.readFileSync(cardPanelPath, 'utf8');
   const appSource = fs.readFileSync(appPath, 'utf8');
   const commandsSource = fs.readFileSync(commandsPath, 'utf8');
@@ -94,10 +98,12 @@ test('TrainingWorkbenchView skip uses hooked onCardStatusTransition persistence 
   assert.doesNotMatch(appSource, /<CoachPracticeView[\s\S]*?onCardStatusTransition=/);
 
   assert.match(workbenchSource, /onCardStatusTransition\?: \(cardId: string, newStatus: TrainingCardStatus/);
-  assert.match(workbenchSource, /onCardStatusTransition\(\s*normalizedCardId,\s*"skipped"/);
-  assert.match(workbenchSource, /onCardStatusTransition\(normalizedCardId, "reviewed", reason\)/);
-  assert.match(workbenchSource, /export function applyTrainingCardSkip/);
-  assert.match(workbenchSource, /export function applyTrainingCardGrade/);
+  // §十四: the helpers moved to trainingCardActions.ts; the view re-exports them.
+  assert.match(actionsSource, /onCardStatusTransition\(\s*normalizedCardId,\s*"skipped"/);
+  assert.match(actionsSource, /onCardStatusTransition\(normalizedCardId, "reviewed", reason\)/);
+  assert.match(actionsSource, /export function applyTrainingCardSkip/);
+  assert.match(actionsSource, /export function applyTrainingCardGrade/);
+  assert.match(workbenchSource, /applyTrainingCardSkip,/);
   assert.doesNotMatch(workbenchSource, /onClick=\{handleSkipCard\}/);
   assert.doesNotMatch(workbenchSource, /onClick=\{\(\) => handleGradeCard\(grade\)\}/);
   assert.match(appSource, /interpretTrainingComposerCardCommand\(normalizedDraft\)/);
@@ -126,7 +132,7 @@ test('TrainingWorkbenchView skip uses hooked onCardStatusTransition persistence 
     /sendDurableTrainingCommand\(trainerCommands\.trainingCardStatusTransition/,
   );
   assert.match(
-    workbenchSource,
+    actionsSource,
     /if \(!normalizedCardId \|\| !onCardStatusTransition \|\| leftoverStoredNote\)/,
   );
 });
@@ -167,6 +173,10 @@ test('live reflect and return persist; leftover cannot fire them', () => {
   const commandsSource = fs.readFileSync(commandsPath, 'utf8');
   const workbenchPath = path.join(webviewRoot, 'components', 'training', 'TrainingWorkbenchView.tsx');
   const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
+  const actionsSource = fs.readFileSync(
+    path.join(webviewRoot, 'components', 'training', 'trainingCardActions.ts'),
+    'utf8',
+  );
 
   assert.match(commandsSource, /trainerCommands\.trainingReflect/);
   assert.match(commandsSource, /trainerCommands\.trainingReturn/);
@@ -215,6 +225,10 @@ test('live App training tree has no scenario skip or grade surface', () => {
   const appSource = fs.readFileSync(appPath, 'utf8');
   const workbenchPath = path.join(webviewRoot, 'components', 'training', 'TrainingWorkbenchView.tsx');
   const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
+  const actionsSource = fs.readFileSync(
+    path.join(webviewRoot, 'components', 'training', 'trainingCardActions.ts'),
+    'utf8',
+  );
 
   assert.doesNotMatch(appSource, /<CoachTrainingView/);
   assert.doesNotMatch(appSource, /<CoachPracticeView/);
@@ -224,8 +238,8 @@ test('live App training tree has no scenario skip or grade surface', () => {
   assert.doesNotMatch(appSource, /onScenarioLabAction=\{/);
   assert.doesNotMatch(workbenchSource, /onScenarioLabAction/);
   assert.doesNotMatch(workbenchSource, /trainerCommands\.trainingScenarioLabAction/);
-  assert.match(workbenchSource, /export function applyTrainingCardSkip/);
-  assert.match(workbenchSource, /export function applyTrainingCardGrade/);
+  assert.match(actionsSource, /export function applyTrainingCardSkip/);
+  assert.match(actionsSource, /export function applyTrainingCardGrade/);
   assert.doesNotMatch(workbenchSource, /onClick=\{handleSkipCard\}/);
   assert.doesNotMatch(workbenchSource, /onClick=\{\(\) => handleGradeCard\(grade\)\}/);
 });
@@ -234,6 +248,10 @@ test('leftover-not-live context rail does not paint leftover dump as live activi
   const appSource = fs.readFileSync(appPath, 'utf8');
   const workbenchPath = path.join(webviewRoot, 'components', 'training', 'TrainingWorkbenchView.tsx');
   const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
+  const actionsSource = fs.readFileSync(
+    path.join(webviewRoot, 'components', 'training', 'trainingCardActions.ts'),
+    'utf8',
+  );
   const railStart = appSource.indexOf('const renderContextualResultRail');
   const railEnd = appSource.indexOf('const renderViewAgentReply');
   const railSource = appSource.slice(railStart, railEnd);
@@ -256,7 +274,7 @@ test('leftover-not-live context rail does not paint leftover dump as live activi
   assert.doesNotMatch(railSource, /Generate a training card/);
   assert.match(workbenchSource, /data-training-leftover-not-live=\{leftoverStoredNote \? "true" : undefined\}/);
   assert.match(
-    workbenchSource,
+    actionsSource,
     /if \(!normalizedCardId \|\| !onCardStatusTransition \|\| leftoverStoredNote\)/,
   );
   assert.match(

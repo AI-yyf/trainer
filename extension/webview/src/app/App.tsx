@@ -178,16 +178,18 @@ import {
 import { CoachComposer, ComposerIconButton } from "../components/composer";
 import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
 import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
-import {
-  type ResourceSearchRequest,
+import type {
+  ResourceSearchRequest,
 } from "../components/resources/ResourcesWorkbenchView";
 import {
   applyTrainingCardGrade,
   applyTrainingCardSkip,
   interpretTrainingComposerCardCommand,
-  type FlashVerificationMode,
-  type TrainingReviewItem,
-  type TrainingSummaryCard,
+} from "../components/training/trainingCardActions";
+import type {
+  FlashVerificationMode,
+  TrainingReviewItem,
+  TrainingSummaryCard,
 } from "../components/training/TrainingWorkbenchView";
 import {
   CheckMarkIcon,

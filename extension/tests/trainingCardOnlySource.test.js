@@ -82,8 +82,13 @@ test('training card-only mode keeps one current card and moves response controls
   assert.match(cardOnly, /training-loop-rail/);
   assert.doesNotMatch(cardOnly, /TrainingNextHopLine/);
   assert.match(cardOnly, /data-training-card-fact=\{section\.key\}/);
-  assert.match(source, /export function interpretTrainingComposerCardCommand/);
-  assert.match(source, /export function applyTrainingCardSkip/);
+  const actionsSource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'training', 'trainingCardActions.ts'),
+    'utf8',
+  );
+  assert.match(actionsSource, /export function applyTrainingCardSkip/);
+  assert.match(actionsSource, /export function interpretTrainingComposerCardCommand/);
+  assert.match(source, /applyTrainingCardSkip,/);
   assert.match(appSource, /interpretTrainingComposerCardCommand\(normalizedDraft\)/);
   assert.doesNotMatch(
     source,

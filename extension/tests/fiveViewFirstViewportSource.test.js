@@ -140,9 +140,13 @@ test('training first viewport is the current card plus one primary, with skip/gr
   assert.doesNotMatch(cardOnly, /handleGradeCard/);
   assert.doesNotMatch(cardOnly, /TrainingNextHopLine/);
   assert.match(training, /training-current__verify-result/);
-  assert.match(training, /export function interpretTrainingComposerCardCommand/);
-  assert.match(training, /export function applyTrainingCardSkip/);
-  assert.match(training, /export function applyTrainingCardGrade/);
+  const trainingActions = fs.readFileSync(
+    path.join(webviewRoot, 'components', 'training', 'trainingCardActions.ts'),
+    'utf8',
+  );
+  assert.match(trainingActions, /export function interpretTrainingComposerCardCommand/);
+  assert.match(trainingActions, /export function applyTrainingCardSkip/);
+  assert.match(trainingActions, /export function applyTrainingCardGrade/);
   assert.match(app, /interpretTrainingComposerCardCommand\(normalizedDraft\)/);
   assert.match(app, /applyTrainingCardSkip\(/);
   assert.match(app, /applyTrainingCardGrade\(/);
