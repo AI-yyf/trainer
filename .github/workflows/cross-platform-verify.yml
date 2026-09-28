@@ -101,6 +101,9 @@ jobs:
       - name: Build the native sidecar binary
         run: npm run bundle:sidecar:binary --prefix extension
 
+      - name: Package the Remote Workspace Companion
+        run: npm run package:remote-companion --prefix extension
+
       - name: Build and verify a native VSIX delivery artifact
         id: package-vsix
         run: npm run package:vsix
