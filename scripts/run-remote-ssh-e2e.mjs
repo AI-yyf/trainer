@@ -131,8 +131,13 @@ async function main() {
     } catch {
       // The runner may already carry an e2e user; authorized_keys is rewritten below anyway.
     }
+    // With UsePAM=no sshd refuses locked accounts (useradd leaves "!" in
+    // shadow) even when pubkey auth would succeed — set a real hash.
+    execFileSync("sudo", ["bash", "-c", `echo 'e2e:trainer-e2e' | chpasswd`]);
     execFileSync("sudo", ["bash", "-c", `mkdir -p ${homeDir}/.ssh && cp ${sshDir}/client_key.pub ${homeDir}/.ssh/authorized_keys && chmod 700 ${homeDir}/.ssh && chmod 600 ${homeDir}/.ssh/authorized_keys && chown -R e2e:e2e ${homeDir}/.ssh`]);
-    execFileSync("sudo", ["bash", "-c", `chown -R e2e:e2e ${workspaceDir}`]);
+    // The workspace stays runner-owned (later steps rewrite artifacts as the
+    // runner); e2e only needs traversal + read, and mkdtemp dirs are 700.
+    execFileSync("sudo", ["chmod", "-R", "a+rX", workspaceDir]);
     const sshdConfig = [
       "Port " + PORT,
       "ListenAddress 127.0.0.1",
@@ -144,6 +149,16 @@ async function main() {
       `AuthorizedKeysFile ${homeDir}/.ssh/authorized_keys`,
       "Subsystem sftp internal-sftp",
     ].join("\n");
+    for (let ancestor = tempRoot; ancestor !== path.dirname(ancestor); ancestor = path.dirname(ancestor)) {
+      try {
+        execFileSync("chmod", ["a+rx", ancestor], { stdio: "ignore" });
+      } catch {
+        break;
+      }
+      if (ancestor === "/tmp" || ancestor === "/") {
+        break;
+      }
+    }
     const configPath = path.join(sshDir, "sshd_config");
     fs.writeFileSync(configPath, sshdConfig);
     execFileSync("sudo", ["/usr/sbin/sshd", "-f", configPath, "-E", path.join(sshDir, "sshd.log")]);
@@ -222,7 +237,7 @@ async function main() {
   // 7. Artifact changes → the same verification honestly fails.
   step("artifact change makes the same verification fail", () => {
     fs.writeFileSync(practiceFile, fs.readFileSync(practiceFile, "utf8").replace("check > 0", "check > 99"));
-    execFileSync("sudo", ["chown", "e2e:e2e", practiceFile]);
+    execFileSync("chmod", ["a+r", practiceFile]);
     const code = sshExitCode([`${workspaceDir}/practice_check.py`, "1", "2"].join(" "));
     if (code !== 1) {
       throw new Error(`expected exit 1 after artifact change, got ${code}`);
