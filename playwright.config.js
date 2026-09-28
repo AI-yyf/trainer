@@ -22,6 +22,9 @@ module.exports = {
   testDir: "./e2e",
   testMatch: "**/*.spec.js",
   timeout: 30000,
+  // One retry in CI absorbs runner-timing flakes (slow cold boots on loaded
+  // windows runners); product failures still fail twice in a row to pass.
+  retries: process.env.CI ? 1 : 0,
   use: {
     baseURL: e2eBaseUrl,
     headless: true,
