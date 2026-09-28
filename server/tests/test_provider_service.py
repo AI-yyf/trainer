@@ -11,6 +11,10 @@ import pytest
 
 from app.core.models import ProviderConfig, UserProfile
 from app.llm.agent_loop import CoachAgentLoop
+from app.llm.coaching_replies import (
+    _agentic_practice_verification_context_active,
+    _claims_verified_practice_completion,
+)
 from app.llm.prompts import (
     build_coaching_messages,
     build_coaching_system_prompt,
@@ -25,12 +29,10 @@ from app.llm.provider_service import (
     DEFAULT_OPENAI_CLIENT_MAX_RETRIES,
     DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS,
     ProviderService,
-    _agentic_practice_verification_context_active,
     _build_agent_tool_context_extra,
     _build_language_corruption_recovery_override,
     _build_provider_error_recovery_override,
     _build_timeout_recovery_override,
-    _claims_verified_practice_completion,
     _first_turn_guided_lane,
     _localized_text,
     _mixed_script_reply_corruption_detail,
