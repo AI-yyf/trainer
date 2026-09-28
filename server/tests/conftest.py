@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import sqlite3
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -66,8 +67,6 @@ __all__ = ["seed_verified_capabilities", "verified_capability_result"]
 # Every database here lives in a tmp_path deleted after the test, so
 # durability is irrelevant; production defaults are untouched (this file
 # only exists under tests/).
-import sqlite3
-
 _original_sqlite_connect = sqlite3.connect
 
 
