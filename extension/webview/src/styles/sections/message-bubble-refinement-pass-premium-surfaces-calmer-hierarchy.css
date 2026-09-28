@@ -194,6 +194,14 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .coach-streaming-dots span {
+    animation: none;
+    opacity: 0.9;
+    transform: none;
+  }
+}
+
 /* ---- Onboarding wizard (cold start) ---- */
 .onboarding-wizard {
   display: flex;

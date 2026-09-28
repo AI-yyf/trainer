@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 
+import { TrainerSpinner } from "../common/TrainerSpinner";
+
 import { CheckMarkIcon, RefreshIcon } from "../icons";
 import type { CoachSessionSummary } from "../../lib/types";
 
@@ -159,7 +161,11 @@ export function CoachHistoryDrawer({
       </div>
       <div className="composer-menu-panel__section">
         {status === "loading" ? (
-          <p className="composer-menu-panel__hint">{zh ? "正在读取会话…" : "Loading conversations…"}</p>
+          <p className="composer-menu-panel__hint">
+            <TrainerSpinner size="sm" label={zh ? "正在读取会话" : "Loading conversations"}>
+              {zh ? "正在读取会话…" : "Loading conversations…"}
+            </TrainerSpinner>
+          </p>
         ) : status === "error" ? (
           <p className="composer-menu-panel__hint">
             {statusMessage ?? (zh ? "暂时读不到会话，稍后再试。" : "Couldn't load conversations. Try again.")}

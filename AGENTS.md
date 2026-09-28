@@ -365,6 +365,7 @@ FastAPI sidecar (port 8765, extension-managed range 34891-34911):
 - **Python**: Ruff (E/F/I/B, line-length 100), Pyright, Python 3.12+
 - **TypeScript**: Strict mode, no `as any`/`@ts-ignore`
 - **CSS**: Design tokens only (`--bg-0`, `--accent`, etc.), no hardcoded colors
+- **Loading idioms** (§四十八): one per surface — `.skeleton` for known-structure content, `.coach-streaming-dots` for coach thinking/streaming, `.trainer-spinner` for inline operations; never stack two, always keep the `prefers-reduced-motion` fallback
 - **State**: Zustand for webview, dataclass for Python domain models
 - **API**: FastAPI with Pydantic models, snake_case payload with camelCase aliases
 - **Messages**: webview→extension via `postMessage`, extension→webview via `HostMessage`

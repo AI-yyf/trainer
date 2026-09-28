@@ -28,6 +28,10 @@ test('trainer spinner primitive is token-driven with a reduced-motion fallback',
   const reduced = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
   assert.match(reduced, /\.trainer-spinner \{[\s\S]*?animation: none;/);
   assert.match(reduced, /\.trainer-spinner::after/);
+  // The idiom contract is documented where the primitives live.
+  assert.match(css, /Loading-idiom contract/);
+  assert.match(css, /\.skeleton\s+content whose structure is known/);
+  assert.match(css, /Never stack two idioms on one surface/);
 });
 
 test('TrainerSpinner exposes a localized status role and ships from common', () => {
@@ -60,4 +64,23 @@ test('async surfaces use the spinner instead of bare text ellipses', () => {
   assert.doesNotMatch(mermaid, /message-mermaid__loading">\.\.\.</);
   assert.match(pdf, /<TrainerSpinner size="sm" label="Loading PDF preview">/);
   assert.match(audio, /<TrainerSpinner size="sm" label=\{statusText\}>/);
+
+  const drawer = fs.readFileSync(
+    path.join(webviewRoot, 'components', 'coach', 'CoachHistoryDrawer.tsx'),
+    'utf8',
+  );
+  assert.match(drawer, /<TrainerSpinner size="sm" label=\{zh \? "正在读取会话" : "Loading conversations"\}>/);
+
+  // The streaming dots keep their own reduced-motion fallback.
+  const dots = fs.readFileSync(
+    path.join(
+      webviewRoot,
+      'styles',
+      'sections',
+      'message-bubble-refinement-pass-premium-surfaces-calmer-hierarchy.css',
+    ),
+    'utf8',
+  );
+  const dotsReduced = dots.slice(dots.indexOf('@media (prefers-reduced-motion: reduce)'));
+  assert.match(dotsReduced, /\.coach-streaming-dots span \{[\s\S]*?animation: none;/);
 });

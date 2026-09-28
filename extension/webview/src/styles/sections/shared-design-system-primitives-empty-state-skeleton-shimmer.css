@@ -1,6 +1,15 @@
 /* ============================================================
    Shared design-system primitives: empty state, skeleton shimmer,
-   score pulse. View agents consume classes only — no private copies.
+   spinner, score pulse. View agents consume classes only — no
+   private copies.
+
+   Loading-idiom contract (§四十八): pick ONE idiom per surface.
+   - .skeleton            content whose structure is known (lists, cards)
+   - .coach-streaming-dots  the coach thinking / streaming a reply
+   - .trainer-spinner       inline operation feedback (render, decode,
+                            fetch inside a panel or control)
+   Never stack two idioms on one surface; label text may accompany
+   either, and every idiom carries a prefers-reduced-motion fallback.
    ============================================================ */
 .empty-state {
   display: flex;
