@@ -11,7 +11,7 @@
     "smoke": "node ./scripts/lifecycle.mjs smoke",
     "smoke:strict": "node ./scripts/lifecycle.mjs smoke --strict",
     "build": "npm run build --prefix extension/webview && npm run build --prefix extension",
-    "check": "npm run check --prefix extension/webview && npm run check --prefix extension",
+    "check": "node extension/scripts/verify-css-sections.mjs && npm run check --prefix extension/webview && npm run check --prefix extension",
     "lint": "npm run lint --prefix extension/webview && npm run lint --prefix extension",
     "smoke:provider": "node ./scripts/provider-smoke.mjs",
     "smoke:trainer-turn": "node ./scripts/trainer-turn-smoke.mjs",

@@ -50,6 +50,18 @@ const prepublishVsixModulePath = path.resolve(
   'scripts',
   'prepublish-vsix.mjs',
 );
+const syncBundledServerModulePath = path.resolve(
+    __dirname,
+    '..',
+    'scripts',
+    'sync-bundled-server.mjs',
+  );
+const verifyCssSectionsModulePath = path.resolve(
+    __dirname,
+    '..',
+    'scripts',
+    'verify-css-sections.mjs',
+  );
 const installVsixScriptPath = path.resolve(__dirname, '..', 'scripts', 'install-vsix.mjs');
 const rootPackageJsonPath = path.resolve(__dirname, '..', '..', 'package.json');
 const runServerTestsScriptPath = path.resolve(
@@ -101,6 +113,8 @@ function loadPackageScriptModules() {
       import(pathToFileURL(prepareCurrentVsixModulePath).href),
       import(pathToFileURL(packageVsixModulePath).href),
       import(pathToFileURL(prepublishVsixModulePath).href),
+      import(pathToFileURL(syncBundledServerModulePath).href),
+      import(pathToFileURL(verifyCssSectionsModulePath).href),
     ]).then(([
       bundleModule,
       verifyModule,
@@ -109,6 +123,8 @@ function loadPackageScriptModules() {
       prepareModule,
       packageVsixModule,
       prepublishVsixModule,
+      syncBundledServerModule,
+      verifyCssSectionsModule,
     ]) => ({
       ...bundleModule,
       ...verifyModule,
@@ -117,6 +133,8 @@ function loadPackageScriptModules() {
       ...prepareModule,
       ...packageVsixModule,
       ...prepublishVsixModule,
+      ...syncBundledServerModule,
+      ...verifyCssSectionsModule,
     }));
   }
   return scriptsPromise;
@@ -1075,4 +1093,80 @@ test('verifyPackage keeps cross-target inventory diagnostic-only for a native pa
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
+});
+
+test('syncBundledServer mirrors every parity target and resets stale mirror content', async () => {
+  const { syncBundledServer } = await loadPackageScriptModules();
+  const tempRoot = createFixtureRoot();
+
+  try {
+    const { repoRoot, extensionDir } = createSidecarFixture(tempRoot);
+    const bundledServer = path.join(extensionDir, 'bundled', 'server');
+    // Stale mirror content that the real tree no longer has must be wiped.
+    writeFile(path.join(bundledServer, 'app', 'removed_module.py'), '# stale\n');
+    writeFile(path.join(bundledServer, 'pyproject.toml'), '[project]\nname="stale"\n');
+
+    const result = await syncBundledServer({ extensionDir, repoRoot });
+
+    assert.equal(result.copyTargets.length, 4);
+    const bundledPyproject = fs.readFileSync(
+      path.join(bundledServer, 'pyproject.toml'),
+      'utf8',
+    );
+    const sourcePyproject = fs.readFileSync(
+      path.join(repoRoot, 'server', 'pyproject.toml'),
+      'utf8',
+    );
+    assert.equal(bundledPyproject, sourcePyproject);
+    assert.equal(
+      fs.existsSync(path.join(bundledServer, 'app', 'removed_module.py')),
+      false,
+    );
+    assert.equal(fs.existsSync(path.join(bundledServer, 'run_sidecar.py')), true);
+    assert.equal(fs.existsSync(path.join(bundledServer, 'README.md')), true);
+    assert.equal(
+      fs.readFileSync(
+        path.join(bundledServer, 'app', 'api', 'routers.py'),
+        'utf8',
+      ),
+      fs.readFileSync(path.join(repoRoot, 'server', 'app', 'api', 'routers.py'), 'utf8'),
+    );
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('verify-css-sections flags unbalanced blocks and passes the real tree', async () => {
+  const { validateCssSections, validateCssSource } = await loadPackageScriptModules();
+  const tempRoot = createFixtureRoot();
+
+  try {
+    const webviewRoot = path.join(tempRoot, 'webview', 'src');
+    writeFile(
+      path.join(webviewRoot, 'styles', 'sections', 'manifest.json'),
+      JSON.stringify([{ file: 'styles/sections/one.css' }]),
+    );
+    writeFile(
+      path.join(webviewRoot, 'styles', 'sections', 'one.css'),
+      '.ok { color: var(--accent); }\n.broken > * {\n',
+    );
+
+    const results = validateCssSections({ webviewRoot });
+    assert.equal(results.length, 1);
+    assert.match(results[0].problems[0], /1 unclosed block/);
+
+    assert.deepEqual(validateCssSource('.a { b: c; }'), []);
+    // Braces inside quoted strings are stripped before counting.
+    assert.deepEqual(validateCssSource('.a { content: "}"; }'), []);
+    assert.match(validateCssSource('.a {\n.b > * {\n')[0], /2 unclosed block/);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+
+  // The real tree must stay balanced: one unclosed block once dropped every
+  // rule behind it from production CSS.
+  assert.deepEqual(
+    validateCssSections().map((entry) => entry.file),
+    [],
+  );
 });

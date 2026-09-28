@@ -366,6 +366,14 @@
 }
 
 .view-content--enter > * {
+  animation: trainer-view-in var(--motion-slow, 280ms) var(--motion-ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-content--enter > * {
+    animation: none;
+  }
+}
 
 /* CC Switch-style quick setup card (Settings → provider form top) */
 .settings-quick-setup {
