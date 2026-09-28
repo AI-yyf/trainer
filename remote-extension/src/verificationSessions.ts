@@ -39,6 +39,9 @@ export type VerificationSessionManagerOptions = {
   defaultTimeoutMs?: number;
   maxSessions?: number;
   generateSessionId?: () => string;
+  /** Injectable for tests; defaults to the global timers. */
+  setTimeoutFn?: (callback: () => void, ms: number) => unknown;
+  clearTimeoutFn?: (timer: unknown) => void;
 };
 
 type SessionRecord = {
@@ -55,7 +58,7 @@ type SessionRecord = {
   error?: string;
   killTree?: () => void;
   runningKey?: string;
-  timer?: ReturnType<typeof setTimeout>;
+  timer?: unknown;
 };
 
 const TERMINAL_STATES: ReadonlySet<RemoteProcessState> = new Set([
@@ -96,6 +99,8 @@ export function createVerificationSessionManager(options: VerificationSessionMan
     maxSessions = 32,
     generateSessionId = () =>
       `vrf-${now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+    setTimeoutFn = (callback: () => void, ms: number) => setTimeout(callback, ms),
+    clearTimeoutFn = (timer: unknown) => clearTimeout(timer as ReturnType<typeof setTimeout>),
   } = options;
 
   const sessions = new Map<string, SessionRecord>();
@@ -109,7 +114,7 @@ export function createVerificationSessionManager(options: VerificationSessionMan
       return; // forward-only
     }
     if (session.timer) {
-      clearTimeout(session.timer);
+      clearTimeoutFn(session.timer);
       session.timer = undefined;
     }
     session.state = next;
@@ -205,7 +210,7 @@ export function createVerificationSessionManager(options: VerificationSessionMan
         typeof spec.timeout_ms === 'number' && spec.timeout_ms > 0
           ? spec.timeout_ms
           : defaultTimeoutMs;
-      session.timer = setTimeout(() => {
+      session.timer = setTimeoutFn(() => {
         if (session.state === 'running') {
           session.killTree?.();
           settle(session, 'timed_out', { error: `timed out after ${timeoutMs}ms` });
