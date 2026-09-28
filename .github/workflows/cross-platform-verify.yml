@@ -74,7 +74,8 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then
             PYTHON=".venv/Scripts/python.exe"
           fi
-          "$PYTHON" -m pytest tests/ -q --tb=short --durations=25 2>&1 | tail -45
+          set -o pipefail
+          "$PYTHON" -m pytest tests/ -q --tb=short --durations=25 -n 4 2>&1 | tail -45
 
       - name: Remote-SSH transport E2E (§十 layer 1, Linux only)
         if: runner.os == 'Linux'
@@ -82,6 +83,7 @@ jobs:
 
       - name: Ruff (server)
         working-directory: server
+        shell: bash
         run: |
           PYTHON=".venv/bin/python"
           if [ "$RUNNER_OS" = "Windows" ]; then
@@ -91,6 +93,7 @@ jobs:
 
       - name: Pyright (server)
         working-directory: server
+        shell: bash
         run: |
           PYTHON=".venv/bin/python"
           if [ "$RUNNER_OS" = "Windows" ]; then
