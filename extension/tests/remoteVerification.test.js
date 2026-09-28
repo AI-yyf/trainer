@@ -52,13 +52,18 @@ function createCommandContext(overrides = {}) {
       async capabilities() {
         return { companionAvailable: true, verify: true };
       },
-      async verify() {
+      async runVerification() {
         return {
           result: 'passed',
-          command: overrides.command ?? 'npm test',
+          state: 'completed',
+          spec: { executable: 'npm', args: ['test'] },
+          execution_location: 'remote:ssh-remote',
+          started_at: '2026-01-01T00:00:00Z',
+          finished_at: '2026-01-01T00:00:01Z',
           exit_code: 0,
           stdout: 'all tests passed',
           stderr: '',
+          environment: { os: 'linux', arch: 'x64', node_version: 'v22' },
         };
       },
     },
@@ -71,7 +76,7 @@ function createCommandContext(overrides = {}) {
 test('remote verification requires a remote workspace window', async () => {
   const { remoteVerifyCommand } = loadWithVscodeMock(remoteVerificationModulePath, {});
   const { context, posts } = createCommandContext({ workspace: { isRemoteWorkspace: false } });
-  const result = await remoteVerifyCommand(context, { command: 'npm test' });
+  const result = await remoteVerifyCommand(context, { executable: 'npm', args: ['test'] });
   assert.equal(result.ok, false);
   assert.match(result.message, /Remote-SSH, WSL, Tunnel, or Dev Container/);
   assert.deepEqual(posts, []);
@@ -86,13 +91,13 @@ test('remote verification reports a missing companion instead of recording evide
       async capabilities() {
         return { companionAvailable: false, verify: false };
       },
-      async verify() {
+      async runVerification() {
         verifyCalls += 1;
-        return { result: 'passed', exit_code: 0 };
+        return { result: 'passed', state: 'completed', exit_code: 0 };
       },
     },
   });
-  const result = await remoteVerifyCommand(context, { command: 'npm test' });
+  const result = await remoteVerifyCommand(context, { executable: 'npm', args: ['test'] });
   assert.equal(result.ok, false);
   assert.match(result.message, /Install Remote Workspace Support/);
   assert.equal(verifyCalls, 0);
@@ -110,7 +115,7 @@ test('a passed remote run attests host-trusted evidence for the live practice ca
       selectedCardType: 'practice',
     },
   });
-  const result = await remoteVerifyCommand(context, { command: 'npm test' });
+  const result = await remoteVerifyCommand(context, { executable: 'npm', args: ['test'] });
   assert.equal(result.ok, true);
   assert.match(result.message, /attested/);
   assert.equal(posts.length, 1);
@@ -135,12 +140,23 @@ test('a failed remote run attests an honest failure', async () => {
       async capabilities() {
         return { companionAvailable: true, verify: true };
       },
-      async verify() {
-        return { result: 'failed', command: 'npm test', exit_code: 1, stdout: '', stderr: '1 test failed' };
+      async runVerification() {
+        return {
+          result: 'failed',
+          state: 'completed',
+          spec: { executable: 'npm', args: ['test'] },
+          execution_location: 'remote:ssh-remote',
+          started_at: '2026-01-01T00:00:00Z',
+          finished_at: '2026-01-01T00:00:01Z',
+          exit_code: 1,
+          stdout: '',
+          stderr: '1 test failed',
+          environment: { os: 'linux', arch: 'x64', node_version: 'v22' },
+        };
       },
     },
   });
-  const result = await remoteVerifyCommand(context, { command: 'npm test' });
+  const result = await remoteVerifyCommand(context, { executable: 'npm', args: ['test'] });
   assert.equal(result.ok, false);
   assert.equal(posts.length, 1);
   const [, , body] = posts[0];
@@ -161,12 +177,12 @@ test('an interrupted remote run records no evidence at all', async () => {
       async capabilities() {
         return { companionAvailable: true, verify: true };
       },
-      async verify() {
+      async runVerification() {
         throw new Error('companion connection lost');
       },
     },
   });
-  const result = await remoteVerifyCommand(context, { command: 'npm test' });
+  const result = await remoteVerifyCommand(context, { executable: 'npm', args: ['test'] });
   assert.equal(result.ok, false);
   assert.match(result.message, /no evidence was recorded/i);
   assert.deepEqual(posts, []);
@@ -185,12 +201,22 @@ test('an exit-code-less completion is treated as interrupted, not failed', async
       async capabilities() {
         return { companionAvailable: true, verify: true };
       },
-      async verify() {
-        return { result: 'failed', command: 'npm test', exit_code: null, stdout: '', stderr: '' };
+      async runVerification() {
+        return {
+          state: 'completed',
+          spec: { executable: 'npm', args: ['test'] },
+          execution_location: 'remote:ssh-remote',
+          started_at: '2026-01-01T00:00:00Z',
+          finished_at: '2026-01-01T00:00:01Z',
+          exit_code: null,
+          stdout: '',
+          stderr: '',
+          environment: { os: 'linux', arch: 'x64', node_version: 'v22' },
+        };
       },
     },
   });
-  const result = await remoteVerifyCommand(context, { command: 'npm test' });
+  const result = await remoteVerifyCommand(context, { executable: 'npm', args: ['test'] });
   assert.equal(result.ok, false);
   assert.match(result.message, /interrupted/i);
   assert.deepEqual(posts, []);
