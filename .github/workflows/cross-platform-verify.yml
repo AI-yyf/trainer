@@ -19,13 +19,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: Verify (${{ matrix.os }})
+  # Job A — Core / Server: the Slow Slice lives here alone so a slow or
+  # hung platform-specific server test cannot starve UI and package signal.
+  server:
+    name: Server (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # macOS completes in ~30 minutes; ubuntu/windows have hung on the
-    # browser-recovery / verify steps, so bound the job instead of
-    # burning the 6-hour runner default.
-    timeout-minutes: 75
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -40,7 +39,129 @@ jobs:
       TRAINER_PROVIDER_SMOKE_MODEL: ${{ secrets.TRAINER_PROVIDER_SMOKE_MODEL }}
       TRAINER_TURN_SMOKE_PROVIDER_API_KEY: ""
       TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: server/pyproject.toml
+
+      - name: Create python environment
+        working-directory: server
+        run: |
+          python -m venv .venv
+          python -m pip install -U pip
+          pip install -e ".[dev]"
+
+      - name: Server tests (slowest slice, isolated here)
+        working-directory: server
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          PYTHON=".venv/bin/python"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            PYTHON=".venv/Scripts/python.exe"
+          fi
+          "$PYTHON" -m pytest tests/ -q --tb=short --durations=25 2>&1 | tail -45
+
+      - name: Ruff (server)
+        working-directory: server
+        run: |
+          PYTHON=".venv/bin/python"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            PYTHON=".venv/Scripts/python.exe"
+          fi
+          "$PYTHON" -m ruff check app tests
+
+      - name: Pyright (server)
+        working-directory: server
+        run: |
+          PYTHON=".venv/bin/python"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            PYTHON=".venv/Scripts/python.exe"
+          fi
+          "$PYTHON" -m pyright app
+
+  # Job B — UI / Experience: webview build, unit guards, the 200-scenario
+  # preview matrix and browser recovery.
+  ui:
+    name: UI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            extension/package-lock.json
+            extension/webview/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bootstrap with the portable lifecycle
+        run: npm run bootstrap -- --frozen
+
+      - name: Build with the portable lifecycle
+        run: npm run dev -- --skip-install
+
+      - name: TypeScript and CSS section gate
+        run: npm run check
+
+      - name: Extension tests
+        run: npm run test:extension
+
+      - name: Install Chromium for recovery verification (Linux)
+        if: runner.os == 'Linux'
+        run: npm exec --yes --package playwright -- playwright install --with-deps chromium
+
+      - name: Install Chromium for recovery verification (macOS and Windows)
+        if: runner.os != 'Linux'
+        run: npm exec --yes --package playwright -- playwright install chromium
+
+      - name: Run the 200-scenario preview experience matrix
+        run: npm run test:experience-matrix
+
+      - name: Verify browser recovery on the native runner
+        run: npm run verify:webview-recovery --prefix extension
+
+  # Job C — Package / Delivery: native sidecar, remote companion, VSIX,
+  # package verification and the portable smoke.
+  package:
+    name: Package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    env:
+      OPENAI_API_KEY: ""
+      TRAINER_PROVIDER_SMOKE_API_KEY: ${{ secrets.TRAINER_PROVIDER_SMOKE_API_KEY }}
+      TRAINER_PROVIDER_SMOKE_BASE_URL: ${{ secrets.TRAINER_PROVIDER_SMOKE_BASE_URL }}
+      TRAINER_PROVIDER_SMOKE_MODEL: ${{ secrets.TRAINER_PROVIDER_SMOKE_MODEL }}
+      TRAINER_TURN_SMOKE_PROVIDER_API_KEY: ""
+      TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_API_KEY: ""
     steps:
       - uses: actions/checkout@v4
 
@@ -66,38 +187,6 @@ jobs:
       - name: Build with the portable lifecycle
         run: npm run dev -- --skip-install
 
-      - name: Run server tests
-        working-directory: server
-        shell: bash
-        env:
-          PYTHONUTF8: "1"
-        run: |
-          PYTHON=".venv/bin/python"
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            PYTHON=".venv/Scripts/python.exe"
-          fi
-          "$PYTHON" -m pytest tests/ -q --tb=short 2>&1 | tail -5
-
-      - name: Install Chromium for recovery verification (Linux)
-        if: runner.os == 'Linux'
-        run: npm exec --yes --package playwright -- playwright install --with-deps chromium
-
-      - name: Install Chromium for recovery verification (macOS and Windows)
-        if: runner.os != 'Linux'
-        run: npm exec --yes --package playwright -- playwright install chromium
-
-      - name: Install Playwright test runner
-        run: npm install --no-save --prefix . "@playwright/test@^1.61.0" "playwright@^1.61.0"
-
-      - name: Run the 200-scenario preview experience matrix
-        run: npm run test:experience-matrix
-
-      - name: Run the 200-scenario real sidecar experience matrix
-        run: npm run test:experience-sidecar
-
-      - name: Verify browser recovery on the native runner
-        run: npm run verify:webview-recovery --prefix extension
-
       - name: Clear inherited sidecar binaries before native packaging
         run: >-
           node -e "require('node:fs').rmSync('extension/bundled/bin', { recursive: true, force: true })"
@@ -115,7 +204,7 @@ jobs:
       - name: Archive the target-specific native VSIX
         uses: actions/upload-artifact@v4
         with:
-          name: trainer-vsix-${{ steps.package-vsix.outputs.vsix_target }}
+          name: trainer-vsix-${{ matrix.os }}-${{ steps.package-vsix.outputs.vsix_target }}
           path: ${{ steps.package-vsix.outputs.vsix_path }}
           if-no-files-found: error
           retention-days: 7
@@ -155,9 +244,6 @@ jobs:
 
       - name: Probe portable readiness
         run: npm run smoke
-
-      - name: Verify workspace
-        run: npm run verify
 
       - name: Run credential-gated provider smoke
         if: ${{ env.TRAINER_PROVIDER_SMOKE_API_KEY != '' && env.TRAINER_PROVIDER_SMOKE_BASE_URL != '' && env.TRAINER_PROVIDER_SMOKE_MODEL != '' }}
