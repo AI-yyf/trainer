@@ -13,6 +13,8 @@ import type { TrainingReliability, TrainingSkillProjection } from "../../lib/typ
 import { CheckMarkIcon, ChevronRightIcon, SparklesIcon, TargetIcon } from "../icons";
 import { ActionButton } from "../common/ActionButton";
 import { TrainerSpinner } from "../common/TrainerSpinner";
+import { RemoteVerificationPanel } from "./RemoteVerificationPanel";
+import { remoteVerifyCopy } from "./remoteVerificationCopy";
 import { SkillProjectionStrip } from "./SkillProjectionStrip";
 import { CollapseSection } from "../common/CollapseSection";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
@@ -1741,13 +1743,9 @@ export function TrainingWorkbenchView({
                         tone="ghost"
                         label={
                           remoteVerification?.running
-                            ? isZh
-                              ? "正在远程验证…"
-                              : "Verifying on remote…"
+                            ? remoteVerifyCopy(language).running(remoteName || "")
                             : remoteName
-                              ? isZh
-                                ? `在 ${remoteName} 上验证`
-                                : `Verify on ${remoteName}`
+                              ? remoteVerifyCopy(language).verifyOn(remoteName)
                               : trainingSurfaceLabel(language, "verifyCurrentFile")
                         }
                         onClick={() => onVerifyCurrentFile()}
@@ -1757,6 +1755,14 @@ export function TrainingWorkbenchView({
                       <HintLadderReveal hints={hintLadder} onReveal={onHintReveal} isZh={isZh} />
                     ) : null}
                   </div>
+                  {remoteVerification && (remoteVerification.running || remoteVerification.summary) ? (
+                    <RemoteVerificationPanel
+                      verification={remoteVerification}
+                      remoteName={remoteName}
+                      language={language}
+                      onStop={onStopRemoteVerification}
+                    />
+                  ) : null}
                   </div>
                 </div>
               </div>
