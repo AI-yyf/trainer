@@ -52,7 +52,7 @@ trainer/                            # Repository root
 │   ├── webview/                    # React workbench UI (Vite + Zustand + i18n)
 │   │   └── src/
 │   │       ├── app/
-│   │       │   ├── App.tsx         # Root workbench (~14.1k lines — renders all 5 views)
+│   │       │   ├── App.tsx         # Root workbench (~15k lines — renders all 5 views)
 │   │       │   ├── useWorkbenchState.ts  # Zustand store
 │   │       │   ├── views/          # (empty)
 │   │       │   └── useTrainingCommands.ts
@@ -123,7 +123,16 @@ trainer/                            # Repository root
 │   │   │   ├── repositories.py     # Additional repositories
 │   │   │   └── database.py         # DB setup
 │   │   ├── llm/
-│   │   │   ├── provider_service.py # ProviderService (~14k lines)
+│   │   │   ├── provider_service.py # ProviderService (~8.1k lines)
+│   │   │   ├── coaching_recovery.py # Recovery overrides (provider error/timeout/language)
+│   │   │   ├── coaching_replies.py  # Reply continuity + relevance guards
+│   │   │   ├── coaching_first_turn.py # First-turn lane selection
+│   │   │   ├── coaching_patches.py  # Reply patch composition
+│   │   │   ├── coaching_reply_drafts.py # Reply drafts + final patches
+│   │   │   ├── coaching_scaffold.py # Task scaffolding helpers
+│   │   │   ├── agent_tool_context.py # Agent tool-context assembly
+│   │   │   ├── provider/           # Transport modules (errors/text/capability/
+│   │   │   │                       #   streaming/redaction/language/assessment)
 │   │   │   ├── agent_loop.py       # ReAct coach agent loop
 │   │   │   ├── agent_binding.py    # Tool binding
 │   │   │   ├── prompts.py          # System prompts (~3.7k lines)
@@ -282,7 +291,8 @@ Five fixed top-level views:
 | `create_app` | `server/app/main.py` | FastAPI app factory — DI wiring of all services |
 | `TrainerRuntime` | `server/app/api/runtime.py` | Wires all services, manages sessions |
 | `build_router` | `server/app/api/routers.py` (~25.5k lines) | All HTTP endpoints |
-| `ProviderService` | `server/app/llm/provider_service.py` (~14k lines) | OpenAI-compatible provider abstraction |
+| `ProviderService` | `server/app/llm/provider_service.py` (~8.1k lines) | OpenAI-compatible provider abstraction |
+| `Coaching modules` | `server/app/llm/coaching_*.py` + `agent_tool_context.py` | Extracted recovery/reply/scaffold/tool-context subsystems (§五十二) |
 | `AgentLoop` | `server/app/llm/agent_loop.py` | ReAct tool-calling loop |
 | `AgentBinding` | `server/app/llm/agent_binding.py` | Tool definition binding |
 | `Prompts` | `server/app/llm/prompts.py` (~3.7k lines) | System prompts for coach modes |
@@ -478,5 +488,5 @@ cd extension/webview && npm run dev   # then open the printed URL
 - Bundled sidecar: `extension/bundled/` (~245 MB, 98 .py files) — for .vsix distribution
 - Companion VSIX (`extension/bundled/remote/`) and native sidecar binaries are build-time artifacts (gitignored, `*.vsix`); `vscode:prepublish` rebuilds the companion before packaging, and `verify-package.mjs` asserts its presence and entrypoint
 - Provider API keys always live in the local UI host's SecretStorage (`ui_proxy`); the remote Companion never receives credentials
-- Largest files: `routers.py` (~25.5k lines), `styles.css` (~20k lines), `App.tsx` (~14.1k lines), `provider_service.py` (~14k lines), `memory/service.py` (~11.5k lines), `test_api.py` (~10.9k lines), `CoachSettingsView.tsx` (~8.2k lines)
+- Largest files: `routers.py` (~25.5k lines), `styles.css` (~20k lines), `App.tsx` (~15k lines), `memory/service.py` (~11.5k lines), `test_api.py` (~10.9k lines), `CoachSettingsView.tsx` (~8.2k lines), `provider_service.py` (~8.1k lines)
 - i18n covered: zh-CN, en-US, es-ES, fr-FR, de-DE, ja-JP, ko-KR, pt-BR
