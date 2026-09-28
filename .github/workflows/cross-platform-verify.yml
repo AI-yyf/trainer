@@ -73,6 +73,10 @@ jobs:
           fi
           "$PYTHON" -m pytest tests/ -q --tb=short --durations=25 2>&1 | tail -45
 
+      - name: Remote-SSH transport E2E (§十 layer 1, Linux only)
+        if: runner.os == 'Linux'
+        run: npm run test:remote-ssh-e2e
+
       - name: Ruff (server)
         working-directory: server
         run: |
