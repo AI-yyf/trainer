@@ -75,7 +75,13 @@ jobs:
             PYTHON=".venv/Scripts/python.exe"
           fi
           set -o pipefail
-          "$PYTHON" -m pytest tests/ -q --tb=short --durations=25 -n 4 2>&1 | tail -45
+          # Windows runners have 2 cores: -n 4 oversubscribes and the suite
+          # misses even a 60-minute window. Match workers to the hardware.
+          WORKERS=4
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            WORKERS=2
+          fi
+          "$PYTHON" -m pytest tests/ -q --tb=short --durations=25 -n "$WORKERS" 2>&1 | tail -45
 
       - name: Remote-SSH transport E2E (§十 layer 1, Linux only)
         if: runner.os == 'Linux'
