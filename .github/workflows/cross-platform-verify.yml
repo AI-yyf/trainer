@@ -14,6 +14,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: cross-platform-verify-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     name: Verify (${{ matrix.os }})
@@ -60,9 +64,15 @@ jobs:
 
       - name: Run server tests
         working-directory: server
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
         run: |
-          . .venv/bin/activate
-          python -m pytest tests/ -q --tb=short 2>&1 | tail -5
+          PYTHON=".venv/bin/python"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            PYTHON=".venv/Scripts/python.exe"
+          fi
+          "$PYTHON" -m pytest tests/ -q --tb=short 2>&1 | tail -5
 
       - name: Install Chromium for recovery verification (Linux)
         if: runner.os == 'Linux'
