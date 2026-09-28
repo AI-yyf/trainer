@@ -24,10 +24,12 @@ jobs:
   server:
     name: Server (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # 60 min: windows pytest exceeds 40 and was killed before --durations
-    # could print; this bump is instrumental — one complete windows run with
-    # per-file timing so the slow slice can actually be fixed.
-    timeout-minutes: 60
+    # Windows is the known long pole: 2951 tests measured at 57m42s serial;
+    # xdist makes it WORSE on the 2-core runner (-n 4 and -n 2 both missed
+    # the window — process/IPC overhead swamps the parallel gain). Serial +
+    # 75 minutes is the measured-honest configuration; shrinking the slow
+    # coach-turn slice is the real fix and stays on the roadmap (§五).
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
@@ -75,13 +77,7 @@ jobs:
             PYTHON=".venv/Scripts/python.exe"
           fi
           set -o pipefail
-          # Windows runners have 2 cores: -n 4 oversubscribes and the suite
-          # misses even a 60-minute window. Match workers to the hardware.
-          WORKERS=4
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            WORKERS=2
-          fi
-          "$PYTHON" -m pytest tests/ -q --tb=short --durations=25 -n "$WORKERS" 2>&1 | tail -45
+          "$PYTHON" -m pytest tests/ -q --tb=short --durations=25 2>&1 | tail -45
 
       - name: Remote-SSH transport E2E (§十 layer 1, Linux only)
         if: runner.os == 'Linux'
