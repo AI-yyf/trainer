@@ -66,7 +66,9 @@ test('cross-platform workflow keeps all experience layers and an explicit VSIX h
   assert.match(source, /--require-host-e2e/);
   assert.match(source, /id: package-vsix/);
   assert.match(source, /uses: actions\/upload-artifact@v4/);
-  assert.match(source, /trainer-vsix-\$\{\{ steps\.package-vsix\.outputs\.vsix_target \}\}/);
+  // Parallel package jobs upload per-OS artifacts, so the matrix OS prefixes
+  // the target-qualified name.
+  assert.match(source, /trainer-vsix-\$\{\{ matrix\.os \}\}-\$\{\{ steps\.package-vsix\.outputs\.vsix_target \}\}/);
   assert.match(source, /path: \$\{\{ steps\.package-vsix\.outputs\.vsix_path \}\}/);
 });
 
