@@ -32,6 +32,10 @@ COACHING_PATCHES_SOURCES = (
     SERVER_ROOT / "app" / "llm" / "coaching_patches.py",
     REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "llm" / "coaching_patches.py",
 )
+AGENT_TOOL_CONTEXT_SOURCES = (
+    SERVER_ROOT / "app" / "llm" / "agent_tool_context.py",
+    REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "llm" / "agent_tool_context.py",
+)
 SOURCE_PAIRS = (
     (
         SERVER_ROOT / "app" / "api" / "routers.py",
@@ -43,6 +47,7 @@ SOURCE_PAIRS = (
     COACHING_REPLIES_SOURCES,
     COACHING_SCAFFOLD_SOURCES,
     COACHING_PATCHES_SOURCES,
+    AGENT_TOOL_CONTEXT_SOURCES,
     (
         SERVER_ROOT / "app" / "llm" / "prompts.py",
         REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "llm" / "prompts.py",
