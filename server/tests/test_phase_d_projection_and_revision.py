@@ -324,3 +324,38 @@ def test_evidence_is_current_for_hash_helper(tmp_path: Path) -> None:
     assert evidence_is_current_for_hash(
         {"artifact_hash": "h1", "superseded_by_evidence_id": "ev-newer"}, "h1",
     ) is False
+
+
+def test_transfer_repeat_verified_requires_distinct_contexts() -> None:
+    """同一场景反复验证不增长迁移能力;两个不同上下文才构成 repeat_verified。"""
+    same_context = [
+        _ev(
+            "t1",
+            attempt_id="attempt-1",
+            scenario="deployment",
+            environment={"runtime": "container"},
+        ),
+        _ev(
+            "t2",
+            attempt_id="attempt-2",
+            scenario="deployment",
+            environment={"runtime": "container"},
+        ),
+    ]
+    distinct_context = [
+        same_context[0],
+        _ev(
+            "t2",
+            attempt_id="attempt-2",
+            scenario="incident triage",
+            environment={"runtime": "bare metal"},
+            constraints=["no container runtime"],
+        ),
+    ]
+
+    same_projection = project_skills(same_context)
+    distinct_projection = project_skills(distinct_context)
+
+    assert same_projection["transfer"]["state"] == "independent"
+    assert same_projection["transfer"]["independent_attempt_count"] == 2
+    assert distinct_projection["transfer"]["state"] == "repeat_verified"
