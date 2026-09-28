@@ -17,11 +17,11 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.models import ProviderConfig
+from app.llm.provider.assessment import _usage_output_tokens
 from app.llm.provider_service import (
     ProviderService,
     _reasoning_budget_exhausted,
     _unusable_visible_reply_category,
-    _usage_output_tokens,
 )
 
 

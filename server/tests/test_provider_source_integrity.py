@@ -12,12 +12,17 @@ PROVIDER_SOURCES = (
     SERVER_ROOT / "app" / "llm" / "provider_service.py",
     REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "llm" / "provider_service.py",
 )
+COACHING_RECOVERY_SOURCES = (
+    SERVER_ROOT / "app" / "llm" / "coaching_recovery.py",
+    REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "llm" / "coaching_recovery.py",
+)
 SOURCE_PAIRS = (
     (
         SERVER_ROOT / "app" / "api" / "routers.py",
         REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "api" / "routers.py",
     ),
     PROVIDER_SOURCES,
+    COACHING_RECOVERY_SOURCES,
     (
         SERVER_ROOT / "app" / "llm" / "prompts.py",
         REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "llm" / "prompts.py",
