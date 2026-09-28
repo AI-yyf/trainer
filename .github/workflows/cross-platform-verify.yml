@@ -93,14 +93,13 @@ jobs:
           fi
           "$PYTHON" -m ruff check app tests
 
+      # Type checking is platform-independent; windows spends its budget on
+      # the 50-minute serial pytest slice instead (§五).
       - name: Pyright (server)
+        if: runner.os == 'Linux'
         working-directory: server
-        shell: bash
         run: |
           PYTHON=".venv/bin/python"
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            PYTHON=".venv/Scripts/python.exe"
-          fi
           "$PYTHON" -m pyright app
 
   # Job B — UI / Experience: webview build, unit guards, the 200-scenario
