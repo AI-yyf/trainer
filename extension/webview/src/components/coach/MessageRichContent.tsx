@@ -213,6 +213,7 @@ function RichMarkdownRenderer({
                 chart={value}
                 errorLabel={copy.renderError}
                 summaryLabel={summaryLabel}
+                loadingLabel={copy.loading}
               />
             );
           }

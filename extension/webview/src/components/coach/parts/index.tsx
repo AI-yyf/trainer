@@ -172,6 +172,7 @@ function MermaidPartRenderer({ part, context }: { part: MermaidPart; context?: P
       chart={part.source}
       summaryLabel={label(context?.language, "Diagram", "Diagram")}
       errorLabel={label(context?.language, "Diagram render failed. Showing the raw content instead.", "Diagram render failed. Showing the raw content instead.")}
+      loadingLabel={label(context?.language, "正在渲染…", "Rendering…")}
     />
   );
 }

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 
+import { TrainerSpinner } from "../common/TrainerSpinner";
+
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
   import.meta.url,
@@ -48,7 +50,11 @@ export default function PdfPreviewContent({
         <Document
           file={src}
           onLoadSuccess={onDocumentLoadSuccess}
-          loading={<div className="pdf-preview__status">Loading PDF preview...</div>}
+          loading={
+            <TrainerSpinner size="sm" label="Loading PDF preview">
+              Loading PDF preview...
+            </TrainerSpinner>
+          }
           error={<div className="pdf-preview__status">PDF preview could not be loaded.</div>}
           noData={<div className="pdf-preview__status">No PDF source is attached.</div>}
         >
@@ -57,7 +63,11 @@ export default function PdfPreviewContent({
             height={pageHeight}
             renderAnnotationLayer={false}
             renderTextLayer={false}
-            loading={<div className="pdf-preview__status">Rendering page...</div>}
+            loading={
+              <TrainerSpinner size="sm" label="Rendering page">
+                Rendering page...
+              </TrainerSpinner>
+            }
           />
         </Document>
       </div>

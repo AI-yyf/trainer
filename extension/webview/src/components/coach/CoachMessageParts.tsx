@@ -191,6 +191,7 @@ function renderPart(
               "图表渲染失败，先显示原始内容。",
               "Diagram render failed. Showing the raw content instead.",
             )}
+            loadingLabel={copy(language, "正在渲染…", "Rendering…")}
           />
         </div>
       );

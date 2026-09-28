@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
 
+import { TrainerSpinner } from "../common/TrainerSpinner";
 import { sanitizePreviewHtml } from "../../lib/htmlSanitizer";
 import { ShikiCodeBlock } from "./parts/ShikiCodeBlock";
 
@@ -7,6 +8,7 @@ export interface MermaidBlockProps {
   chart: string;
   summaryLabel: string;
   errorLabel: string;
+  loadingLabel: string;
 }
 
 let mermaidReady = false;
@@ -46,7 +48,7 @@ async function ensureMermaid() {
   return mermaid;
 }
 
-export function MermaidBlock({ chart, summaryLabel, errorLabel }: MermaidBlockProps) {
+export function MermaidBlock({ chart, summaryLabel, errorLabel, loadingLabel }: MermaidBlockProps) {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
   const elementId = useId().replace(/:/g, "-");
@@ -93,7 +95,7 @@ export function MermaidBlock({ chart, summaryLabel, errorLabel }: MermaidBlockPr
         {svg ? (
           <div dangerouslySetInnerHTML={{ __html: sanitizePreviewHtml(svg) }} />
         ) : (
-          <p className="message-mermaid__loading">...</p>
+          <TrainerSpinner size="sm" label={loadingLabel} />
         )}
       </div>
     </div>

@@ -13,6 +13,7 @@ export {
   ProgressiveHint,
 } from "./HumanizedEmptyStates";
 export { ActionButton } from "./ActionButton";
+export { TrainerSpinner } from "./TrainerSpinner";
 
 export type {
   EmptyStateProps,

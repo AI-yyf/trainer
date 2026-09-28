@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { TrainerSpinner } from "../common/TrainerSpinner";
+
 import WaveSurfer from "wavesurfer.js";
 import { workbenchTokens, type WorkbenchThemeName } from "../../../../../shared/src/tokens";
 
@@ -230,7 +232,13 @@ export default function AudioPreviewContent({
       />
       <div className="audio-preview__footer">
         <span>{title}</span>
-        <span>{statusText}</span>
+        {status === "loading" ? (
+          <TrainerSpinner size="sm" label={statusText}>
+            {statusText}
+          </TrainerSpinner>
+        ) : (
+          <span>{statusText}</span>
+        )}
       </div>
       <div className="audio-preview__controls">
         <button
