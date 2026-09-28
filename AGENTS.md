@@ -422,7 +422,7 @@ FastAPI sidecar (port 8765, extension-managed range 34891-34911):
 
 | 文件/目录 | 来源 | 应被忽略 |
 |-----------|------|---------|
-| `._*` 文件 | macOS AppleDouble 元数据 (Finder/rsync 创建) | ✅ `.gitignore` 未覆盖，建议添加 `._*` |
+| `._*` 文件 | macOS AppleDouble 元数据 (Finder/rsync 创建) | ✅ `.gitignore` 已覆盖 (`._*`)，无需处理 |
 | `.tmp-debug*` | Windows 开发调试遗留目录 | ✅ 安全删除 |
 | `server/.venv/` | Python 虚拟环境 | ✅ `.gitignore` 已覆盖 |
 | `extension/bundled/bin/darwin-arm64/` | macOS 原生二进制 | ✅ windows/linux 上无影响 |
