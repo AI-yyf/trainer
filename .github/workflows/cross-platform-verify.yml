@@ -22,6 +22,10 @@ jobs:
   verify:
     name: Verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # macOS completes in ~30 minutes; ubuntu/windows have hung on the
+    # browser-recovery / verify steps, so bound the job instead of
+    # burning the 6-hour runner default.
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
