@@ -11,14 +11,20 @@ import type {
   RemoteDirectoryEntry,
   RemoteEnvironment,
   RemoteFileStat,
+  RemoteProcessSpec,
   RemoteSearchMatch,
   RemoteSearchRequest,
-  RemoteVerificationRequest,
 } from '../../shared/src/remoteProtocol';
+import { createVerificationSessionManager } from './verificationSessions';
 
 const MAX_READ_BYTES = 1_000_000;
 const MAX_SEARCH_RESULTS = 200;
 const MAX_SEARCH_FILE_BYTES = 500_000;
+
+const verificationSessions = createVerificationSessionManager({
+  spawnVerification: spawnVerificationProcess,
+  environment: () => environment(),
+});
 
 export function activate(context: vscode.ExtensionContext): void {
   const capabilitiesCommand = vscode.commands.registerCommand(
@@ -33,13 +39,76 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {
-  // The companion has no process or credential state to dispose.
+  // Losing the companion host means running verifications can no longer be
+  // observed: mark them connection_lost and kill their trees so nothing
+  // keeps executing unobserved on the remote machine.
+  verificationSessions.disposeAll();
+}
+
+/**
+ * Platform process control for the session manager. `shell: false` always —
+ * the spec's executable and args are passed to the OS verbatim.
+ */
+function spawnVerificationProcess(
+  spec: RemoteProcessSpec,
+  cwd: string | undefined,
+) {
+  const detached = process.platform !== 'win32';
+  const child = spawn(spec.executable, spec.args, {
+    cwd,
+    env: spec.env ? { ...process.env, ...spec.env } : process.env,
+    shell: false,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached,
+  });
+  const stdoutChunks: Array<(chunk: string) => void> = [];
+  const stderrChunks: Array<(chunk: string) => void> = [];
+  child.stdout?.setEncoding('utf8');
+  child.stderr?.setEncoding('utf8');
+  child.stdout?.on('data', (chunk: string) => {
+    for (const listener of stdoutChunks) {
+      listener(chunk);
+    }
+  });
+  child.stderr?.on('data', (chunk: string) => {
+    for (const listener of stderrChunks) {
+      listener(chunk);
+    }
+  });
+  const killTree = () => {
+    if (child.pid === undefined || child.exitCode !== null) {
+      return;
+    }
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' });
+      return;
+    }
+    try {
+      process.kill(-child.pid, 'SIGTERM');
+    } catch {
+      child.kill('SIGTERM');
+    }
+  };
+  return {
+    pid: child.pid,
+    killTree,
+    exited: new Promise<{ code: number | null; error?: string }>((resolve, reject) => {
+      child.on('error', (error: Error) => reject(error));
+      child.on('close', (code: number | null) => resolve({ code }));
+    }),
+    onStdout: (listener: (chunk: string) => void) => {
+      stdoutChunks.push(listener);
+    },
+    onStderr: (listener: (chunk: string) => void) => {
+      stderrChunks.push(listener);
+    },
+  };
 }
 
 function describeCapabilities(): RemoteCompanionCapabilities {
   const folder = vscode.workspace.workspaceFolders?.[0];
   return {
-    protocol_version: 1,
+    protocol_version: 2,
     available: Boolean(folder),
     workspace_uri: folder?.uri.toString(),
     remote_name: vscode.env.remoteName || undefined,
@@ -58,7 +127,7 @@ function describeCapabilities(): RemoteCompanionCapabilities {
 }
 
 async function handleRequest(value: unknown): Promise<RemoteCompanionResponse> {
-  if (!isRecord(value) || value.protocol_version !== 1 || typeof value.operation !== 'string') {
+  if (!isRecord(value) || value.protocol_version !== 2 || typeof value.operation !== 'string') {
     return failure('invalid_request', 'Remote request has an invalid protocol shape.');
   }
   try {
@@ -81,8 +150,26 @@ async function handleRequest(value: unknown): Promise<RemoteCompanionResponse> {
         return { ok: true, diagnostics: diagnostics(value.uri) };
       case 'environment':
         return { ok: true, environment: await environment() };
-      case 'verify':
-        return { ok: true, verification: await verify(value.spec) };
+      case 'verify_start':
+        return {
+          ok: true,
+          verification_session: await verifyStart(value.spec),
+        };
+      case 'verify_status': {
+        const status = verificationSessions.status(
+          requireSessionId(value.session_id),
+          boundedInteger(value.stdout_offset, 0, Number.MAX_SAFE_INTEGER, 0),
+          boundedInteger(value.stderr_offset, 0, Number.MAX_SAFE_INTEGER, 0),
+        );
+        return { ok: true, verification_status: status };
+      }
+      case 'verify_cancel': {
+        const status = verificationSessions.cancel(requireSessionId(value.session_id));
+        return {
+          ok: true,
+          verification_cancelled: { session_id: status.session_id, state: status.state },
+        };
+      }
       default:
         return failure('unsupported_operation', `Unsupported remote operation: ${value.operation}.`);
     }
@@ -200,39 +287,48 @@ async function environment(): Promise<RemoteEnvironment> {
   };
 }
 
-async function verify(value: unknown): Promise<RemoteCompanionResponse['verification']> {
-  const spec = isRecord(value) ? value : {};
-  const command = typeof spec.command === 'string' ? spec.command.trim() : '';
-  if (!command) {
-    throw new Error('Verification requires an explicit command.');
+/**
+ * Starts a verification session in the remote workspace. The spec's cwd is
+ * workspace-validated; args stay structured end to end (protocol v2 has no
+ * shell-string path at all).
+ */
+async function verifyStart(value: unknown): Promise<RemoteCompanionResponse['verification_session']> {
+  const record = isRecord(value) ? value : {};
+  const rawSpec = isRecord(record.spec) ? record.spec : {};
+  const executable = typeof rawSpec.executable === 'string' ? rawSpec.executable.trim() : '';
+  const args = Array.isArray(rawSpec.args) ? rawSpec.args.map((entry) => String(entry)) : [];
+  if (!executable) {
+    throw new Error('Verification requires an explicit executable.');
   }
-  const cwdUri = typeof spec.cwd === 'string' && spec.cwd.trim()
-    ? await resolveUri(spec.cwd)
+  const cwdUri = typeof rawSpec.cwd === 'string' && rawSpec.cwd.trim()
+    ? await resolveUri(rawSpec.cwd)
     : vscode.workspace.workspaceFolders?.[0]?.uri;
   if (!cwdUri) throw new Error('Verification workspace is unavailable.');
-  const cwd = cwdUri.fsPath;
-  const [executable, ...args] = command.split(/\s+/);
-  const startedAt = new Date().toISOString();
-  const result = await new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
-    const child = spawn(executable, args, { cwd, shell: false });
-    let stdout = '';
-    let stderr = '';
-    child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
-    child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
-    child.on('error', reject);
-    child.on('close', (code: number | null) => resolve({ code, stdout, stderr }));
-  });
-  return {
-    result: result.code === 0 ? 'passed' : 'failed',
-    command,
-    execution_location: vscode.env.remoteName ? `remote:${vscode.env.remoteName}` : 'workspace',
-    started_at: startedAt,
-    finished_at: new Date().toISOString(),
-    exit_code: result.code,
-    stdout: result.stdout.slice(0, 20_000),
-    stderr: result.stderr.slice(0, 20_000),
-    environment: await environment(),
+
+  const spec: RemoteProcessSpec = {
+    executable,
+    args,
+    cwd: cwdUri.fsPath,
+    timeout_ms: typeof rawSpec.timeout_ms === 'number' && rawSpec.timeout_ms > 0
+      ? Math.floor(rawSpec.timeout_ms)
+      : undefined,
+    env: isRecord(rawSpec.env)
+      ? Object.fromEntries(
+          Object.entries(rawSpec.env)
+            .filter(([key, entry]) => typeof key === 'string' && typeof entry === 'string')
+            .map(([key, entry]) => [key, String(entry)]),
+        )
+      : undefined,
   };
+  const status = await verificationSessions.startSession(spec);
+  return { session_id: status.session_id, state: status.state };
+}
+
+function requireSessionId(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error('A verification session id is required.');
+  }
+  return value;
 }
 
 function encode(bytes: Uint8Array): string {

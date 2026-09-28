@@ -51,10 +51,15 @@ jobs:
 
       - name: Create python environment
         working-directory: server
+        shell: bash
         run: |
+          PYTHON=".venv/bin/python"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            PYTHON=".venv/Scripts/python.exe"
+          fi
           python -m venv .venv
-          python -m pip install -U pip
-          pip install -e ".[dev]"
+          "$PYTHON" -m pip install -U pip
+          "$PYTHON" -m pip install -e ".[dev]"
 
       - name: Server tests (slowest slice, isolated here)
         working-directory: server
@@ -138,6 +143,9 @@ jobs:
 
       - name: Run the 200-scenario preview experience matrix
         run: npm run test:experience-matrix
+
+      - name: Run the 200-scenario real sidecar experience matrix
+        run: npm run test:experience-sidecar
 
       - name: Verify browser recovery on the native runner
         run: npm run verify:webview-recovery --prefix extension

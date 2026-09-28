@@ -2,10 +2,12 @@ import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 
 import type {
+  RemoteProcessSpec,
   RemoteSearchMatch,
   RemoteSearchRequest,
-  RemoteVerificationRequest,
   RemoteVerificationResult,
+  RemoteVerificationSessionRef,
+  RemoteVerificationStatus,
 } from '../../../shared/src/remoteProtocol';
 import {
   detectRemoteWorkspaceTypeFromContext,
@@ -196,8 +198,28 @@ export class LocalWorkspaceGateway extends WorkspaceProtocolGatewayBase implemen
     };
   }
 
-  async verify(spec: RemoteVerificationRequest): Promise<RemoteVerificationResult> {
-    throw new Error(`Local verification must use the existing Trainer test controller: ${spec.command}`);
+  verifyStart(_spec: RemoteProcessSpec): Promise<RemoteVerificationSessionRef> {
+    return Promise.reject(
+      new Error('Verification sessions are a remote-companion capability; use the local test controller.'),
+    );
+  }
+
+  verifyStatus(_sessionId: string): Promise<RemoteVerificationStatus> {
+    return Promise.reject(
+      new Error('Verification sessions are a remote-companion capability; use the local test controller.'),
+    );
+  }
+
+  verifyCancel(_sessionId: string): Promise<RemoteVerificationSessionRef> {
+    return Promise.reject(
+      new Error('Verification sessions are a remote-companion capability; use the local test controller.'),
+    );
+  }
+
+  runVerification(_spec: RemoteProcessSpec): Promise<RemoteVerificationResult> {
+    return Promise.reject(
+      new Error('Verification sessions are a remote-companion capability; use the local test controller.'),
+    );
   }
 
   async statDto(value: WorkspaceUriInput): Promise<WorkspaceStatDto> {

@@ -3,13 +3,16 @@ import * as vscode from 'vscode';
 import type {
   RemoteCompanionCapabilities,
   RemoteCompanionResponse,
+  RemoteVerificationSessionRef,
+  RemoteVerificationStatus,
   RemoteDirectoryEntry,
   RemoteDiagnostic,
   RemoteEnvironment,
   RemoteFileStat,
   RemoteSearchMatch,
   RemoteSearchRequest,
-  RemoteVerificationRequest,
+  RemoteProcessSpec,
+  RemoteVerificationResult,
 } from '../../../shared/src/remoteProtocol';
 import type {
   WorkspaceDiagnosticDto,
@@ -65,7 +68,8 @@ export type WorkspaceFileStat = RemoteFileStat;
 export type WorkspaceDirectoryEntry = RemoteDirectoryEntry;
 export type WorkspaceSearchMatch = RemoteSearchMatch;
 export type WorkspaceEnvironment = RemoteEnvironment;
-export type WorkspaceVerificationRequest = RemoteVerificationRequest;
+export type WorkspaceVerificationSpec = RemoteProcessSpec;
+export type WorkspaceVerificationResult = RemoteVerificationResult;
 export type WorkspaceDiagnostic = RemoteDiagnostic;
 
 export type WorkspaceReadOptions = {
@@ -102,7 +106,17 @@ export interface WorkspaceGateway {
   hashArtifact(uri: vscode.Uri): Promise<string>;
   diagnostics(uri?: vscode.Uri): Promise<WorkspaceDiagnostic[]>;
   environment(): Promise<WorkspaceEnvironment>;
-  verify(spec: WorkspaceVerificationRequest): Promise<RemoteCompanionResponse['verification'] extends infer T ? NonNullable<T> : never>;
+  verifyStart(spec: WorkspaceVerificationSpec): Promise<RemoteVerificationSessionRef>;
+  verifyStatus(sessionId: string, stdoutOffset?: number, stderrOffset?: number): Promise<RemoteVerificationStatus>;
+  verifyCancel(sessionId: string): Promise<RemoteVerificationSessionRef>;
+  runVerification(
+    spec: WorkspaceVerificationSpec,
+    hooks?: {
+      onChunk?: (chunk: { stream: 'stdout' | 'stderr'; text: string }) => void;
+      signal?: { aborted: boolean };
+      pollIntervalMs?: number;
+    },
+  ): Promise<WorkspaceVerificationResult>;
 }
 
 export function isRemoteWorkspaceLocation(location: WorkspaceLocation | undefined): boolean {

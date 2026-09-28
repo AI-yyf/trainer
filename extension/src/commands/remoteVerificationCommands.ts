@@ -1,3 +1,4 @@
+import type { RemoteProcessSpec } from '../../../shared/src/remoteProtocol';
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
 import {
@@ -9,19 +10,46 @@ import {
 } from '../testing/trainingAttestation';
 
 export interface RemoteVerificationCommandPayload {
-  command?: string;
+  /** Structured process spec — protocol v2 has no shell-string path. */
+  executable?: string;
+  args?: string[];
   cwd?: string;
+  timeoutMs?: number;
   cardId?: string;
 }
 
+function parseSpec(record: Record<string, unknown>): RemoteProcessSpec | undefined {
+  const executable = typeof record.executable === 'string' ? record.executable.trim() : '';
+  if (!executable) {
+    return undefined;
+  }
+  const args = Array.isArray(record.args)
+    ? record.args.map((entry) => String(entry))
+    : [];
+  return {
+    executable,
+    args,
+    ...(typeof record.cwd === 'string' && record.cwd.trim() ? { cwd: record.cwd.trim() } : {}),
+    ...(typeof record.timeoutMs === 'number' && record.timeoutMs > 0
+      ? { timeout_ms: Math.floor(record.timeoutMs) }
+      : {}),
+  };
+}
+
+function describeSpec(spec: RemoteProcessSpec): string {
+  return [spec.executable, ...spec.args].join(' ');
+}
+
 /**
- * Run one explicit verification command in the REMOTE workspace via the
- * Companion and attest the outcome to the sidecar as host-trusted evidence.
+ * Run one explicit verification process in the REMOTE workspace via the
+ * Companion (protocol v2: structured ProcessSpec, streaming lifecycle) and
+ * attest the outcome to the sidecar as host-trusted evidence.
  *
- * Honesty contract: only a completed run (numeric exit code) is attested. A
- * companion/transport failure or an interrupted process records NO evidence —
- * an interrupted run must never become "failed", and nothing here can create
- * "passed" without a real remote execution.
+ * Honesty contract: only a completed run (numeric exit code, state
+ * "completed") is attested. A companion/transport failure, a timeout, a user
+ * cancellation, or a disconnect records NO evidence — an interrupted run must
+ * never become "failed", and nothing here can create "passed" without a real
+ * remote execution.
  */
 export async function remoteVerifyCommand(
   context: CommandContext,
@@ -38,10 +66,9 @@ export async function remoteVerifyCommand(
     return { ok: false, message: 'Workspace trust is required to run remote verification.' };
   }
   const record = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
-  const command = typeof record.command === 'string' ? record.command.trim() : '';
-  const cwd = typeof record.cwd === 'string' && record.cwd.trim() ? record.cwd.trim() : undefined;
-  if (!command) {
-    return { ok: false, message: 'A verification command is required.' };
+  const spec = parseSpec(record);
+  if (!spec) {
+    return { ok: false, message: 'A verification executable is required.' };
   }
 
   const capabilities = await context.workspaceGateway.capabilities();
@@ -53,14 +80,36 @@ export async function remoteVerifyCommand(
     };
   }
 
+  const described = describeSpec(spec);
   let stdout = '';
   let stderr = '';
-  let exitCode: number | null;
-  let passed: boolean;
+  let exitCode: number | null = null;
+  let passed = false;
   try {
-    const verification = await context.workspaceGateway.verify({ command, ...(cwd ? { cwd } : {}) });
-    stdout = verification.stdout ?? '';
-    stderr = verification.stderr ?? '';
+    const verification = await context.workspaceGateway.runVerification(spec, {
+      onChunk: (chunk) => {
+        if (chunk.stream === 'stdout') {
+          stdout = (stdout + chunk.text).slice(-100_000);
+        } else {
+          stderr = (stderr + chunk.text).slice(-100_000);
+        }
+        context.outputChannel.appendLine(`[remote:${chunk.stream}] ${chunk.text.trimEnd()}`);
+      },
+    });
+    if (verification.state !== 'completed') {
+      const reason =
+        verification.state === 'timed_out'
+          ? 'the run timed out'
+          : verification.state === 'cancelled'
+            ? 'the run was cancelled'
+            : 'the companion connection was lost';
+      context.outputChannel.appendLine(`[remote] verification interrupted: ${reason}`);
+      return {
+        ok: false,
+        message: `Remote verification was interrupted (${reason}), so no evidence was recorded.`,
+        data: { spec, state: verification.state, stdout, stderr },
+      };
+    }
     exitCode = verification.exit_code ?? null;
     passed = verification.result === 'passed' && exitCode === 0;
   } catch (error) {
@@ -84,7 +133,7 @@ export async function remoteVerifyCommand(
     const body = buildTestRunAttestationBody({
       card: { cardId },
       passed,
-      summary: `Remote verify ${passed ? 'passed' : 'failed'}: ${command} (exit ${exitCode})`,
+      summary: `Remote verify ${passed ? 'passed' : 'failed'}: ${described} (exit ${exitCode})`,
       testsOutput: truncateTestsOutput(`${stdout}\n${stderr}`.trim()),
       sessionId: context.getSessionId(),
       workspaceId: resolveAttestationWorkspaceId(hostState),
@@ -97,6 +146,6 @@ export async function remoteVerifyCommand(
     message: cardId
       ? `Remote verification ${passed ? 'passed' : 'failed'} (exit ${exitCode}); the result was attested to the trainer.`
       : `Remote verification ${passed ? 'passed' : 'failed'} (exit ${exitCode}); no live practice card, so nothing was attested.`,
-    data: { command, exit_code: exitCode, passed, stdout, stderr },
+    data: { spec, exit_code: exitCode, passed, stdout, stderr },
   };
 }

@@ -334,7 +334,7 @@ export type RemoteCompanionCapabilityFlags = {
 };
 
 export type RemoteCompanionCapabilities = {
-  protocol_version: 1;
+  protocol_version: 2;
   available: boolean;
   workspace_uri?: string;
   remote_name?: string;
@@ -385,21 +385,73 @@ export type RemoteEnvironment = {
   workspace_name?: string;
 };
 
-export type RemoteVerificationRequest = {
-  command: string;
+/**
+ * An explicit process to run in the remote workspace. Protocol v2 never
+ * accepts raw shell strings: the executable and every argument travel as
+ * separate fields so spaces, quotes, and complex pytest targets survive the
+ * bridge exactly as the caller wrote them. No shell is involved — `shell:
+ * false` always.
+ */
+export type RemoteProcessSpec = {
+  executable: string;
+  args: string[];
   cwd?: string;
+  env?: Record<string, string>;
+  /** Kill the process tree after this many milliseconds; 0/undefined = no timeout. */
+  timeout_ms?: number;
 };
 
-export type RemoteVerificationResult = {
-  result: "passed" | "failed";
-  command: string;
-  execution_location: string;
+/** Forward-only lifecycle for a remote verification session. */
+export type RemoteProcessState =
+  | "running"
+  | "completed"
+  | "cancelled"
+  | "timed_out"
+  | "spawn_failed"
+  | "connection_lost";
+
+export type RemoteVerificationStartRequest = {
+  spec: RemoteProcessSpec;
+};
+
+export type RemoteVerificationStatusRequest = {
+  session_id: string;
+  /** Client-side read offsets for incremental stdout/stderr streaming. */
+  stdout_offset?: number;
+  stderr_offset?: number;
+};
+
+export type RemoteVerificationCancelRequest = {
+  session_id: string;
+};
+
+export type RemoteVerificationSessionRef = {
+  session_id: string;
+  state: RemoteProcessState;
+};
+
+/**
+ * One poll of a verification session: incremental output chunks plus the
+ * forward-only state. Terminal states keep answering with empty chunks and
+ * the final fields (idempotent completion).
+ */
+export type RemoteVerificationStatus = {
+  session_id: string;
+  state: RemoteProcessState;
+  /** Present once the process reached a terminal state. */
+  result?: "passed" | "failed";
+  exit_code?: number | null;
   started_at: string;
-  finished_at: string;
-  exit_code: number | null;
-  stdout: string;
-  stderr: string;
+  finished_at?: string;
+  /** Bytes [offset, ...) of buffered output, base64-free UTF-8 text. */
+  stdout_chunk: string;
+  stderr_chunk: string;
+  stdout_total: number;
+  stderr_total: number;
   environment: RemoteEnvironment;
+  spec: RemoteProcessSpec;
+  /** Human-readable detail for spawn_failed / timed_out. */
+  error?: string;
 };
 
 export type RemoteCompanionOperation =
@@ -412,15 +464,20 @@ export type RemoteCompanionOperation =
   | "hash_artifact"
   | "diagnostics"
   | "environment"
-  | "verify";
+  | "verify_start"
+  | "verify_status"
+  | "verify_cancel";
 
 /** Request envelope used by the companion command bridge. */
 export type RemoteCompanionRequest = {
-  protocol_version: 1;
+  protocol_version: 2;
   operation: RemoteCompanionOperation;
   uri?: string;
   query?: RemoteSearchRequest;
-  spec?: RemoteVerificationRequest;
+  spec?: RemoteProcessSpec;
+  session_id?: string;
+  stdout_offset?: number;
+  stderr_offset?: number;
 };
 
 export type RemoteCompanionError = {
@@ -441,5 +498,28 @@ export type RemoteCompanionResponse = {
   artifact_hash?: string;
   diagnostics?: RemoteDiagnostic[];
   environment?: RemoteEnvironment;
-  verification?: RemoteVerificationResult;
+  /** verify_start: the session handle. */
+  verification_session?: RemoteVerificationSessionRef;
+  /** verify_status: incremental output + forward-only state. */
+  verification_status?: RemoteVerificationStatus;
+  /** verify_cancel: the session handle after cancellation. */
+  verification_cancelled?: RemoteVerificationSessionRef;
+};
+
+/**
+ * Final aggregated outcome, composed by the host from status polls.
+ * `result` exists only when `state === "completed"` — a cancelled or
+ * disconnected run must never be reported as passed/failed.
+ */
+export type RemoteVerificationResult = {
+  result?: "passed" | "failed";
+  spec: RemoteProcessSpec;
+  state: RemoteProcessState;
+  execution_location: string;
+  started_at: string;
+  finished_at: string;
+  exit_code: number | null;
+  stdout: string;
+  stderr: string;
+  environment: RemoteEnvironment;
 };
