@@ -20,6 +20,10 @@ COACHING_FIRST_TURN_SOURCES = (
     SERVER_ROOT / "app" / "llm" / "coaching_first_turn.py",
     REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "llm" / "coaching_first_turn.py",
 )
+COACHING_REPLIES_SOURCES = (
+    SERVER_ROOT / "app" / "llm" / "coaching_replies.py",
+    REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "llm" / "coaching_replies.py",
+)
 SOURCE_PAIRS = (
     (
         SERVER_ROOT / "app" / "api" / "routers.py",
@@ -28,6 +32,7 @@ SOURCE_PAIRS = (
     PROVIDER_SOURCES,
     COACHING_RECOVERY_SOURCES,
     COACHING_FIRST_TURN_SOURCES,
+    COACHING_REPLIES_SOURCES,
     (
         SERVER_ROOT / "app" / "llm" / "prompts.py",
         REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "llm" / "prompts.py",
