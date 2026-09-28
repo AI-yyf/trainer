@@ -51,7 +51,7 @@ from .provider.capability import (
 )
 from .provider.errors import ContextBudgetExhaustedError, ProviderRuntimeResponseError
 from .provider.language import _contains_cjk, _contains_cyrillic, _contains_latin
-from .provider.redaction import redact_provider_error
+from .provider.redaction import _compact_text, redact_provider_error
 from .provider.streaming import (
     _await_provider_stream_with_cancellation,
     _iterate_provider_stream_with_cancellation,
@@ -99,15 +99,7 @@ _VISION_CAPABILITY_PROBE_IMAGE = (
 )
 
 
-def _compact_text(value: object | None, limit: int = 160) -> str | None:
-    if not isinstance(value, str):
-        return None
-    normalized = " ".join(value.split()).strip()
-    if not normalized:
-        return None
-    if len(normalized) <= limit:
-        return normalized
-    return f"{normalized[: max(0, limit - 1)].rstrip()}..."
+# _compact_text is imported from .provider.redaction above (§五十二 extraction).
 
 
 def _optional_text(value: object | None) -> str | None:
