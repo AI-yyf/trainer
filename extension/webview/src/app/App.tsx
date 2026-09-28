@@ -5829,16 +5829,21 @@ export function App() {
   // Phase-C navigation: the switcher carries the three daily entries
   // (对话/学习/资料). Training is an activity-driven "continue training"
   // entry — it appears while a card is active or the learner is on the
-  // training surface — and Settings lives in the header as a gear button.
-  // All five views stay routable and every legacy command still lands.
+  // training surface — and Progress follows the same pattern while the
+  // learner is on the progress surface. Settings lives in the header as a
+  // gear button. All five views stay routable and every legacy command
+  // still lands.
   const trainingNavVisible =
     activeView === "training" ||
     Boolean(data.workspaceTrainingState?.activeTrainingCardRouting?.selectedCardId) ||
     Boolean(data.workspaceTrainingState?.selectedCardId);
+  const progressNavVisible = activeView === "progress";
   const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS.filter((view) =>
     view === "training"
       ? trainingNavVisible
-      : view !== "settings" && view !== "progress",
+      : view === "progress"
+        ? progressNavVisible
+        : view !== "settings",
   ).map((view) => {
     if (view === "coach") {
       const label = coachViewLabel(layout.composerLanguage);

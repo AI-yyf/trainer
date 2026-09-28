@@ -60,13 +60,15 @@ test('app shell renders a text-only top navigation for the daily views', () => {
     viewTypes,
     /export const COACH_FIRST_SIDEBAR_VIEWS = \[\s*"coach",\s*"plan",\s*"resources",\s*"training",\s*"progress",\s*"settings",\s*\] as const;/s,
   );
-  // Phase-C nav: three daily tabs, training appears on activity, Settings
-  // lives in the header gear. All five views stay routable.
+  // Phase-C nav: three daily tabs, training appears on activity, Progress
+  // appears while the learner is on the progress surface, Settings lives in
+  // the header gear. All five views stay routable.
   assert.match(
     source,
-    /const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS\.filter\(\(view\) =>\s*view === "training"\s*\? trainingNavVisible\s*: view !== "settings" && view !== "progress",\s*\)\.map\(\(view\) => \{/,
+    /const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS\.filter\(\(view\) =>\s*view === "training"\s*\? trainingNavVisible\s*: view === "progress"\s*\? progressNavVisible\s*: view !== "settings",\s*\)\.map\(\(view\) => \{/,
   );
   assert.match(source, /const trainingNavVisible =\s*activeView === "training" \|\|/);
+  assert.match(source, /const progressNavVisible = activeView === "progress";/);
   assert.match(source, /const label = coachViewLabel\(layout\.composerLanguage\);/);
   // The plan-composer mode menu keeps the dedicated composer word (计划/Plan)
   // while the sidebar tab itself switched to the 学习/Learning label.
