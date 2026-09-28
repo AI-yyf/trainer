@@ -13,7 +13,7 @@ from typing import Any
 
 from ..training.subject_taxonomy import classify_learning_subject
 from .provider.redaction import _compact_text
-from .provider.text import _looks_like_mojibake_text
+from .provider.text import _looks_like_mojibake_text, _prefers_chinese
 
 
 def _localized_text(english: str, chinese: str, response_language: str | None) -> str:
@@ -229,10 +229,6 @@ def _infer_guided_coaching_domain(
     if any(token in blob for token in project_tokens):
         return "project_adaptation"
     return None
-
-
-def _prefers_chinese(response_language: str | None) -> bool:
-    return bool(response_language and response_language.lower().startswith("zh"))
 
 
 def _trim_sentence(text: str, limit: int) -> str:

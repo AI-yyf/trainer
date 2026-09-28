@@ -27,9 +27,8 @@ from .coaching_recovery import (
     _trim_sentence,
 )
 from .prompts import extract_coaching_context
-from .provider.language import _contains_cjk
 from .provider.redaction import _compact_text, redact_provider_error
-from .provider.text import _visible_model_text
+from .provider.text import _contains_cjk, _visible_model_text
 
 _INTERNAL_COACH_META_MARKERS = (
     "current coaching focus:",
