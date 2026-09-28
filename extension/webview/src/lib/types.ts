@@ -1698,6 +1698,11 @@ export interface ConnectionStatus {
 export interface BootstrapData {
   workspaceName: string;
   sessionLabel: string;
+  /** Remote-window identity for the webview (Remote-SSH/WSL/Tunnel/container). */
+  workspace?: {
+    remoteName?: string;
+    isRemoteWorkspace?: boolean;
+  };
   connection: ConnectionStatus;
   providerConfig: ProviderConfigView;
   liveContext: LiveContext;
@@ -2059,4 +2064,23 @@ export type HostMessage =
   | {
       type: "resourceOrganization/pending";
       payload: { pending: boolean; operationCount?: number };
+    }
+  // Remote verification streaming (protocol v2)
+  | {
+      type: "remoteVerification/started";
+      payload: { sessionId: string; spec: { executable: string; args: string[] } };
+    }
+  | {
+      type: "remoteVerification/stream";
+      payload: { sessionId: string; stream: "stdout" | "stderr"; text: string };
+    }
+  | {
+      type: "remoteVerification/finished";
+      payload: {
+        sessionId: string;
+        state: "completed" | "cancelled" | "timed_out" | "spawn_failed" | "connection_lost";
+        exitCode: number | null;
+        passed?: boolean;
+        summary: string;
+      };
     };

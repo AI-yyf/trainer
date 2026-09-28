@@ -166,11 +166,13 @@ export class RemoteWorkspaceGateway implements WorkspaceGateway {
     spec: RemoteProcessSpec,
     hooks: {
       onChunk?: (chunk: { stream: 'stdout' | 'stderr'; text: string }) => void;
+      onStart?: (session: RemoteVerificationSessionRef) => void;
       signal?: { aborted: boolean };
       pollIntervalMs?: number;
     } = {},
   ): Promise<RemoteVerificationResult> {
     const session = await this.verifyStart(spec);
+    hooks.onStart?.(session);
     const pollIntervalMs = hooks.pollIntervalMs ?? 400;
     let stdoutOffset = 0;
     let stderrOffset = 0;

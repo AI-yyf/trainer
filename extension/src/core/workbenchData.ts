@@ -316,6 +316,11 @@ export function applyDerivedHostState(
     ...data,
     workspaceName: workspaceName(workspace),
     sessionLabel: sessionId ?? data.sessionLabel,
+    workspace: {
+      ...data.workspace,
+      remoteName: workspace.remoteName,
+      isRemoteWorkspace: workspace.isRemoteWorkspace,
+    },
     memory: memoryNext,
     connection: {
       state: toConnectionState(sidecar),

@@ -73,7 +73,11 @@ import {
 } from './sessionCommands';
 import { generateStageMaterialCommand } from './stageMaterialCommands';
 import { installRemoteCompanionCommand } from './remoteCompanionCommands';
-import { remoteVerifyCommand } from './remoteVerificationCommands';
+import {
+  remoteVerifyActiveFileCommand,
+  remoteVerifyCancelCommand,
+  remoteVerifyCommand,
+} from './remoteVerificationCommands';
 import { restartSidecarCommand, stopSidecarCommand } from './sidecarCommands';
 import {
   createResearchHandler,
@@ -222,6 +226,8 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.coachRemoteBoundary, register: (ctx) => openCoachScenarioCommand(ctx, 'remoteBoundary') },
     { commandId: COMMAND_IDS.installRemoteCompanion, register: (ctx) => installRemoteCompanionCommand(ctx) },
     { commandId: COMMAND_IDS.remoteVerify, register: (ctx, payload) => remoteVerifyCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.remoteVerifyActiveFile, register: (ctx) => remoteVerifyActiveFileCommand(ctx) },
+    { commandId: COMMAND_IDS.remoteVerifyCancel, register: (ctx) => remoteVerifyCancelCommand(ctx) },
     { commandId: COMMAND_IDS.coachDebugLoop, register: (ctx) => openCoachScenarioCommand(ctx, 'debugLoop') },
     {
       commandId: COMMAND_IDS.coachFunctionContract,

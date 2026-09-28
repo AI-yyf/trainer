@@ -1463,6 +1463,11 @@ export interface StageMaterialItem {
 export interface BootstrapData {
   workspaceName: string;
   sessionLabel: string;
+  /** Remote-window identity for the webview (Remote-SSH/WSL/Tunnel/container). */
+  workspace?: {
+    remoteName?: string;
+    isRemoteWorkspace?: boolean;
+  };
   connection: {
     state: 'starting' | 'connected' | 'offline';
     provider: ProviderSummary;

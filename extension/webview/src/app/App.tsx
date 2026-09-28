@@ -3972,6 +3972,15 @@ export function App() {
   });
   const [planComposerMode, setPlanComposerMode] = useState<PlanComposerMode>("explain");
   const [trainingVerifyNotice, setTrainingVerifyNotice] = useState<string | undefined>();
+  // §八: streaming remote verification panel (protocol v2 lifecycle).
+  const [remoteVerification, setRemoteVerification] = useState<{
+    sessionId?: string;
+    running: boolean;
+    output: string;
+    summary?: string;
+    finishedState?: "completed" | "cancelled" | "timed_out" | "spawn_failed" | "connection_lost";
+    passed?: boolean;
+  }>({ running: false, output: "" });
   const [operationMessageSurface, setOperationMessageSurface] = useState<"global" | "training" | "plan">("global");
   const [pendingPlanComposerDraftReplacement, setPendingPlanComposerDraftReplacement] =
     useState<PlanComposerDraftReplacement>();
@@ -4590,6 +4599,29 @@ export function App() {
           pendingMessageActionTimeoutRef.current = undefined;
         }
         setPendingMessageAction(null);
+      }
+      if (
+        message.type === "remoteVerification/started" ||
+        message.type === "remoteVerification/stream" ||
+        message.type === "remoteVerification/finished"
+      ) {
+        if (message.type === "remoteVerification/started") {
+          setRemoteVerification({ sessionId: message.payload.sessionId, running: true, output: "" });
+        } else if (message.type === "remoteVerification/stream") {
+          setRemoteVerification((current) => ({
+            ...current,
+            output: (current.output + message.payload.text).slice(-20_000),
+          }));
+        } else {
+          setRemoteVerification((current) => ({
+            ...current,
+            running: false,
+            finishedState: message.payload.state,
+            passed: message.payload.passed,
+            summary: message.payload.summary,
+          }));
+        }
+        return;
       }
       if (message.type === "training/resourceHandoff") {
         const handoff = resourceTrainingHandoffResolversRef.current.get(message.payload.requestId);
@@ -12980,6 +13012,18 @@ export function App() {
   // eight-language surface labels; the card reports status transitions and
   // verification requests through the handler below.
   const handleVerifyCurrentFileFromCard = () => {
+    if (data.workspace?.isRemoteWorkspace && !isBrowserPreview) {
+      if (remoteVerification.running) {
+        return;
+      }
+      setRemoteVerification({ running: true, output: "" });
+      setTrainingVerifyNotice(undefined);
+      postMessage({
+        type: "command/execute",
+        payload: { commandId: trainerCommands.remoteVerifyActiveFile },
+      });
+      return;
+    }
     if (isBrowserPreview) {
       setTrainingVerifyNotice(
         layout.composerLanguage === "zh-CN"
@@ -12996,6 +13040,15 @@ export function App() {
     postMessage({
       type: "command/execute",
       payload: { commandId: trainerCommands.evaluateCurrentFile },
+    });
+  };
+  const handleStopRemoteVerification = () => {
+    if (!remoteVerification.running) {
+      return;
+    }
+    postMessage({
+      type: "command/execute",
+      payload: { commandId: trainerCommands.remoteVerifyCancel },
     });
   };
   const trainingVerifyFileVisible =
@@ -13309,6 +13362,9 @@ export function App() {
           selectedCardStatus={effectiveSelectedTrainingCardStatus}
           onCardStatusTransition={leftoverTrainingHandoffChromeNotLive ? undefined : handleTrainingCardStatusTransition}
           onVerifyCurrentFile={handleVerifyCurrentFileFromCard}
+          remoteVerification={remoteVerification}
+          remoteName={data.workspace?.remoteName}
+          onStopRemoteVerification={handleStopRemoteVerification}
           onHintReveal={handleHintReveal}
           title={title}
           currentStep={currentStep}

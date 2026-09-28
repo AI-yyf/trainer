@@ -1,3 +1,6 @@
+import * as path from 'node:path';
+import * as vscode from 'vscode';
+
 import type { RemoteProcessSpec } from '../../../shared/src/remoteProtocol';
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
@@ -148,4 +151,169 @@ export async function remoteVerifyCommand(
       : `Remote verification ${passed ? 'passed' : 'failed'} (exit ${exitCode}); no live practice card, so nothing was attested.`,
     data: { spec, exit_code: exitCode, passed, stdout, stderr },
   };
+}
+
+
+/**
+ * Streaming + cancel registry for the webview-facing remote verification.
+ * One active session at a time per window: starting a new run while one is
+ * active is rejected instead of silently racing two processes.
+ */
+const activeRemoteVerification: {
+  sessionId?: string;
+  signal: { aborted: boolean };
+} = { signal: { aborted: false } };
+
+const PYTESTABLE_EXTENSIONS = new Set(['.py']);
+
+function buildActiveFileVerificationSpec(
+  activeFile: { fsPath: string; languageId?: string },
+): RemoteProcessSpec | undefined {
+  const extension = path.extname(activeFile.fsPath).toLowerCase();
+  if (!PYTESTABLE_EXTENSIONS.has(extension)) {
+    return undefined;
+  }
+  return {
+    executable: 'python',
+    args: ['-m', 'pytest', activeFile.fsPath, '-q', '--no-header'],
+    timeout_ms: 10 * 60_000,
+  };
+}
+
+export async function remoteVerifyActiveFileCommand(
+  context: CommandContext,
+): Promise<CommandExecutionResult> {
+  const workspace = context.getHostState().workspace;
+  if (!workspace.isRemoteWorkspace && !workspace.remoteName) {
+    return {
+      ok: false,
+      message:
+        'Remote verification is only available in a Remote-SSH, WSL, Tunnel, or Dev Container window.',
+    };
+  }
+  if (!(await context.trustGuard.ensureTrusted('run remote verification'))) {
+    return { ok: false, message: 'Workspace trust is required to run remote verification.' };
+  }
+  if (activeRemoteVerification.sessionId) {
+    return {
+      ok: false,
+      message: 'A remote verification is already running. Stop it before starting another.',
+    };
+  }
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    return { ok: false, message: 'Open the practice file before verifying it.' };
+  }
+  const spec = buildActiveFileVerificationSpec({ fsPath: editor.document.uri.fsPath });
+  if (!spec) {
+    return {
+      ok: false,
+      message: 'Remote file verification currently supports Python practice files (pytest).',
+    };
+  }
+
+  const capabilities = await context.workspaceGateway.capabilities();
+  if (!capabilities.companionAvailable || !capabilities.verify) {
+    return {
+      ok: false,
+      message:
+        'Remote Workspace Companion is not available in this window. Run "Trainer: Install Remote Workspace Support", reload the remote window, then verify again.',
+    };
+  }
+
+  activeRemoteVerification.signal = { aborted: false };
+  const signal = activeRemoteVerification.signal;
+  void context.workspaceGateway
+    .runVerification(spec, {
+      signal,
+      onStart: (session) => {
+        activeRemoteVerification.sessionId = session.session_id;
+        void context.workbench.postMessage({
+          type: 'remoteVerification/started',
+          payload: {
+            sessionId: session.session_id,
+            spec: { executable: spec.executable, args: spec.args },
+          },
+        });
+      },
+      onChunk: (chunk) => {
+        if (!activeRemoteVerification.sessionId) {
+          return;
+        }
+        void context.workbench.postMessage({
+          type: 'remoteVerification/stream',
+          payload: {
+            sessionId: activeRemoteVerification.sessionId,
+            stream: chunk.stream,
+            text: chunk.text,
+          },
+        });
+      },
+    })
+    .then(async (verification) => {
+      const sessionId = activeRemoteVerification.sessionId;
+      activeRemoteVerification.sessionId = undefined;
+      if (!sessionId) {
+        return;
+      }
+      const completed = verification.state === 'completed';
+      const exitCode = verification.exit_code ?? null;
+      const passed = completed && verification.result === 'passed' && exitCode === 0;
+
+      const hostState = context.getHostState();
+      const cardId = resolveLivePracticeCardId(hostState);
+      if (cardId && completed) {
+        const body = buildTestRunAttestationBody({
+          card: { cardId },
+          passed,
+          summary: `Remote verify ${passed ? 'passed' : 'failed'} on ${workspace.remoteName ?? 'remote'}: ${path.basename(spec.args[spec.args.length - 1] ?? '')} (exit ${exitCode})`,
+          testsOutput: truncateTestsOutput(`${verification.stdout}\n${verification.stderr}`.trim()),
+          sessionId: context.getSessionId(),
+          workspaceId: resolveAttestationWorkspaceId(hostState),
+        });
+        void dispatchTestRunAttestation(context, body);
+      }
+
+      const summary = completed
+        ? `已验证${passed ? '通过' : '未通过'} (exit ${exitCode})`
+        : verification.state === 'timed_out'
+          ? '远程验证超时,执行结果未知。'
+          : verification.state === 'cancelled'
+            ? '远程验证已停止,执行结果未知。'
+            : '远程验证已中断,执行结果未知。';
+      void context.workbench.postMessage({
+        type: 'remoteVerification/finished',
+        payload: {
+          sessionId,
+          state: verification.state,
+          exitCode,
+          ...(completed ? { passed } : {}),
+          summary,
+        },
+      });
+    })
+    .catch((error) => {
+      activeRemoteVerification.sessionId = undefined;
+      void context.workbench.postMessage({
+        type: 'remoteVerification/finished',
+        payload: {
+          sessionId: '',
+          state: 'connection_lost',
+          exitCode: null,
+          summary: `远程验证已中断,执行结果未知。${error instanceof Error ? error.message : String(error)}`,
+        },
+      });
+    });
+
+  return {
+    ok: true,
+    message: `Remote verification starting on ${workspace.remoteName ?? 'remote'}.`,
+  };
+}
+
+export async function remoteVerifyCancelCommand(
+  context: CommandContext,
+): Promise<CommandExecutionResult> {
+  activeRemoteVerification.signal.aborted = true;
+  return { ok: true, message: 'Stop requested for the running remote verification.' };
 }

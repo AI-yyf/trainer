@@ -113,6 +113,7 @@ export interface WorkspaceGateway {
     spec: WorkspaceVerificationSpec,
     hooks?: {
       onChunk?: (chunk: { stream: 'stdout' | 'stderr'; text: string }) => void;
+      onStart?: (session: RemoteVerificationSessionRef) => void;
       signal?: { aborted: boolean };
       pollIntervalMs?: number;
     },

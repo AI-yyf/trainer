@@ -128,3 +128,39 @@
   }
 }
 
+/* §八 remote verification streaming panel — same visual family as notices. */
+.remote-verify-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--fg, var(--accent)) 3%, transparent);
+}
+
+.remote-verify-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.remote-verify-panel__verdict {
+  color: var(--vscode-descriptionForeground, inherit);
+}
+
+.remote-verify-panel__verdict.is-passed {
+  color: var(--vscode-testing-iconPassed, var(--accent));
+}
+
+.remote-verify-panel__output {
+  margin: 0;
+  max-block-size: 160px;
+  overflow: auto;
+  font-size: var(--trainer-font-2xs, 11px);
+  line-height: 1.45;
+  color: var(--vscode-descriptionForeground, inherit);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

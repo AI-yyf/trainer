@@ -12,6 +12,7 @@ import {
 import type { TrainingReliability, TrainingSkillProjection } from "../../lib/types";
 import { CheckMarkIcon, ChevronRightIcon, SparklesIcon, TargetIcon } from "../icons";
 import { ActionButton } from "../common/ActionButton";
+import { TrainerSpinner } from "../common/TrainerSpinner";
 import { SkillProjectionStrip } from "./SkillProjectionStrip";
 import { CollapseSection } from "../common/CollapseSection";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
@@ -126,6 +127,16 @@ export interface TrainingWorkbenchViewProps {
   primaryAction?: ReactNode;
   /** Card-owned verification affordance (preview/workspace verify flow). */
   onVerifyCurrentFile?: () => void;
+  /** §八: remote identity + streaming verification panel state. */
+  remoteVerification?: {
+    running: boolean;
+    output: string;
+    summary?: string;
+    finishedState?: "completed" | "cancelled" | "timed_out" | "spawn_failed" | "connection_lost";
+    passed?: boolean;
+  };
+  remoteName?: string;
+  onStopRemoteVerification?: () => void;
   /** §五: record honest assistance usage when the learner reveals a hint. */
   onHintReveal?: (hintLevel: number) => void;
   leftoverNote?: string;
@@ -1033,6 +1044,9 @@ export function TrainingWorkbenchView({
   weakSpots = [],
   primaryAction,
   onVerifyCurrentFile,
+  remoteVerification,
+  remoteName,
+  onStopRemoteVerification,
   onHintReveal,
   leftoverNote,
   actions,
@@ -1786,7 +1800,17 @@ export function TrainingWorkbenchView({
                     {onVerifyCurrentFile && cardType === "practice" && trainingSubmode !== "learn-primer" ? (
                       <ActionButton
                         tone="ghost"
-                        label={trainingSurfaceLabel(language, "verifyCurrentFile")}
+                        label={
+                          remoteVerification?.running
+                            ? isZh
+                              ? "正在远程验证…"
+                              : "Verifying on remote…"
+                            : remoteName
+                              ? isZh
+                                ? `在 ${remoteName} 上验证`
+                                : `Verify on ${remoteName}`
+                              : trainingSurfaceLabel(language, "verifyCurrentFile")
+                        }
                         onClick={() => onVerifyCurrentFile()}
                       />
                     ) : null}

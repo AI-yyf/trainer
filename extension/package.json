@@ -271,6 +271,14 @@
       {
         "command": "trainer.research.status",
         "title": "Trainer: Get Research Status"
+      },
+      {
+        "command": "trainer.remote.verifyActiveFile",
+        "title": "Trainer: Verify Current File on the Remote Machine"
+      },
+      {
+        "command": "trainer.remote.verifyCancel",
+        "title": "Trainer: Stop the Remote Verification"
       }
     ],
     "viewsContainers": {

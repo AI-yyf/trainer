@@ -84,6 +84,8 @@ export const COMMAND_IDS = {
   continueWorkspaceAdmission: trainerCommands.continueWorkspaceAdmission,
   abandonWorkspaceAdmission: trainerCommands.abandonWorkspaceAdmission,
   evaluateCurrentFile: trainerCommands.evaluateCurrentFile,
+  remoteVerifyActiveFile: trainerCommands.remoteVerifyActiveFile,
+  remoteVerifyCancel: trainerCommands.remoteVerifyCancel,
   evaluateSelection: trainerCommands.evaluateSelection,
   refreshMemory: trainerCommands.refreshMemory,
   recordUserFeedback: trainerCommands.recordUserFeedback,
