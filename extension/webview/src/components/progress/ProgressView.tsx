@@ -1,3 +1,4 @@
+import type { ComposerLanguage } from "../../lib/types";
 import type { TrainingSkillDimensionState, TrainingSkillProjection } from "../../lib/types";
 
 type DimensionKey = "comprehension" | "implementation" | "debugging" | "transfer";
@@ -12,9 +13,43 @@ const DIMENSION_LABELS: Record<ComposerLanguage, Record<DimensionKey, string>> =
     debugging: "Debugging",
     transfer: "Transfer",
   },
+  "es-ES": {
+    comprehension: "Comprensión",
+    implementation: "Implementación",
+    debugging: "Depuración",
+    transfer: "Transferencia",
+  },
+  "fr-FR": {
+    comprehension: "Compréhension",
+    implementation: "Implémentation",
+    debugging: "Débogage",
+    transfer: "Transfert",
+  },
+  "de-DE": {
+    comprehension: "Verständnis",
+    implementation: "Implementierung",
+    debugging: "Fehlersuche",
+    transfer: "Transfer",
+  },
+  "ja-JP": {
+    comprehension: "理解",
+    implementation: "実装",
+    debugging: "デバッグ",
+    transfer: "転用",
+  },
+  "ko-KR": {
+    comprehension: "이해",
+    implementation: "구현",
+    debugging: "디버깅",
+    transfer: "전이",
+  },
+  "pt-BR": {
+    comprehension: "Compreensão",
+    implementation: "Implementação",
+    debugging: "Depuração",
+    transfer: "Transferência",
+  },
 };
-
-type ComposerLanguage = "zh-CN" | "en-US";
 
 const STATE_LABELS: Record<ComposerLanguage, Record<TrainingSkillDimensionState["state"], string>> = {
   "zh-CN": {
@@ -31,6 +66,175 @@ const STATE_LABELS: Record<ComposerLanguage, Record<TrainingSkillDimensionState[
     repeat_verified: "Repeatedly verified",
     needs_review: "Needs review",
   },
+  "es-ES": {
+    not_verified: "Aún sin verificar",
+    assisted: "Completado con ayudas",
+    independent: "Independiente",
+    repeat_verified: "Verificado repetidamente",
+    needs_review: "Necesita repaso",
+  },
+  "fr-FR": {
+    not_verified: "Pas encore vérifié",
+    assisted: "Terminé avec aides",
+    independent: "Indépendant",
+    repeat_verified: "Vérifié à plusieurs reprises",
+    needs_review: "À revoir",
+  },
+  "de-DE": {
+    not_verified: "Noch nicht überprüft",
+    assisted: "Mit Hinweisen abgeschlossen",
+    independent: "Selbstständig",
+    repeat_verified: "Mehrfach überprüft",
+    needs_review: "Braucht Wiederholung",
+  },
+  "ja-JP": {
+    not_verified: "まだ検証なし",
+    assisted: "ヒント付きで完了",
+    independent: "自力で完了",
+    repeat_verified: "繰り返し検証済み",
+    needs_review: "要復習",
+  },
+  "ko-KR": {
+    not_verified: "아직 검증 안 됨",
+    assisted: "힌트로 완료",
+    independent: "독립 완료",
+    repeat_verified: "반복 검증됨",
+    needs_review: "복습 필요",
+  },
+  "pt-BR": {
+    not_verified: "Ainda não verificado",
+    assisted: "Concluído com dicas",
+    independent: "Independente",
+    repeat_verified: "Verificado repetidamente",
+    needs_review: "Precisa de revisão",
+  },
+};
+
+const COPY: Record<
+  ComposerLanguage,
+  {
+    ariaLabel: string;
+    title: string;
+    updated: (label: string) => string;
+    evidenceCount: (count: number) => string;
+    noEvidence: string;
+    notVerified: string;
+    transferNudge: string;
+    empty: string;
+    startPracticing: string;
+    localeTag: string;
+  }
+> = {
+  "zh-CN": {
+    ariaLabel: "你的成长",
+    title: "你的成长",
+    updated: (label) => `更新于 ${label}`,
+    evidenceCount: (count) => `${count} 次验证通过`,
+    noEvidence: "还没有验证记录",
+    notVerified: "还未验证",
+    transferNudge: "迁移能力还未验证。做一个陌生的练习来检验你真正掌握了吗。",
+    empty: "完成一次练习的验证后，这里会显示你在理解、实现、调试和迁移上的真实成长。",
+    startPracticing: "去练习",
+    localeTag: "zh-CN",
+  },
+  "en-US": {
+    ariaLabel: "Your progress",
+    title: "Your progress",
+    updated: (label) => `Updated ${label}`,
+    evidenceCount: (count) => `${count} verification${count === 1 ? "" : "s"} passed`,
+    noEvidence: "No verifications yet",
+    notVerified: "Not verified yet",
+    transferNudge:
+      "Transfer hasn't been verified yet. Try an unfamiliar exercise to test your real understanding.",
+    empty:
+      "Once you verify a practice card, your real growth in comprehension, implementation, debugging, and transfer shows up here.",
+    startPracticing: "Start practicing",
+    localeTag: "en-US",
+  },
+  "es-ES": {
+    ariaLabel: "Tu progreso",
+    title: "Tu progreso",
+    updated: (label) => `Actualizado ${label}`,
+    evidenceCount: (count) => `${count} verificación${count === 1 ? "" : "es"} superada${count === 1 ? "" : "s"}`,
+    noEvidence: "Aún no hay verificaciones",
+    notVerified: "Aún sin verificar",
+    transferNudge:
+      "La transferencia aún no está verificada. Prueba un ejercicio poco familiar para comprobar tu comprensión real.",
+    empty:
+      "Cuando verifiques una tarjeta de práctica, tu crecimiento real en comprensión, implementación, depuración y transferencia aparecerá aquí.",
+    startPracticing: "Empezar a practicar",
+    localeTag: "es-ES",
+  },
+  "fr-FR": {
+    ariaLabel: "Votre progression",
+    title: "Votre progression",
+    updated: (label) => `Mis à jour ${label}`,
+    evidenceCount: (count) => `${count} vérification${count === 1 ? "" : "s"} réussie${count === 1 ? "" : "s"}`,
+    noEvidence: "Pas encore de vérifications",
+    notVerified: "Pas encore vérifié",
+    transferNudge:
+      "Le transfert n'est pas encore vérifié. Essayez un exercice inhabituel pour tester votre vraie compréhension.",
+    empty:
+      "Après la vérification d'une carte d'exercice, votre progression réelle en compréhension, implémentation, débogage et transfert apparaît ici.",
+    startPracticing: "Commencer à pratiquer",
+    localeTag: "fr-FR",
+  },
+  "de-DE": {
+    ariaLabel: "Dein Fortschritt",
+    title: "Dein Fortschritt",
+    updated: (label) => `Aktualisiert ${label}`,
+    evidenceCount: (count) => `${count} bestandene Überprüfung${count === 1 ? "" : "en"}`,
+    noEvidence: "Noch keine Überprüfungen",
+    notVerified: "Noch nicht überprüft",
+    transferNudge:
+      "Transfer ist noch nicht überprüft. Probiere eine ungewohnte Aufgabe, um dein echtes Verständnis zu testen.",
+    empty:
+      "Sobald du eine Übungskarte überprüfst, erscheint hier dein echtes Wachstum in Verständnis, Implementierung, Fehlersuche und Transfer.",
+    startPracticing: "Jetzt üben",
+    localeTag: "de-DE",
+  },
+  "ja-JP": {
+    ariaLabel: "あなたの成長",
+    title: "あなたの成長",
+    updated: (label) => `${label} 更新`,
+    evidenceCount: (count) => `${count} 回の検証に合格`,
+    noEvidence: "検証記録はまだありません",
+    notVerified: "まだ検証なし",
+    transferNudge:
+      "転用はまだ検証されていません。見慣れない練習で本当の理解を確かめてみましょう。",
+    empty:
+      "練習カードを検証すると、理解・実装・デバッグ・転用の本当の成長がここに表示されます。",
+    startPracticing: "練習を始める",
+    localeTag: "ja-JP",
+  },
+  "ko-KR": {
+    ariaLabel: "당신의 성장",
+    title: "당신의 성장",
+    updated: (label) => `${label} 업데이트`,
+    evidenceCount: (count) => `${count}회 검증 통과`,
+    noEvidence: "아직 검증 기록이 없습니다",
+    notVerified: "아직 검증 안 됨",
+    transferNudge:
+      "전이는 아직 검증되지 않았습니다. 익숙하지 않은 연습으로 진짜 이해를 확인해 보세요.",
+    empty:
+      "연습 카드를 검증하면 이해·구현·디버깅·전이에 대한 실제 성장이 여기에 표시됩니다.",
+    startPracticing: "연습 시작",
+    localeTag: "ko-KR",
+  },
+  "pt-BR": {
+    ariaLabel: "Seu progresso",
+    title: "Seu progresso",
+    updated: (label) => `Atualizado ${label}`,
+    evidenceCount: (count) => `${count} verificação${count === 1 ? "" : "es"} aprovada${count === 1 ? "" : "s"}`,
+    noEvidence: "Nenhuma verificação ainda",
+    notVerified: "Ainda não verificado",
+    transferNudge:
+      "A transferência ainda não foi verificada. Tente um exercício pouco familiar para testar sua compreensão real.",
+    empty:
+      "Depois de verificar um cartão de prática, seu crescimento real em compreensão, implementação, depuração e transferência aparece aqui.",
+    startPracticing: "Começar a praticar",
+    localeTag: "pt-BR",
+  },
 };
 
 function dimensionState(
@@ -41,7 +245,7 @@ function dimensionState(
 }
 
 export interface ProgressViewProps {
-  zh: boolean;
+  language: ComposerLanguage;
   projection?: TrainingSkillProjection;
   onOpenTraining: () => void;
 }
@@ -50,9 +254,11 @@ export interface ProgressViewProps {
  * §十二: capability presentation. Calm text rows with evidence counts —
  * no score bars, no gamification. Every claim comes from the server-side
  * skill projection; empty state explains what will populate it.
+ * §十五: all eight supported languages flow through the label maps —
+ * no zh/en binaries in this surface.
  */
-export function ProgressView({ zh, projection, onOpenTraining }: ProgressViewProps) {
-  const language: ComposerLanguage = zh ? "zh-CN" : "en-US";
+export function ProgressView({ language, projection, onOpenTraining }: ProgressViewProps) {
+  const copy = COPY[language];
   const hasAnyEvidence = DIMENSION_KEYS.some((key) => {
     const state = dimensionState(projection, key);
     return Boolean(state && (state.verifiedCount ?? 0) > 0);
@@ -60,7 +266,7 @@ export function ProgressView({ zh, projection, onOpenTraining }: ProgressViewPro
   const updatedAt = projection?.updatedAt ? new Date(projection.updatedAt) : undefined;
   const updatedLabel =
     updatedAt && !Number.isNaN(updatedAt.getTime())
-      ? updatedAt.toLocaleString(zh ? "zh-CN" : undefined, {
+      ? updatedAt.toLocaleString(copy.localeTag, {
           month: "short",
           day: "numeric",
           hour: "2-digit",
@@ -69,13 +275,11 @@ export function ProgressView({ zh, projection, onOpenTraining }: ProgressViewPro
       : "";
 
   return (
-    <section className="progress-view" aria-label={zh ? "你的成长" : "Your progress"}>
+    <section className="progress-view" aria-label={copy.ariaLabel}>
       <header className="progress-view__header">
-        <p className="eyebrow">{zh ? "你的成长" : "Your progress"}</p>
+        <p className="eyebrow">{copy.title}</p>
         {updatedLabel ? (
-          <p className="progress-view__updated">
-            {zh ? `更新于 ${updatedLabel}` : `Updated ${updatedLabel}`}
-          </p>
+          <p className="progress-view__updated">{copy.updated(updatedLabel)}</p>
         ) : null}
       </header>
       {hasAnyEvidence ? (
@@ -88,21 +292,11 @@ export function ProgressView({ zh, projection, onOpenTraining }: ProgressViewPro
                 <div className="progress-view__row-main">
                   <span className="progress-view__dimension">{DIMENSION_LABELS[language][key]}</span>
                   <span className="progress-view__state">
-                    {state
-                      ? STATE_LABELS[language][state.state]
-                      : zh
-                        ? "还未验证"
-                        : "Not verified yet"}
+                    {state ? STATE_LABELS[language][state.state] : copy.notVerified}
                   </span>
                 </div>
                 <span className="progress-view__evidence">
-                  {count > 0
-                    ? zh
-                      ? `${count} 次验证通过`
-                      : `${count} verification${count === 1 ? "" : "s"} passed`
-                    : zh
-                      ? "还没有验证记录"
-                      : "No verifications yet"}
+                  {count > 0 ? copy.evidenceCount(count) : copy.noEvidence}
                 </span>
               </li>
             );
@@ -116,24 +310,16 @@ export function ProgressView({ zh, projection, onOpenTraining }: ProgressViewPro
             if (strongest.length < 2) return null;
             return (
               <li className="progress-view__row progress-view__nudge">
-                <span className="progress-view__state">
-                  {zh
-                    ? "迁移能力还未验证。做一个陌生的练习来检验你真正掌握了吗。"
-                    : "Transfer hasn't been verified yet. Try an unfamiliar exercise to test your real understanding."}
-                </span>
+                <span className="progress-view__state">{copy.transferNudge}</span>
               </li>
             );
           })()}
         </ul>
       ) : (
         <div className="progress-view__empty">
-          <p>
-            {zh
-              ? "完成一次练习的验证后，这里会显示你在理解、实现、调试和迁移上的真实成长。"
-              : "Once you verify a practice card, your real growth in comprehension, implementation, debugging, and transfer shows up here."}
-          </p>
+          <p>{copy.empty}</p>
           <button className="button button--accent" type="button" onClick={onOpenTraining}>
-            {zh ? "去练习" : "Start practicing"}
+            {copy.startPracticing}
           </button>
         </div>
       )}

@@ -14448,7 +14448,7 @@ export function App() {
     <section className="progress-view-section">
       <Suspense fallback={<ViewFallback label={t.progress} language={layout.composerLanguage} />}>
         <ProgressView
-          zh={layout.composerLanguage === "zh-CN"}
+          language={layout.composerLanguage}
           projection={data.workspaceTrainingState?.skillProjection}
           onOpenTraining={() => setActiveView("training")}
         />
