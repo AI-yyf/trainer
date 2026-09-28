@@ -2966,6 +2966,7 @@ export async function updatePlanCommand(
       restorePlanHistoryEntryId,
       restorePlanHistoryVersion,
     };
+    restorePayload.formal_plan_mutation = true;
     if (revision !== undefined && revision > 0) {
       restorePayload.expected_revision = revision;
     }
@@ -2998,6 +2999,9 @@ export async function updatePlanCommand(
     instructions,
     freeze: frozen,
     frozen,
+    // §十九: the formal UI chain opts into the server's 428 revision guard —
+    // a missing expected_revision must fail loudly, never silently overwrite.
+    formal_plan_mutation: true,
   };
   if (revision !== undefined && revision > 0) {
     planPayload.expected_revision = revision;
