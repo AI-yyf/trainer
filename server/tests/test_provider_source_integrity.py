@@ -40,6 +40,10 @@ COACHING_REPLY_DRAFTS_SOURCES = (
     SERVER_ROOT / "app" / "llm" / "coaching_reply_drafts.py",
     REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "llm" / "coaching_reply_drafts.py",
 )
+PYPROJECT_SOURCES = (
+    SERVER_ROOT / "pyproject.toml",
+    REPOSITORY_ROOT / "extension" / "bundled" / "server" / "pyproject.toml",
+)
 SOURCE_PAIRS = (
     (
         SERVER_ROOT / "app" / "api" / "routers.py",
@@ -238,3 +242,13 @@ def test_shipped_coach_sources_are_clean_and_in_sync(
         assert not unfriendly_literals, f"Unfriendly coach copy in {source_path}: {unfriendly_literals}"
 
     assert server_text == bundled_text
+
+@pytest.mark.parametrize("server_source,bundled_source", (PYPROJECT_SOURCES,))
+def test_bundled_non_python_config_matches_server_bytes(
+    server_source: Path,
+    bundled_source: Path,
+) -> None:
+    """Config parity (pyproject) cannot go through SOURCE_PAIRS: that test ast-parses Python sources."""
+    assert server_source.read_text(encoding="utf-8") == bundled_source.read_text(
+        encoding="utf-8"
+    ), "bundled/server/pyproject.toml has drifted from server/pyproject.toml"
