@@ -24,7 +24,10 @@ jobs:
   server:
     name: Server (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    # 60 min: windows pytest exceeds 40 and was killed before --durations
+    # could print; this bump is instrumental — one complete windows run with
+    # per-file timing so the slow slice can actually be fixed.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
