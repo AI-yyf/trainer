@@ -3975,7 +3975,9 @@ export function App() {
   const [planComposerMode, setPlanComposerMode] = useState<PlanComposerMode>("explain");
   const [trainingVerifyNotice, setTrainingVerifyNotice] = useState<string | undefined>();
   // §十一: companion install state for the Settings remote-support panel.
-  const [companionInstallState, setCompanionInstallState] = useState<string>("not_installed");
+  const [companionInstallState, setCompanionInstallState] = useState<
+    import("../../../../shared/src/companionInstallState").CompanionInstallState
+  >("not_installed");
   const companionStateQueriedRef = useRef(false);
   // §八: streaming remote verification panel (protocol v2 lifecycle).
   const [remoteVerification, setRemoteVerification] = useState<{
@@ -4606,7 +4608,9 @@ export function App() {
         setPendingMessageAction(null);
       }
       if (message.type === "remoteCompanion/state") {
-        setCompanionInstallState(message.payload.state);
+        setCompanionInstallState(
+          message.payload.state as import("../../../../shared/src/companionInstallState").CompanionInstallState,
+        );
         return;
       }
       if (
