@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import type { RemoteProcessSpec } from '../../../shared/src/remoteProtocol';
+import { deriveCompanionInstallState } from '../../../shared/src/companionInstallState';
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
 import {
@@ -316,4 +317,47 @@ export async function remoteVerifyCancelCommand(
 ): Promise<CommandExecutionResult> {
   activeRemoteVerification.signal.aborted = true;
   return { ok: true, message: 'Stop requested for the running remote verification.' };
+}
+
+
+/**
+ * One-shot companion install-state query for the Settings panel. User
+ * initiated (the panel asks when it becomes visible); no background polling.
+ */
+export async function remoteCompanionStateCommand(
+  context: CommandContext,
+): Promise<CommandExecutionResult> {
+  const workspace = context.getHostState().workspace;
+  const remoteName = workspace.remoteName;
+  let capabilities;
+  try {
+    capabilities = await context.workspaceGateway.capabilities();
+  } catch {
+    capabilities = undefined;
+  }
+  const state = deriveCompanionInstallState({
+    capabilities: capabilities
+      ? {
+          protocol_version: (capabilities.protocolVersion ?? 0) as 2,
+          available: Boolean(capabilities.companionAvailable),
+          capabilities: {
+            stat: false,
+            read_file: false,
+            list_directory: false,
+            find_files: false,
+            search_text: false,
+            hash_artifact: false,
+            diagnostics: false,
+            environment: false,
+            verify: false,
+          },
+        }
+      : undefined,
+    connectionLost: false,
+  });
+  return {
+    ok: true,
+    message: `Remote support state: ${state}.`,
+    data: { state, remoteName },
+  };
 }

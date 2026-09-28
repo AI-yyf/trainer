@@ -1444,6 +1444,7 @@ export interface CoachSettingsViewProps {
   workspaceControlStatus?: SettingsSectionStatus;
   /** §15: remote workspace identity for the Remote Support block. */
   remoteWorkspaceName?: string;
+  companionInstallState?: string;
   remoteWorkspaceActive?: boolean;
   providerApiKeyFocusRequest?: number;
   onThemePreferenceChange?: (value: ThemePreference) => void;
@@ -3873,6 +3874,7 @@ export function CoachSettingsView({
   coachDefaultsStatus,
   workspaceControlStatus,
   remoteWorkspaceName,
+  companionInstallState,
   remoteWorkspaceActive,
   providerApiKeyFocusRequest,
   onProviderDraftChange,
@@ -7922,18 +7924,71 @@ export function CoachSettingsView({
                     ? "Trainer 通过 Remote Workspace Companion 读取远端文件、搜索和验证。如果尚未安装，请点击下方按钮。"
                     : "Trainer uses the Remote Workspace Companion for remote file access, search, and verification. Install it below if not yet available."}
                 </p>
-                <button
-                  type="button"
-                  className="toolbar-button"
-                  onClick={() =>
-                    postWebviewMessage({
-                      type: "command/execute",
-                      payload: { commandId: trainerCommands.remoteInstallCompanion },
-                    })
-                  }
-                >
-                  {language === "zh-CN" ? "安装远程支持" : "Install Remote Support"}
-                </button>
+                {(() => {
+                  const zh = language === "zh-CN";
+                  const state = companionInstallState ?? "not_installed";
+                  const labels: Record<string, { button: string; note?: string; disabled: boolean }> = {
+                    not_installed: {
+                      button: zh ? "安装远程支持" : "Install Remote Support",
+                      disabled: false,
+                    },
+                    installing: {
+                      button: zh ? "正在安装…" : "Installing…",
+                      note: zh ? "VS Code 正在安装 Companion。" : "VS Code is installing the companion.",
+                      disabled: true,
+                    },
+                    await_reload: {
+                      button: zh ? "等待 Reload" : "Waiting for reload",
+                      note: zh ? "安装完成,请重载远程窗口后回到这里。" : "Install finished — reload the remote window, then come back.",
+                      disabled: true,
+                    },
+                    preparing: {
+                      button: zh ? "准备中…" : "Preparing…",
+                      disabled: true,
+                    },
+                    ready: {
+                      button: zh ? "远程支持已就绪" : "Remote support ready",
+                      note: remoteWorkspaceName ? `SSH · ${remoteWorkspaceName}` : undefined,
+                      disabled: true,
+                    },
+                    version_incompatible: {
+                      button: zh ? "版本不兼容,重新安装" : "Version mismatch — reinstall",
+                      note: zh ? "Companion 与 Trainer 版本不匹配,请重装。" : "The companion version does not match Trainer. Reinstall it.",
+                      disabled: false,
+                    },
+                    connection_lost: {
+                      button: zh ? "连接丢失,重新安装" : "Connection lost — reinstall",
+                      note: zh ? "远程连接断开。恢复连接后如仍未就绪,请重装。" : "The remote connection dropped. Reinstall if it is still not ready after reconnecting.",
+                      disabled: false,
+                    },
+                    upgrade_available: {
+                      button: zh ? "远程支持已就绪" : "Remote support ready",
+                      note: zh ? "有可用更新,可随时重装升级。" : "An update is available; reinstall any time.",
+                      disabled: true,
+                    },
+                  };
+                  const view = labels[state] ?? labels.not_installed;
+                  return (
+                    <>
+                      {view.note ? (
+                        <p className="settings-sheet__note settings-sheet__note--compact">{view.note}</p>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="toolbar-button"
+                        disabled={view.disabled}
+                        onClick={() =>
+                          postWebviewMessage({
+                            type: "command/execute",
+                            payload: { commandId: trainerCommands.remoteInstallCompanion },
+                          })
+                        }
+                      >
+                        {view.button}
+                      </button>
+                    </>
+                  );
+                })()}
             </section>
             {resourceSandbox ? (
               <section className="settings-sheet__workspace-card">

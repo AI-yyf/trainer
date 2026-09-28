@@ -86,6 +86,7 @@ export const COMMAND_IDS = {
   evaluateCurrentFile: trainerCommands.evaluateCurrentFile,
   remoteVerifyActiveFile: trainerCommands.remoteVerifyActiveFile,
   remoteVerifyCancel: trainerCommands.remoteVerifyCancel,
+  remoteCompanionState: trainerCommands.remoteCompanionState,
   evaluateSelection: trainerCommands.evaluateSelection,
   refreshMemory: trainerCommands.refreshMemory,
   recordUserFeedback: trainerCommands.recordUserFeedback,

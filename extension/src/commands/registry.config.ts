@@ -74,6 +74,7 @@ import {
 import { generateStageMaterialCommand } from './stageMaterialCommands';
 import { installRemoteCompanionCommand } from './remoteCompanionCommands';
 import {
+  remoteCompanionStateCommand,
   remoteVerifyActiveFileCommand,
   remoteVerifyCancelCommand,
   remoteVerifyCommand,
@@ -228,6 +229,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.remoteVerify, register: (ctx, payload) => remoteVerifyCommand(ctx, payload) },
     { commandId: COMMAND_IDS.remoteVerifyActiveFile, register: (ctx) => remoteVerifyActiveFileCommand(ctx) },
     { commandId: COMMAND_IDS.remoteVerifyCancel, register: (ctx) => remoteVerifyCancelCommand(ctx) },
+    { commandId: COMMAND_IDS.remoteCompanionState, register: (ctx) => remoteCompanionStateCommand(ctx) },
     { commandId: COMMAND_IDS.coachDebugLoop, register: (ctx) => openCoachScenarioCommand(ctx, 'debugLoop') },
     {
       commandId: COMMAND_IDS.coachFunctionContract,

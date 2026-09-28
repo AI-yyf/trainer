@@ -29,6 +29,7 @@ export const trainerCommands = {
   coachRemoteBoundary: "trainer.coach.remoteBoundary",
   remoteVerify: "trainer.remote.verify",
   remoteInstallCompanion: "trainer.remote.installCompanion",
+  remoteCompanionState: "trainer.remote.companionState",
   coachDebugLoop: "trainer.coach.debugLoop",
   coachFunctionContract: "trainer.coach.functionContract",
   coachConceptMastery: "trainer.coach.conceptMastery",

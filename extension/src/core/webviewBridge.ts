@@ -490,6 +490,19 @@ export class WorkbenchSidebarController
       const command = this.resolveCommand(message);
       if (command) {
         const result = await this.commandRegistry.execute(command.commandId, command.payload);
+        if (command.commandId === COMMAND_IDS.remoteCompanionState) {
+          // A quiet query: the Settings panel consumes the dedicated state
+          // message instead of a toast.
+          const data = (result.data ?? {}) as { state?: string; remoteName?: string };
+          await this.postMessage({
+            type: 'remoteCompanion/state',
+            payload: {
+              state: data.state ?? 'not_installed',
+              ...(data.remoteName ? { remoteName: data.remoteName } : {}),
+            },
+          });
+          return;
+        }
         const trainingPersistence = trainingPersistenceRequest(command.commandId, command.payload);
         const resourceTrainingHandoff = resourceTrainingHandoffResult(
           command.commandId,

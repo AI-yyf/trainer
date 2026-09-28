@@ -2075,6 +2075,10 @@ export type HostMessage =
       payload: { sessionId: string; stream: "stdout" | "stderr"; text: string };
     }
   | {
+      type: "remoteCompanion/state";
+      payload: { state: string; remoteName?: string };
+    }
+  | {
       type: "remoteVerification/finished";
       payload: {
         sessionId: string;

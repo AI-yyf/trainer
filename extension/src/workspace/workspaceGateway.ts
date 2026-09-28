@@ -62,6 +62,8 @@ export type WorkspaceCapabilities = {
   verify: boolean;
   remoteName?: string;
   companionAvailable?: boolean;
+  /** Companion protocol version; undefined when the companion is absent. */
+  protocolVersion?: number;
 };
 
 export type WorkspaceFileStat = RemoteFileStat;
@@ -158,6 +160,7 @@ export function companionCapabilitiesToWorkspaceCapabilities(
     verify: capabilities.capabilities.verify,
     remoteName: capabilities.remote_name,
     companionAvailable: capabilities.available,
+    protocolVersion: capabilities.protocol_version,
   };
 }
 

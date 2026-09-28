@@ -3972,6 +3972,9 @@ export function App() {
   });
   const [planComposerMode, setPlanComposerMode] = useState<PlanComposerMode>("explain");
   const [trainingVerifyNotice, setTrainingVerifyNotice] = useState<string | undefined>();
+  // §十一: companion install state for the Settings remote-support panel.
+  const [companionInstallState, setCompanionInstallState] = useState<string>("not_installed");
+  const companionStateQueriedRef = useRef(false);
   // §八: streaming remote verification panel (protocol v2 lifecycle).
   const [remoteVerification, setRemoteVerification] = useState<{
     sessionId?: string;
@@ -4599,6 +4602,10 @@ export function App() {
           pendingMessageActionTimeoutRef.current = undefined;
         }
         setPendingMessageAction(null);
+      }
+      if (message.type === "remoteCompanion/state") {
+        setCompanionInstallState(message.payload.state);
+        return;
       }
       if (
         message.type === "remoteVerification/started" ||
@@ -13042,6 +13049,16 @@ export function App() {
       payload: { commandId: trainerCommands.evaluateCurrentFile },
     });
   };
+  useEffect(() => {
+    if (activeView !== "settings" || isBrowserPreview || companionStateQueriedRef.current) {
+      return;
+    }
+    companionStateQueriedRef.current = true;
+    postMessage({
+      type: "command/execute",
+      payload: { commandId: trainerCommands.remoteCompanionState },
+    });
+  }, [activeView, isBrowserPreview]);
   const handleStopRemoteVerification = () => {
     if (!remoteVerification.running) {
       return;
@@ -13906,6 +13923,7 @@ export function App() {
       <Suspense fallback={<ViewFallback label={t.settings} language={layout.composerLanguage} />}>
         <CoachSettingsView
         className="settings-pane"
+        companionInstallState={companionInstallState}
         provider={data.providerConfig}
         workspaceId={settingsWorkspaceId}
 

@@ -279,6 +279,10 @@
       {
         "command": "trainer.remote.verifyCancel",
         "title": "Trainer: Stop the Remote Verification"
+      },
+      {
+        "command": "trainer.remote.companionState",
+        "title": "Trainer: Get Remote Support State"
       }
     ],
     "viewsContainers": {
