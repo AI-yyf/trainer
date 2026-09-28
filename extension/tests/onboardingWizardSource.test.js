@@ -13,21 +13,31 @@ function read(root, relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
 }
 
-test('onboarding wizard keeps the fixed three-step ladder and paste-to-use behavior', () => {
+test('onboarding cold start is conversation-first: a two-row setup card, not a ladder (§十六)', () => {
   const wizard = read(webviewRoot, 'components/firstlook/OnboardingWizard.tsx');
 
+  assert.match(wizard, /onboarding-setup__invite/);
+  assert.match(wizard, /onboardingSetupInvite/);
+  assert.match(wizard, /onboardingSetupCaption/);
+  // The ladder is gone: no ordered step list, no numbered markers.
+  assert.doesNotMatch(wizard, /onboarding-wizard__steps/);
+  assert.doesNotMatch(wizard, /<ol /);
+  // Both setup rows keep the honest done state and an expandable panel each.
+  assert.match(wizard, /onboardingSetupModelDone/);
+  assert.match(wizard, /onboardingSetupRootDone/);
+  assert.match(wizard, /aria-expanded=\{expandedPanel === "model"\}/);
+  assert.match(wizard, /aria-current=\{modelStep\?\.status === "active" && !modelDone \? "step" : undefined\}/);
+  // Full capability is retained behind the rows: paste-to-use, trial, settings.
   assert.match(wizard, /onboardingStepWorkspaceRoot/);
-  assert.match(wizard, /onboardingStepTrust/);
   assert.match(wizard, /onboardingStepConnectModel/);
   assert.match(
     wizard,
     /import \{ parseProviderConnectionPaste \} from "\.\.\/\.\.\/\.\.\/\.\.\/\.\.\/shared\/src\/providerGateway";/,
   );
   assert.match(wizard, /const parsed = parseProviderConnectionPaste\(value\);/);
-  assert.match(wizard, /aria-current=\{step\.status === "active" \? "step" : undefined\}/);
-  // The model step keeps the zero-config trial path next to the paste form.
   assert.match(wizard, /onboardingTrialAction/);
   assert.match(wizard, /onOpenSettings/);
+  assert.match(wizard, /onboardingTrustAction/);
 });
 
 test('App derives onboarding state from workbench data and wires every wizard action', () => {

@@ -821,3 +821,97 @@
   border-radius: 8px;
   background: color-mix(in srgb, var(--bg-1) 70%, transparent);
 }
+
+/* §十六 conversation-first cold start: two-row setup card, not a ladder. */
+.onboarding-setup {
+  display: grid;
+  gap: 10px;
+  inline-size: min(420px, 100%);
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.onboarding-setup__invite {
+  margin: 0;
+  color: var(--fg, inherit);
+  font-size: var(--trainer-font-md, 13px);
+}
+
+.onboarding-setup__hint {
+  margin: 0;
+  color: var(--vscode-descriptionForeground, inherit);
+  font-size: var(--trainer-font-2xs, 11px);
+}
+
+.onboarding-setup__rows {
+  display: grid;
+  gap: 6px;
+}
+
+.onboarding-setup__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(in srgb, var(--fg, var(--accent)) 3%, transparent);
+}
+
+.onboarding-setup__row.is-done {
+  opacity: 0.72;
+}
+
+.onboarding-setup__marker {
+  flex: none;
+  color: var(--vscode-testing-iconPassed, var(--accent));
+}
+
+.onboarding-setup__name {
+  flex: 1;
+  color: var(--fg, inherit);
+}
+
+.onboarding-setup__action {
+  flex: none;
+}
+
+.onboarding-setup__panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  border-radius: var(--radius-sm, 4px);
+}
+
+.onboarding-setup__detail {
+  margin: 0;
+  color: var(--vscode-descriptionForeground, inherit);
+}
+
+.onboarding-setup__field {
+  display: grid;
+  gap: 4px;
+}
+
+.onboarding-setup__field > span {
+  color: var(--vscode-descriptionForeground, inherit);
+  font-size: var(--trainer-font-2xs, 11px);
+}
+
+.onboarding-setup__link {
+  justify-self: start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-setup,
+  .onboarding-setup__panel {
+    animation: none;
+  }
+}

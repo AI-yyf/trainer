@@ -5,9 +5,13 @@ import { useTranslation } from "../../lib/i18n/useTranslation";
 import type { CopyKey } from "../../lib/i18n/copy";
 
 /**
- * Unified cold-start wizard: workspace root → trust window → connect model.
- * One progress rail, one visible action per step; steps flip to "done" as the
- * host patches bootstrap state in, so finishing a step auto-advances.
+ * §十六 conversation-first cold start (§四十八: extracted component).
+ *
+ * The composer leads — the learner can type before any setup exists and the
+ * draft stays in the box. Setup is a two-row status card, not a 1→2→3
+ * ladder: each row expands into the existing full panel (workspace root,
+ * trust, paste-to-connect) only when the learner asks for it, and flips to a
+ * quiet ✓ as the host patches bootstrap state in.
  */
 
 export interface OnboardingWizardProps {
@@ -53,11 +57,20 @@ export function OnboardingWizard({
 }: OnboardingWizardProps) {
   const { t } = useTranslation();
   const [pasteHint, setPasteHint] = useState<string | null>(null);
+  const [expandedPanel, setExpandedPanel] = useState<"model" | "workspace" | null>(null);
 
+  const stepById = useMemo(
+    () => new Map(steps.map((step) => [step.id, step] as const)),
+    [steps],
+  );
+  const modelStep = stepById.get("connect_model");
+  const workspaceStep = stepById.get("workspace_root");
   const trustDone = useMemo(
     () => steps.find((step) => step.id === "trust_window")?.status === "done",
     [steps],
   );
+  const modelDone = modelStep?.status === "done";
+  const rootDone = workspaceStep?.status === "done";
   const connectionReady = Boolean(draftBaseUrl.trim()) && (Boolean(draftApiKey.trim()) || hasStoredApiKey);
 
   if (complete) {
@@ -75,107 +88,137 @@ export function OnboardingWizard({
     onDraftChange({ baseUrl: value });
   };
 
+  const togglePanel = (panel: "model" | "workspace") => {
+    setExpandedPanel((current) => (current === panel ? null : panel));
+  };
+
+  const rowState = (done: boolean) => (done ? "onboarding-setup__row is-done" : "onboarding-setup__row");
+
   return (
-    <div className="onboarding-wizard" role="group" aria-label={t("onboardingTitle")}>
-      <p className="onboarding-wizard__title">{t("onboardingTitle")}</p>
-      <ol className="onboarding-wizard__steps">
-        {steps.map((step, index) => (
-          <li
-            key={step.id}
-            className={`onboarding-wizard__step onboarding-wizard__step--${step.status}`}
-            aria-current={step.status === "active" ? "step" : undefined}
-          >
-            <span className="onboarding-wizard__marker" aria-hidden>
-              {step.status === "done" ? "✓" : String(index + 1)}
-            </span>
-            <span className="onboarding-wizard__step-label">{t(STEP_LABEL_KEY[step.id])}</span>
-          </li>
-        ))}
-      </ol>
+    <div className="onboarding-setup" role="group" aria-label={t("onboardingTitle")}>
+      <p className="onboarding-setup__invite">{t("onboardingSetupInvite")}</p>
+      <p className="onboarding-setup__hint">{t("onboardingSetupCaption")}</p>
 
-      {activeStepId === "workspace_root" ? (
-        <div className="onboarding-wizard__panel">
-          <p className="onboarding-wizard__detail">{t("onboardingRootDetail")}</p>
+      <div className="onboarding-setup__rows">
+        <div
+          className={rowState(modelDone)}
+          aria-current={modelStep?.status === "active" && !modelDone ? "step" : undefined}
+        >
+          <span className="onboarding-setup__marker" aria-hidden>
+            {modelDone ? "✓" : "○"}
+          </span>
+          <span className="onboarding-setup__name">{t(STEP_LABEL_KEY.connect_model)}</span>
           <button
             type="button"
-            className="button button--accent"
-            disabled={busy}
-            onClick={() => onChooseWorkspaceRoot?.()}
+            className="button button--ghost onboarding-setup__action"
+            aria-expanded={expandedPanel === "model"}
+            onClick={() => togglePanel("model")}
           >
-            {t("onboardingRootAction")}
+            {modelDone ? t("onboardingSetupModelDone") : t("onboardingSetupModelAction")}
           </button>
-          {!trustDone && onTrustWindow ? (
-            <div className="onboarding-wizard__inline-trust">
-              <p className="onboarding-wizard__detail">{t("onboardingTrustInlineHint")}</p>
-              <button type="button" className="button button--ghost" onClick={() => onTrustWindow()}>
-                {t("onboardingTrustAction")}
-              </button>
-            </div>
-          ) : null}
         </div>
-      ) : null}
-
-      {activeStepId === "trust_window" ? (
-        <div className="onboarding-wizard__panel">
-          <p className="onboarding-wizard__detail">{t("onboardingTrustDetail")}</p>
-          {onTrustWindow ? (
-            <button type="button" className="button button--accent" onClick={() => onTrustWindow()}>
-              {t("onboardingTrustAction")}
+        {expandedPanel === "model" ? (
+          <div className="onboarding-setup__panel">
+            <p className="onboarding-setup__detail">{t("onboardingModelDetail")}</p>
+            <label className="onboarding-setup__field">
+              <span>{t("onboardingModelPasteLabel")}</span>
+              <input
+                type="text"
+                value={draftBaseUrl}
+                placeholder={t("onboardingModelPastePlaceholder")}
+                onChange={(event) => handlePaste(event.target.value)}
+              />
+            </label>
+            {pasteHint ? <p className="onboarding-setup__hint">{pasteHint}</p> : null}
+            <label className="onboarding-setup__field">
+              <span>{t("onboardingModelKeyLabel")}</span>
+              <input
+                type="password"
+                value={draftApiKey}
+                placeholder={
+                  hasStoredApiKey && !draftApiKey
+                    ? t("onboardingModelKeyStored")
+                    : t("onboardingModelKeyPlaceholder")
+                }
+                onChange={(event) => onDraftChange({ apiKey: event.target.value })}
+              />
+            </label>
+            <button
+              type="button"
+              className="button button--accent"
+              disabled={!connectionReady || busy}
+              onClick={() => onSaveConnection()}
+            >
+              {t("onboardingModelSave")}
             </button>
-          ) : null}
-        </div>
-      ) : null}
-
-      {activeStepId === "connect_model" ? (
-        <div className="onboarding-wizard__panel">
-          <p className="onboarding-wizard__detail">{t("onboardingModelDetail")}</p>
-          <label className="onboarding-wizard__field">
-            <span>{t("onboardingModelPasteLabel")}</span>
-            <input
-              type="text"
-              value={draftBaseUrl}
-              placeholder={t("onboardingModelPastePlaceholder")}
-              onChange={(event) => handlePaste(event.target.value)}
-            />
-          </label>
-          {pasteHint ? <p className="onboarding-wizard__hint">{pasteHint}</p> : null}
-          <label className="onboarding-wizard__field">
-            <span>{t("onboardingModelKeyLabel")}</span>
-            <input
-              type="password"
-              value={draftApiKey}
-              placeholder={hasStoredApiKey && !draftApiKey ? t("onboardingModelKeyStored") : t("onboardingModelKeyPlaceholder")}
-              onChange={(event) => onDraftChange({ apiKey: event.target.value })}
-            />
-          </label>
-          <button
-            type="button"
-            className="button button--accent"
-            disabled={!connectionReady || busy}
-            onClick={() => onSaveConnection()}
-          >
-            {t("onboardingModelSave")}
-          </button>
-          {onStartTrial ? (
-            <div className="onboarding-wizard__trial">
+            {onStartTrial ? (
+              <div className="onboarding-setup__trial">
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  disabled={trialBusy}
+                  onClick={() => onStartTrial()}
+                >
+                  {t("onboardingTrialAction")}
+                </button>
+                <p className="onboarding-setup__hint">{t("onboardingTrialHint")}</p>
+              </div>
+            ) : null}
+            {onOpenSettings ? (
               <button
                 type="button"
-                className="button button--ghost"
-                disabled={trialBusy}
-                onClick={() => onStartTrial()}
+                className="onboarding-setup__link"
+                onClick={() => onOpenSettings()}
               >
-                {t("onboardingTrialAction")}
+                {t("onboardingOpenSettings")}
               </button>
-              <p className="onboarding-wizard__hint">{t("onboardingTrialHint")}</p>
-            </div>
-          ) : null}
-          {onOpenSettings ? (
-            <button type="button" className="onboarding-wizard__link" onClick={() => onOpenSettings()}>
-              {t("onboardingOpenSettings")}
-            </button>
-          ) : null}
+            ) : null}
+          </div>
+        ) : null}
+
+        <div
+          className={rowState(rootDone)}
+          aria-current={workspaceStep?.status === "active" && !rootDone ? "step" : undefined}
+        >
+          <span className="onboarding-setup__marker" aria-hidden>
+            {rootDone ? "✓" : "○"}
+          </span>
+          <span className="onboarding-setup__name">{t(STEP_LABEL_KEY.workspace_root)}</span>
+          <button
+            type="button"
+            className="button button--ghost onboarding-setup__action"
+            aria-expanded={expandedPanel === "workspace"}
+            onClick={() => togglePanel("workspace")}
+          >
+            {rootDone ? t("onboardingSetupRootDone") : t("onboardingSetupRootAction")}
+          </button>
         </div>
-      ) : null}
+        {expandedPanel === "workspace" ? (
+          <div className="onboarding-setup__panel">
+            <p className="onboarding-setup__detail">{t("onboardingRootDetail")}</p>
+            <button
+              type="button"
+              className="button button--accent"
+              disabled={busy}
+              onClick={() => onChooseWorkspaceRoot?.()}
+            >
+              {t("onboardingRootAction")}
+            </button>
+            {!trustDone && onTrustWindow ? (
+              <div className="onboarding-setup__trust">
+                <p className="onboarding-setup__detail">{t("onboardingTrustInlineHint")}</p>
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => onTrustWindow()}
+                >
+                  {t("onboardingTrustAction")}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
