@@ -63,6 +63,7 @@ import {
 
 import type {
   AffectStateView,
+  TrainingSkillEvidenceRowView,
   BootstrapData,
   CapabilityFlags,
   ConversationAttachmentView,
@@ -4450,6 +4451,23 @@ function mapTrainingSkillProjection(
     if (!state || !SKILL_STATE_VALUES.has(state)) {
       continue;
     }
+    const evidenceRows: TrainingSkillEvidenceRowView[] = [];
+    const rawEvidence = Array.isArray(raw.evidence) ? raw.evidence : [];
+    for (const row of rawEvidence) {
+      const rowRecord = asRecord(row);
+      if (!rowRecord) {
+        continue;
+      }
+      evidenceRows.push({
+        evidenceId: asString(rowRecord.evidence_id) ?? asString(rowRecord.evidenceId),
+        attemptId: asString(rowRecord.attempt_id) ?? asString(rowRecord.attemptId),
+        timestamp: asString(rowRecord.timestamp),
+        result: asString(rowRecord.result),
+        assistanceLevel: asString(rowRecord.assistance_level) ?? asString(rowRecord.assistanceLevel),
+        trustLevel: asString(rowRecord.trust_level) ?? asString(rowRecord.trustLevel),
+        scenario: asString(rowRecord.scenario),
+      });
+    }
     const dimensionView: NonNullable<
       WorkspaceTrainingStateView['skillProjection']
     >['dimensions'][typeof dimension] = {
@@ -4457,6 +4475,7 @@ function mapTrainingSkillProjection(
       score: typeof raw.score === 'number' ? raw.score : undefined,
       verifiedCount: typeof raw.verified_count === 'number' ? raw.verified_count : undefined,
       cardId: asString(raw.card_id),
+      evidence: evidenceRows,
     };
     hasDimension = true;
     dimensions[dimension] = dimensionView;

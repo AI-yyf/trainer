@@ -199,11 +199,13 @@ def project_skills(
             "state": "not_verified",
             "score": 0,
             "evidence_ids": [],
+            "evidence": [],
             "verified_count": 0,
             "independent_evidence_count": 0,
             "independent_attempt_count": 0,
         }
 
+    evidence_rows: dict[str, list[dict[str, Any]]] = {dim: [] for dim in _DIMENSIONS}
     independent_success_keys: dict[str, set[tuple[str, str]]] = {
         dim: set() for dim in _DIMENSIONS
     }
@@ -257,6 +259,20 @@ def project_skills(
                 evidence_id = str(rec.get("evidence_id") or f"legacy-{index}")
                 if evidence_id not in result[dim]["evidence_ids"]:
                     result[dim]["evidence_ids"].append(evidence_id)
+                # §十八: the drilldown answers "why does Trainer judge this
+                # way" — time, assistance, trust, and the transfer context
+                # behind each contributing record, newest first.
+                result[dim]["evidence"].append(
+                    {
+                        "evidence_id": evidence_id,
+                        "attempt_id": str(rec.get("attempt_id") or "") or None,
+                        "timestamp": str(rec.get("created_at") or rec.get("timestamp") or "") or None,
+                        "result": result_str,
+                        "assistance_level": str(rec.get("assistance_level") or "independent"),
+                        "trust_level": str(rec.get("trust_level") or ""),
+                        "scenario": str(rec.get("scenario") or "") or None,
+                    }
+                )
                 if result_str == "passed":
                     result[dim]["verified_count"] += 1
                     assistance_level = str(rec.get("assistance_level") or "independent")
@@ -273,6 +289,7 @@ def project_skills(
                     partial_dimensions[dim] = True
 
     for dim in _DIMENSIONS:
+        result[dim]["evidence"].reverse()
         result[dim]["independent_evidence_count"] = len(independent_evidence_keys[dim])
         result[dim]["independent_attempt_count"] = len(independent_success_keys[dim])
         result[dim]["state"] = _state_from_evidence(

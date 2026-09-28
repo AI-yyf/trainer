@@ -1386,11 +1386,23 @@ export interface TrainingReliabilityView {
 }
 
 /** Phase-D capability model: one skill dimension projected from evidence. */
+export interface TrainingSkillEvidenceRowView {
+  evidenceId?: string;
+  attemptId?: string;
+  timestamp?: string;
+  result?: string;
+  assistanceLevel?: string;
+  trustLevel?: string;
+  scenario?: string;
+}
+
 export interface TrainingSkillDimensionStateView {
   state: 'not_verified' | 'assisted' | 'independent' | 'repeat_verified' | 'needs_review';
   score?: number;
   verifiedCount?: number;
   cardId?: string;
+  /** §十八: drilldown rows answering "why this state" — newest first. */
+  evidence?: TrainingSkillEvidenceRowView[];
 }
 
 /** Evidence → skill-state projection mirrored into workspace memory. */

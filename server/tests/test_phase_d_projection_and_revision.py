@@ -359,3 +359,20 @@ def test_transfer_repeat_verified_requires_distinct_contexts() -> None:
     assert same_projection["transfer"]["state"] == "independent"
     assert same_projection["transfer"]["independent_attempt_count"] == 2
     assert distinct_projection["transfer"]["state"] == "repeat_verified"
+
+
+def test_projection_carries_evidence_drilldown_rows_newest_first() -> None:
+    """§十八: every dimension lists contributing evidence (time · assistance ·
+    scenario), newest first, so the UI can answer why a state was judged."""
+    records = [
+        _ev("h1", attempt_id="attempt-1", created_at="2026-09-27T10:00:00Z", scenario="q-learning update"),
+        _ev("h2", attempt_id="attempt-2", created_at="2026-09-28T10:00:00Z", scenario="terminal-state variant"),
+    ]
+
+    projection = project_skills(records)
+    rows = projection["implementation"]["evidence"]
+
+    assert [row["evidence_id"] for row in rows] == ["ev-h2", "ev-h1"]
+    assert rows[0]["timestamp"].startswith("2026-09-28")
+    assert rows[0]["assistance_level"] == "independent"
+    assert rows[1]["scenario"] == "q-learning update"

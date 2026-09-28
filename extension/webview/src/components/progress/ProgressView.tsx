@@ -1,5 +1,11 @@
+import { useState } from "react";
+
 import type { ComposerLanguage } from "../../lib/types";
-import type { TrainingSkillDimensionState, TrainingSkillProjection } from "../../lib/types";
+import type {
+  TrainingSkillDimensionState,
+  TrainingSkillEvidenceRow,
+  TrainingSkillProjection,
+} from "../../lib/types";
 
 type DimensionKey = "comprehension" | "implementation" | "debugging" | "transfer";
 
@@ -123,6 +129,11 @@ const COPY: Record<
     empty: string;
     startPracticing: string;
     localeTag: string;
+    drilldownWhy: string;
+    drilldownEmpty: string;
+    drilldownNoScenario: string;
+    drilldownAssisted: string;
+    drilldownIndependent: string;
   }
 > = {
   "zh-CN": {
@@ -136,6 +147,11 @@ const COPY: Record<
     empty: "完成一次练习的验证后，这里会显示你在理解、实现、调试和迁移上的真实成长。",
     startPracticing: "去练习",
     localeTag: "zh-CN",
+    drilldownWhy: "为什么 Trainer 这样判断：",
+    drilldownEmpty: "还没有可展示的证据明细。",
+    drilldownNoScenario: "无场景标记",
+    drilldownAssisted: "有辅助",
+    drilldownIndependent: "独立完成",
   },
   "en-US": {
     ariaLabel: "Your progress",
@@ -150,6 +166,11 @@ const COPY: Record<
       "Once you verify a practice card, your real growth in comprehension, implementation, debugging, and transfer shows up here.",
     startPracticing: "Start practicing",
     localeTag: "en-US",
+    drilldownWhy: "Why Trainer judges it this way:",
+    drilldownEmpty: "No evidence detail to show yet.",
+    drilldownNoScenario: "No scenario tag",
+    drilldownAssisted: "With help",
+    drilldownIndependent: "Independent",
   },
   "es-ES": {
     ariaLabel: "Tu progreso",
@@ -164,6 +185,11 @@ const COPY: Record<
       "Cuando verifiques una tarjeta de práctica, tu crecimiento real en comprensión, implementación, depuración y transferencia aparecerá aquí.",
     startPracticing: "Empezar a practicar",
     localeTag: "es-ES",
+    drilldownWhy: "Por qué Trainer lo evalúa así:",
+    drilldownEmpty: "Aún no hay detalle de evidencia.",
+    drilldownNoScenario: "Sin escenario",
+    drilldownAssisted: "Con ayuda",
+    drilldownIndependent: "Independiente",
   },
   "fr-FR": {
     ariaLabel: "Votre progression",
@@ -178,6 +204,11 @@ const COPY: Record<
       "Après la vérification d'une carte d'exercice, votre progression réelle en compréhension, implémentation, débogage et transfert apparaît ici.",
     startPracticing: "Commencer à pratiquer",
     localeTag: "fr-FR",
+    drilldownWhy: "Pourquoi Trainer juge ainsi :",
+    drilldownEmpty: "Pas encore de détail de preuve.",
+    drilldownNoScenario: "Sans scénario",
+    drilldownAssisted: "Avec aide",
+    drilldownIndependent: "Indépendant",
   },
   "de-DE": {
     ariaLabel: "Dein Fortschritt",
@@ -192,6 +223,11 @@ const COPY: Record<
       "Sobald du eine Übungskarte überprüfst, erscheint hier dein echtes Wachstum in Verständnis, Implementierung, Fehlersuche und Transfer.",
     startPracticing: "Jetzt üben",
     localeTag: "de-DE",
+    drilldownWhy: "Warum Trainer so urteilt:",
+    drilldownEmpty: "Noch keine Belegdetails.",
+    drilldownNoScenario: "Ohne Szenario",
+    drilldownAssisted: "Mit Hilfe",
+    drilldownIndependent: "Selbstständig",
   },
   "ja-JP": {
     ariaLabel: "あなたの成長",
@@ -206,6 +242,11 @@ const COPY: Record<
       "練習カードを検証すると、理解・実装・デバッグ・転用の本当の成長がここに表示されます。",
     startPracticing: "練習を始める",
     localeTag: "ja-JP",
+    drilldownWhy: "Trainer がこう判断した理由:",
+    drilldownEmpty: "表示できるエビデンスはまだありません。",
+    drilldownNoScenario: "シナリオ記録なし",
+    drilldownAssisted: "ヒント付き",
+    drilldownIndependent: "自力で完了",
   },
   "ko-KR": {
     ariaLabel: "당신의 성장",
@@ -220,6 +261,11 @@ const COPY: Record<
       "연습 카드를 검증하면 이해·구현·디버깅·전이에 대한 실제 성장이 여기에 표시됩니다.",
     startPracticing: "연습 시작",
     localeTag: "ko-KR",
+    drilldownWhy: "Trainer가 이렇게 판단한 이유:",
+    drilldownEmpty: "아직 표시할 증거가 없습니다.",
+    drilldownNoScenario: "시나리오 기록 없음",
+    drilldownAssisted: "도움 받음",
+    drilldownIndependent: "독립 완료",
   },
   "pt-BR": {
     ariaLabel: "Seu progresso",
@@ -234,6 +280,11 @@ const COPY: Record<
       "Depois de verificar um cartão de prática, seu crescimento real em compreensão, implementação, depuração e transferência aparece aqui.",
     startPracticing: "Começar a praticar",
     localeTag: "pt-BR",
+    drilldownWhy: "Por que o Trainer julga assim:",
+    drilldownEmpty: "Ainda sem detalhes de evidência.",
+    drilldownNoScenario: "Sem cenário",
+    drilldownAssisted: "Com ajuda",
+    drilldownIndependent: "Independente",
   },
 };
 
@@ -259,6 +310,7 @@ export interface ProgressViewProps {
  */
 export function ProgressView({ language, projection, onOpenTraining }: ProgressViewProps) {
   const copy = COPY[language];
+  const [expandedDimension, setExpandedDimension] = useState<DimensionKey | undefined>();
   const hasAnyEvidence = DIMENSION_KEYS.some((key) => {
     const state = dimensionState(projection, key);
     return Boolean(state && (state.verifiedCount ?? 0) > 0);
@@ -287,17 +339,50 @@ export function ProgressView({ language, projection, onOpenTraining }: ProgressV
           {DIMENSION_KEYS.map((key) => {
             const state = dimensionState(projection, key);
             const count = state?.verifiedCount ?? 0;
+            const rows: TrainingSkillEvidenceRow[] = state?.evidence ?? [];
+            const expanded = expandedDimension === key && rows.length > 0;
             return (
               <li key={key} className="progress-view__row">
-                <div className="progress-view__row-main">
-                  <span className="progress-view__dimension">{DIMENSION_LABELS[language][key]}</span>
-                  <span className="progress-view__state">
-                    {state ? STATE_LABELS[language][state.state] : copy.notVerified}
+                <button
+                  type="button"
+                  className="progress-view__row-toggle"
+                  aria-expanded={expanded}
+                  disabled={rows.length === 0}
+                  onClick={() => setExpandedDimension((current) => (current === key ? undefined : key))}
+                >
+                  <div className="progress-view__row-main">
+                    <span className="progress-view__dimension">{DIMENSION_LABELS[language][key]}</span>
+                    <span className="progress-view__state">
+                      {state ? STATE_LABELS[language][state.state] : copy.notVerified}
+                    </span>
+                  </div>
+                  <span className="progress-view__evidence">
+                    {count > 0 ? copy.evidenceCount(count) : copy.noEvidence}
                   </span>
-                </div>
-                <span className="progress-view__evidence">
-                  {count > 0 ? copy.evidenceCount(count) : copy.noEvidence}
-                </span>
+                </button>
+                {expanded ? (
+                  <div className="progress-view__drilldown">
+                    <p className="progress-view__drilldown-why">{copy.drilldownWhy}</p>
+                    <ul className="progress-view__drilldown-list">
+                      {rows.map((row) => {
+                        const day = row.timestamp ? row.timestamp.slice(0, 10) : undefined;
+                        const assistance =
+                          row.assistanceLevel === "independent"
+                            ? copy.drilldownIndependent
+                            : copy.drilldownAssisted;
+                        return (
+                          <li key={row.evidenceId ?? `${day}-${row.scenario ?? ""}`}>
+                            <span className="progress-view__drilldown-day">{day ?? ""}</span>
+                            <span className="progress-view__drilldown-assistance">{assistance}</span>
+                            <span className="progress-view__drilldown-scenario">
+                              {row.scenario || copy.drilldownNoScenario}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ) : null}
               </li>
             );
           })}

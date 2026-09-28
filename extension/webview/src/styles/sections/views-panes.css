@@ -7290,3 +7290,63 @@ button.resources-sandbox-layout__chip:focus-visible {
   color: var(--fg-muted);
   font-style: italic;
 }
+
+/* §十八 evidence drilldown: rows toggle an evidence list answering
+   "why this state" — time · assistance · scenario, newest first. */
+.progress-view__row-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  inline-size: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.progress-view__row-toggle:disabled {
+  cursor: default;
+}
+
+.progress-view__drilldown {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  border-radius: var(--radius-sm, 4px);
+}
+
+.progress-view__drilldown-why {
+  margin: 0 0 6px;
+  color: var(--vscode-descriptionForeground, inherit);
+  font-size: var(--trainer-font-2xs, 11px);
+}
+
+.progress-view__drilldown-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.progress-view__drilldown-list li {
+  display: flex;
+  gap: 8px;
+  font-size: var(--trainer-font-2xs, 11px);
+  color: var(--vscode-descriptionForeground, inherit);
+}
+
+.progress-view__drilldown-day {
+  flex: none;
+  min-inline-size: 64px;
+}
+
+.progress-view__drilldown-scenario {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
