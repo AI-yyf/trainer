@@ -158,3 +158,23 @@ deps-only pattern. The correct PR6 approach is one of:
 
 Recommendation: option 3 for P1 release. Options 1/2 are post-release
 refactoring targets.
+
+
+## §五 post-pragma Windows durations (run 36497366247, b454f6c)
+
+Windows server pytest: **2951 passed in 25m19s** — inside the 30–40min
+target. Slowest test: long_session stability at 99.84s (20 coaching
+turns through the full API stack; real test logic, not I/O — the
+pragmas already eliminated the fsync bottleneck from 116s→99.84s and
+the remaining time is genuine test computation on a 2-core runner).
+Remaining top-25 are all 7–15s API integration tests doing real work.
+No further shrinkage needed for P1.
+
+## §十五 date-locale: no migration needed
+
+CoachSettingsView's remaining locale-aware sites already use
+`Intl.DateTimeFormat(language, ...)` which passes ComposerLanguage
+directly to the browser's native Intl API (handles all 8 locales
+natively). The single `language === "zh-CN"` at line 3870 is a
+fallback spread overridden by `localizedSettingsLabels(language)`
+which covers all 8 languages. §十五 is fully closed.
