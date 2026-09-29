@@ -3901,11 +3901,14 @@ export function CoachSettingsView({
     | "skills"
     | "preferences"
     | "advanced";
+  // §四十: all six categories present — keyboard nav must match mouse order.
   const SETTINGS_CATEGORY_ORDER: SettingsCategory[] = [
     "connection",
     "workspace",
     "teaching",
+    "skills",
     "preferences",
+    "advanced",
   ];
   const [activeSettingsCategory, setActiveSettingsCategory] =
     useState<SettingsCategory>("connection");

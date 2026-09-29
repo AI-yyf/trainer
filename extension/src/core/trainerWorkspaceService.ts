@@ -182,6 +182,86 @@ interface ResolvedRuntimeDataSnapshot {
   isOutsideWorkspaceRoot: boolean;
 }
 
+/**
+ * Workspace filesystem port (§release checklist: remote files must never be
+ * resolved through local Node fs). The UI extension host is always local, so
+ * `fs.stat('/remote/path')` can never see a Remote-SSH project; routing every
+ * project-path probe through the workspace filesystem makes the check correct
+ * for local and remote windows alike. Trainer data roots stay on local fs —
+ * they live in the UI host's global storage by design.
+ */
+type WorkspaceFsPort = {
+  isDirectory: (fsPath: string) => Promise<boolean>;
+  exists: (fsPath: string) => Promise<boolean>;
+  readDirectory: (fsPath: string) => Promise<string[]>;
+};
+
+function toWorkspaceUriForPath(fsPath: string): vscode.Uri | undefined {
+  if (!fsPath.trim()) {
+    return undefined;
+  }
+  if (fsPath.includes('://')) {
+    return vscode.Uri.parse(fsPath, true);
+  }
+  const folder = vscode.workspace.workspaceFolders?.find((candidate) => {
+    const folderPath = normalizeFsPath(candidate.uri.fsPath || candidate.uri.path);
+    return (
+      folderPath === normalizeFsPath(fsPath) ||
+      normalizeFsPath(fsPath).startsWith(`${folderPath}/`)
+    );
+  });
+  const scheme = folder?.uri.scheme ?? 'file';
+  return vscode.Uri.parse(`${scheme}:${normalizeFsPath(fsPath)}`, true);
+}
+
+function createDefaultWorkspaceFsPort(): WorkspaceFsPort {
+  return {
+    async isDirectory(fsPath: string): Promise<boolean> {
+      const uri = toWorkspaceUriForPath(fsPath);
+      if (!uri) {
+        return false;
+      }
+      try {
+        return (await vscode.workspace.fs.stat(uri)).type === vscode.FileType.Directory;
+      } catch (error) {
+        if (isNotFoundError(error)) {
+          return false;
+        }
+        throw error;
+      }
+    },
+    async exists(fsPath: string): Promise<boolean> {
+      const uri = toWorkspaceUriForPath(fsPath);
+      if (!uri) {
+        return false;
+      }
+      try {
+        await vscode.workspace.fs.stat(uri);
+        return true;
+      } catch (error) {
+        if (isNotFoundError(error)) {
+          return false;
+        }
+        throw error;
+      }
+    },
+    async readDirectory(fsPath: string): Promise<string[]> {
+      const uri = toWorkspaceUriForPath(fsPath);
+      if (!uri) {
+        return [];
+      }
+      try {
+        return await vscode.workspace.fs.readDirectory(uri);
+      } catch (error) {
+        if (isNotFoundError(error)) {
+          return [];
+        }
+        throw error;
+      }
+    },
+  };
+}
+
 function normalizeRequiredDirectoryPath(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
