@@ -49,6 +49,10 @@ SOURCE_PAIRS = (
         SERVER_ROOT / "app" / "api" / "routers.py",
         REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "api" / "routers.py",
     ),
+    (
+        SERVER_ROOT / "app" / "api" / "_singleflight.py",
+        REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "api" / "_singleflight.py",
+    ),
     PROVIDER_SOURCES,
     COACHING_RECOVERY_SOURCES,
     COACHING_FIRST_TURN_SOURCES,
