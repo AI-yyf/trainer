@@ -578,6 +578,32 @@ function trainingGenerateCardPendingMessage(language: ComposerLanguage): string 
   return copy[language] ?? copy["en-US"];
 }
 
+const PLAN_REVISION_CONFLICT_MARKER =
+  /\[\[trainer-plan-revision-conflict(?::(\d+))?\]\](?:\s|$)/i;
+
+function planRevisionConflictMessage(
+  currentRevision: string | undefined,
+  language: ComposerLanguage,
+): string {
+  const rev = currentRevision ?? "?";
+  const copy: Record<ComposerLanguage, string> = {
+    "zh-CN": `计划已被另一个窗口修改（当前版本 ${rev}）。请刷新后重试，系统已阻止覆盖。`,
+    "en-US": `The plan was modified in another window (current revision ${rev}). Refresh and retry — the overwrite was blocked.`,
+    "es-ES": `El plan fue modificado en otra ventana (revisión actual ${rev}). Actualice y reintente; la sobrescritura fue bloqueada.`,
+    "fr-FR": `Le plan a été modifié dans une autre fenêtre (révision actuelle ${rev}). Actualisez et réessayez ; l'écrasement a été bloqué.`,
+    "de-DE": `Der Plan wurde in einem anderen Fenster geändert (aktuelle Revision ${rev}). Aktualisieren und wiederholen — die Überschreibung wurde blockiert.`,
+    "ja-JP": `プランが別のウィンドウで変更されました（現在のリビジョン ${rev}）。更新して再試行してください。上書きはブロックされました。`,
+    "ko-KR": `플랜이 다른 창에서 수정되었습니다 (현재 버전 ${rev}). 새로고침 후 재시도하세요. 덮어쓰기가 차단되었습니다.`,
+    "pt-BR": `O plano foi modificado em outra janela (revisão atual ${rev}). Atualize e tente novamente; a sobrescrita foi bloqueada.`,
+  };
+  return copy[language] ?? copy["en-US"];
+}
+
+function detectPlanRevisionConflict(message: string): { revision: string } | undefined {
+  const match = PLAN_REVISION_CONFLICT_MARKER.exec(message.trim());
+  return match ? { revision: match[1] ?? "?" } : undefined;
+}
+
 function parseLivePlanTaskGateMarker(message: string): LivePlanTaskGateKind | undefined {
   const match = LIVE_PLAN_TASK_GATE_MARKER.exec(message.trim());
   const kind = match?.[1]?.toLowerCase();
@@ -729,16 +755,19 @@ function sanitizeHostFailureMessage(
 
   const partialDeletion = parsePartialResourceDeletionFailure(message.payload.message);
   const resourceRecovery = resourceOperationFailureMessage(resourceOperationKind, language);
+  const revisionConflict = detectPlanRevisionConflict(message.payload.message);
   const livePlanGate = parseLivePlanTaskGateMarker(message.payload.message);
   return {
     ...message,
     payload: {
       ...message.payload,
-      message: partialDeletion
-        ? partialResourceDeletionFailureMessage(partialDeletion, language)
-        : resourceRecovery
-          ? resourceRecovery
-        : livePlanGate
+      message: revisionConflict
+        ? planRevisionConflictMessage(revisionConflict.revision, language)
+        : partialDeletion
+          ? partialResourceDeletionFailureMessage(partialDeletion, language)
+          : resourceRecovery
+            ? resourceRecovery
+          : livePlanGate
           ? livePlanTaskGateFailureMessage(livePlanGate, language)
         : isProviderAction
           ? providerCategoryFailureMessage(message.payload.providerTest, language) ??
@@ -770,10 +799,13 @@ function sanitizeOperationFailureMessage(
     "There is no current file to verify.",
     "Preview cannot verify a real workspace file. Open the file in VS Code, then verify there.",
   );
+  const revisionConflict2 = detectPlanRevisionConflict(message.message);
   const livePlanGate = parseLivePlanTaskGateMarker(message.message);
   return {
     tone: "error",
-    message: livePlanGate
+    message: revisionConflict2
+      ? planRevisionConflictMessage(revisionConflict2.revision, language)
+      : livePlanGate
       ? livePlanTaskGateFailureMessage(livePlanGate, language)
       : localRecoveryMessages.includes(message.message)
         ? message.message
