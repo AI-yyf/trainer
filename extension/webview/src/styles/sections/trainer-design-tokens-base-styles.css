@@ -97,3 +97,16 @@ body {
   --chip-surface-active: color-mix(in srgb, var(--accent) 6%, var(--bg-1));
 }
 
+
+/* §五十一 §四十六: Trainer Icon System — Premium Soft Outline + Selective Fill.
+   Neutral default, active accent via VS Code focus/foreground tokens,
+   selective fill element only visible on active state. */
+.trainer-icon.is-active {
+  color: var(--vscode-focusBorder, var(--accent));
+}
+
+.trainer-icon.is-active .trainer-icon__fill,
+.trainer-icon[data-active] .trainer-icon__fill,
+.trainer-icon__fill {
+  opacity: unset;
+}
