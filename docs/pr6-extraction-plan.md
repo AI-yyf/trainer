@@ -289,3 +289,30 @@ baseline 7.91s); wall-clock per-turn POSTs are flat
 growth is carried by the genuinely-per-mutation persists and flat
 per-turn work (e.g. `detect_provider_language_corruption`). Option 3
 (connect-per-operation) is still open if the CI runner needs more.
+
+## §十五 webview zh/en ternary closure — final audit (2026-09-30, b017f01)
+
+Two waves: wave 1 (75807b7, 8 files / ~176 sites, narrow single-quote grep)
+and wave 2 (b017f01, 29 further files / ~257 sites found by the broad
+double-quoted `=== "zh-CN" ?` pattern). After both waves the whole
+webview tree greps clean except these **justified non-copy residues**:
+
+- `app/App.tsx` ×14 keep-listed: language endonyms (中文/English ×2),
+  numeric CJK truncation limits (×11), one dynamic-en-operand exception
+  (~12056, provably-falsy en branch). Copy if-branches at 681/1478/
+  1947/2896/2900/3231/10547/11001 are non-ternary logic (one pinned by
+  `appOperationStatusSource`), a separate if-branch refactor if ever needed.
+- `components/coach/MessageRichContent.tsx:376` — `is-zh`/`is-en` CSS
+  class toggle (locale styling hook, not copy).
+- `components/plan/CoachPlanView.tsx:2996` — `MotivationLanguage`
+  adaptation; `shared/src/motivation.ts` type is zh/en-only (follow-up:
+  widen shared type to 8 languages).
+- `components/flash/CoachFlashView.tsx:1175` — the record-dispatch
+  helper's own zh-CN branch (pattern plumbing, returns the key).
+- `lib/browserSidecar.ts:539` — `previewText()` dev-harness helper
+  (browser-preview fixture copy only, 37 call sites, zh outputs
+  test-pinned by `browserSidecar.test.js`; follow-up: key ~40 strings).
+
+Evidence at each wave commit: `npm run check` clean, extension suite
+1714/1714, experience matrix 200/200, all source-guard pins preserved
+(guard re-points committed with wave 1).
