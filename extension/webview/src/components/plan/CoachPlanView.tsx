@@ -725,8 +725,12 @@ function masteryLabel(score: number | undefined, isChinese: boolean): string | u
   if (typeof score !== "number" || Number.isNaN(score)) {
     return undefined;
   }
-  const percent = `${Math.round(score * 100)}%`;
-  return isChinese ? `\u638c\u63e1\u5ea6 ${percent}` : `Mastery ${percent}`;
+  
+  // §八: honest state label, not a fake percentage.
+  if (score >= 0.8) return isChinese ? "\u53cd\u590d\u9a8c\u8bc1" : "Repeatedly verified";
+  if (score >= 0.5) return isChinese ? "\u72ec\u7acb\u5b8c\u6210" : "Independent";
+  if (score > 0) return isChinese ? "\u6709\u8f85\u52a9\u5b8c\u6210" : "Completed with hints";
+  return isChinese ? "\u5c1a\u672a\u9a8c\u8bc1" : "Not yet verified";
 }
 
 function intervalLabel(days: number | undefined, isChinese: boolean): string | undefined {
