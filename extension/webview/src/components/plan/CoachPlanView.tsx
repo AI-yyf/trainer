@@ -211,10 +211,6 @@ export interface CoachPlanViewProps {
 
 type PlanLanguage = ReturnType<typeof useTranslation>["language"];
 
-function hasChinese(value: string | undefined): boolean {
-  return Boolean(value && /[\u3400-\u9fff]/u.test(value));
-}
-
 type PlanCopyKey =
   | "done"
   | "active"
@@ -259,7 +255,62 @@ type PlanCopyKey =
   | "everyStepReturns"
   | "completionFlow"
   | "leftoverNotLive"
-  | "leftoverOutlineMore";
+  | "leftoverOutlineMore"
+  | "narrowNextHint"
+  | "reviewFocusFallback"
+  | "notesLabel"
+  | "supportHint"
+  | "revisitLabel"
+  | "actionsLabel"
+  | "resumeInCoach"
+  | "returnLabel"
+  | "moreLabel"
+  | "followOneThread"
+  | "currentThread"
+  | "planStatusLabel"
+  | "projectPlansLabel"
+  | "globalMemory"
+  | "globalMemoryConnected"
+  | "projectMemory"
+  | "projectMemoryIsolated"
+  | "projectMemoryNotEstablished"
+  | "projectMemoryIsolatedNote"
+  | "projectMemoryEmptyNote"
+  | "thenPrefix"
+  | "verifyFallback"
+  | "returnFallback"
+  | "stageProgress"
+  | "formalPlanFrozenDetail"
+  | "chatNoRewriteShort"
+  | "evidenceUnchangedDetail"
+  | "trainerRemembers"
+  | "teachingObservationsLabel"
+  | "sourceShortlist"
+  | "overviewLabel"
+  | "currentPlanRoute"
+  | "threadContext"
+  | "planChangeCandidatesLabel"
+  | "pendingConfirmation"
+  | "candidateNeedsConfirmation"
+  | "diffLabel"
+  | "noVisibleDiff"
+  | "impactLabel"
+  | "noVisibleImpact"
+  | "acknowledgeCandidate"
+  | "rejectCandidate"
+  | "surfaceAhead"
+  | "surfaceDigest"
+  | "surfaceDue"
+  | "masteryRepeated"
+  | "masteryIndependent"
+  | "masteryAssisted"
+  | "masteryNotVerified"
+  | "intervalDays"
+  | "reviewLaneFallback"
+  | "stageMaterialStudyGuide"
+  | "stageMaterialCheatSheet"
+  | "stageMaterialExerciseSet"
+  | "stageMaterialCodeExamples";
 
 const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
   "zh-CN": {
@@ -307,6 +358,61 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "完成或受阻都会回流到正式计划。",
     leftoverNotLive: "这是此工作区里存下的旧痕迹，不是当前正式计划。",
     leftoverOutlineMore: "计划会怎么展开",
+    narrowNextHint: "先把这一步做完，再扩大范围。",
+    reviewFocusFallback: "当前步骤稳了再回看。",
+    notesLabel: "备注",
+    supportHint: "先走完上面的当前主线。",
+    revisitLabel: "回看",
+    actionsLabel: "动作",
+    resumeInCoach: "回到对话",
+    returnLabel: "回流",
+    moreLabel: "更多",
+    followOneThread: "先只看这一条主线",
+    currentThread: "当前主线",
+    planStatusLabel: "计划状态",
+    projectPlansLabel: "项目子计划",
+    globalMemory: "全局记忆",
+    globalMemoryConnected: "已接入",
+    projectMemory: "当前项目记忆",
+    projectMemoryIsolated: "已隔离",
+    projectMemoryNotEstablished: "待建立",
+    projectMemoryIsolatedNote: "项目证据先留在当前项目；只有可信、可迁移的结果才回流全局。",
+    projectMemoryEmptyNote: "建立项目计划后，这里会显示当前项目的独立记忆状态。",
+    thenPrefix: "再后面：{step}",
+    verifyFallback: "完成后做一次最小验证，确认这一步真的成立。",
+    returnFallback: "带着验证结果回到对话，再决定这条主线的下一步。",
+    stageProgress: "第 {index} / {total} 段",
+    formalPlanFrozenDetail: "正式计划已锁定。聊天证据不会静默重写它。",
+    chatNoRewriteShort: "对话不会静默重写它。",
+    evidenceUnchangedDetail: "证据还没有改写计划。",
+    trainerRemembers: "教练已记住",
+    teachingObservationsLabel: "教学观察",
+    sourceShortlist: "来源短名单",
+    overviewLabel: "概览",
+    currentPlanRoute: "当前计划路线",
+    threadContext: "主线说明",
+    planChangeCandidatesLabel: "计划变更候选",
+    pendingConfirmation: "待确认",
+    candidateNeedsConfirmation: "这条候选还需要确认。",
+    diffLabel: "差异",
+    noVisibleDiff: "没有可展示的差异。",
+    impactLabel: "影响",
+    noVisibleImpact: "没有可展示的影响。",
+    acknowledgeCandidate: "确认候选",
+    rejectCandidate: "拒绝候选",
+    surfaceAhead: "提前提醒",
+    surfaceDigest: "合并回看",
+    surfaceDue: "到期回看",
+    masteryRepeated: "反复验证",
+    masteryIndependent: "独立完成",
+    masteryAssisted: "有辅助完成",
+    masteryNotVerified: "尚未验证",
+    intervalDays: "{days} 天间隔",
+    reviewLaneFallback: "做完当前切片后，再安排这次回看。",
+    stageMaterialStudyGuide: "学习指南",
+    stageMaterialCheatSheet: "速查卡",
+    stageMaterialExerciseSet: "练习集",
+    stageMaterialCodeExamples: "代码示例",
   },
   "en-US": {
     done: "Done",
@@ -353,6 +459,62 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "Completion or blockers both flow back into the formal plan.",
     leftoverNotLive: "This is stored leftover on this workspace, not the live plan.",
     leftoverOutlineMore: "What the plan will show",
+    narrowNextHint: "Narrow the next step first.",
+    reviewFocusFallback: "Continue the current step first.",
+    notesLabel: "Notes",
+    supportHint: "Continue the current step first.",
+    revisitLabel: "Revisit",
+    actionsLabel: "Actions",
+    resumeInCoach: "Resume in Coach",
+    returnLabel: "Return",
+    moreLabel: "More",
+    followOneThread: "Follow one thread first",
+    currentThread: "Current thread",
+    planStatusLabel: "Plan status",
+    projectPlansLabel: "Project plans",
+    globalMemory: "Global memory",
+    globalMemoryConnected: "Connected",
+    projectMemory: "Current project memory",
+    projectMemoryIsolated: "Isolated",
+    projectMemoryNotEstablished: "Not established",
+    projectMemoryIsolatedNote:
+      "Project evidence stays here first; only trusted, transferable results flow back globally.",
+    projectMemoryEmptyNote: "Create a project plan to show this project's isolated memory state.",
+    thenPrefix: "Then: {step}",
+    verifyFallback: "Run one small verification to confirm this step really landed.",
+    returnFallback: "Return to Coach with the verified result before moving the thread forward.",
+    stageProgress: "Stage {index} of {total}",
+    formalPlanFrozenDetail: "Formal plan is frozen. Chat evidence will not rewrite it silently.",
+    chatNoRewriteShort: "Chat evidence will not rewrite it silently.",
+    evidenceUnchangedDetail: "Evidence has not changed the plan",
+    trainerRemembers: "Trainer remembers",
+    teachingObservationsLabel: "Teaching observations",
+    sourceShortlist: "Source shortlist",
+    overviewLabel: "Overview",
+    currentPlanRoute: "Current plan route",
+    threadContext: "Thread context",
+    planChangeCandidatesLabel: "Plan change candidates",
+    pendingConfirmation: "Pending confirmation",
+    candidateNeedsConfirmation: "This candidate still needs confirmation.",
+    diffLabel: "Diff",
+    noVisibleDiff: "No visible diff.",
+    impactLabel: "Impact",
+    noVisibleImpact: "No visible impact.",
+    acknowledgeCandidate: "Acknowledge candidate",
+    rejectCandidate: "Reject candidate",
+    surfaceAhead: "Ahead",
+    surfaceDigest: "Digest",
+    surfaceDue: "Due",
+    masteryRepeated: "Repeatedly verified",
+    masteryIndependent: "Independent",
+    masteryAssisted: "Completed with hints",
+    masteryNotVerified: "Not yet verified",
+    intervalDays: "{days}-day interval",
+    reviewLaneFallback: "Schedule this revisit after the current slice lands.",
+    stageMaterialStudyGuide: "Study guide",
+    stageMaterialCheatSheet: "Cheat sheet",
+    stageMaterialExerciseSet: "Exercises",
+    stageMaterialCodeExamples: "Code examples",
   },
   "es-ES": {
     done: "Completado",
@@ -399,6 +561,64 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "Los resultados y los bloqueos vuelven al plan formal.",
     leftoverNotLive: "Esto es un resto guardado en este espacio, no el plan en vivo.",
     leftoverOutlineMore: "Qué mostrará el plan",
+    narrowNextHint: "Completa primero este paso antes de ampliar el alcance.",
+    reviewFocusFallback: "Continúa primero con el paso actual.",
+    notesLabel: "Notas",
+    supportHint: "Termina primero el hilo actual de arriba.",
+    revisitLabel: "Repasar",
+    actionsLabel: "Acciones",
+    resumeInCoach: "Volver al coach",
+    returnLabel: "Retorno",
+    moreLabel: "Más",
+    followOneThread: "Sigue primero un solo hilo",
+    currentThread: "Hilo actual",
+    planStatusLabel: "Estado del plan",
+    projectPlansLabel: "Planes del proyecto",
+    globalMemory: "Memoria global",
+    globalMemoryConnected: "Conectada",
+    projectMemory: "Memoria del proyecto actual",
+    projectMemoryIsolated: "Aislada",
+    projectMemoryNotEstablished: "Sin establecer",
+    projectMemoryIsolatedNote:
+      "La evidencia del proyecto se queda aquí; solo los resultados fiables y transferibles vuelven a la memoria global.",
+    projectMemoryEmptyNote:
+      "Cuando crees un plan de proyecto, aquí se mostrará el estado de memoria aislada de este proyecto.",
+    thenPrefix: "Después: {step}",
+    verifyFallback: "Ejecuta una verificación mínima para confirmar que este paso realmente quedó hecho.",
+    returnFallback:
+      "Vuelve al coach con el resultado verificado antes de avanzar el hilo.",
+    stageProgress: "Etapa {index} de {total}",
+    formalPlanFrozenDetail: "El plan formal está congelado. La evidencia del chat no lo reescribe en silencio.",
+    chatNoRewriteShort: "La evidencia del chat no lo reescribe en silencio.",
+    evidenceUnchangedDetail: "La evidencia aún no ha cambiado el plan",
+    trainerRemembers: "El trainer lo recuerda",
+    teachingObservationsLabel: "Observaciones de enseñanza",
+    sourceShortlist: "Lista corta de fuentes",
+    overviewLabel: "Resumen",
+    currentPlanRoute: "Ruta actual del plan",
+    threadContext: "Contexto del hilo",
+    planChangeCandidatesLabel: "Candidatos de cambio del plan",
+    pendingConfirmation: "Pendiente de confirmación",
+    candidateNeedsConfirmation: "Este candidato todavía necesita confirmación.",
+    diffLabel: "Diff",
+    noVisibleDiff: "No hay diff visible.",
+    impactLabel: "Impacto",
+    noVisibleImpact: "No hay impacto visible.",
+    acknowledgeCandidate: "Confirmar candidato",
+    rejectCandidate: "Rechazar candidato",
+    surfaceAhead: "Anticipado",
+    surfaceDigest: "Resumen",
+    surfaceDue: "A vencer",
+    masteryRepeated: "Verificado repetidamente",
+    masteryIndependent: "Independiente",
+    masteryAssisted: "Completado con ayudas",
+    masteryNotVerified: "Aún sin verificar",
+    intervalDays: "intervalo de {days} días",
+    reviewLaneFallback: "Programe este repaso cuando aterrice el fragmento actual.",
+    stageMaterialStudyGuide: "Guía de estudio",
+    stageMaterialCheatSheet: "Chuleta",
+    stageMaterialExerciseSet: "Ejercicios",
+    stageMaterialCodeExamples: "Ejemplos de código",
   },
   "fr-FR": {
     done: "Terminé",
@@ -445,6 +665,64 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "Les résultats comme les blocages reviennent au plan formel.",
     leftoverNotLive: "Ceci est un reste enregistré sur cet espace, pas le plan actuel.",
     leftoverOutlineMore: "Ce que le plan montrera",
+    narrowNextHint: "Terminez d'abord cette étape avant d'élargir le périmètre.",
+    reviewFocusFallback: "Continuez d'abord l'étape actuelle.",
+    notesLabel: "Notes",
+    supportHint: "Terminez d'abord le fil courant ci-dessus.",
+    revisitLabel: "Réviser",
+    actionsLabel: "Actions",
+    resumeInCoach: "Reprendre dans Coach",
+    returnLabel: "Retour",
+    moreLabel: "Plus",
+    followOneThread: "Suivez d'abord un seul fil",
+    currentThread: "Fil courant",
+    planStatusLabel: "Statut du plan",
+    projectPlansLabel: "Plans de projet",
+    globalMemory: "Mémoire globale",
+    globalMemoryConnected: "Connectée",
+    projectMemory: "Mémoire du projet courant",
+    projectMemoryIsolated: "Isolée",
+    projectMemoryNotEstablished: "Non établie",
+    projectMemoryIsolatedNote:
+      "Les preuves du projet restent ici ; seuls les résultats fiables et transférables remontent au global.",
+    projectMemoryEmptyNote:
+      "Une fois un plan de projet créé, l'état de mémoire isolée de ce projet s'affichera ici.",
+    thenPrefix: "Ensuite : {step}",
+    verifyFallback: "Faites une petite vérification pour confirmer que cette étape est vraiment acquise.",
+    returnFallback:
+      "Revenez dans Coach avec le résultat vérifié avant de faire avancer le fil.",
+    stageProgress: "Étape {index} sur {total}",
+    formalPlanFrozenDetail: "Le plan formel est gelé. Les preuves du chat ne le réécrivent pas en silence.",
+    chatNoRewriteShort: "Les preuves du chat ne le réécrivent pas en silence.",
+    evidenceUnchangedDetail: "La preuve n'a pas encore modifié le plan",
+    trainerRemembers: "Trainer s'en souvient",
+    teachingObservationsLabel: "Observations pédagogiques",
+    sourceShortlist: "Présélection de sources",
+    overviewLabel: "Aperçu",
+    currentPlanRoute: "Parcours actuel du plan",
+    threadContext: "Contexte du fil",
+    planChangeCandidatesLabel: "Candidats de modification du plan",
+    pendingConfirmation: "À confirmer",
+    candidateNeedsConfirmation: "Ce candidat attend encore une confirmation.",
+    diffLabel: "Diff",
+    noVisibleDiff: "Aucun diff visible.",
+    impactLabel: "Impact",
+    noVisibleImpact: "Aucun impact visible.",
+    acknowledgeCandidate: "Confirmer le candidat",
+    rejectCandidate: "Rejeter le candidat",
+    surfaceAhead: "En avance",
+    surfaceDigest: "Synthèse",
+    surfaceDue: "À échéance",
+    masteryRepeated: "Vérifié à plusieurs reprises",
+    masteryIndependent: "Indépendant",
+    masteryAssisted: "Terminé avec aides",
+    masteryNotVerified: "Pas encore vérifié",
+    intervalDays: "intervalle de {days} jours",
+    reviewLaneFallback: "Programmez cette révision une fois le tronçon actuel terminé.",
+    stageMaterialStudyGuide: "Guide d'étude",
+    stageMaterialCheatSheet: "Aide-mémoire",
+    stageMaterialExerciseSet: "Exercices",
+    stageMaterialCodeExamples: "Exemples de code",
   },
   "de-DE": {
     done: "Erledigt",
@@ -491,6 +769,64 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "Ergebnisse und Blocker fließen beide zurück in den formellen Plan.",
     leftoverNotLive: "Das ist ein gespeicherter Rest in diesem Arbeitsbereich, nicht der aktuelle Plan.",
     leftoverOutlineMore: "Was der Plan zeigen wird",
+    narrowNextHint: "Schließen Sie zuerst diesen Schritt ab, bevor Sie den Umfang erweitern.",
+    reviewFocusFallback: "Fahren Sie zuerst mit dem aktuellen Schritt fort.",
+    notesLabel: "Notizen",
+    supportHint: "Laufen Sie zuerst den aktuellen Pfad oben zu Ende.",
+    revisitLabel: "Wiederholen",
+    actionsLabel: "Aktionen",
+    resumeInCoach: "Im Coach fortsetzen",
+    returnLabel: "Rückfluss",
+    moreLabel: "Mehr",
+    followOneThread: "Folgen Sie zuerst einem einzigen Pfad",
+    currentThread: "Aktueller Pfad",
+    planStatusLabel: "Planstatus",
+    projectPlansLabel: "Projektpläne",
+    globalMemory: "Globales Gedächtnis",
+    globalMemoryConnected: "Verbunden",
+    projectMemory: "Gedächtnis des aktuellen Projekts",
+    projectMemoryIsolated: "Isoliert",
+    projectMemoryNotEstablished: "Nicht eingerichtet",
+    projectMemoryIsolatedNote:
+      "Projekt-Evidenz bleibt zuerst hier; nur vertrauenswürdige, übertragbare Ergebnisse fließen global zurück.",
+    projectMemoryEmptyNote:
+      "Nachdem ein Projekplan angelegt wurde, zeigt diese Stelle den isolierten Gedächtnisstatus dieses Projekts.",
+    thenPrefix: "Danach: {step}",
+    verifyFallback: "Führen Sie eine kleine Prüfung durch, um zu bestätigen, dass dieser Schritt wirklich sitzt.",
+    returnFallback:
+      "Kehren Sie mit dem überprüften Ergebnis in den Coach zurück, bevor Sie den Pfad weiterführen.",
+    stageProgress: "Phase {index} von {total}",
+    formalPlanFrozenDetail: "Der formelle Plan ist eingefroren. Chat-Evidenz schreibt ihn nicht stillschweigend um.",
+    chatNoRewriteShort: "Chat-Evidenz schreibt ihn nicht stillschweigend um.",
+    evidenceUnchangedDetail: "Die Evidenz hat den Plan noch nicht geändert",
+    trainerRemembers: "Trainer hat es behalten",
+    teachingObservationsLabel: "Didaktische Beobachtungen",
+    sourceShortlist: "Kurzauswahl der Quellen",
+    overviewLabel: "Überblick",
+    currentPlanRoute: "Aktuelle Planroute",
+    threadContext: "Pfad-Kontext",
+    planChangeCandidatesLabel: "Kandidaten für Planänderungen",
+    pendingConfirmation: "Bestätigung ausstehend",
+    candidateNeedsConfirmation: "Dieser Kandidat muss noch bestätigt werden.",
+    diffLabel: "Diff",
+    noVisibleDiff: "Kein sichtbarer Diff.",
+    impactLabel: "Auswirkung",
+    noVisibleImpact: "Keine sichtbare Auswirkung.",
+    acknowledgeCandidate: "Kandidat bestätigen",
+    rejectCandidate: "Kandidat ablehnen",
+    surfaceAhead: "Im Voraus",
+    surfaceDigest: "Zusammenfassung",
+    surfaceDue: "Fällig",
+    masteryRepeated: "Mehrfach überprüft",
+    masteryIndependent: "Selbstständig",
+    masteryAssisted: "Mit Hinweisen abgeschlossen",
+    masteryNotVerified: "Noch nicht überprüft",
+    intervalDays: "{days}-Tage-Intervall",
+    reviewLaneFallback: "Planen Sie diese Wiederholung, sobald der aktuelle Abschnitt landet.",
+    stageMaterialStudyGuide: "Lernleitfaden",
+    stageMaterialCheatSheet: "Spickzettel",
+    stageMaterialExerciseSet: "Übungen",
+    stageMaterialCodeExamples: "Codebeispiele",
   },
   "ja-JP": {
     done: "完了",
@@ -537,6 +873,64 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "完了と停止のどちらも正式な計画に戻ります。",
     leftoverNotLive: "これはこのワークスペースに残った記録であり、現在の正式な計画ではありません。",
     leftoverOutlineMore: "計画に含まれる内容",
+    narrowNextHint: "まずこの一手を終えてから、範囲を広げます。",
+    reviewFocusFallback: "現在のステップを先に続けます。",
+    notesLabel: "メモ",
+    supportHint: "まず上の現在の流れを進めます。",
+    revisitLabel: "復習",
+    actionsLabel: "操作",
+    resumeInCoach: "Coach に戻る",
+    returnLabel: "回流",
+    moreLabel: "さらに表示",
+    followOneThread: "まず一本の流れだけを見る",
+    currentThread: "現在の流れ",
+    planStatusLabel: "計画の状態",
+    projectPlansLabel: "プロジェクト計画",
+    globalMemory: "グローバル記憶",
+    globalMemoryConnected: "接続済み",
+    projectMemory: "現在のプロジェクトの記憶",
+    projectMemoryIsolated: "分離",
+    projectMemoryNotEstablished: "未確立",
+    projectMemoryIsolatedNote:
+      "プロジェクトの証拠はまずここに残します。信頼でき、転用できる結果だけがグローバルに戻ります。",
+    projectMemoryEmptyNote:
+      "プロジェクト計画を作成すると、このプロジェクトの分離された記憶状態がここに表示されます。",
+    thenPrefix: "次回: {step}",
+    verifyFallback: "小さな検証を一度行い、このステップが本当に成立したかを確かめます。",
+    returnFallback:
+      "検証結果を持って Coach に戻り、この流れの次の一手を決めます。",
+    stageProgress: "ステージ {index} / {total}",
+    formalPlanFrozenDetail: "正式な計画は固定されています。チャットの証拠が黙って書き換えることはありません。",
+    chatNoRewriteShort: "チャットの証拠が黙って書き換えることはありません。",
+    evidenceUnchangedDetail: "証拠はまだ計画を変えていません",
+    trainerRemembers: "Trainer が記憶しました",
+    teachingObservationsLabel: "指導上の観察",
+    sourceShortlist: "ソース短リスト",
+    overviewLabel: "概要",
+    currentPlanRoute: "現在の計画ルート",
+    threadContext: "流れの補足",
+    planChangeCandidatesLabel: "計画変更の候補",
+    pendingConfirmation: "確認待ち",
+    candidateNeedsConfirmation: "この候補はまだ確認が必要です。",
+    diffLabel: "差分",
+    noVisibleDiff: "表示できる差分はありません。",
+    impactLabel: "影響",
+    noVisibleImpact: "表示できる影響はありません。",
+    acknowledgeCandidate: "候補を承認",
+    rejectCandidate: "候補を却下",
+    surfaceAhead: "先取り",
+    surfaceDigest: "まとめ",
+    surfaceDue: "期限",
+    masteryRepeated: "繰り返し検証済み",
+    masteryIndependent: "自力で完了",
+    masteryAssisted: "ヒント付きで完了",
+    masteryNotVerified: "まだ検証なし",
+    intervalDays: "{days} 日間隔",
+    reviewLaneFallback: "現在のスライスが終わったら、この復習を予定します。",
+    stageMaterialStudyGuide: "学習ガイド",
+    stageMaterialCheatSheet: "チートシート",
+    stageMaterialExerciseSet: "練習問題",
+    stageMaterialCodeExamples: "コード例",
   },
   "ko-KR": {
     done: "완료",
@@ -583,6 +977,64 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "완료와 막힘 모두 공식 계획으로 돌아갑니다.",
     leftoverNotLive: "이건 이 작업 공간에 남은 기록이지, 현재 공식 계획이 아닙니다.",
     leftoverOutlineMore: "계획에 담길 내용",
+    narrowNextHint: "이 단계를 먼저 끝낸 다음 범위를 넓히세요.",
+    reviewFocusFallback: "현재 단계를 먼저 계속하세요.",
+    notesLabel: "메모",
+    supportHint: "먼저 위의 현재 흐름을 끝내세요.",
+    revisitLabel: "복습",
+    actionsLabel: "동작",
+    resumeInCoach: "코치로 돌아가기",
+    returnLabel: "회류",
+    moreLabel: "더 보기",
+    followOneThread: "먼저 하나의 흐름만 보세요",
+    currentThread: "현재 흐름",
+    planStatusLabel: "계획 상태",
+    projectPlansLabel: "프로젝트 계획",
+    globalMemory: "전역 기억",
+    globalMemoryConnected: "연결됨",
+    projectMemory: "현재 프로젝트 기억",
+    projectMemoryIsolated: "격리됨",
+    projectMemoryNotEstablished: "미설정",
+    projectMemoryIsolatedNote:
+      "프로젝트 증거는 먼저 여기에 남습니다. 신뢰할 수 있고 전이 가능한 결과만 전역으로 돌아갑니다.",
+    projectMemoryEmptyNote:
+      "프로젝트 계획을 만들면 이 프로젝트의 격리된 기억 상태가 여기에 표시됩니다.",
+    thenPrefix: "다음: {step}",
+    verifyFallback: "작은 검증을 한 번 실행해 이 단계가 정말 자리 잡았는지 확인하세요.",
+    returnFallback:
+      "검증 결과를 가지고 코치로 돌아온 뒤 이 흐름의 다음 단계를 정하세요.",
+    stageProgress: "{total}단계 중 {index}",
+    formalPlanFrozenDetail: "공식 계획이 고정되었습니다. 대화 증거가 조용히 다시 쓰지 않습니다.",
+    chatNoRewriteShort: "대화 증거가 조용히 다시 쓰지 않습니다.",
+    evidenceUnchangedDetail: "증거가 아직 계획을 바꾸지 않았습니다",
+    trainerRemembers: "Trainer가 기억합니다",
+    teachingObservationsLabel: "학습 지도 관찰",
+    sourceShortlist: "출처 후보 목록",
+    overviewLabel: "개요",
+    currentPlanRoute: "현재 계획 경로",
+    threadContext: "흐름 설명",
+    planChangeCandidatesLabel: "계획 변경 후보",
+    pendingConfirmation: "확인 대기",
+    candidateNeedsConfirmation: "이 후보는 아직 확인이 필요합니다.",
+    diffLabel: "차이",
+    noVisibleDiff: "표시할 차이가 없습니다.",
+    impactLabel: "영향",
+    noVisibleImpact: "표시할 영향이 없습니다.",
+    acknowledgeCandidate: "후보 승인",
+    rejectCandidate: "후보 거절",
+    surfaceAhead: "예습",
+    surfaceDigest: "요약",
+    surfaceDue: "기한",
+    masteryRepeated: "반복 검증됨",
+    masteryIndependent: "독립 완료",
+    masteryAssisted: "힌트로 완료",
+    masteryNotVerified: "아직 검증 안 됨",
+    intervalDays: "{days}일 간격",
+    reviewLaneFallback: "현재 조각이 끝나면 이 복습을 예약하세요.",
+    stageMaterialStudyGuide: "학습 가이드",
+    stageMaterialCheatSheet: "요약 카드",
+    stageMaterialExerciseSet: "연습 문제",
+    stageMaterialCodeExamples: "코드 예시",
   },
   "pt-BR": {
     done: "Concluído",
@@ -629,6 +1081,64 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "Resultados e bloqueios voltam ao plano formal.",
     leftoverNotLive: "Isto é um resto guardado neste espaço, não o plano ao vivo.",
     leftoverOutlineMore: "O que o plano vai mostrar",
+    narrowNextHint: "Conclua primeiro esta etapa antes de ampliar o escopo.",
+    reviewFocusFallback: "Continue primeiro a etapa atual.",
+    notesLabel: "Notas",
+    supportHint: "Termine primeiro o fluxo atual acima.",
+    revisitLabel: "Revisar",
+    actionsLabel: "Ações",
+    resumeInCoach: "Voltar ao coach",
+    returnLabel: "Retorno",
+    moreLabel: "Mais",
+    followOneThread: "Siga primeiro um único fluxo",
+    currentThread: "Fluxo atual",
+    planStatusLabel: "Status do plano",
+    projectPlansLabel: "Planos do projeto",
+    globalMemory: "Memória global",
+    globalMemoryConnected: "Conectada",
+    projectMemory: "Memória do projeto atual",
+    projectMemoryIsolated: "Isolada",
+    projectMemoryNotEstablished: "Não estabelecida",
+    projectMemoryIsolatedNote:
+      "A evidência do projeto fica aqui primeiro; apenas resultados confiáveis e transferíveis voltam para o global.",
+    projectMemoryEmptyNote:
+      "Depois de criar um plano de projeto, o estado de memória isolada deste projeto aparecerá aqui.",
+    thenPrefix: "Depois: {step}",
+    verifyFallback: "Faça uma verificação mínima para confirmar que esta etapa realmente ficou pronta.",
+    returnFallback:
+      "Volte ao coach com o resultado verificado antes de avançar este fluxo.",
+    stageProgress: "Estágio {index} de {total}",
+    formalPlanFrozenDetail: "O plano formal está congelado. A evidência da conversa não o reescreve silenciosamente.",
+    chatNoRewriteShort: "A evidência da conversa não o reescreve silenciosamente.",
+    evidenceUnchangedDetail: "A evidência ainda não mudou o plano",
+    trainerRemembers: "O trainer lembra",
+    teachingObservationsLabel: "Observações de ensino",
+    sourceShortlist: "Lista curta de fontes",
+    overviewLabel: "Visão geral",
+    currentPlanRoute: "Rota atual do plano",
+    threadContext: "Contexto do fluxo",
+    planChangeCandidatesLabel: "Candidatos a mudança do plano",
+    pendingConfirmation: "Aguardando confirmação",
+    candidateNeedsConfirmation: "Este candidato ainda precisa de confirmação.",
+    diffLabel: "Diff",
+    noVisibleDiff: "Nenhum diff visível.",
+    impactLabel: "Impacto",
+    noVisibleImpact: "Nenhum impacto visível.",
+    acknowledgeCandidate: "Confirmar candidato",
+    rejectCandidate: "Rejeitar candidato",
+    surfaceAhead: "Adiantado",
+    surfaceDigest: "Resumo",
+    surfaceDue: "A vencer",
+    masteryRepeated: "Verificado repetidamente",
+    masteryIndependent: "Independente",
+    masteryAssisted: "Concluído com dicas",
+    masteryNotVerified: "Ainda não verificado",
+    intervalDays: "intervalo de {days} dias",
+    reviewLaneFallback: "Agende esta revisão quando a fatia atual ficar pronta.",
+    stageMaterialStudyGuide: "Guia de estudo",
+    stageMaterialCheatSheet: "Cola rápida",
+    stageMaterialExerciseSet: "Exercícios",
+    stageMaterialCodeExamples: "Exemplos de código",
   },
 };
 
@@ -707,57 +1217,55 @@ function formatQueuedStageSummary(count: number, language: PlanLanguage): string
 
 function surfaceModeLabel(
   mode: PlanReviewItem["surfaceMode"],
-  isChinese: boolean,
+  language: PlanLanguage,
 ): string | undefined {
   if (mode === "ahead") {
-    return isChinese ? "\u63d0\u524d\u63d0\u9192" : "Ahead";
+    return planCopy(language, "surfaceAhead");
   }
   if (mode === "digest") {
-    return isChinese ? "\u5408\u5e76\u56de\u770b" : "Digest";
+    return planCopy(language, "surfaceDigest");
   }
   if (mode === "due") {
-    return isChinese ? "\u5230\u671f\u56de\u770b" : "Due";
+    return planCopy(language, "surfaceDue");
   }
   return undefined;
 }
 
-function masteryLabel(score: number | undefined, isChinese: boolean): string | undefined {
+function masteryLabel(score: number | undefined, language: PlanLanguage): string | undefined {
   if (typeof score !== "number" || Number.isNaN(score)) {
     return undefined;
   }
-  
+
   // §八: honest state label, not a fake percentage.
-  if (score >= 0.8) return isChinese ? "\u53cd\u590d\u9a8c\u8bc1" : "Repeatedly verified";
-  if (score >= 0.5) return isChinese ? "\u72ec\u7acb\u5b8c\u6210" : "Independent";
-  if (score > 0) return isChinese ? "\u6709\u8f85\u52a9\u5b8c\u6210" : "Completed with hints";
-  return isChinese ? "\u5c1a\u672a\u9a8c\u8bc1" : "Not yet verified";
+  if (score >= 0.8) return planCopy(language, "masteryRepeated");
+  if (score >= 0.5) return planCopy(language, "masteryIndependent");
+  if (score > 0) return planCopy(language, "masteryAssisted");
+  return planCopy(language, "masteryNotVerified");
 }
 
-function intervalLabel(days: number | undefined, isChinese: boolean): string | undefined {
+function intervalLabel(days: number | undefined, language: PlanLanguage): string | undefined {
   if (typeof days !== "number" || Number.isNaN(days)) {
     return undefined;
   }
-  return isChinese ? `${days} \u5929\u95f4\u9694` : `${days}-day interval`;
+  return planCopy(language, "intervalDays", { days });
 }
 
-function compactReviewMeta(item: PlanReviewItem, isChinese: boolean): string | undefined {
+function compactReviewMeta(item: PlanReviewItem, language: PlanLanguage): string | undefined {
   const meta = [
     item.meta,
-    surfaceModeLabel(item.surfaceMode, isChinese),
-    intervalLabel(item.intervalDays, isChinese),
-    masteryLabel(item.masteryScore, isChinese),
+    surfaceModeLabel(item.surfaceMode, language),
+    intervalLabel(item.intervalDays, language),
+    masteryLabel(item.masteryScore, language),
   ].filter(Boolean) as string[];
   return meta.length > 0 ? meta.join(" · ") : undefined;
 }
 
-function compactReviewLane(item: PlanReviewItem, isChinese: boolean): string {
+function compactReviewLane(item: PlanReviewItem, language: PlanLanguage): string {
   const lead =
     item.taskHint ??
     item.focusArea ??
     item.detail ??
-    (isChinese
-      ? "\u505a\u5b8c\u5f53\u524d\u5207\u7247\u540e\uff0c\u518d\u5b89\u6392\u8fd9\u6b21\u56de\u770b\u3002"
-      : "Schedule this revisit after the current slice lands.");
+    planCopy(language, "reviewLaneFallback");
   const context = item.linkedContext?.slice(0, 2).join(" · ");
   return [lead, context].filter(Boolean).join(" · ");
 }
@@ -1030,28 +1538,6 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     composerDraftReplacementCancelRef.current?.focus();
   }, [composerDraftReplacement?.source, composerDraftReplacement?.title]);
 
-  const uiLanguageSignals = [
-    props.eyebrow,
-    props.currentStageLabel,
-    props.nextStepLabel,
-    props.nextStepHint,
-    props.cadenceLabel,
-    props.reviewLabel,
-    props.coachingStateLabel,
-    props.supportSummaryLabel,
-    props.whyNowLabel,
-    props.verifyLabel,
-    props.reviewWindowLabel,
-    props.pathSummaryLabel,
-    props.projectSubplansLabel,
-    ...Object.values(props.projectSubplanStatusLabels ?? {}),
-  ];
-  const contentLanguageSignals = [props.title, props.goalSummary, plan?.title, plan?.summary].map(nodeText);
-  const hasExplicitUiLanguage = uiLanguageSignals.some((value) => Boolean(nodeText(value).trim()));
-  const isChinese = hasExplicitUiLanguage
-    ? uiLanguageSignals.some((value) => hasChinese(nodeText(value)))
-    : contentLanguageSignals.some(hasChinese);
-
   const resolvedEyebrow = props.eyebrow ?? t("plan");
   const resolvedEmptyTitle = props.title ?? t("plan");
   const resolvedCurrentStageLabel =
@@ -1060,10 +1546,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const resolvedNextStepLabel =
     props.nowLabel ?? props.nextStepLabel ?? t("nextMove");
   const resolvedNextStepHint =
-    props.nextStepHint ??
-    (isChinese
-      ? "先把这一步做完，再扩大范围。"
-      : planCopy(language, "narrowNext"));
+    props.nextStepHint ?? planCopy(language, "narrowNextHint");
   const resolvedNextStepResumeThread = props.nextStepResumeThread?.trim();
   const resolvedStagesLabel = props.stagesLabel ?? t("planStages");
   const resolvedFreezeStateLabel = props.freezeStateLabel ?? planCopy(language, "frozen");
@@ -1073,44 +1556,37 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const resolvedWeakSpotsLabel = props.weakSpotsLabel ?? t("weakSpots");
   const resolvedReviewLabel = props.reviewLabel ?? t("reviewRhythm");
   const resolvedReviewFocusLabel =
-    props.reviewFocusLabel ??
-    (isChinese
-      ? "\u5f53\u524d\u6b65\u9aa4\u7a33\u4e86\u518d\u56de\u770b\u3002"
-      : planCopy(language, "continueCurrent"));
+    props.reviewFocusLabel ?? planCopy(language, "reviewFocusFallback");
   const resolvedCoachingStateLabel = props.coachingStateLabel ?? t("backgroundCoachWork");
   const resolvedSupportSummaryLabel = props.supportSummaryLabel ?? t("backgroundCoachWork");
-  const resolvedNotesLabel = props.notesLabel ?? (isChinese ? "\u5907\u6ce8" : "Notes");
-  const resolvedSupportHint =
-    props.supportHint ??
-    (isChinese
-      ? "\u5148\u8d70\u5b8c\u4e0a\u9762\u7684\u5f53\u524d\u4e3b\u7ebf\u3002"
-      : planCopy(language, "continueCurrent"));
+  const resolvedNotesLabel = props.notesLabel ?? planCopy(language, "notesLabel");
+  const resolvedSupportHint = props.supportHint ?? planCopy(language, "supportHint");
   const resolvedWhyNowLabel = props.whyNowLabel ?? props.summaryLabel ?? t("trainingWhyNow");
   const resolvedVerifyLabel = props.verifyLabel ?? t("acceptance");
   const resolvedReviewWindowLabel =
-    props.reviewWindowLabel ?? (isChinese ? "\u56de\u770b" : "Revisit");
-  const resolvedActionsLabel = props.actionsLabel ?? (isChinese ? "\u52a8\u4f5c" : "Actions");
+    props.reviewWindowLabel ?? planCopy(language, "revisitLabel");
+  const resolvedActionsLabel = props.actionsLabel ?? planCopy(language, "actionsLabel");
   const resolvedResumeActionLabel =
-    resumeActionLabel ?? (isChinese ? "\u56de\u5230\u5bf9\u8bdd" : "Resume in Coach");
+    resumeActionLabel ?? planCopy(language, "resumeInCoach");
   const resolvedReturnLabel =
     props.returnLabel ??
     props.laterLabel ??
     props.pathSummaryLabel ??
-    (isChinese ? "\u56de\u6d41" : "Return");
+    planCopy(language, "returnLabel");
   const resolvedDetailsSummaryLabel =
-    props.detailsSummaryLabel ?? (isChinese ? "\u66f4\u591a" : "More");
+    props.detailsSummaryLabel ?? planCopy(language, "moreLabel");
   const resolvedLinearOverviewLabel =
-    props.overviewLabel ?? (isChinese ? "\u5148\u53ea\u770b\u8fd9\u4e00\u6761\u4e3b\u7ebf" : "Follow one thread first");
+    props.overviewLabel ?? planCopy(language, "followOneThread");
   const resolvedMainlineLabel =
-    props.planAtGlanceLabel ?? (isChinese ? "\u5f53\u524d\u4e3b\u7ebf" : "Current thread");
+    props.planAtGlanceLabel ?? planCopy(language, "currentThread");
   const shouldRepeatGoalLabel =
     resolvedGoalLabel.trim().length > 0 && resolvedGoalLabel.trim() !== resolvedMainlineLabel.trim();
   const resolvedRevisitSummaryLabel =
-    props.revisitSummaryLabel ?? (isChinese ? "\u56de\u770b" : "Revisit");
+    props.revisitSummaryLabel ?? planCopy(language, "revisitLabel");
   const resolvedGovernanceLabel =
-    props.governanceLabel ?? (isChinese ? "\u8ba1\u5212\u72b6\u6001" : "Plan status");
+    props.governanceLabel ?? planCopy(language, "planStatusLabel");
   const resolvedProjectSubplansLabel =
-    props.projectSubplansLabel ?? (isChinese ? "\u9879\u76ee\u5b50\u8ba1\u5212" : "Project plans");
+    props.projectSubplansLabel ?? planCopy(language, "projectPlansLabel");
   const projectSubplans = (props.projectSubplans ?? []).filter(
     (subplan) => subplan.id.trim().length > 0 && subplan.title.trim().length > 0,
   );
@@ -1172,22 +1648,22 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const memoryScopeContext = (
     <section className="coach-plan-view__memory-scope" aria-label={t("globalPlanRelationship")}>
       <div className="coach-plan-view__memory-scope-row">
-        <span>{isChinese ? "全局记忆" : "Global memory"}</span>
-        <strong>{isChinese ? "已接入" : "Connected"}</strong>
+        <span>{planCopy(language, "globalMemory")}</span>
+        <strong>{planCopy(language, "globalMemoryConnected")}</strong>
       </div>
       <span className="coach-plan-view__memory-scope-arrow" aria-hidden="true">→</span>
       <div className="coach-plan-view__memory-scope-row">
-        <span>{isChinese ? "当前项目记忆" : "Current project memory"}</span>
-        <strong>{plan ? (isChinese ? "已隔离" : "Isolated") : (isChinese ? "待建立" : "Not established")}</strong>
+        <span>{planCopy(language, "projectMemory")}</span>
+        <strong>
+          {plan
+            ? planCopy(language, "projectMemoryIsolated")
+            : planCopy(language, "projectMemoryNotEstablished")}
+        </strong>
       </div>
       <p className="coach-plan-view__lane-note coach-plan-view__lane-note--quiet">
         {plan
-          ? isChinese
-            ? "项目证据先留在当前项目；只有可信、可迁移的结果才回流全局。"
-            : "Project evidence stays here first; only trusted, transferable results flow back globally."
-          : isChinese
-            ? "建立项目计划后，这里会显示当前项目的独立记忆状态。"
-            : "Create a project plan to show this project's isolated memory state."}
+          ? planCopy(language, "projectMemoryIsolatedNote")
+          : planCopy(language, "projectMemoryEmptyNote")}
       </p>
     </section>
   );
@@ -1508,19 +1984,13 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const pathProgressNote =
     plan.stages.length === 0 ? "" : formatQueuedStageSummary(queuedStageCount, language);
   const laterContinuationNote = laterSecondaryStage
-    ? isChinese
-      ? `\u518d\u540e\u9762\uff1a${laterSecondaryStage.title}`
-      : `Then: ${laterSecondaryStage.title}`
+    ? planCopy(language, "thenPrefix", { step: laterSecondaryStage.title })
     : undefined;
-  const verifyFallback = isChinese
-    ? "\u5b8c\u6210\u540e\u505a\u4e00\u6b21\u6700\u5c0f\u9a8c\u8bc1\uff0c\u786e\u8ba4\u8fd9\u4e00\u6b65\u771f\u7684\u6210\u7acb\u3002"
-    : "Run one small verification to confirm this step really landed.";
+  const verifyFallback = planCopy(language, "verifyFallback");
   const recoveredVerifyLocked =
     Boolean(plan.currentStep?.trim()) &&
     !(plan.verifyMethod ?? []).some((item) => Boolean(item.trim()));
-  const returnFallback = isChinese
-    ? "\u5e26\u7740\u9a8c\u8bc1\u7ed3\u679c\u56de\u5230\u5bf9\u8bdd\uff0c\u518d\u51b3\u5b9a\u8fd9\u6761\u4e3b\u7ebf\u7684\u4e0b\u4e00\u6b65\u3002"
-    : "Return to Coach with the verified result before moving the thread forward.";
+  const returnFallback = planCopy(language, "returnFallback");
   const currentStepText = props.nextStep ?? activeStageObjective;
   const verifyNowInline = inlineText(props.verifyNow);
   const verifyText = verifyNowInline
@@ -1531,9 +2001,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const returnPathText = props.returnPath ?? returnFallback;
   const stageProgressText = !liveStageIsCurrent
     ? ""
-    : isChinese
-      ? `\u7b2c ${activeStageIndex} / ${totalStageCount} \u6bb5`
-      : `Stage ${activeStageIndex} of ${totalStageCount}`;
+    : planCopy(language, "stageProgress", { index: activeStageIndex, total: totalStageCount });
   const currentGoalText = inlineText(currentGoalSummary, compactPrimary ? "" : activeStageObjective || activeStageTitle);
   const currentMainlineText = currentGoalText || activeStageTitle;
   const showGoalSummary = Boolean(!compactPrimary && currentGoalText && currentGoalText !== activeStageTitle);
@@ -1556,37 +2024,27 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const fallbackGovernanceItems: PlanGovernanceItem[] = [
     {
       id: "formal-plan",
-      label: isChinese ? "\u6b63\u5f0f\u8ba1\u5212" : planCopy(language, "formalPlan"),
+      label: planCopy(language, "formalPlan"),
       value: planStateValue,
       detail: plan.frozen
-        ? isChinese
-          ? "\u6b63\u5f0f\u8ba1\u5212\u5df2\u9501\u5b9a\u3002\u804a\u5929\u8bc1\u636e\u4e0d\u4f1a\u9759\u9ed8\u91cd\u5199\u5b83\u3002"
-          : `${planCopy(language, "formalPlanFrozen")}. ${planCopy(language, "chatEvidenceNoRewrite")}`
-        : isChinese
-          ? "\u5bf9\u8bdd\u4e0d\u4f1a\u9759\u9ed8\u91cd\u5199\u5b83\u3002"
-          : planCopy(language, "chatEvidenceNoRewrite"),
+        ? planCopy(language, "formalPlanFrozenDetail")
+        : planCopy(language, "chatNoRewriteShort"),
       tone: plan.frozen ? "warning" : "good",
     },
     {
       id: "evidence-adoption",
-      label: isChinese ? "\u8bc1\u636e" : planCopy(language, "evidence"),
-      value: isChinese ? "\u5f85\u786e\u8ba4" : planCopy(language, "needsConfirmation"),
-      detail: isChinese
-        ? "\u8bc1\u636e\u8fd8\u6ca1\u6539\u5199\u8ba1\u5212\u3002"
-        : planCopy(language, "evidenceUnchanged"),
+      label: planCopy(language, "evidence"),
+      value: planCopy(language, "needsConfirmation"),
+      detail: planCopy(language, "evidenceUnchangedDetail"),
       tone: "muted",
     },
     {
       id: "blocker-state",
-      label: isChinese ? "\u5361\u70b9" : planCopy(language, "blocker"),
+      label: planCopy(language, "blocker"),
       value: blockedReason
-        ? isChinese
-          ? "\u6709\u5361\u70b9"
-          : planCopy(language, "blocked")
-        : isChinese
-          ? "\u53ef\u63a8\u8fdb"
-          : planCopy(language, "clear"),
-      detail: blockedReason || (isChinese ? "\u76ee\u524d\u6ca1\u6709\u8ba1\u5212\u5361\u70b9\u3002" : planCopy(language, "noPlanBlocker")),
+        ? planCopy(language, "blocked")
+        : planCopy(language, "clear"),
+      detail: blockedReason || planCopy(language, "noPlanBlocker"),
       tone: blockedReason ? "danger" : "good",
     },
   ];
@@ -1705,7 +2163,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     props.rememberedSummary
       ? {
           id: "remembered-summary",
-          label: props.rememberedSummaryLabel ?? (isChinese ? "\u6559\u7ec3\u5df2\u8bb0\u4f4f" : "Trainer remembers"),
+          label: props.rememberedSummaryLabel ?? planCopy(language, "trainerRemembers"),
           body: props.rememberedSummary,
         }
       : null,
@@ -1717,7 +2175,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     props.teachingObservations?.length
       ? {
           id: "observations",
-          label: props.teachingObservationsLabel ?? (isChinese ? "\u6559\u5b66\u89c2\u5bdf" : "Teaching observations"),
+          label: props.teachingObservationsLabel ?? planCopy(language, "teachingObservationsLabel"),
           value: props.teachingObservations.slice(0, 3).join(" · "),
         }
       : null,
@@ -1780,8 +2238,8 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         },
         {
           id: "blocker",
-          label: isChinese ? "卡点" : planCopy(language, "blocker"),
-          body: compactBlockerText || (isChinese ? "可推进" : planCopy(language, "clear")),
+          label: planCopy(language, "blocker"),
+          body: compactBlockerText || planCopy(language, "clear"),
         },
         ...mainLanes.slice(1).map((lane) => ({
           id: lane.id,
@@ -1803,7 +2261,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const detailSections = [
     hasStageDetails ? resolvedStagesLabel : null,
     hasReviewDetails ? resolvedRevisitSummaryLabel : null,
-    hasTrajectoryDetails ? (props.trajectoryLabel ?? (isChinese ? "来源短名单" : "Source shortlist")) : null,
+    hasTrajectoryDetails ? (props.trajectoryLabel ?? planCopy(language, "sourceShortlist")) : null,
     hasBackgroundDetails ? resolvedSupportSummaryLabel : null,
     hasEvidenceDetails ? t("evidenceGovernance") : null,
   ].filter(Boolean) as string[];
@@ -1900,7 +2358,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
               ) : null}
               {!compactPrimary && showGoalSummary ? renderNodeWithParagraph(currentGoalSummary) : null}
               {primarySummaryChips.length ? (
-                <div className="coach-plan-view__summary-chips" aria-label={isChinese ? "概览" : "Overview"}>
+                <div className="coach-plan-view__summary-chips" aria-label={planCopy(language, "overviewLabel")}>
                   {primarySummaryChips.map((chip) => (
                     <StatusLabel key={chip} label={chip} />
                   ))}
@@ -2022,7 +2480,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                 </div>
               ) : null}
               {!compactPrimary ? (
-                <div className="coach-plan-view__route-strip" aria-label={isChinese ? "\u5f53\u524d\u8ba1\u5212\u8def\u7ebf" : "Current plan route"}>
+                <div className="coach-plan-view__route-strip" aria-label={planCopy(language, "currentPlanRoute")}>
                 {primaryRouteStripItems.map((item) => (
                   <div
                     key={item.id}
@@ -2109,7 +2567,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
               {compactDetailRows.length && !compactPrimary ? (
                 <section className="coach-plan-view__details-group">
                   <div className="coach-plan-view__details-group-head">
-                    <span>{isChinese ? "主线说明" : "Thread context"}</span>
+                    <span>{planCopy(language, "threadContext")}</span>
                   </div>
                   <div className="coach-plan-view__micro-list">
                     {compactDetailRows.map((lane) => (
@@ -2213,8 +2671,8 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                       </div>
                     ) : null}
                     {props.dueReviewItems?.slice(0, 4).map((item) => {
-                      const meta = compactReviewMeta(item, isChinese);
-                      const lane = compactReviewLane(item, isChinese);
+                      const meta = compactReviewMeta(item, language);
+                      const lane = compactReviewLane(item, language);
                       return (
                         <div key={item.id} className="coach-plan-view__review-row">
                           <strong>{item.title}</strong>
@@ -2236,7 +2694,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                     {trajectoryRows.length ? (
                       <div className="coach-plan-view__note-line">
                         <p className="coach-plan-view__lane-note coach-plan-view__lane-note--quiet">
-                          {props.trajectoryLabel ?? (isChinese ? "来源短名单" : "Source shortlist")}
+                          {props.trajectoryLabel ?? planCopy(language, "sourceShortlist")}
                         </p>
                         {trajectoryRows.map((row) => (
                           <div key={row.id} className="coach-plan-view__note-item">
@@ -2274,36 +2732,40 @@ export function CoachPlanView(props: CoachPlanViewProps) {
               {planChangeCandidates.length > 0 ? (
                 <section className="coach-plan-view__details-group coach-plan-view__details-group--evidence">
                   <div className="coach-plan-view__details-group-head">
-                    <span>{isChinese ? "计划变更候选" : "Plan change candidates"}</span>
+                    <span>{planCopy(language, "planChangeCandidatesLabel")}</span>
                     <StatusLabel label={`${planChangeCandidates.filter((item) => item.status === "pending").length}`} />
                   </div>
                   {planChangeCandidates.map((candidate) => (
                     <div key={candidate.id} className="coach-plan-view__evidence-item">
-                      <strong>{candidate.status === "pending" ? (isChinese ? "待确认" : "Pending confirmation") : candidate.status}</strong>
+                      <strong>
+                        {candidate.status === "pending"
+                          ? planCopy(language, "pendingConfirmation")
+                          : candidate.status}
+                      </strong>
                       <p>
                         {sanitizeErrorSurfaceText(candidate.reason, language) ||
-                          (isChinese ? "这条候选还需要确认。" : "This candidate still needs confirmation.")}
+                          planCopy(language, "candidateNeedsConfirmation")}
                       </p>
                       <p>
-                        {isChinese ? "差异" : "Diff"}:{" "}
+                        {planCopy(language, "diffLabel")}:{" "}
                         {describeSafeStructuredValue(
                           candidate.diff,
                           language,
-                          isChinese ? "没有可展示的差异。" : "No visible diff.",
+                          planCopy(language, "noVisibleDiff"),
                         )}
                       </p>
                       <p>
-                        {isChinese ? "影响" : "Impact"}:{" "}
+                        {planCopy(language, "impactLabel")}:{" "}
                         {describeSafeStructuredValue(
                           candidate.impact,
                           language,
-                          isChinese ? "没有可展示的影响。" : "No visible impact.",
+                          planCopy(language, "noVisibleImpact"),
                         )}
                       </p>
                       {candidate.status === "pending" ? (
                         <div className="coach-plan-view__evidence-actions">
-                          {onAcknowledgePlanChange ? <ActionButton tone="accent" label={isChinese ? "确认候选" : "Acknowledge candidate"} onClick={() => onAcknowledgePlanChange(candidate.id)} fullWidth={false} /> : null}
-                          {onRejectPlanChange ? <ActionButton tone="ghost" label={isChinese ? "拒绝候选" : "Reject candidate"} onClick={() => onRejectPlanChange(candidate.id)} fullWidth={false} /> : null}
+                          {onAcknowledgePlanChange ? <ActionButton tone="accent" label={planCopy(language, "acknowledgeCandidate")} onClick={() => onAcknowledgePlanChange(candidate.id)} fullWidth={false} /> : null}
+                          {onRejectPlanChange ? <ActionButton tone="ghost" label={planCopy(language, "rejectCandidate")} onClick={() => onRejectPlanChange(candidate.id)} fullWidth={false} /> : null}
                         </div>
                       ) : null}
                     </div>
@@ -2732,16 +3194,17 @@ function stageMaterialKindClass(kind: string): string {
   return STAGE_MATERIAL_KIND_CLASSES[kind] ?? "stage-material-badge--other";
 }
 
-function stageMaterialKindLabel(kind: string, isChinese: boolean): string {
-  const labels: Record<string, [string, string]> = {
-    study_guide: ["学习指南", "Study guide"],
-    cheat_sheet: ["速查卡", "Cheat sheet"],
-    exercise_set: ["练习集", "Exercises"],
-    code_examples: ["代码示例", "Code examples"],
-  };
-  const entry = labels[kind];
-  if (entry) {
-    return isChinese ? entry[0] : entry[1];
+const STAGE_MATERIAL_KIND_LABEL_KEYS: Record<string, PlanCopyKey> = {
+  study_guide: "stageMaterialStudyGuide",
+  cheat_sheet: "stageMaterialCheatSheet",
+  exercise_set: "stageMaterialExerciseSet",
+  code_examples: "stageMaterialCodeExamples",
+};
+
+function stageMaterialKindLabel(kind: string, language: PlanLanguage): string {
+  const key = STAGE_MATERIAL_KIND_LABEL_KEYS[kind];
+  if (key) {
+    return planCopy(language, key);
   }
   return kind.replace(/_/g, " ").trim() || kind;
 }
@@ -2906,7 +3369,6 @@ function StageMaterialsSection({ stageId, planId }: { stageId: string; planId: s
   );
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const items = materials ?? [];
-  const isChinese = language === "zh-CN";
 
   return (
     <CollapseSection
@@ -2947,7 +3409,7 @@ function StageMaterialsSection({ stageId, planId }: { stageId: string; planId: s
                     <span className="coach-plan-view__stage-material-title">
                       <strong>{item.title}</strong>
                       <span className={`stage-material-badge ${stageMaterialKindClass(item.kind)}`}>
-                        {stageMaterialKindLabel(item.kind, isChinese)}
+                        {stageMaterialKindLabel(item.kind, language)}
                       </span>
                     </span>
                     {summary ? (

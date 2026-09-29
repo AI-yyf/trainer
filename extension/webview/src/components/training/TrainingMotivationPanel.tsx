@@ -8,6 +8,11 @@
 
 import React from "react";
 import { SparklesIcon, TrophyIcon, TargetIcon, FireIcon } from "../icons";
+import {
+  timeOfDayGreeting,
+  trainingDurationCopy,
+} from "./trainingPanelCopy";
+import type { ComposerLanguage } from "../../lib/types";
 
 export interface TrainingMotivationMetrics {
   /** Current streak - days of consistent practice */
@@ -37,41 +42,123 @@ export interface TrainingMotivationPanelProps {
   onProgressClick?: () => void;
 }
 
-/**
- * Get time-based greeting based on current hour
- */
-function getTimeBasedGreeting(hour: number, language: "zh-CN" | "en-US"): string {
-  if (hour < 6) {
-    return language === "zh-CN" ? "夜间" : "Late night";
-  }
-  if (hour < 9) {
-    return language === "zh-CN" ? "清晨" : "Early morning";
-  }
-  if (hour < 12) {
-    return language === "zh-CN" ? "上午" : "Morning";
-  }
-  if (hour < 14) {
-    return language === "zh-CN" ? "午间" : "Noon";
-  }
-  if (hour < 18) {
-    return language === "zh-CN" ? "下午" : "Afternoon";
-  }
-  if (hour < 21) {
-    return language === "zh-CN" ? "晚上" : "Evening";
-  }
-  return language === "zh-CN" ? "夜间" : "Night";
+type TrainingMotivationTextKey =
+  | "streakLabel"
+  | "masteredLabel"
+  | "timeLabel"
+  | "progressLabel"
+  | "nextReviewLabel"
+  | "startLabel"
+  | "dayUnit"
+  | "cardUnit";
+
+/** §十五: motivation-panel labels in eight languages (no zh/en binary). */
+const trainingMotivationTextCopy: Record<ComposerLanguage, Record<TrainingMotivationTextKey, string>> = {
+  "zh-CN": {
+    streakLabel: "连续练习",
+    masteredLabel: "已掌握",
+    timeLabel: "练习时长",
+    progressLabel: "今日进度",
+    nextReviewLabel: "下次复习",
+    startLabel: "开始",
+    dayUnit: "天",
+    cardUnit: " 张",
+  },
+  "en-US": {
+    streakLabel: "Streak",
+    masteredLabel: "Mastered",
+    timeLabel: "Practice time",
+    progressLabel: "Today's progress",
+    nextReviewLabel: "Next review",
+    startLabel: "Start",
+    dayUnit: " days",
+    cardUnit: " cards",
+  },
+  "es-ES": {
+    streakLabel: "Racha",
+    masteredLabel: "Dominado",
+    timeLabel: "Tiempo de práctica",
+    progressLabel: "Progreso de hoy",
+    nextReviewLabel: "Próxima revisión",
+    startLabel: "Empezar",
+    dayUnit: " días",
+    cardUnit: " tarjetas",
+  },
+  "fr-FR": {
+    streakLabel: "Série",
+    masteredLabel: "Maîtrisé",
+    timeLabel: "Temps de pratique",
+    progressLabel: "Progrès du jour",
+    nextReviewLabel: "Prochaine révision",
+    startLabel: "Démarrer",
+    dayUnit: " jours",
+    cardUnit: " cartes",
+  },
+  "de-DE": {
+    streakLabel: "Serie",
+    masteredLabel: "Gemeistert",
+    timeLabel: "Praxiszeit",
+    progressLabel: "Fortschritt heute",
+    nextReviewLabel: "Nächste Wiederholung",
+    startLabel: "Start",
+    dayUnit: " Tage",
+    cardUnit: " Karten",
+  },
+  "ja-JP": {
+    streakLabel: "連続練習",
+    masteredLabel: "習得済み",
+    timeLabel: "練習時間",
+    progressLabel: "今日の進捗",
+    nextReviewLabel: "次の復習",
+    startLabel: "開始",
+    dayUnit: "日",
+    cardUnit: " 枚",
+  },
+  "ko-KR": {
+    streakLabel: "연속 연습",
+    masteredLabel: "습득 완료",
+    timeLabel: "연습 시간",
+    progressLabel: "오늘의 진행률",
+    nextReviewLabel: "다음 복습",
+    startLabel: "시작",
+    dayUnit: "일",
+    cardUnit: "장",
+  },
+  "pt-BR": {
+    streakLabel: "Sequência",
+    masteredLabel: "Dominado",
+    timeLabel: "Tempo de prática",
+    progressLabel: "Progresso de hoje",
+    nextReviewLabel: "Próxima revisão",
+    startLabel: "Iniciar",
+    dayUnit: " dias",
+    cardUnit: " cartões",
+  },
+};
+
+function trainingMotivationText(language: ComposerLanguage, key: TrainingMotivationTextKey): string {
+  return trainingMotivationTextCopy[language]?.[key] ?? trainingMotivationTextCopy["en-US"][key];
 }
 
-function formatTime(minutes: number, language: "zh-CN" | "en-US"): string {
+/**
+ * Get time-based greeting based on current hour (hour bucketing stays here;
+ * copy lives in the shared eight-language record).
+ */
+function getTimeBasedGreeting(hour: number, language: ComposerLanguage): string {
+  return timeOfDayGreeting(hour, language);
+}
+
+function formatTime(minutes: number, language: ComposerLanguage): string {
+  const duration = trainingDurationCopy(language);
   if (minutes < 60) {
-    return language === "zh-CN" ? `${minutes} 分钟` : `${minutes} min`;
+    return duration.minutes(minutes);
   }
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   if (mins === 0) {
-    return language === "zh-CN" ? `${hours} 小时` : `${hours} hr`;
+    return duration.hours(hours);
   }
-  return language === "zh-CN" ? `${hours}h ${mins}m` : `${hours}hr ${mins}min`;
+  return duration.mixed(hours, mins);
 }
 
 export const TrainingMotivationPanel: React.FC<TrainingMotivationPanelProps> = ({
@@ -84,12 +171,12 @@ export const TrainingMotivationPanel: React.FC<TrainingMotivationPanelProps> = (
   const currentHour = new Date().getHours();
   const greeting = getTimeBasedGreeting(currentHour, language);
 
-  const streakLabel = language === "zh-CN" ? "连续练习" : "Streak";
-  const masteredLabel = language === "zh-CN" ? "已掌握" : "Mastered";
-  const timeLabel = language === "zh-CN" ? "练习时长" : "Practice time";
-  const progressLabel = language === "zh-CN" ? "今日进度" : "Today's progress";
-  const nextReviewLabel = language === "zh-CN" ? "下次复习" : "Next review";
-  const startLabel = language === "zh-CN" ? "开始" : "Start";
+  const streakLabel = trainingMotivationText(language, "streakLabel");
+  const masteredLabel = trainingMotivationText(language, "masteredLabel");
+  const timeLabel = trainingMotivationText(language, "timeLabel");
+  const progressLabel = trainingMotivationText(language, "progressLabel");
+  const nextReviewLabel = trainingMotivationText(language, "nextReviewLabel");
+  const startLabel = trainingMotivationText(language, "startLabel");
 
   const progressState = metrics.todayProgress >= 80
     ? "is-complete"
@@ -126,7 +213,7 @@ export const TrainingMotivationPanel: React.FC<TrainingMotivationPanelProps> = (
             <div className="stat-value">
               {metrics.streak}
               <span className="stat-unit">
-                {language === "zh-CN" ? "天" : " days"}
+                {trainingMotivationText(language, "dayUnit")}
               </span>
             </div>
             <div className="stat-label">{streakLabel}</div>
@@ -142,7 +229,7 @@ export const TrainingMotivationPanel: React.FC<TrainingMotivationPanelProps> = (
             <div className="stat-value">
               {metrics.cardsMastered}
               <span className="stat-unit">
-                {language === "zh-CN" ? " 张" : " cards"}
+                {trainingMotivationText(language, "cardUnit")}
               </span>
             </div>
             <div className="stat-label">{masteredLabel}</div>

@@ -1806,6 +1806,162 @@ const englishLabels: Partial<CoachSettingsLabels> = {
   managedDataFolderFallbackNote: "Trainer only auto-copies existing data when the target folder is empty.",
 };
 
+/**
+ * §十五: settings labels the shared workbench copy does not cover, in eight
+ * languages (no zh/en binary). Merged into localizedSettingsLabels so the
+ * base-record selection in the view body never decides user-visible copy.
+ */
+const extraLocalizedSettingsLabels: Record<
+  ComposerLanguage,
+  Partial<CoachSettingsLabels>
+> = {
+  "zh-CN": {
+    intro: "",
+    on: "开启",
+    off: "关闭",
+    reviewRhythm: "复习节奏",
+    nextReview: "下次提醒",
+    coachState: "教练判断",
+    workspaceAuthorityEmpty: "还没有收到沙箱边界信息。",
+    managedDataFolder: "受管数据目录",
+    managedDataFolderHint: "Trainer 在这里保存后端数据和回退沙箱内容。切换后会重启后端，旧目录不会自动删除。",
+    managedDataFolderRecommended: "推荐目录",
+    managedDataFolderCustom: "自定义目录",
+    managedDataFolderChoose: "选择目录",
+    managedDataFolderReset: "使用推荐目录",
+    managedDataFolderFallbackNote: "只有目标目录为空时，Trainer 才会自动复制现有数据。",
+  },
+  "en-US": {
+    intro: "",
+    on: "On",
+    off: "Off",
+    reviewRhythm: "Review rhythm",
+    nextReview: "Next reminder",
+    coachState: "Coach judgment",
+    workspaceAuthorityEmpty: "No sandbox authority has been reported yet.",
+    managedDataFolder: "Managed data folder",
+    managedDataFolderHint: "Trainer keeps backend data and fallback sandbox content here. Changing it restarts the backend and leaves the previous folder untouched.",
+    managedDataFolderRecommended: "Recommended folder",
+    managedDataFolderCustom: "Custom folder",
+    managedDataFolderChoose: "Choose folder",
+    managedDataFolderReset: "Use recommended",
+    managedDataFolderFallbackNote: "Trainer only auto-copies existing data when the target folder is empty.",
+  },
+  "es-ES": {
+    intro: "",
+    on: "Activado",
+    off: "Desactivado",
+    reviewRhythm: "Ritmo de repaso",
+    nextReview: "Próximo recordatorio",
+    coachState: "Juicio del coach",
+    workspaceAuthorityEmpty: "Aún no se ha recibido información del límite del sandbox.",
+    managedDataFolder: "Carpeta de datos gestionada",
+    managedDataFolderHint: "Trainer guarda aquí los datos del backend y el contenido del sandbox de respaldo. Cambiarlo reinicia el backend y no borra la carpeta anterior automáticamente.",
+    managedDataFolderRecommended: "Carpeta recomendada",
+    managedDataFolderCustom: "Carpeta personalizada",
+    managedDataFolderChoose: "Elegir carpeta",
+    managedDataFolderReset: "Usar la recomendada",
+    managedDataFolderFallbackNote: "Trainer solo copia automáticamente los datos existentes cuando la carpeta de destino está vacía.",
+  },
+  "fr-FR": {
+    intro: "",
+    on: "Activé",
+    off: "Désactivé",
+    reviewRhythm: "Rythme de révision",
+    nextReview: "Prochain rappel",
+    coachState: "Jugement du coach",
+    workspaceAuthorityEmpty: "Aucune information de limite de sandbox n’a encore été reçue.",
+    managedDataFolder: "Dossier de données géré",
+    managedDataFolderHint: "Trainer enregistre ici les données du backend et le contenu du sandbox de secours. Le modifier redémarre le backend et ne supprime pas automatiquement l’ancien dossier.",
+    managedDataFolderRecommended: "Dossier recommandé",
+    managedDataFolderCustom: "Dossier personnalisé",
+    managedDataFolderChoose: "Choisir un dossier",
+    managedDataFolderReset: "Utiliser le dossier recommandé",
+    managedDataFolderFallbackNote: "Trainer ne copie automatiquement les données existantes que si le dossier cible est vide.",
+  },
+  "de-DE": {
+    intro: "",
+    on: "An",
+    off: "Aus",
+    reviewRhythm: "Wiederholungsrhythmus",
+    nextReview: "Nächste Erinnerung",
+    coachState: "Coach-Einschätzung",
+    workspaceAuthorityEmpty: "Noch keine Informationen zur Sandbox-Grenze erhalten.",
+    managedDataFolder: "Verwalteter Datenordner",
+    managedDataFolderHint: "Trainer speichert hier Backend-Daten und Fallback-Sandbox-Inhalte. Ein Wechsel startet das Backend neu und löscht den alten Ordner nicht automatisch.",
+    managedDataFolderRecommended: "Empfohlener Ordner",
+    managedDataFolderCustom: "Eigener Ordner",
+    managedDataFolderChoose: "Ordner wählen",
+    managedDataFolderReset: "Empfohlenen Ordner verwenden",
+    managedDataFolderFallbackNote: "Trainer kopiert vorhandene Daten nur automatisch, wenn der Zielordner leer ist.",
+  },
+  "ja-JP": {
+    intro: "",
+    on: "オン",
+    off: "オフ",
+    reviewRhythm: "復習リズム",
+    nextReview: "次のリマインダー",
+    coachState: "コーチの判断",
+    workspaceAuthorityEmpty: "サンドボックス境界の情報はまだ届いていません。",
+    managedDataFolder: "管理データフォルダー",
+    managedDataFolderHint: "Trainer はここにバックエンドデータとフォールバックサンドボックスの内容を保存します。変更するとバックエンドが再起動し、旧フォルダーは自動的には削除されません。",
+    managedDataFolderRecommended: "推奨フォルダー",
+    managedDataFolderCustom: "カスタムフォルダー",
+    managedDataFolderChoose: "フォルダーを選択",
+    managedDataFolderReset: "推奨フォルダーを使う",
+    managedDataFolderFallbackNote: "コピー先フォルダーが空の場合にだけ、Trainer は既存データを自動コピーします。",
+  },
+  "ko-KR": {
+    intro: "",
+    on: "켜짐",
+    off: "꺼짐",
+    reviewRhythm: "복습 리듬",
+    nextReview: "다음 알림",
+    coachState: "코치 판단",
+    workspaceAuthorityEmpty: "아직 샌드박스 경계 정보를 받지 못했습니다.",
+    managedDataFolder: "관리 데이터 폴더",
+    managedDataFolderHint: "Trainer 는 여기에 백엔드 데이터와 폴백 샌드박스 내용을 저장합니다. 변경하면 백엔드가 재시작되며 이전 폴더는 자동으로 삭제되지 않습니다.",
+    managedDataFolderRecommended: "권장 폴더",
+    managedDataFolderCustom: "사용자 지정 폴더",
+    managedDataFolderChoose: "폴더 선택",
+    managedDataFolderReset: "권장 폴더 사용",
+    managedDataFolderFallbackNote: "대상 폴더가 비어 있을 때만 Trainer 가 기존 데이터를 자동으로 복사합니다.",
+  },
+  "pt-BR": {
+    intro: "",
+    on: "Ativado",
+    off: "Desativado",
+    reviewRhythm: "Ritmo de revisão",
+    nextReview: "Próximo lembrete",
+    coachState: "Julgamento do coach",
+    workspaceAuthorityEmpty: "Ainda não foi recebida informação do limite do sandbox.",
+    managedDataFolder: "Pasta de dados gerenciada",
+    managedDataFolderHint: "O Trainer guarda aqui os dados do backend e o conteúdo do sandbox de reserva. Mudar isso reinicia o backend e não apaga a pasta anterior automaticamente.",
+    managedDataFolderRecommended: "Pasta recomendada",
+    managedDataFolderCustom: "Pasta personalizada",
+    managedDataFolderChoose: "Escolher pasta",
+    managedDataFolderReset: "Usar a recomendada",
+    managedDataFolderFallbackNote: "O Trainer só copia automaticamente os dados existentes quando a pasta de destino está vazia.",
+  },
+};
+
+/**
+ * Full-coverage base per composer language. zh-CN starts from the Chinese
+ * record; every other locale starts from the English record. All 153 label
+ * keys are then overridden by localizedSettingsLabels, so user-visible copy
+ * always comes from the eight-language path above.
+ */
+const SETTINGS_FALLBACK_LABELS: Record<ComposerLanguage, Partial<CoachSettingsLabels>> = {
+  "zh-CN": defaultLabels,
+  "en-US": englishLabels,
+  "es-ES": englishLabels,
+  "fr-FR": englishLabels,
+  "de-DE": englishLabels,
+  "ja-JP": englishLabels,
+  "ko-KR": englishLabels,
+  "pt-BR": englishLabels,
+};
+
 const firstScreenRowLabels: Record<
   ComposerLanguage,
   Pick<CoachSettingsLabels, "interfaceSection" | "coachSection" | "connectionDetails">
@@ -1856,6 +2012,8 @@ function localizedSettingsLabels(language: ComposerLanguage): Partial<CoachSetti
   const copy = resolveWorkbenchCopy(language);
   const firstScreenRows = firstScreenRowLabels[language] ?? firstScreenRowLabels["en-US"];
   return {
+    // §十五: labels the shared workbench copy does not cover, in eight languages.
+    ...extraLocalizedSettingsLabels[language],
     eyebrow: copy.settings,
     title: `Trainer ${copy.settings}`,
     setupSection: copy.settingsSetupSection,
@@ -3908,8 +4066,12 @@ export function CoachSettingsView({
   onNavigateToView,
   onShareSession,
 }: CoachSettingsViewProps) {
+  // §十五: user-visible labels for all eight languages resolve through
+  // localizedSettingsLabels (shared workbench copy + extraLocalizedSettingsLabels).
+  // This base only guarantees full label coverage per language; it never
+  // decides user-visible copy.
   const baseLabels = {
-    ...(language === "zh-CN" ? defaultLabels : englishLabels),
+    ...SETTINGS_FALLBACK_LABELS[language],
     ...localizedSettingsLabels(language),
   };
   const copy: CoachSettingsLabels = {

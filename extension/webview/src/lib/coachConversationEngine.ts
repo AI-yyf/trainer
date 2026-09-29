@@ -33,6 +33,175 @@ import {
 } from "./coachIntelligence";
 
 // =============================================================================
+// §十五: coach engine copy in eight languages (no zh/en binary).
+// The zh-CN source string is the record key; {domain} / {question} / {reason} /
+// {weeks} are positional slots filled by the caller with .replace().
+// =============================================================================
+
+const COACH_ENGINE_TEXT: Record<string, Record<ComposerLanguage, string>> = {
+  "我是你的学习教练。告诉我你想学什么，或者你现在在哪方面想提升？": {
+    "zh-CN": "我是你的学习教练。告诉我你想学什么，或者你现在在哪方面想提升？",
+    "en-US": "I'm your learning coach. Tell me what you want to learn, or where you'd like to improve.",
+    "es-ES": "Soy tu coach de aprendizaje. Dime qué quieres aprender o en qué área quieres mejorar.",
+    "fr-FR": "Je suis votre coach d’apprentissage. Dites-moi ce que vous voulez apprendre ou où vous souhaitez progresser.",
+    "de-DE": "Ich bin dein Lerncoach. Sag mir, was du lernen willst oder wo du dich verbessern möchtest.",
+    "ja-JP": "私はあなたの学習コーチです。何を学びたいか、どの分野を伸ばしたいか教えてください。",
+    "ko-KR": "저는 학습 코치입니다. 무엇을 배우고 싶은지, 어느 부분을 향상시키고 싶은지 알려주세요.",
+    "pt-BR": "Sou o seu coach de aprendizagem. Diga-me o que você quer aprender ou onde quer melhorar.",
+  },
+  "明白了，你想学习{domain}。{question}\n\n{reason}": {
+    "zh-CN": "明白了，你想学习{domain}。{question}\n\n{reason}",
+    "en-US": "Got it, you want to learn {domain}. {question}\n\n{reason}",
+    "es-ES": "Entendido, quieres aprender {domain}. {question}\n\n{reason}",
+    "fr-FR": "Bien compris, vous voulez apprendre {domain}. {question}\n\n{reason}",
+    "de-DE": "Verstanden, du möchtest {domain} lernen. {question}\n\n{reason}",
+    "ja-JP": "わかりました。{domain} を学びたいのですね。{question}\n\n{reason}",
+    "ko-KR": "알겠습니다. {domain}을(를) 배우고 싶으시군요. {question}\n\n{reason}",
+    "pt-BR": "Entendido, você quer aprender {domain}. {question}\n\n{reason}",
+  },
+  "这个领域": {
+    "zh-CN": "这个领域",
+    "en-US": "this topic",
+    "es-ES": "este tema",
+    "fr-FR": "ce sujet",
+    "de-DE": "dieses Thema",
+    "ja-JP": "この分野",
+    "ko-KR": "이 주제",
+    "pt-BR": "este tópico",
+  },
+  "根据你的情况，我会帮你制定一个适合你的学习计划。预计需要{weeks}周时间。": {
+    "zh-CN": "根据你的情况，我会帮你制定一个适合你的学习计划。预计需要{weeks}周时间。",
+    "en-US": "Based on your situation, I'll create a learning plan for you. Estimated time: {weeks} weeks.",
+    "es-ES": "Según tu situación, crearé un plan de aprendizaje adecuado para ti. Tiempo estimado: {weeks} semanas.",
+    "fr-FR": "D’après votre situation, je vais élaborer un plan d’apprentissage adapté. Durée estimée : {weeks} semaines.",
+    "de-DE": "Basierend auf deiner Situation erstelle ich einen passenden Lernplan für dich. Geschätzte Zeit: {weeks} Wochen.",
+    "ja-JP": "あなたの状況に合わせて学習プランを作成します。予想所要期間：{weeks} 週間。",
+    "ko-KR": "상황에 맞는 학습 계획을 만들어 드리겠습니다. 예상 기간: {weeks}주.",
+    "pt-BR": "Com base na sua situação, criarei um plano de aprendizagem adequado para você. Tempo estimado: {weeks} semanas.",
+  },
+  "我们开始制定具体的学习计划吗？": {
+    "zh-CN": "我们开始制定具体的学习计划吗？",
+    "en-US": "Shall we start creating your learning plan?",
+    "es-ES": "¿Empezamos a crear tu plan de aprendizaje?",
+    "fr-FR": "Commençons à élaborer votre plan d’apprentissage ?",
+    "de-DE": "Sollen wir mit der Erstellung deines Lernplans beginnen?",
+    "ja-JP": "具体的な学習プランの作成を始めましょうか？",
+    "ko-KR": "구체적인 학습 계획 만들기를 시작할까요?",
+    "pt-BR": "Vamos começar a criar seu plano de aprendizagem?",
+  },
+  "好的，让我为你生成学习计划...": {
+    "zh-CN": "好的，让我为你生成学习计划...",
+    "en-US": "Alright, let me create your learning plan...",
+    "es-ES": "De acuerdo, déjame crear tu plan de aprendizaje...",
+    "fr-FR": "Très bien, laissez-moi créer votre plan d’apprentissage...",
+    "de-DE": "In Ordnung, ich erstelle deinen Lernplan...",
+    "ja-JP": "わかりました。学習プランを作成します...",
+    "ko-KR": "좋아요, 학습 계획을 만들어 드릴게요...",
+    "pt-BR": "Certo, deixe-me criar seu plano de aprendizagem...",
+  },
+  "我需要更多信息来帮你制定学习计划。请告诉我你想学什么？": {
+    "zh-CN": "我需要更多信息来帮你制定学习计划。请告诉我你想学什么？",
+    "en-US": "I need more information to help you create a learning plan. What would you like to learn?",
+    "es-ES": "Necesito más información para ayudarte a crear un plan de aprendizaje. ¿Qué te gustaría aprender?",
+    "fr-FR": "J’ai besoin de plus d’informations pour vous aider à créer un plan d’apprentissage. Que souhaitez-vous apprendre ?",
+    "de-DE": "Ich brauche mehr Informationen, um dir bei einem Lernplan zu helfen. Was möchtest du lernen?",
+    "ja-JP": "学習プランを作るにはもっと情報が必要です。何を学びたいですか？",
+    "ko-KR": "학습 계획을 세우려면 정보가 더 필요합니다. 무엇을 배우고 싶으신가요?",
+    "pt-BR": "Preciso de mais informações para ajudar você a criar um plano de aprendizagem. O que você gostaria de aprender?",
+  },
+  "正在了解你的学习目标": {
+    "zh-CN": "正在了解你的学习目标",
+    "en-US": "Understanding your learning goals",
+    "es-ES": "Entendiendo tus objetivos de aprendizaje",
+    "fr-FR": "Compréhension de vos objectifs d’apprentissage",
+    "de-DE": "Lernziele werden erfasst",
+    "ja-JP": "学習目標を把握しています",
+    "ko-KR": "학습 목표 파악 중",
+    "pt-BR": "Entendendo seus objetivos de aprendizagem",
+  },
+  "正在分析你的情况": {
+    "zh-CN": "正在分析你的情况",
+    "en-US": "Analyzing your situation",
+    "es-ES": "Analizando tu situación",
+    "fr-FR": "Analyse de votre situation",
+    "de-DE": "Deine Situation wird analysiert",
+    "ja-JP": "あなたの状況を分析しています",
+    "ko-KR": "상황 분석 중",
+    "pt-BR": "Analisando sua situação",
+  },
+  "正在生成学习计划": {
+    "zh-CN": "正在生成学习计划",
+    "en-US": "Creating your learning plan",
+    "es-ES": "Creando tu plan de aprendizaje",
+    "fr-FR": "Création de votre plan d’apprentissage",
+    "de-DE": "Lernplan wird erstellt",
+    "ja-JP": "学習プランを作成しています",
+    "ko-KR": "학습 계획 생성 중",
+    "pt-BR": "Criando seu plano de aprendizagem",
+  },
+  "正在执行学习计划": {
+    "zh-CN": "正在执行学习计划",
+    "en-US": "Executing learning plan",
+    "es-ES": "Ejecutando el plan de aprendizaje",
+    "fr-FR": "Exécution du plan d’apprentissage",
+    "de-DE": "Lernplan wird ausgeführt",
+    "ja-JP": "学習プランを実行しています",
+    "ko-KR": "학습 계획 실행 중",
+    "pt-BR": "Executando o plano de aprendizagem",
+  },
+  "正在调整计划": {
+    "zh-CN": "正在调整计划",
+    "en-US": "Adapting plan",
+    "es-ES": "Adaptando el plan",
+    "fr-FR": "Adaptation du plan",
+    "de-DE": "Plan wird angepasst",
+    "ja-JP": "プランを調整しています",
+    "ko-KR": "계획 조정 중",
+    "pt-BR": "Adaptando o plano",
+  },
+  "已完成当前阶段": {
+    "zh-CN": "已完成当前阶段",
+    "en-US": "Current stage completed",
+    "es-ES": "Etapa actual completada",
+    "fr-FR": "Étape actuelle terminée",
+    "de-DE": "Aktuelle Phase abgeschlossen",
+    "ja-JP": "現在のステージが完了しました",
+    "ko-KR": "현재 단계 완료",
+    "pt-BR": "Etapa atual concluída",
+  },
+  "准备中": {
+    "zh-CN": "准备中",
+    "en-US": "Preparing",
+    "es-ES": "Preparando",
+    "fr-FR": "Préparation",
+    "de-DE": "Wird vorbereitet",
+    "ja-JP": "準備中",
+    "ko-KR": "준비 중",
+    "pt-BR": "Preparando",
+  },
+};
+
+function coachEngineCopy(language: ComposerLanguage, key: string): string {
+  return COACH_ENGINE_TEXT[key]?.[language] ?? COACH_ENGINE_TEXT[key]?.["en-US"] ?? key;
+}
+
+/**
+ * §十五: plan-confirmation keyword detection per composer language. The zh and
+ * en lists keep the original single-token behavior; the other locales add
+ * their own confirmations on top of the shared English token.
+ */
+const PLAN_CONFIRM_KEYWORDS: Record<ComposerLanguage, string[]> = {
+  "zh-CN": ["开始"],
+  "en-US": ["start"],
+  "es-ES": ["start", "empezar", "comenzar"],
+  "fr-FR": ["start", "commencer", "démarrer"],
+  "de-DE": ["start", "starten", "beginnen"],
+  "ja-JP": ["start", "開始", "はじめる"],
+  "ko-KR": ["start", "시작"],
+  "pt-BR": ["start", "começar", "iniciar"],
+};
+
+// =============================================================================
 // 对话状态管理
 // =============================================================================
 
@@ -154,7 +323,6 @@ export function generateCoachResponse(
   previousContext?: string
 ): CoachResponse {
   const state = { ...currentState };
-  const isChinese = language === "zh-CN";
 
   // Phase 1: 收集用户信息
   if (state.phase === "intake") {
@@ -163,9 +331,10 @@ export function generateCoachResponse(
 
     if (intent === "general") {
       return {
-        message: isChinese
-          ? "我是你的学习教练。告诉我你想学什么，或者你现在在哪方面想提升？"
-          : "I'm your learning coach. Tell me what you want to learn, or where you'd like to improve.",
+        message: coachEngineCopy(
+          language,
+          "我是你的学习教练。告诉我你想学什么，或者你现在在哪方面想提升？",
+        ),
         newState: state,
       };
     }
@@ -184,9 +353,10 @@ export function generateCoachResponse(
         : question.question;
 
       return {
-        message: isChinese
-          ? `明白了，你想学习${goal?.domain || '这个领域'}。${questionText}\n\n${question.reason}`
-          : `Got it, you want to learn ${goal?.domain || 'this topic'}. ${questionText}\n\n${question.reason}`,
+        message: coachEngineCopy(language, "明白了，你想学习{domain}。{question}\n\n{reason}")
+          .replace("{domain}", goal?.domain || coachEngineCopy(language, "这个领域"))
+          .replace("{question}", questionText)
+          .replace("{reason}", question.reason),
         newState: state,
       };
     }
@@ -267,9 +437,10 @@ export function generateCoachResponse(
         sequence: createDefaultLearningStages(goal.domain).map(s => s.id),
       },
       prerequisites: levelMap[levelIndex] === "none" ? ["基础知识准备"] : [],
-      coachJudgment: isChinese
-        ? `根据你的情况，我会帮你制定一个适合你的学习计划。预计需要${weeks}周时间。`
-        : `Based on your situation, I'll create a learning plan for you. Estimated time: ${weeks} weeks.`,
+      coachJudgment: coachEngineCopy(
+        language,
+        "根据你的情况，我会帮你制定一个适合你的学习计划。预计需要{weeks}周时间。",
+      ).replace("{weeks}", String(weeks)),
       clarifyingQuestions: [],
     };
 
@@ -280,9 +451,10 @@ export function generateCoachResponse(
     };
 
     return {
-      message: diagnosis.coachJudgment + "\n\n" + (isChinese
-        ? "我们开始制定具体的学习计划吗？"
-        : "Shall we start creating your learning plan?"),
+      message:
+        diagnosis.coachJudgment +
+        "\n\n" +
+        coachEngineCopy(language, "我们开始制定具体的学习计划吗？"),
       action: { type: "present_diagnosis", diagnosis },
       data: { diagnosis },
       newState: state,
@@ -290,21 +462,21 @@ export function generateCoachResponse(
   }
 
   // Phase 3: 生成计划（当用户确认时）
-  if (state.phase === "diagnosis" && userMessage.includes(isChinese ? "开始" : "start")) {
+  const confirmKeywords = PLAN_CONFIRM_KEYWORDS[language] ?? PLAN_CONFIRM_KEYWORDS["en-US"];
+  if (state.phase === "diagnosis" && confirmKeywords.some((keyword) => userMessage.includes(keyword))) {
     state.phase = "planning";
     return {
-      message: isChinese
-        ? "好的，让我为你生成学习计划..."
-        : "Alright, let me create your learning plan...",
+      message: coachEngineCopy(language, "好的，让我为你生成学习计划..."),
       newState: state,
     };
   }
 
   // 默认回复
   return {
-    message: isChinese
-      ? "我需要更多信息来帮你制定学习计划。请告诉我你想学什么？"
-      : "I need more information to help you create a learning plan. What would you like to learn?",
+    message: coachEngineCopy(
+      language,
+      "我需要更多信息来帮你制定学习计划。请告诉我你想学什么？",
+    ),
     newState: state,
   };
 }
@@ -318,23 +490,21 @@ export function getCoachStateDescription(
   state: CoachConversationState,
   language: ComposerLanguage
 ): string {
-  const isChinese = language === "zh-CN";
-
   switch (state.phase) {
     case "intake":
-      return isChinese ? "正在了解你的学习目标" : "Understanding your learning goals";
+      return coachEngineCopy(language, "正在了解你的学习目标");
     case "diagnosis":
-      return isChinese ? "正在分析你的情况" : "Analyzing your situation";
+      return coachEngineCopy(language, "正在分析你的情况");
     case "planning":
-      return isChinese ? "正在生成学习计划" : "Creating your learning plan";
+      return coachEngineCopy(language, "正在生成学习计划");
     case "executing":
-      return isChinese ? "正在执行学习计划" : "Executing learning plan";
+      return coachEngineCopy(language, "正在执行学习计划");
     case "adapting":
-      return isChinese ? "正在调整计划" : "Adapting plan";
+      return coachEngineCopy(language, "正在调整计划");
     case "completed":
-      return isChinese ? "已完成当前阶段" : "Current stage completed";
+      return coachEngineCopy(language, "已完成当前阶段");
     default:
-      return isChinese ? "准备中" : "Preparing";
+      return coachEngineCopy(language, "准备中");
   }
 }
 

@@ -50,6 +50,80 @@ export function interpretTrainingComposerCardCommand(
   return undefined;
 }
 
+type TrainingCardActionCopyKey =
+  | "skipReason"
+  | "gradeAgainReason"
+  | "gradeHardReason"
+  | "gradeGoodReason"
+  | "gradeEasyReason";
+
+/**
+ * Status-transition reason copy keyed by zh-CN string keys (§十五 i18n
+ * copy-record pattern). Kept in-file: the literals are persisted reasons.
+ */
+const trainingCardActionCopy: Record<ComposerLanguage, Record<TrainingCardActionCopyKey, string>> = {
+  "zh-CN": {
+    skipReason: "学员跳过",
+    gradeAgainReason: "自评：再来一次",
+    gradeHardReason: "自评：有点难",
+    gradeGoodReason: "自评：不错",
+    gradeEasyReason: "自评：太简单了",
+  },
+  "en-US": {
+    skipReason: "Learner skipped",
+    gradeAgainReason: "Self-grade: again",
+    gradeHardReason: "Self-grade: hard",
+    gradeGoodReason: "Self-grade: good",
+    gradeEasyReason: "Self-grade: easy",
+  },
+  "es-ES": {
+    skipReason: "Saltado por el estudiante",
+    gradeAgainReason: "Autoevaluación: otra vez",
+    gradeHardReason: "Autoevaluación: difícil",
+    gradeGoodReason: "Autoevaluación: bien",
+    gradeEasyReason: "Autoevaluación: muy fácil",
+  },
+  "fr-FR": {
+    skipReason: "Passé par l'apprenant",
+    gradeAgainReason: "Auto-évaluation : à revoir",
+    gradeHardReason: "Auto-évaluation : difficile",
+    gradeGoodReason: "Auto-évaluation : bien",
+    gradeEasyReason: "Auto-évaluation : trop facile",
+  },
+  "de-DE": {
+    skipReason: "Von Lernenden übersprungen",
+    gradeAgainReason: "Selbsteinschätzung: nochmal",
+    gradeHardReason: "Selbsteinschätzung: schwer",
+    gradeGoodReason: "Selbsteinschätzung: gut",
+    gradeEasyReason: "Selbsteinschätzung: zu leicht",
+  },
+  "ja-JP": {
+    skipReason: "学習者がスキップ",
+    gradeAgainReason: "自己評価：もう一度",
+    gradeHardReason: "自己評価：難しい",
+    gradeGoodReason: "自己評価：良い",
+    gradeEasyReason: "自己評価：簡単すぎる",
+  },
+  "ko-KR": {
+    skipReason: "학습자가 건너뜀",
+    gradeAgainReason: "자가 평가: 다시",
+    gradeHardReason: "자가 평가: 어려움",
+    gradeGoodReason: "자가 평가: 좋음",
+    gradeEasyReason: "자가 평가: 너무 쉬움",
+  },
+  "pt-BR": {
+    skipReason: "Pulado pelo aprendiz",
+    gradeAgainReason: "Autoavaliação: de novo",
+    gradeHardReason: "Autoavaliação: difícil",
+    gradeGoodReason: "Autoavaliação: bom",
+    gradeEasyReason: "Autoavaliação: fácil demais",
+  },
+};
+
+function trainingCardActionText(language: ComposerLanguage, key: TrainingCardActionCopyKey): string {
+  return trainingCardActionCopy[language]?.[key] ?? trainingCardActionCopy["en-US"][key];
+}
+
 export function applyTrainingCardSkip(
   onCardStatusTransition: CardStatusTransitionSource,
   cardId: string | undefined,
@@ -63,7 +137,7 @@ export function applyTrainingCardSkip(
   onCardStatusTransition(
     normalizedCardId,
     "skipped",
-    language === "zh-CN" ? "学员跳过" : "Learner skipped",
+    trainingCardActionText(language, "skipReason"),
   );
   return true;
 }
@@ -81,20 +155,12 @@ export function applyTrainingCardGrade(
   }
   const reason =
     grade === "again"
-      ? language === "zh-CN"
-        ? "自评：再来一次"
-        : "Self-grade: again"
+      ? trainingCardActionText(language, "gradeAgainReason")
       : grade === "hard"
-        ? language === "zh-CN"
-          ? "自评：有点难"
-          : "Self-grade: hard"
+        ? trainingCardActionText(language, "gradeHardReason")
         : grade === "good"
-          ? language === "zh-CN"
-            ? "自评：不错"
-            : "Self-grade: good"
-          : language === "zh-CN"
-            ? "自评：太简单了"
-            : "Self-grade: easy";
+          ? trainingCardActionText(language, "gradeGoodReason")
+          : trainingCardActionText(language, "gradeEasyReason");
   onCardStatusTransition(normalizedCardId, "reviewed", reason);
   return true;
 }

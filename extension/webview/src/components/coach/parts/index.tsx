@@ -33,6 +33,7 @@ import type {
 } from "../../../lib/types";
 import { StatusPill } from "../../StatusPill";
 import { CollapsibleBlock } from "../CollapsibleBlock";
+import { coachPartsCopy } from "../coachPartsCopy";
 import {
   hasCoachToolResultFailure,
   resolveCoachToolResultCopy,
@@ -83,8 +84,8 @@ export interface PartRegistry {
   alert: PartComponent<AlertPart>;
 }
 
-function label(language: ComposerLanguage | undefined, zh: string, en: string): string {
-  return language === "zh-CN" ? zh : en;
+function label(language: ComposerLanguage | undefined, key: string): string {
+  return coachPartsCopy(language, key);
 }
 
 function asRecordValue(value: unknown): Record<string, unknown> | undefined {
@@ -170,9 +171,9 @@ function MermaidPartRenderer({ part, context }: { part: MermaidPart; context?: P
   return (
     <MermaidBlock
       chart={part.source}
-      summaryLabel={label(context?.language, "Diagram", "Diagram")}
-      errorLabel={label(context?.language, "Diagram render failed. Showing the raw content instead.", "Diagram render failed. Showing the raw content instead.")}
-      loadingLabel={label(context?.language, "正在渲染…", "Rendering…")}
+      summaryLabel={label(context?.language, "Diagram")}
+      errorLabel={label(context?.language, "Diagram render failed. Showing the raw content instead.")}
+      loadingLabel={label(context?.language, "正在渲染…")}
     />
   );
 }
@@ -199,7 +200,7 @@ function TablePartRenderer({ part, context }: { part: TablePart; context?: PartR
 function CitationPartRenderer({ part, context }: { part: CitationPart; context?: PartRenderContext }) {
   const trustText =
     typeof part.trustScore === "number"
-      ? `${label(context?.language, "Trust", "Trust")} ${part.trustScore.toFixed(2)}`
+      ? `${label(context?.language, "Trust")} ${part.trustScore.toFixed(2)}`
       : "";
   const sourceMeta = [part.sourceType, part.freshness, trustText].filter(Boolean).join(" | ");
   return (
@@ -216,7 +217,7 @@ function CitationPartRenderer({ part, context }: { part: CitationPart; context?:
       {part.snippet ? <p>{part.snippet}</p> : null}
       {part.whyItMatters ? (
         <p className="message-part__meta">
-          {label(context?.language, "Why it matters: ", "Why it matters: ")}
+          {label(context?.language, "Why it matters: ")}
           {part.whyItMatters}
         </p>
       ) : null}
@@ -229,27 +230,27 @@ function workspaceEventTitle(
   language: ComposerLanguage | undefined,
 ): string {
   if (eventType === "sandbox_resource_removed") {
-    return label(language, "资料删除结果", "Resource delete result");
+    return label(language, "资料删除结果");
   }
   if (eventType === "sandbox_resource_synced") {
-    return label(language, "资料导入结果", "Resource import result");
+    return label(language, "资料导入结果");
   }
   if (eventType === "sandbox_file_written") {
-    return label(language, "工作区写入结果", "Workspace write result");
+    return label(language, "工作区写入结果");
   }
   if (eventType === "sandbox_file_deleted") {
-    return label(language, "工作区删除结果", "Workspace delete result");
+    return label(language, "工作区删除结果");
   }
   if (eventType === "sandbox_file_renamed") {
-    return label(language, "工作区重命名结果", "Workspace rename result");
+    return label(language, "工作区重命名结果");
   }
   if (eventType === "sandbox_command_executed") {
-    return label(language, "工作区命令结果", "Workspace command result");
+    return label(language, "工作区命令结果");
   }
   if (eventType === "sandbox_workspace_cleared") {
-    return label(language, "工作区清理结果", "Workspace cleanup result");
+    return label(language, "工作区清理结果");
   }
-  return label(language, "Workspace result", "Workspace result");
+  return label(language, "Workspace result");
 }
 
 function workspaceEventSummary(
@@ -265,23 +266,16 @@ function workspaceEventSummary(
   const trashCount = Object.keys(asRecordValue(payload.trashed_paths) ?? {}).length;
   if (eventType === "sandbox_resource_removed") {
     if (trashCount > 1) {
-      return label(
-        language,
-        `已把沙箱副本和 ${trashCount - 1} 个派生工件移入当前工作区回收区。`,
-        `Moved the sandbox copy and ${trashCount - 1} derived artifact${trashCount - 1 === 1 ? "" : "s"} into the active workspace trash.`,
-      );
+      return label(language, "已把沙箱副本和 {n} 个派生工件移入当前工作区回收区。")
+        .replace("{n}", String(trashCount - 1))
+        .replace("{s}", trashCount - 1 === 1 ? "" : "s");
     }
-    return label(
-      language,
-      "已把受控资料副本移入当前工作区回收区。",
-      "Moved the managed resource copy into the active workspace trash.",
-    );
+    return label(language, "已把受控资料副本移入当前工作区回收区。");
   }
   if (eventType === "sandbox_resource_synced") {
     return label(
       language,
       "已把资料同步到当前工作区边界内，后续索引与预览会围绕受控副本展开。",
-      "Synced the resource into the active workspace boundary for governed indexing and preview.",
     );
   }
   return undefined;
@@ -306,48 +300,38 @@ function workspaceEventFacts(
   const latestResult = asStringValue(latestAuthorityOperation.result);
 
   if (checkpointId) {
-    facts.push(label(language, `检查点 ${checkpointId}`, `Checkpoint ${checkpointId}`));
+    facts.push(label(language, "检查点 {id}").replace("{id}", checkpointId));
   }
   if (patchCount > 0) {
     facts.push(
-      label(
-        language,
-        `${patchCount} 个 patch 步骤`,
-        `${patchCount} patch step${patchCount === 1 ? "" : "s"}`,
-      ),
+      label(language, "{n} 个 patch 步骤")
+        .replace("{n}", String(patchCount))
+        .replace("{s}", patchCount === 1 ? "" : "s"),
     );
   }
   if (trashCount > 0) {
     facts.push(
-      label(
-        language,
-        `${trashCount} 个回收区落点`,
-        `${trashCount} trash target${trashCount === 1 ? "" : "s"}`,
-      ),
+      label(language, "{n} 个回收区落点")
+        .replace("{n}", String(trashCount))
+        .replace("{s}", trashCount === 1 ? "" : "s"),
     );
   }
   if (permissionLabel || permissionLevel) {
     facts.push(
-      label(
-        language,
-        `权限 ${permissionLabel ?? permissionLevel}`,
-        `Permission ${permissionLabel ?? permissionLevel}`,
-      ),
+      label(language, "权限 {x}").replace("{x}", permissionLabel ?? permissionLevel ?? ""),
     );
   }
   if (typeof ledgerCount === "number") {
-    facts.push(label(language, `账本 ${ledgerCount}`, `Ledger ${ledgerCount}`));
+    facts.push(label(language, "账本 {n}").replace("{n}", String(ledgerCount)));
   }
   if (typeof checkpointCount === "number") {
-    facts.push(label(language, `检查点总数 ${checkpointCount}`, `Checkpoints ${checkpointCount}`));
+    facts.push(label(language, "检查点总数 {n}").replace("{n}", String(checkpointCount)));
   }
   if (latestOperation && latestResult) {
     facts.push(
-      label(
-        language,
-        `最近操作 ${latestOperation} · ${latestResult}`,
-        `Latest op ${latestOperation} · ${latestResult}`,
-      ),
+      label(language, "最近操作 {op} · {result}")
+        .replace("{op}", latestOperation)
+        .replace("{result}", latestResult),
     );
   }
   return facts;
@@ -391,10 +375,10 @@ function WorkspaceToolResultRenderer({
   const acknowledged = !hasFailure && isAuthoritativeAck(part.result);
   const tone = hasFailure ? "fail" : acknowledged ? "pass" : "pending";
   const statusLabel = hasFailure
-    ? label(context?.language, "失败", "Failed")
+    ? label(context?.language, "失败")
     : acknowledged
-      ? label(context?.language, "已确认", "Confirmed")
-      : label(context?.language, "待确认", "Waiting");
+      ? label(context?.language, "已确认")
+      : label(context?.language, "待确认");
   const eventType = asStringValue(resultRecord.eventType);
   const authority = asRecordValue(resultRecord.authority) ?? {};
   const workspaceRoot = asStringValue(authority.activeWorkspaceRoot);
@@ -416,13 +400,13 @@ function WorkspaceToolResultRenderer({
       {summary ? <p>{summary}</p> : null}
       {workspaceRoot ? (
         <p className="message-part__meta">
-          {label(context?.language, "Workspace root: ", "Workspace root: ")}
+          {label(context?.language, "Workspace root: ")}
           <code>{workspaceRoot}</code>
         </p>
       ) : null}
       {trashRoot ? (
         <p className="message-part__meta">
-          {label(context?.language, "Trash root: ", "Trash root: ")}
+          {label(context?.language, "Trash root: ")}
           <code>{trashRoot}</code>
         </p>
       ) : null}
@@ -437,7 +421,7 @@ function WorkspaceToolResultRenderer({
       ) : null}
       {detailLines.length > 0 ? (
         <details className="message-part__details">
-          <summary>{label(context?.language, "详情", "Details")}</summary>
+          <summary>{label(context?.language, "详情")}</summary>
           <div className="message-part__details-body">
             {detailLines.map((line) => (
               <code key={line}>{sanitizeErrorSurfaceText(line, context?.language)}</code>
@@ -466,11 +450,11 @@ function AcceptanceFeedbackBlock({
     <div className="acceptance-progress" data-acceptance-progress="true">
       <div className="acceptance-progress__head">
         <span>
-          {label(language, "已匹配", "Matched")}{" "}
+          {label(language, "已匹配")}{" "}
           <strong data-acceptance-count={`${feedback.matched}/${feedback.total}`}>
             {feedback.matched}/{feedback.total}
           </strong>{" "}
-          {label(language, "个验收信号", "acceptance signals")}
+          {label(language, "个验收信号")}
         </span>
         <span className="acceptance-progress__percent">{percent}%</span>
       </div>
@@ -500,7 +484,7 @@ function AcceptanceFeedbackBlock({
       ) : null}
       {feedback.nextStep ? (
         <p className="acceptance-progress__next">
-          {label(language, "下一步：", "Next: ")}
+          {label(language, "下一步：")}
           {feedback.nextStep}
         </p>
       ) : null}
@@ -523,7 +507,7 @@ function ToolResultPartRenderer({ part, context }: { part: ToolResultPart; conte
     return (
       <div className="message-part message-part--tool-result">
         <div className="message-part__header">
-          <strong>{label(context?.language, "动手练习验收", "Practice verification")}</strong>
+          <strong>{label(context?.language, "动手练习验收")}</strong>
         </div>
         <AcceptanceFeedbackBlock feedback={acceptanceFeedback} language={context?.language} />
       </div>
@@ -538,14 +522,14 @@ function ToolResultPartRenderer({ part, context }: { part: ToolResultPart; conte
     ? sanitizeErrorSurface(part.error, { language: context?.language })
     : undefined;
   const statusLabel = hasFailure
-    ? label(context?.language, "失败", "Failed")
+    ? label(context?.language, "失败")
     : acknowledged
-      ? label(context?.language, "已确认", "Confirmed")
-      : label(context?.language, "待确认", "Waiting");
+      ? label(context?.language, "已确认")
+      : label(context?.language, "待确认");
   return (
     <div className="message-part message-part--tool-result">
       <div className="message-part__header">
-        <strong>{label(context?.language, "工具结果", "Tool result")}</strong>
+        <strong>{label(context?.language, "工具结果")}</strong>
         <StatusPill tone={tone}>{statusLabel}</StatusPill>
       </div>
       <p className="message-part__meta">
@@ -572,8 +556,8 @@ function ToolResultPartRenderer({ part, context }: { part: ToolResultPart; conte
 
 function ReasoningPartRenderer({ part, context }: { part: ReasoningPart; context?: PartRenderContext }) {
   const summary = part.redacted
-    ? label(context?.language, "Redacted reasoning summary", "Redacted reasoning summary")
-    : label(context?.language, "Reasoning summary", "Reasoning summary");
+    ? label(context?.language, "Redacted reasoning summary")
+    : label(context?.language, "Reasoning summary");
   const sourceChain = part.sourceChain ?? [];
   const hintLadder = part.hintLadder ?? [];
   const verificationSteps = part.verificationSteps ?? [];
@@ -588,7 +572,7 @@ function ReasoningPartRenderer({ part, context }: { part: ReasoningPart; context
         <p className="message-part__meta">{sanitizeErrorSurfaceText(part.detail, context?.language)}</p>
       ) : null}
       {sourceChain.length > 0 ? (
-        <div className="message-part__facts" aria-label={label(context?.language, "Source chain", "Source chain")}>
+        <div className="message-part__facts" aria-label={label(context?.language, "Source chain")}>
           {sourceChain.map((item) => (
             <span key={item} className="message-part__fact-pill">
               {item}
@@ -599,16 +583,12 @@ function ReasoningPartRenderer({ part, context }: { part: ReasoningPart; context
       {hintLadder.length > 0 || verificationSteps.length > 0 ? (
         <details className="message-part__details">
           <summary>
-            {label(
-              context?.language,
-              "Hint ladder & verification",
-              "Hint ladder & verification",
-            )}
+            {label(context?.language, "Hint ladder & verification")}
           </summary>
           <div className="message-part__details-body">
             {hintLadder.length > 0 ? (
               <p className="message-part__meta">
-                {label(context?.language, "Hint ladder", "Hint ladder")}
+                {label(context?.language, "Hint ladder")}
               </p>
             ) : null}
             {hintLadder.map((item) => (
@@ -616,7 +596,7 @@ function ReasoningPartRenderer({ part, context }: { part: ReasoningPart; context
             ))}
             {verificationSteps.length > 0 ? (
               <p className="message-part__meta">
-                {label(context?.language, "Verification steps", "Verification steps")}
+                {label(context?.language, "Verification steps")}
               </p>
             ) : null}
             {verificationSteps.map((item) => (
@@ -649,28 +629,28 @@ function TrainingCardPartRenderer({ part, context }: { part: TrainingCardPart; c
     part.nextAfterCompletion,
   ].filter(Boolean) as string[];
   const reviewMeta = [
-    part.reviewSurfaceMode ? `${label(context?.language, "Surface", "Surface")}: ${part.reviewSurfaceMode}` : undefined,
-    part.reviewSource ? `${label(context?.language, "Source", "Source")}: ${part.reviewSource}` : undefined,
-    part.dueAt ? `${label(context?.language, "Due", "Due")}: ${formatDateTime(part.dueAt)}` : undefined,
+    part.reviewSurfaceMode ? `${label(context?.language, "Surface")}: ${part.reviewSurfaceMode}` : undefined,
+    part.reviewSource ? `${label(context?.language, "Source")}: ${part.reviewSource}` : undefined,
+    part.dueAt ? `${label(context?.language, "Due")}: ${formatDateTime(part.dueAt)}` : undefined,
     typeof part.intervalDays === "number"
-      ? `${label(context?.language, "Interval", "Interval")}: ${part.intervalDays}d`
+      ? `${label(context?.language, "Interval")}: ${part.intervalDays}d`
       : undefined,
     typeof part.stability === "number"
-      ? `${label(context?.language, "Stability", "Stability")}: ${part.stability.toFixed(2)}`
+      ? `${label(context?.language, "Stability")}: ${part.stability.toFixed(2)}`
       : undefined,
     typeof part.fsrsDifficulty === "number"
-      ? `${label(context?.language, "Difficulty", "Difficulty")}: ${part.fsrsDifficulty.toFixed(2)}`
+      ? `${label(context?.language, "Difficulty")}: ${part.fsrsDifficulty.toFixed(2)}`
       : undefined,
     typeof part.retrievability === "number"
-      ? `${label(context?.language, "Recall", "Recall")}: ${formatPercent(part.retrievability)}`
+      ? `${label(context?.language, "Recall")}: ${formatPercent(part.retrievability)}`
       : undefined,
-    part.fsrsState ? `${label(context?.language, "FSRS", "FSRS")}: ${part.fsrsState}` : undefined,
+    part.fsrsState ? `${label(context?.language, "FSRS")}: ${part.fsrsState}` : undefined,
   ].filter(Boolean) as string[];
 
   return (
     <div className="message-part message-part--training-card">
       <div className="message-part__header">
-        <strong>{part.title || label(context?.language, "Training card", "Training card")}</strong>
+        <strong>{part.title || label(context?.language, "Training card")}</strong>
         {part.status ? <StatusPill tone={statusTone}>{part.status}</StatusPill> : null}
       </div>
       <p className="message-part__meta">
@@ -690,11 +670,11 @@ function TrainingCardPartRenderer({ part, context }: { part: TrainingCardPart; c
       {part.problemStatement ? <p>{part.problemStatement}</p> : null}
       {actionItems.length > 0 ? (
         <ul className="message-part__list">
-          {part.deliverable ? <li>{label(context?.language, "Deliverable: ", "Deliverable: ")}{part.deliverable}</li> : null}
-          {part.validationMethod ? <li>{label(context?.language, "Verify via: ", "Verify via: ")}{part.validationMethod}</li> : null}
-          {part.successSignal ? <li>{label(context?.language, "Success signal: ", "Success signal: ")}{part.successSignal}</li> : null}
-          {part.fallbackAction ? <li>{label(context?.language, "Fallback: ", "Fallback: ")}{part.fallbackAction}</li> : null}
-          {part.nextAfterCompletion ? <li>{label(context?.language, "Then: ", "Then: ")}{part.nextAfterCompletion}</li> : null}
+          {part.deliverable ? <li>{label(context?.language, "Deliverable: ")}{part.deliverable}</li> : null}
+          {part.validationMethod ? <li>{label(context?.language, "Verify via: ")}{part.validationMethod}</li> : null}
+          {part.successSignal ? <li>{label(context?.language, "Success signal: ")}{part.successSignal}</li> : null}
+          {part.fallbackAction ? <li>{label(context?.language, "Fallback: ")}{part.fallbackAction}</li> : null}
+          {part.nextAfterCompletion ? <li>{label(context?.language, "Then: ")}{part.nextAfterCompletion}</li> : null}
         </ul>
       ) : null}
     </div>
@@ -704,7 +684,7 @@ function TrainingCardPartRenderer({ part, context }: { part: TrainingCardPart; c
 function PlanUpdatePartRenderer({ part, context }: { part: PlanUpdatePart; context?: PartRenderContext }) {
   return (
     <div className="message-part message-part--plan-update">
-      <span className="eyebrow">{label(context?.language, "Plan update", "Plan update")}</span>
+      <span className="eyebrow">{label(context?.language, "Plan update")}</span>
       <p className="message-part__meta">
         <code>{part.planId}</code>
       </p>
@@ -728,7 +708,7 @@ function TestResultPartRenderer({ part, context }: { part: TestResultPart; conte
   return (
     <div className="message-part message-part--test-result">
       <div className="message-part__header">
-        <strong>{label(context?.language, "Test result", "Test result")}</strong>
+        <strong>{label(context?.language, "Test result")}</strong>
         <StatusPill tone={tone}>{part.status}</StatusPill>
       </div>
       <p className="message-part__meta">

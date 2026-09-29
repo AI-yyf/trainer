@@ -530,61 +530,142 @@ async function readLiveTrainingResponseDetail(response: Response): Promise<strin
   }
 }
 
+/**
+ * §十五: live training success copy in eight languages (no zh/en binary).
+ * Keyed by trainer command id with a "default" fallback entry; the caller
+ * appends the shared `{detail}` suffix.
+ */
+const LIVE_TRAINING_SUCCESS_TEXT: Record<string, Record<ComposerLanguage, string>> = {
+  [trainerCommands.trainingGenerateCard]: {
+    "zh-CN": "真实训练卡已准备好。",
+    "en-US": "A real training card is ready.",
+    "es-ES": "La tarjeta de entrenamiento real está lista.",
+    "fr-FR": "La carte d’entraînement réelle est prête.",
+    "de-DE": "Die echte Trainingskarte ist bereit.",
+    "ja-JP": "実際のトレーニングカードが準備できました。",
+    "ko-KR": "실제 훈련 카드가 준비되었습니다.",
+    "pt-BR": "O cartão de treino real está pronto.",
+  },
+  [trainerCommands.trainingCardStatusTransition]: {
+    "zh-CN": "真实训练卡状态已更新。",
+    "en-US": "The real training card status updated.",
+    "es-ES": "El estado de la tarjeta de entrenamiento real se actualizó.",
+    "fr-FR": "Le statut de la carte d’entraînement réelle a été mis à jour.",
+    "de-DE": "Der Status der echten Trainingskarte wurde aktualisiert.",
+    "ja-JP": "実際のトレーニングカードの状態を更新しました。",
+    "ko-KR": "실제 훈련 카드 상태가 업데이트되었습니다.",
+    "pt-BR": "O estado do cartão de treino real foi atualizado.",
+  },
+  [trainerCommands.trainingFlashcardAnswer]: {
+    "zh-CN": "真实闪卡答案已记录。",
+    "en-US": "The real flashcard answer was recorded.",
+    "es-ES": "La respuesta real de la flashcard quedó registrada.",
+    "fr-FR": "La réponse réelle de la flashcard a été enregistrée.",
+    "de-DE": "Die echte Flashcard-Antwort wurde aufgezeichnet.",
+    "ja-JP": "実際のフラッシュカードの解答を記録しました。",
+    "ko-KR": "실제 플래시카드 답변이 기록되었습니다.",
+    "pt-BR": "A resposta real do flashcard foi registrada.",
+  },
+  [trainerCommands.trainingTheoryDrillAnswer]: {
+    "zh-CN": "真实理论练习答案已记录。",
+    "en-US": "The real theory-drill answer was recorded.",
+    "es-ES": "La respuesta real del ejercicio de teoría quedó registrada.",
+    "fr-FR": "La réponse réelle de l’exercice de théorie a été enregistrée.",
+    "de-DE": "Die echte Theorieübungs-Antwort wurde aufgezeichnet.",
+    "ja-JP": "実際の理論ドリルの解答を記録しました。",
+    "ko-KR": "실제 이론 드릴 답변이 기록되었습니다.",
+    "pt-BR": "A resposta real do exercício de teoria foi registrada.",
+  },
+  [trainerCommands.trainingPracticeReturn]: {
+    "zh-CN": "真实练习返回已记录。",
+    "en-US": "The real practice return was recorded.",
+    "es-ES": "El retorno real de la práctica quedó registrado.",
+    "fr-FR": "Le retour réel de la pratique a été enregistré.",
+    "de-DE": "Die echte Praxis-Rückmeldung wurde aufgezeichnet.",
+    "ja-JP": "実際の練習の持ち帰りを記録しました。",
+    "ko-KR": "실제 연습 회귀가 기록되었습니다.",
+    "pt-BR": "O retorno real da prática foi registrado.",
+  },
+  [trainerCommands.trainingReflect]: {
+    "zh-CN": "真实反思已记录。",
+    "en-US": "The real reflection was recorded.",
+    "es-ES": "La reflexión real quedó registrada.",
+    "fr-FR": "La réflexion réelle a été enregistrée.",
+    "de-DE": "Die echte Reflexion wurde aufgezeichnet.",
+    "ja-JP": "実際のふりかえりを記録しました。",
+    "ko-KR": "실제 복기가 기록되었습니다.",
+    "pt-BR": "A reflexão real foi registrada.",
+  },
+  [trainerCommands.trainingReturn]: {
+    "zh-CN": "真实训练回流已完成。",
+    "en-US": "The real training return completed.",
+    "es-ES": "El retorno real de entrenamiento se completó.",
+    "fr-FR": "Le retour d’entraînement réel est terminé.",
+    "de-DE": "Die echte Trainings-Rückführung wurde abgeschlossen.",
+    "ja-JP": "実際のトレーニング還流が完了しました。",
+    "ko-KR": "실제 훈련 환류가 완료되었습니다.",
+    "pt-BR": "O retorno real de treino foi concluído.",
+  },
+  [trainerCommands.trainingReviewQueueAction]: {
+    "zh-CN": "真实复习队列动作已应用。",
+    "en-US": "The real review queue action was applied.",
+    "es-ES": "La acción real de la cola de repaso se aplicó.",
+    "fr-FR": "L’action réelle de la file de révision a été appliquée.",
+    "de-DE": "Die echte Wiederholungslisten-Aktion wurde angewendet.",
+    "ja-JP": "実際の復習キューの操作を適用しました。",
+    "ko-KR": "실제 복습 대기열 작업이 적용되었습니다.",
+    "pt-BR": "A ação real da fila de revisão foi aplicada.",
+  },
+  [trainerCommands.trainingReviewArtifactAction]: {
+    "zh-CN": "真实复习产物动作已应用。",
+    "en-US": "The real review artifact action was applied.",
+    "es-ES": "La acción real del artefacto de repaso se aplicó.",
+    "fr-FR": "L’action réelle sur l’artefact de révision a été appliquée.",
+    "de-DE": "Die echte Rezensionsartefakt-Aktion wurde angewendet.",
+    "ja-JP": "実際の復習成果物の操作を適用しました。",
+    "ko-KR": "실제 복습 산출물 작업이 적용되었습니다.",
+    "pt-BR": "A ação real do artefato de revisão foi aplicada.",
+  },
+  [trainerCommands.trainingScenarioLabAction]: {
+    "zh-CN": "真实场景实验动作已应用。",
+    "en-US": "The real scenario-lab action was applied.",
+    "es-ES": "La acción real del laboratorio de escenarios se aplicó.",
+    "fr-FR": "L’action réelle du laboratoire de scénarios a été appliquée.",
+    "de-DE": "Die echte Szenario-Labor-Aktion wurde angewendet.",
+    "ja-JP": "実際のシナリオラボの操作を適用しました。",
+    "ko-KR": "실제 시나리오 랩 작업이 적용되었습니다.",
+    "pt-BR": "A ação real do laboratório de cenários foi aplicada.",
+  },
+  [trainerCommands.trainingDependencySkillMapAction]: {
+    "zh-CN": "真实依赖技能图动作已应用。",
+    "en-US": "The real dependency-skill-map action was applied.",
+    "es-ES": "La acción real del mapa de dependencias y habilidades se aplicó.",
+    "fr-FR": "L’action réelle de la carte dépendances-compétences a été appliquée.",
+    "de-DE": "Die echte Abhängigkeits-Skillkarten-Aktion wurde angewendet.",
+    "ja-JP": "実際の依存スキルマップの操作を適用しました。",
+    "ko-KR": "실제 의존성-스킬 맵 작업이 적용되었습니다.",
+    "pt-BR": "A ação real do mapa de dependências e habilidades foi aplicada.",
+  },
+  default: {
+    "zh-CN": "训练步骤已在真实侧车中应用。",
+    "en-US": "The training step was applied in the real sidecar.",
+    "es-ES": "El paso de entrenamiento se aplicó en el sidecar real.",
+    "fr-FR": "L’étape d’entraînement a été appliquée dans le sidecar réel.",
+    "de-DE": "Der Trainingsschritt wurde im echten Sidecar angewendet.",
+    "ja-JP": "訓練ステップを実際のサイドカーに適用しました。",
+    "ko-KR": "훈련 단계가 실제 사이드카에 적용되었습니다.",
+    "pt-BR": "O passo de treino foi aplicado no sidecar real.",
+  },
+};
+
 function livePreviewTrainingSuccessMessage(
   commandId: string,
   language: ComposerLanguage,
   detail?: string,
 ): string {
   const suffix = detail ? ` ${detail}` : "";
-  const isChinese = language === "zh-CN";
-  switch (commandId) {
-    case trainerCommands.trainingGenerateCard:
-      return isChinese
-        ? `真实训练卡已准备好。${suffix}`
-        : `A real training card is ready.${suffix}`;
-    case trainerCommands.trainingCardStatusTransition:
-      return isChinese
-        ? `真实训练卡状态已更新。${suffix}`
-        : `The real training card status updated.${suffix}`;
-    case trainerCommands.trainingFlashcardAnswer:
-      return isChinese
-        ? `真实闪卡答案已记录。${suffix}`
-        : `The real flashcard answer was recorded.${suffix}`;
-    case trainerCommands.trainingTheoryDrillAnswer:
-      return isChinese
-        ? `真实理论练习答案已记录。${suffix}`
-        : `The real theory-drill answer was recorded.${suffix}`;
-    case trainerCommands.trainingPracticeReturn:
-      return isChinese
-        ? `真实练习返回已记录。${suffix}`
-        : `The real practice return was recorded.${suffix}`;
-    case trainerCommands.trainingReflect:
-      return isChinese ? `真实反思已记录。${suffix}` : `The real reflection was recorded.${suffix}`;
-    case trainerCommands.trainingReturn:
-      return isChinese
-        ? `真实训练回流已完成。${suffix}`
-        : `The real training return completed.${suffix}`;
-    case trainerCommands.trainingReviewQueueAction:
-      return isChinese
-        ? `真实复习队列动作已应用。${suffix}`
-        : `The real review queue action was applied.${suffix}`;
-    case trainerCommands.trainingReviewArtifactAction:
-      return isChinese
-        ? `真实复习产物动作已应用。${suffix}`
-        : `The real review artifact action was applied.${suffix}`;
-    case trainerCommands.trainingScenarioLabAction:
-      return isChinese
-        ? `真实场景实验动作已应用。${suffix}`
-        : `The real scenario-lab action was applied.${suffix}`;
-    case trainerCommands.trainingDependencySkillMapAction:
-      return isChinese
-        ? `真实依赖技能图动作已应用。${suffix}`
-        : `The real dependency-skill-map action was applied.${suffix}`;
-    default:
-      return isChinese
-        ? `训练步骤已在真实侧车中应用。${suffix}`
-        : `The training step was applied in the real sidecar.${suffix}`;
-  }
+  const entry = LIVE_TRAINING_SUCCESS_TEXT[commandId] ?? LIVE_TRAINING_SUCCESS_TEXT.default;
+  return `${entry[language] ?? entry["en-US"]}${suffix}`;
 }
 
 async function runBrowserPreviewLiveTrainingAction(
@@ -1005,7 +1086,8 @@ function liveAgentHandoffPrompt(
     const resource = resourceId
       ? bootstrap.resources?.find((item) => item.id === resourceId)
       : undefined;
-    const label = resource?.title || resourceId || (language === "zh-CN" ? "当前资料" : "the selected resource");
+    const label =
+      resource?.title || resourceId || liveHandoffLabel(language, "当前资料");
     return previewText(
       language,
       `请在资料视图中处理“${label}”：使用当前工作区和资料工具定位它，说明当前可见内容与下一步；不要声称已经在浏览器中打开本地文件。`,
@@ -1022,21 +1104,65 @@ function liveAgentHandoffPrompt(
 
   const commandLabel =
     action.payload.commandId === trainerCommands.createGlobalPlan
-      ? language === "zh-CN"
-        ? "创建全局计划"
-        : "create a global plan"
+      ? liveHandoffLabel(language, "创建全局计划")
       : action.payload.commandId === trainerCommands.linkCurrentProjectPlan
-        ? language === "zh-CN"
-          ? "关联当前项目计划"
-          : "link the current project plan"
-        : language === "zh-CN"
-          ? "处理当前资料"
-          : "handle the current resource";
+        ? liveHandoffLabel(language, "关联当前项目计划")
+        : liveHandoffLabel(language, "处理当前资料");
   return previewText(
     language,
     `我在${action.payload.commandId === trainerCommands.openResource ? "资料" : "学习"}视图请求${commandLabel}。请使用真实 Agent 工具检查当前状态，说明可执行的下一步；不要伪造已经完成的写入。`,
     `I requested "${commandLabel}" from the ${action.payload.commandId === trainerCommands.openResource ? "Resources" : "Plan"} view. Use the real Agent tools to inspect the current state and explain the next executable step; do not claim a write completed unless it did.`,
   );
+}
+
+/**
+ * §十五: live agent handoff labels in eight languages (no zh/en binary).
+ */
+const LIVE_HANDOFF_LABEL_TEXT: Record<string, Record<ComposerLanguage, string>> = {
+  "当前资料": {
+    "zh-CN": "当前资料",
+    "en-US": "the selected resource",
+    "es-ES": "el recurso seleccionado",
+    "fr-FR": "la ressource sélectionnée",
+    "de-DE": "die ausgewählte Ressource",
+    "ja-JP": "選択した資料",
+    "ko-KR": "선택한 자료",
+    "pt-BR": "o recurso selecionado",
+  },
+  "创建全局计划": {
+    "zh-CN": "创建全局计划",
+    "en-US": "create a global plan",
+    "es-ES": "crear un plan global",
+    "fr-FR": "créer un plan global",
+    "de-DE": "einen globalen Plan erstellen",
+    "ja-JP": "グローバルプランを作成",
+    "ko-KR": "전역 계획 만들기",
+    "pt-BR": "criar um plano global",
+  },
+  "关联当前项目计划": {
+    "zh-CN": "关联当前项目计划",
+    "en-US": "link the current project plan",
+    "es-ES": "vincular el plan del proyecto actual",
+    "fr-FR": "lier le plan du projet actuel",
+    "de-DE": "den aktuellen Projektplan verknüpfen",
+    "ja-JP": "現在のプロジェクトプランを関連付ける",
+    "ko-KR": "현재 프로젝트 계획 연결",
+    "pt-BR": "vincular o plano do projeto atual",
+  },
+  "处理当前资料": {
+    "zh-CN": "处理当前资料",
+    "en-US": "handle the current resource",
+    "es-ES": "gestionar el recurso actual",
+    "fr-FR": "traiter la ressource actuelle",
+    "de-DE": "die aktuelle Ressource bearbeiten",
+    "ja-JP": "現在の資料を処理",
+    "ko-KR": "현재 자료 처리",
+    "pt-BR": "tratar o recurso atual",
+  },
+};
+
+function liveHandoffLabel(language: ComposerLanguage, key: string): string {
+  return LIVE_HANDOFF_LABEL_TEXT[key]?.[language] ?? LIVE_HANDOFF_LABEL_TEXT[key]?.["en-US"] ?? key;
 }
 
 async function runBrowserPreviewLiveAgentHandoff(

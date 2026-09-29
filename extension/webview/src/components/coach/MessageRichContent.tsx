@@ -2,6 +2,7 @@ import { memo, Suspense, createContext, lazy, useContext, useEffect, useId, useM
 import type { Element } from "hast";
 
 import type { ComposerLanguage } from "../../lib/types";
+import { messageRichContentCopy } from "./messageRichContentCopy";
 import { MermaidBlock } from "./MermaidBlock";
 import { RichCodeBlock } from "./RichCodeBlock";
 import { resolveCodeBlockCopy } from "./codeBlockCopy";
@@ -114,26 +115,13 @@ function richTableContext(
 
 function labels(language: ComposerLanguage) {
   const codeBlockCopy = resolveCodeBlockCopy(language);
-  if (language === "zh-CN") {
-    return {
-      code: codeBlockCopy.code,
-      diagram: "图表",
-      mindmap: "思维导图",
-      table: "表格",
-      renderError: "图表渲染失败，已回退为原始内容。",
-      loading: "正在整理显示…",
-      copy: codeBlockCopy.copy,
-      copied: codeBlockCopy.copied,
-    };
-  }
-
   return {
     code: codeBlockCopy.code,
-    diagram: "Diagram",
-    mindmap: "Mind map",
-    table: "Table",
-    renderError: "Diagram render failed. Showing the raw content instead.",
-    loading: "Rendering…",
+    diagram: messageRichContentCopy(language, "图表"),
+    mindmap: messageRichContentCopy(language, "思维导图"),
+    table: messageRichContentCopy(language, "表格"),
+    renderError: messageRichContentCopy(language, "图表渲染失败，已回退为原始内容。"),
+    loading: messageRichContentCopy(language, "正在整理显示…"),
     copy: codeBlockCopy.copy,
     copied: codeBlockCopy.copied,
   };
@@ -241,7 +229,7 @@ function RichMarkdownRenderer({
                 node,
                 tableId,
                 copy.table,
-                language === "zh-CN" ? "列" : "column",
+                messageRichContentCopy(language, "列"),
               )
             : undefined;
           return (

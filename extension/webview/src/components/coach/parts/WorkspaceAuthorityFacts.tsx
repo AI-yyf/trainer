@@ -1,8 +1,21 @@
 import type { ComposerLanguage } from "../../../lib/types";
 import type { WorkspaceAuthoritySummaryView } from "../../../../../../shared/src/workspaceAuthority";
 
-function text(language: ComposerLanguage, zh: string, en: string): string {
-  return language === "zh-CN" ? zh : en;
+/** §十五: facts-row copy in eight languages (no zh/en binary); zh-CN string is the key. */
+const WORKSPACE_AUTHORITY_FACTS_TEXT: Record<string, Record<string, string>> = {
+  "未配置": {
+    "en-US": "Unconfigured",
+    "es-ES": "Sin configurar",
+    "fr-FR": "Non configuré",
+    "de-DE": "Nicht konfiguriert",
+    "ja-JP": "未設定",
+    "ko-KR": "미설정",
+    "pt-BR": "Não configurado",
+  },
+};
+
+function text(language: ComposerLanguage, key: string): string {
+  return WORKSPACE_AUTHORITY_FACTS_TEXT[key]?.[language] ?? key;
 }
 
 export interface WorkspaceAuthorityFactsProps {
@@ -29,8 +42,8 @@ export function WorkspaceAuthorityFacts({
         {summary.permissionDetail ? ` · ${summary.permissionDetail}` : ""}
       </span>
       <span>{summary.countsText}</span>
-      <span>{sandboxRootPath || fallbackText || text(language, "未配置", "Unconfigured")}</span>
-      <span>{summary.trashRoot || fallbackText || text(language, "未配置", "Unconfigured")}</span>
+      <span>{sandboxRootPath || fallbackText || text(language, "未配置")}</span>
+      <span>{summary.trashRoot || fallbackText || text(language, "未配置")}</span>
     </div>
   );
 }

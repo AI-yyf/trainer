@@ -66,6 +66,34 @@ export function composerModelPolicyHint(
   }
 }
 
+/** §十五: composer model fallback labels in eight languages (no zh/en binary). */
+const COMPOSER_MODEL_TEXT: Record<string, Record<ComposerLanguage, string>> = {
+  "模型": {
+    "zh-CN": "模型",
+    "en-US": "Model",
+    "es-ES": "Modelo",
+    "fr-FR": "Modèle",
+    "de-DE": "Modell",
+    "ja-JP": "モデル",
+    "ko-KR": "모델",
+    "pt-BR": "Modelo",
+  },
+  "当前连接": {
+    "zh-CN": "当前连接",
+    "en-US": "Current connection",
+    "es-ES": "Conexión actual",
+    "fr-FR": "Connexion actuelle",
+    "de-DE": "Aktuelle Verbindung",
+    "ja-JP": "現在の接続",
+    "ko-KR": "현재 연결",
+    "pt-BR": "Conexão atual",
+  },
+};
+
+function composerModelCopy(language: ComposerLanguage, key: string): string {
+  return COMPOSER_MODEL_TEXT[key]?.[language] ?? COMPOSER_MODEL_TEXT[key]?.["en-US"] ?? key;
+}
+
 export function compactComposerModelLabel(
   modelLabel: string,
   _providerLabel: string | undefined,
@@ -73,7 +101,7 @@ export function compactComposerModelLabel(
 ): string {
   const normalized = modelLabel.trim();
   if (!normalized) {
-    return language === "zh-CN" ? "\u6a21\u578b" : "Model";
+    return composerModelCopy(language, "模型");
   }
   const tail = normalized.split("/").filter(Boolean).pop() ?? normalized;
   return (
@@ -262,7 +290,7 @@ export function buildComposerProviderMenuItems(
   const activeProviderLabel =
     provider.profileLabel?.trim() ??
     provider.name?.trim() ??
-    (language === "zh-CN" ? "当前连接" : "Current connection");
+    composerModelCopy(language, "当前连接");
   const activeProviderModelItems =
     knownModels.length > 0
       ? knownModels.map((modelName) => {

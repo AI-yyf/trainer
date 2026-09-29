@@ -1657,6 +1657,244 @@ function resolveFixturePreviewGoal(request: SessionMessageRequest, sessionId: st
   return browserPreviewCoachCopy(request.responseLanguage ?? resolvePreviewLanguage()).fallbackGoal;
 }
 
+/** §十五: fixture-preview copy in eight languages (no zh/en binary). */
+const FIXTURE_PREVIEW_TEXT: Record<string, Record<ComposerLanguage, string>> = {
+  "已经看到附图。先说图里实际有什么、哪里不清楚，再给最小下一步。": {
+    "zh-CN": "已经看到附图。先说图里实际有什么、哪里不清楚，再给最小下一步。",
+    "en-US": "Inspect the attached image. First say what is actually visible and what is unclear, then give the smallest next step.",
+    "es-ES": "He visto la imagen adjunta. Di primero qué se ve realmente y qué no está claro, y da el siguiente paso más pequeño.",
+    "fr-FR": "J’ai vu l’image jointe. Dites d’abord ce qui est réellement visible et ce qui manque de clarté, puis donnez la plus petite étape suivante.",
+    "de-DE": "Ich habe das angehängte Bild gesehen. Sage zuerst, was wirklich zu sehen ist und was unklar ist, und gib dann den kleinsten nächsten Schritt.",
+    "ja-JP": "添付画像を確認しました。まず実際に何が見えるか、どこが不明瞭かを述べ、次に最小の次のステップを出してください。",
+    "ko-KR": "첨부한 이미지를 확인했습니다. 먼저 실제로 보이는 것과 불명확한 부분을 말한 뒤 가장 작은 다음 단계를 주세요.",
+    "pt-BR": "Vi a imagem anexada. Diga primeiro o que realmente aparece e o que não está claro e dê o menor próximo passo.",
+  },
+  "本地预览已记录这次计划解释讨论；正式计划保持不变。": {
+    "zh-CN": "本地预览已记录这次计划解释讨论；正式计划保持不变。",
+    "en-US": "The local preview recorded this plan explanation; the formal plan is unchanged.",
+    "es-ES": "La vista previa local registró esta explicación del plan; el plan formal no cambia.",
+    "fr-FR": "L’aperçu local a enregistré cette explication de plan ; le plan formel reste inchangé.",
+    "de-DE": "Die lokale Vorschau hat diese Plan-Erklärung aufgezeichnet; der formale Plan bleibt unverändert.",
+    "ja-JP": "ローカルプレビューはこのプラン説明の議論を記録しました。正式プランは変更されていません。",
+    "ko-KR": "로컬 미리보기가 이 계획 설명 논의를 기록했습니다. 정식 계획은 변경되지 않습니다.",
+    "pt-BR": "A pré-visualização local registrou esta explicação de plano; o plano formal permanece inalterado.",
+  },
+  "本地预览已记录这条证据讨论；正式计划保持不变。": {
+    "zh-CN": "本地预览已记录这条证据讨论；正式计划保持不变。",
+    "en-US": "The local preview recorded this evidence discussion; the formal plan is unchanged.",
+    "es-ES": "La vista previa local registró esta discusión de evidencia; el plan formal no cambia.",
+    "fr-FR": "L’aperçu local a enregistré cette discussion de preuves ; le plan formel reste inchangé.",
+    "de-DE": "Die lokale Vorschau hat diese Beleg-Diskussion aufgezeichnet; der formale Plan bleibt unverändert.",
+    "ja-JP": "ローカルプレビューはこの証拠の議論を記録しました。正式プランは変更されていません。",
+    "ko-KR": "로컬 미리보기가 이 증거 논의를 기록했습니다. 정식 계획은 변경되지 않습니다.",
+    "pt-BR": "A pré-visualização local registrou esta discussão de evidências; o plano formal permanece inalterado.",
+  },
+  "本地预览已记录这个 blocker，并保留当前正式计划不变。": {
+    "zh-CN": "本地预览已记录这个 blocker，并保留当前正式计划不变。",
+    "en-US": "The local preview recorded this blocker; the formal plan remains unchanged.",
+    "es-ES": "La vista previa local registró este bloqueo y mantiene el plan formal sin cambios.",
+    "fr-FR": "L’aperçu local a enregistré ce blocage et conserve le plan formel inchangé.",
+    "de-DE": "Die lokale Vorschau hat diese Blockade aufgezeichnet und den formalen Plan unverändert gelassen.",
+    "ja-JP": "ローカルプレビューはこのブロッカーを記録し、現在の正式プランを変更せずに保ちました。",
+    "ko-KR": "로컬 미리보기가 이 블로컈를 기록하고 현재 정식 계획을 변경하지 않고 유지합니다.",
+    "pt-BR": "A pré-visualização local registrou este bloqueio e mantém o plano formal inalterado.",
+  },
+  "本地预览已生成一份候选计划草案；它尚未写入正式计划。": {
+    "zh-CN": "本地预览已生成一份候选计划草案；它尚未写入正式计划。",
+    "en-US": "The local preview generated a candidate plan draft; it has not been written to the formal plan.",
+    "es-ES": "La vista previa local generó un borrador de plan candidato; aún no se ha escrito en el plan formal.",
+    "fr-FR": "L’aperçu local a généré un brouillon de plan candidat ; il n’a pas encore été écrit dans le plan formel.",
+    "de-DE": "Die lokale Vorschau hat einen Kandidaten-Planentwurf erzeugt; er wurde noch nicht in den formalen Plan geschrieben.",
+    "ja-JP": "ローカルプレビューが候補プランの草案を生成しました。まだ正式プランには書き込まれていません。",
+    "ko-KR": "로컬 미리보기가 후보 계획 초안을 생성했습니다. 아직 정식 계획에 기록되지 않았습니다.",
+    "pt-BR": "A pré-visualização local gerou um rascunho de plano candidato; ele ainda não foi escrito no plano formal.",
+  },
+  "检查候选草案后，再通过正式计划能力明确确认。": {
+    "zh-CN": "检查候选草案后，再通过正式计划能力明确确认。",
+    "en-US": "Review the candidate draft, then explicitly confirm it through formal-plan capability.",
+    "es-ES": "Revisa el borrador candidato y luego confírmalo explícitamente mediante la capacidad de plan formal.",
+    "fr-FR": "Examinez le brouillon candidat, puis confirmez-le explicitement via la capacité de plan formel.",
+    "de-DE": "Prüfe den Kandidatenentwurf und bestätige ihn dann explizit über die formale Plan-Fähigkeit.",
+    "ja-JP": "候補草案を確認したうえで、正式プラン機能を使って明示的に確定してください。",
+    "ko-KR": "후보 초안을 검토한 뒤 정식 계획 기능으로 명시적으로 확정하세요.",
+    "pt-BR": "Revise o rascunho candidato e depois confirme-o explicitamente pela capacidade de plano formal.",
+  },
+  "先完成当前任务的最小可见结果，再回到主线。": {
+    "zh-CN": "先完成当前任务的最小可见结果，再回到主线。",
+    "en-US": "Finish the smallest visible result for the current task, then return to the main thread.",
+    "es-ES": "Termina el resultado visible más pequeño de la tarea actual y vuelve al hilo principal.",
+    "fr-FR": "Terminez le résultat visible le plus petit de la tâche actuelle, puis revenez au fil principal.",
+    "de-DE": "Schließe das kleinste sichtbare Ergebnis der aktuellen Aufgabe ab und kehre dann zum Hauptfaden zurück.",
+    "ja-JP": "現在のタスクの最小の可視結果を完成させてから、本線に戻りましょう。",
+    "ko-KR": "현재 작업의 가장 작은 보이는 결과를 끝낸 뒤 본선으로 돌아가세요.",
+    "pt-BR": "Termine o menor resultado visível da tarefa atual e depois volte ao fio principal.",
+  },
+  "先生成正式计划，再决定当前任务。": {
+    "zh-CN": "先生成正式计划，再决定当前任务。",
+    "en-US": "Create the formal plan before choosing the current task.",
+    "es-ES": "Crea el plan formal antes de elegir la tarea actual.",
+    "fr-FR": "Créez le plan formel avant de choisir la tâche actuelle.",
+    "de-DE": "Erstelle den formalen Plan, bevor du die aktuelle Aufgabe wählst.",
+    "ja-JP": "現在のタスクを選ぶ前に、正式プランを作成しましょう。",
+    "ko-KR": "현재 작업을 정하기 전에 정식 계획을 만드세요.",
+    "pt-BR": "Crie o plano formal antes de escolher a tarefa atual.",
+  },
+  "一次只完成这一小步，完成后再继续。": {
+    "zh-CN": "一次只完成这一小步，完成后再继续。",
+    "en-US": "Complete this one small step, then continue.",
+    "es-ES": "Completa este pequeño paso y luego continúa.",
+    "fr-FR": "Terminez cette petite étape, puis continuez.",
+    "de-DE": "Vollende diesen einen kleinen Schritt und fahre dann fort.",
+    "ja-JP": "この小さなステップを 1 つだけ完成させ、そのあと続けましょう。",
+    "ko-KR": "이 작은 단계 하나만 끝낸 뒤 계속하세요.",
+    "pt-BR": "Complete este pequeno passo e depois continue.",
+  },
+  "先把方向固定成正式计划，下一步就会清楚。": {
+    "zh-CN": "先把方向固定成正式计划，下一步就会清楚。",
+    "en-US": "Fix the direction as a formal plan first; the next step will become clear.",
+    "es-ES": "Fija primero la dirección como plan formal; el siguiente paso se aclarará.",
+    "fr-FR": "Fixez d’abord la direction dans un plan formel ; la prochaine étape deviendra claire.",
+    "de-DE": "Lege die Richtung zuerst als formalen Plan fest; der nächste Schritt wird klar.",
+    "ja-JP": "まず方向性を正式プランとして固定しましょう。そうすれば次のステップが明確になります。",
+    "ko-KR": "먼저 방향을 정식 계획으로 고정하면 다음 단계가 명확해집니다.",
+    "pt-BR": "Fixe primeiro a direção como plano formal; o próximo passo ficará claro.",
+  },
+  "完成这一小步后，再带着结果继续。": {
+    "zh-CN": "完成这一小步后，再带着结果继续。",
+    "en-US": "Finish this small step, then continue with the result.",
+    "es-ES": "Termina este pequeño paso y luego continúa con el resultado.",
+    "fr-FR": "Terminez cette petite étape, puis continuez avec le résultat.",
+    "de-DE": "Schließe diesen kleinen Schritt ab und mache dann mit dem Ergebnis weiter.",
+    "ja-JP": "この小さなステップを終えたら、結果を持って続けましょう。",
+    "ko-KR": "이 작은 단계를 끝낸 뒤 결과를 가지고 계속하세요.",
+    "pt-BR": "Termine este pequeno passo e depois continue com o resultado.",
+  },
+  "先生成正式计划，再继续。": {
+    "zh-CN": "先生成正式计划，再继续。",
+    "en-US": "Create the formal plan first, then continue.",
+    "es-ES": "Crea primero el plan formal y luego continúa.",
+    "fr-FR": "Créez d’abord le plan formel, puis continuez.",
+    "de-DE": "Erstelle zuerst den formalen Plan und fahre dann fort.",
+    "ja-JP": "まず正式プランを作成してから、続けましょう。",
+    "ko-KR": "먼저 정식 계획을 만든 뒤 계속하세요.",
+    "pt-BR": "Crie primeiro o plano formal e depois continue.",
+  },
+  "你想开始学习的目标": {
+    "zh-CN": "你想开始学习的目标",
+    "en-US": "your learning goal",
+    "es-ES": "tu objetivo de aprendizaje",
+    "fr-FR": "votre objectif d’apprentissage",
+    "de-DE": "dein Lernziel",
+    "ja-JP": "学びたい目標",
+    "ko-KR": "학습 목표",
+    "pt-BR": "seu objetivo de aprendizagem",
+  },
+  "为「{goal}」安排第一周的起步成果": {
+    "zh-CN": "为「{goal}」安排第一周的起步成果",
+    "en-US": "Prepare a first-week outcome for \"{goal}\"",
+    "es-ES": "Prepara un resultado de primera semana para \"{goal}\"",
+    "fr-FR": "Préparez un résultat de première semaine pour « {goal} »",
+    "de-DE": "Lege ein Ergebnis für die erste Woche für \"{goal}\" fest",
+    "ja-JP": "「{goal}」の最初の 1 週間の成果を準備する",
+    "ko-KR": "\"{goal}\" 의 첫 주 성과를 준비하기",
+    "pt-BR": "Prepare um resultado de primeira semana para \"{goal}\"",
+  },
+  "说清楚每周能投入的时间，以及第一周想完成的成果。": {
+    "zh-CN": "说清楚每周能投入的时间，以及第一周想完成的成果。",
+    "en-US": "State your weekly time and the outcome you want to finish in week one.",
+    "es-ES": "Indica tu tiempo semanal y el resultado que quieres terminar en la primera semana.",
+    "fr-FR": "Indiquez votre temps hebdomadaire et le résultat à terminer en première semaine.",
+    "de-DE": "Nenne deine wöchentliche Zeit und das Ergebnis, das du in Woche eins schaffen willst.",
+    "ja-JP": "毎週投入到できる時間と、最初の 1 週間で終えたい成果を明確にしてください。",
+    "ko-KR": "매주 투자할 수 있는 시간과 첫 주에 끝내고 싶은 성과를 분명히 말해 주세요.",
+    "pt-BR": "Diga seu tempo semanal e o resultado que quer concluir na primeira semana.",
+  },
+  "先确认你的基础、每周时间和第一周能完成的小成果。": {
+    "zh-CN": "先确认你的基础、每周时间和第一周能完成的小成果。",
+    "en-US": "First confirm your current level, weekly time, and one small outcome you can finish in week one.",
+    "es-ES": "Primero confirma tu nivel actual, tu tiempo semanal y un pequeño resultado que puedas terminar en la primera semana.",
+    "fr-FR": "Confirmez d’abord votre niveau actuel, votre temps hebdomadaire et un petit résultat à terminer en première semaine.",
+    "de-DE": "Bestätige zuerst dein aktuelles Niveau, deine Wochenzeit und ein kleines Ergebnis für Woche eins.",
+    "ja-JP": "まず現在のレベル、毎週の時間、最初の 1 週間で終えられる小さな成果を確認しましょう。",
+    "ko-KR": "먼저 현재 수준, 주간 시간, 첫 주에 끝낼 수 있는 작은 성과를 확인하세요.",
+    "pt-BR": "Primeiro confirme seu nível atual, tempo semanal e um pequeno resultado que consiga terminar na primeira semana.",
+  },
+  "不需要先提供代码、报错或文件。": {
+    "zh-CN": "不需要先提供代码、报错或文件。",
+    "en-US": "No code, error, or file is needed first.",
+    "es-ES": "No hace falta aportar código, error ni archivo de antemano.",
+    "fr-FR": "Aucun code, erreur ni fichier n’est nécessaire au préalable.",
+    "de-DE": "Code, Fehler oder Dateien sind vorab nicht nötig.",
+    "ja-JP": "最初にコード、エラー、ファイルは必要ありません。",
+    "ko-KR": "먼저 코드, 오류, 파일을 제공할 필요는 없습니다.",
+    "pt-BR": "Não é preciso fornecer código, erro ou arquivo de antemão.",
+  },
+  "补充每周时间": {
+    "zh-CN": "补充每周时间",
+    "en-US": "Add weekly time",
+    "es-ES": "Añade el tiempo semanal",
+    "fr-FR": "Ajoutez le temps hebdomadaire",
+    "de-DE": "Wochenzeit ergänzen",
+    "ja-JP": "毎週の時間を追加",
+    "ko-KR": "주간 시간 추가",
+    "pt-BR": "Adicione o tempo semanal",
+  },
+  "先了解目标、基础和可投入时间，再安排学习路径。": {
+    "zh-CN": "先了解目标、基础和可投入时间，再安排学习路径。",
+    "en-US": "Understand the goal, starting point, and available time before choosing a learning path.",
+    "es-ES": "Entiende el objetivo, el punto de partida y el tiempo disponible antes de trazar la ruta de aprendizaje.",
+    "fr-FR": "Comprenez l’objectif, le point de départ et le temps disponible avant de tracer le parcours d’apprentissage.",
+    "de-DE": "Verstehe Ziel, Ausgangspunkt und verfügbare Zeit, bevor du den Lernpfad festlegst.",
+    "ja-JP": "学習路径を決める前に、目標・現在地・投入到できる時間を把握しましょう。",
+    "ko-KR": "학습 경로를 정하기 전에 목표, 현재 수준, 투자 가능 시간을 파악하세요.",
+    "pt-BR": "Entenda o objetivo, o ponto de partida e o tempo disponível antes de traçar a trilha de aprendizagem.",
+  },
+  "先从能完成的一小步开始，方向会越来越清楚。": {
+    "zh-CN": "先从能完成的一小步开始，方向会越来越清楚。",
+    "en-US": "Start with one finishable step, and the path will become clearer.",
+    "es-ES": "Empieza con un paso que puedas completar y el camino se irá aclarando.",
+    "fr-FR": "Commencez par une étape réalisable et le chemin deviendra plus clair.",
+    "de-DE": "Beginne mit einem machbaren Schritt, und der Weg wird klarer.",
+    "ja-JP": "完了できる小さな一歩から始めれば、方向はだんだん明確になります。",
+    "ko-KR": "완료할 수 있는 작은 한 걸음부터 시작하면 방향이 점점 분명해집니다.",
+    "pt-BR": "Comece com um passo que dê para concluir e o caminho ficará mais claro.",
+  },
+  "候选计划草案（未写入正式计划）": {
+    "zh-CN": "候选计划草案（未写入正式计划）",
+    "en-US": "Candidate plan draft (not written to the formal plan)",
+    "es-ES": "Borrador de plan candidato (no escrito en el plan formal)",
+    "fr-FR": "Brouillon de plan candidat (non écrit dans le plan formel)",
+    "de-DE": "Kandidaten-Planentwurf (nicht in den formalen Plan geschrieben)",
+    "ja-JP": "候補プラン草案（正式プランには未記録）",
+    "ko-KR": "후보 계획 초안(정식 계획에 미기록)",
+    "pt-BR": "Rascunho de plano candidato (não escrito no plano formal)",
+  },
+  "正在准备当前工作区和学习上下文。": {
+    "zh-CN": "正在准备当前工作区和学习上下文。",
+    "en-US": "Preparing the current workspace and learning context.",
+    "es-ES": "Preparando el workspace actual y el contexto de aprendizaje.",
+    "fr-FR": "Préparation du workspace actuel et du contexte d’apprentissage.",
+    "de-DE": "Aktueller Workspace und Lernkontext werden vorbereitet.",
+    "ja-JP": "現在のワークスペースと学習コンテキストを準備しています。",
+    "ko-KR": "현재 워크스페이스와 학습 컨텍스트를 준비하는 중입니다.",
+    "pt-BR": "Preparando o workspace atual e o contexto de aprendizagem.",
+  },
+  "正在向已配置的模型请求回复。": {
+    "zh-CN": "正在向已配置的模型请求回复。",
+    "en-US": "Requesting a reply from the configured model.",
+    "es-ES": "Solicitando una respuesta al modelo configurado.",
+    "fr-FR": "Demande d’une réponse au modèle configuré.",
+    "de-DE": "Antwort vom konfigurierten Modell wird angefordert.",
+    "ja-JP": "設定されたモデルに回答を要求しています。",
+    "ko-KR": "구성된 모델에 응답을 요청하는 중입니다.",
+    "pt-BR": "Solicitando uma resposta ao modelo configurado.",
+  },
+};
+
+function fixturePreviewCopy(language: ComposerLanguage, key: string): string {
+  return FIXTURE_PREVIEW_TEXT[key]?.[language] ?? FIXTURE_PREVIEW_TEXT[key]?.["en-US"] ?? key;
+}
+
 function fixturePreviewReply(
   request: SessionMessageRequest,
   fixtureGoal?: string,
@@ -1668,10 +1906,10 @@ function fixturePreviewReply(
   const language = request.responseLanguage ?? resolvePreviewLanguage();
   const copy = browserPreviewCoachCopy(language);
   if (request.attachments && request.attachments.length > 0) {
-    const body =
-      language === "zh-CN"
-        ? "已经看到附图。先说图里实际有什么、哪里不清楚，再给最小下一步。"
-        : "Inspect the attached image. First say what is actually visible and what is unclear, then give the smallest next step.";
+    const body = fixturePreviewCopy(
+      language,
+      "已经看到附图。先说图里实际有什么、哪里不清楚，再给最小下一步。",
+    );
     return {
       summary: body,
       nextStep: copy.nextAfterCurrent,
@@ -1684,28 +1922,18 @@ function fixturePreviewReply(
     copy.fallbackGoal;
   const planMode = request.planComposerMode;
   if (request.activeView === "plan" && planMode) {
-    const modeCopy =
-      language === "zh-CN"
-        ? {
-            explain: "本地预览已记录这次计划解释讨论；正式计划保持不变。",
-            evidence: "本地预览已记录这条证据讨论；正式计划保持不变。",
-            blocker: "本地预览已记录这个 blocker，并保留当前正式计划不变。",
-            generate: "本地预览已生成一份候选计划草案；它尚未写入正式计划。",
-          }
-        : {
-            explain: "The local preview recorded this plan explanation; the formal plan is unchanged.",
-            evidence: "The local preview recorded this evidence discussion; the formal plan is unchanged.",
-            blocker: "The local preview recorded this blocker; the formal plan remains unchanged.",
-            generate: "The local preview generated a candidate plan draft; it has not been written to the formal plan.",
-          };
+    const modeCopy = {
+      explain: fixturePreviewCopy(language, "本地预览已记录这次计划解释讨论；正式计划保持不变。"),
+      evidence: fixturePreviewCopy(language, "本地预览已记录这条证据讨论；正式计划保持不变。"),
+      blocker: fixturePreviewCopy(language, "本地预览已记录这个 blocker，并保留当前正式计划不变。"),
+      generate: fixturePreviewCopy(language, "本地预览已生成一份候选计划草案；它尚未写入正式计划。"),
+    };
     const body = modeCopy[planMode];
     return {
       summary: modeCopy[planMode],
       nextStep:
         planMode === "generate"
-          ? language === "zh-CN"
-            ? "检查候选草案后，再通过正式计划能力明确确认。"
-            : "Review the candidate draft, then explicitly confirm it through formal-plan capability."
+          ? fixturePreviewCopy(language, "检查候选草案后，再通过正式计划能力明确确认。")
           : copy.nextAfterCurrent,
       body,
     };
@@ -1804,7 +2032,7 @@ function fixturePreviewStatePatch(
   nextTaskResult?: FixturePreviewNextTaskResult,
 ): FixturePreviewStatePatch {
   const responseLanguage = request.responseLanguage ?? "en-US";
-  const isChinese = responseLanguage === "zh-CN";
+  const language = responseLanguage;
   if (nextTaskResult) {
     const task = nextTaskResult.task;
     const taskReady = Boolean(task);
@@ -1817,13 +2045,12 @@ function fixturePreviewStatePatch(
         activeTask: task?.title,
         scenario: taskReady ? "next_task" : "plan",
         relationshipStage: taskReady ? "active" : "intake",
-        firstTurnPriority: taskReady
-          ? isChinese
-            ? "\u5148\u5b8c\u6210\u5f53\u524d\u4efb\u52a1\u7684\u6700\u5c0f\u53ef\u89c1\u7ed3\u679c\uff0c\u518d\u56de\u5230\u4e3b\u7ebf\u3002"
-            : "Finish the smallest visible result for the current task, then return to the main thread."
-          : isChinese
-            ? "\u5148\u751f\u6210\u6b63\u5f0f\u8ba1\u5212\uff0c\u518d\u51b3\u5b9a\u5f53\u524d\u4efb\u52a1\u3002"
-            : "Create the formal plan before choosing the current task.",
+        firstTurnPriority: fixturePreviewCopy(
+          language,
+          taskReady
+            ? "先完成当前任务的最小可见结果，再回到主线。"
+            : "先生成正式计划，再决定当前任务。",
+        ),
         language: responseLanguage,
       },
       coachingState: {
@@ -1832,13 +2059,12 @@ function fixturePreviewStatePatch(
         learnerSignal: taskReady ? "steady" : "uncertain",
         summary: reply.summary,
         nextStep: reply.nextStep,
-        encouragement: taskReady
-          ? isChinese
-            ? "\u4e00\u6b21\u53ea\u5b8c\u6210\u8fd9\u4e00\u5c0f\u6b65\uff0c\u5b8c\u6210\u540e\u518d\u7ee7\u7eed\u3002"
-            : "Complete this one small step, then continue."
-          : isChinese
-            ? "\u5148\u628a\u65b9\u5411\u56fa\u5b9a\u6210\u6b63\u5f0f\u8ba1\u5212\uff0c\u4e0b\u4e00\u6b65\u5c31\u4f1a\u6e05\u695a\u3002"
-            : "Fix the direction as a formal plan first; the next step will become clear.",
+        encouragement: fixturePreviewCopy(
+          language,
+          taskReady
+            ? "一次只完成这一小步，完成后再继续。"
+            : "先把方向固定成正式计划，下一步就会清楚。",
+        ),
         updatedAt: new Date().toISOString(),
       },
       coachTurn: {
@@ -1846,13 +2072,12 @@ function fixturePreviewStatePatch(
         learnerSignal: taskReady ? "steady" : "uncertain",
         summary: reply.summary,
         nextStep: reply.nextStep,
-        encouragement: taskReady
-          ? isChinese
-            ? "\u5b8c\u6210\u8fd9\u4e00\u5c0f\u6b65\u540e\uff0c\u518d\u5e26\u7740\u7ed3\u679c\u7ee7\u7eed\u3002"
-            : "Finish this small step, then continue with the result."
-          : isChinese
-            ? "\u5148\u751f\u6210\u6b63\u5f0f\u8ba1\u5212\uff0c\u518d\u7ee7\u7eed\u3002"
-            : "Create the formal plan first, then continue.",
+        encouragement: fixturePreviewCopy(
+          language,
+          taskReady
+            ? "完成这一小步后，再带着结果继续。"
+            : "先生成正式计划，再继续。",
+        ),
         activeTask: task?.title,
         artifactKinds: [taskReady ? "task" : "plan"],
         suggestedActionTypes: [taskReady ? "next_task" : "plan"],
@@ -1862,28 +2087,31 @@ function fixturePreviewStatePatch(
   }
   const goal =
     resolveFixturePreviewGoal(request, sessionId) ||
-    (isChinese ? "你想开始学习的目标" : "your learning goal");
+    fixturePreviewCopy(language, "你想开始学习的目标");
   const intakeId = `browser-preview-intake-${sessionId}`;
-  const taskTitle = isChinese
-    ? `为「${goal}」安排第一周的起步成果`
-    : `Prepare a first-week outcome for "${goal}"`;
-  const verification = isChinese
-    ? "说清楚每周能投入的时间，以及第一周想完成的成果。"
-    : "State your weekly time and the outcome you want to finish in week one.";
+  const taskTitle = fixturePreviewCopy(language, "为「{goal}」安排第一周的起步成果").replace(
+    "{goal}",
+    goal,
+  );
+  const verification = fixturePreviewCopy(
+    language,
+    "说清楚每周能投入的时间，以及第一周想完成的成果。",
+  );
 
   return {
     conversation,
     task: {
       id: `task-${intakeId}`,
       title: taskTitle,
-      description: isChinese
-        ? "先确认你的基础、每周时间和第一周能完成的小成果。"
-        : "First confirm your current level, weekly time, and one small outcome you can finish in week one.",
+      description: fixturePreviewCopy(
+        language,
+        "先确认你的基础、每周时间和第一周能完成的小成果。",
+      ),
       constraints: [
-        isChinese ? "不需要先提供代码、报错或文件。" : "No code, error, or file is needed first.",
+        fixturePreviewCopy(language, "不需要先提供代码、报错或文件。"),
       ],
       acceptanceCriteria: [verification],
-      nextActionLabel: isChinese ? "补充每周时间" : "Add weekly time",
+      nextActionLabel: fixturePreviewCopy(language, "补充每周时间"),
     },
     coachFocus: {
       currentFocus: goal,
@@ -1891,9 +2119,10 @@ function fixturePreviewStatePatch(
       activeTask: taskTitle,
       scenario: "onboarding",
       relationshipStage: "intake",
-      firstTurnPriority: isChinese
-        ? "先了解目标、基础和可投入时间，再安排学习路径。"
-        : "Understand the goal, starting point, and available time before choosing a learning path.",
+      firstTurnPriority: fixturePreviewCopy(
+        language,
+        "先了解目标、基础和可投入时间，再安排学习路径。",
+      ),
       language: responseLanguage,
     },
     coachingState: {
@@ -1902,9 +2131,10 @@ function fixturePreviewStatePatch(
       learnerSignal: "curious",
       summary: reply.summary,
       nextStep: reply.nextStep,
-      encouragement: isChinese
-        ? "先从能完成的一小步开始，方向会越来越清楚。"
-        : "Start with one finishable step, and the path will become clearer.",
+      encouragement: fixturePreviewCopy(
+        language,
+        "先从能完成的一小步开始，方向会越来越清楚。",
+      ),
       updatedAt: new Date().toISOString(),
     },
     coachTurn: {
@@ -1912,9 +2142,10 @@ function fixturePreviewStatePatch(
       learnerSignal: "curious",
       summary: reply.summary,
       nextStep: reply.nextStep,
-      encouragement: isChinese
-        ? "先从能完成的一小步开始，方向会越来越清楚。"
-        : "Start with one finishable step, and the path will become clearer.",
+      encouragement: fixturePreviewCopy(
+        language,
+        "先从能完成的一小步开始，方向会越来越清楚。",
+      ),
       activeTask: taskTitle,
       artifactKinds: ["task"],
       suggestedActionTypes: ["task"],
@@ -1992,8 +2223,7 @@ function fixturePreviewConversation(
   const mergedPatch = starter ? { ...starter.patch, ...patch } : patch;
   if (request.activeView === "plan" && request.planComposerMode === "generate" && !request.formalPlanMutation) {
     const language = request.responseLanguage ?? resolvePreviewLanguage();
-    const candidateLabel =
-      language === "zh-CN" ? "候选计划草案（未写入正式计划）" : "Candidate plan draft (not written to the formal plan)";
+    const candidateLabel = fixturePreviewCopy(language, "候选计划草案（未写入正式计划）");
     mergedPatch.coachTurn = {
       ...mergedPatch.coachTurn,
       scenario: "plan",
@@ -3420,15 +3650,11 @@ function previewStreamStatusMessage(
   phase: string | undefined,
   responseLanguage: string | undefined,
 ): string | undefined {
-  const messages = responseLanguage === "zh-CN"
-    ? {
-        preparing_context: "\u6b63\u5728\u51c6\u5907\u5f53\u524d\u5de5\u4f5c\u533a\u548c\u5b66\u4e60\u4e0a\u4e0b\u6587\u3002",
-        requesting_model: "\u6b63\u5728\u5411\u5df2\u914d\u7f6e\u7684\u6a21\u578b\u8bf7\u6c42\u56de\u590d\u3002",
-      }
-    : {
-        preparing_context: "Preparing the current workspace and learning context.",
-        requesting_model: "Requesting a reply from the configured model.",
-      };
+  const language = isComposerLanguage(responseLanguage) ? responseLanguage : "en-US";
+  const messages: Record<string, string> = {
+    preparing_context: fixturePreviewCopy(language, "正在准备当前工作区和学习上下文。"),
+    requesting_model: fixturePreviewCopy(language, "正在向已配置的模型请求回复。"),
+  };
   return phase === "preparing_context" || phase === "requesting_model"
     ? messages[phase]
     : undefined;

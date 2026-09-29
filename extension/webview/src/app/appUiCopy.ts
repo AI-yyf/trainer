@@ -2341,6 +2341,24 @@ export const APP_UI_TEXT: Record<string, Record<string, string>> = {
     "ko-KR": "Uploaded {n} supported file{s}.",
     "pt-BR": "Uploaded {n} supported file{s}.",
   },
+  "工具操作": {
+    "en-US": "Tool action",
+    "es-ES": "Acción de herramienta",
+    "fr-FR": "Action d’outil",
+    "de-DE": "Werkzeugaktion",
+    "ja-JP": "ツール操作",
+    "ko-KR": "도구 작업",
+    "pt-BR": "Ação de ferramenta",
+  },
+  "已取消本轮回复，已保留已生成内容。": {
+    "en-US": "This reply was cancelled. The generated content is still here.",
+    "es-ES": "Esta respuesta se canceló. El contenido generado sigue aquí.",
+    "fr-FR": "Cette réponse a été annulée. Le contenu généré est toujours là.",
+    "de-DE": "Diese Antwort wurde abgebrochen. Der generierte Inhalt ist noch da.",
+    "ja-JP": "この返信はキャンセルされました。生成済みの内容は残っています。",
+    "ko-KR": "이 답변은 취소되었습니다. 생성된 내용은 그대로 남아 있습니다.",
+    "pt-BR": "Esta resposta foi cancelada. O conteúdo gerado continua aqui.",
+  },
 };
 
 /**

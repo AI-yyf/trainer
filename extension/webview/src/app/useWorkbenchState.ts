@@ -31,6 +31,7 @@ import {
   setPersistedState,
 } from "../lib/vscode";
 import { normalizeSidebarView } from "../lib/types";
+import { appUiCopy } from "./appUiCopy";
 import type {
   ActiveWorkbenchView,
   BootstrapData,
@@ -945,7 +946,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         }
         const safeToolName =
           sanitizeVisibleText(message.payload.name).trim() ||
-          (state.layout.composerLanguage === "zh-CN" ? "工具操作" : "Tool action");
+          appUiCopy(state.layout.composerLanguage, "工具操作");
         const next = upsertTrainerToolActivity(state.streaming.agentActivity, {
           id: message.payload.id,
           name: safeToolName,
@@ -972,7 +973,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         }
         const safeToolName =
           sanitizeVisibleText(message.payload.name).trim() ||
-          (state.layout.composerLanguage === "zh-CN" ? "工具操作" : "Tool action");
+          appUiCopy(state.layout.composerLanguage, "工具操作");
         const next = upsertTrainerToolActivity(state.streaming.agentActivity, {
           id: message.payload.id,
           name: safeToolName,
@@ -1102,10 +1103,10 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         if (!isCurrentStreamEvent(state.streaming, message.payload.messageId)) {
           return {};
         }
-        const cancelledMessage =
-          state.layout.composerLanguage === "zh-CN"
-            ? "已取消本轮回复，已保留已生成内容。"
-            : "This reply was cancelled. The generated content is still here.";
+        const cancelledMessage = appUiCopy(
+          state.layout.composerLanguage,
+          "已取消本轮回复，已保留已生成内容。",
+        );
         return {
           streaming: {
             ...state.streaming,

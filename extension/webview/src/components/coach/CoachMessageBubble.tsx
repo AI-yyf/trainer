@@ -14,6 +14,7 @@ import {
 } from "../icons/CoachIcons";
 import { AgentActivityStrip } from "./AgentActivityStripSmart";
 import { CoachArtifactBlock, type CoachArtifactBlockData } from "./CoachArtifactBlock";
+import { coachMessageBubbleCopy } from "./coachMessageBubbleCopy";
 import { CoachMessageParts } from "./CoachMessageParts";
 import { MessageRichContent } from "./MessageRichContent";
 
@@ -101,9 +102,9 @@ function supportDetailLines(
   if (!message.support?.lines?.length && message.attachments?.length) {
     for (const attachment of message.attachments) {
       push(
-        language === "zh-CN"
-          ? `${attachment.label}：${attachment.value}`
-          : `${attachment.label}: ${attachment.value}`,
+        coachMessageBubbleCopy(language, "{label}：{value}")
+          .replace("{label}", attachment.label)
+          .replace("{value}", attachment.value),
       );
     }
   }
@@ -147,14 +148,18 @@ function toolTrailSummary(
   language: ComposerLanguage,
 ): string {
   const failed = activities.filter((activity) => activity.status === "failed").length;
-  if (language === "zh-CN") {
-    const base = `已核对 ${activities.length} 项上下文`;
-    return failed > 0 ? `${base}，其中 ${failed} 步需要重试` : base;
+  const base = coachMessageBubbleCopy(language, "已核对 {n} 项上下文")
+    .replace("{n}", String(activities.length))
+    .replace("{s}", activities.length === 1 ? "" : "s");
+  if (failed > 0) {
+    return (
+      base +
+      coachMessageBubbleCopy(language, "，其中 {f} 步需要重试")
+        .replace("{f}", String(failed))
+        .replace("{s}", failed === 1 ? "s" : "")
+    );
   }
-  const base = `Checked ${activities.length} ${activities.length === 1 ? "item" : "items"}`;
-  return failed > 0
-    ? `${base}, ${failed} ${failed === 1 ? "needs" : "need"} a retry`
-    : base;
+  return base;
 }
 
 function CoachMessageBubbleImpl({
@@ -318,7 +323,7 @@ function CoachMessageBubbleImpl({
         ) : null}
         {hasRunningActivities ? (
           <p className="message-bubble__agent-status message-bubble__agent-status--working" role="status">
-            {language === "zh-CN" ? "正在核对上下文…" : "Checking context…"}
+            {coachMessageBubbleCopy(language, "正在核对上下文…")}
           </p>
         ) : null}
         {!hasBody && fallbackStatusSummary ? (
@@ -371,9 +376,7 @@ function CoachMessageBubbleImpl({
         <div
           className="message-bubble__actions"
           role="group"
-          aria-label={
-            language === "zh-CN" ? "这条回复的快捷操作" : "Quick actions for this reply"
-          }
+          aria-label={coachMessageBubbleCopy(language, "这条回复的快捷操作")}
         >
           {isLatestAssistant ? (
             <button

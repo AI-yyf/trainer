@@ -14,6 +14,7 @@
 
 import React, { useState } from "react";
 import { ChevronDownIcon, ChevronRightIcon, BrainIcon, FolderIcon, FileIcon, LightBulbIcon, BookOpenIcon } from "../icons";
+import type { ComposerLanguage } from "../../lib/types";
 
 export interface MemoryLayer {
   id: string;
@@ -68,29 +69,233 @@ function getLayerIcon(layerId: string): React.ReactNode {
   return icons[layerId] ?? <BrainIcon size={16} />;
 }
 
+/** §十五: relative-time copy in eight languages (no zh/en binary). */
+interface TrainingRelativeTimeCopy {
+  justNow: string;
+  minutesAgo: (amount: number) => string;
+  hoursAgo: (amount: number) => string;
+  daysAgo: (amount: number) => string;
+  weekAgo: string;
+}
+
+const trainingRelativeTimeCopy: Record<ComposerLanguage, TrainingRelativeTimeCopy> = {
+  "zh-CN": {
+    justNow: "刚刚",
+    minutesAgo: (amount) => `${amount} 分钟前`,
+    hoursAgo: (amount) => `${amount} 小时前`,
+    daysAgo: (amount) => `${amount} 天前`,
+    weekAgo: "一周前",
+  },
+  "en-US": {
+    justNow: "Just now",
+    minutesAgo: (amount) => `${amount} min ago`,
+    hoursAgo: (amount) => `${amount} hr ago`,
+    daysAgo: (amount) => `${amount} days ago`,
+    weekAgo: "A week ago",
+  },
+  "es-ES": {
+    justNow: "Justo ahora",
+    minutesAgo: (amount) => `hace ${amount} min`,
+    hoursAgo: (amount) => `hace ${amount} h`,
+    daysAgo: (amount) => `hace ${amount} días`,
+    weekAgo: "Hace una semana",
+  },
+  "fr-FR": {
+    justNow: "À l'instant",
+    minutesAgo: (amount) => `il y a ${amount} min`,
+    hoursAgo: (amount) => `il y a ${amount} h`,
+    daysAgo: (amount) => `il y a ${amount} j`,
+    weekAgo: "Il y a une semaine",
+  },
+  "de-DE": {
+    justNow: "Gerade eben",
+    minutesAgo: (amount) => `vor ${amount} Min.`,
+    hoursAgo: (amount) => `vor ${amount} Std.`,
+    daysAgo: (amount) => `vor ${amount} Tagen`,
+    weekAgo: "Vor einer Woche",
+  },
+  "ja-JP": {
+    justNow: "たった今",
+    minutesAgo: (amount) => `${amount}分前`,
+    hoursAgo: (amount) => `${amount}時間前`,
+    daysAgo: (amount) => `${amount}日前`,
+    weekAgo: "1週間前",
+  },
+  "ko-KR": {
+    justNow: "방금 전",
+    minutesAgo: (amount) => `${amount}분 전`,
+    hoursAgo: (amount) => `${amount}시간 전`,
+    daysAgo: (amount) => `${amount}일 전`,
+    weekAgo: "1주 전",
+  },
+  "pt-BR": {
+    justNow: "Agora mesmo",
+    minutesAgo: (amount) => `há ${amount} min`,
+    hoursAgo: (amount) => `há ${amount} h`,
+    daysAgo: (amount) => `há ${amount} dias`,
+    weekAgo: "Há uma semana",
+  },
+};
+
 /**
- * Format relative time
+ * Format relative time (elapsed-time bucketing stays here; copy lives in the
+ * eight-language record).
  */
-function formatRelativeTime(date: Date, language: "zh-CN" | "en-US"): string {
+function formatRelativeTime(date: Date, language: ComposerLanguage): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / (1000 * 60));
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const copy = trainingRelativeTimeCopy[language];
 
   if (diffMins < 1) {
-    return language === "zh-CN" ? "刚刚" : "Just now";
+    return copy.justNow;
   }
   if (diffMins < 60) {
-    return language === "zh-CN" ? `${diffMins} 分钟前` : `${diffMins} min ago`;
+    return copy.minutesAgo(diffMins);
   }
   if (diffHours < 24) {
-    return language === "zh-CN" ? `${diffHours} 小时前` : `${diffHours} hr ago`;
+    return copy.hoursAgo(diffHours);
   }
   if (diffDays < 7) {
-    return language === "zh-CN" ? `${diffDays} 天前` : `${diffDays} days ago`;
+    return copy.daysAgo(diffDays);
   }
-  return language === "zh-CN" ? "一周前" : "A week ago";
+  return copy.weekAgo;
+}
+
+type TrainingMemoryTextKey =
+  | "titleLabel"
+  | "itemsLabel"
+  | "updatedLabel"
+  | "addMemoryLabel"
+  | "noLayersLabel"
+  | "totalLabel"
+  | "layersActive"
+  | "conceptLabel"
+  | "skillLabel"
+  | "resourceLabel"
+  | "goalLabel"
+  | "patternLabel";
+
+/** §十五: memory-panel labels in eight languages (no zh/en binary). */
+const trainingMemoryTextCopy: Record<ComposerLanguage, Record<TrainingMemoryTextKey, string>> = {
+  "zh-CN": {
+    titleLabel: "学习记忆",
+    itemsLabel: "条记录",
+    updatedLabel: "更新于",
+    addMemoryLabel: "添加",
+    noLayersLabel: "暂无记忆记录",
+    totalLabel: "总计",
+    layersActive: "层活跃",
+    conceptLabel: "概念",
+    skillLabel: "技能",
+    resourceLabel: "资源",
+    goalLabel: "目标",
+    patternLabel: "模式",
+  },
+  "en-US": {
+    titleLabel: "Learning Memory",
+    itemsLabel: "items",
+    updatedLabel: "Updated",
+    addMemoryLabel: "Add",
+    noLayersLabel: "No memory records yet",
+    totalLabel: "Total",
+    layersActive: "layers active",
+    conceptLabel: "Concept",
+    skillLabel: "Skill",
+    resourceLabel: "Resource",
+    goalLabel: "Goal",
+    patternLabel: "Pattern",
+  },
+  "es-ES": {
+    titleLabel: "Memoria de aprendizaje",
+    itemsLabel: "elementos",
+    updatedLabel: "Actualizado",
+    addMemoryLabel: "Añadir",
+    noLayersLabel: "Aún no hay registros de memoria",
+    totalLabel: "Total",
+    layersActive: "capas activas",
+    conceptLabel: "Concepto",
+    skillLabel: "Habilidad",
+    resourceLabel: "Recurso",
+    goalLabel: "Meta",
+    patternLabel: "Patrón",
+  },
+  "fr-FR": {
+    titleLabel: "Mémoire d'apprentissage",
+    itemsLabel: "éléments",
+    updatedLabel: "Mis à jour",
+    addMemoryLabel: "Ajouter",
+    noLayersLabel: "Aucun souvenir enregistré pour le moment",
+    totalLabel: "Total",
+    layersActive: "couches actives",
+    conceptLabel: "Concept",
+    skillLabel: "Compétence",
+    resourceLabel: "Ressource",
+    goalLabel: "Objectif",
+    patternLabel: "Motif",
+  },
+  "de-DE": {
+    titleLabel: "Lerngedächtnis",
+    itemsLabel: "Einträge",
+    updatedLabel: "Aktualisiert",
+    addMemoryLabel: "Hinzufügen",
+    noLayersLabel: "Noch keine Gedächtniseinträge",
+    totalLabel: "Gesamt",
+    layersActive: "Ebenen aktiv",
+    conceptLabel: "Konzept",
+    skillLabel: "Fähigkeit",
+    resourceLabel: "Ressource",
+    goalLabel: "Ziel",
+    patternLabel: "Muster",
+  },
+  "ja-JP": {
+    titleLabel: "学習メモリ",
+    itemsLabel: "件",
+    updatedLabel: "更新",
+    addMemoryLabel: "追加",
+    noLayersLabel: "メモリ記録はまだありません",
+    totalLabel: "合計",
+    layersActive: "層がアクティブ",
+    conceptLabel: "概念",
+    skillLabel: "スキル",
+    resourceLabel: "リソース",
+    goalLabel: "目標",
+    patternLabel: "パターン",
+  },
+  "ko-KR": {
+    titleLabel: "학습 메모리",
+    itemsLabel: "개 항목",
+    updatedLabel: "업데이트",
+    addMemoryLabel: "추가",
+    noLayersLabel: "아직 메모리 기록이 없습니다",
+    totalLabel: "합계",
+    layersActive: "개 레이어 활성",
+    conceptLabel: "개념",
+    skillLabel: "스킬",
+    resourceLabel: "리소스",
+    goalLabel: "목표",
+    patternLabel: "패턴",
+  },
+  "pt-BR": {
+    titleLabel: "Memória de aprendizagem",
+    itemsLabel: "itens",
+    updatedLabel: "Atualizado",
+    addMemoryLabel: "Adicionar",
+    noLayersLabel: "Ainda sem registros de memória",
+    totalLabel: "Total",
+    layersActive: "camadas ativas",
+    conceptLabel: "Conceito",
+    skillLabel: "Habilidade",
+    resourceLabel: "Recurso",
+    goalLabel: "Meta",
+    patternLabel: "Padrão",
+  },
+};
+
+function trainingMemoryText(language: ComposerLanguage, key: TrainingMemoryTextKey): string {
+  return trainingMemoryTextCopy[language]?.[key] ?? trainingMemoryTextCopy["en-US"][key];
 }
 
 /**
@@ -98,23 +303,23 @@ function formatRelativeTime(date: Date, language: "zh-CN" | "en-US"): string {
  */
 function getItemTypeInfo(
   type: HighlightType,
-  language: "zh-CN" | "en-US"
+  language: ComposerLanguage
 ): { label: string } {
   const info: Record<HighlightType, { label: string }> = {
     concept: {
-      label: language === "zh-CN" ? "概念" : "Concept",
+      label: trainingMemoryText(language, "conceptLabel"),
     },
     skill: {
-      label: language === "zh-CN" ? "技能" : "Skill",
+      label: trainingMemoryText(language, "skillLabel"),
     },
     resource: {
-      label: language === "zh-CN" ? "资源" : "Resource",
+      label: trainingMemoryText(language, "resourceLabel"),
     },
     goal: {
-      label: language === "zh-CN" ? "目标" : "Goal",
+      label: trainingMemoryText(language, "goalLabel"),
     },
     pattern: {
-      label: language === "zh-CN" ? "模式" : "Pattern",
+      label: trainingMemoryText(language, "patternLabel"),
     },
   };
   return info[type];
@@ -144,12 +349,12 @@ export const TrainingMemoryPanel: React.FC<TrainingMemoryPanelProps> = ({
   };
 
   // Labels
-  const titleLabel = language === "zh-CN" ? "学习记忆" : "Learning Memory";
-  const itemsLabel = language === "zh-CN" ? "条记录" : "items";
-  const updatedLabel = language === "zh-CN" ? "更新于" : "Updated";
-  const addMemoryLabel = language === "zh-CN" ? "添加" : "Add";
-  const noLayersLabel = language === "zh-CN" ? "暂无记忆记录" : "No memory records yet";
-  const totalLabel = language === "zh-CN" ? "总计" : "Total";
+  const titleLabel = trainingMemoryText(language, "titleLabel");
+  const itemsLabel = trainingMemoryText(language, "itemsLabel");
+  const updatedLabel = trainingMemoryText(language, "updatedLabel");
+  const addMemoryLabel = trainingMemoryText(language, "addMemoryLabel");
+  const noLayersLabel = trainingMemoryText(language, "noLayersLabel");
+  const totalLabel = trainingMemoryText(language, "totalLabel");
 
   // Calculate total stats
   const totalItems = layers.reduce((sum, layer) => sum + layer.itemCount, 0);
@@ -164,7 +369,7 @@ export const TrainingMemoryPanel: React.FC<TrainingMemoryPanelProps> = ({
           <span className="memory-title">{titleLabel}</span>
         </div>
         <div className="memory-summary">
-          {activeLayers} / {layers.length} {language === "zh-CN" ? "层活跃" : "layers active"}
+          {activeLayers} / {layers.length} {trainingMemoryText(language, "layersActive")}
           <span className="memory-divider">·</span>
           {totalItems} {itemsLabel}
         </div>

@@ -14,6 +14,7 @@
 
 import React, { useMemo } from "react";
 import { LightBulbIcon, ArrowRightIcon } from "../icons";
+import type { ComposerLanguage } from "../../lib/types";
 
 export interface CoachingTip {
   id: string;
@@ -91,32 +92,121 @@ function selectBestTip(
   return scoredTips[0].tip;
 }
 
+type CoachingTipTextKey =
+  | "techniqueLabel"
+  | "mindsetLabel"
+  | "habitLabel"
+  | "patternLabel"
+  | "strategyLabel"
+  | "dismissLabel"
+  | "nextLabel";
+
+/** §十五: coaching-tip labels in eight languages (no zh/en binary). */
+const coachingTipTextCopy: Record<ComposerLanguage, Record<CoachingTipTextKey, string>> = {
+  "zh-CN": {
+    techniqueLabel: "技巧",
+    mindsetLabel: "心态",
+    habitLabel: "习惯",
+    patternLabel: "模式",
+    strategyLabel: "策略",
+    dismissLabel: "收起",
+    nextLabel: "下一条",
+  },
+  "en-US": {
+    techniqueLabel: "Technique",
+    mindsetLabel: "Mindset",
+    habitLabel: "Habit",
+    patternLabel: "Pattern",
+    strategyLabel: "Strategy",
+    dismissLabel: "Dismiss",
+    nextLabel: "Next",
+  },
+  "es-ES": {
+    techniqueLabel: "Técnica",
+    mindsetLabel: "Mentalidad",
+    habitLabel: "Hábito",
+    patternLabel: "Patrón",
+    strategyLabel: "Estrategia",
+    dismissLabel: "Descartar",
+    nextLabel: "Siguiente",
+  },
+  "fr-FR": {
+    techniqueLabel: "Technique",
+    mindsetLabel: "État d'esprit",
+    habitLabel: "Habitude",
+    patternLabel: "Motif",
+    strategyLabel: "Stratégie",
+    dismissLabel: "Fermer",
+    nextLabel: "Suivant",
+  },
+  "de-DE": {
+    techniqueLabel: "Technik",
+    mindsetLabel: "Denkweise",
+    habitLabel: "Gewohnheit",
+    patternLabel: "Muster",
+    strategyLabel: "Strategie",
+    dismissLabel: "Schließen",
+    nextLabel: "Weiter",
+  },
+  "ja-JP": {
+    techniqueLabel: "テクニック",
+    mindsetLabel: "マインドセット",
+    habitLabel: "習慣",
+    patternLabel: "パターン",
+    strategyLabel: "戦略",
+    dismissLabel: "閉じる",
+    nextLabel: "次へ",
+  },
+  "ko-KR": {
+    techniqueLabel: "기술",
+    mindsetLabel: "마인드셋",
+    habitLabel: "습관",
+    patternLabel: "패턴",
+    strategyLabel: "전략",
+    dismissLabel: "닫기",
+    nextLabel: "다음",
+  },
+  "pt-BR": {
+    techniqueLabel: "Técnica",
+    mindsetLabel: "Mentalidade",
+    habitLabel: "Hábito",
+    patternLabel: "Padrão",
+    strategyLabel: "Estratégia",
+    dismissLabel: "Dispensar",
+    nextLabel: "Próxima",
+  },
+};
+
+function coachingTipText(language: ComposerLanguage, key: CoachingTipTextKey): string {
+  return coachingTipTextCopy[language]?.[key] ?? coachingTipTextCopy["en-US"][key];
+}
+
 /**
  * Get category color and label
  */
 function getCategoryStyle(
   category: CoachingTip["category"],
-  language: "zh-CN" | "en-US"
+  language: ComposerLanguage
 ): { label: string; icon: string } {
   const styles: Record<CoachingTip["category"], { label: string; icon: string }> = {
     technique: {
-      label: language === "zh-CN" ? "技巧" : "Technique",
+      label: coachingTipText(language, "techniqueLabel"),
       icon: "T",
     },
     mindset: {
-      label: language === "zh-CN" ? "心态" : "Mindset",
+      label: coachingTipText(language, "mindsetLabel"),
       icon: "M",
     },
     habit: {
-      label: language === "zh-CN" ? "习惯" : "Habit",
+      label: coachingTipText(language, "habitLabel"),
       icon: "H",
     },
     pattern: {
-      label: language === "zh-CN" ? "模式" : "Pattern",
+      label: coachingTipText(language, "patternLabel"),
       icon: "P",
     },
     strategy: {
-      label: language === "zh-CN" ? "策略" : "Strategy",
+      label: coachingTipText(language, "strategyLabel"),
       icon: "S",
     },
   };
@@ -142,8 +232,8 @@ export const CoachingTipPanel: React.FC<CoachingTipPanelProps> = ({
     ? getCategoryStyle(selectedTip.category, language)
     : null;
 
-  const dismissLabel = language === "zh-CN" ? "收起" : "Dismiss";
-  const nextLabel = language === "zh-CN" ? "下一条" : "Next";
+  const dismissLabel = coachingTipText(language, "dismissLabel");
+  const nextLabel = coachingTipText(language, "nextLabel");
 
   if (!selectedTip) {
     return null;

@@ -12,6 +12,11 @@
  */
 
 import React, { useMemo } from "react";
+import {
+  timeOfDayPeriodPrefix,
+  trainingDurationCopy,
+} from "./trainingPanelCopy";
+import type { ComposerLanguage } from "../../lib/types";
 
 export interface ReviewSlot {
   /** When this review is due */
@@ -43,34 +48,161 @@ export interface TrainingRhythmPanelProps {
   onSlotClick?: (slot: ReviewSlot) => void;
 }
 
+type TrainingRhythmTextKey =
+  | "titleLabel"
+  | "todayLabel"
+  | "streakLabel"
+  | "goalLabel"
+  | "cardsLabel"
+  | "viewScheduleLabel"
+  | "noSlotsLabel"
+  | "goodDayLabel"
+  | "missedDayLabel"
+  | "weekLabel"
+  | "newCardLabel"
+  | "learningCardLabel"
+  | "reviewCardLabel";
+
+/** §十五: rhythm-panel labels in eight languages (no zh/en binary). */
+const trainingRhythmTextCopy: Record<ComposerLanguage, Record<TrainingRhythmTextKey, string>> = {
+  "zh-CN": {
+    titleLabel: "复习节奏",
+    todayLabel: "今日安排",
+    streakLabel: "连续",
+    goalLabel: "目标",
+    cardsLabel: "张卡片",
+    viewScheduleLabel: "完整日程",
+    noSlotsLabel: "今天没有待复习的内容",
+    goodDayLabel: "今日可练",
+    missedDayLabel: "有待复习",
+    weekLabel: "本周",
+    newCardLabel: "新卡片",
+    learningCardLabel: "学习中",
+    reviewCardLabel: "复习",
+  },
+  "en-US": {
+    titleLabel: "Review Rhythm",
+    todayLabel: "Today's Schedule",
+    streakLabel: "Streak",
+    goalLabel: "Goal",
+    cardsLabel: "cards",
+    viewScheduleLabel: "Full schedule",
+    noSlotsLabel: "No reviews scheduled today",
+    goodDayLabel: "Ready today",
+    missedDayLabel: "Review overdue",
+    weekLabel: "This week",
+    newCardLabel: "New",
+    learningCardLabel: "Learning",
+    reviewCardLabel: "Review",
+  },
+  "es-ES": {
+    titleLabel: "Ritmo de repaso",
+    todayLabel: "Agenda de hoy",
+    streakLabel: "Racha",
+    goalLabel: "Meta",
+    cardsLabel: "tarjetas",
+    viewScheduleLabel: "Agenda completa",
+    noSlotsLabel: "Hoy no hay repasos programados",
+    goodDayLabel: "Listo para hoy",
+    missedDayLabel: "Repasos pendientes",
+    weekLabel: "Esta semana",
+    newCardLabel: "Nueva",
+    learningCardLabel: "Aprendiendo",
+    reviewCardLabel: "Repaso",
+  },
+  "fr-FR": {
+    titleLabel: "Rythme de révision",
+    todayLabel: "Programme du jour",
+    streakLabel: "Série",
+    goalLabel: "Objectif",
+    cardsLabel: "cartes",
+    viewScheduleLabel: "Programme complet",
+    noSlotsLabel: "Aucune révision programmée aujourd'hui",
+    goodDayLabel: "Prêt aujourd'hui",
+    missedDayLabel: "Révisions en retard",
+    weekLabel: "Cette semaine",
+    newCardLabel: "Nouvelle",
+    learningCardLabel: "En apprentissage",
+    reviewCardLabel: "Révision",
+  },
+  "de-DE": {
+    titleLabel: "Wiederholungsrhythmus",
+    todayLabel: "Heutiger Plan",
+    streakLabel: "Serie",
+    goalLabel: "Ziel",
+    cardsLabel: "Karten",
+    viewScheduleLabel: "Gesamter Plan",
+    noSlotsLabel: "Heute sind keine Wiederholungen geplant",
+    goodDayLabel: "Heute bereit",
+    missedDayLabel: "Wiederholungen überfällig",
+    weekLabel: "Diese Woche",
+    newCardLabel: "Neu",
+    learningCardLabel: "Lernen",
+    reviewCardLabel: "Wiederholung",
+  },
+  "ja-JP": {
+    titleLabel: "復習リズム",
+    todayLabel: "今日の予定",
+    streakLabel: "連続",
+    goalLabel: "目標",
+    cardsLabel: "枚のカード",
+    viewScheduleLabel: "全スケジュール",
+    noSlotsLabel: "今日は復習予定がありません",
+    goodDayLabel: "今日は練習可能",
+    missedDayLabel: "復習が残っています",
+    weekLabel: "今週",
+    newCardLabel: "新規",
+    learningCardLabel: "学習中",
+    reviewCardLabel: "復習",
+  },
+  "ko-KR": {
+    titleLabel: "복습 리듬",
+    todayLabel: "오늘 일정",
+    streakLabel: "연속",
+    goalLabel: "목표",
+    cardsLabel: "장의 카드",
+    viewScheduleLabel: "전체 일정",
+    noSlotsLabel: "오늘 예정된 복습이 없습니다",
+    goodDayLabel: "오늘 연습 가능",
+    missedDayLabel: "복습이 밀렸습니다",
+    weekLabel: "이번 주",
+    newCardLabel: "새 카드",
+    learningCardLabel: "학습 중",
+    reviewCardLabel: "복습",
+  },
+  "pt-BR": {
+    titleLabel: "Ritmo de revisão",
+    todayLabel: "Programação de hoje",
+    streakLabel: "Sequência",
+    goalLabel: "Meta",
+    cardsLabel: "cartões",
+    viewScheduleLabel: "Programação completa",
+    noSlotsLabel: "Sem revisões programadas hoje",
+    goodDayLabel: "Pronto hoje",
+    missedDayLabel: "Revisões pendentes",
+    weekLabel: "Esta semana",
+    newCardLabel: "Nova",
+    learningCardLabel: "Aprendendo",
+    reviewCardLabel: "Revisão",
+  },
+};
+
+function trainingRhythmText(language: ComposerLanguage, key: TrainingRhythmTextKey): string {
+  return trainingRhythmTextCopy[language]?.[key] ?? trainingRhythmTextCopy["en-US"][key];
+}
+
 /**
- * Get time period label
+ * Get time period label (hour bucketing stays here; the period prefix copy
+ * lives in the shared eight-language record).
  */
 function getTimePeriodLabel(
   slot: ReviewSlot,
-  language: "zh-CN" | "en-US"
+  language: ComposerLanguage
 ): string {
   const hour = slot.dueAt.getHours();
   const minute = slot.dueAt.getMinutes();
   const timeStr = `${hour}:${minute.toString().padStart(2, "0")}`;
-
-  if (language === "zh-CN") {
-    if (hour < 6) return `凌晨 ${timeStr}`;
-    if (hour < 9) return `早晨 ${timeStr}`;
-    if (hour < 12) return `上午 ${timeStr}`;
-    if (hour < 14) return `中午 ${timeStr}`;
-    if (hour < 18) return `下午 ${timeStr}`;
-    if (hour < 21) return `傍晚 ${timeStr}`;
-    return `晚上 ${timeStr}`;
-  }
-
-  if (hour < 6) return `Late night ${timeStr}`;
-  if (hour < 9) return `Morning ${timeStr}`;
-  if (hour < 12) return `Late morning ${timeStr}`;
-  if (hour < 14) return `Noon ${timeStr}`;
-  if (hour < 18) return `Afternoon ${timeStr}`;
-  if (hour < 21) return `Evening ${timeStr}`;
-  return `Night ${timeStr}`;
+  return `${timeOfDayPeriodPrefix(hour, language)} ${timeStr}`;
 }
 
 /**
@@ -78,35 +210,36 @@ function getTimePeriodLabel(
  */
 function getCardTypeInfo(
   type: ReviewSlot["type"],
-  language: "zh-CN" | "en-US"
+  language: ComposerLanguage
 ): { label: string } {
   const info: Record<ReviewSlot["type"], { label: string }> = {
     new: {
-      label: language === "zh-CN" ? "新卡片" : "New",
+      label: trainingRhythmText(language, "newCardLabel"),
     },
     learning: {
-      label: language === "zh-CN" ? "学习中" : "Learning",
+      label: trainingRhythmText(language, "learningCardLabel"),
     },
     review: {
-      label: language === "zh-CN" ? "复习" : "Review",
+      label: trainingRhythmText(language, "reviewCardLabel"),
     },
   };
   return info[type];
 }
 
-function formatTime(minutes: number, language: "zh-CN" | "en-US"): string {
+function formatTime(minutes: number, language: ComposerLanguage): string {
+  const duration = trainingDurationCopy(language);
   if (minutes < 1) {
-    return language === "zh-CN" ? "<1 分钟" : "<1 min";
+    return duration.underMinute;
   }
   if (minutes < 60) {
-    return language === "zh-CN" ? `${minutes} 分钟` : `${minutes} min`;
+    return duration.minutes(minutes);
   }
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   if (mins === 0) {
-    return language === "zh-CN" ? `${hours} 小时` : `${hours} hr`;
+    return duration.hours(hours);
   }
-  return language === "zh-CN" ? `${hours}h ${mins}m` : `${hours}hr ${mins}min`;
+  return duration.mixed(hours, mins);
 }
 
 export const TrainingRhythmPanel: React.FC<TrainingRhythmPanelProps> = ({
@@ -133,15 +266,15 @@ export const TrainingRhythmPanel: React.FC<TrainingRhythmPanelProps> = ({
   );
 
   // Labels
-  const titleLabel = language === "zh-CN" ? "复习节奏" : "Review Rhythm";
-  const todayLabel = language === "zh-CN" ? "今日安排" : "Today's Schedule";
-  const streakLabel = language === "zh-CN" ? "连续" : "Streak";
-  const goalLabel = language === "zh-CN" ? "目标" : "Goal";
-  const cardsLabel = language === "zh-CN" ? "张卡片" : "cards";
-  const viewScheduleLabel = language === "zh-CN" ? "完整日程" : "Full schedule";
-  const noSlotsLabel = language === "zh-CN" ? "今天没有待复习的内容" : "No reviews scheduled today";
-  const goodDayLabel = language === "zh-CN" ? "今日可练" : "Ready today";
-  const missedDayLabel = language === "zh-CN" ? "有待复习" : "Review overdue";
+  const titleLabel = trainingRhythmText(language, "titleLabel");
+  const todayLabel = trainingRhythmText(language, "todayLabel");
+  const streakLabel = trainingRhythmText(language, "streakLabel");
+  const goalLabel = trainingRhythmText(language, "goalLabel");
+  const cardsLabel = trainingRhythmText(language, "cardsLabel");
+  const viewScheduleLabel = trainingRhythmText(language, "viewScheduleLabel");
+  const noSlotsLabel = trainingRhythmText(language, "noSlotsLabel");
+  const goodDayLabel = trainingRhythmText(language, "goodDayLabel");
+  const missedDayLabel = trainingRhythmText(language, "missedDayLabel");
 
   // Determine if user is on track
   const progressPercent = Math.min(100, (todayStats.totalCards / dailyGoal) * 100);
@@ -249,7 +382,7 @@ export const TrainingRhythmPanel: React.FC<TrainingRhythmPanelProps> = ({
       {/* Week overview (condensed) */}
       {weekSlots.length > 0 && (
         <div className="rhythm-week">
-          <div className="week-label">{language === "zh-CN" ? "本周" : "This week"}</div>
+          <div className="week-label">{trainingRhythmText(language, "weekLabel")}</div>
           <div className="week-dots">
             {weekSlots.slice(0, 7).map((slot, index) => {
               const intensity = Math.min(1, slot.cardCount / 30);

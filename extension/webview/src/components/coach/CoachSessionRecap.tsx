@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { CoachTurnSummaryView, ComposerLanguage } from "../../lib/types";
+import { coachSessionRecapCopy } from "./coachSessionRecapCopy";
 import { StatusPill } from "../StatusPill";
 
 export interface CoachSessionRecapProps {
@@ -13,8 +14,8 @@ export interface CoachSessionRecapProps {
 
 type TurnTone = "connected" | "pending" | "fail" | "starting";
 
-function localize(language: ComposerLanguage, zh: string, en: string): string {
-  return language === "zh-CN" ? zh : en;
+function localize(language: ComposerLanguage, key: string): string {
+  return coachSessionRecapCopy(language, key);
 }
 
 function normalize(value: string | undefined): string | undefined {
@@ -38,27 +39,27 @@ function turnTone(turn: CoachTurnSummaryView | null | undefined, isStreaming: bo
 function toneLabel(tone: TurnTone, language: ComposerLanguage): string {
   switch (tone) {
     case "fail":
-      return localize(language, "受阻", "Blocked");
+      return localize(language, "受阻");
     case "pending":
-      return localize(language, "进行中", "Working");
+      return localize(language, "进行中");
     case "connected":
-      return localize(language, "已收口", "Done");
+      return localize(language, "已收口");
     case "starting":
     default:
-      return localize(language, "等待", "Waiting");
+      return localize(language, "等待");
   }
 }
 
 function factLabel(language: ComposerLanguage, kind: "decision" | "blocker" | "nextStep" | "resumeThread"): string {
   switch (kind) {
     case "decision":
-      return localize(language, "决策", "Decision");
+      return localize(language, "决策");
     case "blocker":
-      return localize(language, "卡点", "Blocker");
+      return localize(language, "卡点");
     case "nextStep":
-      return localize(language, "下一步", "Next step");
+      return localize(language, "下一步");
     case "resumeThread":
-      return localize(language, "续接", "Resume");
+      return localize(language, "续接");
   }
 }
 
@@ -96,7 +97,7 @@ export function CoachSessionRecap({
               {toneLabel(tone, language)}
             </StatusPill>
             <span className="coach-turn-recap__title">
-              {localize(language, "本次总结", "Session summary")}
+              {localize(language, "本次总结")}
             </span>
           </div>
 

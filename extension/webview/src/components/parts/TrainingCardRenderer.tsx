@@ -77,6 +77,11 @@ const TRAINING_LABELS: Record<ComposerLanguage, Record<string, string>> = {
     ratingHard: "困难",
     ratingGood: "良好",
     ratingEasy: "简单",
+    skipReason: "学员跳过",
+    gradeAgainReason: "自评：再来一次",
+    gradeHardReason: "自评：有点难",
+    gradeGoodReason: "自评：不错",
+    gradeEasyReason: "自评：太简单了",
   },
   "en-US": {
     cardTypeFlash: "Flash Card",
@@ -117,6 +122,11 @@ const TRAINING_LABELS: Record<ComposerLanguage, Record<string, string>> = {
     ratingHard: "Hard",
     ratingGood: "Good",
     ratingEasy: "Easy",
+    skipReason: "Learner skipped",
+    gradeAgainReason: "Self-grade: again",
+    gradeHardReason: "Self-grade: hard",
+    gradeGoodReason: "Self-grade: good",
+    gradeEasyReason: "Self-grade: easy",
   },
   "es-ES": {
     cardTypeFlash: "Tarjeta rápida",
@@ -157,6 +167,11 @@ const TRAINING_LABELS: Record<ComposerLanguage, Record<string, string>> = {
     ratingHard: "Difícil",
     ratingGood: "Bien",
     ratingEasy: "Fácil",
+    skipReason: "Saltado por el estudiante",
+    gradeAgainReason: "Autoevaluación: otra vez",
+    gradeHardReason: "Autoevaluación: difícil",
+    gradeGoodReason: "Autoevaluación: bien",
+    gradeEasyReason: "Autoevaluación: muy fácil",
   },
   "fr-FR": {
     cardTypeFlash: "Carte flash",
@@ -197,6 +212,11 @@ const TRAINING_LABELS: Record<ComposerLanguage, Record<string, string>> = {
     ratingHard: "Difficile",
     ratingGood: "Bien",
     ratingEasy: "Facile",
+    skipReason: "Passé par l'apprenant",
+    gradeAgainReason: "Auto-évaluation : à revoir",
+    gradeHardReason: "Auto-évaluation : difficile",
+    gradeGoodReason: "Auto-évaluation : bien",
+    gradeEasyReason: "Auto-évaluation : trop facile",
   },
   "de-DE": {
     cardTypeFlash: "Lernkarte",
@@ -237,6 +257,11 @@ const TRAINING_LABELS: Record<ComposerLanguage, Record<string, string>> = {
     ratingHard: "Schwer",
     ratingGood: "Gut",
     ratingEasy: "Leicht",
+    skipReason: "Von Lernenden übersprungen",
+    gradeAgainReason: "Selbsteinschätzung: nochmal",
+    gradeHardReason: "Selbsteinschätzung: schwer",
+    gradeGoodReason: "Selbsteinschätzung: gut",
+    gradeEasyReason: "Selbsteinschätzung: zu leicht",
   },
   "ja-JP": {
     cardTypeFlash: "フラッシュカード",
@@ -260,7 +285,7 @@ const TRAINING_LABELS: Record<ComposerLanguage, Record<string, string>> = {
     cancel: "キャンセル",
     submitAndRate: "提出して評価",
     yourPerformance: "あなたのパフォーマンス",
-    selectPerformanceHint: "現在の状態に最も 맞는オプションを選択してください",
+    selectPerformanceHint: "現在の状態に最も合うオプションを選択してください",
     mastery: "習熟度",
     state: "状態",
     due: "期限",
@@ -277,6 +302,11 @@ const TRAINING_LABELS: Record<ComposerLanguage, Record<string, string>> = {
     ratingHard: "難しい",
     ratingGood: "良い",
     ratingEasy: "簡単",
+    skipReason: "学習者がスキップ",
+    gradeAgainReason: "自己評価：もう一度",
+    gradeHardReason: "自己評価：難しい",
+    gradeGoodReason: "自己評価：良い",
+    gradeEasyReason: "自己評価：簡単すぎる",
   },
   "ko-KR": {
     cardTypeFlash: "플래시카드",
@@ -317,6 +347,11 @@ const TRAINING_LABELS: Record<ComposerLanguage, Record<string, string>> = {
     ratingHard: "어려움",
     ratingGood: "좋음",
     ratingEasy: "쉬움",
+    skipReason: "학습자가 건너뜀",
+    gradeAgainReason: "자가 평가: 다시",
+    gradeHardReason: "자가 평가: 어려움",
+    gradeGoodReason: "자가 평가: 좋음",
+    gradeEasyReason: "자가 평가: 너무 쉬움",
   },
   "pt-BR": {
     cardTypeFlash: "Cartão rápido",
@@ -357,6 +392,11 @@ const TRAINING_LABELS: Record<ComposerLanguage, Record<string, string>> = {
     ratingHard: "Difícil",
     ratingGood: "Bom",
     ratingEasy: "Fácil",
+    skipReason: "Pulado pelo aprendiz",
+    gradeAgainReason: "Autoavaliação: de novo",
+    gradeHardReason: "Autoavaliação: difícil",
+    gradeGoodReason: "Autoavaliação: bom",
+    gradeEasyReason: "Autoavaliação: fácil demais",
   },
 };
 
@@ -372,13 +412,6 @@ function getLabel(language: ComposerLanguage, key: string, vars?: Record<string,
     });
   }
   return label;
-}
-
-/**
- * Simple translation helper for binary zh/en decisions
- */
-function t(language: ComposerLanguage, zh: string, en: string): string {
-  return language === "zh-CN" ? zh : en;
 }
 
 /**
@@ -473,7 +506,7 @@ export const TrainingCardRenderer: React.FC<TrainingCardRendererProps> = ({
     onCardStatusTransition(
       cardId,
       "skipped",
-      language === "zh-CN" ? "学员跳过" : "Learner skipped",
+      getLabel(language, "skipReason"),
     );
   }, [cardId, language, onCardStatusTransition]);
 
@@ -483,20 +516,12 @@ export const TrainingCardRenderer: React.FC<TrainingCardRendererProps> = ({
     }
     const reason =
       rating === "again"
-        ? language === "zh-CN"
-          ? "自评：再来一次"
-          : "Self-grade: again"
+        ? getLabel(language, "gradeAgainReason")
         : rating === "hard"
-          ? language === "zh-CN"
-            ? "自评：有点难"
-            : "Self-grade: hard"
+          ? getLabel(language, "gradeHardReason")
           : rating === "good"
-            ? language === "zh-CN"
-              ? "自评：不错"
-              : "Self-grade: good"
-            : language === "zh-CN"
-              ? "自评：太简单了"
-              : "Self-grade: easy";
+            ? getLabel(language, "gradeGoodReason")
+            : getLabel(language, "gradeEasyReason");
     onCardStatusTransition(cardId, "reviewed", reason);
     setShowRating(false);
   }, [cardId, language, onCardStatusTransition]);

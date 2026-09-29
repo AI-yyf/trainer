@@ -11,6 +11,7 @@ import {
 import type { ComposerLanguage } from "../../lib/types";
 
 import { MermaidBlock } from "./MermaidBlock";
+import { coachMessagePartsCopy } from "./coachMessagePartsCopy";
 import { MessageRichContent } from "./MessageRichContent";
 import { RichCodeBlock } from "./RichCodeBlock";
 import { hasCoachToolResultFailure, resolveCoachToolResultCopy } from "./coachToolResultCopy";
@@ -24,10 +25,9 @@ export interface CoachMessagePartsProps {
 
 function copy(
   language: ComposerLanguage,
-  zh: string,
-  en: string,
+  key: string,
 ): string {
-  return language === "zh-CN" ? zh : en;
+  return coachMessagePartsCopy(language, key);
 }
 
 function renderSafeJson(value: unknown, language: ComposerLanguage): string {
@@ -79,13 +79,13 @@ function coachVisibleStatusLabel(
 ): string {
   switch (status) {
     case "working":
-      return copy(language, "核对中", "Checking");
+      return copy(language, "核对中");
     case "blocked":
-      return copy(language, "受阻", "Blocked");
+      return copy(language, "受阻");
     case "degraded":
-      return copy(language, "已降级", "Degraded");
+      return copy(language, "已降级");
     default:
-      return copy(language, "已核对", "Checked");
+      return copy(language, "已核对");
   }
 }
 
@@ -95,13 +95,13 @@ function coachVisibleStatusHeading(
 ): string {
   switch (status) {
     case "working":
-      return copy(language, "教练正在核对", "Coach is checking");
+      return copy(language, "教练正在核对");
     case "blocked":
-      return copy(language, "教练检查受阻", "Coach hit a blocker");
+      return copy(language, "教练检查受阻");
     case "degraded":
-      return copy(language, "教练已安全降级", "Coach fell back safely");
+      return copy(language, "教练已安全降级");
     default:
-      return copy(language, "教练已核对", "Coach checked");
+      return copy(language, "教练已核对");
   }
 }
 
@@ -172,7 +172,7 @@ function renderPart(
       return (
         <div key={`part-${index}`} className="message-part message-part--math">
           <p className="message-part__meta">
-            {copy(language, part.display ? "展示公式" : "行内公式", part.display ? "Display math" : "Inline math")}
+            {copy(language, part.display ? "展示公式" : "行内公式")}
           </p>
           <MessageRichContent
             body={mathMarkdown(part.tex, Boolean(part.display))}
@@ -185,13 +185,12 @@ function renderPart(
         <div key={`part-${index}`} className="message-part message-part--mermaid">
           <MermaidBlock
             chart={part.source}
-            summaryLabel={copy(language, "流程图", "Diagram")}
+            summaryLabel={copy(language, "流程图")}
             errorLabel={copy(
               language,
               "图表渲染失败，先显示原始内容。",
-              "Diagram render failed. Showing the raw content instead.",
             )}
-            loadingLabel={copy(language, "正在渲染…", "Rendering…")}
+            loadingLabel={copy(language, "正在渲染…")}
           />
         </div>
       );
@@ -203,10 +202,10 @@ function renderPart(
             rows={part.rows.map((row) => row.map((cell) => String(cell ?? "")))}
             rowCount={part.rows.length}
             columnCount={part.columns.length}
-            rowLabel={copy(language, "行", "rows")}
-            columnLabel={copy(language, "列", "columns")}
-            truncatedLabel={copy(language, "仅预览关键信息", "Quick preview only")}
-            emptyLabel={copy(language, "没有可显示的行。", "No rows available.")}
+            rowLabel={copy(language, "行")}
+            columnLabel={copy(language, "列")}
+            truncatedLabel={copy(language, "仅预览关键信息")}
+            emptyLabel={copy(language, "没有可显示的行。")}
           />
         </div>
       );
@@ -221,7 +220,7 @@ function renderPart(
           {part.source ? <p className="message-part__meta">{part.source}</p> : null}
           {typeof part.trustScore === "number" ? (
             <p className="message-part__meta">
-              {copy(language, "可信度", "Trust")} {Math.round(part.trustScore * 100)}%
+              {copy(language, "可信度")} {Math.round(part.trustScore * 100)}%
             </p>
           ) : null}
         </div>
@@ -277,7 +276,7 @@ function renderPart(
           ) : null}
           {part.nextStep ? (
             <p className="message-part__meta">
-              {copy(language, "下一步：", "Next: ")}
+              {copy(language, "下一步：")}
               {part.nextStep}
             </p>
           ) : null}
@@ -286,25 +285,25 @@ function renderPart(
           ) : null}
           {decision ? (
             <p className="message-part__meta">
-              {copy(language, "决定：", "Decision: ")}
+              {copy(language, "决定：")}
               {decision}
             </p>
           ) : null}
           {blocker ? (
             <p className="message-part__meta">
-              {copy(language, "卡点：", "Blocker: ")}
+              {copy(language, "卡点：")}
               {blocker}
             </p>
           ) : null}
           {teachingNote ? (
             <p className="message-part__meta">
-              {copy(language, "教学提示：", "Teaching note: ")}
+              {copy(language, "教学提示：")}
               {teachingNote}
             </p>
           ) : null}
           {confidence ? (
             <p className="message-part__meta">
-              {copy(language, "置信度：", "Confidence: ")}
+              {copy(language, "置信度：")}
               {confidence}
             </p>
           ) : null}
@@ -341,7 +340,7 @@ function renderPart(
       const validationMethod = visibleTrainingCardText(part.validationMethod, language);
       return (
         <div key={`part-${index}`} className="message-part message-part--training-card">
-          <strong>{title || copy(language, "训练卡片", "Training card")}</strong>
+          <strong>{title || copy(language, "训练卡片")}</strong>
           <p className="message-part__meta">
             <code>{part.cardId}</code>
             {part.cardType ? <span>{` | ${part.cardType}`}</span> : null}
@@ -356,7 +355,7 @@ function renderPart(
     case "plan_update":
       return (
         <div key={`part-${index}`} className="message-part message-part--plan-update">
-          <strong>{copy(language, "计划更新", "Plan update")}</strong>
+          <strong>{copy(language, "计划更新")}</strong>
           <p className="message-part__meta">
             <code>{part.planId}</code>
           </p>
@@ -370,7 +369,7 @@ function renderPart(
     case "test_result":
       return (
         <div key={`part-${index}`} className="message-part message-part--test-result">
-          <strong>{copy(language, "测试结果", "Test result")}</strong>
+          <strong>{copy(language, "测试结果")}</strong>
           <p className="message-part__meta">
             <code>{part.command}</code>
             <span>{` | ${part.status}`}</span>

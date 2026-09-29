@@ -132,6 +132,78 @@ function copyFor(language: ComposerLanguage): PreviewActionCopy {
   return PREVIEW_ACTION_COPY[language] ?? PREVIEW_ACTION_COPY["en-US"];
 }
 
+/** §十五: flash-card fixture copy in eight languages (no zh/en binary). */
+const BROWSER_PREVIEW_FLASH_TEXT: Record<string, Record<ComposerLanguage, string>> = {
+  "每周练习 3 次": {
+    "zh-CN": "每周练习 3 次",
+    "en-US": "3 times per week",
+    "es-ES": "3 veces por semana",
+    "fr-FR": "3 fois par semaine",
+    "de-DE": "3-mal pro Woche",
+    "ja-JP": "週 3 回練習する",
+    "ko-KR": "주 3회 연습",
+    "pt-BR": "3 vezes por semana",
+  },
+  "回顾当前学习目标的一条关键规则": {
+    "zh-CN": "回顾当前学习目标的一条关键规则",
+    "en-US": "Recall one key rule for the current learning goal",
+    "es-ES": "Recuerda una regla clave del objetivo de aprendizaje actual",
+    "fr-FR": "Rappelez une règle clé de l’objectif d’apprentissage actuel",
+    "de-DE": "Erinnere dich an eine Kernregel des aktuellen Lernziels",
+    "ja-JP": "現在の学習目標の重要なルールを 1 つ思い出す",
+    "ko-KR": "현재 학습 목표의 핵심 규칙 하나 떠올리기",
+    "pt-BR": "Lembre uma regra chave do objetivo de aprendizagem atual",
+  },
+  "用自己的话解释“{goal}”中的一条关键规则，并给出一个小例子。": {
+    "zh-CN": "用自己的话解释“{goal}”中的一条关键规则，并给出一个小例子。",
+    "en-US": "Explain one key rule for \"{goal}\" in your own words and give one small example.",
+    "es-ES": "Explica con tus palabras una regla clave de \"{goal}\" y da un ejemplo pequeño.",
+    "fr-FR": "Expliquez avec vos mots une règle clé de « {goal} » et donnez un petit exemple.",
+    "de-DE": "Erkläre eine Kernregel von \"{goal}\" in deinen Worten und gib ein kleines Beispiel.",
+    "ja-JP": "「{goal}」の重要なルールを 1 つ自分の言葉で説明し、小さな例を 1 つ挙げてください。",
+    "ko-KR": "\"{goal}\" 의 핵심 규칙 하나를 자신의 말로 설명하고 작은 예시를 하나 들어 주세요.",
+    "pt-BR": "Explique com suas palavras uma regra chave de \"{goal}\" e dê um pequeno exemplo.",
+  },
+  "这是本地浏览器预览训练卡，不会修改真实工作区。": {
+    "zh-CN": "这是本地浏览器预览训练卡，不会修改真实工作区。",
+    "en-US": "This is a local browser-preview training card and does not change a real workspace.",
+    "es-ES": "Esta es una tarjeta de entrenamiento local de la vista previa del navegador y no cambia un workspace real.",
+    "fr-FR": "Il s’agit d’une carte d’entraînement locale de l’aperçu navigateur ; elle ne modifie pas un workspace réel.",
+    "de-DE": "Dies ist eine lokale Browser-Vorschau-Trainingskarte und ändert keinen echten Workspace.",
+    "ja-JP": "これはブラウザプレビューのローカル訓練カードであり、実際のワークスペースは変更しません。",
+    "ko-KR": "이것은 브라우저 미리보기의 로컬 훈련 카드이며 실제 워크스페이스를 변경하지 않습니다.",
+    "pt-BR": "Este é um cartão de treino local de pré-visualização no navegador e não altera um workspace real.",
+  },
+  "先完成这一张卡，再扩展练习。": {
+    "zh-CN": "先完成这一张卡，再扩展练习。",
+    "en-US": "Finish this one card before expanding the practice.",
+    "es-ES": "Termina esta tarjeta antes de ampliar la práctica.",
+    "fr-FR": "Terminez cette carte avant d’élargir la pratique.",
+    "de-DE": "Schließe diese Karte ab, bevor du die Übung ausbaust.",
+    "ja-JP": "まずこの 1 枚を完成させてから、練習を広げましょう。",
+    "ko-KR": "이 카드 한 장을 먼저 끝낸 뒤 연습을 넓히세요.",
+    "pt-BR": "Termine este cartão antes de ampliar a prática.",
+  },
+  "先把这张卡做成一个可验证的结果，再继续。": {
+    "zh-CN": "先把这张卡做成一个可验证的结果，再继续。",
+    "en-US": "Make this card concrete first, then continue.",
+    "es-ES": "Haz concreta esta tarjeta primero y luego continúa.",
+    "fr-FR": "Rendez d’abord cette carte concrète, puis continuez.",
+    "de-DE": "Mache diese Karte zuerst konkret, dann fahre fort.",
+    "ja-JP": "まずこのカードを検証できる結果にしましょう。そのあと続けます。",
+    "ko-KR": "먼저 이 카드를 검증 가능한 결과로 만든 뒤 계속하세요.",
+    "pt-BR": "Torne este cartão concreto primeiro e depois continue.",
+  },
+};
+
+function browserPreviewFlashCopy(language: ComposerLanguage, key: string): string {
+  return (
+    BROWSER_PREVIEW_FLASH_TEXT[key]?.[language] ??
+    BROWSER_PREVIEW_FLASH_TEXT[key]?.["en-US"] ??
+    key
+  );
+}
+
 export type BrowserPreviewCoachCopy = Pick<
   PreviewActionCopy,
   | "planSummary"
@@ -201,10 +273,7 @@ export function buildGoalAwarePreviewPlan(
     id: "browser-preview-goal-plan",
     title: copy.planTitle(goal),
     frozen: false,
-    /*
-    cadence: language === "zh-CN" ? "婵絽绻愰幊?3 婵? : "3 times per week",
-    */
-    cadence: language === "zh-CN" ? "\u6bcf\u5468\u7ec3\u4e60 3 \u6b21" : "3 times per week",
+    cadence: browserPreviewFlashCopy(language, "每周练习 3 次"),
     summary: copy.planSummary,
     stages,
     currentStageId: stages[0].id,
@@ -382,30 +451,13 @@ function buildPreviewTrainingCardPatch(
   const copy = copyFor(language);
   const goal = resolveBrowserPreviewGoal(bootstrap, language);
   const isFlash = cardType === "flash";
-  /*
-  const title = isFlash
-    ? language === "zh-CN"
-      ? "闁搞儳鍋涚换鍌濄亹閹惧啿顤呴悗娑崇細缁″嫰鎯勯鐣屽灱闁汇劌瀚崣褔鏌ㄩ娆炬綈闁?
-      : "Recall one key rule for the current learning goal"
-    : copy.secondStage;
-  */
-  const title = isFlash
-    ? language === "zh-CN"
-      ? "\u56de\u987e\u5f53\u524d\u5b66\u4e60\u76ee\u6807\u7684\u4e00\u6761\u5173\u952e\u89c4\u5219"
-      : "Recall one key rule for the current learning goal"
-    : copy.secondStage;
-  /*
+  const flashTitle = browserPreviewFlashCopy(language, "回顾当前学习目标的一条关键规则");
+  const title = isFlash ? flashTitle : copy.secondStage;
   const taskDescription = isFlash
-    ? language === "zh-CN"
-      ? `闁活潿鍔忛崵婊冾啅鏉堚晜鐣遍悹鍥ㄧ箚椤曗晠寮版惔娑掑亾?{goal}闁靛棗绉跺▓鎴炵▔閳ь剟寮堕垾鍐插綘闂佹鍠涢～澶愬礆濞嗘瑧绀夋鐐存构婵″洦绋夐埀顒佺▔椤忓嫮姣堝〒姘儏閻℃瑩濡存穱?
-      : `Explain one key rule for "${goal}" in your own words and give one small example.`
-    : copy.secondObjective(goal);
-    : copy.secondObjective(goal);
-  */
-  const taskDescription = isFlash
-    ? language === "zh-CN"
-      ? `\u7528\u81ea\u5df1\u7684\u8bdd\u89e3\u91ca\u201c${goal}\u201d\u4e2d\u7684\u4e00\u6761\u5173\u952e\u89c4\u5219\uff0c\u5e76\u7ed9\u51fa\u4e00\u4e2a\u5c0f\u4f8b\u5b50\u3002`
-      : `Explain one key rule for "${goal}" in your own words and give one small example.`
+    ? browserPreviewFlashCopy(
+        language,
+        "用自己的话解释“{goal}”中的一条关键规则，并给出一个小例子。",
+      ).replace("{goal}", goal)
     : copy.secondObjective(goal);
   const cardId = `browser-preview-${isFlash ? "flash" : "practice"}-card`;
   const card = {
@@ -420,14 +472,7 @@ function buildPreviewTrainingCardPatch(
     problemStatement: taskDescription,
     suggestedWorkspaceAction: taskDescription,
     constraints: [
-      /*
-      language === "zh-CN"
-        ? "閺夆晜鐟﹀Σ绋棵硅箛姘兼綌闁革絻鍔戦。鈺冩喆閸儱娅￠柣銊ュ濠€浼村捶閹峰矈鍞茬紓浣稿暙瀹曢亶鏁嶇仦鑲╃憹濞村吋鐭幈銊╁绩閸︻厽鍩傞悗鍦仜娴兼劖鎷呭鍐ㄩ殬闁?
-        : "This is a local browser-preview training card and does not change a real workspace.",
-      */
-      language === "zh-CN"
-        ? "\u8fd9\u662f\u672c\u5730\u6d4f\u89c8\u5668\u9884\u89c8\u8bad\u7ec3\u5361\uff0c\u4e0d\u4f1a\u4fee\u6539\u771f\u5b9e\u5de5\u4f5c\u533a\u3002"
-        : "This is a local browser-preview training card and does not change a real workspace.",
+      browserPreviewFlashCopy(language, "这是本地浏览器预览训练卡，不会修改真实工作区。"),
     ],
     deliverable: taskDescription,
     selfCheck: [copy.verification],
@@ -444,24 +489,11 @@ function buildPreviewTrainingCardPatch(
     returnWith: copy.nextAfterCurrent,
     nextAfterCompletion: copy.nextAfterCurrent,
   };
-  /*
   const nextCard = {
     ...card,
     cardId: `browser-preview-${isFlash ? "practice" : "flash"}-next-card`,
     type: isFlash ? "practice" as const : "flash" as const,
-    title: isFlash ? copy.secondStage : language === "zh-CN" ? "闁搞儳鍋涚换鍌濄亹閹惧啿顤呴悗娑崇細缁″嫰鎯勯鐣屽灱闁汇劌瀚崣褔鏌ㄩ娆炬綈闁? : "Recall one key rule for the current learning goal",
-  };
-  };
-  */
-  const nextCard = {
-    ...card,
-    cardId: `browser-preview-${isFlash ? "practice" : "flash"}-next-card`,
-    type: isFlash ? "practice" as const : "flash" as const,
-    title: isFlash
-      ? copy.secondStage
-      : language === "zh-CN"
-        ? "\u56de\u987e\u5f53\u524d\u5b66\u4e60\u76ee\u6807\u7684\u4e00\u6761\u5173\u952e\u89c4\u5219"
-        : "Recall one key rule for the current learning goal",
+    title: isFlash ? copy.secondStage : flashTitle,
   };
   const candidateType = cardType === "flash" ? "flash_candidate" : "practice_candidate";
   const nextCandidateType = nextCard.type === "flash" ? "flash_candidate" : "practice_candidate";
@@ -489,16 +521,7 @@ function buildPreviewTrainingCardPatch(
       learnerSignal: "curious",
       summary: copy.taskReady(card.title),
       nextStep: card.suggestedWorkspaceAction || taskDescription,
-      /*
-      encouragement:
-        language === "zh-CN"
-          ? "闁稿繐鐗嗛悾顒勫箣閹邦垳绠瑰☉鎾亾鐎殿喚濮村畷閬嶆晬鐏炶棄鏅欓柛鎰暱閻ｉ箖寮伴姘剨闁圭鏅涢妵鍥╃磼閸愌呯槑闁肩厧鍟ú鍧楀Υ?
-          : "Finish this one card before expanding the practice.",
-      */
-      encouragement:
-        language === "zh-CN"
-          ? "\u5148\u5b8c\u6210\u8fd9\u4e00\u5f20\u5361\uff0c\u518d\u6269\u5c55\u7ec3\u4e60\u3002"
-          : "Finish this one card before expanding the practice.",
+      encouragement: browserPreviewFlashCopy(language, "先完成这一张卡，再扩展练习。"),
       updatedAt: now,
     },
     coachTurn: {
@@ -507,16 +530,7 @@ function buildPreviewTrainingCardPatch(
       learnerSignal: "curious",
       summary: copy.taskReady(card.title),
       nextStep: card.suggestedWorkspaceAction || taskDescription,
-      /*
-      encouragement:
-        language === "zh-CN"
-          ? "闁稿繐鐗婃俊鍛婃交濞嗗繒鐐婇柛妞烩偓鍏呯驳閻庡湱鍎戠槐婵嬪礃瀹ュ洦鍩涚紓渚囧幒缁楀懏绋夐埀顒€顫㈤妷锝傚亾?
-          : "Make this card concrete first, then continue.",
-      */
-      encouragement:
-        language === "zh-CN"
-          ? "\u5148\u628a\u8fd9\u5f20\u5361\u505a\u6210\u4e00\u4e2a\u53ef\u9a8c\u8bc1\u7684\u7ed3\u679c\uff0c\u518d\u7ee7\u7eed\u3002"
-          : "Make this card concrete first, then continue.",
+      encouragement: browserPreviewFlashCopy(language, "先把这张卡做成一个可验证的结果，再继续。"),
       activeTask: card.title,
       artifactKinds: ["task"],
       suggestedActionTypes: ["task"],

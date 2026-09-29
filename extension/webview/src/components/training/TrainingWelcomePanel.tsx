@@ -22,6 +22,154 @@ import {
   LightBulbIcon,
   ArrowRightIcon,
 } from "../icons";
+import {
+  timeOfDayGreeting,
+  trainingDurationCopy,
+} from "./trainingPanelCopy";
+import type { ComposerLanguage } from "../../lib/types";
+
+type TrainingWelcomeTextKey =
+  | "streakLabel"
+  | "masteredLabel"
+  | "weekLabel"
+  | "dueLabel"
+  | "startLabel"
+  | "reviewLabel"
+  | "continueLabel"
+  | "allDoneLabel"
+  | "dayUnit"
+  | "cardUnit"
+  | "todayProgress"
+  | "recommendedNext"
+  | "nameSeparator";
+
+/** §十五: welcome-panel labels in eight languages (no zh/en binary). */
+const trainingWelcomeTextCopy: Record<ComposerLanguage, Record<TrainingWelcomeTextKey, string>> = {
+  "zh-CN": {
+    streakLabel: "连续练习",
+    masteredLabel: "已掌握",
+    weekLabel: "本周练习",
+    dueLabel: "待复习",
+    startLabel: "开始",
+    reviewLabel: "复习",
+    continueLabel: "继续学习",
+    allDoneLabel: "今日已完成",
+    dayUnit: "天",
+    cardUnit: " 张",
+    todayProgress: "今日进度",
+    recommendedNext: "推荐下一步",
+    nameSeparator: "，",
+  },
+  "en-US": {
+    streakLabel: "Streak",
+    masteredLabel: "Mastered",
+    weekLabel: "This week",
+    dueLabel: "Due",
+    startLabel: "Start",
+    reviewLabel: "Review",
+    continueLabel: "Continue",
+    allDoneLabel: "All done today",
+    dayUnit: " days",
+    cardUnit: " cards",
+    todayProgress: "Today's Progress",
+    recommendedNext: "Recommended Next",
+    nameSeparator: ", ",
+  },
+  "es-ES": {
+    streakLabel: "Racha",
+    masteredLabel: "Dominado",
+    weekLabel: "Esta semana",
+    dueLabel: "Pendiente",
+    startLabel: "Empezar",
+    reviewLabel: "Repasar",
+    continueLabel: "Continuar",
+    allDoneLabel: "Todo listo hoy",
+    dayUnit: " días",
+    cardUnit: " tarjetas",
+    todayProgress: "Progreso de hoy",
+    recommendedNext: "Siguiente recomendado",
+    nameSeparator: ", ",
+  },
+  "fr-FR": {
+    streakLabel: "Série",
+    masteredLabel: "Maîtrisé",
+    weekLabel: "Cette semaine",
+    dueLabel: "À revoir",
+    startLabel: "Démarrer",
+    reviewLabel: "Réviser",
+    continueLabel: "Continuer",
+    allDoneLabel: "Tout est fait aujourd'hui",
+    dayUnit: " jours",
+    cardUnit: " cartes",
+    todayProgress: "Progrès du jour",
+    recommendedNext: "Prochaine étape recommandée",
+    nameSeparator: ", ",
+  },
+  "de-DE": {
+    streakLabel: "Serie",
+    masteredLabel: "Gemeistert",
+    weekLabel: "Diese Woche",
+    dueLabel: "Fällig",
+    startLabel: "Start",
+    reviewLabel: "Wiederholen",
+    continueLabel: "Fortsetzen",
+    allDoneLabel: "Heute alles erledigt",
+    dayUnit: " Tage",
+    cardUnit: " Karten",
+    todayProgress: "Fortschritt heute",
+    recommendedNext: "Empfohlener nächster Schritt",
+    nameSeparator: ", ",
+  },
+  "ja-JP": {
+    streakLabel: "連続練習",
+    masteredLabel: "習得済み",
+    weekLabel: "今週の練習",
+    dueLabel: "復習予定",
+    startLabel: "開始",
+    reviewLabel: "復習",
+    continueLabel: "続ける",
+    allDoneLabel: "今日は完了",
+    dayUnit: "日",
+    cardUnit: " 枚",
+    todayProgress: "今日の進捗",
+    recommendedNext: "おすすめの次のステップ",
+    nameSeparator: "、",
+  },
+  "ko-KR": {
+    streakLabel: "연속 연습",
+    masteredLabel: "습득 완료",
+    weekLabel: "이번 주 연습",
+    dueLabel: "복습 예정",
+    startLabel: "시작",
+    reviewLabel: "복습",
+    continueLabel: "계속",
+    allDoneLabel: "오늘 완료",
+    dayUnit: "일",
+    cardUnit: "장",
+    todayProgress: "오늘의 진행률",
+    recommendedNext: "추천 다음 단계",
+    nameSeparator: ", ",
+  },
+  "pt-BR": {
+    streakLabel: "Sequência",
+    masteredLabel: "Dominado",
+    weekLabel: "Esta semana",
+    dueLabel: "Pendente",
+    startLabel: "Iniciar",
+    reviewLabel: "Revisar",
+    continueLabel: "Continuar",
+    allDoneLabel: "Tudo pronto hoje",
+    dayUnit: " dias",
+    cardUnit: " cartões",
+    todayProgress: "Progresso de hoje",
+    recommendedNext: "Próximo passo recomendado",
+    nameSeparator: ", ",
+  },
+};
+
+function trainingWelcomeText(language: ComposerLanguage, key: TrainingWelcomeTextKey): string {
+  return trainingWelcomeTextCopy[language]?.[key] ?? trainingWelcomeTextCopy["en-US"][key];
+}
 
 export interface TrainingWelcomePanelProps {
   /** Current language */
@@ -53,54 +201,24 @@ export interface TrainingWelcomePanelProps {
 }
 
 /**
- * Get time-based greeting message
+ * Get time-based greeting message (hour bucketing stays here; copy lives in
+ * the eight-language record).
  */
-function getTimeGreeting(hour: number, language: "zh-CN" | "en-US"): { greeting: string } {
-  if (hour < 6) {
-    return {
-      greeting: language === "zh-CN" ? "夜间" : "Late night",
-    };
-  }
-  if (hour < 9) {
-    return {
-      greeting: language === "zh-CN" ? "清晨" : "Early morning",
-    };
-  }
-  if (hour < 12) {
-    return {
-      greeting: language === "zh-CN" ? "上午" : "Morning",
-    };
-  }
-  if (hour < 14) {
-    return {
-      greeting: language === "zh-CN" ? "午间" : "Noon",
-    };
-  }
-  if (hour < 18) {
-    return {
-      greeting: language === "zh-CN" ? "下午" : "Afternoon",
-    };
-  }
-  if (hour < 21) {
-    return {
-      greeting: language === "zh-CN" ? "晚上" : "Evening",
-    };
-  }
-  return {
-    greeting: language === "zh-CN" ? "夜间" : "Night",
-  };
+function getTimeGreeting(hour: number, language: ComposerLanguage): { greeting: string } {
+  return { greeting: timeOfDayGreeting(hour, language) };
 }
 
-function formatTime(minutes: number, language: "zh-CN" | "en-US"): string {
+function formatTime(minutes: number, language: ComposerLanguage): string {
+  const duration = trainingDurationCopy(language);
   if (minutes < 60) {
-    return language === "zh-CN" ? `${minutes} 分钟` : `${minutes} min`;
+    return duration.minutes(minutes);
   }
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   if (mins === 0) {
-    return language === "zh-CN" ? `${hours} 小时` : `${hours} hr`;
+    return duration.hours(hours);
   }
-  return language === "zh-CN" ? `${hours}h ${mins}m` : `${hours}hr ${mins}min`;
+  return duration.mixed(hours, mins);
 }
 
 export const TrainingWelcomePanel: React.FC<TrainingWelcomePanelProps> = ({
@@ -129,22 +247,20 @@ export const TrainingWelcomePanel: React.FC<TrainingWelcomePanelProps> = ({
   const personalizedGreeting = useMemo(() => {
     const baseGreeting = timeGreeting.greeting;
     if (learnerName) {
-      return language === "zh-CN"
-        ? `${baseGreeting}，${learnerName}`
-        : `${baseGreeting}, ${learnerName}`;
+      return `${baseGreeting}${trainingWelcomeText(language, "nameSeparator")}${learnerName}`;
     }
     return baseGreeting;
   }, [timeGreeting, learnerName, language]);
 
   // Labels
-  const streakLabel = language === "zh-CN" ? "连续练习" : "Streak";
-  const masteredLabel = language === "zh-CN" ? "已掌握" : "Mastered";
-  const timeLabel = language === "zh-CN" ? "本周练习" : "This week";
-  const dueLabel = language === "zh-CN" ? "待复习" : "Due";
-  const startLabel = language === "zh-CN" ? "开始" : "Start";
-  const reviewLabel = language === "zh-CN" ? "复习" : "Review";
-  const continueLabel = language === "zh-CN" ? "继续学习" : "Continue";
-  const noCardsDueLabel = language === "zh-CN" ? "今日已完成" : "All done today";
+  const streakLabel = trainingWelcomeText(language, "streakLabel");
+  const masteredLabel = trainingWelcomeText(language, "masteredLabel");
+  const timeLabel = trainingWelcomeText(language, "weekLabel");
+  const dueLabel = trainingWelcomeText(language, "dueLabel");
+  const startLabel = trainingWelcomeText(language, "startLabel");
+  const reviewLabel = trainingWelcomeText(language, "reviewLabel");
+  const continueLabel = trainingWelcomeText(language, "continueLabel");
+  const noCardsDueLabel = trainingWelcomeText(language, "allDoneLabel");
 
   return (
     <div className="training-welcome-panel">
@@ -165,7 +281,7 @@ export const TrainingWelcomePanel: React.FC<TrainingWelcomePanelProps> = ({
             <div className="stat-value">{currentStreak}</div>
             <div className="stat-label">
               {streakLabel}
-              <span className="stat-unit">{language === "zh-CN" ? "天" : " days"}</span>
+              <span className="stat-unit">{trainingWelcomeText(language, "dayUnit")}</span>
             </div>
           </div>
         </div>
@@ -176,7 +292,7 @@ export const TrainingWelcomePanel: React.FC<TrainingWelcomePanelProps> = ({
             <div className="stat-value">{cardsMastered}</div>
             <div className="stat-label">
               {masteredLabel}
-              <span className="stat-unit">{language === "zh-CN" ? " 张" : " cards"}</span>
+              <span className="stat-unit">{trainingWelcomeText(language, "cardUnit")}</span>
             </div>
           </div>
         </div>
@@ -202,7 +318,7 @@ export const TrainingWelcomePanel: React.FC<TrainingWelcomePanelProps> = ({
       <div className="welcome-progress">
         <div className="progress-label-row">
           <span className="progress-label">
-            {language === "zh-CN" ? "今日进度" : "Today's Progress"}
+            {trainingWelcomeText(language, "todayProgress")}
           </span>
           <span className="progress-value">{todayProgress}%</span>
         </div>
@@ -257,7 +373,7 @@ export const TrainingWelcomePanel: React.FC<TrainingWelcomePanelProps> = ({
       {nextAction && (
         <div className="welcome-next-action">
           <div className="next-action-label">
-            {language === "zh-CN" ? "推荐下一步" : "Recommended Next"}
+            {trainingWelcomeText(language, "recommendedNext")}
           </div>
           <div className="next-action-content">
             <div className="next-action-title">{nextAction.label}</div>

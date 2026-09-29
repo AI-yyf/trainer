@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { ComposerLanguage } from "../../lib/types";
+import { artifactBlockCopy, artifactInlineLeadCopy } from "./coachArtifactBlockCopy";
 import { MessageRichContent } from "./MessageRichContent";
 
 export type CoachArtifactKind =
@@ -38,76 +39,48 @@ function artifactInlineLead(
   kind: CoachArtifactKind,
   language: ComposerLanguage,
 ): string | undefined {
-  if (language === "zh-CN") {
-    if (kind === "principle") {
-      return "原理";
-    }
-    if (kind === "review") {
-      return "先看这个判断点";
-    }
-  }
-
   if (kind === "principle") {
-    return "The principle here is";
+    return artifactInlineLeadCopy(language, "原理");
   }
   if (kind === "review") {
-    return "Check this first";
+    return artifactInlineLeadCopy(language, "先看这个判断点");
   }
   return undefined;
 }
+
+const ACTION_LABEL_KEYS = {
+  plan: "打开计划",
+  next_task: "给我下一题",
+  review: "开始检查",
+  hint: "给我更小提示",
+  retry_review: "再次检查",
+  task: "设为练习",
+} as const;
 
 function artifactActionLabel(
   action: NonNullable<CoachArtifactBlockData["recommendedAction"]>,
   language: ComposerLanguage,
 ): string {
-  const zh = {
-    plan: "打开计划",
-    next_task: "给我下一题",
-    review: "开始检查",
-    hint: "给我更小提示",
-    retry_review: "再次检查",
-    task: "设为练习",
-  } as const;
-  const en = {
-    plan: "Open plan",
-    next_task: "Next task",
-    review: "Run review",
-    hint: "Smaller hint",
-    retry_review: "Review again",
-    task: "Turn into practice",
-  } as const;
-  return (language === "zh-CN" ? zh : en)[action];
+  return artifactBlockCopy(language, ACTION_LABEL_KEYS[action]);
 }
+
+const META_LABEL_KEYS = {
+  focus: "重点",
+  why: "原因",
+  verify: "验证",
+  decision: "决策",
+  blocker: "卡点",
+  resumeThread: "续接",
+  teachingNote: "教学提示",
+  confidence: "把握",
+  evidence: "证据",
+} as const;
 
 function artifactMetaLabel(
   key: "focus" | "why" | "verify" | "decision" | "blocker" | "resumeThread" | "teachingNote" | "confidence" | "evidence",
   language: ComposerLanguage,
 ): string {
-  if (language === "zh-CN") {
-    return {
-      focus: "重点",
-      why: "原因",
-      verify: "验证",
-      decision: "决策",
-      blocker: "卡点",
-      resumeThread: "续接",
-      teachingNote: "教学提示",
-      confidence: "把握",
-      evidence: "证据",
-    }[key];
-  }
-
-  return {
-    focus: "Focus",
-    why: "Why",
-    verify: "Check",
-    decision: "Decision",
-    blocker: "Blocker",
-    resumeThread: "Resume",
-    teachingNote: "Teaching note",
-    confidence: "Confidence",
-    evidence: "Evidence",
-  }[key];
+  return artifactBlockCopy(language, META_LABEL_KEYS[key]);
 }
 
 function artifactMetadataRecord(artifact: CoachArtifactBlockData): Record<string, unknown> | undefined {
@@ -160,34 +133,27 @@ function actionSentence(
   action: NonNullable<CoachArtifactBlockData["recommendedAction"]>,
   language: ComposerLanguage,
 ): string {
-  if (language === "zh-CN") {
-    return `下一步：${artifactActionLabel(action, language)}。`;
-  }
-  return `Next: ${artifactActionLabel(action, language)}.`;
+  return artifactBlockCopy(language, "下一步：{action}。").replace(
+    "{action}",
+    artifactActionLabel(action, language),
+  );
 }
 
 function actionButtonLabel(
   action: NonNullable<CoachArtifactBlockData["recommendedAction"]>,
   language: ComposerLanguage,
 ): string {
-  if (language === "zh-CN") {
-    return `下一步：${artifactActionLabel(action, language)}`;
-  }
-  return `Next: ${artifactActionLabel(action, language)}`;
+  return artifactBlockCopy(language, "下一步：{action}").replace(
+    "{action}",
+    artifactActionLabel(action, language),
+  );
 }
 
 function contentSummaryLabel(kind: CoachArtifactKind, language: ComposerLanguage): string {
-  if (language === "zh-CN") {
-    if (kind === "review" || kind === "evaluation") {
-      return "判断依据";
-    }
-    return "补充说明";
-  }
-
   if (kind === "review" || kind === "evaluation") {
-    return "Why";
+    return artifactBlockCopy(language, "判断依据");
   }
-  return "Note";
+  return artifactBlockCopy(language, "补充说明");
 }
 
 function verificationLead(
@@ -197,42 +163,31 @@ function verificationLead(
   if (items.length === 0) {
     return "";
   }
-  if (language === "zh-CN") {
-    return `做完先看 ${items.join("；")}。`;
-  }
-  return `Check this first after: ${items.join("; ")}.`;
+  return artifactBlockCopy(language, "做完先看 {items}。").replace(
+    "{items}",
+    items.join(artifactBlockCopy(language, "；")),
+  );
 }
+
+const KIND_LABEL_KEYS: Partial<Record<CoachArtifactKind, string>> = {
+  task: "练习题",
+  evaluation: "检查",
+  idea_implementation: "实现",
+  project_idea: "练习想法",
+  project_adaptation: "改造",
+  project_source: "来源",
+  principle: "原理",
+  review: "回看",
+  plan_update: "计划",
+  next_step: "下一步",
+};
 
 function artifactKindLabel(
   kind: CoachArtifactKind,
   language: ComposerLanguage,
 ): string | undefined {
-  const zh: Partial<Record<CoachArtifactKind, string>> = {
-    task: "练习题",
-    evaluation: "检查",
-    idea_implementation: "实现",
-    project_idea: "练习想法",
-    project_adaptation: "改造",
-    project_source: "来源",
-    principle: "原理",
-    review: "回看",
-    plan_update: "计划",
-    next_step: "下一步",
-  };
-  const en: Partial<Record<CoachArtifactKind, string>> = {
-    task: "Practice",
-    evaluation: "Check",
-    idea_implementation: "Implementation",
-    project_idea: "Idea",
-    project_adaptation: "Adaptation",
-    project_source: "Source",
-    principle: "Principle",
-    review: "Review",
-    plan_update: "Plan",
-    next_step: "Next step",
-  };
-
-  return (language === "zh-CN" ? zh : en)[kind];
+  const key = KIND_LABEL_KEYS[kind];
+  return key ? artifactBlockCopy(language, key) : undefined;
 }
 
 function artifactTeaser(
@@ -246,7 +201,7 @@ function artifactTeaser(
     return artifact.bullets[0];
   }
   if (artifact.focusArea) {
-    return language === "zh-CN" ? `先盯住 ${artifact.focusArea}` : `Stay with ${artifact.focusArea}`;
+    return artifactBlockCopy(language, "先盯住 {area}").replace("{area}", artifact.focusArea);
   }
   return undefined;
 }
@@ -318,7 +273,7 @@ export function CoachArtifactBlock({
       {artifact.focusArea ? (
         <p className="artifact-card__detail-note">
           <strong>{artifactMetaLabel("focus", language)}</strong>
-          {language === "zh-CN" ? "：" : ": "}
+          {artifactBlockCopy(language, "：")}
           {artifact.focusArea}
         </p>
       ) : null}
@@ -329,51 +284,51 @@ export function CoachArtifactBlock({
         <>
           <p className="artifact-card__detail-note">
             <strong>{artifactMetaLabel("why", language)}</strong>
-            {language === "zh-CN" ? "：" : ": "}
+            {artifactBlockCopy(language, "：")}
           </p>
           <MessageRichContent body={artifact.rationale} language={language} />
         </>
       ) : null}
       {decision ? (
         <p className="artifact-card__detail-note">
-          <strong>{artifactMetaLabel("decision", language)}</strong>
-          {language === "zh-CN" ? "：" : ": "}
-          {decision}
+            <strong>{artifactMetaLabel("decision", language)}</strong>
+            {artifactBlockCopy(language, "：")}
+            {decision}
         </p>
       ) : null}
       {blocker ? (
         <p className="artifact-card__detail-note">
-          <strong>{artifactMetaLabel("blocker", language)}</strong>
-          {language === "zh-CN" ? "：" : ": "}
-          {blocker}
+            <strong>{artifactMetaLabel("blocker", language)}</strong>
+            {artifactBlockCopy(language, "：")}
+            {blocker}
         </p>
       ) : null}
       {resumeThread ? (
         <p className="artifact-card__detail-note">
-          <strong>{artifactMetaLabel("resumeThread", language)}</strong>
-          {language === "zh-CN" ? "：" : ": "}
-          {resumeThread}
+            <strong>{artifactMetaLabel("resumeThread", language)}</strong>
+            {artifactBlockCopy(language, "：")}
+            {resumeThread}
         </p>
       ) : null}
       {teachingNote ? (
         <p className="artifact-card__detail-note">
-          <strong>{artifactMetaLabel("teachingNote", language)}</strong>
-          {language === "zh-CN" ? "：" : ": "}
-          {teachingNote}
+            <strong>{artifactMetaLabel("teachingNote", language)}</strong>
+            {artifactBlockCopy(language, "：")}
+            {teachingNote}
         </p>
       ) : null}
       {confidence ? (
         <p className="artifact-card__detail-note">
-          <strong>{artifactMetaLabel("confidence", language)}</strong>
-          {language === "zh-CN" ? "：" : ": "}
-          {confidence}
+            <strong>{artifactMetaLabel("confidence", language)}</strong>
+            {artifactBlockCopy(language, "：")}
+            {confidence}
         </p>
       ) : null}
       {evidence.length ? (
         <>
           <p className="artifact-card__detail-note">
             <strong>{artifactMetaLabel("verify", language)}</strong>
-            {language === "zh-CN" ? "：" : ": "}
+            {artifactBlockCopy(language, "：")}
           </p>
           <ul>
             {evidence.map((item) => (
