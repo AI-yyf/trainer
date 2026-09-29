@@ -59,3 +59,75 @@ the split can be executed stepwise without re-deriving it.
   code uses; `--fix` after each cluster.
 - Windows/macOS runner notes: Server job is serial + 75 min (§五);
   pyright runs Linux-only.
+
+
+## Precise AST measurement (2026-09-29, supersedes estimates above)
+
+Iterative transitive analysis (ast-based free-name walk, /task+/evaluate
+routes as seed): the family needs **42 build_router closures**,
+not ~11. Full list, in `RouterDeps` field order:
+
+```
+active_plan_stage
+advance_plan_after_evaluation
+attach_plan_runtime_status
+build_next_step_hint
+build_plan_runtime_status
+build_resume_thread_text
+clean_active_thread_task
+coach_turn_summary_text
+current_workspace_id
+display_focus_label
+effective_response_language
+evaluation_failure_family
+evaluation_outcome_name
+evaluation_requires_verification
+head_plan_revision
+leftover_plan_state_fields
+leftover_runtime_for_workspace
+leftover_task_title_for_workspace
+live_current_task_focus
+live_formal_plan_for_explicit_task_next
+normalize_focus_candidate
+normalize_visible_coach_text
+normalized_object_mapping
+persist_evaluation_learning_loop
+persist_plan_to_sandbox
+persist_training_card_to_sandbox
+persist_training_evaluation_note_to_sandbox
+record_training_practice_evaluation
+report_learning_payload
+require_live_formal_plan_for_explicit_task_next
+require_live_selected_card_for_status
+review_aware_next_task
+save_plan_or_conflict
+should_preserve_active_thread_for_scenario
+strip_visible_next_step_prefix
+structured_plan_progress_signal
+task_training_concepts
+teaching_strategy_context_from_snapshot
+training_card_is_live_for_verify
+training_practice_blocked_report
+unique_text_items
+workspace_preferences
+```
+
+Plus externals importable directly: `api/_helpers` ×4,
+`memory/workspace_recovery` ×5, `training_card_identity` impl,
+`training/card_generator.CardGenerationProviderFailure`, `stamp_verify_plan_advance`
+(nested — moves with its parent closure), `uuid4`, `PLAN_RUNTIME_KEY`
+(routers.py module import from `memory.workspace_recovery`).
+
+Extraction recipe (single commit, verified order):
+1. AST-locate the 42 closure spans + 4 route spans in build_router.
+2. Extend `RouterDeps` with all 42 names; add deps-construction
+   entries (they reference locals that still exist at that point).
+3. Create `routes/tasks.py`: header imports (asyncio/json/re/Literal/cast,
+   HTTPException/Request, models ×9, _helpers ×4, workspace_recovery ×5,
+   training_card_identity impl, _singleflight ×3, redact_provider_error,
+   ProviderService) + `build_tasks_router(runtime, deps)` binding all
+   42 names from `deps` + closure bodies + route bodies.
+4. Delete the spans from build_router; add `include_router`; rebind moved
+   names still used by remaining build_router code from `deps` (only those
+   with surviving callers).
+5. Verify: import OK → ruff clean → full server suite green → push.
