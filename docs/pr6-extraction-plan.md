@@ -131,3 +131,30 @@ Extraction recipe (single commit, verified order):
    names still used by remaining build_router code from `deps` (only those
    with surviving callers).
 5. Verify: import OK → ruff clean → full server suite green → push.
+
+
+## Attempt 3 result (routes-only, closures stay in build_router)
+
+Moving only the 4 route functions while keeping all closures in
+build_router (accessed via deps) still produces 39 test failures. Root
+cause: the route bodies reference closures directly by local name, not
+via deps — the routes were written inside build_router where the
+closures are in scope. Simply rebinding from deps in the new module
+cannot replicate this for closures whose deps fields are themselves
+local build_router state (e.g. `leftover_plan_state_fields` is a
+closure, not a static helper).
+
+**Conclusion**: the /task+/evaluate family is NOT extractable with the
+deps-only pattern. The correct PR6 approach is one of:
+1. **Strangler fig**: new routes go in routes/*.py; existing routes
+   stay in routers.py until each is individually rewritten to use deps
+   (multi-PR, zero risk).
+2. **Class composition**: convert build_router into a class where
+   closures become methods and deps become instance attributes —
+   then subclasses/mixins can split by domain.
+3. **Accept routers.py as-is**: the file is large but functional and
+   fully tested. The 7× 9/9 CI green record is the evidence that
+   matters for P1 release.
+
+Recommendation: option 3 for P1 release. Options 1/2 are post-release
+refactoring targets.
