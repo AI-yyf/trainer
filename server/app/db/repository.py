@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -62,6 +63,12 @@ class TrainerRepository:
     def __init__(self, database_path: Path) -> None:
         self.database_path = database_path
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        # Monotonic counter bumped whenever a statement mutates rows (INSERT/
+        # UPDATE/DELETE detected via sqlite total_changes). Consumers such as
+        # MemoryService.snapshot use it as a cheap "did any persisted state
+        # change" key; it never decreases for the lifetime of the repository.
+        self.write_generation = 0
+        self._write_generation_lock = threading.Lock()
         self._initialize()
 
     @contextmanager
@@ -75,6 +82,9 @@ class TrainerRepository:
             connection.rollback()
             raise
         finally:
+            if connection.total_changes:
+                with self._write_generation_lock:
+                    self.write_generation += 1
             connection.close()
 
     def _initialize(self) -> None:

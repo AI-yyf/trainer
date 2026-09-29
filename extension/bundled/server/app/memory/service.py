@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import inspect
 import re
+import time
 from collections import Counter
+from copy import deepcopy
 from dataclasses import asdict, fields, is_dataclass, replace
 from datetime import timedelta
 from pathlib import Path
@@ -1264,6 +1266,13 @@ class MemoryService(
         self._review_scheduler = ReviewScheduler()
         self._resource_dedupe_hook: Callable[[list[ResourceRecord]], list[ResourceRecord]] | None = None
         self._card_ledger: list[dict[str, Any]] = []
+        # Per-workspace memoization of snapshot(): every lane/repository mutation
+        # funnels through _persist_structured (MemoryService-owned counter) or a
+        # direct TrainerRepository write (write_generation), so a cache entry is
+        # reused only while both counters are unchanged. A 1s wall-clock bucket
+        # keeps clock-derived derivations (FSRS due reviews) effectively fresh.
+        self._persist_generation = 0
+        self._snapshot_cache: dict[str, tuple[int, int, int, MemorySnapshot]] = {}
 
     def set_resource_dedupe_hook(
         self,
@@ -1681,6 +1690,7 @@ class MemoryService(
         return structured
 
     def _persist_structured(self, workspace_id: str) -> None:
+        self._persist_generation += 1
         structured = self._structured_for(workspace_id)
         self.repository.save_structured_memory(workspace_id, structured.export_state())
 
@@ -2407,6 +2417,18 @@ class MemoryService(
         return self._structured_for(workspace_id)
 
     def snapshot(self, workspace_id: str) -> MemorySnapshot:
+        repo_generation = getattr(self.repository, "write_generation", 0)
+        time_bucket = int(time.time())
+        cached = self._snapshot_cache.get(workspace_id)
+        if (
+            cached is not None
+            and cached[0] == repo_generation
+            and cached[1] == self._persist_generation
+            and cached[2] == time_bucket
+        ):
+            # Fresh object graph per call: callers may mutate the returned
+            # snapshot (e.g. rebind .workspace), so never hand out the master.
+            return deepcopy(cached[3])
         context_id = self.repository.resolve_context_id(workspace_id)
         asset_catalog = (
             self._asset_library.catalog(context_id)
@@ -3319,6 +3341,12 @@ class MemoryService(
                 "card_title": current_step,
             }
         self._persist_structured(workspace_id)
+        self._snapshot_cache[workspace_id] = (
+            getattr(self.repository, "write_generation", 0),
+            self._persist_generation,
+            time_bucket,
+            snapshot,
+        )
         return snapshot
 
     def list_teaching_assets(
