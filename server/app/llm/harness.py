@@ -48,6 +48,9 @@ class ProviderUsage:
     cache_read_tokens: int | None = None
     cache_write_tokens: int | None = None
     total_tokens: int | None = None
+    input_cost: float | None = None
+    output_cost: float | None = None
+    total_cost: float | None = None
 
     @property
     def estimated_input_tokens(self) -> int | None:
@@ -73,6 +76,18 @@ def extract_provider_usage(response: object | None) -> ProviderUsage | None:
     if usage_obj is None:
         return None
 
+    def _float(key: str) -> float | None:
+        raw = getattr(usage_obj, key, None)
+        if raw is None and isinstance(usage_obj, dict):
+            raw = usage_obj.get(key)
+        if raw is None:
+            return None
+        try:
+            value = float(raw)
+            return value if value >= 0 else None
+        except (TypeError, ValueError):
+            return None
+
     def _int(key: str) -> int | None:
         raw = getattr(usage_obj, key, None)
         if raw is None and isinstance(usage_obj, dict):
@@ -97,6 +112,9 @@ def extract_provider_usage(response: object | None) -> ProviderUsage | None:
         cache_read_tokens=_int("cache_read_input_tokens") or _int("cache_read_tokens"),
         cache_write_tokens=_int("cache_creation_input_tokens") or _int("cache_write_tokens"),
         total_tokens=total,
+    input_cost=_float("input_cost") or _float("prompt_cost"),
+    output_cost=_float("output_cost") or _float("completion_cost"),
+    total_cost=_float("total_cost"),
     )
 COMPACTION_TOOL_SERIALIZE_CHARS = 2_000
 COMPACTION_RESEARCH_SOURCE_LIMIT = 48
