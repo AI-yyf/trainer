@@ -89,6 +89,7 @@ import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, Fold
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
 import { trainerCommands } from "../../../../../shared/src/commands";
 import { remoteSupportStateView, REMOTE_SUPPORT_COPY } from "./remoteSupportCopy";
+import { settingsText } from "./settingsText";
 import { postMessage as postWebviewMessage } from "../../lib/vscode";
 import {
   trainerSkillCatalog,
@@ -794,9 +795,7 @@ function providerBaseUrlGuidance(
   endpointHint: string,
 ): string {
   if (!protocol) {
-    return language === "zh-CN"
-      ? "先选择协议，再填写服务根地址。未知网关不会被默认成 OpenAI 兼容。"
-      : "Select a protocol before entering the service root. Unknown gateways are not assumed OpenAI-compatible.";
+    return settingsText(language, "先选择协议，再填写服务根地址。未知网关不会被默认成 OpenAI 兼容。", "Select a protocol before entering the service root. Unknown gateways are not assumed OpenAI-compatible.");
   }
   if (protocol === "gemini_generate_content") {
     switch (language) {
@@ -2914,7 +2913,7 @@ function capabilitySummaryText(
 ): string {
   const labels = capabilityLabels(capabilities, language);
   if (labels.length === 0) {
-    return language === "zh-CN" ? "未声明" : "Not declared";
+    return settingsText(language, "未声明", "Not declared");
   }
   return labels.join(" · ");
 }
@@ -3685,14 +3684,12 @@ function gatewayFingerprintNote(
   if (!matched && !isNewApiConnectionType(connectionType)) {
     return undefined;
   }
-  return language === "zh-CN"
-    ? "已识别 New API 网关。目录里的 endpoint 类型只是声明，要以测试结果为准。"
-    : "New API gateway identified. Catalog endpoint types are claims; use the live test.";
+  return settingsText(language, "已识别 New API 网关。目录里的 endpoint 类型只是声明，要以测试结果为准。", "New API gateway identified. Catalog endpoint types are claims; use the live test.");
 }
 
 function protocolChoiceLabel(protocol: ProviderProtocol | undefined, language: ComposerLanguage): string {
   if (!protocol) {
-    return language === "zh-CN" ? "未选择协议" : "Protocol unverified";
+    return settingsText(language, "未选择协议", "Protocol unverified");
   }
   if (language === "zh-CN") {
     switch (protocol) {
@@ -4199,28 +4196,18 @@ export function CoachSettingsView({
       : undefined;
   const reviewSummary = reviewRhythmSummary ?? copy.off;
   const runtimeStatusLabel = providerCoachReady
-    ? language === "zh-CN"
-      ? "可发送"
-      : "Ready"
+    ? settingsText(language, "可发送", "Ready")
     : providerNeedsApiKey
-      ? language === "zh-CN"
-        ? "需补密钥"
-        : "Add API key"
+      ? settingsText(language, "需补密钥", "Add API key")
     : providerSaved
-      ? language === "zh-CN"
-        ? "需检查"
-        : "Needs attention"
-    : language === "zh-CN"
-      ? "待配置"
-      : "Setup";
+      ? settingsText(language, "需检查", "Needs attention")
+    : settingsText(language, "待配置", "Setup");
   const providerStatusLabel = providerCoachReady
     ? copy.configured
     : providerNeedsApiKey
       ? copy.apiKeyMissing
     : providerSaved
-      ? language === "zh-CN"
-        ? "需检查"
-        : "Needs attention"
+      ? settingsText(language, "需检查", "Needs attention")
       : copy.notConfigured;
   const teachingStyleItems = [
     { label: copy.auto, value: "auto" as const },
@@ -4249,7 +4236,7 @@ export function CoachSettingsView({
 
   const safeProviderFailureHint =
     providerErrorHint({ modelErrorCategory: providerFailureCategory }, language) ??
-    (language === "zh-CN" ? "请检查连接设置后重试。" : "Check the connection settings and try again.");
+    (settingsText(language, "请检查连接设置后重试。", "Check the connection settings and try again."));
   const lastTestLabel = providerTestPending
     ? settingsStatusPhrase(language, "checking")
     : providerTestTransportFailed
@@ -4274,7 +4261,7 @@ export function CoachSettingsView({
     : undefined;
   const coachStateText =
     stringifyNode(coachStateSummary) ??
-    (coachStateSummary ? (language === "zh-CN" ? "已生成" : "Available") : undefined);
+    (coachStateSummary ? (settingsText(language, "已生成", "Available")) : undefined);
   const localizedRuntimeStatusLabel = providerCoachReady
     ? settingsStatusPhrase(language, "ready")
     : providerNeedsApiKey
@@ -4462,7 +4449,7 @@ export function CoachSettingsView({
     normalizedDraftBaseUrl === normalizedSavedBaseUrl;
   const providerApiKeyDraftStatus = providerDraftHasApiKey
     ? {
-        value: language === "zh-CN" ? "新 API key" : "New API key",
+        value: settingsText(language, "新 API key", "New API key"),
         state: "warn" as const,
       }
     : providerDraftCanReuseSavedApiKey
@@ -4490,13 +4477,9 @@ export function CoachSettingsView({
   const runtimeSummaryText = shortenSummary(runtimeSummary, 72);
   const coachStateSummaryText = localizedCoachStateText ? shortenSummary(localizedCoachStateText, 88) : undefined;
   const providerRequirementNote = providerNeedsApiKey
-    ? language === "zh-CN"
-      ? "连接已保存，还需要 API key。"
-      : "Connection saved; API key missing."
+    ? settingsText(language, "连接已保存，还需要 API key。", "Connection saved; API key missing.")
     : !providerSaved && savedProviderProfilesAvailable
-      ? language === "zh-CN"
-        ? "这个工作区还没有启用连接。下方有可以直接使用的连接配置。"
-        : "There is no active provider applied yet. Reusable profiles are still available below."
+      ? settingsText(language, "这个工作区还没有启用连接。下方有可以直接使用的连接配置。", "There is no active provider applied yet. Reusable profiles are still available below.")
       : providerCoachBlockReason ?? null;
   const modelListing = asRecord(provider.modelListing);
   const draftListingProtocol = asString(modelListing?.protocol);
@@ -4938,38 +4921,32 @@ export function CoachSettingsView({
   const localizedSaveProfileDetail = providerDetailLabel(language, "saveProfileDetail");
   const localizedPerModelLimitsLabel = providerDetailLabel(language, "perModelLimits");
   const localizedPerModelLimitsDetail =
-    language === "zh-CN"
-      ? "Trainer \u4F1A\u6309 model \u8BB0\u4F4F Context window \u548C Max output\u3002\u5207\u5230\u67D0\u4E2A model \u65F6\uFF0C\u4F1A\u81EA\u52A8\u5E26\u56DE\u5B83\u81EA\u5DF1\u7684 limits\u3002"
-      : "Trainer keeps Context window and Max output per model and restores them when you switch models.";
+    settingsText(language, "Trainer \u4F1A\u6309 model \u8BB0\u4F4F Context window \u548C Max output\u3002\u5207\u5230\u67D0\u4E2A model \u65F6\uFF0C\u4F1A\u81EA\u52A8\u5E26\u56DE\u5B83\u81EA\u5DF1\u7684 limits\u3002", "Trainer keeps Context window and Max output per model and restores them when you switch models.");
   const localizedUseModelLabel =
-    language === "zh-CN" ? "\u7528\u8FD9\u4E2A model" : "Use model";
+    settingsText(language, "\u7528\u8FD9\u4E2A model", "Use model");
   const localizedCurrentModelLabel =
-    language === "zh-CN" ? "\u5F53\u524D" : "Current";
+    settingsText(language, "\u5F53\u524D", "Current");
   const localizedModelLimitEmpty =
-    language === "zh-CN"
-      ? "\u5148\u62C9\u53D6\u6A21\u578B\u5217\u8868\uFF0C\u6216\u8005\u76F4\u63A5\u8F93\u5165\u4E00\u4E2A model\u3002"
-      : "Fetch models first, or type a model name directly.";
+    settingsText(language, "\u5148\u62C9\u53D6\u6A21\u578B\u5217\u8868\uFF0C\u6216\u8005\u76F4\u63A5\u8F93\u5165\u4E00\u4E2A model\u3002", "Fetch models first, or type a model name directly.");
   const localizedCatalogPanelLabel = providerDetailLabel(language, "modelCatalog");
   const localizedCatalogPanelDetail =
-    language === "zh-CN"
-      ? "Trainer \u4F1A\u6309\u8FD9\u4E9B\u5DF2\u4FDD\u5B58\u7684 model \u7EC6\u8282\u6765\u505A\u81EA\u52A8\u5207\u6362\u3001profile \u5207\u6362\u548C live refresh\u3002"
-      : "Trainer uses these saved model details when it switches models, swaps profiles, and refreshes live catalogs.";
+    settingsText(language, "Trainer \u4F1A\u6309\u8FD9\u4E9B\u5DF2\u4FDD\u5B58\u7684 model \u7EC6\u8282\u6765\u505A\u81EA\u52A8\u5207\u6362\u3001profile \u5207\u6362\u548C live refresh\u3002", "Trainer uses these saved model details when it switches models, swaps profiles, and refreshes live catalogs.");
   const localizedCatalogAliasesLabel =
-    language === "zh-CN" ? "Model aliases" : "Model aliases";
+    settingsText(language, "Model aliases", "Model aliases");
   const localizedCatalogTaskBindingsLabel =
-    language === "zh-CN" ? "Task bindings" : "Task bindings";
+    settingsText(language, "Task bindings", "Task bindings");
   const localizedCatalogAllowedModelsLabel =
-    language === "zh-CN" ? "Allowed models" : "Allowed models";
+    settingsText(language, "Allowed models", "Allowed models");
   const localizedCatalogDeniedModelsLabel =
-    language === "zh-CN" ? "Blocked models" : "Blocked models";
+    settingsText(language, "Blocked models", "Blocked models");
   const localizedCatalogEmbeddingModelLabel =
-    language === "zh-CN" ? "Embedding model" : "Embedding model";
+    settingsText(language, "Embedding model", "Embedding model");
   const localizedCatalogRequestDefaultsLabel =
-    language === "zh-CN" ? "Request defaults" : "Request defaults";
+    settingsText(language, "Request defaults", "Request defaults");
   const localizedCatalogSourceLabel =
-    language === "zh-CN" ? "Catalog source" : "Catalog source";
+    settingsText(language, "Catalog source", "Catalog source");
   const localizedCatalogCacheTtlLabel =
-    language === "zh-CN" ? "Cache TTL" : "Cache TTL";
+    settingsText(language, "Cache TTL", "Cache TTL");
   const localizedCatalogSavedModelsLabel: Record<ComposerLanguage, string> = {
     "zh-CN": "已保存模型",
     "en-US": "Saved models",
@@ -4981,60 +4958,44 @@ export function CoachSettingsView({
     "pt-BR": "Modelos salvos",
   };
   const localizedAdvancedRoutingLabel =
-    language === "zh-CN" ? "\u8DEF\u7531\u89C4\u5219" : "Routing rules";
+    settingsText(language, "\u8DEF\u7531\u89C4\u5219", "Routing rules");
   const localizedAdvancedRoutingDetail =
-    language === "zh-CN"
-      ? "这里放会影响 provider profile 行为的高级字段。默认收起，不抢首屏。"
-      : "These fields shape provider profile behavior. They stay collapsed by default so Settings keeps its first screen calm.";
+    settingsText(language, "这里放会影响 provider profile 行为的高级字段。默认收起，不抢首屏。", "These fields shape provider profile behavior. They stay collapsed by default so Settings keeps its first screen calm.");
   const localizedCredentialModeLabel =
-    language === "zh-CN" ? "Credential mode" : "Credential mode";
+    settingsText(language, "Credential mode", "Credential mode");
   const localizedCredentialModeUiProxy =
-    language === "zh-CN" ? "UI proxy" : "UI proxy";
+    settingsText(language, "UI proxy", "UI proxy");
   const localizedCredentialModeWorkspaceSecret =
-    language === "zh-CN" ? "Workspace secret" : "Workspace secret";
+    settingsText(language, "Workspace secret", "Workspace secret");
   const localizedAllowedModelsInputDetail =
-    language === "zh-CN"
-      ? "用逗号或换行分隔。留空表示不限制。"
-      : "Separate models with commas or new lines. Leave blank to allow any model.";
+    settingsText(language, "用逗号或换行分隔。留空表示不限制。", "Separate models with commas or new lines. Leave blank to allow any model.");
   const localizedDeniedModelsInputDetail =
-    language === "zh-CN"
-      ? "这些 model 会被 profile 直接挡住。"
-      : "These models stay blocked for this profile.";
+    settingsText(language, "这些 model 会被 profile 直接挡住。", "These models stay blocked for this profile.");
   const localizedEmbeddingModelPlaceholder =
-    language === "zh-CN" ? "可选，例如 text-embedding-3-small" : "Optional, for example text-embedding-3-small";
+    settingsText(language, "可选，例如 text-embedding-3-small", "Optional, for example text-embedding-3-small");
   const localizedCacheTtlDetail =
-    language === "zh-CN" ? "单位是秒。" : "Measured in seconds.";
+    settingsText(language, "单位是秒。", "Measured in seconds.");
   const localizedManualModelLabel =
-    language === "zh-CN" ? "手动加入 model" : "Add model manually";
+    settingsText(language, "手动加入 model", "Add model manually");
   const localizedManualModelPlaceholder =
-    language === "zh-CN" ? "例如 kimi-k3" : "For example kimi-k3";
+    settingsText(language, "例如 kimi-k3", "For example kimi-k3");
   const localizedManualModelButton =
-    language === "zh-CN" ? "加入当前 catalog" : "Add to current catalog";
+    settingsText(language, "加入当前 catalog", "Add to current catalog");
   const localizedManualModelHint =
-    language === "zh-CN"
-      ? "即使 provider 还没列出它，也可以先把 model 放进当前 catalog。至少填一个 limit 后，它就会被记住。"
-      : "You can stage a model here even before the provider lists it. Save at least one limit to keep it in the catalog.";
+    settingsText(language, "即使 provider 还没列出它，也可以先把 model 放进当前 catalog。至少填一个 limit 后，它就会被记住。", "You can stage a model here even before the provider lists it. Save at least one limit to keep it in the catalog.");
   const localizedRequestDefaultsInputDetail =
-    language === "zh-CN"
-      ? "\u7528 JSON object \u7ec6\u5316 provider \u8bf7\u6c42\u3002Trainer \u4f1a\u5728\u53d1\u9001\u65f6\u5408\u5e76\u8fd9\u4e9b\u9ed8\u8ba4\u503c\u3002"
-      : "Use a JSON object to refine provider requests. Trainer merges these defaults into outgoing requests.";
+    settingsText(language, "\u7528 JSON object \u7ec6\u5316 provider \u8bf7\u6c42\u3002Trainer \u4f1a\u5728\u53d1\u9001\u65f6\u5408\u5e76\u8fd9\u4e9b\u9ed8\u8ba4\u503c\u3002", "Use a JSON object to refine provider requests. Trainer merges these defaults into outgoing requests.");
   const localizedRequestDefaultsInputHint =
-    language === "zh-CN"
-      ? "\u4fdd\u6301\u4e3a\u4e00\u4e2a JSON object\u3002\u9002\u5408\u8bbe\u7f6e reasoning\u3001temperature \u6216\u5176\u4ed6 provider \u5b57\u6bb5\u3002"
-      : "Keep this as a JSON object. Use it for reasoning, temperature, or provider-specific request fields.";
+    settingsText(language, "\u4fdd\u6301\u4e3a\u4e00\u4e2a JSON object\u3002\u9002\u5408\u8bbe\u7f6e reasoning\u3001temperature \u6216\u5176\u4ed6 provider \u5b57\u6bb5\u3002", "Keep this as a JSON object. Use it for reasoning, temperature, or provider-specific request fields.");
   const localizedRequestDefaultsInvalidJson =
-    language === "zh-CN"
-      ? "Request defaults \u5fc5\u987b\u662f\u53ef\u89e3\u6790\u7684 JSON\u3002"
-      : "Request defaults must be valid JSON.";
+    settingsText(language, "Request defaults \u5fc5\u987b\u662f\u53ef\u89e3\u6790\u7684 JSON\u3002", "Request defaults must be valid JSON.");
   const localizedRequestDefaultsInvalidShape =
-    language === "zh-CN"
-      ? "Request defaults \u5fc5\u987b\u662f JSON object\uff0c\u4e0d\u80fd\u662f array \u6216 string\u3002"
-      : "Request defaults must stay a JSON object, not an array or string.";
+    settingsText(language, "Request defaults \u5fc5\u987b\u662f JSON object\uff0c\u4e0d\u80fd\u662f array \u6216 string\u3002", "Request defaults must stay a JSON object, not an array or string.");
   const modelCardCopy = providerModelCardCopy(language);
   const localizedModelOriginLive = modelCardCopy.live;
   const localizedModelOriginManual = modelCardCopy.manual;
   const localizedClearModelLimitsLabel =
-    language === "zh-CN" ? "清除 limits" : "Clear limits";
+    settingsText(language, "清除 limits", "Clear limits");
   const providerCapabilityGroups = describeProviderCapabilityMatrixGroups(
     {
       modelAliases: provider.modelAliases,
@@ -5312,19 +5273,13 @@ export function CoachSettingsView({
   };
   const providerPasteHintCopy = (outcome: ReturnType<typeof applyProviderSmartPaste>): string => {
     if (outcome === "blob") {
-      return language === "zh-CN"
-        ? "已识别连接信息:服务地址和密钥已自动填入。接下来点「获取模型」选一个模型,然后保存即可。"
-        : "Recognized the connection info: base URL and API key are filled in. Next, fetch models, pick one, and save.";
+      return settingsText(language, "已识别连接信息:服务地址和密钥已自动填入。接下来点「获取模型」选一个模型,然后保存即可。", "Recognized the connection info: base URL and API key are filled in. Next, fetch models, pick one, and save.");
     }
     if (outcome === "moved-url") {
-      return language === "zh-CN"
-        ? "这里粘贴的是服务地址,已帮你移到「服务根地址」。密钥请粘到「API 密钥」。"
-        : "That looks like a service address — moved it to Base URL. Paste the key into API key.";
+      return settingsText(language, "这里粘贴的是服务地址,已帮你移到「服务根地址」。密钥请粘到「API 密钥」。", "That looks like a service address — moved it to Base URL. Paste the key into API key.");
     }
     if (outcome === "moved-key") {
-      return language === "zh-CN"
-        ? "这里粘贴的是密钥,已帮你移到「API 密钥」。服务地址请粘到「服务根地址」。"
-        : "That looks like an API key — moved it to API key. Paste the address into Base URL.";
+      return settingsText(language, "这里粘贴的是密钥,已帮你移到「API 密钥」。服务地址请粘到「服务根地址」。", "That looks like an API key — moved it to API key. Paste the address into Base URL.");
     }
     return "";
   };
@@ -5389,13 +5344,9 @@ export function CoachSettingsView({
     : currentDraftModelPolicyMessage
       ? currentDraftModelPolicyMessage
     : !providerDraftFieldsReady
-      ? language === "zh-CN"
-        ? "\u5148\u586b\u5199\u670d\u52a1\u6839\u5730\u5740\u548c\u6a21\u578b\uff0c\u518d\u4fdd\u5b58\u8fde\u63a5\u3002"
-        : "Add the service root and model before saving the connection."
+      ? settingsText(language, "\u5148\u586b\u5199\u670d\u52a1\u6839\u5730\u5740\u548c\u6a21\u578b\uff0c\u518d\u4fdd\u5b58\u8fde\u63a5\u3002", "Add the service root and model before saving the connection.")
       : providerSaved
-        ? language === "zh-CN"
-          ? "\u5F53\u524D\u8FDE\u63A5\u5DF2\u4FDD\u5B58\u3002"
-          : "This connection is already saved."
+        ? settingsText(language, "\u5F53\u524D\u8FDE\u63A5\u5DF2\u4FDD\u5B58\u3002", "This connection is already saved.")
         : copy.setupAction;
   const shouldSurfaceRecentTestFailure =
     (providerTestTransportFailed || Boolean(lastTestFailure)) &&
@@ -5403,15 +5354,13 @@ export function CoachSettingsView({
     !providerHasDraftChanges;
   const calmIntro =
     copy.intro ||
-    (language === "zh-CN"
-      ? "连接与默认项。"
-      : "Connection and defaults.");
+    (settingsText(language, "连接与默认项。", "Connection and defaults."));
   const localizedCalmIntro =
     copy.intro && copy.intro !== "Only the most common coach settings here."
       ? copy.intro
       : settingsSupportPhrase(language, "commonIntro");
   const providerPrimaryAction = providerCoachReady
-    ? (language === "zh-CN" ? "已可发送。" : "Ready to send.")
+    ? (settingsText(language, "已可发送。", "Ready to send."))
     : language === "zh-CN"
       ? providerNeedsApiKey
         ? "缺少 API key。"
@@ -5458,39 +5407,25 @@ export function CoachSettingsView({
     },
   ];
   const coachCapabilityLabel = providerCoachReady
-    ? language === "zh-CN"
-      ? "已就绪"
-      : "Ready"
+    ? settingsText(language, "已就绪", "Ready")
     : providerNeedsApiKey
-      ? language === "zh-CN"
-        ? "缺少密钥"
-        : "Missing key"
+      ? settingsText(language, "缺少密钥", "Missing key")
       : providerSaved
-        ? language === "zh-CN"
-          ? "被阻塞"
-          : "Blocked"
-        : language === "zh-CN"
-          ? "待配置"
-          : "Setup";
+        ? settingsText(language, "被阻塞", "Blocked")
+        : settingsText(language, "待配置", "Setup");
   const coachCapabilityTone = providerCoachReady ? "connected" : providerNeedsApiKey ? "warn" : providerSaved ? "warn" : "offline";
   const imageCapabilityLabel = imageInputState.supported
-    ? language === "zh-CN"
-      ? "已就绪"
-      : "Ready"
+    ? settingsText(language, "已就绪", "Ready")
     : imageInputState.status === "setup_required"
-      ? language === "zh-CN"
-        ? "待配置"
-        : "Setup"
-      : language === "zh-CN"
-        ? "未开启"
-        : "Off";
+      ? settingsText(language, "待配置", "Setup")
+      : settingsText(language, "未开启", "Off");
   const imageCapabilityTone = imageInputState.supported
     ? "connected"
     : imageInputState.status === "setup_required"
       ? "pending"
       : "warn";
   const imageCapabilityDetail =
-    imageInputState.detail ?? imageInputState.reason ?? (language === "zh-CN" ? "未验证图片输入。" : "Image input not verified.");
+    imageInputState.detail ?? imageInputState.reason ?? (settingsText(language, "未验证图片输入。", "Image input not verified."));
   const availabilityTone: "connected" | "pending" | "warn" | "offline" = providerHasDraftChanges
     ? currentDraftModelBlockedByPolicy
       ? "warn"
@@ -5501,68 +5436,40 @@ export function CoachSettingsView({
         ? "warn"
         : "offline";
   const availabilityStatusLabel = providerHasDraftChanges
-    ? language === "zh-CN"
-      ? "草稿未生效"
-      : "Draft not applied"
+    ? settingsText(language, "草稿未生效", "Draft not applied")
     : providerCoachReady
       ? runtimeStatusLabel
       : providerStatusLabel;
   const availabilityHeadline = providerHasDraftChanges && currentDraftModelPolicyMessage
     ? settingsPhrase(language, "chooseModel")
     : providerHasDraftChanges
-      ? language === "zh-CN"
-      ? "连接草稿未保存"
-      : "Connection draft not saved"
+      ? settingsText(language, "连接草稿未保存", "Connection draft not saved")
     : providerCoachReady
-      ? language === "zh-CN"
-        ? "模型可用"
-        : "Model ready"
+      ? settingsText(language, "模型可用", "Model ready")
       : providerNeedsApiKey
-        ? language === "zh-CN"
-          ? "缺少 API key"
-          : "API key required"
+        ? settingsText(language, "缺少 API key", "API key required")
         : providerSaved
-          ? language === "zh-CN"
-            ? "连接待验证"
-            : "Connection needs test"
-          : language === "zh-CN"
-            ? "设置模型连接"
-            : "Set up model access";
+          ? settingsText(language, "连接待验证", "Connection needs test")
+          : settingsText(language, "设置模型连接", "Set up model access");
   const availabilityDetail = providerHasDraftChanges && currentDraftModelPolicyMessage
     ? currentDraftModelPolicyMessage
     : providerHasDraftChanges
       ? providerDraftReadyForTest
-        ? language === "zh-CN"
-          ? "当前草稿已经可以测试。保存后会成为当前连接。"
-          : "This draft can be tested now. Save when you want to apply it."
-        : language === "zh-CN"
-          ? "保存后测试。"
-          : "Save before testing."
+        ? settingsText(language, "当前草稿已经可以测试。保存后会成为当前连接。", "This draft can be tested now. Save when you want to apply it.")
+        : settingsText(language, "保存后测试。", "Save before testing.")
       : providerCoachReady
-      ? language === "zh-CN"
-        ? "对话、计划、训练使用此连接。"
-        : "Chat, plan, and training use this connection."
+      ? settingsText(language, "对话、计划、训练使用此连接。", "Chat, plan, and training use this connection.")
       : providerRequirementNote ?? providerPrimaryAction;
   const availabilityPrimaryLabel = providerHasDraftChanges
-    ? language === "zh-CN"
-      ? "保存草稿"
-      : "Save draft"
+    ? settingsText(language, "保存草稿", "Save draft")
     : providerCoachReady
-      ? language === "zh-CN"
-        ? "重新测试"
-        : "Test again"
+      ? settingsText(language, "重新测试", "Test again")
       : providerSaved && providerNeedsApiKey
-        ? language === "zh-CN"
-          ? "补上 API key"
-          : "Add API key"
+        ? settingsText(language, "补上 API key", "Add API key")
         : copy.setupAction;
   const availabilityPrimaryDetail = providerCoachReady && !providerHasDraftChanges
-    ? language === "zh-CN"
-      ? "测试当前连接"
-      : "Test current connection"
-    : language === "zh-CN"
-      ? "保存后生效"
-      : "Save to apply";
+    ? settingsText(language, "测试当前连接", "Test current connection")
+    : settingsText(language, "保存后生效", "Save to apply");
   const availabilityPrimaryIcon = providerCoachReady && !providerHasDraftChanges
     ? <DiagnosticsIcon size={14} />
     : <CheckMarkIcon size={14} />;
@@ -5588,9 +5495,7 @@ export function CoachSettingsView({
       : providerNeedsRetest
         ? settingsStatusPhrase(language, "needsAttention")
       : coachSendState.status === "warming"
-        ? language === "zh-CN"
-          ? "\u68C0\u67E5\u4E2D"
-          : "Checking"
+        ? settingsText(language, "\u68C0\u67E5\u4E2D", "Checking")
         : coachCapabilityLabel;
   const resolvedCoachCapabilityTone =
     shouldSurfaceRecentTestFailure ||
@@ -5610,9 +5515,7 @@ export function CoachSettingsView({
       : providerNeedsRetest
         ? settingsStatusPhrase(language, "connectionSavedNeedsTest")
       : providerCoachReady
-        ? language === "zh-CN"
-          ? "\u53EF\u53D1\u9001"
-          : "Send enabled"
+        ? settingsText(language, "\u53EF\u53D1\u9001", "Send enabled")
         : coachSendState.status === "warming"
           ? settingsStatusPhrase(language, "checking")
           : providerCoachBlockReason ?? providerPrimaryAction;
@@ -5760,8 +5663,8 @@ export function CoachSettingsView({
           ? settingsStatusPhrase(language, "checking")
           : providerCoachBlockReason ?? providerPrimaryAction;
   const PROVIDER_SETUP_STATUS_COPY: Record<ProviderSetupReason, string> = {
-    workspace_root_missing: language === "zh-CN" ? "待选目录" : "No folder yet",
-    workspace_untrusted: language === "zh-CN" ? "待信任" : "Trust needed",
+    workspace_root_missing: settingsText(language, "待选目录", "No folder yet"),
+    workspace_untrusted: settingsText(language, "待信任", "Trust needed"),
     draft_model_search: settingsStatusPhrase(language, "draftNotApplied"),
     draft_model_pick: settingsStatusPhrase(language, "draftNotApplied"),
     draft_model_policy: settingsStatusPhrase(language, "draftNotApplied"),
@@ -5779,8 +5682,8 @@ export function CoachSettingsView({
     ready: settingsStatusPhrase(language, "ready"),
   };
   const PROVIDER_SETUP_HEADLINE_COPY: Record<ProviderSetupReason, string> = {
-    workspace_root_missing: language === "zh-CN" ? "先选择工作区根目录" : "Choose a workspace root first",
-    workspace_untrusted: language === "zh-CN" ? "先信任此窗口" : "Trust this window first",
+    workspace_root_missing: settingsText(language, "先选择工作区根目录", "Choose a workspace root first"),
+    workspace_untrusted: settingsText(language, "先信任此窗口", "Trust this window first"),
     draft_model_search: settingsStatusPhrase(language, "connectionDraftNotSaved"),
     draft_model_pick: settingsStatusPhrase(language, "connectionDraftNotSaved"),
     draft_model_policy: settingsPhrase(language, "chooseModel"),
@@ -5809,35 +5712,23 @@ export function CoachSettingsView({
     workspace_root_missing: "",
     workspace_untrusted: "",
     draft_model_search: providerDraftReadyForTest
-      ? language === "zh-CN"
-        ? "当前草稿已经可以测试。保存后会成为当前连接。"
-        : "This draft can be tested now. Save when you want to apply it."
+      ? settingsText(language, "当前草稿已经可以测试。保存后会成为当前连接。", "This draft can be tested now. Save when you want to apply it.")
       : settingsStatusPhrase(language, "saveBeforeTesting"),
     draft_model_pick: providerDraftReadyForTest
-      ? language === "zh-CN"
-        ? "当前草稿已经可以测试。保存后会成为当前连接。"
-        : "This draft can be tested now. Save when you want to apply it."
+      ? settingsText(language, "当前草稿已经可以测试。保存后会成为当前连接。", "This draft can be tested now. Save when you want to apply it.")
       : settingsStatusPhrase(language, "saveBeforeTesting"),
     draft_model_policy: currentDraftModelPolicyMessage ?? modelDiscoveryBlockedReason,
     draft_needs_key: providerDraftReadyForTest
-      ? language === "zh-CN"
-        ? "当前草稿已经可以测试。保存后会成为当前连接。"
-        : "This draft can be tested now. Save when you want to apply it."
+      ? settingsText(language, "当前草稿已经可以测试。保存后会成为当前连接。", "This draft can be tested now. Save when you want to apply it.")
       : settingsStatusPhrase(language, "saveBeforeTesting"),
     draft_incomplete: providerDraftReadyForTest
-      ? language === "zh-CN"
-        ? "当前草稿已经可以测试。保存后会成为当前连接。"
-        : "This draft can be tested now. Save when you want to apply it."
+      ? settingsText(language, "当前草稿已经可以测试。保存后会成为当前连接。", "This draft can be tested now. Save when you want to apply it.")
       : settingsStatusPhrase(language, "saveBeforeTesting"),
     draft_await_test: providerDraftReadyForTest
-      ? language === "zh-CN"
-        ? "当前草稿已经可以测试。保存后会成为当前连接。"
-        : "This draft can be tested now. Save when you want to apply it."
+      ? settingsText(language, "当前草稿已经可以测试。保存后会成为当前连接。", "This draft can be tested now. Save when you want to apply it.")
       : settingsStatusPhrase(language, "saveBeforeTesting"),
     draft_ready: providerDraftReadyForTest
-      ? language === "zh-CN"
-        ? "当前草稿已经可以测试。保存后会成为当前连接。"
-        : "This draft can be tested now. Save when you want to apply it."
+      ? settingsText(language, "当前草稿已经可以测试。保存后会成为当前连接。", "This draft can be tested now. Save when you want to apply it.")
       : settingsStatusPhrase(language, "saveBeforeTesting"),
     saved_needs_key: providerRequirementNote ?? settingsStatusPhrase(language, "connectionSavedApiKeyMissing"),
     credentials_rejected: availabilityFailureHint ?? providerPrimaryAction,
@@ -5967,13 +5858,9 @@ export function CoachSettingsView({
   const displayAvailabilityHeadline = shouldOfferRecommendedProviderTemplate
     ? settingsPhrase(language, "chooseProviderTemplate")
     : shouldRoutePrimaryToSavedProfiles
-      ? language === "zh-CN"
-        ? "先应用一个已保存的 profile"
-        : "Apply a saved profile first"
+      ? settingsText(language, "先应用一个已保存的 profile", "Apply a saved profile first")
       : localizedResolvedAvailabilityHeadline;
-  const workspaceRootReminder = language === "zh-CN"
-    ? "先在上方选择工作区根目录，否则对话和训练无法使用。"
-    : "Choose a workspace root above first — Coach and Training cannot work without it.";
+  const workspaceRootReminder = settingsText(language, "先在上方选择工作区根目录，否则对话和训练无法使用。", "Choose a workspace root above first — Coach and Training cannot work without it.");
   const displayAvailabilityDetail = (
     workspaceRootMissing
       ? `${workspaceRootReminder} `
@@ -5981,9 +5868,7 @@ export function CoachSettingsView({
   ) + (shouldOfferRecommendedProviderTemplate
     ? settingsPhrase(language, "chooseProviderTemplateDetail")
     : shouldRoutePrimaryToSavedProfiles
-      ? language === "zh-CN"
-        ? "当前工作区还没有启用中的 provider，但下面已经有可复用的 profiles。"
-        : "This workspace has no active provider yet, but reusable profiles are already available below."
+      ? settingsText(language, "当前工作区还没有启用中的 provider，但下面已经有可复用的 profiles。", "This workspace has no active provider yet, but reusable profiles are already available below.")
       : localizedResolvedAvailabilityDetail);
   const showAvailabilityPrimaryAction =
     workspaceRootMissing || availabilityMode !== "ready" || Boolean(onTestProvider);
@@ -6008,9 +5893,7 @@ export function CoachSettingsView({
           : providerNeedsRetest
                 ? copy.test
                 : shouldRoutePrimaryToSavedProfiles
-                  ? language === "zh-CN"
-                    ? "\u6253\u5F00 profiles"
-                    : "Open profiles"
+                  ? settingsText(language, "\u6253\u5F00 profiles", "Open profiles")
                   : canRetestProvider
                     ? settingsPhrase(language, "testAgain")
                     : providerSaved && providerNeedsApiKey
@@ -6041,9 +5924,7 @@ export function CoachSettingsView({
             : canRetestProvider
               ? settingsPhrase(language, "testCurrentConnection")
               : shouldRoutePrimaryToSavedProfiles
-                ? language === "zh-CN"
-                  ? "\u76F4\u63A5\u6253\u5F00\u4E0B\u65B9\u7684 profiles\u3002"
-                  : "Open the saved profiles below."
+                ? settingsText(language, "\u76F4\u63A5\u6253\u5F00\u4E0B\u65B9\u7684 profiles\u3002", "Open the saved profiles below.")
                 : shouldOpenProviderDetails
                   ? copy.modelHint
                   : settingsPhrase(language, "saveToApply");
@@ -6212,7 +6093,7 @@ export function CoachSettingsView({
     compactSummaryValue(
       [
         availabilityMode === "ready" ? copy.currentWorkspace : undefined,
-        providerHasDraftChanges ? (language === "zh-CN" ? "草稿中" : "Draft") : undefined,
+        providerHasDraftChanges ? (settingsText(language, "草稿中", "Draft")) : undefined,
         appliedProviderFactValue !== copy.notConfigured ? appliedProviderFactValue : undefined,
         appliedModelFactValue !== copy.notConfigured ? appliedModelFactValue : undefined,
       ].filter(Boolean) as string[],
@@ -7154,24 +7035,14 @@ export function CoachSettingsView({
               : currentDraftModelPolicyMessage
                 ? currentDraftModelPolicyMessage
               : !providerDraftFieldsReady
-                ? language === "zh-CN"
-                  ? "先完成 provider、base URL 和 model，再测试连接。"
-                  : "Finish the provider, base URL, and model before testing the connection."
+                ? settingsText(language, "先完成 provider、base URL 和 model，再测试连接。", "Finish the provider, base URL, and model before testing the connection.")
                 : !providerDraftHasApiKey && !providerDraftCanReuseSavedApiKey
-                  ? language === "zh-CN"
-                    ? "先补上 API key，再测试这组连接。"
-                    : "Add an API key before testing this connection."
+                  ? settingsText(language, "先补上 API key，再测试这组连接。", "Add an API key before testing this connection.")
                   : providerSaved
-                    ? language === "zh-CN"
-                      ? "先保存当前草稿，再测试这组连接。"
-                      : "Save the current draft before testing this connection."
+                    ? settingsText(language, "先保存当前草稿，再测试这组连接。", "Save the current draft before testing this connection.")
                     : savedProviderProfilesAvailable
-                      ? language === "zh-CN"
-                        ? "先启用一个已保存的 profile，再测试当前连接。"
-                        : "Apply a saved profile before testing the current connection."
-                      : language === "zh-CN"
-                        ? "先完成 provider 配置，再测试连接。"
-                        : "Finish the provider setup before testing the connection."
+                      ? settingsText(language, "先启用一个已保存的 profile，再测试当前连接。", "Apply a saved profile before testing the current connection.")
+                      : settingsText(language, "先完成 provider 配置，再测试连接。", "Finish the provider setup before testing the connection.")
           }
         />
       ) : null}
@@ -7183,9 +7054,7 @@ export function CoachSettingsView({
         ? settingsStatusPhrase(language, "fillProviderFields")
         : !providerDraft.model.trim()
           ? providerDraftHasApiKey || providerDraftCanReuseSavedApiKey
-            ? language === "zh-CN"
-              ? "保存时将自动获取并选择可用模型。"
-              : "A model will be fetched and selected automatically when you save."
+            ? settingsText(language, "保存时将自动获取并选择可用模型。", "A model will be fetched and selected automatically when you save.")
             : modelPickerCopy.modelRequiredNote
           : !providerDraftHasApiKey && !providerDraftCanReuseSavedApiKey
             ? settingsStatusPhrase(language, "connectionSavedApiKeyMissing")
@@ -7243,7 +7112,7 @@ export function CoachSettingsView({
               >
                 {issue.id === "trust"
                   ? onTrustWindow
-                    ? language === "zh-CN" ? "信任此窗口" : "Trust this window"
+                    ? settingsText(language, "信任此窗口", "Trust this window")
                     : resolveWorkbenchCopy(language).workspaceRootControl
                   : issue.id === "key" || issue.id === "unsaved"
                     ? settingsPhrase(language, "editConfiguration")
@@ -7369,9 +7238,7 @@ export function CoachSettingsView({
                   <input
                     value={providerDraft.name}
                     placeholder={
-                      language === "zh-CN"
-                        ? "给这组连接起个名字(可不填)"
-                        : "Name this connection (optional)"
+                      settingsText(language, "给这组连接起个名字(可不填)", "Name this connection (optional)")
                     }
                     onChange={(event) => onProviderDraftChange({ name: event.target.value })}
                   />
@@ -7382,9 +7249,7 @@ export function CoachSettingsView({
                   <input
                     value={providerDraft.baseUrl}
                     placeholder={
-                      language === "zh-CN"
-                        ? "例如 localhost:1234/v1 或 api.deepseek.com/v1"
-                        : "e.g. localhost:1234/v1 or api.deepseek.com/v1"
+                      settingsText(language, "例如 localhost:1234/v1 或 api.deepseek.com/v1", "e.g. localhost:1234/v1 or api.deepseek.com/v1")
                     }
                     onChange={(event) => {
                       const smartPaste = applyProviderSmartPaste(event.target.value, "baseUrl");
@@ -7430,13 +7295,11 @@ export function CoachSettingsView({
                   persistenceKey="settings-advanced"
                   title={
                     <span className="eyebrow">
-                      {language === "zh-CN" ? "⚙ 高级" : "⚙ Advanced"}
+                      {settingsText(language, "⚙ 高级", "⚙ Advanced")}
                     </span>
                   }
                   subtitle={
-                    language === "zh-CN"
-                      ? "端点测速 · 协议 · 连接详情"
-                      : "Speed test · Protocol · Connection details"
+                    settingsText(language, "端点测速 · 协议 · 连接详情", "Speed test · Protocol · Connection details")
                   }
                 >
                   <ProviderEndpointSpeedTest
@@ -7799,9 +7662,9 @@ export function CoachSettingsView({
                           ? `图片：${capabilityVerdict.imageInput ? "已通过 vision probe 和协议附件支持验证" : imageInputState.detail ?? imageInputState.reason ?? "尚未验证"}`
                           : `Images: ${capabilityVerdict.imageInput ? "vision probe and protocol attachment support verified" : imageInputState.detail ?? imageInputState.reason ?? "not verified yet"}`} · ${
                         workspaceAuthority?.authorityScope === "trainer_sandbox"
-                          ? language === "zh-CN" ? "Trainer 沙箱 artifact 写入" : "Trainer sandbox artifact writes"
-                          : language === "zh-CN" ? "用户源码工作区只读" : "User source workspace is read-only"
-                      } · ${workspaceAuthority?.resourceWriteEvidence?.reason ?? (language === "zh-CN" ? "等待真实写入证据" : "Awaiting verified write evidence")}`
+                          ? settingsText(language, "Trainer 沙箱 artifact 写入", "Trainer sandbox artifact writes")
+                          : settingsText(language, "用户源码工作区只读", "User source workspace is read-only")
+                      } · ${workspaceAuthority?.resourceWriteEvidence?.reason ?? (settingsText(language, "等待真实写入证据", "Awaiting verified write evidence"))}`
                           : undefined
                       }
                     />
@@ -7955,14 +7818,14 @@ export function CoachSettingsView({
                       fullWidth={false}
                       icon={<FolderIcon size={14} />}
                       label={copy.managedDataFolderChoose}
-                      detail={language === "zh-CN" ? "切换并重启后端" : "Switch and restart"}
+                      detail={settingsText(language, "切换并重启后端", "Switch and restart")}
                       onClick={onChooseManagedDataFolder}
                     />
                     <ActionButton
                       fullWidth={false}
                       icon={<RefreshIcon size={14} />}
                       label={copy.managedDataFolderReset}
-                      detail={language === "zh-CN" ? "回到推荐目录" : "Return to recommended"}
+                      detail={settingsText(language, "回到推荐目录", "Return to recommended")}
                       onClick={onResetManagedDataFolder}
                     />
                   </div>
@@ -8311,14 +8174,14 @@ export function CoachSettingsView({
                       fullWidth={false}
                       icon={<RefreshIcon size={14} />}
                       label={copy.refreshMemory}
-                      detail={language === "zh-CN" ? "重建摘要" : "Rebuild summary"}
+                      detail={settingsText(language, "重建摘要", "Rebuild summary")}
                       onClick={onRefreshMemory}
                     />
                     <ActionButton
                       fullWidth={false}
                       icon={<LightningIcon size={14} />}
                       label={copy.resetDefaults}
-                      detail={language === "zh-CN" ? "推荐值" : "Recommended"}
+                      detail={settingsText(language, "推荐值", "Recommended")}
                       onClick={onResetDefaults}
                     />
                   </div>
@@ -8357,9 +8220,7 @@ export function CoachSettingsView({
               {settingsGlobalCopy.settingsSectionSkills}
             </span>
             <span className="settings-section-head__summary">
-              {language === "zh-CN"
-                ? "Trainer 按你的问题自动选用；输入 $ 可手动触发。"
-                : "Trainer picks these automatically; type $ to trigger one manually."}
+              {settingsText(language, "Trainer 按你的问题自动选用；输入 $ 可手动触发。", "Trainer picks these automatically; type $ to trigger one manually.")}
             </span>
           </header>
           <div className="settings-sheet__minor-body settings-sheet__defaults-body">
@@ -8415,24 +8276,22 @@ export function CoachSettingsView({
           <div className="settings-sheet__minor-body settings-sheet__defaults-body">
             <div className="settings-subsection">
               <span className="eyebrow settings-subsection__title">
-                {language === "zh-CN" ? "内部标识" : "Internal identifiers"}
+                {settingsText(language, "内部标识", "Internal identifiers")}
               </span>
               <div className="settings-sheet__simple-list" role="list">
                 <SimpleInfoRow
-                  label={language === "zh-CN" ? "工作区 ID" : "Workspace ID"}
+                  label={settingsText(language, "工作区 ID", "Workspace ID")}
                   value={workspaceId || "—"}
                 />
                 {provider.profileId?.trim() ? (
                   <SimpleInfoRow
-                    label={language === "zh-CN" ? "配置 ID" : "Profile ID"}
+                    label={settingsText(language, "配置 ID", "Profile ID")}
                     value={provider.profileId.trim()}
                   />
                 ) : null}
               </div>
               <p className="settings-sheet__note settings-sheet__note--compact">
-                {language === "zh-CN"
-                  ? "这些标识用于问题排查；连接诊断在“连接”页。"
-                  : "Use these identifiers when reporting issues; connection diagnostics live under Connection."}
+                {settingsText(language, "这些标识用于问题排查；连接诊断在“连接”页。", "Use these identifiers when reporting issues; connection diagnostics live under Connection.")}
               </p>
             </div>
 

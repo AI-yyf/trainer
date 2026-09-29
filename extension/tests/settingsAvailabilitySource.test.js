@@ -241,7 +241,8 @@ test('settings offers the recommended template before manual setup for a blank p
     source,
     /const displayAvailabilityHeadline = workspaceRootMissing/,
   );
-  assert.match(source, /const workspaceRootReminder = language === "zh-CN"/);
+  // §十五: migrated zh/en ternaries resolve through the settingsText record.
+  assert.match(source, /const workspaceRootReminder = settingsText\(language,/);
   assert.match(
     source,
     /const displayAvailabilityDetail = \(\s*workspaceRootMissing\s*\? \`\$\{workspaceRootReminder\} \`\s*: ""\s*\) \+ \(shouldOfferRecommendedProviderTemplate\s*\? settingsPhrase\(language, "chooseProviderTemplateDetail"\)/,
