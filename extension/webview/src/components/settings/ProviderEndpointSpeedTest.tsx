@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { endpointLatencyTier } from "../../../../../shared/src/providerStatus";
 import type { ComposerLanguage } from "../../../../../shared/src/types";
 import type { ProviderEndpointSpeedTestResult } from "../../lib/types";
+import { SPEED_TEST_TEXT } from "./speedTestCopy";
 
 interface ProviderEndpointSpeedTestProps {
   language: ComposerLanguage;
@@ -29,27 +30,13 @@ function copy(
   language: ComposerLanguage,
   key: "label" | "detail" | "addPlaceholder" | "run" | "running" | "adoptFastest" | "selected" | "collapse",
 ): string {
-  const zh = {
-    label: "⚡ 端点测速",
-    detail: "对服务地址做一次轻量测速(不消耗模型额度)。点结果行直接采用该地址。",
-    addPlaceholder: "再添加一个端点地址(可选)",
-    run: "开始测速",
-    running: "测速中…",
-    adoptFastest: "采用最快端点",
-    selected: "当前",
-    collapse: "收起",
-  };
-  const en = {
-    label: "⚡ Endpoint speed test",
-    detail: "Lightweight latency test for service addresses (no model quota used). Click a row to adopt that address.",
-    addPlaceholder: "Add another endpoint to test (optional)",
-    run: "Run speed test",
-    running: "Testing…",
-    adoptFastest: "Use fastest",
-    selected: "current",
-    collapse: "Collapse",
-  };
-  return (language === "zh-CN" ? zh : en)[key];
+  // The zh source key doubles as the lookup; all 8 locales are covered.
+  const zhKeys = Object.keys(SPEED_TEST_TEXT);
+  const zhByIndex = ["⚡ 端点测速", "对服务地址做一次轻量测速(不消耗模型额度)。点结果行直接采用该地址。", "再添加一个端点地址(可选)", "开始测速", "测速中…", "采用最快端点", "当前", "收起"];
+  const keyByIndex = ["label", "detail", "addPlaceholder", "run", "running", "adoptFastest", "selected", "collapse"];
+  const idx = keyByIndex.indexOf(key);
+  if (idx < 0 || idx >= zhKeys.length) return key;
+  return SPEED_TEST_TEXT[zhKeys[idx]]?.[language] ?? zhByIndex[idx] ?? key;
 }
 
 export function ProviderEndpointSpeedTest({
