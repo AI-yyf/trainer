@@ -213,6 +213,32 @@ def resolved_reserve_tokens(extra: dict[str, Any] | None) -> int:
     return max(512, value)
 
 
+def resolved_keep_recent_tokens(extra: dict[str, Any] | None) -> int:
+    """§二十: keep_recent_tokens is per-model overridable via extra."""
+    raw = extra.get("keep_recent_tokens") if isinstance(extra, dict) else None
+    try:
+        value = int(raw) if raw is not None else KEEP_RECENT_TOKENS
+    except (TypeError, ValueError):
+        value = KEEP_RECENT_TOKENS
+    return max(1_024, value)
+
+
+def resolve_compaction_profile(
+    extra: dict[str, Any] | None,
+) -> tuple[int, int, int]:
+    """§十九 §二十: resolve (context_window, reserve, keep_recent) as a set.
+
+    A 1M-context model might set context_window_tokens=1_000_000,
+    reserve_tokens=160_000, keep_recent_tokens=32_000 in its provider
+    extra. Returns values clamped to safe minimums.
+    """
+    return (
+        resolved_context_window(extra),
+        resolved_reserve_tokens(extra),
+        resolved_keep_recent_tokens(extra),
+    )
+
+
 def should_compact(
     messages: list[dict[str, Any]],
     *,
