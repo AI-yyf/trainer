@@ -3108,6 +3108,10 @@ export async function specifyTaskCommand(
     if (gateFailure) {
       return gateFailure;
     }
+    const revisionConflict = planRevisionConflictResult(error);
+    if (revisionConflict) {
+      return revisionConflict;
+    }
     return { ok: false, message: userFacingErrorText(error) };
   }
 
@@ -3530,6 +3534,34 @@ export async function restartSessionCommand(
     ok: true,
     message: 'Trainer restarted the current coaching session.',
     data: summary,
+  };
+}
+
+
+/** §十九: plan_revision_conflict 409 → honest 8-language conflict message. */
+function planRevisionConflictResult(error: unknown): CommandExecutionResult | undefined {
+  if (!(error instanceof SidecarHttpError) || error.statusCode !== 409) {
+    return undefined;
+  }
+  const detail = `${error.metadata?.detail ?? ''} ${error.message ?? ''}`;
+  if (!detail.includes('plan_revision_conflict') && !detail.includes('expected_revision')) {
+    return undefined;
+  }
+  let currentRevision: number | undefined;
+  try {
+    const parsed = typeof error.metadata?.detail === 'string'
+      ? JSON.parse(error.metadata.detail)
+      : error.metadata?.detail;
+    if (parsed && typeof parsed === 'object' && 'current_revision' in parsed) {
+      currentRevision = Number((parsed as Record<string, unknown>).current_revision) || undefined;
+    }
+  } catch {
+    // best-effort detail parse
+  }
+  return {
+    ok: false,
+    message: `[[trainer-plan-revision-conflict${currentRevision !== undefined ? `:${currentRevision}` : ''}]]`,
+    data: { plan_revision_conflict: true, current_revision: currentRevision },
   };
 }
 

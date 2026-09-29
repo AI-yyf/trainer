@@ -2,7 +2,8 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as fsSync from 'node:fs';
 import * as path from 'node:path';
-import type * as vscode from 'vscode';
+import { normalizeFsPath } from './workspaceRoots';
+import * as vscode from 'vscode';
 
 export const TRAINER_WORKSPACE_ROOT_STORAGE_KEY = 'trainer.workspace.root.v1';
 export const TRAINER_WORKSPACE_PROJECTS_STORAGE_KEY = 'trainer.workspace.projects.v1';
@@ -251,7 +252,7 @@ function createDefaultWorkspaceFsPort(): WorkspaceFsPort {
         return [];
       }
       try {
-        return await vscode.workspace.fs.readDirectory(uri);
+        return (await vscode.workspace.fs.readDirectory(uri)).map(([name]) => name);
       } catch (error) {
         if (isNotFoundError(error)) {
           return [];
