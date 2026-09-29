@@ -64,6 +64,16 @@ SOURCE_PAIRS = (
         / "coaching_adaptation_mixin.py",
     ),
     (
+        SERVER_ROOT / "app" / "memory" / "training_handoff_return_mixin.py",
+        REPOSITORY_ROOT
+        / "extension"
+        / "bundled"
+        / "server"
+        / "app"
+        / "memory"
+        / "training_handoff_return_mixin.py",
+    ),
+    (
         SERVER_ROOT / "app" / "memory" / "training_reliability_mixin.py",
         REPOSITORY_ROOT
         / "extension"
