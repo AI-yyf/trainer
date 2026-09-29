@@ -191,6 +191,7 @@ import type {
   TrainingReviewItem,
   TrainingSummaryCard,
 } from "../components/training/TrainingWorkbenchView";
+import { CoachNavIcon, LearningNavIcon, ResourcesNavIcon, TrainingNavIcon } from "../components/icons/navigation/coreNav";
 import {
   CheckMarkIcon,
   BrainIcon,
@@ -199,10 +200,6 @@ import {
   FolderIcon,
   HistoryIcon,
   LinkIcon,
-  NavCoachIcon,
-  NavPlanIcon,
-  NavResourcesIcon,
-  NavTrainingIcon,
   NavProgressIcon,
   RefreshIcon,
   ResourcesIcon,
@@ -1533,13 +1530,15 @@ function resolveHeaderSwitcherDensityForTabs(
   return "icon";
 }
 
+// §四十七: nav icons use 20px optical canvas. Active state Selective Fill
+// is driven by the is-active class on the parent header-switcher__item.
 const SIDEBAR_VIEW_ICONS: Record<ActiveWorkbenchView, ReactNode> = {
-  coach: <NavCoachIcon size={15} />,
-  plan: <NavPlanIcon size={15} />,
-  resources: <NavResourcesIcon size={15} />,
-  training: <NavTrainingIcon size={15} />,
-  progress: <NavProgressIcon size={15} />,
-  settings: <SettingsIcon size={15} />,
+  coach: <CoachNavIcon size={20} />,
+  plan: <LearningNavIcon size={20} />,
+  resources: <ResourcesNavIcon size={20} />,
+  training: <TrainingNavIcon size={20} />,
+  progress: <NavProgressIcon size={20} />,
+  settings: <SettingsIcon size={18} />,
 };
 
 function skillSectionTargetView(section: TrainerSkillSection): ActiveWorkbenchView {

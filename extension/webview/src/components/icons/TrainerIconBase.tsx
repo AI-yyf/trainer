@@ -8,7 +8,7 @@ import type { ReactNode, SVGProps } from "react";
  * Sizes are optical (nav 20, header 18, inline 16, status 12), not uniform.
  */
 export interface TrainerIconProps extends Omit<SVGProps<SVGSVGElement>, "children"> {
-  children: ReactNode;
+  children?: ReactNode;
   /** Optical size — callers use nav=20, header=18, inline=16, status=12. */
   size?: number;
   title?: string;
