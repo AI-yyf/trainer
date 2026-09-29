@@ -3551,23 +3551,13 @@ function thinkingVerificationCopy(language: ComposerLanguage): {
   verifiedDetail: string;
   disabledDetail: string;
 } {
-  if (language === "zh-CN") {
     return {
-      label: "思考",
-      verified: "已验证",
-      notVerified: "未验证",
-      needsVerification: "先测试连接。MiniMax 只用 extra_body.thinking，未验证前不会发送 enabled。",
-      verifiedDetail: "最近一次测试观察到了原生思考字段。",
-      disabledDetail: "当前请求会发送 thinking.type=disabled，避免短回复被思考占满。",
-    };
-  }
-  return {
-    label: "Thinking",
-    verified: "Verified",
-    notVerified: "Not verified",
-    needsVerification: "Test this connection first. MiniMax uses extra_body.thinking; enabled is not sent without live evidence.",
-    verifiedDetail: "The last test observed the native thinking field.",
-    disabledDetail: "Requests currently send thinking.type=disabled so short replies are not consumed by hidden thought.",
+    label: settingsText(language, "思考", "Thinking"),
+    verified: settingsText(language, "已验证", "Verified"),
+    notVerified: settingsText(language, "未验证", "Not verified"),
+    needsVerification: settingsText(language, "先测试连接。MiniMax 只用 extra_body.thinking，未验证前不会发送 enabled。", "Test this connection first. MiniMax uses extra_body.thinking; enabled is not sent without live evidence."),
+    verifiedDetail: settingsText(language, "最近一次测试观察到了原生思考字段。", "The last test observed the native thinking field."),
+    disabledDetail: settingsText(language, "当前请求会发送 thinking.type=disabled，避免短回复被思考占满。", "Requests currently send thinking.type=disabled so short replies are not consumed by hidden thought."),
   };
 }
 
@@ -3617,25 +3607,14 @@ function visionVerificationCopy(language: ComposerLanguage): {
   verifiedDetail: string;
   unsupportedDetail: string;
 } {
-  if (language === "zh-CN") {
     return {
-      label: "视觉",
-      verified: "已验证",
-      notVerified: "未验证",
-      notSupported: "不支持",
-      needsVerification: "先测试连接。声明或默认能力不会让视觉显示为就绪。",
-      verifiedDetail: "最近一次测试观察到了可用的视觉输入。",
-      unsupportedDetail: "最近一次测试没有观察到可用的视觉输入。",
-    };
-  }
-  return {
-    label: "Vision",
-    verified: "Verified",
-    notVerified: "Not verified",
-    notSupported: "Not supported",
-    needsVerification: "Test this connection first. Declared or default capabilities do not make vision ready.",
-    verifiedDetail: "The latest test observed usable vision input.",
-    unsupportedDetail: "The latest test did not observe usable vision input.",
+    label: settingsText(language, "视觉", "Vision"),
+    verified: settingsText(language, "已验证", "Verified"),
+    notVerified: settingsText(language, "未验证", "Not verified"),
+    notSupported: settingsText(language, "不支持", "Not supported"),
+    needsVerification: settingsText(language, "先测试连接。声明或默认能力不会让视觉显示为就绪。", "Test this connection first. Declared or default capabilities do not make vision ready."),
+    verifiedDetail: settingsText(language, "最近一次测试观察到了可用的视觉输入。", "The latest test observed usable vision input."),
+    unsupportedDetail: settingsText(language, "最近一次测试没有观察到可用的视觉输入。", "The latest test did not observe usable vision input."),
   };
 }
 
@@ -3691,32 +3670,17 @@ function protocolChoiceLabel(protocol: ProviderProtocol | undefined, language: C
   if (!protocol) {
     return settingsText(language, "未选择协议", "Protocol unverified");
   }
-  if (language === "zh-CN") {
-    switch (protocol) {
-      case "openai_responses":
-        return "OpenAI 响应";
-      case "openai_chat_completions":
-        return "OpenAI 聊天";
-      case "anthropic_messages":
-        return "Anthropic";
-      case "openai_chat_completions_compatible":
-        return "OpenAI 兼容";
-      case "gemini_generate_content":
-        return "Gemini";
-    }
-  }
-
   switch (protocol) {
     case "openai_responses":
-      return "OpenAI Responses";
+      return settingsText(language, "OpenAI 响应", "OpenAI Responses");
     case "openai_chat_completions":
-      return "OpenAI Chat";
+      return settingsText(language, "OpenAI 聊天", "OpenAI Chat");
     case "anthropic_messages":
-      return "Anthropic";
+      return settingsText(language, "Anthropic", "Anthropic");
     case "openai_chat_completions_compatible":
-      return "OpenAI Compat";
+      return settingsText(language, "OpenAI 兼容", "OpenAI Compat");
     case "gemini_generate_content":
-      return "Gemini";
+      return settingsText(language, "Gemini", "Gemini");
   }
 
   return providerProtocolCompletionLabel(protocol);
@@ -4297,30 +4261,16 @@ export function CoachSettingsView({
       : memoryScope === "session"
         ? copy.memoryScopeRuntimeSession
         : copy.memoryScopeRuntimeProject;
-  const reviewCadenceItems =
-    language === "zh-CN"
-      ? [
-          { label: "\u8f7b", value: "light" as const },
-          { label: "\u6807\u51c6", value: "steady" as const },
-          { label: "\u79ef\u6781", value: "active" as const },
-        ]
-      : [
-          { label: "Light", value: "light" as const },
-          { label: "Standard", value: "steady" as const },
-          { label: "Active", value: "active" as const },
-        ];
-  const reviewReminderItems =
-    language === "zh-CN"
-      ? [
-          { label: "\u5230\u671f\u65f6", value: "due" as const },
-          { label: "\u63d0\u524d", value: "ahead" as const },
-          { label: "\u5408\u5e76", value: "digest" as const },
-        ]
-      : [
-          { label: "Due", value: "due" as const },
-          { label: "Ahead", value: "ahead" as const },
-          { label: "Digest", value: "digest" as const },
-        ];
+  const reviewCadenceItems = [
+    { label: settingsText(language, "轻", "Light"), value: "light" as const },
+    { label: settingsText(language, "标准", "Standard"), value: "steady" as const },
+    { label: settingsText(language, "积极", "Active"), value: "active" as const },
+  ];
+  const reviewReminderItems = [
+    { label: settingsText(language, "到期时", "Due"), value: "due" as const },
+    { label: settingsText(language, "提前", "Ahead"), value: "ahead" as const },
+    { label: settingsText(language, "合并", "Digest"), value: "digest" as const },
+  ];
 
   const updateWorkspaceMemoryToggles = (patch: Partial<WorkspaceMemoryToggles>) => {
     onCoachDefaultsChange?.({
@@ -5360,20 +5310,14 @@ export function CoachSettingsView({
       ? copy.intro
       : settingsSupportPhrase(language, "commonIntro");
   const providerPrimaryAction = providerCoachReady
-    ? (settingsText(language, "已可发送。", "Ready to send."))
-    : language === "zh-CN"
-      ? providerNeedsApiKey
-        ? "缺少 API key。"
-        : providerSaved
-          ? "连接已保存，等待测试通过。"
-          : "填写 provider、protocol、模型和 API key。"
-      : providerNeedsApiKey
-        ? "Missing API key."
-        : providerSaved
-          ? "Connection saved; test still needs to pass."
-          : savedProviderProfilesAvailable
-            ? "Apply a saved profile first."
-            : "Fill provider, protocol, base URL, model, and API key.";
+    ? settingsText(language, "已可发送。", "Ready to send.")
+    : providerNeedsApiKey
+      ? settingsText(language, "缺少 API key。", "Missing API key.")
+      : providerSaved
+        ? settingsText(language, "连接已保存，等待测试通过。", "Connection saved; test still needs to pass.")
+        : savedProviderProfilesAvailable
+          ? settingsText(language, "先应用一个保存的连接。", "Apply a saved profile first.")
+          : settingsText(language, "填写 provider、protocol、模型和 API key。", "Fill provider, protocol, base URL, model, and API key.");
   const providerSetupChecks = [
     {
       id: "provider",
@@ -6292,10 +6236,7 @@ export function CoachSettingsView({
     36,
   );
   const contextBehaviorSummary = followCurrentFile ? copy.followCurrentFile : copy.currentFile;
-  const runtimeFlowSummary =
-    language === "zh-CN"
-      ? `${runtimeSummaryText}${coachStateSummaryText ? ` · ${coachStateSummaryText}` : ""}`
-      : `${runtimeSummaryText}${coachStateSummaryText ? ` · ${coachStateSummaryText}` : ""}`;
+  const runtimeFlowSummary = `${runtimeSummaryText}${coachStateSummaryText ? ` · ${coachStateSummaryText}` : ""}`;
   const rememberedRows = [
     learnerName
       ? { label: settingsPhrase(language, "name"), value: learnerName }
@@ -7557,11 +7498,7 @@ export function CoachSettingsView({
                           <StatusPill tone={modelCacheTone}>{modelCacheStatusLabel}</StatusPill>
                         </span>
                       }
-                      detail={
-                        language === "zh-CN"
-                          ? `${copy.modelCacheSource}: ${cacheSourceLabel}`
-                          : `${copy.modelCacheSource}: ${cacheSourceLabel}`
-                      }
+                      detail={`${copy.modelCacheSource}: ${cacheSourceLabel}`}
                     />
                     <SummaryCard
                       label={copy.lastTest}
@@ -7658,9 +7595,11 @@ export function CoachSettingsView({
                       detail={
                         capabilityChipsAllowed
                           ? `${capabilityVerdict.reason} · ${
-                        language === "zh-CN"
-                          ? `图片：${capabilityVerdict.imageInput ? "已通过 vision probe 和协议附件支持验证" : imageInputState.detail ?? imageInputState.reason ?? "尚未验证"}`
-                          : `Images: ${capabilityVerdict.imageInput ? "vision probe and protocol attachment support verified" : imageInputState.detail ?? imageInputState.reason ?? "not verified yet"}`} · ${
+                        settingsText(
+                          language,
+                          `图片：${capabilityVerdict.imageInput ? "已通过 vision probe 和协议附件支持验证" : imageInputState.detail ?? imageInputState.reason ?? "尚未验证"}`,
+                          `Images: ${capabilityVerdict.imageInput ? "vision probe and protocol attachment support verified" : imageInputState.detail ?? imageInputState.reason ?? "not verified yet"}`,
+                        )} · ${
                         workspaceAuthority?.authorityScope === "trainer_sandbox"
                           ? settingsText(language, "Trainer 沙箱 artifact 写入", "Trainer sandbox artifact writes")
                           : settingsText(language, "用户源码工作区只读", "User source workspace is read-only")
