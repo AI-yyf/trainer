@@ -54,6 +54,16 @@ SOURCE_PAIRS = (
         REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "api" / "_singleflight.py",
     ),
     (
+        SERVER_ROOT / "app" / "memory" / "coaching_adaptation_mixin.py",
+        REPOSITORY_ROOT
+        / "extension"
+        / "bundled"
+        / "server"
+        / "app"
+        / "memory"
+        / "coaching_adaptation_mixin.py",
+    ),
+    (
         SERVER_ROOT / "app" / "memory" / "training_reliability_mixin.py",
         REPOSITORY_ROOT
         / "extension"
