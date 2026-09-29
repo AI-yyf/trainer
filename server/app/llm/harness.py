@@ -32,6 +32,72 @@ DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000
 RESERVE_TOKENS = 16_384
 KEEP_RECENT_TOKENS = 20_000
 OVERFLOW_KEEP_RECENT_TOKENS = 8_000
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderUsage:
+    """§二十一: provider-reported token usage for a single LLM call.
+
+    Prefers real reported usage over estimation. All fields optional —
+    providers may report only input+output without reasoning/cache detail.
+    """
+
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    reasoning_tokens: int | None = None
+    cache_read_tokens: int | None = None
+    cache_write_tokens: int | None = None
+    total_tokens: int | None = None
+
+    @property
+    def estimated_input_tokens(self) -> int | None:
+        """Best input token count: prefer explicit, derive from total if needed."""
+        if self.input_tokens is not None:
+            return self.input_tokens
+        if self.total_tokens is not None and self.output_tokens is not None:
+            return self.total_tokens - self.output_tokens
+        return None
+
+
+def extract_provider_usage(response: object | None) -> ProviderUsage | None:
+    """Read provider-reported usage from an OpenAI-compatible response body.
+
+    Looks for ``response.usage`` (or a dict ``usage`` key) and reads the
+    standard OpenAI token-count fields. Returns None if no usage data found.
+    """
+    if response is None:
+        return None
+    usage_obj = getattr(response, "usage", None)
+    if usage_obj is None and isinstance(response, dict):
+        usage_obj = response.get("usage")
+    if usage_obj is None:
+        return None
+
+    def _int(key: str) -> int | None:
+        raw = getattr(usage_obj, key, None)
+        if raw is None and isinstance(usage_obj, dict):
+            raw = usage_obj.get(key)
+        if raw is None:
+            return None
+        try:
+            value = int(raw)
+            return value if value >= 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    input_tokens = _int("prompt_tokens") or _int("input_tokens")
+    output_tokens = _int("completion_tokens") or _int("output_tokens")
+    total = _int("total_tokens")
+    if input_tokens is None and output_tokens is None and total is None:
+        return None
+    return ProviderUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        reasoning_tokens=_int("reasoning_tokens"),
+        cache_read_tokens=_int("cache_read_input_tokens") or _int("cache_read_tokens"),
+        cache_write_tokens=_int("cache_creation_input_tokens") or _int("cache_write_tokens"),
+        total_tokens=total,
+    )
 COMPACTION_TOOL_SERIALIZE_CHARS = 2_000
 COMPACTION_RESEARCH_SOURCE_LIMIT = 48
 COMPACTION_RESEARCH_ASSESSMENT_LIMIT = 8
