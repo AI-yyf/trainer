@@ -271,6 +271,16 @@ import {
   buildTrainingFeedbackPrompt,
   type TrainingFeedbackPromptInput,
 } from "../lib/universalLearningPrompts";
+import {
+  appUiAltCopy,
+  appUiCopy,
+  COACH_CHECKPOINT_RECOVERY_COPY,
+  COACH_STARTER_PROMPTS,
+  PLAN_DRAFT_REPLACEMENT_COPY,
+  SCENARIO_TEXT,
+  TRAINING_CARD_STATUS_TEXT,
+  TRAINING_HANDOFF_STATUS_TEXT,
+} from "./appUiCopy";
 import { isBrowserPreviewFixtureMode } from "../lib/browserSidecar";
 import { useTrainingCommands, useTrainingAttemptLifecycle } from "./useTrainingCommands";
 import { SkillProjectionStrip } from "../components/training/SkillProjectionStrip";
@@ -611,9 +621,7 @@ function parseLivePlanTaskGateMarker(message: string): LivePlanTaskGateKind | un
 }
 
 function trainingPersistenceFailureMessage(language: ComposerLanguage): string {
-  return language === "zh-CN"
-    ? "训练记录没有保存，因此没有开始教练流式回复。输入已保留，可以重试。"
-    : "The training record was not saved, so the coach stream did not start. Your input is still here to retry.";
+  return appUiCopy(language, "训练记录没有保存，因此没有开始教练流式回复。输入已保留，可以重试。");
 }
 
 function providerRecoveryMessage(language: ComposerLanguage): string {
@@ -948,7 +956,7 @@ function ViewFallback({
   return (
     <section className="section-block section-block--placeholder">
       <p className="muted">
-        {language === "zh-CN" ? `正在加载${label}…` : `Loading ${label}…`}
+        {appUiCopy(language, "正在加载{v}…").replace("{v}", label)}
       </p>
     </section>
   );
@@ -1846,27 +1854,28 @@ function formatCoachDefaultsValue(
   },
   t: Copy,
 ): string {
-  const isChinese = config.language === "zh-CN";
+  // Endonym display: a language's own name stays native in every UI language.
   const languageLabel = config.language === "zh-CN" ? "中文" : "English";
+  const summaryLanguage = config.language;
   const memoryScopeMap = {
-    project: isChinese ? "当前项目" : "Project",
-    personal: isChinese ? "个人通用" : "Personal",
-    session: isChinese ? "仅本次会话" : "Session only",
+    project: appUiCopy(summaryLanguage, "当前项目"),
+    personal: appUiCopy(summaryLanguage, "个人通用"),
+    session: appUiCopy(summaryLanguage, "仅本次会话"),
   } as const;
   const workingSetMap = {
-    focused: isChinese ? "只跟当前任务" : "Current task only",
-    balanced: isChinese ? "兼顾邻近文件" : "Balanced",
-    broad: isChinese ? "允许更宽引用" : "Broader",
+    focused: appUiCopy(summaryLanguage, "只跟当前任务"),
+    balanced: appUiCopy(summaryLanguage, "兼顾邻近文件"),
+    broad: appUiCopy(summaryLanguage, "允许更宽引用"),
   } as const;
   const reviewCadenceMap = {
-    light: isChinese ? "轻量" : "Light",
-    steady: isChinese ? "标准" : "Standard",
-    active: isChinese ? "紧凑" : "Active",
+    light: appUiCopy(summaryLanguage, "轻量"),
+    steady: appUiCopy(summaryLanguage, "标准"),
+    active: appUiCopy(summaryLanguage, "紧凑"),
   } as const;
   const reviewReminderMap = {
-    due: isChinese ? "到期" : "Due",
-    ahead: isChinese ? "提前" : "Ahead",
-    digest: isChinese ? "合并" : "Digest",
+    due: appUiCopy(summaryLanguage, "到期"),
+    ahead: appUiCopy(summaryLanguage, "提前"),
+    digest: appUiCopy(summaryLanguage, "合并"),
   } as const;
 
   return [
@@ -2224,26 +2233,26 @@ function formatSparseCoachDefaultsSavedValue(
   teachingStyle: TeachingStyle,
 ): string | undefined {
   const defaults = workspace.coachDefaults;
-  const isChinese = (workspace.responseLanguage ?? "en-US") === "zh-CN";
+  const summaryLanguage = workspace.responseLanguage ?? "en-US";
   const memoryScopeMap = {
-    project: isChinese ? "当前项目" : "Project",
-    personal: isChinese ? "个人通用" : "Personal",
-    session: isChinese ? "仅本次会话" : "Session only",
+    project: appUiCopy(summaryLanguage, "当前项目"),
+    personal: appUiCopy(summaryLanguage, "个人通用"),
+    session: appUiCopy(summaryLanguage, "仅本次会话"),
   } as const;
   const workingSetMap = {
-    focused: isChinese ? "只跟当前任务" : "Current task only",
-    balanced: isChinese ? "兼顾邻近文件" : "Balanced",
-    broad: isChinese ? "允许更宽引用" : "Broader",
+    focused: appUiCopy(summaryLanguage, "只跟当前任务"),
+    balanced: appUiCopy(summaryLanguage, "兼顾邻近文件"),
+    broad: appUiCopy(summaryLanguage, "允许更宽引用"),
   } as const;
   const reviewCadenceMap = {
-    light: isChinese ? "轻量" : "Light",
-    steady: isChinese ? "标准" : "Standard",
-    active: isChinese ? "紧凑" : "Active",
+    light: appUiCopy(summaryLanguage, "轻量"),
+    steady: appUiCopy(summaryLanguage, "标准"),
+    active: appUiCopy(summaryLanguage, "紧凑"),
   } as const;
   const reviewReminderMap = {
-    due: isChinese ? "到期" : "Due",
-    ahead: isChinese ? "提前" : "Ahead",
-    digest: isChinese ? "合并" : "Digest",
+    due: appUiCopy(summaryLanguage, "到期"),
+    ahead: appUiCopy(summaryLanguage, "提前"),
+    digest: appUiCopy(summaryLanguage, "合并"),
   } as const;
   const values = [
     workspace.responseLanguage ? (workspace.responseLanguage === "zh-CN" ? "中文" : "English") : null,
@@ -2254,13 +2263,13 @@ function formatSparseCoachDefaultsSavedValue(
     defaults?.reviewCadence ? reviewCadenceMap[defaults.reviewCadence] : null,
     defaults?.reviewReminderMode ? reviewReminderMap[defaults.reviewReminderMode] : null,
     defaults?.workspaceMemoryToggles?.decisions !== undefined
-      ? `${isChinese ? "架构决策" : "Architecture decisions"} ${formatToggleValue(defaults.workspaceMemoryToggles.decisions, t)}`
+      ? `${appUiCopy(summaryLanguage, "架构决策")} ${formatToggleValue(defaults.workspaceMemoryToggles.decisions, t)}`
       : null,
     defaults?.workspaceMemoryToggles?.patterns !== undefined
-      ? `${isChinese ? "常用模式" : "Patterns"} ${formatToggleValue(defaults.workspaceMemoryToggles.patterns, t)}`
+      ? `${appUiCopy(summaryLanguage, "常用模式")} ${formatToggleValue(defaults.workspaceMemoryToggles.patterns, t)}`
       : null,
     defaults?.workspaceMemoryToggles?.resources !== undefined
-      ? `${isChinese ? "参考资料" : "Resources"} ${formatToggleValue(defaults.workspaceMemoryToggles.resources, t)}`
+      ? `${appUiCopy(summaryLanguage, "参考资料")} ${formatToggleValue(defaults.workspaceMemoryToggles.resources, t)}`
       : null,
   ];
   const result = values.filter(Boolean) as string[];
@@ -2283,20 +2292,14 @@ function providerModelRuntimeNote(provider: ProviderConfigView, language: Compos
   }
 
   if (modelCount > 0) {
-    return language === "zh-CN"
-      ? `当前连接已可用，可选 ${modelCount} 个模型。`
-      : `This connection is ready with ${modelCount} available models.`;
+    return appUiCopy(language, "当前连接已可用，可选 {v} 个模型。").replace("{v}", String(modelCount));
   }
 
   if (provider.modelListStatus === "loading") {
-    return language === "zh-CN"
-      ? "正在更新可选模型。"
-      : "Updating available models.";
+    return appUiCopy(language, "正在更新可选模型。");
   }
 
-  return language === "zh-CN"
-    ? "当前连接已保存。可以测试连接或更新模型列表。"
-    : "This connection is saved. You can test it or update the model list.";
+  return appUiCopy(language, "当前连接已保存。可以测试连接或更新模型列表。");
 }
 
 function providerModelMenuNote(provider: ProviderConfigView, language: ComposerLanguage): string {
@@ -2317,12 +2320,10 @@ function providerModelMenuNote(provider: ProviderConfigView, language: ComposerL
   }
 
   if (provider.availableModels.length > 0) {
-    return language === "zh-CN"
-      ? `${provider.availableModels.length} 个可选模型`
-      : `${provider.availableModels.length} available models`;
+    return appUiCopy(language, "{v} 个可选模型").replace("{v}", String(provider.availableModels.length));
   }
 
-  return language === "zh-CN" ? "连接已保存" : "Connection saved";
+  return appUiCopy(language, "连接已保存");
 }
 
 function providerHasVerifiedToolsProbe(
@@ -2788,13 +2789,13 @@ function reviewSurfaceModeLabel(
   language: ComposerLanguage,
 ): string | undefined {
   if (value === "ahead") {
-    return language === "zh-CN" ? "提前提醒" : "Ahead";
+    return appUiCopy(language, "提前提醒");
   }
   if (value === "digest") {
-    return language === "zh-CN" ? "合并回看" : "Digest";
+    return appUiCopy(language, "合并回看");
   }
   if (value === "due") {
-    return language === "zh-CN" ? "到期回看" : "Due";
+    return appUiCopy(language, "到期回看");
   }
   return undefined;
 }
@@ -2803,7 +2804,7 @@ function formatIntervalDays(days: number | undefined, language: ComposerLanguage
   if (typeof days !== "number" || Number.isNaN(days)) {
     return undefined;
   }
-  return language === "zh-CN" ? `${days} 天间隔` : `${days}-day interval`;
+  return appUiCopy(language, "{v} 天间隔").replace("{v}", String(days));
 }
 
 function formatMasteryScore(score: number | undefined, language: ComposerLanguage): string | undefined {
@@ -2811,7 +2812,7 @@ function formatMasteryScore(score: number | undefined, language: ComposerLanguag
     return undefined;
   }
   const percent = `${Math.round(score * 100)}%`;
-  return language === "zh-CN" ? `掌握度 ${percent}` : `Mastery ${percent}`;
+  return appUiCopy(language, "掌握度 {v}").replace("{v}", percent);
 }
 
 function toPlanReviewItem(
@@ -2831,7 +2832,7 @@ function toPlanReviewItem(
   language: ComposerLanguage,
 ): PlanReviewItem {
   const meta = [
-    item.dueAt ? `${language === "zh-CN" ? "下次回看" : "Next review"}: ${formatReviewDueLabel(item.dueAt, language)}` : null,
+    item.dueAt ? `${appUiCopy(language, "下次回看")}: ${formatReviewDueLabel(item.dueAt, language)}` : null,
     reviewSurfaceModeLabel(item.surfaceMode, language),
     formatIntervalDays(item.intervalDays, language),
     formatMasteryScore(item.masteryScore, language),
@@ -2919,9 +2920,7 @@ function localizeConversationMessage(
               message.author.trim().toLowerCase() === "coach")
           ? t.trainer
           : message.role === "system" && message.author.trim().toLowerCase() === "system"
-            ? language === "zh-CN"
-              ? "系统"
-              : "System"
+            ? appUiCopy(language, "系统")
             : message.author,
     attachments: message.attachments?.map((attachment) => ({
       label: localizeAttachmentLabel(attachment.label, t),
@@ -2936,54 +2935,22 @@ function learnerSignalLabel(
   language: ComposerLanguage,
 ): string {
   if (value === "blocked") {
-    return language === "zh-CN" ? "卡住" : "Blocked";
+    return appUiCopy(language, "卡住");
   }
   if (value === "uncertain") {
-    return language === "zh-CN" ? "不确定" : "Uncertain";
+    return appUiCopy(language, "不确定");
   }
   if (value === "curious") {
-    return language === "zh-CN" ? "好奇" : "Curious";
+    return appUiCopy(language, "好奇");
   }
-  return language === "zh-CN" ? "稳定" : "Steady";
+  return appUiCopy(language, "稳定");
 }
 
 function coachingScenarioLabel(
   value: NonNullable<ReturnType<typeof useWorkbenchState.getState>["data"]["coachingState"]>["scenario"] | undefined,
   language: ComposerLanguage,
 ): string {
-  const zh = {
-    general: "常规引导",
-    onboarding: "教练建联",
-    idea_implementation: "想法落地",
-    project_idea: "项目提炼",
-    project_adaptation: "项目适配",
-    project_sourcing: "项目来源",
-    principle: "原理讲解",
-    remote_workspace: "远程工作区",
-    debug_loop: "调试闭环",
-    function_guidance: "函数提示",
-    review: "实现评审",
-    plan: "计划推进",
-    task: "训练任务",
-    next_task: "下一步",
-  } as const;
-  const en = {
-    general: "General coaching",
-    onboarding: "Coach intake",
-    idea_implementation: "Idea implementation",
-    project_idea: "Project idea mining",
-    project_adaptation: "Project adaptation",
-    project_sourcing: "Project sourcing",
-    principle: "Principle explanation",
-    remote_workspace: "Remote workspace",
-    debug_loop: "Debug loop",
-    function_guidance: "Function guidance",
-    review: "Review",
-    plan: "Plan",
-    task: "Task",
-    next_task: "Next task",
-  } as const;
-  return (language === "zh-CN" ? zh : en)[value ?? "general"];
+  return SCENARIO_TEXT[value ?? "general"]?.[language] ?? SCENARIO_TEXT.general[language];
 }
 
 function normalizeTrainingStatus(value: string | undefined): string {
@@ -3007,33 +2974,7 @@ function trainingCardStatusLabel(value: string | undefined, language: ComposerLa
   if (!normalized) {
     return undefined;
   }
-  const zh: Record<string, string> = {
-    candidate: "候选",
-    active: "进行中",
-    needs_primer: "先学",
-    answered: "已作答",
-    implemented: "已完成",
-    completed: "已完成",
-    reviewed: "已复核",
-    fed_back: "已回流",
-    skipped: "已跳过",
-    archived: "已归档",
-    blocked: "已阻塞",
-  };
-  const en: Record<string, string> = {
-    candidate: "Candidate",
-    active: "Active",
-    needs_primer: "Study first",
-    answered: "Answered",
-    implemented: "Completed",
-    completed: "Completed",
-    reviewed: "Reviewed",
-    fed_back: "Returned",
-    skipped: "Skipped",
-    archived: "Archived",
-    blocked: "Blocked",
-  };
-  return (language === "zh-CN" ? zh : en)[normalized] ?? value;
+  return TRAINING_CARD_STATUS_TEXT[normalized]?.[language] ?? value;
 }
 
 function trainingHandoffStatusLabel(value: string | undefined, language: ComposerLanguage): string | undefined {
@@ -3041,27 +2982,7 @@ function trainingHandoffStatusLabel(value: string | undefined, language: Compose
   if (!normalized) {
     return undefined;
   }
-  const zh: Record<string, string> = {
-    verified: "已验证",
-    resolved: "已回流",
-    needs_revision: "需返修",
-    needs_primer: "先学",
-    executed: "已接受",
-    fed_back: "已回流",
-    skipped: "已跳过",
-    blocked: "已阻塞",
-  };
-  const en: Record<string, string> = {
-    verified: "Verified",
-    resolved: "Returned",
-    needs_revision: "Needs revision",
-    needs_primer: "Study first",
-    executed: "Accepted",
-    fed_back: "Returned",
-    skipped: "Skipped",
-    blocked: "Blocked",
-  };
-  return (language === "zh-CN" ? zh : en)[normalized] ?? value;
+  return TRAINING_HANDOFF_STATUS_TEXT[normalized]?.[language] ?? value;
 }
 
 function compactCoachLine(
@@ -3072,7 +2993,9 @@ function compactCoachLine(
   if (!value) {
     return undefined;
   }
-  return language === "zh-CN" ? `${label}：${value}` : `${label}: ${value}`;
+  return appUiCopy(language, "{label}：{value}")
+    .replace("{label}", () => label)
+    .replace("{value}", () => value);
 }
 
 function coachLaneLabel(
@@ -3082,39 +3005,39 @@ function coachLaneLabel(
   language: ComposerLanguage,
 ): string {
   if (scenario === "project_adaptation") {
-    return language === "zh-CN" ? "主线：项目适配" : "Lane: project adaptation";
+    return appUiCopy(language, "主线：项目适配");
   }
   if (scenario === "onboarding") {
-    return language === "zh-CN" ? "主线：建立训练关系" : "Lane: coach intake";
+    return appUiCopy(language, "主线：建立训练关系");
   }
   if (scenario === "project_sourcing") {
-    return language === "zh-CN" ? "主线：项目来源" : "Lane: project sourcing";
+    return appUiCopy(language, "主线：项目来源");
   }
   if (scenario === "remote_workspace") {
-    return language === "zh-CN" ? "主线：远程工作区" : "Lane: remote workspace";
+    return appUiCopy(language, "主线：远程工作区");
   }
   if (scenario === "debug_loop") {
-    return language === "zh-CN" ? "主线：调试闭环" : "Lane: debug loop";
+    return appUiCopy(language, "主线：调试闭环");
   }
   if (scenario === "function_guidance") {
-    return language === "zh-CN" ? "主线：函数提示" : "Lane: function guidance";
+    return appUiCopy(language, "主线：函数提示");
   }
   if (scenario === "idea_implementation") {
-    return language === "zh-CN" ? "主线：想法落地" : "Lane: idea implementation";
+    return appUiCopy(language, "主线：想法落地");
   }
   if (scenario === "project_idea") {
-    return language === "zh-CN" ? "主线：项目提炼" : "Lane: project idea mining";
+    return appUiCopy(language, "主线：项目提炼");
   }
   if (scenario === "principle") {
-    return language === "zh-CN" ? "主线：原理讲解" : "Lane: principle";
+    return appUiCopy(language, "主线：原理讲解");
   }
   if (scenario === "review") {
-    return language === "zh-CN" ? "主线：实现评审" : "Lane: review";
+    return appUiCopy(language, "主线：实现评审");
   }
   if (scenario === "plan") {
-    return language === "zh-CN" ? "主线：计划推进" : "Lane: plan";
+    return appUiCopy(language, "主线：计划推进");
   }
-  return language === "zh-CN" ? "主线：当前训练" : "Lane: active coaching";
+  return appUiCopy(language, "主线：当前训练");
 }
 
 function sendContextSummary(
@@ -3136,9 +3059,9 @@ function sendContextSummary(
   }
   if (data.resources.length > 0) {
     parts.push(
-      layout.composerLanguage === "zh-CN"
-        ? `${data.resources.length} 份资料`
-        : `${data.resources.length} resource${data.resources.length === 1 ? "" : "s"}`,
+      appUiCopy(layout.composerLanguage, "{n} 份资料")
+        .replace("{n}", String(data.resources.length))
+        .replace("{s}", data.resources.length === 1 ? "" : "s"),
     );
   }
 
@@ -3160,9 +3083,9 @@ function sendContextShortSummary(
       ? t.relatedFiles
       : undefined,
     data.resources.length > 0
-      ? layout.composerLanguage === "zh-CN"
-        ? `${data.resources.length} 份资料`
-        : `${data.resources.length} resource${data.resources.length === 1 ? "" : "s"}`
+      ? appUiCopy(layout.composerLanguage, "{n} 份资料")
+          .replace("{n}", String(data.resources.length))
+          .replace("{s}", data.resources.length === 1 ? "" : "s")
       : undefined,
   ].filter((value): value is string => Boolean(value));
 
@@ -3170,7 +3093,7 @@ function sendContextShortSummary(
     return "";
   }
   if (activeLabels.length >= 3) {
-    return layout.composerLanguage === "zh-CN" ? "当前代码线索" : "current code context";
+    return appUiCopy(layout.composerLanguage, "当前代码线索");
   }
   return activeLabels.join(" · ");
 }
@@ -3205,9 +3128,9 @@ function sendContextPillItems(
     value:
       layout.includeDiagnostics &&
       ((data.liveContext.diagnosticErrors ?? 0) > 0 || (data.liveContext.diagnosticWarnings ?? 0) > 0)
-        ? layout.composerLanguage === "zh-CN"
-          ? `${data.liveContext.diagnosticErrors ?? 0} 错误 · ${data.liveContext.diagnosticWarnings ?? 0} 警告`
-          : `${data.liveContext.diagnosticErrors ?? 0} errors · ${data.liveContext.diagnosticWarnings ?? 0} warnings`
+        ? appUiCopy(layout.composerLanguage, "{e} 错误 · {w} 警告")
+            .replace("{e}", String(data.liveContext.diagnosticErrors ?? 0))
+            .replace("{w}", String(data.liveContext.diagnosticWarnings ?? 0))
         : undefined,
     active:
       layout.includeDiagnostics &&
@@ -3219,9 +3142,7 @@ function sendContextPillItems(
     label: t.relatedFiles,
     value:
       layout.includeRelatedFiles && data.liveContext.relatedFiles.length > 0
-        ? layout.composerLanguage === "zh-CN"
-          ? `${data.liveContext.relatedFiles.length} 个相关文件`
-          : `${data.liveContext.relatedFiles.length} related files`
+        ? appUiCopy(layout.composerLanguage, "{v} 个相关文件").replace("{v}", String(data.liveContext.relatedFiles.length))
         : undefined,
     active: layout.includeRelatedFiles && data.liveContext.relatedFiles.length > 0,
   });
@@ -3231,9 +3152,7 @@ function sendContextPillItems(
       id: "resources",
       label: t.attachments,
       value:
-        layout.composerLanguage === "zh-CN"
-          ? `${data.resources.length} 份资料`
-          : `${data.resources.length} resources`,
+        appUiCopy(layout.composerLanguage, "{v} 份资料").replace("{v}", String(data.resources.length)),
       active: true,
     });
   }
@@ -3304,9 +3223,9 @@ function sendStatuslineText(
   const answerMode = answerModeLabel(layout.composerAnswerMode, t);
   const resourceSummary =
     data.resources.length > 0
-      ? layout.composerLanguage === "zh-CN"
-        ? `附带 ${data.resources.length} 份资料`
-        : `${data.resources.length} resource${data.resources.length === 1 ? "" : "s"} attached`
+      ? appUiCopy(layout.composerLanguage, "附带 {n} 份资料")
+          .replace("{n}", String(data.resources.length))
+          .replace("{s}", data.resources.length === 1 ? "" : "s")
       : "";
 
   if (layout.composerLanguage === "zh-CN") {
@@ -3333,9 +3252,9 @@ function composerHintText(
   const contextSummary = sendContextShortSummary(data, layout, t, includeCurrentFile);
   const resourceSummary =
     data.resources.length > 0
-      ? layout.composerLanguage === "zh-CN"
-        ? `${data.resources.length} 份资料`
-        : `${data.resources.length} imported resource${data.resources.length === 1 ? "" : "s"}`
+      ? appUiCopy(layout.composerLanguage, "{count} 份资料")
+          .replace("{count}", String(data.resources.length))
+          .replace("{s}", data.resources.length === 1 ? "" : "s")
       : "";
   return [contextSummary, resourceSummary].filter(Boolean).join(" · ");
 }
@@ -3350,15 +3269,11 @@ function composerShortcutHint({
   hasContextMenu: boolean;
 }): string {
   if (hasCommandDeck) {
-    return language === "zh-CN"
-      ? "↑↓ 选择 · Enter 执行 · Tab 补全 · Esc 关闭"
-      : "Up/Down choose · Enter run · Tab complete · Esc close";
+    return appUiCopy(language, "↑↓ 选择 · Enter 执行 · Tab 补全 · Esc 关闭");
   }
 
   if (hasContextMenu) {
-    return language === "zh-CN"
-      ? "Enter 发送 · Shift+Enter 换行 · Esc 收起"
-      : "Enter send · Shift+Enter newline · Esc close";
+    return appUiCopy(language, "Enter 发送 · Shift+Enter 换行 · Esc 收起");
   }
 
   return "";
@@ -3380,49 +3295,34 @@ function defaultPromptText(
   language: ComposerLanguage,
   focusArea?: string,
 ): string {
-  const zhFocus = focusArea ? `，重点围绕「${focusArea}」。` : "";
-  const enFocus = focusArea ? ` Focus on "${focusArea}".` : "";
+  const focus = focusArea
+    ? appUiCopy(language, "，重点围绕「{a}」。").replace("{a}", () => focusArea)
+    : "";
   if (intent === "next_task") {
-    return language === "zh-CN"
-      ? `请给我下一道训练题${zhFocus}`
-      : `Give me the next training task.${enFocus}`;
+    return appUiCopy(language, "请给我下一道训练题{focus}").replace("{focus}", () => focus);
   }
   if (intent === "review") {
-    return language === "zh-CN"
-      ? `请评审我当前文件的实现${zhFocus}`
-      : `Review my current file.${enFocus}`;
+    return appUiCopy(language, "请评审我当前文件的实现{focus}").replace("{focus}", () => focus);
   }
   if (intent === "plan") {
-    return language === "zh-CN"
-      ? `请刷新并重排我的当前训练计划${zhFocus}`
-      : `Refresh and restructure my current training plan.${enFocus}`;
+    return appUiCopy(language, "请刷新并重排我的当前训练计划{focus}").replace("{focus}", () => focus);
   }
   if (intent === "task") {
-    return language === "zh-CN"
-      ? `请把我当前目标转成一个可执行的小任务${zhFocus}`
-      : `Turn my current goal into a concrete, executable task.${enFocus}`;
+    return appUiCopy(language, "请把我当前目标转成一个可执行的小任务{focus}").replace("{focus}", () => focus);
   }
-  return language === "zh-CN"
-    ? `请继续引导我实现这个想法${zhFocus}`
-    : `Keep guiding me through this idea.${enFocus}`;
+  return appUiCopy(language, "请继续引导我实现这个想法{focus}").replace("{focus}", () => focus);
 }
 
 function planComposerDraftReplacementCopy(language: ComposerLanguage, stageTitle: string) {
-  const targetTitle = stageTitle.trim() || (language === "zh-CN" ? "\u5f53\u524d\u9636\u6bb5" : "this stage");
+  const targetTitle = stageTitle.trim() || (appUiCopy(language, "\u5f53\u524d\u9636\u6bb5"));
 
-  return language === "zh-CN"
-    ? {
-        title: "\u4f60\u5df2\u7ecf\u5199\u4e86\u5185\u5bb9\uff0c\u8fd8\u6ca1\u6709\u53d1\u9001\u3002",
-        detail: `\u8981\u628a\u5b83\u6362\u6210\u56f4\u7ed5\u300c${targetTitle}\u300d\u7684\u5f15\u5bfc\u95ee\u9898\u5417\uff1f`,
-        confirmLabel: "\u66ff\u6362\u5185\u5bb9",
-        cancelLabel: "\u4fdd\u7559\u539f\u5185\u5bb9",
-      }
-    : {
-        title: "You have an unsent draft.",
-        detail: `Replace it with a prompt for "${targetTitle}"?`,
-        confirmLabel: "Replace draft",
-        cancelLabel: "Keep draft",
-      };
+  const draftCopy = PLAN_DRAFT_REPLACEMENT_COPY[language] ?? PLAN_DRAFT_REPLACEMENT_COPY["en-US"];
+  return {
+    title: draftCopy.title,
+    detail: draftCopy.detail.replace("{t}", () => targetTitle),
+    confirmLabel: draftCopy.confirmLabel,
+    cancelLabel: draftCopy.cancelLabel,
+  };
 }
 
 function buildLocalCommandSuggestions({
@@ -4263,7 +4163,6 @@ export function App() {
   );
   const handleCoachMessageAction = useCallback(
     async (action: CoachMessageAction, message: ConversationMessage) => {
-      const zh = layout.composerLanguage === "zh-CN";
       if (action === "retry") {
         // Regenerate: re-send the user prompt that produced this reply.
         const conversation = useWorkbenchState.getState().data.conversation;
@@ -4305,12 +4204,12 @@ export function App() {
           await navigator.clipboard.writeText(replyDoc.markdown);
           setOperationMessage({
             tone: "success",
-            message: zh ? "这条教练回复已复制到剪贴板。" : "Coach reply copied to clipboard.",
+            message: appUiCopy(layout.composerLanguage, "这条教练回复已复制到剪贴板。"),
           });
         } catch {
           setOperationMessage({
             tone: "error",
-            message: zh ? "复制失败,请重试。" : "Copy failed. Try again.",
+            message: appUiCopy(layout.composerLanguage, "复制失败,请重试。"),
           });
         }
         return;
@@ -4346,12 +4245,8 @@ export function App() {
               tone: result.failedUploadCount > 0 ? "error" : "success",
               message:
                 result.failedUploadCount > 0
-                  ? zh
-                    ? "这条回复没有存进资料库,请重试。"
-                    : "The reply was not saved to Resources. Try again."
-                  : zh
-                    ? "已把这条回复存入资料库。"
-                    : "The reply was saved to the resource library.",
+                  ? appUiCopy(layout.composerLanguage, "这条回复没有存进资料库,请重试。")
+                  : appUiCopy(layout.composerLanguage, "已把这条回复存入资料库。"),
             });
           } else {
             await requestCoachReplyUpload(message);
@@ -4496,7 +4391,6 @@ export function App() {
   const submitUserFeedback = useCallback(
     (kind: UserFeedbackKind) => {
       if (userFeedbackState.busy || userFeedbackState.submittedKind || isBrowserPreview) return;
-      const isZh = layout.composerLanguage === "zh-CN";
       userFeedbackPendingKindRef.current = kind;
       setUserFeedbackState({ busy: true });
       postMessage({
@@ -4505,7 +4399,7 @@ export function App() {
           commandId: trainerCommands.recordUserFeedback,
           payload: {
             kind,
-            message: isZh ? "这一步不合适。" : "This step does not fit.",
+            message: appUiCopy(layout.composerLanguage, "这一步不合适。"),
             scenario: activeView === "training" ? "training" : "coach",
             focusArea: data.memory.workspace?.latestLearningFocusArea,
             trainingCardId: undefined,
@@ -4514,7 +4408,7 @@ export function App() {
         },
       });
       window.setTimeout(() => {
-        setUserFeedbackState((current) => current.busy ? { busy: false, error: isZh ? "反馈未收到确认，可重试。" : "No acknowledgement received; try again." } : current);
+        setUserFeedbackState((current) => current.busy ? { busy: false, error: appUiCopy(layout.composerLanguage, "反馈未收到确认，可重试。") } : current);
       }, 12000);
     },
     [activeView, data.memory.workspace, data.plan?.id, isBrowserPreview, layout.composerLanguage, postMessage, userFeedbackState.busy, userFeedbackState.submittedKind],
@@ -4786,9 +4680,7 @@ export function App() {
       : {
         allowed: false,
         reason:
-          layout.composerLanguage === "zh-CN"
-            ? "资料写入权限还没确认。先在设置里选工作区根目录。"
-            : "Resource write access has not been confirmed. Choose a workspace root in Settings first.",
+          appUiCopy(layout.composerLanguage, "资料写入权限还没确认。先在设置里选工作区根目录。"),
       };
   const workspaceSessionBlocked =
     trainerWorkspaceAdmission?.status === "root-missing" ||
@@ -5140,7 +5032,7 @@ export function App() {
     data.conversation.length === 0 && !hasDurableCoachContext;
   const baselineConnectedMessage = useMemo(
     () =>
-      layout.composerLanguage === "zh-CN" ? "已连接到扩展宿主。" : "Connected to extension host.",
+      appUiCopy(layout.composerLanguage, "已连接到扩展宿主。"),
     [layout.composerLanguage],
   );
   const providerSavePayload = useMemo(() => {
@@ -5544,23 +5436,27 @@ export function App() {
         ? "warn"
         : "ok";
 
-  const composerContextUsageLabel =
-    layout.composerLanguage === "zh-CN"
-      ? composerContextUsage.limit
-        ? `上下文用量约 ${formatTokenCount(composerContextUsage.used)} / ${formatTokenCount(composerContextUsage.limit)}`
-        : `上下文用量约 ${formatTokenCount(composerContextUsage.used)}（未知上限）`
-      : composerContextUsage.limit
-        ? `Context ~${formatTokenCount(composerContextUsage.used)} / ${formatTokenCount(composerContextUsage.limit)}`
-        : `Context ~${formatTokenCount(composerContextUsage.used)} (limit unknown)`;
+  const composerContextUsageLabel = composerContextUsage.limit
+    ? appUiCopy(layout.composerLanguage, "上下文用量约 {u} / {l}")
+        .replace("{u}", formatTokenCount(composerContextUsage.used))
+        .replace("{l}", formatTokenCount(composerContextUsage.limit))
+    : appUiCopy(layout.composerLanguage, "上下文用量约 {u}（未知上限）").replace(
+        "{u}",
+        formatTokenCount(composerContextUsage.used),
+      );
 
-  const composerContextUsageDetail =
-    layout.composerLanguage === "zh-CN"
-      ? composerContextUsage.limit
-        ? `本会话已用约 ${formatTokenCount(composerContextUsage.used)} 个上下文，上限约 ${formatTokenCount(composerContextUsage.limit)}（约 ${Math.round((composerContextUsage.ratio ?? 0) * 100)}%）。这是按消息长度估算的近似值。`
-        : `本会话已用约 ${formatTokenCount(composerContextUsage.used)} 个上下文（按消息长度估算）。该连接没有可靠的上下文上限，所以只显示估算值。`
-      : composerContextUsage.limit
-        ? `This conversation is using ~${formatTokenCount(composerContextUsage.used)} of ~${formatTokenCount(composerContextUsage.limit)} context tokens (~${Math.round((composerContextUsage.ratio ?? 0) * 100)}%). Estimate based on message length.`
-        : `This conversation is using ~${formatTokenCount(composerContextUsage.used)} context tokens (estimate). This connection has no reliable context limit, so only the estimate is shown.`;
+  const composerContextUsageDetail = composerContextUsage.limit
+    ? appUiCopy(
+        layout.composerLanguage,
+        "本会话已用约 {u} 个上下文，上限约 {l}（约 {p}%）。这是按消息长度估算的近似值。",
+      )
+        .replace("{u}", formatTokenCount(composerContextUsage.used))
+        .replace("{l}", formatTokenCount(composerContextUsage.limit))
+        .replace("{p}", String(Math.round((composerContextUsage.ratio ?? 0) * 100)))
+    : appUiCopy(
+        layout.composerLanguage,
+        "本会话已用约 {u} 个上下文（按消息长度估算）。该连接没有可靠的上下文上限，所以只显示估算值。",
+      ).replace("{u}", formatTokenCount(composerContextUsage.used));
 
   const composerContextRingNode = (
     <svg
@@ -5598,7 +5494,7 @@ export function App() {
   );
 
   const composerHistoryLabel =
-    layout.composerLanguage === "zh-CN" ? "会话历史" : "History";
+    appUiCopy(layout.composerLanguage, "会话历史");
 
   useEffect(() => {
     const pending = pendingLivePlanTaskMintRef.current;
@@ -6045,13 +5941,9 @@ export function App() {
 
   const streamingPlaceholderBody = useMemo(() => {
     if (streaming.agentActivity.length > 0) {
-      return layout.composerLanguage === "zh-CN"
-        ? "正在整理当前步骤，然后给出第一段可见回复。"
-        : "Working through the current step, then writing the first visible reply.";
+      return appUiCopy(layout.composerLanguage, "正在整理当前步骤，然后给出第一段可见回复。");
     }
-    return layout.composerLanguage === "zh-CN"
-      ? "正在梳理你的问题，然后给出第一段可见回复。"
-      : "Thinking through your prompt, then writing the first visible reply.";
+    return appUiCopy(layout.composerLanguage, "正在梳理你的问题，然后给出第一段可见回复。");
   }, [layout.composerLanguage, streaming.agentActivity.length]);
   const hasFormalPlan = data.hasFormalPlan;
   const activePlanStage = hasFormalPlan
@@ -6685,13 +6577,9 @@ export function App() {
           resolvedCoachReview ??
           liveCoachTurnChrome.evaluationNextStep;
     if (!returnTarget) {
-      return layout.composerLanguage === "zh-CN"
-        ? "带验证结果回 Coach，再推进。"
-        : "Return to Coach with the verified result.";
+      return appUiCopy(layout.composerLanguage, "带验证结果回 Coach，再推进。");
     }
-    return layout.composerLanguage === "zh-CN"
-      ? `回到 Coach：${returnTarget}`
-      : `Return to Coach: ${returnTarget}`;
+    return appUiCopy(layout.composerLanguage, "回到 Coach：{v}").replace("{v}", returnTarget);
   }, [
     liveCoachTurnChrome.evaluationNextStep,
     layout.composerLanguage,
@@ -6707,30 +6595,22 @@ export function App() {
       leftoverSettingsLearnerProjectOnboardingNotLive
         ? null
         : data.profile.targetProject
-          ? layout.composerLanguage === "zh-CN"
-            ? `你现在主要在推进：${data.profile.targetProject}`
-            : `You are mainly pushing: ${data.profile.targetProject}`
+          ? appUiCopy(layout.composerLanguage, "你现在主要在推进：{v}").replace("{v}", data.profile.targetProject)
           : null,
       leftoverSettingsProfileRhythmNotLive
         ? null
         : data.profile.preferredLearningMode
-          ? layout.composerLanguage === "zh-CN"
-            ? `你更希望我这样带：${data.profile.preferredLearningMode}`
-            : `You prefer coaching like this: ${data.profile.preferredLearningMode}`
+          ? appUiCopy(layout.composerLanguage, "你更希望我这样带：{v}").replace("{v}", data.profile.preferredLearningMode)
           : null,
       leftoverSettingsProfileRhythmNotLive
         ? null
         : data.profile.preferredRhythm
-          ? layout.composerLanguage === "zh-CN"
-            ? `你想保持的节奏：${data.profile.preferredRhythm}`
-            : `You want to keep this rhythm: ${data.profile.preferredRhythm}`
+          ? appUiCopy(layout.composerLanguage, "你想保持的节奏：{v}").replace("{v}", data.profile.preferredRhythm)
           : null,
       leftoverSettingsLearnerProjectOnboardingNotLive
         ? null
         : data.profile.onboardingRequest
-          ? layout.composerLanguage === "zh-CN"
-            ? `这轮最想推进的是：${data.profile.onboardingRequest}`
-            : `This round mainly wants to move: ${data.profile.onboardingRequest}`
+          ? appUiCopy(layout.composerLanguage, "这轮最想推进的是：{v}").replace("{v}", data.profile.onboardingRequest)
           : null,
     ].filter((item): item is string => Boolean(item));
     if (!lines.length) {
@@ -6760,28 +6640,28 @@ export function App() {
         resolvedCoachFocus
           ? {
               id: "focus",
-              label: layout.composerLanguage === "zh-CN" ? "当前聚焦" : "Current focus",
+              label: appUiCopy(layout.composerLanguage, "当前聚焦"),
               value: resolvedCoachFocus,
             }
           : null,
         resolvedCoachScenario
           ? {
               id: "scenario",
-              label: layout.composerLanguage === "zh-CN" ? "这轮主线" : "Current lane",
+              label: appUiCopy(layout.composerLanguage, "这轮主线"),
               value: coachingScenarioLabel(resolvedCoachScenario, layout.composerLanguage),
             }
           : null,
         liveCoachStage
           ? {
               id: "stage",
-              label: layout.composerLanguage === "zh-CN" ? "当前阶段" : "Current stage",
+              label: appUiAltCopy(layout.composerLanguage, "当前阶段"),
               value: liveCoachStage,
             }
           : null,
         resolvedCoachSignal
           ? {
               id: "signal",
-              label: layout.composerLanguage === "zh-CN" ? "学习信号" : "Learner signal",
+              label: appUiCopy(layout.composerLanguage, "学习信号"),
               value: learnerSignalLabel(resolvedCoachSignal, layout.composerLanguage),
             }
           : null,
@@ -6825,17 +6705,17 @@ export function App() {
     () =>
       [
         compactCoachLine(
-          layout.composerLanguage === "zh-CN" ? "当前主线依据" : "Continuity evidence",
+          appUiCopy(layout.composerLanguage, "当前主线依据"),
           memoryEvidence.join(" · "),
           layout.composerLanguage,
         ),
         compactCoachLine(
-          layout.composerLanguage === "zh-CN" ? "下一轮会怎么续上" : "How the next turn will resume",
+          appUiCopy(layout.composerLanguage, "下一轮会怎么续上"),
           liveCoachTurnChrome.resumeThread,
           layout.composerLanguage,
         ),
         compactCoachLine(
-          layout.composerLanguage === "zh-CN" ? "回应方式会偏向" : "Support style",
+          appUiCopy(layout.composerLanguage, "回应方式会偏向"),
           liveCoachTurnChrome.supportStrategy,
           layout.composerLanguage,
         ),
@@ -6870,7 +6750,7 @@ export function App() {
       return undefined;
     }
     if (coachRelationshipStage === "intake" || isFirstCoachConversation) {
-      return layout.composerLanguage === "zh-CN" ? "先认识一下" : "Start by getting oriented";
+      return appUiCopy(layout.composerLanguage, "先认识一下");
     }
     return resolvedCoachFocus ?? coachThreadSubtitle;
   }, [
@@ -6889,12 +6769,8 @@ export function App() {
     const raw =
       coachRelationshipStage === "intake" || isFirstCoachConversation
         ? data.coachFocus?.firstTurnPriority
-          ? layout.composerLanguage === "zh-CN"
-            ? "先了解你的目标、项目和卡点，再决定最适合怎么带你。"
-            : "First understand your goal, project, and blocker, then choose the best coaching lane."
-          : layout.composerLanguage === "zh-CN"
-            ? "先说你的目标、项目或卡点，我会先判断怎么带你更合适。"
-            : "Start with your goal, project, or blocker. I’ll decide the best coaching lane first."
+          ? appUiCopy(layout.composerLanguage, "先了解你的目标、项目和卡点，再决定最适合怎么带你。")
+          : appUiCopy(layout.composerLanguage, "先说你的目标、项目或卡点，我会先判断怎么带你更合适。")
         : coachContinuitySummary ??
           runtimeCurrentStep ??
           resolvedCoachNextStep ??
@@ -6991,9 +6867,7 @@ export function App() {
           setOperationMessage({
             tone: "info",
             message:
-              layout.composerLanguage === "zh-CN"
-                ? "预览不能改真实数据，请回 VS Code。请在输入框里核对证据。"
-                : "Preview cannot change real data. Use VS Code. Check evidence in the composer.",
+              appUiCopy(layout.composerLanguage, "预览不能改真实数据，请回 VS Code。请在输入框里核对证据。"),
           });
         }
         return;
@@ -7873,12 +7747,8 @@ export function App() {
     if (verifiedResult) {
       return {
         title: trainingExecutionState.pendingPlanConfirmation
-          ? layout.composerLanguage === "zh-CN"
-            ? "已验证，待计划确认"
-            : "Verified, plan confirmation pending"
-          : layout.composerLanguage === "zh-CN"
-            ? "已验证结果"
-            : "Latest verified result",
+          ? appUiCopy(layout.composerLanguage, "已验证，待计划确认")
+          : appUiCopy(layout.composerLanguage, "已验证结果"),
         detail: verifiedResult,
         meta: trainingStatusMeta,
       };
@@ -7894,7 +7764,7 @@ export function App() {
     );
     if (blocker) {
       return {
-        title: layout.composerLanguage === "zh-CN" ? "当前阻塞" : "Current blocker",
+        title: appUiCopy(layout.composerLanguage, "当前阻塞"),
         detail: blocker,
         meta: trainingStatusMeta,
       };
@@ -7907,7 +7777,7 @@ export function App() {
     );
     if (partialProgress) {
       return {
-        title: layout.composerLanguage === "zh-CN" ? "当前进展" : "Partial progress",
+        title: appUiCopy(layout.composerLanguage, "当前进展"),
         detail: partialProgress,
         meta: trainingStatusMeta,
       };
@@ -8537,18 +8407,12 @@ export function App() {
       settingsActionState.targets.includes("coachDefaults")
         ? {
             tone: "pending" as const,
-            title:
-              layout.composerLanguage === "zh-CN"
-                ? settingsActionState.kind === "reset-defaults"
-                  ? "恢复中"
-                  : "保存中"
-                : settingsActionState.kind === "reset-defaults"
-                  ? "Restoring"
-                  : "Saving",
+            title: appUiCopy(
+              layout.composerLanguage,
+              settingsActionState.kind === "reset-defaults" ? "恢复中" : "保存中",
+            ),
             detail:
-              layout.composerLanguage === "zh-CN"
-                ? "正在同步语言、回复方式、教学风格和教练默认策略。"
-                : "Syncing language, answer style, teaching style, and the coach default strategy.",
+              appUiCopy(layout.composerLanguage, "正在同步语言、回复方式、教学风格和教练默认策略。"),
           }
         : undefined) ??
       settingsFeedbackState.coachDefaults;
@@ -8591,9 +8455,7 @@ export function App() {
       }),
       /*
       note:
-        layout.composerLanguage === "zh-CN"
-          ? "这里会一起保存语言、反馈方式、教学风格和教练默认策略。"
-          : "This save writes language, answer mode, teaching style, and the coach default strategy together.",
+        appUiCopy(layout.composerLanguage, "这里会一起保存语言、反馈方式、教学风格和教练默认策略。"),
       */
       feedback,
     };
@@ -8650,18 +8512,12 @@ export function App() {
       settingsActionState.targets.includes("workspaceControl")
         ? {
             tone: "pending" as const,
-            title:
-              layout.composerLanguage === "zh-CN"
-                ? settingsActionState.kind === "reset-defaults"
-                  ? "恢复中"
-                  : "保存中"
-                : settingsActionState.kind === "reset-defaults"
-                  ? "Restoring"
-                  : "Saving",
+            title: appUiCopy(
+              layout.composerLanguage,
+              settingsActionState.kind === "reset-defaults" ? "恢复中" : "保存中",
+            ),
             detail:
-              layout.composerLanguage === "zh-CN"
-                ? "正在写入这组工作区上下文控制。"
-                : "Writing these workspace context controls.",
+              appUiCopy(layout.composerLanguage, "正在写入这组工作区上下文控制。"),
           }
         : undefined) ??
       settingsFeedbackState.workspaceControl;
@@ -8669,12 +8525,10 @@ export function App() {
     return {
       saveState: workspaceSettings ? (isSaved ? "saved" : "unsaved") : "empty",
       effectiveValue,
-      savedValue: savedValue ?? (layout.composerLanguage === "zh-CN" ? "工作区未单独覆盖" : "No workspace override"),
+      savedValue: savedValue ?? (appUiCopy(layout.composerLanguage, "工作区未单独覆盖")),
       editingValue: isSaved ? undefined : effectiveValue,
       note:
-        layout.composerLanguage === "zh-CN"
-          ? "这些开关现在就会影响发送，但保存后工作区重开仍会保持。"
-          : "These switches affect sends immediately, but only persist across reopen after save.",
+        appUiCopy(layout.composerLanguage, "这些开关现在就会影响发送，但保存后工作区重开仍会保持。"),
       feedback,
     };
   }, [
@@ -8906,9 +8760,7 @@ export function App() {
   const imageAttachmentBlockedReason = imageAttachmentSendBlocked
     ? providerImageInputState.detail ??
       providerImageInputState.reason ??
-      (layout.composerLanguage === "zh-CN"
-        ? "当前连接还不能验证图片。"
-        : "This connection cannot verify images yet.")
+      (appUiCopy(layout.composerLanguage, "当前连接还不能验证图片。"))
     : undefined;
   const showComposerProviderPill = false;
   const showComposerProviderNote =
@@ -9030,9 +8882,7 @@ export function App() {
       setOperationMessage({
         tone: "info",
         message:
-          layout.composerLanguage === "zh-CN"
-            ? "资源上下文最多带入 12 份，已使用前 12 份。"
-            : "A Resources turn can use up to 12 items; the first 12 are attached.",
+          appUiCopy(layout.composerLanguage, "资源上下文最多带入 12 份，已使用前 12 份。"),
       });
     }
     const resolvedIncludeCurrentFile =
@@ -9175,9 +9025,7 @@ export function App() {
         setOperationMessage({
           tone: "error",
           message:
-            layout.composerLanguage === "zh-CN"
-              ? "没有找到可导入的支持文件。"
-              : "No supported files were found to import.",
+            appUiCopy(layout.composerLanguage, "没有找到可导入的支持文件。"),
         });
         return;
       }
@@ -9196,40 +9044,53 @@ export function App() {
       useWorkbenchState.getState().patchData(patch);
       const limitedCount = uploads.length;
       const finalTruncated = truncated || uploadTruncated;
-      const skippedTextZh =
-        unsupportedCount > 0 ? `跳过 ${unsupportedCount} 个不支持的文件。` : "";
-      const skippedTextEn =
+      const skippedText =
         unsupportedCount > 0
-          ? ` Skipped ${unsupportedCount} unsupported file${unsupportedCount === 1 ? "" : "s"}.`
+          ? appUiCopy(layout.composerLanguage, "跳过 {n} 个不支持的文件。")
+              .replace("{n}", String(unsupportedCount))
+              .replace("{s}", unsupportedCount === 1 ? "" : "s")
           : "";
-      const truncationTextZh = finalTruncated ? `仅导入前 ${limitedCount} 个支持文件。` : "";
-      const truncationTextEn = finalTruncated
-        ? ` Imported only the first ${limitedCount} supported file${limitedCount === 1 ? "" : "s"}.`
+      const truncationText = finalTruncated
+        ? appUiCopy(layout.composerLanguage, "仅导入前 {n} 个支持文件。")
+            .replace("{n}", String(limitedCount))
+            .replace("{s}", limitedCount === 1 ? "" : "s")
         : "";
-      const indexingTextZh =
+      const indexingText =
         failedIndexCount > 0
-          ? `其中 ${indexedCount} 个已完成索引，${failedIndexCount} 个上传成功但索引未完成。`
-          : `已完成 ${indexedCount} 个文件的索引并刷新资料状态。`;
-      const indexingTextEn =
-        failedIndexCount > 0
-          ? ` Indexed ${indexedCount}, while ${failedIndexCount} uploaded resource${failedIndexCount === 1 ? "" : "s"} did not finish indexing.`
-          : ` Indexed ${indexedCount} resource${indexedCount === 1 ? "" : "s"} and refreshed resource status.`;
-      const uploadFailureTextZh =
+          ? appUiCopy(layout.composerLanguage, "其中 {i} 个已完成索引，{f} 个上传成功但索引未完成。")
+              .replace("{i}", String(indexedCount))
+              .replace("{f}", String(failedIndexCount))
+              .replace("{s}", failedIndexCount === 1 ? "" : "s")
+          : appUiCopy(layout.composerLanguage, "已完成 {i} 个文件的索引并刷新资料状态。")
+              .replace("{i}", String(indexedCount))
+              .replace("{s}", indexedCount === 1 ? "" : "s");
+      const uploadFailureText =
         failedUploadCount > 0
-          ? `其中 ${failedUploadCount} 个没有导入成功，其他资料已经可以使用。`
+          ? appUiCopy(layout.composerLanguage, "其中 {n} 个没有导入成功，其他资料已经可以使用。")
+              .replace("{n}", String(failedUploadCount))
+              .replace("{s}", failedUploadCount === 1 ? "" : "s")
           : "";
-      const uploadFailureTextEn =
-        failedUploadCount > 0
-          ? ` ${failedUploadCount} file${failedUploadCount === 1 ? "" : "s"} could not be imported; the others are ready to use.`
-          : "";
-      const importedLeadZh = importingFolder ? "已导入文件夹中的资料。" : "已导入资料。";
-      const importedLeadEn = importingFolder ? "Imported resources from the folder." : "Imported resources.";
+      const importedLead = appUiCopy(
+        layout.composerLanguage,
+        importingFolder ? "已导入文件夹中的资料。" : "已导入资料。",
+      );
+      const uploadedText = appUiCopy(layout.composerLanguage, "共上传 {n} 个支持文件。")
+        .replace("{n}", String(uploadedCount))
+        .replace("{s}", uploadedCount === 1 ? "" : "s");
       setOperationMessage({
         tone: failedUploadCount > 0 || failedIndexCount > 0 ? "info" : "success",
-        message:
-          layout.composerLanguage === "zh-CN"
-            ? `${importedLeadZh}${uploadedCount > 0 ? ` 共上传 ${uploadedCount} 个支持文件。` : ""}${truncationTextZh ? ` ${truncationTextZh}` : ""}${skippedTextZh ? ` ${skippedTextZh}` : ""}${uploadFailureTextZh ? ` ${uploadFailureTextZh}` : ""} ${indexingTextZh}`.trim()
-            : `${importedLeadEn}${uploadedCount > 0 ? ` Uploaded ${uploadedCount} supported file${uploadedCount === 1 ? "" : "s"}.` : ""}${truncationTextEn}${skippedTextEn}${uploadFailureTextEn}${indexingTextEn}`.trim(),
+        message: [
+          importedLead,
+          uploadedCount > 0 ? uploadedText : "",
+          truncationText,
+          skippedText,
+          uploadFailureText,
+          indexingText,
+        ]
+          .filter(Boolean)
+          .map((fragment) => ` ${fragment}`)
+          .join("")
+          .trim(),
       });
     } catch {
       setOperationMessage({
@@ -9245,9 +9106,7 @@ export function App() {
     }
 
     const rawSource = window.prompt(
-      layout.composerLanguage === "zh-CN"
-        ? "\u7c98\u8d34\u8981\u5bfc\u5165\u7684\u7f51\u9875 URL"
-        : "Paste the webpage URL to import",
+      appUiCopy(layout.composerLanguage, "\u7c98\u8d34\u8981\u5bfc\u5165\u7684\u7f51\u9875 URL"),
     )?.trim();
     if (!rawSource) {
       return;
@@ -9263,9 +9122,7 @@ export function App() {
       setOperationMessage({
         tone: "error",
         message:
-          layout.composerLanguage === "zh-CN"
-            ? "\u8bf7\u8f93\u5165\u6709\u6548\u7684 http \u6216 https URL\u3002"
-            : "Enter a valid http or https URL.",
+          appUiCopy(layout.composerLanguage, "\u8bf7\u8f93\u5165\u6709\u6548\u7684 http \u6216 https URL\u3002"),
       });
       return;
     }
@@ -9291,13 +9148,12 @@ export function App() {
       setOperationMessage({
         tone: result.failedIndexCount > 0 || result.failedUploadCount > 0 ? "info" : "success",
         message:
-          layout.composerLanguage === "zh-CN"
-            ? result.failedIndexCount > 0 || result.failedUploadCount > 0
-              ? `\u7f51\u9875\u5df2\u5bfc\u5165\uff0c\u4f46\u7d22\u5f15\u672a\u5b8c\u5168\u5b8c\u6210\u3002\u5df2\u4e0a\u4f20 ${result.uploadedCount} \u9879\u3002`
-              : "\u7f51\u9875\u5df2\u5bfc\u5165\u5e76\u5b8c\u6210\u7d22\u5f15\u3002"
-            : result.failedIndexCount > 0 || result.failedUploadCount > 0
-              ? `Webpage imported, but indexing did not finish for every resource. Uploaded ${result.uploadedCount}.`
-              : "Webpage imported and indexed.",
+          result.failedIndexCount > 0 || result.failedUploadCount > 0
+            ? appUiCopy(layout.composerLanguage, "网页已导入，但索引未完全完成。已上传 {n} 项。").replace(
+                "{n}",
+                String(result.uploadedCount),
+              )
+            : appUiCopy(layout.composerLanguage, "网页已导入并完成索引。"),
       });
     } catch {
       setOperationMessage({
@@ -9378,9 +9234,7 @@ export function App() {
             setOperationMessage({
               tone: "success",
               message:
-                payload.responseLanguage === "zh-CN"
-                  ? "已保存教练默认设置。"
-                  : "Coach defaults saved.",
+                appUiCopy(payload.responseLanguage, "已保存教练默认设置。"),
             });
           })
           .catch(() => {
@@ -9443,33 +9297,32 @@ export function App() {
   }, []);
 
   const handleShareSession = useCallback(async () => {
-    const zh = layout.composerLanguage === "zh-CN";
     const lines = data.conversation
       .filter((message) => message.body?.trim())
       .map((message) => {
         const role =
-          message.role === "user" ? (zh ? "我" : "Me") : zh ? "教练" : "Coach";
+          message.role === "user" ? (appUiCopy(layout.composerLanguage, "我")) : appUiCopy(layout.composerLanguage, "教练");
         return `**${role}**: ${message.body.trim()}`;
       });
     if (!lines.length) {
       setOperationMessage({
         tone: "info",
-        message: zh ? "还没有会话内容可以分享。" : "Nothing to share yet.",
+        message: appUiCopy(layout.composerLanguage, "还没有会话内容可以分享。"),
       });
       return;
     }
-    const title = zh ? "Trainer 会话" : "Trainer session";
+    const title = appUiCopy(layout.composerLanguage, "Trainer 会话");
     const text = `# ${title}\n\n${lines.join("\n\n")}`;
     try {
       await navigator.clipboard.writeText(text);
       setOperationMessage({
         tone: "success",
-        message: zh ? "会话摘要已复制到剪贴板。" : "Session summary copied to clipboard.",
+        message: appUiCopy(layout.composerLanguage, "会话摘要已复制到剪贴板。"),
       });
     } catch {
       setOperationMessage({
         tone: "error",
-        message: zh ? "复制失败，请重试。" : "Copy failed. Try again.",
+        message: appUiCopy(layout.composerLanguage, "复制失败，请重试。"),
       });
     }
   }, [data.conversation, layout.composerLanguage, setOperationMessage]);
@@ -9501,16 +9354,12 @@ export function App() {
     const focusArea = options?.focusArea;
     const reviewOnlyDraft =
       prompt ??
-      (layout.composerLanguage === "zh-CN"
-        ? "先继续当前复习项，不要新开正式任务。"
-        : "Stay with the current review item. Do not start a new live task.");
+      (appUiCopy(layout.composerLanguage, "先继续当前复习项，不要新开正式任务。"));
     if (action === "hint") {
       setActiveView("coach");
       setComposerDraft(
         prompt ??
-          (layout.composerLanguage === "zh-CN"
-            ? "请继续给我一个更小、更具体的下一步。"
-            : "Give me a smaller, more specific next step."),
+          (appUiCopy(layout.composerLanguage, "请继续给我一个更小、更具体的下一步。")),
       );
       return;
     }
@@ -9519,9 +9368,7 @@ export function App() {
       setActiveView("plan");
       setComposerDraft(
         prompt ??
-          (layout.composerLanguage === "zh-CN"
-            ? "请先和我讨论这条计划的阶段、证据和验证方式；在我明确生成前不要改正式计划。"
-            : "Discuss this plan's stages, evidence, and verification with me first. Do not change the formal plan until I explicitly generate it."),
+          (appUiCopy(layout.composerLanguage, "请先和我讨论这条计划的阶段、证据和验证方式；在我明确生成前不要改正式计划。")),
       );
       return;
     }
@@ -9786,9 +9633,7 @@ export function App() {
             message:
               providerImageInputState.detail ??
               providerImageInputState.reason ??
-              (layout.composerLanguage === "zh-CN"
-                ? "当前连接还不能验证图片。"
-                : "This connection cannot verify images yet."),
+              (appUiCopy(layout.composerLanguage, "当前连接还不能验证图片。")),
           });
           return;
         }
@@ -10042,9 +9887,7 @@ export function App() {
       setOperationMessage({
         tone: "info",
         message:
-          layout.composerLanguage === "zh-CN"
-            ? "先保存连接，再更新模型列表。"
-            : "Save the connection before updating the model list.",
+          appUiCopy(layout.composerLanguage, "先保存连接，再更新模型列表。"),
       });
       return;
     }
@@ -10053,9 +9896,7 @@ export function App() {
       setOperationMessage({
         tone: "info",
         message:
-          layout.composerLanguage === "zh-CN"
-            ? "先填写访问密钥，再更新模型列表。"
-            : "Add an API key before updating the model list.",
+          appUiCopy(layout.composerLanguage, "先填写访问密钥，再更新模型列表。"),
       });
       return;
     }
@@ -10118,9 +9959,7 @@ export function App() {
         setOperationMessage({
           tone: "info",
           message:
-            layout.composerLanguage === "zh-CN"
-              ? "预览模式不会保存思考强度。"
-              : "Thinking effort is not saved in preview mode.",
+            appUiCopy(layout.composerLanguage, "预览模式不会保存思考强度。"),
         });
         return;
       }
@@ -10280,9 +10119,7 @@ export function App() {
         tone: "info",
         message:
           composerModelPolicyHint(layout.composerLanguage, modelPolicy.reason) ??
-          (layout.composerLanguage === "zh-CN"
-            ? "\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u53ef\u4ee5\u4f7f\u7528\u7684\u6a21\u578b\u3002"
-            : "Choose a model that this connection can use."),
+          (appUiCopy(layout.composerLanguage, "\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u53ef\u4ee5\u4f7f\u7528\u7684\u6a21\u578b\u3002")),
       });
       return;
     }
@@ -10380,18 +10217,11 @@ export function App() {
       return;
     }
     if (isBrowserPreview || leftoverTrainingHandoffChromeNotLive || !activeTrainingCardId) {
-      const notice =
-        layout.composerLanguage === "zh-CN"
-          ? leftoverTrainingHandoffChromeNotLive
-            ? "验证未通过：当前训练卡片不是实时状态。"
-            : !activeTrainingCardId
-              ? "没有可验证的当前文件。"
-              : "预览不能验真实工作区文件。请回 VS Code 打开文件后再验证。"
-          : leftoverTrainingHandoffChromeNotLive
-            ? "Verification failed: this training card is not live."
-            : !activeTrainingCardId
-              ? "There is no current file to verify."
-              : "Preview cannot verify a real workspace file. Open the file in VS Code, then verify there.";
+      const notice = leftoverTrainingHandoffChromeNotLive
+        ? appUiCopy(layout.composerLanguage, "验证未通过：当前训练卡片不是实时状态。")
+        : !activeTrainingCardId
+          ? appUiCopy(layout.composerLanguage, "没有可验证的当前文件。")
+          : appUiCopy(layout.composerLanguage, "预览不能验真实工作区文件。请回 VS Code 打开文件后再验证。");
       setTrainingVerifyNotice(notice);
       setOperationMessageSurface("training");
       return;
@@ -10624,9 +10454,9 @@ export function App() {
       const result = trainingState.reviewArtifact.verifiedResult ?? trainingState.reviewArtifact.summary ?? "";
       setActiveView("coach");
       setComposerDraft(
-        layout.composerLanguage === "zh-CN"
-          ? `\u6211\u5b8c\u6210\u4e86\u201c${title}\u201d\u7684\u56de\u987e\u3002\u7ed3\u8bba\uff1a${result}\n\n\u8bf7\u5e2e\u6211\u5b89\u6392\u4e0b\u4e00\u6b65\u3002`
-          : `I finished reviewing "${title}". Result: ${result}\n\nPlease help me choose the next step.`,
+        appUiCopy(layout.composerLanguage, "我完成了“{t}”的回顾。结论：{r}\n\n请帮我安排下一步。")
+          .replace("{t}", () => title)
+          .replace("{r}", () => result),
       );
       window.requestAnimationFrame(() => {
         focusComposerInput();
@@ -10956,7 +10786,7 @@ export function App() {
       return (
         <section
           className="composer-training-panel composer-training-panel--choices-only"
-          aria-label={layout.composerLanguage === "zh-CN" ? "训练选项" : "Training choices"}
+          aria-label={appUiCopy(layout.composerLanguage, "训练选项")}
         >
           <div className="composer-context-strip__chips composer-context-strip__chips--training-choice">
             {normalizedTrainingFlashChoices.slice(0, 4).map((choice, index) => {
@@ -10989,13 +10819,13 @@ export function App() {
     }
 
     const resultMode = trainingComposerPracticeReturnMode === "result";
-    const resultLabel = layout.composerLanguage === "zh-CN" ? "\u8bb0\u5f55\u7ed3\u679c" : "Record result";
-    const blockerLabel = layout.composerLanguage === "zh-CN" ? "\u8bb0\u5f55\u53d7\u963b" : "Record blocker";
+    const resultLabel = appUiCopy(layout.composerLanguage, "\u8bb0\u5f55\u7ed3\u679c");
+    const blockerLabel = appUiCopy(layout.composerLanguage, "\u8bb0\u5f55\u53d7\u963b");
 
     return (
       <section
         className="composer-training-panel"
-        aria-label={layout.composerLanguage === "zh-CN" ? "\u8bad\u7ec3\u4f5c\u7b54\u65b9\u5f0f" : "Training response mode"}
+        aria-label={appUiCopy(layout.composerLanguage, "\u8bad\u7ec3\u4f5c\u7b54\u65b9\u5f0f")}
       >
         <div className="composer-context-strip__chips composer-context-strip__chips--training">
           <button
@@ -11063,9 +10893,9 @@ export function App() {
             <span className="eyebrow">{t.resourcesMenu}</span>
             <strong>
               {data.resources.length > 0
-                ? layout.composerLanguage === "zh-CN"
-                  ? `这次会附带 ${data.resources.length} 份资料`
-                  : `${data.resources.length} attached resource${data.resources.length === 1 ? "" : "s"}`
+                ? appUiCopy(layout.composerLanguage, "这次会附带 {n} 份资料")
+                    .replace("{n}", String(data.resources.length))
+                    .replace("{s}", data.resources.length === 1 ? "" : "s")
                 : t.resourcesEmpty}
             </strong>
           </div>
@@ -11139,9 +10969,7 @@ export function App() {
           {data.resources.length > 0 ? (
             <div className="composer-menu-panel__section">
               <p className="composer-menu-panel__hint">
-                {layout.composerLanguage === "zh-CN"
-                  ? "这些资料会和当前消息一起发给教练参考。"
-                  : "These resources will be sent with the current turn for grounding."}
+                {appUiCopy(layout.composerLanguage, "这些资料会和当前消息一起发给教练参考。")}
               </p>
               <div className="composer-resource-list">
                 {data.resources.slice(0, 6).map((resource) => (
@@ -11157,9 +10985,10 @@ export function App() {
               </div>
               {data.resources.length > 6 ? (
                 <p className="composer-menu-panel__hint">
-                  {layout.composerLanguage === "zh-CN"
-                    ? `另外还有 ${data.resources.length - 6} 份资料会一起带上。`
-                    : `${data.resources.length - 6} more resources will also be included.`}
+                  {appUiCopy(layout.composerLanguage, "另外还有 {n} 份资料会一起带上。").replace(
+                    "{n}",
+                    String(data.resources.length - 6),
+                  )}
                 </p>
               ) : null}
             </div>
@@ -11228,54 +11057,36 @@ export function App() {
       const showModelSection =
         hasModelQuery || defaultVisibleModels.length > 0 || hasOnlyCurrentModel;
       const searchLabel =
-        layout.composerLanguage === "zh-CN" ? "搜索模型或已保存连接" : "Search models or saved connections";
+        appUiCopy(layout.composerLanguage, "搜索模型或已保存连接");
       const emptyStateLabel = hasModelQuery
-        ? layout.composerLanguage === "zh-CN"
-          ? "没有匹配的模型或已保存连接。"
-          : "No matching models or saved connections."
+        ? appUiCopy(layout.composerLanguage, "没有匹配的模型或已保存连接。")
         : hasOnlyCurrentModel
           ? composerProviderCopy.modelPicker.onlyCurrentModel
           : composerHasSavedProfiles
-            ? layout.composerLanguage === "zh-CN"
-              ? "可从下方展开已保存连接。"
-              : "Saved connections are available below."
-            : layout.composerLanguage === "zh-CN"
-              ? "还没有可切换的模型。请到“设置”保存连接。"
-              : "There are no models to switch yet. Save a connection in Settings first.";
+            ? appUiCopy(layout.composerLanguage, "可从下方展开已保存连接。")
+            : appUiCopy(layout.composerLanguage, "还没有可切换的模型。请到“设置”保存连接。");
 
       const visibleSelectionCount = displayedModels.length + (hasModelQuery ? visibleProfiles.length : 0);
       const showSearch = nonActiveModelCount > COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT;
       const modelSectionLabel =
         hasModelQuery
-          ? layout.composerLanguage === "zh-CN"
-            ? "匹配的模型"
-            : "Matching models"
-          : layout.composerLanguage === "zh-CN"
-            ? "可切换模型"
-            : "Available models";
+          ? appUiCopy(layout.composerLanguage, "匹配的模型")
+          : appUiCopy(layout.composerLanguage, "可切换模型");
       const profileSectionLabel =
-        layout.composerLanguage === "zh-CN" ? "已保存连接" : "Saved connections";
+        appUiCopy(layout.composerLanguage, "已保存连接");
       const refreshModelsDisabled =
         !providerApplied ||
         !data.providerConfig.apiKeyConfigured ||
         data.providerConfig.modelListStatus === "loading";
       const refreshModelsLabel =
-        layout.composerLanguage === "zh-CN" ? "刷新模型" : "Refresh models";
+        appUiCopy(layout.composerLanguage, "刷新模型");
       const refreshModelsTitle = !providerApplied
-        ? layout.composerLanguage === "zh-CN"
-          ? "先保存连接，再更新模型列表"
-          : "Save the connection before updating the model list"
+        ? appUiCopy(layout.composerLanguage, "先保存连接，再更新模型列表")
         : !data.providerConfig.apiKeyConfigured
-          ? layout.composerLanguage === "zh-CN"
-            ? "先在“设置”填写访问密钥，再更新模型列表"
-            : "Add an API key in Settings before updating the model list"
+          ? appUiCopy(layout.composerLanguage, "先在“设置”填写访问密钥，再更新模型列表")
           : data.providerConfig.modelListStatus === "loading"
-            ? layout.composerLanguage === "zh-CN"
-              ? "正在更新模型列表"
-              : "Updating the model list"
-            : layout.composerLanguage === "zh-CN"
-              ? "更新模型列表"
-              : "Update the model list";
+            ? appUiCopy(layout.composerLanguage, "正在更新模型列表")
+            : appUiCopy(layout.composerLanguage, "更新模型列表");
 
       return (
         <section className="composer-menu-panel composer-menu-panel--provider">
@@ -11311,20 +11122,20 @@ export function App() {
             <div className="composer-menu-panel__section composer-thinking">
               <div className="composer-thinking__header">
                 <span className="eyebrow">
-                  {layout.composerLanguage === "zh-CN" ? "思考强度" : "Thinking"}
+                  {appUiCopy(layout.composerLanguage, "思考强度")}
                 </span>
                 {composerThinkingDescriptor.disabled ? (
                   <span className="composer-thinking__state">
-                    {layout.composerLanguage === "zh-CN" ? "已关闭" : "Off"}
+                    {appUiCopy(layout.composerLanguage, "已关闭")}
                   </span>
                 ) : null}
               </div>
-              <div className="composer-thinking__modes" role="group" aria-label={layout.composerLanguage === "zh-CN" ? "思考强度" : "Thinking effort"}>
+              <div className="composer-thinking__modes" role="group" aria-label={appUiAltCopy(layout.composerLanguage, "思考强度")}>
                 {(
                   [
-                    { value: "auto", label: layout.composerLanguage === "zh-CN" ? "自动" : "Auto" },
-                    { value: "disabled", label: layout.composerLanguage === "zh-CN" ? "关闭" : "Off" },
-                    { value: "enabled", label: layout.composerLanguage === "zh-CN" ? "开启" : "On" },
+                    { value: "auto", label: appUiCopy(layout.composerLanguage, "自动") },
+                    { value: "disabled", label: appUiCopy(layout.composerLanguage, "关闭") },
+                    { value: "enabled", label: appUiCopy(layout.composerLanguage, "开启") },
                   ] as const
                 ).map((option) => {
                   const active = composerThinkingDescriptor.config.mode === option.value;
@@ -11356,7 +11167,7 @@ export function App() {
               {composerThinkingDescriptor.config.mode === "enabled" &&
               composerThinkingDescriptor.kind === "reasoning_effort" &&
               composerThinkingDescriptor.effortOptions ? (
-                <div className="composer-thinking__modes composer-thinking__modes--effort" role="group" aria-label={layout.composerLanguage === "zh-CN" ? "推理力度" : "Reasoning effort"}>
+                <div className="composer-thinking__modes composer-thinking__modes--effort" role="group" aria-label={appUiCopy(layout.composerLanguage, "推理力度")}>
                   {composerThinkingDescriptor.effortOptions.map((option) => {
                     const active =
                       (composerThinkingDescriptor.config.reasoningEffort ?? "medium") === option;
@@ -11375,10 +11186,10 @@ export function App() {
                         }
                       >
                         {option === "low"
-                          ? layout.composerLanguage === "zh-CN" ? "低" : "Low"
+                          ? appUiCopy(layout.composerLanguage, "低")
                           : option === "high"
-                            ? layout.composerLanguage === "zh-CN" ? "高" : "High"
-                            : layout.composerLanguage === "zh-CN" ? "中" : "Medium"}
+                            ? appUiCopy(layout.composerLanguage, "高")
+                            : appUiCopy(layout.composerLanguage, "中")}
                       </button>
                     );
                   })}
@@ -11388,17 +11199,17 @@ export function App() {
               (composerThinkingDescriptor.kind === "thinking_budget" ||
                 composerThinkingDescriptor.kind === "gemini_thinking") ? (
                 <p className="composer-menu-panel__hint">
-                  {layout.composerLanguage === "zh-CN"
-                    ? `思考预算 ${
-                        typeof composerThinkingDescriptor.config.budgetTokens === "number"
-                          ? composerThinkingDescriptor.config.budgetTokens
-                          : "自动"
-                      }，可在“设置”里调整。`
-                    : `Thinking budget ${
-                        typeof composerThinkingDescriptor.config.budgetTokens === "number"
-                          ? composerThinkingDescriptor.config.budgetTokens
-                          : "auto"
-                      }. Adjust it in Settings.`}
+                  {appUiCopy(
+                    layout.composerLanguage,
+                    typeof composerThinkingDescriptor.config.budgetTokens === "number"
+                      ? "思考预算 {n}，可在“设置”里调整。"
+                      : "思考预算 自动，可在“设置”里调整。",
+                  ).replace(
+                    "{n}",
+                    typeof composerThinkingDescriptor.config.budgetTokens === "number"
+                      ? String(composerThinkingDescriptor.config.budgetTokens)
+                      : "",
+                  )}
                 </p>
               ) : null}
             </div>
@@ -11458,7 +11269,7 @@ export function App() {
                       <div
                         className="composer-provider-list"
                         role="list"
-                        aria-label={layout.composerLanguage === "zh-CN" ? "已保存连接" : "Saved connections"}
+                        aria-label={appUiCopy(layout.composerLanguage, "已保存连接")}
                       >
                         {visibleProfiles.map((profile) => (
                           <button
@@ -11495,7 +11306,7 @@ export function App() {
               <div
                 className="composer-provider-list"
                 role="list"
-                aria-label={layout.composerLanguage === "zh-CN" ? "已保存连接" : "Saved connections"}
+                aria-label={appUiCopy(layout.composerLanguage, "已保存连接")}
               >
                 {savedProfiles.map((profile) => (
                   <button
@@ -11594,9 +11405,7 @@ export function App() {
         <div className="command-deck__header">
           <strong>{t.slashCommands}</strong>
           <span className="command-deck__hint">
-            {layout.composerLanguage === "zh-CN"
-              ? "Enter 执行，Tab 补全。"
-              : "Enter runs it. Tab completes it."}
+            {appUiCopy(layout.composerLanguage, "Enter 执行，Tab 补全。")}
           </span>
         </div>
         <div className="command-deck__list">
@@ -11664,9 +11473,7 @@ export function App() {
       setOperationMessage({
         tone: "error",
         message:
-          layout.composerLanguage === "zh-CN"
-            ? "技能需要 $触发词 和提示词。"
-            : "A skill needs a $trigger and a prompt.",
+          appUiCopy(layout.composerLanguage, "技能需要 $触发词 和提示词。"),
       });
       return;
     }
@@ -11677,9 +11484,7 @@ export function App() {
       setOperationMessage({
         tone: "error",
         message:
-          layout.composerLanguage === "zh-CN"
-            ? `${skill.trigger} 已经是内置技能，换个触发词。`
-            : `${skill.trigger} is a built-in skill. Pick another trigger.`,
+          appUiCopy(layout.composerLanguage, "{v} 已经是内置技能，换个触发词。").replace("{v}", skill.trigger),
       });
       return;
     }
@@ -11690,9 +11495,7 @@ export function App() {
       setOperationMessage({
         tone: "error",
         message:
-          layout.composerLanguage === "zh-CN"
-            ? `最多只能有 ${TRAINER_CUSTOM_SKILL_LIMIT} 个自定义技能，先删除一个。`
-            : `Custom skills are capped at ${TRAINER_CUSTOM_SKILL_LIMIT}. Remove one first.`,
+          appUiCopy(layout.composerLanguage, "最多只能有 {v} 个自定义技能，先删除一个。").replace("{v}", String(TRAINER_CUSTOM_SKILL_LIMIT)),
       });
       return;
     }
@@ -11701,9 +11504,7 @@ export function App() {
     setOperationMessage({
       tone: "success",
       message:
-        layout.composerLanguage === "zh-CN"
-          ? `已保存 ${skill.trigger}。`
-          : `Saved ${skill.trigger}.`,
+        appUiCopy(layout.composerLanguage, "已保存 {v}。").replace("{v}", skill.trigger),
     });
   };
 
@@ -11713,9 +11514,7 @@ export function App() {
       setOperationMessage({
         tone: "error",
         message:
-          layout.composerLanguage === "zh-CN"
-            ? "粘贴的内容不是有效的技能分享包。"
-            : "That paste is not a valid skill share payload.",
+          appUiCopy(layout.composerLanguage, "粘贴的内容不是有效的技能分享包。"),
       });
       return;
     }
@@ -11726,9 +11525,7 @@ export function App() {
       setOperationMessage({
         tone: "error",
         message:
-          layout.composerLanguage === "zh-CN"
-            ? `${skill.trigger} 与内置技能冲突，未安装。`
-            : `${skill.trigger} collides with a built-in skill. Not installed.`,
+          appUiCopy(layout.composerLanguage, "{v} 与内置技能冲突，未安装。").replace("{v}", skill.trigger),
       });
       return;
     }
@@ -11739,9 +11536,7 @@ export function App() {
       setOperationMessage({
         tone: "error",
         message:
-          layout.composerLanguage === "zh-CN"
-            ? `最多只能有 ${TRAINER_CUSTOM_SKILL_LIMIT} 个自定义技能，先删除一个。`
-            : `Custom skills are capped at ${TRAINER_CUSTOM_SKILL_LIMIT}. Remove one first.`,
+          appUiCopy(layout.composerLanguage, "最多只能有 {v} 个自定义技能，先删除一个。").replace("{v}", String(TRAINER_CUSTOM_SKILL_LIMIT)),
       });
       return;
     }
@@ -11750,9 +11545,7 @@ export function App() {
     setOperationMessage({
       tone: "success",
       message:
-        layout.composerLanguage === "zh-CN"
-          ? `已安装 ${skill.trigger}。`
-          : `Installed ${skill.trigger}.`,
+        appUiCopy(layout.composerLanguage, "已安装 {v}。").replace("{v}", skill.trigger),
     });
   };
 
@@ -11766,10 +11559,10 @@ export function App() {
     persistCustomSkills(customSkills.filter((entry) => entry.id !== skillId));
     setOperationMessage({
       tone: "info",
-      message:
-        layout.composerLanguage === "zh-CN"
-          ? `已删除 ${skill?.trigger ?? "skill"}。`
-          : `Removed ${skill?.trigger ?? "skill"}.`,
+      message: appUiCopy(layout.composerLanguage, "已删除 {v}。").replace(
+        "{v}",
+        () => skill?.trigger ?? "skill",
+      ),
     });
   };
 
@@ -11779,14 +11572,12 @@ export function App() {
       setOperationMessage({
         tone: "success",
         message:
-          layout.composerLanguage === "zh-CN"
-            ? `${skill.trigger} 分享包已复制，可粘贴给其他工作区。`
-            : `${skill.trigger} share payload copied — paste it into another workspace to install.`,
+          appUiCopy(layout.composerLanguage, "{v} 分享包已复制，可粘贴给其他工作区。").replace("{v}", skill.trigger),
       });
     } catch {
       setOperationMessage({
         tone: "error",
-        message: layout.composerLanguage === "zh-CN" ? "复制失败，请重试。" : "Copy failed. Try again.",
+        message: appUiCopy(layout.composerLanguage, "复制失败，请重试。"),
       });
     }
   };
@@ -11799,7 +11590,6 @@ export function App() {
       return null;
     }
 
-    const zh = layout.composerLanguage === "zh-CN";
     const draftTriggerToken = trainerSkillTriggerToken(normalizedDraft) ?? "$";
     // Check the merged catalog — not the narrowed suggestion list — so an
     // existing trigger (including one whose `when` context currently hides it
@@ -11812,20 +11602,16 @@ export function App() {
       draftTriggerToken.length > 1 && !hasExactTrigger ? draftTriggerToken : undefined;
 
     return (
-      <div ref={composerDeckRef} className="skill-deck" role="list" aria-label={zh ? "技能" : "Skills"}>
+      <div ref={composerDeckRef} className="skill-deck" role="list" aria-label={appUiCopy(layout.composerLanguage, "技能")}>
         <div className="skill-deck__header">
-          <strong>{zh ? "技能" : "Skills"}</strong>
+          <strong>{appUiCopy(layout.composerLanguage, "技能")}</strong>
           <span className="skill-deck__hint">
-            {zh
-              ? "继续输入可收窄范围，删除 $ 就会按普通消息发送。"
-              : "Keep typing to narrow it down, or remove $ to send a normal message."}
+            {appUiCopy(layout.composerLanguage, "继续输入可收窄范围，删除 $ 就会按普通消息发送。")}
           </span>
         </div>
         {matchingLocalSkills.length === 0 ? (
           <p className="skill-deck__empty">
-            {zh
-              ? "没有匹配到 skill。继续输入，或者直接当作普通消息发送。"
-              : "No matching skill was found. Keep typing, or send this as a normal message."}
+            {appUiCopy(layout.composerLanguage, "没有匹配到 skill。继续输入，或者直接当作普通消息发送。")}
           </p>
         ) : (
           <div className="skill-deck__list">
@@ -11874,7 +11660,7 @@ export function App() {
               setSkillManagerOpen(true);
             }}
           >
-            {zh ? `创建技能 ${creatableTrigger}` : `Create skill ${creatableTrigger}`}
+            {appUiCopy(layout.composerLanguage, "创建技能 {v}").replace("{v}", creatableTrigger)}
           </button>
         ) : null}
         {/* The deck header is display:none chrome — the manager entry must live
@@ -11889,12 +11675,8 @@ export function App() {
           }}
         >
           {skillManagerOpen
-            ? zh
-              ? "收起技能管理"
-              : "Close skill manager"
-            : zh
-              ? "管理技能"
-              : "Manage skills"}
+            ? appUiCopy(layout.composerLanguage, "收起技能管理")
+            : appUiCopy(layout.composerLanguage, "管理技能")}
         </button>
         {skillManagerOpen ? (
           <div className="skill-deck__manager">
@@ -11909,41 +11691,31 @@ export function App() {
                     <button
                       type="button"
                       className="skill-deck__mini-button"
-                      title={zh ? "复制分享包" : "Copy share payload"}
+                      title={appUiCopy(layout.composerLanguage, "复制分享包")}
                       onClick={() => void copyCustomSkillShare(skill)}
                     >
-                      {zh ? "分享" : "Share"}
+                      {appUiCopy(layout.composerLanguage, "分享")}
                     </button>
                     <button
                       type="button"
                       className="skill-deck__mini-button skill-deck__mini-button--danger"
                       title={
                         pendingDeleteSkillId === skill.id
-                          ? zh
-                            ? "再次点击确认删除"
-                            : "Click again to confirm"
-                          : zh
-                            ? "删除技能"
-                            : "Delete skill"
+                          ? appUiCopy(layout.composerLanguage, "再次点击确认删除")
+                          : appUiCopy(layout.composerLanguage, "删除技能")
                       }
                       onClick={() => removeCustomSkill(skill.id)}
                     >
                       {pendingDeleteSkillId === skill.id
-                        ? zh
-                          ? "确认删除"
-                          : "Confirm?"
-                        : zh
-                          ? "删除"
-                          : "Delete"}
+                        ? appUiCopy(layout.composerLanguage, "确认删除")
+                        : appUiCopy(layout.composerLanguage, "删除")}
                     </button>
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="skill-deck__manager-note">
-                {zh
-                  ? "还没有自定义技能。下面创建一个，或粘贴别人分享的技能包。"
-                  : "No custom skills yet. Create one below, or paste a shared skill payload."}
+                {appUiCopy(layout.composerLanguage, "还没有自定义技能。下面创建一个，或粘贴别人分享的技能包。")}
               </p>
             )}
             <div className="skill-deck__form">
@@ -11951,8 +11723,8 @@ export function App() {
                 <input
                   className="skill-deck__input skill-deck__input--trigger"
                   value={skillDraftFields.trigger}
-                  placeholder={zh ? "$触发词" : "$trigger"}
-                  aria-label={zh ? "技能触发词" : "Skill trigger"}
+                  placeholder={appUiCopy(layout.composerLanguage, "$触发词")}
+                  aria-label={appUiCopy(layout.composerLanguage, "技能触发词")}
                   onChange={(event) =>
                     setSkillDraftFields((fields) => ({ ...fields, trigger: event.target.value }))
                   }
@@ -11960,8 +11732,8 @@ export function App() {
                 <input
                   className="skill-deck__input"
                   value={skillDraftFields.title}
-                  placeholder={zh ? "名称（可选）" : "Title (optional)"}
-                  aria-label={zh ? "技能名称" : "Skill title"}
+                  placeholder={appUiCopy(layout.composerLanguage, "名称（可选）")}
+                  aria-label={appUiCopy(layout.composerLanguage, "技能名称")}
                   onChange={(event) =>
                     setSkillDraftFields((fields) => ({ ...fields, title: event.target.value }))
                   }
@@ -11970,8 +11742,8 @@ export function App() {
               <input
                 className="skill-deck__input"
                 value={skillDraftFields.detail}
-                placeholder={zh ? "描述（可选）：选择时显示的说明" : "Detail (optional): shown in the skill list"}
-                aria-label={zh ? "技能描述" : "Skill detail"}
+                placeholder={appUiCopy(layout.composerLanguage, "描述（可选）：选择时显示的说明")}
+                aria-label={appUiCopy(layout.composerLanguage, "技能描述")}
                 onChange={(event) =>
                   setSkillDraftFields((fields) => ({ ...fields, detail: event.target.value }))
                 }
@@ -11979,8 +11751,8 @@ export function App() {
               <textarea
                 className="skill-deck__textarea"
                 value={skillDraftFields.prompt}
-                placeholder={zh ? "提示词：输入 $触发词 后发给教练的指令" : "Prompt sent to the coach when this skill runs"}
-                aria-label={zh ? "技能提示词" : "Skill prompt"}
+                placeholder={appUiCopy(layout.composerLanguage, "提示词：输入 $触发词 后发给教练的指令")}
+                aria-label={appUiCopy(layout.composerLanguage, "技能提示词")}
                 rows={3}
                 onChange={(event) =>
                   setSkillDraftFields((fields) => ({ ...fields, prompt: event.target.value }))
@@ -11991,15 +11763,15 @@ export function App() {
                 className="skill-deck__mini-button skill-deck__mini-button--primary"
                 onClick={saveCustomSkillDraft}
               >
-                {zh ? "保存技能" : "Save skill"}
+                {appUiCopy(layout.composerLanguage, "保存技能")}
               </button>
             </div>
             <div className="skill-deck__form">
               <textarea
                 className="skill-deck__textarea"
                 value={skillImportText}
-                placeholder={zh ? "粘贴技能分享包 JSON 进行安装" : "Paste a skill share payload (JSON) to install"}
-                aria-label={zh ? "安装技能" : "Install skill"}
+                placeholder={appUiCopy(layout.composerLanguage, "粘贴技能分享包 JSON 进行安装")}
+                aria-label={appUiCopy(layout.composerLanguage, "安装技能")}
                 rows={2}
                 onChange={(event) => setSkillImportText(event.target.value)}
               />
@@ -12009,7 +11781,7 @@ export function App() {
                 disabled={!skillImportText.trim()}
                 onClick={installCustomSkillFromPaste}
               >
-                {zh ? "安装技能" : "Install skill"}
+                {appUiCopy(layout.composerLanguage, "安装技能")}
               </button>
             </div>
           </div>
@@ -12069,7 +11841,7 @@ export function App() {
                   })
                 }
               >
-                {layout.composerLanguage === "zh-CN" ? `接着做：${item.label}` : `Continue: ${item.label}`}
+                {appUiCopy(layout.composerLanguage, "接着做：{v}").replace("{v}", item.label)}
               </button>
             ))
           )}
@@ -12158,9 +11930,7 @@ export function App() {
       setOperationMessage({
         tone: "info",
         message:
-          layout.composerLanguage === "zh-CN"
-            ? "练习模式需要在 VS Code 扩展中启动。"
-            : "Practice mode starts inside the VS Code extension.",
+          appUiCopy(layout.composerLanguage, "练习模式需要在 VS Code 扩展中启动。"),
       });
       return;
     }
@@ -12305,28 +12075,15 @@ export function App() {
     if (isFirstCoachConversation && providerCanCoachNow) {
       // §六十一: three starter prompts — not a dashboard. Filling the draft
       // keeps the learner in control of what gets sent.
-      const starters = (
-        layout.composerLanguage === "zh-CN"
-          ? [
-              { label: "解释这个项目", prompt: "带我理解这个项目的结构和它是做什么的。" },
-              { label: "帮我调试", prompt: "我遇到一个报错，帮我一起定位原因。" },
-              { label: "教我一点新东西", prompt: "结合当前项目，教我一个我还不懂的概念。" },
-            ]
-          : [
-              { label: "Explain this project", prompt: "Walk me through what this project does and how it is structured." },
-              { label: "Help me debug", prompt: "I am stuck on an error — help me find the cause." },
-              { label: "Teach me something", prompt: "Teach me one concept from this project that I may not know." },
-            ]
-      );
+      const starters =
+        COACH_STARTER_PROMPTS[layout.composerLanguage] ?? COACH_STARTER_PROMPTS["en-US"];
       return (
         <div className="coach-empty-state coach-empty-state--welcome">
           <p>
-            {layout.composerLanguage === "zh-CN"
-              ? "你在做什么？"
-              : "What are you working on?"}
+            {appUiCopy(layout.composerLanguage, "你在做什么？")}
           </p>
           <div className="coach-empty-state__starters" role="group"
-            aria-label={layout.composerLanguage === "zh-CN" ? "开始方式" : "Ways to start"}>
+            aria-label={appUiCopy(layout.composerLanguage, "开始方式")}>
             {starters.map((starter) => (
               <button
                 key={starter.label}
@@ -12380,19 +12137,9 @@ export function App() {
 
   const coachCheckpointRecovery =
     leftoverStreamingCheckpointNotLive ? false : isCoachCheckpointRecoveryState(streaming);
-  const coachCheckpointRecoveryCopy = layout.composerLanguage === "zh-CN"
-    ? {
-        title: "本轮已中断，可从已保存进度继续",
-        resume: "恢复最近进度",
-        replay: "查看本轮记录",
-        hint: "恢复 checkpoint 不会重新发送当前草稿；查看记录不会改变当前对话。",
-      }
-    : {
-        title: "This turn was interrupted. Continue from saved progress.",
-        resume: "Resume latest progress",
-        replay: "View this turn's record",
-        hint: "Resuming the checkpoint does not resend your draft; viewing the record does not change this conversation.",
-      };
+  const coachCheckpointRecoveryCopy =
+    COACH_CHECKPOINT_RECOVERY_COPY[layout.composerLanguage] ??
+    COACH_CHECKPOINT_RECOVERY_COPY["en-US"];
   const runCoachCheckpointRecoveryAction = (action: CoachCheckpointRecoveryAction) => {
     if (isBrowserPreview) {
       return;
@@ -12430,10 +12177,10 @@ export function App() {
       eyebrow={undefined}
       title={undefined}
       subtitle={undefined}
-      openArtifactLabel={layout.composerLanguage === "zh-CN" ? "\u5c55\u5f00" : "Open"}
+      openArtifactLabel={appUiCopy(layout.composerLanguage, "\u5c55\u5f00")}
       userLabel={t.you}
       assistantLabel={t.trainer}
-      systemLabel={layout.composerLanguage === "zh-CN" ? "\u7cfb\u7edf" : "System"}
+      systemLabel={appUiCopy(layout.composerLanguage, "\u7cfb\u7edf")}
       language={layout.composerLanguage}
       emptyState={embedded || workspaceSessionBlocked ? null : coachSuperEntryContent(false)}
       footer={embedded ? undefined : coachCheckpointRecoveryActions}
@@ -12618,11 +12365,9 @@ export function App() {
           ? resourcesViewLabel(layout.composerLanguage)
           : trainingViewLabel(layout.composerLanguage);
     const summary = isStreamingForView
-      ? isZh
-        ? "正在回复"
-        : "Replying"
+      ? appUiCopy(layout.composerLanguage, "正在回复")
       : truncateInlineText(visibleReply.body, isZh ? 26 : 52) ??
-        (isZh ? "查看回复" : "View reply");
+        (appUiCopy(layout.composerLanguage, "查看回复"));
 
     return (
       <details
@@ -12631,7 +12376,7 @@ export function App() {
         open={isStreamingForView}
       >
         <summary>
-          <span>{isZh ? `${viewLabel} · 本次教练回复` : `${viewLabel} · Latest Coach reply`}</span>
+          <span>{appUiCopy(layout.composerLanguage, "{v} · 本次教练回复").replace("{v}", viewLabel)}</span>
           <strong>{summary}</strong>
         </summary>
         <div className="view-agent-reply__body" aria-live={isStreamingForView ? "polite" : undefined}>
@@ -12640,8 +12385,8 @@ export function App() {
             className={isStreamingForView ? "message-bubble--streaming" : undefined}
             language={layout.composerLanguage}
             message={visibleReply}
-            openArtifactLabel={layout.composerLanguage === "zh-CN" ? "展开" : "Open"}
-            systemLabel={layout.composerLanguage === "zh-CN" ? "系统" : "System"}
+            openArtifactLabel={appUiCopy(layout.composerLanguage, "展开")}
+            systemLabel={appUiCopy(layout.composerLanguage, "系统")}
             userLabel={t.you}
             streaming={isStreamingForView}
             onArtifactOpen={stableHandleCoachArtifactOpen}
@@ -12681,11 +12426,10 @@ export function App() {
         const cardId = ts?.selectedCardId?.trim();
         const cardTitle = ts?.selectedCardTitle?.trim();
         if (!cardId || !cardTitle) return null;
-        const zh = layout.composerLanguage === "zh-CN";
         return (
           <div className="coach-training-resume" role="status">
             <span className="coach-training-resume__label">
-              {zh ? "进行中" : "In progress"}
+              {appUiCopy(layout.composerLanguage, "进行中")}
             </span>
             <span className="coach-training-resume__title">{cardTitle}</span>
             <button
@@ -12693,7 +12437,7 @@ export function App() {
               className="toolbar-button coach-training-resume__go"
               onClick={() => setActiveView("training")}
             >
-              {zh ? "继续" : "Continue"}
+              {appUiCopy(layout.composerLanguage, "继续")}
             </button>
           </div>
         );
@@ -12731,15 +12475,15 @@ export function App() {
     if (!latestCoachArtifact || leftoverCoachTurnChromeNotLive) {
       return sendStatuslineText(sendAnalysis, data, layout, t);
     }
-    if (layout.composerLanguage === "zh-CN") {
-      const action = latestCoachArtifact.recommendedAction
-        ? `现在顺着这条结果继续：${latestCoachArtifact.title}`
-        : `当前主线：${latestCoachArtifact.title}`;
-      return latestArtifactTeaser ? `${action} · ${latestArtifactTeaser}` : action;
-    }
     const action = latestCoachArtifact.recommendedAction
-      ? `Continuing this result: ${latestCoachArtifact.title}`
-      : `Current lane: ${latestCoachArtifact.title}`;
+      ? appUiCopy(layout.composerLanguage, "现在顺着这条结果继续：{v}").replace(
+          "{v}",
+          () => latestCoachArtifact.title,
+        )
+      : appUiCopy(layout.composerLanguage, "当前主线：{v}").replace(
+          "{v}",
+          () => latestCoachArtifact.title,
+        );
     return latestArtifactTeaser ? `${action} · ${latestArtifactTeaser}` : action;
   };
 
@@ -12783,9 +12527,7 @@ export function App() {
           ? t.composerPlaceholderPlan
           : t.composerPlaceholder
       : activeView === "plan"
-        ? layout.composerLanguage === "zh-CN"
-          ? "先记下下一条计划备注。"
-          : "Queue the next plan note here."
+        ? appUiCopy(layout.composerLanguage, "先记下下一条计划备注。")
         : activeView === "training"
           ? trainingComposerModeTextCopy.genericPlaceholder
           : providerRecoveryLocale(layout.composerLanguage).draftWhilePaused;
@@ -12812,25 +12554,17 @@ export function App() {
     sendBlocked
       ? blockedComposerFallback
       : activeView === "resources"
-        ? layout.composerLanguage === "zh-CN"
-          ? "找资料"
-          : "Find a file"
+        ? appUiCopy(layout.composerLanguage, "找资料")
         : activeView === "training"
           ? trainingComposerModeTextCopy.genericPlaceholder
           : activeView === "plan"
-            ? layout.composerLanguage === "zh-CN"
-              ? "写下这一步"
-              : "Write the next step"
+            ? appUiCopy(layout.composerLanguage, "写下这一步")
             : blockedComposerFallback;
   const refinedUtilityComposerPlaceholder =
     activeView === "resources"
-      ? layout.composerLanguage === "zh-CN"
-        ? "找资料"
-        : "Find a file"
+      ? appUiCopy(layout.composerLanguage, "找资料")
       : activeView === "plan"
-        ? layout.composerLanguage === "zh-CN"
-          ? "写下这一步"
-          : "Write the next step"
+        ? appUiCopy(layout.composerLanguage, "写下这一步")
         : compactUtilityComposerPlaceholder;
   const trainingFilePracticeTextCopy = trainingFilePracticeText(layout.composerLanguage);
   const trainingHandoffComposerTextCopy = trainingHandoffComposerText(layout.composerLanguage);
@@ -12873,27 +12607,34 @@ export function App() {
         : activeView === "plan"
           ? activePlanComposerMode.placeholder
           : refinedUtilityComposerPlaceholder;
+  const planSummarySource =
+    formalPlanLive
+      ? activePlanStage?.title ?? resolvedCoachStage ?? resolvedCoachFocus ?? livePlanSummary
+      : recoveredDisplayFacts.currentStep || livePlanTitle;
+  const planSummaryTruncated = truncateInlineText(
+    planSummarySource,
+    layout.composerLanguage === "zh-CN" ? 24 : 48,
+  );
   const resolvedUtilityComposerSummary =
     activeView === "resources"
-      ? layout.composerLanguage === "zh-CN"
-        ? `资料：${selectedResourceNavigationLabel ?? "先让教练定位文件"}`
-        : `Resources: ${selectedResourceNavigationLabel ?? "Let Coach locate the next file"}`
+      ? selectedResourceNavigationLabel
+        ? appUiCopy(layout.composerLanguage, "资料：{v}").replace(
+            "{v}",
+            () => selectedResourceNavigationLabel,
+          )
+        : appUiCopy(layout.composerLanguage, "资料：先让教练定位文件")
       : activeView === "plan"
-        ? layout.composerLanguage === "zh-CN"
-          ? `计划：${truncateInlineText(formalPlanLive ? activePlanStage?.title ?? resolvedCoachStage ?? resolvedCoachFocus ?? livePlanSummary : recoveredDisplayFacts.currentStep || livePlanTitle, 24) ?? "解释当前阶段"}`
-          : `Plan: ${truncateInlineText(formalPlanLive ? activePlanStage?.title ?? resolvedCoachStage ?? resolvedCoachFocus ?? livePlanSummary : recoveredDisplayFacts.currentStep || livePlanTitle, 48) ?? "Explain the current stage"}`
+        ? planSummaryTruncated
+          ? appUiCopy(layout.composerLanguage, "计划：{v}").replace("{v}", () => planSummaryTruncated)
+          : appUiCopy(layout.composerLanguage, "计划：解释当前阶段")
         : activeView === "coach"
           ? contextualComposerSummary()
           : undefined;
   const resolvedUtilityComposerHint =
     activeView === "resources"
-      ? layout.composerLanguage === "zh-CN"
-        ? "可以让教练先找文件、判断最该打开哪一个，或建议如何整理当前资料区。"
-        : "Ask Coach to find the right file, decide what to open next, or suggest how to organize this resource area."
+      ? appUiCopy(layout.composerLanguage, "可以让教练先找文件、判断最该打开哪一个，或建议如何整理当前资料区。")
       : activeView === "plan"
-        ? layout.composerLanguage === "zh-CN"
-          ? "这里适合解释当前阶段、梳理 evidence，或把 blocker 压成更小的下一步。"
-          : "Use this to explain the current stage, structure evidence, or compress a blocker into a smaller next step."
+        ? appUiCopy(layout.composerLanguage, "这里适合解释当前阶段、梳理 evidence，或把 blocker 压成更小的下一步。")
         : providerCanCoachNow && !providerBlockReason
           ? composerSurfaceHint()
           : undefined;
@@ -12907,66 +12648,69 @@ export function App() {
       : activeView === "plan"
         ? activePlanComposerMode.hint
         : refinedUtilityComposerHint;
+  const studyFocusSource =
+    trainingTargetSkill ?? trainingScenarioPackLabel ?? trainingProblemStatement;
+  const studyFocusText =
+    truncateInlineText(studyFocusSource, layout.composerLanguage === "zh-CN" ? 22 : 44) ??
+    studyFocusSource;
+  const returnModeText = truncateInlineText(
+    trainingReturnWithText ?? trainingSuccessSignal ?? trainingCoachBridge.ctaLabel,
+    layout.composerLanguage === "zh-CN" ? 26 : 52,
+  );
+  const reflectFallbackText = truncateInlineText(
+    trainingFallbackActionText ??
+      trainingComposerSelectedVerifyItem ??
+      trainingState?.latestLearningBlocker,
+    layout.composerLanguage === "zh-CN" ? 26 : 52,
+  );
+  const currentCheckText =
+    truncateInlineText(
+      trainingComposerSelectedVerifyItem,
+      layout.composerLanguage === "zh-CN" ? 26 : 52,
+    ) ?? trainingComposerSelectedVerifyItem;
   const resolvedComposerSummary = trainingComposerTalkMode
-    ? layout.composerLanguage === "zh-CN"
-      ? "\u8bad\u7ec3 \u00b7 \u4e0e\u6559\u7ec3\u5bf9\u8bdd"
-      : "Training · Coach conversation"
+    ? appUiCopy(layout.composerLanguage, "\u8bad\u7ec3 \u00b7 \u4e0e\u6559\u7ec3\u5bf9\u8bdd")
     : composerUsesTrainingFlow
     ? trainingComposerUsesAnswerMode
-      ? layout.composerLanguage === "zh-CN"
-        ? `\u4f5c\u7b54\u65b9\u5f0f\uff1a${
-            trainingComposerFlashMode === "choice"
-              ? "\u9009\u62e9"
-              : trainingComposerFlashMode === "fill"
-                ? "\u586b\u7a7a"
-                : "\u7b80\u7b54"
-          }`
-        : `Answer mode: ${
-            trainingComposerFlashMode === "choice"
-              ? "Choice"
-              : trainingComposerFlashMode === "fill"
-                ? "Fill"
-                : "Short"
-          }`
+      ? appUiCopy(
+          layout.composerLanguage,
+          trainingComposerFlashMode === "choice"
+            ? "作答方式：选择"
+            : trainingComposerFlashMode === "fill"
+              ? "作答方式：填空"
+              : "作答方式：简答",
+        )
       : trainingComposerPracticeInputMode
         ? trainingComposerFilePracticeMode
-          ? layout.composerLanguage === "zh-CN"
-            ? `\u52a8\u624b\uff1a${trainingComposerPracticeReturnMode === "result" ? "\u7ed3\u679c\u8bb0\u5f55" : "Blocker"}`
-            : `Try: ${trainingComposerPracticeReturnMode === "result" ? "Result note" : "Blocker"}`
-          : layout.composerLanguage === "zh-CN"
-            ? `\u52a8\u624b\uff1a${trainingComposerPracticeReturnMode === "result" ? "\u7ed3\u679c" : "Blocker"}`
-            : `Try: ${trainingComposerPracticeReturnMode === "result" ? "Result" : "Blocker"}`
+          ? appUiCopy(
+              layout.composerLanguage,
+              trainingComposerPracticeReturnMode === "result" ? "动手：结果记录" : "动手：Blocker",
+            )
+          : appUiCopy(
+              layout.composerLanguage,
+              trainingComposerPracticeReturnMode === "result" ? "动手：结果" : "动手：Blocker",
+            )
       : trainingComposerStudyMode
-        ? layout.composerLanguage === "zh-CN"
-          ? `\u5b66\u4e60\u805a\u7126\uff1a${truncateInlineText(trainingTargetSkill ?? trainingScenarioPackLabel ?? trainingProblemStatement, 22) ?? (trainingTargetSkill ?? trainingScenarioPackLabel ?? trainingProblemStatement ?? "\u5f53\u524d\u5361\u7247")}`
-          : `Study focus: ${truncateInlineText(trainingTargetSkill ?? trainingScenarioPackLabel ?? trainingProblemStatement, 44) ?? (trainingTargetSkill ?? trainingScenarioPackLabel ?? trainingProblemStatement ?? "Current card")}`
+        ? studyFocusText
+          ? appUiCopy(layout.composerLanguage, "学习聚焦：{v}").replace("{v}", () => studyFocusText)
+          : appUiCopy(layout.composerLanguage, "学习聚焦：当前卡片")
       : trainingComposerReturnMode
-        ? layout.composerLanguage === "zh-CN"
-          ? `\u56de\u6d41\uff1a${truncateInlineText(trainingReturnWithText ?? trainingSuccessSignal ?? trainingCoachBridge.ctaLabel, 26) ?? "\u5e26\u56de\u7ed3\u679c"}`
-          : `Return: ${truncateInlineText(trainingReturnWithText ?? trainingSuccessSignal ?? trainingCoachBridge.ctaLabel, 52) ?? "Bring back the result"}`
+        ? returnModeText
+          ? appUiCopy(layout.composerLanguage, "回流：{v}").replace("{v}", () => returnModeText)
+          : appUiCopy(layout.composerLanguage, "回流：带回结果")
       : trainingComposerReflectMode
         ? trainingComposerReflectReason === "flash_answered"
-          ? layout.composerLanguage === "zh-CN"
-            ? "\u590d\u76d8\uff1a\u538b\u6210\u4e00\u6761\u89c4\u5219"
-            : "Reflect: One rule"
+          ? appUiCopy(layout.composerLanguage, "\u590d\u76d8\uff1a\u538b\u6210\u4e00\u6761\u89c4\u5219")
           : trainingComposerReflectReason === "skipped"
-            ? layout.composerLanguage === "zh-CN"
-              ? "\u590d\u76d8\uff1a\u6536\u7d27\u5165\u53e3"
-              : "Reflect: Smaller slice"
+            ? appUiCopy(layout.composerLanguage, "\u590d\u76d8\uff1a\u6536\u7d27\u5165\u53e3")
             : trainingComposerReflectReason === "verification_passed"
-              ? layout.composerLanguage === "zh-CN"
-                ? "\u590d\u76d8\uff1a\u5df2\u9a8c\u8bc1\u7684\u89c4\u5219"
-                : "Reflect: Verified rule"
-            : layout.composerLanguage === "zh-CN"
-              ? `\u590d\u76d8\uff1a${truncateInlineText(trainingFallbackActionText ?? trainingComposerSelectedVerifyItem ?? trainingState?.latestLearningBlocker, 26) ?? "收紧 blocker"}`
-              : `Reflect: ${truncateInlineText(trainingFallbackActionText ?? trainingComposerSelectedVerifyItem ?? trainingState?.latestLearningBlocker, 52) ?? "Tighten the blocker"}`
+              ? appUiCopy(layout.composerLanguage, "\u590d\u76d8\uff1a\u5df2\u9a8c\u8bc1\u7684\u89c4\u5219")
+            : reflectFallbackText
+              ? appUiCopy(layout.composerLanguage, "复盘：{v}").replace("{v}", () => reflectFallbackText)
+              : appUiCopy(layout.composerLanguage, "复盘：收紧 blocker")
       : trainingComposerSelectedVerifyItem
-        ? layout.composerLanguage === "zh-CN"
-          ? `\u5f53\u524d\u68c0\u67e5\uff1a${truncateInlineText(trainingComposerSelectedVerifyItem, 26) ?? trainingComposerSelectedVerifyItem}`
-          : `Current check: ${truncateInlineText(trainingComposerSelectedVerifyItem, 52) ?? trainingComposerSelectedVerifyItem}`
-        : layout.composerLanguage === "zh-CN"
-          ? "\u8bb0\u4e0b\u8fd9\u4e00\u8f6e\u7684\u7ed3\u679c\u3002"
-          : "Record this round's result."
+        ? appUiCopy(layout.composerLanguage, "当前检查：{v}").replace("{v}", () => currentCheckText)
+        : appUiCopy(layout.composerLanguage, "\u8bb0\u4e0b\u8fd9\u4e00\u8f6e\u7684\u7ed3\u679c\u3002")
     : resolvedUtilityComposerSummary;
   const laneAwareComposerSummary =
     trainingComposerTalkMode || composerUsesTrainingFlow
@@ -12996,20 +12740,14 @@ export function App() {
   const refinedComposerAccessibilityLabel = composerUsesTrainingFlow
     ? resolvedComposerAccessibilityLabel
     : activeView === "plan"
-      ? layout.composerLanguage === "zh-CN"
-        ? "提交计划讨论、生成或证据整理请求"
-        : "Submit a plan discussion, generation, or evidence request"
+      ? appUiCopy(layout.composerLanguage, "提交计划讨论、生成或证据整理请求")
       : activeView === "resources"
-        ? layout.composerLanguage === "zh-CN"
-          ? "提交资料定位、整理、下载或转卡请求"
-          : "Submit a resource locate, organize, download, or card request"
+        ? appUiCopy(layout.composerLanguage, "提交资料定位、整理、下载或转卡请求")
         : activeView === "coach"
           ? t.composerAccessibility
           : activeView === "training"
             ? trainingComposerModeTextCopy.genericAccessibilityLabel
-          : layout.composerLanguage === "zh-CN"
-            ? "提交当前视图请求"
-            : "Submit the current view request";
+          : appUiCopy(layout.composerLanguage, "提交当前视图请求");
   const laneAwareComposerAccessibilityLabel =
     trainingComposerTalkMode || composerUsesTrainingFlow
       ? resolvedComposerAccessibilityLabel
@@ -13035,13 +12773,7 @@ export function App() {
             ? trainingComposerModeTextCopy.genericAccessibilityLabel
           : activeView === "resources"
             ? activeResourcesComposerMode.accessibilityLabel
-          : layout.composerLanguage === "zh-CN"
-            ? activeView === "coach"
-              ? "发送消息"
-              : "发送请求"
-            : activeView === "coach"
-              ? "Send message"
-              : "Send request";
+          : appUiCopy(layout.composerLanguage, activeView === "coach" ? "发送消息" : "发送请求");
   const localizedTrainingComposerSummary =
     !trainingComposerTalkMode && composerUsesTrainingFlow && trainingComposerReturnMode
       ? trainingHandoffComposerTextCopy.returnSummary
@@ -13070,16 +12802,12 @@ export function App() {
     }
     if (isBrowserPreview) {
       setTrainingVerifyNotice(
-        layout.composerLanguage === "zh-CN"
-          ? "预览不能验证当前文件；真实工作区中将运行验证。"
-          : "Previews cannot verify the current file; verification runs in a real workspace.",
+        appUiCopy(layout.composerLanguage, "预览不能验证当前文件；真实工作区中将运行验证。"),
       );
       return;
     }
     setTrainingVerifyNotice(
-      layout.composerLanguage === "zh-CN"
-        ? "已提交当前文件验证，等待结果。"
-        : "Verification submitted; waiting for the result.",
+      appUiCopy(layout.composerLanguage, "已提交当前文件验证，等待结果。"),
     );
     postMessage({
       type: "command/execute",
@@ -13122,7 +12850,7 @@ export function App() {
         }
       }}
     >
-      {layout.composerLanguage === "zh-CN" ? "开始练习" : "Start practicing"}
+      {appUiCopy(layout.composerLanguage, "开始练习")}
     </button>
   );
 
@@ -13299,16 +13027,12 @@ export function App() {
           }
           deleteUnavailableReason={
             isBrowserPreview
-              ? layout.composerLanguage === "zh-CN"
-                ? "\u6d4f\u89c8\u5668\u9884\u89c8\u4e0d\u4f1a\u5220\u9664\u771f\u5b9e\u8d44\u6599\u3002\u8bf7\u5728 VS Code \u4fa7\u680f\u4e2d\u6267\u884c\u3002"
-                : "Browser preview cannot delete real resources. Use the VS Code sidebar."
+              ? appUiCopy(layout.composerLanguage, "\u6d4f\u89c8\u5668\u9884\u89c8\u4e0d\u4f1a\u5220\u9664\u771f\u5b9e\u8d44\u6599\u3002\u8bf7\u5728 VS Code \u4fa7\u680f\u4e2d\u6267\u884c\u3002")
               : undefined
           }
           restoreUnavailableReason={
             isBrowserPreview
-              ? layout.composerLanguage === "zh-CN"
-                ? "\u6d4f\u89c8\u5668\u9884\u89c8\u4e0d\u4f1a\u6062\u590d\u771f\u5b9e\u8d44\u6599\u3002\u8bf7\u5728 VS Code \u4fa7\u680f\u4e2d\u6267\u884c\u3002"
-                : "Browser preview cannot restore real resources. Use the VS Code sidebar."
+              ? appUiCopy(layout.composerLanguage, "\u6d4f\u89c8\u5668\u9884\u89c8\u4e0d\u4f1a\u6062\u590d\u771f\u5b9e\u8d44\u6599\u3002\u8bf7\u5728 VS Code \u4fa7\u680f\u4e2d\u6267\u884c\u3002")
               : undefined
           }
           />
@@ -13999,7 +13723,7 @@ export function App() {
         }
         reviewRhythmSummary={resolvedCoachReview}
         nextReviewDue={formattedNextReviewDue}
-        longTermMemoryStateLabel={layout.composerLanguage === "zh-CN" ? "已启用" : "Enabled"}
+        longTermMemoryStateLabel={appUiCopy(layout.composerLanguage, "已启用")}
         themePreference={layout.themePreference}
         memoryShareGrants={data.memory.memoryShareGrants ?? []}
         learningSurfaceAlignment={layout.learningSurfaceAlignment}
@@ -14354,9 +14078,7 @@ export function App() {
             setOperationMessage({
               tone: "info",
               message:
-                layout.composerLanguage === "zh-CN"
-                  ? "浏览器预览没有工作区配置文件入口。这个按钮只在 VS Code 侧栏里可用。"
-                  : "Browser preview does not expose a workspace config file. This action is only available inside the VS Code sidebar.",
+                appUiCopy(layout.composerLanguage, "浏览器预览没有工作区配置文件入口。这个按钮只在 VS Code 侧栏里可用。"),
             });
             return;
           }
@@ -14370,9 +14092,7 @@ export function App() {
             setOperationMessage({
               tone: "info",
               message:
-                layout.composerLanguage === "zh-CN"
-                  ? "浏览器预览只显示预置的工作区边界状态。重新读取真实边界请回到 VS Code 侧栏。"
-                  : "Browser preview only shows seeded workspace boundary state. Re-read the real boundary in the VS Code sidebar.",
+                appUiCopy(layout.composerLanguage, "浏览器预览只显示预置的工作区边界状态。重新读取真实边界请回到 VS Code 侧栏。"),
             });
             return;
           }
@@ -14398,9 +14118,7 @@ export function App() {
             setOperationMessage({
               tone: "info",
               message:
-                layout.composerLanguage === "zh-CN"
-                  ? "浏览器预览不能修改 managed data folder。请在 VS Code 侧栏里选择真实路径。"
-                  : "Browser preview cannot change the managed data folder. Choose the real path in the VS Code sidebar.",
+                appUiCopy(layout.composerLanguage, "浏览器预览不能修改 managed data folder。请在 VS Code 侧栏里选择真实路径。"),
             });
             return;
           }
@@ -14414,9 +14132,7 @@ export function App() {
             setOperationMessage({
               tone: "info",
               message:
-                layout.composerLanguage === "zh-CN"
-                  ? "浏览器预览不能重置 managed data folder。请在 VS Code 侧栏里使用推荐路径。"
-                  : "Browser preview cannot reset the managed data folder. Use the recommended path in the VS Code sidebar.",
+                appUiCopy(layout.composerLanguage, "浏览器预览不能重置 managed data folder。请在 VS Code 侧栏里使用推荐路径。"),
             });
             return;
           }
@@ -14468,9 +14184,7 @@ export function App() {
           setOperationMessage({
             tone: "success",
             message:
-              defaultLanguage === "zh-CN"
-                ? "已恢复教练默认设置。"
-                : "Coach defaults restored.",
+              appUiCopy(defaultLanguage, "已恢复教练默认设置。"),
           });
         }}
         onNavigateToView={setActiveView}
@@ -14587,8 +14301,8 @@ export function App() {
               data-testid="trainer-history-toggle"
               onClick={() => setOpenMenu(openMenu === "history" ? undefined : "history")}
               type="button"
-              aria-label={layout.composerLanguage === "zh-CN" ? "会话历史" : "Chat history"}
-              title={layout.composerLanguage === "zh-CN" ? "会话历史" : "Chat history"}
+              aria-label={appUiAltCopy(layout.composerLanguage, "会话历史")}
+              title={appUiAltCopy(layout.composerLanguage, "会话历史")}
               aria-expanded={openMenu === "history"}
             >
               <span className="header-switcher__icon" aria-hidden="true">
@@ -14634,7 +14348,7 @@ export function App() {
             <button
               type="button"
               className="notice__dismiss"
-              aria-label={layout.composerLanguage === "zh-CN" ? "关闭提示" : "Dismiss notice"}
+              aria-label={appUiCopy(layout.composerLanguage, "关闭提示")}
               onClick={dismissOperationMessage}
             >
               ×
@@ -14739,7 +14453,7 @@ export function App() {
               >
                 <div className="composer-presencebar__context">
                   <div className="composer-presencebar__copy">
-                    <strong>{layout.composerLanguage === "zh-CN" ? "资料上下文" : "Resource context"}</strong>
+                    <strong>{appUiCopy(layout.composerLanguage, "资料上下文")}</strong>
                     <span>{resourceConversationContextLabel}</span>
                   </div>
                 </div>
@@ -14753,7 +14467,7 @@ export function App() {
                     }}
                   >
                     <span className="composer-secondary-button__label">
-                      {layout.composerLanguage === "zh-CN" ? "清除" : "Clear"}
+                      {appUiCopy(layout.composerLanguage, "清除")}
                     </span>
                   </button>
                 </div>
@@ -14796,9 +14510,7 @@ export function App() {
               }
               busyLabel={
                 trainingPersistencePending
-                  ? layout.composerLanguage === "zh-CN"
-                    ? "保存中"
-                    : "Saving"
+                  ? appUiCopy(layout.composerLanguage, "保存中")
                   : t.streaming
               }
               submitLabel=""

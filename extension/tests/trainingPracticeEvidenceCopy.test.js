@@ -21,6 +21,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+const appUiCopySourcePath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'app',
+  'appUiCopy.ts',
+);
 const trainingViewSourcePath = path.resolve(
   __dirname,
   '..',
@@ -154,7 +162,10 @@ test('training structured guidance is wired from App into a collapsed single-car
   assert.match(trainingViewSource, /className="training-next-move"/);
   assert.match(trainingViewSource, /className="training-guidance-details"/);
   assert.match(trainingViewSource, /cardOnly\?: boolean;/);
-  assert.match(trainingViewSource, /scenarioPackLabel \? `\$\{isZh \? "\\u573a\\u666f\\u5305" : "Scenario pack"\}/);
+  assert.match(
+    trainingViewSource,
+    /scenarioPackLabel\s*\?\s*`\$\{trainingWorkbenchText\(language, "scenarioPack"\)\}: \$\{scenarioPackLabel\}`/,
+  );
   assert.match(trainingViewSource, /isFlashCard && !cardOnly && nextMovePrimary && !learnPhaseActive/);
   assert.match(trainingViewSource, /Hints and guardrails/);
   assert.match(trainingViewSource, /Files to touch/);
@@ -255,14 +266,22 @@ test('training composer uses explicit try reflect return phases for practice', (
   assert.match(appSource, /const resolvedComposerSummary = trainingComposerTalkMode/);
   assert.match(appSource, /:\s*composerUsesTrainingFlow\s*\?/);
   assert.match(appSource, /trainingComposerPracticeInputMode\s*\?\s*trainingComposerFilePracticeMode/);
-  assert.match(appSource, /trainingComposerReturnMode\s*\?\s*layout\.composerLanguage === "zh-CN"/);
+  assert.match(appSource, /trainingComposerReturnMode\s*\?\s*trainingHandoffComposerTextCopy\.returnPlaceholder/);
   assert.match(appSource, /trainingComposerReflectMode\s*\?\s*trainingComposerReflectReason === "flash_answered"/);
-  assert.match(appSource, /Try: \$\{trainingComposerPracticeReturnMode === "result" \? "Result note" : "Blocker"\}/);
-  assert.match(appSource, /`Return: \$\{truncateInlineText\(trainingReturnWithText \?\? trainingSuccessSignal \?\? trainingCoachBridge\.ctaLabel,/);
-  assert.match(appSource, /`Reflect: \$\{truncateInlineText\(trainingFallbackActionText \?\? trainingComposerSelectedVerifyItem \?\? trainingState\?\.latestLearningBlocker,/);
-  assert.match(appSource, /Reflect: One rule/);
-  assert.match(appSource, /Reflect: Smaller slice/);
-  assert.match(appSource, /Reflect: Verified rule/);
+  assert.match(
+    appSource,
+    /trainingComposerPracticeReturnMode === "result" \? "动手：结果记录" : "动手：Blocker"/,
+  );
+  assert.match(appSource, /appUiCopy\(layout\.composerLanguage, "回流：\{v\}"\)\.replace\("\{v\}", \(\) => returnModeText\)/);
+  assert.match(appSource, /appUiCopy\(layout\.composerLanguage, "复盘：\{v\}"\)\.replace\("\{v\}", \(\) => reflectFallbackText\)/);
+  assert.match(
+    appSource,
+    /trainingComposerReflectReason === "flash_answered"\s*\?\s*appUiCopy\(layout\.composerLanguage, /,
+  );
+  const appUiCopySource = fs.readFileSync(appUiCopySourcePath, 'utf8');
+  assert.match(appUiCopySource, /"en-US": "Reflect: One rule"/);
+  assert.match(appUiCopySource, /"en-US": "Reflect: Smaller slice"/);
+  assert.match(appUiCopySource, /"en-US": "Reflect: Verified rule"/);
   assert.match(appSource, /State the rule you just confirmed and how you will reuse it\./);
 });
 

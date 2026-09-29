@@ -21,6 +21,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+const appUiCopyPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'appUiCopy.ts');
 const stylesPath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css');
 const coachMessageBubblePath = path.resolve(
   __dirname,
@@ -147,7 +148,9 @@ test('share action copies the selected reply to the clipboard', () => {
 
   assert.match(handler, /action === "share"/);
   assert.match(handler, /navigator\.clipboard\.writeText\(replyDoc\.markdown\)/);
-  assert.match(handler, /Coach reply copied to clipboard/);
+  assert.match(handler, /appUiCopy\(layout\.composerLanguage, "这条教练回复已复制到剪贴板。"\)/);
+  const appUiCopySource = fs.readFileSync(appUiCopyPath, 'utf8');
+  assert.match(appUiCopySource, /"en-US": "Coach reply copied to clipboard\."/);
 });
 
 test('message action pending state clears on stream or operation acknowledgements', () => {

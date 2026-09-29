@@ -126,7 +126,7 @@ test('Coach composer keeps model selection focused while setup stays in Settings
   assert.match(source, /composerProviderCopy\.modelPicker\.onlyCurrentModel/);
   assert.match(source, /composerProviderCopy\.modelPicker\.currentModel/);
   assert.match(source, /\{showSearch \|\| hasModelQuery \? \(/);
-  assert.match(source, /layout\.composerLanguage === "zh-CN" \? "刷新模型" : "Refresh models"/);
+  assert.match(source, /appUiCopy\(layout\.composerLanguage, "刷新模型"\)/);
   assert.match(source, /\{showModelSection \? \(/);
   assert.doesNotMatch(source, /searchMoreModelsHint/);
   assert.match(source, /!hasModelQuery && savedProfiles\.length > 0/);

@@ -21,6 +21,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+const appUiCopyPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'appUiCopy.ts');
 const stylesPath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css');
 const agentActivityPath = path.resolve(
   __dirname,
@@ -108,10 +109,12 @@ test('coach summary stays a compact horizontal context rail', () => {
 
 test('coach summary rail surfaces blocker guidance alongside the live thread', () => {
   const source = fs.readFileSync(appPath, 'utf8');
+  const appUiCopySource = fs.readFileSync(appUiCopyPath, 'utf8');
 
   assert.match(source, /runtimeBlockedReason/);
-  assert.match(source, /Current blocker/);
-  assert.match(source, /How the next turn will resume/);
+  assert.match(source, /appUiCopy\(layout\.composerLanguage, "当前阻塞"\)/);
+  assert.match(appUiCopySource, /"en-US": "Current blocker"/);
+  assert.match(appUiCopySource, /"en-US": "How the next turn will resume"/);
 });
 
 test('coach keeps the normal message thread free of a summary rail', () => {
@@ -177,7 +180,10 @@ test('coach agent activity renders as a normalized lightweight progress rail', (
 
   assert.match(source, /const displayStep/);
   assert.match(source, /step >= activities\.length \? step : step \+ 1/);
-  assert.match(source, /`Step \$\{displayStep\}`/);
+  assert.match(
+    source,
+    /agentActivityStripCopy\(language, "第 \{n\} 步"\)\.replace\("\{n\}", String\(displayStep\)\)/,
+  );
   assert.doesNotMatch(source, /`Step \$\{step \+ 1\}`/);
   assert.match(activityStrip[0], /border-left/);
   assert.doesNotMatch(activityStrip[0], /border:\s*1px/);
@@ -391,15 +397,17 @@ test('coach composer does not gate sending on an unverified streaming probe', ()
 
 test('Coach interrupted recovery exposes checkpoint resume and replay without resending the draft', () => {
   const source = fs.readFileSync(appPath, 'utf8');
+  const appUiCopySource = fs.readFileSync(appUiCopyPath, 'utf8');
   assert.match(source, /function isCoachCheckpointRecoveryState\(/);
   assert.match(source, /streaming\.streamError/);
   assert.match(source, /completionStopReason/);
   assert.match(source, /trainerCommands\.resumeLatestCoachCheckpoint/);
   assert.match(source, /trainerCommands\.replayLatestCoachCheckpoint/);
-  assert.match(source, /恢复最近进度/);
-  assert.match(source, /查看本轮记录/);
-  assert.match(source, /不会重新发送当前草稿/);
-  assert.match(source, /does not resend your draft/);
+  assert.match(source, /COACH_CHECKPOINT_RECOVERY_COPY\[layout\.composerLanguage\]/);
+  assert.match(appUiCopySource, /resume: "恢复最近进度"/);
+  assert.match(appUiCopySource, /replay: "查看本轮记录"/);
+  assert.match(appUiCopySource, /不会重新发送当前草稿/);
+  assert.match(appUiCopySource, /does not resend your draft/);
   assert.match(source, /action === "resume"/);
   assert.doesNotMatch(
     source.slice(source.indexOf('const coachCheckpointRecoveryActions'), source.indexOf('const renderCoachConversationPane')),

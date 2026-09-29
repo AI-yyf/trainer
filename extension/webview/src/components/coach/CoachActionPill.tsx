@@ -1,4 +1,5 @@
 import type { CoachActivity, ComposerLanguage } from "../../lib/types";
+import { coachActionPillCopy } from "./coachActionPillCopy";
 import {
   SearchIcon,
   PlanIcon,
@@ -43,7 +44,6 @@ function kindIcon(kind: CoachActivity["kind"], size = 12) {
 }
 
 export function CoachActionPill({ activity, language = "en-US" }: CoachActionPillProps) {
-  const isZh = language === "zh-CN";
   const isActive = activity.status === "active";
   const isCompleted = activity.status === "completed";
   const isFailed = activity.status === "failed";
@@ -68,12 +68,12 @@ export function CoachActionPill({ activity, language = "en-US" }: CoachActionPil
       <span className="coach-action-pill__label">{activity.label}</span>
       {isCompleted && (
         <span className="coach-action-pill__check" aria-hidden="true">
-          {isZh ? "完成" : "Done"}
+          {coachActionPillCopy(language, "完成")}
         </span>
       )}
       {isFailed && (
         <span className="coach-action-pill__err" aria-hidden="true">
-          {isZh ? "失败" : "Failed"}
+          {coachActionPillCopy(language, "失败")}
         </span>
       )}
     </span>

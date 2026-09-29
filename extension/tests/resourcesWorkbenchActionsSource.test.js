@@ -99,8 +99,16 @@ test('Resources uses real knowledge records and opens them through the existing 
     appSource,
     /onRestoreResources=\{\s*isBrowserPreview\s*\?\s*undefined\s*:\s*\(resourceIds\) => requestResourceMutation\("restore", resourceIds\)/,
   );
-  assert.match(appSource, /Browser preview cannot delete real resources\. Use the VS Code sidebar\./);
-  assert.match(appSource, /Browser preview cannot restore real resources\. Use the VS Code sidebar\./);
+  assert.match(
+    appSource,
+    /deleteUnavailableReason=\{\s*isBrowserPreview\s*\?\s*appUiCopy\(layout\.composerLanguage, "[^"]*"\)\s*:\s*undefined\s*\}/,
+  );
+  const appUiCopySource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'app', 'appUiCopy.ts'),
+    'utf8',
+  );
+  assert.match(appUiCopySource, /"en-US": "Browser preview cannot delete real resources\. Use the VS Code sidebar\."/);
+  assert.match(appUiCopySource, /"en-US": "Browser preview cannot restore real resources\. Use the VS Code sidebar\."/);
 });
 
 test('Resources separates tree selection from explicit native opening', () => {

@@ -1,4 +1,5 @@
 import type { ComposerLanguage } from "./types";
+import { trainingFeedbackPromptCopy } from "./universalLearningPromptCopy";
 
 type ScratchPaperPromptInput = {
   cardTitle?: string;
@@ -142,52 +143,47 @@ export type TrainingFeedbackPromptInput = {
 /**
  * Keep deterministic card bookkeeping separate from model feedback, while
  * giving the Agent enough grounded detail to stream a useful teaching turn.
+ * Prompt text is English-first: zh-CN resolves to the zh record key, and all
+ * other locales resolve to the exact English source.
  */
 export function buildTrainingFeedbackPrompt(
   language: ComposerLanguage,
   input: TrainingFeedbackPromptInput,
 ): string {
-  const isZh = language === "zh-CN";
+  const copy = (key: string) => trainingFeedbackPromptCopy(language, key);
   const phaseLabel =
     input.phase === "answer"
-      ? isZh
-        ? "作答"
-        : "answer"
+      ? copy("作答")
       : input.phase === "reflection"
-        ? isZh
-          ? "复盘"
-          : "reflection"
-        : isZh
-          ? "证据记录"
-          : "evidence note";
+        ? copy("复盘")
+        : copy("证据记录");
   const sections = [
-    isZh
-      ? `我刚提交了本轮训练${phaseLabel}。请基于同一训练线程给出可见的教练反馈。`
-      : `I just submitted a training ${phaseLabel}. Continue the same learning thread with a visible coaching response.`,
+    copy("我刚提交了本轮训练{phase}。请基于同一训练线程给出可见的教练反馈。").replace(
+      "{phase}",
+      phaseLabel,
+    ),
   ];
   if (input.cardTitle?.trim()) {
-    sections.push(isZh ? `训练卡：${input.cardTitle.trim()}` : `Training card: ${input.cardTitle.trim()}`);
+    sections.push(copy("训练卡：{title}").replace("{title}", input.cardTitle.trim()));
   }
   if (input.question?.trim()) {
-    sections.push(isZh ? `题目或任务：${input.question.trim()}` : `Question or task: ${input.question.trim()}`);
+    sections.push(copy("题目或任务：{q}").replace("{q}", input.question.trim()));
   }
   if (input.learnerAnswer?.trim()) {
-    sections.push(
-      isZh ? `我的提交：${input.learnerAnswer.trim()}` : `Learner submission: ${input.learnerAnswer.trim()}`,
-    );
+    sections.push(copy("我的提交：{a}").replace("{a}", input.learnerAnswer.trim()));
   }
   const evidenceItems = input.evidenceItems?.filter((item) => item.trim()).slice(0, 4) ?? [];
   if (evidenceItems.length > 0) {
     sections.push(
-      `${isZh ? "核验线索" : "Verification signals"}:\n${evidenceItems
+      `${copy("核验线索")}:\n${evidenceItems
         .map((item) => `- ${item}`)
         .join("\n")}`,
     );
   }
   sections.push(
-    isZh
-      ? "不要静默修改正式计划。说明这次提交证明了什么、仍有哪些不确定性，以及最小的下一步。答案不完整时要如实说明，回复保持足够精炼，便于马上行动。"
-      : "Do not silently change the formal plan. Explain what the submission proves, what is still uncertain, and the smallest next action. Be honest when the answer is incomplete; keep the response concise enough to act on.",
+    copy(
+      "不要静默修改正式计划。说明这次提交证明了什么、仍有哪些不确定性，以及最小的下一步。答案不完整时要如实说明，回复保持足够精炼，便于马上行动。",
+    ),
   );
   return sections.join("\n\n");
 }

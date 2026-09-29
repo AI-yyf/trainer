@@ -6,6 +6,8 @@
  */
 
 import type { ReactNode } from "react";
+import type { ComposerLanguage } from "../../lib/types";
+import { humanizedEmptyStatesCopy } from "./humanizedEmptyStatesCopy";
 import {
   SparklesIcon,
   SearchIcon,
@@ -29,7 +31,7 @@ export interface EmptyStateProps {
 export interface WelcomeEmptyStateProps {
   onGetStarted?: () => void;
   onOpenSettings?: () => void;
-  language: "zh-CN" | "en-US";
+  language: ComposerLanguage;
   className?: string;
 }
 
@@ -37,20 +39,20 @@ export interface SearchEmptyStateProps {
   query?: string;
   onClearSearch?: () => void;
   onTryDifferentSearch?: () => void;
-  language: "zh-CN" | "en-US";
+  language: ComposerLanguage;
   className?: string;
 }
 
 export interface LearningEmptyStateProps {
   onImportResources?: () => void;
   onStartLearning?: () => void;
-  language: "zh-CN" | "en-US";
+  language: ComposerLanguage;
   className?: string;
 }
 
 export interface SettingsEmptyStateProps {
   onConfigure?: () => void;
-  language: "zh-CN" | "en-US";
+  language: ComposerLanguage;
   className?: string;
 }
 
@@ -120,16 +122,11 @@ export function WelcomeEmptyState({
   language,
   className,
 }: WelcomeEmptyStateProps) {
-  const isZh = language === "zh-CN";
-
   return (
     <HumanizedEmptyState
       iconType="sparkles"
-      title={isZh ? "准备开始" : "Ready to start"}
-      description={isZh
-        ? "先连接模型，然后发送一个目标。"
-        : "Connect a model, then send a goal."
-      }
+      title={humanizedEmptyStatesCopy(language, "准备开始")}
+      description={humanizedEmptyStatesCopy(language, "先连接模型，然后发送一个目标。")}
       className={`humanized-empty-state--welcome ${className ?? ""}`}
       actions={
         <div className="humanized-empty-state__button-group">
@@ -138,7 +135,7 @@ export function WelcomeEmptyState({
               className="humanized-empty-state__action-btn secondary"
               onClick={onOpenSettings}
             >
-              {isZh ? "配置模型" : "Configure Model"}
+              {humanizedEmptyStatesCopy(language, "配置模型")}
             </button>
           )}
           {onGetStarted && (
@@ -146,7 +143,7 @@ export function WelcomeEmptyState({
               className="humanized-empty-state__action-btn primary"
               onClick={onGetStarted}
             >
-              {isZh ? "开始" : "Start"}
+              {humanizedEmptyStatesCopy(language, "开始")}
             </button>
           )}
         </div>
@@ -165,19 +162,16 @@ export function SearchEmptyState({
   language,
   className,
 }: SearchEmptyStateProps) {
-  const isZh = language === "zh-CN";
-
   return (
     <HumanizedEmptyState
       iconType="search"
-      title={isZh ? "没有找到相关结果" : "No results found"}
+      title={humanizedEmptyStatesCopy(language, "没有找到相关结果")}
       description={query
-        ? isZh
-          ? `没有找到与"${query}"相关的资料。尝试其他关键词或调整搜索范围。`
-          : `No results for "${query}". Try different keywords or adjust your search.`
-        : isZh
-        ? "试试输入关键词，或者浏览现有的资料库。"
-        : "Try searching for a keyword, or browse your existing resources."
+        ? humanizedEmptyStatesCopy(
+            language,
+            "没有找到与\"{q}\"相关的资料。尝试其他关键词或调整搜索范围。",
+          ).replace("{q}", query)
+        : humanizedEmptyStatesCopy(language, "试试输入关键词，或者浏览现有的资料库。")
       }
       className={`humanized-empty-state--search ${className ?? ""}`}
       actions={
@@ -187,7 +181,7 @@ export function SearchEmptyState({
               className="humanized-empty-state__action-btn secondary"
               onClick={onClearSearch}
             >
-              {isZh ? "清除搜索" : "Clear Search"}
+              {humanizedEmptyStatesCopy(language, "清除搜索")}
             </button>
           )}
           {onTryDifferentSearch && (
@@ -195,7 +189,7 @@ export function SearchEmptyState({
               className="humanized-empty-state__action-btn primary"
               onClick={onTryDifferentSearch}
             >
-              {isZh ? "尝试其他关键词" : "Try Different Keywords"}
+              {humanizedEmptyStatesCopy(language, "尝试其他关键词")}
             </button>
           )}
         </div>
@@ -213,16 +207,11 @@ export function LearningEmptyState({
   language,
   className,
 }: LearningEmptyStateProps) {
-  const isZh = language === "zh-CN";
-
   return (
     <HumanizedEmptyState
       iconType="book"
-      title={isZh ? "还没有学习资料" : "No learning materials yet"}
-      description={isZh
-        ? "导入代码、文档或网页。"
-        : "Import code, docs, or web pages."
-      }
+      title={humanizedEmptyStatesCopy(language, "还没有学习资料")}
+      description={humanizedEmptyStatesCopy(language, "导入代码、文档或网页。")}
       className={`humanized-empty-state--learning ${className ?? ""}`}
       actions={
         <div className="humanized-empty-state__button-group">
@@ -231,7 +220,7 @@ export function LearningEmptyState({
               className="humanized-empty-state__action-btn secondary"
               onClick={onImportResources}
             >
-              {isZh ? "导入资料" : "Import Resources"}
+              {humanizedEmptyStatesCopy(language, "导入资料")}
             </button>
           )}
           {onStartLearning && (
@@ -239,7 +228,7 @@ export function LearningEmptyState({
               className="humanized-empty-state__action-btn primary"
               onClick={onStartLearning}
             >
-              {isZh ? "开始学习" : "Start Learning"}
+              {humanizedEmptyStatesCopy(language, "开始学习")}
             </button>
           )}
         </div>
@@ -256,16 +245,14 @@ export function SettingsEmptyState({
   language,
   className,
 }: SettingsEmptyStateProps) {
-  const isZh = language === "zh-CN";
-
   return (
     <HumanizedEmptyState
       iconType="settings"
-      title={isZh ? "需要配置" : "Configuration Required"}
-      description={isZh
-        ? "在使用 Trainer 之前，需要先配置你的 provider。请设置 provider、model 和 API key。"
-        : "Before using Trainer, you need to configure your provider. Please set up your provider, model, and API key."
-      }
+      title={humanizedEmptyStatesCopy(language, "需要配置")}
+      description={humanizedEmptyStatesCopy(
+        language,
+        "在使用 Trainer 之前，需要先配置你的 provider。请设置 provider、model 和 API key。",
+      )}
       className={`humanized-empty-state--settings ${className ?? ""}`}
       actions={
         <div className="humanized-empty-state__button-group">
@@ -274,7 +261,7 @@ export function SettingsEmptyState({
               className="humanized-empty-state__action-btn primary"
               onClick={onConfigure}
             >
-              {isZh ? "去配置" : "Configure"}
+              {humanizedEmptyStatesCopy(language, "去配置")}
             </button>
           )}
         </div>

@@ -5,9 +5,11 @@
  */
 
 import type { ReactNode } from "react";
+import type { ComposerLanguage } from "../../lib/types";
+import { coachGuidanceCopy } from "./coachGuidanceCopy";
 
 export interface CoachGuidanceConfig {
-  language: "zh-CN" | "en-US";
+  language: ComposerLanguage;
   currentView: "coach" | "plan" | "training" | "resources" | "settings";
   hasProviderSetup: boolean;
   hasConversation: boolean;
@@ -37,111 +39,74 @@ export interface GuidanceItem {
 }
 
 /**
- * Motivational messages for different streaks and progress states
- */
-const STREAK_MESSAGES = {
-  "zh-CN": {
-    none: "今天还没有练习",
-    beginning: "练习已开始",
-    building: "坚持训练，习惯正在养成",
-    strong: "你已经建立了训练节奏！",
-    excellent: "你的坚持正在产生效果",
-    expert: "训练节奏很稳",
-  },
-  "en-US": {
-    none: "No practice yet today",
-    beginning: "Practice started",
-    building: "Keep training, habits are forming",
-    strong: "You've built a training rhythm!",
-    excellent: "Your consistency is showing results",
-    expert: "Training rhythm is steady",
-  },
-};
-
-const REVIEW_MESSAGES = {
-  "zh-CN": {
-    none: "没有待复习的卡片，休息一下或者挑战新内容",
-    few: "{n} 张卡片等待复习，保持记忆不丢失",
-    some: "你有 {n} 张卡片需要复习，坚持就是胜利",
-    many: "复习队列较长，逐一击破会更有成就感",
-  },
-  "en-US": {
-    none: "No cards due for review. Take a break or challenge something new",
-    few: "{n} card{s} waiting for review, keep that memory fresh",
-    some: "You have {n} card{s} to review. Persistence wins",
-    many: "Review queue is long. Conquer them one by one for a real sense of achievement",
-  },
-};
-
-/**
  * Get streak-level message
  */
-function getStreakMessage(language: "zh-CN" | "en-US", streak: number): string {
-  const isZh = language === "zh-CN";
+function getStreakMessage(language: ComposerLanguage, streak: number): string {
   if (streak === 0) {
-    return isZh ? STREAK_MESSAGES["zh-CN"].none : STREAK_MESSAGES["en-US"].none;
+    return coachGuidanceCopy(language, "今天还没有练习");
   }
   if (streak <= 3) {
-    return isZh ? STREAK_MESSAGES["zh-CN"].beginning : STREAK_MESSAGES["en-US"].beginning;
+    return coachGuidanceCopy(language, "练习已开始");
   }
   if (streak <= 7) {
-    return isZh ? STREAK_MESSAGES["zh-CN"].building : STREAK_MESSAGES["en-US"].building;
+    return coachGuidanceCopy(language, "坚持训练，习惯正在养成");
   }
   if (streak <= 14) {
-    return isZh ? STREAK_MESSAGES["zh-CN"].strong : STREAK_MESSAGES["en-US"].strong;
+    return coachGuidanceCopy(language, "你已经建立了训练节奏！");
   }
   if (streak <= 30) {
-    return isZh ? STREAK_MESSAGES["zh-CN"].excellent : STREAK_MESSAGES["en-US"].excellent;
+    return coachGuidanceCopy(language, "你的坚持正在产生效果");
   }
-  return isZh ? STREAK_MESSAGES["zh-CN"].expert : STREAK_MESSAGES["en-US"].expert;
+  return coachGuidanceCopy(language, "训练节奏很稳");
 }
 
 /**
  * Get review queue message
  */
-function getReviewMessage(language: "zh-CN" | "en-US", dueCount: number): string {
-  const isZh = language === "zh-CN";
-  const msg = isZh ? REVIEW_MESSAGES["zh-CN"] : REVIEW_MESSAGES["en-US"];
-  const plural = dueCount !== 1 ? (isZh ? "s" : "s") : "";
+function getReviewMessage(language: ComposerLanguage, dueCount: number): string {
+  const plural = dueCount !== 1 ? "s" : "";
 
   if (dueCount === 0) {
-    return msg.none;
+    return coachGuidanceCopy(language, "没有待复习的卡片，休息一下或者挑战新内容");
   }
   if (dueCount <= 3) {
-    return msg.few.replace("{n}", String(dueCount)).replace("{s}", plural);
+    return coachGuidanceCopy(language, "{n} 张卡片等待复习，保持记忆不丢失")
+      .replace("{n}", String(dueCount))
+      .replace("{s}", plural);
   }
   if (dueCount <= 10) {
-    return msg.some.replace("{n}", String(dueCount)).replace("{s}", plural);
+    return coachGuidanceCopy(language, "你有 {n} 张卡片需要复习，坚持就是胜利")
+      .replace("{n}", String(dueCount))
+      .replace("{s}", plural);
   }
-  return msg.many;
+  return coachGuidanceCopy(language, "复习队列较长，逐一击破会更有成就感");
 }
 
 /**
  * Time-based greeting that feels natural
  */
-function getTimeBasedGreeting(language: "zh-CN" | "en-US", hour?: number): string {
-  const isZh = language === "zh-CN";
+function getTimeBasedGreeting(language: ComposerLanguage, hour?: number): string {
   const h = hour ?? new Date().getHours();
 
   if (h < 5) {
-    return isZh ? "夜间" : "Late night";
+    return coachGuidanceCopy(language, "夜间");
   }
   if (h < 9) {
-    return isZh ? "清晨" : "Early morning";
+    return coachGuidanceCopy(language, "清晨");
   }
   if (h < 12) {
-    return isZh ? "上午" : "Morning";
+    return coachGuidanceCopy(language, "上午");
   }
   if (h < 14) {
-    return isZh ? "午间" : "Noon";
+    return coachGuidanceCopy(language, "午间");
   }
   if (h < 18) {
-    return isZh ? "下午" : "Afternoon";
+    return coachGuidanceCopy(language, "下午");
   }
   if (h < 21) {
-    return isZh ? "晚上" : "Evening";
+    return coachGuidanceCopy(language, "晚上");
   }
-  return isZh ? "夜间" : "Late night";
+  return coachGuidanceCopy(language, "夜间");
 }
 
 /**
@@ -164,7 +129,6 @@ export function getContextualGuidance(config: CoachGuidanceConfig): GuidanceItem
     totalPracticeTime = 0,
   } = config;
 
-  const isZh = language === "zh-CN";
   const guidance: GuidanceItem[] = [];
 
   // Time-based greeting (low priority, always available)
@@ -181,10 +145,8 @@ export function getContextualGuidance(config: CoachGuidanceConfig): GuidanceItem
   if (!hasProviderSetup) {
     guidance.push({
       id: "setup-provider",
-      title: isZh ? "第一步：连接模型" : "Step 1: Connect a model",
-      description: isZh
-        ? "填写 provider、模型和 API key。"
-        : "Set provider, model, and API key.",
+      title: coachGuidanceCopy(language, "第一步：连接模型"),
+      description: coachGuidanceCopy(language, "填写 provider、模型和 API key。"),
       priority: 1,
       dismissible: false,
       tone: "info",
@@ -196,10 +158,8 @@ export function getContextualGuidance(config: CoachGuidanceConfig): GuidanceItem
   if (hasConversation && !hasActivePlan) {
     guidance.push({
       id: "create-plan",
-      title: isZh ? "创建一个训练计划" : "Create a training plan",
-      description: isZh
-        ? "告诉我目标或当前项目。"
-        : "Share a goal or current project.",
+      title: coachGuidanceCopy(language, "创建一个训练计划"),
+      description: coachGuidanceCopy(language, "告诉我目标或当前项目。"),
       priority: 2,
       dismissible: true,
       tone: "info",
@@ -211,10 +171,8 @@ export function getContextualGuidance(config: CoachGuidanceConfig): GuidanceItem
     if (!hasTrainingCards) {
       guidance.push({
         id: "generate-training",
-      title: isZh ? "生成训练卡片" : "Generate training cards",
-      description: isZh
-          ? "问一个具体问题开始。"
-          : "Ask one specific question to begin.",
+      title: coachGuidanceCopy(language, "生成训练卡片"),
+      description: coachGuidanceCopy(language, "问一个具体问题开始。"),
         priority: 3,
         dismissible: true,
         tone: "info",
@@ -225,7 +183,7 @@ export function getContextualGuidance(config: CoachGuidanceConfig): GuidanceItem
     if (dueReviews > 0) {
       guidance.push({
         id: "review-due",
-        title: isZh ? "复习提醒" : "Review reminder",
+        title: coachGuidanceCopy(language, "复习提醒"),
         description: getReviewMessage(language, dueReviews),
         priority: 4,
         dismissible: true,
@@ -234,10 +192,8 @@ export function getContextualGuidance(config: CoachGuidanceConfig): GuidanceItem
     } else if (hasTrainingCards) {
       guidance.push({
         id: "practice-ready",
-        title: isZh ? "可以继续练习" : "Ready to practice",
-        description: isZh
-          ? "今天的复习已完成。"
-          : "Today's reviews are complete.",
+        title: coachGuidanceCopy(language, "可以继续练习"),
+        description: coachGuidanceCopy(language, "今天的复习已完成。"),
         priority: 5,
         dismissible: true,
         tone: "success",
@@ -249,10 +205,8 @@ export function getContextualGuidance(config: CoachGuidanceConfig): GuidanceItem
   if (currentView === "resources" && !hasResources) {
     guidance.push({
       id: "add-resources",
-      title: isZh ? "添加学习资料" : "Add learning materials",
-      description: isZh
-        ? "导入代码、文档或网页。"
-        : "Import code, docs, or web pages.",
+      title: coachGuidanceCopy(language, "添加学习资料"),
+      description: coachGuidanceCopy(language, "导入代码、文档或网页。"),
       priority: 6,
       dismissible: true,
       tone: "info",
@@ -264,7 +218,7 @@ export function getContextualGuidance(config: CoachGuidanceConfig): GuidanceItem
     const latestWin = recentWins[recentWins.length - 1];
     guidance.push({
       id: "celebrate-win",
-      title: isZh ? "已完成" : "Completed",
+      title: coachGuidanceCopy(language, "已完成"),
       description: latestWin,
       priority: 50,
       dismissible: true,
@@ -277,7 +231,7 @@ export function getContextualGuidance(config: CoachGuidanceConfig): GuidanceItem
     const latestMistake = recentMistakes[recentMistakes.length - 1];
     guidance.push({
       id: "growth-mindset",
-      title: isZh ? "待复盘" : "Needs review",
+      title: coachGuidanceCopy(language, "待复盘"),
       description: latestMistake,
       priority: 51,
       dismissible: true,
@@ -289,10 +243,10 @@ export function getContextualGuidance(config: CoachGuidanceConfig): GuidanceItem
   if (masteredCards > 0) {
     guidance.push({
       id: "mastery-progress",
-      title: isZh ? "技能成长" : "Skill growth",
-      description: isZh
-        ? `已掌握 ${masteredCards} 个概念。`
-        : `${masteredCards} concept${masteredCards > 1 ? "s" : ""} mastered.`,
+      title: coachGuidanceCopy(language, "技能成长"),
+      description: coachGuidanceCopy(language, "已掌握 {n} 个概念。")
+        .replace("{n}", String(masteredCards))
+        .replace("{s}", masteredCards > 1 ? "s" : ""),
       priority: 60,
       dismissible: true,
       tone: "success",
@@ -304,15 +258,18 @@ export function getContextualGuidance(config: CoachGuidanceConfig): GuidanceItem
     const hours = Math.floor(totalPracticeTime / 60);
     const minutes = totalPracticeTime % 60;
     const timeStr = hours > 0
-      ? (isZh ? `${hours} 小时 ${minutes} 分钟` : `${hours}h ${minutes}m`)
-      : (isZh ? `${minutes} 分钟` : `${minutes} minutes`);
+      ? coachGuidanceCopy(language, "{h} 小时 {m} 分钟")
+          .replace("{h}", String(hours))
+          .replace("{m}", String(minutes))
+      : coachGuidanceCopy(language, "{m} 分钟").replace("{m}", String(minutes));
 
     guidance.push({
       id: "practice-time",
-      title: isZh ? "专注时间" : "Focus time",
-      description: isZh
-        ? `你已经投入 ${timeStr} 的专注练习。持续的投入会带来质的飞跃。`
-        : `You've invested ${timeStr} of focused practice. Consistent investment leads to breakthroughs.`,
+      title: coachGuidanceCopy(language, "专注时间"),
+      description: coachGuidanceCopy(
+        language,
+        "你已经投入 {t} 的专注练习。持续的投入会带来质的飞跃。",
+      ).replace("{t}", timeStr),
       priority: 70,
       dismissible: true,
       tone: "encouragement",
@@ -386,33 +343,21 @@ export function getKeyboardShortcuts(view: CoachGuidanceConfig["currentView"]): 
 export function getMotivationalMessage(
   streak: number,
   masteredCards: number,
-  language: "zh-CN" | "en-US"
+  language: ComposerLanguage
 ): string {
-  const isZh = language === "zh-CN";
-
   if (streak >= 30) {
-    return isZh
-      ? "已连续练习 30 天。"
-      : "30-day streak.";
+    return coachGuidanceCopy(language, "已连续练习 30 天。");
   }
   if (streak >= 7) {
-    return isZh
-      ? "已连续练习一周。"
-      : "One-week streak.";
+    return coachGuidanceCopy(language, "已连续练习一周。");
   }
   if (masteredCards >= 50) {
-    return isZh
-      ? "已掌握 50+ 个概念。"
-      : "50+ concepts mastered.";
+    return coachGuidanceCopy(language, "已掌握 50+ 个概念。");
   }
   if (masteredCards >= 10) {
-    return isZh
-      ? "已掌握 10+ 个概念。"
-      : "10+ concepts mastered.";
+    return coachGuidanceCopy(language, "已掌握 10+ 个概念。");
   }
-  return isZh
-    ? "暂无练习记录。"
-    : "No practice yet.";
+  return coachGuidanceCopy(language, "暂无练习记录。");
 }
 
 /**
@@ -420,23 +365,21 @@ export function getMotivationalMessage(
  */
 export function getEncouragementMessage(
   lastRating: number,
-  language: "zh-CN" | "en-US"
+  language: ComposerLanguage
 ): string {
-  const isZh = language === "zh-CN";
-
   if (lastRating === 1) {
-    return isZh ? "再试一次。" : "Try again.";
+    return coachGuidanceCopy(language, "再试一次。");
   }
   if (lastRating === 2) {
-    return isZh ? "再做一遍。" : "Try one more pass.";
+    return coachGuidanceCopy(language, "再做一遍。");
   }
   if (lastRating === 3) {
-    return isZh ? "已通过。" : "Passed.";
+    return coachGuidanceCopy(language, "已通过。");
   }
   if (lastRating === 4) {
-    return isZh ? "已掌握这个概念。" : "Concept mastered.";
+    return coachGuidanceCopy(language, "已掌握这个概念。");
   }
-  return isZh ? "继续当前练习。" : "Continue the current practice.";
+  return coachGuidanceCopy(language, "继续当前练习。");
 }
 
 /**
@@ -444,28 +387,26 @@ export function getEncouragementMessage(
  */
 export function formatRelativeTime(
   minutes: number,
-  language: "zh-CN" | "en-US"
+  language: ComposerLanguage
 ): string {
-  const isZh = language === "zh-CN";
-
   if (minutes < 1) {
-    return isZh ? "刚刚" : "Just now";
+    return coachGuidanceCopy(language, "刚刚");
   }
   if (minutes < 60) {
-    return isZh ? `${minutes} 分钟前` : `${minutes}m ago`;
+    return coachGuidanceCopy(language, "{m} 分钟前").replace("{m}", String(minutes));
   }
   const hours = Math.floor(minutes / 60);
   if (hours < 24) {
-    return isZh ? `${hours} 小时前` : `${hours}h ago`;
+    return coachGuidanceCopy(language, "{h} 小时前").replace("{h}", String(hours));
   }
   const days = Math.floor(hours / 24);
   if (days < 7) {
-    return isZh ? `${days} 天前` : `${days}d ago`;
+    return coachGuidanceCopy(language, "{d} 天前").replace("{d}", String(days));
   }
   const weeks = Math.floor(days / 7);
   if (weeks < 4) {
-    return isZh ? `${weeks} 周前` : `${weeks}w ago`;
+    return coachGuidanceCopy(language, "{w} 周前").replace("{w}", String(weeks));
   }
   const months = Math.floor(days / 30);
-  return isZh ? `${months} 个月前` : `${months}mo ago`;
+  return coachGuidanceCopy(language, "{mo} 个月前").replace("{mo}", String(months));
 }

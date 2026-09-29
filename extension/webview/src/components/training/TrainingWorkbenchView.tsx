@@ -370,6 +370,270 @@ const manualPracticeFallbackCopy: Record<ComposerLanguage, ManualPracticeVerific
   },
 };
 
+/** §十五: per-subtype manual-practice copy in eight languages (no zh/en binary). */
+type ManualPracticeSubtypeCopyKey = "derivation" | "writing" | "memorization" | "reading" | "default";
+
+const manualPracticeSubtypeCopy: Record<
+  ManualPracticeSubtypeCopyKey,
+  Record<ComposerLanguage, ManualPracticeVerificationCopy>
+> = {
+  derivation: {
+    "zh-CN": {
+      tryNote: "先写出一个最小可检查的推导步骤。",
+      verifyNote: "逐行检查关键步骤，或把结果代回去确认它成立。",
+      shortcut: "检查关键步骤",
+      composerHint: "用下方输入框写出这一步怎么成立，或指出卡住的具体行。",
+      fallbackHint: "卡住时先退回到第一条你能证明的步骤。",
+    },
+    "en-US": {
+      tryNote: "Land one small derivation step you can inspect.",
+      verifyNote: "Check the key step line by line, or substitute it back to confirm it holds.",
+      shortcut: "Check the key step",
+      composerHint: "Use the composer below to explain why the step holds, or name the exact line that is blocked.",
+      fallbackHint: "If blocked, return to the first step you can prove.",
+    },
+    "es-ES": {
+      tryNote: "Aterriza un paso de derivación pequeño que puedas inspeccionar.",
+      verifyNote: "Comprueba el paso clave línea por línea, o sustituye el resultado para confirmar que se sostiene.",
+      shortcut: "Comprueba el paso clave",
+      composerHint: "Usa el campo de abajo para explicar por qué se sostiene el paso o señala la línea exacta bloqueada.",
+      fallbackHint: "Si te bloqueas, vuelve al primer paso que puedas demostrar.",
+    },
+    "fr-FR": {
+      tryNote: "Posez une petite étape de dérivation que vous pouvez inspecter.",
+      verifyNote: "Vérifiez l'étape clé ligne par ligne, ou réinjectez le résultat pour confirmer qu'il tient.",
+      shortcut: "Vérifier l'étape clé",
+      composerHint: "Utilisez le champ ci-dessous pour expliquer pourquoi l'étape tient, ou nommez la ligne exacte bloquée.",
+      fallbackHint: "En cas de blocage, revenez à la première étape que vous pouvez prouver.",
+    },
+    "de-DE": {
+      tryNote: "Landiere einen kleinen, überprüfbaren Herleitungsschritt.",
+      verifyNote: "Prüfe den Schlüsselschritt Zeile für Zeile oder setze das Ergebnis ein, um zu bestätigen, dass es hält.",
+      shortcut: "Schlüsselschritt prüfen",
+      composerHint: "Erkläre im Eingabefeld unten, warum der Schritt hält, oder nenne die genaue Zeile, an der es hakt.",
+      fallbackHint: "Wenn du feststeckst, kehre zum ersten Schritt zurück, den du beweisen kannst.",
+    },
+    "ja-JP": {
+      tryNote: "検証できる小さな導出ステップを一つ書きましょう。",
+      verifyNote: "重要なステップを一行ずつ確認するか、結果を代入して成り立つか確かめましょう。",
+      shortcut: "重要ステップを確認",
+      composerHint: "下の入力欄で、このステップがなぜ成り立つかを説明するか、詰まっている行を具体的に示しましょう。",
+      fallbackHint: "詰まったら、証明できる最初のステップに戻りましょう。",
+    },
+    "ko-KR": {
+      tryNote: "확인할 수 있는 작은 유도 단계를 하나 쓰세요.",
+      verifyNote: "핵심 단계를 한 줄씩 확인하거나 결과를 다시 대입해 성립하는지 확인하세요.",
+      shortcut: "핵심 단계 확인",
+      composerHint: "아래 입력창에 이 단계가 왜 성립하는지 설명하거나 막힌 정확한 줄을 짚으세요.",
+      fallbackHint: "막히면 증명할 수 있는 첫 단계로 돌아가세요.",
+    },
+    "pt-BR": {
+      tryNote: "Entregue um passo de derivação pequeno que você possa inspecionar.",
+      verifyNote: "Confira o passo-chave linha por linha, ou substitua o resultado de volta para confirmar que vale.",
+      shortcut: "Confira o passo-chave",
+      composerHint: "Use o campo abaixo para explicar por que o passo vale, ou aponte a linha exata que está travando.",
+      fallbackHint: "Se travar, volte ao primeiro passo que você consegue provar.",
+    },
+  },
+  writing: {
+    "zh-CN": {
+      tryNote: "先写出一个最小的改写、对比或解释。",
+      verifyNote: "对照原句和你的判断，说明为什么这个表达更合适。",
+      shortcut: "检查句子和判断",
+      composerHint: "用下方输入框写出你的语言选择，或指出目前还说不清的地方。",
+      fallbackHint: "卡住时把范围缩回一个句子或一个对比。",
+    },
+    "en-US": {
+      tryNote: "Land one short rewrite, comparison, or explanation.",
+      verifyNote: "Compare the exact phrase against your judgment and explain why it fits better.",
+      shortcut: "Check the sentence and judgment",
+      composerHint: "Use the composer below to state the language choice, or name what is still unclear.",
+      fallbackHint: "If blocked, shrink the scope back to one sentence or one contrast.",
+    },
+    "es-ES": {
+      tryNote: "Aterriza una reescritura, comparación o explicación breve.",
+      verifyNote: "Compara la frase exacta con tu criterio y explica por qué encaja mejor.",
+      shortcut: "Comprueba la frase y el criterio",
+      composerHint: "Usa el campo de abajo para indicar tu elección de lenguaje o señalar qué aún no tienes claro.",
+      fallbackHint: "Si te bloqueas, reduce el alcance a una frase o una comparación.",
+    },
+    "fr-FR": {
+      tryNote: "Posez une reformulation, une comparaison ou une explication courte.",
+      verifyNote: "Comparez la formule exacte à votre jugement et expliquez pourquoi elle convient mieux.",
+      shortcut: "Vérifier la phrase et le jugement",
+      composerHint: "Utilisez le champ ci-dessous pour donner votre choix de formulation ou nommer ce qui reste flou.",
+      fallbackHint: "En cas de blocage, ramenez le périmètre à une phrase ou une comparaison.",
+    },
+    "de-DE": {
+      tryNote: "Liefere eine kurze Umformulierung, einen Vergleich oder eine Erklärung.",
+      verifyNote: "Gleiche die genaue Formulierung mit deinem Urteil ab und erkläre, warum sie besser passt.",
+      shortcut: "Satz und Urteil prüfen",
+      composerHint: "Trage im Eingabefeld unten deine Sprachwahl nach oder benenne, was noch unklar ist.",
+      fallbackHint: "Wenn du feststeckst, verenge den Umfang auf einen Satz oder einen Kontrast.",
+    },
+    "ja-JP": {
+      tryNote: "短い書き直し・比較・説明を一つ書きましょう。",
+      verifyNote: "元の文と自分の判断を突き合わせて、なぜその表現がより適切か説明しましょう。",
+      shortcut: "文と判断を確認",
+      composerHint: "下の入力欄に言葉の選択を書くか、まだはっきり言えない部分を示しましょう。",
+      fallbackHint: "詰まったら、範囲を一つの文か一つの対比まで絞りましょう。",
+    },
+    "ko-KR": {
+      tryNote: "짧은 고쳐 쓰기, 비교 또는 설명을 하나 쓰세요.",
+      verifyNote: "원래 문장과 판단을 견주어 그 표현이 왜 더 적합한지 설명하세요.",
+      shortcut: "문장과 판단 확인",
+      composerHint: "아래 입력창에 표현 선택을 적거나 아직 명확하지 않은 부분을 짚으세요.",
+      fallbackHint: "막히면 범위를 한 문장이나 한 비교로 줄이세요.",
+    },
+    "pt-BR": {
+      tryNote: "Entregue uma reescrita, comparação ou explicação curta.",
+      verifyNote: "Compare a frase exata com o seu julgamento e explique por que ela fica melhor.",
+      shortcut: "Confira a frase e o julgamento",
+      composerHint: "Use o campo abaixo para registrar sua escolha de linguagem ou apontar o que ainda não está claro.",
+      fallbackHint: "Se travar, reduza o escopo a uma frase ou um contraste.",
+    },
+  },
+  memorization: {
+    "zh-CN": {
+      tryNote: "先完成一轮最小闭卷回忆。",
+      verifyNote: "先回忆，再打开资料核对，标出真正漏掉的点。",
+      shortcut: "回忆后核对",
+      composerHint: "用下方输入框记录你记住了什么、漏掉了什么，或哪一组还会混淆。",
+      fallbackHint: "卡住时把这组内容缩回两个点和一个对比。",
+    },
+    "en-US": {
+      tryNote: "Complete one tiny closed-book recall first.",
+      verifyNote: "Recall first, then reopen the source and mark the real gap.",
+      shortcut: "Recall, then check",
+      composerHint: "Use the composer below to record what you recalled, missed, or still confuse.",
+      fallbackHint: "If blocked, shrink the cluster back to two points and one contrast.",
+    },
+    "es-ES": {
+      tryNote: "Completa primero un recuerdo breve sin consultar nada.",
+      verifyNote: "Recuerda primero, reabre la fuente y marca lo que de verdad faltó.",
+      shortcut: "Recordar y comprobar",
+      composerHint: "Usa el campo de abajo para registrar qué recordaste, qué faltó o qué grupo aún confundes.",
+      fallbackHint: "Si te bloqueas, reduce el grupo a dos puntos y una comparación.",
+    },
+    "fr-FR": {
+      tryNote: "Faites d'abord un petit rappel de mémoire, sans support.",
+      verifyNote: "Rappelez d'abord, rouvrez la source et marquez ce qui manque vraiment.",
+      shortcut: "Rappel, puis vérification",
+      composerHint: "Utilisez le champ ci-dessous pour noter ce que vous avez rappelé, manqué ou confondu.",
+      fallbackHint: "En cas de blocage, ramenez le groupe à deux points et une comparaison.",
+    },
+    "de-DE": {
+      tryNote: "Mache zuerst eine kleine Abfrage ohne Unterlagen.",
+      verifyNote: "Erinnere zuerst, öffne dann die Quelle und markiere die echte Lücke.",
+      shortcut: "Erst erinnern, dann prüfen",
+      composerHint: "Halte im Eingabefeld unten fest, was du erinnert hast, was fehlte und was du noch verwechselst.",
+      fallbackHint: "Wenn du feststeckst, schrumpfe den Haufen auf zwei Punkte und einen Kontrast.",
+    },
+    "ja-JP": {
+      tryNote: "まず小さなクローズドブックの想起を一回やりましょう。",
+      verifyNote: "先に思い出してから資料を開いて照合し、本当に抜けている点を印をつけましょう。",
+      shortcut: "想起してから照合",
+      composerHint: "下の入力欄に、覚えていたこと・抜けていたこと・まだ混同するグループを記録しましょう。",
+      fallbackHint: "詰まったら、このグループを2つのポイントと1つの対比まで縮めましょう。",
+    },
+    "ko-KR": {
+      tryNote: "먼저 아주 작은 책 없이 회상을 한 번 해보세요.",
+      verifyNote: "먼저 회상한 뒤 자료를 다시 열어 진짜 빠진 부분을 표시하세요.",
+      shortcut: "회상 후 확인",
+      composerHint: "아래 입력창에 기억한 것, 놓친 것, 아직 헷갈리는 묶음을 기록하세요.",
+      fallbackHint: "막히면 묶음을 두 포인트와 하나의 대비로 줄이세요.",
+    },
+    "pt-BR": {
+      tryNote: "Complete primeiro uma lembrança pequena de cabeça.",
+      verifyNote: "Lembre primeiro, reabra a fonte e marque o que realmente faltou.",
+      shortcut: "Lembrar e conferir",
+      composerHint: "Use o campo abaixo para registrar o que lembrou, o que faltou ou o que ainda confunde.",
+      fallbackHint: "Se travar, reduza o grupo a dois pontos e um contraste.",
+    },
+  },
+  reading: {
+    "zh-CN": {
+      tryNote: "先写下一条窄判断和一条支撑它的证据。",
+      verifyNote: "指出具体片段，并解释它为什么真的支撑这个判断。",
+      shortcut: "检查片段和判断",
+      composerHint: "用下方输入框写出你的判断和证据，或指出目前最不够扎实的那一处。",
+      fallbackHint: "卡住时只保留一个句子、一个意象或一个场景。",
+    },
+    "en-US": {
+      tryNote: "Write one narrow claim and one piece of evidence first.",
+      verifyNote: "Point to the exact excerpt and explain why it really supports the claim.",
+      shortcut: "Check the excerpt and claim",
+      composerHint: "Use the composer below to write the claim and evidence, or name the weakest point.",
+      fallbackHint: "If blocked, shrink the scope to one sentence, image, or scene.",
+    },
+    "es-ES": {
+      tryNote: "Escribe primero una afirmación estrecha y una evidencia que la respalde.",
+      verifyNote: "Señala el fragmento exacto y explica por qué de verdad respalda la afirmación.",
+      shortcut: "Comprueba el fragmento y la afirmación",
+      composerHint: "Usa el campo de abajo para escribir la afirmación y la evidencia, o señala el punto más débil.",
+      fallbackHint: "Si te bloqueas, quédate con una sola frase, una imagen o una escena.",
+    },
+    "fr-FR": {
+      tryNote: "Écrivez d'abord un jugement étroit et une preuve qui l'appuie.",
+      verifyNote: "Désignez l'extrait exact et expliquez pourquoi il soutient vraiment le jugement.",
+      shortcut: "Vérifier l'extrait et le jugement",
+      composerHint: "Utilisez le champ ci-dessous pour écrire le jugement et la preuve, ou nommez le point le plus fragile.",
+      fallbackHint: "En cas de blocage, gardez une seule phrase, une image ou une scène.",
+    },
+    "de-DE": {
+      tryNote: "Schreibe zuerst eine schmale Behauptung und einen Beleg dazu.",
+      verifyNote: "Zeige die genaue Stelle und erkläre, warum sie die Behauptung wirklich stützt.",
+      shortcut: "Ausschnitt und Behauptung prüfen",
+      composerHint: "Schreibe im Eingabefeld unten Behauptung und Beleg, oder benenne den wackeligsten Punkt.",
+      fallbackHint: "Wenn du feststeckst, behalte nur einen Satz, ein Bild oder eine Szene.",
+    },
+    "ja-JP": {
+      tryNote: "まず狭い主張と、それを支える根拠を一つ書きましょう。",
+      verifyNote: "具体的な一節を示し、なぜそれが主張を本当に支えるのか説明しましょう。",
+      shortcut: "一節と主張を確認",
+      composerHint: "下の入力欄に主張と根拠を書くか、今一番頼りない部分を指しましょう。",
+      fallbackHint: "詰まったら、一つの文・イメージ・場面だけを残しましょう。",
+    },
+    "ko-KR": {
+      tryNote: "먼저 좁은 주장 하나와 이를 뒷받침하는 근거 하나를 쓰세요.",
+      verifyNote: "정확한 구절을 짚고, 왜 그것이 주장을 정말 뒷받침하는지 설명하세요.",
+      shortcut: "구절과 주장 확인",
+      composerHint: "아래 입력창에 주장과 근거를 적거나 가장 아직 못박은 부분을 짚으세요.",
+      fallbackHint: "막히면 한 문장, 한 이미지, 한 장면만 남기세요.",
+    },
+    "pt-BR": {
+      tryNote: "Escreva primeiro uma afirmação estreita e uma evidência que a sustente.",
+      verifyNote: "Aponte o trecho exato e explique por que ele realmente sustenta a afirmação.",
+      shortcut: "Confira o trecho e a afirmação",
+      composerHint: "Use o campo abaixo para escrever a afirmação e a evidência, ou aponte o ponto mais frágil.",
+      fallbackHint: "Se travar, guarde apenas uma frase, uma imagem ou uma cena.",
+    },
+  },
+  default: {
+    "zh-CN": {
+      tryNote: "先落下一条最小解释、例子或结果。",
+      verifyNote: "指出你用来证明这张卡的那个例子、片段或解释。",
+      shortcut: "检查证据和解释",
+      composerHint: "用下方输入框记录你已验证的结果，或指出当前 blocker。",
+      fallbackHint: "卡住时先把范围缩回一个最小例子。",
+    },
+    "en-US": {
+      tryNote: "Land one small explanation, example, or result first.",
+      verifyNote: "Point to the exact example, excerpt, or explanation that proves this card.",
+      shortcut: "Check evidence and explanation",
+      composerHint: "Use the composer below to record the verified result or the current blocker.",
+      fallbackHint: "If blocked, shrink the scope back to one minimum example.",
+    },
+    // Other locales share the generic fallback copy on the untyped default lane.
+    "es-ES": manualPracticeFallbackCopy["es-ES"],
+    "fr-FR": manualPracticeFallbackCopy["fr-FR"],
+    "de-DE": manualPracticeFallbackCopy["de-DE"],
+    "ja-JP": manualPracticeFallbackCopy["ja-JP"],
+    "ko-KR": manualPracticeFallbackCopy["ko-KR"],
+    "pt-BR": manualPracticeFallbackCopy["pt-BR"],
+  },
+};
+
 function resolvePracticeVerificationMode(input: {
   isFlashCard: boolean;
   learningFamily?: "code" | "theory";
@@ -396,53 +660,24 @@ function resolveManualPracticeVerificationCopy(
   subtype: string | undefined,
 ): ManualPracticeVerificationCopy {
   const normalizedSubtype = (subtype ?? "").trim().toLowerCase();
-  const isZh = language === "zh-CN";
+  if (normalizedSubtype === "derivation") {
+    return manualPracticeSubtypeCopy.derivation[language] ?? manualPracticeSubtypeCopy.derivation["en-US"];
+  }
+  if (normalizedSubtype === "writing") {
+    return manualPracticeSubtypeCopy.writing[language] ?? manualPracticeSubtypeCopy.writing["en-US"];
+  }
+  if (normalizedSubtype === "memorization") {
+    return (
+      manualPracticeSubtypeCopy.memorization[language] ?? manualPracticeSubtypeCopy.memorization["en-US"]
+    );
+  }
+  if (normalizedSubtype === "reading") {
+    return manualPracticeSubtypeCopy.reading[language] ?? manualPracticeSubtypeCopy.reading["en-US"];
+  }
   if (language !== "zh-CN" && language !== "en-US") {
     return manualPracticeFallbackCopy[language] ?? manualPracticeFallbackCopy["en-US"];
   }
-  if (normalizedSubtype === "derivation") {
-    return {
-      tryNote: isZh ? "先写出一个最小可检查的推导步骤。" : "Land one small derivation step you can inspect.",
-      verifyNote: isZh ? "逐行检查关键步骤，或把结果代回去确认它成立。" : "Check the key step line by line, or substitute it back to confirm it holds.",
-      shortcut: isZh ? "检查关键步骤" : "Check the key step",
-      composerHint: isZh ? "用下方输入框写出这一步怎么成立，或指出卡住的具体行。" : "Use the composer below to explain why the step holds, or name the exact line that is blocked.",
-      fallbackHint: isZh ? "卡住时先退回到第一条你能证明的步骤。" : "If blocked, return to the first step you can prove.",
-    };
-  }
-  if (normalizedSubtype === "writing") {
-    return {
-      tryNote: isZh ? "先写出一个最小的改写、对比或解释。" : "Land one short rewrite, comparison, or explanation.",
-      verifyNote: isZh ? "对照原句和你的判断，说明为什么这个表达更合适。" : "Compare the exact phrase against your judgment and explain why it fits better.",
-      shortcut: isZh ? "检查句子和判断" : "Check the sentence and judgment",
-      composerHint: isZh ? "用下方输入框写出你的语言选择，或指出目前还说不清的地方。" : "Use the composer below to state the language choice, or name what is still unclear.",
-      fallbackHint: isZh ? "卡住时把范围缩回一个句子或一个对比。" : "If blocked, shrink the scope back to one sentence or one contrast.",
-    };
-  }
-  if (normalizedSubtype === "memorization") {
-    return {
-      tryNote: isZh ? "先完成一轮最小闭卷回忆。" : "Complete one tiny closed-book recall first.",
-      verifyNote: isZh ? "先回忆，再打开资料核对，标出真正漏掉的点。" : "Recall first, then reopen the source and mark the real gap.",
-      shortcut: isZh ? "回忆后核对" : "Recall, then check",
-      composerHint: isZh ? "用下方输入框记录你记住了什么、漏掉了什么，或哪一组还会混淆。" : "Use the composer below to record what you recalled, missed, or still confuse.",
-      fallbackHint: isZh ? "卡住时把这组内容缩回两个点和一个对比。" : "If blocked, shrink the cluster back to two points and one contrast.",
-    };
-  }
-  if (normalizedSubtype === "reading") {
-    return {
-      tryNote: isZh ? "先写下一条窄判断和一条支撑它的证据。" : "Write one narrow claim and one piece of evidence first.",
-      verifyNote: isZh ? "指出具体片段，并解释它为什么真的支撑这个判断。" : "Point to the exact excerpt and explain why it really supports the claim.",
-      shortcut: isZh ? "检查片段和判断" : "Check the excerpt and claim",
-      composerHint: isZh ? "用下方输入框写出你的判断和证据，或指出目前最不够扎实的那一处。" : "Use the composer below to write the claim and evidence, or name the weakest point.",
-      fallbackHint: isZh ? "卡住时只保留一个句子、一个意象或一个场景。" : "If blocked, shrink the scope to one sentence, image, or scene.",
-    };
-  }
-  return {
-    tryNote: isZh ? "先落下一条最小解释、例子或结果。" : "Land one small explanation, example, or result first.",
-    verifyNote: isZh ? "指出你用来证明这张卡的那个例子、片段或解释。" : "Point to the exact example, excerpt, or explanation that proves this card.",
-    shortcut: isZh ? "检查证据和解释" : "Check evidence and explanation",
-    composerHint: isZh ? "用下方输入框记录你已验证的结果，或指出当前 blocker。" : "Use the composer below to record the verified result or the current blocker.",
-    fallbackHint: isZh ? "卡住时先把范围缩回一个最小例子。" : "If blocked, shrink the scope back to one minimum example.",
-  };
+  return manualPracticeSubtypeCopy.default[language] ?? manualPracticeSubtypeCopy.default["en-US"];
 }
 
 type TrainingLoopStepKey = "learn" | "try" | "verify" | "reflect" | "return";
@@ -660,6 +895,647 @@ function trainingCardOnlyText(language: ComposerLanguage, key: TrainingCardOnlyC
   return trainingCardOnlyCopy[language]?.[key] ?? trainingCardOnlyCopy["en-US"][key];
 }
 
+/** §十五: workbench-surface copy in eight languages (no zh/en binary). */
+type TrainingWorkbenchTextKey =
+  | "ungrouped"
+  | "startHere"
+  | "currentScenario"
+  | "scenarioPack"
+  | "readSliceFirst"
+  | "startIn"
+  | "apiHint"
+  | "apiHintsLabel"
+  | "boundary"
+  | "ifStuck"
+  | "guidanceFallback"
+  | "answerNow"
+  | "flashCheck"
+  | "verifyNow"
+  | "practiceVerificationLabel"
+  | "verifyFileNoteCardOnly"
+  | "verifyFileNote"
+  | "studyFirstLabel"
+  | "primerLabel"
+  | "flashComposerHint"
+  | "fileComposerHint"
+  | "saveStatus"
+  | "flashDeckNext"
+  | "flashDeckPractice"
+  | "adjustReturnLabel"
+  | "adjustReflectLabel"
+  | "adjustCarryTitle"
+  | "adjustEvidenceTitle"
+  | "adjustNarrowTitle"
+  | "adjustTightenTitle"
+  | "adjustDetailFallback"
+  | "adjustReturnNext"
+  | "adjustEvidenceNext"
+  | "adjustRetestNext"
+  | "flashVerificationAria"
+  | "choiceFillShort"
+  | "readCurrentIdeFile"
+  | "mismatchRecoveryReason"
+  | "currentTrainingRoute"
+  | "studyCuesFirst"
+  | "primerCues"
+  | "hintsGuardrails"
+  | "hintsGuardrailsBody"
+  | "verifyLikeThis"
+  | "bringBackAfterCompletion"
+  | "filesToTouchLabel"
+  | "hintLadderLabel"
+  | "commonMistakesLabel"
+  | "stuckRecoveryLabel"
+  | "sourceAndReason"
+  | "fullAcceptance"
+  | "deliverablesLabel"
+  | "acceptanceMethod"
+  | "landSmallResultFirst"
+  | "returnPath"
+  | "followUpReview"
+  | "fsrsInterval"
+  | "fsrsMastery"
+  | "reviewActions"
+  | "reviewAccept"
+  | "reviewSnooze"
+  | "moreLabel"
+  | "reviewReset"
+  | "reviewSkip"
+  | "reviewDone"
+  | "recentWins"
+  | "watchOuts"
+  | "hintProgressPrefix";
+
+const trainingWorkbenchTextCopy: Record<
+  ComposerLanguage,
+  Record<TrainingWorkbenchTextKey, string>
+> = {
+  "zh-CN": {
+    ungrouped: "未分组",
+    startHere: "先做这一步",
+    currentScenario: "当前场景",
+    scenarioPack: "场景包",
+    readSliceFirst: "先把当前切片读清楚，再进入下面的验证。",
+    startIn: "先看",
+    apiHint: "API 提示",
+    apiHintsLabel: "API 提示",
+    boundary: "边界",
+    ifStuck: "卡住时",
+    guidanceFallback: "展开查看提示、边界和卡住时的恢复路径。",
+    answerNow: "现在作答",
+    flashCheck: "闪记检查",
+    verifyNow: "现在验证",
+    practiceVerificationLabel: "实战验证",
+    verifyFileNoteCardOnly: "再读取当前文件，按下面的检查项确认它是否成立。",
+    verifyFileNote: "从当前文件和诊断判断是否通过。",
+    studyFirstLabel: "先看",
+    primerLabel: "前置",
+    flashComposerHint: "用下方输入框作答，选择列表会出现在输入框上方。",
+    fileComposerHint: "先动手，再用下方输入框记录结果或 blocker。真正通过要靠输入框区域里的 Verify current file。",
+    saveStatus: "保存状态",
+    flashDeckNext: "换一张闪卡",
+    flashDeckPractice: "用闪卡练习",
+    adjustReturnLabel: "回流",
+    adjustReflectLabel: "复盘",
+    adjustCarryTitle: "把这次结果带回下一步",
+    adjustEvidenceTitle: "先复盘这条证据说明了什么",
+    adjustNarrowTitle: "收窄修复，然后再验",
+    adjustTightenTitle: "收紧下一步",
+    adjustDetailFallback: "先记下这轮学到的边界，再继续往下走。",
+    adjustReturnNext: "先记下这条边界，再继续。",
+    adjustEvidenceNext: "先在输入框里说清这条证据，再回流。",
+    adjustRetestNext: "先做最小改动，然后再验一次。",
+    flashVerificationAria: "闪记验证",
+    choiceFillShort: "选择 / 填空 / 简答",
+    readCurrentIdeFile: "读取 IDE 当前文件",
+    mismatchRecoveryReason: "从交接错配中恢复：切换到交接所属卡片",
+    currentTrainingRoute: "当前训练路线",
+    studyCuesFirst: "先看这些线索",
+    primerCues: "前置线索",
+    hintsGuardrails: "提示与边界",
+    hintsGuardrailsBody: "提示和边界",
+    verifyLikeThis: "这样验证",
+    bringBackAfterCompletion: "完成后带回",
+    filesToTouchLabel: "优先文件",
+    hintLadderLabel: "提示阶梯",
+    commonMistakesLabel: "常见错误",
+    stuckRecoveryLabel: "卡住时怎么恢复",
+    sourceAndReason: "来源与原因",
+    fullAcceptance: "完整验收",
+    deliverablesLabel: "交付物",
+    acceptanceMethod: "验收方式",
+    landSmallResultFirst: "先拿到一个最小可验证结果，再决定要不要扩展范围。",
+    returnPath: "回流去向",
+    followUpReview: "后续和回看",
+    fsrsInterval: "间隔",
+    fsrsMastery: "掌握度",
+    reviewActions: "复习操作",
+    reviewAccept: "开始复习",
+    reviewSnooze: "稍后",
+    moreLabel: "更多",
+    reviewReset: "重置",
+    reviewSkip: "跳过",
+    reviewDone: "完成",
+    recentWins: "最近进步",
+    watchOuts: "需要留意",
+    hintProgressPrefix: "提示",
+  },
+  "en-US": {
+    ungrouped: "Ungrouped",
+    startHere: "Start here",
+    currentScenario: "Current scenario",
+    scenarioPack: "Scenario pack",
+    readSliceFirst: "Read this slice first, then move into verification.",
+    startIn: "Start in",
+    apiHint: "API hint",
+    apiHintsLabel: "API hints",
+    boundary: "Boundary",
+    ifStuck: "If stuck",
+    guidanceFallback: "Open for hints, boundaries, and recovery.",
+    answerNow: "Answer now",
+    flashCheck: "Flash check",
+    verifyNow: "Verify",
+    practiceVerificationLabel: "Practice verification",
+    verifyFileNoteCardOnly: "Then read the current file and confirm the checks below.",
+    verifyFileNote: "Pass/fail comes from the current file and diagnostics.",
+    studyFirstLabel: "Study first",
+    primerLabel: "Primer",
+    flashComposerHint: "Answer in the composer below. The choice list appears above the input.",
+    fileComposerHint: "Try the task first, then use the composer below to record the result or blocker. Real pass/fail still comes from Verify current file.",
+    saveStatus: "Save status",
+    flashDeckNext: "Next flashcard",
+    flashDeckPractice: "Practice with flashcards",
+    adjustReturnLabel: "Return",
+    adjustReflectLabel: "Reflect",
+    adjustCarryTitle: "Carry this result forward",
+    adjustEvidenceTitle: "Reflect on what this evidence proves",
+    adjustNarrowTitle: "Narrow the fix and test again",
+    adjustTightenTitle: "Tighten the next move",
+    adjustDetailFallback: "Write down the boundary you learned this round before moving on.",
+    adjustReturnNext: "Capture the boundary, then continue.",
+    adjustEvidenceNext: "State the evidence in the composer, then return.",
+    adjustRetestNext: "Make the smallest change, then retest.",
+    flashVerificationAria: "Flash verification",
+    choiceFillShort: "Choice / fill / short",
+    readCurrentIdeFile: "Read current IDE file",
+    mismatchRecoveryReason: "Recover from handoff mismatch: activate the handoff-owner card",
+    currentTrainingRoute: "Current training route",
+    studyCuesFirst: "Study cues first",
+    primerCues: "Primer cues",
+    hintsGuardrails: "Hints and guardrails",
+    hintsGuardrailsBody: "Hints and guardrails",
+    verifyLikeThis: "Verify like this",
+    bringBackAfterCompletion: "Bring back after completion",
+    filesToTouchLabel: "Files to touch",
+    hintLadderLabel: "Hint ladder",
+    commonMistakesLabel: "Common mistakes",
+    stuckRecoveryLabel: "If you get stuck",
+    sourceAndReason: "Source and reason",
+    fullAcceptance: "Full acceptance",
+    deliverablesLabel: "Deliverables",
+    acceptanceMethod: "Acceptance method",
+    landSmallResultFirst: "Land one small result first.",
+    returnPath: "Return path",
+    followUpReview: "Follow-up and review",
+    fsrsInterval: "Interval",
+    fsrsMastery: "Mastery",
+    reviewActions: "Review actions",
+    reviewAccept: "Start review",
+    reviewSnooze: "Later",
+    moreLabel: "More",
+    reviewReset: "Reset",
+    reviewSkip: "Skip",
+    reviewDone: "Done",
+    recentWins: "Recent wins",
+    watchOuts: "Watch-outs",
+    hintProgressPrefix: "Hint",
+  },
+  "es-ES": {
+    ungrouped: "Sin agrupar",
+    startHere: "Empieza aquí",
+    currentScenario: "Escenario actual",
+    scenarioPack: "Paquete de escenario",
+    readSliceFirst: "Lee primero este fragmento y pasa a la verificación de abajo.",
+    startIn: "Empieza en",
+    apiHint: "Pista de API",
+    apiHintsLabel: "Pistas de API",
+    boundary: "Límite",
+    ifStuck: "Si te bloqueas",
+    guidanceFallback: "Ábrela para ver pistas, límites y la ruta de recuperación.",
+    answerNow: "Responder ahora",
+    flashCheck: "Comprobación flash",
+    verifyNow: "Verificar",
+    practiceVerificationLabel: "Verificación de práctica",
+    verifyFileNoteCardOnly: "Luego lee el archivo actual y confirma con las comprobaciones de abajo si se cumple.",
+    verifyFileNote: "Aprobar o no depende del archivo actual y sus diagnósticos.",
+    studyFirstLabel: "Estudia primero",
+    primerLabel: "Base",
+    flashComposerHint: "Responde en el campo de abajo. La lista de opciones aparece sobre el campo.",
+    fileComposerHint: "Inténtalo primero y usa el campo de abajo para registrar el resultado o el bloqueo. La aprobación real sigue viniendo de Verify current file.",
+    saveStatus: "Estado del guardado",
+    flashDeckNext: "Otra tarjeta flash",
+    flashDeckPractice: "Practicar con tarjetas flash",
+    adjustReturnLabel: "Volver",
+    adjustReflectLabel: "Reflexionar",
+    adjustCarryTitle: "Lleva este resultado al siguiente paso",
+    adjustEvidenceTitle: "Repasa qué demuestra esta evidencia",
+    adjustNarrowTitle: "Reduce el arreglo y verifica otra vez",
+    adjustTightenTitle: "Ajusta el siguiente movimiento",
+    adjustDetailFallback: "Anota el límite que aprendiste en esta ronda antes de seguir avanzando.",
+    adjustReturnNext: "Registra el límite y continúa.",
+    adjustEvidenceNext: "Explica esta evidencia en el campo y vuelve al flujo.",
+    adjustRetestNext: "Haz el cambio más pequeño y vuelve a probar.",
+    flashVerificationAria: "Verificación flash",
+    choiceFillShort: "Opción / completar / corta",
+    readCurrentIdeFile: "Leer el archivo actual del IDE",
+    mismatchRecoveryReason: "Recuperarse del desajuste de traspaso: activar la tarjeta propietaria del traspaso",
+    currentTrainingRoute: "Ruta de entrenamiento actual",
+    studyCuesFirst: "Primero mira estas pistas",
+    primerCues: "Pistas previas",
+    hintsGuardrails: "Pistas y límites",
+    hintsGuardrailsBody: "Pistas y límites",
+    verifyLikeThis: "Verifica así",
+    bringBackAfterCompletion: "Traer de vuelta al terminar",
+    filesToTouchLabel: "Archivos prioritarios",
+    hintLadderLabel: "Escalera de pistas",
+    commonMistakesLabel: "Errores comunes",
+    stuckRecoveryLabel: "Cómo recuperarte si te bloqueas",
+    sourceAndReason: "Fuente y motivo",
+    fullAcceptance: "Aceptación completa",
+    deliverablesLabel: "Entregables",
+    acceptanceMethod: "Método de aceptación",
+    landSmallResultFirst: "Consigue primero un resultado pequeño y verificable antes de decidir si amplías el alcance.",
+    returnPath: "Ruta de retorno",
+    followUpReview: "Seguimiento y repaso",
+    fsrsInterval: "Intervalo",
+    fsrsMastery: "Dominio",
+    reviewActions: "Acciones de repaso",
+    reviewAccept: "Comenzar repaso",
+    reviewSnooze: "Más tarde",
+    moreLabel: "Más",
+    reviewReset: "Reiniciar",
+    reviewSkip: "Saltar",
+    reviewDone: "Hecho",
+    recentWins: "Progresos recientes",
+    watchOuts: "Puntos a vigilar",
+    hintProgressPrefix: "Pista",
+  },
+  "fr-FR": {
+    ungrouped: "Non groupé",
+    startHere: "Commencez ici",
+    currentScenario: "Scénario actuel",
+    scenarioPack: "Pack de scénario",
+    readSliceFirst: "Lisez d'abord ce fragment, puis passez à la vérification ci-dessous.",
+    startIn: "Commencer par",
+    apiHint: "Indice API",
+    apiHintsLabel: "Indices API",
+    boundary: "Limite",
+    ifStuck: "En cas de blocage",
+    guidanceFallback: "Ouvrez pour les indices, les limites et la récupération en cas de blocage.",
+    answerNow: "Répondre maintenant",
+    flashCheck: "Vérification carte",
+    verifyNow: "Vérifier",
+    practiceVerificationLabel: "Vérification d'exercice",
+    verifyFileNoteCardOnly: "Lisez ensuite le fichier actuel et confirmez avec les vérifications ci-dessous s'il est valide.",
+    verifyFileNote: "La réussite se juge sur le fichier actuel et ses diagnostics.",
+    studyFirstLabel: "Étudier d'abord",
+    primerLabel: "Base",
+    flashComposerHint: "Répondez dans le champ ci-dessous. La liste de choix apparaît au-dessus du champ.",
+    fileComposerHint: "Essayez d'abord, puis notez le résultat ou le blocage dans le champ ci-dessous. La réussite réelle passe toujours par Verify current file.",
+    saveStatus: "État de l'enregistrement",
+    flashDeckNext: "Autre carte flash",
+    flashDeckPractice: "S'entraîner avec des cartes flash",
+    adjustReturnLabel: "Retour",
+    adjustReflectLabel: "Réviser",
+    adjustCarryTitle: "Reportez ce résultat à l'étape suivante",
+    adjustEvidenceTitle: "Révisez ce que prouve cette preuve",
+    adjustNarrowTitle: "Réduisez la correction et retestez",
+    adjustTightenTitle: "Resserrez le prochain geste",
+    adjustDetailFallback: "Notez la limite apprise à cette passe avant de continuer.",
+    adjustReturnNext: "Notez cette limite, puis continuez.",
+    adjustEvidenceNext: "Énoncez cette preuve dans le champ, puis revenez au flux.",
+    adjustRetestNext: "Faites le plus petit changement, puis retestez.",
+    flashVerificationAria: "Vérification carte flash",
+    choiceFillShort: "Choix / trous / courte",
+    readCurrentIdeFile: "Lire le fichier actuel de l'IDE",
+    mismatchRecoveryReason: "Reprise après désalignement de passation : activer la carte propriétaire de la passation",
+    currentTrainingRoute: "Parcours d'entraînement actuel",
+    studyCuesFirst: "Commencez par ces indices",
+    primerCues: "Indices de base",
+    hintsGuardrails: "Indices et limites",
+    hintsGuardrailsBody: "Indices et limites",
+    verifyLikeThis: "Vérifiez ainsi",
+    bringBackAfterCompletion: "À rapporter après l'achèvement",
+    filesToTouchLabel: "Fichiers prioritaires",
+    hintLadderLabel: "Échelle d'indices",
+    commonMistakesLabel: "Erreurs fréquentes",
+    stuckRecoveryLabel: "Comment vous débloquer",
+    sourceAndReason: "Source et raison",
+    fullAcceptance: "Acceptation complète",
+    deliverablesLabel: "Livrables",
+    acceptanceMethod: "Méthode d'acceptation",
+    landSmallResultFirst: "Obtenez d'abord un petit résultat vérifiable avant de décider d'élargir le périmètre.",
+    returnPath: "Chemin de retour",
+    followUpReview: "Suivi et révision",
+    fsrsInterval: "Intervalle",
+    fsrsMastery: "Maîtrise",
+    reviewActions: "Actions de révision",
+    reviewAccept: "Commencer la révision",
+    reviewSnooze: "Plus tard",
+    moreLabel: "Plus",
+    reviewReset: "Réinitialiser",
+    reviewSkip: "Passer",
+    reviewDone: "Terminé",
+    recentWins: "Progrès récents",
+    watchOuts: "Points de vigilance",
+    hintProgressPrefix: "Indice",
+  },
+  "de-DE": {
+    ungrouped: "Ungruppiert",
+    startHere: "Hier starten",
+    currentScenario: "Aktuelles Szenario",
+    scenarioPack: "Szenariopaket",
+    readSliceFirst: "Lies zuerst diesen Ausschnitt und gehe dann zur untenstehenden Prüfung über.",
+    startIn: "Einstieg in",
+    apiHint: "API-Hinweis",
+    apiHintsLabel: "API-Hinweise",
+    boundary: "Grenze",
+    ifStuck: "Wenn du feststeckst",
+    guidanceFallback: "Aufklappen für Hinweise, Grenzen und den Wiederherstellungsweg.",
+    answerNow: "Jetzt antworten",
+    flashCheck: "Karten-Check",
+    verifyNow: "Prüfen",
+    practiceVerificationLabel: "Übungsprüfung",
+    verifyFileNoteCardOnly: "Lies danach die aktuelle Datei und bestätige mit den untenstehenden Prüfungen, ob sie hält.",
+    verifyFileNote: "Bestanden oder nicht entscheidet die aktuelle Datei samt Diagnosen.",
+    studyFirstLabel: "Zuerst lernen",
+    primerLabel: "Grundlage",
+    flashComposerHint: "Antworte im Eingabefeld unten. Die Auswahlliste erscheint über dem Eingabefeld.",
+    fileComposerHint: "Probiere die Aufgabe zuerst und nutze das Eingabefeld unten für Ergebnis oder Blocker. Echtes Bestehen läuft weiterhin über Verify current file.",
+    saveStatus: "Speicherstatus",
+    flashDeckNext: "Nächste Lernkarte",
+    flashDeckPractice: "Mit Lernkarten üben",
+    adjustReturnLabel: "Zurück",
+    adjustReflectLabel: "Reflektieren",
+    adjustCarryTitle: "Trage dieses Ergebnis in den nächsten Schritt",
+    adjustEvidenceTitle: "Reflektiere, was dieser Beleg beweist",
+    adjustNarrowTitle: "Verenge die Korrektur und prüfe erneut",
+    adjustTightenTitle: "Schärfe den nächsten Schritt",
+    adjustDetailFallback: "Notiere die in dieser Runde gelernte Grenze, bevor du weitergehst.",
+    adjustReturnNext: "Halte diese Grenze fest und mache weiter.",
+    adjustEvidenceNext: "Benenne diesen Beleg im Eingabefeld und kehre zurück.",
+    adjustRetestNext: "Mache die kleinste Änderung und teste erneut.",
+    flashVerificationAria: "Karten-Verifizierung",
+    choiceFillShort: "Auswahl / Lücke / kurz",
+    readCurrentIdeFile: "Aktuelle IDE-Datei lesen",
+    mismatchRecoveryReason: "Erholung nach Übergabe-Diskrepanz: zur Karte wechseln, der die Übergabe gehört",
+    currentTrainingRoute: "Aktuelle Trainingsroute",
+    studyCuesFirst: "Zuerst diese Hinweise ansehen",
+    primerCues: "Grundlagen-Hinweise",
+    hintsGuardrails: "Hinweise und Grenzen",
+    hintsGuardrailsBody: "Hinweise und Grenzen",
+    verifyLikeThis: "So prüfst du",
+    bringBackAfterCompletion: "Nach Abschluss zurückbringen",
+    filesToTouchLabel: "Vorrangige Dateien",
+    hintLadderLabel: "Hinweisleiter",
+    commonMistakesLabel: "Häufige Fehler",
+    stuckRecoveryLabel: "Wenn du feststeckst",
+    sourceAndReason: "Quelle und Grund",
+    fullAcceptance: "Vollständige Abnahme",
+    deliverablesLabel: "Lieferergebnisse",
+    acceptanceMethod: "Abnahmeverfahren",
+    landSmallResultFirst: "Erreiche zuerst ein kleines, prüfbares Ergebnis, bevor du den Umfang erweiterst.",
+    returnPath: "Rückweg",
+    followUpReview: "Anschluss und Wiederholung",
+    fsrsInterval: "Abstand",
+    fsrsMastery: "Beherrschung",
+    reviewActions: "Wiederholungsaktionen",
+    reviewAccept: "Wiederholung starten",
+    reviewSnooze: "Später",
+    moreLabel: "Mehr",
+    reviewReset: "Zurücksetzen",
+    reviewSkip: "Überspringen",
+    reviewDone: "Fertig",
+    recentWins: "Neue Fortschritte",
+    watchOuts: "Beobachtungspunkte",
+    hintProgressPrefix: "Hinweis",
+  },
+  "ja-JP": {
+    ungrouped: "未グループ",
+    startHere: "まずこのステップ",
+    currentScenario: "現在のシナリオ",
+    scenarioPack: "シナリオパック",
+    readSliceFirst: "まずこの断片を読み込み、下の検証に進みましょう。",
+    startIn: "まずは",
+    apiHint: "API ヒント",
+    apiHintsLabel: "API ヒント",
+    boundary: "境界",
+    ifStuck: "詰まったとき",
+    guidanceFallback: "開くとヒント・境界・詰まったときの復旧手順を確認できます。",
+    answerNow: "今すぐ回答",
+    flashCheck: "フラッシュ確認",
+    verifyNow: "検証",
+    practiceVerificationLabel: "実践検証",
+    verifyFileNoteCardOnly: "その後、現在のファイルを読み、下の確認項目で成立するか確かめましょう。",
+    verifyFileNote: "合格かどうかは現在のファイルと診断で判断します。",
+    studyFirstLabel: "先に学ぶ",
+    primerLabel: "導入",
+    flashComposerHint: "下の入力欄で回答しましょう。選択肢のリストは入力欄の上に表示されます。",
+    fileComposerHint: "まず取り組んでから、下の入力欄に結果またはブロッカーを記録しましょう。本当の合格は Verify current file で判定されます。",
+    saveStatus: "保存状態",
+    flashDeckNext: "次のフラッシュカード",
+    flashDeckPractice: "フラッシュカードで練習",
+    adjustReturnLabel: "戻す",
+    adjustReflectLabel: "振り返る",
+    adjustCarryTitle: "この結果を次のステップへ持ち込む",
+    adjustEvidenceTitle: "この根拠が何を示すか振り返る",
+    adjustNarrowTitle: "修正を絞って、もう一度検証",
+    adjustTightenTitle: "次の一手を絞る",
+    adjustDetailFallback: "先に、このラウンドで学んだ境界を書き留めてから進みましょう。",
+    adjustReturnNext: "この境界を書き留めてから続けましょう。",
+    adjustEvidenceNext: "入力欄でこの根拠を説明してから、流れに戻りましょう。",
+    adjustRetestNext: "最小の変更をしてから、もう一度試しましょう。",
+    flashVerificationAria: "フラッシュ検証",
+    choiceFillShort: "選択 / 穴埋め / 短答",
+    readCurrentIdeFile: "現在の IDE ファイルを読む",
+    mismatchRecoveryReason: "ハンドオフ不整合から回復：ハンドオフ保持カードに切り替える",
+    currentTrainingRoute: "現在のトレーニング経路",
+    studyCuesFirst: "まずこの手がかりを見る",
+    primerCues: "導入の手がかり",
+    hintsGuardrails: "ヒントと境界",
+    hintsGuardrailsBody: "ヒントと境界",
+    verifyLikeThis: "このように検証",
+    bringBackAfterCompletion: "完了後に持ち帰るもの",
+    filesToTouchLabel: "優先ファイル",
+    hintLadderLabel: "ヒントラダー",
+    commonMistakesLabel: "よくある間違い",
+    stuckRecoveryLabel: "詰まったときの復旧",
+    sourceAndReason: "出典と理由",
+    fullAcceptance: "完全な受け入れ基準",
+    deliverablesLabel: "成果物",
+    acceptanceMethod: "受け入れ方法",
+    landSmallResultFirst: "まず小さく検証できる結果を形にしてから、範囲を広げるか判断しましょう。",
+    returnPath: "戻り先",
+    followUpReview: "フォローアップと復習",
+    fsrsInterval: "間隔",
+    fsrsMastery: "習熟度",
+    reviewActions: "復習アクション",
+    reviewAccept: "復習を開始",
+    reviewSnooze: "後で",
+    moreLabel: "もっと見る",
+    reviewReset: "リセット",
+    reviewSkip: "スキップ",
+    reviewDone: "完了",
+    recentWins: "最近の進歩",
+    watchOuts: "注意ポイント",
+    hintProgressPrefix: "ヒント",
+  },
+  "ko-KR": {
+    ungrouped: "그룹 없음",
+    startHere: "이 단계부터",
+    currentScenario: "현재 시나리오",
+    scenarioPack: "시나리오 팩",
+    readSliceFirst: "먼저 이 조각을 읽고 아래 검증으로 넘어가세요.",
+    startIn: "먼저",
+    apiHint: "API 힌트",
+    apiHintsLabel: "API 힌트",
+    boundary: "경계",
+    ifStuck: "막혔을 때",
+    guidanceFallback: "펼치면 힌트, 경계, 막혔을 때의 복구 경로를 볼 수 있습니다.",
+    answerNow: "지금 답하기",
+    flashCheck: "플래시 확인",
+    verifyNow: "검증",
+    practiceVerificationLabel: "실전 검증",
+    verifyFileNoteCardOnly: "이후 현재 파일을 읽고 아래 확인 항목으로 성립하는지 확인하세요.",
+    verifyFileNote: "통과 여부는 현재 파일과 진단으로 판단합니다.",
+    studyFirstLabel: "먼저 학습",
+    primerLabel: "기초",
+    flashComposerHint: "아래 입력창에서 답하세요. 선택 목록은 입력창 위에 나타납니다.",
+    fileComposerHint: "먼저 시도한 뒤 아래 입력창에 결과나 막힌 지점을 기록하세요. 실제 통과는 Verify current file로 판정됩니다.",
+    saveStatus: "저장 상태",
+    flashDeckNext: "다음 플래시카드",
+    flashDeckPractice: "플래시카드로 연습",
+    adjustReturnLabel: "돌아가기",
+    adjustReflectLabel: "회고",
+    adjustCarryTitle: "이 결과를 다음 단계로 가져가기",
+    adjustEvidenceTitle: "이 근거가 무엇을 증명하는지 복기하기",
+    adjustNarrowTitle: "수정을 좁히고 다시 검증",
+    adjustTightenTitle: "다음 수를 다듬기",
+    adjustDetailFallback: "먼저 이 라운드에서 배운 경계를 적어 둔 뒤 계속 진행하세요.",
+    adjustReturnNext: "이 경계를 적어 둔 뒤 계속하세요.",
+    adjustEvidenceNext: "입력창에서 이 근거를 설명한 뒤 흐름으로 돌아가세요.",
+    adjustRetestNext: "가장 작은 변경을 한 뒤 다시 시험하세요.",
+    flashVerificationAria: "플래시 검증",
+    choiceFillShort: "선택 / 빈칸 / 단답",
+    readCurrentIdeFile: "현재 IDE 파일 읽기",
+    mismatchRecoveryReason: "인수 불일치 복구: 인수를 소유한 카드로 전환",
+    currentTrainingRoute: "현재 훈련 경로",
+    studyCuesFirst: "먼저 이 단서 보기",
+    primerCues: "기초 단서",
+    hintsGuardrails: "힌트와 경계",
+    hintsGuardrailsBody: "힌트와 경계",
+    verifyLikeThis: "이렇게 검증",
+    bringBackAfterCompletion: "완료 후 가져올 것",
+    filesToTouchLabel: "우선 파일",
+    hintLadderLabel: "힌트 사다리",
+    commonMistakesLabel: "흔한 실수",
+    stuckRecoveryLabel: "막혔을 때 복구",
+    sourceAndReason: "출처와 이유",
+    fullAcceptance: "전체 인수 조건",
+    deliverablesLabel: "산출물",
+    acceptanceMethod: "인수 방법",
+    landSmallResultFirst: "범위를 넓힐지 정하기 전에 작고 검증 가능한 결과를 먼저 만드세요.",
+    returnPath: "돌아가는 경로",
+    followUpReview: "후속 조치와 복습",
+    fsrsInterval: "간격",
+    fsrsMastery: "숙달도",
+    reviewActions: "복습 작업",
+    reviewAccept: "복습 시작",
+    reviewSnooze: "나중에",
+    moreLabel: "더보기",
+    reviewReset: "초기화",
+    reviewSkip: "건너뛰기",
+    reviewDone: "완료",
+    recentWins: "최근 진전",
+    watchOuts: "주의 포인트",
+    hintProgressPrefix: "힌트",
+  },
+  "pt-BR": {
+    ungrouped: "Sem grupo",
+    startHere: "Comece por aqui",
+    currentScenario: "Cenário atual",
+    scenarioPack: "Pacote de cenário",
+    readSliceFirst: "Leia primeiro esta fatia e siga para a verificação abaixo.",
+    startIn: "Comece em",
+    apiHint: "Dica de API",
+    apiHintsLabel: "Dicas de API",
+    boundary: "Limite",
+    ifStuck: "Se travar",
+    guidanceFallback: "Abra para ver dicas, limites e o caminho de recuperação.",
+    answerNow: "Responder agora",
+    flashCheck: "Verificação flash",
+    verifyNow: "Verificar",
+    practiceVerificationLabel: "Verificação de prática",
+    verifyFileNoteCardOnly: "Depois leia o arquivo atual e confirme com as verificações abaixo se ele vale.",
+    verifyFileNote: "Aprovar ou não depende do arquivo atual e dos diagnósticos.",
+    studyFirstLabel: "Estude primeiro",
+    primerLabel: "Base",
+    flashComposerHint: "Responda no campo abaixo. A lista de opções aparece acima do campo.",
+    fileComposerHint: "Tente primeiro e use o campo abaixo para registrar o resultado ou o bloqueio. A aprovação real continua vindo de Verify current file.",
+    saveStatus: "Estado do salvamento",
+    flashDeckNext: "Próximo cartão flash",
+    flashDeckPractice: "Praticar com cartões flash",
+    adjustReturnLabel: "Retornar",
+    adjustReflectLabel: "Refletir",
+    adjustCarryTitle: "Leve este resultado para o próximo passo",
+    adjustEvidenceTitle: "Reveja o que esta evidência prova",
+    adjustNarrowTitle: "Estreite a correção e teste de novo",
+    adjustTightenTitle: "Ajuste o próximo passo",
+    adjustDetailFallback: "Anote o limite que você aprendeu nesta rodada antes de seguir em frente.",
+    adjustReturnNext: "Registre este limite e continue.",
+    adjustEvidenceNext: "Explique esta evidência no campo e retorne ao fluxo.",
+    adjustRetestNext: "Faça a menor mudança e teste de novo.",
+    flashVerificationAria: "Verificação de cartão flash",
+    choiceFillShort: "Escolha / lacuna / curta",
+    readCurrentIdeFile: "Ler o arquivo atual do IDE",
+    mismatchRecoveryReason: "Recuperar de divergência de transição: ativar o cartão dono da transição",
+    currentTrainingRoute: "Rota de treinamento atual",
+    studyCuesFirst: "Veja primeiro estas pistas",
+    primerCues: "Pistas da base",
+    hintsGuardrails: "Dicas e limites",
+    hintsGuardrailsBody: "Dicas e limites",
+    verifyLikeThis: "Verifique assim",
+    bringBackAfterCompletion: "Trazer de volta ao concluir",
+    filesToTouchLabel: "Arquivos prioritários",
+    hintLadderLabel: "Escada de dicas",
+    commonMistakesLabel: "Erros comuns",
+    stuckRecoveryLabel: "Se você travar",
+    sourceAndReason: "Fonte e motivo",
+    fullAcceptance: "Aceitação completa",
+    deliverablesLabel: "Entregáveis",
+    acceptanceMethod: "Método de aceitação",
+    landSmallResultFirst: "Consiga primeiro um resultado pequeno e verificável antes de decidir ampliar o escopo.",
+    returnPath: "Caminho de retorno",
+    followUpReview: "Acompanhamento e revisão",
+    fsrsInterval: "Intervalo",
+    fsrsMastery: "Domínio",
+    reviewActions: "Ações de revisão",
+    reviewAccept: "Iniciar revisão",
+    reviewSnooze: "Mais tarde",
+    moreLabel: "Mais",
+    reviewReset: "Redefinir",
+    reviewSkip: "Pular",
+    reviewDone: "Concluído",
+    recentWins: "Progressos recentes",
+    watchOuts: "Pontos de atenção",
+    hintProgressPrefix: "Dica",
+  },
+};
+
+function trainingWorkbenchText(language: ComposerLanguage, key: TrainingWorkbenchTextKey): string {
+  return trainingWorkbenchTextCopy[language]?.[key] ?? trainingWorkbenchTextCopy["en-US"][key];
+}
+
 function buildTrainingLoopSteps(input: {
   language: ComposerLanguage;
   composerPhase: TrainingExecutionState["composerPhase"];
@@ -677,6 +1553,569 @@ function buildTrainingLoopSteps(input: {
   }));
 }
 
+/** §十五: verification-return state copy in eight languages (no zh/en binary). */
+type TrainingVerificationReturnCopyKey =
+  | "primerRetryEyebrow"
+  | "primerRetryTitle"
+  | "primerRetryDetail"
+  | "primerRetryNext"
+  | "primerStudyEyebrow"
+  | "primerStudyTitle"
+  | "primerStudyDetail"
+  | "primerStudyNext"
+  | "skippedEyebrow"
+  | "skippedTitle"
+  | "skippedDetail"
+  | "skippedNext"
+  | "flashBlockedEyebrow"
+  | "flashBlockedTitle"
+  | "flashBlockedDetailFallback"
+  | "flashBlockedNext"
+  | "flashVerifiedEyebrow"
+  | "flashVerifiedTitle"
+  | "flashVerifiedDetailFallback"
+  | "flashVerifiedNext"
+  | "flashAnsweredEyebrow"
+  | "flashAnsweredTitle"
+  | "flashAnsweredDetailFallback"
+  | "flashAnsweredNext"
+  | "flashEvidenceMissingEyebrow"
+  | "flashEvidenceMissingTitle"
+  | "flashEvidenceMissingDetailFallback"
+  | "flashEvidenceMissingNext"
+  | "flashWaitingEyebrow"
+  | "flashWaitingTitle"
+  | "flashWaitingDetail"
+  | "flashWaitingNext"
+  | "practiceBlockedEyebrow"
+  | "practiceBlockedTitleManual"
+  | "practiceBlockedTitleFile"
+  | "practiceBlockedDetailManual"
+  | "practiceBlockedDetailFile"
+  | "practiceBlockedNextManualFallback"
+  | "practiceBlockedNextFile"
+  | "pendingPlanEyebrow"
+  | "pendingPlanTitle"
+  | "pendingPlanDetailFallback"
+  | "pendingPlanNext"
+  | "practiceVerifiedEyebrow"
+  | "practiceVerifiedTitleManual"
+  | "practiceVerifiedTitleFile"
+  | "practiceVerifiedDetailManual"
+  | "practiceVerifiedDetailFile"
+  | "practiceVerifiedNextManual"
+  | "practiceVerifiedNextFile"
+  | "practiceEvidenceMissingEyebrow"
+  | "practiceEvidenceMissingTitle"
+  | "practiceEvidenceMissingDetailFallback"
+  | "practiceEvidenceMissingNext"
+  | "waitingEyebrow"
+  | "waitingTitle"
+  | "waitingDetailFile"
+  | "waitingNextManual"
+  | "waitingNextFile";
+
+const trainingVerificationReturnCopy: Record<
+  ComposerLanguage,
+  Record<TrainingVerificationReturnCopyKey, string>
+> = {
+  "zh-CN": {
+    primerRetryEyebrow: "需要再答",
+    primerRetryTitle: "先巩固这条规则，再答一次",
+    primerRetryDetail: "刚才的答案还没稳住；这张卡保持在当前训练里，不会算作完成。",
+    primerRetryNext: "看提示或巩固材料，再答同一张卡。",
+    primerStudyEyebrow: "先学",
+    primerStudyTitle: "先建立最小理解",
+    primerStudyDetail: "这张卡还不适合直接动手，先看 primer 再回来。",
+    primerStudyNext: "先读完 primer，再回到同一张卡。",
+    skippedEyebrow: "已跳过",
+    skippedTitle: "先收紧入口，再回来",
+    skippedDetail: "这张卡暂时跳过了，现在先把入口改成更小的切片。",
+    skippedNext: "先选一个更小的入口，再回到当前主线。",
+    flashBlockedEyebrow: "未稳住",
+    flashBlockedTitle: "先收紧这条规则",
+    flashBlockedDetailFallback: "这个答案还没稳定到可以带回主线。",
+    flashBlockedNext: "先补上缺的证据，再简述一次。",
+    flashVerifiedEyebrow: "已作答",
+    flashVerifiedTitle: "先复盘这条已验证规则",
+    flashVerifiedDetailFallback: "这张闪记卡已经完成。",
+    flashVerifiedNext: "先用一句话说清它为什么成立，再回流。",
+    flashAnsweredEyebrow: "已作答",
+    flashAnsweredTitle: "把答案压成一条规则",
+    flashAnsweredDetailFallback: "现在用一句话说出这张卡真正想让你记住的规则。",
+    flashAnsweredNext: "复盘一次，再把规则带回主线。",
+    flashEvidenceMissingEyebrow: "缺少证据",
+    flashEvidenceMissingTitle: "先补上这次答案的依据",
+    flashEvidenceMissingDetailFallback: "还没有可追溯的答案依据。",
+    flashEvidenceMissingNext: "在输入框记下规则和依据，再复盘。",
+    flashWaitingEyebrow: "闪记",
+    flashWaitingTitle: "选择 /填空 /简答",
+    flashWaitingDetail: "不读 IDE 文件。",
+    flashWaitingNext: "提交答案。",
+    practiceBlockedEyebrow: "未通过",
+    practiceBlockedTitleManual: "先收紧这一轮验证",
+    practiceBlockedTitleFile: "先修当前文件",
+    practiceBlockedDetailManual: "还需要一条更稳的解释、例子，或证据。",
+    practiceBlockedDetailFile: "还没达到通过条件。",
+    practiceBlockedNextManualFallback: "先缩回到一个更小的可证明步骤。",
+    practiceBlockedNextFile: "修完再验。",
+    pendingPlanEyebrow: "已验证，待计划确认",
+    pendingPlanTitle: "这次证据已验证，但还不是正式计划完成",
+    pendingPlanDetailFallback: "IDE 或闪记验证已通过，等待 Coach 确认是否更新正式计划。",
+    pendingPlanNext: "先复盘，再把证据带回 Coach 确认计划下一步。",
+    practiceVerifiedEyebrow: "已通过",
+    practiceVerifiedTitleManual: "先复盘这张已验证练习卡",
+    practiceVerifiedTitleFile: "先复盘这次实战证据",
+    practiceVerifiedDetailManual: "这一轮解释或例子已经足够稳。",
+    practiceVerifiedDetailFile: "当前文件已通过。",
+    practiceVerifiedNextManual: "先说清楚你用的证据或关键步，再回流。",
+    practiceVerifiedNextFile: "先说清楚是哪条证据让它通过，再回流。",
+    practiceEvidenceMissingEyebrow: "缺少证据",
+    practiceEvidenceMissingTitle: "先补上这次练习的依据",
+    practiceEvidenceMissingDetailFallback: "实现不等于通过，还需要一条可追溯的验证结果。",
+    practiceEvidenceMissingNext: "在输入框记录验证结果或 blocker，再复盘。",
+    waitingEyebrow: "待验",
+    waitingTitle: "先落地一个最小可交付结果",
+    waitingDetailFile: "实战卡要读当前 IDE 文件。",
+    waitingNextManual: "在下方输入框记录结果或 blocker。",
+    waitingNextFile: "写完后验证。",
+  },
+  "en-US": {
+    primerRetryEyebrow: "Retry needed",
+    primerRetryTitle: "Reinforce the rule, then answer again",
+    primerRetryDetail: "The last answer was not stable yet; this card stays active and is not counted as complete.",
+    primerRetryNext: "Review the hint or primer, then answer the same card again.",
+    primerStudyEyebrow: "Study first",
+    primerStudyTitle: "Build the smallest understanding first",
+    primerStudyDetail: "This card is not ready for direct execution yet; open the primer first.",
+    primerStudyNext: "Finish the primer, then return to the same card.",
+    skippedEyebrow: "Skipped",
+    skippedTitle: "Narrow the entry, then return",
+    skippedDetail: "This card was skipped for now, so the next step is to reopen it with a smaller slice.",
+    skippedNext: "Choose a smaller entry point, then return to the current thread.",
+    flashBlockedEyebrow: "Needs review",
+    flashBlockedTitle: "Tighten the rule first",
+    flashBlockedDetailFallback: "This answer is not stable enough to carry back yet.",
+    flashBlockedNext: "Add the missing proof, then restate it once.",
+    flashVerifiedEyebrow: "Answer checked",
+    flashVerifiedTitle: "Reflect on this verified rule",
+    flashVerifiedDetailFallback: "This flash card is completed.",
+    flashVerifiedNext: "State why it holds in one sentence, then return.",
+    flashAnsweredEyebrow: "Answered",
+    flashAnsweredTitle: "Compress the answer into one rule",
+    flashAnsweredDetailFallback: "Now say the one rule this card wants you to retain.",
+    flashAnsweredNext: "Reflect once, then bring the rule back.",
+    flashEvidenceMissingEyebrow: "Evidence missing",
+    flashEvidenceMissingTitle: "Add the evidence for this answer",
+    flashEvidenceMissingDetailFallback: "There is no traceable evidence for this answer yet.",
+    flashEvidenceMissingNext: "Record the rule and its evidence in the composer, then reflect.",
+    flashWaitingEyebrow: "Flash",
+    flashWaitingTitle: "Choice / fill / short answer",
+    flashWaitingDetail: "No IDE file read.",
+    flashWaitingNext: "Submit an answer.",
+    practiceBlockedEyebrow: "Needs work",
+    practiceBlockedTitleManual: "Tighten this verification round first",
+    practiceBlockedTitleFile: "Fix the current file first",
+    practiceBlockedDetailManual: "This still needs one tighter explanation, example, or proof.",
+    practiceBlockedDetailFile: "Pass condition not met yet.",
+    practiceBlockedNextManualFallback: "Return to one smaller step you can prove.",
+    practiceBlockedNextFile: "Fix it, then verify again.",
+    pendingPlanEyebrow: "Verified, plan confirmation pending",
+    pendingPlanTitle: "Evidence is verified; the formal plan is not complete",
+    pendingPlanDetailFallback: "The IDE or flash evidence passed; Coach must confirm any formal plan change.",
+    pendingPlanNext: "Reflect, then bring the evidence to Coach to confirm the next plan step.",
+    practiceVerifiedEyebrow: "Verified",
+    practiceVerifiedTitleManual: "Reflect on this verified practice card",
+    practiceVerifiedTitleFile: "Reflect on this verified evidence",
+    practiceVerifiedDetailManual: "This explanation or example is grounded enough to continue.",
+    practiceVerifiedDetailFile: "Current file passed.",
+    practiceVerifiedNextManual: "Name the proof or key step you used, then return.",
+    practiceVerifiedNextFile: "Name the proof that made it pass, then return.",
+    practiceEvidenceMissingEyebrow: "Evidence missing",
+    practiceEvidenceMissingTitle: "Add the evidence for this practice",
+    practiceEvidenceMissingDetailFallback: "Implementation is not a pass; a traceable verification result is still needed.",
+    practiceEvidenceMissingNext: "Record the verification result or blocker in the composer, then reflect.",
+    waitingEyebrow: "Waiting",
+    waitingTitle: "Land the smallest deliverable first",
+    waitingDetailFile: "Practice cards read the current IDE file.",
+    waitingNextManual: "Record the result or blocker in the composer below.",
+    waitingNextFile: "Verify after editing.",
+  },
+  "es-ES": {
+    primerRetryEyebrow: "Reintento necesario",
+    primerRetryTitle: "Refuerza la regla y responde de nuevo",
+    primerRetryDetail: "La última respuesta aún no se consolidó; esta tarjeta sigue activa en el entrenamiento y no cuenta como completada.",
+    primerRetryNext: "Repasa la pista o el material de refuerzo y vuelve a responder la misma tarjeta.",
+    primerStudyEyebrow: "Estudia primero",
+    primerStudyTitle: "Construye primero la comprensión mínima",
+    primerStudyDetail: "Esta tarjeta aún no está lista para ejecutarse directamente; abre primero la base.",
+    primerStudyNext: "Termina la base y vuelve a la misma tarjeta.",
+    skippedEyebrow: "Omitida",
+    skippedTitle: "Reduce la entrada y vuelve",
+    skippedDetail: "Esta tarjeta se omitió por ahora; el siguiente paso es reabrirla con un fragmento más pequeño.",
+    skippedNext: "Elige un punto de entrada más pequeño y vuelve al hilo actual.",
+    flashBlockedEyebrow: "Requiere revisión",
+    flashBlockedTitle: "Afina primero la regla",
+    flashBlockedDetailFallback: "Esta respuesta aún no es lo bastante estable para llevarla de vuelta.",
+    flashBlockedNext: "Añade la prueba que falta y reformúlala una vez.",
+    flashVerifiedEyebrow: "Respuesta comprobada",
+    flashVerifiedTitle: "Repasa esta regla verificada",
+    flashVerifiedDetailFallback: "Esta tarjeta flash está completada.",
+    flashVerifiedNext: "Explica en una frase por qué se sostiene y vuelve al flujo.",
+    flashAnsweredEyebrow: "Respondida",
+    flashAnsweredTitle: "Condensa la respuesta en una regla",
+    flashAnsweredDetailFallback: "Ahora di en una frase la regla que esta tarjeta quiere que retengas.",
+    flashAnsweredNext: "Repasa una vez y lleva la regla de vuelta al hilo.",
+    flashEvidenceMissingEyebrow: "Falta evidencia",
+    flashEvidenceMissingTitle: "Añade la evidencia de esta respuesta",
+    flashEvidenceMissingDetailFallback: "Todavía no hay evidencia rastreable de esta respuesta.",
+    flashEvidenceMissingNext: "Anota la regla y su evidencia en el campo y repasa.",
+    flashWaitingEyebrow: "Tarjeta",
+    flashWaitingTitle: "Opción / completar / respuesta corta",
+    flashWaitingDetail: "No lee archivos del IDE.",
+    flashWaitingNext: "Envía una respuesta.",
+    practiceBlockedEyebrow: "Necesita trabajo",
+    practiceBlockedTitleManual: "Afina primero esta ronda de verificación",
+    practiceBlockedTitleFile: "Corrige primero el archivo actual",
+    practiceBlockedDetailManual: "Todavía hace falta una explicación, un ejemplo o una prueba más sólidos.",
+    practiceBlockedDetailFile: "Aún no se cumple la condición de paso.",
+    practiceBlockedNextManualFallback: "Vuelve a un paso más pequeño que puedas demostrar.",
+    practiceBlockedNextFile: "Corrige y verifica de nuevo.",
+    pendingPlanEyebrow: "Verificada, pendiente de confirmar el plan",
+    pendingPlanTitle: "La evidencia está verificada, pero el plan formal no está completo",
+    pendingPlanDetailFallback: "La verificación del IDE o de la tarjeta pasó; Coach debe confirmar cualquier cambio del plan formal.",
+    pendingPlanNext: "Repasa y lleva la evidencia a Coach para confirmar el siguiente paso del plan.",
+    practiceVerifiedEyebrow: "Verificada",
+    practiceVerifiedTitleManual: "Repasa esta tarjeta de práctica verificada",
+    practiceVerifiedTitleFile: "Repasa esta evidencia de práctica verificada",
+    practiceVerifiedDetailManual: "Esta explicación o ejemplo ya es lo bastante sólido para continuar.",
+    practiceVerifiedDetailFile: "El archivo actual pasó.",
+    practiceVerifiedNextManual: "Nombra la prueba o el paso clave que usaste y vuelve al flujo.",
+    practiceVerifiedNextFile: "Nombra la prueba que hizo que pasara y vuelve al flujo.",
+    practiceEvidenceMissingEyebrow: "Falta evidencia",
+    practiceEvidenceMissingTitle: "Añade la evidencia de esta práctica",
+    practiceEvidenceMissingDetailFallback: "Implementar no es aprobar; aún hace falta un resultado de verificación rastreable.",
+    practiceEvidenceMissingNext: "Registra el resultado de verificación o el bloqueo en el campo y repasa.",
+    waitingEyebrow: "En espera",
+    waitingTitle: "Aterriza primero el resultado entregable más pequeño",
+    waitingDetailFile: "Las tarjetas de práctica leen el archivo actual del IDE.",
+    waitingNextManual: "Registra el resultado o el bloqueo en el campo de abajo.",
+    waitingNextFile: "Verifica después de editar.",
+  },
+  "fr-FR": {
+    primerRetryEyebrow: "Nouvelle réponse requise",
+    primerRetryTitle: "Renforcez la règle, puis répondez à nouveau",
+    primerRetryDetail: "La dernière réponse n'était pas encore solide ; cette carte reste active dans l'entraînement et ne compte pas comme terminée.",
+    primerRetryNext: "Relisez l'indice ou le support de renforcement, puis répondez à nouveau à la même carte.",
+    primerStudyEyebrow: "Étudier d'abord",
+    primerStudyTitle: "Construisez d'abord la compréhension minimale",
+    primerStudyDetail: "Cette carte n'est pas encore prête pour une exécution directe ; ouvrez d'abord la base.",
+    primerStudyNext: "Terminez la base, puis revenez à la même carte.",
+    skippedEyebrow: "Passée",
+    skippedTitle: "Resserrez l'entrée, puis revenez",
+    skippedDetail: "Cette carte a été passée pour l'instant ; l'étape suivante est de la rouvrir avec un fragment plus petit.",
+    skippedNext: "Choisissez un point d'entrée plus petit, puis revenez au fil actuel.",
+    flashBlockedEyebrow: "À revoir",
+    flashBlockedTitle: "Resserrez d'abord la règle",
+    flashBlockedDetailFallback: "Cette réponse n'est pas encore assez stable pour être rapportée.",
+    flashBlockedNext: "Ajoutez la preuve manquante, puis reformulez-la une fois.",
+    flashVerifiedEyebrow: "Réponse vérifiée",
+    flashVerifiedTitle: "Révisez cette règle vérifiée",
+    flashVerifiedDetailFallback: "Cette carte flash est terminée.",
+    flashVerifiedNext: "Dites en une phrase pourquoi elle tient, puis revenez au flux.",
+    flashAnsweredEyebrow: "Répondue",
+    flashAnsweredTitle: "Condensez la réponse en une règle",
+    flashAnsweredDetailFallback: "Dites maintenant en une phrase la règle que cette carte veut vous faire retenir.",
+    flashAnsweredNext: "Révisez une fois, puis rapportez la règle au fil.",
+    flashEvidenceMissingEyebrow: "Preuve manquante",
+    flashEvidenceMissingTitle: "Ajoutez la preuve de cette réponse",
+    flashEvidenceMissingDetailFallback: "Il n'y a pas encore de preuve traçable pour cette réponse.",
+    flashEvidenceMissingNext: "Notez la règle et sa preuve dans le champ, puis révisez.",
+    flashWaitingEyebrow: "Carte",
+    flashWaitingTitle: "Choix / texte à trous / réponse courte",
+    flashWaitingDetail: "Ne lit aucun fichier de l'IDE.",
+    flashWaitingNext: "Soumettez une réponse.",
+    practiceBlockedEyebrow: "À retravailler",
+    practiceBlockedTitleManual: "Resserrez d'abord cette passe de vérification",
+    practiceBlockedTitleFile: "Corrigez d'abord le fichier actuel",
+    practiceBlockedDetailManual: "Il manque encore une explication, un exemple ou une preuve plus solide.",
+    practiceBlockedDetailFile: "La condition de passage n'est pas encore remplie.",
+    practiceBlockedNextManualFallback: "Revenez à une étape plus petite que vous pouvez prouver.",
+    practiceBlockedNextFile: "Corrigez, puis vérifiez à nouveau.",
+    pendingPlanEyebrow: "Vérifiée, confirmation du plan en attente",
+    pendingPlanTitle: "La preuve est vérifiée, mais le plan formel n'est pas terminé",
+    pendingPlanDetailFallback: "La vérification IDE ou carte est passée ; Coach doit confirmer toute modification du plan formel.",
+    pendingPlanNext: "Révisez, puis apportez la preuve à Coach pour confirmer la prochaine étape du plan.",
+    practiceVerifiedEyebrow: "Vérifiée",
+    practiceVerifiedTitleManual: "Révisez cette carte d'exercice vérifiée",
+    practiceVerifiedTitleFile: "Révisez cette preuve de pratique vérifiée",
+    practiceVerifiedDetailManual: "Cette explication ou cet exemple est désormais assez solide pour continuer.",
+    practiceVerifiedDetailFile: "Le fichier actuel est passé.",
+    practiceVerifiedNextManual: "Nommez la preuve ou l'étape clé utilisée, puis revenez au flux.",
+    practiceVerifiedNextFile: "Nommez la preuve qui l'a fait passer, puis revenez au flux.",
+    practiceEvidenceMissingEyebrow: "Preuve manquante",
+    practiceEvidenceMissingTitle: "Ajoutez la preuve de cet exercice",
+    practiceEvidenceMissingDetailFallback: "Implémenter n'est pas réussir ; il faut encore un résultat de vérification traçable.",
+    practiceEvidenceMissingNext: "Notez le résultat de vérification ou le blocage dans le champ, puis révisez.",
+    waitingEyebrow: "En attente",
+    waitingTitle: "Posez d'abord le plus petit livrable possible",
+    waitingDetailFile: "Les cartes de pratique lisent le fichier actuel de l'IDE.",
+    waitingNextManual: "Notez le résultat ou le blocage dans le champ ci-dessous.",
+    waitingNextFile: "Vérifiez après modification.",
+  },
+  "de-DE": {
+    primerRetryEyebrow: "Erneut Antworten nötig",
+    primerRetryTitle: "Festige die Regel zuerst und antworte dann erneut",
+    primerRetryDetail: "Die letzte Antwort war noch nicht stabil; diese Karte bleibt im aktuellen Training aktiv und gilt nicht als abgeschlossen.",
+    primerRetryNext: "Sieh dir den Hinweis oder das Festigungsmaterial an und beantworte dieselbe Karte erneut.",
+    primerStudyEyebrow: "Zuerst lernen",
+    primerStudyTitle: "Baue zuerst das kleinste Verständnis auf",
+    primerStudyDetail: "Diese Karte ist noch nicht für die direkte Ausführung bereit; öffne zuerst die Grundlage.",
+    primerStudyNext: "Schließe die Grundlage ab und kehre zur selben Karte zurück.",
+    skippedEyebrow: "Übersprungen",
+    skippedTitle: "Verkleinere den Einstieg und kehre zurück",
+    skippedDetail: "Diese Karte wurde vorerst übersprungen; öffne sie als Nächstes mit einem kleineren Ausschnitt wieder.",
+    skippedNext: "Wähle einen kleineren Einstieg und kehre zum aktuellen Arbeitsfaden zurück.",
+    flashBlockedEyebrow: "Überprüfung nötig",
+    flashBlockedTitle: "Schärfe zuerst die Regel",
+    flashBlockedDetailFallback: "Diese Antwort ist noch nicht stabil genug, um sie zurückzubringen.",
+    flashBlockedNext: "Ergänze den fehlenden Beleg und formuliere ihn einmal aus.",
+    flashVerifiedEyebrow: "Antwort geprüft",
+    flashVerifiedTitle: "Reflektiere diese geprüfte Regel",
+    flashVerifiedDetailFallback: "Diese Lernkarte ist abgeschlossen.",
+    flashVerifiedNext: "Sage in einem Satz, warum sie gilt, und kehre zurück.",
+    flashAnsweredEyebrow: "Beantwortet",
+    flashAnsweredTitle: "Verdichte die Antwort zu einer Regel",
+    flashAnsweredDetailFallback: "Nenne jetzt in einem Satz die Regel, die diese Karte dir wirklich einprägen will.",
+    flashAnsweredNext: "Reflektiere einmal und bringe die Regel zurück zum Faden.",
+    flashEvidenceMissingEyebrow: "Beleg fehlt",
+    flashEvidenceMissingTitle: "Ergänze den Beleg für diese Antwort",
+    flashEvidenceMissingDetailFallback: "Es gibt noch keinen nachvollziehbaren Beleg für diese Antwort.",
+    flashEvidenceMissingNext: "Notiere Regel und Beleg im Eingabefeld und reflektiere.",
+    flashWaitingEyebrow: "Karte",
+    flashWaitingTitle: "Auswahl / Lückentext / Kurzantwort",
+    flashWaitingDetail: "Liest keine IDE-Dateien.",
+    flashWaitingNext: "Sende eine Antwort ab.",
+    practiceBlockedEyebrow: "Nachbesserung nötig",
+    practiceBlockedTitleManual: "Schärfe zuerst diese Prüfrunde",
+    practiceBlockedTitleFile: "Korrigiere zuerst die aktuelle Datei",
+    practiceBlockedDetailManual: "Es fehlt noch eine belastbarere Erklärung, ein Beispiel oder ein Beleg.",
+    practiceBlockedDetailFile: "Die Bestehensbedingung ist noch nicht erfüllt.",
+    practiceBlockedNextManualFallback: "Kehre zu einem kleineren, beweisbaren Schritt zurück.",
+    practiceBlockedNextFile: "Erst korrigieren, dann erneut prüfen.",
+    pendingPlanEyebrow: "Verifiziert, Planbestätigung ausstehend",
+    pendingPlanTitle: "Dieser Beleg ist verifiziert, aber der formale Plan ist nicht fertig",
+    pendingPlanDetailFallback: "Die IDE- oder Karten-Verifizierung ist bestanden; Coach muss jede formale Planänderung bestätigen.",
+    pendingPlanNext: "Reflektiere und bringe den Beleg zu Coach, um den nächsten Planschritt zu bestätigen.",
+    practiceVerifiedEyebrow: "Verifiziert",
+    practiceVerifiedTitleManual: "Reflektiere diese verifizierte Übungskarte",
+    practiceVerifiedTitleFile: "Reflektiere diesen verifizierten Praxisbeleg",
+    practiceVerifiedDetailManual: "Diese Erklärung oder dieses Beispiel ist jetzt stabil genug, um weiterzumachen.",
+    practiceVerifiedDetailFile: "Die aktuelle Datei ist bestanden.",
+    practiceVerifiedNextManual: "Nenne den Beleg oder Schlüsselschritt, den du verwendet hast, und kehre zurück.",
+    practiceVerifiedNextFile: "Nenne den Beleg, der zum Bestehen geführt hat, und kehre zurück.",
+    practiceEvidenceMissingEyebrow: "Beleg fehlt",
+    practiceEvidenceMissingTitle: "Ergänze den Beleg für diese Übung",
+    practiceEvidenceMissingDetailFallback: "Umsetzen ist nicht Bestehen; es fehlt noch ein nachvollziehbares Verifizierungsergebnis.",
+    practiceEvidenceMissingNext: "Halte das Verifizierungsergebnis oder den Blocker im Eingabefeld fest und reflektiere.",
+    waitingEyebrow: "Ausstehend",
+    waitingTitle: "Liefere zuerst das kleinste lieferbare Ergebnis",
+    waitingDetailFile: "Übungskarten lesen die aktuelle IDE-Datei.",
+    waitingNextManual: "Halte das Ergebnis oder den Blocker im Feld unten fest.",
+    waitingNextFile: "Nach dem Bearbeiten prüfen.",
+  },
+  "ja-JP": {
+    primerRetryEyebrow: "再回答が必要",
+    primerRetryTitle: "このルールを先に強化してから、もう一度答えましょう",
+    primerRetryDetail: "直前の回答はまだ安定していません。このカードは現在のトレーニングに残り、完了として数えられません。",
+    primerRetryNext: "ヒントや強化素材を見て、同じカードにもう一度答えましょう。",
+    primerStudyEyebrow: "先に学ぶ",
+    primerStudyTitle: "まず最小の理解を作る",
+    primerStudyDetail: "このカードはまだ直接取り組む段階ではありません。まず導入を読みましょう。",
+    primerStudyNext: "導入を読み終えてから、同じカードに戻りましょう。",
+    skippedEyebrow: "スキップ済み",
+    skippedTitle: "入り口を絞ってから戻る",
+    skippedDetail: "このカードはいったんスキップされました。次はもっと小さな断片で開き直しましょう。",
+    skippedNext: "もっと小さい入り口を選んでから、現在のスレッドに戻りましょう。",
+    flashBlockedEyebrow: "要見直し",
+    flashBlockedTitle: "まずこのルールを締めましょう",
+    flashBlockedDetailFallback: "この回答はまだ十分に安定しておらず、持ち帰る段階ではありません。",
+    flashBlockedNext: "欠けている根拠を補い、一度言い換えましょう。",
+    flashVerifiedEyebrow: "回答済み",
+    flashVerifiedTitle: "この検証済みルールを振り返る",
+    flashVerifiedDetailFallback: "このフラッシュカードは完了しました。",
+    flashVerifiedNext: "なぜ成り立つのかを一文で説明してから、学習の流れに戻りましょう。",
+    flashAnsweredEyebrow: "回答済み",
+    flashAnsweredTitle: "答えを一つのルールに圧縮する",
+    flashAnsweredDetailFallback: "このカードが本当に覚えさせたいルールを、今一文で言いましょう。",
+    flashAnsweredNext: "一度振り返ってから、ルールを本筋に持ち帰りましょう。",
+    flashEvidenceMissingEyebrow: "根拠が不足",
+    flashEvidenceMissingTitle: "この回答の根拠を補いましょう",
+    flashEvidenceMissingDetailFallback: "この回答にはまだ追跡可能な根拠がありません。",
+    flashEvidenceMissingNext: "入力欄にルールと根拠を記録してから、振り返りましょう。",
+    flashWaitingEyebrow: "カード",
+    flashWaitingTitle: "選択 / 穴埋め / 短答",
+    flashWaitingDetail: "IDE のファイルは読みません。",
+    flashWaitingNext: "答えを送信しましょう。",
+    practiceBlockedEyebrow: "要修正",
+    practiceBlockedTitleManual: "まずこの検証ラウンドを締めましょう",
+    practiceBlockedTitleFile: "まず現在のファイルを修正しましょう",
+    practiceBlockedDetailManual: "もっと安定した説明・例・根拠がまだ必要です。",
+    practiceBlockedDetailFile: "合格条件にまだ達していません。",
+    practiceBlockedNextManualFallback: "証明できるもっと小さなステップに縮めましょう。",
+    practiceBlockedNextFile: "修正してから、もう一度検証しましょう。",
+    pendingPlanEyebrow: "検証済み、計画確認待ち",
+    pendingPlanTitle: "この根拠は検証済みですが、正式な計画はまだ完了していません",
+    pendingPlanDetailFallback: "IDE またはフラッシュカードの検証は合格しました。正式な計画を更新するかどうかは Coach の確認待ちです。",
+    pendingPlanNext: "振り返ってから、根拠を Coach に持ち帰り、計画の次のステップを確認しましょう。",
+    practiceVerifiedEyebrow: "合格",
+    practiceVerifiedTitleManual: "この検証済み練習カードを振り返る",
+    practiceVerifiedTitleFile: "この検証済みの実践根拠を振り返る",
+    practiceVerifiedDetailManual: "この説明または例は、続行できる十分な安定さになりました。",
+    practiceVerifiedDetailFile: "現在のファイルは合格しました。",
+    practiceVerifiedNextManual: "使った根拠や重要なステップを言ってから、流れに戻りましょう。",
+    practiceVerifiedNextFile: "合格につながった根拠を言ってから、流れに戻りましょう。",
+    practiceEvidenceMissingEyebrow: "根拠が不足",
+    practiceEvidenceMissingTitle: "この練習の根拠を補いましょう",
+    practiceEvidenceMissingDetailFallback: "実装は合格ではありません。追跡可能な検証結果がまだ必要です。",
+    practiceEvidenceMissingNext: "入力欄に検証結果またはブロッカーを記録してから、振り返りましょう。",
+    waitingEyebrow: "検証待ち",
+    waitingTitle: "まず最小の成果物を形にしましょう",
+    waitingDetailFile: "実践カードは現在の IDE ファイルを読みます。",
+    waitingNextManual: "下の入力欄に結果またはブロッカーを記録しましょう。",
+    waitingNextFile: "書き終えたら検証しましょう。",
+  },
+  "ko-KR": {
+    primerRetryEyebrow: "다시 응답 필요",
+    primerRetryTitle: "규칙을 먼저 다지고 다시 답하세요",
+    primerRetryDetail: "방금 답은 아직 안정되지 않았습니다. 이 카드는 현재 훈련에 유지되며 완료로 계산되지 않습니다.",
+    primerRetryNext: "힌트나 보강 자료를 본 뒤 같은 카드에 다시 답하세요.",
+    primerStudyEyebrow: "먼저 학습",
+    primerStudyTitle: "가장 작은 이해부터 만들기",
+    primerStudyDetail: "이 카드는 아직 바로 실행하기엔 이르니, 먼저 기초 자료를 보세요.",
+    primerStudyNext: "기초 자료를 끝낸 뒤 같은 카드로 돌아오세요.",
+    skippedEyebrow: "건너뜀",
+    skippedTitle: "진입을 좁힌 뒤 돌아오기",
+    skippedDetail: "이 카드는 일단 건너뛰었습니다. 이제 더 작은 조각으로 다시 여는 것이 다음 단계입니다.",
+    skippedNext: "더 작은 진입점을 고른 뒤 현재 흐름으로 돌아오세요.",
+    flashBlockedEyebrow: "검토 필요",
+    flashBlockedTitle: "먼저 이 규칙을 다듬으세요",
+    flashBlockedDetailFallback: "이 답은 아직 메인 흐름으로 가져가기에 충분히 안정적이지 않습니다.",
+    flashBlockedNext: "빠진 근거를 보충하고 한 번 다시 요약하세요.",
+    flashVerifiedEyebrow: "답안 확인됨",
+    flashVerifiedTitle: "검증된 이 규칙을 복기하세요",
+    flashVerifiedDetailFallback: "이 플래시 카드는 완료되었습니다.",
+    flashVerifiedNext: "왜 성립하는지 한 문장으로 말한 뒤 흐름으로 돌아가세요.",
+    flashAnsweredEyebrow: "응답함",
+    flashAnsweredTitle: "답을 한 규칙으로 압축하기",
+    flashAnsweredDetailFallback: "이 카드가 정말 기억하길 원하는 규칙을 지금 한 문장으로 말해 보세요.",
+    flashAnsweredNext: "한 번 복기한 뒤 규칙을 본 흐름으로 가져오세요.",
+    flashEvidenceMissingEyebrow: "근거 없음",
+    flashEvidenceMissingTitle: "이 답의 근거를 보충하세요",
+    flashEvidenceMissingDetailFallback: "이 답에는 아직 추적 가능한 근거가 없습니다.",
+    flashEvidenceMissingNext: "입력창에 규칙과 근거를 적은 뒤 복기하세요.",
+    flashWaitingEyebrow: "카드",
+    flashWaitingTitle: "선택 / 빈칸 / 단답",
+    flashWaitingDetail: "IDE 파일을 읽지 않습니다.",
+    flashWaitingNext: "답을 제출하세요.",
+    practiceBlockedEyebrow: "보완 필요",
+    practiceBlockedTitleManual: "먼저 이 검증 라운드를 다듬으세요",
+    practiceBlockedTitleFile: "먼저 현재 파일을 수정하세요",
+    practiceBlockedDetailManual: "더 안정적인 설명, 예시 또는 근거가 아직 필요합니다.",
+    practiceBlockedDetailFile: "통과 조건을 아직 충족하지 못했습니다.",
+    practiceBlockedNextManualFallback: "증명할 수 있는 더 작은 단계로 줄이세요.",
+    practiceBlockedNextFile: "고친 뒤 다시 검증하세요.",
+    pendingPlanEyebrow: "검증됨, 계획 확인 대기",
+    pendingPlanTitle: "이 근거는 검증되었지만 공식 계획은 아직 완료되지 않았습니다",
+    pendingPlanDetailFallback: "IDE 또는 플래시 검증은 통과했습니다. 공식 계획 변경 여부는 Coach의 확인을 기다리는 중입니다.",
+    pendingPlanNext: "복기한 뒤 근거를 Coach에게 가져가 계획의 다음 단계를 확인하세요.",
+    practiceVerifiedEyebrow: "통과",
+    practiceVerifiedTitleManual: "검증된 이 연습 카드를 복기하세요",
+    practiceVerifiedTitleFile: "검증된 이 실전 근거를 복기하세요",
+    practiceVerifiedDetailManual: "이 설명이나 예시는 이제 계속하기에 충분히 안정적입니다.",
+    practiceVerifiedDetailFile: "현재 파일이 통과했습니다.",
+    practiceVerifiedNextManual: "사용한 근거나 핵심 단계를 말한 뒤 흐름으로 돌아가세요.",
+    practiceVerifiedNextFile: "통과시킨 근거를 말한 뒤 흐름으로 돌아가세요.",
+    practiceEvidenceMissingEyebrow: "근거 없음",
+    practiceEvidenceMissingTitle: "이 연습의 근거를 보충하세요",
+    practiceEvidenceMissingDetailFallback: "구현은 통과가 아닙니다. 추적 가능한 검증 결과가 아직 필요합니다.",
+    practiceEvidenceMissingNext: "입력창에 검증 결과나 막힌 지점을 기록한 뒤 복기하세요.",
+    waitingEyebrow: "검증 대기",
+    waitingTitle: "가장 작은 인도 가능한 결과부터 만들기",
+    waitingDetailFile: "실전 카드는 현재 IDE 파일을 읽습니다.",
+    waitingNextManual: "아래 입력창에 결과나 막힌 지점을 기록하세요.",
+    waitingNextFile: "작성한 뒤 검증하세요.",
+  },
+  "pt-BR": {
+    primerRetryEyebrow: "Nova resposta necessária",
+    primerRetryTitle: "Reforce a regra e responda novamente",
+    primerRetryDetail: "A última resposta ainda não ficou estável; este cartão permanece ativo no treinamento e não conta como concluído.",
+    primerRetryNext: "Revise a dica ou o material de reforço e responda o mesmo cartão de novo.",
+    primerStudyEyebrow: "Estude primeiro",
+    primerStudyTitle: "Construa primeiro o entendimento mínimo",
+    primerStudyDetail: "Este cartão ainda não está pronto para execução direta; abra primeiro a base.",
+    primerStudyNext: "Termine a base e volte ao mesmo cartão.",
+    skippedEyebrow: "Pulado",
+    skippedTitle: "Estreite a entrada e volte",
+    skippedDetail: "Este cartão foi pulado por enquanto; o próximo passo é reabri-lo com uma fatia menor.",
+    skippedNext: "Escolha uma entrada menor e volte ao fluxo atual.",
+    flashBlockedEyebrow: "Precisa de revisão",
+    flashBlockedTitle: "Afine primeiro a regra",
+    flashBlockedDetailFallback: "Esta resposta ainda não está estável o bastante para voltar.",
+    flashBlockedNext: "Adicione a prova que falta e reformule uma vez.",
+    flashVerifiedEyebrow: "Resposta verificada",
+    flashVerifiedTitle: "Reveja esta regra verificada",
+    flashVerifiedDetailFallback: "Este cartão flash foi concluído.",
+    flashVerifiedNext: "Diga em uma frase por que ela vale e retorne ao fluxo.",
+    flashAnsweredEyebrow: "Respondida",
+    flashAnsweredTitle: "Comprima a resposta em uma regra",
+    flashAnsweredDetailFallback: "Agora diga em uma frase a regra que este cartão quer que você retenha.",
+    flashAnsweredNext: "Reveja uma vez e leve a regra de volta ao fluxo.",
+    flashEvidenceMissingEyebrow: "Evidência ausente",
+    flashEvidenceMissingTitle: "Adicione a evidência desta resposta",
+    flashEvidenceMissingDetailFallback: "Ainda não há evidência rastreável para esta resposta.",
+    flashEvidenceMissingNext: "Registre a regra e a evidência no campo e reveja.",
+    flashWaitingEyebrow: "Cartão",
+    flashWaitingTitle: "Escolha / lacuna / resposta curta",
+    flashWaitingDetail: "Não lê arquivos do IDE.",
+    flashWaitingNext: "Envie uma resposta.",
+    practiceBlockedEyebrow: "Precisa de ajuste",
+    practiceBlockedTitleManual: "Afine primeiro esta rodada de verificação",
+    practiceBlockedTitleFile: "Corrija primeiro o arquivo atual",
+    practiceBlockedDetailManual: "Ainda falta uma explicação, um exemplo ou uma prova mais sólidos.",
+    practiceBlockedDetailFile: "A condição de aprovação ainda não foi atingida.",
+    practiceBlockedNextManualFallback: "Volte a um passo menor que você consiga provar.",
+    practiceBlockedNextFile: "Corrija e verifique de novo.",
+    pendingPlanEyebrow: "Verificada, confirmação do plano pendente",
+    pendingPlanTitle: "A evidência está verificada, mas o plano formal não está concluído",
+    pendingPlanDetailFallback: "A verificação do IDE ou do cartão passou; o Coach deve confirmar qualquer mudança no plano formal.",
+    pendingPlanNext: "Reveja e leve a evidência ao Coach para confirmar o próximo passo do plano.",
+    practiceVerifiedEyebrow: "Verificada",
+    practiceVerifiedTitleManual: "Reveja este cartão de prática verificado",
+    practiceVerifiedTitleFile: "Reveja esta evidência de prática verificada",
+    practiceVerifiedDetailManual: "Esta explicação ou exemplo já está sólido o bastante para continuar.",
+    practiceVerifiedDetailFile: "O arquivo atual passou.",
+    practiceVerifiedNextManual: "Nomeie a prova ou o passo-chave que usou e retorne ao fluxo.",
+    practiceVerifiedNextFile: "Nomeie a prova que fez passar e retorne ao fluxo.",
+    practiceEvidenceMissingEyebrow: "Evidência ausente",
+    practiceEvidenceMissingTitle: "Adicione a evidência desta prática",
+    practiceEvidenceMissingDetailFallback: "Implementar não é aprovar; ainda é preciso um resultado de verificação rastreável.",
+    practiceEvidenceMissingNext: "Registre o resultado da verificação ou o bloqueio no campo e reveja.",
+    waitingEyebrow: "Aguardando",
+    waitingTitle: "Entregue primeiro o menor resultado possível",
+    waitingDetailFile: "Cartões de prática leem o arquivo atual do IDE.",
+    waitingNextManual: "Registre o resultado ou o bloqueio no campo abaixo.",
+    waitingNextFile: "Verifique após editar.",
+  },
+};
+
+function trainingVerificationReturnText(
+  language: ComposerLanguage,
+  key: TrainingVerificationReturnCopyKey,
+): string {
+  return trainingVerificationReturnCopy[language]?.[key] ?? trainingVerificationReturnCopy["en-US"][key];
+}
+
 function resolveVerificationReturnState(input: {
   language: ComposerLanguage;
   isFlashCard: boolean;
@@ -689,7 +2128,6 @@ function resolveVerificationReturnState(input: {
   latestLearningBlocker?: string;
   latestLearningFollowup?: string;
 }): TrainingVerificationReturnState {
-  const isZh = input.language === "zh-CN";
   const manualPracticeCopy =
     !input.isFlashCard && input.practiceVerificationMode === "manual"
       ? resolveManualPracticeVerificationCopy(input.language, input.learningSubtype)
@@ -709,41 +2147,31 @@ function resolveVerificationReturnState(input: {
   const pendingPlanConfirmationLike = trainingExecutionState.pendingPlanConfirmation;
   const flashAnsweredLike = trainingExecutionState.flashAnswered;
   const evidenceMissingLike = trainingExecutionState.verification.status === "evidence_missing";
+  const copy = (key: TrainingVerificationReturnCopyKey) =>
+    trainingVerificationReturnText(input.language, key);
 
   if (needsPrimerLike) {
     const flashRetry = input.isFlashCard;
     return {
       kind: "waiting",
-      eyebrow: flashRetry ? (isZh ? "\u9700\u8981\u518d\u7b54" : "Retry needed") : isZh ? "\u5148\u5b66" : "Study first",
-      title: flashRetry ? (isZh ? "\u5148\u5de9\u56fa\u8fd9\u6761\u89c4\u5219\uff0c\u518d\u7b54\u4e00\u6b21" : "Reinforce the rule, then answer again") : isZh ? "\u5148\u5efa\u7acb\u6700\u5c0f\u7406\u89e3" : "Build the smallest understanding first",
+      eyebrow: flashRetry ? copy("primerRetryEyebrow") : copy("primerStudyEyebrow"),
+      title: flashRetry ? copy("primerRetryTitle") : copy("primerStudyTitle"),
       detail:
         firstText(
           input.latestLearningFollowup,
-          flashRetry
-            ? isZh
-              ? "\u521a\u624d\u7684\u7b54\u6848\u8fd8\u6ca1\u7a33\u4f4f\uff1b\u8fd9\u5f20\u5361\u4fdd\u6301\u5728\u5f53\u524d\u8bad\u7ec3\u91cc\uff0c\u4e0d\u4f1a\u7b97\u4f5c\u5b8c\u6210\u3002"
-              : "The last answer was not stable yet; this card stays active and is not counted as complete."
-            : isZh
-              ? "\u8fd9\u5f20\u5361\u8fd8\u4e0d\u9002\u5408\u76f4\u63a5\u52a8\u624b\uff0c\u5148\u770b primer \u518d\u56de\u6765\u3002"
-              : "This card is not ready for direct execution yet; open the primer first.",
+          flashRetry ? copy("primerRetryDetail") : copy("primerStudyDetail"),
         ) ?? "",
-      next: flashRetry ? (isZh ? "\u770b\u63d0\u793a\u6216\u5de9\u56fa\u6750\u6599\uff0c\u518d\u7b54\u540c\u4e00\u5f20\u5361\u3002" : "Review the hint or primer, then answer the same card again.") : isZh ? "\u5148\u8bfb\u5b8c primer\uff0c\u518d\u56de\u5230\u540c\u4e00\u5f20\u5361\u3002" : "Finish the primer, then return to the same card.",
+      next: flashRetry ? copy("primerRetryNext") : copy("primerStudyNext"),
     };
   }
 
   if (skippedLike) {
     return {
       kind: "needs-review",
-      eyebrow: isZh ? "\u5df2\u8df3\u8fc7" : "Skipped",
-      title: isZh ? "\u5148\u6536\u7d27\u5165\u53e3\uff0c\u518d\u56de\u6765" : "Narrow the entry, then return",
-      detail:
-        firstText(
-          input.latestLearningFollowup,
-          isZh
-            ? "\u8fd9\u5f20\u5361\u6682\u65f6\u8df3\u8fc7\u4e86\uff0c\u73b0\u5728\u5148\u628a\u5165\u53e3\u6539\u6210\u66f4\u5c0f\u7684\u5207\u7247\u3002"
-            : "This card was skipped for now, so the next step is to reopen it with a smaller slice.",
-        ) ?? "",
-      next: isZh ? "\u5148\u9009\u4e00\u4e2a\u66f4\u5c0f\u7684\u5165\u53e3\uff0c\u518d\u56de\u5230\u5f53\u524d\u4e3b\u7ebf\u3002" : "Choose a smaller entry point, then return to the current thread.",
+      eyebrow: copy("skippedEyebrow"),
+      title: copy("skippedTitle"),
+      detail: firstText(input.latestLearningFollowup, copy("skippedDetail")) ?? "",
+      next: copy("skippedNext"),
     };
   }
 
@@ -751,176 +2179,131 @@ function resolveVerificationReturnState(input: {
     if (blockedLike) {
       return {
         kind: selectedStatus === "blocked" ? "blocked" : "needs-review",
-        eyebrow: isZh ? "\u672a\u7a33\u4f4f" : "Needs review",
-        title: isZh ? "\u5148\u6536\u7d27\u8fd9\u6761\u89c4\u5219" : "Tighten the rule first",
-        detail:
-          blocker ||
-          (isZh
-            ? "\u8fd9\u4e2a\u7b54\u6848\u8fd8\u6ca1\u7a33\u5b9a\u5230\u53ef\u4ee5\u5e26\u56de\u4e3b\u7ebf\u3002"
-            : "This answer is not stable enough to carry back yet."),
-        next: isZh ? "\u5148\u8865\u4e0a\u7f3a\u7684\u8bc1\u636e\uff0c\u518d\u7b80\u8ff0\u4e00\u6b21\u3002" : "Add the missing proof, then restate it once.",
+        eyebrow: copy("flashBlockedEyebrow"),
+        title: copy("flashBlockedTitle"),
+        detail: blocker || copy("flashBlockedDetailFallback"),
+        next: copy("flashBlockedNext"),
       };
     }
 
     if (verifiedLike) {
       return {
         kind: "verified",
-        eyebrow: isZh ? "\u5df2\u4f5c\u7b54" : "Answer checked",
-        title: isZh ? "\u5148\u590d\u76d8\u8fd9\u6761\u5df2\u9a8c\u8bc1\u89c4\u5219" : "Reflect on this verified rule",
-        detail:
-          input.latestVerifiedResult?.trim() ||
-          (isZh ? "\u8fd9\u5f20\u95ea\u8bb0\u5361\u5df2\u7ecf\u5b8c\u6210\u3002" : "This flash card is completed."),
-        next: isZh ? "\u5148\u7528\u4e00\u53e5\u8bdd\u8bf4\u6e05\u5b83\u4e3a\u4ec0\u4e48\u6210\u7acb\uff0c\u518d\u56de\u6d41\u3002" : "State why it holds in one sentence, then return.",
+        eyebrow: copy("flashVerifiedEyebrow"),
+        title: copy("flashVerifiedTitle"),
+        detail: input.latestVerifiedResult?.trim() || copy("flashVerifiedDetailFallback"),
+        next: copy("flashVerifiedNext"),
       };
     }
 
     if (flashAnsweredLike) {
       return {
         kind: "needs-review",
-        eyebrow: isZh ? "\u5df2\u4f5c\u7b54" : "Answered",
-        title: isZh ? "\u628a\u7b54\u6848\u538b\u6210\u4e00\u6761\u89c4\u5219" : "Compress the answer into one rule",
-        detail:
-          firstText(
-            input.latestLearningFollowup,
-            isZh ? "\u73b0\u5728\u7528\u4e00\u53e5\u8bdd\u8bf4\u51fa\u8fd9\u5f20\u5361\u771f\u6b63\u60f3\u8ba9\u4f60\u8bb0\u4f4f\u7684\u89c4\u5219\u3002" : "Now say the one rule this card wants you to retain.",
-          ) ?? "",
-        next: isZh ? "\u590d\u76d8\u4e00\u6b21\uff0c\u518d\u628a\u89c4\u5219\u5e26\u56de\u4e3b\u7ebf\u3002" : "Reflect once, then bring the rule back.",
+        eyebrow: copy("flashAnsweredEyebrow"),
+        title: copy("flashAnsweredTitle"),
+        detail: firstText(input.latestLearningFollowup, copy("flashAnsweredDetailFallback")) ?? "",
+        next: copy("flashAnsweredNext"),
       };
     }
 
     if (evidenceMissingLike) {
       return {
         kind: "needs-review",
-        eyebrow: isZh ? "\u7f3a\u5c11\u8bc1\u636e" : "Evidence missing",
-        title: isZh ? "\u5148\u8865\u4e0a\u8fd9\u6b21\u7b54\u6848\u7684\u4f9d\u636e" : "Add the evidence for this answer",
-        detail:
-          firstText(
-            input.latestLearningFollowup,
-            isZh ? "\u8fd8\u6ca1\u6709\u53ef\u8ffd\u6eaf\u7684\u7b54\u6848\u4f9d\u636e\u3002" : "There is no traceable evidence for this answer yet.",
-          ) ?? "",
-        next: isZh ? "\u5728\u8f93\u5165\u6846\u8bb0\u4e0b\u89c4\u5219\u548c\u4f9d\u636e\uff0c\u518d\u590d\u76d8\u3002" : "Record the rule and its evidence in the composer, then reflect.",
+        eyebrow: copy("flashEvidenceMissingEyebrow"),
+        title: copy("flashEvidenceMissingTitle"),
+        detail: firstText(input.latestLearningFollowup, copy("flashEvidenceMissingDetailFallback")) ?? "",
+        next: copy("flashEvidenceMissingNext"),
       };
     }
 
     return {
       kind: "waiting",
-      eyebrow: isZh ? "\u95ea\u8bb0" : "Flash",
-      title: isZh ? "\u9009\u62e9 /\u586b\u7a7a /\u7b80\u7b54" : "Choice / fill / short answer",
-      detail: isZh ? "\u4e0d\u8bfb IDE \u6587\u4ef6\u3002" : "No IDE file read.",
-      next: isZh ? "\u63d0\u4ea4\u7b54\u6848\u3002" : "Submit an answer.",
+      eyebrow: copy("flashWaitingEyebrow"),
+      title: copy("flashWaitingTitle"),
+      detail: copy("flashWaitingDetail"),
+      next: copy("flashWaitingNext"),
     };
   }
 
   if (blockedLike) {
     return {
       kind: selectedStatus === "blocked" ? "blocked" : "needs-review",
-      eyebrow: isZh ? "\u672a\u901a\u8fc7" : "Needs work",
+      eyebrow: copy("practiceBlockedEyebrow"),
       title:
         input.practiceVerificationMode === "manual"
-          ? isZh
-            ? "\u5148\u6536\u7d27\u8fd9\u4e00\u8f6e\u9a8c\u8bc1"
-            : "Tighten this verification round first"
-          : isZh
-            ? "\u5148\u4fee\u5f53\u524d\u6587\u4ef6"
-            : "Fix the current file first",
+          ? copy("practiceBlockedTitleManual")
+          : copy("practiceBlockedTitleFile"),
       detail:
         blocker ||
         (input.practiceVerificationMode === "manual"
-          ? isZh
-            ? "\u8fd8\u9700\u8981\u4e00\u6761\u66f4\u7a33\u7684\u89e3\u91ca\u3001\u4f8b\u5b50\uff0c\u6216\u8bc1\u636e\u3002"
-            : "This still needs one tighter explanation, example, or proof."
-          : isZh
-            ? "\u8fd8\u6ca1\u8fbe\u5230\u901a\u8fc7\u6761\u4ef6\u3002"
-            : "Pass condition not met yet."),
+          ? copy("practiceBlockedDetailManual")
+          : copy("practiceBlockedDetailFile")),
       next:
         input.practiceVerificationMode === "manual"
-          ? manualPracticeCopy?.fallbackHint ??
-            (isZh ? "\u5148\u7f29\u56de\u5230\u4e00\u4e2a\u66f4\u5c0f\u7684\u53ef\u8bc1\u660e\u6b65\u9aa4\u3002" : "Return to one smaller step you can prove.")
-          : isZh
-            ? "\u4fee\u5b8c\u518d\u9a8c\u3002"
-            : "Fix it, then verify again.",
+          ? manualPracticeCopy?.fallbackHint ?? copy("practiceBlockedNextManualFallback")
+          : copy("practiceBlockedNextFile"),
     };
   }
 
   if (pendingPlanConfirmationLike) {
     return {
       kind: "pending-plan-confirmation",
-      eyebrow: isZh ? "\u5df2\u9a8c\u8bc1\uff0c\u5f85\u8ba1\u5212\u786e\u8ba4" : "Verified, plan confirmation pending",
-      title: isZh ? "\u8fd9\u6b21\u8bc1\u636e\u5df2\u9a8c\u8bc1\uff0c\u4f46\u8fd8\u4e0d\u662f\u6b63\u5f0f\u8ba1\u5212\u5b8c\u6210" : "Evidence is verified; the formal plan is not complete",
-      detail:
-        input.latestVerifiedResult?.trim() ||
-        (isZh ? "IDE \u6216\u95ea\u8bb0\u9a8c\u8bc1\u5df2\u901a\u8fc7\uff0c\u7b49\u5f85 Coach \u786e\u8ba4\u662f\u5426\u66f4\u65b0\u6b63\u5f0f\u8ba1\u5212\u3002" : "The IDE or flash evidence passed; Coach must confirm any formal plan change."),
-      next: isZh ? "先复盘，再把证据带回 Coach 确认计划下一步。" : "Reflect, then bring the evidence to Coach to confirm the next plan step.",
+      eyebrow: copy("pendingPlanEyebrow"),
+      title: copy("pendingPlanTitle"),
+      detail: input.latestVerifiedResult?.trim() || copy("pendingPlanDetailFallback"),
+      next: copy("pendingPlanNext"),
     };
   }
 
   if (verifiedLike) {
     return {
       kind: "verified",
-      eyebrow: isZh ? "\u5df2\u901a\u8fc7" : "Verified",
+      eyebrow: copy("practiceVerifiedEyebrow"),
       title:
         input.practiceVerificationMode === "manual"
-          ? isZh
-            ? "\u5148\u590d\u76d8\u8fd9\u5f20\u5df2\u9a8c\u8bc1\u7ec3\u4e60\u5361"
-            : "Reflect on this verified practice card"
-          : isZh
-            ? "\u5148\u590d\u76d8\u8fd9\u6b21\u5b9e\u6218\u8bc1\u636e"
-            : "Reflect on this verified evidence",
+          ? copy("practiceVerifiedTitleManual")
+          : copy("practiceVerifiedTitleFile"),
       detail:
         input.latestVerifiedResult?.trim() ||
         (input.practiceVerificationMode === "manual"
-          ? isZh
-            ? "\u8fd9\u4e00\u8f6e\u89e3\u91ca\u6216\u4f8b\u5b50\u5df2\u7ecf\u8db3\u591f\u7a33\u3002"
-            : "This explanation or example is grounded enough to continue."
-          : isZh
-            ? "\u5f53\u524d\u6587\u4ef6\u5df2\u901a\u8fc7\u3002"
-            : "Current file passed."),
+          ? copy("practiceVerifiedDetailManual")
+          : copy("practiceVerifiedDetailFile")),
       next:
         input.practiceVerificationMode === "manual"
-          ? isZh
-            ? "\u5148\u8bf4\u6e05\u695a\u4f60\u7528\u7684\u8bc1\u636e\u6216\u5173\u952e\u6b65\uff0c\u518d\u56de\u6d41\u3002"
-            : "Name the proof or key step you used, then return."
-          : isZh
-            ? "\u5148\u8bf4\u6e05\u695a\u662f\u54ea\u6761\u8bc1\u636e\u8ba9\u5b83\u901a\u8fc7\uff0c\u518d\u56de\u6d41\u3002"
-            : "Name the proof that made it pass, then return.",
+          ? copy("practiceVerifiedNextManual")
+          : copy("practiceVerifiedNextFile"),
     };
   }
 
   if (evidenceMissingLike) {
     return {
       kind: "needs-review",
-      eyebrow: isZh ? "\u7f3a\u5c11\u8bc1\u636e" : "Evidence missing",
-      title: isZh ? "\u5148\u8865\u4e0a\u8fd9\u6b21\u7ec3\u4e60\u7684\u4f9d\u636e" : "Add the evidence for this practice",
+      eyebrow: copy("practiceEvidenceMissingEyebrow"),
+      title: copy("practiceEvidenceMissingTitle"),
       detail:
         firstText(
           input.latestLearningFollowup,
-          isZh ? "\u5b9e\u73b0\u4e0d\u7b49\u4e8e\u901a\u8fc7\uff0c\u8fd8\u9700\u8981\u4e00\u6761\u53ef\u8ffd\u6eaf\u7684\u9a8c\u8bc1\u7ed3\u679c\u3002" : "Implementation is not a pass; a traceable verification result is still needed.",
+          copy("practiceEvidenceMissingDetailFallback"),
         ) ?? "",
-      next: isZh ? "\u5728\u8f93\u5165\u6846\u8bb0\u5f55\u9a8c\u8bc1\u7ed3\u679c\u6216 blocker\uff0c\u518d\u590d\u76d8\u3002" : "Record the verification result or blocker in the composer, then reflect.",
+      next: copy("practiceEvidenceMissingNext"),
     };
   }
 
   return {
     kind: "waiting",
-    eyebrow: isZh ? "\u5f85\u9a8c" : "Waiting",
-    title: isZh ? "\u5148\u843d\u5730\u4e00\u4e2a\u6700\u5c0f\u53ef\u4ea4\u4ed8\u7ed3\u679c" : "Land the smallest deliverable first",
+    eyebrow: copy("waitingEyebrow"),
+    title: copy("waitingTitle"),
     detail:
       firstText(
         input.latestLearningFollowup,
         input.practiceVerificationMode === "manual"
           ? manualPracticeCopy?.verifyNote
-          : isZh
-            ? "\u5b9e\u6218\u5361\u8981\u8bfb\u5f53\u524d IDE \u6587\u4ef6\u3002"
-            : "Practice cards read the current IDE file.",
+          : copy("waitingDetailFile"),
       ) ?? "",
     next:
       input.practiceVerificationMode === "manual"
-        ? isZh
-          ? "\u5728\u4e0b\u65b9\u8f93\u5165\u6846\u8bb0\u5f55\u7ed3\u679c\u6216 blocker\u3002"
-          : "Record the result or blocker in the composer below."
-        : isZh
-          ? "\u5199\u5b8c\u540e\u9a8c\u8bc1\u3002"
-          : "Verify after editing.",
+        ? copy("waitingNextManual")
+        : copy("waitingNextFile"),
   };
 }
 
@@ -999,7 +2382,6 @@ export function TrainingWorkbenchView({
   expectedSymbols = [],
 }: TrainingWorkbenchViewProps) {
   const leftoverStoredNote = leftoverNote?.trim() || "";
-  const isZh = language === "zh-CN";
   // Batch 6: default to focus-area groups so the review queue reads as a few
   // coherent topics instead of a flat list of one-off decisions.
   const reviewFocusGroups = useMemo(
@@ -1010,9 +2392,9 @@ export function TrainingWorkbenchView({
           reason: item.detail ?? item.meta ?? item.title,
         })),
         [],
-        isZh ? "未分组" : "Ungrouped",
+        trainingWorkbenchText(language, "ungrouped"),
       ),
-    [reviewItems, isZh],
+    [reviewItems, language],
   );
   const cappedReviewGroups = useMemo(() => {
     let budget = 4;
@@ -1199,12 +2581,8 @@ export function TrainingWorkbenchView({
   const nextMovePrimary = shouldShowNextMove ? suggestedWorkspaceActionPreview : scenarioPreview;
   const nextMoveSecondary = shouldShowNextMove ? scenarioPreview : undefined;
   const nextMoveLabel = shouldShowNextMove
-    ? isZh
-      ? "\u5148\u505a\u8fd9\u4e00\u6b65"
-      : "Start here"
-    : isZh
-      ? "\u5f53\u524d\u573a\u666f"
-      : "Current scenario";
+    ? trainingWorkbenchText(language, "startHere")
+    : trainingWorkbenchText(language, "currentScenario");
   const whyNowPreview = resolvedWhyNow ? compactCardText(resolvedWhyNow, cardOnly ? 88 : 120) : undefined;
   const formattedFilesToTouch = compactArtifactList(filesToTouch, 40, 4);
   const formattedApiHints = compactArtifactList(apiHints, 44, 4);
@@ -1224,12 +2602,13 @@ export function TrainingWorkbenchView({
     firstText(
       whyNowPreview,
       shouldShowNextMove && nextMovePrimary ? `${nextMoveLabel}: ${nextMovePrimary}` : undefined,
-      nextMoveSecondary ? `${isZh ? "\u573a\u666f" : "Scenario"}: ${nextMoveSecondary}` : undefined,
-      scenarioPackLabel ? `${isZh ? "\u573a\u666f\u5305" : "Scenario pack"}: ${scenarioPackLabel}` : undefined,
-    ) ??
-    (isZh
-      ? "\u5148\u628a\u5f53\u524d\u5207\u7247\u8bfb\u6e05\u695a\uff0c\u518d\u8fdb\u5165\u4e0b\u9762\u7684\u9a8c\u8bc1\u3002"
-      : "Read this slice first, then move into verification.");
+      nextMoveSecondary
+        ? `${trainingSurfaceLabel(language, "scenario")}: ${nextMoveSecondary}`
+        : undefined,
+      scenarioPackLabel
+        ? `${trainingWorkbenchText(language, "scenarioPack")}: ${scenarioPackLabel}`
+        : undefined,
+    ) ?? trainingWorkbenchText(language, "readSliceFirst");
   const learnFirstDetail = cardOnly
     ? (firstText(sourceSummary?.trim(), sourceDetail?.trim()) ??
       trainingCardOnlyText(language, "learnFirst"))
@@ -1310,23 +2689,20 @@ export function TrainingWorkbenchView({
   const guidanceSummary =
     firstText(
       formattedFilesToTouch[0]
-        ? `${isZh ? "\u5148\u770b" : "Start in"} ${formattedFilesToTouch[0]}`
+        ? `${trainingWorkbenchText(language, "startIn")} ${formattedFilesToTouch[0]}`
         : undefined,
       formattedApiHints[0]
-        ? `${isZh ? "API \u63d0\u793a" : "API hint"} ${formattedApiHints[0]}`
+        ? `${trainingWorkbenchText(language, "apiHint")} ${formattedApiHints[0]}`
         : undefined,
       constraints[0]
-        ? `${isZh ? "\u8fb9\u754c" : "Boundary"} ${compactCardText(constraints[0], 54)}`
+        ? `${trainingWorkbenchText(language, "boundary")} ${compactCardText(constraints[0], 54)}`
         : undefined,
       hintLadder[0]
-        ? `${isZh ? "\u5361\u4f4f\u65f6" : "If stuck"} ${compactCardText(hintLadder[0], 54)}`
+        ? `${trainingWorkbenchText(language, "ifStuck")} ${compactCardText(hintLadder[0], 54)}`
         : undefined,
       stuckRecovery?.trim() ? compactCardText(stuckRecovery, 58) : undefined,
       practiceVerificationMode === "manual" ? compactCardText(manualPracticeCopy.fallbackHint, 58) : undefined,
-    ) ??
-    (isZh
-      ? "\u5c55\u5f00\u67e5\u770b\u63d0\u793a\u3001\u8fb9\u754c\u548c\u5361\u4f4f\u65f6\u7684\u6062\u590d\u8def\u5f84\u3002"
-      : "Open for hints, boundaries, and recovery.");
+    ) ?? trainingWorkbenchText(language, "guidanceFallback");
   const trainingLoopSteps = buildTrainingLoopSteps({
     language,
     composerPhase: trainingExecutionState.composerPhase,
@@ -1339,33 +2715,16 @@ export function TrainingWorkbenchView({
       state: "upcoming" as const,
     };
   const flashSectionLabel = cardOnly
-    ? isZh
-      ? "\u73b0\u5728\u4f5c\u7b54"
-      : "Answer now"
-    : isZh
-      ? "\u95ea\u8bb0\u68c0\u67e5"
-      : "Flash check";
-  const resolvedFlashSectionLabel = isZh
-    ? cardOnly
-      ? "\u73b0\u5728\u4f5c\u7b54"
-      : "\u95ea\u8bb0\u68c0\u67e5"
-    : flashSectionLabel;
+    ? trainingWorkbenchText(language, "answerNow")
+    : trainingWorkbenchText(language, "flashCheck");
   const practiceSectionLabel = cardOnly
-    ? isZh
-      ? "\u73b0\u5728\u9a8c\u8bc1"
-      : "Verify"
-    : isZh
-      ? "\u5b9e\u6218\u9a8c\u8bc1"
-      : "Practice verification";
+    ? trainingWorkbenchText(language, "verifyNow")
+    : trainingWorkbenchText(language, "practiceVerificationLabel");
   const practiceSectionNote =
     practiceVerificationMode === "file"
       ? cardOnly
-        ? isZh
-          ? "\u518d\u8bfb\u53d6\u5f53\u524d\u6587\u4ef6\uff0c\u6309\u4e0b\u9762\u7684\u68c0\u67e5\u9879\u786e\u8ba4\u5b83\u662f\u5426\u6210\u7acb\u3002"
-          : "Then read the current file and confirm the checks below."
-        : isZh
-          ? "\u4ece\u5f53\u524d\u6587\u4ef6\u548c\u8bca\u65ad\u5224\u65ad\u662f\u5426\u901a\u8fc7\u3002"
-          : "Pass/fail comes from the current file and diagnostics."
+        ? trainingWorkbenchText(language, "verifyFileNoteCardOnly")
+        : trainingWorkbenchText(language, "verifyFileNote")
       : manualPracticeCopy.verifyNote;
   const cardOnlyTask = resolvedProblemStatement;
   const cardOnlyDoneLine = firstText(routeVerifySummary, resolvedSuccessSignal);
@@ -1379,27 +2738,23 @@ export function TrainingWorkbenchView({
     firstText(resolvedDeliverables[0]?.trim(), resolvedSuccessSignal, cardOnlyTask) ?? cardOnlyTask;
   const cardOnlyWhyNowSummary = compactCardText(firstText(resolvedWhyNow), 120);
   const learnSectionLabel = learnPhaseActive
-    ? (isZh ? "\u5148\u770b" : "Study first")
-    : (isZh ? "\u524d\u7f6e" : "Primer");
+    ? trainingWorkbenchText(language, "studyFirstLabel")
+    : trainingWorkbenchText(language, "primerLabel");
   const visibleLearnFirstDetail =
     learnFirstDetail && !learnPhaseActive ? compactCardText(learnFirstDetail, 108) : learnFirstDetail;
   const showLearnFirstPanel = learnPhaseActive && hasLearnFirstBlock;
   const showLearnPrimerNote = !cardOnly && !learnPhaseActive && hasLearnFirstBlock;
   const composerVerificationHint = isFlashCard
-    ? (isZh
-        ? "\u7528\u4e0b\u65b9\u8f93\u5165\u6846\u4f5c\u7b54\uff0c\u9009\u62e9\u5217\u8868\u4f1a\u51fa\u73b0\u5728\u8f93\u5165\u6846\u4e0a\u65b9\u3002"
-        : "Answer in the composer below. The choice list appears above the input.")
+    ? trainingWorkbenchText(language, "flashComposerHint")
     : practiceVerificationMode === "file"
-      ? (isZh
-          ? "\u5148\u52a8\u624b\uff0c\u518d\u7528\u4e0b\u65b9\u8f93\u5165\u6846\u8bb0\u5f55\u7ed3\u679c\u6216 blocker\u3002\u771f\u6b63\u901a\u8fc7\u8981\u9760\u8f93\u5165\u6846\u533a\u57df\u91cc\u7684 Verify current file\u3002"
-          : "Try the task first, then use the composer below to record the result or blocker. Real pass/fail still comes from Verify current file.")
+      ? trainingWorkbenchText(language, "fileComposerHint")
       : manualPracticeCopy.composerHint;
   const cardOnlyBodySections: TrainingCardOnlySection[] = [
     ...(reliabilityCopy
       ? [
           {
             key: "reliability",
-            label: isZh ? "保存状态" : "Save status",
+            label: trainingWorkbenchText(language, "saveStatus"),
             title: reliabilityCopy.what,
             detail: `${reliabilityCopy.why} ${reliabilityCopy.next}`,
           } satisfies TrainingCardOnlySection,
@@ -1432,60 +2787,35 @@ export function TrainingWorkbenchView({
     },
   ];
   const flashDeckActionLabel = isFlashCard
-    ? isZh
-      ? "\u6362\u4e00\u5f20\u95ea\u5361"
-      : "Next flashcard"
-    : isZh
-      ? "\u7528\u95ea\u5361\u7ec3\u4e60"
-      : "Practice with flashcards";
+    ? trainingWorkbenchText(language, "flashDeckNext")
+    : trainingWorkbenchText(language, "flashDeckPractice");
   const hasAdjustmentOutcome =
     verificationReturn.kind !== "waiting" ||
     Boolean(latestVerifiedResult?.trim() || latestLearningBlocker?.trim());
   const isReadyToReturn = trainingExecutionState.composerPhase === "return";
   const adjustmentCopy = hasAdjustmentOutcome
     ? {
-        label:
-          isReadyToReturn
-            ? isZh
-              ? "\u56de\u6d41"
-              : "Return"
-            : isZh
-              ? "\u590d\u76d8"
-              : "Reflect",
-        title:
-          isReadyToReturn
-            ? isZh
-              ? "\u628a\u8fd9\u6b21\u7ed3\u679c\u5e26\u56de\u4e0b\u4e00\u6b65"
-              : "Carry this result forward"
-            : verificationReturn.kind === "verified"
-              ? isZh
-                ? "\u5148\u590d\u76d8\u8fd9\u6761\u8bc1\u636e\u8bf4\u660e\u4e86\u4ec0\u4e48"
-                : "Reflect on what this evidence proves"
+        label: isReadyToReturn
+          ? trainingWorkbenchText(language, "adjustReturnLabel")
+          : trainingWorkbenchText(language, "adjustReflectLabel"),
+        title: isReadyToReturn
+          ? trainingWorkbenchText(language, "adjustCarryTitle")
+          : verificationReturn.kind === "verified"
+            ? trainingWorkbenchText(language, "adjustEvidenceTitle")
             : verificationReturn.kind === "blocked"
-              ? isZh
-                ? "\u6536\u7a84\u4fee\u590d\uff0c\u7136\u540e\u518d\u9a8c"
-                : "Narrow the fix and test again"
-              : isZh
-                ? "\u6536\u7d27\u4e0b\u4e00\u6b65"
-                : "Tighten the next move",
+              ? trainingWorkbenchText(language, "adjustNarrowTitle")
+              : trainingWorkbenchText(language, "adjustTightenTitle"),
         detail:
           firstText(
             isReadyToReturn ? latestLearningFollowup : undefined,
             stuckRecovery,
             reflectionPrompt,
-          ) ?? (isZh ? "\u5148\u8bb0\u4e0b\u8fd9\u8f6e\u5b66\u5230\u7684\u8fb9\u754c\uff0c\u518d\u7ee7\u7eed\u5f80\u4e0b\u8d70\u3002" : "Write down the boundary you learned this round before moving on."),
-        next:
-          isReadyToReturn
-            ? isZh
-              ? "\u5148\u8bb0\u4e0b\u8fd9\u6761\u8fb9\u754c\uff0c\u518d\u7ee7\u7eed\u3002"
-              : "Capture the boundary, then continue."
-            : verificationReturn.kind === "verified"
-              ? isZh
-                ? "\u5148\u5728\u8f93\u5165\u6846\u91cc\u8bf4\u6e05\u8fd9\u6761\u8bc1\u636e\uff0c\u518d\u56de\u6d41\u3002"
-                : "State the evidence in the composer, then return."
-            : isZh
-              ? "\u5148\u505a\u6700\u5c0f\u6539\u52a8\uff0c\u7136\u540e\u518d\u9a8c\u4e00\u6b21\u3002"
-              : "Make the smallest change, then retest.",
+          ) ?? trainingWorkbenchText(language, "adjustDetailFallback"),
+        next: isReadyToReturn
+          ? trainingWorkbenchText(language, "adjustReturnNext")
+          : verificationReturn.kind === "verified"
+            ? trainingWorkbenchText(language, "adjustEvidenceNext")
+            : trainingWorkbenchText(language, "adjustRetestNext"),
       }
     : undefined;
   const shouldElevateReturnAction = Boolean(actions) && isReadyToReturn;
@@ -1493,13 +2823,13 @@ export function TrainingWorkbenchView({
   const flashProofSurface = (
     <section
       className="training-proof-card training-proof-card--flash"
-      aria-label={isZh ? "\u95ea\u8bb0\u9a8c\u8bc1" : "Flash verification"}
+      aria-label={trainingWorkbenchText(language, "flashVerificationAria")}
     >
       <div className="training-proof-card__head">
-        <SectionHeading icon={<CheckMarkIcon size={12} />} label={resolvedFlashSectionLabel} />
+        <SectionHeading icon={<CheckMarkIcon size={12} />} label={flashSectionLabel} />
         {!cardOnly ? (
           <span className="training-proof-card__shortcut">
-            {isZh ? "\u9009\u62e9 / \u586b\u7a7a / \u7b80\u7b54" : "Choice / fill / short"}
+            {trainingWorkbenchText(language, "choiceFillShort")}
           </span>
         ) : null}
       </div>
@@ -1521,16 +2851,14 @@ export function TrainingWorkbenchView({
   const practiceProofSurface = (
     <section
       className="training-proof-card training-proof-card--practice"
-      aria-label={isZh ? "\u5b9e\u6218\u9a8c\u8bc1" : "Practice verification"}
+      aria-label={trainingWorkbenchText(language, "practiceVerificationLabel")}
     >
       <div className="training-proof-card__head">
         <SectionHeading icon={<CheckMarkIcon size={12} />} label={practiceSectionLabel} />
         {!cardOnly ? (
           <span className="training-proof-card__shortcut">
             {practiceVerificationMode === "file"
-              ? isZh
-                ? "\u8bfb\u53d6 IDE \u5f53\u524d\u6587\u4ef6"
-                : "Read current IDE file"
+              ? trainingWorkbenchText(language, "readCurrentIdeFile")
               : manualPracticeCopy.shortcut}
           </span>
         ) : null}
@@ -1581,7 +2909,7 @@ export function TrainingWorkbenchView({
               onCardStatusTransition(
                 mismatchRecovery.cardId,
                 "active",
-                isZh ? "从交接错配中恢复：切换到交接所属卡片" : "Recover from handoff mismatch: activate the handoff-owner card",
+                trainingWorkbenchText(language, "mismatchRecoveryReason"),
               )
             }
           >
@@ -1752,7 +3080,7 @@ export function TrainingWorkbenchView({
                       />
                     ) : null}
                     {hintLadder.length > 0 && cardType === "practice" ? (
-                      <HintLadderReveal hints={hintLadder} onReveal={onHintReveal} isZh={isZh} />
+                      <HintLadderReveal hints={hintLadder} onReveal={onHintReveal} language={language} />
                     ) : null}
                   </div>
                   {remoteVerification && (remoteVerification.running || remoteVerification.summary) ? (
@@ -1864,7 +3192,10 @@ export function TrainingWorkbenchView({
               {isFlashCard && whyNowPreview && !learnPhaseActive ? <p className="training-current__why">{whyNowPreview}</p> : null}
             </div>
 
-            <div className="training-current__route-strip" aria-label={isZh ? "\u5f53\u524d\u8bad\u7ec3\u8def\u7ebf" : "Current training route"}>
+            <div
+              className="training-current__route-strip"
+              aria-label={trainingWorkbenchText(language, "currentTrainingRoute")}
+            >
               {routeStripItems.map((item) => (
                 <div
                   key={item.key}
@@ -1884,7 +3215,10 @@ export function TrainingWorkbenchView({
                 {learnFirstTitle ? <strong>{learnFirstTitle}</strong> : null}
                 <p>{learnFirstDetail}</p>
                 {visibleLearnFirstArtifacts.length > 0 ? (
-                  <div className="training-code-list" aria-label={isZh ? "\u5148\u770b\u8fd9\u4e9b\u7ebf\u7d22" : "Study cues first"}>
+                  <div
+                    className="training-code-list"
+                    aria-label={trainingWorkbenchText(language, "studyCuesFirst")}
+                  >
                     {visibleLearnFirstArtifacts.map((item, index) => (
                       <code key={`${item}-${index}`}>{item}</code>
                     ))}
@@ -1899,7 +3233,10 @@ export function TrainingWorkbenchView({
                 {learnFirstTitle ? <strong>{learnFirstTitle}</strong> : null}
                 {visibleLearnFirstDetail ? <p>{visibleLearnFirstDetail}</p> : null}
                 {visibleLearnFirstArtifacts.length > 0 ? (
-                  <div className="training-code-list" aria-label={isZh ? "\u524d\u7f6e\u7ebf\u7d22" : "Primer cues"}>
+                  <div
+                    className="training-code-list"
+                    aria-label={trainingWorkbenchText(language, "primerCues")}
+                  >
                     {visibleLearnFirstArtifacts.slice(0, 2).map((item, index) => (
                       <code key={`${item}-${index}`}>{item}</code>
                     ))}
@@ -1914,7 +3251,7 @@ export function TrainingWorkbenchView({
                 <strong>{nextMovePrimary}</strong>
                 {nextMoveSecondary ? (
                   <p>
-                    <span>{isZh ? "\u573a\u666f" : "Scenario"}</span>{" "}
+                    <span>{trainingSurfaceLabel(language, "scenario")}</span>{" "}
                     {nextMoveSecondary}
                   </p>
                 ) : null}
@@ -1962,13 +3299,13 @@ export function TrainingWorkbenchView({
                 open={verificationReturn.kind === "blocked" && Boolean(stuckRecovery?.trim())}
               >
                 <summary>
-                  <span>{isZh ? "\u63d0\u793a\u4e0e\u8fb9\u754c" : "Hints and guardrails"}</span>
+                  <span>{trainingWorkbenchText(language, "hintsGuardrails")}</span>
                   <strong>{guidanceSummary}</strong>
                 </summary>
                 <div className="training-guidance-details__body">
                   {formattedFilesToTouch.length > 0 ? (
                     <details className="training-guidance-details__nested">
-                      <summary>{isZh ? "\u8fd9\u6837\u9a8c\u8bc1" : "Verify like this"}</summary>
+                      <summary>{trainingWorkbenchText(language, "verifyLikeThis")}</summary>
                       <section className="training-guidance-details__section">
                         <ul className="training-inline-list">
                           {verifyItems.map((item) => (
@@ -1980,7 +3317,7 @@ export function TrainingWorkbenchView({
                   ) : null}
                   {resolvedReturnWith?.trim() ? (
                     <section className="training-card-route-details__section">
-                      <h3>{isZh ? "\u5b8c\u6210\u540e\u5e26\u56de" : "Bring back after completion"}</h3>
+                      <h3>{trainingWorkbenchText(language, "bringBackAfterCompletion")}</h3>
                       <p>{resolvedReturnWith}</p>
                     </section>
                   ) : null}
@@ -1993,9 +3330,12 @@ export function TrainingWorkbenchView({
                     Boolean(stuckRecovery?.trim()) ||
                     Boolean(reflectionPrompt?.trim())) ? (
                     <section className="training-card-route-details__section">
-                      <h3>{isZh ? "\u63d0\u793a\u548c\u8fb9\u754c" : "Hints and guardrails"}</h3>
+                      <h3>{trainingWorkbenchText(language, "hintsGuardrailsBody")}</h3>
                       {formattedFilesToTouch.length > 0 ? (
-                        <div className="training-code-list" aria-label={isZh ? "\u4f18\u5148\u6587\u4ef6" : "Files to touch"}>
+                        <div
+                          className="training-code-list"
+                          aria-label={trainingWorkbenchText(language, "filesToTouchLabel")}
+                        >
                           {formattedFilesToTouch.map((item, index) => (
                             <code key={`${item}-${index}`}>{item}</code>
                           ))}
@@ -2007,7 +3347,10 @@ export function TrainingWorkbenchView({
                           title={t.trainingCardDetailsApiHints}
                           persistenceKey={`card-${cardId ?? "current"}-api-hints`}
                         >
-                          <div className="training-code-list" aria-label={isZh ? "API \u63d0\u793a" : "API hints"}>
+                          <div
+                            className="training-code-list"
+                            aria-label={trainingWorkbenchText(language, "apiHintsLabel")}
+                          >
                             {formattedApiHints.map((item, index) => (
                               <code key={`${item}-${index}`}>{item}</code>
                             ))}
@@ -2036,7 +3379,7 @@ export function TrainingWorkbenchView({
                       ) : null}
                       {hintLadder.length > 0 ? (
                         <details className="training-guidance-details__nested">
-                          <summary>{isZh ? "提示阶梯" : "Hint ladder"}</summary>
+                          <summary>{trainingWorkbenchText(language, "hintLadderLabel")}</summary>
                           <ul className="training-inline-list">
                             {hintLadder.map((item) => (
                               <li key={item}>{item}</li>
@@ -2046,7 +3389,7 @@ export function TrainingWorkbenchView({
                       ) : null}
                       {commonMistakes.length > 0 ? (
                         <details className="training-guidance-details__nested">
-                          <summary>{isZh ? "常见错误" : "Common mistakes"}</summary>
+                          <summary>{trainingWorkbenchText(language, "commonMistakesLabel")}</summary>
                           <ul className="training-inline-list">
                             {commonMistakes.map((item) => (
                               <li key={item}>{item}</li>
@@ -2056,7 +3399,7 @@ export function TrainingWorkbenchView({
                       ) : null}
                       {stuckRecovery?.trim() || reflectionPrompt?.trim() ? (
                         <details className="training-guidance-details__nested">
-                          <summary>{isZh ? "卡住时怎么恢复" : "If you get stuck"}</summary>
+                          <summary>{trainingWorkbenchText(language, "stuckRecoveryLabel")}</summary>
                           {stuckRecovery?.trim() ? <p>{stuckRecovery}</p> : null}
                           {reflectionPrompt?.trim() ? <p>{reflectionPrompt}</p> : null}
                         </details>
@@ -2069,7 +3412,7 @@ export function TrainingWorkbenchView({
 
             {showSourceDetails ? (
               <details className="training-source-details">
-                <summary>{isZh ? "\u6765\u6e90\u4e0e\u539f\u56e0" : "Source and reason"}</summary>
+                <summary>{trainingWorkbenchText(language, "sourceAndReason")}</summary>
                 <div className="training-source-details__body">
                   {sourceDetail?.trim() ? <p>{sourceDetail}</p> : null}
                   {shouldShowStep && isStepLong ? <p>{currentStep}</p> : null}
@@ -2080,11 +3423,11 @@ export function TrainingWorkbenchView({
 
             {showRouteDetails ? (
               <details className="training-card-route-details">
-                <summary>{isZh ? "\u5b8c\u6574\u9a8c\u6536" : "Full acceptance"}</summary>
+                <summary>{trainingWorkbenchText(language, "fullAcceptance")}</summary>
                 <div className="training-card-route-details__body">
                   {resolvedDeliverables.length > 0 ? (
                     <section className="training-card-route-details__section">
-                      <h3>{isZh ? "\u4ea4\u4ed8\u7269" : "Deliverables"}</h3>
+                      <h3>{trainingWorkbenchText(language, "deliverablesLabel")}</h3>
                       <ul className="training-inline-list">
                         {resolvedDeliverables.map((item) => (
                           <li key={item}>{item}</li>
@@ -2098,7 +3441,7 @@ export function TrainingWorkbenchView({
                     persistenceKey={`card-${cardId ?? "current"}-acceptance`}
                   >
                     <section className="training-card-route-details__section">
-                      <h3>{isZh ? "\u9a8c\u6536\u65b9\u5f0f" : "Acceptance method"}</h3>
+                      <h3>{trainingWorkbenchText(language, "acceptanceMethod")}</h3>
                       {resolvedVerifyItems.length > 0 ? (
                         <ul className="training-inline-list">
                           {resolvedVerifyItems.map((item) => (
@@ -2107,15 +3450,13 @@ export function TrainingWorkbenchView({
                         </ul>
                       ) : (
                         <p className="muted">
-                          {isZh
-                            ? "\u5148\u62ff\u5230\u4e00\u4e2a\u6700\u5c0f\u53ef\u9a8c\u8bc1\u7ed3\u679c\uff0c\u518d\u51b3\u5b9a\u8981\u4e0d\u8981\u6269\u5c55\u8303\u56f4\u3002"
-                            : "Land one small result first."}
+                          {trainingWorkbenchText(language, "landSmallResultFirst")}
                         </p>
                       )}
                     </section>
                   </CollapseSection>
                   <section className="training-card-route-details__section">
-                    <h3>{isZh ? "\u56de\u6d41\u53bb\u5411" : "Return path"}</h3>
+                    <h3>{trainingWorkbenchText(language, "returnPath")}</h3>
                     <p>{resolvedReturnWith || defaultReturnPath}</p>
                   </section>
                   {visibleNextAfterCompletion ? (
@@ -2135,7 +3476,7 @@ export function TrainingWorkbenchView({
             recentWins.length > 0 ||
             weakSpots.length > 0) ? (
             <details className="training-details">
-              <summary>{isZh ? "\u540e\u7eed\u548c\u56de\u770b" : "Follow-up and review"}</summary>
+              <summary>{trainingWorkbenchText(language, "followUpReview")}</summary>
 
               {carryoverCards.length > 0 ? (
                 <div className="training-carryover-stack">
@@ -2168,17 +3509,20 @@ export function TrainingWorkbenchView({
                               <summary>FSRS</summary>
                               <p>
                                 {item.fsrs.intervalDays !== undefined
-                                  ? `${isZh ? "间隔" : "Interval"}: ${item.fsrs.intervalDays}d`
+                                  ? `${trainingWorkbenchText(language, "fsrsInterval")}: ${item.fsrs.intervalDays}d`
                                   : null}
                                 {item.fsrs.masteryScore !== undefined
-                                  ? ` · ${isZh ? "掌握度" : "Mastery"}: ${item.fsrs.masteryScore}`
+                                  ? ` · ${trainingWorkbenchText(language, "fsrsMastery")}: ${item.fsrs.masteryScore}`
                                   : null}
                               </p>
                             </details>
                           ) : null}
                           <details className="training-review-row__actions-details" open>
-                            <summary>{isZh ? "复习操作" : "Review actions"}</summary>
-                            <div className="training-review-row__actions" aria-label={isZh ? "复习操作" : "Review actions"}>
+                            <summary>{trainingWorkbenchText(language, "reviewActions")}</summary>
+                            <div
+                              className="training-review-row__actions"
+                              aria-label={trainingWorkbenchText(language, "reviewActions")}
+                            >
                               {(["accept", "snooze"] as const).map((action) => (
                                 <button
                                   className={action === "accept" ? "button button--accent" : "button button--ghost"}
@@ -2191,15 +3535,14 @@ export function TrainingWorkbenchView({
                                     taskHint: item.taskHint,
                                   })}
                                 >
-                                  {isZh
-                                    ? { accept: "开始复习", snooze: "稍后" }[action]
-                                    : action === "accept"
-                                      ? "Start review"
-                                      : "Later"}
+                                  {trainingWorkbenchText(
+                                    language,
+                                    action === "accept" ? "reviewAccept" : "reviewSnooze",
+                                  )}
                                 </button>
                               ))}
                               <details className="training-review-row__more">
-                                <summary>{isZh ? "更多" : "More"}</summary>
+                                <summary>{trainingWorkbenchText(language, "moreLabel")}</summary>
                                 <div className="training-review-row__more-actions">
                                   {(["reset", "skip", "done"] as const).map((action) => (
                                     <button
@@ -2213,9 +3556,14 @@ export function TrainingWorkbenchView({
                                         taskHint: item.taskHint,
                                       })}
                                     >
-                                      {isZh
-                                        ? { reset: "重置", skip: "跳过", done: "完成" }[action]
-                                        : action[0].toUpperCase() + action.slice(1)}
+                                      {trainingWorkbenchText(
+                                        language,
+                                        action === "reset"
+                                          ? "reviewReset"
+                                          : action === "skip"
+                                            ? "reviewSkip"
+                                            : "reviewDone",
+                                      )}
                                     </button>
                                   ))}
                                 </div>
@@ -2234,7 +3582,10 @@ export function TrainingWorkbenchView({
                   {recentWins.length > 0 ? (
                     <section className="training-signal-card">
                       <h4>
-                        <SectionHeading icon={<TargetIcon size={12} />} label={isZh ? "\u6700\u8fd1\u8fdb\u6b65" : "Recent wins"} />
+                        <SectionHeading
+                          icon={<TargetIcon size={12} />}
+                          label={trainingWorkbenchText(language, "recentWins")}
+                        />
                       </h4>
                       <ul className="training-inline-list">
                         {recentWins.slice(0, 3).map((item) => (
@@ -2246,7 +3597,10 @@ export function TrainingWorkbenchView({
                   {weakSpots.length > 0 ? (
                     <section className="training-signal-card">
                       <h4>
-                        <SectionHeading icon={<SparklesIcon size={12} />} label={isZh ? "\u9700\u8981\u7559\u610f" : "Watch-outs"} />
+                        <SectionHeading
+                          icon={<SparklesIcon size={12} />}
+                          label={trainingWorkbenchText(language, "watchOuts")}
+                        />
                       </h4>
                       <ul className="training-inline-list">
                         {weakSpots.slice(0, 3).map((item) => (
@@ -2269,17 +3623,21 @@ export function TrainingWorkbenchView({
 function HintLadderReveal({
   hints,
   onReveal,
-  isZh,
+  language,
 }: {
   hints: string[];
   onReveal?: (hintLevel: number) => void;
-  isZh: boolean;
+  language: ComposerLanguage;
 }) {
   const [revealed, setRevealed] = useState(0);
   const total = hints.length;
   const allRevealed = revealed >= total;
   return (
-    <div className="training-hint-reveal" role="group" aria-label={isZh ? "提示阶梯" : "Hint ladder"}>
+    <div
+      className="training-hint-reveal"
+      role="group"
+      aria-label={trainingWorkbenchText(language, "hintLadderLabel")}
+    >
       {revealed > 0 ? (
         <ul className="training-hint-reveal__list">
           {hints.slice(0, revealed).map((hint, index) => (
@@ -2300,7 +3658,7 @@ function HintLadderReveal({
             onReveal?.(next);
           }}
         >
-          {isZh ? `提示 ${revealed + 1}/${total}` : `Hint ${revealed + 1}/${total}`}
+          {`${trainingWorkbenchText(language, "hintProgressPrefix")} ${revealed + 1}/${total}`}
         </button>
       ) : null}
     </div>

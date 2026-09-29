@@ -6,6 +6,8 @@
  */
 
 import type { ReactNode } from "react";
+import type { ComposerLanguage } from "../../lib/types";
+import { quickActionsCopy } from "./quickActionsCopy";
 import {
   SearchIcon,
   SettingsIcon,
@@ -32,18 +34,15 @@ export interface QuickActionItem {
 export interface QuickActionsPanelProps {
   actions: QuickActionItem[];
   title?: string;
-  language: "zh-CN" | "en-US";
+  language: ComposerLanguage;
   className?: string;
 }
 
 export function QuickActionsPanel({
   actions,
   title,
-  language,
   className,
 }: QuickActionsPanelProps) {
-  const isZh = language === "zh-CN";
-
   return (
     <div className={`quick-actions-panel ${className ?? ""}`}>
       {title && <div className="quick-actions-panel__title">{title}</div>}
@@ -86,7 +85,7 @@ export function QuickActionsPanel({
  * Pre-defined quick actions for common scenarios
  */
 export function getCoachQuickActions(config: {
-  language: "zh-CN" | "en-US";
+  language: ComposerLanguage;
   hasProviderSetup: boolean;
   hasActivePlan: boolean;
   onOpenSettings: () => void;
@@ -96,7 +95,6 @@ export function getCoachQuickActions(config: {
   onViewPlan: () => void;
 }): QuickActionItem[] {
   const { language, hasProviderSetup, hasActivePlan, onOpenSettings, onStartChat, onGenerateTraining, onViewResources, onViewPlan } = config;
-  const isZh = language === "zh-CN";
 
   const actions: QuickActionItem[] = [];
 
@@ -104,7 +102,7 @@ export function getCoachQuickActions(config: {
   actions.push({
     id: "quick-settings",
     icon: <SettingsIcon size={16} />,
-    label: isZh ? "设置" : "Settings",
+    label: quickActionsCopy(language, "设置"),
     onClick: onOpenSettings,
   });
 
@@ -112,7 +110,7 @@ export function getCoachQuickActions(config: {
   actions.push({
     id: "quick-chat",
     icon: <SparklesIcon size={16} />,
-    label: isZh ? "开始对话" : "Chat",
+    label: quickActionsCopy(language, "开始对话"),
     onClick: onStartChat,
     disabled: !hasProviderSetup,
     variant: hasProviderSetup ? "primary" : "default",
@@ -123,7 +121,7 @@ export function getCoachQuickActions(config: {
     actions.push({
       id: "quick-plan",
       icon: <PlanIcon size={16} />,
-      label: isZh ? "查看计划" : "Plan",
+      label: quickActionsCopy(language, "查看计划"),
       onClick: onViewPlan,
     });
   }
@@ -132,7 +130,7 @@ export function getCoachQuickActions(config: {
   actions.push({
     id: "quick-training",
     icon: <LightningIcon size={16} />,
-    label: isZh ? "生成训练" : "Train",
+    label: quickActionsCopy(language, "生成训练"),
     onClick: onGenerateTraining,
     disabled: !hasActivePlan,
   });
@@ -141,7 +139,7 @@ export function getCoachQuickActions(config: {
   actions.push({
     id: "quick-resources",
     icon: <FolderIcon size={16} />,
-    label: isZh ? "资料库" : "Resources",
+    label: quickActionsCopy(language, "资料库"),
     onClick: onViewResources,
   });
 
@@ -156,7 +154,7 @@ export interface SearchQuickActionProps {
   onChange: (value: string) => void;
   onSearch: (query: string) => void;
   placeholder?: string;
-  language: "zh-CN" | "en-US";
+  language: ComposerLanguage;
   className?: string;
 }
 
@@ -168,8 +166,7 @@ export function SearchQuickAction({
   language,
   className,
 }: SearchQuickActionProps) {
-  const isZh = language === "zh-CN";
-  const defaultPlaceholder = isZh ? "搜索资料..." : "Search resources...";
+  const defaultPlaceholder = quickActionsCopy(language, "搜索资料...");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,7 +191,7 @@ export function SearchQuickAction({
             type="button"
             className="search-quick-action__clear"
             onClick={() => onChange("")}
-            aria-label={isZh ? "清除搜索" : "Clear search"}
+            aria-label={quickActionsCopy(language, "清除搜索")}
           >
             ×
           </button>
