@@ -1952,6 +1952,7 @@ test('updatePlanCommand restores formal plan history through the governed plan A
     instructions: 'Explicitly restore the current formal project plan from governed history.',
     restorePlanHistoryEntryId: 'audit-project-1',
     restorePlanHistoryVersion: undefined,
+    formal_plan_mutation: true,
   });
   assert.ok(context.__patches.length >= 1);
 });
@@ -2013,6 +2014,7 @@ test('updatePlanCommand forwards explicit formal plan history version restores t
     instructions: 'Restore the authoritative formal project plan from governed version 3.',
     restorePlanHistoryEntryId: 'audit-project-1',
     restorePlanHistoryVersion: 3,
+    formal_plan_mutation: true,
   });
 });
 
@@ -2072,6 +2074,7 @@ test('updatePlanCommand restores formal plan history by version even without an 
     instructions: 'Restore the authoritative formal project plan from governed version 3.',
     restorePlanHistoryEntryId: undefined,
     restorePlanHistoryVersion: 3,
+    formal_plan_mutation: true,
   });
 });
 

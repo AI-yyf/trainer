@@ -115,6 +115,27 @@ def _has_transfer_fact(rec: dict[str, Any]) -> bool:
     return False
 
 
+def _transfer_context_key(rec: dict[str, Any]) -> tuple[str, ...]:
+    """Normalized cross-context identity for a transfer fact.
+
+    Two successes only prove transfer when they come from different
+    scenario/environment/constraint combinations — the same task re-verified
+    never grows transfer capability.
+    """
+    parts: list[str] = []
+    for key in ("scenario", "environment", "constraints"):
+        value = rec.get(key)
+        if isinstance(value, str):
+            parts.append(_normalise_marker(value))
+        elif isinstance(value, (list, tuple, set)):
+            parts.append(_normalise_marker("|".join(sorted(str(item) for item in value))))
+        elif isinstance(value, dict):
+            parts.append(_normalise_marker("|".join(f"{k}={value[k]}" for k in sorted(value))))
+        else:
+            parts.append("")
+    return tuple(parts)
+
+
 def _success_key(rec: dict[str, Any], index: int) -> tuple[str, str]:
     """Group independent success by attempt, with an evidence fallback."""
     attempt_id = str(rec.get("attempt_id") or "").strip()
@@ -134,11 +155,20 @@ def _state_from_evidence(
     assisted_successes: int,
     has_failed_evidence: bool,
     has_partial_evidence: bool,
+    distinct_context_count: int = 0,
+    requires_distinct_contexts: bool = False,
 ) -> str:
-    """Map qualified evidence to a state; do not infer state from score."""
-    if independent_successes >= 2:
+    """Map qualified evidence to a state; do not infer state from score.
+
+    ``requires_distinct_contexts`` (transfer only): repeat_verified additionally
+    needs the independent successes to span at least two distinct
+    scenario/environment/constraint combinations.
+    """
+    if independent_successes >= 2 and (
+        not requires_distinct_contexts or distinct_context_count >= 2
+    ):
         return "repeat_verified"
-    if independent_successes == 1:
+    if independent_successes >= 1:
         return "independent"
     if has_failed_evidence:
         return "needs_review"
@@ -169,6 +199,7 @@ def project_skills(
             "state": "not_verified",
             "score": 0,
             "evidence_ids": [],
+            "evidence": [],
             "verified_count": 0,
             "independent_evidence_count": 0,
             "independent_attempt_count": 0,
@@ -181,6 +212,7 @@ def project_skills(
         dim: set() for dim in _DIMENSIONS
     }
     assisted_success_keys: dict[str, set[str]] = {dim: set() for dim in _DIMENSIONS}
+    transfer_context_keys: set[tuple[str, ...]] = set()
     failed_dimensions: dict[str, bool] = {dim: False for dim in _DIMENSIONS}
     partial_dimensions: dict[str, bool] = {dim: False for dim in _DIMENSIONS}
 
@@ -226,12 +258,28 @@ def project_skills(
                 evidence_id = str(rec.get("evidence_id") or f"legacy-{index}")
                 if evidence_id not in result[dim]["evidence_ids"]:
                     result[dim]["evidence_ids"].append(evidence_id)
+                # §十八: the drilldown answers "why does Trainer judge this
+                # way" — time, assistance, trust, and the transfer context
+                # behind each contributing record, newest first.
+                result[dim]["evidence"].append(
+                    {
+                        "evidence_id": evidence_id,
+                        "attempt_id": str(rec.get("attempt_id") or "") or None,
+                        "timestamp": str(rec.get("created_at") or rec.get("timestamp") or "") or None,
+                        "result": result_str,
+                        "assistance_level": str(rec.get("assistance_level") or "independent"),
+                        "trust_level": str(rec.get("trust_level") or ""),
+                        "scenario": str(rec.get("scenario") or "") or None,
+                    }
+                )
                 if result_str == "passed":
                     result[dim]["verified_count"] += 1
                     assistance_level = str(rec.get("assistance_level") or "independent")
                     if assistance_level == "independent":
                         independent_success_keys[dim].add(_success_key(rec, index))
                         independent_evidence_keys[dim].add(evidence_id)
+                        if dim == "transfer" and transfer_fact:
+                            transfer_context_keys.add(_transfer_context_key(rec))
                     else:
                         assisted_success_keys[dim].add(evidence_id)
                 elif result_str == "failed":
@@ -240,6 +288,7 @@ def project_skills(
                     partial_dimensions[dim] = True
 
     for dim in _DIMENSIONS:
+        result[dim]["evidence"].reverse()
         result[dim]["independent_evidence_count"] = len(independent_evidence_keys[dim])
         result[dim]["independent_attempt_count"] = len(independent_success_keys[dim])
         result[dim]["state"] = _state_from_evidence(
@@ -247,6 +296,10 @@ def project_skills(
             assisted_successes=len(assisted_success_keys[dim]),
             has_failed_evidence=failed_dimensions[dim],
             has_partial_evidence=partial_dimensions[dim],
+            distinct_context_count=len(transfer_context_keys)
+            if dim == "transfer"
+            else 0,
+            requires_distinct_contexts=dim == "transfer",
         )
 
     if card_id:
