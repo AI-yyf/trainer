@@ -6,7 +6,10 @@ import type { ComposerLanguage as SharedComposerLanguage } from "../../../../sha
 import type {
   ProviderCapabilityEvidence,
   ProviderCapabilityVerificationState,
+  ProviderProbeUsage,
 } from "../../../../shared/src/providerTest";
+
+export type { ProviderCapabilityEvidence, ProviderProbeUsage } from "../../../../shared/src/providerTest";
 import type { ProviderThinkingConfig } from "../../../../shared/src/providerThinking";
 
 export type ThemePreference = "system" | "light" | "dark";
@@ -75,6 +78,8 @@ export interface ProviderLastTestResult {
   retryable?: boolean;
   statusCode?: number;
   responseLanguage?: ComposerLanguage;
+  /** Provider-reported usage from the live probe; absent when not reported. */
+  probeUsage?: ProviderProbeUsage;
   capabilityEvidence?: ProviderCapabilityEvidence[];
   toolsReady?: boolean;
   toolProbeStatus?: ProviderCapabilityVerificationState;

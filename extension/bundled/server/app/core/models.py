@@ -2786,6 +2786,23 @@ class ProviderCapabilityEvidence(BaseModel):
     state: ProviderCapabilityState
 
 
+class ProviderProbeUsage(BaseModel):
+    """§二十一: provider-reported usage from the live provider-test probe.
+
+    Fields are echoed only when the provider itself reported them — Trainer
+    never estimates or fabricates cost numbers.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    input_tokens: int | None = Field(default=None, alias="inputTokens")
+    output_tokens: int | None = Field(default=None, alias="outputTokens")
+    total_tokens: int | None = Field(default=None, alias="totalTokens")
+    input_cost: float | None = Field(default=None, alias="inputCost")
+    output_cost: float | None = Field(default=None, alias="outputCost")
+    total_cost: float | None = Field(default=None, alias="totalCost")
+
+
 class ProviderTestResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
@@ -2831,6 +2848,7 @@ class ProviderTestResponse(BaseModel):
         default="unverified",
         alias="thinkingProbeStatus",
     )
+    probe_usage: ProviderProbeUsage | None = Field(default=None, alias="probeUsage")
 
 
 class ProviderModelsRequest(BaseModel):

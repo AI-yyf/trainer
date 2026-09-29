@@ -100,6 +100,17 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
             "model_capabilities": serialized_model_capabilities,
         }
 
+    def provider_probe_usage_payload(
+        result: ProviderTestResponse | None,
+    ) -> dict[str, object]:
+        """Echo provider-reported probe usage only when actually reported."""
+        if result is None or result.probe_usage is None:
+            return {}
+        dumped = result.probe_usage.model_dump(by_alias=True, exclude_none=True)
+        if not dumped:
+            return {}
+        return {"probe_usage": dumped}
+
     def empty_provider_test_capability_payload(
         provider: ProviderConfig | None = None,
     ) -> dict[str, object]:
@@ -877,6 +888,7 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                 "retryable": result.retryable,
                 "status_code": result.status_code,
                 "model_supported": result.model_supported,
+                **provider_probe_usage_payload(result),
                 **provider_test_capability_payload(provider, result),
             }
             persist_provider_last_test_recovery(payload, success_response, provider)
@@ -913,6 +925,7 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
             "retryable": result.retryable,
             "status_code": result.status_code,
             "model_supported": result.model_supported,
+            **provider_probe_usage_payload(result),
             **provider_test_capability_payload(provider, result),
         }
         persist_provider_last_test_recovery(payload, failed_response, provider)

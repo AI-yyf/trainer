@@ -48,6 +48,9 @@ class ProviderUsage:
     cache_read_tokens: int | None = None
     cache_write_tokens: int | None = None
     total_tokens: int | None = None
+    input_cost: float | None = None
+    output_cost: float | None = None
+    total_cost: float | None = None
 
     @property
     def estimated_input_tokens(self) -> int | None:
@@ -73,6 +76,18 @@ def extract_provider_usage(response: object | None) -> ProviderUsage | None:
     if usage_obj is None:
         return None
 
+    def _float(key: str) -> float | None:
+        raw = getattr(usage_obj, key, None)
+        if raw is None and isinstance(usage_obj, dict):
+            raw = usage_obj.get(key)
+        if raw is None:
+            return None
+        try:
+            value = float(raw)
+            return value if value >= 0 else None
+        except (TypeError, ValueError):
+            return None
+
     def _int(key: str) -> int | None:
         raw = getattr(usage_obj, key, None)
         if raw is None and isinstance(usage_obj, dict):
@@ -97,6 +112,9 @@ def extract_provider_usage(response: object | None) -> ProviderUsage | None:
         cache_read_tokens=_int("cache_read_input_tokens") or _int("cache_read_tokens"),
         cache_write_tokens=_int("cache_creation_input_tokens") or _int("cache_write_tokens"),
         total_tokens=total,
+    input_cost=_float("input_cost") or _float("prompt_cost"),
+    output_cost=_float("output_cost") or _float("completion_cost"),
+    total_cost=_float("total_cost"),
     )
 COMPACTION_TOOL_SERIALIZE_CHARS = 2_000
 COMPACTION_RESEARCH_SOURCE_LIMIT = 48
@@ -310,10 +328,21 @@ def should_compact(
     *,
     extra: dict[str, Any] | None = None,
     keep_recent_tokens: int = KEEP_RECENT_TOKENS,
+    last_provider_input_tokens: int | None = None,
 ) -> bool:
+    """§二十一: prefer provider-reported input tokens when available.
+
+    ``last_provider_input_tokens`` comes from the most recent LLM response's
+    real usage report. It reflects the actual token count including
+    reasoning/cache tokens that chars/4 estimation systematically misses.
+    Falls back to estimate_tokens when no provider usage is available.
+    """
     window = resolved_context_window(extra)
     reserve = resolved_reserve_tokens(extra)
-    tokens = estimate_tokens(messages)
+    if last_provider_input_tokens is not None and last_provider_input_tokens > 0:
+        tokens = last_provider_input_tokens
+    else:
+        tokens = estimate_tokens(messages)
     threshold = max(keep_recent_tokens, window - reserve)
     return tokens > threshold
 

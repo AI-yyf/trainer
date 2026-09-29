@@ -19,6 +19,7 @@ from ..core.models import (
     ProviderConfig,
     ProviderModelsResponse,
     ProviderModelTokenLimit,
+    ProviderProbeUsage,
     ProviderProtocol,
     ProviderTestResponse,
     UserProfile,
@@ -104,6 +105,7 @@ from .coaching_scaffold import (
     _scaffold_diagnosis,
     _scaffold_teaching_note,
 )
+from .harness import extract_provider_usage
 from .prompts import (
     _truncate_coaching_history_content,
     build_coaching_messages,
@@ -527,6 +529,25 @@ class _ReasoningBlockFilter:
         buffered = _trim_trailing_reasoning_prefix(self._buffer)
         self._buffer = ""
         return _strip_reasoning_blocks(buffered)
+
+
+def _probe_usage_payload(response: object | None) -> ProviderProbeUsage | None:
+    """Echo provider-reported usage from a live probe response.
+
+    Never estimates: when the provider did not report usage (or cost detail),
+    the field stays None so the UI can hide it instead of fabricating numbers.
+    """
+    usage = extract_provider_usage(response)
+    if usage is None:
+        return None
+    return ProviderProbeUsage(
+        inputTokens=usage.input_tokens,
+        outputTokens=usage.output_tokens,
+        totalTokens=usage.total_tokens,
+        inputCost=usage.input_cost,
+        outputCost=usage.output_cost,
+        totalCost=usage.total_cost,
+    )
 
 
 class ProviderService:
@@ -4778,6 +4799,7 @@ class ProviderService:
                             diagnostics=diagnostics,
                             provider_reachable=True,
                             model_supported=True,
+                            probeUsage=_probe_usage_payload(latest_probe_response),
                         )
                 language_probe = self._language_probe_result_resilient(
                     client=client,
@@ -4831,6 +4853,7 @@ class ProviderService:
                             diagnostics=diagnostics,
                             provider_reachable=True,
                             model_supported=True,
+                            probeUsage=_probe_usage_payload(latest_probe_response),
                         )
                     return ProviderTestResponse(
                         ok=False,
@@ -4850,6 +4873,7 @@ class ProviderService:
                         diagnostics=diagnostics,
                         provider_reachable=True,
                         model_supported=True,
+                        probeUsage=_probe_usage_payload(latest_probe_response),
                     )
                 diagnostics.append(f"Probe response preview: {preview}")
                 probe_detail = str(language_probe.get("detail") or "").strip()
@@ -4873,6 +4897,7 @@ class ProviderService:
                     diagnostics=diagnostics,
                     provider_reachable=True,
                     model_supported=True,
+                    probeUsage=_probe_usage_payload(latest_probe_response),
                 )
             except Exception as chat_exc:
                 category, retryable, status_code, provider_reachable, model_supported = self._classify_error(chat_exc)

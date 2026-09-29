@@ -113,6 +113,15 @@ export interface ProviderModelCache {
   retryable?: boolean;
 }
 
+export interface ProviderProbeUsage {
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
+  inputCost?: number | null;
+  outputCost?: number | null;
+  totalCost?: number | null;
+}
+
 export interface ProviderLastTestResult {
   ok: boolean;
   status: string;
@@ -129,6 +138,7 @@ export interface ProviderLastTestResult {
   retryable?: boolean;
   statusCode?: number;
   responseLanguage?: string;
+  probeUsage?: ProviderProbeUsage;
   capabilityEvidence?: ProviderCapabilityEvidence[];
   toolsReady?: boolean;
   toolProbeStatus?: ProviderCapabilityVerificationState;

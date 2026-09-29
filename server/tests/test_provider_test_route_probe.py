@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from app.core.models import ProviderCapabilityEvidence, ProviderModelsResponse, ProviderTestResponse
+from app.core.models import (
+    ProviderCapabilityEvidence,
+    ProviderModelsResponse,
+    ProviderProbeUsage,
+    ProviderTestResponse,
+)
 from app.llm.provider_service import ProviderService
 from tests.test_api import build_client
 
@@ -680,3 +685,54 @@ def test_provider_test_unknown_protocol_overwrites_prior_success(tmp_path: Path)
         assert recovered.get("ok") is not True
         assert recovered.get("tools_ready") is not True
 
+
+
+def test_provider_test_route_echoes_probe_usage_only_when_reported(tmp_path: Path) -> None:
+    provider_payload = {
+        "name": "usage-provider",
+        "baseUrl": "https://example.com/v1",
+        "apiKeyRef": "trainer.usage",
+        "model": "UsageModel",
+    }
+
+    def run_route(with_usage: bool) -> dict[str, object]:
+        probe_usage = None
+        if with_usage:
+            probe_usage = ProviderProbeUsage(
+                inputTokens=12,
+                outputTokens=34,
+                totalTokens=46,
+                totalCost=0.007,
+            )
+        with (
+            build_client(tmp_path, configure_provider=False) as client,
+            patch.object(
+                ProviderService,
+                "test",
+                autospec=True,
+                return_value=ProviderTestResponse(
+                    ok=True,
+                    detail="Provider reachable.",
+                    provider_reachable=True,
+                    model_supported=True,
+                    probe_usage=probe_usage,
+                ),
+            ),
+        ):
+            response = client.post(
+                "/provider/test",
+                json={"provider": provider_payload, "api_key": "sk-test"},
+            )
+        assert response.status_code == 200
+        return response.json()
+
+    reported = run_route(with_usage=True)
+    assert reported["probe_usage"] == {
+        "inputTokens": 12,
+        "outputTokens": 34,
+        "totalTokens": 46,
+        "totalCost": 0.007,
+    }
+
+    unreported = run_route(with_usage=False)
+    assert "probe_usage" not in unreported

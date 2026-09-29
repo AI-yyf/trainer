@@ -11,6 +11,7 @@ import type {
   ProviderProtocol,
   ProviderTaskBinding,
   ProviderLastTestResult,
+  ProviderProbeUsage,
   ProviderCapabilityVerificationState,
   ProviderModelCache,
   ResolvedProviderConfig,
@@ -52,6 +53,25 @@ function asVerificationState(value: unknown): ProviderCapabilityVerificationStat
     : undefined;
 }
 
+function asStoredProbeUsage(value: unknown): ProviderProbeUsage | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const numberOrUndefined = (input: unknown): number | null | undefined =>
+    typeof input === 'number' && Number.isFinite(input) ? input : undefined;
+  const normalized: ProviderProbeUsage = {
+    inputTokens: numberOrUndefined(record.inputTokens),
+    outputTokens: numberOrUndefined(record.outputTokens),
+    totalTokens: numberOrUndefined(record.totalTokens),
+    inputCost: numberOrUndefined(record.inputCost),
+    outputCost: numberOrUndefined(record.outputCost),
+    totalCost: numberOrUndefined(record.totalCost),
+  };
+  const hasReportedField = Object.values(normalized).some((entry) => typeof entry === 'number');
+  return hasReportedField ? normalized : undefined;
+}
+
 function asStoredLastTestResult(value: Record<string, unknown>): ProviderLastTestResult | undefined {
   const providerName = typeof value.providerName === 'string' ? value.providerName.trim() : '';
   const baseUrl = typeof value.baseUrl === 'string' ? value.baseUrl.trim() : '';
@@ -78,6 +98,7 @@ function asStoredLastTestResult(value: Record<string, unknown>): ProviderLastTes
     retryable: typeof value.retryable === 'boolean' ? value.retryable : undefined,
     statusCode: typeof value.statusCode === 'number' ? value.statusCode : undefined,
     responseLanguage: typeof value.responseLanguage === 'string' ? value.responseLanguage : undefined,
+    probeUsage: asStoredProbeUsage(value.probeUsage),
     capabilityEvidence: Array.isArray(value.capabilityEvidence)
       ? value.capabilityEvidence.flatMap((item): ProviderCapabilityEvidence[] => {
           if (!item || typeof item !== 'object') {

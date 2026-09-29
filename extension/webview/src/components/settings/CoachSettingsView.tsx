@@ -108,6 +108,7 @@ import type {
   ManagedDataFolder,
   MemoryShareGrant,
   ProviderConfigView,
+  ProviderProbeUsage,
   TeachingStyle,
   ThemePreference,
   TrainerWorkspaceAdmission,
@@ -2076,7 +2077,8 @@ type SettingsPhraseKey =
   | "navShare"
   | "navResources"
   | "navTraining"
-  | "navWorkspace";
+  | "navWorkspace"
+  | "probeCost";
 
 const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, string>> = {
   "zh-CN": {
@@ -2133,6 +2135,7 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     navResources: "资料库",
     navTraining: "训练卡",
     navWorkspace: "工作区",
+    probeCost: "费用",
   },
   "en-US": {
     notRecorded: "Not recorded",
@@ -2188,6 +2191,7 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     navResources: "Library",
     navTraining: "Training card",
     navWorkspace: "Workspace",
+    probeCost: "cost",
   },
   "es-ES": {
     notRecorded: "Sin registro",
@@ -2243,6 +2247,7 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     navResources: "Biblioteca",
     navTraining: "Tarjeta de entrenamiento",
     navWorkspace: "Espacio",
+    probeCost: "coste",
   },
   "fr-FR": {
     notRecorded: "Non enregistré",
@@ -2298,6 +2303,7 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     navResources: "Bibliothèque",
     navTraining: "Carte d’entraînement",
     navWorkspace: "Espace",
+    probeCost: "coût",
   },
   "de-DE": {
     notRecorded: "Nicht erfasst",
@@ -2353,6 +2359,7 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     navResources: "Bibliothek",
     navTraining: "Übungskarte",
     navWorkspace: "Bereich",
+    probeCost: "Kosten",
   },
   "ja-JP": {
     notRecorded: "記録なし",
@@ -2408,6 +2415,7 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     navResources: "ライブラリ",
     navTraining: "トレーニングカード",
     navWorkspace: "ワークスペース",
+    probeCost: "コスト",
   },
   "ko-KR": {
     notRecorded: "기록 없음",
@@ -2463,6 +2471,7 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     navResources: "라이브러리",
     navTraining: "훈련 카드",
     navWorkspace: "작업 영역",
+    probeCost: "비용",
   },
   "pt-BR": {
     notRecorded: "Sem registro",
@@ -2518,6 +2527,7 @@ const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, st
     navResources: "Biblioteca",
     navTraining: "Cartão de treino",
     navWorkspace: "Espaço",
+    probeCost: "custo",
   },
 };
 
@@ -3051,6 +3061,38 @@ function formatTokenValue(value: number | undefined): string {
     return "-";
   }
   return new Intl.NumberFormat("en-US").format(Math.round(value));
+}
+
+function formatProbeCostValue(value: number | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "-";
+  }
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 8 }).format(value);
+}
+
+/**
+ * §二十一: probe usage detail from provider-reported numbers only. Each part
+ * stays hidden when the provider did not report it — nothing is estimated.
+ */
+function describeProbeUsageDetail(
+  usage: ProviderProbeUsage | undefined,
+  language: ComposerLanguage,
+): string | undefined {
+  if (!usage) {
+    return undefined;
+  }
+  const parts: string[] = [];
+  if (
+    typeof usage.totalTokens === "number" &&
+    Number.isFinite(usage.totalTokens) &&
+    usage.totalTokens > 0
+  ) {
+    parts.push(`${formatTokenValue(usage.totalTokens)} tokens`);
+  }
+  if (typeof usage.totalCost === "number" && Number.isFinite(usage.totalCost)) {
+    parts.push(`${settingsPhrase(language, "probeCost")} ${formatProbeCostValue(usage.totalCost)}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
 function formatDurationSeconds(value: number | undefined): string | undefined {
@@ -4199,6 +4241,7 @@ export function CoachSettingsView({
               ? copy.lastTestNeedsSetup
               : copy.lastTestFailed
         : copy.lastTestNever;
+  const probeUsageDetail = describeProbeUsageDetail(lastTest?.probeUsage, language);
   const lastTestDetail = lastTest
     ? `${formatTimestamp(lastTest.checkedAt, language)} · ${
         providerTestPassed
@@ -4206,7 +4249,7 @@ export function CoachSettingsView({
           : lastTest.ok || providerTestFreshness !== "fresh"
             ? settingsStatusPhrase(language, "connectionSavedNeedsTest")
             : safeProviderFailureHint
-      }`
+      }${probeUsageDetail ? ` · ${probeUsageDetail}` : ""}`
     : undefined;
   const coachStateText =
     stringifyNode(coachStateSummary) ??

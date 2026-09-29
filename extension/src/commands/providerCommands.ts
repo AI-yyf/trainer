@@ -11,6 +11,7 @@ import type {
   ProviderConfigView,
   ProviderCredentialMode,
   ProviderLastTestResult,
+  ProviderProbeUsage,
   ProviderProtocol,
 } from '../core/types';
 import { applyDerivedHostState } from '../core/workbenchData';
@@ -166,6 +167,8 @@ type ProviderTestResponse = {
   visionReady?: boolean;
   vision_probe_status?: unknown;
   visionProbeStatus?: unknown;
+  probe_usage?: unknown;
+  probeUsage?: unknown;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -207,6 +210,32 @@ function toRecordArray(value: unknown): Array<Record<string, unknown>> {
 
 function toBoolean(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
+}
+
+function toOptionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * §二十一: normalize the provider-reported probe usage (snake_case or camelCase).
+ * Only fields the provider actually reported are kept — nothing is estimated.
+ */
+function normalizeProviderProbeUsage(value: unknown): ProviderProbeUsage | undefined {
+  const response = asRecord(value);
+  const record = asRecord(response?.probe_usage ?? response?.probeUsage);
+  if (!record) {
+    return undefined;
+  }
+  const normalized: ProviderProbeUsage = {
+    inputTokens: toOptionalNumber(record.input_tokens ?? record.inputTokens) ?? null,
+    outputTokens: toOptionalNumber(record.output_tokens ?? record.outputTokens) ?? null,
+    totalTokens: toOptionalNumber(record.total_tokens ?? record.totalTokens) ?? null,
+    inputCost: toOptionalNumber(record.input_cost ?? record.inputCost) ?? null,
+    outputCost: toOptionalNumber(record.output_cost ?? record.outputCost) ?? null,
+    totalCost: toOptionalNumber(record.total_cost ?? record.totalCost) ?? null,
+  };
+  const hasReportedField = Object.values(normalized).some((entry) => typeof entry === 'number');
+  return hasReportedField ? normalized : undefined;
 }
 
 function toOptionalString(value: unknown): string | undefined {
@@ -814,6 +843,7 @@ export async function testProviderCommand(
       retryable: response.retryable,
       statusCode: response.status_code,
       responseLanguage,
+      probeUsage: normalizeProviderProbeUsage(response),
       capabilityEvidence: capabilityTruth.capabilityEvidence,
       toolsReady: capabilityTruth.toolsReady,
       toolProbeStatus: capabilityTruth.toolProbeStatus,

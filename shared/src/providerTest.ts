@@ -48,6 +48,16 @@ export interface ProviderCapabilityTruth {
   thinkingProbeStatus: ProviderCapabilityVerificationState;
 }
 
+/** §二十一: provider-reported usage from the live probe (never estimated). */
+export interface ProviderProbeUsage {
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
+  inputCost?: number | null;
+  outputCost?: number | null;
+  totalCost?: number | null;
+}
+
 export interface ProviderTestResponse {
   /** Whether the test succeeded */
   ok: boolean;
@@ -98,6 +108,9 @@ export interface ProviderTestResponse {
   visionReady?: boolean;
   vision_probe_status?: ProviderCapabilityVerificationState;
   visionProbeStatus?: ProviderCapabilityVerificationState;
+  /** Provider-reported usage from the live probe; absent when not reported. */
+  probe_usage?: ProviderProbeUsage;
+  probeUsage?: ProviderProbeUsage;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
