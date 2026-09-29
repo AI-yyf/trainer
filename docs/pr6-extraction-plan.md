@@ -57,6 +57,10 @@ the split can be executed stepwise without re-deriving it.
   — annotate row lists explicitly with the row type.
 - ruff F401 on the moved module's imports: keep only what the moved
   code uses; `--fix` after each cluster.
+- Free-name classification: verify every lowercase free name against
+  the source module's import block, not just builtins/locals — three
+  `live_*` module-level imports were misclassified as locals and only
+  ruff F821 caught them (memory mixin session, 2026-09-30).
 - Windows/macOS runner notes: Server job is serial + 75 min (§五);
   pyright runs Linux-only.
 
