@@ -62,7 +62,11 @@ the split can be executed stepwise without re-deriving it.
   `live_*` module-level imports were misclassified as locals and only
   ruff F821 caught them (memory mixin session, 2026-09-30).
 - Windows/macOS runner notes: Server job is serial + 75 min (§五);
-  pyright runs Linux-only.
+  pyright runs Linux-only — so run `.venv/bin/python -m pyright app`
+  locally before every server push. Bit us on the memory-mixin session:
+  ruff + full pytest passed but CI pyright caught a
+  `reportIncompatibleVariableOverride` in the handoff-mixin TYPE_CHECKING
+  annotations (fixed in 312c102).
 
 
 ## Precise AST measurement (2026-09-29, supersedes estimates above)
