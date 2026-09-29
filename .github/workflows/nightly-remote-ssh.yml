@@ -62,8 +62,6 @@ jobs:
       - name: TypeScript and CSS section gate
         run: npm run check
 
-      - name: Install Playwright test runner (root dev dependency)
-        run: npm install --no-save --prefix . "@playwright/test@^1.61.0" "playwright@^1.61.0"
 
       - name: Remote-SSH transport E2E (§十)
         run: npm run test:remote-ssh-e2e
@@ -75,6 +73,9 @@ jobs:
 
       - name: Extension tests
         run: npm run test:extension
+
+      - name: Install Chromium for the preview experience matrix
+        run: npm exec --yes --package playwright -- playwright install --with-deps chromium
 
       - name: 200-scenario preview experience matrix
         run: npm run test:experience-matrix
