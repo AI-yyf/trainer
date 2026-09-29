@@ -10,6 +10,11 @@ const hostPath = require('node:path');
 const _Mod = require('node:module');
 const _origLoad = _Mod._load;
 _Mod._load = function (request, parent, isMain) {
+  if (request.endsWith('./workspaceRoots')) {
+    return require(hostPath.resolve(
+      __dirname, '..', 'dist', 'extension', 'src', 'core', 'workspaceRoots.js',
+    ));
+  }
   if (request === 'vscode') {
     return {
       workspace: { workspaceFolders: [], fs: {
