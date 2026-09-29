@@ -43,6 +43,24 @@ REMOTE=$(ssh 141s "sha256sum /tmp/trainer-e2e/main.py" | cut -d' ' -f1)
 10. **Disconnect**: Close the Remote-SSH window — conversation and progress persist
 11. **Reconnect**: Re-open the Remote-SSH window — conversation, training, attempt, and evidence are restored
 
+## Nightly L2 Manual Acceptance
+
+The nightly workflow [`.github/workflows/nightly-remote-ssh.yml`](../.github/workflows/nightly-remote-ssh.yml)
+runs the Layer 1 transport E2E robotically, and on every run also produces
+everything a human needs for the **Layer 2** pass (real Trainer sidebar inside
+a Remote-SSH VS Code Server window):
+
+| Artifact | Contents |
+| --- | --- |
+| `trainer-remote-ssh-l2-vsix` | The packaged extension VSIX(s) (`extension/*.vsix`) built by that run |
+| `trainer-remote-ssh-l2-manual-checklist` | Bilingual (zh-CN + en-US) click-path checklist: install VSIX → open sidebar → verify five views → one coaching turn → attach workspace → verify Companion capability, each with its expected outcome and a blank pass/fail column |
+
+The workflow run summary links both artifacts. To execute the acceptance:
+
+1. Open the latest nightly run (`Actions → Trainer Nightly Remote-SSH E2E`) and download both artifacts.
+2. Follow the checklist inside a Remote-SSH window (prerequisites above).
+3. Paste the evidence back: the filled checklist (pass/fail column) or screenshots covering steps 2–6; on failure include the VS Code output panel (Trainer channel) log.
+
 ## Known Limitations
 
 - Remote Companion must be installed on the remote extension host (Trainer → Settings → Workspace → Install Remote Support)

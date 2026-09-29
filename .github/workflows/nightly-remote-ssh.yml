@@ -1,17 +1,25 @@
 name: Trainer Nightly Remote-SSH E2E
 
-# §十 Layer 2: nightly remote-SSH integration verification.
+# §十 Layer 1 + Layer 2: nightly remote-SSH verification.
 #
-# Runs the Layer 1 transport E2E (real localhost sshd: exec, byte-exact
-# read, search, sha256 hashing, verification pass/fail, interrupted-run
-# outcome-unknown, reconnect) plus the shipped-source integrity and full
-# server suites as a regression floor.
+# Layer 1 (robotic): runs the transport E2E against a real localhost sshd
+# (exec, byte-exact read, search, sha256 hashing, verification pass/fail,
+# interrupted-run outcome-unknown, reconnect) plus the shipped-source
+# integrity and full server suites as a regression floor.
 #
-# Layer 3 (VS Code Server remote-window journey: companion install →
-# capability handshake → training attempt → evidence → reconnect through
-# the actual VS Code UI) requires the Remote-SSH extension + VS Code
-# Server infrastructure and remains a manual acceptance target
-# (docs/remote-ssh-acceptance.md).
+# Layer 2 (manual, instrumented): a human inside a real Remote-SSH
+# VS Code Server window cannot be asserted robotically in CI, so every run
+# PRODUCES what that human needs:
+#   * the packaged extension VSIX artifacts (trainer-remote-ssh-l2-vsix)
+#   * a generated bilingual L2 manual acceptance checklist
+#     (trainer-remote-ssh-l2-manual-checklist)
+#   * a run summary linking both artifacts
+# The human executes the checklist and pastes it (or screenshots) back as
+# evidence (docs/remote-ssh-acceptance.md).
+#
+# Layer 3 (full VS Code Server remote-window journey asserted by machines)
+# still requires Remote-SSH + VS Code Server infrastructure and remains a
+# manual acceptance target (docs/remote-ssh-acceptance.md).
 
 on:
   schedule:
@@ -30,7 +38,7 @@ jobs:
   remote-ssh-e2e:
     name: Remote-SSH E2E (ubuntu)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -56,6 +64,13 @@ jobs:
       - name: Build with the portable lifecycle
         run: npm run dev -- --skip-install
 
+      - name: Generate the L2 manual acceptance checklist (§十)
+        run: |
+          mkdir -p artifacts
+          node scripts/generate-remote-ssh-l2-checklist.mjs \
+            --out artifacts/remote-ssh-l2-manual-checklist.md \
+            --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
       - name: Install Playwright test runner (root dev dependency)
         run: npm install --no-save --prefix . "@playwright/test@^1.61.0" "playwright@^1.61.0"
 
@@ -63,8 +78,26 @@ jobs:
         run: npm run check
 
 
-      - name: Remote-SSH transport E2E (§十)
+      - name: Remote-SSH transport E2E (§十 Layer 1)
         run: npm run test:remote-ssh-e2e
+
+      - name: Package the extension VSIX for the L2 manual pass
+        run: npm run package:vsix
+
+      - name: Upload L2 VSIX artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: trainer-remote-ssh-l2-vsix
+          path: extension/*.vsix
+          if-no-files-found: error
+
+      - name: Upload the L2 manual acceptance checklist
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trainer-remote-ssh-l2-manual-checklist
+          path: artifacts/remote-ssh-l2-manual-checklist.md
+          if-no-files-found: error
 
       - name: Shipped-source integrity gate
         working-directory: server
@@ -79,6 +112,28 @@ jobs:
 
       - name: 200-scenario preview experience matrix
         run: npm run test:experience-matrix
+
+      - name: Write the L2 acceptance summary
+        if: always()
+        run: |
+          {
+            echo "## §十 Layer 2 — Remote-SSH nightly manual acceptance"
+            echo ""
+            echo "Layer 1 (transport E2E over real localhost sshd) ran robotically above."
+            echo "Layer 2 (human inside a Remote-SSH VS Code Server window) is instrumented"
+            echo "by this run's artifacts:"
+            echo ""
+            echo "| Artifact | Contents |"
+            echo "| --- | --- |"
+            echo "| \`trainer-remote-ssh-l2-vsix\` | Packaged extension VSIX(s) to install in the Remote-SSH window (\`extension/*.vsix\`) |"
+            echo "| \`trainer-remote-ssh-l2-manual-checklist\` | Bilingual zh-CN/en-US click-path checklist with per-step expected outcomes and a blank pass/fail column |"
+            echo ""
+            echo "Both artifacts are listed under this run's **Artifacts** section:"
+            echo "<${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}>"
+            echo ""
+            echo "Execute the checklist in a Remote-SSH window and paste it (or screenshots)"
+            echo "back as evidence — see docs/remote-ssh-acceptance.md."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   server-regression:
     name: Server regression (ubuntu)
