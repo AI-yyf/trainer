@@ -90,6 +90,7 @@ import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src"
 import { trainerCommands } from "../../../../../shared/src/commands";
 import { remoteSupportStateView, REMOTE_SUPPORT_COPY } from "./remoteSupportCopy";
 import { settingsText } from "./settingsText";
+import { languageIntegrityText } from "./languageIntegrityCopy";
 import { postMessage as postWebviewMessage } from "../../lib/vscode";
 import {
   trainerSkillCatalog,
@@ -2876,23 +2877,22 @@ function capabilityLabels(
   capabilities: CapabilityFlags | undefined,
   language: ComposerLanguage,
 ): string[] {
-  const isZh = language === "zh-CN";
   const labels: string[] = [];
 
   if (capabilities?.chat) {
-    labels.push(isZh ? "对话" : "Chat");
+    labels.push(settingsText(language, "对话", "Chat"));
   }
   if (capabilities?.responses) {
     labels.push("Responses");
   }
   if (capabilities?.streaming) {
-    labels.push(isZh ? "流式" : "Streaming");
+    labels.push(settingsText(language, "流式", "Streaming"));
   }
   if (capabilities?.tools) {
-    labels.push(isZh ? "\u58f0\u660e\u5de5\u5177" : "Declared tools");
+    labels.push(settingsText(language, "声明工具", "Declared tools"));
   }
   if (capabilities?.structuredOutput) {
-    labels.push(isZh ? "结构化" : "Structured");
+    labels.push(settingsText(language, "结构化", "Structured"));
   }
   if (capabilities?.jsonSchema) {
     labels.push("JSON Schema");
@@ -3702,97 +3702,79 @@ function describeLanguageIntegrityFact(input: {
   detail: string;
 } {
   const { language, provider, coachSendState } = input;
-  const isZh = language === "zh-CN";
+  const integrity = (zh: string, en: string) => languageIntegrityText(language, zh, en);
   const lastTest = provider.lastTestResult;
   const lastCategory = provider.modelErrorCategory ?? lastTest?.errorCategory ?? lastTest?.status;
   const lastTestWasZh = Boolean(lastTest?.responseLanguage?.toLowerCase().startsWith("zh"));
 
   if (!provider.configured) {
     return {
-      value: isZh ? "\u5f85\u8bbe\u7f6e" : "Setup",
+      value: integrity("待设置", "Setup"),
       tone: "offline",
-      detail: isZh
-        ? "\u5148\u4fdd\u5b58\u4e00\u7ec4 connection\uff0c\u7136\u540e\u518d\u8dd1 zh-CN \u8f93\u5165\u68c0\u67e5\u3002"
-        : "Save a connection first, then run a zh-CN integrity check.",
+      detail: integrity("先保存一组 connection，然后再跑 zh-CN 输入检查。", "Save a connection first, then run a zh-CN integrity check."),
     };
   }
 
   if (!provider.apiKeyConfigured) {
     return {
-      value: isZh ? "\u7f3a API key" : "Add API key",
+      value: integrity("缺 API key", "Add API key"),
       tone: "offline",
-      detail: isZh
-        ? "\u8865\u4e0a API key \u540e\uff0c\u518d\u9a8c\u8bc1 zh-CN \u8f93\u5165\u662f\u5426\u5b8c\u6574\u3002"
-        : "Add an API key before checking zh-CN input integrity.",
+      detail: integrity("补上 API key 后，再验证 zh-CN 输入是否完整。", "Add an API key before checking zh-CN input integrity."),
     };
   }
 
   if (lastCategory === "language_corruption") {
     return {
-      value: isZh ? "请先换服务" : "Chinese blocked",
+      value: integrity("请先换服务", "Chinese blocked"),
       tone: "warn",
-      detail: isZh
-        ? "这条连接在发送中文时出了问题。请更换模型服务或访问地址，或者暂时用英文继续。"
-        : "This connection corrupts zh-CN input before the model sees it. Switch provider or gateway, or use English for now.",
+      detail: integrity("这条连接在发送中文时出了问题。请更换模型服务或访问地址，或者暂时用英文继续。", "This connection corrupts zh-CN input before the model sees it. Switch provider or gateway, or use English for now."),
     };
   }
 
   if (lastCategory === "language_probe_inconclusive") {
     return {
-      value: isZh ? "\u5f85\u9a8c\u8bc1" : "Needs zh-CN test",
+      value: integrity("待验证", "Needs zh-CN test"),
       tone: "warn",
-      detail: isZh
-        ? "连接可以使用，但中文内容还没有验证完成。请先重新测试；必要时可暂时用英文继续。"
-        : "The connection is reachable, but zh-CN input is not fully verified yet. English fallback is safer until you retest.",
+      detail: integrity("连接可以使用，但中文内容还没有验证完成。请先重新测试；必要时可暂时用英文继续。", "The connection is reachable, but zh-CN input is not fully verified yet. English fallback is safer until you retest."),
     };
   }
 
   if (lastTest?.ok && lastTestWasZh) {
     return {
-      value: isZh ? "\u5df2\u9a8c\u8bc1" : "Verified",
+      value: integrity("已验证", "Verified"),
       tone: "connected",
-      detail: isZh
-        ? "\u6700\u8fd1\u4e00\u6b21\u6d4b\u8bd5\u5df2\u7ecf\u786e\u8ba4 zh-CN \u8f93\u5165\u80fd\u5b8c\u6574\u5230\u8fbe\u6a21\u578b\u3002"
-        : "The latest test confirmed zh-CN input reaches the model intact.",
+      detail: integrity("最近一次测试已经确认 zh-CN 输入能完整到达模型。", "The latest test confirmed zh-CN input reaches the model intact."),
     };
   }
 
   if (coachSendState.status === "warming" || coachSendState.status === "refreshing") {
     return {
-      value: isZh ? "\u68c0\u67e5\u4e2d" : "Checking",
+      value: integrity("检查中", "Checking"),
       tone: "pending",
-      detail: isZh
-        ? "\u7b49\u8fd9\u7ec4 provider \u5b8c\u6210 model \u786e\u8ba4\u540e\uff0c\u518d\u8dd1 zh-CN \u8f93\u5165\u68c0\u67e5\u3002"
-        : "Wait for model discovery to finish, then rerun the zh-CN check.",
+      detail: integrity("等这组 provider 完成 model 确认后，再跑 zh-CN 输入检查。", "Wait for model discovery to finish, then rerun the zh-CN check."),
     };
   }
 
   if (coachSendState.blocked) {
     return {
-      value: isZh ? "\u5f85\u6062\u590d" : "Unavailable",
+      value: integrity("待恢复", "Unavailable"),
       tone: "warn",
-      detail: isZh
-        ? "\u5148\u628a chat connection \u6062\u590d\u5230\u53ef\u7528\uff0c\u7136\u540e\u518d\u68c0\u67e5 zh-CN \u8f93\u5165\u5b8c\u6574\u6027\u3002"
-        : "Recover the chat connection first, then verify zh-CN input integrity.",
+      detail: integrity("先把 chat connection 恢复到可用，然后再检查 zh-CN 输入完整性。", "Recover the chat connection first, then verify zh-CN input integrity."),
     };
   }
 
   if (lastTest?.ok) {
     return {
-      value: isZh ? "\u672a\u6d4b zh-CN" : "zh-CN not tested",
+      value: integrity("未测 zh-CN", "zh-CN not tested"),
       tone: "pending",
-      detail: isZh
-        ? "\u8fd9\u6761 connection \u5df2\u901a\u8fc7\u6d4b\u8bd5\uff0c\u4f46\u6700\u8fd1\u4e00\u6b21\u8fd8\u4e0d\u662f zh-CN \u8f93\u5165\u3002\u5982\u679c\u4f60\u8981\u7528\u4e2d\u6587\u6559\u7ec3\uff0c\u8bf7\u518d\u8dd1\u4e00\u6b21 zh-CN \u6d4b\u8bd5\u3002"
-        : "This connection passed a test, but not with zh-CN input. Run one zh-CN test before relying on Chinese coaching.",
+      detail: integrity("这条 connection 已通过测试，但最近一次还不是 zh-CN 输入。如果你要用中文教练，请再跑一次 zh-CN 测试。", "This connection passed a test, but not with zh-CN input. Run one zh-CN test before relying on Chinese coaching."),
     };
   }
 
   return {
-    value: isZh ? "\u5f85\u6d4b\u8bd5" : "Run test",
+    value: integrity("待测试", "Run test"),
     tone: "pending",
-    detail: isZh
-      ? "\u8fde\u63a5\u5df2\u53ef\u7528\uff0c\u4f46 zh-CN \u8f93\u5165\u8fd8\u6ca1\u6709\u771f\u6b63\u9a8c\u8bc1\u8fc7\u3002"
-      : "The connection can work, but zh-CN input has not been verified yet.",
+    detail: integrity("连接已可用，但 zh-CN 输入还没有真正验证过。", "The connection can work, but zh-CN input has not been verified yet."),
   };
 }
 
