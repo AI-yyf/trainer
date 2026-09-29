@@ -205,7 +205,6 @@ def project_skills(
             "independent_attempt_count": 0,
         }
 
-    evidence_rows: dict[str, list[dict[str, Any]]] = {dim: [] for dim in _DIMENSIONS}
     independent_success_keys: dict[str, set[tuple[str, str]]] = {
         dim: set() for dim in _DIMENSIONS
     }
