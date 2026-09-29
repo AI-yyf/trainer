@@ -6,6 +6,28 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 
+// Mock vscode before requiring the compiled module (which imports vscode
+// at runtime for workspace.fs access and workspaceRoots imports).
+const Module = require('node:module');
+const _originalLoad = Module._load;
+Module._load = function patchedLoad(request, parent, isMain) {
+  if (request === 'vscode') {
+    return {
+      workspace: {
+        workspaceFolders: [],
+        fs: {
+          async stat() { throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' }); },
+          async readDirectory() { return []; },
+        },
+      },
+      FileType: { Directory: 2, File: 1 },
+      Uri: { parse: (v) => ({ fsPath: v, path: v, scheme: 'file' }) },
+      env: { remoteName: undefined },
+    };
+  }
+  return _originalLoad.call(this, request, parent, isMain);
+};
+
 const trainerWorkspaceServiceModulePath = path.resolve(
   __dirname,
   '..',

@@ -1,0 +1,1185 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Trainer — Intro Deck</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --ink:   #06060a;
+    --ink2:  #0b0b11;
+    --fg:    #f2f0ec;
+    --mut:   #8f8b85;
+    --gold:  #d9b273;
+    --taupe: #9d907a;
+    --teal:  #4ec9b0;
+    --violet:#8b7cf6;
+    --rose:  #f48771;
+    --ui: -apple-system, "SF Pro Display", "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    --mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, "Noto Sans Mono CJK SC", monospace;
+  }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--ink); }
+  body { font-family: var(--ui); color: var(--fg); -webkit-font-smoothing: antialiased; }
+
+  #stage { position: absolute; inset: 0; overflow: hidden; }
+  #bgcanvas { position: absolute; inset: 0; }
+  #aurora { position: absolute; inset: -20%; pointer-events: none; }
+  .aur {
+    position: absolute; border-radius: 50%; filter: blur(120px); opacity: 0;
+    will-change: transform, opacity;
+  }
+
+  /* vignette + grain */
+  #vig { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 78% 68% at 50% 48%, transparent 40%, rgba(0,0,0,.55) 100%); }
+  #grain { position: absolute; inset: 0; pointer-events: none; opacity: .045; mix-blend-mode: overlay; }
+
+  .scene { position: absolute; inset: 0; will-change: opacity; }
+
+  /* ---------- type ---------- */
+  .h1 { font-size: 132px; font-weight: 800; letter-spacing: -0.045em; line-height: .95; }
+  .h2 { font-size: 76px; font-weight: 750; letter-spacing: -0.035em; line-height: 1.05; }
+  .h3 { font-size: 46px; font-weight: 700; letter-spacing: -0.028em; line-height: 1.15; }
+  .lede { font-size: 27px; font-weight: 400; color: var(--mut); letter-spacing: .01em; line-height: 1.5; }
+  .eyebrow { font-size: 15px; font-weight: 650; letter-spacing: .34em; color: var(--taupe); text-transform: uppercase; }
+  .mono { font-family: var(--mono); }
+  .gold { color: var(--gold); }
+  .teal { color: var(--teal); }
+  .rose { color: var(--rose); }
+  .ch { display: inline-block; will-change: transform, opacity; }
+
+  /* ---------- window ---------- */
+  .win { position: absolute; will-change: transform, opacity; }
+  .win-bar {
+    height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 14px;
+    background: linear-gradient(180deg, #1b1b22, #131318);
+    border: 1px solid rgba(255,255,255,.09); border-bottom: none;
+    border-radius: 14px 14px 0 0;
+  }
+  .win-bar i { width: 11px; height: 11px; border-radius: 50%; background: #3a3a44; display: block; }
+  .win-bar i:nth-child(1) { background: #45343a; }
+  .win-bar i:nth-child(2) { background: #3d3a2e; }
+  .win-bar i:nth-child(3) { background: #2f3d3a; }
+  .win-title { font-size: 12.5px; color: #7d7a76; margin-left: 8px; letter-spacing: .04em; font-family: var(--mono); }
+  .win-body {
+    position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,.09);
+    border-radius: 0 0 14px 14px; background: #0e0e13;
+  }
+  .win-body img { display: block; width: 100%; }
+  .win-glow { position: absolute; inset: -14% -8%; border-radius: 50%; filter: blur(70px); z-index: -1; }
+
+  /* ---------- chips / cards ---------- */
+  .card {
+    position: absolute; will-change: transform, opacity;
+    background: linear-gradient(160deg, rgba(28,28,36,.92), rgba(15,15,20,.92));
+    border: 1px solid rgba(255,255,255,.10); border-radius: 16px;
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,.9);
+    backdrop-filter: blur(8px);
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 9px; padding: 9px 16px; border-radius: 999px;
+    background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.10);
+    font-size: 16px; color: #cfcbc5; will-change: transform, opacity;
+  }
+  .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); }
+  .kbd { font-family: var(--mono); font-size: 15px; color: var(--mut); }
+
+  /* code panel */
+  .code {
+    font-family: var(--mono); font-size: 16px; line-height: 1.75; color: #cfcbc5;
+    white-space: pre; will-change: opacity;
+  }
+  .code .k { color: #c792ea; } .code .f { color: #82aaff; }
+  .code .s { color: #c3e88d; } .code .n { color: #f78c6c; }
+  .code .c { color: #5c6470; } .code .t { color: #ffcb6b; }
+
+  .caret { display: inline-block; width: 9px; height: 20px; background: var(--gold); vertical-align: -3px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bgcanvas" width="1920" height="1080"></canvas>
+  <div id="aurora">
+    <div class="aur" id="aur1"></div>
+    <div class="aur" id="aur2"></div>
+    <div class="aur" id="aur3"></div>
+  </div>
+  <div id="vig"></div>
+  <div id="grain"></div>
+  <div class="scene" id="s-boot"></div>
+  <div class="scene" id="s-problem"></div>
+  <div class="scene" id="s-reveal"></div>
+  <div class="scene" id="s-coach"></div>
+  <div class="scene" id="s-plan"></div>
+  <div class="scene" id="s-res"></div>
+  <div class="scene" id="s-train"></div>
+  <div class="scene" id="s-arch"></div>
+  <div class="scene" id="s-scale"></div>
+  <div class="scene" id="s-outro"></div>
+</div>
+
+<script>
+/* =======================================================================
+   Deterministic timeline. Everything is a pure function of t (seconds),
+   so frame N always renders identically — required for frame-accurate
+   capture. No CSS animations, no Math.random at draw time.
+   ======================================================================= */
+const W = 1920, H = 1080, FPS = 30, DURATION = 62.0;
+
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+const lerp = (a, b, k) => a + (b - a) * k;
+const seg = (t, a, b) => clamp01((t - a) / (b - a));
+const eOut = k => 1 - Math.pow(1 - k, 3);
+const eIn = k => k * k * k;
+const eIO = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const eExpo = k => k >= 1 ? 1 : 1 - Math.pow(2, -10 * k);
+const eBack = k => { const c = 1.9; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
+const sstep = (a, b, x) => { const k = clamp01((x - a) / (b - a)); return k * k * (3 - 2 * k); };
+// enter (a→b) then exit (c→d) envelope
+const env = (t, a, b, c, d) => sstep(a, b, t) * (1 - sstep(c, d, t));
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let x = Math.imul(a ^ a >>> 15, 1 | a);
+    x = x + Math.imul(x ^ x >>> 7, 61 | x) ^ x;
+    return ((x ^ x >>> 14) >>> 0) / 4294967296;
+  };
+}
+const R = mulberry32(20260929);
+
+/* ---------- deterministic particle field ---------- */
+const NP = 78;
+const parts = [];
+for (let i = 0; i < NP; i++) {
+  parts.push({
+    x: R(), y: R(),
+    vx: (R() - .5) * .012, vy: (R() - .5) * .012,
+    r: .6 + R() * 1.7,
+    h: R(),
+    ph: R() * 6.283,
+  });
+}
+const cv = document.getElementById('bgcanvas');
+const cx = cv.getContext('2d');
+
+function drawField(t, intensity) {
+  cx.clearRect(0, 0, W, H);
+  if (intensity <= 0.001) return;
+  // perspective dot grid, drifting
+  cx.save();
+  cx.globalAlpha = .30 * intensity;
+  cx.strokeStyle = 'rgba(157,144,122,0.13)';
+  cx.lineWidth = 1;
+  const off = (t * 9) % 64;
+  for (let x = -64; x < W + 64; x += 64) {
+    cx.beginPath(); cx.moveTo(x + off * .12, 0); cx.lineTo(x + off * .12, H); cx.stroke();
+  }
+  for (let y = -64; y < H + 64; y += 64) {
+    cx.beginPath(); cx.moveTo(0, y); cx.lineTo(W, y); cx.stroke();
+  }
+  cx.restore();
+
+  // drifting motes + constellation links
+  const px = i => ((parts[i].x + parts[i].vx * t) % 1 + 1) % 1 * W;
+  const py = i => ((parts[i].y + parts[i].vy * t) % 1 + 1) % 1 * H;
+  cx.save();
+  for (let i = 0; i < NP; i++) {
+    for (let j = i + 1; j < NP; j++) {
+      const dx = px(i) - px(j), dy = py(i) - py(j);
+      const d2 = dx * dx + dy * dy;
+      if (d2 < 46000) {
+        const a = (1 - d2 / 46000) * .16 * intensity;
+        cx.strokeStyle = `rgba(217,178,115,${a.toFixed(3)})`;
+        cx.lineWidth = 1;
+        cx.beginPath(); cx.moveTo(px(i), py(i)); cx.lineTo(px(j), py(j)); cx.stroke();
+      }
+    }
+  }
+  for (let i = 0; i < NP; i++) {
+    const hue = parts[i].h;
+    const col = hue < .5 ? '217,178,115' : hue < .82 ? '78,201,176' : '139,124,246';
+    const a = (.20 + .35 * (0.5 + 0.5 * Math.sin(t * 1.5 + parts[i].ph))) * intensity;
+    cx.fillStyle = `rgba(${col},${a.toFixed(3)})`;
+    cx.beginPath(); cx.arc(px(i), py(i), parts[i].r, 0, 6.2832); cx.fill();
+  }
+  cx.restore();
+}
+
+/* ---------- film grain (static, generated once) ---------- */
+(function grain() {
+  const g = document.getElementById('grain');
+  const c = document.createElement('canvas'); c.width = 240; c.height = 135;
+  const x = c.getContext('2d');
+  const id = x.createImageData(240, 135);
+  const gr = mulberry32(7);
+  for (let i = 0; i < id.data.length; i += 4) {
+    const v = 120 + gr() * 135;
+    id.data[i] = id.data[i+1] = id.data[i+2] = v; id.data[i+3] = 255;
+  }
+  x.putImageData(id, 0, 0);
+  g.style.backgroundImage = `url(${c.toDataURL()})`;
+})();
+
+/* ---------- dom helpers ---------- */
+const $ = s => document.querySelector(s);
+const el = (tag, cls, html) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (html != null) n.innerHTML = html;
+  return n;
+};
+function chars(host, text, cls) {
+  host.innerHTML = '';
+  const out = [];
+  for (const ch of text) {
+    const s = el('span', 'ch' + (cls ? ' ' + cls : ''), ch === ' ' ? '&nbsp;' : ch);
+    host.appendChild(s); out.push(s);
+  }
+  return out;
+}
+function setT(node, { o = 1, x = 0, y = 0, s = 1, r = 0, rz = 0, rx = 0, ry = 0, b = 0, sx = 1, sy = 1 } = {}) {
+  let tr = '';
+  if (x || y) tr += `translate3d(${x.toFixed(2)}px,${y.toFixed(2)}px,0) `;
+  if (r) tr += `rotate(${r.toFixed(3)}deg) `;
+  if (rz) tr += `rotateZ(${rz.toFixed(3)}deg) `;
+  if (rx) tr += `rotateX(${rx.toFixed(3)}deg) `;
+  if (ry) tr += `rotateY(${ry.toFixed(3)}deg) `;
+  if (s !== 1) tr += `scale(${s.toFixed(4)}) `;
+  if (sx !== 1 || sy !== 1) tr += `scale(${sx.toFixed(4)},${sy.toFixed(4)}) `;
+  node.style.transform = tr || 'none';
+  node.style.opacity = o;
+  node.style.filter = b ? `blur(${b.toFixed(2)}px)` : 'none';
+}
+const hide = n => { n.style.opacity = 0; };
+
+/* =======================================================================
+   SCENES
+   ======================================================================= */
+
+/* ---------- S1 · BOOT  0 → 5.5 ---------- */
+const boot = (() => {
+  const root = $('#s-boot');
+  const eb = el('div', 'eyebrow', 'TRAINER');
+  eb.style.cssText = 'position:absolute;left:960px;top:250px;transform:translateX(-50%)';
+  root.appendChild(eb);
+
+  const word = el('div', 'h1');
+  word.style.cssText = 'position:absolute;left:960px;top:322px;transform:translateX(-50%)';
+  root.appendChild(word);
+  const letters = chars(word, 'TRAINER');
+
+  const rule = el('div', '');
+  rule.style.cssText = 'position:absolute;left:960px;top:472px;height:2px;width:0;transform:translateX(-50%);background:linear-gradient(90deg,transparent,var(--gold),transparent);box-shadow:0 0 30px rgba(217,178,115,.7)';
+  root.appendChild(rule);
+
+  const sub = el('div', 'h3');
+  sub.style.cssText = 'position:absolute;left:960px;top:520px;transform:translateX(-50%);color:#b9b4ac';
+  root.appendChild(sub);
+  const subChars = chars(sub, '对话式编程训练工作台');
+
+  const sub2 = el('div', 'lede mono');
+  sub2.style.cssText = 'position:absolute;left:960px;top:594px;transform:translateX(-50%);font-size:20px;letter-spacing:.10em;color:#6f6b66';
+  sub2.textContent = 'VS Code EXTENSION  ·  LOCAL BRAIN  ·  REMOTE HANDS';
+  root.appendChild(sub2);
+
+  const ring = el('div', '');
+  ring.style.cssText = 'position:absolute;left:960px;top:392px;width:560px;height:560px;margin:-280px 0 0 -280px;border-radius:50%;border:1px solid rgba(217,178,115,.16)';
+  root.appendChild(ring);
+  const ring2 = el('div', '');
+  ring2.style.cssText = 'position:absolute;left:960px;top:392px;width:820px;height:820px;margin:-410px 0 0 -410px;border-radius:50%;border:1px solid rgba(217,178,115,.09)';
+  root.appendChild(ring2);
+
+  return function (t) {
+    // letter scatter-in
+    letters.forEach((n, i) => {
+      const k = eExpo(seg(t, .35 + i * .085, 1.05 + i * .085));
+      const sc = mulberry32(1000 + i);
+      const ax = (sc() - .5) * 900, ay = (sc() - .5) * 460, ar = (sc() - .5) * 190;
+      setT(n, {
+        o: k,
+        x: ax * (1 - k), y: ay * (1 - k) + (1 - k) * 40,
+        r: ar * (1 - k), s: lerp(.6, 1, k), b: (1 - k) * 12,
+      });
+    });
+    const kT = seg(t, .5, 1.4);
+    setT(eb, { o: kT, y: (1 - eOut(kT)) * -14, b: (1 - kT) * 6 });
+
+    const kR = eOut(seg(t, 1.0, 1.9));
+    rule.style.width = (kR * 520).toFixed(1) + 'px';
+    setT(rule, { o: .85 * kR });
+
+    subChars.forEach((n, i) => {
+      const k = eOut(seg(t, 1.7 + i * .045, 2.35 + i * .045));
+      setT(n, { o: k, y: (1 - k) * 22, b: (1 - k) * 8 });
+    });
+    setT(sub2, { o: seg(t, 2.5, 3.3), y: (1 - eOut(seg(t, 2.5, 3.3))) * 16 });
+
+    // rings breathe
+    setT(ring, { o: .5 + .5 * .3, s: 1 + .06 * Math.sin(t * 1.1), r: t * 6 });
+    setT(ring2, { o: 1, s: 1 + .05 * Math.sin(t * .8 + 1.4), r: -t * 4 });
+
+    // whole-scene push-out at the end
+    const out = seg(t, 4.7, 5.5);
+    setT(root, { o: 1 - out, s: 1 + out * .18, b: out * 14 });
+  };
+})();
+
+/* ---------- S2 · PROBLEM  5.5 → 12.0 ---------- */
+const problem = (() => {
+  const root = $('#s-problem');
+  const eb = el('div', 'eyebrow', 'THE PROBLEM');
+  eb.style.cssText = 'position:absolute;left:180px;top:196px';
+  const head = el('div', 'h2');
+  head.style.cssText = 'position:absolute;left:180px;top:240px';
+  root.append(eb, head);
+  const hc = chars(head, '学习是离散的');
+
+  const items = [
+    { t: '读文档', c: '#9d907a' }, { t: '刷题', c: '#8b7cf6' }, { t: '写代码', c: '#4ec9b0' },
+    { t: '改需求', c: '#f48771' }, { t: '查资料', c: '#d9b273' },
+  ];
+  const nodes = items.map((it, i) => {
+    const c = el('div', 'card');
+    c.style.cssText = `left:0;top:0;width:236px;height:112px;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;letter-spacing:.02em;color:${it.c};border-color:${it.c}33`;
+    c.textContent = it.t;
+    root.appendChild(c);
+    return c;
+  });
+
+  // snap lines between neighbours
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.style.cssText = 'position:absolute;inset:0';
+  const lines = [];
+  for (let i = 0; i < 4; i++) {
+    const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    l.setAttribute('stroke-dasharray', '7 9');
+    svg.appendChild(l); lines.push(l);
+  }
+  root.appendChild(svg);
+
+  const stats = [
+    ['14', '个浏览器标签页'],
+    ['37', '条收藏夹链接'],
+    ['0', '次自动复习调度'],
+  ].map(([v, l], i) => {
+    const c = el('div', '');
+    c.style.cssText = `position:absolute;left:${180 + i * 330}px;top:806px;width:300px`;
+    c.innerHTML = `<div style="font-family:var(--mono);font-size:66px;font-weight:700;color:#5f5b57;line-height:1">${v}</div>
+                   <div style="font-size:19px;color:#6f6b66;margin-top:12px">${l}</div>`;
+    root.appendChild(c); return c;
+  });
+
+  const verdict = el('div', 'h3');
+  verdict.style.cssText = 'position:absolute;left:180px;top:948px;color:var(--rose)';
+  verdict.textContent = '知识记住了，但没有变成能力';
+  root.appendChild(verdict);
+
+  // layout targets
+  const layout = [
+    { x: 360, y: 470, r: -13 }, { x: 760, y: 400, r: 8 }, { x: 1180, y: 500, r: -5 },
+    { x: 600, y: 660, r: 15 }, { x: 1500, y: 372, r: -19 },
+  ];
+
+  return function (t) {
+    const local = t - 5.5;
+    hc.forEach((n, i) => {
+      const k = eOut(seg(t, 5.7 + i * .06, 6.3 + i * .06));
+      setT(n, { o: k, y: (1 - k) * 26, b: (1 - k) * 10 });
+    });
+    setT(eb, { o: seg(t, 5.6, 6.1) });
+
+    const inK = seg(local, .35, 1.5);
+    nodes.forEach((n, i) => {
+      const k = eBack(seg(local, .35 + i * .13, 1.35 + i * .13));
+      const L = layout[i];
+      // drift outward slowly, jitter when the "links" break
+      const shake = sstep(6.2, 6.9, local) * (1 - sstep(7.2, 7.9, local));
+      const jx = shake ? Math.sin(local * 34 + i) * 9 * shake : 0;
+      const jy = shake ? Math.cos(local * 29 + i * 2) * 7 * shake : 0;
+      setT(n, {
+        o: k * (1 - sstep(7.0, 7.6, local) * .0),
+        x: lerp(960, L.x, k) + jx,
+        y: lerp(560, L.y, k) + jy,
+        r: lerp(0, L.r, k),
+        s: lerp(.5, 1, k),
+      });
+    });
+
+    // lines draw then snap red
+    const draw = eOut(seg(local, 1.5, 2.6));
+    const broken = sstep(6.2, 6.8, local);
+    nodes.forEach((n, i) => {
+      if (i >= nodes.length - 1) return;
+      const a = nodes[i], b = nodes[i + 1];
+      const ax = a.getBoundingClientRect();
+      // use layout numbers (transform already applied) — recompute from current t
+      const pa = currentPos(i, local), pb = currentPos(i + 1, local);
+      const l = lines[i];
+      l.setAttribute('x1', pa.x + 118); l.setAttribute('y1', pa.y + 56);
+      l.setAttribute('x2', pa.x + 118 + (pb.x - pa.x) * draw);
+      l.setAttribute('y2', pa.y + 56 + (pb.y - pa.y) * draw);
+      l.setAttribute('stroke', broken > .5 ? 'rgba(244,135,113,.55)' : 'rgba(157,144,122,.42)');
+      l.setAttribute('stroke-width', 1.5);
+      l.setAttribute('opacity', (.55 * draw * (1 - sstep(6.4, 7.1, local))).toFixed(3));
+    });
+
+    stats.forEach((n, i) => {
+      const k = eOut(seg(local, 3.0 + i * .18, 3.7 + i * .18));
+      setT(n, { o: k, y: (1 - k) * 20, b: (1 - k) * 6 });
+    });
+    setT(verdict, { o: seg(local, 4.0, 4.7), y: (1 - eOut(seg(local, 4.0, 4.7))) * 18 });
+
+    // everything snaps apart at the very end
+    const blow = sstep(6.6, 7.0, local);
+    if (blow > 0) {
+      nodes.forEach((n, i) => {
+        const s = mulberry32(500 + i);
+        const dx = (s() - .5) * 1900, dy = (s() - .5) * 900;
+        const cur = currentPos(i, local);
+        const curR = parseFloat((n.style.transform.match(/rotate\(([-\d.]+)deg\)/) || [0, 0])[1]) || 0;
+        n.style.transform = `translate3d(${cur.x + dx * blow}px,${cur.y + dy * blow}px,0) rotate(${curR + (s() - .5) * 160 * blow}deg)`;
+      });
+    }
+  };
+
+  function currentPos(i, local) {
+    const k = eBack(seg(local, .35 + i * .13, 1.35 + i * .13));
+    const L = layout[i];
+    return { x: lerp(960, L.x, k), y: lerp(560, L.y, k) };
+  }
+})();
+
+/* ---------- S3 · REVEAL  12.0 → 18.0 ---------- */
+const reveal = (() => {
+  const root = $('#s-reveal');
+  const eb = el('div', 'eyebrow', 'THE WORKBENCH');
+  eb.style.cssText = 'position:absolute;left:150px;top:196px';
+  const h = el('div', 'h2');
+  h.style.cssText = 'position:absolute;left:150px;top:236px;font-size:66px';
+  h.innerHTML = `一个工作台<br><span class="gold">五条主线</span>`;
+  const lede = el('div', 'lede');
+  lede.style.cssText = 'position:absolute;left:150px;top:412px;width:420px;font-size:22px';
+  lede.innerHTML = '对话、学习、资料、训练、设置——<br>围绕同一个学习者，同一份上下文。';
+  root.append(eb, h, lede);
+
+  const views = [
+    { id: 'coach', label: '对话', en: 'Coach', shot: 'shots/coach-rich.png' },
+    { id: 'plan', label: '学习', en: 'Plan', shot: 'shots/plan-ready.png' },
+    { id: 'res', label: '资料', en: 'Resources', shot: 'shots/res-preview.png' },
+    { id: 'train', label: '训练', en: 'Training', shot: 'shots/train-fn.png' },
+    { id: 'set', label: '设置', en: 'Settings', shot: 'shots/settings.png' },
+  ];
+  const wins = views.map((v, i) => {
+    const w = el('div', 'win');
+    w.style.cssText = `left:0;top:0;width:262px;perspective:1400px`;
+    w.innerHTML = `
+      <div class="win-glow" style="background:radial-gradient(closest-side,rgba(217,178,115,.20),transparent)"></div>
+      <div class="win-bar"><i></i><i></i><i></i><span class="win-title">trainer · ${v.en}</span></div>
+      <div class="win-body"><img src="${v.shot}"></div>`;
+    root.appendChild(w);
+    const cap = el('div', '');
+    cap.style.cssText = 'position:absolute;left:0;top:0;width:262px;text-align:center';
+    cap.innerHTML = `<div style="font-size:24px;font-weight:700;letter-spacing:.08em">${v.label}</div>
+                     <div class="mono" style="font-size:13px;color:#6b6762;margin-top:6px;letter-spacing:.12em">${v.en.toUpperCase()}</div>`;
+    root.appendChild(cap);
+    return { w, cap, i, v };
+  });
+
+  return function (t) {
+    const local = t - 12.0;
+    setT(eb, { o: seg(t, 12.1, 12.6) });
+    setT(h, { o: seg(t, 12.2, 12.9), y: (1 - eOut(seg(t, 12.2, 12.9))) * 24 });
+    setT(lede, { o: seg(t, 13.0, 13.7), y: (1 - eOut(seg(t, 13.0, 13.7))) * 18 });
+
+    // windows fan in with 3D
+    const fly = seg(local, .5, 2.4);
+    wins.forEach(({ w, cap, i }, n) => {
+      const k = eBack(seg(local, .5 + n * .16, 2.0 + n * .16));
+      const x = lerp(1760, 620 + n * 258, k);
+      const y = lerp(300 + n * 22, 452, k);
+      const ry = lerp(-58, -13 + n * 1.2, k);
+      const sc = lerp(.62, 1, k);
+      setT(w, { o: k, x, y, ry, rx: 6, s: sc, b: (1 - k) * 14 });
+      w.style.zIndex = String(10 - Math.abs(n - 2));
+      setT(cap, { o: k, x, y: y + 640, ry: 0, s: 1 });
+    });
+
+    // active-tab underline sweeps across the strip
+    const sweep = (local - 2.6) / 1.9;
+    if (sweep >= 0) {
+      const p = (Math.sin(sweep * Math.PI * 2 - Math.PI / 2) * .5 + .5) * 4;
+      const idx = Math.round(p);
+      const x = 620 + idx * 258 + 131;
+      const bar = document.getElementById('tabbar') || (() => {
+        const b = el('div', '');
+        b.id = 'tabbar';
+        b.style.cssText = 'position:absolute;left:0;top:0;height:2px;width:74px;border-radius:2px;background:var(--gold);box-shadow:0 0 22px rgba(217,178,115,.85)';
+        root.appendChild(b); return b;
+      })();
+      setT(bar, { x: x - 37, y: 430, o: clamp01(1.6 - Math.abs(sweep - 1) * 1.6) });
+    }
+  };
+})();
+
+/* ---------- shared: product window factory ---------- */
+function productWin({ shot, w, title, sub, x, y, host, glow = 'rgba(217,178,115,.22)' }) {
+  const n = el('div', 'win');
+  n.style.cssText = `left:0;top:0;width:${w}px`;
+  n.innerHTML = `
+    <div class="win-glow" style="background:radial-gradient(closest-side,${glow},transparent)"></div>
+    <div class="win-bar"><i></i><i></i><i></i><span class="win-title">${title}</span>
+      <span class="win-title" style="margin-left:auto;margin-right:4px">${sub}</span></div>
+    <div class="win-body"><img src="${shot}"></div>`;
+  host.appendChild(n);
+  return n;
+}
+
+/* ---------- S4 · COACH  18.0 → 26.0 ---------- */
+const coachScene = (() => {
+  const root = $('#s-coach');
+  const eb = el('div', 'eyebrow', '01 · COACH');
+  eb.style.cssText = 'position:absolute;left:1120px;top:196px';
+  const h = el('div', 'h2');
+  h.style.cssText = 'position:absolute;left:1120px;top:238px;font-size:64px';
+  h.innerHTML = `ReAct<br><span class="gold">教练循环</span>`;
+  root.append(eb, h);
+
+  const win = productWin({
+    shot: 'shots/coach-rich.png', w: 560, title: 'trainer · coach',
+    sub: 'gpt-4.1-mini', host: root, glow: 'rgba(217,178,115,.24)',
+  });
+
+  // tool-call chain
+  const chain = el('div', '');
+  chain.style.cssText = 'position:absolute;left:1120px;top:474px;width:600px';
+  root.appendChild(chain);
+  const steps = [
+    ['think', '整理问题', 'var(--taupe)'],
+    ['read_file', 'src/api/session.ts', 'var(--gold)'],
+    ['lsp_diagnostics', '3 个错误 · 0 个致命', 'var(--rose)'],
+    ['reply', '先讲清楚边界，再动手', 'var(--teal)'],
+  ];
+  const stepNodes = steps.map(([name, detail, c], i) => {
+    const n = el('div', '');
+    n.style.cssText = `display:flex;align-items:center;gap:14px;height:56px;opacity:0`;
+    n.innerHTML = `<div style="width:9px;height:9px;border-radius:50%;background:${c};box-shadow:0 0 16px ${c};flex:none"></div>
+      <div class="mono" style="font-size:19px;color:${c};width:190px;letter-spacing:-.01em">${name}</div>
+      <div style="font-size:17px;color:#807b75">${detail}</div>`;
+    chain.appendChild(n); return n;
+  });
+
+  const loopBar = el('div', '');
+  loopBar.style.cssText = 'position:absolute;left:1120px;top:722px;height:2px;width:0;background:linear-gradient(90deg,var(--gold),var(--teal));box-shadow:0 0 20px rgba(217,178,115,.6)';
+  root.appendChild(loopBar);
+  const loopTxt = el('div', 'mono');
+  loopTxt.style.cssText = 'position:absolute;left:1120px;top:748px;font-size:15px;color:#6b6762;letter-spacing:.06em';
+  root.appendChild(loopTxt);
+
+  // typing stream box
+  const stream = el('div', 'code');
+  stream.style.cssText = 'position:absolute;left:1120px;top:812px;width:600px;height:96px;opacity:0';
+  root.appendChild(stream);
+  const STREAM = '<span class="c">// 教练会先读，再讲</span>\n<span class="k">先确认边界</span>：把函数契约讲清楚，\n再给一个能跑的最小改法。';
+  stream.innerHTML = STREAM;
+
+  return function (t) {
+    const local = t - 18.0;
+    setT(eb, { o: seg(t, 18.1, 18.6) });
+    setT(h, { o: seg(t, 18.2, 18.9), y: (1 - eOut(seg(t, 18.2, 18.9))) * 24 });
+
+    // window slides in from left, subtle parallax
+    const k = eExpo(seg(local, .1, 1.5));
+    setT(win, { o: k, x: lerp(-620, 470, k), y: lerp(120, 250, k), s: lerp(.94, 1, k), b: (1 - k) * 12, rx: lerp(5, 0, k) });
+
+    // tool chain steps
+    stepNodes.forEach((n, i) => {
+      const kk = eOut(seg(local, 1.4 + i * .42, 2.3 + i * .42));
+      setT(n, { o: kk, x: (1 - kk) * -26, s: lerp(.94, 1, kk) });
+    });
+
+    // loop bar fills as steps complete, then repeats once
+    const loop = seg(local, 1.5, 3.4);
+    const rep = (local - 4.4) / 2.4;
+    const rr = rep >= 0 ? (rep % 1) : 0;
+    const useRep = rep >= 0;
+    const lv = useRep ? rr : loop;
+    loopBar.style.width = (clamp01(lv) * 600).toFixed(1) + 'px';
+    loopTxt.textContent = useRep
+      ? `循环 ${Math.floor(rep) + 2} · turn ${3 + Math.floor(rep)} · 工具 ${Math.min(6, 2 + Math.floor(rep) * 2)} 次`
+      : '循环 1 · turn 3 · 思考 → 工具 → 观察 → 回答';
+
+    // streaming type-on
+    const flat = STREAM.replace(/<[^>]+>/g, '');
+    const total = flat.length;
+    const tk = useRep ? clamp01((rr - .45) / .4) : clamp01((local - 4.6) / 1.5);
+    // rebuild with markup, cutting at tk
+    const idx = Math.floor(tk * total);
+    stream.innerHTML = sliceMarkup(STREAM, idx) + (tk > .96 ? '<span class="caret"></span>' : '');
+    setT(stream, { o: useRep ? clamp01((rr - .4) / .1) : clamp01((local - 4.5) / .4) });
+  };
+
+  function sliceMarkup(s, n) {
+    let out = '', count = 0, open = false;
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (c === '<') { out += c; if (s[i + 1] !== '/') open = true; continue; }
+      if (c === '>') { out += c; if (s[i - 1] !== '/') open = false; continue; }
+      if (open) { out += c; continue; }
+      if (count >= n) break;
+      out += c; count++;
+    }
+    return out;
+  }
+})();
+
+/* ---------- S5 · PLAN  26.0 → 32.0 ---------- */
+const planScene = (() => {
+  const root = $('#s-plan');
+  const eb = el('div', 'eyebrow', '02 · PLAN');
+  eb.style.cssText = 'position:absolute;left:150px;top:196px';
+  const h = el('div', 'h2');
+  h.style.cssText = 'position:absolute;left:150px;top:236px;font-size:60px';
+  h.innerHTML = `计划带锁，<br><span class="gold">证据诚实</span>`;
+  root.append(eb, h);
+
+  const win = productWin({
+    shot: 'shots/plan-ready.png', w: 520, title: 'trainer · plan',
+    sub: 'stage 2 / 5', host: root, glow: 'rgba(139,124,246,.22)',
+  });
+
+  // revision badge
+  const rev = el('div', 'card');
+  rev.style.cssText = 'left:0;top:0;width:250px;height:96px;padding:16px 20px;opacity:0;border-color:rgba(139,124,246,.35)';
+  rev.innerHTML = `<div style="font-size:13px;color:#7a756f;letter-spacing:.14em">PLAN REVISION</div>
+    <div class="mono" style="font-size:32px;color:#b3a8ff;margin-top:8px">r-<span id="revn">7</span>
+      <span style="font-size:14px;color:#6b6762">· optimistic lock</span></div>`;
+  root.appendChild(rev);
+
+  // conflict toast
+  const toast = el('div', 'card');
+  toast.style.cssText = 'left:0;top:0;width:520px;height:86px;padding:14px 20px;opacity:0;border-color:rgba(244,135,113,.42);background:linear-gradient(160deg,rgba(48,26,26,.94),rgba(20,14,16,.94))';
+  toast.innerHTML = `<div style="display:flex;gap:12px;align-items:center">
+      <div style="color:var(--rose);font-size:22px">⚠</div>
+      <div><div style="font-size:17px;color:#f0d6d0">计划已被其他窗口更新</div>
+      <div class="mono" style="font-size:13px;color:#a2705f;margin-top:4px">409 plan_revision_conflict → 合并后重试</div></div>
+    </div>`;
+  root.appendChild(toast);
+
+  // evidence badges
+  const evBox = el('div', '');
+  evBox.style.cssText = 'position:absolute;left:150px;top:648px;width:820px;opacity:0';
+  root.appendChild(evBox);
+  const evs = [
+    ['自述证据', 'self_reported', '#8a857f', '客户端说的，不算数'],
+    ['宿主背书', 'host_attested', 'var(--teal)', 'VS Code Testing API 签发'],
+    ['引用锚点', 'resource · hash · location', 'var(--gold)', '源被删 → 引用自动作废'],
+  ];
+  const evNodes = evs.map(([cn, en, c, d], i) => {
+    const n = el('div', 'card');
+    n.style.cssText = `left:${i * 278}px;top:0;width:256px;height:132px;padding:18px 20px;opacity:0;border-color:${c}38`;
+    n.innerHTML = `<div style="display:flex;align-items:center;gap:9px">
+        <div style="width:16px;height:18px;flex:none;opacity:.9">
+          <svg viewBox="0 0 20 20" width="16" height="18"><path d="M10 2 4 5v5c0 3.5 2.5 6 6 7.5 3.5-1.5 6-4 6-7.5V5z" fill="none" stroke="${c}" stroke-width="1.6"/>
+          <path d="m7.4 10 2 2 3.4-3.6" fill="none" stroke="${c}" stroke-width="1.6"/></svg>
+        </div>
+        <div style="font-size:20px;font-weight:700;color:${c}">${cn}</div></div>
+      <div class="mono" style="font-size:12.5px;color:#7d7873;margin-top:10px;letter-spacing:-.01em">${en}</div>
+      <div style="font-size:14px;color:#6b6762;margin-top:8px">${d}</div>`;
+    evBox.appendChild(n); return n;
+  });
+
+  return function (t) {
+    const local = t - 26.0;
+    setT(eb, { o: seg(t, 26.1, 26.6) });
+    setT(h, { o: seg(t, 26.2, 26.9), y: (1 - eOut(seg(t, 26.2, 26.9))) * 24 });
+    const k = eExpo(seg(local, .1, 1.3));
+    setT(win, { o: k, x: lerp(-560, 470, k), y: lerp(140, 268, k), s: lerp(.93, 1, k), b: (1 - k) * 12, rx: lerp(5, 0, k) });
+
+    // revision ticks
+    const rn = document.getElementById('revn');
+    const rk = eOut(seg(local, 1.6, 2.6));
+    setT(rev, { o: sstep(1.5, 2.0, local), x: lerp(-30, 0, rk), y: lerp(0, 452, rk) });
+    if (rn) rn.textContent = String(7 + Math.min(4, Math.floor(rk * 4.99)));
+
+    // toast slides in at the moment of conflict
+    const tk = eOut(seg(local, 2.8, 3.5));
+    setT(toast, { o: sstep(2.7, 3.0, local) * (1 - sstep(5.2, 5.9, local)), x: lerp(-40, 0, tk), y: 592 });
+
+    evNodes.forEach((n, i) => {
+      const kk = eOut(seg(local, 3.3 + i * .22, 4.1 + i * .22));
+      setT(n, { o: kk, y: (1 - kk) * 26, s: lerp(.95, 1, kk), b: (1 - kk) * 8 });
+    });
+  };
+})();
+
+/* ---------- S6 · RESOURCES  32.0 → 37.0 ---------- */
+const resScene = (() => {
+  const root = $('#s-res');
+  const eb = el('div', 'eyebrow', '03 · RESOURCES');
+  eb.style.cssText = 'position:absolute;left:1120px;top:196px';
+  const h = el('div', 'h2');
+  h.style.cssText = 'position:absolute;left:1120px;top:236px;font-size:60px';
+  h.innerHTML = `资料进得来，<br><span class="gold">搜得到</span>`;
+  root.append(eb, h);
+
+  const win = productWin({
+    shot: 'shots/res-preview.png', w: 500, title: 'trainer · resources',
+    sub: 'FTS5', host: root, glow: 'rgba(78,201,176,.22)',
+  });
+
+  // search box typing
+  const box = el('div', 'card');
+  box.style.cssText = 'left:0;top:0;width:560px;height:62px;display:flex;align-items:center;gap:12px;padding:0 20px;opacity:0';
+  box.innerHTML = `<div style="color:#6b6762;font-size:18px">⌕</div>
+    <div class="mono" id="q" style="font-size:22px;color:#e6e2dc"></div><div class="caret" id="qc"></div>`;
+  root.appendChild(box);
+
+  const hits = [
+    ['登录错误对照', 'docs/coach/patterns', 3],
+    ['重登录失败的提示', 'knowledge/', 2],
+    ['错误分类与出口', 'docs/training/evidence', 1],
+  ];
+  const hitNodes = hits.map(([t, p, n], i) => {
+    const d = el('div', '');
+    d.style.cssText = 'height:62px;display:flex;align-items:center;gap:16px;opacity:0';
+    d.innerHTML = `<div style="width:5px;height:30px;border-radius:3px;background:var(--teal);flex:none"></div>
+      <div style="font-size:20px;color:#ddd8d2">${t}</div>
+      <div class="mono" style="font-size:14px;color:#6b6762;margin-left:auto">${p}</div>
+      <div class="mono" style="font-size:13px;color:#4e4a46;border:1px solid #35322e;border-radius:999px;padding:3px 9px">${n}</div>`;
+    root.appendChild(d); return d;
+  });
+
+  const tiers = el('div', '');
+  tiers.style.cssText = 'position:absolute;left:1120px;top:762px;opacity:0';
+  tiers.innerHTML = `<div style="font-size:15px;color:#6b6762;letter-spacing:.14em;margin-bottom:14px">PREVIEW TIERS</div>`;
+  root.appendChild(tiers);
+  const tierNodes = [['Tier A', '原样渲染', '#4ec9b0'], ['Tier B', '结构化提取', '#d9b273'], ['Tier C', '只留索引', '#8a857f']]
+    .map(([a, b, c], i) => {
+      const d = el('div', 'chip');
+      d.style.opacity = 0;
+      d.innerHTML = `<div style="width:7px;height:7px;border-radius:50%;background:${c}"></div>
+        <div><span style="color:#ddd8d2;font-weight:600">${a}</span> <span style="color:#6b6762;font-size:14px">${b}</span></div>`;
+      d.style.marginBottom = '10px';
+      tiers.appendChild(d); return d;
+    });
+
+  return function (t) {
+    const local = t - 32.0;
+    setT(eb, { o: seg(t, 32.1, 32.6) });
+    setT(h, { o: seg(t, 32.2, 32.9), y: (1 - eOut(seg(t, 32.2, 32.9))) * 24 });
+    const k = eExpo(seg(local, .1, 1.3));
+    setT(win, { o: k, x: lerp(1560, 380, k), y: lerp(120, 250, k), s: lerp(.93, 1, k), b: (1 - k) * 12, rx: lerp(-5, 0, k) });
+
+    // typing query
+    const q = '登录错误';
+    const qk = clamp01((local - 1.3) / 1.0);
+    const shown = q.slice(0, Math.floor(qk * q.length));
+    document.getElementById('q').textContent = shown;
+    const qc = document.getElementById('qc');
+    setT(box, { o: sstep(1.2, 1.6, local), y: 556 });
+    qc.style.display = qk < 1 && Math.floor(local * 2.2) % 2 === 0 ? 'none' : 'inline-block';
+
+    hitNodes.forEach((n, i) => {
+      const kk = eOut(seg(local, 2.4 + i * .26, 3.0 + i * .26));
+      setT(n, { o: kk, x: (1 - kk) * 34, b: (1 - kk) * 7 });
+      n.style.top = (640 + i * 70) + 'px';
+      n.style.position = 'absolute';
+    });
+    tierNodes.forEach((n, i) => {
+      const kk = eOut(seg(local, 3.2 + i * .2, 3.9 + i * .2));
+      setT(n, { o: kk, x: (1 - kk) * -22 });
+    });
+  };
+})();
+
+/* ---------- S7 · TRAINING / FSRS  37.0 → 44.5 ---------- */
+const trainScene = (() => {
+  const root = $('#s-train');
+  const eb = el('div', 'eyebrow', '04 · TRAINING');
+  eb.style.cssText = 'position:absolute;left:150px;top:196px';
+  const h = el('div', 'h2');
+  h.style.cssText = 'position:absolute;left:150px;top:236px;font-size:60px';
+  h.innerHTML = `把练习排进<br><span class="gold">遗忘曲线</span>`;
+  const lede = el('div', 'lede');
+  lede.style.cssText = 'position:absolute;left:150px;top:400px;width:380px;font-size:21px';
+  lede.textContent = 'FSRS 间隔重复：每张卡按记忆强度重新排期。';
+  root.append(eb, h, lede);
+
+  const win = productWin({
+    shot: 'shots/train-fn.png', w: 400, title: 'trainer · training',
+    sub: 'card 1/1', host: root, glow: 'rgba(217,178,115,.22)',
+  });
+
+  // forgetting curve
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 900 400');
+  svg.setAttribute('width', '900'); svg.setAttribute('height', '400');
+  svg.style.cssText = 'position:absolute;left:150px;top:492px;overflow:visible';
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="fg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#d9b273" stop-opacity=".30"/>
+        <stop offset="100%" stop-color="#d9b273" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <g id="grid"></g>
+    <path id="curveFill" d="" fill="url(#fg)"/>
+    <path id="curve" d="" fill="none" stroke="#d9b273" stroke-width="3" stroke-linecap="round"/>
+    <circle id="dot" r="7" fill="#d9b273"/>
+    <g id="marks"></g>`;
+  root.appendChild(svg);
+  const grid = svg.querySelector('#grid');
+  for (let i = 0; i <= 8; i++) {
+    const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    l.setAttribute('x1', i * 112); l.setAttribute('y1', 0); l.setAttribute('x2', i * 112); l.setAttribute('y2', 400);
+    l.setAttribute('stroke', 'rgba(255,255,255,.05)'); l.setAttribute('stroke-width', 1);
+    grid.appendChild(l);
+  }
+  for (let i = 0; i <= 4; i++) {
+    const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    l.setAttribute('x1', 0); l.setAttribute('y1', i * 100); l.setAttribute('x2', 900); l.setAttribute('y2', i * 100);
+    l.setAttribute('stroke', 'rgba(255,255,255,.05)'); l.setAttribute('stroke-width', 1);
+    grid.appendChild(l);
+  }
+  // retention curve
+  const pts = [];
+  for (let i = 0; i <= 120; i++) {
+    const x = i / 120 * 900;
+    const y = 380 - 340 * Math.exp(-Math.pow(x / 330, 1.45));
+    pts.push([x, y]);
+  }
+  const d = 'M' + pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' L');
+  svg.querySelector('#curve').setAttribute('d', d);
+  svg.querySelector('#curveFill').setAttribute('d', d + ' L900,400 L0,400 Z');
+
+  // review intervals along the curve
+  const intervals = [['1d', .10], ['3d', .30], ['7d', .56], ['21d', .84]];
+  const marks = intervals.map(([lab, f], i) => {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('opacity', '0');
+    const idx = Math.round(f * 120);
+    const p = pts[idx];
+    g.innerHTML = `<line x1="${p[0]}" y1="${p[1]}" x2="${p[0]}" y2="${p[1] + 26}" stroke="#4ec9b0" stroke-width="1.5" stroke-dasharray="3 4"/>
+      <circle cx="${p[0]}" cy="${p[1]}" r="5.5" fill="#0b0b11" stroke="#4ec9b0" stroke-width="2"/>
+      <text x="${p[0]}" y="${p[1] + 48}" fill="#8f8b85" font-size="17" font-family="SF Mono, monospace" text-anchor="middle">${lab}</text>`;
+    svg.querySelector('#marks').appendChild(g); return g;
+  });
+
+  // cards flying into slots
+  const cardNodes = intervals.map(([lab], i) => {
+    const c = el('div', 'card');
+    c.style.cssText = `left:0;top:0;width:92px;height:126px;opacity:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px`;
+    c.innerHTML = `<div style="font-size:11px;color:#6b6762;font-family:var(--mono)">CARD</div>
+                   <div style="font-size:15px;color:#ddd8d2;font-weight:600">${lab}</div>`;
+    root.appendChild(c); return c;
+  });
+
+  return function (t) {
+    const local = t - 37.0;
+    setT(eb, { o: seg(t, 37.1, 37.6) });
+    setT(h, { o: seg(t, 37.2, 37.9), y: (1 - eOut(seg(t, 37.2, 37.9))) * 24 });
+    setT(lede, { o: seg(t, 38.0, 38.6), y: (1 - eOut(seg(t, 38.0, 38.6))) * 18 });
+    const k = eExpo(seg(local, .1, 1.3));
+    setT(win, { o: k, x: lerp(700, 1246, k), y: lerp(200, 258, k), s: lerp(.92, 1, k), b: (1 - k) * 12, rx: lerp(6, 0, k) });
+
+    // curve draws
+    const dk = eOut(seg(local, 1.2, 3.4));
+    const curve = svg.querySelector('#curve'), fill = svg.querySelector('#curveFill'), dot = svg.querySelector('#dot');
+    const total = curve.getTotalLength ? curve.getTotalLength() : 2000;
+    curve.style.strokeDasharray = total;
+    curve.style.strokeDashoffset = total * (1 - dk);
+    const nFill = Math.floor(dk * (pts.length));
+    fill.setAttribute('d', 'M' + pts.slice(0, Math.max(2, nFill)).map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' L') + ` L${(pts[Math.max(1, nFill - 1)] || [0, 400])[0].toFixed(1)},400 L0,400 Z`);
+    fill.style.opacity = clamp01((dk - .25) / .5);
+    const pAt = pts[Math.min(pts.length - 1, nFill)];
+    dot.setAttribute('cx', pAt[0]); dot.setAttribute('cy', pAt[1]);
+    dot.setAttribute('opacity', clamp01((dk - .1) / .3) * (Math.floor(local * 3) % 4 === 0 ? .25 : 1));
+
+    marks.forEach((g, i) => {
+      const kk = eOut(seg(local, 2.6 + i * .3, 3.3 + i * .3));
+      g.setAttribute('opacity', kk.toFixed(3));
+    });
+
+    // cards fly from the window into the curve slots
+    cardNodes.forEach((c, i) => {
+      const f = intervals[i][1];
+      const tx = 150 + f * 900 - 46, ty = 492 + pts[Math.round(f * 120)][1] - 63;
+      const kk = eBack(seg(local, 3.4 + i * .26, 4.5 + i * .26));
+      const sx = 1246 + 200, sy = 258 + 200;
+      setT(c, {
+        o: kk,
+        x: lerp(sx, tx, kk), y: lerp(sy, ty, kk),
+        s: lerp(.9, .78, kk), r: lerp(0, i % 2 ? 8 : -8, kk),
+        b: (1 - kk) * 6,
+      });
+    });
+  };
+})();
+
+/* ---------- S8 · ARCHITECTURE  44.5 → 53.0 ---------- */
+const archScene = (() => {
+  const root = $('#s-arch');
+  const eb = el('div', 'eyebrow', 'ARCHITECTURE');
+  eb.style.cssText = 'position:absolute;left:160px;top:150px';
+  const h = el('div', 'h2');
+  h.style.cssText = 'position:absolute;left:160px;top:190px;font-size:58px';
+  h.innerHTML = `<span class="gold">本地大脑</span> <span style="color:#5a5652">/</span> 远端双手`;
+  root.append(eb, h);
+
+  const nodes = [
+    { id: 'host', x: 160, y: 400, w: 380, h: 190, c: '#d9b273', t: 'VS Code 宿主', s: 'Trainer Extension · UI Host' },
+    { id: 'sidecar', x: 660, y: 380, w: 360, h: 230, c: '#4ec9b0', t: 'FastAPI Sidecar', s: 'ReAct 循环 · 教学决策 · 评估' },
+    { id: 'store', x: 660, y: 676, w: 360, h: 130, c: '#9d907a', t: 'SQLite + Qdrant', s: '记忆 · 计划 · 语义检索' },
+    { id: 'remote', x: 1140, y: 400, w: 380, h: 190, c: '#8b7cf6', t: '远端 Companion', s: 'Remote FS · 搜索 · 诊断 · 校验' },
+    { id: 'prov', x: 1140, y: 676, w: 380, h: 130, c: '#8a857f', t: 'Provider API', s: 'OpenAI 兼容 · 密钥留在宿主' },
+  ];
+  const map = {};
+  nodes.forEach(n => {
+    const d = el('div', 'card');
+    d.style.cssText = `left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px;padding:24px 26px;opacity:0;border-color:${n.c}3a`;
+    d.innerHTML = `<div style="display:flex;align-items:center;gap:10px">
+        <div style="width:8px;height:8px;border-radius:50%;background:${n.c};box-shadow:0 0 14px ${n.c}"></div>
+        <div style="font-size:27px;font-weight:700;color:#eae6e0;letter-spacing:-.01em">${n.t}</div></div>
+      <div class="mono" style="font-size:15px;color:#7d7873;margin-top:12px;letter-spacing:-.01em">${n.s}</div>`;
+    root.appendChild(d); map[n.id] = d;
+  });
+
+  // secret lock badge on the host
+  const lock = el('div', 'card');
+  lock.style.cssText = 'left:0;top:0;width:300px;height:70px;padding:12px 18px;opacity:0;border-color:rgba(244,135,113,.4);display:flex;align-items:center;gap:12px';
+  lock.innerHTML = `<div style="color:var(--rose);font-size:22px">🔒</div>
+    <div><div style="font-size:16px;color:#f0d6d0">API Key 不出宿主</div>
+    <div class="mono" style="font-size:12px;color:#a2705f;margin-top:3px">SecretStorage · ui_proxy</div></div>`;
+  root.appendChild(lock);
+
+  // packet paths
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.style.cssText = 'position:absolute;inset:0';
+  root.appendChild(svg);
+  const NS = 'http://www.w3.org/2000/svg';
+  const links = [];
+  function link(a, b, c) {
+    const l = document.createElementNS(NS, 'line');
+    l.setAttribute('stroke', c); l.setAttribute('stroke-width', 1.6);
+    l.setAttribute('stroke-dasharray', '6 8');
+    l.setAttribute('opacity', '0');
+    svg.appendChild(l); links.push({ l, a, b }); return l;
+  }
+  const l1 = link('host', 'sidecar', 'rgba(217,178,115,.5)');
+  const l2 = link('sidecar', 'store', 'rgba(157,144,122,.5)');
+  const l3 = link('sidecar', 'remote', 'rgba(139,124,246,.5)');
+  const l4 = link('sidecar', 'prov', 'rgba(138,133,127,.45)');
+
+  const packets = [];
+  for (let i = 0; i < 10; i++) {
+    const p = document.createElementNS(NS, 'circle');
+    p.setAttribute('r', '4'); p.setAttribute('opacity', '0');
+    svg.appendChild(p); packets.push({ p, li: i % 4, ph: (i / 10) });
+  }
+
+  const cap = el('div', 'lede');
+  cap.style.cssText = 'position:absolute;left:160px;top:872px;width:1000px;font-size:22px;opacity:0';
+  cap.textContent = '身份、记忆、计划、证据留在本地；远端只伸手去够代码。';
+  root.appendChild(cap);
+
+  const anchor = { host: [540, 495], sidecar: [840, 495], store: [840, 676], remote: [1140, 495], prov: [1140, 741] };
+
+  return function (t) {
+    const local = t - 44.5;
+    setT(eb, { o: seg(t, 44.6, 45.1) });
+    setT(h, { o: seg(t, 44.7, 45.4), y: (1 - eOut(seg(t, 44.7, 45.4))) * 22 });
+
+    nodes.forEach((n, i) => {
+      const kk = eBack(seg(local, .3 + i * .17, 1.4 + i * .17));
+      setT(map[n.id], { o: kk, y: lerp(0, 0, kk) + (1 - kk) * 26, s: lerp(.92, 1, kk), b: (1 - kk) * 10 });
+    });
+    const lk = eOut(seg(local, 1.4, 2.6));
+    setT(lock, { o: sstep(2.2, 2.7, local), x: lerp(560, 620, lk), y: 618, s: lerp(.96, 1, lk) });
+
+    const lset = [l1, l2, l3, l4];
+    lset.forEach((l, i) => {
+      const kk = eOut(seg(local, 1.3 + i * .18, 2.4 + i * .18));
+      const a = anchor[nodes[i].id], b = anchor[nodes[i + 1].id];
+      l.setAttribute('x1', a[0]); l.setAttribute('y1', a[1]);
+      l.setAttribute('x2', lerp(a[0], b[0], kk)); l.setAttribute('y2', lerp(a[1], b[1], kk));
+      l.setAttribute('opacity', (kk * .9).toFixed(3));
+    });
+
+    const flow = clamp01((local - 2.2) / 1.2);
+    packets.forEach(({ p, li, ph }) => {
+      const prog = ((local * .38 + ph) % 1);
+      const a = anchor[nodes[li].id], b = anchor[nodes[li + 1].id];
+      p.setAttribute('cx', lerp(a[0], b[0], prog));
+      p.setAttribute('cy', lerp(a[1], b[1], prog) + Math.sin(prog * Math.PI) * -18);
+      const cols = ['#d9b273', '#9d907a', '#8b7cf6', '#8a857f'];
+      p.setAttribute('fill', cols[li]);
+      p.setAttribute('opacity', (flow * Math.sin(prog * Math.PI) * .95).toFixed(3));
+    });
+
+    setT(cap, { o: seg(local, 3.4, 4.2), y: (1 - eOut(seg(local, 3.4, 4.2))) * 18 });
+  };
+})();
+
+/* ---------- S9 · SCALE  53.0 → 57.0 ---------- */
+const scaleScene = (() => {
+  const root = $('#s-scale');
+  const eb = el('div', 'eyebrow', 'BY THE NUMBERS');
+  eb.style.cssText = 'position:absolute;left:960px;top:280px;transform:translateX(-50%)';
+  const tiles = [
+    ['5', '视图', 'views'],
+    ['8', '语言', 'locales'],
+    ['376', '测试文件', 'node --test + pytest'],
+    ['25.5k', '行', 'routers.py'],
+    ['245', 'MB', '随包 sidecar'],
+  ];
+  const nodes = tiles.map(([v, l, s], i) => {
+    const c = el('div', 'card');
+    c.style.cssText = `width:296px;height:230px;padding:30px 30px;opacity:0`;
+    c.innerHTML = `<div class="mono" style="font-size:66px;font-weight:700;color:#eae6e0;line-height:1;letter-spacing:-.03em">
+        <span class="num" data-v="${v}">0</span></div>
+      <div style="font-size:24px;font-weight:650;color:#b9b4ac;margin-top:18px">${l}</div>
+      <div class="mono" style="font-size:13px;color:#6b6762;margin-top:8px;letter-spacing:.06em">${s}</div>`;
+    root.appendChild(c); return { c, v, i };
+  });
+  root.appendChild(eb);
+  return function (t) {
+    const local = t - 53.0;
+    setT(eb, { o: seg(t, 53.1, 53.6) });
+    nodes.forEach(({ c, v, i }) => {
+      const kk = eBack(seg(local, .25 + i * .16, 1.3 + i * .16));
+      const x = 960 + (i - 2) * 322;
+      setT(c, { o: kk, x, y: lerp(420, 420, kk) + (1 - kk) * 40, s: lerp(.9, 1, kk), b: (1 - kk) * 12 });
+      const num = c.querySelector('.num');
+      const target = parseFloat(v);
+      const cur = target * eOut(clamp01((local - (.55 + i * .16)) / 1.1));
+      num.textContent = v.includes('k') ? (cur / 1000).toFixed(1) + 'k' : String(Math.round(cur));
+    });
+  };
+})();
+
+/* ---------- S10 · OUTRO  57.0 → 62.0 ---------- */
+const outro = (() => {
+  const root = $('#s-outro');
+  const svg = document.createElementNS(NS_PLACEHOLDER, 'svg');
+  const NSU = 'http://www.w3.org/2000/svg';
+  root.innerHTML = `
+  <svg viewBox="0 0 120 120" width="188" height="188" id="mark" style="position:absolute;left:960px;top:322px;transform:translateX(-50%)">
+    <g fill="none" stroke="#d9b273" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <path id="p1" d="M30 15h40a10 10 0 0 1 10 10v42"/>
+      <path id="p2" d="M30 15a10 10 0 0 0-10 10v62l16-13h32a10 10 0 0 0 10-10"/>
+      <path id="p3" d="M60 39 67 58 86 65 67 72 60 91 53 72 34 65 53 58z"/>
+    </g>
+    <circle id="markdot" cx="60" cy="65" r="4" fill="#d9b273" opacity="0"/>
+  </svg>`;
+  const word = el('div', 'h1');
+  word.style.cssText = 'position:absolute;left:960px;top:498px;transform:translateX(-50%);font-size:104px';
+  word.textContent = 'TRAINER';
+  const tag = el('div', 'h3');
+  tag.style.cssText = 'position:absolute;left:960px;top:620px;transform:translateX(-50%);color:#b9b4ac';
+  tag.textContent = '让 AI 当教练，而不是当答案机';
+  const sub = el('div', 'lede mono');
+  sub.style.cssText = 'position:absolute;left:960px;top:686px;transform:translateX(-50%);font-size:19px;letter-spacing:.10em;color:#6b6762';
+  sub.textContent = 'VS CODE EXTENSION  ·  PYTHON SIDECAR  ·  FSRS  ·  8 LANGUAGES';
+  root.append(word, tag, sub);
+
+  const strip = el('div', '');
+  strip.style.cssText = 'position:absolute;left:960px;top:812px;transform:translateX(-50%);display:flex;gap:16px';
+  root.appendChild(strip);
+  const chips = [['对话', 'Coach'], ['学习', 'Plan'], ['资料', 'Resources'], ['训练', 'Training'], ['设置', 'Settings']]
+    .map(([a, b]) => {
+      const c = el('div', 'chip');
+      c.style.opacity = 0;
+      c.innerHTML = `<div class="dot"></div><div><span style="color:#ddd8d2;font-weight:600">${a}</span>
+        <span class="mono" style="color:#6b6762;font-size:12.5px;margin-left:8px;letter-spacing:.08em">${b.toUpperCase()}</span></div>`;
+      strip.appendChild(c); return c;
+    });
+
+  const paths = ['p1', 'p2', 'p3'].map(id => root.querySelector('#' + id));
+  return function (t) {
+    const local = t - 57.0;
+    paths.forEach((p, i) => {
+      const kk = eOut(seg(local, .1 + i * .22, 1.1 + i * .22));
+      const L = p.getTotalLength();
+      p.style.strokeDasharray = L; p.style.strokeDashoffset = L * (1 - kk);
+    });
+    const kd = eOut(seg(local, 1.0, 1.5));
+    root.querySelector('#markdot').setAttribute('opacity', (kd * (Math.floor(local * 2.5) % 2 ? .35 : 1)).toFixed(2));
+    root.querySelector('#mark').setAttribute('transform', `rotate(${(1 - kd) * -90} 60 65)`);
+
+    const kw = eExpo(seg(local, .8, 1.7));
+    setT(word, { o: kw, y: (1 - kw) * 30, b: (1 - kw) * 14, s: lerp(.95, 1, kw) });
+    setT(tag, { o: eOut(seg(local, 1.7, 2.5)), y: (1 - eOut(seg(local, 1.7, 2.5))) * 20 });
+    setT(sub, { o: seg(local, 2.1, 2.9) });
+    chips.forEach((c, i) => {
+      const kk = eBack(seg(local, 2.5 + i * .13, 3.2 + i * .13));
+      setT(c, { o: kk, y: (1 - kk) * 22, s: lerp(.9, 1, kk) });
+    });
+  };
+})();
+
+/* =======================================================================
+   MASTER RENDER
+   ======================================================================= */
+const SCENES = [
+  { el: $('#s-boot'), t0: 0, t1: 5.5, fn: boot },
+  { el: $('#s-problem'), t0: 5.5, t1: 12.0, fn: problem },
+  { el: $('#s-reveal'), t0: 12.0, t1: 18.0, fn: reveal },
+  { el: $('#s-coach'), t0: 18.0, t1: 26.0, fn: coachScene },
+  { el: $('#s-plan'), t0: 26.0, t1: 32.0, fn: planScene },
+  { el: $('#s-res'), t0: 32.0, t1: 37.0, fn: resScene },
+  { el: $('#s-train'), t0: 37.0, t1: 44.5, fn: trainScene },
+  { el: $('#s-arch'), t0: 44.5, t1: 53.0, fn: archScene },
+  { el: $('#s-scale'), t0: 53.0, t1: 57.0, fn: scaleScene },
+  { el: $('#s-outro'), t0: 57.0, t1: 62.0, fn: outro },
+];
+const FADE = .42;
+
+const aur = [$('#aur1'), $('#aur2'), $('#aur3')];
+aur[0].style.cssText = 'left:2%;top:-14%;width:900px;height:900px;background:radial-gradient(closest-side,rgba(217,178,115,.30),transparent)';
+aur[1].style.cssText = 'left:56%;top:38%;width:1050px;height:1050px;background:radial-gradient(closest-side,rgba(78,201,176,.20),transparent)';
+aur[2].style.cssText = 'left:24%;top:44%;width:1000px;height:1000px;background:radial-gradient(closest-side,rgba(139,124,246,.17),transparent)';
+
+function render(t) {
+  // aurora drift
+  aur.forEach((n, i) => {
+    const sp = [.10, -.075, .055][i];
+    const px = Math.sin(t * sp + i * 2.1) * 130;
+    const py = Math.cos(t * sp * .8 + i * 1.3) * 90;
+    const sc = 1 + .18 * Math.sin(t * .16 + i);
+    n.style.transform = `translate3d(${px}px,${py}px,0) scale(${sc.toFixed(3)})`;
+  });
+
+  let fieldK = .55;
+  SCENES.forEach(s => {
+    const vis = clamp01((t - s.t0) / FADE) * (1 - clamp01((t - (s.t1 - FADE)) / FADE));
+    if (vis <= 0) { s.el.style.opacity = 0; return; }
+    s.el.style.opacity = vis.toFixed(4);
+    s.el.style.pointerEvents = 'none';
+    s.fn(t);
+  });
+  // deepen the field on the calmer beats
+  if (t > 12 && t < 18) fieldK = .8;
+  if (t >= 44.5 && t < 53) fieldK = .4;
+  if (t >= 53) fieldK = .7;
+  drawField(t, fieldK);
+}
+
+window.__seek = t => { render(t); };
+window.__duration = DURATION;
+window.__fps = FPS;
+
+window.__ready = (async () => {
+  const imgs = Array.from(document.images);
+  await Promise.all(imgs.map(i => i.complete ? Promise.resolve() : new Promise(res => {
+    i.addEventListener('load', res); i.addEventListener('error', res);
+  })));
+  await document.fonts.ready;
+  render(0);
+  return true;
+})();
+</script>
+</body>
+</html>

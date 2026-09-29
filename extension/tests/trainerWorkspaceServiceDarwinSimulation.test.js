@@ -5,6 +5,25 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const hostPath = require('node:path');
 
+
+// Mock vscode before requiring the compiled module
+const _Mod = require('node:module');
+const _origLoad = _Mod._load;
+_Mod._load = function (request, parent, isMain) {
+  if (request === 'vscode') {
+    return {
+      workspace: { workspaceFolders: [], fs: {
+        async stat() { throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' }); },
+        async readDirectory() { return []; },
+      }},
+      FileType: { Directory: 2, File: 1 },
+      Uri: { parse: (v) => ({ fsPath: v, path: v, scheme: 'file' }) },
+      env: { remoteName: undefined },
+    };
+  }
+  return _origLoad.call(this, request, parent, isMain);
+};
+
 // ---------------------------------------------------------------------------
 // Darwin-semantics simulation for the workspace recovery runtime-data checks.
 //

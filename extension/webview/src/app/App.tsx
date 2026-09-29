@@ -14583,6 +14583,19 @@ export function App() {
           </div>
           <div className="header-actions">
             <button
+              className="header-switcher__item header-switcher__item--history"
+              data-testid="trainer-history-toggle"
+              onClick={() => setOpenMenu(openMenu === "history" ? undefined : "history")}
+              type="button"
+              aria-label={layout.composerLanguage === "zh-CN" ? "会话历史" : "Chat history"}
+              title={layout.composerLanguage === "zh-CN" ? "会话历史" : "Chat history"}
+              aria-expanded={openMenu === "history"}
+            >
+              <span className="header-switcher__icon" aria-hidden="true">
+                <HistoryIcon size={18} />
+              </span>
+            </button>
+            <button
               className={`header-switcher__item header-switcher__item--gear ${
                 activeView === "settings" ? "is-active" : ""
               }`}
