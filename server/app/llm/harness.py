@@ -310,10 +310,21 @@ def should_compact(
     *,
     extra: dict[str, Any] | None = None,
     keep_recent_tokens: int = KEEP_RECENT_TOKENS,
+    last_provider_input_tokens: int | None = None,
 ) -> bool:
+    """§二十一: prefer provider-reported input tokens when available.
+
+    ``last_provider_input_tokens`` comes from the most recent LLM response's
+    real usage report. It reflects the actual token count including
+    reasoning/cache tokens that chars/4 estimation systematically misses.
+    Falls back to estimate_tokens when no provider usage is available.
+    """
     window = resolved_context_window(extra)
     reserve = resolved_reserve_tokens(extra)
-    tokens = estimate_tokens(messages)
+    if last_provider_input_tokens is not None and last_provider_input_tokens > 0:
+        tokens = last_provider_input_tokens
+    else:
+        tokens = estimate_tokens(messages)
     threshold = max(keep_recent_tokens, window - reserve)
     return tokens > threshold
 
