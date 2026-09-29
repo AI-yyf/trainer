@@ -42,7 +42,7 @@ class TrainingHandoffReturnMixin:
         _record_training_event: Callable[..., Any]
         _structured_for: Callable[[str], StructuredMemoryService]
         _sync_live_evidence_binding: Callable[..., Any]
-        _training_handoff_generator: TrainingHandoffGenerator
+        _training_handoff_generator: Callable[[str], TrainingHandoffGenerator]
         enqueue_evidence: Callable[..., Any]
         evidence_queue: Callable[..., Any]
         get_card: Callable[..., Any]
