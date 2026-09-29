@@ -73,6 +73,16 @@ SOURCE_PAIRS = (
         / "memory"
         / "onboarding_extraction.py",
     ),
+    (
+        SERVER_ROOT / "app" / "memory" / "teaching_asset_catalog_mixin.py",
+        REPOSITORY_ROOT
+        / "extension"
+        / "bundled"
+        / "server"
+        / "app"
+        / "memory"
+        / "teaching_asset_catalog_mixin.py",
+    ),
     PROVIDER_SOURCES,
     COACHING_RECOVERY_SOURCES,
     COACHING_FIRST_TURN_SOURCES,
