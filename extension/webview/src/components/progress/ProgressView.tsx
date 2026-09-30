@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { EvidenceIcon } from "../icons/brand/trainerBrand";
 import type { ComposerLanguage } from "../../lib/types";
 import type {
   TrainingSkillDimensionState,
@@ -362,7 +363,10 @@ export function ProgressView({ language, projection, onOpenTraining }: ProgressV
                 </button>
                 {expanded ? (
                   <div className="progress-view__drilldown">
-                    <p className="progress-view__drilldown-why">{copy.drilldownWhy}</p>
+                    <p className="progress-view__drilldown-why">
+                      <EvidenceIcon size={12} />
+                      {copy.drilldownWhy}
+                    </p>
                     <ul className="progress-view__drilldown-list">
                       {rows.map((row) => {
                         const day = row.timestamp ? row.timestamp.slice(0, 10) : undefined;

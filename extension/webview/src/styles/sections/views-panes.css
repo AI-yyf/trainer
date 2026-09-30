@@ -7310,9 +7310,17 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 .progress-view__drilldown-why {
+  display: flex;
+  gap: 4px;
+  align-items: center;
   margin: 0 0 6px;
   color: var(--vscode-descriptionForeground, inherit);
   font-size: var(--trainer-font-2xs, 11px);
+}
+
+.progress-view__drilldown-why .trainer-icon {
+  flex: 0 0 auto;
+  color: var(--accent, currentColor);
 }
 
 .progress-view__drilldown-list {

@@ -87,6 +87,7 @@ import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, TrashIcon } from "../icons";
 import { AlertTriangleIcon, DataFolderIcon, DoneIcon, ReloadIcon, SettingsShareIcon } from "../icons/inline";
+import { RemoteIcon } from "../icons/brand/trainerBrand";
 import { ResourcesNavIcon, TrainingNavIcon } from "../icons/navigation/coreNav";
 import { SettingsAdvancedIcon, SettingsConnectionIcon, SettingsPreferencesIcon, SettingsSkillsIcon, SettingsTeachingIcon, SettingsWorkspaceIcon } from "../icons/navigation/settingsNav";
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
@@ -7910,7 +7911,10 @@ export function CoachSettingsView({
                   return (
                     <>
                 <div className="settings-sheet__authority-block-head">
-                  <span className="eyebrow">{remoteSupportCopy.sectionTitle}</span>
+                  <span className="eyebrow">
+                    <RemoteIcon size={12} />
+                    {remoteSupportCopy.sectionTitle}
+                  </span>
                 </div>
                 <div className="settings-sheet__summary-grid">
                   <SummaryCard

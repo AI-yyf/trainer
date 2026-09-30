@@ -1253,7 +1253,15 @@
 }
 
 .settings-sheet__authority-block-head .eyebrow {
+  display: flex;
+  gap: 4px;
+  align-items: center;
   padding-top: 2px;
+}
+
+.settings-sheet__authority-block-head .eyebrow .trainer-icon {
+  flex: 0 0 auto;
+  color: var(--accent);
 }
 
 .settings-sheet__authority-block .action-button {
