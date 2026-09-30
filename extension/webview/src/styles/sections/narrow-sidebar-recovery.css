@@ -3,32 +3,13 @@
    Keep governed facts readable before collapsing secondary detail.
    ========================================================================== */
 
-@media (max-width: 540px) {
-  .header-switcher {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    overflow: hidden;
-    scrollbar-width: none;
-  }
-
-  .header-switcher__item {
-    width: 100%;
-    min-inline-size: 0;
-    padding-inline: 2px;
-    justify-content: center;
-  }
-
-  .header-switcher__label {
-    overflow: visible;
-    text-overflow: clip;
-  }
-}
+/* Narrow widths: no .header-switcher override on purpose. The Phase-C nav
+   renders 3 primary tabs (+ activity-gated Training / on-surface Progress),
+   so the base grid in app-shell.css follows the rendered count; the legacy
+   fixed five-column override left a dead track and off-center tabs.
+   History/Settings stay in the header utility row at every width. */
 
 @media (max-width: 380px) {
-  .header-switcher {
-    gap: 0;
-  }
-
   .header-switcher__item,
   .header-switcher--compact .header-switcher__item,
   .header-switcher--compact .header-switcher__label {
