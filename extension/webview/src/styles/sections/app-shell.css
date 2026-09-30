@@ -227,6 +227,22 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
   display: flex;
 }
 
+/* Utility-layer buttons are content-sized icon hits, not stretching tabs —
+   the base .header-switcher__item grid contract (width: 100%; min-width: 0)
+   collapses them to invisibility inside this flex row. */
+.header-actions .header-switcher__item {
+  width: auto;
+  min-width: 28px;
+  min-height: 24px;
+  padding: 3px 6px;
+}
+
+/* Icon spans stay display:none outside .header-switcher--icon containers;
+   the utility row is exactly such an icon-only context. */
+.header-actions .header-switcher__icon {
+  display: inline-flex;
+}
+
 .trainer-header .status-pill {
   padding: 0;
   border: 0;
