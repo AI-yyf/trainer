@@ -48,18 +48,3 @@ export function TrainerIconBase({
     </svg>
   );
 }
-
-/** A small filled element used inside icons to mark the active state. */
-export function SelectiveFill({ d }: { d: string }) {
-  return (
-    <path
-      className="trainer-icon__fill"
-      d={d}
-      fill="currentColor"
-      stroke="none"
-      opacity={0}
-    >
-      <animate attributeName="opacity" from="0" to="0" dur="0s" />
-    </path>
-  );
-}

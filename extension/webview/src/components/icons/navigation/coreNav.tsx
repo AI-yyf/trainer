@@ -7,6 +7,8 @@
  * - Learning: progressive learning path (3 ascending nodes, not a flag)
  * - Resources: layered knowledge pages (not a bar chart)
  * - Training: focused practice frame with a center diamond (not a checklist)
+ * - Progress: trend line rising into a corner arrow with a position node
+ *   (was the CoachIcons NavProgressIcon step-dash sketch)
  *
  * Each icon accepts `active` to show its Selective Fill element.
  */
@@ -63,6 +65,22 @@ export function TrainingNavIcon({ active, ...props }: NavIconProps) {
         <path d="M10 7.5 12.5 10 10 12.5 7.5 10z" fill="currentColor" stroke="none" />
       ) : (
         <path d="M10 7.5 12.5 10 10 12.5 7.5 10z" />
+      )}
+    </TrainerIconBase>
+  );
+}
+
+export function NavProgressIcon({ active, ...props }: NavIconProps) {
+  return (
+    <TrainerIconBase {...props} active={active}>
+      {/* Upward trend line rising into a corner arrow */}
+      <path d="M3 15.5 7.6 10.9l2.9 2.7 6.5-7" />
+      <path d="M13 6.6h4v4" />
+      {/* Current-position node on the trend: fills when active */}
+      {active ? (
+        <circle cx="10.5" cy="13.6" r="1.5" fill="currentColor" stroke="none" />
+      ) : (
+        <circle cx="10.5" cy="13.6" r="1.5" />
       )}
     </TrainerIconBase>
   );

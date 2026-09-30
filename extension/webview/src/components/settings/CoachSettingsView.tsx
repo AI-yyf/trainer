@@ -85,7 +85,9 @@ import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
-import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, NavResourcesIcon, NavTrainingIcon, PlusIcon, RefreshIcon, ShareIcon, TrashIcon } from "../icons";
+import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, TrashIcon } from "../icons";
+import { AlertTriangleIcon, DataFolderIcon, DoneIcon, ReloadIcon, SettingsShareIcon } from "../icons/inline";
+import { ResourcesNavIcon, TrainingNavIcon } from "../icons/navigation/coreNav";
 import { SettingsAdvancedIcon, SettingsConnectionIcon, SettingsPreferencesIcon, SettingsSkillsIcon, SettingsTeachingIcon, SettingsWorkspaceIcon } from "../icons/navigation/settingsNav";
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
 import { trainerCommands } from "../../../../../shared/src/commands";
@@ -5606,8 +5608,8 @@ export function CoachSettingsView({
     ? settingsText(language, "测试当前连接", "Test current connection")
     : settingsText(language, "保存后生效", "Save to apply");
   const availabilityPrimaryIcon = providerCoachReady && !providerHasDraftChanges
-    ? <DiagnosticsIcon size={14} />
-    : <CheckMarkIcon size={14} />;
+    ? <AlertTriangleIcon size={14} />
+    : <DoneIcon size={14} />;
   const availabilityPrimaryAction = providerCoachReady && !providerHasDraftChanges
     ? onTestProvider
     : onSaveProvider;
@@ -6065,24 +6067,24 @@ export function CoachSettingsView({
                   : settingsPhrase(language, "saveToApply");
   const resolvedAvailabilityPrimaryIcon =
     canFindDraftModels
-      ? <RefreshIcon size={14} />
+      ? <ReloadIcon size={14} />
       : hasDiscoveredDraftModels
-        ? <CheckMarkIcon size={14} />
+        ? <DoneIcon size={14} />
         : shouldRepairDraftModelPolicy
-          ? <GearIcon size={14} />
+          ? <SettingsPreferencesIcon size={14} />
         : shouldFocusDraftApiKey
-          ? <GearIcon size={14} />
+          ? <SettingsPreferencesIcon size={14} />
         : shouldCompleteDraftSetup
-        ? <GearIcon size={14} />
+        ? <SettingsPreferencesIcon size={14} />
         : shouldWaitForDraftTest
-          ? <RefreshIcon size={14} />
+          ? <ReloadIcon size={14} />
           : shouldRepairProviderCredentials
-            ? <GearIcon size={14} />
+            ? <SettingsPreferencesIcon size={14} />
           : canRetestProvider
-              ? <RefreshIcon size={14} />
+              ? <ReloadIcon size={14} />
               : shouldOpenProviderDetails
-                ? <GearIcon size={14} />
-                : <CheckMarkIcon size={14} />;
+                ? <SettingsPreferencesIcon size={14} />
+                : <DoneIcon size={14} />;
   const resolvedAvailabilityPrimaryAction =
     canFindDraftModels
       ? onRefreshProviderModels
@@ -6119,27 +6121,27 @@ export function CoachSettingsView({
       ? {
           label: settingsPhrase(language, "chooseProviderTemplate"),
           detail: settingsPhrase(language, "chooseProviderTemplateDetail"),
-          icon: <LightningIcon size={14} />,
+          icon: <SettingsSkillsIcon size={14} />,
           action: focusProviderTemplatePicker,
         }
       : canRestartSidecar
         ? {
             ...sidecarRestartCopy(language),
-            icon: <RefreshIcon size={14} />,
+            icon: <ReloadIcon size={14} />,
             action: onRestartSidecar,
           }
         : shouldRepairProviderCredentials
               ? {
                   label: settingsPhrase(language, "addApiKey"),
                   detail: settingsPhrase(language, "addApiKeyDetail"),
-                  icon: <GearIcon size={14} />,
+                  icon: <SettingsPreferencesIcon size={14} />,
                   action: openProviderApiKey,
                 }
               : providerSaved && providerNeedsApiKey && !providerHasDraftChanges
                   ? {
                       label: settingsPhrase(language, "addApiKey"),
                       detail: settingsPhrase(language, "addApiKeyDetail"),
-                      icon: <CheckMarkIcon size={14} />,
+                      icon: <DoneIcon size={14} />,
                       action: openProviderApiKey,
                     }
                   : {
@@ -6201,7 +6203,7 @@ export function CoachSettingsView({
         ) : null}
         <ActionButton
           fullWidth={false}
-          icon={<GearIcon size={14} />}
+          icon={<SettingsPreferencesIcon size={14} />}
           label={settingsPhrase(language, "editConfiguration")}
           ariaLabel={settingsPhrase(language, "editConfiguration")}
           detail={settingsPhrase(language, "editConfigurationDetail")}
@@ -6938,7 +6940,7 @@ export function CoachSettingsView({
                   </span>
                   {profile.isActive ? (
                     <span className="settings-provider-profile__state" aria-hidden="true">
-                      <CheckMarkIcon size={12} />
+                      <DoneIcon size={12} />
                     </span>
                   ) : null}
                 </span>
@@ -6955,7 +6957,7 @@ export function CoachSettingsView({
                 aria-label={localizedSaveProfileLabel}
                 onClick={onSaveProviderProfile}
               >
-                <CheckMarkIcon size={13} />
+                <DoneIcon size={13} />
                 <span>{localizedSaveProfileLabel}</span>
               </button>
             ) : null}
@@ -6967,7 +6969,7 @@ export function CoachSettingsView({
                 aria-label={localizedRefreshProfilesLabel}
                 onClick={onRefreshProviderProfiles}
               >
-                <RefreshIcon size={14} />
+                <ReloadIcon size={14} />
               </button>
             ) : null}
             {providerSaved && onUseProviderTemplateLabel && connectionView !== "add" ? (
@@ -7036,7 +7038,7 @@ export function CoachSettingsView({
     <div className="settings-actions settings-actions--compact">
       <ActionButton
         fullWidth={false}
-        icon={<GearIcon size={14} />}
+        icon={<SettingsPreferencesIcon size={14} />}
         label={copy.openConfig}
         detail={settingsPhrase(language, "workspaceFile")}
         onClick={onOpenConfig}
@@ -7120,7 +7122,7 @@ export function CoachSettingsView({
             providerSaveBusy ? (
               <span className="settings-quick-setup__saving-dot" aria-hidden />
             ) : (
-              <CheckMarkIcon size={14} />
+              <DoneIcon size={14} />
             )
           }
           label={saveProviderConnectionLabel}
@@ -7139,7 +7141,7 @@ export function CoachSettingsView({
       {showSecondaryModelDiscoveryAction ? (
         <ActionButton
           fullWidth={false}
-          icon={<RefreshIcon size={14} />}
+          icon={<ReloadIcon size={14} />}
           label={modelDiscoveryActionLabel}
           detail={modelDiscoveryActionDetail}
           disabled={!canRefreshModels}
@@ -7150,7 +7152,7 @@ export function CoachSettingsView({
       {!modelDiscoveryGuidanceActive && showProviderDetailTestAction ? (
         <ActionButton
           fullWidth={false}
-          icon={<DiagnosticsIcon size={14} />}
+          icon={<AlertTriangleIcon size={14} />}
           label={copy.test}
           ariaLabel={copy.test}
           detail={
@@ -7946,14 +7948,14 @@ export function CoachSettingsView({
                   <div className="settings-actions settings-actions--compact">
                     <ActionButton
                       fullWidth={false}
-                      icon={<FolderIcon size={14} />}
+                      icon={<DataFolderIcon size={14} />}
                       label={copy.managedDataFolderChoose}
                       detail={settingsText(language, "切换并重启后端", "Switch and restart")}
                       onClick={onChooseManagedDataFolder}
                     />
                     <ActionButton
                       fullWidth={false}
-                      icon={<RefreshIcon size={14} />}
+                      icon={<ReloadIcon size={14} />}
                       label={copy.managedDataFolderReset}
                       detail={settingsText(language, "回到推荐目录", "Return to recommended")}
                       onClick={onResetManagedDataFolder}
@@ -8013,7 +8015,7 @@ export function CoachSettingsView({
                 <span className="eyebrow">{copy.currentWorkspace}</span>
                 <ActionButton
                   fullWidth={false}
-                  icon={<RefreshIcon size={14} />}
+                  icon={<ReloadIcon size={14} />}
                   label={copy.refreshWorkspaceAuthority}
                   detail={settingsStatusPhrase(language, "rereadSandboxBoundary")}
                   onClick={onRefreshWorkspaceAuthority}
@@ -8028,7 +8030,7 @@ export function CoachSettingsView({
               ) : (
                 <div className="empty-state settings-sheet__authority-empty">
                   <span className="empty-state__icon" aria-hidden="true">
-                    <GearIcon size={16} />
+                    <SettingsPreferencesIcon size={16} />
                   </span>
                   <span className="empty-state__title">{copy.workspaceAuthorityEmpty}</span>
                 </div>
@@ -8302,14 +8304,14 @@ export function CoachSettingsView({
                   <div className="settings-actions settings-actions--compact">
                     <ActionButton
                       fullWidth={false}
-                      icon={<RefreshIcon size={14} />}
+                      icon={<ReloadIcon size={14} />}
                       label={copy.refreshMemory}
                       detail={settingsText(language, "重建摘要", "Rebuild summary")}
                       onClick={onRefreshMemory}
                     />
                     <ActionButton
                       fullWidth={false}
-                      icon={<LightningIcon size={14} />}
+                      icon={<SettingsSkillsIcon size={14} />}
                       label={copy.resetDefaults}
                       detail={settingsText(language, "推荐值", "Recommended")}
                       onClick={onResetDefaults}
@@ -8543,7 +8545,7 @@ export function CoachSettingsView({
                   title={settingsPhrase(language, "navShare")}
                   onClick={onShareSession}
                 >
-                  <ShareIcon size={14} aria-hidden="true" />
+                  <SettingsShareIcon size={14} aria-hidden="true" />
                 </button>
               ) : null}
               {onNavigateToView ? (
@@ -8554,7 +8556,7 @@ export function CoachSettingsView({
                   title={settingsPhrase(language, "navResources")}
                   onClick={() => onNavigateToView("resources")}
                 >
-                  <NavResourcesIcon size={14} aria-hidden="true" />
+                  <ResourcesNavIcon size={14} aria-hidden="true" />
                 </button>
               ) : null}
               {onNavigateToView ? (
@@ -8565,7 +8567,7 @@ export function CoachSettingsView({
                   title={settingsPhrase(language, "navTraining")}
                   onClick={() => onNavigateToView("training")}
                 >
-                  <NavTrainingIcon size={14} aria-hidden="true" />
+                  <TrainingNavIcon size={14} aria-hidden="true" />
                 </button>
               ) : null}
             </div>

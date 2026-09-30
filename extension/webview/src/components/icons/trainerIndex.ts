@@ -1,11 +1,25 @@
 export { TrainerIconBase, type TrainerIconProps } from "./TrainerIconBase";
-export { CoachNavIcon, LearningNavIcon, ResourcesNavIcon, TrainingNavIcon } from "./navigation/coreNav";
+export {
+  CoachNavIcon,
+  LearningNavIcon,
+  NavProgressIcon,
+  ResourcesNavIcon,
+  TrainingNavIcon,
+} from "./navigation/coreNav";
 export {
   SettingsAdvancedIcon,
   SettingsConnectionIcon,
+  SettingsIcon,
   SettingsPreferencesIcon,
   SettingsSkillsIcon,
   SettingsTeachingIcon,
   SettingsWorkspaceIcon,
 } from "./navigation/settingsNav";
 export { TrainerMarkIcon, ModelLayersIcon, EvidenceIcon, RemoteIcon } from "./brand/trainerBrand";
+export {
+  AlertTriangleIcon,
+  DataFolderIcon,
+  DoneIcon,
+  ReloadIcon,
+  SettingsShareIcon,
+} from "./inline";

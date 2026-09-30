@@ -2,15 +2,6 @@ import { IconBase, type IconBaseProps } from "./IconBase";
 
 type CoachIconProps = Omit<IconBaseProps, "children">;
 
-export function SettingsIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M6.6 1.8h2.8l.4 1.7c.4.1.8.3 1.1.6l1.7-.6 1.2 2.1-1.3 1.1c.1.4.1.8.1 1.3s0 .9-.1 1.3l1.3 1.1-1.2 2.1-1.7-.6c-.3.3-.7.5-1.1.6l-.4 1.7H6.6l-.4-1.7c-.4-.1-.8-.3-1.1-.6l-1.7.6-1.2-2.1 1.3-1.1A5 5 0 0 1 3.4 8c0-.4 0-.9.1-1.3L2.2 5.6 3.4 3.5l1.7.6c.3-.3.7-.5 1.1-.6z" />
-      <circle cx="8" cy="8" r="1.9" />
-    </IconBase>
-  );
-}
-
 export function ComposeIcon(props: CoachIconProps) {
   return (
     <IconBase {...props}>
@@ -25,16 +16,6 @@ export function SendIcon(props: CoachIconProps) {
     <IconBase {...props}>
       <path d="M8 12.25V3.75" />
       <path d="M4.75 7.15 8 3.75l3.25 3.4" />
-    </IconBase>
-  );
-}
-
-export function CommandIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M3.5 5h9" />
-      <path d="M3.5 8h9" />
-      <path d="M3.5 11h6" />
     </IconBase>
   );
 }
@@ -87,18 +68,6 @@ export function PlusIcon(props: CoachIconProps) {
   );
 }
 
-export function SelectionIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M3.5 5V3.5H5" />
-      <path d="M11 3.5h1.5V5" />
-      <path d="M12.5 11V12.5H11" />
-      <path d="M5 12.5H3.5V11" />
-      <path d="M6 5.5h4v4H6z" />
-    </IconBase>
-  );
-}
-
 export function DiagnosticsIcon(props: CoachIconProps) {
   return (
     <IconBase {...props}>
@@ -109,35 +78,11 @@ export function DiagnosticsIcon(props: CoachIconProps) {
   );
 }
 
-export function RelatedFilesIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <circle cx="4.2" cy="4.2" r="1.4" />
-      <circle cx="11.8" cy="4.2" r="1.4" />
-      <circle cx="8" cy="11.7" r="1.4" />
-      <path d="M5.5 5.2 7.2 9.4" />
-      <path d="M10.5 5.2 8.8 9.4" />
-    </IconBase>
-  );
-}
-
 export function ContextLayersIcon(props: CoachIconProps) {
   return (
     <IconBase {...props}>
       <rect x="3.2" y="3.2" width="7.2" height="7.2" rx="1.2" />
       <path d="M6.6 11.6h5.2a1.2 1.2 0 0 0 1.2-1.2V5.4" />
-    </IconBase>
-  );
-}
-
-export function FollowIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <circle cx="8" cy="8" r="3.2" />
-      <path d="M8 1.7v2.1" />
-      <path d="M8 12.2v2.1" />
-      <path d="M1.7 8h2.1" />
-      <path d="M12.2 8h2.1" />
     </IconBase>
   );
 }
@@ -161,16 +106,6 @@ export function PlanIcon(props: CoachIconProps) {
       <path d="M4.2 6.5h7.6" />
       <path d="M4.2 9.7h4.5" />
       <path d="M3 2.2h10v11.6H3z" />
-    </IconBase>
-  );
-}
-
-export function ReviewIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M12.1 7.9a4.1 4.1 0 1 1-1.1-2.8" />
-      <path d="M10.7 2.8h2.5v2.5" />
-      <path d="M13.2 2.8 9.9 6.1" />
     </IconBase>
   );
 }
@@ -451,29 +386,14 @@ export function PageIcon(props: CoachIconProps) {
   return <FileIcon {...props} />;
 }
 
+/* Legacy 16-box gear kept for not-yet-migrated surfaces; the canonical
+ * gear lives in ../icons/navigation/settingsNav (SettingsIcon /
+ * SettingsPreferencesIcon). */
 export function GearIcon(props: CoachIconProps) {
-  return <SettingsIcon {...props} />;
-}
-
-export function TrainerMarkIcon(props: CoachIconProps) {
   return (
-    <IconBase {...props} viewBox="0 0 128 128">
-      <rect x="14" y="14" width="100" height="100" rx="26" fill="currentColor" opacity="0.1" />
-      <rect
-        x="18"
-        y="18"
-        width="92"
-        height="92"
-        rx="22"
-        stroke="currentColor"
-        strokeOpacity="0.2"
-        strokeWidth="4"
-      />
-      <path d="M39 44H79" strokeWidth="7" strokeLinecap="round" />
-      <path d="M39 64H88" strokeWidth="7" strokeLinecap="round" />
-      <path d="M39 84H61" strokeWidth="7" strokeLinecap="round" opacity="0.9" />
-      <path d="M80 78 91 89 80 100" strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="92" cy="38" r="4.5" fill="currentColor" opacity="0.24" stroke="none" />
+    <IconBase {...props}>
+      <path d="M6.6 1.8h2.8l.4 1.7c.4.1.8.3 1.1.6l1.7-.6 1.2 2.1-1.3 1.1c.1.4.1.8.1 1.3s0 .9-.1 1.3l1.3 1.1-1.2 2.1-1.7-.6c-.3.3-.7.5-1.1.6l-.4 1.7H6.6l-.4-1.7c-.4-.1-.8-.3-1.1-.6l-1.7.6-1.2-2.1 1.3-1.1A5 5 0 0 1 3.4 8c0-.4 0-.9.1-1.3L2.2 5.6 3.4 3.5l1.7.6c.3-.3.7-.5 1.1-.6z" />
+      <circle cx="8" cy="8" r="1.9" />
     </IconBase>
   );
 }
@@ -484,116 +404,6 @@ export function ResourcesIcon(props: CoachIconProps) {
 
 export function TrainingIcon(props: CoachIconProps) {
   return <TargetIcon {...props} />;
-}
-
-export function NavCoachIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M3.1 3h9.8a1.4 1.4 0 0 1 1.4 1.4v4.8a1.4 1.4 0 0 1-1.4 1.4H7.2l-2.8 2.3v-2.3H3.1a1.4 1.4 0 0 1-1.4-1.4V4.4A1.4 1.4 0 0 1 3.1 3z" />
-      <path d="m8 5.2.62 1.38L10 7.2l-1.38.62L8 9.2l-.62-1.38L6 7.2l1.38-.62z" />
-    </IconBase>
-  );
-}
-
-export function NavPlanIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <circle cx="3.1" cy="12.6" r="1.15" />
-      <circle cx="7.9" cy="8" r="1.15" />
-      <path d="M4.25 12.6h1.5a1.5 1.5 0 0 0 1.5-1.5V9.15" />
-      <path d="M9.05 8h1.45a1.5 1.5 0 0 0 1.5-1.5V5.1" />
-      <path d="M12 2.5v5" />
-      <path d="M12 2.8l2.2.8-2.2.9" />
-    </IconBase>
-  );
-}
-
-export function NavResourcesIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M2.6 13.4h10.8" />
-      <path d="M4.5 13.4V6" />
-      <path d="M6.9 13.4V3.6" />
-      <path d="M9.3 13.4V7" />
-      <path d="m11.5 13.4 1.9-6.4" />
-    </IconBase>
-  );
-}
-
-export function NavTrainingIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M5 3.4h6.8a1 1 0 0 1 1 1V6" />
-      <path d="M4.2 5.6h6.6a1 1 0 0 1 1 1v4.8a1 1 0 0 1-1 1H4.2a1 1 0 0 1-1-1V6.6a1 1 0 0 1 1-1z" />
-      <path d="m5.5 9.2 1.3 1.3 2.4-2.5" />
-    </IconBase>
-  );
-}
-
-export function NavProgressIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M2.8 12.9h2.4" />
-      <path d="M6.8 9.6h2.4" />
-      <path d="M10.8 6.3h2.4" />
-      <path d="M3.4 11.2 7 7.4l2.4 1.9 3.6-4.6" />
-      <path d="M10.4 4.7h2.6v2.6" />
-    </IconBase>
-  );
-}
-
-export function NavConnectionIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <circle cx="3.7" cy="12.3" r="1.4" />
-      <circle cx="12.3" cy="3.7" r="1.4" />
-      <path d="M5 11.1c1.7-1.3 3.6-1.6 4.7-3.1 1-1.4 1-2.5 1.5-3.2" />
-    </IconBase>
-  );
-}
-
-export function NavWorkspaceIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M2.4 5.4a1 1 0 0 1 1-1h3l1.4 1.4H13a1 1 0 0 1 1 1v4.8a1 1 0 0 1-1 1H3.4a1 1 0 0 1-1-1z" />
-      <path d="M8 8.4v1.8" />
-      <path d="M8 10.2H6.5v1.4" />
-      <path d="M8 10.2h1.5v1.4" />
-    </IconBase>
-  );
-}
-
-export function NavTeachingIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M8 3 14.3 6 8 9 1.7 6z" />
-      <path d="M4.9 7.5v2.4c0 .9 1.4 1.7 3.1 1.7s3.1-.8 3.1-1.7V7.5" />
-      <path d="M13.7 6v3.4" />
-    </IconBase>
-  );
-}
-
-export function NavMemoryIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M4.6 4.6h6.8v6.8H4.6z" />
-      <path d="M6.3 4.6V3M9.7 4.6V3M6.3 13v-1.6M9.7 13v-1.6M4.6 6.3H3M4.6 9.7H3M13 6.3h-1.6M13 9.7h-1.6" />
-      <path d="M8 7l1.4.5v1.2c0 .85-.6 1.35-1.4 1.75-.8-.4-1.4-.9-1.4-1.75V7.5z" />
-    </IconBase>
-  );
-}
-
-export function NavAdvancedIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M4.4 2.8v10.4" />
-      <path d="M8 2.8v10.4" />
-      <path d="M11.6 2.8v10.4" />
-      <path d="M3.2 10h2.4" />
-      <path d="M6.8 5.4h2.4" />
-      <path d="M10.4 11.4h2.4" />
-    </IconBase>
-  );
 }
 
 export function HistoryIcon(props: CoachIconProps) {

@@ -11,12 +11,18 @@
  * - Skills: a lightning bolt that fills when active (was LightningIcon)
  * - Preferences: a gear whose hub fills when active (was GearIcon)
  * - Advanced: mixer sliders with a filled thumb accent (was NavAdvancedIcon)
+ * - SettingsIcon: the header/sidebar gear — the same canonical gear as
+ *   Preferences (was the CoachIcons SettingsIcon 16-box sketch)
  *
  * Each icon accepts `active` to show its Selective Fill element.
  */
 import { TrainerIconBase, type TrainerIconProps } from "../TrainerIconBase";
 
 type SettingsNavIconProps = Omit<TrainerIconProps, "active"> & { active?: boolean };
+
+/** Canonical gear body, shared by the Preferences category and the header gear. */
+const GEAR_BODY =
+  "M8.25 2.25h3.5l.5 2.13c.5.12 1 .37 1.38.75l2.12-.75 1.5 2.63-1.63 1.37c.13.5.13 1 .13 1.62s0 1.13-.13 1.63l1.63 1.37-1.5 2.63-2.13-.75c-.37.37-.87.62-1.37.75l-.5 2.12h-3.5l-.5-2.12c-.5-.13-1-.38-1.38-.75l-2.12.75-1.5-2.63 1.62-1.37c-.12-.5-.12-1-.12-1.63s0-1.12.12-1.62L4 5.88l1.5-2.63 2.13.75c.37-.38.87-.63 1.37-.75z";
 
 export function SettingsConnectionIcon({ active, ...props }: SettingsNavIconProps) {
   return (
@@ -89,8 +95,22 @@ export function SettingsPreferencesIcon({ active, ...props }: SettingsNavIconPro
   return (
     <TrainerIconBase {...props} active={active}>
       {/* Gear body */}
-      <path d="M8.25 2.25h3.5l.5 2.13c.5.12 1 .37 1.38.75l2.12-.75 1.5 2.63-1.63 1.37c.13.5.13 1 .13 1.62s0 1.13-.13 1.63l1.63 1.37-1.5 2.63-2.13-.75c-.37.37-.87.62-1.37.75l-.5 2.12h-3.5l-.5-2.12c-.5-.13-1-.38-1.38-.75l-2.12.75-1.5-2.63 1.62-1.37c-.12-.5-.12-1-.12-1.63s0-1.12.12-1.62L4 5.88l1.5-2.63 2.13.75c.37-.38.87-.63 1.37-.75z" />
+      <path d={GEAR_BODY} />
       {/* Gear hub: fills when active */}
+      {active ? (
+        <circle cx="10" cy="10" r="2.4" fill="currentColor" stroke="none" />
+      ) : (
+        <circle cx="10" cy="10" r="2.4" />
+      )}
+    </TrainerIconBase>
+  );
+}
+
+/** Header/sidebar gear — the canonical gear, same geometry as Preferences. */
+export function SettingsIcon({ active, ...props }: SettingsNavIconProps) {
+  return (
+    <TrainerIconBase {...props} active={active}>
+      <path d={GEAR_BODY} />
       {active ? (
         <circle cx="10" cy="10" r="2.4" fill="currentColor" stroke="none" />
       ) : (
