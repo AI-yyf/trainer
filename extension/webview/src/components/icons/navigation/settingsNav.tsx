@@ -20,10 +20,6 @@ import { TrainerIconBase, type TrainerIconProps } from "../TrainerIconBase";
 
 type SettingsNavIconProps = Omit<TrainerIconProps, "active"> & { active?: boolean };
 
-/** Canonical gear body, shared by the Preferences category and the header gear. */
-const GEAR_BODY =
-  "M8.25 2.25h3.5l.5 2.13c.5.12 1 .37 1.38.75l2.12-.75 1.5 2.63-1.63 1.37c.13.5.13 1 .13 1.62s0 1.13-.13 1.63l1.63 1.37-1.5 2.63-2.13-.75c-.37.37-.87.62-1.37.75l-.5 2.12h-3.5l-.5-2.12c-.5-.13-1-.38-1.38-.75l-2.12.75-1.5-2.63 1.62-1.37c-.12-.5-.12-1-.12-1.63s0-1.12.12-1.62L4 5.88l1.5-2.63 2.13.75c.37-.38.87-.63 1.37-.75z";
-
 export function SettingsConnectionIcon({ active, ...props }: SettingsNavIconProps) {
   return (
     <TrainerIconBase {...props} active={active}>
@@ -91,31 +87,48 @@ export function SettingsSkillsIcon({ active, ...props }: SettingsNavIconProps) {
   );
 }
 
+/**
+ * Refined minimal cog: rounded hub + eight round-cap teeth (20-box).
+ * Reads cleanly at 16-18px where the old toothed-outline gear turned to mud.
+ */
+function CogGlyph({ active }: { active?: boolean }) {
+  const teeth: Array<[number, number, number, number]> = [
+    [10, 2.7, 10, 4.2],
+    [10, 15.8, 10, 17.3],
+    [2.7, 10, 4.2, 10],
+    [15.8, 10, 17.3, 10],
+    [4.45, 4.45, 5.5, 5.5],
+    [15.55, 15.55, 14.5, 14.5],
+    [4.45, 15.55, 5.5, 14.5],
+    [15.55, 4.45, 14.5, 5.5],
+  ];
+  return (
+    <>
+      {teeth.map(([x1, y1, x2, y2]) => (
+        <path key={`${x1},${y1}`} d={`M${x1} ${y1}L${x2} ${y2}`} />
+      ))}
+      {active ? (
+        <circle cx="10" cy="10" r="2.7" fill="currentColor" stroke="none" />
+      ) : (
+        <circle cx="10" cy="10" r="2.7" />
+      )}
+    </>
+  );
+}
+
 export function SettingsPreferencesIcon({ active, ...props }: SettingsNavIconProps) {
   return (
     <TrainerIconBase {...props} active={active}>
-      {/* Gear body */}
-      <path d={GEAR_BODY} />
-      {/* Gear hub: fills when active */}
-      {active ? (
-        <circle cx="10" cy="10" r="2.4" fill="currentColor" stroke="none" />
-      ) : (
-        <circle cx="10" cy="10" r="2.4" />
-      )}
+      <CogGlyph active={active} />
     </TrainerIconBase>
   );
 }
 
-/** Header/sidebar gear — the canonical gear, same geometry as Preferences. */
+/** Header/sidebar gear — the canonical cog, same geometry as Preferences. */
 export function SettingsIcon({ active, ...props }: SettingsNavIconProps) {
   return (
     <TrainerIconBase {...props} active={active}>
-      <path d={GEAR_BODY} />
-      {active ? (
-        <circle cx="10" cy="10" r="2.4" fill="currentColor" stroke="none" />
-      ) : (
-        <circle cx="10" cy="10" r="2.4" />
-      )}
+      <CogGlyph active={active} />
     </TrainerIconBase>
   );
 }

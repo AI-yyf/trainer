@@ -406,13 +406,3 @@ export function TrainingIcon(props: CoachIconProps) {
   return <TargetIcon {...props} />;
 }
 
-export function HistoryIcon(props: CoachIconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M6.9 2.7A5.4 5.4 0 1 1 2.6 8" />
-      <path d="M2.6 2.9v3.4h3.4" />
-      <path d="M8 5.2V8l2.1 1.3" />
-    </IconBase>
-  );
-}
-

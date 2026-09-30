@@ -192,7 +192,7 @@ import type {
   TrainingSummaryCard,
 } from "../components/training/TrainingWorkbenchView";
 import { CoachNavIcon, LearningNavIcon, ResourcesNavIcon, TrainingNavIcon } from "../components/icons/navigation/coreNav";
-import { ModelLayersIcon, TrainerMarkIcon } from "../components/icons/brand/trainerBrand";
+import { ModelLayersIcon } from "../components/icons/brand/trainerBrand";
 import {
   CheckMarkIcon,
   ChevronRightIcon,
@@ -14299,7 +14299,7 @@ export function App() {
       <header className="trainer-header">
         <div className="trainer-header__utility">
           <span className="trainer-header__brand" aria-hidden="true">
-            <TrainerMarkIcon size={13} />
+            Trainer
           </span>
           <div className="header-actions">
             <button

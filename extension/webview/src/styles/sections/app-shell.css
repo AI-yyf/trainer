@@ -97,9 +97,12 @@ body,
 .trainer-header__brand {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   flex: none;
-  color: var(--fg-muted);
+  color: var(--fg-1);
+  font-size: var(--trainer-font-xs);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  user-select: none;
 }
 
 /* Row 2 — primary nav: the daily view switcher owns the full row with even

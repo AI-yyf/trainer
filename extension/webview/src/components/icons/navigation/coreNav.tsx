@@ -85,3 +85,19 @@ export function NavProgressIcon({ active, ...props }: NavIconProps) {
     </TrainerIconBase>
   );
 }
+
+/** Rewind-clock history glyph (20-box): counter-clockwise arc out of a
+  corner bracket, clock hands at the center. Replaces the old plain-clock
+  sketch from the previous icon grammar. */
+export function HistoryIcon({ active, ...props }: NavIconProps) {
+  return (
+    <TrainerIconBase {...props} active={active}>
+      {/* Rewind arc sweeping out of the corner bracket */}
+      <path d="M2.6 10a7.4 7.4 0 1 0 7.4-7.4 8 8 0 0 0-5.53 2.25L2.6 6.6" />
+      {/* Arrow bracket the arc rewinds into */}
+      <path d="M2.6 2.7v3.9h3.9" />
+      {/* Clock hands */}
+      <path d="M10 5.9v4.1l3.2 1.6" />
+    </TrainerIconBase>
+  );
+}
