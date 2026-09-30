@@ -56,7 +56,7 @@
 
 .settings-status-bar__issue:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: -1px;
 }
 
 .settings-template-entry {
@@ -81,7 +81,7 @@
 
 .settings-template-entry:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: -1px;
 }
 
 .settings-template-entry__copy {
@@ -115,11 +115,18 @@
   min-width: 0;
 }
 
-.settings-section-head--flat {
-  flex-wrap: wrap;
-  gap: 6px 10px;
-  padding: 4px 0 2px;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
+.settings-section-dot {
+  display: inline-flex;
+  align-items: center;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.settings-section-dot::before {
+  content: "";
+  display: none;
 }
 
 .settings-section-head__summary {
@@ -193,25 +200,15 @@
   animation: settings-anchor-flash var(--motion-base) var(--ease-out) 2;
 }
 
+/* Unified Settings panel heading: one treatment for every category panel
+   (muted eyebrow + optional summary, hairline underneath). */
 .settings-section-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 0;
-}
-
-.settings-section-dot {
-  display: inline-flex;
-  align-items: center;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--warning);
-}
-
-.settings-section-dot::before {
-  content: "";
-  display: none;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 4px 0 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
 }
 
 .settings-section-save.is-dirty {
@@ -239,7 +236,7 @@
 
 .settings-answer-style__option:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: -1px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -253,6 +250,7 @@
 .settings-endpoint-speed {
   display: grid;
   gap: 6px;
+  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
 }
 
 .settings-endpoint-speed__rows {
@@ -265,16 +263,16 @@
   align-items: center;
   gap: 8px;
   padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius, 6px);
+  border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--fg);
+  color: var(--fg-1);
   cursor: pointer;
   text-align: left;
 }
 
 .settings-endpoint-speed__row:hover {
-  background: var(--hover, color-mix(in srgb, var(--accent) 12%, transparent));
+  background: var(--bg-2);
 }
 
 .settings-endpoint-speed__dot {
@@ -288,7 +286,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--trainer-font-2xs);
 }
 
 .settings-endpoint-speed__latency {
@@ -323,11 +321,9 @@
 }
 
 .settings-endpoint-speed__actions input:focus {
-  box-shadow: 0 0 0 3px var(--focus-ring);
-}
-
-.settings-endpoint-speed {
-  animation: trainer-pop-in var(--motion-base, 180ms) var(--motion-ease);
+  /* Settings focus language: one inset ring everywhere. */
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
 }
 
 .settings-endpoint-speed__row:nth-child(1) { animation-delay: 0ms; }

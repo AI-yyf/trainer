@@ -355,7 +355,9 @@
 }
 
 .settings-provider-directory__item:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  /* Settings focus language: one inset ring everywhere (§四十八 — one idiom
+     per surface; the inset offset never clips inside scroll lists). */
+  outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
 }
 
@@ -512,8 +514,8 @@
 .toolbar-button:focus-visible,
 .settings-sheet__choice-pill:focus-visible,
 .context-chip:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
 }
 
 .toolbar-button[aria-pressed="true"],
@@ -663,7 +665,7 @@
 
 .settings-availability-strip__more > summary:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: -1px;
 }
 
 .settings-availability-strip__more .eyebrow,
@@ -901,7 +903,7 @@
 }
 
 .settings-level-head__back:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
 }
 
@@ -999,7 +1001,7 @@
 
 .settings-provider-bar__icon-button:focus-visible,
 .settings-provider-bar__add:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
 }
 
@@ -1029,7 +1031,7 @@
 }
 
 .settings-provider-profile:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
 }
 
@@ -1166,8 +1168,8 @@
 }
 
 .settings-model-limit-row__model:focus-visible {
-  outline: 1px solid var(--focus-ring);
-  outline-offset: 1px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
 }
 
 .settings-model-limit-row__model-name,
@@ -1506,8 +1508,8 @@
 }
 
 .settings-sheet__minor-panel > summary:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
   border-radius: var(--radius-sm);
 }
 
@@ -1587,8 +1589,11 @@
 .settings-memory-sharing__revoke:focus-visible {
   border-color: color-mix(in srgb, var(--danger, var(--accent)) 42%, var(--line));
   color: var(--danger, var(--accent));
-  outline: none;
-  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.settings-memory-sharing__revoke:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
 }
 
 .settings-memory-sharing__revoke:disabled {
@@ -1724,8 +1729,8 @@
 }
 
 .settings-sheet__workspace-list-item:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
 }
 
 .settings-sheet__workspace-list-item > em {

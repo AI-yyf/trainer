@@ -85,7 +85,8 @@ import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
-import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, NavAdvancedIcon, NavConnectionIcon, NavResourcesIcon, NavTeachingIcon, NavTrainingIcon, NavWorkspaceIcon, PlusIcon, RefreshIcon, ShareIcon, TrashIcon } from "../icons";
+import { CheckMarkIcon, ChevronLeftIcon, ChevronRightIcon, DiagnosticsIcon, FolderIcon, GearIcon, LightningIcon, NavResourcesIcon, NavTrainingIcon, PlusIcon, RefreshIcon, ShareIcon, TrashIcon } from "../icons";
+import { SettingsAdvancedIcon, SettingsConnectionIcon, SettingsPreferencesIcon, SettingsSkillsIcon, SettingsTeachingIcon, SettingsWorkspaceIcon } from "../icons/navigation/settingsNav";
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
 import { trainerCommands } from "../../../../../shared/src/commands";
 import { remoteSupportStateView, REMOTE_SUPPORT_COPY } from "./remoteSupportCopy";
@@ -6305,37 +6306,37 @@ export function CoachSettingsView({
       id: "connection",
       label: settingsGlobalCopy.settingsSectionConnection,
       dirty: connectionDirty,
-      icon: <NavConnectionIcon size={15} />,
+      icon: <SettingsConnectionIcon size={16} active={activeSettingsCategory === "connection"} />,
     },
     {
       id: "workspace",
       label: settingsPhrase(language, "navWorkspace"),
       dirty: false,
-      icon: <NavWorkspaceIcon size={15} />,
+      icon: <SettingsWorkspaceIcon size={16} active={activeSettingsCategory === "workspace"} />,
     },
     {
       id: "teaching",
       label: settingsGlobalCopy.settingsTeachingPrefs,
       dirty: false,
-      icon: <NavTeachingIcon size={15} />,
+      icon: <SettingsTeachingIcon size={16} active={activeSettingsCategory === "teaching"} />,
     },
     {
       id: "skills",
       label: settingsGlobalCopy.settingsSectionSkills,
       dirty: false,
-      icon: <LightningIcon size={15} />,
+      icon: <SettingsSkillsIcon size={16} active={activeSettingsCategory === "skills"} />,
     },
     {
       id: "preferences",
       label: settingsGlobalCopy.settingsPreferences,
       dirty: false,
-      icon: <GearIcon size={15} />,
+      icon: <SettingsPreferencesIcon size={16} active={activeSettingsCategory === "preferences"} />,
     },
     {
       id: "advanced",
       label: settingsGlobalCopy.settingsAdvancedContext,
       dirty: false,
-      icon: <NavAdvancedIcon size={15} />,
+      icon: <SettingsAdvancedIcon size={16} active={activeSettingsCategory === "advanced"} />,
     },
   ] as const;
   const settingsNavRef = useRef<HTMLElement | null>(null);
@@ -7330,7 +7331,7 @@ export function CoachSettingsView({
             data-settings-section="connection"
           >
             {providerSaved ? (
-            <div className="settings-section-head">
+            <header className="settings-section-head">
               <span className="eyebrow">{settingsGlobalCopy.settingsSectionConnection}</span>
               {connectionDirty ? (
                 <span
@@ -7341,7 +7342,7 @@ export function CoachSettingsView({
                   <span className="sr-only">{settingsGlobalCopy.settingsStatusUnsaved}</span>
                 </span>
               ) : null}
-            </div>
+            </header>
             ) : null}
 
             {providerListBar}
@@ -7887,7 +7888,7 @@ export function CoachSettingsView({
           data-settings-section="workspace"
           aria-labelledby="settings-section-workspace-title"
         >
-          <header className="settings-section-head settings-section-head--flat">
+          <header className="settings-section-head">
             <span id="settings-section-workspace-title" className="eyebrow">
               {resolveWorkbenchCopy(language).workspaceRootControl}
             </span>
@@ -8044,7 +8045,7 @@ export function CoachSettingsView({
           data-settings-section="teaching"
           aria-labelledby="settings-section-teaching-title"
         >
-          <header className="settings-section-head settings-section-head--flat">
+          <header className="settings-section-head">
             <span id="settings-section-teaching-title" className="eyebrow">
               {settingsGlobalCopy.settingsTeachingPrefs}
             </span>
@@ -8134,7 +8135,7 @@ export function CoachSettingsView({
           data-settings-section="preferences"
           aria-labelledby="settings-section-preferences-title"
         >
-          <header className="settings-section-head settings-section-head--flat">
+          <header className="settings-section-head">
             <span id="settings-section-preferences-title" className="eyebrow">
               {settingsGlobalCopy.settingsPreferences}
             </span>
@@ -8344,7 +8345,7 @@ export function CoachSettingsView({
           data-settings-section="skills"
           aria-labelledby="settings-section-skills-title"
         >
-          <header className="settings-section-head settings-section-head--flat">
+          <header className="settings-section-head">
             <span id="settings-section-skills-title" className="eyebrow">
               {settingsGlobalCopy.settingsSectionSkills}
             </span>
@@ -8397,7 +8398,7 @@ export function CoachSettingsView({
           data-settings-section="advanced"
           aria-labelledby="settings-section-advanced-title"
         >
-          <header className="settings-section-head settings-section-head--flat">
+          <header className="settings-section-head">
             <span id="settings-section-advanced-title" className="eyebrow">
               {settingsGlobalCopy.settingsAdvancedContext}
             </span>

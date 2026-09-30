@@ -44,14 +44,16 @@
   color: var(--fg-0);
   font-size: var(--trainer-font-xs);
   outline: none;
-  transition: box-shadow var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease);
+  transition: background var(--motion-fast) var(--motion-ease);
   font-family: inherit;
 }
 
 .settings-field input:focus,
 .settings-field select:focus,
 .settings-field textarea:focus {
-  box-shadow: 0 0 0 3px var(--focus-ring);
+  /* Settings focus language: one inset ring everywhere. */
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
 }
 
 .settings-field input::placeholder,
@@ -103,8 +105,8 @@
 }
 
 .settings-model-picker > summary:focus-visible {
-  box-shadow: 0 0 0 3px var(--focus-ring);
-  outline: none;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
 }
 
 .settings-model-picker > summary > span {
