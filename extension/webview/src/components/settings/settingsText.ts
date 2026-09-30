@@ -962,7 +962,13 @@ export function settingsText(
   zh: string,
   en: string,
 ): string {
-  const entry = SETTINGS_TEXT[JSON.stringify([zh, en])] ?? SETTINGS_TEXT[zh];
+  // zh-CN resolves to the source string directly; the record keys embed the
+  // zh text (`zh\u0000en` disambiguation form) and carry only the other 7
+  // languages, so an entry lookup can never serve zh-CN.
+  if (language === "zh-CN") {
+    return zh;
+  }
+  const entry = SETTINGS_TEXT[`${zh}\u0000${en}`] ?? SETTINGS_TEXT[zh];
   return entry?.[language] ?? en;
 }
 

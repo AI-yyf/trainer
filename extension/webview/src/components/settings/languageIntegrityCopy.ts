@@ -212,6 +212,11 @@ export function languageIntegrityText(
   zh: string,
   en: string,
 ): string {
+  // Records key on the zh source and carry only the other 7 languages, so
+  // zh-CN must resolve from the source string, never the en fallback.
+  if (language === "zh-CN") {
+    return zh;
+  }
   const entry = LANGUAGE_INTEGRITY_TEXT[zh];
   return entry?.[language] ?? en;
 }
