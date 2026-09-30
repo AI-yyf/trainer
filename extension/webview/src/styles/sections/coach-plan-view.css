@@ -403,9 +403,9 @@
 
 .coach-plan-view__main-card[data-plan-primary="true"] .coach-plan-view__now-card {
   margin-top: 0;
-  padding-top: 6px;
+  padding-top: 0;
   border-left: 0;
-  border-top: 1px solid color-mix(in srgb, var(--line) 34%, transparent);
+  border-top: 0;
 }
 
 .coach-plan-view__compact-more .coach-plan-view__now-card {
@@ -553,11 +553,6 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .resources-library-hero__footer {
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
-
   .resources-view-switcher {
     grid-column: 1;
     grid-row: 2;
@@ -574,10 +569,6 @@
   .coach-plan-view__compact-verify {
     grid-template-columns: minmax(0, 1fr);
     gap: 2px;
-  }
-
-  .coach-plan-view__route-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .coach-plan-view__now-card span,

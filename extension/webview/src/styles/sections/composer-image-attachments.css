@@ -166,42 +166,6 @@
   text-transform: none !important;
 }
 
-.trainer-shell .message-markdown h1 {
-  font-size: 1.22rem !important;
-  font-weight: 700 !important;
-  line-height: 1.3 !important;
-  letter-spacing: 0 !important;
-  text-transform: none !important;
-  color: var(--fg-0) !important;
-}
-
-.trainer-shell .message-markdown h2 {
-  font-size: 1.08rem !important;
-  font-weight: 650 !important;
-  line-height: 1.32 !important;
-  letter-spacing: 0 !important;
-  text-transform: none !important;
-  color: var(--fg-0) !important;
-}
-
-.trainer-shell .message-markdown h3 {
-  font-size: 1rem !important;
-  font-weight: 600 !important;
-  line-height: 1.35 !important;
-  letter-spacing: 0 !important;
-  text-transform: none !important;
-  color: var(--fg-0) !important;
-}
-
-.trainer-shell .message-markdown h4 {
-  font-size: 0.94rem !important;
-  font-weight: 550 !important;
-  line-height: 1.35 !important;
-  letter-spacing: 0 !important;
-  text-transform: none !important;
-  color: var(--fg-0) !important;
-}
-
 .section-block__header h2,
 .workbench-pane__heading h2,
 .settings-sheet__header h2,

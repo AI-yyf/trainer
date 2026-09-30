@@ -176,10 +176,6 @@
 }
 
 @media (max-width: 360px) {
-  .agent-activity-strip__summary {
-    gap: 3px 6px;
-  }
-
   .agent-activity-pill {
     gap: 4px;
     padding-inline: 8px;

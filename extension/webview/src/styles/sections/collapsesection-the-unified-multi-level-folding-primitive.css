@@ -6,7 +6,7 @@
    ============================================================ */
 .collapse-section {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--surface-1);
   overflow: hidden;
 }
@@ -71,8 +71,8 @@
   flex: none;
   padding: 1px 6px;
   border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 11px;
+  border-radius: var(--radius-full);
+  font-size: var(--trainer-font-3xs);
   color: var(--vscode-descriptionForeground, inherit);
 }
 
@@ -82,7 +82,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--vscode-descriptionForeground, inherit);
-  font-size: 12px;
+  font-size: var(--trainer-font-2xs);
 }
 
 .collapse-section__actions {

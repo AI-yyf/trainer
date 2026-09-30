@@ -182,10 +182,6 @@
   max-width: none;
 }
 
-.composer-shell--quiet .composer-mode-control__trigger {
-  max-width: none;
-}
-
 .composer-shell--quiet .composer-mode-control__chevron svg,
 .composer-shell--quiet .composer__clear-btn svg {
   width: 16px;
@@ -458,6 +454,7 @@
 }
 
 .composer__shortcut {
+  gap: 5px;
   font-family: var(--font-ui);
   color: var(--fg-muted);
   font-size: var(--trainer-font-3xs);
@@ -649,6 +646,7 @@
 }
 
 .composer-mode-control__label {
+  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

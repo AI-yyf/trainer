@@ -645,12 +645,6 @@
   font-weight: 400;
 }
 
-.settings-availability-strip__state {
-  display: inline-flex;
-  margin-left: 6px;
-  vertical-align: middle;
-}
-
 .settings-availability-strip__more {
   min-width: 0;
   color: var(--fg-muted);
@@ -1623,17 +1617,11 @@
 }
 
 .settings-sheet__defaults-summary--inline {
-  flex-direction: row;
-  align-items: center;
   justify-content: space-between;
-  gap: 8px;
 }
 
 .settings-sheet__defaults-summary-main {
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
 }
 
 .settings-sheet__defaults-summary::marker {
@@ -1862,7 +1850,6 @@
   }
 
   .settings-availability-strip__facts {
-    grid-template-columns: 1fr;
     gap: 0;
   }
 
@@ -1873,19 +1860,8 @@
     gap: 6px;
   }
 
-  .settings-availability-fact > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .settings-availability-fact > strong {
     width: 100%;
-    justify-content: flex-start;
-  }
-
-  .settings-availability-fact__text {
-    text-align: left;
   }
 
   .settings-sheet__setup-guidance,
@@ -1904,28 +1880,10 @@
     grid-template-columns: 1fr;
   }
 
-  .header-switcher {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-    gap: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    padding-inline: 0;
-  }
-
   .header-switcher__item {
-    width: 100%;
-    min-width: 0;
     padding: 6px 2px 8px;
     font-size: var(--trainer-font-2xs);
-    justify-content: center;
   }
-
-.header-switcher__label {
-  min-width: 0;
-  overflow: visible;
-  text-overflow: clip;
-}
 
   .settings-sheet__utility-grid {
     grid-template-columns: 1fr;
@@ -1955,10 +1913,6 @@
 @media (max-width: 320px) {
   .settings-availability-fact {
     padding-bottom: 5px;
-  }
-
-  .settings-availability-fact > strong {
-    justify-content: flex-start;
   }
 }
 

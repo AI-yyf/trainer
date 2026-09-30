@@ -10,11 +10,6 @@
   justify-content: flex-start;
 }
 
-.coach-plan-view__main-card[data-plan-primary="true"] .coach-plan-view__now-card {
-  border-top: 0;
-  padding-top: 0;
-}
-
 .coach-plan-view__compact-more > summary,
 .training-current__more > summary,
 .settings-availability-strip__more > summary,
@@ -24,7 +19,7 @@
   gap: 8px;
   min-height: 28px;
   padding: 2px 0;
-  font-size: 12px;
+  font-size: var(--trainer-font-2xs);
   line-height: var(--leading-meta);
   color: var(--fg-muted);
   list-style: none;
@@ -96,18 +91,6 @@
   background: transparent;
   border: 0;
   box-shadow: none;
-}
-
-.training-next-hop {
-  margin: 10px 0 0;
-  color: var(--fg-muted);
-  font-size: var(--type-meta);
-  line-height: var(--leading-meta);
-}
-
-.training-next-hop strong {
-  font-weight: 400;
-  color: var(--fg-1);
 }
 
 .message-bubble__meta {
@@ -202,10 +185,6 @@ details[open] > :not(summary) {
 .composer-shell--quiet .composer-secondary-button:hover {
   border-color: color-mix(in srgb, var(--line) 48%, transparent);
   background: color-mix(in srgb, var(--bg-2) 54%, transparent);
-}
-
-.header-switcher__item.is-active {
-  font-weight: 400;
 }
 
 .coach-empty-state--welcome {
@@ -322,13 +301,6 @@ details[open] > :not(summary) {
 
 .composer__plus-control {
   position: relative;
-}
-
-.composer-mode-control__label {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .composer-plus-menu {

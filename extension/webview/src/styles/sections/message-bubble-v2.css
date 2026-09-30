@@ -4,8 +4,8 @@
 
 .message-bubble-v2 {
   display: flex;
-  gap: 6px;
-  padding: 6px 8px;
+  gap: 8px;
+  padding: 8px 10px;
   animation: messageFadeIn var(--motion-in) var(--motion-ease);
 }
 
@@ -18,11 +18,11 @@
 }
 
 .message-bubble-v2--user .message-bubble-v2__content {
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg-1));
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
   color: var(--fg-0);
   border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
-  border-radius: 8px 8px 4px 8px;
-  padding: 8px 10px;
+  border-radius: 10px 10px 4px 10px;
+  padding: 9px 12px;
   max-width: 92%;
 }
 
@@ -43,21 +43,22 @@
 }
 
 .message-bubble-v2--assistant .message-bubble-v2__content {
-  background: transparent;
-  border: 0;
-  border-left: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
-  border-radius: 0;
-  padding: 0 0 0 10px;
+  background: color-mix(in srgb, var(--bg-1) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 38%, var(--line));
+  border-radius: 4px 10px 10px 4px;
+  padding: 10px 12px;
   max-width: 100%;
 }
 
 .message-bubble-v2__avatar {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-radius: 50%;
-  background: color-mix(in srgb, var(--bg-2) 72%, var(--bg-1));
-  color: var(--fg-1);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-1));
+  color: var(--fg-0);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -86,7 +87,8 @@
 .message-bubble-v2__name {
   font-size: var(--trainer-font-2xs);
   font-weight: 400;
-  color: var(--fg-muted);
+  letter-spacing: 0.02em;
+  color: var(--fg-1);
 }
 
 .message-bubble-v2__time {
@@ -110,7 +112,7 @@
 
 .message-bubble-v2__body {
   font-size: var(--trainer-font-xs);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .message-bubble-v2__badges {

@@ -122,12 +122,6 @@
   padding-inline: 7px 8px;
 }
 
-.button--iconic .button__icon {
-  width: 18px;
-  height: 18px;
-  border-radius: var(--radius-sm);
-}
-
 .kbd-chip,
 .quick-action-btn__kbd,
 .composer__shortcut,
@@ -151,12 +145,6 @@
     inset 0 1px 0 color-mix(in srgb, var(--fg-0) 12%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--bg-0) 14%, transparent),
     0 1px 0 color-mix(in srgb, var(--fg-0) 4%, transparent);
-}
-
-.composer__shortcut {
-  gap: 5px;
-  padding-inline: 9px;
-  color: var(--fg-1);
 }
 
 .flash-card__kbd-hint,

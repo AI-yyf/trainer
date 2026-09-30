@@ -77,10 +77,6 @@
     line-height: 1.15;
   }
 
-  .training-current__topline {
-    align-items: flex-start;
-  }
-
   .training-current__learning-family,
   .training-current__meta--context[data-training-context-layout="optional-second-line"] {
     max-width: none;
@@ -132,11 +128,6 @@
   .coach-plan-view__route-strip {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
-  }
-
-  .coach-plan-view__now-card[data-plan-fact="next"] strong,
-  .coach-plan-view__route-item[data-plan-fact] strong {
-    -webkit-line-clamp: unset;
   }
 
   .settings-availability-strip__facts {

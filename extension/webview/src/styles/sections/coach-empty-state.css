@@ -7,9 +7,7 @@
 }
 
 .coach-empty-state__starters {
-  display: flex;
   flex-wrap: wrap;
-  gap: 6px;
 }
 
 .coach-empty-state__starters .toolbar-button {
@@ -42,7 +40,7 @@
   margin: 0;
   color: var(--fg-1, var(--fg-0, inherit));
   opacity: 0.78;
-  font-size: 12px;
+  font-size: var(--trainer-font-2xs);
   line-height: 1.5;
 }
 
