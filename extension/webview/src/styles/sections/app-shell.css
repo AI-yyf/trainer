@@ -81,18 +81,33 @@ body,
   opacity: 1;
 }
 
-.trainer-header__status {
+/* Row 1 — utility/identity layer: a small muted brand mark on the start
+   edge, History + Settings icon actions pinned to the end edge. This row
+   never wraps; the actions always stay flush to the top corner. */
+.trainer-header__utility {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0;
-  align-items: stretch;
+  align-items: center;
   justify-content: flex-start;
+  gap: 0;
   width: 100%;
   min-width: 0;
+  padding-top: 6px;
 }
 
-.trainer-header__status--icons .header-actions {
-  margin-left: auto;
+.trainer-header__brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: var(--fg-muted);
+}
+
+/* Row 2 — primary nav: the daily view switcher owns the full row with even
+   columns. It is a real second layer, not a wrapped leftover. */
+.trainer-header__nav {
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 
 .button__icon {
@@ -273,8 +288,6 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
   align-items: stretch;
   gap: 0;
   width: 100%;
-  flex: 1 0 100%;
-  align-self: stretch;
   min-width: 0;
   overflow: hidden;
   scrollbar-width: none;
@@ -380,13 +393,8 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
     padding-inline: 0;
   }
 
-  .trainer-header__status {
+  .trainer-header__utility {
     gap: 0;
-  }
-
-  .header-actions {
-    margin-left: 0;
-    align-self: flex-start;
   }
 
   .header-switcher {
@@ -413,6 +421,12 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
 }
 
 @media (max-width: 340px) {
+  /* Very narrow: row 1 keeps only the History/Settings icon buttons, flush
+     to the end edge — the brand mark yields first. Rows never wrap. */
+  .trainer-header__brand {
+    display: none;
+  }
+
   .header-switcher {
     gap: 0;
   }

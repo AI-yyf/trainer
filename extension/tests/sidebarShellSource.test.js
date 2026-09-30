@@ -87,8 +87,31 @@ test('app shell renders a text-only top navigation for the daily views', () => {
   assert.match(source, /aria-current=\{activeView === view \? "page" : undefined\}/);
   assert.match(source, /<span className="header-switcher__label">\{displayLabel\}<\/span>/);
   assert.match(source, /<span className="header-switcher__icon" aria-hidden="true">/);
-  assert.match(source, /\{SIDEBAR_VIEW_ICONS\[view\]\}/);
+  assert.match(source, /\{sidebarViewIcon\(view, activeView === view\)\}/);
   assert.match(source, /aria-label=\{label\}/);
+});
+
+test('header composes two intentional layers: utility row above primary nav', () => {
+  const source = fs.readFileSync(appSourcePath, 'utf8');
+
+  // Row 1: utility/identity — muted brand mark, History + Settings actions
+  // pinned to the end edge (single History entry point lives here).
+  const utilityStart = source.indexOf('className="trainer-header__utility"');
+  assert.ok(utilityStart > -1, 'expected the trainer-header__utility row');
+  const utilityBlock = source.slice(utilityStart, utilityStart + 2200);
+  assert.match(utilityBlock, /className="trainer-header__brand" aria-hidden="true"/);
+  assert.match(utilityBlock, /data-testid="trainer-history-toggle"/);
+  assert.match(utilityBlock, /onClick=\{toggleComposerHistoryMenu\}/);
+  assert.match(utilityBlock, /data-testid="trainer-view-nav-settings"/);
+  assert.match(utilityBlock, /className="header-actions"/);
+  // Row 2: primary nav — full-width view switcher in its own layer.
+  const navStart = source.indexOf('<nav className="trainer-header__nav"');
+  assert.ok(navStart > -1, 'expected the trainer-header__nav row');
+  const navBlock = source.slice(navStart, navStart + 600);
+  assert.match(navBlock, /aria-label=\{t\.viewNavigation\}/);
+  assert.match(navBlock, /className=\{`header-switcher header-switcher--\$\{headerSwitcherDensity\}`\}/);
+  // The composer secondary row keeps no duplicate history entry.
+  assert.doesNotMatch(source, /id: "session-history"/);
 });
 
 test('top navigation swaps squeezed text for per-view icons', () => {
@@ -108,6 +131,36 @@ test('top navigation swaps squeezed text for per-view icons', () => {
   assert.match(styles, /\.header-switcher__icon\s*\{[\s\S]*?display:\s*none;/);
   assert.match(styles, /\.header-switcher--icon \.header-switcher__icon\s*\{[\s\S]*?display:\s*inline-flex;/);
   assert.match(styles, /\.header-switcher--icon \.header-switcher__label\s*\{[\s\S]*?display:\s*none;/);
+});
+
+test('header layers are laid out on purpose, not by flex-wrap accident', () => {
+  const styles = readStylesSource();
+
+  // Row 1 never wraps; actions stay pinned to the end edge.
+  const utilityStart = styles.indexOf('.trainer-header__utility {');
+  assert.ok(utilityStart > -1, 'expected .trainer-header__utility rules');
+  const utilityBlock = styles.slice(utilityStart, utilityStart + 220);
+  assert.match(utilityBlock, /display:\s*flex;/);
+  assert.doesNotMatch(utilityBlock, /flex-wrap/);
+
+  // Row 2 owns the full width as a real second layer.
+  const navStart = styles.indexOf('.trainer-header__nav {');
+  assert.ok(navStart > -1, 'expected .trainer-header__nav rules');
+  const navBlock = styles.slice(navStart, navStart + 160);
+  assert.match(navBlock, /width:\s*100%;/);
+  assert.match(navBlock, /min-width:\s*0;/);
+
+  // The switcher is no longer stretched by the old wrap hack…
+  const switcherStart = styles.indexOf('\n.header-switcher {');
+  const switcherBlock = styles.slice(switcherStart, switcherStart + 520);
+  assert.doesNotMatch(switcherBlock, /flex:\s*1 0 100%/);
+  // …and the accidental wrap container is gone entirely.
+  assert.doesNotMatch(styles, /\.trainer-header__status/);
+  // Very narrow widths: the brand mark yields, the icon buttons stay flush.
+  const narrowStart = styles.indexOf('@media (max-width: 340px)');
+  assert.ok(narrowStart > -1, 'expected the 340px narrow-width layer');
+  const narrowBlock = styles.slice(narrowStart, narrowStart + 400);
+  assert.match(narrowBlock, /\.trainer-header__brand\s*\{[^}]*display:\s*none;/);
 });
 
 test('extension manifest exposes Trainer as the VS Code-native universal coach', () => {

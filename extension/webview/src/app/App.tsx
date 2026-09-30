@@ -192,9 +192,9 @@ import type {
   TrainingSummaryCard,
 } from "../components/training/TrainingWorkbenchView";
 import { CoachNavIcon, LearningNavIcon, ResourcesNavIcon, TrainingNavIcon } from "../components/icons/navigation/coreNav";
+import { ModelLayersIcon, TrainerMarkIcon } from "../components/icons/brand/trainerBrand";
 import {
   CheckMarkIcon,
-  BrainIcon,
   ChevronRightIcon,
   ContextLayersIcon,
   FolderIcon,
@@ -1570,16 +1570,36 @@ function resolveHeaderSwitcherDensityForTabs(
   return "icon";
 }
 
-// §四十七: nav icons use 20px optical canvas. Active state Selective Fill
-// is driven by the is-active class on the parent header-switcher__item.
-const SIDEBAR_VIEW_ICONS: Record<ActiveWorkbenchView, ReactNode> = {
-  coach: <CoachNavIcon size={20} />,
-  plan: <LearningNavIcon size={20} />,
-  resources: <ResourcesNavIcon size={20} />,
-  training: <TrainingNavIcon size={20} />,
-  progress: <NavProgressIcon size={20} />,
-  settings: <SettingsIcon size={18} />,
-};
+// §四十七: nav icons use 20px optical canvas. `sidebarViewIcon` forwards the
+// real active state so TrainerIconBase renders its Selective Fill variant
+// (§四十六). CoachIcons-based glyphs have no `active` prop; the shared
+// `.trainer-icon is-active` class drives the same CSS contract for them.
+function sidebarViewIcon(view: ActiveWorkbenchView, active: boolean): ReactNode {
+  switch (view) {
+    case "coach":
+      return <CoachNavIcon size={20} active={active} />;
+    case "plan":
+      return <LearningNavIcon size={20} active={active} />;
+    case "resources":
+      return <ResourcesNavIcon size={20} active={active} />;
+    case "training":
+      return <TrainingNavIcon size={20} active={active} />;
+    case "progress":
+      return (
+        <NavProgressIcon
+          size={20}
+          className={active ? "trainer-icon is-active" : "trainer-icon"}
+        />
+      );
+    case "settings":
+      return (
+        <SettingsIcon
+          size={18}
+          className={active ? "trainer-icon is-active" : "trainer-icon"}
+        />
+      );
+  }
+}
 
 function skillSectionTargetView(section: TrainerSkillSection): ActiveWorkbenchView {
   switch (section) {
@@ -2807,12 +2827,22 @@ function formatIntervalDays(days: number | undefined, language: ComposerLanguage
   return appUiCopy(language, "{v} 天间隔").replace("{v}", String(days));
 }
 
+// Honest banded capability language — a single score must never surface as a
+// fake numeric percent. Bands: independent / assisted / emerging / unverified.
 function formatMasteryScore(score: number | undefined, language: ComposerLanguage): string | undefined {
   if (typeof score !== "number" || Number.isNaN(score)) {
     return undefined;
   }
-  const percent = `${Math.round(score * 100)}%`;
-  return appUiCopy(language, "掌握度 {v}").replace("{v}", percent);
+  if (score >= 0.8) {
+    return appUiCopy(language, "掌握度：独立完成");
+  }
+  if (score >= 0.5) {
+    return appUiCopy(language, "掌握度：有辅助完成");
+  }
+  if (score > 0) {
+    return appUiCopy(language, "掌握度：初步接触");
+  }
+  return appUiCopy(language, "掌握度：待验证");
 }
 
 function toPlanReviewItem(
@@ -5493,8 +5523,8 @@ export function App() {
     </svg>
   );
 
-  const composerHistoryLabel =
-    appUiCopy(layout.composerLanguage, "会话历史");
+  // History has a single header entry point (trainer-history-toggle); the
+  // composer secondary row stays minimal (context usage + model switch).
 
   useEffect(() => {
     const pending = pendingLivePlanTaskMintRef.current;
@@ -14267,39 +14297,15 @@ export function App() {
         }}
       />
       <header className="trainer-header">
-        <div className="trainer-header__status">
-          <div
-            ref={headerSwitcherRef}
-            className={`header-switcher header-switcher--${headerSwitcherDensity}`}
-            aria-label={t.viewNavigation}
-          >
-            {sidebarViewTabs.map(({ view, label, compactLabel }) => {
-              const displayLabel = headerSwitcherDensity === "compact" ? compactLabel : label;
-              return (
-                <button
-                  key={view}
-                  className={`header-switcher__item ${activeView === view ? "is-active" : ""}`}
-                  data-testid={`trainer-view-nav-${view}`}
-                  onClick={() => setActiveView(view)}
-                  type="button"
-                  aria-label={label}
-                  title={label}
-                  aria-pressed={activeView === view}
-                  aria-current={activeView === view ? "page" : undefined}
-                >
-                  <span className="header-switcher__icon" aria-hidden="true">
-                    {SIDEBAR_VIEW_ICONS[view]}
-                  </span>
-                  <span className="header-switcher__label">{displayLabel}</span>
-                </button>
-              );
-            })}
-          </div>
+        <div className="trainer-header__utility">
+          <span className="trainer-header__brand" aria-hidden="true">
+            <TrainerMarkIcon size={13} />
+          </span>
           <div className="header-actions">
             <button
               className="header-switcher__item header-switcher__item--history"
               data-testid="trainer-history-toggle"
-              onClick={() => setOpenMenu(openMenu === "history" ? undefined : "history")}
+              onClick={toggleComposerHistoryMenu}
               type="button"
               aria-label={appUiAltCopy(layout.composerLanguage, "会话历史")}
               title={appUiAltCopy(layout.composerLanguage, "会话历史")}
@@ -14322,7 +14328,7 @@ export function App() {
               aria-current={activeView === "settings" ? "page" : undefined}
             >
               <span className="header-switcher__icon" aria-hidden="true">
-                {SIDEBAR_VIEW_ICONS.settings}
+                {sidebarViewIcon("settings", activeView === "settings")}
               </span>
             </button>
             {activeView === "coach" && displayConnectionState !== "connected" ? (
@@ -14332,6 +14338,34 @@ export function App() {
             ) : null}
           </div>
         </div>
+        <nav className="trainer-header__nav" aria-label={t.viewNavigation}>
+          <div
+            ref={headerSwitcherRef}
+            className={`header-switcher header-switcher--${headerSwitcherDensity}`}
+          >
+            {sidebarViewTabs.map(({ view, label, compactLabel }) => {
+              const displayLabel = headerSwitcherDensity === "compact" ? compactLabel : label;
+              return (
+                <button
+                  key={view}
+                  className={`header-switcher__item ${activeView === view ? "is-active" : ""}`}
+                  data-testid={`trainer-view-nav-${view}`}
+                  onClick={() => setActiveView(view)}
+                  type="button"
+                  aria-label={label}
+                  title={label}
+                  aria-pressed={activeView === view}
+                  aria-current={activeView === view ? "page" : undefined}
+                >
+                  <span className="header-switcher__icon" aria-hidden="true">
+                    {sidebarViewIcon(view, activeView === view)}
+                  </span>
+                  <span className="header-switcher__label">{displayLabel}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
       </header>
 
       {operationMessage &&
@@ -14590,19 +14624,9 @@ export function App() {
                     }),
                 },
                 {
-                  id: "session-history",
-                  compact: true as const,
-                  icon: <HistoryIcon size={16} />,
-                  label: composerHistoryLabel,
-                  title: composerHistoryLabel,
-                  ariaLabel: composerHistoryLabel,
-                  tone: "ghost" as const,
-                  onClick: toggleComposerHistoryMenu,
-                },
-                {
                   id: "model-switch",
                   compact: composerModelActionDensity === "compact",
-                  icon: <BrainIcon size={16} />,
+                  icon: <ModelLayersIcon size={16} />,
                   label: composerModelButtonDisplayLabel,
                   tone: "ghost" as const,
                   title: composerModelButtonTitle,
