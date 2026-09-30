@@ -1,18 +1,26 @@
 /**
  * §四十五 Trainer brand icon — expresses Guide + Practice + Feedback,
- * not "AI document tool". A compass-star inside an open frame.
+ * not "AI document tool". A compass star inside an open frame.
+ *
+ * Canonical geometry — the exact 16×16 path set of extension/media/trainer-icon.svg
+ * (Activity Bar), extension/media/trainer.svg and media/trainer-icon.png.
+ * One mark, three renders; change all of them together.
  */
 import { TrainerIconBase, type TrainerIconProps } from "../TrainerIconBase";
 
+/** Open frame: not a closed document, suggests forward movement. */
+const MARK_FRAME =
+  "M5.5 13.25H11.25A2 2 0 0 0 13.25 11.25V4.75A2 2 0 0 0 11.25 2.75H4.75A2 2 0 0 0 2.75 4.75V10.5";
+/** Compass star: guide + practice + feedback. */
+const MARK_STAR = "M8 5 8.85 7.15 11 8 8.85 8.85 8 11 7.15 8.85 5 8 7.15 7.15Z";
+
 export function TrainerMarkIcon({ active, ...props }: TrainerIconProps & { active?: boolean }) {
   return (
-    <TrainerIconBase {...props} active={active}>
-      {/* Open frame: not a closed document, suggests forward movement */}
-      <path d="M5 2.5h7a2 2 0 0 1 2 2v8" />
-      <path d="M5 2.5a2 2 0 0 0-2 2v11l3-2.5h6a2 2 0 0 0 2-2" />
-      {/* Compass star: guide + practice + feedback */}
-      <path d="M10 6.5 11 9.5 14 10.5 11 11.5 10 14.5 9 11.5 6 10.5 9 9.5z" />
-      {active ? <circle cx="10" cy="10.5" r="1" fill="currentColor" stroke="none" /> : null}
+    <TrainerIconBase {...props} active={active} viewBox="0 0 16 16">
+      <path d={MARK_FRAME} />
+      <path d={MARK_STAR} />
+      {/* §四十六 selective fill: the star turns solid when the surface is active */}
+      {active ? <path d={MARK_STAR} fill="currentColor" stroke="none" /> : null}
     </TrainerIconBase>
   );
 }
