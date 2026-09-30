@@ -305,6 +305,10 @@ type PlanCopyKey =
   | "masteryIndependent"
   | "masteryAssisted"
   | "masteryNotVerified"
+  | "masteryBandIndependent"
+  | "masteryBandAssisted"
+  | "masteryBandEmerging"
+  | "masteryBandNotVerified"
   | "intervalDays"
   | "reviewLaneFallback"
   | "stageMaterialStudyGuide"
@@ -407,6 +411,10 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     masteryIndependent: "独立完成",
     masteryAssisted: "有辅助完成",
     masteryNotVerified: "尚未验证",
+    masteryBandIndependent: "独立完成",
+    masteryBandAssisted: "有辅助完成",
+    masteryBandEmerging: "初步接触",
+    masteryBandNotVerified: "待验证",
     intervalDays: "{days} 天间隔",
     reviewLaneFallback: "做完当前切片后，再安排这次回看。",
     stageMaterialStudyGuide: "学习指南",
@@ -509,6 +517,10 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     masteryIndependent: "Independent",
     masteryAssisted: "Completed with hints",
     masteryNotVerified: "Not yet verified",
+    masteryBandIndependent: "Independent",
+    masteryBandAssisted: "Assisted",
+    masteryBandEmerging: "Emerging",
+    masteryBandNotVerified: "Not verified yet",
     intervalDays: "{days}-day interval",
     reviewLaneFallback: "Schedule this revisit after the current slice lands.",
     stageMaterialStudyGuide: "Study guide",
@@ -613,6 +625,10 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     masteryIndependent: "Independiente",
     masteryAssisted: "Completado con ayudas",
     masteryNotVerified: "Aún sin verificar",
+    masteryBandIndependent: "Independiente",
+    masteryBandAssisted: "Con ayuda",
+    masteryBandEmerging: "Primeros pasos",
+    masteryBandNotVerified: "Aún sin verificar",
     intervalDays: "intervalo de {days} días",
     reviewLaneFallback: "Programe este repaso cuando aterrice el fragmento actual.",
     stageMaterialStudyGuide: "Guía de estudio",
@@ -717,6 +733,10 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     masteryIndependent: "Indépendant",
     masteryAssisted: "Terminé avec aides",
     masteryNotVerified: "Pas encore vérifié",
+    masteryBandIndependent: "Indépendant",
+    masteryBandAssisted: "Avec aide",
+    masteryBandEmerging: "Premiers pas",
+    masteryBandNotVerified: "Pas encore vérifié",
     intervalDays: "intervalle de {days} jours",
     reviewLaneFallback: "Programmez cette révision une fois le tronçon actuel terminé.",
     stageMaterialStudyGuide: "Guide d'étude",
@@ -821,6 +841,10 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     masteryIndependent: "Selbstständig",
     masteryAssisted: "Mit Hinweisen abgeschlossen",
     masteryNotVerified: "Noch nicht überprüft",
+    masteryBandIndependent: "Selbstständig",
+    masteryBandAssisted: "Mit Hilfe",
+    masteryBandEmerging: "Erste Schritte",
+    masteryBandNotVerified: "Noch nicht überprüft",
     intervalDays: "{days}-Tage-Intervall",
     reviewLaneFallback: "Planen Sie diese Wiederholung, sobald der aktuelle Abschnitt landet.",
     stageMaterialStudyGuide: "Lernleitfaden",
@@ -925,6 +949,10 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     masteryIndependent: "自力で完了",
     masteryAssisted: "ヒント付きで完了",
     masteryNotVerified: "まだ検証なし",
+    masteryBandIndependent: "自力で完了",
+    masteryBandAssisted: "ヒント付き",
+    masteryBandEmerging: "学び始め",
+    masteryBandNotVerified: "まだ検証なし",
     intervalDays: "{days} 日間隔",
     reviewLaneFallback: "現在のスライスが終わったら、この復習を予定します。",
     stageMaterialStudyGuide: "学習ガイド",
@@ -1029,6 +1057,10 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     masteryIndependent: "독립 완료",
     masteryAssisted: "힌트로 완료",
     masteryNotVerified: "아직 검증 안 됨",
+    masteryBandIndependent: "독립 완료",
+    masteryBandAssisted: "도움 받음",
+    masteryBandEmerging: "시작 단계",
+    masteryBandNotVerified: "아직 검증 안 됨",
     intervalDays: "{days}일 간격",
     reviewLaneFallback: "현재 조각이 끝나면 이 복습을 예약하세요.",
     stageMaterialStudyGuide: "학습 가이드",
@@ -1133,6 +1165,10 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     masteryIndependent: "Independente",
     masteryAssisted: "Concluído com dicas",
     masteryNotVerified: "Ainda não verificado",
+    masteryBandIndependent: "Independente",
+    masteryBandAssisted: "Com ajuda",
+    masteryBandEmerging: "Primeiros passos",
+    masteryBandNotVerified: "Ainda não verificado",
     intervalDays: "intervalo de {days} dias",
     reviewLaneFallback: "Agende esta revisão quando a fatia atual ficar pronta.",
     stageMaterialStudyGuide: "Guia de estudo",
@@ -1241,6 +1277,25 @@ function masteryLabel(score: number | undefined, language: PlanLanguage): string
   if (score >= 0.5) return planCopy(language, "masteryIndependent");
   if (score > 0) return planCopy(language, "masteryAssisted");
   return planCopy(language, "masteryNotVerified");
+}
+
+/**
+ * §八: canonical capability band for dashboard mastery scores — replaces the
+ * old fake-precision percent readout. Shared wording with the progress
+ * surface: >=0.8 independent, >=0.5 assisted, >0 emerging, otherwise not
+ * verified. No numeric percent, no bars implying precision.
+ */
+function capabilityBandLabel(score: number | undefined, language: PlanLanguage): string {
+  if (typeof score !== "number" || Number.isNaN(score) || score <= 0) {
+    return planCopy(language, "masteryBandNotVerified");
+  }
+  if (score >= 0.8) {
+    return planCopy(language, "masteryBandIndependent");
+  }
+  if (score >= 0.5) {
+    return planCopy(language, "masteryBandAssisted");
+  }
+  return planCopy(language, "masteryBandEmerging");
 }
 
 function intervalLabel(days: number | undefined, language: PlanLanguage): string | undefined {
@@ -3053,7 +3108,7 @@ function LearningHomeOverview({
  * view props stay untouched.
  */
 function PlanDashboard({ plan }: { plan: LearningPlan }) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const stageMaterials = useWorkbenchState((state) => state.stageMaterials);
   const dueReviewCount = useWorkbenchState((state) => state.data.memory.dueReviewCount);
   const dueReviews = useWorkbenchState((state) => state.data.memory.dueReviews);
@@ -3124,23 +3179,20 @@ function PlanDashboard({ plan }: { plan: LearningPlan }) {
           <h4 className="plan-dashboard__block-title">{t("planDashboardMasteryTitle")}</h4>
           {masteryEntries.length > 0 ? (
             <ul className="plan-dashboard__mastery-list">
-              {masteryEntries.map((entry) => {
-                const percent = Math.round(entry.score * 100);
-                return (
-                  <li key={entry.concept} className="plan-dashboard__mastery-item">
-                    <span className="plan-dashboard__mastery-name" title={entry.concept}>
-                      {entry.concept}
-                    </span>
-                    <div className="plan-dashboard__bar">
-                      <div
-                        className="plan-dashboard__bar-fill"
-                        style={{ "--bar-fill": String(percent / 100) } as CSSProperties}
-                      />
-                    </div>
-                    <span className="plan-dashboard__mastery-score">{percent}%</span>
-                  </li>
-                );
-              })}
+              {masteryEntries.map((entry) => (
+                <li
+                  key={entry.concept}
+                  className="plan-dashboard__mastery-item"
+                  style={{ gridTemplateColumns: "minmax(0, 1fr) auto" }}
+                >
+                  <span className="plan-dashboard__mastery-name" title={entry.concept}>
+                    {entry.concept}
+                  </span>
+                  <span className="plan-dashboard__mastery-score">
+                    {capabilityBandLabel(entry.score, language)}
+                  </span>
+                </li>
+              ))}
             </ul>
           ) : (
             <div className="empty-state stage-dashboard-empty">
