@@ -362,7 +362,12 @@ type PreviewProviderSecretsStore = {
   lastTestsByProviderModel: Record<string, ProviderLastTestResult>;
 };
 
-// Browser preview is a development harness. Keep credentials process-local and clear legacy storage.
+// Browser preview is a development harness. Keep credentials out of
+// long-term storage (legacy localStorage copies are actively deleted), but
+// mirror them into sessionStorage: a reload must not throw away the key and
+// its verification, or every reopen forces a 20s+ re-check. sessionStorage
+// clears with the tab, so nothing persists on disk or across sessions.
+const PREVIEW_PROVIDER_SECRETS_SESSION_KEY = "trainer:webview:preview:provider-secrets";
 let previewProviderSecretsInMemory: PreviewProviderSecretsStore = {
   apiKeysByProvider: {},
   modelCachesByProvider: {},
@@ -756,6 +761,25 @@ function hasSamePreviewCredentialTransport(
 }
 
 function previewProviderSecrets(): PreviewProviderSecretsStore {
+  if (
+    typeof window !== "undefined" &&
+    Object.keys(previewProviderSecretsInMemory.apiKeysByProvider).length === 0 &&
+    Object.keys(previewProviderSecretsInMemory.lastTestsByProviderModel).length === 0
+  ) {
+    try {
+      const raw = window.sessionStorage.getItem(PREVIEW_PROVIDER_SECRETS_SESSION_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as PreviewProviderSecretsStore;
+        previewProviderSecretsInMemory = {
+          apiKeysByProvider: parsed.apiKeysByProvider ?? {},
+          modelCachesByProvider: parsed.modelCachesByProvider ?? {},
+          lastTestsByProviderModel: parsed.lastTestsByProviderModel ?? {},
+        };
+      }
+    } catch {
+      // Corrupt or unavailable session storage — start from the empty store.
+    }
+  }
   if (typeof window !== "undefined") {
     try {
       window.localStorage.removeItem(PREVIEW_PROVIDER_SECRETS_STORAGE_KEY);
@@ -778,6 +802,14 @@ function savePreviewProviderSecrets(next: PreviewProviderSecretsStore): void {
     lastTestsByProviderModel: { ...next.lastTestsByProviderModel },
   };
   if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.setItem(
+        PREVIEW_PROVIDER_SECRETS_SESSION_KEY,
+        JSON.stringify(previewProviderSecretsInMemory),
+      );
+    } catch {
+      // Storage may be unavailable in hardened preview environments.
+    }
     try {
       window.localStorage.removeItem(PREVIEW_PROVIDER_SECRETS_STORAGE_KEY);
     } catch {
