@@ -652,7 +652,8 @@ async def test_loop_uses_finalize_metadata_when_no_visible_reply_turn_is_needed(
     assert result.summary == "sum"
     assert result.next_step == "next"
     assert "sum" in result.final_content
-    assert "next" in result.final_content
+    # The next step travels as agent metadata (icon strip), not body text.
+    assert "next" not in result.final_content
     assert "Wrapping up." not in result.final_content
     assert result.decision == "Choose the smallest verified fix"
     assert result.blocker == "Missing workspace evidence"
@@ -694,7 +695,8 @@ async def test_loop_does_not_make_a_second_provider_call_after_coach_finalize() 
     assert result.stop_reason == "coach_finalize"
     assert calls == 1
     assert "sum" in result.final_content
-    assert "next" in result.final_content
+    # The next step travels as agent metadata (icon strip), not body text.
+    assert "next" not in result.final_content
     assert "Wrapping up." not in result.final_content
 
 
@@ -1387,7 +1389,7 @@ async def test_streaming_loop_surfaces_structured_coach_finalize_payload() -> No
     assert final["confidence"] == "high"
     assert final["evidence"] == ["tool result A", "tool result B"]
     assert "sum" in final["content"]
-    assert "next" in final["content"]
+    assert "next" not in final["content"]
     assert not any(
         event["type"] == "text" and "Wrapping up." in str(event.get("delta") or "")
         for event in events
@@ -1450,7 +1452,8 @@ async def test_streaming_loop_uses_finalize_metadata_without_a_second_provider_c
     final = next(event for event in events if event["type"] == "final")
     assert calls == 0
     assert "metadata only" in final["content"]
-    assert "continue" in final["content"]
+    # next_step stays in metadata (icon strip), not the visible body.
+    assert "continue" not in final["content"]
     assert any(
         event["type"] == "text" and event.get("delta") == final["content"]
         for event in events

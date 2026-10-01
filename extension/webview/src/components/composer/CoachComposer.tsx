@@ -852,9 +852,17 @@ export function CoachComposer({
     const maxHeight = Math.max(minHeight, compactMode ? 112 : 140);
 
     textarea.style.height = "0px";
-    const nextHeight = Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight);
+    const contentHeight = textarea.scrollHeight;
+    const nextHeight = Math.min(Math.max(contentHeight, minHeight), maxHeight);
     textarea.style.height = `${nextHeight}px`;
-    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+    // Decided from the height-0 measurement: re-reading after the resize can
+    // still report the clamped value and flip the scroller back to "hidden".
+    textarea.style.overflowY = contentHeight > maxHeight ? "auto" : "hidden";
+    // A textarea that shrank (or re-grew) keeps its previous scrollTop, which
+    // left the first typed line clipped above the frame after multi-line
+    // input. Anchor the view to the top; real keystrokes re-scroll to the
+    // caret on their own.
+    textarea.scrollTop = 0;
   }, [compactMode, value, minRows]);
 
   return (

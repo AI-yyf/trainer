@@ -60,15 +60,17 @@ test('app shell renders a text-only top navigation for the daily views', () => {
     viewTypes,
     /export const COACH_FIRST_SIDEBAR_VIEWS = \[\s*"coach",\s*"plan",\s*"resources",\s*"training",\s*"progress",\s*"settings",\s*\] as const;/s,
   );
-  // Phase-C nav: three daily tabs, training appears on activity, Progress
-  // appears while the learner is on the progress surface, Settings lives in
-  // the header gear. All five views stay routable.
+  // The nav row is a map of the workbench, so every top-level destination is
+  // always present. It used to hide 训练 until a training card existed and
+  // 成长 until you were already inside it, which left both unreachable from a
+  // fresh session and made the row change shape depending on where you stood.
+  // Settings stays out of the row: the header gear is its permanent entry.
   assert.match(
     source,
-    /const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS\.filter\(\(view\) =>\s*view === "training"\s*\? trainingNavVisible\s*: view === "progress"\s*\? progressNavVisible\s*: view !== "settings",\s*\)\.map\(\(view\) => \{/,
+    /const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS\.filter\(\(view\) => view !== "settings"\)\.map\(\(view\) => \{/,
   );
-  assert.match(source, /const trainingNavVisible =\s*activeView === "training" \|\|/);
-  assert.match(source, /const progressNavVisible = activeView === "progress";/);
+  assert.doesNotMatch(source, /const trainingNavVisible/);
+  assert.doesNotMatch(source, /const progressNavVisible/);
   assert.match(source, /const label = coachViewLabel\(layout\.composerLanguage\);/);
   // The plan-composer mode menu keeps the dedicated composer word (计划/Plan)
   // while the sidebar tab itself switched to the 学习/Learning label.

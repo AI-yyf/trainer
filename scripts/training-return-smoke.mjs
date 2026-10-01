@@ -20,22 +20,40 @@ const sidecarUrl = (
 )
   .trim()
   .replace(/\/+$/, "");
+// Spec §23 names (TRAINER_TEST_*) are the canonical credential variables, so
+// one set of credentials works across every smoke script. Without these
+// fallbacks this script alone answered "missing_provider_base_url" while the
+// other two happily ran on the exact same environment.
 const providerBaseUrl = (
-  process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_BASE_URL ?? ""
+  process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_BASE_URL ??
+  process.env.TRAINER_TEST_BASE_URL ??
+  process.env.TRAINER_PROVIDER_SMOKE_BASE_URL ??
+  ""
 )
   .trim()
   .replace(/\/+$/, "");
 const providerApiKey = (
-  process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_API_KEY ?? ""
+  process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_API_KEY ??
+  process.env.TRAINER_TEST_API_KEY ??
+  process.env.TRAINER_PROVIDER_SMOKE_API_KEY ??
+  ""
 ).trim();
 const providerModel = (
-  process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_MODEL ?? defaultModel
+  process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_MODEL ??
+  process.env.TRAINER_PROVIDER_SMOKE_MODEL ??
+  defaultModel
 ).trim();
 const providerProtocol = normalizeProtocol(
-  (process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_PROTOCOL ?? defaultProtocol).trim(),
+  (
+    process.env.TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_PROTOCOL ??
+    process.env.TRAINER_PROVIDER_SMOKE_PROTOCOL ??
+    defaultProtocol
+  ).trim(),
 );
 const responseLanguage = (
-  process.env.TRAINER_TRAINING_RETURN_SMOKE_RESPONSE_LANGUAGE ?? defaultResponseLanguage
+  process.env.TRAINER_TRAINING_RETURN_SMOKE_RESPONSE_LANGUAGE ??
+  process.env.TRAINER_PROVIDER_SMOKE_RESPONSE_LANGUAGE ??
+  defaultResponseLanguage
 ).trim();
 
 function normalizeProtocol(value) {

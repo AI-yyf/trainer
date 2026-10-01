@@ -850,3 +850,35 @@
   50% { opacity: 0; }
 }
 
+
+/* Reply suffix cues: the coaching focus / next step / review rhythm render as
+   quiet icons with tooltips instead of trailing text paragraphs. */
+.message-suffix-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
+}
+
+.message-suffix-icons__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--fg-3);
+  cursor: default;
+}
+
+.message-suffix-icons__item:hover {
+  color: var(--fg-1);
+  background: color-mix(in srgb, var(--bg-2) 60%, transparent);
+}
+
+.message-suffix-icons__item svg {
+  width: 13px;
+  height: 13px;
+}

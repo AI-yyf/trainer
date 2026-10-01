@@ -40,7 +40,10 @@ import {
 import { providerErrorHint } from "../../../../shared/src/providerStatus";
 import { normalizeProviderRequestDefaults } from "../../../../shared/src/providerRequestDefaults";
 import { normalizeProviderThinkingConfig } from "../../../../shared/src/providerThinking";
-import { normalizeTrainerCustomSkills } from "../../../../shared/src/skillCatalog";
+import {
+  normalizeCustomSkillTrigger,
+  normalizeTrainerCustomSkills,
+} from "../../../../shared/src/skillCatalog";
 import {
   applyProviderModelCatalog,
   mergeProviderModelTokenLimits,
@@ -2244,7 +2247,148 @@ function fixturePreviewConversation(
   return { patch: mergedPatch, reply };
 }
 
+/**
+ * Smart skill authoring: turn a one-line description into a ready-to-save
+ * custom skill. The configured model writes the trigger/title/prompt when a
+ * provider is connected; a deterministic template is the fallback so the flow
+ * works everywhere (VS Code parity).
+ */
+export async function generateBrowserPreviewSkillDraft(
+  description: string,
+): Promise<
+  | {
+      trigger: string;
+      title: string;
+      detail: string;
+      prompt: string;
+      source: "model" | "template";
+    }
+  | undefined
+> {
+  const trimmed = description.trim();
+  if (trimmed.length < 2) {
+    return undefined;
+  }
+  const template = templateSkillDraft(trimmed);
+  if (
+    typeof window === "undefined" ||
+    window.__TRAINER_BROWSER_PREVIEW__ !== true ||
+    isBrowserPreviewFixture()
+  ) {
+    return template;
+  }
+  const override = browserPreviewProviderRequestOverride();
+  if (!override?.apiKey?.trim() || !override.provider.baseUrl) {
+    return template;
+  }
+  const base = normalizePreviewBaseUrl(override.provider.baseUrl);
+  if (!base) {
+    return template;
+  }
+  try {
+    const response = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${override.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: override.provider.model,
+        temperature: 0.3,
+        max_tokens: 2000,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You design compact reusable coach skills. Reply with ONLY a JSON object: "
+              + '{"trigger":"$kebab-case-short","title":"<=40 chars","detail":"<=140 chars summary",'
+              + '"prompt":"imperative coach instructions, <=600 chars"}. The trigger must be a single '
+              + "lowercase kebab-case word starting with $. No markdown, no extra text.",
+          },
+          {
+            role: "user",
+            content: `为 Trainer 设计一个技能。技能描述:${trimmed}`,
+          },
+        ],
+      }),
+    });
+    if (!response.ok) {
+      return template;
+    }
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: unknown } }>;
+    };
+    const raw = String(payload.choices?.[0]?.message?.content ?? "");
+    const cleaned = raw.replace(/<think\b[\s\S]*?<\/think>/gi, "").trim();
+    const jsonStart = cleaned.indexOf("{");
+    const jsonEnd = cleaned.lastIndexOf("}");
+    if (jsonStart < 0 || jsonEnd <= jsonStart) {
+      return template;
+    }
+    const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1)) as Record<string, unknown>;
+    const trigger = normalizeCustomSkillTrigger(parsed.trigger) ?? template.trigger;
+    const title = String(parsed.title ?? "").trim().slice(0, 200) || template.title;
+    const prompt = String(parsed.prompt ?? "").trim().slice(0, 4000) || template.prompt;
+    const detail = String(parsed.detail ?? "").trim().slice(0, 300) || prompt.slice(0, 140);
+    return { trigger, title, detail, prompt, source: "model" };
+  } catch {
+    return template;
+  }
+}
+
+function templateSkillDraft(description: string): {
+  trigger: string;
+  title: string;
+  detail: string;
+  prompt: string;
+  source: "model" | "template";
+} {
+  const latinWords = description.toLowerCase().match(/[a-z][a-z0-9]{2,}/g);
+  const base = latinWords?.[0] ?? "custom";
+  const title = description.length <= 40 ? description : `${description.slice(0, 38)}…`;
+  return {
+    trigger: `$${base}`,
+    title,
+    detail: description.length <= 140 ? description : `${description.slice(0, 137)}…`,
+    prompt: `任务:${description}\n\n要求:\n- 先确认你理解的目标与边界,有含糊处先问一句。\n- 用小步骤推进,每步给出可见结果。\n- 最后给出验证方式,确认这一步真正落地。`,
+    source: "template",
+  };
+}
+
 let inFlightPreviewSessionStart: Promise<string> | null = null;
+
+/**
+ * Host-trust emulation for the browser preview. The extension host attests
+ * window trust by carrying `workspace_trusted` on its sidecar requests
+ * (/session/start among them); without the same attestation the preview's
+ * capability summary stays untrusted forever and every trust-gated surface
+ * (training cards, attestation) is dead, no matter how often the learner
+ * clicks "Trust this window".
+ */
+export async function attestBrowserPreviewWorkspaceTrust(): Promise<boolean> {
+  if (
+    typeof window === "undefined" ||
+    window.__TRAINER_BROWSER_PREVIEW__ !== true ||
+    isBrowserPreviewFixture()
+  ) {
+    return false;
+  }
+  const workspaceId = previewWorkspaceId();
+  try {
+    const response = await fetchPreview(`${baseUrl()}/session/start`, {
+      method: "POST",
+      headers: asJsonHeaders(),
+      body: JSON.stringify({
+        workspace_id: workspaceId,
+        workspace_name: DEV_WORKSPACE_NAME,
+        workspace_trusted: true,
+      }),
+    }, "session");
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
 
 export async function ensureBrowserPreviewSession(existingSessionId?: string): Promise<string> {
   if (existingSessionId?.trim()) {
@@ -2561,7 +2705,26 @@ async function saveBrowserPreviewProviderCore(
   }
   const name = draft.name?.trim() || current?.name?.trim() || PREVIEW_DEFAULT_PROVIDER_NAME;
   const baseUrl = normalizePreviewBaseUrl(draft.baseUrl ?? current?.baseUrl);
-  const model = (draft.model ?? current?.model ?? "").trim();
+  let model = (draft.model ?? current?.model ?? "").trim();
+
+  // The quick-setup copy promises "a model will be picked automatically when
+  // you save" — keep that promise: with an address and key but no model, list
+  // the catalog and take the resolved/first entry instead of failing the save.
+  if (!model && baseUrl && draft.apiKey?.trim() && !isBrowserPreviewFixture()) {
+    try {
+      const draftProvider = buildPreviewDraftProvider({ ...draft, model: "" }, current);
+      const refreshed = await refreshPreviewProviderModelState(draftProvider, draft.apiKey.trim());
+      model =
+        refreshed.provider.resolvedModel?.trim() ||
+        refreshed.provider.availableModels[0]?.trim() ||
+        "";
+      if (model) {
+        draft.model = model;
+      }
+    } catch {
+      // Fall through with the empty model; the honest "add a model" error below.
+    }
+  }
 
   if (!baseUrl || !model) {
     throw new Error(
@@ -3310,6 +3473,25 @@ async function refreshPreviewProviderModelState(
     modelStatusCode: asNumber(payload.status_code),
     modelRetryable: asBoolean(payload.retryable),
   });
+}
+
+/**
+ * List models for a not-yet-saved provider draft (the onboarding paste flow).
+ * Unlike refreshBrowserPreviewProviderModels this returns the raw id list
+ * instead of host messages, so the wizard can prefill its model field before
+ * anything is persisted.
+ */
+export async function listBrowserPreviewDraftModels(
+  draft: PreviewProviderDraftInput,
+  apiKey: string,
+): Promise<string[]> {
+  const current = buildPreviewProviderView(activePreviewProviderRecord());
+  const draftProvider = buildPreviewDraftProvider(draft, current);
+  if (!draftProvider.baseUrl || !apiKey.trim() || isBrowserPreviewFixture()) {
+    return [];
+  }
+  const refreshed = await refreshPreviewProviderModelState(draftProvider, apiKey);
+  return refreshed.provider.availableModels;
 }
 
 export async function refreshBrowserPreviewProviderModels(

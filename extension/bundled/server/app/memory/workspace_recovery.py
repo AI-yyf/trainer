@@ -4920,6 +4920,7 @@ RESUME_FAILURE_STOP_REASONS = frozenset(
         "malformed_response",
         "truncated_or_empty",
         "rate_limit",
+        "upstream_unavailable",
         "timeout",
         "network",
         "unknown",

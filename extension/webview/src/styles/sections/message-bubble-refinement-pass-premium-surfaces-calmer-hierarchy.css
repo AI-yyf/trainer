@@ -309,27 +309,59 @@
   background: var(--bg-1);
 }
 
+/* Label-over-value grid. The previous single-row flex packed four stats into
+   one line so they read as a run-on sentence and the widest one pushed the
+   others off. A 2x2 grid keeps every number scannable on its own without
+   spending four bordered cards of vertical space on three small figures. */
 .coach-plan-view__home-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin: 0;
   color: var(--fg-muted);
   font-size: var(--trainer-font-2xs);
 }
 
 .coach-plan-view__home-stat {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-inline-size: 0;
+  padding: 0;
+}
+
+.coach-plan-view__home-stat dt {
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+}
+
+.coach-plan-view__home-stat dd {
+  margin: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-0);
+  font-size: var(--trainer-font-xs);
+  font-weight: 400;
 }
 
 .coach-plan-view__home-stat strong {
   color: var(--fg-0);
   font-weight: 400;
+}
+
+/* Numeric figures get tabular alignment so a changing count does not jitter. */
+.coach-plan-view__home-stat dd:has(> :only-child:not(svg)) {
+  font-variant-numeric: tabular-nums;
+}
+
+.coach-plan-view__home-stat--wide {
+  grid-column: 1 / -1;
 }
 
 .coach-plan-view__home-stat--stage {

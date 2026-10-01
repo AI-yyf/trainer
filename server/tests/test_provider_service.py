@@ -16,6 +16,7 @@ from app.llm.coaching_replies import (
     _claims_verified_practice_completion,
 )
 from app.llm.prompts import (
+    _has_execution_ready_next_step_request,
     build_coaching_messages,
     build_coaching_system_prompt,
     coaching_scenario_label,
@@ -661,7 +662,7 @@ def test_provider_test_uses_native_anthropic_messages_probe() -> None:
         ("gemini_generate_content", "https://generativelanguage.googleapis.com/v1beta"),
     ],
 )
-def test_native_http_502_is_retryable_network_failure(
+def test_native_http_502_is_retryable_upstream_failure(
     protocol: str,
     base_url: str,
 ) -> None:
@@ -702,10 +703,12 @@ def test_native_http_502_is_retryable_network_failure(
         result = service.test(config, "sk-test", response_language="en-US")
 
     assert result.ok is False
-    assert result.error_category == "network"
+    # A 502 proves the endpoint answered. Reporting it as an unreachable
+    # provider told users to go fix a base URL and API key that were both fine.
+    assert result.error_category == "upstream_unavailable"
     assert result.retryable is True
     assert result.status_code == 502
-    assert result.provider_reachable is False
+    assert result.provider_reachable is True
     assert result.model_supported is None
 
 
@@ -1632,14 +1635,126 @@ async def test_minimax_direct_sidecar_config_forces_visible_reply_wire_defaults(
         await client.chat.completions.create(**request_payload)
 
     assert request_payload["max_tokens"] == 256
+    # A profile that explicitly asks for thinking gets it. This used to be
+    # forced to "disabled" here, which meant the settings screen wrote a value
+    # the sidecar silently discarded — and models that *require* thinking
+    # (MiniMax-M3.1-Flash-Preview) rejected the request outright with HTTP 400.
+    # The short-visible-reply default still applies when nothing is declared;
+    # see test_minimax_undeclared_profile_defaults_to_disabled_thinking.
     assert request_payload["extra_body"] == {
-        "thinking": {"type": "disabled"},
+        "thinking": {"type": "enabled"},
         "gateway_option": "keep-me",
     }
     assert captured["max_tokens"] == 256
-    assert captured["thinking"] == {"type": "disabled"}
+    assert captured["thinking"] == {"type": "enabled"}
     assert captured["gateway_option"] == "keep-me"
     assert "extra_body" not in captured
+
+
+def test_minimax_undeclared_profile_defaults_to_disabled_thinking() -> None:
+    """With no declared thinking config, keep the short-visible-reply default."""
+    from app.llm.provider.thinking import reset_learned_policies
+
+    reset_learned_policies()
+    config = ProviderConfig(
+        name="undeclared-minimax-gateway",
+        base_url="http://minimax-gateway.test",
+        api_key_ref="trainer.minimax",
+        model="MiniMax-M3",
+        protocol="openai_chat_completions_compatible",
+    )
+    service = ProviderService(config=config, api_key="test-only")
+    payload = service._apply_request_defaults(  # noqa: SLF001
+        {
+            "model": config.model,
+            "messages": [{"role": "user", "content": "Explain one step."}],
+            "max_tokens": 1024,
+        }
+    )
+    assert payload["extra_body"]["thinking"] == {"type": "disabled"}
+
+
+def test_mandatory_thinking_rejection_is_renegotiated_and_remembered() -> None:
+    """A gateway that refuses thinking=disabled is retried, then remembered.
+
+    Regression: claude-opus-5-5.1-Flash-Preview on a MiniMax-style gateway
+    answers HTTP 400 "requires adaptive thinking" and the whole provider test
+    failed, making a listed, reachable model permanently unusable.
+    """
+    from app.llm.provider.thinking import learned_policy, reset_learned_policies
+
+    reset_learned_policies()
+    config = ProviderConfig(
+        name="mandatory-thinking-gateway",
+        base_url="http://minimax-gateway.test",
+        api_key_ref="trainer.minimax",
+        model="MiniMax-M3.1-Flash-Preview",
+        protocol="openai_chat_completions_compatible",
+    )
+    service = ProviderService(config=config, api_key="test-only")
+    payload = service._apply_request_defaults(  # noqa: SLF001
+        {"model": config.model, "messages": [{"role": "user", "content": "pong"}], "max_tokens": 1024}
+    )
+    assert payload["extra_body"]["thinking"] == {"type": "disabled"}
+
+    class MandatoryThinkingRejection(Exception):
+        status_code = 400
+
+        def __init__(self) -> None:
+            super().__init__(
+                "invalid params, model requires adaptive thinking; "
+                'thinking.type="disabled" is not allowed'
+            )
+            self.body = {"error": {"message": str(self)}}
+
+    attempts: list[dict[str, object]] = []
+
+    class FakeCompletions:
+        def create(self, **kwargs: object) -> str:
+            attempts.append(dict(kwargs))
+            if len(attempts) == 1:
+                raise MandatoryThinkingRejection()
+            return "pong"
+
+    class FakeClient:
+        chat = type("Chat", (), {"completions": FakeCompletions()})()
+
+    result = service._create_chat_completion_negotiated(  # noqa: SLF001
+        FakeClient(), payload, config
+    )
+    assert result == "pong"
+    assert len(attempts) == 2
+    assert attempts[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert attempts[1]["extra_body"] == {"thinking": {"type": "enabled"}}
+    # The learned policy is keyed per model and reused on the next request.
+    assert learned_policy(config) == "enabled"
+    assert service._apply_request_defaults(  # noqa: SLF001
+        {"model": config.model, "messages": [{"role": "user", "content": "again"}], "max_tokens": 64}
+    )["extra_body"]["thinking"] == {"type": "enabled"}
+
+
+def test_thinking_policy_never_uses_a_top_level_kwarg() -> None:
+    """A top-level `thinking=` raises TypeError before any HTTP call.
+
+    The OpenAI SDK rejects unknown keyword arguments client-side, so a payload
+    carrying a top-level thinking field never reaches the gateway at all.
+    """
+    from openai import OpenAI
+
+    from app.llm.provider.thinking import apply_thinking_policy
+
+    for policy in ("enabled", "disabled"):
+        payload = apply_thinking_policy({"model": "m"}, policy)
+        assert "thinking" not in payload
+        assert payload["extra_body"]["thinking"] == {"type": policy}
+
+    client = OpenAI(api_key="test-only", base_url="http://gateway.invalid/v1")
+    with pytest.raises(TypeError):
+        client.chat.completions.create(
+            model="m",
+            messages=[{"role": "user", "content": "x"}],
+            **{"thinking": {"type": "enabled"}},  # type: ignore[arg-type]
+        )
 
 
 @pytest.mark.asyncio
@@ -3572,7 +3687,7 @@ def test_postprocess_first_turn_reply_describes_continuity_in_chinese() -> None:
     )
     assert "我会先理解你的目标、项目语境和当前阻塞点" in reply
     assert "现有项目里哪些必须稳定、哪些必须改变" in reply
-    assert "真实例子、片段或输入" in reply
+    assert "真实例子或片段" in reply
     assert "告诉我现在更接近哪一类" not in reply
 
 
@@ -4127,7 +4242,7 @@ def test_postprocess_first_turn_reply_keeps_idea_lane_concrete_without_generic_l
     assert "告诉我现在更接近哪一类" not in reply
     assert "which lane is closest" not in reply.lower()
     assert "最小可运行切片" in reply
-    assert "真实例子、片段或输入" in reply
+    assert "真实例子或片段" in reply
 
 
 def test_postprocess_first_turn_reply_keeps_concrete_writing_request_out_of_generic_lane_prompt() -> None:
@@ -4142,7 +4257,7 @@ def test_postprocess_first_turn_reply_keeps_concrete_writing_request_out_of_gene
     lowered = reply.lower()
     assert "which lane is closest" not in lowered
     assert "improve this writing faster" in lowered
-    assert "one real example, snippet, or input" in lowered
+    assert "one real example or snippet" in lowered
 
 
 def test_postprocess_first_turn_reply_keeps_concrete_word_request_out_of_generic_lane_prompt() -> None:
@@ -4157,7 +4272,7 @@ def test_postprocess_first_turn_reply_keeps_concrete_word_request_out_of_generic
     lowered = reply.lower()
     assert "which lane is closest" not in lowered
     assert "learn this word better" in lowered
-    assert "one real example, snippet, or input" in lowered
+    assert "one real example or snippet" in lowered
 
 
 def test_timeout_recovery_override_for_general_non_code_request_returns_learn_first_step() -> None:
@@ -4338,7 +4453,7 @@ def test_postprocess_first_turn_reply_promises_continuity_in_chinese() -> None:
     assert "告诉我现在更接近哪一类" not in reply
     assert "which lane is closest" not in reply.lower()
     assert "先从你的目标开始，再决定怎么推进" in reply
-    assert "真实例子、片段或输入" in reply
+    assert "真实例子或片段" in reply
 
 
 @pytest.mark.parametrize(
@@ -4781,7 +4896,7 @@ def test_postprocess_first_turn_reply_keeps_project_adaptation_compact_in_englis
     assert "which lane is closest" not in lowered
     assert "existing-project lane" in lowered
     assert "must stay stable" in lowered
-    assert "first boundary you want to adapt" in lowered
+    assert "which boundary to adapt first" in lowered
 
 
 def test_postprocess_first_turn_reply_keeps_project_adaptation_compact_in_chinese() -> None:
@@ -4794,7 +4909,7 @@ def test_postprocess_first_turn_reply_keeps_project_adaptation_compact_in_chines
     )
     assert "现有项目里哪些必须稳定" in reply
     assert "必须改变" in reply
-    assert "第一道边界" in reply
+    assert "哪条边界要先适配" in reply
 
 
 @pytest.mark.parametrize(
@@ -5955,7 +6070,7 @@ async def test_coaching_reply_postprocesses_principle_reply_when_apply_now_is_mi
     assert "它在这里重要，是因为" in reply
     assert "先指出 app.py 里第一个失败边界" in reply
     assert "Boundary-first explanation" in reply
-    assert "先把这个原理落成动作" in reply
+    assert "先把这个原理落成动作" not in reply
 
 
 @pytest.mark.asyncio
@@ -5997,8 +6112,10 @@ async def test_coaching_reply_postprocesses_project_idea_with_first_step() -> No
             },
         )
 
-    assert "先别把它讲成更大的计划" in reply
-    assert "先补 app.py 里启动分支的一处防线" in reply
+    assert "先别把它讲成更大的计划" not in reply
+    # The scaffolded first step now travels as next-step metadata (icon strip),
+    # not as text appended onto the model's reply.
+    assert "先补 app.py 里启动分支的一处防线" not in reply
 
 
 @pytest.mark.asyncio
@@ -7136,7 +7253,7 @@ async def test_coaching_reply_stream_appends_postprocessed_suffix() -> None:
     assert "它决定了启动分支为什么会错" in reply
     assert "指出 app.py 里第一个失败边界" in reply
     assert "Boundary-first explanation" in reply
-    assert "先把这个原理落成动作" in reply
+    assert "先把这个原理落成动作" not in reply
     assert len(chunks) >= 2
 
 
@@ -7861,3 +7978,113 @@ async def test_coaching_reply_does_not_reframe_execution_ready_turn_into_lane_se
     assert "add one focused assertion" in lowered
     assert "teaching value" in lowered
     assert "which lane is closest" not in lowered
+
+
+def test_execution_ready_heuristic_covers_common_chinese_next_step_phrasings() -> None:
+    """Learners ask for the first slice in more ways than the original tokens.
+
+    A live MiniMax-M2.7 run showed "给我第一个最小练习" falling outside the
+    token lists: the model answered, the agent loop spent >90s, and the reply
+    was still discarded for the canned intake lane template. These phrasings
+    are all execution-ready requests and must classify as such.
+    """
+    for message in (
+        "好,给我第一个最小练习",
+        "给我一个最小的练习开始",
+        "第一步做什么",
+        "先带我做第一小步",
+        "给我第一个任务",
+        "带我做一个最小验证",
+        "只告诉我下一步,给一个最小动作",
+    ):
+        assert _has_execution_ready_next_step_request(message), message
+    # Non-requests stay outside the gate: an ordinary status update or a
+    # learn-first framing without any step/scope ask must not flip the lane.
+    assert not _has_execution_ready_next_step_request("我今天把环境装好了")
+    assert not _has_execution_ready_next_step_request("我想学会用 Python 写单元测试,从哪里开始?")
+
+
+@pytest.mark.asyncio
+async def test_coaching_reply_keeps_model_answer_for_chinese_first_slice_request() -> None:
+    """A Chinese "first minimal exercise" ask must not be reframed into the lane template."""
+    config = _make_config()
+    service = ProviderService(config=config, api_key="sk-test-key")
+
+    mock_choice = MagicMock()
+    mock_choice.message.content = (
+        "好，第一个练习从最小的一步开始。\n\n"
+        "新建 `test_add.py`，只写一个断言：`assert add(-1, 1) == 0`，然后运行它。\n\n"
+        "把运行结果原样带回来，我们再决定下一步收紧还是扩展。"
+    )
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+
+    with patch.object(service, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+        mock_get_client.return_value = mock_client
+
+        profile = _make_profile()
+        reply = await service.coaching_reply(
+            profile,
+            "好,给我第一个最小练习",
+            coach_context={
+                "relationship_stage": "intake",
+            },
+        )
+
+    assert "assert add(-1, 1) == 0" in reply
+    assert "先别直接给答案" not in reply
+    assert "沿着你刚才这个具体任务继续" not in reply
+
+
+def test_success_signal_patch_never_doubles_sentence_stop() -> None:
+    """The wrapper adds its own full stop; a terminated signal must not yield "。。"."""
+    from app.llm.coaching_reply_drafts import _compose_success_signal_patch
+
+    terminated = {"success_signal": "断言通过且没有回归。"}
+    assert (
+        _compose_success_signal_patch(reply="", exercise_prompt=terminated, chinese=True)
+        == "这一步算过的信号是：断言通过且没有回归。"
+    )
+    unterminated = {"success_signal": "断言通过且没有回归"}
+    assert (
+        _compose_success_signal_patch(reply="", exercise_prompt=unterminated, chinese=True)
+        == "这一步算过的信号是：断言通过且没有回归。"
+    )
+    english = {"success_signal": "the assertion passes."}
+    assert (
+        _compose_success_signal_patch(reply="", exercise_prompt=english, chinese=False)
+        == "You can count this slice as done when: the assertion passes."
+    )
+
+
+def test_minimax_declared_thinking_survives_every_wire_path() -> None:
+    """A profile that asks for thinking keeps it on *all* transports.
+
+    The OpenAI chat path is covered by
+    `test_minimax_direct_sidecar_config_forces_visible_reply_wire_defaults`.
+    The Anthropic/Gemini native probes and the raw-HTTP client read
+    `_raw_provider_request_defaults` instead, and that path had no coverage for
+    the declared case — a regression there would have silently forced every
+    model back to `thinking: disabled` while the chat-path test still passed.
+    """
+    from app.llm.provider_service import ProviderService
+
+    def normalized(**defaults: object) -> dict[str, object]:
+        config = ProviderConfig(
+            name="custom-minimax-gateway",
+            base_url="http://minimax-gateway.test",
+            api_key_ref="trainer.minimax",
+            model="MiniMax-M3",
+            protocol="openai_chat_completions_compatible",
+            request_defaults=defaults,
+        )
+        return ProviderService._raw_provider_request_defaults(config)  # noqa: SLF001
+
+    declared = normalized(extra_body={"thinking": {"type": "enabled"}})
+    assert declared["extra_body"]["thinking"] == {"type": "enabled"}  # type: ignore[index]
+
+    undeclared = normalized(max_tokens=256)
+    # No declared thinking: the short-visible-reply default still applies.
+    assert undeclared.get("extra_body", {}).get("thinking") == {"type": "disabled"}  # type: ignore[union-attr]

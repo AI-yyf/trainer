@@ -836,6 +836,78 @@ def test_session_message_minimal_provider_override_stays_plain_chat(
     assert captured["plain_tools"] is False
 
 
+def test_turn_focus_hint_ignores_bare_acknowledgment_clause(tmp_path: Path) -> None:
+    """A leading "好," must not become the quoted coaching focus 「好」.
+
+    The live MiniMax-M2.7 run produced "先围绕「好」做一个很小的具体动作" —
+    the comma-split first clause passed the specificity gate and got quoted
+    back to the learner as the turn focus.
+    """
+
+    async def fake_coaching_reply(
+        self: ProviderService,
+        profile: object,
+        message: str,
+        *args: object,
+        **kwargs: object,
+    ) -> str:
+        return (
+            "好，第一个练习从最小的一步开始。\n\n"
+            "新建 test_first.py，写一个断言并运行它，把结果带回来。"
+        )
+
+    with (
+        build_client(tmp_path, configure_provider=False) as client,
+        patch.object(ProviderService, "coaching_reply", autospec=True, side_effect=fake_coaching_reply),
+    ):
+        start_response = client.post(
+            "/session/start",
+            json={
+                "workspace_id": "workspace-ack-focus",
+                "workspace_name": "Ack Focus",
+            },
+        )
+        assert start_response.status_code == 200, start_response.text
+        seed_verified_capabilities(
+            client.app.state.runtime,
+            ProviderConfig(
+                name="preview-provider",
+                base_url="https://gateway.example/v1",
+                api_key_ref="",
+                model="preview-model",
+                capabilities={"tools": False, "streaming": True},
+            ),
+            "sk-test",
+            tools=False,
+        )
+        response = client.post(
+            "/turn",
+            json={
+                "session_id": start_response.json()["session_id"],
+                "workspace_id": "workspace-ack-focus",
+                "message": "好,给我第一个最小练习",
+                "response_language": "zh-CN",
+                "apiKey": "sk-test",
+                "provider": {
+                    "name": "preview-provider",
+                    "baseUrl": "https://gateway.example/v1",
+                    "model": "preview-model",
+                    "capabilities": {"tools": False, "streaming": True},
+                },
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    content = str(payload["reply"]["content"])
+    assert "围绕「好」" not in content
+    assert "围绕「好的」" not in content
+    # The focus hint also feeds long-lived state; a filler acknowledgment must
+    # not become the persisted coaching thread ("先沿着「好」这条主线继续推进").
+    assert "「好」" not in str(payload.get("coach_turn", {}).get("next_step", ""))
+    assert "「好」" not in str(payload["snapshot"]["memory"].get("current_focus", ""))
+
+
 def test_session_and_plan_flow(tmp_path: Path) -> None:
     with build_client(tmp_path) as client:
         start_response = client.post(

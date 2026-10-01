@@ -422,9 +422,12 @@ def _compose_success_signal_patch(
         return ""
     if _reply_has_verification_signal(reply, chinese) and len(reply) > 180:
         return ""
+    # success_signal routinely arrives sentence-terminated; the wrapper adds its
+    # own full stop, so strip one trailing mark to avoid "。。" on the wire.
+    trimmed_signal = success_signal.rstrip("。．.")
     if chinese:
-        return f"这一步算过的信号是：{success_signal}。"
-    return f"You can count this slice as done when: {success_signal}."
+        return f"这一步算过的信号是：{trimmed_signal}。"
+    return f"You can count this slice as done when: {trimmed_signal}."
 
 
 def _compose_recalled_memory_patch(

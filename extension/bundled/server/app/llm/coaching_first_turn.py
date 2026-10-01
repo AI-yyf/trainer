@@ -139,10 +139,10 @@ def _first_turn_lane_next_step(
         )
     if scenario == "project_adaptation":
         if chinese:
-            return "下一步：带回一个真实例子、片段或输入，告诉我哪个现有模块或行为必须稳定、哪一部分必须改变，以及你想先适配的第一道边界。"
+            return "下一步：带回一个真实例子或片段，告诉我哪条边界要先适配。"
         return (
-            "Next step: tell me which existing module or behavior must stay stable, which part "
-            "must change, and the first boundary you want to adapt."
+            "Next step: bring back one real example and tell me which boundary "
+            "to adapt first."
         )
     return ""
 
@@ -182,10 +182,10 @@ _FIRST_TURN_EXPLICIT_SCENARIOS = {
 
 def _first_turn_concrete_followthrough(*, chinese: bool) -> str:
     if chinese:
-        return "\u4e0b\u4e00\u6b65\uff1a\u6cbf\u7740\u4f60\u521a\u624d\u8fd9\u4e2a\u5177\u4f53\u4efb\u52a1\u7ee7\u7eed\uff0c\u7ed9\u6211\u4e00\u4e2a\u4f60\u73b0\u5728\u5c31\u80fd\u5c55\u5f00\u7684\u771f\u5b9e\u4f8b\u5b50\u3001\u7247\u6bb5\u6216\u8f93\u5165\uff0c\u6211\u4f1a\u5728\u540c\u4e00\u6761\u7ebf\u91cc\u7ee7\u7eed\u5e26\u4f60\u505a\u3002"
+        return "下一步：给我一个你现在就能展开的真实例子或片段，我们接着做。"
     return (
-        "Next step: stay on the exact task you just named and give me one real example, "
-        "snippet, or input you can open right now so we can keep the same thread moving."
+        "Next step: give me one real example or snippet you can open right now, "
+        "and we'll keep going."
     )
 
 

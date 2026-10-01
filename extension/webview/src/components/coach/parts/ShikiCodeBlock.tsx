@@ -1,8 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { codeToHtml } from "shiki";
-
 import { sanitizePreviewHtml } from "../../../lib/htmlSanitizer";
+
+/**
+ * Shiki is imported lazily, and it has to be.
+ *
+ * A top-level `import { codeToHtml } from "shiki"` pulls *every* bundled
+ * grammar into the eager graph — the production build was emitting cpp at
+ * 785 kB, emacs-lisp at 790 kB, wasm at 622 kB, and dozens more, none of which
+ * a coach reply ever highlights. VS Code loads this webview on every sidebar
+ * activation, so all of that was being parsed and held in memory before the
+ * first message rendered.
+ *
+ * `codeToHtml` is only ever called from an async function, so a dynamic import
+ * costs nothing in code shape and keeps the grammars out of the initial load.
+ */
+async function loadCodeToHtml() {
+  const shiki = await import("shiki");
+  return shiki.codeToHtml;
+}
 
 type ThemeName = "github-dark-default" | "github-light-default";
 
@@ -55,6 +71,7 @@ async function highlightCode(code: string, languageId: string, themeName: ThemeN
     return cached;
   }
 
+  const codeToHtml = await loadCodeToHtml();
   const html = await codeToHtml(code, {
     lang: normalizeLanguage(languageId) as never,
     theme: themeName,

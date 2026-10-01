@@ -273,6 +273,14 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                 "Trainer 还连不到 provider endpoint。请检查 base URL 和 network path。",
                 response_language,
             )
+        if error_category == "upstream_unavailable":
+            return localized_text(
+                "The provider answered, but its upstream returned a server error. This is a "
+                "gateway-side outage or overload, not a local setting problem — retry shortly.",
+                "provider endpoint 已经应答，但它的上游返回了服务端错误。这是网关侧的故障或过载，"
+                "不是本地配置问题——稍后重试即可。",
+                response_language,
+            )
         if error_category == "malformed_response":
             return localized_text(
                 "Provider returned an unexpected response. Check that the endpoint matches the configured protocol.",

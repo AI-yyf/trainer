@@ -1444,6 +1444,8 @@ export interface ConversationMessage {
     metadata?: Record<string, unknown>;
   }>;
   contextNote?: string;
+  /** Server-side turn metadata (coach focus / next step / review rhythm). */
+  metadata?: Record<string, unknown>;
   support?: {
     preview?: string;
     lines?: string[];

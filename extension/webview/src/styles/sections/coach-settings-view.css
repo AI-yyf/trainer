@@ -10,6 +10,20 @@
   margin-bottom: 8px;
 }
 
+/* The details summary carries three facts (title, workspace pill, connection
+   name). At sidebar width one flex row truncates all of them; let the row
+   wrap so each fact stays readable. */
+.coach-settings-view__provider-detail .collapse-section__header,
+.coach-settings-view__provider-detail .collapse-section__header-row {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.coach-settings-view__provider-detail .collapse-section__header .collapse-section__title {
+  flex: 0 0 auto;
+  margin-inline-end: auto;
+}
+
 .coach-settings-view__provider-detail[open] {
   display: block;
 }

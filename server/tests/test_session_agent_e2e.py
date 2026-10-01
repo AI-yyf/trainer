@@ -1554,7 +1554,8 @@ def test_session_message_surfaces_agent_finalize_as_next_step_artifact(
         "We narrowed the issue to one async iterator boundary. "
         "Next: Patch the smallest async iterator call site and rerun the check."
     )
-    assert "Patch the smallest async iterator call site" in body["reply"]["content"]
+    # The finalize next step travels as agent_meta (icon strip), not body text.
+    assert "Patch the smallest async iterator call site" not in body["reply"]["content"]
     assert "(scripted provider exhausted)" not in body["reply"]["content"]
     artifacts = body["reply"]["metadata"].get("artifacts", [])
     next_step_artifact = next(
@@ -2656,7 +2657,8 @@ def test_multi_turn_simulation_with_attachment_and_coach_finalize(
                 "Whitespace tightened; rerun pending. Next: Run pytest on stuck.py and report the result."
             )
             assert "Whitespace tightened; rerun pending." in body_3["reply"]["content"]
-            assert "Run pytest on stuck.py and report the result." in body_3["reply"]["content"]
+            # The finalize next step travels as agent_meta (icon strip), not body text.
+            assert "Run pytest on stuck.py and report the result." not in body_3["reply"]["content"]
             assert scripted._index == 5
             assert "Glad" not in body_3["reply"]["content"]
             assert body_3["snapshot"]["memory"]["active_thread"]["summary"] == (

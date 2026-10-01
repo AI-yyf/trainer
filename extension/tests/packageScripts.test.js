@@ -208,8 +208,14 @@ test('package.json exposes the webview recovery verification script', () => {
 
 test('webview builds keep the browserSidecar test contract separate from production packaging', () => {
   const webviewPackageJson = JSON.parse(fs.readFileSync(webviewPackageJsonPath, 'utf8'));
-  assert.equal(webviewPackageJson.scripts.build, 'tsc -b && vite build');
-  assert.equal(webviewPackageJson.scripts['build:preview'], 'tsc -b && vite build --mode preview');
+  // The contract is "typecheck then bundle with vite" — not one exact string.
+  // `--logLevel error` is a reporting choice (a full build narrates every
+  // emitted asset, which is megabytes of noise in a log-capturing harness) and
+  // must not read as a change to what the build does.
+  assert.match(webviewPackageJson.scripts.build, /^tsc -b && vite build\b/);
+  assert.match(webviewPackageJson.scripts['build:preview'], /^tsc -b && vite build --mode preview\b/);
+  assert.doesNotMatch(webviewPackageJson.scripts.build, /browserSidecar-test/);
+  assert.doesNotMatch(webviewPackageJson.scripts['build:preview'], /browserSidecar-test/);
 
   const ignoreEntries = fs.readFileSync(webviewVscodeIgnorePath, 'utf8');
   assert.match(ignoreEntries, /^webview\/browserSidecar-test\.js$/m);

@@ -415,8 +415,11 @@ async def test_openai_compatible_catalog_limits_control_final_chat_budget(
     _, payload = chat_client.chat.completions.create.call_args
     assert payload["max_tokens"] == expected_max_output
     assert payload["max_tokens"] < config.request_defaults["max_tokens"]
-    expected_thinking = "disabled" if provider_name == "MiniMax" else "enabled"
-    assert payload["extra_body"]["thinking"]["type"] == expected_thinking
+    # The profile declares thinking enabled, so it is enabled — for MiniMax too.
+    # It used to be forced to "disabled" purely because the gateway looked like
+    # MiniMax, which silently discarded the user's own setting and made
+    # mandatory-thinking models impossible to drive.
+    assert payload["extra_body"]["thinking"]["type"] == "enabled"
 
 
 @pytest.mark.asyncio

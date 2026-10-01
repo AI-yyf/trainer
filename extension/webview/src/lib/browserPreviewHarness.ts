@@ -7,6 +7,7 @@ import {
 } from "./browserPreviewActions";
 import {
   attachBrowserPreviewStreamReader,
+  attestBrowserPreviewWorkspaceTrust,
   browserPreviewProviderRequestOverride,
   cancelBrowserPreviewStream,
   ensureBrowserPreviewSidecar,
@@ -77,6 +78,7 @@ const PREVIEW_WORKSPACE_ID_STORAGE_KEY = "trainer:webview:preview:workspace-id";
 const TRAINING_PERSISTENCE_REQUEST_ID_KEY = "__trainerTrainingPersistenceId";
 const RESOURCE_TRAINING_HANDOFF_REQUEST_ID_KEY = "__trainerResourceTrainingHandoffId";
 const LIVE_TRAINING_COMMAND_IDS = new Set<string>([
+  // Attempt lifecycle commands route through the live sidecar routes below.
   trainerCommands.trainingGenerateCard,
   trainerCommands.trainingCardStatusTransition,
   trainerCommands.trainingFlashcardAnswer,
@@ -89,6 +91,13 @@ const LIVE_TRAINING_COMMAND_IDS = new Set<string>([
   trainerCommands.trainingReviewArtifactAction,
   trainerCommands.trainingScenarioLabAction,
   trainerCommands.trainingDependencySkillMapAction,
+  // Attempt lifecycle — without these the preview's "Start this step" and the
+  // verify/return cycle dead-end even with a fully working provider.
+  trainerCommands.trainingAttemptStart,
+  trainerCommands.trainingAttemptUpdate,
+  trainerCommands.trainingAttemptEvidence,
+  trainerCommands.trainingAttemptRecover,
+  trainerCommands.trainingAttemptClose,
 ]);
 const LIVE_TRAINING_PERSISTENCE_COMMAND_IDS = new Set<string>([
   trainerCommands.trainingCardStatusTransition,
@@ -99,6 +108,11 @@ const LIVE_TRAINING_PERSISTENCE_COMMAND_IDS = new Set<string>([
   trainerCommands.trainingReturn,
   trainerCommands.evidenceEnqueue,
   trainerCommands.trainingReviewArtifactAction,
+  trainerCommands.trainingAttemptUpdate,
+  trainerCommands.trainingAttemptEvidence,
+  trainerCommands.trainingAttemptClose,
+  trainerCommands.trainingAttemptStart,
+  trainerCommands.trainingAttemptRecover,
 ]);
 const LIVE_AGENT_HANDOFF_COMMAND_IDS = new Set<string>([
   trainerCommands.openResource,
@@ -796,6 +810,52 @@ async function runBrowserPreviewLiveTrainingAction(
           new_status: browserPreviewString(payload?.newStatus) || "active",
           reason: browserPreviewString(payload?.reason),
           ...browserPreviewReliabilityFields(payload),
+        });
+        break;
+      case trainerCommands.trainingAttemptStart:
+        response = await requestFor("/training/attempt/start", {
+          workspace_id: workspaceId,
+          card_id: browserPreviewString(payload?.cardId),
+          file_path: browserPreviewString(payload?.filePath) || undefined,
+          file_hash: browserPreviewString(payload?.fileHash) || undefined,
+          file_version:
+            typeof payload?.fileVersion === "number" ? payload.fileVersion : undefined,
+        });
+        break;
+      case trainerCommands.trainingAttemptUpdate:
+        response = await requestFor("/training/attempt/update", {
+          workspace_id: workspaceId,
+          attempt_id: browserPreviewString(payload?.attemptId),
+          card_id: browserPreviewString(payload?.cardId) || undefined,
+          answer_draft: browserPreviewString(payload?.answerDraft) || undefined,
+          assistance_level: browserPreviewString(payload?.assistanceLevel) || undefined,
+          status: browserPreviewString(payload?.status) || undefined,
+        });
+        break;
+      case trainerCommands.trainingAttemptEvidence:
+        response = await requestFor("/training/attempt/evidence", {
+          attempt_id: browserPreviewString(payload?.attemptId),
+          artifact_hash: browserPreviewString(payload?.artifactHash),
+          result: browserPreviewString(payload?.result),
+          runner_version: browserPreviewString(payload?.runnerVersion) || "trainer-sidecar",
+          execution_location:
+            browserPreviewString(payload?.executionLocation) || "workspace",
+          limitations: Array.isArray(payload?.limitations) ? payload.limitations : [],
+          resource_id: browserPreviewString(payload?.resourceId) || undefined,
+          resource_version_id:
+            browserPreviewString(payload?.resourceVersionId) || undefined,
+        });
+        break;
+      case trainerCommands.trainingAttemptRecover:
+        response = await requestFor("/training/attempt/recover", {
+          workspace_id: workspaceId,
+          card_id: browserPreviewString(payload?.cardId),
+        });
+        break;
+      case trainerCommands.trainingAttemptClose:
+        response = await requestFor("/training/attempt/close", {
+          attempt_id: browserPreviewString(payload?.attemptId),
+          workspace_id: workspaceId,
         });
         break;
       case trainerCommands.trainingFlashcardAnswer:
@@ -5617,6 +5677,17 @@ function configureBrowserPreviewEnvironment(state: BrowserPreviewState): void {
       runBrowserPreviewWebviewAction(action, state.composerLanguage);
       return;
     }
+    if (
+      action.type === "command/execute" &&
+      action.payload.commandId === trainerCommands.trustWorkspaceWindow
+    ) {
+      // Live preview has no VS Code host to own window trust, so this surface
+      // both re-attests to the sidecar (capability summary) and applies the
+      // webview patch (windowTrusted) itself, mirroring the host.
+      void attestBrowserPreviewWorkspaceTrust();
+      runBrowserPreviewWebviewAction(action, state.composerLanguage);
+      return;
+    }
     if (handleBrowserPreviewStreamCancel(action)) {
       return;
     }
@@ -6844,6 +6915,14 @@ export function installBrowserPreviewHarness(): void {
       if (isWebviewAction(message)) {
         if (handleBrowserPreviewStreamCancel(message)) {
           return;
+        }
+        if (
+          message.type === "command/execute" &&
+          message.payload.commandId === trainerCommands.trustWorkspaceWindow
+        ) {
+          // Host-side half of trust: re-attest to the live sidecar so the
+          // capability summary flips to trusted (see attestBrowserPreviewWorkspaceTrust).
+          void attestBrowserPreviewWorkspaceTrust();
         }
         if (
           state.connectionState !== "offline" &&

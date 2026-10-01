@@ -28,7 +28,6 @@ import {
 import { useTranslation } from "../../lib/i18n/useTranslation";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
 import { SkillProjectionStrip } from "../training/SkillProjectionStrip";
-import { getMotivationalMessage, type MotivationLanguage } from "../../../../../shared/src/motivation";
 import type {
   EvidenceItemView,
   EvidenceQueueView,
@@ -256,6 +255,8 @@ type PlanCopyKey =
   | "completionFlow"
   | "leftoverNotLive"
   | "leftoverOutlineMore"
+  | "learningHomeClearTitle"
+  | "learningHomeDueTitle"
   | "narrowNextHint"
   | "reviewFocusFallback"
   | "notesLabel"
@@ -362,6 +363,8 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "完成或受阻都会回流到正式计划。",
     leftoverNotLive: "这是此工作区里存下的旧痕迹，不是当前正式计划。",
     leftoverOutlineMore: "计划会怎么展开",
+    learningHomeClearTitle: "今天没有到期的复习，先把当前这一步往前推。",
+    learningHomeDueTitle: "从最早到期的那张开始，一次一张。",
     narrowNextHint: "先把这一步做完，再扩大范围。",
     reviewFocusFallback: "当前步骤稳了再回看。",
     notesLabel: "备注",
@@ -467,6 +470,8 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "Completion or blockers both flow back into the formal plan.",
     leftoverNotLive: "This is stored leftover on this workspace, not the live plan.",
     leftoverOutlineMore: "What the plan will show",
+    learningHomeClearTitle: "Nothing is due for review today — push the current step forward.",
+    learningHomeDueTitle: "Start with the earliest due card, one at a time.",
     narrowNextHint: "Narrow the next step first.",
     reviewFocusFallback: "Continue the current step first.",
     notesLabel: "Notes",
@@ -573,6 +578,8 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "Los resultados y los bloqueos vuelven al plan formal.",
     leftoverNotLive: "Esto es un resto guardado en este espacio, no el plan en vivo.",
     leftoverOutlineMore: "Qué mostrará el plan",
+    learningHomeClearTitle: "Hoy no hay nada pendiente de repaso: avanza el paso actual.",
+    learningHomeDueTitle: "Empieza por la más antigua que toca, una a una.",
     narrowNextHint: "Completa primero este paso antes de ampliar el alcance.",
     reviewFocusFallback: "Continúa primero con el paso actual.",
     notesLabel: "Notas",
@@ -681,6 +688,8 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "Les résultats comme les blocages reviennent au plan formel.",
     leftoverNotLive: "Ceci est un reste enregistré sur cet espace, pas le plan actuel.",
     leftoverOutlineMore: "Ce que le plan montrera",
+    learningHomeClearTitle: "Rien à réviser aujourd’hui : avancez sur l’étape en cours.",
+    learningHomeDueTitle: "Commencez par la plus ancienne à réviser, une par une.",
     narrowNextHint: "Terminez d'abord cette étape avant d'élargir le périmètre.",
     reviewFocusFallback: "Continuez d'abord l'étape actuelle.",
     notesLabel: "Notes",
@@ -789,6 +798,8 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "Ergebnisse und Blocker fließen beide zurück in den formellen Plan.",
     leftoverNotLive: "Das ist ein gespeicherter Rest in diesem Arbeitsbereich, nicht der aktuelle Plan.",
     leftoverOutlineMore: "Was der Plan zeigen wird",
+    learningHomeClearTitle: "Heute ist nichts zur Wiederholung fällig — bring den aktuellen Schritt voran.",
+    learningHomeDueTitle: "Fang mit der ältesten fälligen Karte an, eine nach der anderen.",
     narrowNextHint: "Schließen Sie zuerst diesen Schritt ab, bevor Sie den Umfang erweitern.",
     reviewFocusFallback: "Fahren Sie zuerst mit dem aktuellen Schritt fort.",
     notesLabel: "Notizen",
@@ -897,6 +908,8 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "完了と停止のどちらも正式な計画に戻ります。",
     leftoverNotLive: "これはこのワークスペースに残った記録であり、現在の正式な計画ではありません。",
     leftoverOutlineMore: "計画に含まれる内容",
+    learningHomeClearTitle: "本日の復習はありません。現在のステップを進めましょう。",
+    learningHomeDueTitle: "期限が古いカードから、一枚ずつ始めましょう。",
     narrowNextHint: "まずこの一手を終えてから、範囲を広げます。",
     reviewFocusFallback: "現在のステップを先に続けます。",
     notesLabel: "メモ",
@@ -1005,6 +1018,8 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "완료와 막힘 모두 공식 계획으로 돌아갑니다.",
     leftoverNotLive: "이건 이 작업 공간에 남은 기록이지, 현재 공식 계획이 아닙니다.",
     leftoverOutlineMore: "계획에 담길 내용",
+    learningHomeClearTitle: "오늘 복습할 카드가 없습니다. 지금 단계부터 진행하세요.",
+    learningHomeDueTitle: "마감된 카드 중 가장 오래된 것부터 하나씩 시작하세요.",
     narrowNextHint: "이 단계를 먼저 끝낸 다음 범위를 넓히세요.",
     reviewFocusFallback: "현재 단계를 먼저 계속하세요.",
     notesLabel: "메모",
@@ -1113,6 +1128,8 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     completionFlow: "Resultados e bloqueios voltam ao plano formal.",
     leftoverNotLive: "Isto é um resto guardado neste espaço, não o plano ao vivo.",
     leftoverOutlineMore: "O que o plano vai mostrar",
+    learningHomeClearTitle: "Nada para revisar hoje — avance o passo atual.",
+    learningHomeDueTitle: "Comece pela mais antiga que está em dia, uma de cada vez.",
     narrowNextHint: "Conclua primeiro esta etapa antes de ampliar o escopo.",
     reviewFocusFallback: "Continue primeiro a etapa atual.",
     notesLabel: "Notas",
@@ -2484,13 +2501,6 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                   >
                     <span className="coach-plan-view__now-label">{currentLane.label}</span>
                     <strong>{currentLane.body}</strong>
-                    {currentLane.detail &&
-                    inlineText(currentLane.detail) !== inlineText(currentLane.body) ? (
-                      <p className="coach-plan-view__now-done">{inlineText(currentLane.detail)}</p>
-                    ) : null}
-                    {compactLaterText ? (
-                      <p className="coach-plan-view__now-next">{compactLaterText}</p>
-                    ) : null}
                   </div>
                   {compactPrimaryAction ? (
                     <div className="coach-plan-view__compact-primary-action">
@@ -2608,9 +2618,9 @@ export function CoachPlanView(props: CoachPlanViewProps) {
               </div>
             </details>
           ) : null}
-          {hasDetails ? (
+          {hasDetails && !compactPrimary ? (
           <details className="coach-plan-view__details">
-            <summary>{compactPrimary ? resolvedDetailsSummaryLabel : detailsSummary}</summary>
+            <summary>{detailsSummary}</summary>
             {hasDetails ? (
             <div className="coach-plan-view__details-body">
               <div className="coach-plan-view__details-intro">
@@ -2658,7 +2668,11 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                 </section>
               ) : null}
 
-              {compactSecondaryActions.length ? (
+              {/* When compactPrimary is on, the same action list already renders as
+                  its own first-class "动作" disclosure directly under the current
+                  step. Repeating it here rendered 生成计划 twice in one view — the
+                  identical accent button, same label, same detail text. */}
+              {compactSecondaryActions.length && !compactPrimary ? (
                 <section className="coach-plan-view__details-group">
                   <div className="coach-plan-view__details-group-head">
                     <span>{resolvedActionsLabel}</span>
@@ -3048,35 +3062,50 @@ function LearningHomeOverview({
   const storedDueReviews = useWorkbenchState((state) => state.data.memory.dueReviews);
   const storedDueCount = useWorkbenchState((state) => state.data.memory.dueReviewCount);
   const recentWins = useWorkbenchState((state) => state.data.memory.recentWins);
-  const motivationLanguage: MotivationLanguage = language === "zh-CN" ? "zh-CN" : "en-US";
   const dueCount = storedDueCount ?? storedDueReviews.length;
-  const motivation = getMotivationalMessage(0, 0, 0, dueCount, motivationLanguage);
+  // getMotivationalMessage is fed zeros here, so on this surface it could only
+  // ever fall through to "N 张卡片待复习" — a verbatim restatement of the
+  // "今日到期复习 / 2" tile sitting directly above it. This line now says
+  // something the tile does not: what to do next.
+  const motivation = {
+    type: dueCount > 0 ? ("reminder" as const) : ("encouragement" as const),
+    message:
+      planCopy(language, dueCount > 0 ? "learningHomeDueTitle" : "learningHomeClearTitle"),
+  };
   const nextReview = storedDueReviews[0];
   const dueCountDisplay = dueCount > 0 ? String(dueCount) : "0";
 
   return (
     <div className="coach-plan-view__home-overview" data-learning-home-overview="true">
-      <div className="coach-plan-view__home-stats" aria-label={t("learningHomeDueLabel")}>
-        <span className="coach-plan-view__home-stat">
-          <strong>{dueCountDisplay}</strong> {t("learningHomeDueLabel")}
-        </span>
+      {/* These were three inline spans in one flex row: "2 今日到期复习　下次复习:
+          …　最近成果: 2" read as a single run-on sentence, the widest item
+          pushed the rest off the line, and the stage name orphaned onto its own
+          row. A labelled grid makes each number scannable on its own. */}
+      <dl className="coach-plan-view__home-stats" aria-label={t("learningHomeDueLabel")}>
+        <div className="coach-plan-view__home-stat">
+          <dt>{t("learningHomeDueLabel")}</dt>
+          <dd>{dueCountDisplay}</dd>
+        </div>
         {nextReview ? (
-          <span
-            className="coach-plan-view__home-stat"
+          <div
+            className="coach-plan-view__home-stat coach-plan-view__home-stat--wide"
             title={[nextReview.concept, nextReview.reason].filter(Boolean).join(" · ")}
           >
-            {t("learningHomeNextLabel")}: <strong>{nextReview.concept}</strong>
-          </span>
+            <dt>{t("learningHomeNextLabel")}</dt>
+            <dd>{nextReview.concept}</dd>
+          </div>
         ) : null}
-        <span className="coach-plan-view__home-stat">
-          {t("learningHomeWinsLabel")}: <strong>{recentWins.length}</strong>
-        </span>
+        <div className="coach-plan-view__home-stat">
+          <dt>{t("learningHomeWinsLabel")}</dt>
+          <dd>{String(recentWins.length)}</dd>
+        </div>
         {activeStageTitle ? (
-          <span className="coach-plan-view__home-stat coach-plan-view__home-stat--stage" title={activeStageTitle}>
-            <strong>{activeStageTitle}</strong>
-          </span>
+          <div className="coach-plan-view__home-stat" title={activeStageTitle}>
+            <dt>{t("planDashboardStagesTitle")}</dt>
+            <dd>{activeStageTitle}</dd>
+          </div>
         ) : null}
-      </div>
+      </dl>
       <p className="coach-plan-view__home-message" data-motivation-type={motivation.type}>
         {motivation.message}
       </p>

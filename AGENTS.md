@@ -230,15 +230,24 @@ trainer/                            # Repository root
 
 ## SIDEBAR IA (SHIPPED)
 
-Five fixed top-level views:
+Six top-level surfaces. Five live in the header nav row and are **always
+present**; Settings is reached through the header gear, which is its permanent
+entry point.
 
-| View | ID | Chinese | Purpose |
-|------|----|---------|---------|
-| Coach | `coach` | 对话 | Conversation with the coach agent (messages, artifacts, composer) |
-| Plan | `plan` | 学习 | Learning plan stages, current task, evidence governance |
-| Resources | `resources` | 资料 | Uploaded materials, search (FTS5), preview (Tier A/B/C) |
-| Training | `training` | 训练 | Active training card, flash cards, scenario lab, FSRS reviews |
-| Settings | `settings` | 设置 | Provider config, coach defaults, language, workspace control |
+| View | ID | Chinese | In nav row | Purpose |
+|------|----|---------|-----------|---------|
+| Coach | `coach` | 对话 | yes | Conversation with the coach agent (messages, artifacts, composer) |
+| Plan | `plan` | 学习 | yes | Learning plan stages, current task, evidence governance |
+| Resources | `resources` | 资料 | yes | Uploaded materials, search (FTS5), preview (Tier A/B/C) |
+| Training | `training` | 训练 | yes | Active training card, flash cards, scenario lab, FSRS reviews |
+| Progress | `progress` | 成长 | yes | Capability bands (理解/实现/调试/迁移), verified-evidence counts |
+| Settings | `settings` | 设置 | no (gear) | Provider config, coach defaults, language, workspace control |
+
+The nav row used to hide 训练 until a training card existed and 成长 until the
+learner was already inside it, so both were unreachable from a fresh session
+and the row changed shape depending on where you stood. A nav is a map: every
+destination must be visible at all times. `scripts/verify-ui-geometry.mjs`
+asserts this across every view and scenario.
 
 ## WHERE TO LOOK
 

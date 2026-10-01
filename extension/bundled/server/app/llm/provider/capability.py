@@ -144,20 +144,22 @@ def _normalized_provider_request_defaults(provider: ProviderConfig | None) -> di
 
     # MiniMax-compatible gateways can consume a short reply budget in hidden
     # reasoning unless this request-body field is explicitly disabled.
+    # MiniMax thinks-by-default and can swallow a short visible-reply budget.
+    # Keep enabled only when the profile explicitly asked for it (a live probe
+    # that declared thinking, or the user's own request_defaults). Everything
+    # else gets the short-reply default; provider.thinking re-negotiates it at
+    # runtime for models that reject the field outright.
     thinking = normalized_extra_body.get("thinking")
     thinking_type = (
         str(thinking.get("type") or "").strip().lower()
         if isinstance(thinking, dict)
         else ""
     )
-    declared_thinking = bool(getattr(getattr(provider, "capabilities", None), "thinking", False))
-    # MiniMax thinks-by-default and can swallow a short visible-reply budget.
-    # Keep enabled only when the profile explicitly declared thinking after a live probe.
+    user_declared_thinking = thinking_type == "enabled"
+    probe_declared_thinking = bool(getattr(getattr(provider, "capabilities", None), "thinking", False))
     # A thinking-capability probe overlays extra_body after defaults are applied.
-    if thinking_type == "enabled" and declared_thinking:
-        thinking_type = "enabled"
-    else:
-        thinking_type = "disabled"
+    if thinking_type != "enabled" or (probe_declared_thinking and not user_declared_thinking):
+        thinking_type = "enabled" if (probe_declared_thinking or user_declared_thinking) else "disabled"
     normalized_extra_body["thinking"] = {"type": thinking_type}
     normalized["extra_body"] = normalized_extra_body
     return normalized

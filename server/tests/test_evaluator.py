@@ -3,10 +3,14 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from subprocess import CompletedProcess, TimeoutExpired
 from unittest.mock import patch
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -102,6 +106,7 @@ class EvaluatorTests(unittest.TestCase):
             mock_run.assert_called_once()
             self.assertEqual(mock_run.call_args.args[0][0], str(sibling_script.resolve(strict=False)))
 
+    @pytest.mark.real_tools  # asserts on real subprocess / exit-code behaviour
     def test_missing_executable_stays_skipped_when_no_sibling_script_exists(self) -> None:
         runtime_suffix = ".exe" if os.name == "nt" else ""
 
@@ -122,6 +127,7 @@ class EvaluatorTests(unittest.TestCase):
             self.assertEqual(result.command, command.argv)
             mock_run.assert_not_called()
 
+    @pytest.mark.real_tools  # asserts on real subprocess / exit-code behaviour
     def test_runner_tolerates_missing_output_and_forces_utf8_decoding(self) -> None:
         command = CheckCommand(name="ruff", argv=["ruff", "check", "."], cwd=".")
         completed = CompletedProcess(command.argv, 0, stdout=None, stderr=None)
@@ -138,6 +144,7 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(mock_run.call_args.kwargs["encoding"], "utf-8")
         self.assertEqual(mock_run.call_args.kwargs["errors"], "replace")
 
+    @pytest.mark.real_tools  # asserts on real subprocess / exit-code behaviour
     def test_runner_returns_error_when_check_times_out(self) -> None:
         command = CheckCommand(name="pytest", argv=["pytest"], cwd=".")
         timeout = TimeoutExpired(command.argv, 60, output=b"partial", stderr=b"still running")
@@ -153,6 +160,7 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(result.stderr, "still running")
         self.assertIn("timed out after 60 seconds", result.summary)
 
+    @pytest.mark.real_tools  # asserts on real subprocess / exit-code behaviour
     def test_pytest_no_tests_collected_is_skipped(self) -> None:
         command = CheckCommand(name="pytest", argv=["pytest"], cwd=".")
         completed = CompletedProcess(command.argv, 5, stdout="no tests ran in 0.01s\n", stderr="")
@@ -166,6 +174,7 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(result.status, CheckStatus.SKIPPED)
         self.assertEqual(result.exit_code, 5)
 
+    @pytest.mark.real_tools  # asserts on real subprocess / exit-code behaviour
     def test_pytest_failure_is_not_treated_as_no_tests(self) -> None:
         command = CheckCommand(name="pytest", argv=["pytest"], cwd=".")
         completed = CompletedProcess(command.argv, 1, stdout="1 failed in 0.01s\n", stderr="")
@@ -178,6 +187,7 @@ class EvaluatorTests(unittest.TestCase):
 
         self.assertEqual(result.status, CheckStatus.FAILED)
 
+    @pytest.mark.real_tools  # asserts on real subprocess / exit-code behaviour
     def test_uv_trampoline_failure_is_skipped_not_failed(self) -> None:
         command = CheckCommand(name="pyright", argv=["pyright", "x.py"], cwd=".")
         completed = CompletedProcess(
@@ -195,6 +205,7 @@ class EvaluatorTests(unittest.TestCase):
 
         self.assertEqual(result.status, CheckStatus.SKIPPED)
 
+    @pytest.mark.real_tools  # asserts on real subprocess / exit-code behaviour
     def test_pytest_exit_five_without_collection_evidence_stays_failed(self) -> None:
         command = CheckCommand(name="pytest", argv=["pytest"], cwd=".")
         completed = CompletedProcess(
@@ -621,3 +632,199 @@ def test_leftover_formal_card_title_does_not_live_in_evaluator_notes() -> None:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _SlowRunner:
+    """Records concurrency by tracking overlapping calls."""
+
+    def __init__(self, delay: float = 0.12) -> None:
+        self._delay = delay
+        self.calls: list[str] = []
+        self.max_overlap = 0
+        self._active = 0
+        self._lock = threading.Lock()
+
+    def run(self, command: CheckCommand) -> CheckResult:
+        with self._lock:
+            self.calls.append(command.name)
+            self._active += 1
+            self.max_overlap = max(self.max_overlap, self._active)
+        try:
+            time.sleep(self._delay)
+            return CheckResult(
+                name=command.name, status=CheckStatus.PASSED, command=list(command.argv), summary="ok"
+            )
+        finally:
+            with self._lock:
+                self._active -= 1
+
+
+def _snippet_request(code: str = "def add(a: int, b: int) -> int:\n    return a + b\n"):
+    spec = TaskSpecGenerator().generate(
+        TaskSpecificationRequest(prompt="Add two integers and return the sum.")
+    ).spec
+    return EvaluationRequest(spec=spec, code=code)
+
+
+class TestEvaluatorPerformanceInvariants(unittest.TestCase):
+    """Locks in the three optimisations that keep "verify this file" responsive.
+
+    None of these change behaviour, so every one of them is the kind of edit
+    that slips through a green suite: a pipeline that runs the tools in series
+    passes the same assertions, just five seconds slower per turn. Each test
+    fails on the regression rather than on a changed string.
+    """
+
+    def setUp(self) -> None:
+        from app.evaluator.check_cache import CHECK_RESULT_CACHE
+
+        CHECK_RESULT_CACHE.clear()
+        self.addCleanup(CHECK_RESULT_CACHE.clear)
+
+    def test_pipeline_resolves_its_runner_through_the_default_factory(self) -> None:
+        """The suite replaces `default_command_runner`, not the class.
+
+        Inlining `SubprocessCommandRunner()` into `EvaluationPipeline.__init__`
+        would silently bypass the deterministic stand-in the whole suite runs
+        on, and every test would still pass — while the suite went from two
+        minutes back to spawning real pyright for hundreds of fixtures.
+        """
+        from app.evaluator import service as evaluator_service
+
+        sentinel = FakeRunner({CheckStatus.PASSED: CheckStatus.PASSED})
+        original = evaluator_service.default_command_runner
+        evaluator_service.default_command_runner = lambda: sentinel
+        try:
+            pipeline = EvaluationPipeline()
+        finally:
+            evaluator_service.default_command_runner = original
+        self.assertIs(pipeline._runner, sentinel)  # noqa: SLF001
+
+    def test_external_tools_run_concurrently_not_in_series(self) -> None:
+        """ruff, pyright and pytest overlap instead of summing their startups.
+
+        A verification turn is dominated by process startup — pyright alone
+        spends 2-4s in Node before reading a line. Running the three in series
+        cost the *sum*; this pins that they overlap.
+        """
+        runner = _SlowRunner()
+        pipeline = EvaluationPipeline(runner=runner)
+        pipeline.evaluate(_snippet_request())
+        self.assertEqual(sorted(runner.calls), ["pyright", "pytest", "ruff"])
+        self.assertGreater(
+            runner.max_overlap,
+            1,
+            "external tools ran one after another; a verification turn pays the sum of three cold starts",
+        )
+
+    def test_unchanged_code_is_not_re_verified_from_scratch(self) -> None:
+        """Re-checking identical content reuses the tool results.
+
+        The coach asks for verification repeatedly; without the content-keyed
+        cache every request re-spawned all three tools for a file that had not
+        changed.
+        """
+        runner = _SlowRunner()
+        pipeline = EvaluationPipeline(runner=runner)
+        first = _snippet_request()
+        pipeline.evaluate(first)
+        second = _snippet_request()
+        pipeline.evaluate(second)
+        self.assertEqual(
+            runner.calls.count("pyright"),
+            1,
+            "identical content was verified twice; the content-keyed cache is not wired into the pipeline",
+        )
+
+    def test_a_result_is_only_reused_by_the_runner_that_produced_it(self) -> None:
+        """Swapping the runner must not inherit the previous runner's verdict.
+
+        Two runners can legitimately disagree about identical content — a live
+        pyright and a fixture, say. Keying the cache on content alone let a
+        swapped runner silently return the old verdict, which is how
+        `test_training_recovery_journey` caught this.
+        """
+        first = _SlowRunner()
+        spec = TaskSpecGenerator().generate(
+            TaskSpecificationRequest(prompt="Return the sum of two numbers.")
+        ).spec
+        EvaluationPipeline(runner=first).evaluate(
+            EvaluationRequest(spec=spec, code="def add(a: int, b: int) -> int:\n    return a + b\n")
+        )
+        self.assertEqual(len(first.calls), 3)
+
+        class DisagreeingRunner:
+            def __init__(self) -> None:
+                self.calls: list[str] = []
+
+            def run(self, command: CheckCommand) -> CheckResult:
+                self.calls.append(command.name)
+                return CheckResult(
+                    name=command.name,
+                    status=CheckStatus.FAILED,
+                    command=list(command.argv),
+                    summary="this runner disagrees",
+                )
+
+        second = DisagreeingRunner()
+        report = EvaluationPipeline(runner=second).evaluate(
+            EvaluationRequest(spec=spec, code="def add(a: int, b: int) -> int:\n    return a + b\n")
+        )
+        self.assertEqual(
+            sorted(second.calls),
+            ["pyright", "pytest", "ruff"],
+            "the second runner inherited the first runner's cached verdict",
+        )
+        self.assertEqual(report.overall_status, CheckStatus.FAILED)
+
+    def test_cache_survives_concurrent_verification_requests(self) -> None:
+        """Two learners verifying at once must not corrupt the cache.
+
+        The verify endpoints are *sync* FastAPI handlers, so Starlette runs
+        them in its threadpool and the cache is genuinely shared across
+        threads. Read-modify-evict is not atomic: without a lock, two threads
+        reaching the eviction together pop the final entry and the second
+        `popitem` raises, turning a verification the user asked for into a 500.
+        """
+        from app.evaluator.check_cache import CheckResultCache
+
+        cache = CheckResultCache(max_entries=8)
+        sandbox = tempfile.mkdtemp()
+        files = []
+        for index in range(40):
+            path = os.path.join(sandbox, f"file_{index}.py")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(f"VALUE_{index} = {index}\n")
+            files.append(CheckCommand(name="ruff", argv=["ruff", "check", path], cwd=sandbox))
+
+        errors: list[BaseException] = []
+        barrier = threading.Barrier(8)
+
+        def hammer(subset: list[CheckCommand]) -> None:
+            try:
+                barrier.wait(timeout=10)
+                for _ in range(6):
+                    for command in subset:
+                        cache.get(command, sandbox, runner=self)
+                        cache.put(
+                            command,
+                            sandbox,
+                            CheckResult(
+                                name=command.name,
+                                status=CheckStatus.PASSED,
+                                command=list(command.argv),
+                                summary="ok",
+                            ),
+                            runner=self,
+                        )
+            except BaseException as exc:  # noqa: BLE001 - the point is to surface it
+                errors.append(exc)
+
+        threads = [threading.Thread(target=hammer, args=(files[index::8],)) for index in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+
+        self.assertEqual([str(error) for error in errors], [], "concurrent cache access raised")
+        self.assertLessEqual(len(cache), 8)

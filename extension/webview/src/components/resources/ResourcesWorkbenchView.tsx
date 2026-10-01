@@ -3180,7 +3180,10 @@ export function ResourcesWorkbenchView({
               />
             ))}
 
-            {resources.length === 0 && !hasSearchQuery ? (
+            {/* The orientation card already covers the zero-resource guidance
+                ("needs setup / library is empty" + import action); rendering
+                this generic empty block too duplicated the same message. */}
+            {resources.length === 0 && !hasSearchQuery && orientation?.state !== "needs_setup" ? (
               <div className="resources-empty">
                 <p className="resources-empty__title">{localize(language, "emptyTitle")}</p>
                 <p className="resources-empty__hint">{localize(language, "emptyBody")}</p>

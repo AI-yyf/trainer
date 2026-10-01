@@ -213,7 +213,7 @@ details[open] > :not(summary) {
 
 /* Browser preview: sit in a VS Code sidebar, not a 1280 desktop canvas. */
 .trainer-preview-workbench {
-  --trainer-preview-sidebar-width: 400px;
+  --trainer-preview-sidebar-width: 460px;
   display: grid;
   grid-template-columns: var(--trainer-preview-sidebar-width) minmax(0, 1fr);
   width: 100%;

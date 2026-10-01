@@ -192,7 +192,6 @@ import type {
   TrainingSummaryCard,
 } from "../components/training/TrainingWorkbenchView";
 import { CoachNavIcon, LearningNavIcon, ResourcesNavIcon, TrainingNavIcon } from "../components/icons/navigation/coreNav";
-import { ModelLayersIcon } from "../components/icons/brand/trainerBrand";
 import {
   CheckMarkIcon,
   ChevronRightIcon,
@@ -5835,18 +5834,13 @@ export function App() {
   // learner is on the progress surface. Settings lives in the header as a
   // gear button. All five views stay routable and every legacy command
   // still lands.
-  const trainingNavVisible =
-    activeView === "training" ||
-    Boolean(data.workspaceTrainingState?.activeTrainingCardRouting?.selectedCardId) ||
-    Boolean(data.workspaceTrainingState?.selectedCardId);
-  const progressNavVisible = activeView === "progress";
-  const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS.filter((view) =>
-    view === "training"
-      ? trainingNavVisible
-      : view === "progress"
-        ? progressNavVisible
-        : view !== "settings",
-  ).map((view) => {
+  // The nav is a map of the workbench, so every top-level destination has to be
+  // reachable from it at all times. These tabs used to appear only once you were
+  // already inside them (or only after a training card existed), which made
+  // "训练" and "成长" unreachable from a fresh session — the row changed shape
+  // depending on where you stood. Settings stays out of the row because the
+  // header gear is its permanent, always-visible entry point.
+  const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS.filter((view) => view !== "settings").map((view) => {
     if (view === "coach") {
       const label = coachViewLabel(layout.composerLanguage);
       return {
@@ -5933,6 +5927,16 @@ export function App() {
     const container = viewContentRef.current;
     if (!container) {
       return;
+    }
+    if (activeView === "coach") {
+      // A conversation opens on its newest turn, not its oldest. Every other
+      // surface starts at the top, but landing mid-history in a chat reads as
+      // "the app forgot the thread" — and it hides whatever the coach just said.
+      coachAutoScrollPinnedRef.current = true;
+      const frame = window.requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight;
+      });
+      return () => window.cancelAnimationFrame(frame);
     }
     container.scrollTop = 0;
   }, [activeView]);
@@ -11261,6 +11265,15 @@ export function App() {
                             profile.policyReason,
                           );
                           const modelDisabled = profile.isActive || profile.isSelectable === false;
+                          const modelContextTokens =
+                            data.providerConfig.modelTokenLimits?.[profile.model]
+                              ?.contextWindowTokens ?? data.providerConfig.contextWindowTokens;
+                          const modelContextHint = modelContextTokens
+                            ? appUiCopy(layout.composerLanguage, "上下文 {n}").replace(
+                                "{n}",
+                                formatTokenCount(modelContextTokens),
+                              )
+                            : undefined;
                           return (
                             <button
                               key={profile.id}
@@ -11268,14 +11281,19 @@ export function App() {
                               type="button"
                               disabled={modelDisabled}
                               aria-current={profile.isActive ? "true" : undefined}
-                              title={policyHint ?? profile.model}
+                              title={
+                                [policyHint, modelContextHint].filter(Boolean).join(" · ") ||
+                                profile.model
+                              }
                               onClick={() => switchComposerProviderModel(profile.model)}
                             >
                               <div className="composer-provider-list__row">
                                 <span className="composer-provider-list__stack">
                                   <span className="composer-provider-list__model">{profile.model}</span>
-                                  {policyHint ? (
-                                    <span className="composer-provider-list__label">{policyHint}</span>
+                                  {modelContextHint || policyHint ? (
+                                    <span className="composer-provider-list__label">
+                                      {[modelContextHint, policyHint].filter(Boolean).join(" · ")}
+                                    </span>
                                   ) : null}
                                 </span>
                                 {profile.isActive ? (
@@ -11949,6 +11967,31 @@ export function App() {
   const onboardingActive =
     !onboarding.complete &&
     (!data.providerConfig.configured || trainerWorkspaceAdmission?.status === "root-missing");
+  // The onboarding paste only fills address + key, but a saveable provider
+  // needs a model id. The browser preview can list models for an unsaved
+  // draft directly; the VS Code host keeps the field free-form so the learner
+  // can type it (the full settings picker stays available either way).
+  // Smart skill authoring: the settings panel describes a skill in one line;
+  // the preview generates the trigger/title/prompt with the configured model.
+  const onGenerateSkillDraft = useMemo(() => {
+    if (!isBrowserPreview) {
+      return undefined;
+    }
+    return async (description: string) => {
+      const browserPreview = await loadBrowserPreviewModule();
+      return browserPreview.generateBrowserPreviewSkillDraft(description);
+    };
+  }, [isBrowserPreview]);
+
+  const onboardingListModels = useMemo(() => {
+    if (!isBrowserPreview) {
+      return undefined;
+    }
+    return async (baseUrl: string, apiKey: string): Promise<string[]> => {
+      const browserPreview = await loadBrowserPreviewModule();
+      return browserPreview.listBrowserPreviewDraftModels({ baseUrl }, apiKey);
+    };
+  }, [isBrowserPreview]);
   const startOnboardingTrial = () => {
     setSettingsActionState({
       kind: "start-provider-trial",
@@ -12010,8 +12053,10 @@ export function App() {
       trialBusy={settingsActionState?.kind === "start-provider-trial"}
       draftBaseUrl={providerDraft.baseUrl}
       draftApiKey={providerDraft.apiKey}
+      draftModel={providerDraft.model}
       hasStoredApiKey={data.providerConfig.apiKeyConfigured}
       onDraftChange={(patch) => setProviderDraft((draft) => ({ ...draft, ...patch }))}
+      onListModels={onboardingListModels}
       onChooseWorkspaceRoot={() =>
         runWorkspaceAdmissionCommand(trainerCommands.chooseTrainerWorkspaceRoot)
       }
@@ -13834,6 +13879,7 @@ export function App() {
         onAnswerModeChange={autosaving(setComposerAnswerMode)}
         onTeachingStyleChange={autosaving(setTeachingStyle)}
         onFollowCurrentFileChange={autosaving(setFollowCurrentFile)}
+        onGenerateSkillDraft={onGenerateSkillDraft}
         onCoachDefaultsChange={autosaving(setCoachDefaults)}
         onContextDetailChange={autosaving(setContextDetail)}
         onIncludeCurrentFileChange={autosaving(setIncludeCurrentFile)}
@@ -14298,9 +14344,6 @@ export function App() {
       />
       <header className="trainer-header">
         <div className="trainer-header__utility">
-          <span className="trainer-header__brand" aria-hidden="true">
-            Trainer
-          </span>
           <div className="header-actions">
             <button
               className="header-switcher__item header-switcher__item--history"
@@ -14558,7 +14601,7 @@ export function App() {
               allowEmptySubmit={allowEmptyTrainingReturnSubmission}
               inputReadOnly={allowEmptyTrainingReturnSubmission}
               language={layout.composerLanguage}
-              minRows={1}
+              minRows={2}
               summary={
                 activeView === "coach" || allowEmptyTrainingReturnSubmission
                   ? localizedTrainingComposerSummary
@@ -14596,6 +14639,15 @@ export function App() {
               }
               accessory={
                 <>
+                  {openMenu ? (
+                    // Click-anywhere-outside to close: a transparent layer
+                    // under the panel that swallows the first outside click.
+                    <div
+                      className="composer-menu-backdrop"
+                      onClick={() => setOpenMenu(undefined)}
+                      aria-hidden="true"
+                    />
+                  ) : null}
                   {renderTrainingComposerAccessory()}
                   {renderComposerAccessory()}
                   {renderSkillDeck()}
@@ -14610,26 +14662,25 @@ export function App() {
               }
               secondaryActions={[
                 {
-                  id: "context-usage",
-                  compact: true as const,
-                  icon: composerContextRingNode,
-                  label: composerContextUsageLabel,
-                  title: composerContextUsageLabel,
-                  ariaLabel: composerContextUsageLabel,
-                  tone: "ghost" as const,
-                  onClick: () =>
-                    setOperationMessage({
-                      tone: "info",
-                      message: composerContextUsageDetail,
-                    }),
-                },
-                {
+                  // Model + context combined: the ring carries the usage tone,
+                  // the label carries model + token estimate, the menu lists
+                  // each model's context window.
                   id: "model-switch",
                   compact: composerModelActionDensity === "compact",
-                  icon: <ModelLayersIcon size={16} />,
-                  label: composerModelButtonDisplayLabel,
+                  icon: composerContextRingNode,
+                  label: composerContextUsage.used
+                    ? `${composerModelButtonDisplayLabel} · ${
+                        composerContextUsage.limit
+                          ? `${formatTokenCount(composerContextUsage.used)}/${formatTokenCount(
+                              composerContextUsage.limit,
+                            )}`
+                          : `~${formatTokenCount(composerContextUsage.used)}`
+                      }`
+                    : composerModelButtonDisplayLabel,
                   tone: "ghost" as const,
-                  title: composerModelButtonTitle,
+                  title: [composerModelButtonTitle, composerContextUsageDetail]
+                    .filter(Boolean)
+                    .join(" · "),
                   ariaLabel: composerModelButtonTitle,
                   onClick: toggleComposerModelMenu,
                 },
@@ -14776,14 +14827,8 @@ export function App() {
                 }
               }}
               leadingActions={[
-                {
-                  id: "context",
-                  label: t.currentContext,
-                  icon: <ContextLayersIcon size={16} />,
-                  pinned: true,
-                  active: openMenu === "context",
-                  onClick: () => setOpenMenu(openMenu === "context" ? undefined : "context"),
-                },
+                // The current-file context toggle lives in Settings (advanced
+                // context); the composer keeps only the resources entry here.
                 ...(activeView === "resources"
                   ? []
                   : [

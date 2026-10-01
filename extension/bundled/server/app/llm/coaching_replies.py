@@ -1676,6 +1676,11 @@ def _clean_provider_failure_summary(
             "The provider rate-limited this turn before Trainer could continue.",
             "这个 provider 对这一轮请求触发了 rate limit，Trainer 暂时不能继续。",
         ),
+        "upstream_unavailable": (
+            "The provider answered, but its own upstream failed on this turn. Nothing "
+            "needs changing in the connection — retrying shortly is the fix.",
+            "provider 已经应答，但它自己的上游在这一轮失败了。连接配置不用改，稍后重试即可。",
+        ),
         "timeout": (
             "Trainer could not get a response from the provider before the timeout.",
             "Trainer 在 timeout 前没有从 provider 收到响应。",
@@ -1738,6 +1743,11 @@ def _clean_provider_failure_next_step(
         "rate_limit": (
             "Wait briefly, then retry this same turn once the rate limit clears.",
             "先等一会儿，等 rate limit 过去后再重试这一轮。",
+        ),
+        "upstream_unavailable": (
+            "The provider itself is up — its upstream is failing. Retry this same turn in a moment; "
+            "do not change the connection settings.",
+            "provider 本身是通的，是它的上游在报错。稍等一下重试这一轮即可，不用改连接配置。",
         ),
         "timeout": (
             "Retry once after checking provider latency or gateway load.",

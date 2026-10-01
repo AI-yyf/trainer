@@ -1670,6 +1670,20 @@ def _has_execution_ready_next_step_request(
         "\u5148\u505a\u4ec0\u4e48",
         "先改哪里",
         "\u4e0b\u4e00\u6b65\u8be5\u505a\u4ec0\u4e48",
+        # Natural phrasings a learner uses when asking for the first concrete
+        # slice. Missing these sent execution-ready turns back through the
+        # intake reframe, which replaced a live model reply with the canned
+        # lane-selection template (verified live against MiniMax-M2.7).
+        "第一步",
+        "第一小步",
+        "第一个练习",
+        "最小练习",
+        "的练习",
+        "练习开始",
+        "第一个任务",
+        "给我练习",
+        "先带我做",
+        "\u5e26\u6211\u505a\u4e00\u4e2a",
         "只告诉我",
     )
     scope_tokens = (
@@ -1738,6 +1752,22 @@ def _has_execution_ready_next_step_request(
     wants_small_scope = any(token in lowered for token in scope_tokens)
     wants_learn_first = any(token in lowered for token in learn_first_tokens)
     wants_try_or_verify = any(token in lowered for token in try_or_verify_tokens)
+    # An explicit ask for the first concrete slice is execution-ready on its
+    # own; requiring an additional smallness qualifier here is what let "第一
+    # 步做什么"-style turns fall back into the intake lane template.
+    explicit_first_slice_ask = any(
+        token in lowered
+        for token in (
+            "第一步做什么",
+            "第一步是",
+            "第一步该",
+            "第一小步",
+            "第一个练习",
+            "第一个任务",
+            "先带我做",
+            "带我做一个",
+        )
+    )
     has_live_anchor = bool(
         current_file
         and any(
@@ -1748,6 +1778,8 @@ def _has_execution_ready_next_step_request(
     guided_lane = scenario in {"remote_workspace", "debug_loop", "function_guidance"}
 
     if wants_next_step and wants_small_scope:
+        return True
+    if explicit_first_slice_ask:
         return True
     if has_live_anchor and wants_learn_first and (wants_try_or_verify or wants_small_scope or wants_next_step):
         return True

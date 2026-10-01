@@ -574,12 +574,16 @@ test('Composer expansion lists stay anchored, bounded, scrollable, and keyboard-
   assert.ok(panels, 'expected bounded expansion panel styles');
   assert.match(accessory[0], /position:\s*absolute/);
   assert.match(accessory[0], /bottom:\s*calc\(100% \+ 6px\)/);
-  assert.match(panels[0], /inline-size:\s*min\(calc\(100% - 12px\), 320px\)/);
-  assert.match(panels[0], /max-inline-size:\s*calc\(100% - 12px\)/);
-  assert.match(panels[0], /max-block-size:\s*min\(36vh, 220px\)/);
+  // The palette tracks the composer's own measure. It used to be capped at
+  // 320px inside a ~395px composer, which left it visibly detached and let it
+  // sit on top of the last coach message.
+  assert.match(panels[0], /inline-size:\s*100%/);
+  assert.match(panels[0], /max-inline-size:\s*100%/);
+  assert.match(panels[0], /max-block-size:\s*min\(36vh, 260px\)/);
   assert.match(panels[0], /overflow:\s*auto/);
   assert.match(panels[0], /overflow-x:\s*hidden/);
   assert.match(panels[0], /overscroll-behavior:\s*contain/);
+  assert.match(panels[0], /scrollbar-width:\s*thin/);
   assert.match(styles, /\.composer__accessory :is\(\.command-deck__item, \.skill-deck__item\):focus-visible/);
   assert.match(styles, /@media \(max-width: 360px\)[\s\S]*?\.composer__accessory > :is\(\.composer-menu-panel, \.command-deck, \.skill-deck\)/);
   assert.match(source, /title=\{\[command\.command, command\.title, command\.description\]/);

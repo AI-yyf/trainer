@@ -1293,3 +1293,37 @@ test('describeProviderProfileSummary does not mark an empty connection as ready'
   assert.equal(summary.status, '未命名连接');
   assert.match(summary.detail, /已保存连接: 0/);
 });
+
+test('a gateway 5xx reads as an upstream outage, not an unreachable provider', () => {
+  const { providerErrorHint } = require(providerStatusModulePath);
+  const languages = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
+
+  for (const language of languages) {
+    const hint = providerErrorHint({ modelErrorCategory: 'upstream_unavailable' }, language);
+    assert.equal(
+      typeof hint,
+      'string',
+      `no hint for upstream_unavailable in ${language}`,
+    );
+    assert.ok(
+      hint.length > 10,
+      `upstream_unavailable hint for ${language} is too short to be actionable: ${JSON.stringify(hint)}`,
+    );
+  }
+
+  // The message must not tell the learner to fix what is not broken. A 502
+  // proves the endpoint answered; sending someone to change the base URL or the
+  // API key is the exact misdirection this category was introduced to stop.
+  const zh = providerErrorHint({ modelErrorCategory: 'upstream_unavailable' }, 'zh-CN');
+  assert.doesNotMatch(
+    zh,
+    /base ?url|api ?key|连不到|endpoint/i,
+    `the 5xx hint still blames the local configuration: ${zh}`,
+  );
+  const en = providerErrorHint({ modelErrorCategory: 'upstream_unavailable' }, 'en-US');
+  assert.doesNotMatch(
+    en,
+    /base ?url|api ?key|could not reach|check the /i,
+    `the 5xx hint still blames the local configuration: ${en}`,
+  );
+});

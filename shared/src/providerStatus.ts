@@ -122,6 +122,7 @@ const recentTestBlockingCategories = new Set([
 
 const recentTestDegradedCategories = new Set([
   'rate_limit',
+  'upstream_unavailable',
   'timeout',
   'network',
   'network_error',
@@ -138,6 +139,7 @@ const recentTestConnectivityFailureCategories = new Set([
 type ProviderStatusPhraseKey =
   | 'invalid_key_or_permission'
   | 'rate_limit'
+  | 'upstream_unavailable'
   | 'timeout'
   | 'network'
   | 'malformed_response'
@@ -166,6 +168,7 @@ const providerStatusPhraseTable: Record<
   'zh-CN': {
     invalid_key_or_permission: '这组连接暂时不能用。到“设置”检查密钥和权限后再试。',
     rate_limit: '服务正忙，请稍等再试。',
+    upstream_unavailable: '服务商已收到请求，但它的上游暂时出错。稍等重试即可，不用改配置。',
     timeout: '等了很久还没有回复。检查网络后再试。',
     network: '暂时连不上模型。检查连接后再试。',
     malformed_response: '收到的回复暂时无法使用。稍后再试，或换一个模型。',
@@ -190,6 +193,7 @@ const providerStatusPhraseTable: Record<
   'en-US': {
     invalid_key_or_permission: 'This connection cannot be used right now. Open Settings to check the key and access.',
     rate_limit: 'The service is busy right now. Wait a moment and try again.',
+    upstream_unavailable: 'The provider answered, but its upstream failed. Retry in a moment — no setting needs changing.',
     timeout: 'The service took too long to reply. Check the connection and try again.',
     network: 'Trainer cannot reach the model right now. Check the connection and try again.',
     malformed_response: 'The reply cannot be used right now. Try again later or choose another model.',
@@ -214,6 +218,7 @@ const providerStatusPhraseTable: Record<
   'es-ES': {
     invalid_key_or_permission: 'La clave API no es válida o no tiene acceso a este modelo o proyecto.',
     rate_limit: 'El proveedor está limitando solicitudes ahora mismo. Espera un momento y vuelve a intentarlo.',
+    upstream_unavailable: 'El proveedor respondió, pero su upstream falló. Reintenta en un momento: no hay que cambiar la configuración.',
     timeout: 'La solicitud agotó el tiempo antes de que el proveedor respondiera.',
     network: 'Trainer no pudo llegar al proveedor. Revisa la base URL y la ruta de red.',
     malformed_response: 'El endpoint respondió con un formato que no coincide con el esquema compatible con OpenAI.',
@@ -238,6 +243,7 @@ const providerStatusPhraseTable: Record<
   'fr-FR': {
     invalid_key_or_permission: "La clé API est invalide ou n'a pas accès à ce modèle ou projet.",
     rate_limit: 'Le fournisseur limite actuellement les requêtes. Attendez un moment puis réessayez.',
+    upstream_unavailable: 'Le fournisseur a répondu, mais son amont a échoué. Réessayez dans un instant : rien à changer dans la configuration.',
     timeout: "La requête a expiré avant que le fournisseur ne réponde.",
     network: "Trainer n'a pas pu joindre le fournisseur. Vérifiez la base URL et le chemin réseau.",
     malformed_response: "Le point de terminaison a renvoyé un format qui ne correspond pas au schéma compatible OpenAI.",
@@ -262,6 +268,7 @@ const providerStatusPhraseTable: Record<
   'de-DE': {
     invalid_key_or_permission: 'Der API-Schlüssel ist ungültig oder hat keinen Zugriff auf dieses Modell oder Projekt.',
     rate_limit: 'Der Anbieter begrenzt Anfragen gerade. Warten Sie kurz und versuchen Sie es erneut.',
+    upstream_unavailable: 'Der Anbieter hat geantwortet, aber sein Upstream ist fehlgeschlagen. Gleich erneut versuchen – die Einstellung muss nicht geändert werden.',
     timeout: 'Die Anfrage hat das Zeitlimit erreicht, bevor der Anbieter geantwortet hat.',
     network: 'Trainer konnte den Anbieter nicht erreichen. Prüfen Sie Base URL und Netzwerkpfad.',
     malformed_response: 'Der Endpunkt hat ein Format zurückgegeben, das nicht zum OpenAI-kompatiblen Schema passt.',
@@ -286,6 +293,7 @@ const providerStatusPhraseTable: Record<
   'ja-JP': {
     invalid_key_or_permission: 'API キーが無効か、このモデルまたはプロジェクトへの権限がありません。',
     rate_limit: '現在プロバイダー側でレート制限中です。少し待ってからもう一度試してください。',
+    upstream_unavailable: 'プロバイダーは応答しましたが、上流側で一時的なエラーが発生しました。設定は変更せず、少し待って再試行してください。',
     timeout: 'プロバイダーが応答する前にリクエストがタイムアウトしました。',
     network: 'Trainer はプロバイダーに接続できませんでした。base URL とネットワーク経路を確認してください。',
     malformed_response: 'エンドポイントの応答形式が OpenAI 互換スキーマと一致しません。',
@@ -310,6 +318,7 @@ const providerStatusPhraseTable: Record<
   'ko-KR': {
     invalid_key_or_permission: 'API 키가 올바르지 않거나 이 모델 또는 프로젝트에 접근 권한이 없습니다.',
     rate_limit: '현재 제공자가 속도를 제한하고 있습니다. 잠시 후 다시 시도하세요.',
+    upstream_unavailable: '제공자가 응답했지만 업스트림에서 오류가 발생했습니다. 설정은 그대로 두고 잠시 후 다시 시도하세요.',
     timeout: '제공자가 응답하기 전에 요청 시간이 초과되었습니다.',
     network: 'Trainer가 제공자에 도달하지 못했습니다. base URL과 네트워크 경로를 확인하세요.',
     malformed_response: '엔드포인트가 OpenAI 호환 형식과 맞지 않는 응답을 돌려주었습니다.',
@@ -334,6 +343,7 @@ const providerStatusPhraseTable: Record<
   'pt-BR': {
     invalid_key_or_permission: 'A chave de API é inválida ou não tem acesso a este modelo ou projeto.',
     rate_limit: 'O provedor está limitando requisições agora. Espere um momento e tente novamente.',
+    upstream_unavailable: 'O provedor respondeu, mas o upstream falhou. Tente de novo em instantes — nenhuma configuração precisa mudar.',
     timeout: 'A solicitação expirou antes de o provedor responder.',
     network: 'O Trainer não conseguiu alcançar o provedor. Verifique a base URL e o caminho de rede.',
     malformed_response: 'O endpoint respondeu com um formato que não corresponde ao esquema compatível com OpenAI.',
@@ -430,6 +440,11 @@ const providerErrorCategoryKeyMap: Partial<Record<string, ProviderStatusPhraseKe
   invalid_api_key: 'invalid_key_or_permission',
   authentication_failed: 'invalid_key_or_permission',
   rate_limit: 'rate_limit',
+  // A 5xx means the gateway answered and its own upstream failed. Without this
+  // entry the category resolved to `undefined` and the surface showed no
+  // message at all, so the 8-language copy I wrote was never actually
+  // reachable from the hint the learner reads.
+  upstream_unavailable: 'upstream_unavailable',
   timeout: 'timeout',
   network: 'network',
   network_error: 'network',

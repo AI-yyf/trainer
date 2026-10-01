@@ -85,7 +85,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--surface-2);
 }
 
@@ -93,27 +93,44 @@
   border-bottom: none;
 }
 
+/* One line per capability: name, then the band descriptor, then the count in
+   a fixed right-hand column so the four counts line up and the set can be read
+   at a glance. These rows were two lines each with the count marooned at the
+   far right, which made four numbers look like four unrelated sentences.
+   Deliberately no bar or percentage: this surface reports honest capability
+   bands, and a gauge would imply a precision the evidence does not carry. */
 .progress-view__row-main {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .progress-view__dimension {
   font-size: var(--trainer-font-sm);
   color: var(--fg-0);
+  flex: none;
 }
 
 .progress-view__state {
   font-size: var(--trainer-font-2xs);
   color: var(--fg-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .progress-view__evidence {
   font-size: var(--trainer-font-2xs);
   color: var(--fg-muted);
   white-space: nowrap;
+  flex: none;
+  min-inline-size: 7.5em;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
 }
 
 .progress-view__empty {

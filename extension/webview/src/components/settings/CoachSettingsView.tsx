@@ -85,7 +85,7 @@ import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
-import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, TrashIcon } from "../icons";
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, PlusIcon, TrashIcon } from "../icons";
 import { AlertTriangleIcon, DataFolderIcon, DoneIcon, ReloadIcon, SettingsShareIcon } from "../icons/inline";
 import { RemoteIcon } from "../icons/brand/trainerBrand";
 import { ResourcesNavIcon, TrainingNavIcon } from "../icons/navigation/coreNav";
@@ -98,8 +98,10 @@ import { languageIntegrityText } from "./languageIntegrityCopy";
 import { postMessage as postWebviewMessage } from "../../lib/vscode";
 import {
   trainerSkillCatalog,
+  normalizeCustomSkillTrigger,
   resolveTrainerSkillText,
   trainerSkillSectionLabel,
+  type TrainerCustomSkill,
   type TrainerSkillSection,
 } from "../../../../../shared/src/skillCatalog";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
@@ -1460,6 +1462,12 @@ export interface CoachSettingsViewProps {
   onTeachingStyleChange?: (value: TeachingStyle) => void;
   onFollowCurrentFileChange?: (value: boolean) => void;
   onCoachDefaultsChange?: (value: Partial<CoachDefaults>) => void;
+  onGenerateSkillDraft?: (
+    description: string,
+  ) => Promise<
+    | { trigger: string; title: string; detail: string; prompt: string; source: "model" | "template" }
+    | undefined
+  >;
   onContextDetailChange?: (value: "focused" | "balanced" | "full") => void;
   onIncludeCurrentFileChange?: (value: boolean) => void;
   onIncludeSelectionChange?: (value: boolean) => void;
@@ -2996,21 +3004,55 @@ function ChoiceList<T extends string>({
   active?: T;
   onChange?: (value: T) => void;
 }) {
+  // One themed pull-down per row: trigger shows the current choice, the
+  // listbox opens below, closes on outside click or on pick.
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onDocMouseDown = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [open]);
+  const effective = active ?? items[0]?.value;
+  const current = items.find((item) => item.value === effective) ?? items[0];
   return (
-    <div className="settings-sheet__group">
-      <div className="settings-sheet__choices">
-        {items.map((item) => (
-          <button
-            key={item.value}
-            className={`toolbar-button settings-sheet__choice-pill ${item.value === active ? "is-active" : ""}`}
-            type="button"
-            aria-pressed={item.value === active}
-            onClick={() => onChange?.(item.value)}
-          >
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </div>
+    <div className="settings-sheet__group settings-choice" ref={rootRef}>
+      <button
+        type="button"
+        className="settings-choice__trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="settings-choice__trigger-label">{current?.label}</span>
+        <ChevronDownIcon size={12} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="settings-choice__list" role="listbox">
+          {items.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              role="option"
+              aria-selected={item.value === effective}
+              className={`settings-choice__option ${item.value === effective ? "is-active" : ""}`}
+              onClick={() => {
+                onChange?.(item.value);
+                setOpen(false);
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -4033,6 +4075,7 @@ export function CoachSettingsView({
   onTeachingStyleChange,
   onFollowCurrentFileChange,
   onCoachDefaultsChange,
+  onGenerateSkillDraft,
   onContextDetailChange,
   onIncludeCurrentFileChange,
   onIncludeSelectionChange,
@@ -4124,6 +4167,16 @@ export function CoachSettingsView({
     setActiveSettingsCategory(id);
   };
   const [advancedContextPinned, setAdvancedContextPinned] = useState(false);
+  const [customSkillDraft, setCustomSkillDraft] = useState({
+    trigger: "",
+    title: "",
+    prompt: "",
+    detail: "",
+  });
+  const [customSkillDescription, setCustomSkillDescription] = useState("");
+  const [customSkillGenerating, setCustomSkillGenerating] = useState(false);
+  const [customSkillSource, setCustomSkillSource] = useState<"model" | "template" | null>(null);
+  const [customSkillError, setCustomSkillError] = useState<string | null>(null);
   const [providerApiKeyFocusRequested, setProviderApiKeyFocusRequested] = useState(false);
   const [providerProfilesFocusRequested, setProviderProfilesFocusRequested] = useState(false);
   const [providerTemplatesFocusRequested, setProviderTemplatesFocusRequested] = useState(false);
@@ -4897,6 +4950,7 @@ export function CoachSettingsView({
             : "pass"
           : "pending";
   const providerProfiles = useMemo(() => normalizeProviderProfileViews(provider), [provider]);
+  const customSkills = coachDefaults.customSkills ?? [];
   const providerProfileCount = countSavedProviderProfiles(provider);
 
   const liveProtocol = normalizeProviderProtocol(provider.protocol);
@@ -6308,45 +6362,40 @@ export function CoachSettingsView({
     {
       id: "connection",
       label: settingsGlobalCopy.settingsSectionConnection,
+      shortLabel: settingsGlobalCopy.settingsNavShortConnection,
       dirty: connectionDirty,
       icon: <SettingsConnectionIcon size={16} active={activeSettingsCategory === "connection"} />,
     },
     {
       id: "workspace",
       label: settingsPhrase(language, "navWorkspace"),
+      shortLabel: settingsGlobalCopy.settingsNavShortWorkspace,
       dirty: false,
       icon: <SettingsWorkspaceIcon size={16} active={activeSettingsCategory === "workspace"} />,
     },
     {
       id: "teaching",
       label: settingsGlobalCopy.settingsTeachingPrefs,
+      shortLabel: settingsGlobalCopy.settingsNavShortTeaching,
       dirty: false,
       icon: <SettingsTeachingIcon size={16} active={activeSettingsCategory === "teaching"} />,
     },
     {
-      id: "skills",
-      label: settingsGlobalCopy.settingsSectionSkills,
-      dirty: false,
-      icon: <SettingsSkillsIcon size={16} active={activeSettingsCategory === "skills"} />,
-    },
-    {
       id: "preferences",
       label: settingsGlobalCopy.settingsPreferences,
+      shortLabel: settingsGlobalCopy.settingsNavShortPreferences,
       dirty: false,
       icon: <SettingsPreferencesIcon size={16} active={activeSettingsCategory === "preferences"} />,
-    },
-    {
-      id: "advanced",
-      label: settingsGlobalCopy.settingsAdvancedContext,
-      dirty: false,
-      icon: <SettingsAdvancedIcon size={16} active={activeSettingsCategory === "advanced"} />,
     },
   ] as const;
   const settingsNavRef = useRef<HTMLElement | null>(null);
   const [settingsNavDense, setSettingsNavDense] = useState(false);
-  // Measure real overflow: render labels, check scrollWidth vs clientWidth,
-  // then fall back to icon-only when the text does not fit. Layout effect so
-  // the probe never paints.
+  // Measure the *labels*, not the nav. The nav row uses `flex: 1` on every
+  // item, so it shrinks its children instead of overflowing — `scrollWidth`
+  // stayed equal to `clientWidth` at every width, the icon-only fallback never
+  // armed, and each label silently collapsed to one glyph per line
+  // ("高级上下文" rendered as "高级"). Comparing each label's laid-out width
+  // against its scroll width detects the squeeze that actually happens.
   useLayoutEffect(() => {
     const nav = settingsNavRef.current;
     if (!nav) {
@@ -6355,10 +6404,17 @@ export function CoachSettingsView({
     const measure = () => {
       nav.classList.remove("settings-nav--icon");
       nav.classList.add("settings-nav--measuring");
-      const overflows = nav.scrollWidth > nav.clientWidth + 1;
+      const labels = Array.from(nav.querySelectorAll<HTMLElement>(".settings-nav__label"));
+      // A label whose content is wider than the box it was given is being
+      // truncated or wrapped — both mean the text does not fit.
+      const squeezed = labels.some(
+        (label) => label.scrollWidth > label.clientWidth + 1 || label.scrollHeight > label.clientHeight + 1,
+      );
+      const rowOverflows = nav.scrollWidth > nav.clientWidth + 1;
       nav.classList.remove("settings-nav--measuring");
-      nav.classList.toggle("settings-nav--icon", overflows);
-      setSettingsNavDense(overflows);
+      const dense = squeezed || rowOverflows;
+      nav.classList.toggle("settings-nav--icon", dense);
+      setSettingsNavDense(dense);
     };
     const observer = new ResizeObserver(measure);
     observer.observe(nav);
@@ -8345,7 +8401,7 @@ export function CoachSettingsView({
         </section>
         ) : null}
 
-        {activeSettingsCategory === "skills" ? (
+        {(activeSettingsCategory === "skills" || activeSettingsCategory === "teaching") ? (
         <section
           className="settings-section settings-section--flat settings-anchor"
           data-settings-section="skills"
@@ -8394,11 +8450,216 @@ export function CoachSettingsView({
                 );
               })}
             </div>
+
+            <div className="settings-subsection" data-settings-subsection="skills-custom">
+              <span className="eyebrow settings-subsection__title">
+                {settingsText(language, "我的技能", "My skills")}
+              </span>
+              {customSkills.length > 0 ? (
+                <div className="settings-sheet__simple-list" role="list">
+                  {customSkills.map((skill) => (
+                    <div key={skill.id} className="settings-skill-row" role="listitem">
+                      <span className="settings-skill-row__trigger">{skill.trigger}</span>
+                      <span className="settings-skill-row__body">
+                        <span className="settings-skill-row__title">{skill.title}</span>
+                        {skill.detail ? (
+                          <span className="settings-skill-row__detail">{skill.detail}</span>
+                        ) : null}
+                      </span>
+                      <button
+                        type="button"
+                        className="settings-skill-row__remove"
+                        aria-label={settingsText(language, "删除技能", "Remove skill")}
+                        title={settingsText(language, "删除技能", "Remove skill")}
+                        onClick={() =>
+                          onCoachDefaultsChange?.({
+                            customSkills: customSkills.filter((item) => item.id !== skill.id),
+                          })
+                        }
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="settings-sheet__note settings-sheet__note--compact">
+                  {settingsText(
+                    language,
+                    "还没有自定义技能。添加一个，用 $触发器 在输入框里调用。",
+                    "No custom skills yet. Add one and call it with its $trigger in the composer.",
+                  )}
+                </p>
+              )}
+
+              <div className="settings-skill-form">
+                <div className="settings-skill-form__field">
+                  <span className="eyebrow">
+                    {settingsText(language, "用一句话描述这个技能", "Describe the skill in one line")}
+                  </span>
+                  <textarea
+                    value={customSkillDescription}
+                    rows={2}
+                    placeholder={settingsText(
+                      language,
+                      "例如:每周五把学习记录整理成周报,按完成/卡住/下一步输出",
+                      "e.g. every Friday, tidy my learning log into done/stuck/next",
+                    )}
+                    onChange={(event) => {
+                      setCustomSkillDescription(event.target.value);
+                      setCustomSkillError(null);
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="button button--accent settings-skill-form__generate"
+                  disabled={
+                    customSkillGenerating ||
+                    customSkillDescription.trim().length < 2 ||
+                    !onGenerateSkillDraft
+                  }
+                  onClick={async () => {
+                    const draft = await onGenerateSkillDraft?.(customSkillDescription);
+                    if (!draft) {
+                      setCustomSkillError(
+                        settingsText(
+                          language,
+                          "先描述一下这个技能要做什么。",
+                          "Describe what the skill should do first.",
+                        ),
+                      );
+                      return;
+                    }
+                    setCustomSkillDraft({
+                      trigger: draft.trigger,
+                      title: draft.title,
+                      prompt: draft.prompt,
+                      detail: draft.detail,
+                    });
+                    setCustomSkillSource(draft.source);
+                    setCustomSkillError(null);
+                  }}
+                >
+                  {customSkillGenerating
+                    ? settingsText(language, "生成中…", "Drafting…")
+                    : onGenerateSkillDraft
+                      ? settingsText(language, "✨ 智能生成", "✨ Draft with AI")
+                      : settingsText(language, "生成草稿", "Draft")}
+                </button>
+                {customSkillSource ? (
+                  <p className="settings-sheet__note settings-sheet__note--compact">
+                    {customSkillSource === "model"
+                      ? settingsText(language, "已用当前模型生成,可直接修改后保存。", "Drafted with your model — tweak anything before saving.")
+                      : settingsText(language, "已生成草稿(未连接模型),可修改后保存。", "Drafted without a model — tweak anything before saving.")}
+                  </p>
+                ) : null}
+
+                <div className="settings-skill-form__field">
+                  <span className="eyebrow">{settingsText(language, "触发器", "Trigger")}</span>
+                  <input
+                    type="text"
+                    value={customSkillDraft.trigger}
+                    placeholder="$my-skill"
+                    onChange={(event) => {
+                      setCustomSkillDraft((draft) => ({ ...draft, trigger: event.target.value }));
+                      setCustomSkillError(null);
+                    }}
+                  />
+                </div>
+                <div className="settings-skill-form__field">
+                  <span className="eyebrow">{settingsText(language, "名称", "Name")}</span>
+                  <input
+                    type="text"
+                    value={customSkillDraft.title}
+                    placeholder={settingsText(language, "例如:整理周报", "e.g. Tidy my weekly report")}
+                    onChange={(event) => {
+                      setCustomSkillDraft((draft) => ({ ...draft, title: event.target.value }));
+                      setCustomSkillError(null);
+                    }}
+                  />
+                </div>
+                <div className="settings-skill-form__field">
+                  <span className="eyebrow">{settingsText(language, "提示词", "Prompt")}</span>
+                  <textarea
+                    value={customSkillDraft.prompt}
+                    rows={3}
+                    onChange={(event) => {
+                      setCustomSkillDraft((draft) => ({ ...draft, prompt: event.target.value }));
+                      setCustomSkillError(null);
+                    }}
+                  />
+                </div>
+                {customSkillError ? (
+                  <p className="settings-sheet__note settings-sheet__note--compact" role="alert">
+                    {customSkillError}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  className="button button--accent settings-skill-form__add"
+                  disabled={
+                    !customSkillDraft.trigger.trim() ||
+                    !customSkillDraft.title.trim() ||
+                    !customSkillDraft.prompt.trim() ||
+                    customSkills.length >= 24
+                  }
+                  onClick={() => {
+                    const normalized = normalizeCustomSkillTrigger(customSkillDraft.trigger);
+                    if (!normalized) {
+                      setCustomSkillError(
+                        settingsText(
+                          language,
+                          "触发器需要是 $ 开头、无空格的短词(例如 $weekly-report)。",
+                          "The trigger must be a short $word without spaces (e.g. $weekly-report).",
+                        ),
+                      );
+                      return;
+                    }
+                    if (
+                      customSkills.some(
+                        (item) => item.trigger.toLowerCase() === normalized.toLowerCase(),
+                      )
+                    ) {
+                      setCustomSkillError(
+                        settingsText(language, "这个触发器已经被使用了。", "That trigger is already in use."),
+                      );
+                      return;
+                    }
+                    const prompt = customSkillDraft.prompt.trim();
+                    const title = customSkillDraft.title.trim();
+                    const detail =
+                      customSkillDraft.detail.trim() ||
+                      (prompt.length > 140 ? `${prompt.slice(0, 137)}...` : prompt);
+                    onCoachDefaultsChange?.({
+                      customSkills: [
+                        ...customSkills,
+                        {
+                          id: `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+                          trigger: normalized,
+                          title,
+                          detail,
+                          prompt,
+                          keywords: [],
+                          createdAt: new Date().toISOString(),
+                        } satisfies TrainerCustomSkill,
+                      ],
+                    });
+                    setCustomSkillDraft({ trigger: "", title: "", prompt: "", detail: "" });
+                    setCustomSkillDescription("");
+                    setCustomSkillSource(null);
+                    setCustomSkillError(null);
+                  }}
+                >
+                  {settingsText(language, "添加技能", "Add skill")}
+                </button>
+              </div>
+            </div>
           </div>
         </section>
         ) : null}
 
-        {activeSettingsCategory === "advanced" ? (
+        {(activeSettingsCategory === "advanced" || activeSettingsCategory === "preferences") ? (
         <section
           className="settings-section settings-section--flat settings-anchor"
           data-settings-section="advanced"
@@ -8527,7 +8788,9 @@ export function CoachSettingsView({
                 <span className="settings-nav__icon" aria-hidden="true">
                   {item.icon}
                 </span>
-                <span className="settings-nav__label">{item.label}</span>
+                <span className="settings-nav__label" data-settings-nav-full={item.label}>
+                  {settingsNavDense ? item.shortLabel : item.label}
+                </span>
                 {item.dirty ? (
                   <span
                     className="settings-section-dot"
@@ -8540,41 +8803,6 @@ export function CoachSettingsView({
               </button>
             ))}
           </nav>
-            <div className="settings-nav__actions" role="group" aria-label={settingsPhrase(language, "navShare")}>
-              {onShareSession ? (
-                <button
-                  type="button"
-                  className="settings-nav__action"
-                  aria-label={settingsPhrase(language, "navShare")}
-                  title={settingsPhrase(language, "navShare")}
-                  onClick={onShareSession}
-                >
-                  <SettingsShareIcon size={14} aria-hidden="true" />
-                </button>
-              ) : null}
-              {onNavigateToView ? (
-                <button
-                  type="button"
-                  className="settings-nav__action"
-                  aria-label={settingsPhrase(language, "navResources")}
-                  title={settingsPhrase(language, "navResources")}
-                  onClick={() => onNavigateToView("resources")}
-                >
-                  <ResourcesNavIcon size={14} aria-hidden="true" />
-                </button>
-              ) : null}
-              {onNavigateToView ? (
-                <button
-                  type="button"
-                  className="settings-nav__action"
-                  aria-label={settingsPhrase(language, "navTraining")}
-                  title={settingsPhrase(language, "navTraining")}
-                  onClick={() => onNavigateToView("training")}
-                >
-                  <TrainingNavIcon size={14} aria-hidden="true" />
-                </button>
-              ) : null}
-            </div>
           </div>
         </div>
       </div>

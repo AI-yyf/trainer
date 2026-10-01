@@ -1085,9 +1085,13 @@ def _visible_coach_finalize_reply(
     *,
     response_language: str | None,
 ) -> str:
-    """Turn verified finalize metadata into a compact learner-facing close."""
+    """Turn verified finalize metadata into a compact learner-facing close.
+
+    The next step intentionally stays out of the body: it reaches the learner
+    through the reply's icon strip (agent_meta.next_step), keeping the reply
+    text to the coach's own words.
+    """
     chinese = bool(response_language and response_language.lower().startswith("zh"))
-    next_label = "\u4e0b\u4e00\u6b65\uff1a" if chinese else "Next step: "
     blocker_label = "\u5f53\u524d\u963b\u585e\uff1a" if chinese else "Current blocker: "
     parts: list[str] = []
 
@@ -1099,10 +1103,6 @@ def _visible_coach_finalize_reply(
     blocker = str(payload.get("blocker") or "").strip()
     if blocker:
         parts.append(f"{blocker_label}{blocker}")
-
-    next_step = str(payload.get("next_step") or "").strip()
-    if next_step:
-        parts.append(f"{next_label}{next_step}")
 
     return "\n\n".join(parts)
 

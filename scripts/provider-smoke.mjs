@@ -516,12 +516,18 @@ async function readResponse(step, url, init, modelId) {
 }
 
 function buildFailureReport({ model: resolvedModel, protocol: resolvedProtocol, failure }) {
+  // Keep the diagnosis. Dropping failure.detail/status here is what made a
+  // rejected request-field look identical to a bad API key: the operator had
+  // nothing to act on and had to re-derive the cause by hand.
   return {
     ok: false,
     category: failure.category,
     model: resolvedModel,
     protocol: resolvedProtocol,
     elapsedMs: elapsedMs(),
+    status: failure.status,
+    detail: failure.detail,
+    step: failure.step,
   };
 }
 

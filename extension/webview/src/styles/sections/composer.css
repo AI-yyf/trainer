@@ -211,7 +211,7 @@
   inset-inline: 0;
   bottom: calc(100% + 6px);
   display: grid;
-  justify-items: start;
+  justify-items: stretch;
   gap: 6px;
   max-inline-size: 100%;
   pointer-events: none;
@@ -222,14 +222,18 @@
 }
 
 .composer__accessory > :is(.composer-menu-panel, .command-deck, .skill-deck) {
-  inline-size: min(calc(100% - 12px), 320px);
-  max-inline-size: calc(100% - 12px);
-  max-block-size: min(36vh, 220px);
+  /* Match the composer's own measure so the palette reads as attached to the
+     box it belongs to, instead of floating beside it. */
+  inline-size: 100%;
+  max-inline-size: 100%;
+  max-block-size: min(36vh, 260px);
   margin: 0;
   overflow: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
-  box-shadow: none;
+  box-shadow: 0 -8px 28px -12px rgb(0 0 0 / 55%);
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--line) 70%, transparent) transparent;
 }
 
 .composer__accessory :is(.command-deck__header, .skill-deck__header, .skill-deck__empty) {

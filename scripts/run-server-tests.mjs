@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -83,6 +84,7 @@ export function runServerCommand({
     const result = spawnSync(python.command, [...python.args, ...args], {
       cwd: serverRoot,
       stdio: "inherit",
+      env,
     });
 
     if (result.error) {
@@ -115,10 +117,63 @@ export function runServerCommand({
   );
 }
 
+/**
+ * Worker count for the pytest run.
+ *
+ * The suite is ~3000 tests whose cost is per-test app/SQLite setup rather than
+ * any single hotspot, so it parallelises well. Every database in
+ * tests/conftest.py lives in a per-test tmp_path and the HTTP paths use mock
+ * transports, so spreading it across processes is safe.
+ *
+ * The load average is deliberately *not* an input. An earlier version backed
+ * off when the machine looked busy, on the theory that adding workers to a
+ * saturated box hurts. Measurement says the opposite: the work is CPU-bound
+ * Python, so running it nearly serially costs far more than the contention.
+ * Measured on this box at load 18: n=2 → 304s, n=4 → 258s, n=6 → 188s,
+ * n=8 → 202s. The gentlest setting was the slowest by a wide margin.
+ *
+ * TRAINER_SERVER_TEST_WORKERS=1 restores the serial run; any non-numeric value
+ * falls back to the computed default rather than disabling parallelism
+ * silently.
+ */
+export function resolveTestWorkers({
+  env = process.env,
+  cpus = os.cpus().length,
+} = {}) {
+  const raw = (env.TRAINER_SERVER_TEST_WORKERS ?? "").trim();
+  if (raw) {
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 8;
+  }
+  // Never below 4: a 2-worker run is measurably worse than any other setting.
+  return Math.max(4, Math.min(8, cpus));
+}
+
 export function runServerTests(options = {}) {
+  const workers = resolveTestWorkers(options);
+  const parallel = workers > 1 ? ["-n", String(workers)] : [];
   return runServerCommand({
     ...options,
-    args: ["-m", "pytest", "tests", "-q"],
+    // -p no:cacheprovider keeps workers from fighting over the pytest cache.
+    //
+    // The heartbeat keeps the run observable: under xdist the controller
+    // prints a dot per test, and a slow integration test on a loaded machine
+    // can leave 20-30s of complete silence — indistinguishable from a hang to
+    // anything supervising the process. One line every 10s says "alive".
+    // PYTHONPATH exposes the plugin module, and it stays quiet inside workers
+    // so there is no eightfold echo.
+    args: [
+      "-m", "pytest", "tests", "-q",
+      ...parallel,
+      "-p", "no:cacheprovider",
+      "-p", "trainer_suite_heartbeat",
+    ],
+    env: {
+      ...(options.env ?? process.env),
+      PYTHONPATH: [path.join(serverDir, "tests"), (options.env ?? process.env).PYTHONPATH ?? ""]
+        .filter(Boolean)
+        .join(path.delimiter),
+    },
     label: "Trainer server tests",
   });
 }

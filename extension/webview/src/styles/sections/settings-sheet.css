@@ -82,9 +82,21 @@
   order: 2;
   display: flex;
   flex: none;
-  align-items: center;
+  flex-direction: column-reverse;
+  align-items: stretch;
   border-top: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
   background: var(--bg-0, var(--panel));
+}
+
+/* The action rail sits above the category row and is right-aligned; the
+   category nav then gets the full width of the pane instead of sharing it
+   with three unrelated buttons. */
+.settings-nav__actions--rail {
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 6px 4px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
+  margin-bottom: 2px;
 }
 
 .settings-nav {
@@ -92,18 +104,30 @@
   flex: 1 1 auto;
   min-width: 0;
   flex-direction: row;
+  justify-content: center;
   gap: 2px;
   padding: 6px 2px 4px;
+  /* Six categories now own the whole row. Rather than let every cell shrink
+     until its label is one glyph wide, keep cells at their natural width and
+     let the row scroll as a last resort. Labels stay whole. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.settings-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .settings-nav__item {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   min-width: 0;
-  padding: 6px 2px;
+  padding: 6px 8px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -112,6 +136,7 @@
   font-size: var(--trainer-font-2xs);
   line-height: 1.3;
   text-align: center;
+  white-space: nowrap;
   cursor: pointer;
   position: relative;
 }
@@ -130,10 +155,16 @@
 .settings-nav--measuring .settings-nav__label {
   display: inline;
   -webkit-line-clamp: unset;
+  overflow: visible;
+  text-overflow: clip;
 }
 
+/* Dense mode keeps a short label beside each icon instead of dropping the
+   text entirely — six unlabelled glyphs are not navigable. The component swaps
+   in the abbreviated copy and this only tightens the cell. */
 .settings-nav--icon .settings-nav__item {
-  padding: 7px 2px;
+  padding: 6px 5px;
+  gap: 3px;
 }
 
 .settings-nav--icon .settings-nav__icon {
@@ -141,7 +172,12 @@
 }
 
 .settings-nav--icon .settings-nav__label {
-  display: none;
+  display: inline;
+  font-size: var(--trainer-font-3xs);
+}
+
+.settings-nav--icon .settings-nav__item.is-active {
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--fg-0) 65%, transparent);
 }
 
 .settings-nav--icon .settings-section-dot {
@@ -199,9 +235,8 @@
 .settings-nav__label {
   min-width: 0;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   line-height: 1.25;
 }
 
@@ -285,6 +320,8 @@
 .settings-connection-summary__meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 2px;
   gap: 6px;
   min-width: 0;
   color: var(--fg-muted);
@@ -292,12 +329,12 @@
   line-height: 1.4;
 }
 
+/* Model / protocol / host read in full: the summary card is where the learner
+   verifies what they configured, so nothing here gets an ellipsis. */
 .settings-connection-summary__model,
 .settings-connection-summary__host {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .settings-provider-directory {
@@ -934,9 +971,11 @@
   min-width: 0;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 4px;
   gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  /* Wrapped, not scrolled: a horizontal scrollbar under the provider chip
+     read as a stray progress bar. */
   padding: 2px;
 }
 
@@ -948,12 +987,19 @@
 }
 
 .settings-provider-bar .settings-provider-profile--bar {
-  width: auto;
-  flex: 0 0 auto;
+  /* Shrink inside the wrapped list: a 0 0 auto chip overflowed its 189px box
+     and collided with the action buttons. */
+  flex: 1 1 auto;
+  min-width: 0;
   border: 1px solid color-mix(in srgb, var(--line) 34%, transparent);
   border-radius: var(--radius-sm);
   padding: 4px 8px;
   background: color-mix(in srgb, var(--bg-1) 45%, transparent);
+}
+
+.settings-provider-bar .settings-provider-profile--bar .settings-provider-profile__row {
+  flex-wrap: wrap;
+  row-gap: 2px;
 }
 
 .settings-provider-bar .settings-provider-profile--bar.is-active {
@@ -1044,6 +1090,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 2px;
   gap: 8px;
 }
 
@@ -1053,27 +1101,30 @@
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  flex: none;
-  max-width: 62%;
+  flex: 1 1 auto;
+  /* The configured model must read in full — no ellipsis on the one value the
+     learner actually configured. */
+  max-width: 100%;
 }
 
 .settings-provider-profile__label,
 .settings-provider-profile__model {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: var(--trainer-font-3xs);
   line-height: 1.25;
 }
 
 .settings-provider-profile__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--fg-1);
 }
 
 .settings-provider-profile__model {
   color: var(--fg-muted);
   font-weight: 400;
+  overflow-wrap: anywhere;
 }
 
 .settings-provider-profile__state {
@@ -1360,8 +1411,11 @@
 
 .settings-setup-checks--availability {
   padding: 0;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 5px;
+  /* Two columns, not four: at sidebar width four cells truncate every value
+     to "Provider c…"-style ellipses, which reads as noise. Two cells keep the
+     label and its value readable; five checks simply wrap to three rows. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 10px;
 }
 
 .settings-setup-check {
@@ -1924,3 +1978,267 @@
   }
 }
 
+
+/* ==========================================================================
+   Connection form polish — sidebar-width hierarchy pass
+   ========================================================================== */
+
+/* Blockers: one tight card, rows single-line, actions ghost-aligned. */
+.settings-status-bar--blockers {
+  gap: 2px;
+  padding: 5px 8px;
+}
+
+.settings-status-bar--blockers .settings-status-bar__row {
+  min-height: 24px;
+}
+
+.settings-status-bar--blockers .settings-status-bar__text {
+  color: var(--fg-2);
+}
+
+.settings-status-bar--blockers .settings-status-bar__issue {
+  min-height: 20px;
+  padding: 1px 8px;
+  background: transparent;
+  color: var(--fg-2);
+}
+
+.settings-status-bar--blockers .settings-status-bar__issue:hover {
+  color: var(--fg-1);
+  background: color-mix(in srgb, var(--bg-2) 70%, transparent);
+}
+
+/* Primary save: own the row. Secondary actions sit beneath as quiet peers. */
+.settings-section--setup .settings-actions--primary .action-button--accent {
+  width: 100%;
+  min-height: 30px;
+}
+
+/* Setup fields: keep the eyebrow/field rhythm even so the form scans as one
+   column instead of loose islands. */
+.settings-section--setup .settings-setup-checks {
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 24%, transparent);
+}
+
+/* Connection details collapse: keep the row airy at 336px. */
+.coach-settings-view__provider-detail .collapse-section__header {
+  padding: 7px 8px;
+}
+
+/* Pull-down option lists: one regular control per settings row. */
+.settings-sheet__choice-select {
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+  color: var(--fg-1);
+  font-family: inherit;
+  font-size: var(--trainer-font-xs);
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.settings-sheet__choice-select:hover {
+  border-color: color-mix(in srgb, var(--line) 80%, transparent);
+}
+
+.settings-sheet__choice-select:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 1px;
+}
+
+/* Regular preference rows: one grid — fixed label column, control fills.
+   Applies to the consolidated preferences body so every row lines up. */
+.settings-sheet__defaults-body .settings-row {
+  display: grid;
+  grid-template-columns: minmax(84px, 38%) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+
+.settings-sheet__defaults-body .settings-row > .eyebrow {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Managed skill list: bordered rows with the $ trigger as a lead chip. */
+.settings-skill-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+}
+
+.settings-skill-row .settings-skill-row__title {
+  color: var(--fg-0);
+}
+
+.settings-skill-row .settings-skill-row__detail {
+  color: var(--fg-1);
+}
+
+.settings-skill-row + .settings-skill-row {
+  margin-top: 4px;
+}
+
+.settings-skill-row__trigger {
+  flex: none;
+  min-width: 34px;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
+  font-size: var(--trainer-font-2xs);
+  font-weight: 500;
+  text-align: center;
+}
+
+/* Themed pull-down for settings option rows (replaces the native popup). */
+.settings-choice {
+  position: relative;
+}
+
+.settings-choice__trigger {
+  width: 100%;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+  color: var(--fg-1);
+  font-family: inherit;
+  font-size: var(--trainer-font-xs);
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.settings-choice__trigger:hover {
+  border-color: color-mix(in srgb, var(--line) 80%, transparent);
+}
+
+.settings-choice__trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-choice__list {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-1) 97%, var(--bg-0));
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--bg-0) 30%, transparent);
+}
+
+.settings-choice__option {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-1);
+  font-family: inherit;
+  font-size: var(--trainer-font-xs);
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-choice__option:hover {
+  background: color-mix(in srgb, var(--bg-2) 70%, transparent);
+}
+
+.settings-choice__option.is-active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--fg-0);
+}
+
+/* Custom skills: add form + managed rows with remove. */
+.settings-skill-row__remove {
+  flex: none;
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-3);
+  font-size: var(--trainer-font-xs);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.settings-skill-row__remove:hover {
+  color: var(--fg-0);
+  background: color-mix(in srgb, var(--bg-2) 70%, transparent);
+}
+
+.settings-skill-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 38%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+}
+
+.settings-skill-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.settings-skill-form__field input,
+.settings-skill-form__field textarea {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+  color: var(--fg-1);
+  font-family: inherit;
+  font-size: var(--trainer-font-xs);
+  line-height: 1.35;
+  resize: vertical;
+}
+
+.settings-skill-form__field input:focus,
+.settings-skill-form__field textarea:focus {
+  outline: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: -1px;
+}
+
+.settings-skill-form__add {
+  align-self: flex-start;
+  min-height: 26px;
+  padding: 4px 12px;
+}
+
+.settings-skill-form__generate {
+  align-self: flex-start;
+  min-height: 28px;
+  padding: 4px 12px;
+}

@@ -152,6 +152,14 @@ from .provider.text import (
     _visible_model_text,
     _wrong_language_cjk_reply_detail,
 )
+from .provider.thinking import (
+    apply_thinking_policy,
+    declared_thinking,
+    learned_policy,
+    remember_policy,
+    resolve_thinking_policy,
+    thinking_rejection_policy,
+)
 from .provider_gateway import (
     catalog_endpoint_type_claims,
     gateway_fingerprint_diagnostics,
@@ -1638,7 +1646,11 @@ class ProviderService:
                 continue
             merged[normalized_key] = value
 
-        return merged
+        # Apply the negotiated thinking policy here, on the central chokepoint
+        # every chat request passes through. Without this the policy learned
+        # from a gateway rejection is never re-applied, so every later turn
+        # re-pays the same HTTP 400 round trip before succeeding.
+        return apply_thinking_policy(merged, resolve_thinking_policy(merged, self._thinking_scope(provider)))
 
     def _provider_cache_key(self, provider: ProviderConfig, api_key: str | None) -> tuple[str, str]:
         try:
@@ -1887,7 +1899,10 @@ class ProviderService:
         if "malformed" in lowered or "invalid json" in lowered or "unexpected response" in lowered:
             return ("malformed_response", False, status_code, True, None)
         if status_code and 500 <= status_code <= 599:
-            return ("network", True, status_code, False, None)
+            # A 5xx means the endpoint answered — its own upstream failed. That
+            # is not the same as "cannot reach the provider", and collapsing the
+            # two sent users off to debug a base URL that was working fine.
+            return ("upstream_unavailable", True, status_code, True, None)
         return ("unknown", False, status_code, False, None)
 
     def _detail_from_category(
@@ -2360,7 +2375,9 @@ class ProviderService:
                         "stream": stream,
                     }
                 )
-                response = await client.chat.completions.create(**request_payload)
+                response = await self._create_chat_completion_negotiated_async(
+                    client, request_payload
+                )
                 return response, candidate
             except Exception as exc:
                 last_error = exc
@@ -3507,14 +3524,103 @@ class ProviderService:
             if key in defaults and defaults[key] is not None:
                 merged[key] = defaults[key]
         if not self._anthropic_base_url_is_official(provider):
-            merged["thinking"] = {"type": "disabled"}
-            return merged
+            # Previously an unconditional `thinking: disabled`. That is still the
+            # right first attempt for reasoning-first gateways (it keeps probe
+            # replies short), but it must not be a blanket override: a user's
+            # explicit request_defaults wins, and models that *require* thinking
+            # reject this field with HTTP 400. provider.thinking re-negotiates
+            # the policy per model at runtime and replays the request.
+            return apply_thinking_policy(
+                merged, resolve_thinking_policy(merged, provider)
+            )
         thinking_budget = defaults.get("thinking_budget", defaults.get("thinkingBudget"))
         if isinstance(thinking_budget, int) and thinking_budget > 0:
             merged["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
         elif isinstance(thinking_budget, str) and thinking_budget.strip().lower() == "disabled":
             merged.pop("thinking", None)
         return _flatten_minimax_thinking_for_raw_http(merged, provider)
+
+    # --- thinking re-negotiation ------------------------------------------------
+    # A gateway may reject the `thinking` request field outright (mandatory-
+    # thinking models answer HTTP 400 "requires adaptive thinking"). Rather than
+    # failing the turn, replay once with the policy the gateway actually accepts
+    # and remember it for this (base_url, model) so later requests go out right.
+
+    @staticmethod
+    def _retry_payload_for_thinking(
+        payload: dict[str, Any],
+        provider: ProviderConfig | None,
+        attempted: str,
+        policy: str,
+    ) -> dict[str, Any] | None:
+        """Rebuild ``payload`` under a different thinking policy, or ``None``.
+
+        Returns ``None`` when a user-declared ``enabled`` opt-in is in play — we
+        never silently downgrade a choice the user made themselves.
+        """
+        if declared_thinking(payload) == "enabled" and policy != "enabled":
+            return None
+        candidate = apply_thinking_policy(payload, policy)  # type: ignore[arg-type]
+        if candidate.get("thinking") == payload.get("thinking") and (
+            candidate.get("extra_body") or {}
+        ) == (payload.get("extra_body") or {}):
+            return None
+        if provider is not None:
+            remember_policy(provider, policy)  # type: ignore[arg-type]
+        return candidate
+
+    def _thinking_scope(self, provider: ProviderConfig | None) -> ProviderConfig | None:
+        """The provider identity a learned thinking policy is cached under."""
+        return provider or self._config
+
+    def _create_chat_completion_negotiated(
+        self,
+        client: Any,
+        payload: dict[str, Any],
+        provider: ProviderConfig | None = None,
+    ) -> Any:
+        """Sync ``chat.completions.create`` with one thinking re-negotiation."""
+        scope = self._thinking_scope(provider)
+        attempted = declared_thinking(payload) or (learned_policy(scope) if scope else None) or "disabled"
+        try:
+            return client.chat.completions.create(**payload)
+        except Exception as exc:
+            policy = thinking_rejection_policy(exc, attempted)
+            if policy is None:
+                raise
+            retry_payload = self._retry_payload_for_thinking(payload, scope, attempted, policy)
+            if retry_payload is None:
+                raise
+            try:
+                return client.chat.completions.create(**retry_payload)
+            except Exception as retry_exc:
+                # The first rejection is the actionable diagnosis ("this model
+                # requires adaptive thinking"). Never let a retry's own failure
+                # mask it — re-raise the original and chain the retry detail.
+                raise exc from retry_exc
+
+    async def _create_chat_completion_negotiated_async(
+        self,
+        client: Any,
+        payload: dict[str, Any],
+        provider: ProviderConfig | None = None,
+    ) -> Any:
+        """Async ``chat.completions.create`` with one thinking re-negotiation."""
+        scope = self._thinking_scope(provider)
+        attempted = declared_thinking(payload) or (learned_policy(scope) if scope else None) or "disabled"
+        try:
+            return await client.chat.completions.create(**payload)
+        except Exception as exc:
+            policy = thinking_rejection_policy(exc, attempted)
+            if policy is None:
+                raise
+            retry_payload = self._retry_payload_for_thinking(payload, scope, attempted, policy)
+            if retry_payload is None:
+                raise
+            try:
+                return await client.chat.completions.create(**retry_payload)
+            except Exception as retry_exc:
+                raise exc from retry_exc
 
     def _apply_gemini_native_probe_defaults(
         self,
@@ -4669,7 +4775,9 @@ class ProviderService:
                             },
                             provider,
                         )
-                        response = client.chat.completions.create(**request_payload)
+                        response = self._create_chat_completion_negotiated(
+                            client, request_payload, provider
+                        )
                         break
                     except Exception as chat_exc:
                         if not self._is_model_not_supported_error(chat_exc):
@@ -4707,7 +4815,9 @@ class ProviderService:
                                 },
                                 provider,
                             )
-                            retry_probe_response = client.chat.completions.create(**retry_probe_request)
+                            retry_probe_response = self._create_chat_completion_negotiated(
+                                client, retry_probe_request, provider
+                            )
                             latest_probe_response = retry_probe_response
                             retry_probe_message = (
                                 retry_probe_response.choices[0].message
@@ -4743,7 +4853,9 @@ class ProviderService:
                             },
                             provider,
                         )
-                        visible_probe_response = client.chat.completions.create(**visible_probe_request)
+                        visible_probe_response = self._create_chat_completion_negotiated(
+                            client, visible_probe_request, provider
+                        )
                         latest_probe_response = visible_probe_response
                         visible_probe_message = (
                             visible_probe_response.choices[0].message
@@ -5427,16 +5539,6 @@ class ProviderService:
         if not has_structured_context:
             return reply
 
-        next_step_hint = _prefer_structured_next_step(
-            scenario=scenario,
-            next_step_hint=_extract_next_step_hint_text(context.get("next_step_hint")),
-            implementation_guide=implementation_guide,
-            adaptation_guide=adaptation_guide,
-            principle_note=principle_note,
-            project_ideas=project_ideas,
-            exercise_prompt=exercise_prompt,
-        )
-
         additions: list[str] = []
 
         principle_patch = _compose_principle_followthrough_patch(
@@ -5455,21 +5557,9 @@ class ProviderService:
         if guided_lane_patch:
             additions.append(guided_lane_patch)
 
-        next_step_patch = _compose_missing_next_step_patch(
-            reply=reply,
-            scenario=scenario,
-            next_step_hint=next_step_hint,
-            file_path=file_path,
-            project_entry_points=project_entry_points,
-            learner_signal=learner_signal,
-            mode=mode,
-            chinese=chinese,
-            coach_context=context,
-        )
-        if not next_step_patch:
-            next_step_patch = None
-        if next_step_patch:
-            additions.append(next_step_patch)
+        # The next step no longer appends to the body: it reaches the learner
+        # through the reply's icon strip (coach_turn.next_step / next_step_hint
+        # metadata), so the text ends with the coach's own words.
 
         review_patch = _compose_review_tightening_patch(
             reply=reply,

@@ -2786,6 +2786,41 @@ export function TrainingWorkbenchView({
       detail: routeReturnSummary,
     },
   ];
+  // A card often derives several of these fields from one source, so the same
+  // sentence surfaced three times ("当前训练动作" == "交付物") and the trailing
+  // done/blocker lines restated the verify step without a label. Walk the
+  // sections in reading order and keep only the first occurrence of each
+  // normalized value, so every line on the card earns its place.
+  const cardOnlySeenValues = new Set<string>();
+  const cardOnlyDistinctSections = cardOnlyBodySections.filter((section) => {
+    const title = section.title?.trim();
+    const detail = section.detail?.trim();
+    if (!title && !detail) {
+      return false;
+    }
+    for (const candidate of [title, detail]) {
+      if (!candidate) continue;
+      const key = normalizeCardText(candidate);
+      if (!key) continue;
+      if (cardOnlySeenValues.has(key)) {
+        return false;
+      }
+      cardOnlySeenValues.add(key);
+    }
+    return true;
+  });
+  const cardOnlyDoneTextDistinct =
+    cardOnlyDoneText &&
+    !cardOnlySeenValues.has(normalizeCardText(cardOnlyDoneText)) &&
+    normalizeCardText(cardOnlyDoneText) !== normalizeCardText(displayTitle)
+      ? cardOnlyDoneText
+      : null;
+  const cardOnlyBlockerDistinct =
+    latestLearningBlocker &&
+    !cardOnlySeenValues.has(normalizeCardText(latestLearningBlocker)) &&
+    normalizeCardText(latestLearningBlocker) !== normalizeCardText(displayTitle)
+      ? latestLearningBlocker
+      : null;
   const flashDeckActionLabel = isFlashCard
     ? trainingWorkbenchText(language, "flashDeckNext")
     : trainingWorkbenchText(language, "flashDeckPractice");
@@ -2971,37 +3006,21 @@ export function TrainingWorkbenchView({
                         <p data-view-why="">{cardOnlyTask}</p>
                       ) : null}
                     </div>
-                    {cardOnlyBodySections
-                      .filter((section) => {
-                        const title = section.title?.trim();
-                        const detail = section.detail?.trim();
-                        if (!title && !detail) {
-                          return false;
-                        }
-                        if (
-                          section.key === "current" &&
-                          title &&
-                          normalizeCardText(title) === normalizeCardText(displayTitle)
-                        ) {
-                          return false;
-                        }
-                        return true;
-                      })
-                      .map((section) => (
-                        <article key={section.key} className="training-current__card-section" data-training-card-fact={section.key}>
-                          <span className="training-current__card-label">{section.label}</span>
-                          {section.title ? (
-                            <p className="training-current__card-value">{section.title}</p>
-                          ) : null}
-                          {section.detail ? <p>{section.detail}</p> : null}
-                        </article>
-                      ))}
-                    {cardOnlyDoneText ? (
-                      <p className="training-current__done">{cardOnlyDoneText}</p>
+                    {cardOnlyDistinctSections.map((section) => (
+                      <article key={section.key} className="training-current__card-section" data-training-card-fact={section.key}>
+                        <span className="training-current__card-label">{section.label}</span>
+                        {section.title ? (
+                          <p className="training-current__card-value">{section.title}</p>
+                        ) : null}
+                        {section.detail ? <p>{section.detail}</p> : null}
+                      </article>
+                    ))}
+                    {cardOnlyDoneTextDistinct ? (
+                      <p className="training-current__done">{cardOnlyDoneTextDistinct}</p>
                     ) : null}
-                    {latestLearningBlocker ? (
+                    {cardOnlyBlockerDistinct ? (
                       <p className="training-current__verify-result" role="status">
-                        {latestLearningBlocker}
+                        {cardOnlyBlockerDistinct}
                       </p>
                     ) : null}
                     <SkillProjectionStrip language={language} projection={skillProjection} variant="full" />
@@ -3051,18 +3070,15 @@ export function TrainingWorkbenchView({
                   <div
                     className="training-current__actions training-current__actions--primary"
                   >
-                    {onCardStatusTransition && cardId ? (
+                    {onCardStatusTransition && cardId &&
+                    (selectedCardStatus === "needs_primer" ||
+                      selectedCardStatus === "candidate" ||
+                      !selectedCardStatus) ? (
                       <ActionButton
                         tone={selectedCardStatus === "needs_primer" ? "accent" : "ghost"}
                         label={trainingSurfaceLabel(language, "startStep")}
                         onClick={() => {
-                          if (
-                            selectedCardStatus === "needs_primer" ||
-                            selectedCardStatus === "candidate" ||
-                            !selectedCardStatus
-                          ) {
-                            onCardStatusTransition(cardId, "active", "start_step");
-                          }
+                          onCardStatusTransition(cardId, "active", "start_step");
                         }}
                       />
                     ) : null}

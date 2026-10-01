@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
@@ -18,6 +19,7 @@ from ..core.models import (
 from ..core.models import TaskSpec as ApiTaskSpec
 from ..memory.workspace_recovery import live_training_card_title
 from ..specs.models import RequirementItem, TaskSpec
+from .check_cache import CHECK_RESULT_CACHE
 from .models import CheckCommand, CheckResult, CheckStatus, EvaluationRequest, SemanticReview
 from .models import EvaluationReport as LaneEvaluationReport
 
@@ -195,6 +197,18 @@ class DefaultSemanticReviewer:
         return ""
 
 
+def default_command_runner() -> CommandRunner:
+    """The runner an EvaluationPipeline uses when none is injected.
+
+    Indirection rather than calling ``SubprocessCommandRunner()`` inline: the
+    suite replaces *this* to stop spawning real linters for every test, while
+    the runner class itself stays directly constructible and directly tested.
+    Swapping the class would have silently changed what
+    ``tests/test_evaluator.py`` exercises.
+    """
+    return SubprocessCommandRunner()
+
+
 class EvaluationPipeline:
     def __init__(
         self,
@@ -203,7 +217,7 @@ class EvaluationPipeline:
         hypothesis_hook: HypothesisHook | None = None,
         semantic_reviewer: SemanticReviewer | None = None,
     ) -> None:
-        self._runner = runner or SubprocessCommandRunner()
+        self._runner = runner or default_command_runner()
         self._hypothesis_hook = hypothesis_hook or DefaultHypothesisHook()
         self._semantic_reviewer = semantic_reviewer or DefaultSemanticReviewer()
 
@@ -289,7 +303,40 @@ class EvaluationPipeline:
                     hypothesis_target=request.hypothesis_target,
                 )
 
-            checks = [self._runner.run(command) for command in self.plan_commands(request)]
+            # ruff, pyright and pytest are independent processes over the same
+            # sandbox. Running them one after another made a single "verify this
+            # file" turn cost the *sum* of three cold starts, and pyright alone
+            # is 2-4s of Node startup before it looks at a line of code. They do
+            # not share state, so overlap them: the turn is now bounded by the
+            # slowest tool instead of the sum. Order is preserved by mapping
+            # over the plan rather than collecting from the pool.
+            commands = self.plan_commands(request)
+            sandbox = request.workspace or ""
+            # Re-verifying an unchanged file must not re-pay three process
+            # cold starts, so results are cached by content rather than by the
+            # throwaway sandbox path. All-or-nothing: a half-cached report would
+            # mix a stale verdict with a fresh one for the same file, which is
+            # worse than either being wrong on its own.
+            cached_results = [
+                CHECK_RESULT_CACHE.get(command, sandbox, self._runner) for command in commands
+            ]
+            if all(result is not None for result in cached_results):
+                checks = [result for result in cached_results if result is not None]
+            else:
+                # ruff, pyright and pytest are independent processes over the
+                # same sandbox. One after another made a single "verify this
+                # file" turn cost the *sum* of three cold starts, and pyright
+                # alone is 2-4s of Node startup before it reads a line. They
+                # share no state, so overlap them: the turn is bounded by the
+                # slowest tool instead of the sum. Order is preserved by
+                # mapping over the plan rather than collecting from the pool.
+                if len(commands) > 1:
+                    with ThreadPoolExecutor(max_workers=len(commands)) as pool:
+                        checks = list(pool.map(self._runner.run, commands))
+                else:
+                    checks = [self._runner.run(command) for command in commands]
+                for command, result in zip(commands, checks, strict=False):
+                    CHECK_RESULT_CACHE.put(command, sandbox, result, self._runner)
             checks.append(self._hypothesis_hook.run(request))
             semantic_review = self._semantic_reviewer.review(request.spec, code, checks)
             overall_status = self._overall_status(checks, semantic_review)

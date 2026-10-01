@@ -430,3 +430,10 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
   }
 }
 
+
+/* High-resolution polish: crisp text and thinner hairlines at scale. */
+.trainer-header,
+.trainer-preview-sidebar {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}

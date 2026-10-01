@@ -76,7 +76,13 @@ test('training card-only mode keeps one current card and moves response controls
   assert.match(cardOnly, /data-view-why=""/);
   assert.match(cardOnly, /data-view-primary=""/);
   assert.match(cardOnly, /training-current__card-section/);
-  assert.match(cardOnly, /cardOnlyBodySections/);
+  // Sections render from the de-duplicated list, so a card that derives several
+  // fields from one source cannot print the same sentence under three labels.
+  assert.match(cardOnly, /cardOnlyDistinctSections/);
+  assert.match(source, /const cardOnlyDistinctSections = cardOnlyBodySections\.filter/);
+  assert.match(source, /const cardOnlySeenValues = new Set<string>\(\)/);
+  assert.match(cardOnly, /cardOnlyDoneTextDistinct/);
+  assert.match(cardOnly, /cardOnlyBlockerDistinct/);
   assert.doesNotMatch(cardOnly, /training-current__more/);
   // The step rail moved onto the card-only card.
   assert.match(cardOnly, /training-loop-rail/);

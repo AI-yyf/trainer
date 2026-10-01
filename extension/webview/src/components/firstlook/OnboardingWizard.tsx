@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { parseProviderConnectionPaste } from "../../../../../shared/src/providerGateway";
 import type { OnboardingStep } from "../../../../../shared/src/onboarding";
 import { useTranslation } from "../../lib/i18n/useTranslation";
@@ -22,8 +22,10 @@ export interface OnboardingWizardProps {
   trialBusy: boolean;
   draftBaseUrl: string;
   draftApiKey: string;
+  draftModel: string;
   hasStoredApiKey: boolean;
-  onDraftChange: (patch: { baseUrl?: string; apiKey?: string }) => void;
+  onDraftChange: (patch: { baseUrl?: string; apiKey?: string; model?: string }) => void;
+  onListModels?: (baseUrl: string, apiKey: string) => Promise<string[]>;
   onChooseWorkspaceRoot?: () => void;
   onTrustWindow?: () => void;
   onSaveConnection: () => void;
@@ -47,8 +49,10 @@ export function OnboardingWizard({
   trialBusy,
   draftBaseUrl,
   draftApiKey,
+  draftModel,
   hasStoredApiKey,
   onDraftChange,
+  onListModels,
   onChooseWorkspaceRoot,
   onTrustWindow,
   onSaveConnection,
@@ -58,6 +62,11 @@ export function OnboardingWizard({
   const { t } = useTranslation();
   const [pasteHint, setPasteHint] = useState<string | null>(null);
   const [expandedPanel, setExpandedPanel] = useState<"model" | "workspace" | null>(null);
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [modelAutoState, setModelAutoState] = useState<"idle" | "loading" | "auto" | "failed">(
+    "idle",
+  );
+  const fetchedModelsKeyRef = useRef("");
 
   const stepById = useMemo(
     () => new Map(steps.map((step) => [step.id, step] as const)),
@@ -71,7 +80,42 @@ export function OnboardingWizard({
   );
   const modelDone = modelStep?.status === "done";
   const rootDone = workspaceStep?.status === "done";
-  const connectionReady = Boolean(draftBaseUrl.trim()) && (Boolean(draftApiKey.trim()) || hasStoredApiKey);
+  const connectionReady =
+    Boolean(draftBaseUrl.trim()) &&
+    (Boolean(draftApiKey.trim()) || hasStoredApiKey) &&
+    Boolean(draftModel.trim());
+
+  // A relay paste carries only address + key. The save path demands a model,
+  // so fetch the catalog once address and key exist and prefill the first
+  // entry — without this the wizard's Save & connect can never succeed.
+  const modelFetchKey = `${expandedPanel === "model"}\u0000${draftBaseUrl}\u0000${draftApiKey}`;
+  const draftModelTrimmed = draftModel.trim();
+  const listModels = onListModels;
+  useEffect(() => {
+    const [expanded, base, key] = modelFetchKey.split("\u0000");
+    if (expanded !== "true" || !listModels) {
+      return;
+    }
+    if (!base.trim() || !(key.trim() || hasStoredApiKey)) {
+      return;
+    }
+    if (fetchedModelsKeyRef.current === modelFetchKey) {
+      return;
+    }
+    fetchedModelsKeyRef.current = modelFetchKey;
+    setModelAutoState("loading");
+    listModels(base, key)
+      .then((models) => {
+        setModelOptions(models);
+        setModelAutoState(models.length > 0 ? "auto" : "failed");
+        if (models.length > 0 && !draftModelTrimmed) {
+          onDraftChange({ model: models[0] });
+        }
+      })
+      .catch(() => {
+        setModelAutoState("failed");
+      });
+  }, [modelFetchKey, listModels, hasStoredApiKey, draftModelTrimmed, onDraftChange]);
 
   if (complete) {
     return null;
@@ -143,6 +187,24 @@ export function OnboardingWizard({
                 onChange={(event) => onDraftChange({ apiKey: event.target.value })}
               />
             </label>
+            <label className="onboarding-setup__field">
+              <span>{t("onboardingModelNameLabel")}</span>
+              <input
+                type="text"
+                value={draftModel}
+                placeholder={t("onboardingModelNamePlaceholder")}
+                list="onboarding-model-options"
+                onChange={(event) => onDraftChange({ model: event.target.value })}
+              />
+              <datalist id="onboarding-model-options">
+                {modelOptions.map((model) => (
+                  <option key={model} value={model} />
+                ))}
+              </datalist>
+            </label>
+            {modelAutoState === "auto" && modelOptions.length > 0 ? (
+              <p className="onboarding-setup__hint">{t("onboardingModelNameAuto")}</p>
+            ) : null}
             <button
               type="button"
               className="button button--accent"

@@ -1109,6 +1109,25 @@ export function runBrowserPreviewAction(
     return workspaceTransition;
   }
 
+  // The host owns window trust in VS Code; the preview owns it here. Without
+  // this emulation the preview could never confirm trust, and every
+  // trust-gated surface (training cards, attestation) stayed dead forever.
+  if (commandId === trainerCommands.trustWorkspaceWindow) {
+    return {
+      patch: {
+        memory: {
+          ...bootstrap.memory,
+          workspace: {
+            ...(bootstrap.memory?.workspace ?? {}),
+            windowTrusted: true,
+          },
+        },
+      },
+      tone: "success",
+      message: workspaceCopy.workspaceRootReady,
+    };
+  }
+
   const workspaceMutationBlock = previewWorkspaceMutationGate(commandId, bootstrap, workspaceCopy);
   if (workspaceMutationBlock) {
     return workspaceMutationBlock;

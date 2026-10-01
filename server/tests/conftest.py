@@ -9,6 +9,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Test-isolation guard: never touch the developer's default data directory.
@@ -78,3 +80,25 @@ def _fast_sqlite_connect(*args: object, **kwargs: object) -> sqlite3.Connection:
 
 
 sqlite3.connect = _fast_sqlite_connect  # type: ignore[assignment]
+
+
+@pytest.fixture(autouse=True)
+def _isolate_external_check_cache():
+    """Keep the process-level tool-check cache from leaking across tests.
+
+    In the product the cache is deliberately long-lived: a learner re-verifying
+    an unchanged file should not re-pay a pyright cold start. In the suite that
+    same sharing would let one test's verdict satisfy another test's assertion,
+    making results depend on execution order. Clearing between tests preserves
+    per-test isolation without giving up the production win.
+    """
+    from app.evaluator.check_cache import CHECK_RESULT_CACHE
+
+    CHECK_RESULT_CACHE.clear()
+    yield
+    CHECK_RESULT_CACHE.clear()
+
+
+# Registered after conftest's own fixtures so it can see `real_tools`. This is
+# what keeps the suite off the real linters by default; see the module for why.
+pytest_plugins: list[str] = ["fake_external_tools"]

@@ -6,8 +6,8 @@
   "description": "Trainer workbench webview app.",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "build:preview": "tsc -b && vite build --mode preview",
+    "build": "tsc -b && vite build --logLevel error",
+    "build:preview": "tsc -b && vite build --mode preview --logLevel error",
     "check": "tsc --noEmit -p tsconfig.json",
     "lint": "npm run check",
     "preview": "vite preview"

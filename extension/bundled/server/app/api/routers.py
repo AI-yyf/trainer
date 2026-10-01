@@ -1574,6 +1574,48 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         "training",
         "general",
         "coach-turn",
+        # Bare acknowledgments / filler. "好,给我第一个最小练习" splits on the
+        # comma into first clause "好", which then surfaced in the reply as
+        # 「好」 being the coaching focus.
+        "ok",
+        "okay",
+        "alright",
+        "sure",
+        "yes",
+        "yeah",
+        "yep",
+        "yup",
+        "go",
+        "go ahead",
+        "continue",
+        "next",
+        "please",
+        "thanks",
+        "thank you",
+        "好",
+        "好的",
+        "好嘞",
+        "好呀",
+        "好啦",
+        "好嘛",
+        "好滴",
+        "嗯",
+        "嗯嗯",
+        "嗯呐",
+        "行",
+        "行吧",
+        "可以",
+        "成",
+        "中",
+        "妥",
+        "继续",
+        "接着来",
+        "来吧",
+        "开始吧",
+        "下一步",
+        "麻烦了",
+        "谢谢",
+        "多谢",
     }
 
     GENERIC_FOCUS_DISPLAY_LABELS = {
@@ -2998,6 +3040,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         "malformed_response",
         "truncated_or_empty",
         "rate_limit",
+        "upstream_unavailable",
         "timeout",
         "network",
         "unknown",
@@ -5099,6 +5142,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             "model_not_found",
             "malformed_response",
             "rate_limit",
+            "upstream_unavailable",
             "timeout",
             "network",
             "unknown",
@@ -9488,6 +9532,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             "model_not_found",
             "malformed_response",
             "rate_limit",
+            "upstream_unavailable",
             "timeout",
             "network",
             "unknown",
@@ -15684,8 +15729,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             )
             next_step = (
                 localized_text(
-                    f"Stay on '{turn_focus_hint}', take one small concrete step, then bring back what you observed.",
-                    f"\u5148\u56f4\u7ed5\u300c{turn_focus_hint}\u300d\u505a\u4e00\u4e2a\u5f88\u5c0f\u7684\u5177\u4f53\u52a8\u4f5c\uff0c\u518d\u628a\u4f60\u89c2\u5bdf\u5230\u7684\u7ed3\u679c\u5e26\u56de\u6765\u3002",
+                    f"On '{turn_focus_hint}': one small step, then report back.",
+                    f"围绕「{turn_focus_hint}」先做一个小动作，把结果带回来。",
                     response_language,
                 )
                 if turn_focus_hint and not preserve_active_thread
