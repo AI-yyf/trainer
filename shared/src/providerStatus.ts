@@ -420,6 +420,21 @@ function unverifiedProviderWarning(language: ProviderSurfaceLanguage): string {
   return unverifiedProviderWarningByLanguage[language] ?? unverifiedProviderWarningByLanguage['en-US'];
 }
 
+const siblingModelWarningByLanguage: Record<ProviderSurfaceLanguage, string> = {
+  'zh-CN': '已切换到同连接下的新模型，尚未单独验证。可以直接发送，首次发送即完成确认；需要的话也可先测试。',
+  'en-US': "Switched to a new model on the same connection; it has not been verified individually yet. You can send now — the first send confirms it — or test first if you prefer.",
+  'es-ES': 'Cambiaste a un nuevo model en la misma conexión; aún no se ha verificado individualmente. Puedes enviar ahora — el primer envío lo confirma — o probar antes si lo prefieres.',
+  'fr-FR': "Vous êtes passé à un nouveau model sur la même connexion ; il n'a pas encore été vérifié individuellement. Vous pouvez envoyer — le premier envoi le confirme — ou tester d'abord si vous préférez.",
+  'de-DE': 'Sie haben auf ein neues model in derselben Verbindung gewechselt; es wurde noch nicht einzeln verifiziert. Sie können jetzt senden — die erste sendung bestätigt es — oder zuerst testen.',
+  'ja-JP': '同じ接続の新しい model に切り替えました。個別の検証はまだです。そのまま送信できます — 初回の送信で確認されます — または先にテストを。',
+  'ko-KR': '같은 연결의 새 model로 전환했습니다. 아직 개별 검증은 되지 않았습니다. 바로 보낼 수 있으며, 첫 전송이 확인을 대신합니다. 원하면 먼저 테스트하세요.',
+  'pt-BR': 'Você mudou para um novo model na mesma conexão; ainda não foi verificado individualmente. Pode enviar agora — o primeiro envio confirma — ou testar antes, se preferir.',
+};
+
+function siblingModelWarning(language: ProviderSurfaceLanguage): string {
+  return siblingModelWarningByLanguage[language] ?? siblingModelWarningByLanguage['en-US'];
+}
+
 const staleVerificationWarningByLanguage: Record<ProviderSurfaceLanguage, string> = {
   'zh-CN': '这组连接之前的检查已通过，但结果有点旧了。现在可以直接发送；建议空闲时重新测试一次。',
   'en-US': 'This connection passed an earlier check, but the result is a bit old. You can send now; re-test when convenient.',
@@ -585,6 +600,34 @@ function lastProviderTestTargetedChinese(
 function normalizeProviderTestTarget(value: string | undefined): string | undefined {
   const normalized = value?.trim().replace(/\/+$/, '').toLowerCase();
   return normalized || undefined;
+}
+
+/**
+ * True when the last passing check targeted the same transport (provider name,
+ * base URL, protocol) as the current one — only the model differs. A passing
+ * check on that transport vouches for sibling models: the first send on the
+ * new model is its live confirmation, so switching must not hard-block.
+ */
+export function providerTestTargetsSameTransport(
+  provider: Pick<ProviderStatusLike, 'name' | 'baseUrl' | 'protocol' | 'lastTestResult'>,
+): boolean | undefined {
+  const lastTest = provider.lastTestResult;
+  if (!lastTest) {
+    return undefined;
+  }
+  const testProvider = normalizeProviderTestTarget(lastTest.providerName);
+  const testBaseUrl = normalizeProviderTestTarget(lastTest.baseUrl);
+  const providerName = normalizeProviderTestTarget(provider.name);
+  const providerBaseUrl = normalizeProviderTestTarget(provider.baseUrl);
+  if (!testProvider || !testBaseUrl || !providerName || !providerBaseUrl) {
+    return undefined;
+  }
+  if (testProvider !== providerName || testBaseUrl !== providerBaseUrl) {
+    return false;
+  }
+  const testProtocol = normalizeProviderTestTarget(lastTest.protocol);
+  const providerProtocol = normalizeProviderTestTarget(provider.protocol);
+  return !testProtocol || !providerProtocol || testProtocol === providerProtocol;
 }
 
 export function providerTestTargetsCurrentConnection(
@@ -899,6 +942,22 @@ export function describeProviderSendState(
         blocked: false,
         status: 'degraded_error',
         warning: staleVerificationWarning(language),
+      };
+    }
+    // Switching models inside the same verified transport is not a new
+    // connection: the passing check vouches for sibling models, and the
+    // first send on the new model is its live confirmation. Hard-blocking
+    // here forced a full re-test on every model switch.
+    const sameTransport = providerTestTargetsSameTransport(provider);
+    if (
+      sameTransport === true &&
+      testReadiness.freshness !== 'unknown' &&
+      testReadiness.languageVerified
+    ) {
+      return {
+        blocked: false,
+        status: 'degraded_error',
+        warning: siblingModelWarning(language),
       };
     }
     return {
