@@ -1190,6 +1190,17 @@ class ReviewQueueItem(BaseModel):
     mastery_score: float | None = None
 
 
+class TrainingPlanBinding(BaseModel):
+    """Formal identity captured when a practice is minted, never supplied by the model."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    plan_id: str = Field(alias="planId", min_length=1)
+    stage_id: str = Field(alias="stageId", min_length=1)
+    step: str = Field(min_length=1)
+    revision: int | None = Field(default=None, ge=0)
+
+
 class TrainingCardCandidateSnapshot(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
@@ -1241,6 +1252,7 @@ class TrainingCardCandidateSnapshot(BaseModel):
     review_schedule: dict[str, Any] = Field(default_factory=dict)
     difficulty: str = "medium"
     plan_links: list[str] = Field(default_factory=list)
+    plan_binding: TrainingPlanBinding | None = Field(default=None, alias="planBinding")
     source_chain: list[str] = Field(default_factory=list)
     project_id: str = ""
     project_scope: str = ""
@@ -1336,6 +1348,7 @@ class CardGenerationContext(BaseModel):
     target_skill: str = ""
     focus_area: str = ""
     plan_stage_id: str = ""
+    plan_binding: TrainingPlanBinding | None = Field(default=None, alias="planBinding")
     resource_id: str = ""
     difficulty: str = "medium"
     hint_count: int | None = None
@@ -1475,6 +1488,8 @@ class EvidenceItem(BaseModel):
     verification_source: str = ""
     timestamp: str = ""
     target_plan_stage_id: str = ""
+    target_plan_id: str = ""
+    target_plan_step: str = ""
     adopted: bool = False
     adopted_at: str | None = None
     deferred_at: str | None = None
@@ -1678,6 +1693,7 @@ class ReviewQueueAction(BaseModel):
     note: str = ""
     scope: str = "single"
     created_at: str = Field(default_factory=utc_now_iso)
+    next_review_at: str = ""
 
     @model_validator(mode="after")
     def sync_review_action_defaults(self) -> "ReviewQueueAction":
@@ -2307,6 +2323,20 @@ class ChatMessage(BaseModel):
         return self
 
 
+class StageMaterialItem(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    plan_stage_id: str = Field(alias="planStageId")
+    kind: str
+    title: str
+    summary: str
+    content: str
+    focus_area: str = Field(default="", alias="focusArea")
+    created_at: str = Field(default="", alias="createdAt")
+    generation_source: Literal["model", "template"] = Field(alias="generationSource")
+
+
 class WorkbenchSnapshot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -2315,6 +2345,8 @@ class WorkbenchSnapshot(BaseModel):
     active_panel: Literal["chat", "plan", "task", "evaluate"] = "chat"
     snapshot_revision: int = Field(default=0, alias="snapshotRevision")
     messages: list[ChatMessage] = Field(default_factory=list)
+    stage_materials: dict[str, list[StageMaterialItem]] = Field(default_factory=dict, alias="stageMaterials")
+    session_history_restored: bool = Field(default=False, alias="sessionHistoryRestored")
     profile: UserProfile | None = None
     plan: LearningPlan | None = None
     global_plan: GlobalPlan | None = None
@@ -2943,6 +2975,7 @@ class TaskSpecifyRequest(BaseModel):
 
 
 class EvaluateCurrentFileRequest(BaseModel):
+    verification_python: str | None = None
     session_id: str | None = None
     workspace_id: str | None = None
     task_spec_id: str | None = None
@@ -2959,6 +2992,7 @@ class EvaluateCurrentFileRequest(BaseModel):
 
 
 class EvaluateSnippetRequest(BaseModel):
+    verification_python: str | None = None
     session_id: str | None = None
     workspace_id: str | None = None
     task_spec_id: str | None = None

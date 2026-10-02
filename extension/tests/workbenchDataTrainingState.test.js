@@ -78,6 +78,9 @@ test('mergeMemorySummary maps authoritative workspace training state from memory
         },
         latest_training_handoff: {
           handoff_id: 'handoff-practice-1',
+          card_id: 'card-practice-1',
+          reflection: 'The route boundary is explicit.\nThe focused test passed.',
+          reflected_at: '2026-10-02T07:00:00Z',
           candidate_id: 'candidate-practice-1',
           continue_in: 'training',
           card_type: 'practice',
@@ -127,6 +130,7 @@ test('mergeMemorySummary maps authoritative workspace training state from memory
             'Implement `debounceSearch` and keep normalizedQuery updated.',
           ],
           verification_steps: ['Confirm debounceSearch is called from the current IDE file.'],
+          acceptance_criteria: ['Use `debounceSearch` for the delayed query.'],
           return_with: 'Bring back the route diff plus one blocker you still had to reason through.',
           next_after_completion: 'Return with the route diff and the test output.',
           stuck_recovery: 'If the boundary is blurry again, write down one input, one output, and one owner.',
@@ -247,6 +251,10 @@ test('mergeMemorySummary maps authoritative workspace training state from memory
     patch.workspaceTrainingState.latestTrainingHandoff.handoffId,
     'handoff-practice-1',
   );
+  assert.equal(patch.workspaceTrainingState.latestTrainingHandoff.cardId, 'card-practice-1');
+  assert.equal(patch.workspaceTrainingState.latestTrainingHandoff.reflection,
+    'The route boundary is explicit.\nThe focused test passed.');
+  assert.equal(patch.workspaceTrainingState.latestTrainingHandoff.reflectedAt, '2026-10-02T07:00:00Z');
   assert.equal(
     patch.workspaceTrainingState.latestTrainingHandoff.verificationSteps[0],
     'Run the minimum route test.',
@@ -291,6 +299,8 @@ test('mergeMemorySummary maps authoritative workspace training state from memory
     patch.workspaceTrainingState.trainingCardCandidates[0].filesToTouch,
     ['extension/webview/src/search.ts'],
   );
+  assert.deepEqual(patch.workspaceTrainingState.trainingCardCandidates[0].acceptanceCriteria,
+    ['Use `debounceSearch` for the delayed query.']);
   assert.equal(
     patch.workspaceTrainingState.trainingCardCandidates[0].returnWith,
     'Bring back the route diff plus one blocker you still had to reason through.',
@@ -457,4 +467,21 @@ test('mergeSessionMessage carries training handoff truth through session snapsho
     'card-practice-1',
   );
   assert.equal(result.patch.workspaceTrainingState.reviewArtifact.status, 'active');
+});
+
+test('a new handoff in the same workspace cannot inherit another card reflection', () => {
+  const bootstrap = createBootstrap();
+  const first = mergeMemorySummary(bootstrap, { memory: { workspace: {
+    workspace_id: 'F:\\trainer',
+    latest_training_handoff: { handoff_id: 'old-handoff', card_id: 'old-card',
+      candidate_id: 'old-card', reflection: 'Old reflection', reflected_at: '2026-10-01T00:00:00Z' },
+  } } });
+  const second = mergeMemorySummary({ ...bootstrap, ...first }, { memory: { workspace: {
+    workspace_id: 'F:\\trainer',
+    latest_training_handoff: { handoff_id: 'new-handoff', card_id: 'new-card',
+      candidate_id: 'new-card', handoff_status: 'verification_required' },
+  } } });
+  assert.equal(second.workspaceTrainingState.latestTrainingHandoff.cardId, 'new-card');
+  assert.equal(second.workspaceTrainingState.latestTrainingHandoff.reflection, undefined);
+  assert.equal(second.workspaceTrainingState.latestTrainingHandoff.reflectedAt, undefined);
 });

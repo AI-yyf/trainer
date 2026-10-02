@@ -186,7 +186,7 @@ export function dispatchTestRunAttestation(
     try {
       runtime.outputChannel.appendLine(
         `[training-attestation] failed to attest card ${body.card_id}: ${
-          error instanceof Error ? error.message : String(error)
+          error instanceof Error ? error.name : 'Request failed'
         }`,
       );
     } catch {

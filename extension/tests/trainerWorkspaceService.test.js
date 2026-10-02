@@ -500,6 +500,10 @@ test('workspace recovery captures external sidecar data and resumes from the res
     'sqlite-state\n',
   );
   assert.equal(restored.managedDataRoot, path.resolve(restoredRoot, '.trainer', 'runtime'));
+  assert.deepEqual(
+    JSON.parse(await fs.readFile(path.join(restored.managedDataRoot, 'runtime-location.json'), 'utf8')),
+    { schemaVersion: 1, dataRoot: path.resolve(externalDataRoot) },
+  );
   assert.equal(
     await fs.readFile(path.join(restored.managedDataRoot, 'qdrant', 'collections.json'), 'utf8'),
     '{"resources":1}\n',

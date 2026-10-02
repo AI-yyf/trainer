@@ -79,5 +79,5 @@ test('browser preview language URL overrides are applied once and choice buttons
   );
   assert.match(app, /browserPreviewLocationOverridesAppliedRef\.current = true/);
   assert.doesNotMatch(settings, /onMouseUp=\{\(\) => onChange\?\.\(item\.value\)\}/);
-  assert.match(settings, /onClick=\{\(\) => onChange\?\.\(item\.value\)\}/);
+  assert.match(settings, /onClick=\{\(\) => \{\s*onChange\?\.\(item\.value\);\s*setOpen\(false\);/);
 });

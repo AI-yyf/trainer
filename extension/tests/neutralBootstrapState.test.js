@@ -771,6 +771,58 @@ test('ordinary view switches keep resource detail and training return targets av
   );
 });
 
+test('a new runtime database drops restore targets even when its context ID is unchanged', () => {
+  const state = loadWorkbenchState({ injectedBootstrap: {
+    runtimeDataGeneration: 'newer-database',
+    memory: { workspace: { workspaceId: 'context-one' }, sandboxPreview: { path: '/old.md' } },
+    workspaceTrainingState: { workspaceId: 'context-one', skillProjection: {
+      workspaceId: 'context-one', dimensions: { implementation: { state: 'assisted', verifiedCount: 1 } },
+    } },
+  } });
+  state.getState().setResourceRestoreContext({ surface: 'detail', resourceId: 'old-resource' });
+  state.getState().openTrainingReviewQueue();
+  state.getState().applyHostMessage({ type: 'ui/restoreView', payload: {
+    activeView: 'training', trainingRestoreTarget: 'next_hop',
+    latestTrainingNextHop: { targetId: 'old-card', cardType: 'practice', title: 'Old card' },
+  } });
+  // Match the actual JSON bridge: undefined properties do not survive transport.
+  state.getState().applyHostMessage(JSON.parse(JSON.stringify({ type: 'bootstrap', payload: {
+    runtimeDataGeneration: 'older-backup',
+    memory: { workspace: { workspaceId: 'context-one' } },
+    workspaceTrainingState: { workspaceId: 'context-one' },
+  } })));
+  const restored = state.getState();
+  assert.equal(restored.data.workspaceTrainingState.skillProjection, undefined);
+  assert.equal(restored.data.workspaceTrainingState.latestTrainingNextHop, undefined);
+  assert.equal(restored.data.memory.sandboxPreview, undefined);
+  assert.equal(restored.resourceRestoreContext, undefined);
+  assert.equal(restored.trainingRestoreContext, undefined);
+  assert.equal(restored.trainingReviewQueueRequested, false);
+  assert.deepEqual(restored.stageMaterials, {});
+});
+
+test('review navigation opens Training and clears the request when leaving it', () => {
+  const state = loadWorkbenchState();
+  state.getState().openTrainingReviewQueue();
+  assert.equal(state.getState().layout.activeView, 'training');
+  assert.equal(state.getState().trainingReviewQueueRequested, true);
+  state.getState().setActiveView('coach');
+  assert.equal(state.getState().trainingReviewQueueRequested, false);
+});
+
+test('accepting a review clears the previous restored training target', () => {
+  const state = loadWorkbenchState();
+  state.getState().applyHostMessage({ type: 'ui/restoreView', payload: {
+    activeView: 'training', trainingRestoreTarget: 'next_hop',
+    latestTrainingNextHop: { targetId: 'old-card', cardType: 'practice', title: 'Old card' },
+  } });
+  state.getState().openTrainingReviewQueue();
+  state.getState().beginTrainingReview();
+  assert.equal(state.getState().trainingRestoreContext, undefined);
+  assert.equal(state.getState().trainingReviewQueueRequested, false);
+  assert.equal(state.getState().layout.activeView, 'training');
+});
+
 test('stream/cancelled keeps composer draft and acks failure without clearing it', () => {
   const state = loadWorkbenchState({
     injectedBootstrap: {

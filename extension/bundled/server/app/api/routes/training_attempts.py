@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from ..runtime import TrainerRuntime
+from ..training_skill_evidence import persist_skill_projection as persist_workspace_skill_projection
 
 
 class AttemptStartRequest(BaseModel):
@@ -66,37 +66,7 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
         return records
 
     def persist_skill_projection(workspace_id: str, attempt_id: str) -> dict | None:
-        """Phase-D UI closure: project the attempt's evidence into skill
-        states and mirror it into workspace memory so every snapshot (Coach,
-        Plan, Training views) carries the learner's current capability
-        ladder without extra round-trips."""
-        from app.training.skill_projection import project_skills
-
-        store = runtime.attempt_store
-        if store is None:
-            return None
-        attempt = store.get_attempt(attempt_id, workspace_id=workspace_id)
-        if attempt is None:
-            return None
-        projection = project_skills(
-            _projection_records(
-                store,
-                workspace_id=workspace_id,
-                card_id=str(attempt.get("card_id") or ""),
-            ),
-            card_id=attempt.get("card_id"),
-        )
-        runtime.memory_service.update_workspace_state(
-            workspace_id,
-            training_skill_projection={
-                "workspace_id": workspace_id,
-                "attempt_id": attempt_id,
-                "card_id": attempt.get("card_id"),
-                "dimensions": projection,
-                "updated_at": datetime.now(UTC).isoformat(),
-            },
-        )
-        return projection
+        return persist_workspace_skill_projection(runtime, workspace_id, attempt_id)
 
     def require_store():
         if runtime.attempt_store is None:

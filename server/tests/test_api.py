@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -4106,6 +4107,35 @@ def test_training_generate_card_rejects_untrusted_file_uri_and_flat_facts(tmp_pa
     assert str(workspace_root) not in card_text
 
 
+def resource_content_completion() -> str:
+    return json.dumps({
+        "title": "HTTPX 连接与读取超时",
+        "why_now": "区分连接与读取两个等待阶段。",
+        "focus_area": "HTTPX 超时行为",
+        "target_skill": "区分连接和读取超时",
+        "scenario": "一次请求已经连接，但服务端迟迟没有返回数据。",
+        "problem_statement": "区分连接等待与读取等待。",
+        "api_hints": ["分别查看连接和读取超时配置。"],
+        "deliverable": "给出两个阶段的对比说明。",
+        "self_check": ["连接成功后仍可能发生读取超时。"],
+        "grading_rubric": ["能区分两个阶段的等待对象。"],
+        "stuck_recovery": "先列出连接建立和等待数据两个步骤。",
+        "reflection_prompt": "为什么连接成功不代表后续读取不会超时？",
+        "knowledge_type": "engineering_concept",
+        "question": "连接已经建立，但等不到响应数据，应检查哪类超时？",
+        "answer_mode": "text",
+        "expected_answer": "应检查读取超时。连接和读取属于不同的等待阶段。",
+        "learner_deliverables": ["明确指出读取超时。"],
+        "verification_steps": ["对照资料中的连接和读取两个阶段。"],
+        "success_signal": "正确区分两个超时阶段。",
+        "return_with": "带回两个阶段的解释。",
+        "next_after_completion": "用两个超时案例核对边界。",
+        "hint_ladder": ["请求是否已建立连接？"],
+        "common_mistakes": ["把连接成功等同于请求完成。"],
+        "feedback": {"correct": "已正确区分阶段。", "incorrect": "重新比较两个等待阶段。"},
+    }, ensure_ascii=False)
+
+
 def test_training_generate_card_projects_only_indexed_resource_evidence(tmp_path: Path) -> None:
     trainer_root = tmp_path / "trainer-resource-root"
     workspace_root = trainer_root / "resource-evidence-root"
@@ -4150,10 +4180,11 @@ def test_training_generate_card_projects_only_indexed_resource_evidence(tmp_path
         runtime.repository.save_resource(managed_workspace_id, trusted_resource)
 
         with patch.object(
-            runtime.card_generation_service,
-            "_try_llm_generation",
-            side_effect=AssertionError("governed resource cards must not call the provider"),
-        ):
+            ProviderService,
+            "chat_completion",
+            new_callable=AsyncMock,
+            return_value=resource_content_completion(),
+        ) as completion:
             response = client.post(
                 "/training/generate-card",
                 json={
@@ -4179,7 +4210,14 @@ def test_training_generate_card_projects_only_indexed_resource_evidence(tmp_path
     assert card["status"] == "candidate"
     assert card["scenario_pack"] == "resource_knowledge"
     assert any("fragment-trusted-timeout" in item for item in card["source_chain"])
-    assert "HTTPX separates connect and read timeout limits." in card_text
+    completion.assert_awaited_once()
+    messages = completion.call_args.args[0]
+    prompt_text = str(messages)
+    assert "HTTPX separates connect and read timeout limits." in prompt_text
+    assert "client-selected focus" not in prompt_text
+    assert "attacker.invalid" not in prompt_text
+    assert "client-forged" not in prompt_text
+    assert card["question"] == "连接已经建立，但等不到响应数据，应检查哪类超时？"
     assert "client-selected focus" not in card_text
     assert "attacker.invalid" not in card_text
     assert "client-forged" not in card_text
@@ -4222,7 +4260,15 @@ def test_training_generate_card_reuses_open_resource_card_before_creating_anothe
         "resource_id": trusted_resource.id,
     }
 
-    with build_client(tmp_path) as client:
+    with (
+        patch.object(
+            ProviderService,
+            "chat_completion",
+            new_callable=AsyncMock,
+            return_value=resource_content_completion(),
+        ) as completion,
+        build_client(tmp_path) as client,
+    ):
         runtime = client.app.state.runtime
         provisioning = runtime.provision_project_adoption(
             workspace_id=workspace_id,
@@ -4248,6 +4294,7 @@ def test_training_generate_card_reuses_open_resource_card_before_creating_anothe
 
         assert first.status_code == 200, first.text
         assert second.status_code == 200, second.text
+        completion.assert_awaited_once()
         first_card_id = first.json()["card"]["card_id"]
         assert second.json()["card"]["card_id"] == first_card_id
         assert [card.card_id for card in runtime.memory_service.get_cards(managed_workspace_id)] == [
@@ -4274,6 +4321,7 @@ def test_training_generate_card_reuses_open_resource_card_before_creating_anothe
         assert regenerated.status_code == 200, regenerated.text
         assert regenerated.json()["card"]["card_id"] != first_card_id
         assert len(runtime.memory_service.get_cards(managed_workspace_id)) == 2
+        assert completion.await_count == 2
 
 
 def test_training_generate_card_rejects_unready_resource_cards_before_persisting(tmp_path: Path) -> None:

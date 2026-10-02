@@ -309,6 +309,24 @@ test('persisted learning phase wins over stale card status', () => {
   assert.equal(state.selectedStatus, 'active');
 });
 
+test('handoff requirements advance beyond the last completed ledger phase', () => {
+  const reflection = deriveTrainingExecutionState({
+    cardType: 'practice', selectedCardStatus: 'active', learningPhase: 'verify',
+    latestTrainingHandoffStatus: 'needs_reflection', latestTrainingNextHopStatus: 'reflection_required',
+  });
+  assert.equal(reflection.composerPhase, 'reflect');
+  const returning = deriveTrainingExecutionState({
+    cardType: 'practice', selectedCardStatus: 'active', learningPhase: 'reflect',
+    latestTrainingHandoffStatus: 'ready_to_return', latestTrainingNextHopStatus: 'return_required',
+  });
+  assert.equal(returning.composerPhase, 'return');
+  const completed = deriveTrainingExecutionState({
+    cardType: 'practice', selectedCardStatus: 'fed_back', learningPhase: 'verify',
+    latestTrainingNextHopStatus: 'continued_in_chat',
+  });
+  assert.equal(completed.composerPhase, 'return');
+});
+
 test('persisted learn phase keeps an active card in learn', () => {
   const state = deriveTrainingExecutionState({
     cardType: 'practice',

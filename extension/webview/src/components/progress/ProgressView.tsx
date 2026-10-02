@@ -369,7 +369,10 @@ export function ProgressView({ language, projection, onOpenTraining }: ProgressV
                     </p>
                     <ul className="progress-view__drilldown-list">
                       {rows.map((row) => {
-                        const day = row.timestamp ? row.timestamp.slice(0, 10) : undefined;
+                        const recordedAt = row.timestamp ? new Date(row.timestamp) : undefined;
+                        const day = recordedAt && !Number.isNaN(recordedAt.getTime())
+                          ? recordedAt.toLocaleDateString(copy.localeTag)
+                          : undefined;
                         const assistance =
                           row.assistanceLevel === "independent"
                             ? copy.drilldownIndependent

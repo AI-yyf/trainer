@@ -1411,12 +1411,18 @@ test('uploadResourceCommand accepts inline uploads without opening picker UI', a
   assert.equal(result.data[0].status, 'ready');
 });
 
-test('uploadResourceCommand preserves earlier files when a later upload fails', async () => {
+test('uploadResourceCommand preserves earlier files when a later upload fails', async (t) => {
+  const pickedFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-picked-resources-'));
+  t.after(() => fs.rmSync(pickedFolder, { recursive: true, force: true }));
+  const firstFile = path.join(pickedFolder, 'first.md');
+  const secondFile = path.join(pickedFolder, 'second.md');
+  fs.writeFileSync(firstFile, '用户明确选择的资料\n', 'utf8');
+  fs.writeFileSync(secondFile, 'second file', 'utf8');
   const vscodeMock = {
     window: {
       showOpenDialog: async () => [
-        { fsPath: 'C:\\trainer\\first.md' },
-        { fsPath: 'C:\\private\\second.md' },
+        { fsPath: firstFile },
+        { fsPath: secondFile },
       ],
     },
   };
@@ -1457,6 +1463,9 @@ test('uploadResourceCommand preserves earlier files when a later upload fails', 
 
   const result = await uploadResourceCommand(context, { mode: 'files' });
 
+  const upload = context.__requests.find((request) => request.body.name === 'first.md');
+  assert.equal(upload.body.content_encoding, 'base64');
+  assert.equal(Buffer.from(upload.body.content, 'base64').toString('utf8'), '用户明确选择的资料\n');
   assert.equal(result.ok, false);
   assert.match(result.message ?? '', /已导入 1 项资料，已完成 1 项索引/);
   assert.match(result.message ?? '', /另有 1 个文件没能添加。你可以先使用已导入的资料，稍后再试。/);
@@ -1564,6 +1573,42 @@ test('previewResourceCommand requests governed content and patches the workbench
   });
   assert.equal(context.__patches[0].memory.sandboxPreview.content, '# Preview content');
   assert.deepEqual(executedCommands, []);
+});
+
+test('previewResourceCommand restores sandbox authority before previewing an imported resource', async () => {
+  const { previewResourceCommand } = loadWithVscodeMock(resourceCommandsModulePath, {});
+  const context = createContext();
+  context.sidecarClient.getJson = async (port, requestPath) => {
+    context.__gets.push({ port, requestPath });
+    return { sandbox_root_path: 'F:\\trainer\\sandboxes\\workspace-a', ready: true };
+  };
+  context.sidecarClient.postJson = async (port, requestPath, body) => {
+    context.__requests.push({ port, requestPath, body });
+    return { path: body.path, preview_kind: 'markdown', content: '# Restored preview' };
+  };
+
+  const result = await previewResourceCommand(context, { resourceId: 'resource-1' });
+
+  assert.equal(result.ok, true);
+  assert.match(context.__gets[0].requestPath, /^\/sandbox\/state\?/);
+  assert.equal(context.__patches[0].memory.sandboxState.sandboxRootPath,
+    'F:\\trainer\\sandboxes\\workspace-a');
+  assert.equal(context.__requests[0].requestPath, '/sandbox/preview');
+  assert.equal(context.__patches[1].memory.sandboxPreview.content, '# Restored preview');
+});
+
+test('previewResourceCommand rejects an imported path outside freshly restored sandbox authority', async () => {
+  const { previewResourceCommand } = loadWithVscodeMock(resourceCommandsModulePath, {});
+  const context = createContext();
+  context.sidecarClient.getJson = async () => ({
+    sandbox_root_path: 'F:\\trainer\\sandboxes\\different-workspace', ready: true,
+  });
+
+  const result = await previewResourceCommand(context, { resourceId: 'resource-1' });
+
+  assert.equal(result.ok, false);
+  assert.match(result.message, /outside the governed/);
+  assert.equal(context.__requests.length, 0);
 });
 
 test('previewResourceCommand attaches conversation file_preview for live docx document preview', async () => {
@@ -2172,7 +2217,7 @@ test('chooseManagedDataFolderCommand restarts the backend and reinitializes the 
   assert.deepEqual(context.__gets, [
     {
       port: 34891,
-      requestPath: '/memory/summary?workspace_id=F%3A%5Ctrainer%5Cworkspace-a',
+      requestPath: '/memory/summary?workspace_id=F%3A%5Ctrainer%5Cworkspace-a&session_id=session-restarted',
     },
     {
       port: 34891,

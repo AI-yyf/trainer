@@ -21,6 +21,7 @@ from app.core.models import (
 )
 from app.main import app
 from app.memory.models import utc_now
+from app.memory.service import MemoryService
 
 
 class TrainingEndpointIntegrationTests(unittest.TestCase):
@@ -388,6 +389,73 @@ class TrainingEndpointIntegrationTests(unittest.TestCase):
         self.assertTrue(data["ok"])
         self.assertEqual(data["review_artifact"]["status"], "resolved")
         self.assertGreater(structured._weaknesses["python decorators"].next_review_at, utc_now())
+        self.assertFalse(any(item.concept == "python decorators" for item in runtime.memory_service.snapshot(workspace_id).due_reviews))
+
+    def test_queue_deferral_survives_reload_without_creating_or_reopening_a_review(self) -> None:
+        for action in ("snooze", "skip", "done"):
+            workspace_id = f"queue-{action}-{uuid4().hex}"
+            memory = self._runtime().memory_service
+            structured = memory.structured_for_workspace(workspace_id)
+            structured.record_weakness("tuple slot", "Explain the assignment boundary.", severity=3, review_after_days=0)
+            memory._persist_structured(workspace_id)
+            self.assertTrue(any(item.concept == "tuple slot" for item in memory.snapshot(workspace_id).due_reviews))
+            response = self.client.post("/training/review-queue/action", json={
+                "workspace_id": workspace_id, "concept": "tuple slot", "action": action,
+            })
+            self.assertEqual(response.status_code, 200, response.text)
+            snapshot = memory.snapshot(workspace_id)
+            self.assertFalse(any(item.concept == "tuple slot" for item in snapshot.due_reviews))
+            self.assertIsNone(snapshot.review_artifact)
+            self.assertFalse(snapshot.learning_outcomes)
+            self.assertGreater(structured._weaknesses["tuple slot"].next_review_at, utc_now())
+            restored = MemoryService(memory.repository).snapshot(workspace_id)
+            self.assertFalse(any(item.concept == "tuple slot" for item in restored.due_reviews))
+            self.assertIsNone(restored.review_artifact)
+
+    def test_accepting_another_concept_starts_a_distinct_review(self) -> None:
+        workspace_id = f"queue-identity-{uuid4().hex}"
+        memory = self._runtime().memory_service
+        for concept in ("list mutation", "tuple slot"):
+            response = self.client.post("/training/review-queue/action", json={
+                "workspace_id": workspace_id, "concept": concept, "action": "accept",
+                "task_hint": f"Explain {concept}.",
+            })
+            self.assertEqual(response.status_code, 200)
+            artifact = memory.snapshot(workspace_id).review_artifact
+            assert artifact is not None
+            self.assertEqual(artifact.focus_area, concept)
+            if concept == "list mutation":
+                first_id = artifact.id
+            else:
+                self.assertNotEqual(artifact.id, first_id)
+                self.assertNotIn("list mutation", artifact.root_cause)
+                second_id = artifact.id
+        structured = memory.structured_for_workspace(workspace_id)
+        structured._review_artifact = artifact.model_copy(update={"partial_progress": "An unfinished recall answer."})
+        memory._persist_structured(workspace_id)
+        self.client.post("/training/review-queue/action", json={
+            "workspace_id": workspace_id, "concept": "tuple slot", "action": "accept",
+        })
+        self.assertEqual(memory.snapshot(workspace_id).review_artifact.id, second_id)
+        self.assertEqual(memory.snapshot(workspace_id).review_artifact.partial_progress, "An unfinished recall answer.")
+
+    def test_reset_requeues_every_concept_in_the_requested_focus_area(self) -> None:
+        workspace_id = f"queue-batch-{uuid4().hex}"
+        memory = self._runtime().memory_service
+        structured = memory.structured_for_workspace(workspace_id)
+        for concept in ("tuple slot", "list mutation", "unrelated"):
+            structured.record_weakness(concept, "Review later.", severity=2, review_after_days=5,
+                context="mutability" if concept != "unrelated" else "other")
+        memory._persist_structured(workspace_id)
+        response = self.client.post("/training/review-queue/action", json={
+            "workspace_id": workspace_id, "concept": "tuple slot", "action": "reset",
+            "scope": "focus_area", "focus_area": "mutability", "batch_limit": 2,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["actions"]), 2)
+        for concept in ("tuple slot", "list mutation"):
+            self.assertLessEqual(structured._weaknesses[concept].next_review_at, utc_now())
+        self.assertGreater(structured._weaknesses["unrelated"].next_review_at, utc_now())
 
     def test_scenario_lab_action_endpoint_rejects_a_stale_lab_id(self) -> None:
         """E6: stale Scenario Lab actions return a recoverable conflict without creating evidence."""

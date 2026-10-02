@@ -14,6 +14,8 @@ export interface TrainingCoachBridgeInput {
   successSignal?: string;
   returnWith?: string;
   latestVerifiedResult?: string;
+  latestSubmittedResult?: string;
+  reflection?: string;
   latestFollowup?: string;
   reviewSummary?: string;
   reviewBlocker?: string;
@@ -135,12 +137,11 @@ function buildTrainingReturn(
   }
 
   if (mode === "report_result") {
-    const verifiedResult = firstText(input.latestVerifiedResult, input.reviewSummary, input.successSignal);
+    const verifiedResult = compact(input.latestVerifiedResult);
     const summary = firstText(
       input.reviewSummary,
       input.latestVerifiedResult,
-      input.successSignal,
-      input.returnWith,
+      input.latestSubmittedResult,
     );
     if (!summary) {
       return undefined;
@@ -186,8 +187,8 @@ function buildTrainingReturn(
 function hasReportableResult(input: TrainingCoachBridgeInput): boolean {
   return Boolean(
     compact(input.latestVerifiedResult) ||
+      compact(input.latestSubmittedResult) ||
       compact(input.reviewSummary) ||
-      compact(input.successSignal) ||
       input.reviewStatus === "resolved",
   );
 }
@@ -211,7 +212,9 @@ function focusLabel(input: TrainingCoachBridgeInput): string {
 }
 
 function reportPrompt(input: TrainingCoachBridgeInput, focus: string): string {
-  const verified = firstText(input.latestVerifiedResult, input.reviewSummary);
+  const verified = compact(input.latestVerifiedResult);
+  const submitted = input.latestSubmittedResult?.trim() || input.reviewSummary?.trim();
+  const reflection = input.reflection?.trim();
   const bringBack = firstText(
     input.returnWith,
     input.latestFollowup,
@@ -221,24 +224,32 @@ function reportPrompt(input: TrainingCoachBridgeInput, focus: string): string {
   const passSignal = compact(input.successSignal);
   if (input.language === "zh-CN") {
     return [
-      `请继续围绕「${focus}」做 coach-only 评估，不要替我改代码。`,
+      `请评估我在「${focus}」中的提交，不要替我改代码。`,
       verified
-        ? `我已经完成了这一轮，并带回这条验证结果：${verified}`
-        : "我已经完成了这一轮，需要你先评估结果。",
+        ? `请评估这条结果记录及其证据：${verified}`
+        : !submitted ? "请先评估当前记录和还需要的验证。" : undefined,
+      submitted && compact(submitted) !== verified
+        ? `我的提交是：\n${submitted}\n请判断答案和还需要的验证。`
+        : undefined,
+      reflection ? `我的复盘是：\n${reflection}` : undefined,
       passSignal ? `这张卡的过关信号是：${passSignal}` : undefined,
       bringBack
-        ? `我按要求带回的是：${bringBack}`
+        ? `这张卡要求带回的内容是：${bringBack}`
         : "请先判断这次结果是通过、部分通过、误解，还是需要降级。",
       "请你先评估，再决定是复盘、纳入计划证据、补闪记，还是给我下一张更合适的卡。",
     ]
       .filter(Boolean)
-      .join(" ");
+      .join("\n\n");
   }
   return [
     `Keep coaching around "${focus}" and stay coach-only. Do not edit code for me.`,
     verified
-      ? `I finished this loop and brought back this verification result: ${verified}`
-      : "I finished this loop and need you to evaluate the result first.",
+      ? `Evaluate this result record and its evidence: ${verified}`
+      : !submitted ? "Assess the current record and the verification still needed." : undefined,
+    submitted && compact(submitted) !== verified
+      ? `My submission is:\n${submitted}\nAssess the answer and the verification still needed.`
+      : undefined,
+    reflection ? `My reflection is:\n${reflection}` : undefined,
     passSignal ? `The pass signal for this card was: ${passSignal}` : undefined,
     bringBack
       ? `Here is what I was supposed to bring back: ${bringBack}`
@@ -246,14 +257,14 @@ function reportPrompt(input: TrainingCoachBridgeInput, focus: string): string {
     "Evaluate it first, then decide whether it should become review, plan evidence, flash reinforcement, or the next card.",
   ]
     .filter(Boolean)
-    .join(" ");
+    .join("\n\n");
 }
 
 function unstickPrompt(input: TrainingCoachBridgeInput, focus: string): string {
   const progress = firstText(
     input.reviewPartialProgress,
     input.latestVerifiedResult,
-    input.learnerDeliverables?.[0],
+    input.latestSubmittedResult,
   );
   const blocker = firstText(
     input.reviewBlocker,
@@ -263,8 +274,8 @@ function unstickPrompt(input: TrainingCoachBridgeInput, focus: string): string {
   );
   if (input.language === "zh-CN") {
     return [
-      `请继续围绕「${focus}」做 coach-only 指导，不要替我改代码。`,
-      progress ? `我已经推进到：${progress}` : "我已经尝试了这张训练卡，但卡住了。",
+      `请围绕「${focus}」指导我，不要替我改代码。`,
+      progress ? `我已经推进到：${progress}` : "我卡在这张训练卡上。",
       blocker ? `当前卡点是：${blocker}` : "我需要你先帮我判断为什么这轮会卡住。",
       "请你先判断根因更像理论、API、边界、验证还是资料问题，再决定该复盘、补闪记、压成更小实战，还是先回资料。",
     ]
@@ -286,7 +297,7 @@ function continuePrompt(input: TrainingCoachBridgeInput, focus: string): string 
   const verification = compactList(input.verificationSteps, 1)[0];
   if (input.language === "zh-CN") {
     return [
-      `请继续围绕「${focus}」做 coach-only 指导，不要替我改代码。`,
+      `请围绕「${focus}」指导我，不要替我改代码。`,
       deliverable ? `我接下来会自己完成：${deliverable}` : "请先继续压清这张训练卡的下一步。",
       verification ? `我会先这样验证：${verification}` : undefined,
       "请告诉我从哪个文件或边界开始、我自己要写什么、以及做完后该带什么结果回给你。",
@@ -311,7 +322,8 @@ export function buildTrainingCoachBridge(input: TrainingCoachBridgeInput): Train
     : hasStallSignal(input)
       ? "unstick"
       : "continue_task";
-  const verified = firstText(input.latestVerifiedResult, input.reviewSummary);
+  const verified = compact(input.latestVerifiedResult);
+  const submitted = firstText(input.latestSubmittedResult, input.reviewSummary);
   const bringBack = firstText(
     input.returnWith,
     input.latestFollowup,
@@ -335,8 +347,8 @@ export function buildTrainingCoachBridge(input: TrainingCoachBridgeInput): Train
       prompt: reportPrompt(input, focus),
       detail:
         input.language === "zh-CN"
-          ? "把验证结果带回对话，让教练先判定通过程度，再决定复盘、计划证据、闪记补漏还是下一张卡。"
-          : "Bring the verification result back so the coach can score the loop before choosing review, plan evidence, flash reinforcement, or the next card.",
+          ? verified ? "带回验证记录，请教练判断通过程度和下一步。" : "带回答案，请教练判断还需要哪些验证。"
+          : verified ? "Bring the verification result back for assessment and the next step." : "Bring the answer back so the coach can assess the verification still needed.",
       ctaLabel: trainingCoachCtaLabel(input.language, "result"),
       summaryLines: uniqueList(
         [
@@ -344,6 +356,11 @@ export function buildTrainingCoachBridge(input: TrainingCoachBridgeInput): Train
             ? input.language === "zh-CN"
               ? `验证结果：${verified}`
               : `Verification result: ${verified}`
+            : undefined,
+          !verified && submitted
+            ? input.language === "zh-CN"
+              ? `我的提交：${submitted}`
+              : `My submission: ${submitted}`
             : undefined,
           input.successSignal
             ? input.language === "zh-CN"
@@ -471,6 +488,11 @@ export function buildTrainingCoachBridge(input: TrainingCoachBridgeInput): Train
 export function composeTrainingCoachBridgeDraft(
   bridge: Pick<TrainingCoachBridge, "prompt" | "detail" | "summaryLines" | "title">,
 ): string {
+  // The prompt already carries the full submission and requirements. Sidebar
+  // summaries are shortened for display and must not be sent as duplicated data.
+  if (bridge.prompt.trim()) {
+    return bridge.prompt.trim();
+  }
   const sections = uniqueList(
     [
       compact(bridge.prompt),

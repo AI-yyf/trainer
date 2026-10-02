@@ -1,4 +1,5 @@
 export const trainerCommands = {
+  generateSkillDraft: "trainer.skills.generateDraft",
   openWorkbench: "trainer.openWorkbench",
   configureProvider: "trainer.provider.configure",
   saveProvider: "trainer.provider.save",

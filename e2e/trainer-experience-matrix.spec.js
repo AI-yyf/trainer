@@ -169,7 +169,7 @@ async function assertVisibleContract(page, scenario, contract) {
       await expectSingleVisible(page.locator(".plan-view"));
       return;
     case "resources_surface":
-      await expectSingleVisible(page.locator(".resources-knowledge"));
+      await expectSingleVisible(page.locator(".resources-reader"));
       return;
     case "training_card":
       await expect(page.locator(".training-pane--card-only")).toBeVisible();
@@ -244,8 +244,8 @@ async function exercisePlan(page, scenario) {
 }
 
 async function exerciseResources(page, scenario) {
-  await expectSingleVisible(page.locator(".resources-knowledge"));
-  const search = page.locator('.resources-knowledge__search input[type="search"]');
+  await expectSingleVisible(page.locator(".resources-reader"));
+  const search = page.locator('.resources-reader__search input[type="search"]');
   await expectSingleVisible(search);
   const query = scenario.userAction.input;
   await search.fill(query);
@@ -253,12 +253,23 @@ async function exerciseResources(page, scenario) {
   return { kind: scenario.userAction.kind, query };
 }
 
+async function expectTrainingCardFacts(card) {
+  const facts = card.locator('[data-training-card-fact]');
+  const keys = await facts.evaluateAll((elements) =>
+    elements.map((element) => element.getAttribute('data-training-card-fact')));
+  expect(keys.every(key => ['deliverable', 'verify'].includes(key))).toBe(true);
+  expect(new Set(keys).size).toBe(keys.length);
+  await expect(card.locator('.training-current__heading [data-view-object]').first()).toBeVisible();
+  await expect(card.locator('[data-training-card-footer]')).toBeVisible();
+  await expect(card.locator('[data-training-review-queue], .training-loop-rail, .skill-projection-strip')).toHaveCount(0);
+  await expect(card.locator('[data-training-card-fact="why-now"], [data-training-card-fact="return"]')).toHaveCount(0);
+}
+
 async function exerciseTraining(page, scenario) {
   const card = page.locator(".training-pane--card-only");
   await expect(card).toBeVisible();
-  await expect(card.locator("[data-training-card-fact]")).toHaveCount(5);
-  // The narrow card-only surface answers the five learner questions directly;
-  // the full Learn/Try/Verify/Reflect/Return rail belongs to the expanded view.
+  await expectTrainingCardFacts(card);
+  // The card shows its task and verification; background rails stay out of the reading surface.
   await expect(card.locator(".training-loop-step")).toHaveCount(0);
   return { kind: scenario.userAction.kind, card };
 }
@@ -345,19 +356,17 @@ async function exerciseSettings(page, scenario) {
 
   if (scenario.userAction.kind === "switch_language") {
     const targetLanguage = scenario.language === "en-US" ? "zh-CN" : "en-US";
-    // The redesigned Settings IA renders the response-language choice as a
-    // pill row (data-settings-language) inside the Teaching preferences tab.
+    // The response language is a keyboard-accessible listbox in Teaching.
     const teachingTab = page.locator('[data-settings-nav="teaching"]');
     await expect(teachingTab).toBeVisible();
     await teachingTab.click();
     const languageRow = page.locator('.settings-row[data-settings-language="true"]');
     await expectSingleVisible(languageRow);
-    const choice = languageRow.getByRole("button", { name: LANGUAGE_LABELS[targetLanguage], exact: true });
-    await expectSingleVisible(choice);
-    await choice.click();
-    const appliedChoice = page.getByRole("button", { name: LANGUAGE_LABELS[targetLanguage], exact: true });
-    await expectSingleVisible(appliedChoice);
-    await expect(appliedChoice).toHaveAttribute("aria-pressed", "true");
+    const trigger = languageRow.getByRole("button").first();
+    await trigger.click();
+    await languageRow.getByRole("option", { name: LANGUAGE_LABELS[targetLanguage], exact: true }).click();
+    await expect(trigger).toHaveText(LANGUAGE_LABELS[targetLanguage]);
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
     return { kind: "switch_language", targetLanguage };
   }
 
@@ -390,7 +399,7 @@ async function assertRecoveryContract(page, scenario) {
       if (scenario.runner === "coach") {
         await expectSingleVisible(page.locator(".composer-shell"));
       } else if (scenario.runner === "resources") {
-        await expectSingleVisible(page.locator(".resources-knowledge"));
+        await expectSingleVisible(page.locator(".resources-reader"));
       } else if (scenario.runner === "plan") {
         await expectSingleVisible(page.locator(".plan-view"));
       } else {
@@ -433,11 +442,11 @@ async function assertPersistenceContract(page, scenario, actionResult) {
       await expectSingleVisible(page.locator(".plan-view"));
       return;
     case "resource_query":
-      await expectSingleVisible(page.locator('.resources-knowledge__search input[type="search"]'));
-      await expect(page.locator('.resources-knowledge__search input[type="search"]')).toHaveValue(actionResult.query);
+      await expectSingleVisible(page.locator('.resources-reader__search input[type="search"]'));
+      await expect(page.locator('.resources-reader__search input[type="search"]')).toHaveValue(actionResult.query);
       return;
     case "current_training_card":
-      await expect(page.locator(".training-pane--card-only [data-training-card-fact]")).toHaveCount(5);
+      await expectTrainingCardFacts(page.locator(".training-pane--card-only"));
       return;
     case "settings_detail":
       await expectSingleVisible(page.locator(".coach-settings-view__provider-detail"));
@@ -463,10 +472,7 @@ async function assertPersistenceContract(page, scenario, actionResult) {
       return;
     case "locale_session": {
       const expectedLabel = LANGUAGE_LABELS[actionResult.targetLanguage];
-      await expect(page.getByRole("button", { name: expectedLabel, exact: true })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
+      await expect(page.locator('.settings-row[data-settings-language="true"]').getByRole("button").first()).toHaveText(expectedLabel);
       return;
     }
     default:

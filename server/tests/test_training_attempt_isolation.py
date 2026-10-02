@@ -115,8 +115,9 @@ def test_distinct_attempts_produce_repeat_verified(tmp_path: Path) -> None:
         attempt_id=first["attempt_id"], artifact_hash="hash-A", result="passed"
     )
 
-    # A verified attempt is no longer active, so entering the same card creates
-    # a genuinely new attempt rather than counting a second check on attempt 1.
+    # Verify alone keeps the same attempt through Reflect. An explicit Return
+    # retires it before a genuinely new practice cycle can count as repetition.
+    store.close_attempt(first["attempt_id"], workspace_id="ws-1")
     second = store.start_attempt(
         workspace_id="ws-1", card_id="card-1", file_hash="hash-B"
     )

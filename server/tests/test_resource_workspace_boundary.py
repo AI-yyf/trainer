@@ -1,3 +1,4 @@
+import base64
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,32 @@ def _service(tmp_path: Path) -> ResourceService:
         ingest_service=IngestService(),
         semantic_memory=SemanticMemory(tmp_path / "semantic"),
     )
+
+
+@pytest.mark.parametrize("collection", [False, True])
+def test_explicit_file_content_import_owns_bytes_without_external_path_authority(tmp_path, collection):
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    outside_folder = tmp_path / "outside"
+    outside_folder.mkdir()
+    outside_file = outside_folder / "notes.md"
+    outside_file.write_text("Original external file must stay untouched", encoding="utf-8")
+    chosen_content = "# Python 元组\n元组固定元素引用；内部列表仍能修改。\n"
+    service = _service(tmp_path)
+    service.set_workspace_path_resolver(lambda _workspace_id: str(workspace_root))
+    uploaded = service.upload("workspace-import", ResourceUploadRequest(
+        workspace_id="workspace-import", kind="markdown", name="notes.md", source=str(outside_file),
+        content=base64.b64encode(chosen_content.encode()).decode(), content_encoding="base64",
+        **({"collection_path": "outside/notes.md", "collection_root": str(outside_folder)} if collection else {}),
+    ))
+    assert uploaded.source != str(outside_file)
+    assert Path(uploaded.source).read_bytes() == chosen_content.encode()
+    assert outside_file.read_text() == "Original external file must stay untouched"
+    if collection:
+        assert uploaded.collection_path == "outside/notes.md"
+        assert uploaded.collection_root != str(outside_folder)
+    indexed = service.index("workspace-import", ResourceIndexRequest(resource_id=uploaded.id))
+    assert indexed.index_status == "indexed"
 
 
 def test_index_rejects_persisted_local_file_outside_registered_workspace_root(

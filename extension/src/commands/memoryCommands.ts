@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import type { CommandContext } from '../core/commandContext';
 import { STORAGE_KEYS } from '../core/constants';
 import type { BootstrapData, CommandExecutionResult } from '../core/types';
-import { mergeMemorySummarySnapshot } from '../core/workbenchData';
+import { mapWorkspaceAuthority, mergeMemorySummarySnapshot } from '../core/workbenchData';
 import { getRuntimeWorkspaceId, getWorkspaceId, withWorkspaceQuery } from './workspaceContext';
 import {
   asNonEmptyString,
@@ -60,10 +60,17 @@ export async function refreshMemoryCommand(
     return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
   }
 
+  const generation = context.getHostState().bootstrap.runtimeDataGeneration;
+  const workspaceId = getRuntimeWorkspaceId(context);
+  const sessionId = context.getSessionId();
   const summary = await context.sidecarClient.getJson<unknown>(
     status.port,
     withWorkspaceQuery('/memory/summary', context),
   );
+  if (context.getHostState().bootstrap.runtimeDataGeneration !== generation
+    || getRuntimeWorkspaceId(context) !== workspaceId || context.getSessionId() !== sessionId) {
+    return { ok: false, message: 'Trainer data changed while refreshing memory.' };
+  }
   await patchFromSummary(context, summary);
   return {
     ok: true,
@@ -144,10 +151,16 @@ export async function refreshWorkspaceAuthorityCommand(
     return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
   }
 
+  const workspaceId = getRuntimeWorkspaceId(context);
+  const generation = context.getHostState().bootstrap.runtimeDataGeneration;
   const authority = await context.sidecarClient.getJson<unknown>(
     status.port,
     buildWorkspaceAuthorityRequestPath(context),
   );
+  if (getRuntimeWorkspaceId(context) !== workspaceId
+    || context.getHostState().bootstrap.runtimeDataGeneration !== generation) {
+    return { ok: false, message: 'Workspace changed while refreshing authority.' };
+  }
   const sandboxState = mergeSandboxStateFromAuthority(context, authority);
 
   await context.patchWorkbenchData({
@@ -543,7 +556,7 @@ function mergeSandboxStateFromAuthority(
     activeWorkspaceRoot,
     trashRootPath,
     authoritySource,
-    authority,
+    authority: mapWorkspaceAuthority(authorityRecord, authority),
   } as BootstrapData['memory']['sandboxState'];
 }
 

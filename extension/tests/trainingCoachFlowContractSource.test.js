@@ -58,7 +58,7 @@ test('training card and Coach routes preserve separate drafts when the route cha
   assert.doesNotMatch(source, /id: "training-composer-route"/);
 });
 
-test('Plan, Resources, and Training expose the complete latest Agent reply for later review', () => {
+test('utility surfaces avoid duplicate conversation panels', () => {
   const source = fs.readFileSync(appPath, 'utf8');
   const replyHelper = sourceSection(source, 'const renderViewAgentReply =', 'const renderDockedView');
 
@@ -67,7 +67,6 @@ test('Plan, Resources, and Training expose the complete latest Agent reply for l
   assert.match(replyHelper, /message\.role !== "assistant"/);
   assert.match(replyHelper, /visibleReply\.body/);
   assert.match(replyHelper, /<CoachMessageBubble/);
-  for (const view of ['plan', 'resources', 'training']) {
-    assert.match(source, new RegExp(`renderViewAgentReply\\("${view}"\\)`));
-  }
+  assert.doesNotMatch(source, /renderViewAgentReply\("(?:resources|training)"\)/);
+  assert.doesNotMatch(source, /renderViewAgentReply\("plan"\)/);
 });

@@ -112,11 +112,9 @@ test.describe("Trainer preview plan governance", () => {
     await expect(plan.locator(".coach-plan-view__decision-strip")).toContainText("Formal plan is frozen");
     await expect(plan.getByText("Next Move", { exact: true })).toBeVisible();
 
-    await plan.getByText("More", { exact: true }).click();
-    await expect(plan.locator(".coach-plan-view__governance-item").filter({ hasText: "Formal plan" })).toContainText(
-      "Frozen",
-    );
-    const liveControl = page.getByRole("button", { name: "Live", exact: true });
+    const liveControl = plan.locator('.coach-plan-view__compact-primary-action button');
+    await expect(liveControl).toHaveText("Unfreeze plan");
+    await expect(plan.locator('.coach-plan-view__governance')).toHaveCount(0);
     await expect(liveControl).toBeEnabled();
     await expect(page.getByRole("button", { name: "Freeze plan", exact: true })).toHaveCount(0);
 
@@ -128,7 +126,7 @@ test.describe("Trainer preview plan governance", () => {
     expect(errors).toEqual([]);
   });
 
-  test("31: a blocked plan keeps its blocker and pending evidence actionable", async ({ page }) => {
+  test("31: a blocked plan keeps its blocker and recovery action without adopting unchecked evidence", async ({ page }) => {
     const errors = collectConsoleErrors(page);
     const messages = collectPreviewMessages(page);
 
@@ -145,27 +143,14 @@ test.describe("Trainer preview plan governance", () => {
         .getByText("The current file verification does not yet support this plan step.", { exact: true }),
     ).toBeVisible();
 
-    await plan.getByText("More", { exact: true }).click();
-    const evidenceDetails = plan.locator(".coach-plan-view__evidence-details");
-    await expect(evidenceDetails).toBeVisible();
-    await evidenceDetails.locator(":scope > summary").click();
-    const evidenceSection = evidenceDetails.locator(".coach-plan-view__details-group--evidence");
-    await expect(evidenceSection).toBeVisible();
-    await expect(evidenceSection.locator(".coach-plan-view__evidence-filter").filter({ hasText: "Pending" })).toContainText(
-      "2",
-    );
-    await expect(evidenceSection.getByText("Current plan thread now points at a single file boundary", { exact: true })).toBeVisible();
-
-    const adopt = evidenceSection.getByRole("button", { name: "Adopt", exact: true }).first();
-    await expect(adopt).toBeEnabled();
-    await adopt.click();
-    await expectPreviewMessage(
-      messages,
-      (message) =>
-        message?.type === "command/execute" &&
-        message?.payload?.commandId === "trainer.evidence.adopt" &&
-        message?.payload?.payload?.evidenceId === "evidence-plan-1",
-    );
+    const recovery = plan.locator('.coach-plan-view__compact-primary-action button');
+    await expect(recovery).toBeEnabled();
+    await recovery.click();
+    await expect(page.locator('#coach-composer')).toBeFocused();
+    await expect(page.locator('#coach-composer')).not.toHaveValue('');
+    await expect(plan.locator('.coach-plan-view__evidence-details, .coach-plan-view__governance')).toHaveCount(0);
+    expect(messages.filter(message => message?.type === 'command/execute' &&
+      message?.payload?.commandId === 'trainer.evidence.adopt')).toEqual([]);
     expect(errors).toEqual([]);
   });
 

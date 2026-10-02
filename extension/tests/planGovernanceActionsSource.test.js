@@ -116,7 +116,7 @@ test('formal plan generation is explicit while Plan discussion stays conversatio
   assert.match(source, /const planComposerSubmission = activeView === "plan";/);
   assert.match(
     source,
-    /const formalPlanGeneration =\s*planComposerSubmission && resolvedPlanComposerMode === "generate";/,
+    /const formalPlanGeneration =\s*\(planComposerSubmission && resolvedPlanComposerMode === "generate"\) \|\|\s*\(activeView === "coach" && sendAnalysis.intent === "plan"\);/,
   );
   assert.match(source, /function providerHasVerifiedToolsProbe\([\s\S]*?lastTest\.toolsReady === true[\s\S]*?lastTest\.toolProbeStatus === "verified"[\s\S]*?toolsEvidence\?\.state === "verified"[\s\S]*?toolsEvidence\.observed === true/);
   assert.match(source, /const providerSupportsFormalPlanTools = providerHasVerifiedToolsProbe\(\{\s*lastTestResult: scopedProviderLastTest,\s*\}\);/);
@@ -165,7 +165,7 @@ test('an empty Plan starts in discussion mode and only an explicit action select
 
   assert.match(
     source,
-    /const resolvedPlanComposerMode: PlanComposerMode = !planHasFormalThread\s*\?\s*recoveredRuntime && \(planComposerMode === "blocker" \|\| planComposerMode === "evidence"\)\s*\?\s*planComposerMode\s*:\s*"explain"/,
+    /const resolvedPlanComposerMode: PlanComposerMode = !planHasFormalThread && planComposerMode !== "generate"\s*\?\s*recoveredRuntime && \(planComposerMode === "blocker" \|\| planComposerMode === "evidence"\)\s*\?\s*planComposerMode\s*:\s*"explain"/,
   );
   assert.match(source, /openPlanComposerMode\("generate"\);/);
 });
@@ -179,7 +179,7 @@ test('recovered runtime makes orientation the primary Plan action and folds gene
 
   assert.match(
     source,
-    /const recoveredPlanPrimary =\s*recoveredRuntime &&\s*\(planOrientation\.primaryAction === "clear_blocker" \|\|\s*planOrientation\.primaryAction === "continue_step" \|\|\s*planOrientation\.primaryAction === "adopt_evidence" \|\|\s*planOrientation\.primaryAction === "wait"\)\s*\?\s*planOrientation\.primaryAction\s*:\s*null;/,
+    /const recoveredPlanPrimary =\s*recoveredRuntime &&\s*\(planOrientation\.primaryAction === "clear_blocker" \|\|\s*planOrientation\.primaryAction === "continue_step" \|\|\s*planOrientation\.primaryAction === "unfreeze_plan" \|\|\s*planOrientation\.primaryAction === "adopt_evidence" \|\|\s*planOrientation\.primaryAction === "wait"\)\s*\?\s*planOrientation\.primaryAction\s*:\s*null;/,
   );
   assert.doesNotMatch(planView, /showAction=\{recoveredAdoptPrimary \|\| !recoveredPlanPrimary\}/);
   assert.match(source, /const recoveredAdoptPrimary = recoveredPlanPrimary === "adopt_evidence";/);
@@ -188,7 +188,7 @@ test('recovered runtime makes orientation the primary Plan action and folds gene
   assert.match(planView, /recoveredAdoptPrimary/);
   assert.match(
     planView,
-    /id:\s*recoveredPlanPrimary === "clear_blocker"\s*\?\s*"plan-clear-blocker"\s*:\s*recoveredPlanPrimary === "wait"\s*\?\s*"plan-needs-evidence"\s*:\s*"plan-continue-step"/,
+    /id:\s*recoveredPlanPrimary === "clear_blocker"\s*\?\s*"plan-clear-blocker"\s*:\s*recoveredPlanPrimary === "unfreeze_plan"\s*\?\s*"resume-plan"\s*:\s*recoveredPlanPrimary === "wait"\s*\?\s*"plan-needs-evidence"\s*:\s*"plan-continue-step"/,
   );
   assert.match(planView, /label: planOrientation\.primaryActionLabel/);
   assert.match(planView, /tone: "accent" as const/);
@@ -447,7 +447,7 @@ test('waiting live pending keeps adopt primary and exposes reject/defer beside i
   );
   assert.match(
     source,
-    /id:\s*recoveredPlanPrimary === "clear_blocker"\s*\?\s*"plan-clear-blocker"\s*:\s*recoveredPlanPrimary === "wait"\s*\?\s*"plan-needs-evidence"/,
+    /id:\s*recoveredPlanPrimary === "clear_blocker"\s*\?\s*"plan-clear-blocker"\s*:\s*recoveredPlanPrimary === "unfreeze_plan"\s*\?\s*"resume-plan"\s*:\s*recoveredPlanPrimary === "wait"\s*\?\s*"plan-needs-evidence"/,
   );
   assert.match(source, /commandId: trainerCommands\.evidenceDefer/);
   assert.match(source, /commandId: trainerCommands\.evidenceReject/);
@@ -544,7 +544,7 @@ test('Plan first screen keeps one primary action and leftover-not-live honesty',
     resourcesSource,
     /data-resources-leftover-note="true"\s*[\s\S]*?role="status"\s*[\s\S]*?aria-live="polite"/,
   );
-  assert.match(resourcesSource, /leftoverStoredNote \? null : \(/);
+  assert.match(resourcesSource, /omitLeftoverLibrary \? null : \(/);
   assert.match(trainingSource, /leftoverNote\?: string/);
   assert.match(trainingSource, /data-training-leftover-not-live=/);
   assert.match(trainingSource, /data-training-leftover-note="true"/);
@@ -559,7 +559,7 @@ test('Plan first screen keeps one primary action and leftover-not-live honesty',
     trainingSource,
     /leftoverStoredNote \? \([\s\S]*?aria-label=\{t\.openCoach\}/,
   );
-  assert.match(resourcesSource, /leftoverStoredNote \? null : \(/);
+  assert.match(resourcesSource, /omitLeftoverLibrary \? null : \(/);
   assert.match(
     resourcesSource,
     /leftoverStoredNote \? \(\s*<p[\s\S]*?data-resources-leftover-note="true"/,

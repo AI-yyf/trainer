@@ -41,6 +41,7 @@ Rules:
 15. Do not lead with definitions when the learner still lacks the problem frame. Make concepts feel necessary before naming them.
 16. Introduce every important variable, function, API, or branch by role, origin, and what breaks without it.
 17. Every 2-3 new ideas, briefly recycle the state: what is known, what is still missing, and what the next proof point is.
+18. A code block presented as a runnable file must run as shown. When teaching an expected exception, catch it before later assertions or output, or put the deliberately failing command in a separate block and label it. Preserve indentation and keep source citations outside runnable code.
 
 First-turn rule:
 On a first-turn or low-context conversation, do not jump straight into prescriptive instruction. First establish the coaching relationship by understanding the learner's goal, current level, project context, preferred rhythm, and where they feel stuck.
@@ -651,6 +652,22 @@ def build_coaching_system_prompt(
         target_project=profile.target_project or "Not specified",
         libraries=", ".join(profile.preferred_libraries) if profile.preferred_libraries else "None specified",
     )
+    # This flag is stamped by the server only after checking a completed Return
+    # against the current file path/hash and current controlled-check evidence.
+    # It must survive context compaction: the learner's pasted summary is not
+    # the authority for the already recorded verification.
+    if isinstance(coach_context, dict) and coach_context.get("completed_training_return_feedback") is True:
+        system_prompt += (
+            "\n\nCurrent returned training artifact: Trainer has verified the unchanged "
+            "current file against current server-controlled evidence for this card. "
+            "Verification, reflection and Return are already recorded. This is server "
+            "state, not an unverified learner claim. Evaluate the reflection and the "
+            "scope of the evidence. Do not demand pasted tool logs as a prerequisite "
+            "for acknowledging the recorded verification or ask to repeat it unless "
+            "the learner explicitly requests new checks. Do not infer unrecorded "
+            "test counts, outputs, plan adoption or stage completion. Plan adoption "
+            "is a separate explicit action."
+        )
 
     coaching_scenario, current_file = _function_guidance_prompt_inputs(
         message,
@@ -733,6 +750,18 @@ def build_coaching_system_prompt(
     )
     if honesty_block:
         system_prompt += honesty_block
+
+    recall = coaching_context.get("review_artifact")
+    if isinstance(recall, dict):
+        system_prompt += (
+            "\n\n## Current Recall Review\n"
+            "Evaluate this recall's own prompt and answer. This is self-reported concept recall; "
+            "do not require old coding checks, infer a passed verification, or invent test counts. "
+            "Other practice or plan requirements are outside this question.\n"
+            f"Prompt: {_compact_text(recall.get('summary'), 600)}\n"
+            f"Recall rule: {_compact_text(recall.get('guardrail'), 240)}\n"
+            f"Recorded answer: {_compact_text(recall.get('verified_result'), 1000)}"
+        )
 
     system_prompt += (
         "\n\n## Teaching Style Bias\n"
@@ -2386,6 +2415,12 @@ def extract_coaching_context(
         "relationship_stage": relationship_stage,
         "first_turn_priority": first_turn_priority,
         "history_mode": history_mode,
+        "review_artifact": (
+            coach_context.get("review_artifact")
+            if isinstance(coach_context, dict)
+            and isinstance(coach_context.get("review_artifact"), dict)
+            else None
+        ),
         "learning_outcomes": learning_outcomes if isinstance(learning_outcomes, list) else [],
         "recent_teaching_signals": recent_teaching_signals,
         "continuity_summary": continuity_summary,
@@ -2688,7 +2723,10 @@ def infer_coaching_scenario(
         "远程开发",
         "远程工作区",
         "开发容器",
-        "容器",
+        "docker 容器",
+        "docker容器",
+        "容器工作区",
+        "容器开发环境",
         "隧道",
         "主机",
         "host label",

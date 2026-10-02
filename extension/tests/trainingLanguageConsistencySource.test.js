@@ -46,14 +46,14 @@ test('training card content has a stricter language boundary than ambient coach 
   assert.match(source, /const trainingReturnWithText = leftoverTrainingHandoffChromeNotLive[\s\S]*?:\s*pickLanguageAlignedTrainingText/);
   assert.match(source, /const trainingSuccessSignal = leftoverTrainingHandoffChromeNotLive[\s\S]*?:\s*pickLanguageAlignedTrainingText/);
 
-  assert.match(source, /whyThisCard=\{localizedWhyNow\}/);
+  assert.match(source, /whyThisCard=\{reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail : localizedWhyNow\}/);
   assert.match(
     source,
-    /latestVerifiedResult=\{\s*trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText/,
+    /latestVerifiedResult=\{\s*reviewArtifactForeground\s*\? undefined\s*:\s*trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText/,
   );
   assert.match(
     source,
-    /latestLearningBlocker=\{\s*trainingVerifyNotice \?\?\s*\(leftoverTrainingHandoffChromeNotLive \|\| trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText/,
+    /latestLearningBlocker=\{\s*\(reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.blockedReason : trainingVerifyNotice\) \?\?\s*\(leftoverTrainingHandoffChromeNotLive \|\| reviewArtifactForeground \|\| trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText/,
   );
   assert.match(source, /recentWins=\{pickLanguageAlignedTrainingList/);
   assert.doesNotMatch(source, /whyThisCard=\{trainingWhyThisCard\}/);

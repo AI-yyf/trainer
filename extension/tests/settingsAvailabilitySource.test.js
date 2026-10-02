@@ -157,11 +157,11 @@ test('settings keeps availability as the compact source of provider truth', () =
   assert.match(strip, /effectiveAvailabilityPrimaryCta\.label/);
   // The compact connected summary hides the strip; it stays mounted while
   // configuring or whenever the saved connection needs attention. The strip
-  // drops out of the dedicated advanced-details level, and workspace-trust
+  // Backend recovery also stays visible in advanced details. Workspace-trust
   // states are owned by the blocker banner so trust is never stated twice.
   assert.match(
     source,
-    /const showAvailabilityStrip =\s*providerSetupReason !== "workspace_untrusted" &&\s*\(\(showConnectionForm && connectionView !== "advanced"\) \|\|\s*\(showConnectionSummary && resolvedAvailabilityTone !== "connected"\)\);/,
+    /const showAvailabilityStrip =\s*providerSetupReason !== "workspace_untrusted" &&\s*\(Boolean\(backendRecovery\) \|\| \(showConnectionForm && connectionView !== "advanced"\) \|\|\s*\(showConnectionSummary && resolvedAvailabilityTone !== "connected"\)\);/,
   );
   assert.match(source, /\{showAvailabilityStrip \? \(/);
   assert.match(source, /\{connectionView === "advanced" \? \(/);
@@ -235,7 +235,7 @@ test('settings offers the recommended template before manual setup for a blank p
   // workspace-root CTA lives only in the workspace panel above (no duplicate).
   assert.match(
     source,
-    /const displayAvailabilityHeadline = shouldOfferRecommendedProviderTemplate/,
+    /const displayAvailabilityHeadline = backendRecovery \? backendRecovery\.title : shouldOfferRecommendedProviderTemplate/,
   );
   assert.doesNotMatch(
     source,
@@ -245,7 +245,7 @@ test('settings offers the recommended template before manual setup for a blank p
   assert.match(source, /const workspaceRootReminder = settingsText\(language,/);
   assert.match(
     source,
-    /const displayAvailabilityDetail = \(\s*workspaceRootMissing\s*\? \`\$\{workspaceRootReminder\} \`\s*: ""\s*\) \+ \(shouldOfferRecommendedProviderTemplate\s*\? settingsPhrase\(language, "chooseProviderTemplateDetail"\)/,
+    /const displayAvailabilityDetail = \(\s*workspaceRootMissing\s*\? \`\$\{workspaceRootReminder\} \`\s*: ""\s*\) \+ \(backendRecovery\s*\? backendStarting \? backendRecovery\.detail : sidecarRestartCopy\(language\)\.detail\s*: shouldOfferRecommendedProviderTemplate\s*\? settingsPhrase\(language, "chooseProviderTemplateDetail"\)/,
   );
   assert.doesNotMatch(cta, /workspaceRootMissing && onChooseTrainerWorkspaceRoot/);
   assert.match(source, /shouldOfferRecommendedProviderTemplate/);
@@ -287,7 +287,7 @@ test('settings details give draft requirements precedence over saved-connection 
 test('settings routes incomplete drafts back to the form and only tests ready drafts', () => {
   const source = readSettingsSource();
   const ctaStart = source.indexOf('const resolvedAvailabilityPrimaryLabel =');
-  const ctaEnd = source.indexOf('const canRestartSidecar =', ctaStart);
+  const ctaEnd = source.indexOf('const effectiveAvailabilityPrimaryCta:', ctaStart);
 
   assert.ok(ctaStart >= 0 && ctaEnd > ctaStart, 'expected availability CTA resolution');
   const cta = source.slice(ctaStart, ctaEnd);
@@ -297,9 +297,9 @@ test('settings routes incomplete drafts back to the form and only tests ready dr
   );
   assert.match(cta, /shouldCompleteDraftSetup\s*\? modelDiscoveryBlockedReason/);
   assert.match(cta, /shouldCompleteDraftSetup\s*\? \(\) => setConnectionView\("edit"\)/);
-  assert.match(source, /const shouldWaitForDraftTest = providerHasDraftChanges && providerTestPending;/);
-  assert.match(cta, /shouldWaitForDraftTest\s*\? settingsStatusPhrase\(language, "checking"\)/);
-  assert.match(cta, /shouldWaitForDraftTest\s*\? undefined/);
+  assert.match(source, /const shouldWaitForProviderTest = providerTestPending;/);
+  assert.match(cta, /shouldWaitForProviderTest\s*\? settingsStatusPhrase\(language, "checking"\)/);
+  assert.match(cta, /shouldWaitForProviderTest\s*\? undefined/);
   assert.match(
     cta,
     /providerHasDraftChanges\s*\? settingsPhrase\(language, "testDraftConnection"\)/,
@@ -318,7 +318,7 @@ test('settings routes incomplete drafts back to the form and only tests ready dr
 test('settings takes a complete draft that only lacks its API key straight to that field', () => {
   const source = readSettingsSource();
   const ctaStart = source.indexOf('const resolvedAvailabilityPrimaryLabel =');
-  const ctaEnd = source.indexOf('const canRestartSidecar =', ctaStart);
+  const ctaEnd = source.indexOf('const effectiveAvailabilityPrimaryCta:', ctaStart);
 
   assert.ok(ctaStart >= 0 && ctaEnd > ctaStart, 'expected availability CTA resolution');
   const cta = source.slice(ctaStart, ctaEnd);
@@ -335,7 +335,7 @@ test('settings takes a complete draft that only lacks its API key straight to th
 test('settings blocks a draft model that conflicts with its connection policy before save or test', () => {
   const source = readSettingsSource();
   const ctaStart = source.indexOf('const resolvedAvailabilityPrimaryLabel =');
-  const ctaEnd = source.indexOf('const canRestartSidecar =', ctaStart);
+  const ctaEnd = source.indexOf('const effectiveAvailabilityPrimaryCta:', ctaStart);
 
   assert.ok(ctaStart >= 0 && ctaEnd > ctaStart, 'expected availability CTA resolution');
   const cta = source.slice(ctaStart, ctaEnd);
@@ -347,7 +347,7 @@ test('settings blocks a draft model that conflicts with its connection policy be
   );
   assert.match(
     source,
-    /const canSaveProviderConnection = Boolean\(\s*onSaveProvider &&\s*providerDraftFieldsReady &&\s*!currentDraftModelBlockedByPolicy &&/,
+    /const canSaveProviderConnection = Boolean\(\s*onSaveProvider &&\s*!providerSaveBusy &&\s*providerDraftFieldsReady &&\s*!currentDraftModelBlockedByPolicy &&/,
   );
   assert.match(source, /const modelDiscoveryBlockedReason =\s*currentDraftModelPolicyMessage \?\?/);
   assert.match(

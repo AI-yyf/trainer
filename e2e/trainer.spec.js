@@ -103,7 +103,7 @@ const TRAINING_COPY = {
 };
 
 const TRAINING_LOOP_KEYS = ["learn", "try", "verify", "reflect", "return"];
-const TRAINING_CARD_FACTS = ["current", "why-now", "deliverable", "verify", "return"];
+const TRAINING_CARD_FACTS = ["why-now", "deliverable", "verify", "return"];
 
 function viewNavigationTestId(view) {
   return `trainer-view-nav-${view}`;
@@ -833,6 +833,14 @@ test.describe("Trainer Five-View Shell", () => {
       });
       await expectActiveView(page, language, "training");
 
+      await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
+        type: "state/patch",
+        payload: { workspaceTrainingState: {
+          ...window.__TRAINER_BOOTSTRAP__.workspaceTrainingState,
+          selectedCardStatus: "needs_primer",
+        } },
+      }));
+
       const card = page.getByRole("group", { name: copy.card, exact: true });
       await expect(card).toHaveCount(1);
       await expectTrainingLoop(card, "learn");
@@ -841,6 +849,8 @@ test.describe("Trainer Five-View Shell", () => {
       await expect(activeLearnStep).toHaveText(copy.activeLearnStep);
       await expectTrainingCardFacts(card);
       await expect(page.locator(".training-card-nav")).toHaveCount(0);
+      await expect(card.locator('[data-training-next-card="true"]')).toBeVisible();
+      await expect(card.locator('[data-training-card-fact="current"]')).toHaveCount(0);
       await expect(card.getByRole("button", { name: copy.startThisStep, exact: true })).toBeVisible();
       await expect(card.getByText(copy.verifyCurrentFile, { exact: true })).toHaveCount(0);
       await expectNoHorizontalOverflow(page);
@@ -999,6 +1009,7 @@ test.describe("Trainer Five-View Shell", () => {
 
   test("keeps the next training step lightweight beside the one current card", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
+    const commands = collectPreviewCommands(page);
 
     await page.setViewportSize({ width: 360, height: 900 });
     await openPreview(page, "training", {
@@ -1011,11 +1022,18 @@ test.describe("Trainer Five-View Shell", () => {
     await expect(training.locator("[data-view-object]").first()).toBeVisible();
     await expect(training.locator("[data-training-next-hop=\"true\"]")).toHaveCount(0);
     await expect(training.locator(":scope > .training-carryover-row")).toHaveCount(0);
-    await expect(training.locator(":scope > .training-details")).toHaveCount(0);
+    await expect(training.locator(":scope > .training-details")).toHaveCount(1);
+    await expect(training.locator(":scope > .training-details")).not.toHaveAttribute("open", "");
     await expect(training.locator(".training-current__more")).toHaveCount(0);
     await expect(training.locator(".training-loop-rail")).toHaveCount(0);
-    await expect(training.getByText("后续和回看", { exact: true })).toHaveCount(0);
+    await expect(training.getByText("后续和回看", { exact: true })).toHaveCount(1);
     await expectNoHorizontalOverflow(page);
+    await training.locator('[data-training-next-card="true"]').click();
+    await expect.poll(() => commands.some(message =>
+      message.payload?.commandId === "trainer.training.generateCard")).toBe(true);
+    const generated = commands.find(message => message.payload?.commandId === "trainer.training.generateCard");
+    expect(generated.payload.payload.cardType).toBe("practice");
+    expect(generated.payload.payload.focusArea).toBeUndefined();
     await expectNoConsoleErrors(errors);
   });
 
@@ -1216,7 +1234,7 @@ test.describe("Trainer Five-View Shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
-  test("opens context and resource panels from the coach input shell", async ({ page }) => {
+  test("opens the resource panel from the coach input shell", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 
     for (const language of ["zh-CN", "en-US"]) {
@@ -1227,12 +1245,8 @@ test.describe("Trainer Five-View Shell", () => {
       });
 
       const iconButtons = page.locator(".composer__leading-actions .icon-button");
-      await expect(iconButtons).toHaveCount(2);
-
+      await expect(iconButtons).toHaveCount(1);
       await iconButtons.nth(0).click();
-      await expect(page.locator(".composer-menu-panel .menu-row")).toHaveCount(2);
-
-      await iconButtons.nth(1).click();
       await expect(page.locator(".composer-menu-panel--resources")).toBeVisible();
       await expect(page.locator(".composer-menu-panel--resources .menu-list__item")).toHaveCount(2);
     }
@@ -1435,7 +1449,8 @@ test.describe("Trainer Five-View Shell", () => {
     await teachingTab.click();
     const languageRow = page.locator("[data-settings-language]");
     await expect(languageRow).toBeVisible();
-    await languageRow.getByRole("button", { name: "English", exact: true }).click();
+    await languageRow.getByRole("button").click();
+    await languageRow.getByRole("option", { name: "English", exact: true }).click();
     await expectActiveView(page, "en-US", "settings");
     await expect(page.getByTestId(viewNavigationTestId("settings"))).toHaveAttribute("aria-label", "Settings");
     await expectNoConsoleErrors(errors);

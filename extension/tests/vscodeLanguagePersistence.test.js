@@ -12,6 +12,49 @@ const webviewTypesPath = path.resolve(__dirname, '..', 'webview', 'src', 'lib', 
 const sharedTypesPath = path.resolve(__dirname, '..', '..', 'shared', 'src', 'types.ts');
 const supportedLanguages = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
 
+test('native skill requests match acknowledgement IDs and clear their listeners', async () => {
+  const listeners = new Map();
+  const sent = [];
+  const timers = new Map();
+  const loaded = loadVscodeModule({
+    acquireVsCodeApi: () => ({ postMessage: message => sent.push(message) }),
+    addEventListener: (type, listener) => listeners.set(type, listener),
+    removeEventListener: type => listeners.delete(type),
+    setTimeout: callback => { timers.set(1, callback); return 1; },
+    clearTimeout: id => timers.delete(id),
+  });
+  try {
+    const pending = loaded.module.requestNativeSkillDraft('Check Python');
+    const requestId = sent[0].payload.payload.requestId;
+    assert.equal(sent[0].payload.commandId, 'trainer.skills.generateDraft');
+    const draft = { trigger: '$check', title: 'Check', detail: 'Review', prompt: 'Review code', source: 'model' };
+    listeners.get('message')({ data: { type: 'skills/draftResult', payload: { requestId: 'foreign-request', ok: true, draft } } });
+    assert.equal(listeners.size, 1);
+    listeners.get('message')({ data: { type: 'skills/draftResult', payload: { requestId, ok: true, draft } } });
+    assert.deepEqual(await pending, draft);
+    assert.equal(listeners.size, 0);
+    assert.equal(timers.size, 0);
+  } finally { loaded.restore(); }
+});
+
+test('native skill timeouts reject and detach before a late response', async () => {
+  const listeners = new Map();
+  let timeout;
+  const loaded = loadVscodeModule({
+    acquireVsCodeApi: () => ({ postMessage() {} }),
+    addEventListener: (type, listener) => listeners.set(type, listener),
+    removeEventListener: type => listeners.delete(type),
+    setTimeout: callback => { timeout = callback; return 1; },
+    clearTimeout() {},
+  });
+  try {
+    const pending = loaded.module.requestNativeSkillDraft('Check Python');
+    timeout();
+    await assert.rejects(pending, /timed out/);
+    assert.equal(listeners.size, 0);
+  } finally { loaded.restore(); }
+});
+
 function compileTypeScript(sourcePath) {
   return ts.transpileModule(fs.readFileSync(sourcePath, 'utf8'), {
     compilerOptions: {
@@ -93,6 +136,57 @@ function createLayout(composerLanguage) {
     composerDraft: '',
   };
 }
+
+test('host bridge accepts completed provider tests with nullable sidecar metadata', () => {
+  const listeners = new Map();
+  const delivered = [];
+  const loaded = loadVscodeModule({
+    addEventListener: (type, listener) => listeners.set(type, listener),
+    removeEventListener: (type) => listeners.delete(type),
+  });
+  try {
+    const unsubscribe = loaded.module.subscribeToHostMessages((message) => delivered.push(message));
+    listeners.get('message')({ data: {
+      type: 'operation/status',
+      payload: { tone: 'success', message: 'M is connected.',
+        providerTest: { ok: true, errorCategory: null, statusCode: null, retryable: null } },
+    } });
+    assert.equal(delivered.length, 1);
+    assert.equal(delivered[0].payload.providerTest.ok, true);
+    assert.equal(delivered[0].payload.providerTest.statusCode, undefined);
+    unsubscribe();
+    assert.equal(listeners.size, 0);
+  } finally {
+    loaded.restore();
+  }
+});
+
+test('host bridge accepts terminal stream frames with nullable optional metadata', () => {
+  const listeners = new Map();
+  const delivered = [];
+  const loaded = loadVscodeModule({
+    addEventListener: (type, listener) => listeners.set(type, listener),
+    removeEventListener: (type) => listeners.delete(type),
+  });
+  try {
+    const unsubscribe = loaded.module.subscribeToHostMessages((message) => delivered.push(message));
+    listeners.get('message')({ data: {
+      type: 'stream/complete', payload: { messageId: 'native-stream', tokens: 42,
+        agentic: false, summary: null, nextStep: null, stopReason: null, toolCount: null,
+        reliabilityPhase: 'acked', reliabilityOutcome: 'success' },
+    } });
+    listeners.get('message')({ data: {
+      type: 'stream/error', payload: { messageId: 'native-stream-error', error: 'Try again.',
+        category: null, statusCode: null, retryable: null,
+        reliabilityPhase: 'acked', reliabilityOutcome: 'failure' },
+    } });
+    assert.equal(delivered.length, 2);
+    assert.equal(delivered[0].payload.stopReason, undefined);
+    assert.equal(delivered[0].payload.reliabilityOutcome, 'success');
+    assert.equal(delivered[1].payload.retryable, undefined);
+    unsubscribe();
+  } finally { loaded.restore(); }
+});
 
 test('VS Code bootstrap restores every supported composer language without collapsing it to English', () => {
   for (const composerLanguage of supportedLanguages) {

@@ -30,6 +30,7 @@ const {
   mergeResourceRecords,
   mergeSessionMessage,
   failClosedWorkbenchAfterWorkspaceTransfer,
+  resetWorkbenchAfterRuntimeDataChange,
   mergeSessionStartSnapshot,
   mergeMemorySummarySnapshot,
   mergeSessionMessageSnapshot,
@@ -38,6 +39,7 @@ const {
   mergeEvaluationResultSnapshot,
   patchHostState,
   toHostBootstrapMessage,
+  toOperationStatus,
 } = require(workbenchDataModulePath);
 const {
   createEmptyTrainerStreamingState,
@@ -3326,6 +3328,43 @@ test('failClosedWorkbenchAfterWorkspaceTransfer re-scopes leftover A when restor
   assert.equal(patch.memory.workspace.projectContext, 'Keep the leftover A project context');
 });
 
+test('changing databases resets same-context learning state before loading an older backup', () => {
+  const state = createHostState();
+  state.bootstrap = leftoverAIdentityBootstrap();
+  state.bootstrap.workspaceTrainingState.skillProjection = {
+    workspaceId: 'workspace-a',
+    dimensions: { implementation: { state: 'assisted', score: 1, verifiedCount: 1 } },
+  };
+  state.bootstrap.memory.weakSpots = ['Only present in the newer database'];
+  const provider = state.bootstrap.providerConfig;
+  const admission = state.bootstrap.memory.workspace.trainerWorkspace;
+  const reset = resetWorkbenchAfterRuntimeDataChange(state, 'workspace-a');
+  assert.equal(reset.workspaceTrainingState.skillProjection, undefined);
+  assert.equal(reset.plan.id, '');
+  assert.deepEqual(reset.conversation, []);
+  assert.deepEqual(reset.resources, []);
+  assert.deepEqual(reset.memory.weakSpots, []);
+  assert.equal(reset.providerConfig, provider);
+  assert.equal(reset.memory.workspace.trainerWorkspace, admission);
+  assert.equal(reset.memory.workspace.workspaceId, 'workspace-a');
+
+  const current = { ...state.bootstrap, ...reset };
+  const restored = mergeMemorySummary(current, {
+    context_id: 'workspace-a',
+    memory: { workspace: { workspace_id: 'workspace-a' }, resources: [], due_reviews: [] },
+  });
+  assert.equal(restored.workspaceTrainingState?.skillProjection, undefined);
+  assert.equal(restored.plan.id, '');
+  const live = mergeMemorySummary({ ...current, ...restored }, {
+    memory: { workspace: { workspace_id: 'workspace-a', training_skill_projection: {
+      workspace_id: 'workspace-a', dimensions: {
+        implementation: { state: 'assisted', score: 1, verified_count: 1 },
+      },
+    } } },
+  });
+  assert.equal(live.workspaceTrainingState.skillProjection.dimensions.implementation.verifiedCount, 1);
+});
+
 test('failClosedWorkbenchAfterWorkspaceTransfer drops leftover A identity on leave or rollback to empty', () => {
   const patch = failClosedWorkbenchAfterWorkspaceTransfer(leftoverAIdentityBootstrap(), undefined);
 
@@ -6451,6 +6490,146 @@ test('mergeMemorySummarySnapshot omit plan keeps live plan and selected_card_id 
   assert.notEqual(patch.planRuntimeStatus?.recovered, true);
 });
 
+test('workspace recovery retains acknowledged imported resources while dropping leftover library chrome', () => {
+  const ws = 'workspace-import-reload';
+  const current = createBootstrap();
+  current.memory.workspace = { ...current.memory.workspace, workspaceId: ws };
+  current.workspaceTrainingState = { ...current.workspaceTrainingState, workspaceId: ws };
+  const patch = mergeMemorySummarySnapshot(current, {
+    context_id: ws,
+    plan: null,
+    plan_runtime_status: { recovered: true, current_step: '' },
+    memory: {
+      workspace: { workspace_id: ws },
+      resources: [
+        {
+          id: 'resource-imported', title: 'Uploaded notes', kind: 'markdown',
+          status: 'ready', source: '/tmp/notes.md',
+          sandbox_path: '/trainer/sandboxes/workspace-import-reload/notes.md',
+          index_status: 'indexed',
+        },
+        { id: 'resource-leftover', title: 'Stale chrome', kind: 'markdown', status: 'ready' },
+      ],
+    },
+  }, ws);
+
+  assert.equal(patch.planRuntimeStatus.recovered, true);
+  assert.deepEqual(patch.resources.map((resource) => resource.id), ['resource-imported']);
+  assert.equal(patch.resources[0].sandboxPath, '/trainer/sandboxes/workspace-import-reload/notes.md');
+});
+
+test('provider operation acknowledgement omits nullable transport metadata', () => {
+  const message = toOperationStatus(true, 'Connected', {
+    ok: true, errorCategory: null, statusCode: null, retryable: null,
+  });
+  assert.deepEqual(message.payload.providerTest, { ok: true });
+  const failed = toOperationStatus(false, 'Unavailable', {
+    ok: false, errorCategory: 'model_not_found', statusCode: 404, retryable: true,
+  });
+  assert.deepEqual(failed.payload.providerTest, {
+    ok: false, errorCategory: 'model_not_found', statusCode: 404, retryable: true,
+  });
+});
+
+test('acknowledged workspace recovery retains saved custom skills and coaching settings', () => {
+  const ws = 'workspace-skills-reload';
+  const current = createBootstrap();
+  current.memory.workspace = { ...current.memory.workspace, workspaceId: ws };
+  const skill = { id: 'custom-check', trigger: '$py-check', title: 'Python check',
+    detail: 'Check one issue', prompt: 'Check the submitted code', keywords: [], createdAt: undefined };
+  const patch = mergeSessionStartSnapshot(current, {
+    context_id: ws, plan: null, session_history_restored: true,
+    plan_runtime_status: { recovered: true, current_step: '' },
+    memory: { workspace: { workspace_id: ws, coach_defaults: {
+      memory_scope: 'project', working_set_mode: 'focused', custom_skills: [skill],
+    } } },
+  }, ws);
+  assert.equal(patch.sessionHistoryRestored, true);
+  assert.equal(patch.memory.workspace.coachDefaults.workingSetMode, 'focused');
+  assert.deepEqual(patch.memory.workspace.coachDefaults.customSkills, [skill]);
+  const next = mergeMemorySummarySnapshot({ ...current, ...patch }, {
+    context_id: ws, plan: null, plan_runtime_status: { recovered: true, current_step: '' },
+    memory: { workspace: { workspace_id: ws, coach_defaults: {
+      memory_scope: 'project', working_set_mode: 'focused', custom_skills: [skill],
+    } } },
+  }, ws);
+  assert.deepEqual(next.memory.workspace.coachDefaults.customSkills, [skill]);
+});
+
+test('workspace recovery paints explicitly restored session history without a live plan', () => {
+  const ws = 'workspace-history-reload';
+  const current = createBootstrap();
+  current.memory.workspace = { ...current.memory.workspace, workspaceId: ws };
+  current.workspaceTrainingState = { ...current.workspaceTrainingState, workspaceId: ws };
+  const payload = {
+    context_id: ws, sessionHistoryRestored: true, plan: null,
+    plan_runtime_status: { recovered: true, current_step: '' },
+    messages: [{ id: 'recorded-user', role: 'user', content: 'Keep my conversation',
+      timestamp: '2026-10-02T00:00:00Z' }],
+    memory: { workspace: { workspace_id: ws } },
+  };
+  const restored = mergeMemorySummarySnapshot(current, payload, ws);
+  assert.equal(restored.conversation[0].body, 'Keep my conversation');
+  assert.equal(restored.sessionHistoryRestored, true);
+  const continued = mergeMemorySummarySnapshot({ ...current, ...restored }, {
+    context_id: ws, memory: { workspace: { workspace_id: ws } },
+  }, ws);
+  assert.equal(continued.sessionHistoryRestored, true);
+  const otherWorkspace = mergeMemorySummarySnapshot({ ...current, ...restored }, {
+    context_id: 'workspace-other', messages: [],
+    memory: { workspace: { workspace_id: 'workspace-other' } },
+  }, 'workspace-other');
+  assert.equal(otherWorkspace.sessionHistoryRestored, false);
+  assert.deepEqual(otherWorkspace.conversation, []);
+  const stale = mergeMemorySummarySnapshot(current, { ...payload, sessionHistoryRestored: false }, ws);
+  assert.deepEqual(stale.conversation, []);
+});
+
+test('independent evidence survives host serialization and stays scoped to its workspace', () => {
+  const current = createBootstrap();
+  current.memory.workspace = { ...current.memory.workspace, workspaceId: 'evidence-a' };
+  const payload = JSON.parse(JSON.stringify({ context_id: 'evidence-a', memory: {
+    workspace: { workspace_id: 'evidence-a' }, evidence_queue: {
+      pending: [], deferred: [], adopted: [], rejected: [], history: [],
+      unscoped: [
+        { id: 'independent-a', workspace_id: 'evidence-a', summary: 'Independent check', concepts: [], outcome: 'pass' },
+        { id: 'independent-b', workspace_id: 'evidence-b', summary: 'Other workspace', concepts: [], outcome: 'pass' },
+      ],
+    },
+  } }));
+  const patch = mergeMemorySummary(current, payload, 'evidence-a');
+  assert.deepEqual(patch.memory.evidenceQueue.unscoped.map((item) => item.id), ['independent-a']);
+  assert.equal(patch.memory.evidenceQueue.totalCount, 1);
+  assert.deepEqual(patch.memory.evidenceQueue.pending, []);
+  const cleared = mergeMemorySummary({ ...current, ...patch }, {
+    context_id: 'evidence-a', memory: { workspace: { workspace_id: 'evidence-a' },
+      evidence_queue: { pending: [], deferred: [], adopted: [], rejected: [], history: [], unscoped: [] } },
+  }, 'evidence-a');
+  assert.deepEqual(cleared.memory.evidenceQueue.unscoped, []);
+});
+
+test('recovered memory preserves live sandbox authority evidence while removing stale plan chrome', () => {
+  const ws = 'workspace-authority-reload';
+  const current = createBootstrap();
+  current.memory.workspace = { ...current.memory.workspace, workspaceId: ws };
+  current.workspaceTrainingState = { ...current.workspaceTrainingState, workspaceId: ws };
+  current.memory.sandboxState = {
+    sandboxRootPath: '/trainer/sandboxes/workspace-authority-reload',
+    nodes: [], totalSize: 0, lastModified: '',
+    authority: { authorityScope: 'trainer_sandbox', resourceWriteAllowed: true,
+      resourceWriteEvidence: { operation: 'write', scope: 'trainer_sandbox', allowed: true } },
+  };
+  const patch = mergeMemorySummarySnapshot(current, {
+    context_id: ws, plan: null,
+    plan_runtime_status: { recovered: true, current_step: '' },
+    memory: { workspace: { workspace_id: ws } },
+  }, ws);
+  assert.equal(patch.memory.sandboxState.authority.resourceWriteAllowed, true);
+  assert.equal(patch.memory.sandboxState.authority.resourceWriteEvidence.allowed, true);
+  assert.equal(patch.plan.id, '');
+  assert.deepEqual(patch.plan.stages, []);
+});
+
 test('mergeMemorySummarySnapshot explicit plan:null clears live plan with recovered overlay', () => {
   const ws = 'workspace-null-vs-omit';
   const live = createBootstrap();
@@ -6504,4 +6683,113 @@ test('mergeMemorySummarySnapshot explicit plan:null clears live plan with recove
   assert.equal(patch.planRuntimeStatus?.recovered, true);
   assert.equal(patch.workspaceTrainingState?.selectedCardId, undefined);
   assert.notEqual(patch.workspaceTrainingState?.selectedCardId, 'card-leftover-null');
+});
+
+test('independently selected training survives a recovered workspace without a plan', () => {
+  const current = createDefaultBootstrapData({ trusted: true, workspaceFolder: 'workspace-training' });
+  const card = { card_id: 'live-resource-flash', card_type: 'flash', title: 'Tuple references',
+    question: 'Can a list inside a tuple still change?', status: 'active' };
+  const snapshot = {
+    context_id: 'workspace-training', plan: null,
+    plan_runtime_status: { recovered: true, current_step: '' },
+    memory: {
+      workspace: { workspace_id: 'workspace-training', selected_card_id: card.card_id,
+        selected_card_status: 'active', live_training_selection: {
+          workspace_id: 'workspace-training', card_id: card.card_id, selected_at: '2026-10-02T03:00:00Z',
+        } },
+      training_cards: [card],
+      active_training_card_routing: { selected_card_id: card.card_id, selected_card: card },
+    },
+  };
+  const patch = mergeMemorySummarySnapshot(current, snapshot);
+  assert.equal(patch.workspaceTrainingState.selectedCardId, card.card_id);
+  assert.equal(patch.workspaceTrainingState.selectedCardTitle, card.title);
+  assert.equal(patch.workspaceTrainingState.activeTrainingCardRouting.selectedCard.question, card.question);
+  snapshot.memory.workspace.live_training_selection.workspace_id = 'other-workspace';
+  const mismatched = mergeMemorySummarySnapshot(current, snapshot);
+  assert.equal(mismatched.workspaceTrainingState.selectedCardId, undefined);
+});
+
+test('stage materials hydrate from both snapshot spellings and clear on plan/workspace changes', () => {
+  const current = createDefaultBootstrapData(createWorkspaceSnapshot(), createProvider(), createSidecarStatus());
+  current.plan.id = 'plan-materials';
+  current.memory.workspace = { ...current.memory.workspace, workspaceId: 'workspace-materials' };
+  current.stageMaterials = { stale: [] };
+  const materials = { 'stage-1': [{ id: 'mat-1', planStageId: 'stage-1', kind: 'code_examples',
+    title: 'Actual code', summary: 'A document', content: 'if True:\n    print(1)', generationSource: 'model' }] };
+  for (const field of ['stageMaterials', 'stage_materials']) {
+    const snapshot = { context_id: 'workspace-materials', plan: { id: 'plan-materials', workspace_id: 'workspace-materials' }, [field]: materials };
+    assert.deepEqual(mergeMemorySummary(current, snapshot).stageMaterials['stage-1'][0].content, 'if True:\n    print(1)');
+    assert.deepEqual(mergeSessionMessage(current, { snapshot }, 'Continue').patch.stageMaterials, mergeMemorySummary(current, snapshot).stageMaterials);
+  }
+  assert.deepEqual(mergeMemorySummary(current, { plan: null }).stageMaterials, {});
+  assert.deepEqual(mergeMemorySummary(current, { plan: { id: 'replacement' } }).stageMaterials, {});
+  assert.deepEqual(mergeMemorySummary(current, { context_id: 'other-workspace' }).stageMaterials, {});
+  assert.deepEqual(mergeMemorySummary(current, { context_id: 'other-workspace', stageMaterials: materials }).stageMaterials['stage-1'][0].content, 'if True:\n    print(1)');
+});
+
+test('new selected card never inherits another card completed handoff or proof', () => {
+  const current = createBootstrap();
+  const workspaceId = 'workspace-new-card-after-return';
+  current.memory.workspace = { ...current.memory.workspace, workspaceId };
+  current.workspaceTrainingState = { workspaceId, selectedCardId: 'card-old',
+    latestTrainingHandoff: { cardId: 'card-old', handoffId: 'handoff-old', learningPhase: 'return', handoffStatus: 'verified' },
+    latestLearningVerifiedResult: 'Old file passed', latestTrainingNextHop: { status: 'return_required' } };
+  const oldHandoff = { workspace_id: workspaceId, card_id: 'card-old', handoff_id: 'handoff-old',
+    learning_phase: 'return', handoff_status: 'verified', status: 'completed' };
+  const memory = { workspace: { workspace_id: workspaceId, selected_card_id: 'card-new',
+    selected_card_type: 'practice', selected_card_status: 'active', selected_card_title: 'Old title',
+    live_training_selection: { workspace_id: workspaceId, card_id: 'card-new', selected_at: '2026-10-02T05:15:00Z' },
+    latest_training_handoff: oldHandoff, latest_training_submode: 'review',
+    latest_training_next_hop: { workspace_id: workspaceId, selected_card_id: 'card-new', status: 'return_required' },
+    latest_learning_verified_result: 'Old file passed', latest_learning_followup: 'Return old proof' },
+    review_artifact: { id: 'recall-old', status: 'resolved', verified_result: 'Old closed-book recall' },
+    training_card_candidates: [{ card_id: 'card-new', card_type: 'practice', title: 'New hash boundary practice', status: 'active' }],
+  };
+  const patch = mergeMemorySummary(current, { context_id: workspaceId, memory });
+  const training = patch.workspaceTrainingState;
+  assert.equal(training.selectedCardId, 'card-new');
+  assert.equal(training.selectedCardTitle, 'New hash boundary practice');
+  assert.equal(training.latestTrainingSubmode, 'practice');
+  assert.equal(training.latestTrainingHandoff, undefined);
+  assert.equal(training.latestTrainingNextHop, undefined);
+  assert.equal(training.latestLearningVerifiedResult, undefined);
+  assert.equal(training.latestLearningFollowup, undefined);
+  assert.equal(training.reviewArtifact.id, 'recall-old');
+  assert.equal(training.reviewArtifact.verifiedResult, 'Old closed-book recall');
+  assert.equal(oldHandoff.card_id, 'card-old');
+  assert.equal(oldHandoff.handoff_status, 'verified');
+
+  // An omitted handoff in a partial patch cannot revive the previous card either.
+  delete memory.workspace.latest_training_handoff;
+  delete memory.workspace.latest_training_next_hop;
+  delete memory.workspace.latest_learning_verified_result;
+  delete memory.workspace.latest_learning_followup;
+  const partial = mergeMemorySummary(current, { context_id: workspaceId, memory }).workspaceTrainingState;
+  assert.equal(partial.latestTrainingHandoff, undefined);
+  assert.equal(partial.latestTrainingNextHop, undefined);
+  assert.equal(partial.latestLearningVerifiedResult, undefined);
+
+  // Once new card verification arrives, its own handoff remains actionable.
+  memory.workspace.latest_training_handoff = { ...oldHandoff, card_id: 'card-new', handoff_id: 'handoff-new',
+    learning_phase: 'verify', handoff_status: 'needs_reflection' };
+  memory.workspace.latest_learning_verified_result = 'New hash checks passed';
+  const verified = mergeMemorySummary(current, { context_id: workspaceId, memory }).workspaceTrainingState;
+  assert.equal(verified.latestTrainingHandoff.cardId, 'card-new');
+  assert.equal(verified.latestTrainingHandoff.handoffStatus, 'needs_reflection');
+  assert.equal(verified.latestLearningVerifiedResult, 'New hash checks passed');
+  assert.equal(verified.reviewArtifact.id, 'recall-old');
+
+  // A live card's own blocker/title survive a restored formal-plan identity.
+  memory.workspace.latest_plan_runtime = { recovered: true, workspace_id: workspaceId,
+    plan_id: current.plan.id, current_step: 'A separate formal plan instruction' };
+  memory.workspace.latest_training_handoff = { ...memory.workspace.latest_training_handoff,
+    handoff_status: 'needs_revision', blocked_by: 'Missing executable hash boundary' };
+  memory.workspace.latest_learning_blocker = 'Missing executable hash boundary';
+  memory.workspace.selected_card_title = 'A separate formal plan instruction';
+  const blocked = mergeMemorySummary(current, { context_id: workspaceId, memory }).workspaceTrainingState;
+  assert.equal(blocked.selectedCardTitle, 'New hash boundary practice');
+  assert.equal(blocked.latestLearningBlocker, 'Missing executable hash boundary');
+  assert.equal(blocked.latestTrainingHandoff.blockedBy, 'Missing executable hash boundary');
+
 });

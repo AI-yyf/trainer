@@ -17,7 +17,7 @@ import type {
   ResourceRecordView,
 } from '../core/types';
 import type { ManagedDataFolderChangeResult } from '../core/sidecarProcessManager';
-import { mergeMemorySummarySnapshot, mergeResourceRecords } from '../core/workbenchData';
+import { mergeMemorySummarySnapshot, mergeResourceRecords, resetWorkbenchAfterRuntimeDataChange } from '../core/workbenchData';
 import { rehydrateWorkbenchRuntime, trainerSessionBlockReason } from '../core/runtimeRehydration';
 import { getRuntimeWorkspaceId, withWorkspaceQuery } from './workspaceContext';
 import { basenameFs, looksLikeWindowsAbsolutePath } from '../core/workspaceRoots';
@@ -1090,7 +1090,10 @@ export async function resetManagedDataFolderCommand(
   }
 
   const workspaceFolder = context.getHostState().workspace.workspaceFolder;
-  const change = await context.sidecarManager.resetManagedDataFolder(workspaceFolder);
+  const change = await context.sidecarManager.resetManagedDataFolder(workspaceFolder, {
+    allowExistingTarget: true,
+    copyExistingData: false,
+  });
   return applyManagedDataFolderChange(context, change);
 }
 
@@ -1229,7 +1232,25 @@ export async function previewResourceCommand(
     };
   }
 
-  const sandboxRoot = resolveSandboxRootPath(context);
+  let sandboxRoot = resolveSandboxRootPath(context);
+  if (!sandboxRoot) {
+    // A restored session or newly imported resource may arrive before the
+    // sandbox browser has been opened. Obtain the authoritative root before
+    // checking containment; the resource path itself is never authority.
+    try {
+      const refreshed = await refreshSandboxCommand(context);
+      if (!refreshed.ok) {
+        return refreshed;
+      }
+      sandboxRoot = asString(asRecord(refreshed.data)?.sandboxRootPath) ??
+        asString(asRecord(refreshed.data)?.rootPath) ?? resolveSandboxRootPath(context);
+    } catch (error) {
+      return {
+        ok: false,
+        message: `Unable to load the governed sandbox for preview: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
   if (!sandboxRoot || !isPathWithinRoot(previewPath, sandboxRoot)) {
     return { ok: false, message: 'The requested preview path is outside the governed Trainer sandbox.' };
   }
@@ -1714,12 +1735,18 @@ async function uploadLocalFiles(
       : undefined;
     let upload: unknown;
     try {
+      // These paths come from the native file/folder picker. Import their
+      // bytes through the local host so the sidecar never needs broader
+      // filesystem access (including when the current project is remote).
+      const content = await fs.readFile(filePath);
       upload = await context.sidecarClient.postJson<unknown>(port, '/resource/upload', {
         session_id: context.getSessionId(),
         workspace_id: workspaceId,
         kind: detectResourceKind(filePath),
         name: basenameFs(filePath),
         source: filePath,
+        content: content.toString('base64'),
+        content_encoding: 'base64',
         tags: [],
         ...(collectionPath
           ? {
@@ -2729,6 +2756,9 @@ async function applyManagedDataFolderChange(
   }
 
   await context.setSessionId(undefined);
+  await context.patchWorkbenchData(
+    resetWorkbenchAfterRuntimeDataChange(context.getHostState(), getRuntimeWorkspaceId(context)),
+  );
   const status = await context.sidecarManager.restart();
   if (status.lifecycle === 'ready') {
     await rehydrateWorkbenchRuntime(context, {

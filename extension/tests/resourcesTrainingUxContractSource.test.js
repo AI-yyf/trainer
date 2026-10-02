@@ -97,8 +97,8 @@ test('training defaults to a five-stage single-card loop with one visible, state
   assert.doesNotMatch(cardOnly, /training-loop-rail--card-only/);
   assert.match(source, /const order: TrainingLoopStepKey\[\] = \["learn", "try", "verify", "reflect", "return"\];/);
   // Phase-C: the five-step loop renders on the card-only card.
-  assert.match(cardOnly, /trainingLoopSteps\.map/);
-  assert.match(cardOnly, /data-training-loop-step=\{step\.key\}/);
+  assert.doesNotMatch(cardOnly, /trainingLoopSteps\.map/);
+  assert.match(cardOnly, /data-training-card-footer="true"/);
   assert.match(cardOnly, /data-view-primary=""/);
   assert.match(cardOnly, /training-current__done/);
   assert.doesNotMatch(cardOnly, /flashProofSurface|practiceProofSurface/);

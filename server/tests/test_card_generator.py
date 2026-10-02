@@ -876,6 +876,58 @@ class TestRequestResponseModels(unittest.TestCase):
 # LLM integration tests — mock ProviderService.chat_completion
 # ---------------------------------------------------------------------------
 
+class TestCurrentIdeFileGrounding(unittest.TestCase):
+    def test_latest_code_selection_and_diagnostics_reach_model_as_source_data(self) -> None:
+        context = _ctx(
+            current_file_path="/workspace/.tmp-native-training/list_pairs.py",
+            current_file_language_id="python",
+            current_file_content="def test_nested_mutability():\n    assert [1, 2, 4] == [1, 2, 4]\n",
+            current_file_selection="assert [1, 2, 4] == [1, 2, 4]",
+            current_file_selection_range="2:5-2:38",
+            current_file_diagnostics=["No active diagnostics"],
+        )
+        messages = CardGenerationService()._llm_messages(context, "conversation_gap", "practice")
+        snapshot = json.loads(messages[1]["content"].split("(source data):\n", 1)[1])
+        self.assertEqual(snapshot["code"], context.current_file_content)
+        self.assertEqual(snapshot["selection"], context.current_file_selection)
+        self.assertEqual(snapshot["path"], context.current_file_path)
+        self.assertEqual(snapshot["diagnostics"], context.current_file_diagnostics)
+        self.assertFalse(snapshot["code_truncated"])
+        self.assertIn("not guesses from its filename", messages[0]["content"])
+
+    def test_large_file_snapshot_is_bounded_and_marks_truncation(self) -> None:
+        context = _ctx(current_file_path="/workspace/large.py", current_file_content="x" * 13000)
+        messages = CardGenerationService()._llm_messages(context, "conversation_gap", "practice")
+        snapshot = json.loads(messages[1]["content"].split("(source data):\n", 1)[1])
+        self.assertEqual(len(snapshot["code"]), 12000)
+        self.assertTrue(snapshot["code_truncated"])
+
+    def test_model_basename_and_missing_target_use_exact_host_file(self) -> None:
+        context = _ctx(
+            current_file_path="/workspace/nested/list_pairs.py", current_file_content="pair = ([1, 2], 3)",
+        )
+        for targets in (["list_pairs.py"], []):
+            with self.subTest(targets=targets):
+                card = CardGenerationService()._finalize_card(
+                    TrainingCardCandidateSnapshot(card_type="practice", files_to_touch=targets),
+                    "conversation_gap", context,
+                )
+                self.assertEqual(card.files_to_touch, [context.current_file_path])
+
+    def test_other_file_same_basename_is_not_rebound_and_flash_has_no_file_target(self) -> None:
+        context = _ctx(current_file_path="/workspace/nested/sample.py", current_file_content="x = 1")
+        service = CardGenerationService()
+        card = service._finalize_card(
+            TrainingCardCandidateSnapshot(card_type="practice", files_to_touch=["other/sample.py"]),
+            "conversation_gap", context,
+        )
+        self.assertEqual(card.files_to_touch, ["other/sample.py"])
+        flash = service._finalize_card(
+            TrainingCardCandidateSnapshot(card_type="flash"), "conversation_gap", context,
+        )
+        self.assertEqual(flash.files_to_touch, [])
+
+
 class _MockProviderService:
     """Minimal mock that returns a canned JSON string from chat_completion."""
 
@@ -899,6 +951,7 @@ class _RecordingMockProviderService(_MockProviderService):
     def __init__(self, response_json: dict) -> None:
         super().__init__(response_json)
         self.calls = 0
+        self.messages = []
 
     async def chat_completion(
         self,
@@ -908,6 +961,7 @@ class _RecordingMockProviderService(_MockProviderService):
         max_tokens: int = 1024,
     ) -> str:
         self.calls += 1
+        self.messages = messages
         return await super().chat_completion(messages, model, temperature, max_tokens)
 
 
@@ -1319,8 +1373,12 @@ class TestGuidedScenarioFactGate(unittest.TestCase):
         self.assertNotIn("do-not-leak-this-secret", rendered)
         self.assertNotIn("const internalToken", rendered)
 
-    def test_resource_knowledge_pack_uses_derived_evidence_before_llm(self) -> None:
-        provider = _RecordingMockProviderService(_complete_llm_response())
+    def test_resource_knowledge_teaches_content_using_only_derived_evidence(self) -> None:
+        response = {**_complete_llm_response(),
+                    "title": "HTTPX timeout boundaries", "focus_area": "HTTPX timeouts",
+                    "target_skill": "Connect versus read timeout",
+                    "question": "How do connect and read timeout limits differ?"}
+        provider = _RecordingMockProviderService(response)
         card = CardGenerationService(provider_service=provider).generate_card(
             "resource_knowledge",
             _ctx(
@@ -1331,16 +1389,16 @@ class TestGuidedScenarioFactGate(unittest.TestCase):
                 resource_trust_score=0.95,
                 resource_knowledge_evidence=_resource_evidence("resource-httpx-timeouts"),
                 card_type="practice",
-                response_language="zh-CN",
+                response_language="en-US",
             ),
         )
 
         self.assertEqual(card.scenario_pack, "resource_knowledge")
         self.assertEqual(card.status, "candidate")
         self.assertEqual(card.created_from, "resource")
-        self.assertTrue(_contains_chinese(card.title))
-        self.assertIn("资料 ID：resource-httpx-timeouts", card.source_chain)
-        self.assertIn("可信状态：trusted", card.source_chain)
+        self.assertEqual(card.title, response["title"])
+        self.assertIn("Resource ID: resource-httpx-timeouts", card.source_chain)
+        self.assertIn("Trust state: trusted", card.source_chain)
         self.assertNotIn("https://www.python-httpx.org/advanced/timeouts/", " ".join(card.source_chain))
         rendered = repr(card.model_dump())
         self.assertIn("fragment-httpx-timeouts", " ".join(card.source_chain))
@@ -1350,7 +1408,11 @@ class TestGuidedScenarioFactGate(unittest.TestCase):
         )
         self.assertNotIn("https://www.python-httpx.org/advanced/timeouts/", rendered)
         self.assertNotIn("client-selected focus", rendered)
-        self.assertEqual(provider.calls, 0)
+        prompt = provider.messages[0]["content"]
+        self.assertIn("HTTPX timeout behavior distinguishes connect and read limits.", prompt)
+        self.assertNotIn("client-selected focus", prompt)
+        self.assertNotIn("https://www.python-httpx.org/advanced/timeouts/", prompt)
+        self.assertEqual(provider.calls, 1)
 
     def test_resource_knowledge_pack_needs_primer_without_derived_evidence(self) -> None:
         provider = _RecordingMockProviderService(_complete_llm_response())
@@ -1575,9 +1637,9 @@ class TestLLMPlanRequirement(unittest.TestCase):
 
 
 class TestGovernedResourceKnowledge(unittest.TestCase):
-    """resource_knowledge remains deterministic and evidence-gated even with a provider."""
+    """Verified resource content can be taught; missing evidence still blocks model generation."""
 
-    def test_resource_flash_card_bypasses_a_successful_provider(self) -> None:
+    def test_resource_flash_card_uses_a_successful_provider_with_verified_content(self) -> None:
         provider = _RecordingMockProviderService(_flash_llm_response())
         card = CardGenerationService(provider_service=provider).generate_card(
             "resource_knowledge",
@@ -1597,7 +1659,9 @@ class TestGovernedResourceKnowledge(unittest.TestCase):
         self.assertTrue(card.question)
         self.assertTrue(card.expected_answer)
         self.assertTrue(card.hint_ladder)
-        self.assertEqual(provider.calls, 0)
+        self.assertEqual(card.question, _flash_llm_response()["question"])
+        self.assertIn("Decorator order changes which wrapper receives the call.", provider.messages[0]["content"])
+        self.assertEqual(provider.calls, 1)
 
     def test_resource_flash_without_evidence_stays_needs_primer(self) -> None:
         provider = _RecordingMockProviderService(_flash_llm_response())

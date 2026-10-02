@@ -119,7 +119,7 @@ test('buildTrainingCoachBridge includes explicit flash card identity in training
   assert.equal(bridge.trainingReturn?.returnMode, 'result');
 });
 
-test('composeTrainingCoachBridgeDraft keeps the coach return prompt compact and preserves summary lines', () => {
+test('composeTrainingCoachBridgeDraft sends the complete prompt without shortened sidebar summaries', () => {
   const draft = composeTrainingCoachBridgeDraft({
     title: 'Bring "response_model" back to coach',
     prompt:
@@ -133,7 +133,57 @@ test('composeTrainingCoachBridgeDraft keeps the coach return prompt compact and 
   });
 
   assert.match(draft, /Keep coaching around "response_model"/i);
-  assert.match(draft, /Verification result: The focused route test now passes\./i);
-  assert.match(draft, /Bring back: One verification output and one open question\./i);
-  assert.ok(draft.includes('\n\n- Verification result'));
+  assert.doesNotMatch(draft, /Verification result:|Bring back:|Bring "response_model"/);
+});
+
+
+test('card requirements alone never become a completed training result', () => {
+  const bridge = buildTrainingCoachBridge({
+    language: 'zh-CN', cardId: 'tuple-flash', cardType: 'flash', cardTitle: '元组引用',
+    successSignal: '解释列表可变、元组绑定不变。', returnWith: '带回运行结果。',
+  });
+  assert.equal(bridge.mode, 'continue_task');
+  assert.equal(bridge.trainingReturn, undefined);
+  assert.doesNotMatch(bridge.prompt, /已经完成|按要求带回的是/);
+});
+
+test('submitted answers return as submissions without claimed verification', () => {
+  const bridge = buildTrainingCoachBridge({
+    language: 'zh-CN', cardId: 'tuple-flash', cardType: 'flash', cardTitle: '元组引用',
+    successSignal: '解释列表可变、元组绑定不变。', returnWith: '带回运行结果。',
+    latestSubmittedResult: 'append 合法，替换元素会抛出 TypeError。',
+  });
+  assert.equal(bridge.mode, 'report_result');
+  assert.match(bridge.prompt, /我的提交是：\s+append 合法/);
+  assert.match(bridge.prompt, /这张卡要求带回的内容是：带回运行结果/);
+  assert.doesNotMatch(bridge.prompt, /已经完成|按要求带回的是/);
+  assert.equal(bridge.trainingReturn.summary, 'append 合法，替换元素会抛出 TypeError。');
+  assert.equal(bridge.trainingReturn.verifiedResult, undefined);
+});
+
+test('return drafts preserve multiline submitted code exactly once without claiming verification', () => {
+  const answer = '```python\ntry:\n    pair[1] = 9\nexcept TypeError:\n    print("expected")\n```';
+  const bridge = buildTrainingCoachBridge({
+    language: 'zh-CN', cardTitle: '元组引用', latestSubmittedResult: answer,
+  });
+  const draft = composeTrainingCoachBridgeDraft(bridge);
+  assert.ok(draft.includes(answer));
+  assert.equal(draft.split(answer).length - 1, 1);
+  assert.doesNotMatch(draft, /验证结果：|已经完成|coach-only/);
+});
+
+test('verified returns also carry the complete submission and reflection', () => {
+  const answer = '```python\nassert pair[0] == [1, 2, 4]\n```';
+  const reflection = '位置赋值触发 TypeError，append 修改内层 list。\nbefore: ([1, 2], 3)\nafter: ([1, 2, 4], 3)';
+  for (const language of ['zh-CN', 'en-US']) {
+    const draft = composeTrainingCoachBridgeDraft(buildTrainingCoachBridge({
+      language, cardId: 'tuple-boundary', cardType: 'practice', cardTitle: 'Tuple boundary',
+      latestVerifiedResult: 'Executable checks passed: ruff, pyright, pytest.',
+      latestSubmittedResult: answer, reflection, reviewStatus: 'resolved',
+    }));
+    assert.ok(draft.includes(answer));
+    assert.ok(draft.includes(reflection));
+    assert.equal(draft.split(reflection).length - 1, 1);
+    assert.match(draft, /Executable checks passed/);
+  }
 });

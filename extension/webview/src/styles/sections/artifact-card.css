@@ -79,6 +79,20 @@
   border-top: 1px solid var(--line);
 }
 
+.coach-artifact-card--compact {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.coach-artifact-card--compact .artifact-card__next-action {
+  margin: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .artifact-card__next-note {
   font-size: var(--trainer-font-2xs);
   color: var(--fg-muted);
@@ -87,4 +101,3 @@
 .artifact-card__action {
   margin-top: 8px;
 }
-

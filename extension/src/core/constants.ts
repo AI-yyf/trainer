@@ -92,6 +92,7 @@ export const COMMAND_IDS = {
   recordUserFeedback: trainerCommands.recordUserFeedback,
   refreshWorkspaceAuthority: trainerCommands.refreshWorkspaceAuthority,
   saveCoachSettings: trainerCommands.saveCoachSettings,
+  generateSkillDraft: trainerCommands.generateSkillDraft,
   grantMemoryShare: trainerCommands.grantMemoryShare,
   revokeMemoryShare: trainerCommands.revokeMemoryShare,
   evidenceEnqueue: trainerCommands.evidenceEnqueue,
@@ -170,10 +171,10 @@ export const SIDECAR_DEFAULTS = {
   // When the sidecar reported ready recently, skip re-probing before each
   // command and trust the cached status.
   healthCheckTtlMs: 10_000,
-  // The PyInstaller onedir binary can take several seconds on its very first
-  // macOS launch (Gatekeeper signature validation is silent and load-sensitive),
-  // so darwin gets a wider health window than the default 20s.
-  startupTimeoutMs: process.platform === 'darwin' ? 60_000 : 20_000,
+  // The first macOS launch after an update validates the bundled native
+  // libraries. This exceeded 60s during the native regression with concurrent
+  // builds/tests; keep the bounded startup window separate from fast probes.
+  startupTimeoutMs: process.platform === 'darwin' ? 120_000 : 20_000,
   requestTimeoutMs: 15_000,
   providerRequestTimeoutMs: 90_000,
   // A full coach turn runs the ReAct loop server-side; reasoning-first

@@ -123,7 +123,42 @@ def _looks_like_internal_coach_meta(text: str) -> bool:
 
 
 def _strip_internal_coach_meta(text: str) -> str:
+    # Prose cleanup must not rewrite code: indentation, empty lines and strings
+    # that happen to contain coach metadata are part of the runnable example.
     normalized_text = _visible_model_text(text)
+    segments: list[str] = []
+    prose: list[str] = []
+    code: list[str] = []
+    fence = ""
+    for line in normalized_text.splitlines(keepends=True):
+        match = re.match(r"^[ \t]*(`{3,}|~{3,})", line)
+        if fence:
+            code.append(line)
+            if (
+                match
+                and match.group(1)[0] == fence[0]
+                and len(match.group(1)) >= len(fence)
+                and not line[match.end():].strip()
+            ):
+                segments.append("".join(code).rstrip("\r\n"))
+                code = []
+                fence = ""
+        elif match:
+            if prose:
+                segments.append(_strip_internal_coach_prose("".join(prose)))
+                prose = []
+            fence = match.group(1)
+            code.append(line)
+        else:
+            prose.append(line)
+    if code:
+        segments.append("".join(code).rstrip("\r\n"))
+    if prose:
+        segments.append(_strip_internal_coach_prose("".join(prose)))
+    return "\n\n".join(segment for segment in segments if segment).strip()
+
+
+def _strip_internal_coach_prose(normalized_text: str) -> str:
     if not normalized_text.strip():
         return ""
 
@@ -189,6 +224,11 @@ def _agentic_practice_completion_guard(
     coach_context: dict[str, Any] | None,
     response_language: str | None,
 ) -> dict[str, str] | None:
+    # A formal-plan mutation may quote prior verified checks while outlining
+    # work still to do. It does not close a practice card, and must not have
+    # its successful plan-save reply replaced by a practice-verification gate.
+    if isinstance(coach_context, dict) and coach_context.get("formal_plan_mutation") is True:
+        return None
     if not _agentic_practice_verification_context_active(
         message=message,
         current_file=current_file,
@@ -199,6 +239,8 @@ def _agentic_practice_completion_guard(
         return None
     verification_result = _current_file_practice_verification_result(tool_events)
     if isinstance(verification_result, dict) and verification_result.get("passed") is True:
+        return None
+    if verification_result is None and isinstance(coach_context, dict) and coach_context.get("completed_training_return_feedback") is True:
         return None
 
     chinese = _prefers_chinese(response_language)
@@ -378,9 +420,9 @@ def _text_has_practice_verification_terms(text: str) -> bool:
             "training card",
             "hands-on",
             "acceptance",
-            "",
-            "",
-            "",
+            "练习",
+            "训练卡片",
+            "验收",
         )
     )
 

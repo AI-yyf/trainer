@@ -40,6 +40,8 @@ export interface ManagedDataFolderConfigureOptions {
    * an existing directory whose contents were not copied in this operation.
    */
   allowExistingTarget?: boolean;
+  /** Root switching selects a separate dataset; it must not copy the one being left. */
+  copyExistingData?: boolean;
 }
 
 export interface ManagedDataRootScope {
@@ -158,7 +160,9 @@ export class SidecarProcessManager implements vscode.Disposable {
 
     await this.stopForManagedDataTransfer();
     fs.mkdirSync(normalizedTargetPath, { recursive: true });
-    const migration = this.migrateManagedDataFolder(previous.effectivePath, normalizedTargetPath);
+    const migration = options.copyExistingData === false
+      ? 'not_needed'
+      : this.migrateManagedDataFolder(previous.effectivePath, normalizedTargetPath);
     if (migration === 'skipped_nested_target') {
       throw new Error('Trainer managed data folder cannot be nested inside its current data directory.');
     }
@@ -197,7 +201,9 @@ export class SidecarProcessManager implements vscode.Disposable {
 
     await this.stopForManagedDataTransfer();
     fs.mkdirSync(defaultPath, { recursive: true });
-    const migration = this.migrateManagedDataFolder(previous.effectivePath, defaultPath);
+    const migration = options.copyExistingData === false
+      ? 'not_needed'
+      : this.migrateManagedDataFolder(previous.effectivePath, defaultPath);
     if (migration === 'skipped_nested_target') {
       throw new Error('Trainer managed data folder cannot be nested inside its current data directory.');
     }

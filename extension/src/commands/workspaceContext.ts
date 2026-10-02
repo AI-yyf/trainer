@@ -82,7 +82,10 @@ export function getRuntimeWorkspaceContext(
   return {
     workspaceId: contextId ?? workspaceIdentity ?? DEFAULT_WORKSPACE_ID,
     canonicalProjectPath: admission?.canonicalProjectPath ?? remoteWorkspaceUri ?? sovereignWorkspacePath,
-    rootId: contextId ? admission?.rootId : undefined,
+    // The data container is selected before a project has been provisioned.
+    // Starting adoption in the unscoped database would strand its identity
+    // as soon as the newly managed context switches to root-scoped storage.
+    rootId: admission?.rootId,
     projectId: contextId ? admission?.projectId : undefined,
     contextId,
     legacyWorkspaceId,

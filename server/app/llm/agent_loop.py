@@ -299,6 +299,7 @@ class CoachAgentLoop:
                 else self.DEFAULT_FIRST_STEP_TIMEOUT_SECONDS
             )
         self.first_step_timeout = self._bounded_step_timeout(resolved_first_step_timeout)
+        self._formal_plan_commit_retries = 0
 
     # ---- non-streaming -----------------------------------------------------
 
@@ -372,6 +373,11 @@ class CoachAgentLoop:
             history.append(_assistant_message(assistant_text, tool_calls))
 
             if not tool_calls:
+                if assistant_text.strip() and self._continue_required_plan_save(history, steps):
+                    step.stop_reason = "formal_plan_save_pending"
+                    self._prepare_next_turn(history)
+                    index += 1
+                    continue
                 if not assistant_text.strip():
                     step.stop_reason = "empty_response"
                     summary, next_step = _build_empty_response_recovery(
@@ -436,6 +442,11 @@ class CoachAgentLoop:
                         tool_result=finalize_payload,
                     )
                 )
+                if self._continue_required_plan_save(history, steps, finalize_data):
+                    step.stop_reason = "formal_plan_save_pending"
+                    self._prepare_next_turn(history)
+                    index += 1
+                    continue
                 visible_reply = _visible_coach_finalize_reply(
                     finalize_data,
                     response_language=self.context.response_language,
@@ -618,6 +629,14 @@ class CoachAgentLoop:
             history.append(_assistant_message(assistant_text, tool_calls))
 
             if not tool_calls:
+                if assistant_text.strip() and self._continue_required_plan_save(history, streamed_steps):
+                    step = AgentStep(index=index, assistant_content=assistant_text,
+                                     stop_reason="formal_plan_save_pending")
+                    streamed_steps.append(step)
+                    previous_step = step
+                    self._prepare_next_turn(history)
+                    index += 1
+                    continue
                 if not assistant_text.strip():
                     summary, next_step = _build_empty_response_recovery(
                         context=self.context,
@@ -709,6 +728,13 @@ class CoachAgentLoop:
                         tool_result=finalize_payload,
                     )
                 )
+                if self._continue_required_plan_save(history, streamed_steps + [step], finalize_data):
+                    step.stop_reason = "formal_plan_save_pending"
+                    streamed_steps.append(step)
+                    previous_step = step
+                    self._prepare_next_turn(history)
+                    index += 1
+                    continue
                 visible_reply = _visible_coach_finalize_reply(
                     finalize_data,
                     response_language=self.context.response_language,
@@ -758,6 +784,42 @@ class CoachAgentLoop:
             index += 1
 
     # ---- helpers -----------------------------------------------------------
+
+    def _continue_required_plan_save(
+        self,
+        history: list[dict[str, Any]],
+        steps: list[AgentStep],
+        finalize: dict[str, Any] | None = None,
+    ) -> bool:
+        """Give an authorized, incomplete save one bounded model repair turn."""
+        if self._extra().get("formal_plan_mutation") is not True or self._formal_plan_commit_retries:
+            return False
+        save_tool = self.registry.get("save_formal_plan")
+        if save_tool is None or save_tool.schema_for(self.provider.protocol) not in self._tools_schema():
+            return False
+        if finalize and (finalize.get("blocker") or finalize.get("decision") == "blocked"):
+            return False
+        for step in steps:
+            for event in step.tool_results:
+                result = event.get("result")
+                if (event.get("name") == "save_formal_plan" and isinstance(result, dict)
+                        and result.get("ok") is True and result.get("committed") is True):
+                    return False
+        self._formal_plan_commit_retries += 1
+        history.append({
+            "role": "system",
+            "content": (
+                "The explicitly requested formal plan save is still pending. A text draft or "
+                "coach_finalize does not commit this turn. Re-read the latest learner request; "
+                "its corrections take priority over older plan, memory and verification summaries. "
+                "Preserve its plan identity, stage count, stage statuses and unexecuted work. "
+                "Call save_formal_plan with the plan you shaped, then inspect its result. "
+                "Do not invent test counts or claim a save before ok=true and committed=true. "
+                "If a concrete requirement prevents saving, use coach_finalize with "
+                "decision=blocked and a specific blocker. Do not retry indefinitely."
+            ),
+        })
+        return True
 
     def _tools_schema(self) -> list[dict[str, Any]]:
         extra = self.context.extra if isinstance(self.context.extra, dict) else {}

@@ -1789,6 +1789,7 @@ export function CoachTrainingView({
   recentFlashAttempts,
   flashPracticeBridge,
   workspaceTrainingState,
+  latestLearningBlocker,
   initialTrainingSubmode,
   onTrainingSubmodeChange,
   onRefreshTask,
@@ -2968,6 +2969,7 @@ export function CoachTrainingView({
           reviewMeta={reviewTruth?.meta}
           latestReviewActionSummary={reviewTruth?.latestAction}
           latestVerifiedResult={workspaceTrainingState?.latestLearningVerifiedResult}
+          latestLearningBlocker={latestLearningBlocker || workspaceTrainingState?.latestLearningBlocker}
           latestLearningFollowup={workspaceTrainingState?.latestLearningFollowup}
           latestReturnWith={resolvedHandoff.returnWith}
           latestSuccessSignal={resolvedHandoff.successSignal}

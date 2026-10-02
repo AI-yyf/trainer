@@ -153,7 +153,7 @@ test('share action copies the selected reply to the clipboard', () => {
   assert.match(appUiCopySource, /"en-US": "Coach reply copied to clipboard\."/);
 });
 
-test('message action pending state clears on stream or operation acknowledgements', () => {
+test('reply uploads wait for their own acknowledgement while other actions clear on status', () => {
   const source = fs.readFileSync(appPath, 'utf8');
   const dispatchStart = source.indexOf('const applyHostMessage = useCallback(');
   assert.ok(dispatchStart > -1, 'expected applyHostMessage');
@@ -161,7 +161,8 @@ test('message action pending state clears on stream or operation acknowledgement
 
   assert.match(dispatch, /message\.type === "operation\/status" \|\| message\.type === "stream\/start"/);
   assert.match(dispatch, /setPendingMessageAction\(null\)/);
-  assert.match(source, /setPendingMessageAction\(`\$\{message\.id\}:\$\{action\}`\)/);
+  assert.match(source, /pendingMessageActionRef\.current = `\$\{message\.id\}:\$\{action\}`/);
+  assert.match(dispatch, /!pendingMessageActionRef\.current\?\.endsWith\(":save-resource"\)/);
   assert.match(source, /pendingMessageActionTimeoutRef/);
 });
 

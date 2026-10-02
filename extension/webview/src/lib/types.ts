@@ -922,6 +922,7 @@ export interface MemorySnapshot {
     latestLearningFocusArea?: string;
     latest_learning_focus_area?: string;
     latestTransferState?: TransferSkillStateView;
+    liveTrainingSelection?: { workspaceId?: string; cardId?: string; selectedAt?: string };
     latestPlanRuntime?: {
       revision?: number;
       workspaceId?: string;
@@ -996,6 +997,7 @@ export interface EvidenceItemView {
   verificationSource?: string;
   timestamp?: string;
   targetPlanStageId?: string;
+  targetPlanStep?: string;
   adopted?: boolean;
   adoptedAt?: string | null;
   deferredAt?: string | null;
@@ -1010,6 +1012,7 @@ export interface EvidenceQueueView {
   adopted: EvidenceItemView[];
   rejected: EvidenceItemView[];
   history?: EvidenceItemView[];
+  unscoped?: EvidenceItemView[];
   totalCount: number;
 }
 
@@ -1061,6 +1064,9 @@ export interface TrainingBlockedCardCandidate {
 
 export interface TrainingHandoff {
   handoffId?: string;
+  cardId?: string;
+  reflection?: string;
+  reflectedAt?: string;
   learningPhase?: "learn" | "try" | "verify" | "reflect" | "return";
   candidateId?: string;
   candidateType?: TrainingConversationCandidateType;
@@ -1145,6 +1151,7 @@ export interface TrainingCardCandidate {
   choices?: string[];
   answerMode?: string;
   expectedAnswer?: string;
+  learnerAnswer?: string;
   focusArea?: string;
   targetSkill?: string;
   scenarioPack?: string;
@@ -1161,6 +1168,7 @@ export interface TrainingCardCandidate {
   filesToTouch?: string[];
   learnerDeliverables?: string[];
   verificationSteps?: string[];
+  acceptanceCriteria?: string[];
   successSignal?: string;
   expectedSymbols?: string[];
   returnWith?: string;
@@ -1186,6 +1194,7 @@ export interface ActiveTrainingCardRouting {
     choices?: string[];
     answerMode?: string;
     expectedAnswer?: string;
+    learnerAnswer?: string;
     focusArea?: string;
     targetSkill?: string;
     scenarioPack?: string;
@@ -1202,6 +1211,7 @@ export interface ActiveTrainingCardRouting {
     filesToTouch?: string[];
     learnerDeliverables?: string[];
     verificationSteps?: string[];
+    acceptanceCriteria?: string[];
     successSignal?: string;
     expectedSymbols?: string[];
     returnWith?: string;
@@ -1700,6 +1710,7 @@ export interface StreamAgentStepEvent {
 }
 
 export interface StageMaterialItem {
+  generationSource?: "model" | "template";
   id: string;
   planStageId: string;
   kind: 'study_guide' | 'cheat_sheet' | 'exercise_set' | 'code_examples' | string;
@@ -1715,6 +1726,10 @@ export interface ConnectionStatus {
 }
 
 export interface BootstrapData {
+  /** Host generation changes when the runtime database is replaced or switched. */
+  runtimeDataGeneration?: string;
+  /** History confirmed for the current workspace by a server session snapshot. */
+  sessionHistoryRestored?: boolean;
   workspaceName: string;
   sessionLabel: string;
   /** Remote-window identity for the webview (Remote-SSH/WSL/Tunnel/container). */
@@ -2046,6 +2061,8 @@ export interface HostProviderTestSummary {
 }
 
 export type HostMessage =
+  | { type: "stageMaterials/settled"; payload: { workspaceId: string; planId: string; stageId: string } }
+  | { type: "skills/draftResult"; payload: { requestId: string; ok: boolean; draft?: { trigger: string; title: string; detail: string; prompt: string; source: "model" | "template" }; message?: string } }
   | { type: "bootstrap"; payload: BootstrapData }
   | { type: "state/patch"; payload: Partial<BootstrapData> }
   | {

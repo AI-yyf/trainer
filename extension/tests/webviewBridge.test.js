@@ -458,6 +458,32 @@ test('visibility recovery rehydrates empty html and syncs state again', async ()
   assert.ok(outputLines.some((line) => /\[webview\] visible -> rehydrating state/.test(line)));
 });
 
+test('runtime database changes send a replacing bootstrap while ordinary updates stay incremental', async () => {
+  const extensionPath = await createExtensionFixtureDir();
+  const harness = createViewHarness();
+  const { WorkbenchSidebarController } = loadWithVscodeMock(bridgeModulePath, createVscodeMock());
+  let state = createBootstrapState();
+  state.bootstrap.runtimeDataGeneration = 'newer-database';
+  const controller = new WorkbenchSidebarController(
+    { extensionPath, extensionUri: { fsPath: extensionPath } },
+    { async execute() { return { ok: true, message: 'noop' }; } },
+    () => state,
+    { appendLine() {} },
+  );
+  await controller.resolveWebviewView(harness.view);
+  await controller.syncState();
+  harness.postedMessages.length = 0;
+  state = patchHostState(state, { runtimeDataGeneration: 'older-backup', conversation: [] });
+  await controller.syncState();
+  assert.equal(harness.postedMessages.length, 1);
+  assert.equal(harness.postedMessages[0].type, 'bootstrap');
+  assert.equal(harness.postedMessages[0].payload.runtimeDataGeneration, 'older-backup');
+  harness.postedMessages.length = 0;
+  state = patchHostState(state, { sessionLabel: 'Restored session' });
+  await controller.syncState();
+  assert.equal(harness.postedMessages[0].type, 'state/patch');
+});
+
 test('visibility rehydration keeps rendered html when the lifecycle is already healthy', async () => {
   const extensionPath = await createExtensionFixtureDir();
   const harness = createViewHarness();

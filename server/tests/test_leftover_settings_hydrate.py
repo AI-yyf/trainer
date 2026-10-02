@@ -310,7 +310,10 @@ def test_session_start_omits_leftover_settings_and_sandbox_preview_when_recovere
             request_id="leftover-conversation-hydrate-empty",
         )
         resumed = _resume_session(client, workspace_a)
-        assert leftover_conversation not in str(resumed.get("messages") or [])
+        # Durable same-workspace session history survives without a formal plan.
+        # Memory-only leftovers and all cross-workspace content remain omitted.
+        assert resumed.get("sessionHistoryRestored") is True
+        assert [item["id"] for item in resumed.get("messages") or []] == ["msg-leftover-a"]
         resumed_thread = ((resumed.get("memory") or {}).get("active_thread") or {})
         assert leftover_conversation_focus not in str(resumed_thread)
         resumed_workspace = ((resumed.get("memory") or {}).get("workspace") or {})

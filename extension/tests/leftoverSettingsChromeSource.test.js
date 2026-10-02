@@ -104,8 +104,8 @@ test('leftover Settings profile/rhythm is not live Settings identity when recove
   assert.match(workbenchData, /onboardingRequest: settingsLearnerProjectOnboardingNotLive/);
   assert.match(workbenchData, /sandboxPreview: resourceSandboxPreviewNotLive/);
   assert.match(workbenchData, /sandboxState: resourceSandboxStateNotLive/);
-  assert.match(workbenchData, /resources: resourceLibraryListNotLive \? \[\] : patch\.resources/);
-  assert.match(workbenchData, /conversation: coachConversationNotLive \? \[\] : patch\.conversation/);
+  assert.match(workbenchData, /resources: resourceLibraryListNotLive\s*\? patch\.resources\?\.filter\(resourceRecordIsAcknowledgedUpload\)/);
+  assert.match(workbenchData, /conversation: coachConversationNotLive && !preserveSessionHistory \? \[\] : patch\.conversation/);
   assert.match(workbenchData, /suggestedActions: suggestedActionsNotLive \? \[\] : leftoverHonestSuggestedActions/);
   assert.match(workbenchData, /latestStreamingCheckpoint:/);
   assert.match(workbenchData, /streamingCheckpointNotLive && !patch\.streamingState\?\.isStreaming/);
@@ -166,8 +166,9 @@ test('leftover Settings profile/rhythm is not live Settings identity when recove
   );
   assert.match(
     appSource,
-    /const liveResources = leftoverResourceLibraryListNotLive \? \[\] : data\.resources/,
+    /const liveResources = leftoverResourceLibraryListNotLive\s*\? data\.resources\.filter\(resourceRecordIsAcknowledgedUpload\)\s*: data\.resources/,
   );
+  assert.match(appSource, /!data\.sessionHistoryRestored && leftoverCoachConversationIsNotLive/);
   assert.match(
     appSource,
     /const liveSandboxState = leftoverResourceSandboxStateNotLive/,

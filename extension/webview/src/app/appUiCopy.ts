@@ -10,6 +10,15 @@
 import type { ComposerLanguage } from "../lib/types";
 
 export const APP_UI_TEXT: Record<string, Record<string, string>> = {
+  "解冻计划": {
+    "en-US": "Unfreeze plan",
+    "es-ES": "Descongelar el plan",
+    "fr-FR": "Déverrouiller le plan",
+    "de-DE": "Plan entsperren",
+    "ja-JP": "計画の凍結を解除",
+    "ko-KR": "계획 동결 해제",
+    "pt-BR": "Descongelar o plano",
+  },
   "训练记录没有保存，因此没有开始教练流式回复。输入已保留，可以重试。": {
     "en-US": "The training record was not saved, so the coach stream did not start. Your input is still here to retry.",
     "es-ES": "The training record was not saved, so the coach stream did not start. Your input is still here to retry.",

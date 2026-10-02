@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 from provider_fixtures import seed_verified_capabilities
 
@@ -300,6 +302,82 @@ def test_incomplete_runtime_does_not_attach_ready_plan_status(tmp_path: Path) ->
         assert not status.get("current_step")
         assert not status.get("blocked_reason")
         assert status.get("current_stage") is None
+
+
+@pytest.mark.parametrize("path", ["/turn", "/turn/stream"])
+def test_bound_plan_resume_keeps_identity_when_reply_suggests_another_step(
+    tmp_path: Path, path: str,
+) -> None:
+    async def fake_reply(*args: object, **kwargs: object) -> str:
+        return "Keep the current Python step. Run the nested list example."
+
+    async def fake_stream(*args: object, **kwargs: object):
+        yield await fake_reply()
+
+    workspace_id = "workspace-bound-plan-resume"
+    with (
+        _client(tmp_path) as client,
+        patch.object(ProviderService, "coaching_reply", new=fake_reply),
+        patch.object(ProviderService, "coaching_reply_stream", new=fake_stream),
+        patch.object(routers_mod, "extract_structured_plan_runtime_facts", return_value={
+            "current_step": "Explain the plan governance instead",
+            "why_now": "A generic conversational suggestion",
+            "verify_method": ["Discuss the plan"],
+        }),
+    ):
+        runtime = client.app.state.runtime
+        plan = LearningPlan(
+            id="plan-bound-python", title="Python mutability", current_stage_id="stage-1",
+            current_step="Run list_pairs.py", why_now="Compare nested object mutation",
+            verify_method=["Assert pair[0] equals [1, 2, 4]"],
+            stages=[PlanStage(id="stage-1", title="Nested lists", goal="Explain mutation",
+                              outcomes=["Compare two operations"], status="active")],
+        )
+        runtime.repository.save_plan(workspace_id, plan)
+        runtime.memory_service.persist_plan_runtime_recovery(
+            workspace_id, plan=plan, request_id="bind-python-plan", plan_runtime={
+                "plan_id": plan.id, "current_stage_id": "stage-1",
+                "current_step": plan.current_step, "why_now": plan.why_now,
+                "verify_method": plan.verify_method,
+            },
+        )
+        start = client.post("/session/start", json={
+            "workspace_id": workspace_id, "workspace_name": workspace_id,
+        })
+        assert start.status_code == 200
+        response = client.post(path, json={
+            "workspace_id": workspace_id, "session_id": start.json()["session_id"],
+            "intent": "coach", "formalPlanMutation": False, "use_agent_loop": False,
+            "requestId": "resume-python-plan", "message": "Continue this step: Run list_pairs.py",
+            "response_language": "en-US", "planRuntimeRecovery": {
+                "action": "continue_step", "recovered": True, "formalPlanMutation": False,
+                "currentStep": plan.current_step, "currentStepId": "stage-1",
+            },
+        })
+        assert response.status_code == 200, response.text
+        if path.endswith("/stream"):
+            complete = next(block for block in response.text.split("\n\n")
+                            if block.startswith("event: complete"))
+            payload = json.loads(next(line[6:] for line in complete.splitlines()
+                                      if line.startswith("data: ")))
+            payload = payload["response"]
+        else:
+            payload = response.json()
+        status = payload.get("plan_runtime_status") or payload["snapshot"]["plan_runtime_status"]
+        assert status["plan_id"] == plan.id
+        assert status["current_step"] == plan.current_step
+        assert status["verify_method"] == plan.verify_method
+        assert status["resume_state"] == "in_progress"
+        assert (payload.get("plan") or payload["snapshot"]["plan"])["id"] == plan.id
+        recovered = runtime.memory_service.recover_workspace_facts(workspace_id)[PLAN_RUNTIME_KEY]
+        assert recovered["plan_id"] == plan.id
+        assert recovered["current_step"] == plan.current_step
+        reloaded = client.post("/session/start", json={
+            "workspace_id": workspace_id, "workspace_name": workspace_id,
+        })
+        assert reloaded.status_code == 200, reloaded.text
+        assert reloaded.json()["plan"]["id"] == plan.id
+        assert reloaded.json()["plan_runtime_status"]["current_step"] == plan.current_step
 
 
 def test_turn_resume_continue_step_uses_recovered_runtime_without_generating_plan(tmp_path: Path) -> None:

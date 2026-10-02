@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+from datetime import UTC, datetime
+from uuid import uuid4
+
 from fastapi import APIRouter, HTTPException
 
 from ...core.models import TeachingKnowledgeAsset
+from ...pedagogy.stage_material_state import stage_material_payload, stage_material_state
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 
@@ -16,21 +21,16 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
     provider_api_key_from_payload = deps.provider_api_key_from_payload
 
     def _stage_material_payload(asset: TeachingKnowledgeAsset) -> dict[str, object]:
-        content = asset.concept_card or asset.example or asset.exercise_seed or asset.summary
-        return {
-            "id": asset.id,
-            "planStageId": asset.plan_stage_id,
-            "kind": asset.kind,
-            "title": asset.title,
-            "summary": asset.summary,
-            "content": content,
-            "focusArea": asset.focus_area,
-            "createdAt": asset.created_at or "",
-        }
+        return stage_material_payload(asset).model_dump(by_alias=True)
 
-    def _stage_materials_for_stage(workspace: str, stage: str) -> list[TeachingKnowledgeAsset]:
-        assets = runtime.memory_service.list_teaching_assets(workspace, scope=None, limit=200)
-        return [asset for asset in assets if asset.plan_stage_id == stage]
+    def _resolve_stage(workspace: str, plan_id: str, stage_id: str):
+        plan = runtime.repository.get_latest_plan(workspace)
+        if plan is None or plan_id not in {plan.id, plan.plan_id}:
+            raise HTTPException(status_code=404, detail="Plan not found for this workspace.")
+        stage = next((item for item in plan.stages if item.id == stage_id), None)
+        if stage is None:
+            raise HTTPException(status_code=404, detail="Plan stage not found.")
+        return plan, stage
 
     @router.get("/plan/{plan_id}/stages/{stage_id}/materials")
     def list_stage_materials(
@@ -40,11 +40,14 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         workspace_id: str | None = None,
     ) -> dict[str, object]:
         resolved_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
-        materials = _stage_materials_for_stage(resolved_workspace_id, stage_id)
+        plan, _ = _resolve_stage(resolved_workspace_id, plan_id, stage_id)
+        materials = stage_material_state(plan, runtime.memory_service.list_teaching_assets(
+            resolved_workspace_id, scope=None, limit=10000,
+        )).get(stage_id, [])
         return {
             "plan_id": plan_id,
             "stage_id": stage_id,
-            "materials": [_stage_material_payload(asset) for asset in materials],
+            "materials": [item.model_dump(by_alias=True) for item in materials],
         }
 
     @router.post("/plan/{plan_id}/stages/{stage_id}/material/generate")
@@ -55,14 +58,7 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
     ) -> dict[str, object]:
         payload = payload or {}
         resolved_workspace_id = current_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
-        plan = runtime.repository.get_latest_plan(resolved_workspace_id)
-        if plan is None:
-            raise HTTPException(status_code=404, detail="No learning plan is available for this workspace.")
-        if plan_id not in {getattr(plan, "id", ""), getattr(plan, "plan_id", "")}:
-            raise HTTPException(status_code=404, detail="Plan not found for this workspace.")
-        stage = next((item for item in (plan.stages or []) if item.id == stage_id), None)
-        if stage is None:
-            raise HTTPException(status_code=404, detail="Plan stage not found.")
+        plan, stage = _resolve_stage(resolved_workspace_id, plan_id, stage_id)
         stage_exercises = list(getattr(stage, "exercises", None) or [])
         if not stage_exercises:
             stage_exercises = [
@@ -95,21 +91,28 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         response_language = str(
             payload.get("response_language") or payload.get("responseLanguage") or "zh-CN"
         )
-        materials = await composer.compose_stage_materials(
-            workspace_id=resolved_workspace_id,
-            plan_title=plan.title,
-            stage_id=stage_id,
-            stage_title=stage.title,
-            stage_goal=stage.goal,
-            stage_outcomes=list(stage.outcomes or []),
-            stage_exercises=stage_exercises,
-            focus_area=str(payload.get("focus_area") or payload.get("focusArea") or ""),
-            profile_summary=profile_summary,
-            teaching_asset_hints=hints,
-            response_language=response_language,
-        )
+        try:
+            materials = await asyncio.wait_for(composer.compose_stage_materials(
+                workspace_id=resolved_workspace_id,
+                plan_title=plan.title,
+                stage_id=stage_id,
+                stage_title=stage.title,
+                stage_goal=stage.goal,
+                stage_outcomes=list(stage.outcomes or []),
+                stage_exercises=stage_exercises,
+                focus_area=str(payload.get("focus_area") or payload.get("focusArea") or ""),
+                profile_summary=profile_summary,
+                teaching_asset_hints=hints,
+                response_language=response_language,
+            ), timeout=90)
+        except TimeoutError as exc:
+            raise HTTPException(status_code=504, detail="Stage material generation timed out. Retry.") from exc
+        # A plan can change while the model is running. Never persist against its replacement.
+        _resolve_stage(resolved_workspace_id, plan_id, stage_id)
+        batch = f"stage-batch:{datetime.now(UTC).isoformat()}:{uuid4().hex}"
         persisted: list[TeachingKnowledgeAsset] = []
         for asset in materials:
+            asset = asset.model_copy(update={"tags": [*asset.tags, f"plan:{plan_id}", batch]})
             persisted.append(
                 runtime.memory_service.record_teaching_asset(resolved_workspace_id, asset)
             )

@@ -164,7 +164,7 @@ function resolveTrainerIntent(
     return "next_task";
   }
   if (/^\/plan\b/i.test(draft)) {
-    return "coach";
+    return isExplicitFormalPlanSave(draft.replace(/^\/plan\b/i, "").trim()) ? "plan" : "coach";
   }
   if (/^\/review\b/i.test(draft)) {
     return "review";
@@ -219,12 +219,23 @@ function inferNaturalLanguageIntent(draft: string): SendIntent | undefined {
     return undefined;
   }
 
+  if (isExplicitFormalPlanSave(normalized)) {
+    return "plan";
+  }
+
   if (matchesAny(normalized, REVIEW_PATTERNS)) {
     return "review";
   }
   // Next-task language stays in Coach until the learner uses /next or the
   // explicit Next task action. Casual "next" / "continue" must not mint a TaskSpec.
   return undefined;
+}
+
+function isExplicitFormalPlanSave(draft: string): boolean {
+  const instruction = draft.split(/[。！？!?\n]/, 1)[0];
+  const asksToChangePlan = /^(?:(?:请(?:你)?|帮我|麻烦(?:你)?)\s*)*(?:明确|直接)?(?:重新)?(?:生成|创建|修改|修正|修复|补齐|更新|重写)[^。！？\n]{0,48}计划/u.test(instruction) ||
+    /^(?:please\s+)?(?:create|generate|update|revise|fix|rewrite|repair|complete)\b.{0,90}\bplan\b/iu.test(instruction);
+  return asksToChangePlan && /保存|落库|存下|\bsave\b/iu.test(instruction);
 }
 
 function normalizeDraftText(value: string): string {
@@ -250,4 +261,3 @@ const EXPLICIT_CURRENT_FILE_PATTERNS = [
   /\u8fd9(?:\u4e2a|\u6bb5)?(?:\u6587\u4ef6|\u4ee3\u7801|\u51fd\u6570)/,
   /(?:\u67e5\u770b|\u770b\u770b|\u89e3\u91ca|\u5206\u6790|\u68c0\u67e5)(?:\u4e00\u4e0b)?(?:\u5f53\u524d|\u8fd9(?:\u4e2a|\u6bb5)?)?(?:\u6587\u4ef6|\u4ee3\u7801|\u51fd\u6570)/,
 ];
-

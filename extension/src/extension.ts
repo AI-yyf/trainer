@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { registerCommands } from './commands';
+import { evaluatePublishedFileCommand } from './commands/evaluationCommands';
 import { primeProviderModelsState } from './commands/providerWebviewCommands';
 import { invalidateActiveTrainerStreams } from './commands/sessionCommands';
 import { getRuntimeWorkspaceContext } from './commands/workspaceContext';
@@ -306,7 +307,10 @@ export async function activate(
     },
   };
   registry.setContext(commandContext);
-  tests.setAttestationRuntime(commandContext);
+  tests.setVerificationRuntime({
+    evaluateFile: uri => evaluatePublishedFileCommand(commandContext, uri),
+    outputChannel,
+  });
   workbench.setRefreshHandler(async () => {
     // Visibility/refresh must never re-initialize the runtime: the Trainer
     // Engine keeps session, memory, and the provider session alive behind the

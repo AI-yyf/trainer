@@ -73,6 +73,33 @@ def _parse_sse_complete_response(body: str) -> dict[str, object]:
     raise AssertionError(f"no SSE complete frame in: {body[:500]}")
 
 
+def test_resource_generation_stream_explains_missing_project_admission(tmp_path: Path) -> None:
+    app = _build_app(tmp_path)
+    with TestClient(app) as client:
+        assert client.post("/session/start", json={
+            "workspace_id": "unmanaged-project", "workspace_name": "Unmanaged project",
+        }).status_code == 200
+        mark_provider_capabilities_verified(
+            app.state.runtime, app.state.runtime.provider_config,
+            "sk-test-not-a-real-key-aaaaaaaa", tools=False,
+        )
+        response = client.post("/training/generate-card/stream", json={
+            "workspace_id": "unmanaged-project", "request_id": "missing-project-admission",
+            "stream_id": "missing-project-admission-stream", "source": "resource_knowledge",
+            "resource_id": "uploaded-resource", "card_type": "flash",
+            "focus_area": "Python lists", "target_skill": "Mutability", "response_language": "zh-CN",
+        })
+    assert response.status_code == 200, response.text
+    errors = [json.loads(line[6:]) for block in response.text.split("\n\n")
+              if block.startswith("event: error") for line in block.splitlines()
+              if line.startswith("data: ")]
+    assert errors
+    assert "请先把这个项目加入 Trainer" in str(errors[0])
+    assert "Provider request failed" not in str(errors[0])
+    complete = _parse_sse_complete_response(response.text)
+    assert complete["reliability"]["outcome"] == "failure"
+
+
 @pytest.mark.asyncio
 async def test_generate_card_stream_mid_cancel_publishes_failure_complete_blocks_remint(
     tmp_path: Path,

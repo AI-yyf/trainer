@@ -29,7 +29,7 @@ test('coach streaming placeholder stays descriptive before the first chunk arriv
     appUiCopySource,
     /"en-US": "Thinking through your prompt, then writing the first visible reply\."/,
   );
-  assert.match(source, /body: streaming\.streamedContent \|\| streamingPlaceholderBody,/);
+  assert.match(source, /: streaming\.streamedContent \|\| streamingPlaceholderBody,/);
   assert.doesNotMatch(source, /body: streaming\.streamedContent \|\| "\.\.\.",/);
 });
 

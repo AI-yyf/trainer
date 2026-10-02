@@ -756,6 +756,7 @@ export type CopyKey =
   // Plan evidence governance
   | "evidenceConfidence"
   | "evidenceGovernance"
+  | "evidenceFilterUnscoped"
   | "evidenceFilterAll"
   | "evidenceFilterDeferred"
   | "evidenceFilterAdopted"
@@ -811,6 +812,7 @@ export type CopyKey =
   | "planStageMaterialsGenerating"
   | "planStageMaterialsView"
   | "planStageMaterialsHide"
+  | "planStageMaterialsTemplate"
   | "planStageMaterialsEmpty"
   | "planStageCompletionLabel"
   | "planStageMaterialsBadgeTitle"
@@ -1051,6 +1053,7 @@ export const copyTable = {
     planStageMaterialsGenerating: "生成中…",
     planStageMaterialsView: "查看",
     planStageMaterialsHide: "收起",
+    planStageMaterialsTemplate: "模板 · 可重新生成",
     planStageMaterialsEmpty: "这个阶段还没有学习资料。",
     planStageCompletionLabel: "阶段完成度",
     planStageMaterialsBadgeTitle: "已生成资料",
@@ -1254,6 +1257,7 @@ export const copyTable = {
     evidenceConfidence: "\u7f6e\u4fe1",
     evidenceGovernance: "\u8bc1\u636e\u6cbb\u7406",
     evidenceFilterAll: "\u5168\u90e8",
+    evidenceFilterUnscoped: "独立记录",
     evidenceFilterDeferred: "\u5df2\u5ef6\u671f",
     evidenceFilterAdopted: "\u5df2\u63a5\u7eb3",
     evidenceFilterRejected: "\u5df2\u9a73\u56de",
@@ -1877,6 +1881,7 @@ export const copyTable = {
     planStageMaterialsGenerating: "Generating…",
     planStageMaterialsView: "View",
     planStageMaterialsHide: "Hide",
+    planStageMaterialsTemplate: "Template · retry generation",
     planStageMaterialsEmpty: "No study materials for this stage yet.",
     planStageCompletionLabel: "Stage completion",
     planStageMaterialsBadgeTitle: "Materials generated",
@@ -2072,6 +2077,7 @@ export const copyTable = {
     evidenceConfidence: "Confidence",
     evidenceGovernance: "Evidence governance",
     evidenceFilterAll: "All",
+    evidenceFilterUnscoped: "Independent records",
     evidenceFilterDeferred: "Deferred",
     evidenceFilterAdopted: "Adopted",
     evidenceFilterRejected: "Rejected",
@@ -2677,6 +2683,7 @@ export const copyTable = {
     planStageMaterialsGenerating: "Generando…",
     planStageMaterialsView: "Ver",
     planStageMaterialsHide: "Ocultar",
+    planStageMaterialsTemplate: "Plantilla · volver a generar",
     planStageMaterialsEmpty: "Todavía no hay materiales de estudio para esta etapa.",
     planStageCompletionLabel: "Progreso de la etapa",
     planStageMaterialsBadgeTitle: "Materiales generados",
@@ -3089,6 +3096,7 @@ export const copyTable = {
     evidenceConfidence: "Confianza",
     evidenceGovernance: "Gobernanza de evidencia",
     evidenceFilterAll: "Todo",
+    evidenceFilterUnscoped: "Registros independientes",
     evidenceFilterDeferred: "Pospuesto",
     evidenceFilterAdopted: "Adoptado",
     evidenceFilterRejected: "Rechazado",
@@ -3266,6 +3274,7 @@ export const copyTable = {
     planStageMaterialsGenerating: "Génération…",
     planStageMaterialsView: "Voir",
     planStageMaterialsHide: "Masquer",
+    planStageMaterialsTemplate: "Modèle · relancer la génération",
     planStageMaterialsEmpty: "Il n'y a pas encore de supports d'étude pour cette étape.",
     planStageCompletionLabel: "Avancement de l'étape",
     planStageMaterialsBadgeTitle: "Supports générés",
@@ -3447,6 +3456,7 @@ export const copyTable = {
     evidenceConfidence: "Confiance",
     evidenceGovernance: "Gouvernance des preuves",
     evidenceFilterAll: "Tout",
+    evidenceFilterUnscoped: "Enregistrements indépendants",
     evidenceFilterDeferred: "Diff\u00e9r\u00e9",
     evidenceFilterAdopted: "Adopt\u00e9",
     evidenceFilterRejected: "Rejet\u00e9",
@@ -3624,6 +3634,7 @@ export const copyTable = {
     planStageMaterialsGenerating: "Wird erstellt…",
     planStageMaterialsView: "Anzeigen",
     planStageMaterialsHide: "Ausblenden",
+    planStageMaterialsTemplate: "Vorlage · erneut generieren",
     planStageMaterialsEmpty: "Für diese Phase gibt es noch keine Lernmaterialien.",
     planStageCompletionLabel: "Phasenfortschritt",
     planStageMaterialsBadgeTitle: "Materialien erstellt",
@@ -3805,6 +3816,7 @@ export const copyTable = {
     evidenceConfidence: "Konfidenz",
     evidenceGovernance: "Evidenzsteuerung",
     evidenceFilterAll: "Alle",
+    evidenceFilterUnscoped: "Unabhängige Aufzeichnungen",
     evidenceFilterDeferred: "Zur\u00fcckgestellt",
     evidenceFilterAdopted: "\u00dcbernommen",
     evidenceFilterRejected: "Abgelehnt",
@@ -3982,6 +3994,7 @@ export const copyTable = {
     planStageMaterialsGenerating: "生成中…",
     planStageMaterialsView: "表示",
     planStageMaterialsHide: "閉じる",
+    planStageMaterialsTemplate: "テンプレート · 再生成できます",
     planStageMaterialsEmpty: "このステージにはまだ学習資料がありません。",
     planStageCompletionLabel: "ステージ完了度",
     planStageMaterialsBadgeTitle: "資料の生成状況",
@@ -4163,6 +4176,7 @@ export const copyTable = {
     evidenceConfidence: "\u4fe1\u983c\u5ea6",
     evidenceGovernance: "\u8a3c\u64da\u7ba1\u7406",
     evidenceFilterAll: "\u3059\u3079\u3066",
+    evidenceFilterUnscoped: "独立した記録",
     evidenceFilterDeferred: "\u5ef6\u671f",
     evidenceFilterAdopted: "\u63a1\u7528\u6e08\u307f",
     evidenceFilterRejected: "\u5374\u4e0b\u6e08\u307f",
@@ -4340,6 +4354,7 @@ export const copyTable = {
     planStageMaterialsGenerating: "생성 중…",
     planStageMaterialsView: "보기",
     planStageMaterialsHide: "접기",
+    planStageMaterialsTemplate: "템플릿 · 다시 생성 가능",
     planStageMaterialsEmpty: "이 단계에는 아직 학습 자료가 없습니다.",
     planStageCompletionLabel: "단계 완료도",
     planStageMaterialsBadgeTitle: "자료 생성 현황",
@@ -4521,6 +4536,7 @@ export const copyTable = {
     evidenceConfidence: "\uc2e0\ub8b0\ub3c4",
     evidenceGovernance: "\uc99d\uac70 \uad00\ub9ac",
     evidenceFilterAll: "\uc804\uccb4",
+    evidenceFilterUnscoped: "독립 기록",
     evidenceFilterDeferred: "\ubcf4\ub958\ub428",
     evidenceFilterAdopted: "\ucc44\ud0dd\ub428",
     evidenceFilterRejected: "\uac70\ubd80\ub428",
@@ -4698,6 +4714,7 @@ export const copyTable = {
     planStageMaterialsGenerating: "Gerando…",
     planStageMaterialsView: "Ver",
     planStageMaterialsHide: "Ocultar",
+    planStageMaterialsTemplate: "Modelo · gerar novamente",
     planStageMaterialsEmpty: "Ainda não há materiais de estudo para este estágio.",
     planStageCompletionLabel: "Progresso do estágio",
     planStageMaterialsBadgeTitle: "Materiais gerados",
@@ -4879,6 +4896,7 @@ export const copyTable = {
     evidenceConfidence: "Confian\u00e7a",
     evidenceGovernance: "Governan\u00e7a de evid\u00eancias",
     evidenceFilterAll: "Tudo",
+    evidenceFilterUnscoped: "Registros independentes",
     evidenceFilterDeferred: "Adiado",
     evidenceFilterAdopted: "Adotado",
     evidenceFilterRejected: "Rejeitado",
@@ -5294,6 +5312,7 @@ const contextRailLocaleOverrides: Record<ComposerLanguage, ContextRailCopy> = {
 
 type TrainingUiCopy = Pick<
   Copy,
+  | "nextCard"
   | "trainingOpenCurrentCard"
   | "trainingReturnToCoach"
   | "trainingAnswerNow"
@@ -5305,6 +5324,7 @@ type TrainingUiCopy = Pick<
 
 const trainingUiLocaleOverrides: Record<ComposerLanguage, TrainingUiCopy> = {
   "zh-CN": {
+    nextCard: "下一张",
     trainingOpenCurrentCard: "\u7ee7\u7eed\uff1a\u6253\u5f00\u5f53\u524d\u5361\u7247",
     trainingReturnToCoach: "\u5e26\u7ed3\u679c\u56de\u5230\u6559\u7ec3",
     trainingAnswerNow: "\u73b0\u5728\u4f5c\u7b54",
@@ -5315,6 +5335,7 @@ const trainingUiLocaleOverrides: Record<ComposerLanguage, TrainingUiCopy> = {
       "\u5f00\u59cb\u8bad\u7ec3\u540e\uff0c\u4f1a\u6309\u5f53\u524d\u91cd\u70b9\u751f\u6210\u4e00\u5f20\u5c0f\u800c\u53ef\u9a8c\u8bc1\u7684\u4efb\u52a1\u3002",
   },
   "en-US": {
+    nextCard: "Next card",
     trainingOpenCurrentCard: "Continue: Open current card",
     trainingReturnToCoach: "Return result to Coach",
     trainingAnswerNow: "Answer now",
@@ -5324,6 +5345,7 @@ const trainingUiLocaleOverrides: Record<ComposerLanguage, TrainingUiCopy> = {
     trainingEmptyDescription: "Start training to create one small, verifiable task from your current focus.",
   },
   "es-ES": {
+    nextCard: "Siguiente tarjeta",
     trainingOpenCurrentCard: "Continuar: abrir la tarjeta actual",
     trainingReturnToCoach: "Volver al coach con el resultado",
     trainingAnswerNow: "Responder ahora",
@@ -5334,6 +5356,7 @@ const trainingUiLocaleOverrides: Record<ComposerLanguage, TrainingUiCopy> = {
       "Inicia el entrenamiento para crear una tarea peque\u00f1a y verificable a partir de tu enfoque actual.",
   },
   "fr-FR": {
+    nextCard: "Carte suivante",
     trainingOpenCurrentCard: "Continuer : ouvrir la carte actuelle",
     trainingReturnToCoach: "Ramener le r\u00e9sultat au coach",
     trainingAnswerNow: "R\u00e9pondre maintenant",
@@ -5344,6 +5367,7 @@ const trainingUiLocaleOverrides: Record<ComposerLanguage, TrainingUiCopy> = {
       "Commencez l'entra\u00eenement pour cr\u00e9er une petite t\u00e2che v\u00e9rifiable depuis votre objectif actuel.",
   },
   "de-DE": {
+    nextCard: "Nächste Karte",
     trainingOpenCurrentCard: "Weiter: Aktuelle Karte \u00f6ffnen",
     trainingReturnToCoach: "Ergebnis zum Coach zur\u00fcckbringen",
     trainingAnswerNow: "Jetzt antworten",
@@ -5354,6 +5378,7 @@ const trainingUiLocaleOverrides: Record<ComposerLanguage, TrainingUiCopy> = {
       "Starte das Training, um aus deinem aktuellen Fokus eine kleine, \u00fcberpr\u00fcfbare Aufgabe zu erstellen.",
   },
   "ja-JP": {
+    nextCard: "次のカード",
     trainingOpenCurrentCard: "\u7d9a\u3051\u308b\uff1a\u73fe\u5728\u306e\u30ab\u30fc\u30c9\u3092\u958b\u304f",
     trainingReturnToCoach: "\u7d50\u679c\u3092\u30b3\u30fc\u30c1\u306b\u623b\u3059",
     trainingAnswerNow: "\u4eca\u3059\u3050\u56de\u7b54\u3059\u308b",
@@ -5364,6 +5389,7 @@ const trainingUiLocaleOverrides: Record<ComposerLanguage, TrainingUiCopy> = {
       "\u958b\u59cb\u3059\u308b\u3068\u3001\u73fe\u5728\u306e\u5b66\u7fd2\u306e\u7126\u70b9\u304b\u3089\u5c0f\u3055\u304f\u78ba\u8a8d\u3067\u304d\u308b\u8ab2\u984c\u3092\u4e00\u3064\u4f5c\u308a\u307e\u3059\u3002",
   },
   "ko-KR": {
+    nextCard: "다음 카드",
     trainingOpenCurrentCard: "\uacc4\uc18d: \ud604\uc7ac \uce74\ub4dc \uc5f4\uae30",
     trainingReturnToCoach: "\uacb0\uacfc\ub97c \ucf54\uce58\uc5d0\uac8c \uac00\uc838\uac00\uae30",
     trainingAnswerNow: "\uc9c0\uae08 \ub2f5\ud558\uae30",
@@ -5374,6 +5400,7 @@ const trainingUiLocaleOverrides: Record<ComposerLanguage, TrainingUiCopy> = {
       "\uc2dc\uc791\ud558\uba74 \ud604\uc7ac \ud559\uc2b5 \ucd08\uc810\uc5d0\uc11c \uc791\uace0 \ud655\uc778 \uac00\ub2a5\ud55c \uacfc\uc81c \ud558\ub098\ub97c \ub9cc\ub4ed\ub2c8\ub2e4.",
   },
   "pt-BR": {
+    nextCard: "Próximo cartão",
     trainingOpenCurrentCard: "Continuar: abrir o cart\u00e3o atual",
     trainingReturnToCoach: "Levar o resultado ao coach",
     trainingAnswerNow: "Responder agora",

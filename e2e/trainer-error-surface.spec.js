@@ -117,14 +117,7 @@ test.describe("Trainer error-surface contract", () => {
     });
 
     await expect(page.getByText("The last tool step did not finish.")).toBeVisible();
-    // The tool trail expander summarizes failed steps ("Checked 1 item, 1
-    // needs a retry"); expanding it reveals the sanitized activity strip.
-    const toolTrail = page.getByText(/Checked \d+ item/).first();
-    await expect(toolTrail).toBeVisible();
-    await toolTrail.click();
-    const activity = page.locator(".agent-activity-strip, .message-part--tool-result").first();
-    await expect(activity).toBeVisible();
-    await expect(page.getByText(/Needs another try|did not finish|keep asking|try again/i).first()).toBeVisible();
+    await expect(page.locator('.message-bubble__tool-trail, .agent-activity-strip, .message-part--tool-result')).toHaveCount(0);
     const visible = await page.locator("body").innerText();
     assertNoLeak(visible);
   });
@@ -196,16 +189,9 @@ test.describe("Trainer error-surface contract", () => {
       },
     });
 
-    const details = page.locator("details.coach-plan-view__details").first();
-    await expect(details).toBeVisible();
-    if (!(await details.evaluate((element) => element.open))) {
-      await details.locator(":scope > summary").click();
-    }
-    const item = page.locator(".coach-plan-view__evidence-item").first();
-    await expect(item).toBeVisible();
-    await expect(item).toContainText("Shrink the next step after the last failed check.");
-    await expect(item).toContainText("Keep the current slice");
-    const visible = await item.innerText();
+    await expect(page.locator('details[data-plan-governance-disclosure], .coach-plan-view__evidence-item')).toHaveCount(0);
+    await expect(page.locator('[data-plan-primary="true"]')).toBeVisible();
+    const visible = await page.locator('body').innerText();
     assertNoLeak(visible);
     expect(visible).not.toMatch(/^\s*\{/);
   });

@@ -236,8 +236,10 @@ def test_projection_aggregates_distinct_attempts_for_repeat_verification(
     )
     assert projection.status_code == 200
     implementation = projection.json()["projection"]["implementation"]
-    assert implementation["state"] == "repeat_verified"
-    assert implementation["independent_attempt_count"] == 2
+    # Both records came from the self-report channel, so repetition cannot
+    # promote them into an independently verified capability.
+    assert implementation["state"] == "not_verified"
+    assert implementation["independent_attempt_count"] == 0
 
 
 def test_attempt_evidence_roundtrip_over_rpc(tokened_client: TestClient) -> None:

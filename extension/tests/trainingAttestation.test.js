@@ -77,6 +77,10 @@ function createVscodeMock() {
     },
     createTestRun(request) {
       const run = {
+        enqueued(item) { this.runCalls.push({ state: 'enqueued', id: item.id }); },
+        started(item) { this.runCalls.push({ state: 'started', id: item.id }); },
+        skipped(item) { this.runCalls.push({ state: 'skipped', id: item.id }); },
+        errored(item, message) { this.runCalls.push({ state: 'errored', id: item.id, message }); },
         passed(item) {
           this.runCalls.push({ state: 'passed', id: item.id });
         },
@@ -207,56 +211,19 @@ async function runAllTests(vscodeMock) {
   await flushAsyncWork();
 }
 
-test('successful run with a live practice card posts a test_runner attestation', async () => {
+test('cached passing rows cannot attest a currently selected practice card', async () => {
   const vscodeMock = createVscodeMock();
   const { TrainerTestController } = loadWithVscodeMock(testControllerModulePath, vscodeMock);
-  const { resolveLivePracticeCardId } = require(trainingAttestationModulePath);
-  const hostState = createHostState({ trainingState: livePracticeTrainingState() });
-  const { runtime, calls } = createRuntimeMock(vscodeMock, hostState);
-
+  const { runtime, calls } = createRuntimeMock(vscodeMock, createHostState({ trainingState: livePracticeTrainingState() }));
   const tests = new TrainerTestController(runtime);
-  assert.equal(resolveLivePracticeCardId(hostState), 'card-practice-1');
-
-  tests.publishReport(
-    {
-      static_checks: [{ id: 'ruff', label: 'Ruff', status: 'passed', detail: 'clean' }],
-      dynamic_checks: [{ id: 'pytest', label: 'Pytest', status: 'passed', detail: '3 examples green' }],
-      semantic_checks: [],
-    },
-    vscodeMock.Uri.file('F:\\trainer\\sample.py'),
-  );
-
+  tests.publishReport({ dynamic_checks: [{ id: 'pytest', label: 'Pytest', status: 'passed', detail: 'old result' }] },
+    vscodeMock.Uri.file('F:\\trainer\\sample.py'));
   await runAllTests(vscodeMock);
-
-  const run = vscodeMock.__controller.runCalls[0];
-  assert.deepEqual(
-    run.runCalls.filter((entry) => entry.state !== 'end'),
-    [
-      { state: 'passed', id: 'ruff' },
-      { state: 'passed', id: 'pytest' },
-    ],
-  );
-
-  assert.equal(calls.posts.length, 1);
-  const post = calls.posts[0];
-  assert.equal(post.port, 8765);
-  assert.equal(post.path, ATTEST_PATH);
-  assert.deepEqual(post.body, {
-    card_id: 'card-practice-1',
-    passed: true,
-    evidence_source: 'test_runner',
-    summary: 'Test run passed: 2 test(s)',
-    tests_output: 'PASS Ruff: clean PASS Pytest: 3 examples green',
-    focus_area: 'async error handling',
-    card_title: 'Implement the retry helper',
-    session_id: 'session-1',
-    // Raw Windows-style workspace id: normalizeFsPath keeps it verbatim on
-    // every platform instead of joining it onto the host cwd.
-    workspace_id: 'F:\\trainer',
-  });
+  assert.equal(calls.posts.length, 0);
+  assert.equal(vscodeMock.__controller.runCalls[0].runCalls.filter(entry => entry.state === 'passed').length, 0);
 });
 
-test('failed run does not post an attestation', async () => {
+test('cached failed rows do not run or post an attestation', async () => {
   const vscodeMock = createVscodeMock();
   const { TrainerTestController } = loadWithVscodeMock(testControllerModulePath, vscodeMock);
   const hostState = createHostState({ trainingState: livePracticeTrainingState() });
@@ -275,14 +242,14 @@ test('failed run does not post an attestation', async () => {
   await runAllTests(vscodeMock);
 
   const run = vscodeMock.__controller.runCalls[0];
-  assert.equal(run.runCalls.filter((entry) => entry.state === 'failed').length, 1);
+  assert.equal(run.runCalls.filter((entry) => entry.state === 'failed').length, 0);
   assert.equal(calls.posts.length, 0);
 });
 
 test('no live practice card means no attestation post', async () => {
   const vscodeMock = createVscodeMock();
   const { TrainerTestController } = loadWithVscodeMock(testControllerModulePath, vscodeMock);
-  const { resolveLivePracticeCardId } = require(trainingAttestationModulePath);
+  const { resolveLivePracticeCardId } = loadWithVscodeMock(trainingAttestationModulePath, vscodeMock);
 
   const noCardHostState = createHostState({ trainingState: undefined });
   const closedCardHostState = createHostState({
@@ -311,63 +278,18 @@ test('no live practice card means no attestation post', async () => {
   }
 });
 
-test('attestation post rejection is swallowed, logged, and never throws', async () => {
+test('an explicit host attestation failure is logged and remains bounded', async () => {
   const vscodeMock = createVscodeMock();
-  const { TrainerTestController } = loadWithVscodeMock(testControllerModulePath, vscodeMock);
-  const hostState = createHostState({ trainingState: livePracticeTrainingState() });
-  const { runtime, calls } = createRuntimeMock(vscodeMock, hostState, {
-    rejectPost: new Error('sidecar exploded'),
+  loadWithVscodeMock(testControllerModulePath, vscodeMock);
+  const { dispatchTestRunAttestation } = loadWithVscodeMock(trainingAttestationModulePath, vscodeMock);
+  const { runtime, calls } = createRuntimeMock(vscodeMock, createHostState({ trainingState: livePracticeTrainingState() }), {
+    rejectPost: new Error('fixture-secret'),
   });
-
-  const tests = new TrainerTestController(runtime);
-  tests.publishReport(
-    {
-      static_checks: [{ id: 'ruff', label: 'Ruff', status: 'passed', detail: 'clean' }],
-      dynamic_checks: [],
-      semantic_checks: [],
-    },
-    vscodeMock.Uri.file('F:\\trainer\\sample.py'),
-  );
-
-  await runAllTests(vscodeMock);
-
+  await dispatchTestRunAttestation(runtime, { card_id: 'card-practice-1', passed: true, evidence_source: 'test_runner' });
   assert.equal(calls.posts.length, 1);
-  assert.equal(
-    calls.logs.some(
-      (line) =>
-        line.includes('[training-attestation]') &&
-        line.includes('card-practice-1') &&
-        line.includes('sidecar exploded'),
-    ),
-    true,
-    'expected the attestation failure to be logged to the output channel',
-  );
-});
-
-test('attestation is skipped when the sidecar is unavailable and the failure is logged', async () => {
-  const vscodeMock = createVscodeMock();
-  const { TrainerTestController } = loadWithVscodeMock(testControllerModulePath, vscodeMock);
-  const hostState = createHostState({ trainingState: livePracticeTrainingState() });
-  const { runtime, calls } = createRuntimeMock(vscodeMock, hostState, {
-    sidecarStatus: { lifecycle: 'starting', detail: 'Sidecar is starting.' },
-  });
-
-  const tests = new TrainerTestController(runtime);
-  tests.publishReport(
-    {
-      static_checks: [{ id: 'ruff', label: 'Ruff', status: 'passed', detail: 'clean' }],
-      dynamic_checks: [],
-      semantic_checks: [],
-    },
-    vscodeMock.Uri.file('F:\\trainer\\sample.py'),
-  );
-
-  await runAllTests(vscodeMock);
-
-  assert.equal(calls.posts.length, 0);
   assert.equal(calls.logs.length, 1);
-  assert.match(calls.logs[0], /\[training-attestation\]/);
-  assert.match(calls.logs[0], /Sidecar is starting\./);
+  assert.match(calls.logs[0], /training-attestation/);
+  assert.equal(calls.logs[0].includes('fixture-secret'), false);
 });
 
 test('tests_output longer than the limit is truncated', async () => {
@@ -384,4 +306,65 @@ test('tests_output longer than the limit is truncated', async () => {
   const truncated = truncateTestsOutput(longOutput);
   assert.ok(truncated.length <= TEST_RUNNER_ATTESTATION_OUTPUT_LIMIT + 1);
   assert.ok(truncated.startsWith('PASS Check 1'));
+});
+
+
+function freshRuntime(reportOrFunction) {
+  const calls = [], logs = [];
+  return { calls, logs, runtime: { outputChannel: { appendLine: line => logs.push(line) },
+    evaluateFile: async uri => { calls.push(uri.fsPath); return typeof reportOrFunction === 'function'
+      ? reportOrFunction(uri) : reportOrFunction; } } };
+}
+
+test('Testing Run reevaluates the file and uses fresh failures instead of old passing rows', async () => {
+  const vscodeMock = createVscodeMock();
+  const { TrainerTestController } = loadWithVscodeMock(testControllerModulePath, vscodeMock);
+  const f = freshRuntime({ dynamic_checks: [{ id: 'pytest', label: 'Pytest', status: 'failed', detail: 'new failure' }] });
+  const tests = new TrainerTestController(f.runtime);
+  tests.publishReport({ dynamic_checks: [{ id: 'pytest', label: 'Pytest', status: 'passed' }] }, vscodeMock.Uri.file('F:/trainer/sample.py'));
+  await runAllTests(vscodeMock);
+  assert.equal(f.calls.length, 1);
+  assert.equal(vscodeMock.__controller.runCalls[0].runCalls.filter(row => row.state === 'passed').length, 0);
+  assert.equal(vscodeMock.__controller.runCalls[0].runCalls.find(row => row.state === 'failed').message.value, 'new failure');
+});
+
+test('warnings and absent verifier results are skipped, never green passing tests', async () => {
+  const vscodeMock = createVscodeMock();
+  const { TrainerTestController } = loadWithVscodeMock(testControllerModulePath, vscodeMock);
+  const f = freshRuntime({ static_checks: [{ id: 'lint', status: 'warning' }], dynamic_checks: [{ id: 'pytest', status: 'warning' }] });
+  const tests = new TrainerTestController(f.runtime);
+  tests.publishReport({}, vscodeMock.Uri.file('F:/trainer/sample.py'));
+  await runAllTests(vscodeMock);
+  const rows = vscodeMock.__controller.runCalls[0].runCalls;
+  assert.equal(rows.filter(row => row.state === 'passed').length, 0);
+  assert.equal(rows.filter(row => row.state === 'skipped').length, 2);
+});
+
+test('include and exclude select only the requested file and check after a fresh report', async () => {
+  const vscodeMock = createVscodeMock();
+  const { TrainerTestController } = loadWithVscodeMock(testControllerModulePath, vscodeMock);
+  const report = { static_checks: [{ id: 'ruff', status: 'passed' }], dynamic_checks: [{ id: 'pytest', status: 'passed' }] };
+  const f = freshRuntime(report), tests = new TrainerTestController(f.runtime);
+  const first = vscodeMock.Uri.file('F:/trainer/first.py'), second = vscodeMock.Uri.file('F:/trainer/second.py');
+  tests.publishReport(report, first); tests.publishReport(report, second);
+  const firstRoot = vscodeMock.__controller.items.get(first.toString());
+  const check = firstRoot.children.values()[1].children.values()[0];
+  await vscodeMock.__controller.runHandler({ include: [check], exclude: [] });
+  assert.deepEqual(f.calls, ['F:/trainer/first.py']);
+  assert.deepEqual(vscodeMock.__controller.runCalls[0].runCalls.filter(row => row.state === 'enqueued').map(row => row.id), ['pytest']);
+  assert.deepEqual(vscodeMock.__controller.runCalls[0].runCalls.filter(row => row.state === 'passed').map(row => row.id), ['pytest']);
+  await vscodeMock.__controller.runHandler({ include: [firstRoot], exclude: [firstRoot] });
+  assert.equal(f.calls.length, 1);
+});
+
+test('cancelled fresh evaluations do not report completed tests', async () => {
+  const vscodeMock = createVscodeMock();
+  const { TrainerTestController } = loadWithVscodeMock(testControllerModulePath, vscodeMock);
+  const token = { isCancellationRequested: false };
+  const f = freshRuntime(() => { token.isCancellationRequested = true; return { dynamic_checks: [{ id: 'pytest', status: 'passed' }] }; });
+  const tests = new TrainerTestController(f.runtime);
+  tests.publishReport({}, vscodeMock.Uri.file('F:/trainer/sample.py'));
+  await vscodeMock.__controller.runHandler({ include: undefined, exclude: [] }, token);
+  assert.equal(vscodeMock.__controller.runCalls[0].runCalls.filter(row => row.state === 'passed').length, 0);
+  assert.equal(vscodeMock.__controller.runCalls[0].runCalls.at(-1).state, 'end');
 });

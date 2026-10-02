@@ -26,7 +26,7 @@ test('Settings offers a direct sidecar restart and avoids duplicate model discov
   );
   assert.match(
     source,
-    /const canRestartSidecar =\s*providerFailureCategory === "sidecar_unavailable" && Boolean\(onRestartSidecar\);/,
+    /const canRestartSidecar = backendUnavailable && Boolean\(onRestartSidecar\);/,
   );
   assert.match(source, /canRestartSidecar\s*\? \{\s*\.\.\.sidecarRestartCopy\(language\),/);
   assert.match(source, /action: onRestartSidecar,/);

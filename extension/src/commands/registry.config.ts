@@ -29,6 +29,7 @@ import {
   trainingRestoreOrchestrationCommand,
 } from './memoryCommands';
 import { openWorkbenchCommand } from './openWorkbench';
+import { generateSkillDraftCommand } from './skillCommands';
 import { openCoachScenarioCommand } from './coachScenarioCommands';
 import {
   chooseSandboxRootCommand,
@@ -342,6 +343,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
       register: (ctx, payload) => evaluateSelectionCommand(ctx, payload),
     },
     { commandId: COMMAND_IDS.refreshMemory, register: (ctx) => refreshMemoryCommand(ctx) },
+    { commandId: COMMAND_IDS.generateSkillDraft, register: (ctx, payload) => generateSkillDraftCommand(ctx, payload) },
     { commandId: COMMAND_IDS.recordUserFeedback, register: (ctx, payload) => recordUserFeedbackCommand(ctx, payload) },
     { commandId: COMMAND_IDS.refreshWorkspaceAuthority, register: (ctx) => refreshWorkspaceAuthorityCommand(ctx) },
     { commandId: COMMAND_IDS.saveCoachSettings, register: (ctx, payload) => saveCoachSettingsCommand(ctx, payload) },

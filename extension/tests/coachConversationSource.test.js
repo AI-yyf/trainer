@@ -307,15 +307,15 @@ test('docked views retain a compact Coach context rail without docking the full 
   assert.match(source, /const renderContextualResultRail = \(view: "plan" \| "resources" \| "training" \| "settings"\) =>/);
   assert.match(source, /data-view-context-rail=\{view\}/);
   assert.match(source, /data-view-context-rail-open-coach/);
-  assert.match(source, /renderContextualResultRail\("plan"\)/);
-  assert.match(source, /renderContextualResultRail\("resources"\)/);
+  assert.doesNotMatch(source, /renderContextualResultRail\("plan"\)/);
+  assert.doesNotMatch(source, /renderContextualResultRail\("resources"\)/);
   assert.match(source, /const \[lastTurnView, setLastTurnView\] = useState<ActiveWorkbenchView>\(\);/);
   assert.match(source, /setLastTurnView\(turnActiveView\);/);
   assert.match(
     source,
     /const isResourcesContextWorthSurfacing =\s*!isResources \|\| streaming\.isStreaming \|\| lastTurnView === "resources";/,
   );
-  assert.match(source, /renderContextualResultRail\("training"\)/);
+  assert.doesNotMatch(source, /renderContextualResultRail\("training"\)/);
   assert.match(source, /renderContextualResultRail\("settings"\)/);
   assert.match(source, /view-stack--single/);
   assert.match(
@@ -466,7 +466,8 @@ test('Training keeps card submission default while allowing a contextual Coach r
 
   assert.match(source, /type TrainingComposerRoute = "card" \| "coach"/);
   assert.match(source, /useState<TrainingComposerRoute>\("card"\)/);
-  assert.match(source, /trainingComposerTalkMode = trainingComposerEnabled && trainingComposerRoute === "coach"/);
+  assert.match(source, /trainingComposerTalkMode = trainingComposerEnabled &&\s*\(trainingComposerRoute === "coach" \|\| resolvedReviewArtifact\)/);
+  assert.match(source, /const resolvedReviewArtifact = reviewArtifactForeground && trainingState\?\.reviewArtifact\?\.status === "resolved"/);
   assert.match(source, /composerUsesTrainingFlow = trainingComposerEnabled && !trainingComposerTalkMode/);
   assert.doesNotMatch(source, /id: "training-composer-route"/);
   assert.match(source, /type TrainingComposerRoute = "card" \| "coach"/);
@@ -477,8 +478,7 @@ test('Training review entry uses shared localized copy and hides mismatched revi
   const source = fs.readFileSync(appPath, 'utf8');
 
   assert.match(source, /const primaryDueReviewTitle = primaryDueReview/);
-  assert.match(source, /pickLanguageAlignedTrainingText\(layout\.composerLanguage, primaryDueReview\.concept\) \?\?\s*t\.reviewQueue/);
-  assert.match(source, /pickLanguageAlignedTrainingText\(layout\.composerLanguage, primaryDueReview\.concept\) \?\?\s*t\.reviewQueue/);
+  assert.match(source, /reviewConceptLabel\(primaryDueReview\.concept\)/);
   assert.match(source, /const primaryDueReviewTitle = primaryDueReview/);
   assert.doesNotMatch(source, /layout\.composerLanguage === "zh-CN" \? "待回顾" : "Due review"/);
 });

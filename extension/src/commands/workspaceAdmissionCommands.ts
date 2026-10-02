@@ -9,7 +9,7 @@ import { maybePromptCarryOverOnProjectSwitch } from './memoryCommands';
 import { rehydrateWorkbenchRuntime } from '../core/runtimeRehydration';
 import { resolveTrainerWorkspaceAdmission } from '../core/trainerWorkspaceAdmission';
 import { resolveCurrentTrainerProjectPath } from '../core/trainerWorkspaceAdmission';
-import { failClosedWorkbenchAfterWorkspaceTransfer } from '../core/workbenchData';
+import { failClosedWorkbenchAfterWorkspaceTransfer, resetWorkbenchAfterRuntimeDataChange } from '../core/workbenchData';
 import {
   applyExcludedWorkspacesToBootstrap,
   flushPendingTransferPromotionScope,
@@ -94,6 +94,10 @@ type SelectedTrainerRoot = {
   canonicalRootPath: string;
   rootId?: string;
 };
+
+function runtimeDataPointerKey(rootPath: string): string {
+  return `trainer.workspace.runtimeDataByRoot.v1:${encodeURIComponent(normalizeFsPath(rootPath))}`;
+}
 
 type WorkspaceClassificationRequest = {
   workspace_id: string;
@@ -373,7 +377,10 @@ export async function chooseTrainerWorkspaceRootCommand(
     const selection = await runWithQuiescentManagedData(
       context,
       async () => context.trainerWorkspace.selectRoot(rootPath as string),
-      (selectedManifest) => runtimeDataRootUnder(selectedManifest.rootPath),
+      (selectedManifest) => context.extensionContext.globalState.get<string>(
+        runtimeDataPointerKey(selectedManifest.rootPath),
+      ) ?? runtimeDataRootUnder(selectedManifest.rootPath),
+      { copyExistingData: false },
     );
     manifest = selection.result;
     restartedSidecar = selection.restartedSidecar;
@@ -445,7 +452,7 @@ export async function backupTrainerWorkspaceCommand(
     context,
     async (managedDataRoot) => context.trainerWorkspace.backupWorkspace(backupRoot, { managedDataRoot }),
   );
-  await rehydrateAfterWorkspaceDataTransfer(context, restartedSidecar);
+  await rehydrateAfterWorkspaceDataTransfer(context, restartedSidecar, false);
   return {
     ok: true,
     message: (
@@ -499,12 +506,18 @@ async function runWithQuiescentManagedData<T>(
   context: CommandContext,
   operation: (managedDataRoot: string) => Promise<T>,
   resolveNextManagedDataRoot?: (result: T) => string | undefined,
+  options: { copyExistingData?: boolean } = {},
 ): Promise<{ result: T; restartedSidecar: boolean }> {
   const workspaceFolder = context.getHostState().workspace.workspaceFolder;
   const currentData = context.sidecarManager.getManagedDataFolderSnapshot(workspaceFolder);
   const priorLifecycle = context.sidecarManager.getStatus().lifecycle;
   const wasReady = priorLifecycle === 'ready' || priorLifecycle === 'starting';
   const previousWorkspaceRoot = context.trainerWorkspace.getRoot();
+  if (previousWorkspaceRoot) {
+    await context.extensionContext.globalState.update(
+      runtimeDataPointerKey(previousWorkspaceRoot), currentData.effectivePath,
+    );
+  }
   let operationFailure: unknown;
 
   if (wasReady) {
@@ -519,16 +532,43 @@ async function runWithQuiescentManagedData<T>(
       if (!nextManagedDataRoot) {
         throw new Error('Workspace transfer did not include the runtime data required to resume Trainer.');
       }
+      const nextManifest = await context.trainerWorkspace.readWorkspaceManifest();
+      await context.sidecarManager.setManagedDataRootScope?.({
+        rootId: nextManifest?.rootId,
+        legacyWorkspaceFolder: workspaceFolder,
+      });
       await context.sidecarManager.configureManagedDataFolder(nextManagedDataRoot, workspaceFolder, {
         allowExistingTarget: true,
+        ...options,
       });
+      const nextRoot = context.trainerWorkspace.getRoot();
+      if (nextRoot) {
+        await context.extensionContext.globalState.update(
+          runtimeDataPointerKey(nextRoot), nextManagedDataRoot,
+        );
+      }
     }
     return { result, restartedSidecar: wasReady };
   } catch (error) {
     operationFailure = error;
     if (resolveNextManagedDataRoot) {
-      await context.trainerWorkspace.rollbackWorkspaceRoot(previousWorkspaceRoot).catch(() => undefined);
-      await patchTrainerWorkspaceAdmission(context).catch(() => undefined);
+      try {
+        await context.trainerWorkspace.rollbackWorkspaceRoot(previousWorkspaceRoot);
+        const previousManifest = await context.trainerWorkspace.readWorkspaceManifest();
+        await context.sidecarManager.setManagedDataRootScope?.({
+          rootId: previousManifest?.rootId,
+          legacyWorkspaceFolder: workspaceFolder,
+        });
+        await context.sidecarManager.configureManagedDataFolder(currentData.effectivePath, workspaceFolder, {
+          allowExistingTarget: true,
+          copyExistingData: false,
+        });
+        await patchTrainerWorkspaceAdmission(context);
+      } catch (rollbackError) {
+        context.outputChannel.appendLine(
+          `[workspace] Transfer rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+        );
+      }
     }
     throw error;
   } finally {
@@ -550,13 +590,16 @@ async function runWithQuiescentManagedData<T>(
 async function rehydrateAfterWorkspaceDataTransfer(
   context: CommandContext,
   restartedSidecar: boolean,
+  dataChanged = true,
 ): Promise<void> {
   const incomingWorkspaceId = incomingWorkspaceIdAfterAdmission(
     context,
     context.getHostState().bootstrap.memory.workspace?.trainerWorkspace,
   );
   await context.patchWorkbenchData(
-    failClosedWorkbenchAfterWorkspaceTransfer(context.getHostState().bootstrap, incomingWorkspaceId),
+    dataChanged
+      ? resetWorkbenchAfterRuntimeDataChange(context.getHostState(), incomingWorkspaceId)
+      : failClosedWorkbenchAfterWorkspaceTransfer(context.getHostState().bootstrap, incomingWorkspaceId),
   );
   if (!restartedSidecar) {
     return;
@@ -1152,14 +1195,14 @@ async function provisionManagedProject(
     selectedRoot = await relocateWorkspaceRootForProject(context, projectPath, selectedRoot);
   }
 
-  const status = await context.sidecarManager.ensureRunning();
+  let status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
     throw new Error(status.detail ?? 'Trainer backend is unavailable.');
   }
 
   const workspaceName = basenameFs(projectPath) || 'Trainer';
   const workspaceFileSnapshot = await buildWorkspaceFileSnapshot(context);
-  const classification = await classifyProjectForAdmission(context, status.port, {
+  let classification = await classifyProjectForAdmission(context, status.port, {
     workspace_id: projectPath,
     folder_path: projectPath,
     root_id: selectedRoot.rootId,
@@ -1173,8 +1216,31 @@ async function provisionManagedProject(
   if (!registeredRootId || !registeredRootPath) {
     throw new Error('Trainer backend did not register the selected workspace root before adding the project.');
   }
+  const rootScopeChanged = selectedRoot.rootId !== registeredRootId;
   await context.trainerWorkspace.setRootIdentity(registeredRootId, registeredRootPath);
   selectedRoot = await readSelectedTrainerRoot(context);
+  if (rootScopeChanged) {
+    // Root registration may have happened during the initial unscoped launch.
+    // Switch storage before creating the project/session, then obtain a fresh
+    // discovery owned by the backend that will keep that project's data.
+    await patchTrainerWorkspaceAdmission(context);
+    status = await context.sidecarManager.ensureRunning();
+    if (status.lifecycle !== 'ready' || !status.port) {
+      throw new Error(status.detail ?? 'Trainer backend is unavailable.');
+    }
+    classification = await classifyProjectForAdmission(context, status.port, {
+      workspace_id: projectPath, folder_path: projectPath,
+      root_id: selectedRoot.rootId, root_path: selectedRoot.canonicalRootPath,
+      remote_name: context.getHostState().workspace.remoteName ?? '',
+      ...(workspaceFileSnapshot ? { workspace_file_snapshot: workspaceFileSnapshot } : {}),
+      ...(responseLanguage ? { response_language: responseLanguage } : {}),
+    });
+    if (classification.root_identity?.rootId !== selectedRoot.rootId ||
+        !classification.root_identity?.rootPath ||
+        !pathsEqual(classification.root_identity.rootPath, selectedRoot.canonicalRootPath)) {
+      throw new Error('Trainer workspace changed while this project was being added.');
+    }
+  }
   const started = await postUserInitiatedProjectAdmission<{ session_id?: string }>(
     context,
     status.port,

@@ -16,6 +16,21 @@ const workspaceContextModulePath = path.resolve(
   'workspaceContext.js',
 );
 
+test('selected root scopes runtime storage before a discovered project is managed', () => {
+  const { getRuntimeWorkspaceContext } = loadWithVscodeMock(workspaceContextModulePath, {
+    workspace: { workspaceFolders: [] }, window: {},
+  });
+  const runtime = getRuntimeWorkspaceContext({ getHostState: () => ({
+    workspace: { workspaceFolder: '/projects/new-project' },
+    bootstrap: { memory: { workspace: { trainerWorkspace: {
+      status: 'project-found', rootId: 'root-selected', rootPath: '/learning',
+    } } } },
+  }) });
+  assert.equal(runtime.rootId, 'root-selected');
+  assert.equal(runtime.contextId, undefined);
+  assert.equal(runtime.workspaceId, '/projects/new-project');
+});
+
 test('getWorkspaceId and getWorkspaceName prefer activeWorkspaceRoot over workspaceFolder', () => {
   const vscodeMock = {
     workspace: {

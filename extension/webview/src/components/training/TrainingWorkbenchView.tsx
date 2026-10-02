@@ -1,4 +1,4 @@
-import { useState,  useMemo, type ReactNode } from "react";
+import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
 
 import {
   deriveTrainingExecutionState,
@@ -15,7 +15,7 @@ import { ActionButton } from "../common/ActionButton";
 import { TrainerSpinner } from "../common/TrainerSpinner";
 import { RemoteVerificationPanel } from "./RemoteVerificationPanel";
 import { remoteVerifyCopy } from "./remoteVerificationCopy";
-import { SkillProjectionStrip } from "./SkillProjectionStrip";
+import { MessageRichContent } from "../coach/MessageRichContent";
 import { CollapseSection } from "../common/CollapseSection";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type { ComposerLanguage, TrainingCardType } from "../../lib/types";
@@ -117,6 +117,7 @@ export interface TrainingWorkbenchViewProps {
   /** Phase-D: evidence-derived skill states for the active attempt. */
   skillProjection?: TrainingSkillProjection;
   reviewItems?: TrainingReviewItem[];
+  reviewQueueOpenRequest?: boolean;
   reviewSummary?: string;
   onReviewQueueAction?: (payload: {
     concept: string;
@@ -2362,6 +2363,7 @@ export function TrainingWorkbenchView({
   latestLearningFollowup,
   skillProjection,
   reviewItems = [],
+  reviewQueueOpenRequest = false,
   reviewSummary,
   onReviewQueueAction,
   recentWins = [],
@@ -2411,6 +2413,7 @@ export function TrainingWorkbenchView({
   }, [reviewFocusGroups]);
   const t = resolveWorkbenchCopy(language);
   const operationMessage = useWorkbenchState((state) => state.operationMessage);
+  const cardGenerationPending = useWorkbenchState((state) => state.streaming.isStreaming);
   const handoffOwnerCardId = useWorkbenchState(
     (state) => state.data.workspaceTrainingState?.latestTrainingHandoff?.candidateId,
   );
@@ -2428,6 +2431,18 @@ export function TrainingWorkbenchView({
     return window.matchMedia("(max-width: 420px)").matches;
   });
   const isFlashCard = cardType === "flash";
+  const currentCardRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!reviewQueueOpenRequest && cardId) {
+      currentCardRef.current?.scrollIntoView({ block: "start" });
+    }
+  }, [cardId, reviewQueueOpenRequest]);
+  const reviewQueueRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (reviewQueueOpenRequest && reviewItems.length > 0) {
+      reviewQueueRef.current?.scrollIntoView({ block: "start" });
+    }
+  }, [reviewQueueOpenRequest, reviewItems.length]);
   const normalizedTrainingSubmode = (trainingSubmode ?? "")
     .trim()
     .toLowerCase()
@@ -2511,6 +2526,7 @@ export function TrainingWorkbenchView({
   const flashPromptText = flashPrompt?.trim() || currentStep.trim() || title;
   const resolvedWhyNow = firstText(whyThisCard?.trim(), whyNow?.trim());
   const resolvedProblemStatement = firstText(
+    cardOnly && !isFlashCard ? suggestedWorkspaceAction?.trim() : undefined,
     problemStatement?.trim(),
     isFlashCard ? flashPromptText : undefined,
     currentStep.trim(),
@@ -2727,15 +2743,19 @@ export function TrainingWorkbenchView({
         : trainingWorkbenchText(language, "verifyFileNote")
       : manualPracticeCopy.verifyNote;
   const cardOnlyTask = resolvedProblemStatement;
-  const cardOnlyDoneLine = firstText(routeVerifySummary, resolvedSuccessSignal);
+  const cardOnlyDoneLine = firstText(latestVerifiedResult);
   const cardOnlyDoneText =
     cardOnlyDoneLine &&
     normalizeCardText(cardOnlyDoneLine) !== normalizeCardText(displayTitle) &&
     normalizeCardText(cardOnlyDoneLine) !== normalizeCardText(cardOnlyTask)
       ? cardOnlyDoneLine
       : undefined;
-  const cardOnlyDeliverable =
-    firstText(resolvedDeliverables[0]?.trim(), resolvedSuccessSignal, cardOnlyTask) ?? cardOnlyTask;
+  const cardOnlyDeliverable = resolvedDeliverables.length > 1
+    ? resolvedDeliverables.map(item => `- ${item.replace(/\n/g, "\n  ")}`).join("\n")
+    : firstText(resolvedDeliverables[0]?.trim(), resolvedSuccessSignal, cardOnlyTask) ?? cardOnlyTask;
+  const cardOnlyVerification = resolvedVerifyItems.length > 1
+    ? resolvedVerifyItems.map(item => `- ${item.replace(/\n/g, "\n  ")}`).join("\n")
+    : firstText(resolvedVerifyItems[0], resolvedSuccessSignal, practiceSectionNote);
   const cardOnlyWhyNowSummary = compactCardText(firstText(resolvedWhyNow), 120);
   const learnSectionLabel = learnPhaseActive
     ? trainingWorkbenchText(language, "studyFirstLabel")
@@ -2778,7 +2798,7 @@ export function TrainingWorkbenchView({
     {
       key: "verify",
       label: trainingLoopStepLabel("verify", language),
-      detail: routeVerifySummary,
+      detail: cardOnlyVerification,
     },
     {
       key: "return",
@@ -2791,8 +2811,9 @@ export function TrainingWorkbenchView({
   // done/blocker lines restated the verify step without a label. Walk the
   // sections in reading order and keep only the first occurrence of each
   // normalized value, so every line on the card earns its place.
-  const cardOnlySeenValues = new Set<string>();
+  const cardOnlySeenValues = new Set([displayTitle, cardOnlyTask].filter(Boolean).map(normalizeCardText));
   const cardOnlyDistinctSections = cardOnlyBodySections.filter((section) => {
+    if (section.key !== "deliverable" && section.key !== "verify") return false;
     const title = section.title?.trim();
     const detail = section.detail?.trim();
     if (!title && !detail) {
@@ -2987,7 +3008,7 @@ export function TrainingWorkbenchView({
         </>
       ) : (
         <>
-          <section className="training-current training-current--primary training-current--single-card">
+          <section ref={currentCardRef} className="training-current training-current--primary training-current--single-card">
             {cardOnly ? (
               <div
                 className="training-current__card-stack training-current__card-stack--card-only"
@@ -2999,31 +3020,48 @@ export function TrainingWorkbenchView({
                   <div className="training-current__card-face">
                     <div className="training-current__sentence" data-view-identity="true" data-view-why="">
                       <div className="training-current__lead training-current__lead--card-face training-current__lead--floating">
-                        <h2 data-view-object="">{displayTitle}</h2>
+                        <div className="training-current__heading">
+                          <h2 data-view-object="">{displayTitle}</h2>
+                        </div>
                       </div>
-                      {cardOnlyTask &&
+                    {cardOnlyTask &&
                       normalizeCardText(cardOnlyTask) !== normalizeCardText(displayTitle) ? (
-                        <p data-view-why="">{cardOnlyTask}</p>
+                        <div className="training-current__markdown" data-view-why="">
+                          <MessageRichContent body={cardOnlyTask} language={language} />
+                        </div>
                       ) : null}
                     </div>
+                    {showLearnFirstPanel ? (
+                      <div className="training-next-move">
+                        <span className="training-next-move__label">{learnSectionLabel}</span>
+                        {learnFirstTitle ? <strong>{learnFirstTitle}</strong> : null}
+                        <MessageRichContent body={learnFirstDetail ?? ""} language={language} />
+                        {visibleLearnFirstArtifacts.length > 0 ? (
+                          <div className="training-code-list" aria-label={trainingWorkbenchText(language, "studyCuesFirst")}>
+                            {visibleLearnFirstArtifacts.map((item, index) => <code key={`${item}-${index}`}>{item}</code>)}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {cardOnlyDistinctSections.map((section) => (
                       <article key={section.key} className="training-current__card-section" data-training-card-fact={section.key}>
                         <span className="training-current__card-label">{section.label}</span>
                         {section.title ? (
-                          <p className="training-current__card-value">{section.title}</p>
+                          <div className="training-current__markdown training-current__card-value">
+                            <MessageRichContent body={section.title} language={language} />
+                          </div>
                         ) : null}
-                        {section.detail ? <p>{section.detail}</p> : null}
+                        {section.detail ? <div className="training-current__markdown"><MessageRichContent body={section.detail} language={language} /></div> : null}
                       </article>
                     ))}
                     {cardOnlyDoneTextDistinct ? (
-                      <p className="training-current__done">{cardOnlyDoneTextDistinct}</p>
+                      <div className="training-current__done training-current__markdown"><MessageRichContent body={cardOnlyDoneTextDistinct} language={language} /></div>
                     ) : null}
                     {cardOnlyBlockerDistinct ? (
                       <p className="training-current__verify-result" role="status">
                         {cardOnlyBlockerDistinct}
                       </p>
                     ) : null}
-                    <SkillProjectionStrip language={language} projection={skillProjection} variant="full" />
                     {shouldElevateReturnAction ? (
                       <div
                         className="training-current__actions training-current__actions--primary"
@@ -3033,32 +3071,7 @@ export function TrainingWorkbenchView({
                         {actions}
                       </div>
                     ) : null}
-                  {!trainingRailHiddenForViewport ? (
-                  <div
-                    className="training-loop-rail"
-                    aria-label={trainingSurfaceLabel(language, "trainingLoop")}
-                    data-training-loop-layout="3-plus-2"
-                    data-training-loop-step-count={trainingLoopSteps.length}
-                  >
-                    {trainingLoopSteps.map((step) => (
-                      <div
-                        key={step.key}
-                        className={`training-loop-step is-${step.state}`}
-                        aria-current={step.state === "active" ? "step" : undefined}
-                        title={step.label}
-                        data-training-loop-step={step.key}
-                        data-training-loop-state={step.state}
-                        data-training-loop-label={step.label}
-                      >
-                        <span className="training-loop-step__dot" aria-hidden="true" />
-                        <span className="training-loop-step__label" data-training-loop-step-label={step.label}>
-                          {step.label}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  ) : null}
-                  {actions ? (
+                  {actions && !shouldElevateReturnAction ? (
                     <div
                       className="training-current__actions training-current__actions--primary"
                       role="group"
@@ -3109,6 +3122,15 @@ export function TrainingWorkbenchView({
                   ) : null}
                   </div>
                 </div>
+                {onNextCard ? (
+                  <footer className="training-current__footer" data-training-card-footer="true">
+                    <button className="button button--ghost training-current__next-card" type="button"
+                      data-training-next-card="true" disabled={cardGenerationPending}
+                      onClick={() => onNextCard()}>
+                      <span>{t.nextCard}</span><ChevronRightIcon size={14} />
+                    </button>
+                  </footer>
+                ) : null}
               </div>
             ) : null}
             {!cardOnly ? (
@@ -3161,7 +3183,7 @@ export function TrainingWorkbenchView({
                   className="training-card-nav__button"
                   type="button"
                   disabled={!onNextCard}
-                  onClick={onNextCard}
+                  onClick={() => onNextCard?.()}
                   title={t.nextCard}
                 >
                   <span>{t.nextCard}</span>
@@ -3486,15 +3508,12 @@ export function TrainingWorkbenchView({
             ) : null}
           </section>
 
-          {!cardOnly && (carryoverCards.length > 0 ||
-            reviewItems.length > 0 ||
-            reviewSummary ||
-            recentWins.length > 0 ||
-            weakSpots.length > 0) ? (
-            <details className="training-details">
+          {!cardOnly && (reviewItems.length > 0 || carryoverCards.length > 0 ||
+            reviewSummary || recentWins.length > 0 || weakSpots.length > 0) ? (
+            <details ref={reviewQueueRef} className="training-details" data-training-review-queue="true" open={reviewQueueOpenRequest}>
               <summary>{trainingWorkbenchText(language, "followUpReview")}</summary>
 
-              {carryoverCards.length > 0 ? (
+              {!cardOnly && carryoverCards.length > 0 ? (
                 <div className="training-carryover-stack">
                   {carryoverCards.map((card) => (
                     <TrainingCarryoverRow
@@ -3505,7 +3524,7 @@ export function TrainingWorkbenchView({
                 </div>
               ) : null}
 
-              {reviewSummary ? <p className="training-details__summary">{reviewSummary}</p> : null}
+              {reviewSummary && reviewItems.length === 0 ? <p className="training-details__summary">{reviewSummary}</p> : null}
 
               {cappedReviewGroups.length > 0 ? (
                 <div className="training-review-stack">
@@ -3593,7 +3612,7 @@ export function TrainingWorkbenchView({
                 </div>
               ) : null}
 
-              {recentWins.length > 0 || weakSpots.length > 0 ? (
+              {!cardOnly && (recentWins.length > 0 || weakSpots.length > 0) ? (
                 <div className="training-signal-grid">
                   {recentWins.length > 0 ? (
                     <section className="training-signal-card">

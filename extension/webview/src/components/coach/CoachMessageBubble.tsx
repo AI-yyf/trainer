@@ -128,6 +128,13 @@ function supportDetailLines(
   message: ConversationMessage,
   language: ComposerLanguage,
 ): string[] {
+  if (message.role === "user") {
+    return (message.attachments ?? []).map((attachment) =>
+      coachMessageBubbleCopy(language, "{label}：{value}")
+        .replace("{label}", attachment.label)
+        .replace("{value}", attachment.value),
+    );
+  }
   const lines: string[] = [];
   const seen = new Set<string>();
   const push = (value: string | undefined) => {
@@ -260,6 +267,7 @@ function CoachMessageBubbleImpl({
           <CoachArtifactBlock
             key={`${artifact.kind}:${artifact.title}:${index}`}
             artifact={artifact}
+            compact={message.role === "assistant" && Boolean(message.body.trim())}
             language={language}
             openLabel={openArtifactLabel}
             onOpen={
@@ -275,7 +283,7 @@ function CoachMessageBubbleImpl({
     );
   }
 
-  if (hasSupportDetails) {
+  if (hasSupportDetails && message.role !== "assistant") {
     detailBlocks.push(
       <div key="support" className="message-support-list message-support-list--compact">
         {supportDetails.map((line) => (
@@ -290,7 +298,7 @@ function CoachMessageBubbleImpl({
   // `detailBlocks` is only fed by these two sources, and a support block can be
   // pushed while still empty (e.g. a preview without lines), so the gate reads
   // the sources rather than the array.
-  const hasSupplementMaterial = messageHasArtifacts || supportDetails.length > 0;
+  const hasSupplementMaterial = messageHasArtifacts || (message.role !== "assistant" && supportDetails.length > 0);
   const showSystemMeta = message.role === "system";
   // Feed chrome stays out of the way: user turns render without a repeated
   // author/timestamp row; the timestamp remains available as a tooltip.
@@ -311,7 +319,8 @@ function CoachMessageBubbleImpl({
     message.role === "user" && !messageHasArtifacts && supportDetails.length === 1 && attachmentCount <= 1;
   const visibleParts =
     message.role === "assistant" && message.parts?.length
-      ? message.parts.filter((part) => !HIDDEN_ASSISTANT_PART_TYPES.has(part.type))
+      ? message.parts.filter((part) => !HIDDEN_ASSISTANT_PART_TYPES.has(part.type) &&
+          !(hasBody && ["training_card", "plan_update", "test_result"].includes(part.type)))
       : message.parts;
   const hasParts = (visibleParts?.length ?? 0) > 0;
   const hasRunningActivities =
@@ -384,9 +393,6 @@ function CoachMessageBubbleImpl({
             streaming={streaming}
           />
         ) : null}
-        {!streaming && message.role === "assistant" ? (
-          <ReplySuffixIcons message={message} />
-        ) : null}
         {hasParts ? <CoachMessageParts parts={visibleParts ?? []} language={language} /> : null}
         {children}
         {streaming ? (
@@ -412,13 +418,6 @@ function CoachMessageBubbleImpl({
             <div className="message-bubble__details-body">{detailBlocks}</div>
           </div>
         )
-      ) : null}
-
-      {toolTrailActivities.length > 0 ? (
-        <details className="message-bubble__tool-trail">
-          <summary>{toolTrailSummary(toolTrailActivities, language)}</summary>
-          <AgentActivityStrip activities={toolTrailActivities} language={language} />
-        </details>
       ) : null}
 
       {showAssistantActions ? (

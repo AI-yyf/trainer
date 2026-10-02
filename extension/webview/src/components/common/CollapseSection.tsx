@@ -121,7 +121,14 @@ export function CollapseSection(props: CollapseSectionProps): JSX.Element {
           </span>
         ) : null}
       </div>
-      <div id={bodyId} className="collapse-section__body-wrap" aria-hidden={!isOpen}>
+      <div
+        id={bodyId}
+        className="collapse-section__body-wrap"
+        aria-hidden={!isOpen}
+        ref={(node) => {
+          if (node) node.inert = !isOpen;
+        }}
+      >
         <div className="collapse-section__body">{children}</div>
       </div>
     </section>

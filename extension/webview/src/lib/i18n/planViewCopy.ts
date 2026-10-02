@@ -38,7 +38,7 @@ export type PlanViewCopy = {
 const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
   "zh-CN": {
     goalHint: "先把这一轮压成一个可验证的结果。",
-    emptyState: (coachName) => `先启用一组可用连接。之后 ${coachName} 会把当前项目和对话压成正式主线。`,
+    emptyState: (coachName) => `还没有正式学习计划。告诉 ${coachName} 你的目标和可用时间，然后生成计划。`,
     overviewLabel: "这条训练线",
     currentStageLabel: "当前阶段",
     currentStageHint: "先看你现在在哪一段。",
@@ -72,7 +72,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
   },
   "en-US": {
     goalHint: "Compress this turn into one verifiable result first.",
-    emptyState: (coachName) => `Connect a working provider first. Then ${coachName} will turn the project and conversation into a formal learning thread.`,
+    emptyState: (coachName) => `No formal learning plan yet. Tell ${coachName} your goal and available time, then generate a plan.`,
     overviewLabel: "This learning thread",
     currentStageLabel: "Current stage",
     currentStageHint: "Start by locating your current stage.",
@@ -106,7 +106,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
   },
   "es-ES": {
     goalHint: "Primero convierte esta ronda en un resultado verificable.",
-    emptyState: (coachName) => `Primero configura una conexión que funcione. Después, ${coachName} convertirá el proyecto y la conversación en una ruta de aprendizaje formal.`,
+    emptyState: (coachName) => `Aún no hay un plan formal. Indica a ${coachName} tu objetivo y tiempo disponible y genera un plan.`,
     overviewLabel: "Esta ruta de aprendizaje",
     currentStageLabel: "Etapa actual",
     currentStageHint: "Empieza por ubicar tu etapa actual.",
@@ -140,7 +140,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
   },
   "fr-FR": {
     goalHint: "Commencez par transformer cette étape en un résultat vérifiable.",
-    emptyState: (coachName) => `Configurez d'abord une connexion utilisable. Ensuite, ${coachName} transformera le projet et la conversation en parcours d'apprentissage formel.`,
+    emptyState: (coachName) => `Pas encore de plan formel. Indiquez à ${coachName} votre objectif et votre temps disponible, puis générez un plan.`,
     overviewLabel: "Ce fil d'apprentissage",
     currentStageLabel: "Étape actuelle",
     currentStageHint: "Commencez par repérer votre étape actuelle.",
@@ -174,7 +174,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
   },
   "de-DE": {
     goalHint: "Verdichte diese Runde zuerst zu einem überprüfbaren Ergebnis.",
-    emptyState: (coachName) => `Richte zuerst eine funktionierende Verbindung ein. Danach fasst ${coachName} Projekt und Gespräch zu einem formalen Lernpfad zusammen.`,
+    emptyState: (coachName) => `Noch kein formaler Lernplan. Nenne ${coachName} dein Ziel und deine verfügbare Zeit und erstelle einen Plan.`,
     overviewLabel: "Dieser Lernpfad",
     currentStageLabel: "Aktuelle Phase",
     currentStageHint: "Finde zuerst deine aktuelle Phase.",
@@ -208,7 +208,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
   },
   "ja-JP": {
     goalHint: "この回を、まず検証できる一つの結果に絞り込みます。",
-    emptyState: (coachName) => `まず使える接続を設定してください。その後、${coachName} がプロジェクトと対話を正式な学習の主線にまとめます。`,
+    emptyState: (coachName) => `正式な学習計画はまだありません。${coachName} に目標と使える時間を伝えて、計画を作成してください。`,
     overviewLabel: "この学習の主線",
     currentStageLabel: "現在の段階",
     currentStageHint: "まず今いる段階を確認します。",
@@ -242,7 +242,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
   },
   "ko-KR": {
     goalHint: "이번 단계를 먼저 검증 가능한 하나의 결과로 좁혀 주세요.",
-    emptyState: (coachName) => `먼저 사용할 수 있는 연결을 설정하세요. 그다음 ${coachName}가 프로젝트와 대화를 정식 학습 흐름으로 정리합니다.`,
+    emptyState: (coachName) => `아직 정식 학습 계획이 없습니다. ${coachName}에게 목표와 가능한 시간을 알려 주고 계획을 만드세요.`,
     overviewLabel: "이 학습 흐름",
     currentStageLabel: "현재 단계",
     currentStageHint: "먼저 현재 단계를 확인하세요.",
@@ -276,7 +276,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
   },
   "pt-BR": {
     goalHint: "Primeiro reduza esta etapa a um resultado verificável.",
-    emptyState: (coachName) => `Primeiro configure uma conexão que funcione. Depois, ${coachName} transformará o projeto e a conversa em uma trilha formal de aprendizagem.`,
+    emptyState: (coachName) => `Ainda não há um plano formal. Diga a ${coachName} seu objetivo e tempo disponível e gere um plano.`,
     overviewLabel: "Esta trilha de aprendizagem",
     currentStageLabel: "Etapa atual",
     currentStageHint: "Comece localizando sua etapa atual.",

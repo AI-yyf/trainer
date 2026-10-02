@@ -115,7 +115,7 @@ class CheckResultCache:
             for token in command.argv[1:]
             if token != target
         )
-        return (command.name, digest, args, command.cwd is not None, id(runner) if runner is not None else None)
+        return (command.name, command.argv[0], digest, args, command.cwd is not None, id(runner) if runner is not None else None)
 
     # -- get / put ---------------------------------------------------------
     def get(

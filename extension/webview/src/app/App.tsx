@@ -9,9 +9,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { reviewConceptLabel } from "../lib/reviewLabel";
 
+import { resourceRecordIsAcknowledgedUpload } from "../../../../shared/src/resourceWorkbenchGovernance";
 import { trainerCommands } from "../../../../shared/src/commands";
 import type { TrainerOperationMessage } from "../../../../shared/src/protocol";
+import type { TrainingPlanBinding } from "../../../../shared/src/models";
 import { isComposerLanguage } from "../../../../shared/src/types";
 import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
 import { analyzeSendIntent, shouldAttachCurrentFile } from "../../../../shared/src/sendIntelligence";
@@ -101,6 +104,7 @@ import {
   leftoverTransferSkillIsNotLive,
   leftoverTrainingFocusChromeIsNotLive,
   leftoverTrainingHandoffChromeIsNotLive,
+  independentTrainingSelectionIsLive,
   leftoverResourceSelectedDetailIsNotLive,
   leftoverResourceSandboxPreviewIsNotLive,
   leftoverResourceSandboxStateIsNotLive,
@@ -263,6 +267,7 @@ import {
   postDebugVisibleFacts,
   postMessage,
   subscribeToHostMessages,
+  requestNativeSkillDraft,
 } from "../lib/vscode";
 import {
   buildGenericImageReviewPrompt,
@@ -282,7 +287,6 @@ import {
 } from "./appUiCopy";
 import { isBrowserPreviewFixtureMode } from "../lib/browserSidecar";
 import { useTrainingCommands, useTrainingAttemptLifecycle } from "./useTrainingCommands";
-import { SkillProjectionStrip } from "../components/training/SkillProjectionStrip";
 import { type TrainingRestoreContext, useWorkbenchState } from "./useWorkbenchState";
 import type { PlanReviewItem } from "../components/plan/CoachPlanView";
 import type {
@@ -856,8 +860,8 @@ const CoachSettingsView = lazy(async () => {
   return { default: module.CoachSettingsView };
 });
 const ResourcesWorkbenchView = lazy(async () => {
-  const module = await import("../components/resources/ResourcesWorkbenchView");
-  return { default: module.ResourcesWorkbenchView };
+  const module = await import("../components/resources/ResourcesReaderView");
+  return { default: module.ResourcesReaderView };
 });
 const TrainingWorkbenchView = lazy(async () => {
   const module = await import("../components/training/TrainingWorkbenchView");
@@ -1457,13 +1461,19 @@ function isShortTechnicalEnglishText(value: string): boolean {
 }
 
 function hasExcessiveEnglishProseForChinese(value: string): boolean {
-  const words = tokenizeAsciiWords(value);
+  // Code identifiers are part of the exercise, not foreign-language prose.
+  // Rejecting any unknown English token hid real Chinese questions containing
+  // names such as `pair[0].append(4)`.
+  const prose = value.replace(/```[\s\S]*?```|`[^`]*`/g, "");
+  const words = tokenizeAsciiWords(prose);
   if (words.length === 0) {
     return false;
   }
-  return words.some(
+  const unfamiliar = words.filter(
     (word) => !SHORT_ZH_TECHNICAL_ENGLISH_TOKENS.has(word) && !/\d/.test(word),
   );
+  const chineseLength = (prose.match(/[\u4e00-\u9fff]/g) ?? []).length;
+  return unfamiliar.length >= 8 && unfamiliar.join("").length > chineseLength * 2;
 }
 
 function isLanguageAlignedUiText(language: ComposerLanguage, value: string | undefined): boolean {
@@ -2180,9 +2190,17 @@ function restoredTrainingCard(
       ? {
           cardId: reviewArtifact.id,
           type: "practice" as const,
-          title: reviewArtifact.title ?? "Review recovery",
+          learningFamily: "theory" as const,
+          learningPhase: "reflect" as const,
+          title: reviewArtifact.focusArea
+            ? (reviewArtifact.title ?? "Review recovery").replace(
+                reviewArtifact.focusArea, reviewConceptLabel(reviewArtifact.focusArea),
+              )
+            : reviewArtifact.title ?? "Review recovery",
           focusArea: reviewArtifact.focusArea,
           targetSkill: reviewArtifact.focusArea,
+          deliverable: reviewArtifact.summary,
+          reflectionPrompt: reviewArtifact.guardrail,
           problemStatement: reviewArtifact.summary ?? reviewArtifact.rootCause,
           learnerDeliverables: reviewArtifact.recommendedActions,
           verificationSteps: [reviewArtifact.nextSelfImplementationRule].filter(
@@ -2682,7 +2700,7 @@ function buildSettingsFeedback(
   language: ComposerLanguage,
   slot: SettingsFeedbackSlot,
 ): SettingsActionFeedback | undefined {
-  if (!action || !message || !action.targets.includes(slot)) {
+  if (!action || !message || message.tone === "info" || !action.targets.includes(slot)) {
     return undefined;
   }
 
@@ -2868,7 +2886,7 @@ function toPlanReviewItem(
   ].filter(Boolean) as string[];
   return {
     id: `${item.source ?? "review"}-${item.concept}-${index}`,
-    title: item.concept,
+    title: reviewConceptLabel(item.concept),
     detail: item.reason,
     meta: meta.length > 0 ? meta.join(" · ") : undefined,
     surfaceMode: item.surfaceMode,
@@ -3838,6 +3856,8 @@ export function App() {
     resourceOrganizationPending,
     resourceRestoreContext,
     trainingRestoreContext,
+    trainingReviewQueueRequested,
+    beginTrainingReview,
     hasReceivedHostState,
     setActiveView,
     setResourceRestoreContext,
@@ -3918,7 +3938,7 @@ export function App() {
   const [composerModelActionDensity, setComposerModelActionDensity] =
     useState<ComposerModelActionDensity>("default");
   const [headerSwitcherDensity, setHeaderSwitcherDensity] = useState<HeaderSwitcherDensity>("full");
-  const [settingsActionState, setSettingsActionState] = useState<SettingsActionState>();
+  const [settingsActionState, updateSettingsActionState] = useState<SettingsActionState>();
   const [settingsFeedbackState, setSettingsFeedbackState] = useState<SettingsFeedbackState>({});
   const [providerApiKeyFocusRequest, setProviderApiKeyFocusRequest] = useState(0);
   const [trainingComposerFlashMode, setTrainingComposerFlashMode] =
@@ -3955,6 +3975,7 @@ export function App() {
     useState<ResourcesComposerMode>("locate");
   const [selectedResourceContextIds, setSelectedResourceContextIds] = useState<string[]>([]);
   const [resourceConversationContextIds, setResourceConversationContextIds] = useState<string[]>([]);
+  const [resourcesViewSearchQuery, setResourcesViewSearchQuery] = useState("");
   const [lastTurnView, setLastTurnView] = useState<ActiveWorkbenchView>();
   const [coachContextTransition, setCoachContextTransition] = useState<
     { signature: string; conversationLength: number } | undefined
@@ -3979,6 +4000,7 @@ export function App() {
   const trainingPersistenceSequenceRef = useRef(0);
   const [trainingPersistencePending, setTrainingPersistencePending] = useState(false);
   const [pendingMessageAction, setPendingMessageAction] = useState<string | null>(null);
+  const pendingMessageActionRef = useRef<string | null>(null);
   const pendingMessageActionTimeoutRef = useRef<number | undefined>(undefined);
   const coachAutoScrollPinnedRef = useRef(true);
   // Locally echoed user turns: shown the moment sendTurn fires, replaced
@@ -4035,6 +4057,17 @@ export function App() {
     },
     [layout.composerLanguage, setRawOperationMessage],
   );
+  const setSettingsActionState = useCallback((next?: SettingsActionState) => {
+    // A repeated connection test can return the same text as the previous one.
+    // Clear the previous outcome when starting, rather than treating identical
+    // text as an outstanding operation forever.
+    if (next) {
+      setOperationMessage(undefined);
+      updateSettingsActionState({ ...next, baselineMessageKey: undefined });
+    } else {
+      updateSettingsActionState(undefined);
+    }
+  }, [setOperationMessage]);
   const handleResourceSelectionChange = useCallback(
     (resourceIds: string[], reason?: "selection" | "unmount") => {
       setSelectedResourceContextIds(resourceIds);
@@ -4168,6 +4201,7 @@ export function App() {
                     name: replyDoc.title,
                     source: "coach-reply",
                     content: replyDoc.markdown,
+                    contentEncoding: "utf-8",
                     tags: ["coach-reply"],
                     sourceType: "file",
                   },
@@ -4243,14 +4277,19 @@ export function App() {
         }
         return;
       }
-      setPendingMessageAction(`${message.id}:${action}`);
+      if (pendingMessageActionRef.current) return;
+      pendingMessageActionRef.current = `${message.id}:${action}`;
+      setPendingMessageAction(pendingMessageActionRef.current);
       if (pendingMessageActionTimeoutRef.current !== undefined) {
         window.clearTimeout(pendingMessageActionTimeoutRef.current);
       }
-      pendingMessageActionTimeoutRef.current = window.setTimeout(() => {
-        setPendingMessageAction(null);
-        pendingMessageActionTimeoutRef.current = undefined;
-      }, 30_000);
+      if (action !== "save-resource") {
+        pendingMessageActionTimeoutRef.current = window.setTimeout(() => {
+          pendingMessageActionRef.current = null;
+          setPendingMessageAction(null);
+          pendingMessageActionTimeoutRef.current = undefined;
+        }, 30_000);
+      }
       if (action === "save-resource") {
         try {
           if (isBrowserPreview) {
@@ -4279,9 +4318,23 @@ export function App() {
             });
           } else {
             await requestCoachReplyUpload(message);
+            setOperationMessage({
+              tone: "success",
+              message: appUiCopy(layout.composerLanguage, "已把这条回复存入资料库。"),
+            });
           }
-        } catch {
-          // The resource-operation status message already surfaced the failure.
+        } catch (error) {
+          setOperationMessage({
+            tone: "error",
+            message: `${appUiCopy(layout.composerLanguage, "这条回复没有存进资料库,请重试。")} ${sanitizeErrorSurfaceText(error instanceof Error ? error.message : String(error), layout.composerLanguage)}`,
+          });
+        } finally {
+          if (pendingMessageActionTimeoutRef.current !== undefined) {
+            window.clearTimeout(pendingMessageActionTimeoutRef.current);
+            pendingMessageActionTimeoutRef.current = undefined;
+          }
+          pendingMessageActionRef.current = null;
+          setPendingMessageAction(null);
         }
         return;
       }
@@ -4552,13 +4605,15 @@ export function App() {
   const applyHostMessage = useCallback(
     (message: HostMessage, isProviderActionOverride = false) => {
       hostMessageSequenceRef.current += 1;
-      // Per-reply quick actions are acknowledged by the first stream/status
-      // message that follows the command — clear the button's pending state.
-      if (message.type === "operation/status" || message.type === "stream/start") {
+      // Reply uploads settle through their request-id acknowledgement. An
+      // unrelated status (for example Trash refresh) must not enable duplicates.
+      if ((message.type === "operation/status" || message.type === "stream/start") &&
+          !pendingMessageActionRef.current?.endsWith(":save-resource")) {
         if (pendingMessageActionTimeoutRef.current !== undefined) {
           window.clearTimeout(pendingMessageActionTimeoutRef.current);
           pendingMessageActionTimeoutRef.current = undefined;
         }
+        pendingMessageActionRef.current = null;
         setPendingMessageAction(null);
       }
       if (message.type === "remoteCompanion/state") {
@@ -4754,6 +4809,22 @@ export function App() {
     [],
   );
   const draft = layout.composerDraft;
+  const composerSessionRef = useRef<string>();
+  const composerSessionDraftsRef = useRef(new Map<string, string>());
+  const composerSessionKey = `${data.memory.workspace?.resourceSandbox?.effectivePath
+    ?? data.memory.workspace?.workspaceId ?? data.workspaceName}\u0000${data.sessionLabel}`;
+  useEffect(() => {
+    if (!hasReceivedHostState || !data.sessionLabel) {
+      return;
+    }
+    const previousSession = composerSessionRef.current;
+    composerSessionRef.current = composerSessionKey;
+    if (!previousSession || previousSession === composerSessionKey) {
+      return;
+    }
+    composerSessionDraftsRef.current.set(previousSession, draft);
+    setComposerDraft(composerSessionDraftsRef.current.get(composerSessionKey) ?? "");
+  }, [composerSessionKey, data.sessionLabel, draft, hasReceivedHostState, setComposerDraft]);
   const normalizedDraft = draft.trim();
   useEffect(() => {
     if (activeView === "plan" && normalizedDraft) {
@@ -5183,7 +5254,7 @@ export function App() {
       providerDraft.maxOutputTokens !== data.providerConfig.maxOutputTokens ||
       providerModelTokenLimitsKey(providerDraft.modelTokenLimits) !==
         providerModelTokenLimitsKey(data.providerConfig.modelTokenLimits) ||
-      providerDraft.credentialMode !== data.providerConfig.credentialMode ||
+      providerDraft.credentialMode !== (data.providerConfig.credentialMode ?? "ui_proxy") ||
       providerDraftStringArrayKey(providerDraft.catalogModels) !==
         providerDraftStringArrayKey(data.providerConfig.catalogModels) ||
       providerDraftStringArrayKey(providerDraft.allowedModels) !==
@@ -5201,6 +5272,7 @@ export function App() {
         JSON.stringify(data.providerConfig.thinkingConfig ?? null) ||
       providerDraftHasUnsavedApiKey,
     [
+      data.providerConfig.configured,
       data.providerConfig.baseUrl,
       data.providerConfig.cacheTtlSeconds,
       data.providerConfig.catalogSource,
@@ -5546,7 +5618,9 @@ export function App() {
       return;
     }
 
-    if (!operationMessage) {
+    // Backend readiness/progress can arrive while a connection test is active.
+    // Only its final success/error should settle the settings operation.
+    if (!operationMessage || operationMessage.tone === "info") {
       return;
     }
 
@@ -5726,19 +5800,6 @@ export function App() {
       cancelled = true;
     };
   }, [isBrowserPreview]);
-
-  useEffect(() => {
-    if (!hasReceivedHostState || isBrowserPreview || activeView !== "resources") {
-      return;
-    }
-
-    postMessage({
-      type: "command/execute",
-      payload: {
-        commandId: trainerCommands.refreshResourceTrash,
-      },
-    });
-  }, [activeView, hasReceivedHostState, isBrowserPreview]);
 
   useEffect(() => {
     if (isBrowserPreview) {
@@ -6009,9 +6070,14 @@ export function App() {
     recovered: recoveredRuntime,
     runtimeCurrentStep: leftoverChromeIdentity.runtimeCurrentStep,
   });
+  const independentTrainingSelectionLive = independentTrainingSelectionIsLive({
+    workspaceId: data.memory.workspace?.workspaceId,
+    selectedCardId: data.workspaceTrainingState?.selectedCardId,
+    selection: data.memory.workspace?.liveTrainingSelection,
+  });
   const leftoverTrainingHandoffChromeNotLive = leftoverTrainingHandoffChromeIsNotLive(
     leftoverChromeIdentity,
-  );
+  ) && !independentTrainingSelectionLive;
   const leftoverSandboxPreviewNotLive = leftoverResourceSandboxPreviewIsNotLive(
     leftoverChromeIdentity,
   );
@@ -6026,15 +6092,15 @@ export function App() {
       recovered: recoveredRuntime,
       runtimeCurrentStep: leftoverChromeIdentity.runtimeCurrentStep,
     }) || leftoverTrainingHandoffChromeNotLive;
-  const leftoverSettingsProfileRhythmNotLive = leftoverSettingsProfileRhythmIsNotLive({
+  const leftoverSettingsProfileRhythmNotLive = !data.sessionHistoryRestored && leftoverSettingsProfileRhythmIsNotLive({
     recovered: recoveredRuntime,
     runtimeCurrentStep: planRuntimeStatus?.currentStep ?? runtimeCurrentThread?.currentStep,
   });
-  const leftoverSettingsLearnerProjectOnboardingNotLive = leftoverSettingsLearnerProjectOnboardingIsNotLive({
+  const leftoverSettingsLearnerProjectOnboardingNotLive = !data.sessionHistoryRestored && leftoverSettingsLearnerProjectOnboardingIsNotLive({
     recovered: recoveredRuntime,
     runtimeCurrentStep: planRuntimeStatus?.currentStep ?? runtimeCurrentThread?.currentStep,
   });
-  const leftoverCoachConversationNotLive = leftoverCoachConversationIsNotLive({
+  const leftoverCoachConversationNotLive = !data.sessionHistoryRestored && leftoverCoachConversationIsNotLive({
     recovered: recoveredRuntime,
     runtimeCurrentStep: planRuntimeStatus?.currentStep ?? runtimeCurrentThread?.currentStep,
   });
@@ -6321,7 +6387,7 @@ export function App() {
   const formalPlanIdentity = useMemo(
     () => ({
       recovered: recoveredRuntime,
-      runtimeCurrentStep: recoveredDisplayFacts.currentStep,
+      runtimeCurrentStep: runtimeCurrentStepRaw,
       planCurrentStep: data.plan.currentStep,
       runtimePlanId: data.memory.workspace?.latestPlanRuntime?.planId,
       planId: data.plan.id,
@@ -6330,7 +6396,7 @@ export function App() {
       data.memory.workspace?.latestPlanRuntime?.planId,
       data.plan.currentStep,
       data.plan.id,
-      recoveredDisplayFacts.currentStep,
+      runtimeCurrentStepRaw,
       recoveredRuntime,
     ],
   );
@@ -6496,7 +6562,7 @@ export function App() {
       .map((item) => item?.trim())
       .filter(Boolean)
       .join(" — ");
-    if (verifySentence) {
+    if (verifyAdvance?.advanced && verifySentence) {
       return verifySentence;
     }
     if (recoveredRuntime && recoveredDisplayFacts.currentStep) {
@@ -6526,7 +6592,8 @@ export function App() {
     liveCoachTurnChrome.coachJudgmentTeachingGoal,
     runtimeWhyNow,
   ]);
-  const verifyPlanAdvanceNext = planRuntimeStatus?.verifyPlanAdvance?.next?.trim() || "";
+  const verifyPlanAdvanceNext = planRuntimeStatus?.verifyPlanAdvance?.advanced
+    ? planRuntimeStatus.verifyPlanAdvance.next?.trim() || "" : "";
   const planVerifyItems = useMemo(() => {
     const items = lockRecoveredPlanVerifyItems({
       recovered: recoveredRuntime,
@@ -7153,6 +7220,7 @@ export function App() {
     recoveredRuntime &&
     (planOrientation.primaryAction === "clear_blocker" ||
       planOrientation.primaryAction === "continue_step" ||
+      planOrientation.primaryAction === "unfreeze_plan" ||
       planOrientation.primaryAction === "adopt_evidence" ||
       planOrientation.primaryAction === "wait")
       ? planOrientation.primaryAction
@@ -7176,7 +7244,9 @@ export function App() {
     }
   }, [activeView, planOrientation.primaryAction]);
   const firstLookContinuePrimary = planOrientation.primaryAction === "continue_without_plan";
-  const liveResources = leftoverResourceLibraryListNotLive ? [] : data.resources;
+  const liveResources = leftoverResourceLibraryListNotLive
+    ? data.resources.filter(resourceRecordIsAcknowledgedUpload)
+    : data.resources;
   const liveSandboxState = leftoverResourceSandboxStateNotLive
     ? undefined
     : data.memory.sandboxState;
@@ -7220,7 +7290,8 @@ export function App() {
       trustState: selectedResource?.trustState,
       freshness: selectedResource?.freshness,
       qualityFlags: selectedResource?.qualityFlags,
-      searchQuery: data.resourceSearch?.query,
+      searchQuery: data.resourceSearch?.query.trim() === resourcesViewSearchQuery.trim()
+        ? resourcesViewSearchQuery : undefined,
       searchHitCount: data.resourceSearch?.hits.length ?? data.resourceSearch?.total,
       searchWorkspaceId,
       currentWorkspaceId,
@@ -7251,6 +7322,7 @@ export function App() {
     recoveredRuntime,
     data.memory.workspace?.workspaceId,
     data.resourceSearch,
+    resourcesViewSearchQuery,
     data.workspaceTrainingState?.latestTrainingHandoff,
     data.workspaceTrainingState?.workspaceId,
     layout.composerLanguage,
@@ -7330,6 +7402,10 @@ export function App() {
       (shouldPrioritizeReviewArtifact ||
         (trainingRestoreForeground && trainingRestoreContext?.target === "review_artifact")),
   );
+  // A retained review is history unless that exact review is the foreground card.
+  const activeTrainingReviewArtifact = reviewArtifactForeground
+    ? trainingState?.reviewArtifact
+    : undefined;
   const trainingLedgerEntry =
     trainingState?.trainingEventLedger?.find((entry) => entry.selectedCardId === trainingState?.selectedCardId) ??
     trainingState?.trainingEventLedger?.find((entry) => entry.cardCandidateId === trainingState?.selectedCardId) ??
@@ -7374,12 +7450,15 @@ export function App() {
               (trainingCardType === "flash" ? "flash" : "practice"))
       : trainingState?.latestTrainingSubmode;
   const effectiveSelectedTrainingCardStatus = reviewArtifactForeground
-    ? (trainingState?.reviewArtifact?.status === "resolved" ? "fed_back" : "active")
+    ? (trainingState?.reviewArtifact?.status === "resolved" ? "reviewed" : "active")
     : (trainingRestoreForeground
       ? (restoredTrainingCardStatus ?? "active")
       : trainingState?.selectedCardStatus);
-  const visibleTrainingCardTitle = liveTrainingNextChallengeTitle({
+  const visibleTrainingCardTitle = reviewArtifactForeground
+    ? selectedTrainingCardCandidate?.title
+    : liveTrainingNextChallengeTitle({
     ...formalPlanIdentity,
+    recovered: formalPlanIdentity.recovered && !independentTrainingSelectionLive,
     planTitle: data.plan.title,
     taskTitle: data.task.title,
     cardTitle: pickLanguageAlignedTrainingText(
@@ -7571,6 +7650,7 @@ export function App() {
   });
   const liveTrainingHandoffChrome = preferRecoveredTrainingHandoffChrome({
     ...leftoverChromeIdentity,
+    recovered: !independentTrainingSelectionLive && leftoverChromeIdentity.recovered,
     successSignal: pickFirstText(
       trainingState?.latestTrainingHandoff?.successSignal,
       selectedTrainingCardCandidate?.successSignal,
@@ -7667,7 +7747,7 @@ export function App() {
     trainingState?.dueReviews?.length ? trainingState.dueReviews : data.memory.dueReviews;
   const primaryDueReview = authoritativeDueReviews[0];
   const primaryDueReviewTitle = primaryDueReview
-    ? pickLanguageAlignedTrainingText(layout.composerLanguage, primaryDueReview.concept) ??
+    ? pickLanguageAlignedTrainingText(layout.composerLanguage, reviewConceptLabel(primaryDueReview.concept)) ??
       t.reviewQueue
     : undefined;
   const trainingReviewItems = useMemo<TrainingReviewItem[]>(
@@ -7675,7 +7755,7 @@ export function App() {
       authoritativeDueReviews.slice(0, 4).map((item, index) => ({
         id: `training-review-${index}-${item.concept}`,
         title:
-          pickLanguageAlignedTrainingText(layout.composerLanguage, item.concept) ??
+          pickLanguageAlignedTrainingText(layout.composerLanguage, reviewConceptLabel(item.concept)) ??
           t.reviewQueue,
         concept: item.concept,
         focusArea: pickLanguageAlignedTrainingText(layout.composerLanguage, item.focusArea) ?? item.focusArea ?? item.concept,
@@ -7723,7 +7803,7 @@ export function App() {
             : (trainingState?.latestTrainingHandoff?.blockedBy ??
               trainingState?.latestTrainingNextHop?.blockedBy),
         latestVerifiedResult: reviewArtifactForeground
-          ? trainingState?.reviewArtifact?.verifiedResult
+          ? undefined
           : (trainingRestoreReplacesSelectedCard
             ? undefined
             : trainingState?.latestLearningVerifiedResult),
@@ -7775,8 +7855,9 @@ export function App() {
     const verifiedResult = pickLanguageAlignedTrainingText(
       layout.composerLanguage,
       trainingState?.latestLearningVerifiedResult,
-      trainingState?.reviewArtifact?.verifiedResult,
-      trainingState?.scenarioLab?.reviewOutcome,
+      activeTrainingReviewArtifact?.verifiedResult,
+      activeTrainingCardId && trainingState?.scenarioLab?.id === activeTrainingCardId
+        ? trainingState?.scenarioLab?.reviewOutcome : undefined,
     );
     if (verifiedResult) {
       return {
@@ -7794,7 +7875,7 @@ export function App() {
       trainingState?.latestTrainingHandoff?.blockedBy,
       trainingState?.latestTrainingNextHop?.statusReason,
       trainingState?.latestTrainingNextHop?.blockedBy,
-      trainingState?.reviewArtifact?.blockedReason,
+      activeTrainingReviewArtifact?.blockedReason,
     );
     if (blocker) {
       return {
@@ -7807,7 +7888,7 @@ export function App() {
     const partialProgress = pickLanguageAlignedTrainingText(
       layout.composerLanguage,
       trainingState?.latestLearningPartialProgress,
-      trainingState?.reviewArtifact?.partialProgress,
+      activeTrainingReviewArtifact?.partialProgress,
     );
     if (partialProgress) {
       return {
@@ -7937,7 +8018,17 @@ export function App() {
         latestVerifiedResult:
           trainingRestoreReplacesSelectedCard
             ? undefined
-            : (trainingState?.latestLearningVerifiedResult ?? trainingState?.reviewArtifact?.verifiedResult),
+            : (trainingState?.latestLearningVerifiedResult ?? activeTrainingReviewArtifact?.verifiedResult),
+        latestSubmittedResult:
+          selectedTrainingCardCandidate?.learnerAnswer ?? selectedTrainingRouteCard?.learnerAnswer,
+        reflection:
+          !trainingRestoreReplacesSelectedCard &&
+          activeTrainingCardId === (
+            trainingState?.latestTrainingHandoff?.cardId ??
+            trainingState?.latestTrainingHandoff?.candidateId
+          )
+            ? trainingState?.latestTrainingHandoff?.reflection
+            : undefined,
         latestFollowup:
           leftoverTrainingHandoffChromeNotLive || trainingRestoreReplacesSelectedCard
             ? undefined
@@ -7946,38 +8037,39 @@ export function App() {
               trainingState?.latestTrainingNextHop?.nextAfterCompletion),
         reviewSummary: trainingRestoreReplacesSelectedCard
           ? undefined
-          : trainingState?.reviewArtifact?.summary,
+          : activeTrainingReviewArtifact?.summary,
         reviewBlocker:
           leftoverTrainingHandoffChromeNotLive || trainingRestoreReplacesSelectedCard
             ? undefined
             : (liveTrainingHandoffChrome.blocker ??
               trainingState?.latestLearningBlocker ??
-              trainingState?.reviewArtifact?.blockedReason),
+              activeTrainingReviewArtifact?.blockedReason),
         reviewPartialProgress:
           trainingRestoreReplacesSelectedCard
             ? undefined
             : (trainingState?.latestLearningPartialProgress ??
-              trainingState?.reviewArtifact?.partialProgress),
+              activeTrainingReviewArtifact?.partialProgress),
         reviewRootCause: trainingRestoreReplacesSelectedCard
           ? undefined
-          : trainingState?.reviewArtifact?.rootCause,
+          : activeTrainingReviewArtifact?.rootCause,
         reviewNextRule: trainingRestoreReplacesSelectedCard
           ? undefined
-          : trainingState?.reviewArtifact?.nextSelfImplementationRule,
+          : activeTrainingReviewArtifact?.nextSelfImplementationRule,
         reviewRecommendedActions: trainingRestoreReplacesSelectedCard
           ? undefined
-          : trainingState?.reviewArtifact?.recommendedActions,
+          : activeTrainingReviewArtifact?.recommendedActions,
         reviewStatus:
           trainingCardVerified
             ? "resolved"
-            : trainingCardBlocked || trainingState?.reviewArtifact?.status === "active"
+            : trainingCardBlocked || activeTrainingReviewArtifact?.status === "active"
               ? "active"
-              : trainingState?.reviewArtifact?.status === "archived"
+              : activeTrainingReviewArtifact?.status === "archived"
                 ? "archived"
                 : undefined,
       }),
     [
       activeTrainingCardId,
+      activeTrainingReviewArtifact,
       authoritativeVerifyItems,
       leftoverTrainingHandoffChromeNotLive,
       liveTrainingCurrentFocus,
@@ -7989,10 +8081,12 @@ export function App() {
       liveTrainingTitle,
       layout.composerLanguage,
       selectedTrainingCardCandidate?.focusArea,
+      selectedTrainingCardCandidate?.learnerAnswer,
       selectedTrainingCardCandidate?.returnWith,
       selectedTrainingCardCandidate?.successSignal,
       selectedTrainingCardCandidate?.title,
       selectedTrainingRouteCard?.focusArea,
+      selectedTrainingRouteCard?.learnerAnswer,
       selectedTrainingRouteCard?.returnWith,
       selectedTrainingRouteCard?.successSignal,
       selectedTrainingRouteCard?.title,
@@ -8007,16 +8101,19 @@ export function App() {
       trainingState?.latestLearningPartialProgress,
       trainingState?.latestLearningVerifiedResult,
       trainingState?.latestTrainingHandoff?.returnWith,
+      trainingState?.latestTrainingHandoff?.cardId,
+      trainingState?.latestTrainingHandoff?.candidateId,
+      trainingState?.latestTrainingHandoff?.reflection,
       trainingState?.latestTrainingHandoff?.successSignal,
       trainingState?.latestTrainingNextHop?.nextAfterCompletion,
-      trainingState?.reviewArtifact?.blockedReason,
-      trainingState?.reviewArtifact?.nextSelfImplementationRule,
-      trainingState?.reviewArtifact?.partialProgress,
-      trainingState?.reviewArtifact?.recommendedActions,
-      trainingState?.reviewArtifact?.rootCause,
-      trainingState?.reviewArtifact?.status,
-      trainingState?.reviewArtifact?.summary,
-      trainingState?.reviewArtifact?.verifiedResult,
+      activeTrainingReviewArtifact?.blockedReason,
+      activeTrainingReviewArtifact?.nextSelfImplementationRule,
+      activeTrainingReviewArtifact?.partialProgress,
+      activeTrainingReviewArtifact?.recommendedActions,
+      activeTrainingReviewArtifact?.rootCause,
+      activeTrainingReviewArtifact?.status,
+      activeTrainingReviewArtifact?.summary,
+      activeTrainingReviewArtifact?.verifiedResult,
       trainingState?.selectedCardId,
       trainingState?.selectedCardTitle,
       visibleTrainingCardTitle,
@@ -8057,6 +8154,7 @@ export function App() {
   });
   const trainingProblemStatement = pickLanguageAlignedTrainingText(
     layout.composerLanguage,
+    trainingCardType === "flash" ? trainingFlashPrompt : undefined,
     selectedTrainingCardCandidate?.problemStatement,
     selectedTrainingRouteCard?.problemStatement,
     trainingState?.activeTrainingCardRouting?.selectedCard?.problemStatement,
@@ -8185,7 +8283,9 @@ export function App() {
     visibleTrainingCardTitle,
   ]);
   const trainingComposerEnabled = activeView === "training" && hasTrainingCard;
-  const trainingComposerTalkMode = trainingComposerEnabled && trainingComposerRoute === "coach";
+  const resolvedReviewArtifact = reviewArtifactForeground && trainingState?.reviewArtifact?.status === "resolved";
+  const trainingComposerTalkMode = trainingComposerEnabled &&
+    (trainingComposerRoute === "coach" || resolvedReviewArtifact);
   const trainingComposerUsesAnswerMode = trainingComposerPhase === "answer";
   const handleTrainingComposerRouteChange = useCallback(
     (nextRoute: TrainingComposerRoute) => {
@@ -8754,7 +8854,7 @@ export function App() {
     workspaceSessionBlocked || !providerCanCoachNow || Boolean(providerBlockReason);
   const capabilitySendBlocked = !capabilityVerdict.chat;
   const handleGenerateTrainingCard = useCallback(
-    (focusArea?: string) => {
+    (focusArea?: string, prompt?: string, planBinding?: TrainingPlanBinding) => {
       if (workspaceSessionBlocked) {
         openWorkspaceAdmission();
         setOperationMessage({
@@ -8772,7 +8872,7 @@ export function App() {
         return;
       }
 
-      requestTrainingCardGeneration(focusArea);
+      requestTrainingCardGeneration(focusArea, prompt, planBinding);
     },
     [
       blockedComposerGuidance,
@@ -8922,7 +9022,7 @@ export function App() {
     const resolvedIncludeCurrentFile =
       includeCurrentFile ??
       (layout.includeCurrentFile && shouldAttachCurrentFile(text, intent));
-    const effectiveStream = resolvedFormalPlanMutation ? false : stream;
+    const effectiveStream = stream;
     const payload = {
       text,
       intent,
@@ -9761,9 +9861,13 @@ export function App() {
         sendTrainingFeedback({
           phase: trainingComposerReflectMode ? "reflection" : "evidence",
           cardTitle: visibleTrainingCardTitle ?? liveTrainingTitle,
-          question: trainingComposerSelectedVerifyItem ?? trainingProblemStatement,
+          question: reviewArtifactForeground
+            ? trainingState?.reviewArtifact?.summary
+            : trainingComposerSelectedVerifyItem ?? trainingProblemStatement,
           learnerAnswer: normalizedDraft,
-          evidenceItems: authoritativeVerifyItems,
+          evidenceItems: reviewArtifactForeground
+            ? selectedTrainingCardCandidate?.verificationSteps ?? []
+            : authoritativeVerifyItems,
         });
         setComposerDraft("");
       }
@@ -9817,7 +9921,8 @@ export function App() {
         : "coach";
     const planComposerSubmission = activeView === "plan";
     const formalPlanGeneration =
-      planComposerSubmission && resolvedPlanComposerMode === "generate";
+      (planComposerSubmission && resolvedPlanComposerMode === "generate") ||
+      (activeView === "coach" && sendAnalysis.intent === "plan");
     const previewPlanCandidateGeneration =
       formalPlanGeneration && isBrowserPreview && Boolean(window.__TRAINER_BOOTSTRAP__);
     if (formalPlanGeneration && !previewPlanCandidateGeneration && !providerCanMutateFormalPlan) {
@@ -10206,21 +10311,17 @@ export function App() {
   const currentWorkspaceIdForAttempt =
     data.memory.workspace?.workspaceId ?? data.workspaceTrainingState?.workspaceId ?? "";
   const attemptLifecycle = useMemo(() => useTrainingAttemptLifecycle(), []);
-  const trainingAttemptIdRef = useRef<string | undefined>(undefined);
-  const trainingAttemptCardRef = useRef<string | undefined>(undefined);
 
   // When a formal training card becomes active, start or resume its attempt.
   useEffect(() => {
-    if (activeView !== "training" || !activeTrainingCardId || isBrowserPreview) {
+    if (activeView !== "training" || !activeTrainingCardId || isBrowserPreview || trainingComposerReturnMode || reviewArtifactForeground) {
       return;
     }
     attemptLifecycle.startOrRecover(activeTrainingCardId, {
       filePath: data.liveContext?.activeFile ?? undefined,
     });
-    trainingAttemptIdRef.current = undefined; // server assigns/resumes
-    trainingAttemptCardRef.current = activeTrainingCardId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView, activeTrainingCardId, attemptLifecycle, isBrowserPreview]);
+  }, [activeView, activeTrainingCardId, attemptLifecycle, isBrowserPreview, trainingComposerReturnMode, reviewArtifactForeground]);
 
   const handleHintReveal = useCallback(
     (hintLevel: number) => {
@@ -10268,8 +10369,11 @@ export function App() {
           source: "training",
           cardId: activeTrainingCardId,
           cardTitle: visibleTrainingCardTitle,
-          taskSpecId: data.task.id,
-          acceptanceCriteria: authoritativeVerifyItems,
+          acceptanceCriteria: selectedTrainingCardCandidate?.acceptanceCriteria?.length
+            ? selectedTrainingCardCandidate.acceptanceCriteria
+            : selectedTrainingRouteCard?.acceptanceCriteria?.length
+              ? selectedTrainingRouteCard.acceptanceCriteria
+              : authoritativeVerifyItems,
           learnerDeliverables: trainingDeliverables,
           expectedSymbols: trainingCardType === "practice" ? practiceExpectedSymbols : [],
           filesToTouch: trainingFilesToTouch,
@@ -10280,7 +10384,8 @@ export function App() {
     leftoverTrainingHandoffChromeNotLive,
     activeTrainingCardId,
     authoritativeVerifyItems,
-    data.task.id,
+    selectedTrainingCardCandidate?.acceptanceCriteria,
+    selectedTrainingRouteCard?.acceptanceCriteria,
     isBrowserPreview,
     layout.composerLanguage,
     trainingFilesToTouch,
@@ -10593,7 +10698,7 @@ export function App() {
     hasFormalPlan &&
     Boolean(activePlanStage?.title?.trim() || data.plan.summary.trim() || data.plan.stages.length > 0);
   const planIsFrozen = hasFormalPlan && livePlanFrozen;
-  const resolvedPlanComposerMode: PlanComposerMode = !planHasFormalThread
+  const resolvedPlanComposerMode: PlanComposerMode = !planHasFormalThread && planComposerMode !== "generate"
     ? recoveredRuntime && (planComposerMode === "blocker" || planComposerMode === "evidence")
       ? planComposerMode
       : "explain"
@@ -10909,8 +11014,11 @@ export function App() {
     });
   }, [setComposerDraft, streaming.isStreaming, streaming.streamMessageId]);
 
+  const streamWasActiveRef = useRef(streaming.isStreaming);
   useEffect(() => {
-    if (!streaming.isStreaming && streaming.completionStopReason !== "cancelled") {
+    const wasActive = streamWasActiveRef.current;
+    streamWasActiveRef.current = streaming.isStreaming;
+    if (wasActive && !streaming.isStreaming && streaming.completionStopReason !== "cancelled") {
       streamResumeDraftRef.current = "";
     }
   }, [streaming.completionStopReason, streaming.isStreaming]);
@@ -11975,7 +12083,7 @@ export function App() {
   // the preview generates the trigger/title/prompt with the configured model.
   const onGenerateSkillDraft = useMemo(() => {
     if (!isBrowserPreview) {
-      return undefined;
+      return requestNativeSkillDraft;
     }
     return async (description: string) => {
       const browserPreview = await loadBrowserPreviewModule();
@@ -12124,7 +12232,7 @@ export function App() {
       // A categorized provider failure names its class (invalid key, rate
       // limit, …) instead of the generic check-connection line.
       const setupDetail =
-        (providerSendState.blocked ? providerSendState.reason?.trim() : undefined) ||
+        (data.connection.state === "connected" && providerSendState.blocked ? providerSendState.reason?.trim() : undefined) ||
         providerSetupState.detail;
       const setupActionLabel =
         providerSetupState.actionLabel ||
@@ -12179,6 +12287,28 @@ export function App() {
   };
 
   const handleCoachArtifactOpen = (artifact: CoachArtifactBlockData) => {
+    // “Set as practice” explicitly creates a card for the live plan step.
+    // A normal task turn is intentionally blocked after Return; it must not
+    // mint a parallel TaskSpec or leave this button stuck in review-only mode.
+    if (
+      (artifact.kind === "task" || artifact.kind === "next_step") &&
+      (!artifact.recommendedAction || artifact.recommendedAction === "task") &&
+      formalPlanLive && !livePlanFrozen &&
+      activePlanStage?.id && data.plan.id &&
+      recoveredDisplayFacts.currentStep?.trim()
+    ) {
+      handleGenerateTrainingCard(
+        activePlanStage?.title ?? artifact.focusArea,
+        recoveredDisplayFacts.currentStep,
+        {
+          planId: data.plan.id,
+          stageId: activePlanStage.id,
+          step: recoveredDisplayFacts.currentStep,
+          revision: data.plan.revision,
+        },
+      );
+      return;
+    }
     if (artifact.recommendedAction) {
       handleSuggestedAction(artifact.recommendedAction, {
         focusArea: artifact.focusArea,
@@ -12262,7 +12392,8 @@ export function App() {
       streamingMessage={
         streaming.isStreaming
           ? {
-              body: streaming.streamedContent || streamingPlaceholderBody,
+              body: streaming.streamMessageId?.startsWith("training_")
+                ? streamingPlaceholderBody : streaming.streamedContent || streamingPlaceholderBody,
               author: t.trainer,
               timestamp: t.streaming,
               role: "assistant",
@@ -12297,7 +12428,7 @@ export function App() {
           layout.composerLanguage,
           trainingState?.latestLearningBlocker,
           trainingState?.latestTrainingHandoff?.blockedBy,
-          trainingState?.reviewArtifact?.blockedReason,
+          activeTrainingReviewArtifact?.blockedReason,
           runtimeBlockedReason,
         )
       : isSettings
@@ -12312,9 +12443,9 @@ export function App() {
         : pickLanguageAlignedTrainingText(
           layout.composerLanguage,
           trainingState?.latestLearningVerifiedResult,
-          trainingState?.reviewArtifact?.verifiedResult,
+          activeTrainingReviewArtifact?.verifiedResult,
           trainingState?.latestLearningPartialProgress,
-          trainingState?.reviewArtifact?.partialProgress,
+          activeTrainingReviewArtifact?.partialProgress,
         )
       : isSettings
         ? undefined
@@ -12326,7 +12457,8 @@ export function App() {
     // while the agent is still working; the completed-result guard below still
     // prevents stale Coach results from cluttering the Resources surface.
     const liveValue = streaming.isStreaming
-      ? truncateInlineText(streaming.streamedContent || streamingPlaceholderBody, textLimit)
+      ? truncateInlineText(streaming.streamMessageId?.startsWith("training_")
+          ? streamingPlaceholderBody : streaming.streamedContent || streamingPlaceholderBody, textLimit)
       : undefined;
     const activitySource = liveValue ?? blockerValue ?? resultValue;
     const activityValue =
@@ -12424,7 +12556,8 @@ export function App() {
           id: `streaming-${view}`,
           role: "assistant" as const,
           author: t.trainer,
-          body: streaming.streamedContent || streamingPlaceholderBody,
+          body: streaming.streamMessageId?.startsWith("training_")
+            ? streamingPlaceholderBody : streaming.streamedContent || streamingPlaceholderBody,
           timestamp: t.streaming,
         }
       : latestReply;
@@ -12881,13 +13014,7 @@ export function App() {
       );
       return;
     }
-    setTrainingVerifyNotice(
-      appUiCopy(layout.composerLanguage, "已提交当前文件验证，等待结果。"),
-    );
-    postMessage({
-      type: "command/execute",
-      payload: { commandId: trainerCommands.evaluateCurrentFile },
-    });
+    handleVerifyTrainingFromIde();
   };
   useEffect(() => {
     if (activeView !== "settings" || isBrowserPreview || companionStateQueriedRef.current) {
@@ -12918,7 +13045,7 @@ export function App() {
       onClick={() => {
         setActiveView("training");
         const cardId = data.workspaceTrainingState?.selectedCardId?.trim();
-        if (cardId && !isBrowserPreview) {
+        if (cardId && !isBrowserPreview && !trainingComposerReturnMode) {
           attemptLifecycle.startOrRecover(cardId, {
             filePath: data.liveContext?.activeFile ?? undefined,
           });
@@ -12965,6 +13092,7 @@ export function App() {
           language={layout.composerLanguage}
           resources={liveResources}
           resourceSearch={data.resourceSearch}
+          onSearchQueryChange={setResourcesViewSearchQuery}
           orientation={
             leftoverResourceLibraryListNotLive && resourcesOrientation
               ? {
@@ -13112,8 +13240,7 @@ export function App() {
           }
           />
         </Suspense>
-        {renderViewAgentReply("resources")}
-        {renderContextualResultRail("resources")}
+
       </section>
     );
   };
@@ -13153,9 +13280,6 @@ export function App() {
       ? pickLanguageAlignedTrainingText(
           layout.composerLanguage,
           trainingSuggestedWorkspaceAction,
-          selectedTrainingCardCandidate?.deliverable,
-          selectedTrainingRouteCard?.deliverable,
-          runtimeCurrentStep,
         )
       : undefined;
     const localizedScenario = hasRenderableTrainingCard
@@ -13214,7 +13338,7 @@ export function App() {
           cardId={activeTrainingCardId}
           selectedCardStatus={effectiveSelectedTrainingCardStatus}
           onCardStatusTransition={leftoverTrainingHandoffChromeNotLive ? undefined : handleTrainingCardStatusTransition}
-          onVerifyCurrentFile={handleVerifyCurrentFileFromCard}
+          onVerifyCurrentFile={reviewArtifactForeground ? undefined : handleVerifyCurrentFileFromCard}
           remoteVerification={remoteVerification}
           remoteName={data.workspace?.remoteName}
           onStopRemoteVerification={handleStopRemoteVerification}
@@ -13223,12 +13347,12 @@ export function App() {
           currentStep={currentStep}
           learningFamily={trainingLearningFamily}
           learningSubtype={trainingLearningSubtype}
-          whyThisCard={localizedWhyNow}
+          whyThisCard={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : localizedWhyNow}
           targetSkill={liveTrainingSkill}
           problemStatement={trainingProblemStatement}
           suggestedWorkspaceAction={localizedSuggestedWorkspaceAction}
           scenario={localizedScenario}
-          whyNow={localizedWhyNow}
+          whyNow={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : localizedWhyNow}
           sourceSummary={localizedSourceSummary}
           sourceDetail={
             hasRenderableTrainingCard
@@ -13246,26 +13370,26 @@ export function App() {
                 )
               : undefined
           }
-          apiHints={hasTrainingCard ? trainingApiHints : []}
-          constraints={hasTrainingCard ? trainingConstraints : []}
-          selfCheck={hasTrainingCard ? trainingSelfCheck : []}
-          deliverable={hasTrainingCard ? trainingDeliverable : undefined}
-          deliverables={hasTrainingCard ? trainingDeliverables : []}
-          validationMethod={hasTrainingCard ? trainingValidationMethod : undefined}
-          verificationMethod={hasTrainingCard ? trainingVerificationMethod : undefined}
-          verifyItems={hasTrainingCard ? authoritativeVerifyItems : []}
-          successSignal={hasTrainingCard ? trainingSuccessSignal : undefined}
-          returnWith={hasTrainingCard ? trainingReturnWithText : undefined}
-          nextAfterCompletion={hasTrainingCard ? trainingNextAfterCompletionText : undefined}
-          fallbackAction={hasTrainingCard ? trainingFallbackActionText : undefined}
-          filesToTouch={hasTrainingCard ? trainingFilesToTouch : []}
-          hintLadder={hasTrainingCard ? trainingHintLadder : []}
-          commonMistakes={hasTrainingCard ? trainingCommonMistakes : []}
-          stuckRecovery={hasTrainingCard ? trainingStuckRecovery : undefined}
-          reflectionPrompt={hasTrainingCard ? trainingReflectionPrompt : undefined}
-          outcome={hasTrainingCard ? trainingOutcomeCard : undefined}
+          apiHints={!reviewArtifactForeground && hasTrainingCard ? trainingApiHints : []}
+          constraints={!reviewArtifactForeground && hasTrainingCard ? trainingConstraints : []}
+          selfCheck={!reviewArtifactForeground && hasTrainingCard ? trainingSelfCheck : []}
+          deliverable={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : hasTrainingCard ? trainingDeliverable : undefined}
+          deliverables={reviewArtifactForeground ? selectedTrainingCardCandidate?.learnerDeliverables ?? [] : hasTrainingCard ? trainingDeliverables : []}
+          validationMethod={!reviewArtifactForeground && hasTrainingCard ? trainingValidationMethod : undefined}
+          verificationMethod={!reviewArtifactForeground && hasTrainingCard ? trainingVerificationMethod : undefined}
+          verifyItems={reviewArtifactForeground ? selectedTrainingCardCandidate?.verificationSteps ?? [] : hasTrainingCard ? authoritativeVerifyItems : []}
+          successSignal={reviewArtifactForeground ? trainingState?.reviewArtifact?.verifiedResult : hasTrainingCard ? trainingSuccessSignal : undefined}
+          returnWith={reviewArtifactForeground ? trainingState?.reviewArtifact?.nextSelfImplementationRule : hasTrainingCard ? trainingReturnWithText : undefined}
+          nextAfterCompletion={!reviewArtifactForeground && hasTrainingCard ? trainingNextAfterCompletionText : undefined}
+          fallbackAction={!reviewArtifactForeground && hasTrainingCard ? trainingFallbackActionText : undefined}
+          filesToTouch={!reviewArtifactForeground && hasTrainingCard ? trainingFilesToTouch : []}
+          hintLadder={!reviewArtifactForeground && hasTrainingCard && !trainingComposerReturnMode ? trainingHintLadder : []}
+          commonMistakes={!reviewArtifactForeground && hasTrainingCard ? trainingCommonMistakes : []}
+          stuckRecovery={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : hasTrainingCard ? trainingStuckRecovery : undefined}
+          reflectionPrompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : hasTrainingCard ? trainingReflectionPrompt : undefined}
+          outcome={!reviewArtifactForeground && hasTrainingCard ? trainingOutcomeCard : undefined}
           nextHop={
-            hasRenderableTrainingCard && !trainingRestoreForeground
+            hasRenderableTrainingCard && !trainingRestoreForeground && !reviewArtifactForeground
               ? trainingNextHopCard
               : undefined
           }
@@ -13288,7 +13412,11 @@ export function App() {
               : (trainingState?.latestTrainingHandoff?.learningPhase ??
                 selectedTrainingCardCandidate?.learningPhase)
           }
-          latestTrainingReliability={trainingState?.latestTrainingReliability}
+          latestTrainingReliability={
+            !reviewArtifactForeground || trainingState?.latestTrainingReliability?.cardId === activeTrainingCardId
+              ? trainingState?.latestTrainingReliability
+              : undefined
+          }
           reliabilityInFlight={trainingPersistencePending}
           latestTrainingNextHopStatus={
             reviewArtifactForeground || trainingRestoreReplacesSelectedCard
@@ -13311,25 +13439,32 @@ export function App() {
                 trainingState?.latestTrainingHandoff?.blockedBy
           }
           latestVerifiedResult={
-            trainingRestoreReplacesSelectedCard
+            reviewArtifactForeground
+              ? undefined
+              : trainingRestoreReplacesSelectedCard
               ? undefined
               : pickLanguageAlignedTrainingText(
                   layout.composerLanguage,
                   trainingState?.latestLearningVerifiedResult,
-                )
+                ) ?? trainingState?.latestLearningVerifiedResult
           }
           latestLearningBlocker={
-            trainingVerifyNotice ??
-            (leftoverTrainingHandoffChromeNotLive || trainingRestoreReplacesSelectedCard
+            (reviewArtifactForeground ? trainingState?.reviewArtifact?.blockedReason : trainingVerifyNotice) ??
+            (leftoverTrainingHandoffChromeNotLive || reviewArtifactForeground || trainingRestoreReplacesSelectedCard
               ? undefined
               : pickLanguageAlignedTrainingText(
                   layout.composerLanguage,
                   liveTrainingHandoffChrome.blocker,
                   trainingState?.latestLearningBlocker,
+                ) || liveTrainingHandoffChrome.blocker || trainingState?.latestLearningBlocker || (
+                  activeTrainingCardId && trainingState?.latestTrainingNextHop?.candidateId === activeTrainingCardId &&
+                  trainingState?.latestTrainingNextHop?.status === "verification_required"
+                    ? trainingState?.latestTrainingNextHop?.statusReason || trainingState?.latestTrainingNextHop?.summary
+                    : undefined
                 ))
           }
           latestLearningFollowup={
-            leftoverTrainingHandoffChromeNotLive || trainingRestoreReplacesSelectedCard
+            leftoverTrainingHandoffChromeNotLive || reviewArtifactForeground || trainingRestoreReplacesSelectedCard
               ? undefined
               : pickLanguageAlignedTrainingText(
                   layout.composerLanguage,
@@ -13339,7 +13474,11 @@ export function App() {
           }
           skillProjection={data.workspaceTrainingState?.skillProjection}
           reviewItems={trainingReviewItems}
-          onReviewQueueAction={handleReviewQueueAction}
+          reviewQueueOpenRequest={trainingReviewQueueRequested}
+          onReviewQueueAction={(payload) => {
+            if (payload.action === "accept") beginTrainingReview();
+            handleReviewQueueAction(payload);
+          }}
           reviewSummary={pickLanguageAlignedTrainingText(
             layout.composerLanguage,
             formattedNextReviewDue,
@@ -13382,13 +13521,22 @@ export function App() {
           expectedSymbols={trainingCardType === "practice" ? practiceExpectedSymbols : []}
           />
         </Suspense>
-        {renderViewAgentReply("training")}
-        {renderContextualResultRail("training")}
+
       </section>
     );
   };
 
-  const renderPlanView = () => (
+  const renderPlanView = () => (!hasFormalPlan || data.plan.id === "plan-pending") && data.connection.state !== "connected" ? (
+    <section className="plan-view" data-plan-backend-recovery="true">
+      <div className="coach-empty-state coach-empty-state--blocked" role="status">
+        <p>{providerSetupState.title}</p>
+        <p className="coach-empty-state__detail">{providerSetupState.detail}</p>
+        <button className="button button--accent" type="button" onClick={openProviderSetup}>
+          {providerSetupState.actionLabel}
+        </button>
+      </div>
+    </section>
+  ) : (
     <section className="plan-view">
       <Suspense fallback={<ViewFallback label={t.plan} language={layout.composerLanguage} />}>
         <CoachPlanView
@@ -13476,13 +13624,14 @@ export function App() {
           queued: t.stageQueued,
         }}
         actions={[
-          ...(liveEvidenceQueue.pending.length > 0
+          ...(liveEvidenceQueue.pending.length > 0 && formalPlanLive && !livePlanFrozen && !workspaceSessionBlocked
             ? [
                 {
-                  id: "plan-needs-evidence",
-                  label: planOrientation.primaryActionLabel,
+                  id: recoveredAdoptPrimary ? "plan-review-evidence" : "plan-needs-evidence",
+                  label: recoveredAdoptPrimary ? t.approve
+                    : resolvePlanComposerCopy(layout.composerLanguage).modes.evidence.primaryPrompt.label,
                   tone: "accent" as const,
-                  onClick: () => handlePlanOrientationAction("wait"),
+                  onClick: () => handlePlanOrientationAction(recoveredAdoptPrimary ? "adopt_evidence" : "wait"),
                 },
               ]
             : []),
@@ -13512,10 +13661,14 @@ export function App() {
                         id:
                           recoveredPlanPrimary === "clear_blocker"
                             ? "plan-clear-blocker"
+                            : recoveredPlanPrimary === "unfreeze_plan"
+                              ? "resume-plan"
                             : recoveredPlanPrimary === "wait"
                               ? "plan-needs-evidence"
                               : "plan-continue-step",
-                        label: planOrientation.primaryActionLabel,
+                        label: recoveredPlanPrimary === "unfreeze_plan"
+                          ? appUiCopy(layout.composerLanguage, "解冻计划")
+                          : planOrientation.primaryActionLabel,
                         tone: "accent" as const,
                         onClick: () => handlePlanOrientationAction(recoveredPlanPrimary),
                       },
@@ -13568,7 +13721,7 @@ export function App() {
             ? [
                 {
                   id: livePlanFrozen ? "resume-plan" : "freeze-plan",
-                  label: livePlanFrozen ? t.planLive : t.planFreeze,
+                  label: livePlanFrozen ? appUiCopy(layout.composerLanguage, "解冻计划") : t.planFreeze,
                   tone: "ghost" as const,
                   onClick: () => {
                     pendingLivePlanTaskMintRef.current = {
@@ -13749,8 +13902,6 @@ export function App() {
         }}
         />
         </Suspense>
-      {renderViewAgentReply("plan")}
-      {renderContextualResultRail("plan")}
     </section>
   );
 
@@ -13760,7 +13911,9 @@ export function App() {
         <CoachSettingsView
         className="settings-pane"
         companionInstallState={companionInstallState}
+        remoteWorkspaceName={data.workspace?.isRemoteWorkspace ? data.workspace.remoteName : undefined}
         provider={data.providerConfig}
+        backendConnectionState={data.connection.state}
         workspaceId={settingsWorkspaceId}
 
         capabilityVerdict={capabilityVerdict}
@@ -14549,14 +14702,6 @@ export function App() {
                   </button>
                 </div>
               </div>
-            ) : null}
-
-            {activeView === "coach" ? (
-              <SkillProjectionStrip
-                language={layout.composerLanguage}
-                projection={data.workspaceTrainingState?.skillProjection}
-                variant="compact"
-              />
             ) : null}
 
             <CoachComposer

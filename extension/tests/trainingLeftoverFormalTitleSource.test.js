@@ -16,7 +16,7 @@ test('Training card title does not use leftover formal plan or task title', () =
   const titleBlock = source.slice(titleStart, titleEnd);
   assert.match(source, /liveTrainingTitleFallback\(/);
   assert.match(source, /liveTrainingNextChallengeTitle\(/);
-  assert.match(source, /const visibleTrainingCardTitle = liveTrainingNextChallengeTitle\(\{/);
+  assert.match(source, /const visibleTrainingCardTitle = reviewArtifactForeground\s*\? selectedTrainingCardCandidate\?\.title\s*:\s*liveTrainingNextChallengeTitle\(\{/);
   assert.match(source, /formalTaskIsLiveRuntimeIdentity\(/);
   assert.match(titleBlock, /liveTrainingTitle/);
   assert.doesNotMatch(titleBlock, /data\.task\.title/);

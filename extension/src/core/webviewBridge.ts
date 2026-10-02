@@ -320,11 +320,15 @@ export class WorkbenchSidebarController
       return;
     }
 
-    if (!previous || forceFull) {
+    const runtimeDataChanged = previous &&
+      next.runtimeDataGeneration !== previous.runtimeDataGeneration;
+    if (!previous || forceFull || runtimeDataChanged) {
       // Fresh webview (new html) or explicit repair request: deliver the
       // complete payload.
       this.lastSyncedPayload = next;
-      const payload = toHostPatchMessage(this.getState());
+      const payload = runtimeDataChanged
+        ? toHostBootstrapMessage(this.getState())
+        : toHostPatchMessage(this.getState());
       recordWebviewSync({ full: true, bytes: JSON.stringify(payload).length });
       await this.postMessage(payload);
       return;

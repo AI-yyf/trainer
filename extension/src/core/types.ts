@@ -854,6 +854,15 @@ export interface ResourceSearchStateView {
 }
 
 export interface WorkspaceAuthorityView {
+  authorityScope?: 'project' | 'trainer_sandbox' | string;
+  resourceWriteAllowed?: boolean;
+  resourceWriteEvidence?: {
+    operation?: string;
+    scope?: string;
+    targetRoot?: string;
+    allowed?: boolean;
+    reason?: string;
+  };
   activeWorkspaceRoot?: string;
   rootUri?: string;
   authoritySource?: string;
@@ -1024,6 +1033,7 @@ export interface MemorySnapshotView {
     onboardingRequest?: string;
     latestLearningFocusArea?: string;
     latestTransferState?: TransferSkillStateRecord;
+    liveTrainingSelection?: { workspaceId?: string; cardId?: string; selectedAt?: string };
     latestPlanRuntime?: PlanRuntimeRecoveryRecord;
     latestProviderCapability?: ProviderCapabilityRecoveryRecord;
     latestStreamingCheckpoint?: StreamingCheckpointRecord;
@@ -1057,6 +1067,7 @@ export interface EvidenceItemView {
   verificationSource?: string;
   timestamp?: string;
   targetPlanStageId?: string;
+  targetPlanStep?: string;
   adopted?: boolean;
   adoptedAt?: string | null;
   deferredAt?: string | null;
@@ -1071,6 +1082,7 @@ export interface EvidenceQueueView {
   adopted: EvidenceItemView[];
   rejected: EvidenceItemView[];
   history?: EvidenceItemView[];
+  unscoped?: EvidenceItemView[];
   totalCount: number;
 }
 
@@ -1107,6 +1119,9 @@ export interface TrainingBlockedCardCandidateView {
 
 export interface TrainingHandoffView {
   handoffId?: string;
+  cardId?: string;
+  reflection?: string;
+  reflectedAt?: string;
   learningPhase?: 'learn' | 'try' | 'verify' | 'reflect' | 'return';
   candidateId?: string;
   candidateType?: TrainingConversationCandidateTypeView;
@@ -1188,6 +1203,7 @@ export interface TrainingCardCandidateView {
   choices?: string[];
   answerMode?: string;
   expectedAnswer?: string;
+  learnerAnswer?: string;
   learningFamily?: 'code' | 'theory';
   learningSubtype?: string;
   knowledgeType?: string;
@@ -1207,6 +1223,7 @@ export interface TrainingCardCandidateView {
   filesToTouch?: string[];
   learnerDeliverables?: string[];
   verificationSteps?: string[];
+  acceptanceCriteria?: string[];
   successSignal?: string;
   expectedSymbols?: string[];
   returnWith?: string;
@@ -1229,6 +1246,7 @@ export interface ActiveTrainingCardRoutingView {
     choices?: string[];
     answerMode?: string;
     expectedAnswer?: string;
+    learnerAnswer?: string;
     learningFamily?: 'code' | 'theory';
     learningSubtype?: string;
     knowledgeType?: string;
@@ -1248,6 +1266,7 @@ export interface ActiveTrainingCardRoutingView {
     filesToTouch?: string[];
     learnerDeliverables?: string[];
     verificationSteps?: string[];
+    acceptanceCriteria?: string[];
     successSignal?: string;
     expectedSymbols?: string[];
     returnWith?: string;
@@ -1472,6 +1491,7 @@ export interface ConversationMessageView {
 }
 
 export interface StageMaterialItem {
+  generationSource?: "model" | "template";
   id: string;
   planStageId: string;
   kind: string;
@@ -1483,6 +1503,10 @@ export interface StageMaterialItem {
 }
 
 export interface BootstrapData {
+  /** Host generation changes when the runtime database is replaced or switched. */
+  runtimeDataGeneration?: string;
+  /** History confirmed for the current workspace by a server session snapshot. */
+  sessionHistoryRestored?: boolean;
   workspaceName: string;
   sessionLabel: string;
   /** Remote-window identity for the webview (Remote-SSH/WSL/Tunnel/container). */
@@ -1930,6 +1954,8 @@ export interface DebugVisibleWorkbenchFacts {
 }
 
 export type HostMessage =
+  | { type: 'stageMaterials/settled'; payload: { workspaceId: string; planId: string; stageId: string } }
+  | { type: 'skills/draftResult'; payload: { requestId: string; ok: boolean; draft?: unknown; message?: string } }
   | { type: 'bootstrap'; payload: BootstrapData }
   | { type: 'state/patch'; payload: Partial<BootstrapData> }
   | {

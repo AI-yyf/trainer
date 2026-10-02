@@ -50,6 +50,7 @@ class EvaluationRequest:
     workspace: str | None = None
     pytest_args: list[str] = field(default_factory=list)
     hypothesis_target: str | None = None
+    verification_python: str | None = None
 
 
 @dataclass(slots=True)

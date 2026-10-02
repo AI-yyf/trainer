@@ -96,12 +96,11 @@ test('app shell renders a text-only top navigation for the daily views', () => {
 test('header composes two intentional layers: utility row above primary nav', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
 
-  // Row 1: utility/identity — muted brand mark, History + Settings actions
+  // Row 1: History + Settings actions
   // pinned to the end edge (single History entry point lives here).
   const utilityStart = source.indexOf('className="trainer-header__utility"');
   assert.ok(utilityStart > -1, 'expected the trainer-header__utility row');
   const utilityBlock = source.slice(utilityStart, utilityStart + 2200);
-  assert.match(utilityBlock, /className="trainer-header__brand" aria-hidden="true"/);
   assert.match(utilityBlock, /data-testid="trainer-history-toggle"/);
   assert.match(utilityBlock, /onClick=\{toggleComposerHistoryMenu\}/);
   assert.match(utilityBlock, /data-testid="trainer-view-nav-settings"/);

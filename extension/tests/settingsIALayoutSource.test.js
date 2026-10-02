@@ -133,18 +133,20 @@ test('teaching is a flat section: preset radio, feedback + style, language, adva
   assert.doesNotMatch(section, /persistenceKey="settings-teaching-prefs"/);
 });
 
-test('settings navigation is six flat categories saved on change', () => {
+test('settings navigation has four categories with matching keyboard order and saves on change', () => {
   const source = readSettingsSource();
   const app = fs.readFileSync(path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx'), 'utf8');
 
-  // §64: Connection / Workspace / Teaching / Skills / Preferences / Advanced.
+  // Skills live under Teaching; advanced defaults live under Preferences.
   assert.match(
     source,
-    /type SettingsCategory =\s*\n?\s*\| "connection"\s*\n?\s*\| "workspace"\s*\n?\s*\| "teaching"\s*\n?\s*\| "skills"\s*\n?\s*\| "preferences"\s*\n?\s*\| "advanced";/,
+    /type SettingsCategory =\s*\| "connection"\s*\| "workspace"\s*\| "teaching"\s*\| "preferences";/,
   );
   assert.doesNotMatch(source, /id: "memory",/);
-  assert.match(source, /id: "skills",/);
-  assert.match(source, /id: "advanced",/);
+  const order = source.match(/const SETTINGS_CATEGORY_ORDER: SettingsCategory\[\] = \[([\s\S]*?)\];/)[1];
+  assert.deepEqual([...order.matchAll(/"([^"]+)"/g)].map((match) => match[1]),
+    ['connection', 'workspace', 'teaching', 'preferences']);
+  assert.doesNotMatch(source, /id: "skills",|id: "advanced",/);
   assert.doesNotMatch(source, /useState\(false\);\s*\n\s*type SettingsCategory/);
   for (const id of ['connection', 'workspace', 'teaching', 'skills', 'preferences', 'advanced']) {
     assert.match(source, new RegExp(`data-settings-section="${id}"`));

@@ -1059,6 +1059,93 @@
   margin-bottom: 6px;
 }
 
+.coach-plan-view__details-group--evidence {
+  min-width: 0;
+}
+
+.coach-plan-view__evidence-refresh {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.coach-plan-view__evidence-toolbar,
+.coach-plan-view__evidence-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.coach-plan-view__evidence-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--trainer-font-2xs);
+  cursor: pointer;
+}
+
+.coach-plan-view__evidence-filter:hover {
+  background: var(--bg-2);
+  color: var(--fg-0);
+}
+
+.coach-plan-view__evidence-filter.is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-1));
+  color: var(--fg-0);
+}
+
+.coach-plan-view__evidence-filter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.coach-plan-view__evidence-row {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+  overflow-wrap: anywhere;
+}
+
+.coach-plan-view__evidence-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.coach-plan-view__evidence-row-head > div {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.coach-plan-view__evidence-row p {
+  margin: 6px 0;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+}
+
+.coach-plan-view__evidence-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+}
+
 .coach-plan-view__details-body {
   font-size: var(--trainer-font-xs);
   color: var(--fg-1);
@@ -1208,3 +1295,9 @@
   gap: 6px;
 }
 
+.coach-plan-view__compact-stage { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--trainer-space-3); align-items: start; padding-block: var(--trainer-space-3); border-bottom: 1px solid var(--line); }
+.coach-plan-view__compact-stage:last-child { border-bottom: 0; }
+.coach-plan-view__compact-stage-marker { display: grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: 50%; background: var(--bg-1); color: var(--fg-muted); font-size: var(--trainer-font-xs); }
+.coach-plan-view__compact-stage[aria-current] .coach-plan-view__compact-stage-marker { color: var(--accent); }
+.coach-plan-view__compact-stage strong { display: block; font-weight: 400; overflow-wrap: anywhere; line-height: 1.6; }
+.coach-plan-view__compact-stage-status { display: block; color: var(--fg-muted); font-size: var(--trainer-font-xs); margin-top: var(--trainer-space-1); }

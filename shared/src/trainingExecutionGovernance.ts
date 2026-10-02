@@ -308,7 +308,9 @@ export function deriveTrainingExecutionState(
   }
 
   const persistedPhase = normalizeTrainingLearningPhase(input.learningPhase);
-  if (persistedPhase) {
+  // The ledger stores the phase that just completed (Verify or Reflect).
+  // Explicit handoff requirements describe what the learner must do next.
+  if (persistedPhase && !returned && !returnRequired && !reflectionRequired) {
     composerPhase =
       persistedPhase === "try" && input.cardType === "flash" && !flashAnswered && !verified && !blocked
         ? "answer"

@@ -20,6 +20,15 @@ def _card(card_id: str = "phase-card") -> TrainingCardCandidateSnapshot:
     )
 
 
+@pytest.mark.parametrize("display_phase", ["learn", "try", "verify", "reflect"])
+def test_committed_return_timestamp_wins_over_stale_display_phase(display_phase: str) -> None:
+    assert TrainingHandoffGenerator._restored_phase(
+        {"learning_phase": display_phase, "returned_at": "2026-10-01T22:52:06+00:00"},
+        verification_state="verified", reflection="Expected TypeError was caught.",
+        status=HandoffStatus.COMPLETED,
+    ) is TrainingPhase.RETURN
+
+
 def test_handoff_blocks_verification_and_return_before_try() -> None:
     generator = TrainingHandoffGenerator()
     handoff = generator.build_handoff_record(_card(), {})

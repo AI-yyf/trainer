@@ -2,7 +2,7 @@
 
 Not theater: understand without invent → explicit /plan/generate → explicit
 /training/generate-card → evaluator-acked current-file verify (temp content) →
-formal+runtime advance + FSRS for THAT live card → reflect/return → chips do
+FSRS for THAT live card without advancing an unbound formal task → reflect/return → chips do
 not mint TaskSpec/second plan; /session/message (+stream) stamps the same latch;
 transferable stays blocked in one workspace until a distinct second root.
 """
@@ -326,7 +326,8 @@ def test_class_human_learn_try_verify_reflect_return_closed_loop(tmp_path: Path)
         assert verify_summary
         assert practice.read_text(encoding="utf-8") == original_practice
 
-        # Evaluator-acked verify → formal+runtime advance + FSRS for THAT card
+        # A live practice verification schedules THAT card. Formal task progress
+        # still requires a task binding; a generic card cannot complete a stage.
         latest = runtime.repository.get_latest_plan(workspace_id)
         assert latest is not None
         assert latest.id == plan_id
@@ -349,7 +350,8 @@ def test_class_human_learn_try_verify_reflect_return_closed_loop(tmp_path: Path)
 
         session = runtime.ensure_session(session_id, workspace_id=workspace_id)
         advance = (session.snapshot.plan_runtime_status or {}).get("verify_plan_advance") or {}
-        assert advance.get("advanced") is True
+        assert advance.get("advanced") is False
+        assert "not bound" in str(advance.get("why") or "")
         assert str(advance.get("plan_id") or "").strip() == plan_id
         assert str(advance.get("what") or "").strip()
         assert str(advance.get("why") or "").strip()

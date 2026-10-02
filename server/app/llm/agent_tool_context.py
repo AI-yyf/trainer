@@ -26,6 +26,8 @@ def _denied_auto_mint_tool_names(extra: dict[str, Any]) -> list[str]:
     # Composer chat never mints cards (even explicit "create a practice card").
     # Intentional mint is POST /training/generate-card only.
     denied.append("generate_training_card")
+    if extra.get("completed_training_return_feedback") is True:
+        denied.append("verify_practice_current_file")
     if extra.get("formal_plan_mutation") is not True:
         denied.append("save_formal_plan")
     if extra.get("explicit_learning_note_request") is not True:
@@ -148,6 +150,7 @@ def _build_agent_tool_context_extra(
         "pace_signal",
         "first_turn_priority",
         "formal_plan_mutation",
+        "completed_training_return_feedback",
         # Local-only cooperative cancellation signal for active SSE turns.
         "stream_cancel_event",
     ):

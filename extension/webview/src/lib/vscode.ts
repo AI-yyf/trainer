@@ -2,6 +2,7 @@ import { z } from "zod";
 import { SUPPORTED_LANGUAGES } from "../../../../shared/src/types";
 import { stripProviderSnapshotSecrets } from "../../../../shared/src/hostLastTestGovernance";
 import { normalizeTrainerCustomSkills } from "../../../../shared/src/skillCatalog";
+import { trainerCommands } from "../../../../shared/src/commands";
 
 import type {
   CoachDefaults,
@@ -36,6 +37,14 @@ declare global {
 }
 
 const hostMessageSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("stageMaterials/settled"), payload: z.object({
+    workspaceId: z.string(), planId: z.string(), stageId: z.string(),
+  }) }),
+  z.object({ type: z.literal("skills/draftResult"), payload: z.object({
+    requestId: z.string(), ok: z.boolean(), message: z.string().optional(),
+    draft: z.object({ trigger: z.string(), title: z.string(), detail: z.string(), prompt: z.string(),
+      source: z.enum(["model", "template"]) }).optional(),
+  }) }),
   z.object({
     type: z.literal("bootstrap"),
     payload: z.any(),
@@ -53,10 +62,10 @@ const hostMessageSchema = z.discriminatedUnion("type", [
       surface: z.enum(["global", "stream"]).optional(),
       providerTest: z
         .object({
-          ok: z.boolean().optional(),
-          errorCategory: z.string().optional(),
-          statusCode: z.number().optional(),
-          retryable: z.boolean().optional(),
+          ok: z.boolean().nullish().transform((value) => value ?? undefined),
+          errorCategory: z.string().nullish().transform((value) => value ?? undefined),
+          statusCode: z.number().nullish().transform((value) => value ?? undefined),
+          retryable: z.boolean().nullish().transform((value) => value ?? undefined),
         })
         .optional(),
     }),
@@ -132,65 +141,67 @@ const hostMessageSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("stream/chunk"),
     payload: z.object({
-      messageId: z.string().optional(),
+      messageId: z.string().nullish().transform((value) => value ?? undefined),
       chunk: z.string(),
     }),
   }),
   z.object({
     type: z.literal("stream/complete"),
     payload: z.object({
-      messageId: z.string().optional(),
+      messageId: z.string().nullish().transform((value) => value ?? undefined),
       tokens: z.number(),
-      agentic: z.boolean().optional(),
-      summary: z.string().optional(),
-      nextStep: z.string().optional(),
-      stopReason: z.string().optional(),
-      toolCount: z.number().optional(),
+      agentic: z.boolean().nullish().transform((value) => value ?? undefined),
+      summary: z.string().nullish().transform((value) => value ?? undefined),
+      nextStep: z.string().nullish().transform((value) => value ?? undefined),
+      stopReason: z.string().nullish().transform((value) => value ?? undefined),
+      toolCount: z.number().nullish().transform((value) => value ?? undefined),
+      reliabilityPhase: z.string().nullish().transform((value) => value ?? undefined),
+      reliabilityOutcome: z.string().nullish().transform((value) => value ?? undefined),
     }),
   }),
   z.object({
     type: z.literal("stream/error"),
     payload: z.object({
-      messageId: z.string().optional(),
+      messageId: z.string().nullish().transform((value) => value ?? undefined),
       error: z.string(),
-      category: z.string().optional(),
-      statusCode: z.number().optional(),
-      retryable: z.boolean().optional(),
-      reliabilityPhase: z.string().optional(),
-      reliabilityOutcome: z.string().optional(),
+      category: z.string().nullish().transform((value) => value ?? undefined),
+      statusCode: z.number().nullish().transform((value) => value ?? undefined),
+      retryable: z.boolean().nullish().transform((value) => value ?? undefined),
+      reliabilityPhase: z.string().nullish().transform((value) => value ?? undefined),
+      reliabilityOutcome: z.string().nullish().transform((value) => value ?? undefined),
     }),
   }),
   z.object({
     type: z.literal("stream/cancelled"),
     payload: z.object({
-      messageId: z.string().optional(),
+      messageId: z.string().nullish().transform((value) => value ?? undefined),
     }),
   }),
   z.object({
     type: z.literal("stream/tool_call"),
     payload: z.object({
-      messageId: z.string().optional(),
+      messageId: z.string().nullish().transform((value) => value ?? undefined),
       id: z.string(),
       name: z.string(),
       arguments: z.unknown().optional(),
-      step: z.number().optional(),
+      step: z.number().nullish().transform((value) => value ?? undefined),
     }),
   }),
   z.object({
     type: z.literal("stream/tool_result"),
     payload: z.object({
-      messageId: z.string().optional(),
+      messageId: z.string().nullish().transform((value) => value ?? undefined),
       id: z.string(),
       name: z.string(),
       ok: z.boolean(),
       result: z.unknown().optional(),
-      step: z.number().optional(),
+      step: z.number().nullish().transform((value) => value ?? undefined),
     }),
   }),
   z.object({
     type: z.literal("stream/step"),
     payload: z.object({
-      messageId: z.string().optional(),
+      messageId: z.string().nullish().transform((value) => value ?? undefined),
       index: z.number(),
       stop_reason: z.union([z.string(), z.null()]).optional(),
     }),
@@ -364,6 +375,34 @@ export function subscribeToHostMessages(
       window.removeEventListener(PREVIEW_HOST_MESSAGE_EVENT, previewHandler);
     }
   };
+}
+
+export function requestNativeSkillDraft(description: string): Promise<{
+  trigger: string; title: string; detail: string; prompt: string; source: "model" | "template";
+}> {
+  const requestId = `skill-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return new Promise((resolve, reject) => {
+    const unsubscribe = subscribeToHostMessages((message) => {
+      if (message.type !== "skills/draftResult" || message.payload.requestId !== requestId) return;
+      window.clearTimeout(timeoutId);
+      unsubscribe();
+      if (message.payload.ok && message.payload.draft) resolve(message.payload.draft);
+      else reject(new Error(message.payload.message ?? "Skill generation failed."));
+    });
+    const timeoutId = window.setTimeout(() => {
+      unsubscribe();
+      reject(new Error("Skill generation timed out. Please retry."));
+    }, 60_000);
+    try {
+      postMessage({ type: "command/execute", payload: {
+        commandId: trainerCommands.generateSkillDraft, payload: { requestId, description },
+      } });
+    } catch (error) {
+      window.clearTimeout(timeoutId);
+      unsubscribe();
+      reject(error);
+    }
+  });
 }
 
 export function inVsCodeWebview(): boolean {

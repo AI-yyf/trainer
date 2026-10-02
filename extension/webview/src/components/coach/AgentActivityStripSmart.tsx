@@ -52,6 +52,11 @@ const TOOL_LABELS: Record<string, Record<ComposerLanguage, string>> = {
     "fr-FR": "Inspecter le plan", "de-DE": "Plan prüfen",
     "ja-JP": "プランを確認", "ko-KR": "계획 검사", "pt-BR": "Inspecionar plano",
   },
+  save_formal_plan: {
+    "zh-CN": "保存计划", "en-US": "Save plan", "es-ES": "Guardar plan",
+    "fr-FR": "Enregistrer le plan", "de-DE": "Plan speichern",
+    "ja-JP": "プランを保存", "ko-KR": "계획 저장", "pt-BR": "Salvar plano",
+  },
   verify_practice_current_file: {
     "zh-CN": "验证实战", "en-US": "Verify practice", "es-ES": "Verificar práctica",
     "fr-FR": "Vérifier la pratique", "de-DE": "Praxis prüfen",

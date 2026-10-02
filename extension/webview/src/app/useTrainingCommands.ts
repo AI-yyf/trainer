@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { trainerCommands } from "../../../../shared/src/commands";
 import { postMessage } from "../lib/vscode";
 import type { ActiveWorkbenchView } from "../lib/types";
+import type { TrainingPlanBinding } from "../../../../shared/src/models";
 
 const TRAINING_PERSISTENCE_REQUEST_ID_KEY = "__trainerTrainingPersistenceId";
 
@@ -101,6 +102,8 @@ type FlashPracticeBridgeInput = {
 };
 
 type PracticeFileVerificationRequestInput = {
+  filesToTouch?: string[];
+  expectedSymbols?: string[];
   cardId: string;
   cardTitle: string;
   acceptanceCriteria: string[];
@@ -145,11 +148,13 @@ export function useTrainingCommands(
     [requestTrainingPersistence],
   );
 
-  const onRefreshTask = useCallback((focusArea?: string) => {
+  const onRefreshTask = useCallback((focusArea?: string, prompt?: string, planBinding?: TrainingPlanBinding) => {
     sendTrainingCommand(trainerCommands.trainingGenerateCard, {
       focusArea,
       cardType: "practice",
       submode: "practice",
+      ...(planBinding ? { source: "formal_plan_step", planBinding } : {}),
+      ...(prompt?.trim() ? { prompt, contextHint: prompt } : {}),
     });
   }, []);
 
@@ -232,6 +237,8 @@ export function useTrainingCommands(
   const onVerifyCurrentFile = useCallback((request: PracticeFileVerificationRequestInput) => {
     sendTrainingCommand(trainerCommands.evaluateCurrentFile, {
       source: "training",
+      filesToTouch: request.filesToTouch,
+      expectedSymbols: request.expectedSymbols,
       cardId: request.cardId,
       cardTitle: request.cardTitle,
       acceptanceCriteria: request.acceptanceCriteria,

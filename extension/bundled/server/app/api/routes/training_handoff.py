@@ -80,6 +80,16 @@ def build_training_handoff_router(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        handoff = workspace.get("latest_training_handoff")
+        if (
+            not request.cancel
+            and isinstance(handoff, dict)
+            and handoff.get("status") == "completed"
+            and runtime.attempt_store is not None
+        ):
+            attempt = runtime.attempt_store.find_active_attempt(request.workspace_id, request.card_id)
+            if attempt is not None:
+                runtime.attempt_store.close_attempt(attempt["attempt_id"], workspace_id=request.workspace_id)
         refresh(request.workspace_id)
         return TrainingHandoffActionResponse(workspace=workspace)
 

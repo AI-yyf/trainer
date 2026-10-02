@@ -1287,19 +1287,25 @@ class ResourceService:
             return request
 
         normalized_source = str(request.source or "").strip()
-        has_real_local_source = False
-        if normalized_source:
-            local_path = self._local_source_path(normalized_source)
-            has_real_local_source = local_path is not None and local_path.exists()
-
-        if has_real_local_source:
-            return request
-
         suffix = self._resource_suffix(request.kind, request.name, normalized_source)
         safe_name = self._safe_slug(request.name) or "resource"
         materialized_dir = self._inline_resource_root(workspace_id)
-        materialized_dir.mkdir(parents=True, exist_ok=True)
-        file_path = materialized_dir / f"{safe_name}-{uuid4().hex[:8]}{suffix}"
+        collection_path = self._normalize_collection_path(request.collection_path)
+        collection_root = request.collection_root
+        if (collection_path is None) != (collection_root is None):
+            raise ValueError("collection_path and collection_root must be supplied together.")
+        if collection_path is not None:
+            # Preserve the chosen collection's relative hierarchy within owned
+            # storage. The original external directory never becomes authority.
+            parts = PurePosixPath(collection_path).parts
+            if len(parts) < 2:
+                raise ValueError("An imported collection must include a relative file path.")
+            root_path = materialized_dir / "collections" / uuid4().hex / parts[0]
+            file_path = root_path.joinpath(*parts[1:])
+            collection_root = str(root_path)
+        else:
+            file_path = materialized_dir / f"{safe_name}-{uuid4().hex[:8]}{suffix}"
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         encoding = request.content_encoding or "utf-8"
         if encoding == "base64":
             file_path.write_bytes(base64.b64decode(inline_content))
@@ -1308,7 +1314,8 @@ class ResourceService:
             # bytes (and thus the TR-059 content hash) platform-dependent.
             file_path.write_bytes(inline_content.encode("utf-8"))
         return request.model_copy(
-            update={"source": str(file_path), "content": None, "content_encoding": None}
+            update={"source": str(file_path), "content": None, "content_encoding": None,
+                    "collection_root": collection_root}
         )
 
     def _validate_source(self, source: str, *, source_type: str = "file") -> None:

@@ -603,6 +603,39 @@ test('cancelStreamMessageCommand aborts the active stream without reporting a pr
   );
 });
 
+test('cancellation unlocks the composer while a provider iterator is still unwinding', async () => {
+  const { sendStreamMessageCommand, cancelStreamMessageCommand } = loadWithVscodeMock(
+    sessionCommandsModulePath, { window: { activeTextEditor: undefined } },
+  );
+  const context = createContext();
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
+  context.sidecarClient.fetchSSE = async function* (port, requestPath, body, options) {
+    context.__streamCalls.push([port, requestPath, body, options]);
+    yield { event: 'chunk', data: JSON.stringify({ chunk: 'A partial explanation' }) };
+    await pending;
+    yield { event: 'chunk', data: JSON.stringify({ chunk: 'Late text must stay discarded' }) };
+  };
+  const running = sendStreamMessageCommand(context, {
+    text: 'Explain this deliberately slow example.', stream: true, responseLanguage: 'en-US',
+  });
+  while (!context.getStreamingState().streamedContent) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  const messageId = context.getStreamingState().streamMessageId;
+  const result = await cancelStreamMessageCommand(context, { messageId });
+  assert.equal(result.ok, true);
+  assert.equal(context.getStreamingState().isStreaming, false);
+  assert.equal(context.getStreamingState().streamedContent, 'A partial explanation');
+  assert.equal(context.getStreamingState().completionStopReason, 'cancelled');
+  assert.ok(context.__hostMessages.some((message) =>
+    message.type === 'stream/cancelled' && message.payload.messageId === messageId));
+  release();
+  await running;
+  assert.equal(context.getStreamingState().isStreaming, false);
+  assert.equal(context.getStreamingState().streamedContent, 'A partial explanation');
+});
+
 test('invalidateActiveTrainerStreams drops buffered Coach SSE events after a workspace switch', async () => {
   const vscodeMock = {
     window: {

@@ -21,13 +21,12 @@
     "Education"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onCommand:trainer.openWorkbench",
-    "onView:trainer.sidebar"
+    "onStartupFinished"
   ],
   "main": "./dist/extension/src/extension.js",
   "contributes": {
     "commands": [
+      { "command": "trainer.skills.generateDraft", "title": "Trainer: Generate Skill Draft" },
       {
         "command": "trainer.openWorkbench",
         "title": "Trainer: Open Coach Sidebar"

@@ -12,8 +12,10 @@ import pytest
 from app.core.models import ProviderConfig, UserProfile
 from app.llm.agent_loop import CoachAgentLoop
 from app.llm.coaching_replies import (
+    _agentic_practice_completion_guard,
     _agentic_practice_verification_context_active,
     _claims_verified_practice_completion,
+    _strip_internal_coach_meta,
 )
 from app.llm.prompts import (
     _has_execution_ready_next_step_request,
@@ -2264,7 +2266,7 @@ def test_provider_test_reports_rate_limit_structurally() -> None:
 
     assert result.ok is False
     assert result.error_category == "rate_limit"
-    assert result.retryable is False
+    assert result.retryable is True
     assert "rate limit" in (result.detail or "").lower()
 
 
@@ -3089,6 +3091,22 @@ def test_claims_verified_practice_completion_ignores_generic_verified_doc_langua
     assert _claims_verified_practice_completion(
         "Current-file verification passed, so you can mark this complete."
     ) is True
+
+
+def test_formal_plan_save_may_quote_prior_verification_without_practice_gate() -> None:
+    assert _agentic_practice_completion_guard(
+        content="正式计划已保存。已有4种检查已通过，hash 边界仍待验证。",
+        message="补齐3个阶段，保持第一阶段进行中。",
+        tool_events=[], current_file={"path": "list_pairs.py", "content": "pair = ([1, 2], 3)"},
+        coach_context={"formal_plan_mutation": True}, response_language="zh-CN",
+    ) is None
+
+
+def test_generic_current_file_question_is_not_always_practice_verification() -> None:
+    assert _agentic_practice_verification_context_active(
+        message="解释这个变量名称。", current_file={"path": "sample.py", "content": "value = 1"},
+        coach_context=None,
+    ) is False
 
 
 def test_first_turn_guided_lane_recognizes_call_site_function_prompt() -> None:
@@ -7659,6 +7677,26 @@ async def test_coaching_reply_strips_reasoning_blocks_before_postprocessing() ->
 
     assert reply == "Hello coach"
     assert "<think>" not in reply
+
+
+@pytest.mark.parametrize("fence", ["```", "~~~~"])
+def test_coach_cleanup_preserves_runnable_fenced_code(fence: str) -> None:
+    code = (
+        f"{fence}python\n"
+        "try:\n"
+        "    pair[1] = 9\n"
+        "except TypeError:\n"
+        "    # Current coaching focus: this is a code comment, not prose.\n"
+        "    print('TypeError')\n\n"
+        "print('done')\n"
+        f"{fence}"
+    )
+    original = f"Current coaching focus: Compare the two operations.\n\n{code}\n\nReview rhythm: Run the example."
+    cleaned = _strip_internal_coach_meta(original)
+    assert code in cleaned
+    assert cleaned.startswith("Compare the two operations.")
+    assert cleaned.endswith("Run the example.")
+    compile(cleaned.split(f"{fence}python\n", 1)[1].split(f"\n{fence}", 1)[0], "example.py", "exec")
 
 
 def test_finalize_coaching_reply_strips_internal_meta_prefix_but_keeps_visible_remainder() -> None:

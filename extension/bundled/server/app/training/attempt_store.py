@@ -81,7 +81,7 @@ class AttemptStore:
         card_id: str,
         file_path: str | None = None,
         file_hash: str | None = None,
-        file_version: int = 1,
+        file_version: int | None = None,
         assistance_level: str = "independent",
     ) -> dict[str, Any]:
         # Idempotent enter: an in-flight attempt for the same workspace+card is
@@ -106,7 +106,7 @@ class AttemptStore:
             "assistance_level": assistance_level,
             "file_path": file_path,
             "file_hash": file_hash,
-            "file_version": file_version,
+            "file_version": file_version if file_version is not None else 1,
             "created_at": now,
             "updated_at": now,
         }
@@ -132,7 +132,7 @@ class AttemptStore:
             connection.close()
         for row in rows:
             payload = json.loads(row["payload"])
-            if payload.get("status") in ("active", "answered", "implemented"):
+            if payload.get("status") in ("active", "answered", "implemented", "verified"):
                 return payload
         return None
 
@@ -292,11 +292,15 @@ class AttemptStore:
             limitations=limitations,
         )
 
-        # Honesty contract: recording new evidence supersedes the previous
-        # current record for this attempt.
+        # A self report cannot replace a controlled result for the same
+        # artifact. Changed artifact hashes still expire old evidence below.
+        trust_rank = {"self_reported": 0, "model_review": 1, "static_analysis": 2, "controlled_check": 3}
         for row in self.list_evidence_rows(attempt_id):
             payload = json.loads(row["payload"])
-            if payload.get("superseded_by_evidence_id") is None:
+            if (
+                payload.get("superseded_by_evidence_id") is None
+                and trust_rank.get(trust_level, 0) >= trust_rank.get(payload.get("trust_level"), 0)
+            ):
                 payload["superseded_by_evidence_id"] = evidence_id
                 self._write_evidence_row(row["evidence_id"], payload)
 
@@ -335,9 +339,21 @@ class AttemptStore:
             if value is not None:
                 payload[key] = value
         self._write_evidence_row(evidence_id, payload)
+        verified = any(
+            item.get("artifact_hash") == artifact_hash
+            and item.get("trust_level") == "controlled_check"
+            and item.get("result") == "passed"
+            and not item.get("superseded_by_evidence_id")
+            for item in self.list_evidence(attempt_id)
+        )
         self.update_attempt(
             attempt_id,
-            status="verified" if canonical_result == "passed" else attempt.get("status"),
+            status=(
+                "returned" if attempt.get("status") == "returned"
+                else "verified" if verified
+                else "implemented" if attempt.get("status") == "verified"
+                else attempt.get("status")
+            ),
             file_hash=artifact_hash,
         )
         # The brand-new record is current by definition: the attempt's bound

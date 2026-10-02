@@ -20,6 +20,7 @@ from ..training.handoff import (
     TrainingHandoffGenerator,
     TrainingPhase,
 )
+from ..training.plan_binding import binding_matches_plan
 from .models import utc_now
 from .workspace_recovery import (
     formal_plan_is_live_runtime_identity,
@@ -60,7 +61,7 @@ class TrainingHandoffReturnMixin:
         ]
         if not verified:
             raise ValueError("A completed Return requires trusted verification evidence.")
-        summary = "\n".join(record.content.strip() for record in verified[-3:])
+        summary = "\n".join(dict.fromkeys(record.content.strip() for record in verified[-3:]))
         source = next(
             (
                 record.verification_source.strip()
@@ -114,6 +115,10 @@ class TrainingHandoffReturnMixin:
             runtime=leftover_runtime,
             existing=leftover_runtime,
             current_step=recovered_step,
+        )
+        binding = card.plan_binding
+        stale_binding = binding is not None and not binding_matches_plan(
+            binding, leftover_plan, leftover_runtime or {}
         )
         leftover_labels = leftover_formal_training_labels(
             plan=leftover_plan,
@@ -172,6 +177,7 @@ class TrainingHandoffReturnMixin:
             "current_stage_id": current_stage_id,
             "leftover_labels": leftover_labels,
             "live_plan": live_plan,
+            "stale_binding": stale_binding,
         }
 
     def _bind_training_return_evidence_to_plan_runtime(
@@ -182,7 +188,7 @@ class TrainingHandoffReturnMixin:
         evidence: EvidenceItem,
     ) -> None:
         bind = self._training_return_plan_runtime_bind(workspace_id, card)
-        if not bind["current_step"]:
+        if not bind["current_step"] or bind["stale_binding"]:
             return
         self.persist_plan_runtime_recovery(
             workspace_id,
@@ -220,7 +226,9 @@ class TrainingHandoffReturnMixin:
         leftover_labels = bind["leftover_labels"]
         live_plan = bool(bind["live_plan"])
         concepts: list[str] = []
-        for item in (card.target_skill, card.focus_area, bind["current_step"]):
+        binding = card.plan_binding
+        bound_step = binding.step if binding else bind["current_step"]
+        for item in (card.target_skill, card.focus_area, bound_step):
             text = str(item or "").strip()
             if text and text not in leftover_labels and text not in concepts:
                 concepts.append(text)
@@ -236,10 +244,15 @@ class TrainingHandoffReturnMixin:
                 concepts=concepts,
                 outcome="pass",
                 confidence=0.9,
-                target_plan_stage_id=card.plan_links[0] if card.plan_links else "",
+                target_plan_stage_id=binding.stage_id if binding else (
+                    card.plan_links[0] if card.plan_links else ""
+                ),
+                target_plan_id=binding.plan_id if binding else "",
             ),
             verified=True,
             verification_source=verification_source,
+            auto_bind_current_plan=binding is None,
+            bound_plan_step=binding.step if binding else "",
         )
         persisted = self._training_return_evidence_for_card(workspace_id, card.card_id)
         if persisted is None or persisted.id != item.id or not persisted.verified:

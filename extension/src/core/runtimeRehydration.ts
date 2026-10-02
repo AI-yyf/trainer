@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { getRuntimeWorkspaceContext } from '../commands/workspaceContext';
+import { refreshWorkspaceAuthorityCommand } from '../commands/memoryCommands';
 import { recordProviderRestoreMs, recordRuntimeRehydration } from './runtimeMetrics';
 import type { CommandContext } from './commandContext';
 import type { SidecarStatus } from './types';
@@ -28,6 +29,7 @@ const inflightRuntimeRehydrations = new WeakMap<
   CommandContext,
   {
     workspaceId: string;
+    ensureSidecar: boolean;
     promise: Promise<SidecarStatus>;
   }
 >();
@@ -204,6 +206,11 @@ export function trainerSessionBlockReason(context: CommandContext): string | und
 }
 
 export function shouldAutoStartSidecar(status: SidecarStatus): boolean {
+  // The initial idle state has not inspected launch candidates yet. Let the
+  // manager discover them instead of treating an unprobed state as unavailable.
+  if (status.lifecycle === 'idle') {
+    return true;
+  }
   if (!status.canStart || status.lifecycle === 'unavailable') {
     return false;
   }
@@ -359,14 +366,21 @@ export async function refreshWorkbenchMemory(
     }
     const summaryPath = `/memory/summary?${params.toString()}`;
     const summary = await context.sidecarClient.getJson<unknown>(port, summaryPath);
-    if (getRehydrationWorkspaceId(context) !== workspaceId) {
+    if (
+      getRehydrationWorkspaceId(context) !== workspaceId ||
+      context.getSessionId() !== sessionId
+    ) {
       context.outputChannel.appendLine(
-        `[memory] discarded summary from stale workspace ${workspaceId}`,
+        `[memory] discarded summary from stale workspace/session ${workspaceId}`,
       );
       return;
     }
     await context.patchWorkbenchData(
       mergeMemorySummarySnapshot(context.getHostState().bootstrap, summary, workspaceId),
+    );
+    const restored = context.getHostState().bootstrap;
+    context.outputChannel.appendLine(
+      `[memory] recovered history=${restored.sessionHistoryRestored === true} skills=${restored.memory.workspace?.coachDefaults?.customSkills?.length ?? 0}`,
     );
   } catch (error) {
     context.outputChannel.appendLine(
@@ -429,7 +443,7 @@ export async function rehydrateWorkbenchRuntime(
     if (inflightRuntimeRehydrations.get(context)?.promise === inflight.promise) {
       inflightRuntimeRehydrations.delete(context);
     }
-    if (inflight.workspaceId === requestedWorkspaceId) {
+    if (inflight.workspaceId === requestedWorkspaceId && (!ensureSidecar || inflight.ensureSidecar)) {
       if (syncWorkbench) {
         await context.workbench.syncState();
       }
@@ -473,11 +487,19 @@ export async function rehydrateWorkbenchRuntime(
         return context.sidecarManager.getStatus();
       }
       await Promise.all([
-        refreshWorkbenchMemory(context, status.port, {
-          preferWorkspaceRecovery: true,
-        }),
+        refreshWorkbenchMemory(context, status.port),
         refreshWorkbenchResourceTrash(context, status.port),
       ]);
+      if (getRuntimeWorkspaceContext(context).workspaceId === workspaceIdAtStart) {
+        try {
+          const refreshed = await refreshWorkspaceAuthorityCommand(context);
+          if (!refreshed.ok) context.outputChannel.appendLine(`[authority] ${refreshed.message}`);
+        } catch (error) {
+          context.outputChannel.appendLine(
+            `[authority] unable to refresh workspace authority: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
     }
 
     if (getRuntimeWorkspaceContext(context).workspaceId !== workspaceIdAtStart) {
@@ -489,6 +511,7 @@ export async function rehydrateWorkbenchRuntime(
 
   inflightRuntimeRehydrations.set(context, {
     workspaceId: workspaceIdAtStart,
+    ensureSidecar,
     promise: rehydration,
   });
   try {

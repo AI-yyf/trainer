@@ -54,6 +54,7 @@ export interface ResourcesWorkbenchViewProps {
   isBrowserPreview?: boolean;
   isLiveBrowserPreview?: boolean;
   onSearchResources?: (request: ResourceSearchRequest) => void | Promise<void>;
+  onSearchQueryChange?: (query: string) => void;
   onImportFiles?: () => void;
   onImportFolder?: () => void;
   onImportUrl?: () => void;
@@ -1887,6 +1888,7 @@ export function ResourcesWorkbenchView({
   isBrowserPreview = false,
   isLiveBrowserPreview = false,
   onSearchResources,
+  onSearchQueryChange,
   onImportFiles,
   onImportFolder,
   onImportUrl,
@@ -1918,6 +1920,7 @@ export function ResourcesWorkbenchView({
   const importMenuRef = useRef<HTMLDivElement>(null);
   const importMenuId = useId();
   const [query, setQuery] = useState("");
+  useEffect(() => { onSearchQueryChange?.(query); }, [onSearchQueryChange, query]);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(
     () => pickInitialResourceId(resources, initialResourceContextIds, sandboxPreviewInput),
@@ -2761,6 +2764,8 @@ export function ResourcesWorkbenchView({
         .join(" | ")
     : "";
   const leftoverStoredNote = leftoverNote?.trim() || "";
+  const omitLeftoverLibrary = Boolean(leftoverStoredNote) && resources.length === 0
+    && resourceWriteAccess?.allowed !== true;
   const orientationTone = orientation ? coachOrientationTone(orientation.state) : undefined;
   const orientationState = leftoverStoredNote
     ? undefined
@@ -2815,7 +2820,7 @@ export function ResourcesWorkbenchView({
       <div className="workbench-pane__heading resources-knowledge__heading sr-only">
         <h2>{localize(language, "title")}</h2>
       </div>
-      {leftoverStoredNote ? null : (
+      {omitLeftoverLibrary ? null : (
       <div className="resources-knowledge__toolbar">
         <label className="resources-search resources-search--hero resources-knowledge__search">
           <span className="sr-only">{localize(language, "searchPlaceholder")}</span>
@@ -3016,7 +3021,7 @@ export function ResourcesWorkbenchView({
 
       {null}
 
-      {leftoverStoredNote ? null : restoreContext?.surface === "sandbox" ? (
+      {omitLeftoverLibrary ? null : restoreContext?.surface === "sandbox" ? (
         <div className="resources-inline-context" role="status">
           <strong className="resources-inline-context__title">
             {restoredSandboxContextTitle(language)}
@@ -3143,7 +3148,7 @@ export function ResourcesWorkbenchView({
         </div>
       ) : null}
 
-      {leftoverStoredNote ? null : (
+      {omitLeftoverLibrary ? null : (
       <div
         className="resources-knowledge__tree"
         ref={treeRef}
@@ -3207,7 +3212,7 @@ export function ResourcesWorkbenchView({
           </>
         )}
 
-      {leftoverStoredNote || trashedResources.length === 0 ? null : (
+      {omitLeftoverLibrary || trashedResources.length === 0 ? null : (
       <details
         className="resources-knowledge__trash resources-library-tree__trash"
         open={trashOpen}
@@ -3486,3 +3491,5 @@ export function ResourcesWorkbenchView({
     </section>
   );
 }
+
+export { localize as resourceLibraryText, compactResourceSearchPlaceholder };

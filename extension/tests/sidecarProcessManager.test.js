@@ -734,3 +734,28 @@ test('SidecarProcessManager rejects a managed data target nested inside the curr
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
 });
+
+test('SidecarProcessManager can switch datasets without copying and resume the existing recommended dataset', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-data-switch-'));
+  try {
+    const workspaceRoot = path.join(tempRoot, 'workspace');
+    const manager = createManagerFixture({ workspaceFolder: workspaceRoot, extensionPath: path.join(workspaceRoot, 'extension') });
+    const original = manager.getManagedDataFolderSnapshot(workspaceRoot).effectivePath;
+    writeFile(path.join(original, 'memory.json'), '{"from":"original"}\n');
+    const other = path.join(tempRoot, 'other-data');
+    const switched = await manager.configureManagedDataFolder(other, workspaceRoot, {
+      allowExistingTarget: true, copyExistingData: false,
+    });
+    assert.equal(switched.migration, 'not_needed');
+    assert.equal(fs.existsSync(path.join(other, 'memory.json')), false);
+    writeFile(path.join(other, 'memory.json'), '{"from":"other"}\n');
+    const resumed = await manager.resetManagedDataFolder(workspaceRoot, {
+      allowExistingTarget: true, copyExistingData: false,
+    });
+    assert.equal(resumed.next.effectivePath, original);
+    assert.equal(fs.readFileSync(path.join(original, 'memory.json'), 'utf8'), '{"from":"original"}\n');
+    assert.equal(fs.readFileSync(path.join(other, 'memory.json'), 'utf8'), '{"from":"other"}\n');
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});

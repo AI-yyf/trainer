@@ -112,8 +112,9 @@ test('plan first viewport keeps a work-surface object without a governance dump'
   assert.doesNotMatch(compactSummary, /data-plan-evidence-list/);
   assert.doesNotMatch(compactSummary, /coach-plan-view__compact-fact/);
   assert.doesNotMatch(compactSummary, /memoryScopeContext/);
-  assert.match(compactSummary, /coach-plan-view__now-done/);
-  assert.match(compactSummary, /coach-plan-view__now-next/);
+  assert.match(compactSummary, /coach-plan-view__now-card/);
+  assert.match(compactSummary, /data-plan-fact="next"/);
+  assert.match(compactSummary, /compactPrimaryAction\.onClick/);
   assert.match(app, /openPlanComposerMode\("evidence"\)/);
 });
 
@@ -131,7 +132,8 @@ test('training first viewport is the current card plus one primary, with skip/gr
   assert.doesNotMatch(cardOnly, /training-current__more/);
   // Phase-C training slice: the loop rail and step-start action live on the
   // card-only first viewport.
-  assert.match(cardOnly, /training-loop-rail/);
+  assert.doesNotMatch(cardOnly, /training-loop-rail/);
+  assert.match(cardOnly, /data-training-card-footer="true"/);
   // The step-start label is App-composed (localizable), the affordance lives
   // on the card.
   assert.match(training, /startStep: "Start this step"/);

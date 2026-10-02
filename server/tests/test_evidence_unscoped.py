@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.core.models import EvidenceItem
+import pytest
+from fastapi import HTTPException
+
+from app.core.models import EvidenceItem, LearningPlan, PlanStage
 from app.db.repository import TrainerRepository
 from app.memory.service import MemoryService
 from app.memory.workspace_recovery import (
@@ -13,6 +16,94 @@ from app.memory.workspace_recovery import (
 )
 
 CURRENT_STEP = "Review the refresh path"
+
+
+def test_historical_verified_evidence_cannot_complete_revised_stage(tmp_path: Path) -> None:
+    workspace_id = "ws-history-adopt"
+    repository = TrainerRepository(tmp_path / "history-adopt.db")
+    service = MemoryService(repository)
+    plan = LearningPlan(
+        id="plan-refresh", title="Refresh boundaries", current_stage_id="stage-1",
+        current_step=CURRENT_STEP,
+        stages=[PlanStage(id="stage-1", title="Boundary checks", goal=CURRENT_STEP, status="active", outcomes=["boundary"])],
+    )
+    repository.save_plan(workspace_id, plan)
+    item = service.enqueue_evidence(
+        workspace_id,
+        EvidenceItem(summary="Earlier boundary passed", outcome="pass", target_plan_stage_id="stage-1"),
+        verified=True, verification_source="current_file_evaluation",
+    )
+    _seed_recovered_runtime(service, workspace_id)
+    before = repository.get_latest_plan(workspace_id).model_dump()
+    with pytest.raises(HTTPException) as error:
+        service.adopt_evidence(workspace_id, item.id)
+    assert error.value.status_code == 409
+    assert repository.get_latest_plan(workspace_id).model_dump() == before
+    rebuilt = MemoryService(TrainerRepository(tmp_path / "history-adopt.db"))
+    history = rebuilt.evidence_queue(workspace_id).history
+    assert len(history) == 1
+    assert history[0].id == item.id
+    assert not history[0].adopted
+
+
+def test_independent_verified_evidence_is_recorded_without_advancing_plan(tmp_path: Path) -> None:
+    workspace_id = "ws-independent-adopt"
+    repository = TrainerRepository(tmp_path / "independent-adopt.db")
+    service = MemoryService(repository)
+    plan = LearningPlan(
+        id="plan-refresh", title="Refresh boundaries", current_stage_id="stage-1",
+        current_step=CURRENT_STEP,
+        stages=[PlanStage(id="stage-1", title="Boundary checks", goal=CURRENT_STEP, status="active", outcomes=["boundary"])],
+    )
+    repository.save_plan(workspace_id, plan)
+    _seed_recovered_runtime(service, workspace_id)
+    item = service.enqueue_evidence(
+        workspace_id,
+        EvidenceItem(summary="Independent boundary check", outcome="pass", concepts=["boundary"]),
+        verified=True, verification_source="current_file_evaluation", auto_bind_current_plan=False,
+    )
+    before = repository.get_latest_plan(workspace_id).model_dump()
+    service.update_workspace_state(workspace_id, selected_card_id="current-review",
+                                   selected_card_title="Recall: Python",
+                                   latest_training_next_hop={"title": "Recall: Python"})
+    workspace_before = service.snapshot(workspace_id).workspace.copy()
+    response = service.adopt_evidence(workspace_id, item.id)
+    assert response.evidence.adopted
+    assert not response.plan_updated
+    assert repository.get_latest_plan(workspace_id).model_dump() == before
+    assert service.snapshot(workspace_id).workspace == workspace_before
+    assert service.recover_workspace_facts(workspace_id)["latest_plan_runtime"]["current_step"] == CURRENT_STEP
+
+
+def test_fresh_stage_evidence_keeps_its_step_binding_after_plan_revision(tmp_path: Path) -> None:
+    workspace_id = "ws-fresh-stage-binding"
+    repository = TrainerRepository(tmp_path / "fresh-binding.db")
+    service = MemoryService(repository)
+    plan = LearningPlan(
+        id="plan-refresh", title="Refresh boundaries", current_stage_id="stage-1",
+        current_step=CURRENT_STEP,
+        stages=[PlanStage(id="stage-1", title="Boundary checks", goal=CURRENT_STEP, status="active", outcomes=["boundary"])],
+    )
+    repository.save_plan(workspace_id, plan)
+    _seed_recovered_runtime(service, workspace_id)
+    item = service.enqueue_evidence(
+        workspace_id,
+        EvidenceItem(summary="Current stage check", outcome="pass", target_plan_stage_id="stage-1",
+                     target_plan_step="Client-supplied step must be ignored"),
+        verified=True, verification_source="current_file_evaluation",
+    )
+    assert item.target_plan_step == CURRENT_STEP
+    assert [entry.id for entry in service.evidence_queue(workspace_id).pending] == [item.id]
+    revised_step = "Add the missing hash boundary"
+    revised = plan.model_copy(update={"current_step": revised_step})
+    repository.save_plan(workspace_id, revised)
+    service.bind_explicit_generated_plan(workspace_id, revised)
+    rebuilt = MemoryService(TrainerRepository(tmp_path / "fresh-binding.db"))
+    assert [entry.id for entry in rebuilt.evidence_queue(workspace_id).history] == [item.id]
+    with pytest.raises(HTTPException) as error:
+        rebuilt.adopt_evidence(workspace_id, item.id)
+    assert error.value.status_code == 409
+    assert repository.get_latest_plan(workspace_id).current_step == revised_step
 
 
 def _seed_recovered_runtime(service: MemoryService, workspace_id: str) -> None:

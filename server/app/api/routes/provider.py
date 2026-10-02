@@ -4,7 +4,7 @@ import re
 from datetime import UTC, datetime
 from typing import cast
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from ...core.models import (
     ProviderConfig,
@@ -13,6 +13,7 @@ from ...core.models import (
 )
 from ...llm.provider_gateway import NEWAPI_CONNECTION_TYPE
 from ...llm.provider_protocols import provider_protocol_family
+from ...llm.skill_draft import generate_skill_draft
 from .._helpers import contains_cjk_text, localized_text, prefers_chinese
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
@@ -29,6 +30,22 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
     provider_model_policy_detail = deps.provider_model_policy_detail
     provider_model_policy_violation = deps.provider_model_policy_violation
     provider_protocol_from_payload = deps.provider_protocol_from_payload
+
+    @router.post("/provider/skill-draft")
+    async def skill_draft(payload: dict) -> dict[str, str]:
+        description = payload.get("description")
+        if not isinstance(description, str) or not 2 <= len(description.strip()) <= 2000:
+            raise HTTPException(status_code=422, detail="Describe the skill in 2-2000 characters.")
+        provider = provider_config_from_payload(payload)
+        api_key = provider_api_key_from_payload(payload)
+        service = runtime.provider_service_for(provider, api_key)
+        if not service.has_api_key:
+            raise HTTPException(status_code=409, detail="Save a provider connection first.")
+        language = str(payload.get("response_language") or "en-US")
+        try:
+            return await generate_skill_draft(service, description.strip(), language)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail="Skill generation failed. Try again.") from exc
 
     def provider_declared_window_payload(
         provider: ProviderConfig | None,

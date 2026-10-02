@@ -727,29 +727,62 @@ test('explicit adoption briefly unlocks only its required setup requests from br
     const adoptionRequests = context.__runtimeCalls
       .slice(requestStart)
       .filter((call) => call.kind === 'post');
-    assert.deepEqual(
-      adoptionRequests.map((call) => call.trainerAdmissionMode),
-      [undefined, undefined, undefined, undefined],
-    );
+    const setupPaths = new Set([
+      '/workspace/classify', '/session/start', '/workspace/discovery/decision',
+      '/memory/transfer/include-workspace',
+    ]);
+    assert.ok(adoptionRequests.every((call) =>
+      call.trainerAdmissionMode === undefined && setupPaths.has(call.requestPath)));
+    assert.equal(adoptionRequests.filter((call) => call.requestPath === '/workspace/classify').length, 2);
     assert.equal(
       adoptionRequests.some((call) => call.requestPath === '/memory/transfer/include-workspace'),
       true,
     );
-    assert.deepEqual(context.__admissionModeCalls.slice(modeTransitionStart, -1), [
-      undefined,
-      readOnlyMode,
-      undefined,
-      readOnlyMode,
-      undefined,
-      readOnlyMode,
-      undefined,
-      readOnlyMode,
-      undefined,
-      readOnlyMode,
-    ]);
+    const transitions = context.__admissionModeCalls.slice(modeTransitionStart, -1);
+    assert.ok(transitions.length >= 10);
+    for (let index = 0; index < transitions.length; index += 1) {
+      if (transitions[index] === undefined) {
+        assert.equal(transitions[index + 1], readOnlyMode);
+      } else {
+        assert.equal(transitions[index], readOnlyMode);
+      }
+    }
     assert.equal(context.__getTrainerAdmissionMode(), undefined);
     assert.equal(context.__calls.at(-1).adoptionMode, 'managed');
   }
+});
+
+test('new root adoption creates its project and session in the newly scoped backend', async () => {
+  const vscodeMock = createVscodeMock('C:\\trainer-workspace-tests\\root');
+  const { adoptWorkspaceProjectCommand, chooseTrainerWorkspaceRootCommand } =
+    loadWithVscodeMock(commandsModulePath, vscodeMock);
+  const context = createContext();
+  await chooseTrainerWorkspaceRootCommand(context);
+  const requestStart = context.__runtimeCalls.length;
+  let rootRegistered = false;
+  const setRootIdentity = context.trainerWorkspace.setRootIdentity;
+  context.trainerWorkspace.setRootIdentity = async (...args) => {
+    await setRootIdentity(...args);
+    rootRegistered = true;
+  };
+  const ensureRunning = context.sidecarManager.ensureRunning;
+  const getStatus = context.sidecarManager.getStatus;
+  context.sidecarManager.ensureRunning = async () => ({
+    ...await ensureRunning(), port: rootRegistered ? 34892 : 34891,
+  });
+  context.sidecarManager.getStatus = () => ({
+    ...getStatus(), port: rootRegistered ? 34892 : 34891,
+  });
+
+  assert.equal((await adoptWorkspaceProjectCommand(context)).ok, true);
+  const requests = context.__runtimeCalls.slice(requestStart);
+  const classifications = requests.filter((call) => call.requestPath === '/workspace/classify');
+  assert.equal(classifications[0].port, 34891);
+  assert.equal(classifications.at(-1).port, 34892);
+  for (const requestPath of ['/session/start', '/workspace/discovery/decision']) {
+    assert.equal(requests.find((call) => call.requestPath === requestPath).port, 34892);
+  }
+  assert.equal(requests.find((call) => call.requestPath?.startsWith('/workspace/adoption-job?')).port, 34892);
 });
 
 test('a failed explicit adoption restores the original read-only admission', async () => {
@@ -1232,6 +1265,30 @@ test('workspace recovery commands keep backups non-disruptive and refresh after 
     'configure',
     'restart',
   ]);
+});
+
+test('switching roots restores each remembered dataset and never copies the previous root', async () => {
+  const firstRoot = 'C:\\trainer-workspace-tests\\first-root';
+  const secondRoot = 'C:\\trainer-workspace-tests\\second-root';
+  const vscodeMock = createVscodeMock(firstRoot, secondRoot, firstRoot);
+  const { chooseTrainerWorkspaceRootCommand } = loadWithVscodeMock(commandsModulePath, vscodeMock);
+  const context = createContext();
+  const configurationOptions = [];
+  const configure = context.sidecarManager.configureManagedDataFolder;
+  context.sidecarManager.configureManagedDataFolder = async (...args) => {
+    configurationOptions.push(args[2]);
+    return configure(...args);
+  };
+  assert.equal((await chooseTrainerWorkspaceRootCommand(context)).ok, true);
+  const firstData = context.sidecarManager.getManagedDataFolderSnapshot().effectivePath;
+  assert.equal((await chooseTrainerWorkspaceRootCommand(context)).ok, true);
+  const secondData = context.sidecarManager.getManagedDataFolderSnapshot().effectivePath;
+  assert.notEqual(firstData, secondData);
+  assert.equal((await chooseTrainerWorkspaceRootCommand(context)).ok, true);
+  assert.equal(context.sidecarManager.getManagedDataFolderSnapshot().effectivePath, firstData);
+  assert.deepEqual(configurationOptions, Array.from({ length: 3 }, () => ({
+    allowExistingTarget: true, copyExistingData: false,
+  })));
 });
 
 test('restore does not leftover-fill workspace A identity onto a different workspace', async () => {

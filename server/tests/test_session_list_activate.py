@@ -118,3 +118,18 @@ def test_session_activate_rejects_unknown_session_instead_of_latest_fallback(
             params={"workspace_id": WORKSPACE, "session_id": first},
         )
         assert history.status_code == 200
+
+
+def test_session_list_marks_the_callers_selected_session_instead_of_recency(tmp_path: Path) -> None:
+    with build_client(tmp_path) as client:
+        older = _start(client)
+        _say(client, older, "OLDER-MARKER")
+        newer = _start(client)
+        _say(client, newer, "NEWER-MARKER")
+        for selected in (older, newer, older):
+            response = client.get(
+                "/session/list", params={"workspace_id": WORKSPACE, "session_id": selected}
+            )
+            assert response.status_code == 200
+            active = [item["session_id"] for item in response.json() if item["is_active"]]
+            assert active == [selected]

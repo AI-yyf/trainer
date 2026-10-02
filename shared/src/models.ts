@@ -594,6 +594,7 @@ export type EvidenceItem = {
   verificationSource?: string;
   timestamp?: string;
   targetPlanStageId?: string;
+  targetPlanStep?: string;
   adopted?: boolean;
   adoptedAt?: string | null;
   deferredAt?: string | null;
@@ -608,6 +609,7 @@ export type EvidenceQueueSnapshot = {
   adopted: EvidenceItem[];
   rejected: EvidenceItem[];
   history?: EvidenceItem[];
+  unscoped?: EvidenceItem[];
   totalCount: number;
 };
 
@@ -776,3 +778,9 @@ export type FlashcardRecoveryMode =
   | "scenario_lab_or_project"
   | "transfer"
   | "review";
+export interface TrainingPlanBinding {
+  planId: string;
+  stageId: string;
+  step: string;
+  revision?: number;
+}

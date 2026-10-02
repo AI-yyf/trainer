@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { parseProviderConnectionPaste } from "../../../../../shared/src/providerGateway";
 import type { ComposerLanguage } from "../../../../../shared/src/types";
-import { CheckMarkIcon, GearIcon } from "../icons";
+import { CheckMarkIcon } from "../icons";
 
 interface ProviderQuickSetupDraft {
   name: string;
@@ -241,7 +241,10 @@ export function ProviderQuickSetup({
   }
 
   return (
-    <div className="settings-quick-setup">
+    <form className="settings-quick-setup" onSubmit={(event) => {
+      event.preventDefault();
+      if (canSave && !busy) onSave();
+    }}>
       <div className="settings-quick-setup__head">
         <strong>{copy(language, "title")}</strong>
         {connectedSummary ? (
@@ -288,10 +291,9 @@ export function ProviderQuickSetup({
       </label>
 
       <button
-        type="button"
+        type="submit"
         className="action-button action-button--accent"
         disabled={!canSave || busy}
-        onClick={onSave}
       >
         {busy ? (
           <>
@@ -306,6 +308,6 @@ export function ProviderQuickSetup({
         )}
       </button>
 
-    </div>
+    </form>
   );
 }

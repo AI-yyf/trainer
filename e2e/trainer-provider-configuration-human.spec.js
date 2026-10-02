@@ -152,7 +152,7 @@ test.describe("human Provider configuration preview", () => {
     // entered right away — the applied values stream into the form.
     const initial = await openDetails(page);
     await expect(initial.fields.getByLabel("Service root")).toHaveValue("https://api.minimaxi.com/v1");
-    await expect(initial.fields.getByLabel("Connection name (optional)")).toHaveValue("MiniMax");
+    await expect(initial.fields.getByLabel("Connection name (optional)")).toHaveCount(0);
 
     const picker = await openModelPicker(page);
     const modelSelect = picker.getByRole("combobox", { name: "Model", exact: true });
@@ -173,6 +173,7 @@ test.describe("human Provider configuration preview", () => {
     // drill in through the collapsible entry row.
     await providerDetail(page).locator(".collapse-section__header").click();
     const advanced = providerDetail(page).locator("details.settings-sheet__provider-catalog");
+    await expect(page.getByLabel("Connection name (optional)")).toHaveValue("MiniMax");
     await expect(advanced).toBeVisible();
     if (!(await advanced.evaluate((element) => element.open))) {
       await advanced.locator(":scope > summary").click();
@@ -230,7 +231,9 @@ test.describe("human Provider configuration preview", () => {
 
     const secondProfileName = "Preview fallback profile";
     const secondDraft = await openDetails(page);
-    await secondDraft.fields.getByLabel("Connection name (optional)").fill(secondProfileName);
+    await providerDetail(page).locator(".collapse-section__header").click();
+    await page.getByLabel("Connection name (optional)").fill(secondProfileName);
+    await providerDetail(page).locator(".collapse-section__header").click();
     await secondDraft.fields.getByLabel("API Key", { exact: true }).fill(credential);
     const secondProfiles = await openProfiles(page);
     await secondProfiles.getByRole("button", { name: "Save as connection", exact: true }).click();

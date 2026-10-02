@@ -170,7 +170,9 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     const library = page.getByRole("region", { name: "Unified library", exact: true });
     const tree = library.getByRole("tree", { name: "Unified library", exact: true });
     await expect(library).toBeVisible();
-    await expect(tree).toContainText("No resources yet");
+    await expect(library).toContainText("The library is empty");
+    await expect(library.getByRole("treeitem")).toHaveCount(0);
+    await expect(tree.getByRole("treeitem")).toHaveCount(0);
 
     const importStart = await actionCount(page);
     await library.getByRole("button", { name: "Add resource", exact: true }).click();

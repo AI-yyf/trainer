@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 from provider_fixtures import seed_verified_capabilities
 
-from app.core.models import EvaluationCheck, EvaluationReport, ProviderConfig
+from app.core.models import EvaluationCheck, EvaluationReport, ProviderConfig, TaskSpec
 from app.core.settings import AppSettings
 from app.llm.provider_service import ProviderService
 from app.main import create_app
@@ -30,7 +30,7 @@ def _settings(data_dir: Path) -> AppSettings:
 
 def _passed_report(summary: str, next_step: str) -> EvaluationReport:
     return EvaluationReport(
-        task_spec_id="",
+        task_spec_id="task-auth-expiry",
         summary=summary,
         static_checks=[],
         dynamic_checks=[
@@ -137,6 +137,11 @@ def test_evaluator_ack_advances_live_plan_runtime_without_mint_or_global(
         assert str(live_runtime.get("plan_id") or "").strip() == plan_id
         assert str(live_runtime.get("current_step") or "").strip() == step_before
 
+        session = runtime.ensure_session(session_id, workspace_id=workspace_id)
+        session.snapshot.current_task = TaskSpec(id="task-auth-expiry", title="Verify auth expiry",
+            natural_language_goal="Implement require_fresh")
+        runtime.save_session_state(session_id)
+
         runtime.evaluator_service.evaluate_snippet = MagicMock(
             return_value=_passed_report(summary, next_step)
         )
@@ -145,6 +150,7 @@ def test_evaluator_ack_advances_live_plan_runtime_without_mint_or_global(
             json={
                 "session_id": session_id,
                 "workspace_id": workspace_id,
+                "task_spec_id": "task-auth-expiry",
                 "language_id": "python",
                 "content": (
                     "def require_fresh(token):\n"
@@ -200,6 +206,7 @@ def test_evaluator_ack_advances_live_plan_runtime_without_mint_or_global(
         assert str(summary_advance.get("next") or "").strip()
 
         assert _card_ids(runtime, workspace_id) == cards_before
+
         assert not str(workspace.get("selected_card_id") or workspace.get("selectedCardId") or "").strip()
         assert runtime.memory_service.global_memory().capability_profile == {}
 
@@ -216,6 +223,7 @@ def test_evaluator_ack_advances_live_plan_runtime_without_mint_or_global(
             json={
                 "session_id": session_id,
                 "workspace_id": workspace_id,
+                "task_spec_id": "task-auth-expiry",
                 "language_id": "python",
                 "content": "def ok():\n    return True\n",
             },
@@ -240,3 +248,38 @@ def test_evaluator_ack_advances_live_plan_runtime_without_mint_or_global(
         )
         assert runtime.memory_service.global_memory().capability_profile == {}
         assert _card_ids(runtime, workspace_id) == cards_before
+
+
+def test_unbound_file_results_cannot_advance_or_replan_the_live_formal_plan(tmp_path: Path) -> None:
+    app = create_app(_settings(tmp_path / "unbound"))
+    _seed_provider(app)
+    with TestClient(app) as client:
+        workspace_id = "ws-unbound-file"
+        started = client.post("/session/start", json={"workspace_id": workspace_id, "workspace_name": "Unbound file"})
+        assert started.status_code == 200, started.text
+        session_id = started.json()["session_id"]
+        generated = client.post("/plan/generate", json={"session_id": session_id,
+            "workspace_id": workspace_id, "objectives": ["Ship auth expiry"]})
+        assert generated.status_code == 200, generated.text
+        runtime = app.state.runtime
+        before = runtime.repository.get_latest_plan(workspace_id).model_dump()
+        evidence_before = set(runtime.memory_service._structured_for(workspace_id)._evidence_items)
+        for passed in (True, False):
+            report = _passed_report("An unrelated file was checked", "A file-specific next step")
+            report.task_spec_id = None
+            report.passed = passed
+            runtime.evaluator_service.evaluate_current_file = MagicMock(return_value=report)
+            response = client.post("/evaluate/current-file", json={"session_id": session_id,
+                "workspace_id": workspace_id, "file_path": str(tmp_path / "unrelated.py"),
+                "language_id": "python", "content": "def test_unrelated():\n    assert True\n"})
+            assert response.status_code == 200, response.text
+            assert runtime.repository.get_latest_plan(workspace_id).model_dump() == before
+            session = runtime.ensure_session(session_id, workspace_id=workspace_id)
+            assert session.snapshot.plan_runtime_status["verify_plan_advance"]["advanced"] is False
+        new_evidence = [item for key, item in runtime.memory_service._structured_for(workspace_id)._evidence_items.items()
+            if key not in evidence_before and item.source == "learning_signal"]
+        assert new_evidence
+        assert all(not item.target_plan_stage_id for item in new_evidence)
+        assert all(item.concepts == ["unrelated"] for item in new_evidence)
+        queue = client.get('/memory/summary', params={'workspace_id': workspace_id}).json()['memory']['evidence_queue']
+        assert not any(item['id'] in {e.id for e in new_evidence} for item in queue['pending'])

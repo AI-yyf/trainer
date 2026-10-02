@@ -12,6 +12,7 @@ export const TRAINER_WORKSPACE_PENDING_RECONCILIATIONS_STORAGE_KEY =
 export const TRAINER_WORKSPACE_MANIFEST_FILE = path.join('.trainer', 'workspace.json');
 export const TRAINER_WORKSPACE_BACKUP_FILE = path.join('.trainer', 'backup.json');
 export const TRAINER_WORKSPACE_RUNTIME_DATA_DIRECTORY = path.join('.trainer', 'runtime');
+export const TRAINER_RUNTIME_LOCATION_FILE = 'runtime-location.json';
 
 export const TRAINER_WORKSPACE_DIRECTORIES = [
   'Projects',
@@ -1315,18 +1316,21 @@ export class TrainerWorkspaceService {
     stagingRoot: string,
     runtimeData: ResolvedRuntimeDataSnapshot,
   ): Promise<void> {
-    if (!runtimeData.isOutsideWorkspaceRoot) {
-      return;
-    }
-
     const targetRoot = this.resolveRuntimeDataPath(stagingRoot, runtimeData.relativePath);
     await this.assertRuntimeDestinationSafe(stagingRoot, targetRoot);
-    await fs.rm(targetRoot, { recursive: true, force: true });
-    await fs.mkdir(path.dirname(targetRoot), { recursive: true });
-    await fs.cp(runtimeData.sourceRoot, targetRoot, {
-      recursive: true,
-      force: false,
-      errorOnExist: true,
+    if (runtimeData.isOutsideWorkspaceRoot) {
+      await fs.rm(targetRoot, { recursive: true, force: true });
+      await fs.mkdir(path.dirname(targetRoot), { recursive: true });
+      await fs.cp(runtimeData.sourceRoot, targetRoot, {
+        recursive: true,
+        force: false,
+        errorOnExist: true,
+      });
+    }
+    await fs.mkdir(targetRoot, { recursive: true });
+    await this.writeJsonAtomically(path.join(targetRoot, TRAINER_RUNTIME_LOCATION_FILE), {
+      schemaVersion: 1,
+      dataRoot: runtimeData.sourceRoot,
     });
   }
 

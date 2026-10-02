@@ -22,9 +22,15 @@ const vscodeMock = {
   },
 };
 
+const { createDefaultBootstrapData } = loadWithVscodeMock(
+  path.resolve(__dirname, '..', 'dist', 'extension', 'src', 'core', 'workbenchData.js'),
+  vscodeMock,
+);
+
 const {
   buildTrainerRuntimeStatus,
   rehydrateWorkbenchRuntime,
+  refreshWorkbenchMemory,
   refreshWorkbenchResourceTrash,
   shouldAutoStartSidecar,
   trainerSessionBlockReason,
@@ -301,7 +307,7 @@ test('runtime rehydration restores durable Trash with the sovereign workspace be
   assert.deepEqual(requests, [
     {
       port: 34891,
-      requestPath: '/memory/summary?workspace_id=F%3A%5Ctrainer%5Cworkspace-a',
+      requestPath: '/memory/summary?workspace_id=F%3A%5Ctrainer%5Cworkspace-a&session_id=stale-session',
     },
     {
       port: 34891,
@@ -552,9 +558,9 @@ test('a workspace change waits out an older rehydration and hydrates the new wor
   assert.deepEqual(
     requests.map(({ requestPath }) => requestPath),
     [
-      `/memory/summary?workspace_id=${encodeURIComponent(workspaceA)}`,
+      `/memory/summary?workspace_id=${encodeURIComponent(workspaceA)}&session_id=session-a`,
       `/resource/trash?workspace_id=${encodeURIComponent(workspaceA)}`,
-      `/memory/summary?workspace_id=${encodeURIComponent(workspaceB)}`,
+      `/memory/summary?workspace_id=${encodeURIComponent(workspaceB)}&session_id=session-b`,
       `/resource/trash?workspace_id=${encodeURIComponent(workspaceB)}`,
     ],
   );
@@ -570,4 +576,101 @@ test('a workspace change waits out an older rehydration and hydrates the new wor
     ),
     true,
   );
+});
+
+
+test('the unprobed idle sidecar is eligible for a trusted startup', () => {
+  assert.equal(shouldAutoStartSidecar({
+    lifecycle: 'idle', host: '127.0.0.1', canStart: false,
+    detail: 'Sidecar not started yet.',
+  }), true);
+});
+
+test('a startup request cannot be swallowed by an in-flight read-only rehydration', async () => {
+  let releaseScope;
+  const scopeGate = new Promise((resolve) => { releaseScope = resolve; });
+  let scopeCalls = 0;
+  let starts = 0;
+  let status = { lifecycle: 'idle', host: '127.0.0.1', canStart: false };
+  const hostState = {
+    workspace: { trusted: true, activeWorkspaceRoot: 'F:\\project' },
+    bootstrap: { memory: { workspace: { trainerWorkspace: { status: 'managed' } } } },
+  };
+  const context = {
+    trainerWorkspace: { getRoot: () => 'F:\\trainer-root' },
+    getHostState: () => hostState,
+    sidecarManager: {
+      getStatus: () => status,
+      async setManagedDataRootScope() {
+        scopeCalls += 1;
+        if (scopeCalls === 1) await scopeGate;
+      },
+      async ensureRunning() {
+        starts += 1;
+        status = { lifecycle: 'starting', host: '127.0.0.1', canStart: true };
+        return status;
+      },
+    },
+    async patchWorkbenchData() {},
+    workbench: { async syncState() {} },
+  };
+  const refresh = rehydrateWorkbenchRuntime(context, { ensureSidecar: false });
+  await new Promise((resolve) => setImmediate(resolve));
+  const startup = rehydrateWorkbenchRuntime(context, { ensureSidecar: true });
+  releaseScope();
+  await Promise.all([refresh, startup]);
+  assert.equal(starts, 1);
+  assert.equal(scopeCalls, 2);
+});
+
+
+test('memory refresh scopes the transcript to the selected conversation', async () => {
+  let requestedPath;
+  const patches = [];
+  const workspace = { trusted: true, activeWorkspaceRoot: '/trainer/project' };
+  const bootstrap = createDefaultBootstrapData(workspace);
+  bootstrap.memory.workspace.trainerWorkspace = { status: 'managed' };
+  const context = {
+    trainerWorkspace: { getRoot: () => '/trainer' },
+    getSessionId: () => 'selected-session',
+    getHostState: () => ({
+      workspace,
+      bootstrap,
+    }),
+    sidecarClient: {
+      async getJson(port, requestPath) {
+        requestedPath = requestPath;
+        return { messages: [{ id: 'selected-message', role: 'assistant', content: 'Selected history' }] };
+      },
+    },
+    async patchWorkbenchData(patch) { patches.push(patch); },
+    outputChannel: { appendLine() {} },
+  };
+  await refreshWorkbenchMemory(context, 34891);
+  assert.equal(new URL(requestedPath, 'http://localhost').searchParams.get('session_id'), 'selected-session');
+  assert.equal(patches[0].conversation[0].body, 'Selected history');
+});
+
+test('memory refresh discards a late transcript after a conversation switch', async () => {
+  let sessionId = 'session-a';
+  let resolveSummary;
+  const patches = [];
+  const context = {
+    trainerWorkspace: { getRoot: () => '/trainer' },
+    getSessionId: () => sessionId,
+    getHostState: () => ({
+      workspace: { activeWorkspaceRoot: '/trainer/project' },
+      bootstrap: { memory: { workspace: { trainerWorkspace: { status: 'managed' } } } },
+    }),
+    sidecarClient: {
+      getJson() { return new Promise(resolve => { resolveSummary = resolve; }); },
+    },
+    async patchWorkbenchData(patch) { patches.push(patch); },
+    outputChannel: { appendLine() {} },
+  };
+  const pending = refreshWorkbenchMemory(context, 34891);
+  sessionId = 'session-b';
+  resolveSummary({ messages: [{ id: 'old-message', role: 'assistant', content: 'Wrong history' }] });
+  await pending;
+  assert.deepEqual(patches, []);
 });

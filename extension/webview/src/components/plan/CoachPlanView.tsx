@@ -14,6 +14,7 @@ import {
 } from "../../../../../shared/src/errorSurfaceSanitizer";
 
 import { ActionButton } from "../common";
+import { MessageRichContent } from "../coach/MessageRichContent";
 import { CollapseSection } from "../common/CollapseSection";
 import {
   CheckMarkIcon,
@@ -26,6 +27,7 @@ import {
   WarningIcon,
 } from "../icons";
 import { useTranslation } from "../../lib/i18n/useTranslation";
+import { reviewConceptLabel } from "../../lib/reviewLabel";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
 import { SkillProjectionStrip } from "../training/SkillProjectionStrip";
 import type {
@@ -1446,10 +1448,11 @@ function collectEvidenceItems(queue: EvidenceQueueView | undefined): EvidenceIte
   if (!queue) {
     return [];
   }
-  return [...queue.pending, ...queue.deferred, ...queue.adopted, ...queue.rejected, ...(queue.history ?? [])];
+  return [...queue.pending, ...queue.deferred, ...queue.adopted, ...queue.rejected, ...(queue.history ?? []), ...(queue.unscoped ?? [])];
 }
 
 const RECOVERED_PLAN_ACTION_IDS = new Set([
+  "resume-plan",
   "plan-review-evidence",
   "plan-clear-blocker",
   "plan-continue-step",
@@ -1596,7 +1599,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const skillProjection = useWorkbenchState(
     (state) => state.data.workspaceTrainingState?.skillProjection,
   );
-  const [evidenceFilter, setEvidenceFilter] = useState<"all" | "pending" | "deferred" | "adopted" | "rejected" | "history">(
+  const [evidenceFilter, setEvidenceFilter] = useState<"all" | "pending" | "deferred" | "adopted" | "rejected" | "history" | "unscoped">(
     "pending",
   );
   const [planTab, setPlanTab] = useState<"plan" | "progress">("plan");
@@ -1823,6 +1826,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       adopted: evidenceQueue?.adopted.length ?? 0,
       rejected: evidenceQueue?.rejected.length ?? 0,
       history: evidenceQueue?.history?.length ?? 0,
+      unscoped: evidenceQueue?.unscoped?.length ?? 0,
       total: evidenceQueue?.totalCount ?? 0,
     }),
     [evidenceQueue],
@@ -1839,6 +1843,8 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         return evidenceQueue?.adopted ?? [];
       case "rejected":
         return evidenceQueue?.rejected ?? [];
+      case "unscoped":
+        return evidenceQueue?.unscoped ?? [];
       case "history":
         return evidenceQueue?.history ?? [];
       default:
@@ -1889,7 +1895,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         role="tab"
         aria-selected={planTab === "progress"}
         data-plan-tab="progress"
-        className={`plan-dashboard__tab${planTab === "progress" ? " is-active" : ""}`}
+        className={`plan-dashboard__tab${!compactPrimary && planTab === "progress" ? " is-active" : ""}`}
         onClick={() => setPlanTab("progress")}
       >
         {t("planDashboardTabProgress")}
@@ -1911,8 +1917,8 @@ export function CoachPlanView(props: CoachPlanViewProps) {
           </div>
         </div>
         )}
-        {planTabBar}
-        {planTab === "progress" ? (
+        {!compactPrimary ? planTabBar : null}
+        {!compactPrimary && planTab === "progress" ? (
           <div className="plan-dashboard__empty" data-plan-dashboard-empty="true">
             <PlanIcon size={20} />
             <p>{t("planDashboardEmptyTitle")}</p>
@@ -1944,7 +1950,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
             ) : (
               emptyState
             )}
-            {leftoverNote ? null : compactPrimary && emptyPrimaryAction ? (
+            {compactPrimary && emptyPrimaryAction ? (
               <div className="coach-plan-view__compact-primary-action">
                 <ActionButton
                   className="coach-plan-view__action-button"
@@ -2175,7 +2181,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     const reviewText = inlineText(props.reviewWindow);
     const reviewFirst = reviewText.match(/^[\s\S]*?[。.!?]/)?.[0]?.trim() || reviewText;
     const queued = upcomingStages[0]?.title?.trim() ?? "";
-    return [reviewFirst, queued].find((text) => text && text !== now && text !== done) ?? "";
+    return [compactPrimary ? "" : reviewFirst, queued].find((text) => text && text !== now && text !== done) ?? "";
   })();
   const routeStripItems = [
     {
@@ -2366,16 +2372,17 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         </div>
       ) : null}
 
-      {planTabBar}
+      {!compactPrimary ? planTabBar : null}
 
-      <LearningHomeOverview
+      {!compactPrimary ? <LearningHomeOverview
         activeStageTitle={activeStageTitle ?? ""}
+        currentStageLabel={resolvedCurrentStageLabel}
         onStageContinue={
           onStageSelect && activeStage ? () => onStageSelect(activeStage) : undefined
         }
-      />
+      /> : null}
 
-      {planTab === "progress" ? null : (
+      {compactPrimary || planTab === "progress" ? null : (
         <SkillProjectionStrip
           language={language}
           projection={skillProjection}
@@ -2383,7 +2390,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         />
       )}
 
-      {planTab === "progress" ? (
+      {!compactPrimary && planTab === "progress" ? (
         <PlanDashboard plan={plan} />
       ) : (
       <div className="coach-plan-view__flow coach-plan-view__flow--linear">
@@ -2429,7 +2436,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                 </>
               ) : null}
               {!compactPrimary && showGoalSummary ? renderNodeWithParagraph(currentGoalSummary) : null}
-              {primarySummaryChips.length ? (
+              {!compactPrimary && primarySummaryChips.length ? (
                 <div className="coach-plan-view__summary-chips" aria-label={planCopy(language, "overviewLabel")}>
                   {primarySummaryChips.map((chip) => (
                     <StatusLabel key={chip} label={chip} />
@@ -2516,7 +2523,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                       />
                     </div>
                   ) : null}
-                  {compactSecondaryActions.length ? (
+                  {!compactPrimary && compactSecondaryActions.length ? (
                     <details className="coach-plan-view__empty-more">
                       <summary>{resolvedActionsLabel}</summary>
                       <div className="coach-plan-view__actions-stack">
@@ -2565,9 +2572,38 @@ export function CoachPlanView(props: CoachPlanViewProps) {
               ) : null}
             </div>
           </div>
+          {compactPrimary && plan.stages.length > 0 ? (
+            <details className="coach-plan-view__details" data-plan-stage-disclosure="true">
+              <summary>{`${t("planStages")} (${plan.stages.length})`}</summary>
+              <div className="coach-plan-view__details-body">
+                {renderComposerDraftReplacement("stage")}
+                <div className="coach-plan-view__stage-list">
+                  {plan.stages.map((stage) => (
+                    <div
+                      key={stage.id}
+                      className="coach-plan-view__compact-stage"
+                      data-plan-stage={stage.id}
+                      data-stage-status={stage.status}
+                      aria-current={stage.id === activeStage?.id ? "step" : undefined}
+                    >
+                      <span className="coach-plan-view__compact-stage-marker" aria-hidden="true">
+                        {stage.status === "done" ? <CheckMarkIcon size={14} /> : plan.stages.indexOf(stage) + 1}
+                      </span>
+                      <div>
+                        <strong>{stage.title}</strong>
+                        <span className="coach-plan-view__compact-stage-status">{resolveStageStatusLabel(
+                          stage.status, stageStatusLabels?.[stage.status], language,
+                        )}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </details>
+          ) : null}
           {compactPrimary ? null : memoryScopeContext}
           {compactPrimary ? null : globalPlanContext}
-          {!hasStageDetails && plan.stages.length === 1 && plan.stages[0] ? (
+          {!compactPrimary && !hasStageDetails && plan.stages.length === 1 && plan.stages[0] ? (
             <PlanStageSection
               stage={plan.stages[0]}
               planId={plan.id}
@@ -2618,8 +2654,8 @@ export function CoachPlanView(props: CoachPlanViewProps) {
               </div>
             </details>
           ) : null}
-          {hasDetails && !compactPrimary ? (
-          <details className="coach-plan-view__details">
+          {!compactPrimary && hasDetails ? (
+          <details className="coach-plan-view__details" data-plan-governance-disclosure="true">
             <summary>{detailsSummary}</summary>
             {hasDetails ? (
             <div className="coach-plan-view__details-body">
@@ -2695,7 +2731,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                 </section>
               ) : null}
 
-              {hasStageDetails ? (
+              {hasStageDetails && !compactPrimary ? (
                 <section className="coach-plan-view__details-group">
                   <div className="coach-plan-view__details-group-head">
                     <span>{resolvedStagesLabel}</span>
@@ -2745,6 +2781,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                       return (
                         <div key={item.id} className="coach-plan-view__review-row">
                           <strong>{item.title}</strong>
+
                           <p>{lane}</p>
                           {meta ? <span>{meta}</span> : null}
                         </div>
@@ -2851,10 +2888,8 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                   <section
                     className={`coach-plan-view__details-group coach-plan-view__details-group--evidence is-${evidenceTone}`}
                   >
-                  <div className="coach-plan-view__details-group-head">
-                    <span>{t("evidenceGovernance")}</span>
-                    <StatusLabel label={`${evidenceCounts.total}`} />
-                    {evidenceActions?.onRefreshQueue ? (
+                  {evidenceActions?.onRefreshQueue ? (
+                    <div className="coach-plan-view__evidence-refresh">
                       <ActionButton
                         tone="ghost"
                         icon={<RefreshIcon size={12} />}
@@ -2862,11 +2897,11 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                         onClick={evidenceActions.onRefreshQueue}
                         fullWidth={false}
                       />
-                    ) : null}
-                  </div>
-                  <div className="coach-plan-view__evidence-toolbar">
-                    {(["pending", "deferred", "adopted", "rejected", "history", "all"] as const)
-                      .filter((filter) => filter !== "history" || evidenceCounts.history > 0)
+                    </div>
+                  ) : null}
+                  <div className="coach-plan-view__evidence-toolbar" role="group" aria-label={t("evidenceGovernance")}>
+                    {(["pending", "deferred", "adopted", "rejected", "unscoped", "history", "all"] as const)
+                      .filter((filter) => (filter !== "history" && filter !== "unscoped") || evidenceCounts[filter] > 0 || evidenceFilter === filter)
                       .map((filter) => {
                       const active = evidenceFilter === filter;
                       const count =
@@ -2882,7 +2917,9 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                               ? t("evidenceFilterDeferred")
                               : filter === "adopted"
                                 ? t("evidenceFilterAdopted")
-                                : filter === "history"
+                                : filter === "unscoped"
+                                  ? t("evidenceFilterUnscoped")
+                                  : filter === "history"
                                   ? t("history")
                                   : t("evidenceFilterRejected");
                       return (
@@ -2890,6 +2927,8 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                           key={filter}
                           type="button"
                           className={`coach-plan-view__evidence-filter ${active ? "is-active" : ""}`}
+                          aria-pressed={active}
+                          aria-label={`${filterLabel} ${count}`}
                           onClick={() => setEvidenceFilter(filter)}
                         >
                           <span>{filterLabel}</span>
@@ -2901,6 +2940,8 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                   {filteredEvidenceItems.length > 0 ? (
                     <div className="coach-plan-view__evidence-list">
                       {filteredEvidenceItems.map((item) => {
+                        const historical = evidenceQueue?.history?.some((entry) => entry.id === item.id);
+                        const independent = evidenceQueue?.unscoped?.some((entry) => entry.id === item.id);
                         const summary = inlineText(item.summary);
                         const concepts = item.concepts.slice(0, 3).join(" · ");
                         const source = formatEvidenceSource(item.source, t);
@@ -2921,7 +2962,13 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                               </div>
                               <StatusLabel
                                 label={
-                                  item.adopted
+                                  historical
+                                    ? [t("history"), item.adopted ? t("evidenceFilterAdopted")
+                                      : item.rejectedAt ? t("evidenceFilterRejected")
+                                        : item.deferredAt ? t("evidenceFilterDeferred") : ""].filter(Boolean).join(" · ")
+                                    : independent
+                                      ? t("evidenceFilterUnscoped")
+                                      : item.adopted
                                     ? t("evidenceFilterAdopted")
                                     : item.rejectedAt
                                       ? t("evidenceFilterRejected")
@@ -2935,6 +2982,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                             {(evidenceActions?.onAdoptEvidence ||
                               evidenceActions?.onRejectEvidence ||
                               evidenceActions?.onDeferEvidence) &&
+                            !historical &&
                             !item.adopted &&
                             !item.rejectedAt &&
                             !(showLiveEvidenceDecisions && !item.deferredAt) ? (
@@ -3052,13 +3100,15 @@ function collectPlanMastery(
  */
 function LearningHomeOverview({
   activeStageTitle,
+  currentStageLabel,
   onStageContinue,
 }: {
   activeStageTitle: string;
+  currentStageLabel: string;
   onStageContinue?: () => void;
 }) {
   const { t, language } = useTranslation();
-  const setActiveView = useWorkbenchState((state) => state.setActiveView);
+  const openTrainingReviewQueue = useWorkbenchState((state) => state.openTrainingReviewQueue);
   const storedDueReviews = useWorkbenchState((state) => state.data.memory.dueReviews);
   const storedDueCount = useWorkbenchState((state) => state.data.memory.dueReviewCount);
   const recentWins = useWorkbenchState((state) => state.data.memory.recentWins);
@@ -3089,10 +3139,10 @@ function LearningHomeOverview({
         {nextReview ? (
           <div
             className="coach-plan-view__home-stat coach-plan-view__home-stat--wide"
-            title={[nextReview.concept, nextReview.reason].filter(Boolean).join(" · ")}
+            title={[reviewConceptLabel(nextReview.concept), nextReview.reason].filter(Boolean).join(" · ")}
           >
             <dt>{t("learningHomeNextLabel")}</dt>
-            <dd>{nextReview.concept}</dd>
+            <dd>{reviewConceptLabel(nextReview.concept)}</dd>
           </div>
         ) : null}
         <div className="coach-plan-view__home-stat">
@@ -3101,7 +3151,7 @@ function LearningHomeOverview({
         </div>
         {activeStageTitle ? (
           <div className="coach-plan-view__home-stat" title={activeStageTitle}>
-            <dt>{t("planDashboardStagesTitle")}</dt>
+            <dt>{currentStageLabel}</dt>
             <dd>{activeStageTitle}</dd>
           </div>
         ) : null}
@@ -3114,7 +3164,7 @@ function LearningHomeOverview({
           <ActionButton
             tone="accent"
             label={t("learningHomeStartReview")}
-            onClick={() => setActiveView("training")}
+            onClick={openTrainingReviewQueue}
             fullWidth={false}
           />
         ) : (
@@ -3214,8 +3264,8 @@ function PlanDashboard({ plan }: { plan: LearningPlan }) {
                   className="plan-dashboard__mastery-item"
                   style={{ gridTemplateColumns: "minmax(0, 1fr) auto" }}
                 >
-                  <span className="plan-dashboard__mastery-name" title={entry.concept}>
-                    {entry.concept}
+                  <span className="plan-dashboard__mastery-name" title={reviewConceptLabel(entry.concept)}>
+                    {reviewConceptLabel(entry.concept)}
                   </span>
                   <span className="plan-dashboard__mastery-score">
                     {capabilityBandLabel(entry.score, language)}
@@ -3290,7 +3340,7 @@ function stageMaterialKindLabel(kind: string, language: PlanLanguage): string {
   return kind.replace(/_/g, " ").trim() || kind;
 }
 
-/** Nominal material kinds a stage can carry — the completion ring and badge count these. */
+/** Material counts describe generated documents; only a completed stage fills its ring. */
 const STAGE_MATERIAL_KIND_SEQUENCE = [
   "study_guide",
   "cheat_sheet",
@@ -3303,12 +3353,9 @@ function stageMaterialProgress(
   status: PlanStage["status"],
 ): { completed: number; total: number; percent: number } {
   const total = STAGE_MATERIAL_KIND_SEQUENCE.length;
-  if (status === "done") {
-    return { completed: total, total, percent: 100 };
-  }
   const generatedKinds = new Set((materials ?? []).map((item) => item.kind));
   const completed = STAGE_MATERIAL_KIND_SEQUENCE.filter((kind) => generatedKinds.has(kind)).length;
-  return { completed, total, percent: Math.round((completed / total) * 100) };
+  return { completed, total, percent: status === "done" ? 100 : 0 };
 }
 
 /** Staggered entrance delay: one step per item, capped at the first 8 items. */
@@ -3428,9 +3475,9 @@ function PlanStageSection({
         }
         badge={<span title={badgeTitle}>{progress.completed}/{progress.total}</span>}
         actions={<StageMaterialGenerateButton planId={planId} stageId={stage.id} />}
-        onToggle={() => onStageSelect?.(stage)}
+        onToggle={(open) => { if (open) onStageSelect?.(stage); }}
       >
-        <StageMaterialsSection stageId={stage.id} planId={planId} />
+        <StageMaterialsSection stageId={stage.id} />
       </CollapseSection>
     </div>
   );
@@ -3442,7 +3489,7 @@ function PlanStageSection({
  * materials arrive via host state patches. Newly mounted materials fade in with
  * a capped stagger (.plan-material-enter).
  */
-function StageMaterialsSection({ stageId, planId }: { stageId: string; planId: string }) {
+function StageMaterialsSection({ stageId }: { stageId: string }) {
   const { t, language } = useTranslation();
   const materials = useWorkbenchState((state) => state.stageMaterials[stageId]);
   const generating = useWorkbenchState((state) =>
@@ -3466,9 +3513,6 @@ function StageMaterialsSection({ stageId, planId }: { stageId: string; planId: s
             <p className="empty-state__title">
               {generating ? t("planStageMaterialsGenerating") : t("planStageMaterialsEmpty")}
             </p>
-            <div className="empty-state__action">
-              <StageMaterialGenerateButton planId={planId} stageId={stageId} />
-            </div>
           </div>
         ) : (
           <ul className="coach-plan-view__stage-material-list">
@@ -3489,6 +3533,9 @@ function StageMaterialsSection({ stageId, planId }: { stageId: string; planId: s
                   >
                     <span className="coach-plan-view__stage-material-title">
                       <strong>{item.title}</strong>
+                      {item.generationSource === "template" ? <span className="stage-material-badge">
+                        {t("planStageMaterialsTemplate")}
+                      </span> : null}
                       <span className={`stage-material-badge ${stageMaterialKindClass(item.kind)}`}>
                         {stageMaterialKindLabel(item.kind, language)}
                       </span>
@@ -3501,7 +3548,9 @@ function StageMaterialsSection({ stageId, planId }: { stageId: string; planId: s
                     </span>
                   </button>
                   {expanded ? (
-                    <pre className="coach-plan-view__stage-material-content">{item.content}</pre>
+                    <div className="coach-plan-view__stage-material-content">
+                      <MessageRichContent body={item.content} language={language} />
+                    </div>
                   ) : null}
                 </li>
               );

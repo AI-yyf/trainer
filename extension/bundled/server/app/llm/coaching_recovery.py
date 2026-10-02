@@ -160,7 +160,11 @@ def _infer_guided_coaching_domain(
         "远程工作区",
         "远程连接",
         "隧道",
-        "容器",
+        "开发容器",
+        "docker 容器",
+        "docker容器",
+        "容器工作区",
+        "容器开发环境",
         "凭据模式",
     )
     if any(token in blob for token in remote_tokens):

@@ -3689,6 +3689,18 @@ def _tool_text_list(value: object, *, limit: int = 12, item_limit: int = 320) ->
     return result
 
 
+def _explicit_formal_plan_stage_count(message: object) -> int | None:
+    text = str(message or "").lower()
+    chinese_counts = {char: index for index, char in enumerate("一二三四五六七八九十", 1)}
+    counts: set[int] = set()
+    for match in re.finditer(r"(?<![\d第])([1-9]|1[0-2]|[一二三四五六七八九十])\s*个?\s*阶段", text):
+        value = match.group(1)
+        counts.add(int(value) if value.isdigit() else chinese_counts[value])
+    for match in re.finditer(r"\b(1[0-2]|[1-9])\s*[- ]?\s*stages?\b", text):
+        counts.add(int(match.group(1)))
+    return next(iter(counts)) if len(counts) == 1 else None
+
+
 async def _handle_save_formal_plan(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
     """Persist a plan that the model has shaped from the live conversation.
 
@@ -3764,6 +3776,21 @@ async def _handle_save_formal_plan(context: ToolContext, args: dict[str, Any]) -
             "ok": False,
             "error": "invalid_stages",
             "detail": "Every plan stage needs a title and a concrete goal.",
+        }
+    if len(stages) != len(raw_stages):
+        return {
+            "ok": False,
+            "error": "invalid_stages",
+            "detail": "Every requested stage must have a title and goal; do not save a partial plan.",
+        }
+    stage_count = _explicit_formal_plan_stage_count(context.extra.get("learner_message"))
+    if stage_count is not None and len(stages) != stage_count:
+        return {
+            "ok": False,
+            "error": "stage_count_mismatch",
+            "expected_stage_count": stage_count,
+            "actual_stage_count": len(stages),
+            "detail": "Include every stage requested by the learner before saving the formal plan.",
         }
     if not any(stage.status == "active" for stage in stages):
         stages[0].status = "active"

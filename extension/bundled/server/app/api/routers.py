@@ -89,6 +89,7 @@ from ..core.models import (
     TheoryDrillRestoreRequest,
     ToneDecision,
     TrainingCardCandidateSnapshot,
+    TrainingPlanBinding,
     TurnRequest,
     UserFeedbackRequest,
     UserProfile,
@@ -110,6 +111,8 @@ from ..llm.provider_service import (
     _build_language_corruption_recovery_override,
     redact_provider_error,
 )
+from ..llm.stream_agent_metadata import merge_stream_agent_metadata
+from ..llm.training_review_context import active_training_review, apply_training_review_context
 from ..memory.models import utc_now
 from ..memory.note_request import message_requests_explicit_learning_note
 from ..memory.workspace_recovery import (
@@ -191,6 +194,7 @@ from ..training.card_generator import (
     _make_guided_scenario_pack_card,
 )
 from ..training.card_request import message_requests_explicit_training_card
+from ..training.plan_binding import validated_mint_binding
 from ..workspace.classifier import (
     classify_heuristic,
     is_code_like_current_file,
@@ -224,11 +228,16 @@ from .routes.sandbox import build_sandbox_router
 from .routes.workspace import build_workspace_router
 from .runtime import SessionState, TrainerRuntime
 from .training_card_identity import (
+    prepare_training_file_evaluation,
+)
+from .training_card_identity import (
     require_live_selected_card_for_status as require_live_selected_card_for_status_impl,
 )
 from .training_card_identity import (
     training_card_is_live_for_verify as training_card_is_live_for_verify_impl,
 )
+from .training_return_feedback import completed_return_feedback
+from .training_skill_evidence import record_executed_training_evidence
 
 logger = logging.getLogger(__name__)
 
@@ -6687,8 +6696,20 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         evaluation=None,
         snapshot: WorkbenchSnapshot | None = None,
         grounding_context: dict[str, object] | None = None,
+        completed_return: bool = False,
+        active_view: str | None = None,
     ) -> dict[str, object]:
         artifacts: dict[str, object] = {}
+        recall = active_training_review(memory, normalize_active_view_name(active_view))
+        if recall is not None:
+            recall_rule = recall.guardrail or recall.next_self_implementation_rule
+            return {"review": artifact_payload(
+                kind="review", title=recall.title, summary=recall.summary,
+                content="\n\n".join(part for part in [recall.summary, recall_rule] if part),
+                bullets=[recall_rule], focus_area=recall.focus_area,
+                metadata={"review_artifact_id": recall.id, "evidence_scope": "self_reported_recall",
+                          "status": recall.status},
+            )}
 
         def stored_exercise_prompt() -> dict[str, object] | None:
             if snapshot is None:
@@ -7365,7 +7386,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 summary=evaluation.summary,
                 bullets=(bullets + failing_checks[:2])[:4],
                 teaser=evaluation.next_step,
-                recommended_action="retry_review" if failing_checks else "review",
+                recommended_action="plan" if completed_return else "retry_review" if failing_checks else "review",
                 rationale=localized_text(
                     "The review loop should keep the learner on the first high-leverage fix, not dump every issue with equal weight.",
                     "",
@@ -7704,6 +7725,17 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         )
         state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
         state.snapshot.profile = profile
+        completed_return = bool(
+            current_evaluation is not None and current_evaluation.passed
+            and completed_return_feedback(runtime, state.workspace_id, request)
+        )
+        if completed_return and current_evaluation is not None and current_evaluation.passed:
+            current_evaluation = current_evaluation.model_copy(update={"next_step": localized_text(
+                "Verification, reflection and Return are complete. Review the returned evidence in Plan before deciding whether to adopt it.",
+                "这张卡的验证、复盘和回流已完成。在学习页查看回流证据，再决定是否接纳到当前计划。",
+                request.response_language,
+            )})
+            state.snapshot.evaluation = current_evaluation
         scenario = inherit_active_thread_scenario_for_continuation(
             scenario,
             message=request.message,
@@ -8166,6 +8198,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             plan_runtime_recovery=getattr(request, "plan_runtime_recovery", None),
             context_tier=context_tier,
         )
+        if completed_return and current_evaluation is not None and current_evaluation.passed:
+            coach_context["completed_training_return_feedback"] = True
+            coach_context["next_step_hint"] = current_evaluation.next_step
         if isinstance(request, TurnRequest) and request.intent == "plan" and request.formal_plan_mutation:
             coach_context["formal_plan_mutation"] = True
             coach_context["allow_coach_only_tools"] = True
@@ -8240,7 +8275,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             evaluation=current_evaluation,
             snapshot=state.snapshot,
             grounding_context=resource_context,
+            completed_return=completed_return,
+            active_view=request.active_view,
         )
+        if active_training_review(memory, normalize_active_view_name(request.active_view)) is not None:
+            suggested_actions = []
         return {
             "scenario": scenario,
             "learner_signal": learner_signal,
@@ -11762,9 +11801,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
 
     def current_snapshot(session_id: str | None = None, workspace_id: str | None = None) -> WorkbenchSnapshot:
         resolved_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
-        state = runtime.get_session(session_id) if session_id else None
-        if state is None and session_id is None and workspace_id is None:
-            state = runtime.latest_session()
+        _, state = resolve_session_history_state(
+            session_id=session_id, workspace_id=resolved_workspace_id
+        )
         snapshot = state.snapshot.model_copy(deep=True) if state and state.workspace_id == resolved_workspace_id else WorkbenchSnapshot()
         snapshot.context_id = resolved_workspace_id
         snapshot.memory = runtime.memory_service.snapshot(resolved_workspace_id)
@@ -11785,6 +11824,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             snapshot,
             response_language=workspace_response_language,
             answer_mode=workspace_answer_mode or (snapshot.profile.answer_policy if snapshot.profile else None),
+            preserve_session_history=bool(state and state.workspace_id == resolved_workspace_id),
         )
         # Hydration may rebuild card routing; a recovered runtime step remains
         # authoritative for the visible training next hop.
@@ -13287,6 +13327,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 # Nested IDE input is consumed into vetted fields below; never carry raw input onward.
                 "current_file": None,
                 "resource_knowledge_evidence": None,
+                "plan_stage_id": "",
                 **guided_training_workspace_facts(
                     workspace_id=request.workspace_id,
                     scenario=training_card_guided_scenario(request),
@@ -13607,6 +13648,17 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         """Apply the same redaction, locale, and resource trust projection to both routes."""
         request_payload = request.model_copy(deep=True)
         request_payload = request_payload.model_copy(
+            update={"plan_binding": current_training_plan_binding(request_payload)}
+        )
+        if request_payload.plan_binding is not None:
+            request_payload = request_payload.model_copy(
+                update={
+                    "plan_stage_id": request_payload.plan_binding.stage_id,
+                    "source": "plan_requirement" if request_payload.source == "formal_plan_step"
+                    else request_payload.source,
+                }
+            )
+        request_payload = request_payload.model_copy(
             update={
                 "focus_area": redact_training_fact_text(request_payload.focus_area, 240, collapse=True),
                 "target_skill": redact_training_fact_text(request_payload.target_skill, 240, collapse=True),
@@ -13662,6 +13714,20 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     }
                 )
         return _apply_pedagogy_controls_to_card_request(request_payload, runtime)
+
+    def current_training_plan_binding(request: CardGenerationRequest) -> TrainingPlanBinding | None:
+        plan, recovered = leftover_runtime_for_workspace(request.workspace_id)
+        revision = runtime.repository.get_plan_revision(request.workspace_id, plan.id) if plan else 0
+        try:
+            return validated_mint_binding(
+                request.plan_binding,
+                source=request.source,
+                plan=plan,
+                runtime=recovered,
+                revision=revision,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     def existing_open_resource_training_card(
         request_payload: CardGenerationRequest,
@@ -13721,6 +13787,14 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 leftover_labels=mint_overlay["leftover"],
                 recovered_step=str(mint_overlay["recovered_step"] or ""),
             )
+            # Recheck after the provider completes: a plan may change during generation.
+            binding = current_training_plan_binding(request_payload)
+            card = card.model_copy(update={
+                "plan_binding": binding,
+                "plan_links": [binding.stage_id] if binding else (
+                    [request_payload.plan_stage_id] if request_payload.plan_stage_id else []
+                ),
+            })
             return runtime.memory_service.upsert_card(request_payload.workspace_id, card)
 
         def existing_open_resource_card() -> TrainingCardCandidateSnapshot | None:
@@ -13783,14 +13857,14 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     return route_stored_card(
                         existing_open_resource_card() or store_generated_card(generated_card)
                     )
-                except CardGenerationProviderFailure:
+                except (CardGenerationProviderFailure, HTTPException):
                     raise
                 except Exception as exc:
                     # Explicit generate failure must not clobber leftover storage.
                     raise HTTPException(status_code=502, detail=str(exc)) from exc
         try:
             return route_stored_card(store_generated_card(generated_card))
-        except CardGenerationProviderFailure:
+        except (CardGenerationProviderFailure, HTTPException):
             raise
         except Exception as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -15254,6 +15328,15 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             return summary, next_step
 
         if normalized == "training":
+            review = active_training_review(snapshot.memory, normalized)
+            if review is not None:
+                summary = localized_text(
+                    f"Current recall review: {review.title or review.focus_area}.",
+                    f"当前复习：{review.title or review.focus_area}。",
+                    response_language,
+                )
+                next_step = review.guardrail or review.next_self_implementation_rule
+                return summary, next_step
             active_training_routing = getattr(snapshot.memory, "active_training_card_routing", None)
             active_card = (
                 active_training_routing.selected_card
@@ -16262,7 +16345,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         grounding_context: dict[str, object] | None = None,
         active_view: str | None = None,
         session_workspace_id: str | None = None,
+        preserve_session_history: bool = False,
     ) -> WorkbenchSnapshot:
+        snapshot.session_history_restored = preserve_session_history
         due_reviews = snapshot.memory.due_reviews
         snapshot.review_queue_summary = summarize_review_queue(due_reviews, response_language)
         snapshot.next_review_due = due_reviews[0].due_at if due_reviews else None
@@ -16740,7 +16825,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     "fallback_action": handoff_chrome.get("routing_fallback_action", ""),
                     "why_this_card": handoff_chrome.get("why_this_card", ""),
                 }
-            if not live_for_hydrate and leftover_settings_profile_rhythm_is_not_live(
+            if not preserve_session_history and not live_for_hydrate and leftover_settings_profile_rhythm_is_not_live(
                 runtime=leftover_runtime,
                 existing=leftover_runtime,
             ):
@@ -16753,7 +16838,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 }
                 workspace_memory.pop("coach_defaults", None)
                 workspace_memory.pop("coachDefaults", None)
-            if leftover_settings_learner_project_onboarding_is_not_live(
+            if not preserve_session_history and leftover_settings_learner_project_onboarding_is_not_live(
                 runtime=leftover_runtime,
                 existing=leftover_runtime,
             ):
@@ -16804,7 +16889,15 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 ]
                 if len(kept_resources) != len(live_resources):
                     snapshot.memory = snapshot.memory.model_copy(update={"resources": kept_resources})
-            if leftover_training_handoff_chrome_is_not_live(
+            independent_selection = workspace_memory.get("live_training_selection")
+            independent_card_is_live = (
+                isinstance(independent_selection, dict)
+                and independent_selection.get("workspace_id") == workspace_id
+                and bool(independent_selection.get("selected_at"))
+                and bool(independent_selection.get("card_id"))
+                and independent_selection.get("card_id") == runtime.memory_service.live_selected_training_card_id(workspace_id)
+            )
+            if not independent_card_is_live and leftover_training_handoff_chrome_is_not_live(
                 runtime=leftover_runtime,
                 existing=leftover_runtime,
                 plan=leftover_plan_for_chrome,
@@ -16899,7 +16992,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 runtime=leftover_runtime,
                 existing=leftover_runtime,
             ):
-                snapshot.messages = []
+                if not preserve_session_history:
+                    snapshot.messages = []
                 snapshot.memory = snapshot.memory.model_copy(update={"active_thread": None})
                 workspace_memory.pop("active_thread", None)
                 workspace_memory.pop("activeThread", None)
@@ -17060,6 +17154,13 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     **workspace_memory,
                     "latest_coach_orientation": orientation,
                 }
+        from ..pedagogy.stage_material_state import stage_material_state
+
+        snapshot.stage_materials = stage_material_state(
+            snapshot.plan,
+            runtime.memory_service.list_teaching_assets(workspace_id, scope=None, limit=10000)
+            if workspace_id and snapshot.plan else [],
+        )
         return snapshot
 
     def active_plan_stage(plan: LearningPlan | None) -> PlanStage | None:
@@ -17179,7 +17280,13 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             snapshot=snapshot,
             coach_turn=coach_turn,
         )
-        if structured_signal:
+        # Scoped runtime is authoritative. A conversational next-step suggestion
+        # must not replace the bound plan step during an ordinary resume turn.
+        # Explicit plan commits and verified advances persist their runtime first.
+        project_lane = str((coach_turn or {}).get("scenario") or "") in {
+            "idea_implementation", "project_adaptation", "project_idea", "project_sourcing",
+        }
+        if structured_signal and (recovered_status is None or project_lane):
             structured_step = str(structured_signal.get("current_step") or "").strip()
             structured_why = str(structured_signal.get("why_now") or "").strip()
             structured_next = str(structured_signal.get("next_after_current") or "").strip()
@@ -18317,7 +18424,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             coach_context["formal_plan_mutation"] = False
         if isinstance(message, str) and message.strip():
             coach_context["learner_message"] = message
-        return coach_context
+        return apply_training_review_context(coach_context, memory, normalized_active_view)
 
     def task_training_concepts(
         task: TaskSpec | None,
@@ -18471,6 +18578,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             evidence_source=evidence_source,
             verified_by_evaluator=bool(report.passed),
         )
+        if isinstance(request, EvaluateCurrentFileRequest):
+            record_executed_training_evidence(
+                runtime, workspace_id=workspace_id, request=request, report=report
+            )
         if bool(report.passed):
             runtime.memory_service.schedule_live_training_card_fsrs_after_verify(
                 workspace_id,
@@ -18538,12 +18649,17 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         action_type: str,
         fallback_focus_area: str,
     ) -> None:
+        task = state.snapshot.current_task
+        bound_to_task = bool(task and report.task_spec_id and report.task_spec_id == task.id)
         concepts = task_training_concepts(
             state.snapshot.current_task,
             snapshot=state.snapshot,
             plan=state.snapshot.plan,
+        ) if bound_to_task else []
+        focus_area = (
+            live_current_task_focus(state.snapshot, fallback=fallback_focus_area)
+            if bound_to_task else fallback_focus_area
         )
-        focus_area = live_current_task_focus(state.snapshot, fallback=fallback_focus_area)
         if not concepts and focus_area:
             concepts = [focus_area]
         if evaluation_requires_verification(report):
@@ -18567,6 +18683,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 ],
                 teaching_strategy_context=teaching_strategy_context_from_snapshot(state.snapshot),
                 verified_by_evaluator=False,
+                bind_evidence_to_current_plan=bound_to_task,
             )
             return
         failed_checks, learning_checks, missing_requirements = report_learning_payload(report)
@@ -18618,6 +18735,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             selected_teaching_asset_ids=selected_teaching_asset_ids,
             teaching_strategy_context=teaching_strategy_context_from_snapshot(state.snapshot),
             verified_by_evaluator=bool(report.passed),
+            bind_evidence_to_current_plan=bound_to_task,
         )
 
     def advance_plan_after_evaluation(
@@ -18653,6 +18771,16 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 status["verify_plan_advance"],
             )
 
+        task = state.snapshot.current_task
+        if task is None or not report.task_spec_id or report.task_spec_id != task.id:
+            stamp_verify_plan_advance(
+                advanced=False,
+                what="Plan progress unchanged",
+                why="This file evaluation is not bound to the current formal task.",
+                next_step=str(report.next_step or "").strip(),
+                plan_id=str(getattr(state.snapshot.plan, "id", "") or ""),
+            )
+            return
         if evaluation_requires_verification(report):
             stamp_verify_plan_advance(
                 advanced=False,
@@ -20508,6 +20636,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         if restored.snapshot.profile
                         else None
                     ),
+                    preserve_session_history=True,
                 )
                 runtime.save_session_state(restored.session_id)
                 snapshot_payload = restored.snapshot.model_dump(by_alias=True)
@@ -21360,7 +21489,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             limit=max(1, min(limit, 100)),
         )
         items: list[dict[str, object]] = []
-        active_session_id = getattr(runtime.latest_session(), "session_id", None)
+        # The caller owns conversation selection; recency does not identify
+        # the current conversation when the learner reopens older history.
+        active_session_id = str(session_id or "").strip() or getattr(
+            runtime.latest_session(), "session_id", None
+        )
         for payload in payloads:
             item = summarize_session_list_payload(payload)
             if item is None:
@@ -22448,7 +22581,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         "agentic": True,
                         **(normalize_attachment_delivery_payload(attachment_delivery) or {}),
                     }
-                    final_agent_meta = {**stream_agent_meta, **final_agent_meta}
+                    final_agent_meta = merge_stream_agent_metadata(
+                        final_agent_meta, stream_agent_meta,
+                        preserve_failure=provider_failure_detected,
+                    )
                 if should_attach_auto_resource_events(final_agent_meta):
                     final_agent_meta = apply_auto_resource_agent_evidence(
                         final_agent_meta,
@@ -23116,7 +23252,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                             final_agent_meta.update(override_meta)
 
                     if use_agent_stream and not provider_failure_detected:
-                        final_agent_meta = {
+                        final_agent_meta = merge_stream_agent_metadata(final_agent_meta, {
                             "stop_reason": agent_stop_reason,
                             "summary": agent_summary,
                             "next_step": agent_next_step,
@@ -23129,8 +23265,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                             "steps": agent_steps,
                             "tool_events": agent_tool_events,
                             "agentic": True,
-                            **final_agent_meta,
-                        }
+                        })
                         coach_turn_data = merge_agent_finalize_into_coach_turn(
                             coach_turn_data,
                             summary=agent_summary,
@@ -23772,7 +23907,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         "agentic": True,
                         **(normalize_attachment_delivery_payload(attachment_delivery) or {}),
                     }
-                    final_agent_meta = {**stream_agent_meta, **final_agent_meta}
+                    final_agent_meta = merge_stream_agent_metadata(
+                        final_agent_meta, stream_agent_meta,
+                        preserve_failure=provider_failure_detected,
+                    )
                 if should_attach_auto_resource_events(final_agent_meta):
                     final_agent_meta = apply_auto_resource_agent_evidence(
                         final_agent_meta,
@@ -23966,6 +24104,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     def evaluate_current_file(request: EvaluateCurrentFileRequest):
         workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
         state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
+        request = prepare_training_file_evaluation(runtime, workspace_id, request)
         leftover = leftover_plan_state_fields(workspace_id)
         leftover_runtime = leftover.get("leftover_runtime")
         report = stamp_produced_workspace_record(
@@ -24613,9 +24752,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     yield _abort_frame
                 return
             except Exception as exc:
+                # Local admission/indexing gates are actionable domain errors,
+                # not provider failures. Keep their safe explanation in SSE.
+                error = exc.detail if isinstance(exc, HTTPException) else exc
                 async for _abort_frame in _abort_fail_closed(
                     error_detail=redact_provider_error(
-                        exc,
+                        error,
                         api_key=getattr(training_provider_service, "_api_key", None),
                     ),
                 ):

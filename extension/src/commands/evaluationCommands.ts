@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
@@ -71,6 +73,34 @@ export async function evaluateCurrentFileCommand(
   );
 }
 
+/** Native Testing API reruns read the document again; cached display rows are not proof. */
+export async function evaluatePublishedFileCommand(context: CommandContext, uri: vscode.Uri): Promise<unknown> {
+  if (!(await context.trustGuard.ensureTrusted('run Trainer file verification'))) throw new Error('Workspace trust required');
+  const document = await vscode.workspace.openTextDocument(uri);
+  const state = context.getHostState();
+  const training = state.bootstrap.workspaceTrainingState;
+  const cardId = training?.selectedCardId;
+  const routed = training?.activeTrainingCardRouting?.selectedCard;
+  const card = routed?.cardId === cardId && routed
+    ? routed
+    : training?.trainingCardCandidates?.find(candidate => candidate.cardId === cardId);
+  const files = card?.filesToTouch ?? [];
+  const workspaceFolder = state.workspace.workspaceFolder;
+  const matches = files.some(file => {
+    const absolute = isAbsoluteFsPath(file) ? file : workspaceFolder ? path.join(workspaceFolder, file) : '';
+    return absolute && normalizeFsPath(absolute) === normalizeFsPath(document.uri.fsPath);
+  });
+  const livePractice = cardId && training?.selectedCardType === 'practice'
+    && !['fed_back', 'archived', 'reviewed', 'skipped'].includes(training.selectedCardStatus ?? '') && matches;
+  const result = await evaluateDocument(context, document, document.getText(), '/evaluate/current-file',
+    livePractice ? { source: 'training', cardId, cardTitle: card?.title,
+      acceptanceCriteria: card?.acceptanceCriteria?.length ? card.acceptanceCriteria : card?.verificationSteps,
+      learnerDeliverables: card?.learnerDeliverables,
+      expectedSymbols: card?.expectedSymbols, filesToTouch: files } : undefined);
+  if (!result.ok || !result.data) throw new Error('File verification could not complete');
+  return result.data;
+}
+
 export async function evaluateSelectionCommand(
   context: CommandContext,
   payload?: unknown,
@@ -135,13 +165,16 @@ async function evaluateDocument(
       `[${diagnosticSeverityLabel(diagnostic.severity)}] line ${diagnostic.range.start.line + 1}: ${diagnostic.message}`,
   );
 
+  const verificationPython = await resolveVerificationPython(context, document.uri);
   try {
     const response = await context.sidecarClient.postJson<unknown>(status.port, path, {
       session_id: context.getSessionId(),
       workspace_id: getRuntimeWorkspaceId(context),
-      task_spec_id: evaluationPayload.taskSpecId ?? context.getHostState().bootstrap.task.id,
+      task_spec_id: evaluationPayload.taskSpecId ?? (evaluationPayload.source === 'training'
+        ? undefined : context.getHostState().bootstrap.task.id),
       file_path: document.uri.fsPath,
       language_id: document.languageId,
+      ...(verificationPython ? { verification_python: verificationPython } : {}),
       content: code,
       diagnostics,
       evaluation_source: evaluationPayload.source,
@@ -156,7 +189,7 @@ async function evaluateDocument(
       ...(evaluationPayload.expectedSymbols.length > 0
         ? { expected_symbols: evaluationPayload.expectedSymbols }
         : {}),
-    });
+    }, { timeoutMs: 75_000 });
 
     await context.patchWorkbenchData(
       mergeEvaluationResultSnapshot(
@@ -242,8 +275,51 @@ function extractEvaluationPayload(payload: unknown): {
   };
 }
 
+interface PythonEnvironmentApi {
+  environments?: { getActiveEnvironmentPath(resource?: vscode.Uri): { path: string } };
+}
+
+interface PythonEnvironmentsApi {
+  getEnvironment(resource?: vscode.Uri): Promise<{ execInfo?: { run?: { executable?: string } } } | undefined>;
+}
+
+async function resolveVerificationPython(context: CommandContext, resource: vscode.Uri): Promise<string | undefined> {
+  let active: string | undefined;
+  const environments = vscode.extensions?.getExtension<PythonEnvironmentsApi>('ms-python.vscode-python-envs');
+  if (environments && vscode.workspace?.getConfiguration?.('python', resource).get<boolean>('useEnvironmentsExtension') !== false) {
+    try {
+      const api = environments.isActive ? environments.exports : await environments.activate();
+      active = (await api.getEnvironment?.(resource))?.execInfo?.run?.executable;
+    } catch (error) {
+      context.outputChannel?.appendLine(`[verification-python] ${error instanceof Error ? error.name : 'Environment lookup failed'}`);
+    }
+  }
+  const python = vscode.extensions?.getExtension<PythonEnvironmentApi>('ms-python.python');
+  if (!active && python) {
+    try {
+      const api = python.isActive ? python.exports : await python.activate();
+      active = api.environments?.getActiveEnvironmentPath(resource).path;
+    } catch (error) {
+      context.outputChannel?.appendLine(`[verification-python] ${error instanceof Error ? error.name : 'Environment lookup failed'}`);
+    }
+  }
+  const workspace = context.getHostState().workspace;
+  const root = vscode.workspace?.getWorkspaceFolder?.(resource)?.uri.fsPath
+    ?? workspace.activeWorkspaceRoot ?? workspace.workspaceFolder;
+  const configured = vscode.workspace?.getConfiguration?.('python', resource).get<string>('defaultInterpreterPath');
+  const candidates = [active,
+    ...(root ? ['.venv', 'venv', 'server/.venv'].flatMap(folder => [
+      path.join(root, folder, 'bin', 'python'), path.join(root, folder, 'Scripts', 'python.exe'),
+    ]) : []),
+    configured && root ? configured.replace(/\$\{workspaceFolder\}/g, root) : configured];
+  const selected = candidates.find(candidate => candidate && fs.existsSync(candidate) && fs.statSync(candidate).isFile());
+  context.outputChannel?.appendLine(`[verification-python] ${selected ?? 'No workspace interpreter found'}`);
+  return selected;
+}
+
 function normalizeFsPath(value: string): string {
-  return value.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '');
+  return /^(?:[a-z]:|\/\/)/i.test(normalized) ? normalized.toLowerCase() : normalized;
 }
 
 function isAbsoluteFsPath(value: string): boolean {
@@ -288,8 +364,7 @@ async function resolveTrainingVerifyDocument(input: {
           : input.workspaceFolder
             ? joinWorkspacePath(input.workspaceFolder, filePath)
             : filePath;
-        return normalizeFsPath(editorPath) === normalizeFsPath(absolute) ||
-          normalizeFsPath(editorPath).endsWith(`/${normalizeFsPath(filePath)}`);
+        return normalizeFsPath(editorPath) === normalizeFsPath(absolute);
       })
     ) {
       return input.editor?.document;

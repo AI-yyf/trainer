@@ -139,7 +139,7 @@ test('Plan keeps the compact first viewport focused on governed route facts', ()
   assert.doesNotMatch(compactSummary, /data-plan-evidence-list/);
   assert.doesNotMatch(compactSummary, /coach-plan-view__compact-fact/);
   assert.doesNotMatch(source, /coach-plan-view__compact-more/);
-  assert.match(source, /<details className="coach-plan-view__details">/);
+  assert.match(source, /<details className="coach-plan-view__details" data-plan-governance-disclosure="true">/);
   assert.match(source, /<details className="coach-plan-view__nested-details coach-plan-view__evidence-details">/);
   assert.match(source, /evidenceActions\?\.onAdoptEvidence/);
   assert.match(source, /evidenceActions\?\.onDeferEvidence/);

@@ -1,4 +1,6 @@
 import * as path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { normalizeStageMaterials } from '../../../shared/src/stageMaterials';
 import { trainerCommandCatalog } from '../../../shared/src/commands';
 import {
   createEmptyTrainerStreamingState,
@@ -7,6 +9,7 @@ import {
 } from '../../../shared/src/protocol';
 import { normalizeResourceSearchMode } from '../../../shared/src/resourceSearch';
 import { deriveResourceTrustState } from '../../../shared/src/resourceTrust';
+import { resourceRecordIsAcknowledgedUpload } from '../../../shared/src/resourceWorkbenchGovernance';
 import {
   defaultCapabilitiesForProtocol,
   normalizeProviderProtocol,
@@ -22,6 +25,7 @@ import {
   preferRecoveredCoachTurnChrome,
   preferRecoveredTrainingFocusChrome,
   leftoverTrainingHandoffChromeIsNotLive,
+  independentTrainingSelectionIsLive,
   leftoverResourceSelectedDetailIsNotLive,
   leftoverResourceSandboxPreviewIsNotLive,
   leftoverResourceSandboxStateIsNotLive,
@@ -465,6 +469,7 @@ export function mergeSessionMessage(
       ? mapWorkspaceTrainingState(snapshot.memory, current.workspaceTrainingState)
       : current.workspaceTrainingState,
     profile: mappedProfile,
+    stageMaterials: mapStageMaterials(snapshot, current, incomingWorkspaceId, currentWorkspaceId),
     plan: snapshot
       ? mapPlan(snapshot.plan, current.plan, incomingWorkspaceId, currentWorkspaceId)
       : current.plan,
@@ -631,7 +636,12 @@ export function mergeSessionMessage(
     ),
   };
 
-  return { sessionId, patch: applyLeftoverBoundPlanFiveViewOmit(current, applyLeftoverNotLiveTaskGuideFocus(patch)) };
+  const preserveHistory = snapshot?.session_history_restored === true ||
+    snapshot?.sessionHistoryRestored === true ||
+    (!workspaceIdsChanged(incomingWorkspaceId, currentWorkspaceId) && current.sessionHistoryRestored === true);
+  patch.sessionHistoryRestored = preserveHistory;
+  return { sessionId, patch: applyLeftoverBoundPlanFiveViewOmit(current,
+    applyLeftoverNotLiveTaskGuideFocus(patch, preserveHistory)) };
 }
 
 export function mergePlanResult(
@@ -963,7 +973,7 @@ export function mergeMemorySummary(
       recovered: true,
     };
   }
-  const mapped = {
+  const mapped: Partial<BootstrapData> = {
     conversation: mapConversation(
       snapshot?.messages,
       current.conversation,
@@ -972,6 +982,7 @@ export function mergeMemorySummary(
     ),
     profile: mappedProfile,
     plan: mappedPlan,
+    stageMaterials: mapStageMaterials(snapshot, current, incomingWorkspaceId, currentWorkspaceId),
     globalPlan: mapGlobalPlan(
       firstPresentRecordValue(snapshot, ['global_plan', 'globalPlan']),
       current.globalPlan,
@@ -1138,10 +1149,53 @@ export function mergeMemorySummary(
       currentWorkspaceId,
     ),
   };
-  return applyLeftoverBoundPlanFiveViewOmit(current, applyLeftoverNotLiveTaskGuideFocus(mapped));
+  const preserveHistory = snapshot?.session_history_restored === true ||
+    snapshot?.sessionHistoryRestored === true ||
+    (!workspaceIdsChanged(incomingWorkspaceId, currentWorkspaceId) && current.sessionHistoryRestored === true);
+  mapped.sessionHistoryRestored = preserveHistory;
+  return applyLeftoverBoundPlanFiveViewOmit(current,
+    applyLeftoverNotLiveTaskGuideFocus(mapped, preserveHistory));
 }
 
 const EMPTY_WORKSPACE_TRANSFER_ID = '__trainer_empty_workspace__';
+
+export function resetWorkbenchAfterRuntimeDataChange(
+  state: TrainerHostState,
+  incomingWorkspaceId?: string,
+): Partial<BootstrapData> {
+  // Backups retain context IDs. A different database must not inherit even
+  // same-context fallbacks from the previous dataset.
+  const current = state.bootstrap;
+  const reset = createDefaultBootstrapData(state.workspace, state.provider, state.sidecar);
+  return {
+    ...reset,
+    runtimeDataGeneration: randomUUID(),
+    globalPlan: undefined,
+    projectPlanLink: undefined,
+    stageMaterials: undefined,
+    deletedResources: undefined,
+    resourceSearch: undefined,
+    research: undefined,
+    connection: current.connection,
+    providerConfig: current.providerConfig,
+    liveContext: current.liveContext,
+    plan: { ...reset.plan, id: '', title: '', summary: '' },
+    task: { ...reset.task, id: '', title: '', description: '' },
+    memory: {
+      ...reset.memory,
+      workspace: {
+        workspaceId: incomingWorkspaceId,
+        responseLanguage: current.memory.workspace?.responseLanguage,
+        windowTrusted: state.workspace.trusted,
+        trainerWorkspace: current.memory.workspace?.trainerWorkspace,
+        resourceSandbox: current.memory.workspace?.resourceSandbox,
+      },
+    },
+    workspaceTrainingState: { workspaceId: incomingWorkspaceId },
+    sessionLabel: '',
+    sessionHistoryRestored: false,
+  };
+}
 
 export function failClosedWorkbenchAfterWorkspaceTransfer(
   current: BootstrapData,
@@ -1426,7 +1480,12 @@ export function toOperationStatus(
     payload: {
       tone: ok ? 'success' : 'error',
       message,
-      ...(providerTest ? { providerTest } : {}),
+      ...(providerTest ? { providerTest: {
+        ...(typeof providerTest.ok === 'boolean' ? { ok: providerTest.ok } : {}),
+        ...(typeof providerTest.errorCategory === 'string' ? { errorCategory: providerTest.errorCategory } : {}),
+        ...(typeof providerTest.statusCode === 'number' ? { statusCode: providerTest.statusCode } : {}),
+        ...(typeof providerTest.retryable === 'boolean' ? { retryable: providerTest.retryable } : {}),
+      } } : {}),
     },
   };
 }
@@ -1694,6 +1753,21 @@ function applyWorkspaceProfileHints(
       ? workspace.projectContext
       : workspace.projectContext ?? profile.projectContext,
   };
+}
+
+function mapStageMaterials(
+  snapshot: Record<string, unknown> | undefined,
+  current: BootstrapData,
+  incomingWorkspaceId?: string,
+  currentWorkspaceId?: string,
+): NonNullable<BootstrapData['stageMaterials']> {
+  if (snapshot?.plan === null) return {};
+  const plan = asRecord(snapshot?.plan);
+  const planId = asString(plan?.id ?? plan?.plan_id);
+  const materials = snapshot?.stage_materials ?? snapshot?.stageMaterials;
+  if (materials !== undefined) return normalizeStageMaterials(materials);
+  return workspaceIdsChanged(incomingWorkspaceId, currentWorkspaceId)
+    || (planId && planId !== current.plan.id) ? {} : current.stageMaterials ?? {};
 }
 
 function mapPlan(
@@ -2312,7 +2386,7 @@ function applyLeftoverNotLiveTaskGuideFocus<
     coachOrientation?: BootstrapData['coachOrientation'];
     streamingState?: BootstrapData['streamingState'];
   },
->(patch: T): T {
+>(patch: T, preserveSessionHistory = false): T {
   if (patch.planRuntimeStatus?.recovered !== true) {
     return patch;
   }
@@ -2362,7 +2436,13 @@ function applyLeftoverNotLiveTaskGuideFocus<
     planId: patch.plan?.id,
     planCurrentStep: patch.plan?.currentStep,
   };
-  const leftoverTrainingHandoffNotLive = leftoverTrainingHandoffChromeIsNotLive(leftoverChromeIdentity);
+  const independentTrainingSelectionLive = independentTrainingSelectionIsLive({
+    workspaceId: patch.memory?.workspace?.workspaceId,
+    selectedCardId: patch.workspaceTrainingState?.selectedCardId,
+    selection: patch.memory?.workspace?.liveTrainingSelection,
+  });
+  const leftoverTrainingHandoffNotLive =
+    leftoverTrainingHandoffChromeIsNotLive(leftoverChromeIdentity) && !independentTrainingSelectionLive;
   const trainingFocusChrome = preferRecoveredTrainingFocusChrome({
     ...leftoverChromeIdentity,
     teachingDecisionFocusArea: patch.teachingDecision?.focusArea,
@@ -2373,6 +2453,7 @@ function applyLeftoverNotLiveTaskGuideFocus<
   });
   const trainingHandoffChrome = preferRecoveredTrainingHandoffChrome({
     ...leftoverChromeIdentity,
+    recovered: !independentTrainingSelectionLive,
     successSignal: patch.workspaceTrainingState?.latestTrainingHandoff?.successSignal,
     returnWith: patch.workspaceTrainingState?.latestTrainingHandoff?.returnWith,
     cardTitle: patch.workspaceTrainingState?.latestTrainingHandoff?.cardTitle,
@@ -2449,11 +2530,11 @@ function applyLeftoverNotLiveTaskGuideFocus<
     runtimeCurrentStep: patch.planRuntimeStatus.currentStep,
     transfer: patch.workspaceTrainingState?.latestTransferState,
   });
-  const settingsProfileRhythmNotLive = leftoverSettingsProfileRhythmIsNotLive({
+  const settingsProfileRhythmNotLive = !preserveSessionHistory && leftoverSettingsProfileRhythmIsNotLive({
     recovered: true,
     runtimeCurrentStep: patch.planRuntimeStatus.currentStep,
   });
-  const settingsLearnerProjectOnboardingNotLive = leftoverSettingsLearnerProjectOnboardingIsNotLive({
+  const settingsLearnerProjectOnboardingNotLive = !preserveSessionHistory && leftoverSettingsLearnerProjectOnboardingIsNotLive({
     recovered: true,
     runtimeCurrentStep: patch.planRuntimeStatus.currentStep,
   });
@@ -2571,7 +2652,12 @@ function applyLeftoverNotLiveTaskGuideFocus<
           selectedCardId: leftoverTrainingHandoffNotLive
             ? undefined
             : patch.workspaceTrainingState.selectedCardId,
-          selectedCardTitle: trainingHandoffChrome.selectedCardTitle,
+          selectedCardTitle: independentTrainingSelectionLive
+            ? patch.workspaceTrainingState.trainingCardCandidates?.find(
+                card => card.cardId === patch.workspaceTrainingState?.selectedCardId,
+              )?.title ?? patch.workspaceTrainingState.activeTrainingCardRouting?.selectedCard?.title ??
+              patch.workspaceTrainingState.selectedCardTitle
+            : trainingHandoffChrome.selectedCardTitle,
           latestLearningFollowup: trainingHandoffChrome.followup,
           latestLearningBlocker: trainingHandoffChrome.blocker,
           latestLearningVerifiedResult: leftoverTrainingHandoffNotLive
@@ -2653,7 +2739,7 @@ function applyLeftoverNotLiveTaskGuideFocus<
           sandboxPreview: resourceSandboxPreviewNotLive
             ? undefined
             : patch.memory.sandboxPreview,
-          sandboxState: resourceSandboxStateNotLive
+          sandboxState: resourceSandboxStateNotLive && !patch.memory.sandboxState?.authority?.authorityScope
             ? undefined
             : patch.memory.sandboxState,
           workspace: patch.memory.workspace
@@ -2697,8 +2783,10 @@ function applyLeftoverNotLiveTaskGuideFocus<
             : patch.memory.workspaceUnderstanding,
         }
       : patch.memory,
-    resources: resourceLibraryListNotLive ? [] : patch.resources,
-    conversation: coachConversationNotLive ? [] : patch.conversation,
+    resources: resourceLibraryListNotLive
+      ? patch.resources?.filter(resourceRecordIsAcknowledgedUpload)
+      : patch.resources,
+    conversation: coachConversationNotLive && !preserveSessionHistory ? [] : patch.conversation,
     suggestedActions: suggestedActionsNotLive ? [] : leftoverHonestSuggestedActions,
     coachOrientation:
       streamingCheckpointNotLive &&
@@ -3718,7 +3806,7 @@ function mapSandboxPreview(
   };
 }
 
-function mapWorkspaceAuthority(
+export function mapWorkspaceAuthority(
   value: unknown,
   fallback: SandboxAuthorityView,
 ): SandboxAuthorityView {
@@ -3729,6 +3817,7 @@ function mapWorkspaceAuthority(
 
   const activeWorkspaceRoot =
     asText(record.activeWorkspaceRoot) ?? asText(record.active_workspace_root) ?? fallback?.activeWorkspaceRoot;
+  const writeEvidence = asRecord(record.resourceWriteEvidence ?? record.resource_write_evidence);
   const rootUri = asText(record.rootUri) ?? asText(record.root_uri) ?? fallback?.rootUri;
   const authoritySource =
     asText(record.authoritySource) ?? asText(record.authority_source) ?? fallback?.authoritySource;
@@ -3775,6 +3864,15 @@ function mapWorkspaceAuthority(
     authoritySource,
     remoteName,
     authorityMode,
+    authorityScope: asText(record.authorityScope ?? record.authority_scope),
+    resourceWriteAllowed: asBoolean(record.resourceWriteAllowed ?? record.resource_write_allowed),
+    resourceWriteEvidence: writeEvidence ? {
+      operation: asText(writeEvidence.operation),
+      scope: asText(writeEvidence.scope),
+      targetRoot: asText(writeEvidence.targetRoot ?? writeEvidence.target_root),
+      allowed: asBoolean(writeEvidence.allowed),
+      reason: asText(writeEvidence.reason),
+    } : undefined,
     permissionLevel,
     permissionLabel,
     allowedOperations,
@@ -3856,16 +3954,23 @@ function mapEvidenceQueue(
     incomingWorkspaceId,
     workspaceChanged,
   );
+  const unscoped = mapEvidenceItems(
+    record.unscoped, chromeFallback?.unscoped, incomingWorkspaceId, workspaceChanged,
+  );
   return {
     pending,
     deferred,
     adopted,
     rejected,
     history,
+    ...(Array.isArray(record.unscoped) || chromeFallback?.unscoped
+      ? { unscoped }
+      : {}),
     totalCount:
       asNumber(record.total_count) ??
       asNumber(record.totalCount) ??
-      pending.length + deferred.length + adopted.length + rejected.length + history.length,
+      pending.length + deferred.length + adopted.length + rejected.length + history.length +
+        unscoped.length,
   };
 }
 
@@ -3910,6 +4015,9 @@ function mapEvidenceItems(
       timestamp: asString(record?.timestamp) ?? undefined,
       targetPlanStageId:
         asString(record?.target_plan_stage_id) ?? asString(record?.targetPlanStageId) ?? undefined,
+      ...(asString(record?.target_plan_step ?? record?.targetPlanStep)
+        ? { targetPlanStep: asString(record?.target_plan_step ?? record?.targetPlanStep) }
+        : {}),
       adopted: asBoolean(record?.adopted) ?? undefined,
       adoptedAt: asString(record?.adopted_at) ?? asString(record?.adoptedAt) ?? null,
       deferredAt: asString(record?.deferred_at) ?? asString(record?.deferredAt) ?? null,
@@ -4223,6 +4331,15 @@ function mapMemoryWorkspace(
         sameWorkspace,
       ) ?? (sameWorkspace ? fallback?.latestTransferState : undefined),
     latestPlanRuntime: latestPlanRuntime ?? (sameWorkspace ? fallback?.latestPlanRuntime : undefined),
+    liveTrainingSelection: (() => {
+      const selection = asRecord(record.live_training_selection ?? record.liveTrainingSelection);
+      if (!selection) return undefined;
+      return {
+        workspaceId: asString(selection.workspace_id) ?? asString(selection.workspaceId),
+        cardId: asString(selection.card_id) ?? asString(selection.cardId),
+        selectedAt: asString(selection.selected_at) ?? asString(selection.selectedAt),
+      };
+    })(),
     latestProviderCapability:
       latestProviderCapability ?? (sameWorkspace ? fallback?.latestProviderCapability : undefined),
     latestStreamingCheckpoint:
@@ -4519,7 +4636,10 @@ function mapWorkspaceTrainingState(
     Boolean(incomingWorkspaceId) &&
     Boolean(fallbackWorkspaceId) &&
     incomingWorkspaceId === fallbackWorkspaceId;
-  const chromeFallback = sameWorkspace ? fallback : undefined;
+  const incomingSelectedCardId =
+    asString(workspaceRecord?.selected_card_id) ?? asString(workspaceRecord?.selectedCardId);
+  const sameSelectedCard = !incomingSelectedCardId || incomingSelectedCardId === fallback?.selectedCardId;
+  const chromeFallback = sameWorkspace && sameSelectedCard ? fallback : undefined;
   const rawHandoff = workspaceRecord?.latest_training_handoff ?? workspaceRecord?.latestTrainingHandoff;
   const rawNextHop = workspaceRecord?.latest_training_next_hop ?? workspaceRecord?.latestTrainingNextHop;
   const scopedHandoff =
@@ -4687,6 +4807,32 @@ function mapWorkspaceTrainingState(
     return fallback;
   }
 
+  const selectedCardId = mapped.selectedCardId?.trim();
+  const handoffCardId = mapped.latestTrainingHandoff?.cardId?.trim();
+  const selectedCard = mapped.trainingCardCandidates?.find(card => card.cardId === selectedCardId) ??
+    (mapped.activeTrainingCardRouting?.selectedCard?.cardId === selectedCardId
+      ? mapped.activeTrainingCardRouting?.selectedCard : undefined);
+  if (selectedCardId && handoffCardId && selectedCardId !== handoffCardId) {
+    // Stored handoffs remain historical facts. They cannot supply completion,
+    // proof, or a Return action for a different newly selected card.
+    mapped.latestTrainingHandoff = undefined;
+    mapped.latestTrainingNextHop = undefined;
+    mapped.latestLearningVerifiedResult = undefined;
+    mapped.latestLearningFollowup = undefined;
+    mapped.latestLearningBlocker = undefined;
+    mapped.latestLearningPartialProgress = undefined;
+    mapped.latestLearningAbandonReason = undefined;
+    mapped.latestTrainingSubmode = mapped.reviewArtifact?.id === selectedCardId
+      ? mapped.latestTrainingSubmode : mapped.selectedCardType;
+    mapped.selectedCardTitle = selectedCard?.title;
+  }
+  const selectedCardChanged = Boolean(
+    sameWorkspace && fallback?.selectedCardId && incomingSelectedCardId && !sameSelectedCard,
+  );
+  if (selectedCardChanged && mapped.reviewArtifact?.id !== selectedCardId) {
+    mapped.latestTrainingSubmode = mapped.selectedCardType;
+  }
+
   return mapped;
 }
 
@@ -4782,7 +4928,18 @@ function mapTrainingHandoff(
     return fallback;
   }
 
+  const incomingHandoffId = asString(record.handoff_id) ?? asString(record.handoffId);
+  const incomingCardId = asString(record.card_id) ?? asString(record.cardId);
+  const incomingCandidateId = asString(record.candidate_id) ?? asString(record.candidateId);
+  const sameHandoff = (!incomingHandoffId || incomingHandoffId === fallback?.handoffId) &&
+    (!incomingCardId || incomingCardId === fallback?.cardId) &&
+    (!incomingCandidateId || incomingCandidateId === fallback?.candidateId);
   const mapped: TrainingHandoffStateView = {
+    cardId: incomingCardId ?? (sameHandoff ? fallback?.cardId : undefined),
+    reflection: asString(record.reflection) ?? (sameHandoff ? fallback?.reflection : undefined),
+    reflectedAt:
+      asString(record.reflected_at) ?? asString(record.reflectedAt) ??
+      (sameHandoff ? fallback?.reflectedAt : undefined),
     handoffId:
       asString(record.handoff_id) ??
       asString(record.handoffId) ??
@@ -4971,6 +5128,7 @@ type TrainingCardVerificationFields = Pick<
   | 'choices'
   | 'answerMode'
   | 'expectedAnswer'
+  | 'learnerAnswer'
   | 'learningFamily'
   | 'learningSubtype'
   | 'knowledgeType'
@@ -4990,6 +5148,7 @@ type TrainingCardVerificationFields = Pick<
   | 'filesToTouch'
   | 'learnerDeliverables'
   | 'verificationSteps'
+  | 'acceptanceCriteria'
   | 'successSignal'
   | 'expectedSymbols'
   | 'returnWith'
@@ -5023,6 +5182,8 @@ function mapTrainingCardVerificationFields(
       asString(record.expected_answer) ??
       asString(record.expectedAnswer) ??
       fallback?.expectedAnswer,
+    learnerAnswer:
+      asString(record.learner_answer) ?? asString(record.learnerAnswer) ?? fallback?.learnerAnswer,
     learningFamily:
       (asString(record.learning_family) ?? asString(record.learningFamily)) === 'code'
         ? 'code'
@@ -5068,6 +5229,9 @@ function mapTrainingCardVerificationFields(
     verificationSteps:
       asStringArray(record.verification_steps ?? record.verificationSteps) ??
       fallback?.verificationSteps,
+    acceptanceCriteria:
+      asStringArray(record.acceptance_criteria ?? record.acceptanceCriteria) ??
+      fallback?.acceptanceCriteria,
     successSignal:
       asString(record.success_signal) ?? asString(record.successSignal) ?? fallback?.successSignal,
     expectedSymbols:

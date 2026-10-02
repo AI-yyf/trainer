@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+from app.core.models import ActiveCardSelectionResult, TrainingCardCandidateSnapshot
 from app.llm.provider_service import ProviderService
 from app.workspace.classifier import classify_heuristic
 from tests.test_api import build_client
@@ -17,6 +18,72 @@ def _profile(goal: str) -> dict[str, object]:
         "teaching_style": "guided",
         "answer_policy": "guided",
     }
+
+
+def test_independent_training_card_survives_reload_without_a_formal_plan(tmp_path: Path) -> None:
+    workspace_id = "resource-training-without-plan"
+    card = TrainingCardCandidateSnapshot(
+        card_id="independent-flash-card", card_type="flash", title="Tuple references",
+        question="Can a list inside a tuple still change?", status="active",
+    )
+    with build_client(tmp_path) as client:
+        started = client.post("/session/start", json={
+            "workspace_id": workspace_id, "workspace_name": "Resource training",
+        })
+        assert started.status_code == 200
+        memory = client.app.state.runtime.memory_service
+        memory.persist_active_card_selection(workspace_id, ActiveCardSelectionResult(
+            selected_card=card, selected_card_id=card.card_id,
+        ))
+    with build_client(tmp_path) as client:
+        summary = client.get("/memory/summary", params={"workspace_id": workspace_id})
+        assert summary.status_code == 200
+        payload = summary.json()
+        assert payload["plan"] is None
+        routing = payload["memory"]["active_training_card_routing"]
+        assert routing["selected_card_id"] == card.card_id
+        assert routing["selected_card"]["question"] == card.question
+        marker = payload["memory"]["workspace"]["live_training_selection"]
+        assert marker["workspace_id"] == workspace_id
+        assert marker["card_id"] == card.card_id
+
+
+def test_reload_keeps_recorded_conversation_without_a_formal_plan(tmp_path: Path) -> None:
+    workspace_id = "workspace-conversation-without-plan"
+    user_text = "Explain why a tuple can contain a mutable list."
+    with build_client(tmp_path) as client:
+        started = client.post("/session/start", json={
+            "workspace_id": workspace_id, "workspace_name": "Conversation only",
+        })
+        session_id = started.json()["session_id"]
+        with patch.object(ProviderService, "coaching_reply", autospec=True) as reply:
+            reply.return_value = "The tuple fixes element references; the list can still change."
+            result = client.post("/session/message", json={
+                "session_id": session_id, "workspace_id": workspace_id,
+                "message": user_text, "response_language": "en-US", "use_agent_loop": False,
+            })
+        assert result.status_code == 200
+        client.app.state.runtime.memory_service.structured_for_workspace(workspace_id).update_workspace(
+            latest_plan_runtime={"recovered": True, "current_step": ""},
+        )
+        client.app.state.runtime.save_session_state(session_id)
+
+    with build_client(tmp_path) as client:
+        # VS Code reload uses a workspace-only summary, then session/start.
+        summary = client.get("/memory/summary", params={"workspace_id": workspace_id})
+        assert summary.status_code == 200
+        assert summary.json()["sessionHistoryRestored"] is True
+        assert any(item["content"] == user_text for item in summary.json()["messages"])
+        restored = client.post("/session/start", json={
+            "workspace_id": workspace_id, "workspace_name": "Conversation only",
+        })
+        assert restored.json()["session_id"] == session_id
+        assert any(item["content"] == user_text for item in restored.json()["messages"])
+        isolated = client.get("/memory/summary", params={
+            "workspace_id": "other-workspace", "session_id": session_id,
+        })
+        assert isolated.json()["messages"] == []
+        assert isolated.json()["sessionHistoryRestored"] is False
 
 
 def test_session_start_restores_latest_workspace_thread_after_sidecar_restart(tmp_path: Path) -> None:

@@ -123,6 +123,27 @@ test('analyzeSendIntent keeps natural-language planning prompts conversational',
   assert.equal(result.intent, 'coach');
 });
 
+test('explicit plan saves take priority over check vocabulary in their supporting facts', () => {
+  for (const draft of [
+    '请明确修正并保存当前正式学习计划。已有4/4指四种检查，不要虚构 pytest 用例数量。',
+    '请补齐并保存已有正式学习计划，保留同一个 plan_id。复盘已有验证结果。',
+    '请修复并保存当前正式计划的状态矛盾。请读取实际验证证据。',
+    'Please revise and save my learning plan. Review the check count as a fact, not a completed task.',
+    '/plan 请更新并保存正式学习计划。检查结果尚未证明整阶段完成。',
+  ]) {
+    const result = analyzeSendIntent(createInput({ draft, activeFile: undefined }));
+    assert.equal(result.intent, 'plan', draft);
+    assert.equal(result.requiresCurrentFile, false);
+  }
+  for (const draft of [
+    '请解释如何修正并保存当前正式学习计划。',
+    '请解释如何修复并保存当前正式学习计划。',
+    '不要修改并保存当前学习计划，先讨论一个例子。',
+  ]) {
+    assert.equal(analyzeSendIntent(createInput({ draft })).intent, 'coach', draft);
+  }
+});
+
 test('analyzeSendIntent keeps Plan-view discussion out of the formal mutation route', () => {
   const result = analyzeSendIntent(
     createInput({

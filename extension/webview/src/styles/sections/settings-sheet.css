@@ -2099,8 +2099,15 @@
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
   font-size: var(--trainer-font-2xs);
-  font-weight: 500;
+  font-weight: 400;
   text-align: center;
+}
+
+/* Section entrance animations create stacking contexts. Raise the section
+   with an open choice so the following Skills panel cannot cover its options. */
+.settings-section:has(.settings-choice__list) {
+  position: relative;
+  z-index: 2;
 }
 
 /* Themed pull-down for settings option rows (replaces the native popup). */

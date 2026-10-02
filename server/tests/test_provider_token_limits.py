@@ -508,6 +508,38 @@ def test_model_listing_does_not_report_an_unprobed_model_as_ready() -> None:
 
     assert result.ok is False
     assert result.provider_reachable is True
-    assert result.model_supported is False
-    assert result.error_category == "model_not_tested"
-    assert "did not verify a usable reply" in result.detail
+    assert result.model_supported is None
+    assert result.error_category == "timeout"
+    assert "timeout" in result.detail.lower() or "timed out" in result.detail.lower()
+
+
+@pytest.mark.parametrize("listed", [True, False])
+@pytest.mark.parametrize(
+    ("status_code", "category", "retryable"),
+    [(529, "upstream_unavailable", True), (429, "rate_limit", True),
+     (401, "invalid_key_or_permission", False)],
+)
+def test_model_listing_preserves_the_primary_chat_error(
+    listed: bool, status_code: int, category: str, retryable: bool,
+) -> None:
+    service = ProviderService()
+    fake_client = MagicMock()
+    fake_client.chat.completions.create.side_effect = Exception(
+        f"Error code: {status_code} - gateway request failed"
+    )
+    models = ProviderModelsResponse(
+        ok=listed, detail="Model listing result", available_models=["selected-model"] if listed else [],
+        listed=listed, error_category=None if listed else "network", retryable=True,
+    )
+    with (
+        patch.object(service, "_create_sync_client", return_value=fake_client),
+        patch.object(service, "list_models", return_value=models),
+    ):
+        result = service.test(_token_limited_config(), "sk-test")
+
+    assert result.ok is False
+    assert result.error_category == category
+    assert result.retryable is retryable
+    assert result.status_code == status_code
+    assert result.provider_reachable is True
+    assert result.model_supported is None

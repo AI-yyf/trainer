@@ -74,8 +74,14 @@ async function openProviderDetails(page) {
     await editButton.click();
   }
   const connectionFields = providerConnectionFields(page);
-  await expect(connectionFields.getByLabel("Connection name (optional)", { exact: true })).toBeVisible();
+  await expect(connectionFields.getByLabel("Service root")).toBeVisible();
   return page;
+}
+
+async function setProviderConnectionName(page, name) {
+  await openProviderAdvanced(page);
+  await page.getByLabel("Connection name (optional)", { exact: true }).fill(name);
+  await page.locator(".coach-settings-view__provider-detail .collapse-section__header").first().click();
 }
 
 async function openProviderProfiles(page) {
@@ -93,7 +99,7 @@ function providerModelPicker(detail) {
 }
 
 function providerTestButton(page) {
-  return page.getByRole("button", { name: "Test Connection", exact: true }).first();
+  return page.getByRole("button", { name: /^(Test Connection|Test again)$/ }).first();
 }
 
 async function expectPreviewHarness(page) {
@@ -260,6 +266,11 @@ test.describe("Trainer Settings provider lifecycle", () => {
       const payload = JSON.parse(route.request().postData() || "{}");
       providerTestPayloads.push(payload);
       const failed = providerTestPayloads.length === 1;
+      await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__?.({
+        type: 'operation/status',
+        payload: { tone: 'info', message: 'Trainer backend is ready.' },
+      }));
+
       await route.fulfill(
         jsonResponse(
           failed
@@ -274,6 +285,9 @@ test.describe("Trainer Settings provider lifecycle", () => {
             : {
                 ok: true,
                 status: "connected",
+                error_category: null,
+                status_code: null,
+                retryable: null,
                 diagnostics: ["Mock transport accepted the corrected model."],
                 capability_evidence: [
                   { name: "tools", declared: true, observed: true, state: "verified" },
@@ -300,9 +314,7 @@ test.describe("Trainer Settings provider lifecycle", () => {
     expect(await isDisclosureOpen(collapsedProviderDetail)).toBe(false);
 
     const detail = await openProviderDetails(page);
-    await providerConnectionFields(detail)
-      .getByLabel("Connection name (optional)", { exact: true })
-      .fill(providerName);
+    await setProviderConnectionName(page, providerName);
     await providerConnectionFields(detail).getByLabel("Service root").fill(providerBaseUrl);
     await setProviderModel(detail, rejectedModel);
     await providerConnectionFields(detail).getByLabel("API Key", { exact: true }).fill(ephemeralCredential);
@@ -337,9 +349,9 @@ test.describe("Trainer Settings provider lifecycle", () => {
     await page.reload();
     await page.waitForLoadState("networkidle");
     const reloadedDetail = await openProviderDetails(page);
-    await expect(
-      providerConnectionFields(reloadedDetail).getByLabel("Connection name (optional)", { exact: true }),
-    ).toHaveValue(providerName);
+    await openProviderAdvanced(page);
+    await expect(page.getByLabel("Connection name (optional)", { exact: true })).toHaveValue(providerName);
+    await page.locator(".coach-settings-view__provider-detail .collapse-section__header").first().click();
     await expect(
       providerConnectionFields(reloadedDetail).getByLabel("Service root"),
     ).toHaveValue(providerBaseUrl);
@@ -377,9 +389,7 @@ test.describe("Trainer Settings provider lifecycle", () => {
         .click();
     }
     const liveDetail = await openProviderDetails(page);
-    await providerConnectionFields(liveDetail)
-      .getByLabel("Connection name (optional)", { exact: true })
-      .fill(providerName);
+    await setProviderConnectionName(page, providerName);
     await providerConnectionFields(liveDetail).getByLabel("Service root").fill(providerBaseUrl);
     await setProviderModel(liveDetail, rejectedModel);
     await providerConnectionFields(liveDetail)
@@ -441,6 +451,17 @@ test.describe("Trainer Settings provider lifecycle", () => {
     await expect(page.locator(".settings-availability-strip")).not.toContainText(
       "No model is available right now",
     );
+
+    // A second success has the same outcome text; it must still end its busy state.
+    await expect(providerTestButton(page)).toBeEnabled();
+    const repeatedTestRequest = page.waitForRequest(
+      (request) => new URL(request.url()).pathname === "/provider/test",
+    );
+    await providerTestButton(page).click();
+    await repeatedTestRequest;
+    await expect(providerTestButton(page)).toBeEnabled();
+    await expect(page.locator(".settings-availability-strip")).toContainText("use this connection");
+    expect(providerTestPayloads).toHaveLength(3);
 
     const correctedPayload = providerTestPayloads[1];
     expect(correctedPayload).toMatchObject({

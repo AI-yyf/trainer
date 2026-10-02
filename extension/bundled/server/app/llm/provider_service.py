@@ -39,7 +39,6 @@ from .coaching_first_turn import (
 )
 from .coaching_patches import (
     _build_empty_reply_override,
-    _compose_missing_next_step_patch,
     _compose_principle_followthrough_patch,
     _compose_scaffold_paragraphs,
     _guided_domain_empty_reply_override,
@@ -5030,14 +5029,20 @@ class ProviderService:
                 models_result = self.list_models(provider, api_key)
                 count = len(models_result.available_models)
                 if models_result.ok:
-                    detail = (
+                    listing_detail = (
                         f"Provider reachable and listed {count} models, but the chat probe did not verify "
                         f"a usable reply for model {provider.model}."
                     )
                     if models_result.resolved_model:
-                        detail += f" The configured model resolves to {models_result.resolved_model}."
+                        listing_detail += f" The configured model resolves to {models_result.resolved_model}."
+                    detail = (
+                        listing_detail
+                        if category == "unknown"
+                        else self._detail_from_category(category, provider=provider, error=chat_exc)
+                    )
                     diagnostics = [
                         "Chat probe failed; model listing does not prove the selected model is usable.",
+                        listing_detail,
                         redact_provider_error(chat_exc, api_key=api_key),
                         *models_result.diagnostics,
                     ]
@@ -5051,12 +5056,14 @@ class ProviderService:
                 return ProviderTestResponse(
                     ok=False,
                     detail=detail,
-                    error_category="model_not_tested" if models_result.ok else category,
-                    retryable=retryable if models_result.ok else models_result.retryable,
-                    status_code=status_code if models_result.ok else models_result.status_code,
+                    # A successful model list cannot erase a concrete chat failure;
+                    # a failed list is a secondary probe, not the chat's status.
+                    error_category="model_not_tested" if models_result.ok and category == "unknown" else category,
+                    retryable=retryable,
+                    status_code=status_code,
                     diagnostics=diagnostics,
                     provider_reachable=models_result.ok or provider_reachable,
-                    model_supported=False if models_result.ok else model_supported,
+                    model_supported=model_supported,
                 )
         except Exception as exc:  # pragma: no cover - network dependent
             category, retryable, status_code, provider_reachable, model_supported = self._classify_error(exc)
@@ -5481,9 +5488,7 @@ class ProviderService:
                     coach_context=coach_context,
                     response_language=response_language,
                 )
-        file_path = str(context.get("file_path") or "").strip() or None
         pace_signal = str(context.get("pace_signal") or "").strip()
-        mode = normalize_answer_policy(answer_mode or profile.answer_policy)
 
         implementation_guide = (
             context.get("implementation_guide") if isinstance(context.get("implementation_guide"), dict) else {}

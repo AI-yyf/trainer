@@ -746,6 +746,12 @@ class TrainingHandoffGenerator:
         reflected = bool(reflection.strip())
         returned = status is HandoffStatus.COMPLETED or bool(payload.get("returned_at"))
 
+        # A completed, reflected return has a durable timestamp. Older
+        # snapshots can retain a stale Reflect/Verify display phase; restoring
+        # them must not reopen a cycle whose Return already committed.
+        if verified and reflected and status is HandoffStatus.COMPLETED and payload.get("returned_at"):
+            return TrainingPhase.RETURN
+
         if requested is TrainingPhase.RETURN and verified and reflected and returned:
             return requested
         if requested is TrainingPhase.REFLECT and verified and reflected:

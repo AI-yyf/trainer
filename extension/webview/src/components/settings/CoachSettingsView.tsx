@@ -47,6 +47,7 @@ import {
   sidecarRestartCopy,
 } from "./providerSettingsCopy";
 import { MemorySharingPanel } from "./MemorySharingPanel";
+import { providerRecoveryLocale } from "../../app/providerRecoveryCopy";
 import {
   deriveProviderSetupState,
   type ProviderSetupReason,
@@ -1411,6 +1412,7 @@ export interface CoachSettingsLabels {
 
 export interface CoachSettingsViewProps {
   provider: ProviderConfigView;
+  backendConnectionState?: "starting" | "connected" | "offline";
   workspaceId?: string;
   capabilityVerdict: TrainerCapabilityVerdict;
   providerImageInputState?: ProviderImageInputState;
@@ -3008,9 +3010,15 @@ function ChoiceList<T extends string>({
   // listbox opens below, closes on outside click or on pick.
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const focusChoiceOnOpenRef = useRef(false);
   useEffect(() => {
     if (!open) {
       return;
+    }
+    if (focusChoiceOnOpenRef.current) {
+      rootRef.current?.querySelector<HTMLButtonElement>('[role="option"][aria-selected="true"]')?.focus();
+      focusChoiceOnOpenRef.current = false;
     }
     const onDocMouseDown = (event: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
@@ -3023,8 +3031,31 @@ function ChoiceList<T extends string>({
   const effective = active ?? items[0]?.value;
   const current = items.find((item) => item.value === effective) ?? items[0];
   return (
-    <div className="settings-sheet__group settings-choice" ref={rootRef}>
+    <div className="settings-sheet__group settings-choice" ref={rootRef} onKeyDown={(event) => {
+      if (event.key === "Escape" && open) {
+        event.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+        return;
+      }
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      if (!open) {
+        focusChoiceOnOpenRef.current = true;
+        setOpen(true);
+        return;
+      }
+      const options = Array.from(rootRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? []);
+      if (!options.length) return;
+      const focusedIndex = options.findIndex((option) => option === document.activeElement);
+      const index = focusedIndex >= 0 ? focusedIndex
+        : options.findIndex((option) => option.getAttribute("aria-selected") === "true");
+      const next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1
+        : (index + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+      options[next]?.focus();
+    }}>
       <button
+        ref={triggerRef}
         type="button"
         className="settings-choice__trigger"
         aria-haspopup="listbox"
@@ -3046,6 +3077,7 @@ function ChoiceList<T extends string>({
               onClick={() => {
                 onChange?.(item.value);
                 setOpen(false);
+                triggerRef.current?.focus();
               }}
             >
               {item.label}
@@ -4026,6 +4058,7 @@ function describeLanguageIntegrityFact(input: {
 
 export function CoachSettingsView({
   provider,
+  backendConnectionState,
   workspaceId,
   capabilityVerdict,
   providerImageInputState,
@@ -4149,24 +4182,20 @@ export function CoachSettingsView({
     | "connection"
     | "workspace"
     | "teaching"
-    | "skills"
-    | "preferences"
-    | "advanced";
-  // §四十: all six categories present — keyboard nav must match mouse order.
+    | "preferences";
+  // Keyboard navigation follows the same four destinations as the visible tabs.
   const SETTINGS_CATEGORY_ORDER: SettingsCategory[] = [
     "connection",
     "workspace",
     "teaching",
-    "skills",
     "preferences",
-    "advanced",
   ];
   const [activeSettingsCategory, setActiveSettingsCategory] =
     useState<SettingsCategory>("connection");
   const openSettingsCategorySection = (id: SettingsCategory) => {
     setActiveSettingsCategory(id);
   };
-  const [advancedContextPinned, setAdvancedContextPinned] = useState(false);
+  const [advancedContextPinned, setAdvancedContextPinned] = useState<boolean | undefined>();
   const [customSkillDraft, setCustomSkillDraft] = useState({
     trigger: "",
     title: "",
@@ -4433,6 +4462,13 @@ export function CoachSettingsView({
     (lastTestFailure?.status === "failed" ? "test_failed" : lastTestFailure?.status) ??
     provider.modelErrorCategory ??
     (providerTestTransportFailed ? "test_failed" : undefined);
+  const backendStarting = backendConnectionState === "starting";
+  const backendUnavailable = backendConnectionState === "offline" ||
+    (backendConnectionState === undefined && providerFailureCategory === "sidecar_unavailable");
+  const backendRecovery = backendStarting || backendUnavailable
+    ? providerRecoveryLocale(language).summary[backendStarting ? "starting" : "offline"]
+    : undefined;
+  const canRestartSidecar = backendUnavailable && Boolean(onRestartSidecar);
   const modelSelectionNeedsRecovery =
     provider.modelListStatus === "error" ||
     providerFailureCategory === "model_not_found" ||
@@ -5522,6 +5558,7 @@ export function CoachSettingsView({
   const canRefreshModels = providerDraftReadyForModelDiscovery && modelListStatus !== "loading";
   const canSaveProviderConnection = Boolean(
     onSaveProvider &&
+    !providerSaveBusy &&
     providerDraftFieldsReady &&
       !currentDraftModelBlockedByPolicy &&
       !providerDraftEditorBlocked &&
@@ -5751,7 +5788,7 @@ export function CoachSettingsView({
     !providerDraftReadyForTest &&
     !canFindDraftModels &&
     !hasDiscoveredDraftModels;
-  const shouldWaitForDraftTest = providerHasDraftChanges && providerTestPending;
+  const shouldWaitForProviderTest = providerTestPending;
   const shouldRepairProviderCredentials =
     providerCredentialsRejected && !providerHasDraftChanges && !providerTestPassed;
   const workspaceRootMissing =
@@ -5814,7 +5851,7 @@ export function CoachSettingsView({
     ready: "connected",
   };
   const resolvedAvailabilityTone: "connected" | "pending" | "warn" | "offline" =
-    PROVIDER_SETUP_STRIP_TONE[providerSetupReason];
+    backendStarting ? "pending" : backendUnavailable ? "offline" : PROVIDER_SETUP_STRIP_TONE[providerSetupReason];
   const localizedCoachCapabilityLabel =
     providerCoachReady
       ? settingsStatusPhrase(language, "ready")
@@ -5893,7 +5930,9 @@ export function CoachSettingsView({
     ready: settingsStatusPhrase(language, "modelReady"),
   };
   const localizedResolvedAvailabilityStatusLabel =
-    PROVIDER_SETUP_STATUS_COPY[providerSetupReason];
+    backendRecovery
+      ? providerRecoveryLocale(language).status[backendStarting ? "starting" : "offline"]
+      : PROVIDER_SETUP_STATUS_COPY[providerSetupReason];
   const localizedResolvedAvailabilityHeadline =
     PROVIDER_SETUP_HEADLINE_COPY[providerSetupReason];
   const readyAvailabilityScopeDetail = `${copy.currentWorkspace} \u00b7 ${settingsStatusPhrase(
@@ -6022,7 +6061,7 @@ export function CoachSettingsView({
   const showQuickSetup = !providerSaved && connectionView === "auto";
   const showAvailabilityStrip =
     providerSetupReason !== "workspace_untrusted" &&
-    ((showConnectionForm && connectionView !== "advanced") ||
+    (Boolean(backendRecovery) || (showConnectionForm && connectionView !== "advanced") ||
       (showConnectionSummary && resolvedAvailabilityTone !== "connected"));
   const connectionHost = (provider.baseUrl || providerDraft.baseUrl || "")
     .replace(/^https?:\/\//i, "")
@@ -6047,7 +6086,7 @@ export function CoachSettingsView({
       modelSelectRef.current?.focus();
     });
   };
-  const displayAvailabilityHeadline = shouldOfferRecommendedProviderTemplate
+  const displayAvailabilityHeadline = backendRecovery ? backendRecovery.title : shouldOfferRecommendedProviderTemplate
     ? settingsPhrase(language, "chooseProviderTemplate")
     : shouldRoutePrimaryToSavedProfiles
       ? settingsText(language, "先应用一个已保存的 profile", "Apply a saved profile first")
@@ -6057,13 +6096,15 @@ export function CoachSettingsView({
     workspaceRootMissing
       ? `${workspaceRootReminder} `
       : ""
-  ) + (shouldOfferRecommendedProviderTemplate
+  ) + (backendRecovery
+    ? backendStarting ? backendRecovery.detail : sidecarRestartCopy(language).detail
+    : shouldOfferRecommendedProviderTemplate
     ? settingsPhrase(language, "chooseProviderTemplateDetail")
     : shouldRoutePrimaryToSavedProfiles
       ? settingsText(language, "当前工作区还没有启用中的 provider，但下面已经有可复用的 profiles。", "This workspace has no active provider yet, but reusable profiles are already available below.")
       : localizedResolvedAvailabilityDetail);
   const showAvailabilityPrimaryAction =
-    workspaceRootMissing || availabilityMode !== "ready" || Boolean(onTestProvider);
+    Boolean(backendRecovery) || workspaceRootMissing || availabilityMode !== "ready" || Boolean(onTestProvider);
   const resolvedAvailabilityPrimaryLabel = canFindDraftModels
     ? modelDiscoveryActionLabel
     : hasDiscoveredDraftModels
@@ -6074,7 +6115,7 @@ export function CoachSettingsView({
         ? settingsPhrase(language, "addApiKey")
       : shouldCompleteDraftSetup
       ? settingsPhrase(language, "connectionFieldsAndKey")
-      : shouldWaitForDraftTest
+      : shouldWaitForProviderTest
         ? settingsStatusPhrase(language, "checking")
         : shouldRepairProviderCredentials
           ? settingsPhrase(language, "addApiKey")
@@ -6103,7 +6144,7 @@ export function CoachSettingsView({
         ? settingsPhrase(language, "addApiKeyDetail")
       : shouldCompleteDraftSetup
       ? modelDiscoveryBlockedReason
-      : shouldWaitForDraftTest
+      : shouldWaitForProviderTest
         ? settingsStatusPhrase(language, "checking")
         : shouldRepairProviderCredentials
           ? settingsPhrase(language, "addApiKeyDetail")
@@ -6131,7 +6172,7 @@ export function CoachSettingsView({
           ? <SettingsPreferencesIcon size={14} />
         : shouldCompleteDraftSetup
         ? <SettingsPreferencesIcon size={14} />
-        : shouldWaitForDraftTest
+        : shouldWaitForProviderTest
           ? <ReloadIcon size={14} />
           : shouldRepairProviderCredentials
             ? <SettingsPreferencesIcon size={14} />
@@ -6151,7 +6192,7 @@ export function CoachSettingsView({
           ? openProviderApiKey
         : shouldCompleteDraftSetup
         ? () => setConnectionView("edit")
-        : shouldWaitForDraftTest
+        : shouldWaitForProviderTest
           ? undefined
           : shouldRepairProviderCredentials
             ? openProviderApiKey
@@ -6164,27 +6205,27 @@ export function CoachSettingsView({
                 : shouldOpenProviderDetails
                   ? () => openProviderDetails()
                   : onSaveProvider;
-  const canRestartSidecar =
-    providerFailureCategory === "sidecar_unavailable" && Boolean(onRestartSidecar);
   const effectiveAvailabilityPrimaryCta: {
     label: string;
     detail: string;
     icon: ReactNode;
     action?: (() => void) | undefined;
   } =
-    shouldOfferRecommendedProviderTemplate
-      ? {
-          label: settingsPhrase(language, "chooseProviderTemplate"),
-          detail: settingsPhrase(language, "chooseProviderTemplateDetail"),
-          icon: <SettingsSkillsIcon size={14} />,
-          action: focusProviderTemplatePicker,
-        }
+    backendStarting
+      ? { label: backendRecovery?.title ?? "", detail: backendRecovery?.detail ?? "", icon: <ReloadIcon size={14} /> }
       : canRestartSidecar
         ? {
             ...sidecarRestartCopy(language),
             icon: <ReloadIcon size={14} />,
             action: onRestartSidecar,
           }
+      : shouldOfferRecommendedProviderTemplate
+      ? {
+          label: settingsPhrase(language, "chooseProviderTemplate"),
+          detail: settingsPhrase(language, "chooseProviderTemplateDetail"),
+          icon: <SettingsSkillsIcon size={14} />,
+          action: focusProviderTemplatePicker,
+        }
         : shouldRepairProviderCredentials
               ? {
                   label: settingsPhrase(language, "addApiKey"),
@@ -7325,9 +7366,9 @@ export function CoachSettingsView({
             savedBaseUrl={provider.baseUrl}
             savedModel={provider.model}
             connected={providerCoachReady}
-            hasStoredApiKey={provider.apiKeyConfigured}
+            hasStoredApiKey={providerDraftCanReuseSavedApiKey}
             trusted={resolvedWorkspaceTrustState === "trusted"}
-            busy={providerTestPending}
+            busy={providerSaveBusy || providerTestPending}
             onDraftChange={onProviderDraftChange}
             onSave={() => {
               if (onSaveProvider) {
@@ -7425,17 +7466,6 @@ export function CoachSettingsView({
             >
               <div className="settings-grid settings-grid--form">
                 <label className="settings-field">
-                  <span>{providerConnectionNameLabel(language)}</span>
-                  <input
-                    value={providerDraft.name}
-                    placeholder={
-                      settingsText(language, "给这组连接起个名字(可不填)", "Name this connection (optional)")
-                    }
-                    onChange={(event) => onProviderDraftChange({ name: event.target.value })}
-                  />
-                </label>
-
-                <label className="settings-field">
                   <span>{providerBaseUrlLabel}</span>
                   <input
                     value={providerDraft.baseUrl}
@@ -7481,27 +7511,6 @@ export function CoachSettingsView({
                   />
                 </label>
 
-                <CollapseSection
-                  level={2}
-                  persistenceKey="settings-advanced"
-                  title={
-                    <span className="eyebrow">
-                      {settingsText(language, "⚙ 高级", "⚙ Advanced")}
-                    </span>
-                  }
-                  subtitle={
-                    settingsText(language, "端点测速 · 协议 · 连接详情", "Speed test · Protocol · Connection details")
-                  }
-                >
-                  <ProviderEndpointSpeedTest
-                    language={language}
-                    baseUrl={normalizedDraftBaseUrl || providerDraft.baseUrl}
-                    results={providerSpeedTestResults}
-                    pending={providerSpeedTestPending}
-                    onRun={(urls) => onSpeedTestEndpoints?.(urls)}
-                    onAdopt={(url) => onProviderDraftChange({ baseUrl: url })}
-                  />
-                </CollapseSection>
                 {providerPasteHint ? (
                   <p className="settings-sheet__note settings-sheet__note--compact settings-sheet__note--warning">
                     {providerPasteHint}
@@ -7651,13 +7660,9 @@ export function CoachSettingsView({
                 )}
               </div>
 
-              {copy.configFileNote ? (
-                <p className="inline-note settings-sheet__note">{copy.configFileNote}</p>
-              ) : null}
             </form>
 
             {providerPrimaryActions}
-            {providerSecondaryActions}
             {!providerCoachReady ? (
               <p className="settings-sheet__note settings-sheet__note--warning">
                 {providerDetailRequirementNote}
@@ -7698,6 +7703,14 @@ export function CoachSettingsView({
               <div className="collapse-section__body">
               <div className="coach-settings-view__provider-detail-body">
                 <div className="settings-grid settings-grid--form">
+                  <label className="settings-field">
+                    <span>{providerConnectionNameLabel(language)}</span>
+                    <input
+                      value={providerDraft.name}
+                      placeholder={settingsText(language, "给这组连接起个名字(可不填)", "Name this connection (optional)")}
+                      onChange={(event) => onProviderDraftChange({ name: event.target.value })}
+                    />
+                  </label>
                   <div className="settings-field">
                     <span>{settingsSupportPhrase(language, "protocol")}</span>
                     <ChoiceList
@@ -7720,6 +7733,17 @@ export function CoachSettingsView({
                     </div>
                   </div>
                 </div>
+
+                <ProviderEndpointSpeedTest
+                  language={language}
+                  baseUrl={normalizedDraftBaseUrl || providerDraft.baseUrl}
+                  results={providerSpeedTestResults}
+                  pending={providerSpeedTestPending}
+                  onRun={(urls) => onSpeedTestEndpoints?.(urls)}
+                  onAdopt={(url) => onProviderDraftChange({ baseUrl: url })}
+                />
+
+                {providerSecondaryActions}
 
                 {!canNestModelLimitsInCatalog ? providerModelLimitsPanel : null}
 
@@ -7960,7 +7984,7 @@ export function CoachSettingsView({
               onBackup={onBackupTrainerWorkspace}
               onRestore={onRestoreTrainerWorkspaceBackup}
             />
-            <section className="settings-sheet__workspace-card" data-settings-subsection="remote-support">
+            {remoteWorkspaceName ? <section className="settings-sheet__workspace-card" data-settings-subsection="remote-support">
                 {(() => {
                   const remoteSupportCopy = REMOTE_SUPPORT_COPY[language];
                   const view = remoteSupportStateView(language, companionInstallState);
@@ -7975,7 +7999,7 @@ export function CoachSettingsView({
                 <div className="settings-sheet__summary-grid">
                   <SummaryCard
                     label={remoteSupportCopy.remoteHost}
-                    value={remoteWorkspaceName || "SSH"}
+                    value={remoteWorkspaceName}
                   />
                 </div>
                 <p className="settings-sheet__note settings-sheet__note--compact">
@@ -8000,7 +8024,7 @@ export function CoachSettingsView({
                     </>
                   );
                 })()}
-            </section>
+            </section> : null}
             {resourceSandbox ? (
               <section className="settings-sheet__workspace-card">
                 <div className="settings-sheet__authority-block-head">
@@ -8401,7 +8425,7 @@ export function CoachSettingsView({
         </section>
         ) : null}
 
-        {(activeSettingsCategory === "skills" || activeSettingsCategory === "teaching") ? (
+        {activeSettingsCategory === "teaching" ? (
         <section
           className="settings-section settings-section--flat settings-anchor"
           data-settings-section="skills"
@@ -8520,25 +8544,36 @@ export function CoachSettingsView({
                     !onGenerateSkillDraft
                   }
                   onClick={async () => {
-                    const draft = await onGenerateSkillDraft?.(customSkillDescription);
-                    if (!draft) {
-                      setCustomSkillError(
-                        settingsText(
-                          language,
-                          "先描述一下这个技能要做什么。",
-                          "Describe what the skill should do first.",
-                        ),
-                      );
-                      return;
-                    }
-                    setCustomSkillDraft({
-                      trigger: draft.trigger,
-                      title: draft.title,
-                      prompt: draft.prompt,
-                      detail: draft.detail,
-                    });
-                    setCustomSkillSource(draft.source);
+                    if (customSkillGenerating) return;
+                    setCustomSkillGenerating(true);
                     setCustomSkillError(null);
+                    try {
+                      const draft = await onGenerateSkillDraft?.(customSkillDescription);
+                      if (!draft) {
+                        setCustomSkillError(
+                          settingsText(
+                            language,
+                            "先描述一下这个技能要做什么。",
+                            "Describe what the skill should do first.",
+                          ),
+                        );
+                        return;
+                      }
+                      setCustomSkillDraft({
+                        trigger: draft.trigger,
+                        title: draft.title,
+                        prompt: draft.prompt,
+                        detail: draft.detail,
+                      });
+                      setCustomSkillSource(draft.source);
+                      setCustomSkillError(null);
+                    } catch {
+                      setCustomSkillError(settingsText(language,
+                        "技能生成失败。请检查连接后重试，也可以直接填写下方内容。",
+                        "Skill generation failed. Check your connection and retry, or enter the skill below."));
+                    } finally {
+                      setCustomSkillGenerating(false);
+                    }
                   }}
                 >
                   {customSkillGenerating
@@ -8659,7 +8694,7 @@ export function CoachSettingsView({
         </section>
         ) : null}
 
-        {(activeSettingsCategory === "advanced" || activeSettingsCategory === "preferences") ? (
+        {activeSettingsCategory === "preferences" ? (
         <section
           className="settings-section settings-section--flat settings-anchor"
           data-settings-section="advanced"
@@ -8695,7 +8730,7 @@ export function CoachSettingsView({
             <CollapseSection
               level={2}
               persistenceKey="settings-advanced-context"
-              open={answerStyle === "custom" || advancedContextPinned}
+              open={advancedContextPinned ?? answerStyle === "custom"}
               onToggle={setAdvancedContextPinned}
               title={<span className="eyebrow">{settingsGlobalCopy.settingsAdvancedContext}</span>}
               subtitle={<span className="settings-sheet__defaults-preview">{contextBehaviorSummary}</span>}

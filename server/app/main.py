@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import os
+import sqlite3
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -35,6 +37,8 @@ from .training.attempt_store import AttemptStore
 from .training.card_generator import CardGenerationService
 from .training.card_router import CardRouterService
 from .training.plan_revision import PlanRevisionStore
+from .workspace.root_scope_recovery import recover_legacy_root_registrations
+from .workspace.runtime_path_recovery import recover_runtime_paths
 
 
 def create_app(settings_override: Settings | AppSettings | None = None) -> FastAPI:
@@ -44,9 +48,16 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     data_dir.mkdir(parents=True, exist_ok=True)
 
     repository = TrainerRepository(database_path)
+    try:
+        recover_legacy_root_registrations(repository)
+    except (sqlite3.DatabaseError, ValueError):
+        logging.getLogger(__name__).warning(
+            "Legacy Trainer registration recovery was unavailable; current scoped data was preserved."
+        )
     attempt_store = AttemptStore(database_path)
     plan_revision_store = PlanRevisionStore(database_path)
     resource_version_store = ResourceVersionStore(database_path)
+    recover_runtime_paths(database_path, data_dir)
     research_db_path = data_dir / "research.db"
     research_repository = ResearchRepository(research_db_path)
     qdrant_path = settings.qdrant_path if isinstance(settings, Settings) else data_dir / "qdrant"

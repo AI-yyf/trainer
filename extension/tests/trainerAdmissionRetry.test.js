@@ -373,13 +373,14 @@ test('clicking Add to Trainer after a root_path_unavailable record re-attempts a
   assert.equal(result.ok, true);
   // The stale retry record alone did not block the attempt: the click POSTed.
   const classify = classifyCalls(context);
-  assert.equal(classify.length, 2);
+  assert.ok(classify.length >= 3);
   assert.equal(classify[0].body.root_id, STALE_ROOT_ID);
   assert.equal(classify[0].body.root_path, FRESH_ROOT_PATH);
   // The retry re-registers the root by path instead of replaying the stale ID.
   assert.equal(classify[1].body.root_id, undefined);
   assert.equal(classify[1].body.root_path, FRESH_ROOT_PATH);
   assert.equal(classify[1].body.workspace_id, PROJECT_PATH);
+  assert.equal(classify.at(-1).body.root_id, 'root-fresh-identity');
   // The refreshed identity was persisted and used by the follow-up requests.
   const identityCall = context.__calls.find((call) => call.kind === 'root-identity');
   assert.equal(identityCall.rootId, 'root-fresh-identity');

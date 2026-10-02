@@ -78,7 +78,7 @@ test('composer model switch becomes an accessible icon action in a narrow sideba
 
   assert.match(source, /density=\{composerModelActionDensity\}/);
   assert.match(source, /id: "model-switch",\s*compact: composerModelActionDensity === "compact",/);
-  assert.match(source, /icon: <ModelLayersIcon size=\{16\} \/>/);
+  assert.match(source, /icon: composerContextRingNode,/);
   assert.doesNotMatch(source, /icon: <BrainIcon size=\{16\} \/>/);
   assert.match(source, /ariaLabel: composerModelButtonTitle/);
   assert.match(source, /setComposerModelActionDensity\(width < 430 \? "compact" : "default"\)/);
@@ -95,7 +95,7 @@ test('Coach composer keeps model selection focused while setup stays in Settings
   );
   assert.match(source, /toggleComposerModelMenu/);
   assert.match(source, /id: "model-switch",/);
-  assert.match(source, /label: composerModelButtonDisplayLabel,/);
+  assert.match(source, /label: composerContextUsage\.used[\s\S]*?: composerModelButtonDisplayLabel,/);
   assert.match(source, /onClick: toggleComposerModelMenu,/);
   assert.match(source, /onClick=\{\(\) => switchComposerProviderModel\(profile\.model\)\}/);
   assert.match(source, /onClick=\{\(\) => switchComposerProviderProfile\(profile\.id\)\}/);
@@ -135,7 +135,7 @@ test('Coach composer keeps model selection focused while setup stays in Settings
   assert.doesNotMatch(source, /<div className="composer-provider-summary">/);
   assert.match(source, /const modelDisabled = profile\.isActive \|\| profile\.isSelectable === false;/);
   assert.match(source, /disabled=\{modelDisabled\}/);
-  assert.match(source, /composer-provider-list__label">\{policyHint\}/);
+  assert.match(source, /\[modelContextHint, policyHint\]\.filter\(Boolean\)\.join\(" · "\)/);
   assert.match(source, /aria-current=\{profile\.isActive \? "true" : undefined\}/);
   assert.doesNotMatch(source, /providerMenuTokenBadges/);
   assert.doesNotMatch(source, /composer-provider-list__detail/);

@@ -15,6 +15,10 @@ const URL_PATTERN = /^https?:\/\//i;
 export function resolveResourceOpenTarget(resource: ResourceOpenRecord): ResourceOpenTarget {
   const source = resource.source?.trim();
   const canonicalSource = resource.canonicalSource?.trim();
+  const localSnapshot = resource.sandboxPath?.trim();
+  if (localSnapshot && !URL_PATTERN.test(localSnapshot)) {
+    return { kind: "vscode", source: localSnapshot };
+  }
 
   if (resource.kind === "url") {
     const urlSource = [source, canonicalSource].find((value) => value && URL_PATTERN.test(value));

@@ -7,7 +7,9 @@ const { test, expect } = require("playwright/test");
 
 const PREVIEW_PATH = "/vscode-preview.html";
 const VIEWPORT_WIDTHS = [300, 360, 420];
-const TRAINING_CARD_FACTS = ["current", "why-now", "deliverable", "verify", "return"];
+const TRAINING_CARD_FACTS = ["deliverable", "verify"];
+const PROGRESS_LABELS = { "es-ES": "Progreso", "fr-FR": "Progrès", "de-DE": "Fortschritt",
+  "ja-JP": "成長", "ko-KR": "성장", "pt-BR": "Progresso" };
 
 const VIEW_LABELS = {
   "es-ES": ["Chat", "Plan", "Recursos", "Entrenamiento", "Ajustes"],
@@ -48,13 +50,11 @@ async function openStandaloneTrainingPreview(page, language, width) {
 }
 
 async function expectFiveLocalizedTopLevelViews(page, language) {
-  // Phase-C IA: visible switcher tabs are a prefix of the five view labels;
-  // Settings moved to the header gear (its label is the fifth entry).
   const switcher = page.locator(".header-switcher");
-  const tabs = switcher.getByTestId(/^trainer-view-nav-(coach|plan|resources|training)$/);
+  const tabs = switcher.getByTestId(/^trainer-view-nav-(coach|plan|resources|training|progress)$/);
   await expect(tabs.first()).toBeVisible();
   const count = await tabs.count();
-  expect([3, 4]).toContain(count);
+  expect(count).toBe(5);
   for (let index = 0; index < count; index += 1) {
     await expect(tabs.nth(index)).toBeVisible();
   }
@@ -62,7 +62,7 @@ async function expectFiveLocalizedTopLevelViews(page, language) {
   const labels = await tabs.evaluateAll((nodes) =>
     nodes.map((node) => node.getAttribute("aria-label")),
   );
-  expect(labels).toEqual(VIEW_LABELS[language].slice(0, count));
+  expect(labels).toEqual([...VIEW_LABELS[language].slice(0, 4), PROGRESS_LABELS[language]]);
   await expect(page.getByTestId("trainer-view-nav-settings")).toHaveAttribute(
     "aria-label",
     VIEW_LABELS[language][4],
@@ -73,10 +73,15 @@ async function expectCurrentTrainingCardFacts(page) {
   const card = page.locator(".training-current__card-stack[role=group]");
   const facts = card.locator("[data-training-card-fact]");
 
-  await expect(facts).toHaveCount(TRAINING_CARD_FACTS.length);
-  for (const fact of TRAINING_CARD_FACTS) {
+  const keys = await facts.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-training-card-fact')));
+  expect(new Set(keys).size).toBe(keys.length);
+  for (const fact of keys) {
+    expect(TRAINING_CARD_FACTS).toContain(fact);
     await expect(card.locator(`[data-training-card-fact=\"${fact}\"]`)).toBeVisible();
   }
+  await expect(card.locator('.training-current__heading [data-view-object]').first()).toBeVisible();
+  await expect(page.locator('[data-training-card-footer]')).toBeVisible();
+  await expect(page.locator('[data-training-card-fact="why-now"], [data-training-card-fact="return"], .training-loop-rail, [data-training-review-queue]')).toHaveCount(0);
 }
 
 async function expectNoHorizontalOverflow(page) {

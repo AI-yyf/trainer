@@ -174,6 +174,28 @@ test('refreshWorkspaceAuthorityCommand refreshes only sandbox authority state', 
   assert.equal(context.__patches[0].memory.sandboxState.authority.ledgerEntryCount, 7);
 });
 
+test('workspace authority refresh preserves sandbox write evidence for feature readiness', async () => {
+  const { refreshWorkspaceAuthorityCommand } = loadWithVscodeMock(memoryCommandsModulePath, {});
+  const context = createContext();
+  context.sidecarClient.getJson = async () => ({ authority: {
+    active_workspace_root: 'F:\\trainer\\workspace-a',
+    authority_scope: 'trainer_sandbox', resource_write_allowed: true,
+    resource_write_evidence: {
+      operation: 'write', scope: 'trainer_sandbox', allowed: true,
+      target_root: 'F:\\trainer\\sandboxes\\workspace-a',
+    },
+  } });
+
+  assert.equal((await refreshWorkspaceAuthorityCommand(context)).ok, true);
+  const authority = context.__patches[0].memory.sandboxState.authority;
+  assert.equal(authority.authorityScope, 'trainer_sandbox');
+  assert.equal(authority.resourceWriteAllowed, true);
+  assert.deepEqual(authority.resourceWriteEvidence, {
+    operation: 'write', scope: 'trainer_sandbox', allowed: true,
+    targetRoot: 'F:\\trainer\\sandboxes\\workspace-a', reason: undefined,
+  });
+});
+
 test('refreshMemoryCommand keeps a managed context for the next dependency action', async () => {
   const vscodeMock = {};
   const { refreshMemoryCommand } = loadWithVscodeMock(memoryCommandsModulePath, vscodeMock);
@@ -213,6 +235,21 @@ test('refreshMemoryCommand keeps a managed context for the next dependency actio
     context.__patches[0].memory.workspace?.trainerWorkspace?.contextId,
     'context-managed-123',
   );
+});
+
+test('late memory and authority responses cannot overwrite a same-context restored database', async () => {
+  const commands = loadWithVscodeMock(memoryCommandsModulePath, {});
+  for (const command of [commands.refreshMemoryCommand, commands.refreshWorkspaceAuthorityCommand]) {
+    const context = createContext();
+    context.getHostState().bootstrap.runtimeDataGeneration = 'original';
+    context.sidecarClient.getJson = async () => {
+      context.getHostState().bootstrap.runtimeDataGeneration = 'restored';
+      return { memory: { workspace: { workspace_id: 'F:\\trainer\\workspace-a' } },
+        authority: { active_workspace_root: 'F:\\trainer\\workspace-a' } };
+    };
+    assert.equal((await command(context)).ok, false);
+    assert.equal(context.__patches.length, 0);
+  }
 });
 
 test('revokeMemoryShareCommand removes the source through the current workspace and refreshes the snapshot', async () => {

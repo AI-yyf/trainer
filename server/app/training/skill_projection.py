@@ -272,7 +272,9 @@ def project_skills(
                         "scenario": str(rec.get("scenario") or "") or None,
                     }
                 )
-                if result_str == "passed":
+                # Self reports, model reviews and static checks remain visible
+                # in the drilldown, but cannot attest executable capability.
+                if result_str == "passed" and rec.get("trust_level") == "controlled_check":
                     result[dim]["verified_count"] += 1
                     assistance_level = str(rec.get("assistance_level") or "independent")
                     if assistance_level == "independent":

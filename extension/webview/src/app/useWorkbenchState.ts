@@ -280,6 +280,9 @@ export interface TrainingRestoreContext {
 }
 
 export interface WorkbenchStore {
+  trainingReviewQueueRequested: boolean;
+  openTrainingReviewQueue: () => void;
+  beginTrainingReview: () => void;
   data: WorkbenchBootstrapState;
   layout: PersistedWorkbenchState;
   /** Local language intent remains visible until the host echoes the same value. */
@@ -581,7 +584,7 @@ function syncLayoutFromBootstrap(
   const nextResourceSearchMode = workspace?.resourceSearchMode ?? layoutChrome.resourceSearchMode;
   const nextTeachingStyle = data.profile?.preferredStyle?.trim()
     ? normalizeTeachingStyle(data.profile.preferredStyle)
-    : layout.teachingStyle;
+    : layoutChrome.teachingStyle;
   const nextFollowCurrentFile = workspace?.followCurrentFile ?? layoutChrome.followCurrentFile;
   const nextContextDetail = workspace?.contextDetail ?? layoutChrome.contextDetail;
   const nextIncludeCurrentFile = workspace?.includeCurrentFile ?? layoutChrome.includeCurrentFile;
@@ -620,6 +623,16 @@ function syncLayoutFromBootstrap(
 }
 
 export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
+  trainingReviewQueueRequested: false,
+  openTrainingReviewQueue: () => set((state) => ({
+    trainingReviewQueueRequested: true,
+    layout: persistLayout({ ...state.layout, activeView: "training" }),
+  })),
+  beginTrainingReview: () => set((state) => ({
+    trainingReviewQueueRequested: false,
+    trainingRestoreContext: undefined,
+    layout: persistLayout({ ...state.layout, activeView: "training" }),
+  })),
   data: initialData,
   layout: initialUi,
   pendingComposerLanguage: undefined,
@@ -650,6 +663,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
     })),
   setActiveView: (activeView) =>
     set((state) => ({
+      trainingReviewQueueRequested: activeView === "training" && state.trainingReviewQueueRequested,
       layout: persistLayout({
         ...state.layout,
         activeView: normalizeSidebarView(activeView),
@@ -769,10 +783,11 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
     set((state) => {
       if (message.type === "bootstrap") {
         const nextData = normalizeBootstrapData(message.payload as WorkbenchBootstrapInput);
+        const runtimeDataChanged = nextData.runtimeDataGeneration !== state.data.runtimeDataGeneration;
         const previousWorkspaceId = state.data.memory.workspace?.workspaceId;
         const incomingWorkspaceId = nextData.memory.workspace?.workspaceId;
         const effectiveWorkspaceId = incomingWorkspaceId ?? previousWorkspaceId;
-        const scopedPendingComposerLanguage = workspaceIdentityChanged(
+        const scopedPendingComposerLanguage = runtimeDataChanged || workspaceIdentityChanged(
           effectiveWorkspaceId,
           previousWorkspaceId,
         )
@@ -781,7 +796,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         const nextLayout = syncLayoutFromBootstrap(
           state.layout,
           nextData,
-          previousWorkspaceId,
+          runtimeDataChanged ? undefined : previousWorkspaceId,
           scopedPendingComposerLanguage,
         );
         const nextPendingComposerLanguage = reconcilePendingComposerLanguage(
@@ -795,7 +810,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         const restoredTargetId = restoredNextHop?.targetId ?? restoredNextHop?.candidateId;
         const incomingTrainingState = nextData.workspaceTrainingState;
         const shouldPreserveRestoredNextHop = Boolean(
-          nextLayout.activeView === "training" &&
+          !runtimeDataChanged && nextLayout.activeView === "training" &&
             restoredNextHop &&
             !incomingTrainingState?.latestTrainingNextHop &&
             (!incomingTrainingState?.selectedCardId ||
@@ -836,9 +851,10 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           // A full bootstrap replaces session state; stage materials follow the host truth.
           stageMaterials: resolvedData.stageMaterials ?? {},
           stageMaterialGenerating: {},
-          resourceRestoreContext: state.resourceRestoreContext,
-          trainingRestoreContext: state.trainingRestoreContext,
-          operationMessage: adoptRecoveredStreamingOperationMessage(
+          resourceRestoreContext: runtimeDataChanged ? undefined : state.resourceRestoreContext,
+          trainingRestoreContext: runtimeDataChanged ? undefined : state.trainingRestoreContext,
+          trainingReviewQueueRequested: runtimeDataChanged ? false : state.trainingReviewQueueRequested,
+          operationMessage: runtimeDataChanged ? undefined : adoptRecoveredStreamingOperationMessage(
             nextLayout.composerLanguage,
             nextStreaming,
             state.operationMessage,
@@ -873,19 +889,16 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         );
         const nextStreaming = normalizeTrainerStreamingState(nextData.streamingState);
         const patchedStageMaterials = message.payload.stageMaterials;
-        const settledStageIds = new Set(
-          patchedStageMaterials !== undefined ? Object.keys(patchedStageMaterials) : [],
-        );
+        const stageScopeChanged = workspaceIdentityChanged(effectiveWorkspaceId, previousWorkspaceId)
+          || nextData.plan.id !== state.data.plan.id;
         return {
           data: nextData,
           layout: nextLayout,
           pendingComposerLanguage: nextPendingComposerLanguage,
           streaming: nextStreaming,
-          stageMaterials: mergeStageMaterials(state.stageMaterials, patchedStageMaterials),
-          stageMaterialGenerating: clearStageMaterialGenerating(
-            state.stageMaterialGenerating,
-            settledStageIds,
-          ),
+          stageMaterials: stageScopeChanged ? patchedStageMaterials ?? {}
+            : patchedStageMaterials ?? state.stageMaterials,
+          stageMaterialGenerating: stageScopeChanged ? {} : state.stageMaterialGenerating,
           operationMessage: adoptRecoveredStreamingOperationMessage(
             nextLayout.composerLanguage,
             nextStreaming,
@@ -894,6 +907,14 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           ),
           hasReceivedHostState: true,
         };
+      }
+
+      if (message.type === "stageMaterials/settled") {
+        if (message.payload.workspaceId !== state.data.memory.workspace?.workspaceId
+          || message.payload.planId !== state.data.plan.id) return {};
+        return { stageMaterialGenerating: clearStageMaterialGenerating(
+          state.stageMaterialGenerating, new Set([message.payload.stageId]),
+        ) };
       }
 
       if (message.type === "stream/start") {
@@ -1154,10 +1175,6 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
                     state.layout.composerLanguage,
                   ),
                 },
-          // Stage material generation failures arrive as error statuses; never leave
-          // an optimistic in-flight spinner stuck after the host reports a failure.
-          stageMaterialGenerating:
-            message.payload.tone === "error" ? {} : state.stageMaterialGenerating,
         };
       }
 
@@ -1260,7 +1277,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
     }),
   requestStageMaterialGeneration: (planId, stageId) => {
     const normalizedStageId = stageId.trim();
-    if (!normalizedStageId) {
+    if (!normalizedStageId || get().stageMaterialGenerating[normalizedStageId]) {
       return;
     }
     set((state) => ({

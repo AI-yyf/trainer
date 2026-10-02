@@ -108,10 +108,13 @@ export type EvidenceQueueBuckets<T extends { id?: string; concepts?: string[] }>
   adopted: T[];
   rejected: T[];
   history?: T[];
+  unscoped?: T[];
   totalCount?: number;
 };
 
-export function scopeEvidenceQueueToRuntimeStep<T extends { id?: string; concepts?: string[] }>(input: {
+export function scopeEvidenceQueueToRuntimeStep<T extends {
+  id?: string; concepts?: string[]; targetPlanStep?: string; targetPlanStageId?: string;
+}>(input: {
   queue?: EvidenceQueueBuckets<T>;
   recovered?: boolean;
   currentStep?: string;
@@ -131,7 +134,7 @@ export function scopeEvidenceQueueToRuntimeStep<T extends { id?: string; concept
       queue.deferred.length +
       queue.adopted.length +
       queue.rejected.length +
-      (queue.history?.length ?? 0);
+      (queue.history?.length ?? 0) + (queue.unscoped?.length ?? 0);
   if (!input.recovered || !currentStep) {
     return {
       pending: queue.pending,
@@ -139,10 +142,14 @@ export function scopeEvidenceQueueToRuntimeStep<T extends { id?: string; concept
       adopted: queue.adopted,
       rejected: queue.rejected,
       history: queue.history ?? [],
+      ...(queue.unscoped ? { unscoped: queue.unscoped } : {}),
       totalCount,
     };
   }
-  const bound = (item: T) => (item.concepts ?? []).some((concept) => concept.trim() === currentStep);
+  const bound = (item: T) => item.targetPlanStep?.trim()
+    ? item.targetPlanStep.trim() === currentStep
+    : item.targetPlanStageId?.trim() === currentStep ||
+      (item.concepts ?? []).some((concept) => concept.trim() === currentStep);
   const partition = (items: T[]): [T[], T[]] => {
     const live: T[] = [];
     const historic: T[] = [];
@@ -179,6 +186,7 @@ export function scopeEvidenceQueueToRuntimeStep<T extends { id?: string; concept
     adopted,
     rejected,
     history,
+    ...(queue.unscoped ? { unscoped: queue.unscoped } : {}),
     totalCount,
   };
 }
@@ -253,6 +261,18 @@ export function formalCardIsLiveRuntimeIdentity(input: {
   void input.cardTitle;
   void input.runtimeCurrentStep;
   return true;
+}
+
+export function independentTrainingSelectionIsLive(input: {
+  workspaceId?: string;
+  selectedCardId?: string;
+  selection?: { workspaceId?: string; cardId?: string; selectedAt?: string };
+}): boolean {
+  return Boolean(text(input.workspaceId) && text(input.selection?.selectedAt) &&
+    text(input.selection?.workspaceId) === text(input.workspaceId) &&
+    formalCardIsLiveRuntimeIdentity({
+      cardId: input.selectedCardId, selectedCardId: input.selection?.cardId,
+    }));
 }
 
 export function liveFormalPlanFrozen(input: {
@@ -1445,6 +1465,18 @@ function derivePlanOrientationBase(input: PlanOrientationInput): PlanOrientation
     }
   }
 
+  if (frozen) {
+    return record({
+      objectLabel: currentStep || copy.frozenPlan,
+      state: "waiting",
+      why: copy.planFrozen,
+      primaryAction: "unfreeze_plan",
+      primaryActionLabel: copy.unfreeze,
+      nextStep: currentStep || copy.frozenReviewOnly,
+      advancedWhere: copy.planFrozenWhere,
+    });
+  }
+
   if (input.recoveredRuntime && blocked && currentStep) {
     return record({
       objectLabel: currentStep || copy.currentPlan,
@@ -1540,18 +1572,6 @@ function derivePlanOrientationBase(input: PlanOrientationInput): PlanOrientation
       primaryActionLabel: copy.clearBlocker,
       nextStep: currentStep ? copy.clearBlockerThenReturn(currentStep) : copy.clearThisBlocker,
       advancedWhere: copy.planEvidenceBlockers,
-    });
-  }
-
-  if (frozen) {
-    return record({
-      objectLabel: currentStep || copy.frozenPlan,
-      state: "waiting",
-      why: copy.planFrozen,
-      primaryAction: "unfreeze_plan",
-      primaryActionLabel: copy.unfreeze,
-      nextStep: currentStep || copy.frozenReviewOnly,
-      advancedWhere: copy.planFrozenWhere,
     });
   }
 

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import ntpath
+from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
 
+from ..core.models import EvaluateCurrentFileRequest
 from ..memory.workspace_recovery import PLAN_RUNTIME_KEY, select_plan_runtime_for_scope
 
 _LEFTOVER_NOT_LIVE_MISMATCH = (
@@ -38,6 +41,48 @@ def training_card_is_live_for_verify(runtime: Any, workspace_id: str, card_id: s
         return requested == live_id
     leftover_runtime = leftover_runtime_overlay(runtime, workspace_id)
     return not leftover_runtime
+
+
+def prepare_training_file_evaluation(
+    runtime: Any, workspace_id: str, request: EvaluateCurrentFileRequest,
+) -> EvaluateCurrentFileRequest:
+    """Use the live stored card contract and reject proof from a different file."""
+    if str(request.evaluation_source or "").strip().lower() != "training":
+        return request
+    card_id = str(request.training_card_id or "").strip()
+    if not training_card_is_live_for_verify(runtime, workspace_id, card_id):
+        return request  # Historical evaluation remains readable, without status persistence.
+    card = runtime.memory_service.get_card(workspace_id, card_id)
+    if card is None:
+        return request
+    workspace = runtime.memory_service.snapshot(workspace_id).workspace
+    project = str(workspace.get("canonical_project_path") or workspace.get("project_path") or "")
+
+    def canonical(value: str) -> str:
+        if ntpath.splitdrive(value)[0]:
+            return ntpath.normcase(ntpath.normpath(value))
+        if ntpath.splitdrive(project)[0] and not Path(value).is_absolute():
+            return ntpath.normcase(ntpath.normpath(ntpath.join(project, value)))
+        path = Path(value)
+        if not path.is_absolute():
+            if not project:
+                return ""
+            path = Path(project) / path
+        return str(path.resolve())
+
+    targets = list(card.files_to_touch or [])
+    requested_path = canonical(request.file_path)
+    if targets and (not requested_path or requested_path not in {canonical(item) for item in targets}):
+        raise HTTPException(
+            status_code=409,
+            detail="This file is not a target of the current training card. Open its target file and retry.",
+        )
+    updates: dict[str, object] = {}
+    for field in ("acceptance_criteria", "learner_deliverables", "expected_symbols"):
+        values = list(getattr(card, field, []) or [])
+        if values:
+            updates[field] = values
+    return request.model_copy(update=updates) if updates else request
 
 
 def require_live_selected_card_for_status(runtime: Any, workspace_id: str, card_id: str) -> None:

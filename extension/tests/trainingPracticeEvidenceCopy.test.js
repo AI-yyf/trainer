@@ -119,7 +119,7 @@ test('training single-card keeps the knowledge card separate from composer verif
   assert.match(cardOnlySections, /key: "deliverable"/);
   assert.match(cardOnlySections, /key: "verify"/);
   assert.match(cardOnlySections, /key: "return"/);
-  assert.match(cardOnlySections, /detail: routeVerifySummary/);
+  assert.match(cardOnlySections, /detail: cardOnlyVerification/);
   assert.match(cardOnlySections, /detail: routeReturnSummary/);
   assert.doesNotMatch(trainingViewSource, /training-current__card-footer/);
   assert.match(appSource, /const renderTrainingComposerAccessory = \(\) => \{/);
@@ -149,15 +149,15 @@ test('training structured guidance is wired from App into a collapsed single-car
 
   assert.match(appSource, /suggestedWorkspaceAction=\{localizedSuggestedWorkspaceAction\}/);
   assert.match(appSource, /scenario=\{localizedScenario\}/);
-  assert.match(appSource, /apiHints=\{hasTrainingCard \? trainingApiHints : \[\]\}/);
+  assert.match(appSource, /apiHints=\{!reviewArtifactForeground && hasTrainingCard \? trainingApiHints : \[\]\}/);
   assert.match(appSource, /cardOnly=\{true\}/);
-  assert.match(appSource, /constraints=\{hasTrainingCard \? trainingConstraints : \[\]\}/);
-  assert.match(appSource, /selfCheck=\{hasTrainingCard \? trainingSelfCheck : \[\]\}/);
-  assert.match(appSource, /filesToTouch=\{hasTrainingCard \? trainingFilesToTouch : \[\]\}/);
-  assert.match(appSource, /hintLadder=\{hasTrainingCard \? trainingHintLadder : \[\]\}/);
-  assert.match(appSource, /commonMistakes=\{hasTrainingCard \? trainingCommonMistakes : \[\]\}/);
-  assert.match(appSource, /stuckRecovery=\{hasTrainingCard \? trainingStuckRecovery : undefined\}/);
-  assert.match(appSource, /reflectionPrompt=\{hasTrainingCard \? trainingReflectionPrompt : undefined\}/);
+  assert.match(appSource, /constraints=\{!reviewArtifactForeground && hasTrainingCard \? trainingConstraints : \[\]\}/);
+  assert.match(appSource, /selfCheck=\{!reviewArtifactForeground && hasTrainingCard \? trainingSelfCheck : \[\]\}/);
+  assert.match(appSource, /filesToTouch=\{!reviewArtifactForeground && hasTrainingCard \? trainingFilesToTouch : \[\]\}/);
+  assert.match(appSource, /hintLadder=\{!reviewArtifactForeground && hasTrainingCard && !trainingComposerReturnMode \? trainingHintLadder : \[\]\}/);
+  assert.match(appSource, /commonMistakes=\{!reviewArtifactForeground && hasTrainingCard \? trainingCommonMistakes : \[\]\}/);
+  assert.match(appSource, /stuckRecovery=\{reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail : hasTrainingCard \? trainingStuckRecovery : undefined\}/);
+  assert.match(appSource, /reflectionPrompt=\{reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail : hasTrainingCard \? trainingReflectionPrompt : undefined\}/);
 
   assert.match(trainingViewSource, /className="training-next-move"/);
   assert.match(trainingViewSource, /className="training-guidance-details"/);
@@ -199,11 +199,11 @@ test('training verification-return strip is driven by snapshot status, not summa
   );
   assert.match(
     appSource,
-    /latestVerifiedResult=\{\s*trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText\(/,
+    /latestVerifiedResult=\{\s*reviewArtifactForeground\s*\? undefined\s*:\s*trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText\(/,
   );
   assert.match(
     appSource,
-    /latestLearningBlocker=\{\s*trainingVerifyNotice \?\?[\s\S]*?trainingRestoreReplacesSelectedCard[\s\S]*?pickLanguageAlignedTrainingText\(/,
+    /latestLearningBlocker=\{\s*\(reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.blockedReason : trainingVerifyNotice\) \?\?[\s\S]*?trainingRestoreReplacesSelectedCard[\s\S]*?pickLanguageAlignedTrainingText\(/,
   );
   assert.match(appSource, /const trainingComposerManualPracticeMode =/);
   assert.match(appSource, /const trainingComposerFilePracticeMode =/);
@@ -368,7 +368,7 @@ test('training view stays truthful when no governed card exists and keeps verifi
   );
   assert.match(
     appSource,
-    /const visibleTrainingCardTitle = liveTrainingNextChallengeTitle\([\s\S]*?trainingRestoreForeground \? selectedTrainingCardCandidate\?\.title : undefined,/,
+    /const visibleTrainingCardTitle = reviewArtifactForeground\s*\? selectedTrainingCardCandidate\?\.title\s*:\s*liveTrainingNextChallengeTitle\([\s\S]*?trainingRestoreForeground \? selectedTrainingCardCandidate\?\.title : undefined,/,
   );
   assert.match(
     appSource,
@@ -378,18 +378,18 @@ test('training view stays truthful when no governed card exists and keeps verifi
     appSource,
     /const currentStep = hasRenderableTrainingCard[\s\S]*?trainingProblemStatement,[\s\S]*?trainingSuggestedWorkspaceAction,[\s\S]*?trainingDeliverables\[0\],/,
   );
-  assert.match(appSource, /deliverables=\{hasTrainingCard \? trainingDeliverables : \[\]\}/);
-  assert.match(appSource, /verifyItems=\{hasTrainingCard \? authoritativeVerifyItems : \[\]\}/);
-  assert.match(appSource, /outcome=\{hasTrainingCard \? trainingOutcomeCard : undefined\}/);
+  assert.match(appSource, /deliverables=\{reviewArtifactForeground \? selectedTrainingCardCandidate\?\.learnerDeliverables \?\? \[\] : hasTrainingCard \? trainingDeliverables : \[\]\}/);
+  assert.match(appSource, /verifyItems=\{reviewArtifactForeground \? selectedTrainingCardCandidate\?\.verificationSteps \?\? \[\] : hasTrainingCard \? authoritativeVerifyItems : \[\]\}/);
+  assert.match(appSource, /outcome=\{!reviewArtifactForeground && hasTrainingCard \? trainingOutcomeCard : undefined\}/);
   assert.match(
     appSource,
-    /nextHop=\{\s*hasRenderableTrainingCard && !trainingRestoreForeground\s*\? trainingNextHopCard\s*:\s*undefined\s*\}/,
+    /nextHop=\{\s*hasRenderableTrainingCard && !trainingRestoreForeground && !reviewArtifactForeground\s*\? trainingNextHopCard\s*:\s*undefined\s*\}/,
   );
 
   assert.match(trainingViewSource, /successSignal\?: string;/);
   assert.match(trainingViewSource, /const resolvedSuccessSignal = firstText\(successSignal\?\.trim\(\)\);/);
   assert.match(trainingViewSource, /const cardOnlyBodySections: TrainingCardOnlySection\[\] = \[/);
-  assert.match(trainingViewSource, /detail: routeVerifySummary/);
+  assert.match(trainingViewSource, /detail: cardOnlyVerification/);
   assert.match(trainingViewSource, /detail: routeReturnSummary/);
   assert.match(trainingViewSource, /!cardOnly \? \(isFlashCard \? flashProofSurface : practiceProofSurface\) : null/);
 });

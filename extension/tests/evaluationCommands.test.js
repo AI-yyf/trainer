@@ -394,7 +394,7 @@ test('evaluateCurrentFileCommand keeps the evaluation result when training state
   assert.equal(context.__patches.length, 1);
   assert.equal(context.__patches[0].evaluation.summary, 'Practice verification completed.');
   assert.equal(context.__publishedReports.length, 1);
-  assert.match(context.__outputLines[0], /Memory summary refresh failed/);
+  assert.ok(context.__outputLines.some(line => /Memory summary refresh failed/.test(line)));
 });
 
 test('evaluateSelectionCommand rejects training practice verification before posting snippets', async () => {
@@ -543,3 +543,56 @@ test('evaluateCurrentFileCommand fails honestly without filesToTouch or an edito
   assert.equal(context.__posts.length, 0);
 });
 
+
+test('Testing file reruns read current document content and bind only the matching live practice file', async () => {
+  const document = { uri: { fsPath: 'F:/trainer/workspace-a/src/retry.py' }, languageId: 'python',
+    getText: () => 'def retry():\n    return 2\n' };
+  const vscodeMock = { workspace: { openTextDocument: async () => document, workspaceFolders: [] },
+    window: {}, languages: { getDiagnostics: () => [] } };
+  const { evaluatePublishedFileCommand } = loadWithVscodeMock(evaluationCommandsModulePath, vscodeMock);
+  const context = createContext({ expectedTrustReason: 'run Trainer file verification' });
+  const host = context.getHostState();
+  host.bootstrap.workspaceTrainingState = { selectedCardId: 'card-bound', selectedCardType: 'practice',
+    selectedCardStatus: 'active', activeTrainingCardRouting: { selectedCard: { cardId: 'card-bound',
+      title: 'Retry', filesToTouch: ['src/retry.py'], verificationSteps: ['Implement retry'], expectedSymbols: ['retry'] } } };
+  await evaluatePublishedFileCommand(context, document.uri);
+  assert.equal(context.__posts[0].body.content, document.getText());
+  assert.equal(context.__posts[0].body.training_card_id, 'card-bound');
+  assert.deepEqual(context.__posts[0].body.expected_symbols, ['retry']);
+  assert.equal(context.__posts[0].body.task_spec_id, undefined);
+  document.uri.fsPath = 'F:/trainer/workspace-a/other/retry.py';
+  await evaluatePublishedFileCommand(context, document.uri);
+  assert.equal(context.__posts[1].body.training_card_id, undefined);
+});
+
+test('verification follows Python Environments selection before the legacy and default interpreter', async t => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-python-selection-'));
+  t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
+  const selected = path.join(folder, 'selected-python');
+  const legacy = path.join(folder, 'legacy-python');
+  const configured = path.join(folder, 'default-python');
+  for (const file of [selected, legacy, configured]) fs.writeFileSync(file, 'fixture');
+  const document = { uri: { fsPath: path.join(folder, 'test_example.py') }, languageId: 'python',
+    getText: () => 'def test_example():\n    assert True\n' };
+  let useNew = true;
+  const vscodeMock = {
+    window: { activeTextEditor: { document } }, languages: { getDiagnostics: () => [] },
+    workspace: { getWorkspaceFolder: () => ({ uri: { fsPath: folder } }),
+      getConfiguration: () => ({ get: key => key === 'defaultInterpreterPath' ? configured : true }) },
+    extensions: { getExtension: id => id === 'ms-python.vscode-python-envs'
+      ? useNew ? { isActive: false, activate: async () => ({ getEnvironment: async resource => {
+        assert.equal(resource, document.uri);
+        return { execInfo: { run: { executable: selected } } };
+      } }) } : undefined
+      : { isActive: true, exports: { environments: { getActiveEnvironmentPath: () => ({ path: legacy }) } } } },
+  };
+  const { evaluateCurrentFileCommand } = loadWithVscodeMock(evaluationCommandsModulePath, vscodeMock);
+  const context = createContext();
+  await evaluateCurrentFileCommand(context);
+  assert.equal(context.__posts[0].body.verification_python, selected);
+  useNew = false;
+  await evaluateCurrentFileCommand(context);
+  assert.equal(context.__posts[1].body.verification_python, legacy);
+});

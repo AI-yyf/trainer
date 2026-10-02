@@ -1,73 +1,59 @@
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult, StageMaterialItem } from '../core/types';
 import { COMMAND_IDS } from '../core/constants';
+import { normalizeStageMaterials } from '../../../shared/src/stageMaterials';
 import { getRuntimeWorkspaceId } from './workspaceContext';
 
-interface StageMaterialGeneratePayload {
-  planId?: unknown;
-  stageId?: unknown;
-  workspaceId?: unknown;
-}
-
 function readNonEmptyString(value: unknown): string {
-  return typeof value === 'string' && value.trim() ? value.trim() : '';
+  return typeof value === 'string' ? value.trim() : '';
 }
 
-/**
- * Generate learning materials for a plan stage via the sidecar, then push the
- * resulting materials into the workbench as a state/patch keyed by stage id.
- */
 export async function generateStageMaterialCommand(
-  context: CommandContext,
-  payload: unknown,
+  context: CommandContext, payload: unknown,
 ): Promise<CommandExecutionResult> {
-  const input = (payload ?? {}) as StageMaterialGeneratePayload;
+  const input = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
   const planId = readNonEmptyString(input.planId);
   const stageId = readNonEmptyString(input.stageId);
-  if (!planId || !stageId) {
-    return { ok: false, message: 'planId and stageId are required to generate stage materials.' };
-  }
-  if (!(await context.trustGuard.ensureTrusted('generate stage learning materials'))) {
-    return { ok: false, message: 'Workspace trust is required to generate stage materials.' };
-  }
-
-  const status = await context.sidecarManager.ensureRunning();
-  if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
-  }
-
-  const body: Record<string, unknown> = {
-    workspace_id: readNonEmptyString(input.workspaceId) || getRuntimeWorkspaceId(context),
-  };
-  const sessionId = context.getSessionId();
-  if (sessionId) {
-    body.session_id = sessionId;
-  }
-
-  let response: { materials?: StageMaterialItem[] } | undefined;
+  const workspaceId = getRuntimeWorkspaceId(context);
+  const language = context.getHostState().bootstrap.memory.workspace?.responseLanguage ?? 'en-US';
+  const zh = language.startsWith('zh');
+  const failure = zh ? '资料生成失败，请重试并检查模型连接。' : 'Material generation failed. Retry and check the model connection.';
+  if (!planId || !stageId) return { ok: false, message: failure };
   try {
-    response = await context.sidecarClient.postJson<{ materials?: StageMaterialItem[] }>(
+    if (readNonEmptyString(input.workspaceId) && input.workspaceId !== workspaceId) throw new Error('Workspace changed');
+    if (!(await context.trustGuard.ensureTrusted('generate stage learning materials'))) throw new Error('Workspace trust required');
+    const status = await context.sidecarManager.ensureRunning();
+    if (status.lifecycle !== 'ready' || !status.port) throw new Error('Sidecar unavailable');
+    const provider = context.providerStore.getConfig();
+    if (!provider) throw new Error('Saved provider required');
+    const apiKey = await context.providerStore.getApiKey();
+    const response = await context.sidecarClient.postJson<{ materials?: StageMaterialItem[] }>(
       status.port,
       `/plan/${encodeURIComponent(planId)}/stages/${encodeURIComponent(stageId)}/material/generate`,
-      body,
+      { workspace_id: workspaceId, session_id: context.getSessionId(),
+        provider, api_key: apiKey, response_language: language },
+      { timeoutMs: 100_000 },
     );
+    const materials = normalizeStageMaterials({ [stageId]: response?.materials })[stageId] ?? [];
+    if (materials.length === 0) throw new Error('No materials returned');
+    if (getRuntimeWorkspaceId(context) !== workspaceId
+      || context.getHostState().bootstrap.plan.id !== planId) {
+      return { ok: false, cancelled: true, message: zh ? '计划已切换。' : 'The plan has changed.' };
+    }
+    await context.patchWorkbenchData({ stageMaterials: {
+      ...context.getHostState().bootstrap.stageMaterials, [stageId]: materials,
+    } });
+    const templates = materials.some(item => item.generationSource === 'template');
+    return { ok: true, message: templates
+      ? (zh ? '模型未完成生成，已提供阶段模板；可以重试生成完整资料。' : 'The model did not complete generation. Stage templates are available; retry for full materials.')
+      : (zh ? `已生成 ${materials.length} 份学习资料。` : `Generated ${materials.length} learning materials.`),
+      data: { stageId, materials } };
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    return { ok: false, message: `Stage material generation failed: ${detail}` };
+    context.outputChannel.appendLine(`[stage-material] ${error instanceof Error ? error.name : 'Request failed'}`);
+    return { ok: false, message: failure };
+  } finally {
+    await context.workbench.postMessage({ type: 'stageMaterials/settled', payload: { workspaceId, planId, stageId } });
   }
-
-  const materials = Array.isArray(response?.materials) ? response?.materials : [];
-  await context.patchWorkbenchData({
-    stageMaterials: { [stageId]: materials },
-  });
-  return {
-    ok: true,
-    message:
-      materials.length > 0
-        ? `已生成 ${materials.length} 份学习资料。`
-        : 'Stage material generation returned no materials.',
-    data: { stageId, materials },
-  };
 }
 
 export const stageMaterialCommandIds = [COMMAND_IDS.stageMaterialGenerate];

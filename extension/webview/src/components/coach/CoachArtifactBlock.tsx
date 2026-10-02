@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { ComposerLanguage } from "../../lib/types";
 import { artifactBlockCopy, artifactInlineLeadCopy } from "./coachArtifactBlockCopy";
+import { reviewConceptLabel } from "../../lib/reviewLabel";
 import { MessageRichContent } from "./MessageRichContent";
 
 export type CoachArtifactKind =
@@ -27,6 +28,8 @@ export interface CoachArtifactBlockData {
 
 export interface CoachArtifactBlockProps {
   artifact: CoachArtifactBlockData;
+  /** Replies with a readable body only need an actionable attachment. */
+  compact?: boolean;
   className?: string;
   openLabel?: string;
   language?: ComposerLanguage;
@@ -213,6 +216,7 @@ function artifactTeaser(
 
 export function CoachArtifactBlock({
   artifact,
+  compact = false,
   className,
   openLabel = "Open",
   language = "en-US",
@@ -234,6 +238,23 @@ export function CoachArtifactBlock({
     ? actionButtonLabel(artifact.recommendedAction, language)
     : openLabel;
   const metadata = artifactMetadataRecord(artifact);
+  const isRecallReview = artifact.kind === "review" &&
+    metadata?.evidence_scope === "self_reported_recall";
+  const displayFocus = isRecallReview && artifact.focusArea
+    ? reviewConceptLabel(artifact.focusArea) : artifact.focusArea;
+  const displayTitle = isRecallReview && artifact.focusArea && displayFocus
+    ? artifact.title.replace(artifact.focusArea, displayFocus) : artifact.title;
+  if (compact) {
+    if (["evaluation", "review"].includes(artifact.kind) && !artifact.recommendedAction) return null;
+    if (!onOpen || (!interactive && !artifact.recommendedAction)) return null;
+    return (
+      <article className={`${classes} coach-artifact-card--compact`} data-artifact-kind={artifact.kind}>
+        <button className="artifact-card__next-action" type="button" onClick={() => onOpen(artifact)}>
+          {artifact.recommendedAction ? actionLabel : displayTitle}
+        </button>
+      </article>
+    );
+  }
   const decision = artifactMetadataText(metadata, ["decision"]);
   const blocker = artifactMetadataText(metadata, ["blocker"]);
   const resumeThread = artifactMetadataText(metadata, ["resumeThread", "resume_thread"]);
@@ -262,19 +283,19 @@ export function CoachArtifactBlock({
   const kindLabel = artifactKindLabel(artifact.kind, language);
   const showKindLabel = Boolean(kindLabel) && !isPrimaryLaneArtifact;
   const detailSummary = contentSummaryLabel(artifact.kind, language);
-  const teaser = artifactTeaser(artifact, language);
+  const teaser = artifactTeaser({ ...artifact, focusArea: displayFocus }, language);
   const showInlineDetails = isPrimaryLaneArtifact;
   const showTeaser =
     Boolean(teaser) &&
     teaser?.trim() !== artifact.summary?.trim() &&
-    teaser?.trim() !== artifact.title.trim();
+    teaser?.trim() !== displayTitle.trim();
   const detailBody: ReactNode = (
     <>
       {artifact.focusArea ? (
         <p className="artifact-card__detail-note">
           <strong>{artifactMetaLabel("focus", language)}</strong>
           {artifactBlockCopy(language, "：")}
-          {artifact.focusArea}
+          {displayFocus}
         </p>
       ) : null}
       {artifact.content ? (
@@ -345,7 +366,7 @@ export function CoachArtifactBlock({
       <div className="artifact-card__header">
         <div className="artifact-card__header-main">
           {showKindLabel ? <span className="artifact-card__kind">{kindLabel}</span> : null}
-          <strong>{artifact.title}</strong>
+          <strong>{displayTitle}</strong>
         </div>
         {icon ? <span className="artifact-card__icon">{icon}</span> : null}
       </div>

@@ -166,6 +166,8 @@ function runPyInstaller(paths) {
     "--onedir",
     "--name",
     "trainer-sidecar",
+    "--collect-data",
+    "app.training",
     "--distpath",
     distRoot,
     "--workpath",
@@ -212,6 +214,10 @@ function copyBundle(paths) {
 
   ensureExists(sourceDir, "built sidecar directory");
   ensureExists(sourceExecutable, "built sidecar executable");
+  ensureExists(
+    path.join(sourceDir, "_internal", "app", "training", "guided_training_scenario_packs.json"),
+    "bundled training scenario catalog",
+  );
 
   fs.rmSync(bundleRoot, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(bundleRoot), { recursive: true });

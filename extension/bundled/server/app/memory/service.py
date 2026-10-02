@@ -86,7 +86,8 @@ from .models import (
     MemorySnapshot as LaneMemorySnapshot,
 )
 from .onboarding_extraction import OnboardingExtractionMixin, _contains_chinese
-from .review_scheduler import ReviewScheduler
+from .review_queue import visible_review_queue_items
+from .review_scheduler import ReviewRating, ReviewScheduler
 from .semantic import HashingEmbedder, SemanticMemory
 from .teaching_asset_catalog_mixin import TeachingAssetCatalogMixin
 from .training_handoff_return_mixin import TrainingHandoffReturnMixin
@@ -2394,6 +2395,10 @@ class MemoryService(
                 active_lane_snapshot,
             )
         )
+        due_reviews = visible_review_queue_items(
+            due_reviews, structured_service._review_queue_actions,
+            structured_service._weaknesses, now=utc_now(),
+        )
         teaching_observations = self._derive_teaching_observations(
             plan,
             active_lane_snapshot,
@@ -4238,6 +4243,10 @@ class MemoryService(
         existing = structured._workspace.get(PLAN_RUNTIME_KEY)
         # Capture live id before advance mutates runtime overlay.
         live_id = self.live_selected_training_card_id(workspace_id)
+        plan = self.repository.get_latest_plan(workspace_id)
+        live_plan = formal_plan_is_live_runtime_identity(plan=plan, runtime=existing, existing=existing)
+        if live_plan and plan and plan.frozen:
+            return None
         record = build_plan_runtime_advance_after_adopt(
             existing=existing,
             evidence=evidence,
@@ -4254,6 +4263,19 @@ class MemoryService(
         record = stamp_workspace_scope(record, workspace_id)
         if record is None:
             return None
+        if live_plan and plan:
+            # Adoption advances the same formal plan. Leaving its old step in
+            # SQLite would make the next hydrate reject the plan as leftover.
+            plan.current_step = str(record.get("current_step") or "")
+            plan.blocked_reason = str(record.get("blocked_reason") or "")
+            plan.why_now = str(record.get("why_now") or "")
+            plan.verify_method = list(record.get("verify_method") or [])
+            plan.next_after_current = str(record.get("next_after_current") or "")
+            plan.updated_at = utc_now().isoformat()
+            record["current_stage_id"] = plan.current_stage_id
+            from ..training.plan_revision import save_plan_advancing_revision
+
+            save_plan_advancing_revision(self.repository, workspace_id, plan)
         structured.update_workspace(**{PLAN_RUNTIME_KEY: record})
         self._refresh_training_next_challenge_after_runtime_advance(workspace_id, record)
         self._persist_structured(workspace_id)
@@ -5369,6 +5391,11 @@ class MemoryService(
             "selected_card_id": selection.selected_card_id or "",
             "selected_card_status": selection.selected_card.status if selection.selected_card else "",
             "latest_training_next_hop": next_hop,
+            "live_training_selection": {
+                "workspace_id": workspace_id,
+                "card_id": selection.selected_card_id or "",
+                "selected_at": utc_now().isoformat(),
+            },
         }
         if selection.selected_card is not None:
             workspace_patch["latest_training_submode"] = selection.selected_card.card_type
@@ -5478,6 +5505,8 @@ class MemoryService(
         *,
         verified: bool = False,
         verification_source: str = "",
+        auto_bind_current_plan: bool = True,
+        bound_plan_step: str = "",
     ) -> EvidenceItem:
         structured = self._structured_for(workspace_id)
         normalized = item.model_copy(
@@ -5487,9 +5516,21 @@ class MemoryService(
                 "timestamp": item.timestamp or utc_now().isoformat(),
                 "verified": verified,
                 "verification_source": verification_source.strip() if verified else "",
+                "target_plan_step": bound_plan_step.strip(),
             }
         )
-        if not str(normalized.target_plan_stage_id or "").strip():
+        recovered = select_plan_runtime_for_scope(structured._workspace.get(PLAN_RUNTIME_KEY), workspace_id)
+        if auto_bind_current_plan and recovered and normalized.target_plan_stage_id:
+            plan = self.repository.get_latest_plan(workspace_id)
+            if (
+                plan
+                and normalized.target_plan_stage_id == plan.current_stage_id
+                and formal_plan_is_live_runtime_identity(plan=plan, runtime=recovered, existing=recovered)
+            ):
+                normalized = normalized.model_copy(
+                    update={"target_plan_step": str(recovered.get("current_step") or "").strip()}
+                )
+        if auto_bind_current_plan and not str(normalized.target_plan_stage_id or "").strip():
             # Auto-bind unscoped evidence to the recovered runtime's current step
             # so it stays live pending instead of draining into history.
             recovered = normalize_plan_runtime_recovery(structured._workspace.get(PLAN_RUNTIME_KEY))
@@ -5533,6 +5574,8 @@ class MemoryService(
             rejected=rejected,
             current_step=str((recovered or {}).get("current_step") or ""),
             recovered=recovered_runtime,
+            current_plan_id=str((recovered or {}).get("plan_id") or ""),
+            current_stage_id=str((recovered or {}).get("current_stage_id") or ""),
         )
         return EvidenceQueueSnapshot(
             pending=list(scoped["pending"]),
@@ -5629,6 +5672,13 @@ class MemoryService(
         evidence = structured._evidence_items.get(evidence_id)
         if evidence is None or evidence.adopted or evidence.rejected_at:
             raise HTTPException(status_code=404, detail="Evidence item not found.")
+        queue = self.evidence_queue(workspace_id)
+        if any(item.id == evidence_id for item in queue.history):
+            raise HTTPException(
+                status_code=409,
+                detail="Historical evidence does not belong to the current step. Verify the current task before adopting evidence.",
+            )
+        independent_evidence = any(item.id == evidence_id for item in queue.unscoped)
         adopted = evidence.model_copy(
             update={
                 "adopted": True,
@@ -5637,6 +5687,15 @@ class MemoryService(
             }
         )
         structured._evidence_items[evidence_id] = adopted
+
+        if independent_evidence:
+            self._record_adopted_return_transfer(workspace_id, adopted)
+            self._persist_structured(workspace_id)
+            return EvidenceAdoptResponse(
+                evidence=adopted,
+                plan_updated=False,
+                plan_change_summary="Independent evidence adopted without plan or training context changes.",
+            )
 
         plan_updated = False
         plan_change_summary = ""
@@ -5675,10 +5734,17 @@ class MemoryService(
                     if next_stage is not None:
                         next_stage.status = "active"
                         plan.current_stage_id = next_stage.id
+                        plan.current_step = next_stage.goal or next_stage.title
+                        plan.verify_method = list(next_stage.outcomes)
+                        following_stage = plan.stages[active_index + 2] if active_index + 2 < len(plan.stages) else None
+                        plan.next_after_current = following_stage.goal if following_stage else ""
                         plan_change_summary = f"Advanced from {active_stage.title} to {next_stage.title}."
                     else:
                         plan.current_stage_id = active_stage.id
                         plan_change_summary = f"Completed {active_stage.title}."
+                    plan.blocked_reason = ""
+                    plan.why_now = adopted.summary
+                    plan.updated_at = utc_now().isoformat()
                     from_label = live_coach_stage_label(
                         plan=plan,
                         runtime=recovered_runtime,
@@ -5710,7 +5776,13 @@ class MemoryService(
                     from ..training.plan_revision import save_plan_advancing_revision
 
                     save_plan_advancing_revision(self.repository, workspace_id, plan)
-        advanced = self.persist_plan_runtime_advance_after_adopt(workspace_id, adopted)
+        advanced = (
+            self.persist_plan_runtime_advance_after_verify(workspace_id, plan, request_id=adopted.id)
+            if plan_updated
+            else self.persist_plan_runtime_advance_after_adopt(workspace_id, adopted)
+        )
+        if advanced and leftover_plan_is_live and plan and not plan.frozen:
+            plan_updated = True
         self._refresh_training_next_challenge_after_runtime_advance(
             workspace_id,
             advanced or recovered_runtime,
@@ -6268,75 +6340,110 @@ class MemoryService(
         batch_limit: int = 4,
     ) -> list[ReviewQueueAction]:
         structured = self._structured_for(workspace_id)
+        concept = concept.strip()
         concepts = [concept]
         if scope == "focus_area" and focus_area:
             concepts = [
                 item.concept
                 for item in structured._weaknesses.values()
                 if item.last_seen_context == focus_area
-            ][:batch_limit] or [concept]
+            ][:max(1, min(batch_limit, 20))] or [concept]
+        now = utc_now()
+        outcomes = {
+            "accept": "queued", "reset": "needs_more_practice", "snooze": "deferred",
+            "skip": "dismissed", "done": "completed",
+        }
         created: list[ReviewQueueAction] = []
         for entry_concept in concepts:
-            created.append(
-                ReviewQueueAction(
-                    entry_id=f"review-action-{uuid4().hex[:10]}",
-                    concept=entry_concept,
-                    action=action,
-                    outcome="queued" if action == "accept" else "needs_more_practice" if action == "reset" else action,
-                    focus_area=focus_area,
-                    task_hint=task_hint,
-                    note=note,
-                    scope=scope,
+            deadline = None
+            if action == "reset":
+                structured.record_weakness(
+                    entry_concept, note or "Review queue signaled more practice is needed.",
+                    severity=2, review_after_days=0, context=focus_area,
                 )
-            )
+                mastery = structured._mastery.get(entry_concept)
+                if mastery is not None:
+                    structured._mastery[entry_concept] = self._review_scheduler.process_mastery_review(
+                        mastery, ReviewRating.AGAIN,
+                    )
+            elif action in {"snooze", "skip", "done"}:
+                mastery = structured._mastery.get(entry_concept)
+                if action == "done":
+                    reviewed = self._review_scheduler.process_mastery_review(
+                        mastery or MasteryRecord(concept=entry_concept, score=0.3, confidence=0.5),
+                        ReviewRating.GOOD,
+                    )
+                    structured._mastery[entry_concept] = reviewed
+                    deadline = reviewed.next_review_at
+                else:
+                    deadline = now + timedelta(days=1)
+                    if mastery is not None:
+                        structured._mastery[entry_concept] = replace(
+                            mastery, next_review_at=deadline, due_date=deadline,
+                        )
+                weakness = structured._weaknesses.get(entry_concept)
+                if weakness is not None:
+                    structured._weaknesses[entry_concept] = replace(
+                        weakness, next_review_at=deadline, updated_at=now,
+                    )
+            created.append(ReviewQueueAction(
+                entry_id=f"review-action-{uuid4().hex[:10]}", concept=entry_concept,
+                action=action, outcome=outcomes[action], focus_area=focus_area,
+                task_hint=task_hint, note=note, scope=scope, created_at=now.isoformat(),
+                next_review_at=deadline.isoformat() if deadline else "",
+            ))
         structured._review_queue_actions.extend(created)
-        if action == "reset":
-            structured.record_weakness(
-                concept,
-                note or "Review queue signaled more practice is needed.",
-                severity=2,
-                review_after_days=0,
-                context=focus_area,
+        previous = structured._review_artifact
+        same_review = bool(previous and previous.source == "review_queue" and previous.focus_area == concept)
+        if action == "accept" or (action == "reset" and same_review):
+            language = _workspace_language(structured._workspace)
+            artifact = previous if same_review else ReviewArtifactSnapshot(
+                id=f"review-{uuid4().hex[:10]}",
+                title=_localized_memory_text(f"Review: {concept}", f"复习：{concept}", language),
+                focus_area=concept, source="review_queue", status="active",
+                summary=task_hint or note or _localized_memory_text(
+                    f"Recall {concept} before the next attempt.", f"先回忆「{concept}」，再核对答案。", language,
+                ),
+                root_cause=note or _localized_memory_text(
+                    f"Explain the boundary of {concept}.", f"解释「{concept}」的边界。", language,
+                ),
+                guardrail=_localized_memory_text(
+                    "Recall first, then check one small example.", "先回忆，再用一个小例子核对答案。", language,
+                ),
+                next_self_implementation_rule=task_hint or _localized_memory_text(
+                    "Explain the rule without looking at your notes.", "不看笔记，用一句话解释这条规则。", language,
+                ),
+                recommended_recovery_mode="review_queue",
+                recommended_actions=[task_hint] if task_hint else [], last_action="reviewed", version=1,
             )
-        artifact = structured._review_artifact or ReviewArtifactSnapshot(
-            id=f"review-{uuid4().hex[:10]}",
-            title=f"Review artifact: {concept}",
-            focus_area=concept,
-            source="review_queue",
-            status="active",
-            summary=task_hint or note or f"Review {concept} before the next attempt.",
-            root_cause=note or f"{concept} still needs a tighter review loop.",
-            guardrail="Keep the review attached to the smallest failing boundary.",
-            next_self_implementation_rule=task_hint or "Rebuild one minimum slice before widening scope.",
-            recommended_recovery_mode="review_queue",
-            recommended_actions=[task_hint or "Rebuild one minimum slice before widening scope."],
-            last_action="reviewed",
-            version=1,
-        )
-        if structured._review_artifact is not None:
-            artifact = artifact.model_copy(
-                update={
-                    "status": "active",
-                    "summary": task_hint or note or artifact.summary,
-                    "root_cause": note or artifact.root_cause,
-                    "last_action": "reviewed",
-                    "version": artifact.version + 1,
-                    "updated_at": utc_now().isoformat(),
-                }
-            )
-        structured._review_artifact = artifact
-        structured._review_artifact_history.append(
-            ReviewArtifactHistoryEntry(
-                entry_id=f"hist-{uuid4().hex[:10]}",
-                review_artifact_id=artifact.id,
-                action="reviewed",
-                version=artifact.version,
-                note=note,
-                before_snapshot={},
+            assert artifact is not None
+            if same_review:
+                artifact = artifact.model_copy(update={
+                    "status": "active", "summary": task_hint or note or artifact.summary,
+                    "root_cause": note or artifact.root_cause, "last_action": "reviewed",
+                    **({"verified_result": "", "blocker": "", "partial_progress": ""}
+                       if artifact.status != "active" else {}),
+                    "version": artifact.version + 1, "updated_at": now.isoformat(),
+                })
+            structured._review_artifact = artifact
+            structured._review_artifact_history.append(ReviewArtifactHistoryEntry(
+                entry_id=f"hist-{uuid4().hex[:10]}", review_artifact_id=artifact.id,
+                action="reviewed", version=artifact.version, note=note,
+                before_snapshot=previous.model_dump(mode="json") if same_review and previous else {},
                 after_snapshot=artifact.model_dump(mode="json"),
-            )
-        )
-        structured.update_workspace(latest_training_submode="review_queue")
+            ))
+            structured.update_workspace(latest_training_submode="review_queue")
+        elif action == "done" and previous and previous.focus_area in concepts:
+            structured._review_artifact = previous.model_copy(update={
+                "status": "resolved", "last_action": "resolved",
+                "version": previous.version + 1, "updated_at": now.isoformat(),
+            })
+            structured._review_artifact_history.append(ReviewArtifactHistoryEntry(
+                entry_id=f"hist-{uuid4().hex[:10]}", review_artifact_id=previous.id,
+                action="resolved", version=previous.version + 1, note=note,
+                before_snapshot=previous.model_dump(mode="json"),
+                after_snapshot=structured._review_artifact.model_dump(mode="json"),
+            ))
         self._persist_structured(workspace_id)
         return created
 
@@ -6371,6 +6478,8 @@ class MemoryService(
         updated = artifact.model_copy(update=update_payload)
         structured._review_artifact = updated
         if action == "resolved" and updated.focus_area:
+            review_completed_at = utc_now()
+            next_review_at = review_completed_at + timedelta(days=2)
             structured.update_mastery(
                 updated.focus_area,
                 delta=0.08,
@@ -6381,9 +6490,13 @@ class MemoryService(
             if weakness is not None:
                 structured._weaknesses[updated.focus_area] = replace(
                     weakness,
-                    updated_at=utc_now(),
-                    next_review_at=utc_now() + timedelta(days=2),
+                    updated_at=review_completed_at,
+                    next_review_at=next_review_at,
                 )
+            structured._review_queue_actions.append(ReviewQueueAction(
+                concept=updated.focus_area, action="done", outcome="completed", note=note,
+                created_at=review_completed_at.isoformat(), next_review_at=next_review_at.isoformat(),
+            ))
         structured._review_artifact_history.append(
             ReviewArtifactHistoryEntry(
                 entry_id=f"hist-{uuid4().hex[:10]}",
@@ -8235,6 +8348,7 @@ class MemoryService(
         transfer_target_context: str | None = None,
         transfer_evidence_summary: str | None = None,
         verified_by_evaluator: bool = False,
+        bind_evidence_to_current_plan: bool = True,
     ) -> LearningOutcomeRecord:
         resolved_workspace_id = self._resolve_workspace_for_write(workspace_id)
         structured = self._structured_for(resolved_workspace_id)
@@ -8450,6 +8564,7 @@ class MemoryService(
                 outcome=evidence_outcome,
                 confidence=0.7 if is_success else 0.45,
             ),
+            auto_bind_current_plan=bind_evidence_to_current_plan,
         )
         profile = self.repository.get_profile(resolved_workspace_id)
         preferred_libraries = {

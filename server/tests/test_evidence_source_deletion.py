@@ -286,9 +286,10 @@ def test_evidence_projection_flows_into_workspace_memory(tmp_path: Path) -> None
         assert projection["attempt_id"] == attempt["attempt_id"]
         dimensions = projection["dimensions"]
         assert set(dimensions) == {"comprehension", "implementation", "debugging", "transfer"}
-        # A passed controlled check lifts implementation above not_verified.
-        assert dimensions["implementation"]["state"] in {"assisted", "independent", "repeat_verified"}
-        assert dimensions["implementation"]["verified_count"] >= 1
+        # The client cannot claim controlled_check on the self-report channel.
+        assert evidence_resp.json()["evidence"]["trust_level"] == "self_reported"
+        assert dimensions["implementation"]["state"] == "not_verified"
+        assert dimensions["implementation"]["verified_count"] == 0
 
 
 def test_resource_restore_requires_same_hash_reindex_before_unflagging(tmp_path: Path) -> None:

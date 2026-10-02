@@ -59,6 +59,19 @@ def test_reflect_then_return_persists_truthful_completion_across_restart(tmp_pat
         )
         assert session.status_code == 200
         card, handoff_id = _seed_verified_handoff(app, workspace_id)
+        attempt = app.state.runtime.attempt_store.start_attempt(
+            workspace_id=workspace_id, card_id=card.card_id,
+        )
+        app.state.runtime.attempt_store.record_evidence(
+            attempt_id=attempt["attempt_id"], artifact_hash="verified-parser", result="passed",
+        )
+        # Re-running the same trusted check must not duplicate the return summary.
+        app.state.runtime.memory_service.record_training_practice_evaluation_result(
+            workspace_id=workspace_id, card_id=card.card_id, passed=True,
+            summary="pytest tests/test_parser.py -k boundary: 1 passed",
+            next_step="Record what the focused check proved.", focus_area=card.focus_area,
+            evidence_source="test_runner", verified_by_evaluator=True,
+        )
 
         premature_return = client.post(
             "/training/return",
@@ -82,6 +95,7 @@ def test_reflect_then_return_persists_truthful_completion_across_restart(tmp_pat
             },
         )
         assert reflected.status_code == 200
+        assert app.state.runtime.attempt_store.find_active_attempt(workspace_id, card.card_id) is not None
         reflected_workspace = reflected.json()["workspace"]
         assert reflected_workspace["latest_training_handoff"]["learning_phase"] == "reflect"
         assert reflected_workspace["latest_training_handoff"]["return_mode"] == "return_required"
@@ -107,6 +121,8 @@ def test_reflect_then_return_persists_truthful_completion_across_restart(tmp_pat
             json={"workspace_id": workspace_id, "card_id": card.card_id, "handoff_id": handoff_id},
         )
         assert returned.status_code == 200
+        assert rebuilt_app.state.runtime.attempt_store.find_active_attempt(workspace_id, card.card_id) is None
+        assert rebuilt_app.state.runtime.attempt_store.get_attempt(attempt["attempt_id"])["status"] == "returned"
         returned_workspace = returned.json()["workspace"]
         assert returned_workspace["latest_training_handoff"]["learning_phase"] == "return"
         assert returned_workspace["latest_training_handoff"]["status"] == "completed"
@@ -114,6 +130,7 @@ def test_reflect_then_return_persists_truthful_completion_across_restart(tmp_pat
         assert returned_workspace["latest_training_next_hop"]["status"] == "continued_in_chat"
         assert returned_workspace["selected_card_status"] == "implemented"
         assert "1 passed" in returned_workspace["latest_learning_verified_result"]
+        assert returned_workspace["latest_learning_verified_result"].count("1 passed") == 1
 
         summary = rebuilt_client.get(f"/memory/summary?workspace_id={workspace_id}")
         evidence = summary.json()["memory"]["evidence_queue"]["pending"]

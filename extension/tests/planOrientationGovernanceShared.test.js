@@ -369,6 +369,21 @@ test('after advance previous adopted evidence is history not live review', () =>
   assert.notEqual(orientation.primaryAction, 'generate_plan');
 });
 
+test('evidence projection keeps host step bindings and independent records', () => {
+  const scoped = scopeEvidenceQueueToRuntimeStep({ recovered: true, currentStep: 'Add hash checks',
+    queue: { pending: [
+      { id: 'fresh', concepts: [], targetPlanStageId: 'stage-1', targetPlanStep: 'Add hash checks' },
+      { id: 'old', concepts: ['Add hash checks'], targetPlanStageId: 'stage-1', targetPlanStep: 'Check tuple assignment' },
+      { id: 'text-bound', concepts: [], targetPlanStageId: 'Add hash checks' },
+    ], deferred: [], adopted: [], rejected: [], history: [],
+      unscoped: [{ id: 'independent', concepts: ['tuple assignment'] }] },
+  });
+  assert.deepEqual(scoped.pending.map((item) => item.id), ['fresh', 'text-bound']);
+  assert.deepEqual(scoped.history.map((item) => item.id), ['old']);
+  assert.deepEqual(scoped.unscoped.map((item) => item.id), ['independent']);
+  assert.equal(scoped.totalCount, 4);
+});
+
 test('advanced recovered empty verify does not keep old verify or invent adopt', () => {
   const items = lockRecoveredPlanVerifyItems({
     recovered: true,
@@ -2218,4 +2233,18 @@ test('pressure adapts without inventing live objects', () => {
     }),
     false,
   );
+});
+
+test('a live frozen recovered plan offers unfreeze before pending evidence or blockers', () => {
+  for (const resumeState of ['in_progress', 'waiting']) {
+    const orientation = derivePlanOrientation({
+      hasFormalPlan: true, frozen: true, recoveredRuntime: true, resumeState,
+      currentStep: 'Verify the hash boundary', planCurrentStep: 'Verify the hash boundary',
+      planId: 'current-plan', runtimePlanId: 'current-plan',
+      pendingEvidenceCount: 1, pendingEvidenceIds: ['current-return'],
+      blockedReason: 'Awaiting evidence adoption', language: 'zh-CN',
+    });
+    assert.equal(orientation.primaryAction, 'unfreeze_plan');
+    assert.equal(orientation.state, 'waiting');
+  }
 });

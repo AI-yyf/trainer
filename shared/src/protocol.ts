@@ -1,3 +1,4 @@
+import type { StageMaterialItem } from './stageMaterials';
 import type {
   AffectState,
   CoachingState,
@@ -205,6 +206,8 @@ export type ResearchApproval = {
  */
 export type WorkbenchGate = {
   messages: ChatMessage[];
+  /** Messages loaded from the requested workspace's persisted session. */
+  sessionHistoryRestored?: boolean;
   pending_approvals: string[];
   notifications: string[];
 };
@@ -271,6 +274,7 @@ export type WorkbenchSnapshot = {
   nextReviewDue?: string;
   planRuntimeStatus?: PlanRuntimeStatus;
   suggestedActions?: WorkbenchSuggestedAction[];
+  stageMaterials?: Record<string, StageMaterialItem[]>;
 };
 
 export type ViewNodeKind =
@@ -427,6 +431,7 @@ export type TaskNextRequest = {
 };
 
 export type EvaluateCurrentFileRequest = {
+  verificationPython?: string;
   sessionId?: string;
   taskSpecId?: string;
   filePath: string;

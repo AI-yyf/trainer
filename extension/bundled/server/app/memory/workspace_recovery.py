@@ -4564,6 +4564,12 @@ def evidence_bound_to_runtime_step(item: Any, current_step: str) -> bool:
     step = _text(current_step)
     if not step:
         return False
+    bound_step = _text(
+        getattr(item, "target_plan_step", None)
+        or (item.get("target_plan_step") if isinstance(item, dict) else "")
+    )
+    if bound_step:
+        return bound_step == step
     if step in evidence_item_concepts(item):
         return True
     target = _text(
@@ -4582,6 +4588,8 @@ def scope_evidence_queue_to_runtime_step(
     history: list[Any] | None = None,
     current_step: str = "",
     recovered: bool = False,
+    current_plan_id: str = "",
+    current_stage_id: str = "",
 ) -> dict[str, list[Any]]:
     """Live pending/adopt follow recovered current_step. Older items stay history.
 
@@ -4589,16 +4597,6 @@ def scope_evidence_queue_to_runtime_step(
     ``unscoped`` bucket so they stay actionable; pending items explicitly bound
     to another step stay history, as do non-bound deferred/adopted/rejected.
     """
-
-    if not recovered or not _text(current_step):
-        return {
-            "pending": list(pending),
-            "deferred": list(deferred),
-            "adopted": list(adopted),
-            "rejected": list(rejected),
-            "history": list(history or []),
-            "unscoped": [],
-        }
 
     def _item_target_stage(item: Any) -> str:
         return _text(
@@ -4613,6 +4611,19 @@ def scope_evidence_queue_to_runtime_step(
         historic: list[Any] = []
         unscoped: list[Any] = []
         for item in items:
+            target_plan = _text(
+                getattr(item, "target_plan_id", None)
+                or (item.get("target_plan_id") if isinstance(item, dict) else "")
+            )
+            if target_plan and target_plan != _text(current_plan_id):
+                historic.append(item)
+                continue
+            if target_plan and _item_target_stage(item) != _text(current_stage_id):
+                historic.append(item)
+                continue
+            if not recovered or not _text(current_step):
+                live.append(item)
+                continue
             if evidence_bound_to_runtime_step(item, current_step):
                 live.append(item)
                 continue
@@ -4963,6 +4974,16 @@ def build_plan_runtime_resume(
     if action not in {"continue_step", "clear_blocker"}:
         return None
     facts = reply_facts if isinstance(reply_facts, dict) else {}
+    if _text(current.get("plan_id")):
+        # A reply may clarify a bound step or mark it waiting for verification,
+        # but only a formal commit or verified advance can change its identity.
+        facts = {
+            key: value
+            for key, value in facts.items()
+            if key not in {"current_step", "currentStep", "why_now", "whyNow",
+                           "verify_method", "verifyMethod", "next_after_current",
+                           "nextAfterCurrent"}
+        }
     current_step = _text(facts.get("current_step") or facts.get("currentStep")) or (
         accepted_recovery.get("current_step") or current.get("current_step")
     )

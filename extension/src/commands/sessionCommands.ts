@@ -2855,30 +2855,43 @@ export async function cancelStreamMessageCommand(
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
   const active = activeCoachStreams.get(context);
+  const streamingState = currentStreamingState(context);
+  const requestedMessageId =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as { messageId?: unknown }).messageId
+      : undefined;
   if (!active) {
     const trainingCancellation = await cancelTrainingCardStreamCommand(context, payload);
     if (trainingCancellation) {
       return trainingCancellation;
     }
+    if (!streamingState.isStreaming) {
+      await context.workbench.syncState();
+      return { ok: true, message: 'The Trainer stream has already stopped.' };
+    }
+  }
+
+  const messageId = active?.messageId ?? streamingState.streamMessageId;
+  if (!messageId) {
     return {
       ok: false,
       message: 'No Trainer stream is currently running.',
     };
   }
-
-  const requestedMessageId =
-    payload && typeof payload === 'object' && !Array.isArray(payload)
-      ? (payload as { messageId?: unknown }).messageId
-      : undefined;
-  if (typeof requestedMessageId === 'string' && requestedMessageId.trim() && requestedMessageId !== active.messageId) {
+  if (typeof requestedMessageId === 'string' && requestedMessageId.trim() && requestedMessageId !== messageId) {
     return {
       ok: false,
       message: 'The requested Trainer stream is no longer current.',
     };
   }
 
-  active.abortController.abort();
-  void context.sidecarClient
+  // Settle the local UI before waiting for a provider iterator or a snapshot.
+  // Invalidate buffered events so an aborted iterator cannot revive this stream.
+  nextStreamGeneration(context);
+  activeCoachStreams.delete(context);
+  activeCoachStreamContexts.delete(context);
+  active?.abortController.abort();
+  if (active) void context.sidecarClient
     .postJson(
       active.sidecarPort,
       '/stream/cancel',
@@ -2889,9 +2902,27 @@ export async function cancelStreamMessageCommand(
       // The local abort remains the fallback when the sidecar has already
       // disconnected or is shutting down.
     });
+  const responseLanguage = resolveProviderGuardLanguage(context);
+  await postStreamReliabilityStatus(context, 'failed', responseLanguage);
+  await updateStreamingState(context, (state) => ({
+    ...state,
+    isStreaming: false,
+    streamError: undefined,
+    completionStopReason: 'cancelled',
+    reliabilityPhase: 'acked',
+    reliabilityOutcome: 'failure',
+  }));
+  await postStreamReliabilityStatus(context, 'acked', responseLanguage);
+  await context.workbench.postMessage({
+    type: 'stream/cancelled',
+    payload: { messageId },
+  });
+  await context.workbench.syncState();
   return {
     ok: true,
-    message: 'Cancellation requested.',
+    message: responseLanguage === 'zh-CN'
+      ? '已取消本轮回复，已保留已生成内容。'
+      : 'Reply cancelled. Generated content was kept.',
   };
 }
 
@@ -3476,6 +3507,8 @@ export async function restartSessionCommand(
   if (workspaceGate) {
     return workspaceGate;
   }
+
+  await invalidateActiveTrainerStreams(context);
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
@@ -4659,6 +4692,7 @@ export async function activateCoachSessionCommand(
   if (workspaceGate) {
     return workspaceGate;
   }
+  await invalidateActiveTrainerStreams(context);
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
     return { ok: false, message: status.detail ?? 'Trainer could not reach the Coach service.' };

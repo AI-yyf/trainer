@@ -297,6 +297,22 @@ test('trainingGenerateCardCommand sends workspace_id to sidecar', async () => {
   assert.equal(context.__synced.length, 1);
 });
 
+test('practice generation forwards the formal plan binding through the host', async () => {
+  const { trainingGenerateCardCommand } = loadWithVscodeMock(trainingCommandsModulePath, {
+    commands: { async executeCommand() { return undefined; } },
+  });
+  const context = createContext();
+  const planBinding = { planId: 'plan-current', stageId: 'verify', step: 'Run boundary test', revision: 7 };
+  const result = await trainingGenerateCardCommand(context, {
+    source: 'formal_plan_step', cardType: 'practice', prompt: planBinding.step, planBinding,
+  });
+  assert.equal(result.ok, true);
+  const body = context.__postCalls[0][2];
+  assert.deepEqual(body.plan_binding, planBinding);
+  assert.equal(body.plan_stage_id, 'verify');
+  assert.equal(body.source, 'formal_plan_step');
+});
+
 test('workspace invalidation prevents an old training stream from publishing into the next workspace', async () => {
   const vscodeMock = { commands: { async executeCommand() { return undefined; } } };
   const { trainingGenerateCardCommand, invalidateActiveTrainingCardStream } = loadWithVscodeMock(
@@ -1851,4 +1867,29 @@ test('return leftover-not-live 409 does not rehydrate leftover as live', async (
   assert.doesNotMatch(String(result.message), /sk-[a-z0-9]/i);
   assert.equal(context.__patched.length, 0);
   assert.equal(context.__synced.length, 0);
+});
+
+test('hint assistance updates the active attempt by workspace-scoped card identity', async () => {
+  const { trainingAttemptUpdateCommand } = loadWithVscodeMock(trainingCommandsModulePath, {});
+  const context = createContext();
+  let body;
+  context.sidecarClient.postJson = async (port, requestPath, payload) => {
+    assert.equal(requestPath, '/training/attempt/update');
+    body = payload;
+    return { ok: true, attempt: { attempt_id: 'resolved-attempt', assistance_level: payload.assistance_level } };
+  };
+  const result = await trainingAttemptUpdateCommand(context, { cardId: 'current-card', assistanceLevel: 'hint_level_2' });
+  assert.equal(result.ok, true);
+  assert.equal(body.card_id, 'current-card');
+  assert.equal(body.workspace_id, 'F:\\trainer-training');
+  assert.equal(body.assistance_level, 'hint_level_2');
+  assert.equal(Object.hasOwn(body, 'attempt_id'), false);
+});
+
+test('attempt updates without an attempt or card identity fail before transport', async () => {
+  const { trainingAttemptUpdateCommand } = loadWithVscodeMock(trainingCommandsModulePath, {});
+  const context = createContext();
+  const result = await trainingAttemptUpdateCommand(context, { assistanceLevel: 'hint_level_1' });
+  assert.equal(result.ok, false);
+  assert.equal(context.__postCalls.length, 0);
 });

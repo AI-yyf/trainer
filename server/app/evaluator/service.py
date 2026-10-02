@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import os
 import re
 import shutil
@@ -77,10 +78,21 @@ class SubprocessCommandRunner:
                 stderr=stderr,
                 summary=f"{command.name} timed out after 60 seconds.",
             )
+        except OSError as exc:
+            return CheckResult(
+                name=command.name,
+                status=CheckStatus.ERROR,
+                command=argv,
+                summary=f"Could not start {command.name}: {exc.strerror or type(exc).__name__}.",
+            )
         stdout = completed.stdout or ""
         stderr = completed.stderr or ""
         combined = f"{stdout}\n{stderr}".lower()
-        if "uv trampoline failed" in combined or "failed to canonicalize script path" in combined:
+        missing_module = (
+            command.argv[1:3] == ["-m", command.name]
+            and re.search(rf": No module named ['\"]?{re.escape(command.name)}['\"]?\s*$", stderr.strip())
+        )
+        if missing_module or "uv trampoline failed" in combined or "failed to canonicalize script path" in combined:
             status = CheckStatus.SKIPPED
         elif command.name == "pytest" and _pytest_collected_no_tests(
             completed.returncode,
@@ -97,6 +109,11 @@ class SubprocessCommandRunner:
             if stderr.strip()
             else ""
         )
+        if completed.returncode != 0:
+            errors = [line.strip() for line in stderr.splitlines()
+                      if "error:" in line.lower() or ": No module named " in line]
+            if errors:
+                summary = errors[-1]
         return CheckResult(
             name=command.name,
             status=status,
@@ -158,6 +175,11 @@ class DefaultHypothesisHook:
 
 class DefaultSemanticReviewer:
     def review(self, spec: TaskSpec, code: str, checks: list[CheckResult]) -> SemanticReview:
+        if not spec.requirements:
+            return SemanticReview(
+                status=CheckStatus.SKIPPED,
+                summary="No task requirements were supplied; only the executable checks were evaluated.",
+            )
         missing: list[str] = []
         recommendations: list[str] = []
         code_lower = code.lower()
@@ -239,15 +261,24 @@ class EvaluationPipeline:
         pytest_args = list(request.pytest_args) if request.pytest_args else [target]
         if "-p" not in pytest_args:
             pytest_args = [*pytest_args, "-p", "no:cacheprovider"]
-        return [
-            CheckCommand(name="ruff", argv=["ruff", "check", target], cwd=cwd),
-            CheckCommand(name="pyright", argv=["pyright", target], cwd=cwd),
+        # PyInstaller's sys.executable is the sidecar launcher, not a Python CLI.
+        python = request.verification_python or (
+            (shutil.which("python3") or shutil.which("python") or "python3")
+            if getattr(sys, "frozen", False) else sys.executable
+        )
+        modules = bool(request.verification_python or getattr(sys, "frozen", False))
+        commands = [
+            CheckCommand(name="ruff", argv=[python, "-m", "ruff", "check", target] if modules else ["ruff", "check", target], cwd=cwd),
+            CheckCommand(name="pyright", argv=[python, "-m", "pyright", target] if modules else ["pyright", target], cwd=cwd),
             CheckCommand(
                 name="pytest",
-                argv=[sys.executable, "-m", "pytest", *pytest_args],
+                argv=[python, "-m", "pytest", *pytest_args],
                 cwd=cwd,
             ),
         ]
+        if _has_python_script_entrypoint(request.code or ""):
+            commands.append(CheckCommand(name="python-script", argv=[python, "-B", target], cwd=cwd))
+        return commands
 
     def evaluate(self, request: EvaluationRequest) -> LaneEvaluationReport:
         # Always own a TemporaryDirectory as tool cwd — ignore any caller workspace
@@ -276,6 +307,7 @@ class EvaluationPipeline:
                     workspace=sandbox,
                     pytest_args=request.pytest_args or [sandbox_target],
                     hypothesis_target=request.hypothesis_target,
+                    verification_python=request.verification_python,
                 )
                 target = sandbox_target
                 reported_target = original_abs
@@ -290,6 +322,7 @@ class EvaluationPipeline:
                     workspace=sandbox,
                     pytest_args=request.pytest_args,
                     hypothesis_target=request.hypothesis_target,
+                    verification_python=request.verification_python,
                 )
                 target = str(temp_path)
                 reported_target = target
@@ -301,6 +334,7 @@ class EvaluationPipeline:
                     workspace=sandbox,
                     pytest_args=request.pytest_args,
                     hypothesis_target=request.hypothesis_target,
+                    verification_python=request.verification_python,
                 )
 
             # ruff, pyright and pytest are independent processes over the same
@@ -310,7 +344,10 @@ class EvaluationPipeline:
             # not share state, so overlap them: the turn is now bounded by the
             # slowest tool instead of the sum. Order is preserved by mapping
             # over the plan rather than collecting from the pool.
-            commands = self.plan_commands(request)
+            planned = self.plan_commands(request)
+            # A script may write temporary files. Run it after the independent
+            # analysis/test processes, and never reuse a cached execution result.
+            commands = [command for command in planned if command.name != "python-script"]
             sandbox = request.workspace or ""
             # Re-verifying an unchanged file must not re-pay three process
             # cold starts, so results are cached by content rather than by the
@@ -337,6 +374,9 @@ class EvaluationPipeline:
                     checks = [self._runner.run(command) for command in commands]
                 for command, result in zip(commands, checks, strict=False):
                     CHECK_RESULT_CACHE.put(command, sandbox, result, self._runner)
+            checks.extend(
+                self._runner.run(command) for command in planned if command.name == "python-script"
+            )
             checks.append(self._hypothesis_hook.run(request))
             semantic_review = self._semantic_reviewer.review(request.spec, code, checks)
             overall_status = self._overall_status(checks, semantic_review)
@@ -385,14 +425,8 @@ class EvaluatorService:
         leftover_runtime: dict[str, Any] | None = None,
         leftover_task_title: str = "",
     ) -> EvaluationReport:
-        training_acceptance_check = self._training_acceptance_check(
-            source=request.evaluation_source,
-            code=request.content,
-            language_id=request.language_id,
-            acceptance_criteria=request.acceptance_criteria,
-            learner_deliverables=request.learner_deliverables,
-            expected_symbols=request.expected_symbols,
-        )
+        if spec is not None and request.task_spec_id != spec.id:
+            spec = None
         use_training_acceptance_only = _uses_training_acceptance_only(
             source=request.evaluation_source,
             spec=spec,
@@ -403,15 +437,31 @@ class EvaluatorService:
         report = self.pipeline.evaluate(
             EvaluationRequest(
                 spec=_convert_spec(
-                    spec,
+                    None if use_training_acceptance_only else spec,
                     request.task_spec_id,
-                    include_default_requirement=not use_training_acceptance_only,
                 ),
                 target_path=request.file_path,
                 code=request.content,
+                verification_python=request.verification_python,
                 # cwd sandbox is owned by EvaluationPipeline.evaluate (TemporaryDirectory);
                 # never pass the learner project parent (avoids .pytest_cache / pyc writes).
             )
+        )
+        training_acceptance_check = self._training_acceptance_check(
+            source=request.evaluation_source,
+            code=request.content,
+            language_id=request.language_id,
+            acceptance_criteria=request.acceptance_criteria,
+            learner_deliverables=request.learner_deliverables,
+            expected_symbols=request.expected_symbols,
+            execution_passed=report.overall_status == CheckStatus.PASSED and any(
+                check.name in {"pytest", "hypothesis", "python-script"} and check.status == CheckStatus.PASSED
+                for check in report.checks
+            ),
+            script_stdout=next((
+                check.stdout for check in report.checks
+                if check.name == "python-script" and check.status == CheckStatus.PASSED
+            ), None),
         )
         context_notes = self._evaluation_context_notes(
             source=request.evaluation_source,
@@ -429,8 +479,7 @@ class EvaluatorService:
             vscode_diagnostics=request.diagnostics,
             training_acceptance_check=training_acceptance_check,
             requires_dynamic_verification=(
-                request.evaluation_source == "training"
-                and _requires_code_evidence(request.language_id)
+                _requires_code_evidence(request.language_id)
             ),
         )
 
@@ -443,14 +492,8 @@ class EvaluatorService:
         leftover_runtime: dict[str, Any] | None = None,
         leftover_task_title: str = "",
     ) -> EvaluationReport:
-        training_acceptance_check = self._training_acceptance_check(
-            source=request.evaluation_source,
-            code=request.content,
-            language_id=request.language_id,
-            acceptance_criteria=request.acceptance_criteria,
-            learner_deliverables=request.learner_deliverables,
-            expected_symbols=request.expected_symbols,
-        )
+        if spec is not None and request.task_spec_id != spec.id:
+            spec = None
         use_training_acceptance_only = _uses_training_acceptance_only(
             source=request.evaluation_source,
             spec=spec,
@@ -461,12 +504,28 @@ class EvaluatorService:
         report = self.pipeline.evaluate(
             EvaluationRequest(
                 spec=_convert_spec(
-                    spec,
+                    None if use_training_acceptance_only else spec,
                     request.task_spec_id,
-                    include_default_requirement=not use_training_acceptance_only,
                 ),
                 code=request.content,
+                verification_python=request.verification_python,
             )
+        )
+        training_acceptance_check = self._training_acceptance_check(
+            source=request.evaluation_source,
+            code=request.content,
+            language_id=request.language_id,
+            acceptance_criteria=request.acceptance_criteria,
+            learner_deliverables=request.learner_deliverables,
+            expected_symbols=request.expected_symbols,
+            execution_passed=report.overall_status == CheckStatus.PASSED and any(
+                check.name in {"pytest", "hypothesis", "python-script"} and check.status == CheckStatus.PASSED
+                for check in report.checks
+            ),
+            script_stdout=next((
+                check.stdout for check in report.checks
+                if check.name == "python-script" and check.status == CheckStatus.PASSED
+            ), None),
         )
         context_notes = self._evaluation_context_notes(
             source=request.evaluation_source,
@@ -484,8 +543,7 @@ class EvaluatorService:
             vscode_diagnostics=request.diagnostics,
             training_acceptance_check=training_acceptance_check,
             requires_dynamic_verification=(
-                request.evaluation_source == "training"
-                and _requires_code_evidence(request.language_id)
+                _requires_code_evidence(request.language_id)
             ),
         )
 
@@ -518,7 +576,7 @@ class EvaluatorService:
         dynamic_checks = [
             self._to_api_check(check)
             for check in report.checks
-            if check.name in {"pytest", "hypothesis"}
+            if check.name in {"pytest", "hypothesis", "python-script"}
         ]
         semantic_detail_lines = [
             *(context_notes or []),
@@ -533,7 +591,7 @@ class EvaluatorService:
             if check.status in {CheckStatus.FAILED, CheckStatus.ERROR}
         ]
         has_dynamic_verification = any(
-            check.name in {"pytest", "hypothesis"} and check.status == CheckStatus.PASSED
+            check.name in {"pytest", "hypothesis", "python-script"} and check.status == CheckStatus.PASSED
             for check in report.checks
         )
         verification_required = requires_dynamic_verification and not has_dynamic_verification
@@ -549,10 +607,14 @@ class EvaluatorService:
             and not verification_required
         )
         if passed:
-            summary = (
-                report.semantic_review.summary
-                or "The implementation passed the current evaluation loop."
+            passed_tools = [check.name for check in report.checks if check.status == CheckStatus.PASSED]
+            summary = f"Executable checks passed: {', '.join(passed_tools)}." if passed_tools else (
+                "The implementation passed the current evaluation loop."
             )
+            if training_acceptance_check is not None:
+                summary += " Training acceptance signals matched."
+            if report.semantic_review.status == CheckStatus.PASSED and report.semantic_review.summary:
+                summary += f" {report.semantic_review.summary}"
         elif failed_tool_labels:
             summary = f"Evaluation failed on: {', '.join(failed_tool_labels)}."
         elif training_acceptance_blocks:
@@ -566,6 +628,8 @@ class EvaluatorService:
                 )
                 if missing_preview:
                     summary = f"{summary} Still missing: {missing_preview}."
+                if verification_required:
+                    summary += " Verification is still required because no dynamic verifier actually ran."
             else:
                 summary = "Training practice verification needs current-file evidence for the card acceptance signals."
         elif verification_required:
@@ -574,7 +638,9 @@ class EvaluatorService:
             summary = "Evaluation found requirement gaps that still need to be implemented."
         else:
             summary = report.semantic_review.summary or "Evaluation found a blocking issue."
-        if report.recommendations:
+        if passed:
+            next_step = "Record a reflection on the verified result, then bring it back to Coach."
+        elif report.recommendations:
             next_step = report.recommendations[0]
         elif has_error_diagnostics:
             next_step = (
@@ -585,6 +651,8 @@ class EvaluatorService:
             and "No training acceptance criteria" in training_acceptance_check.detail
         ):
             next_step = "Provide concrete acceptance criteria or expected symbols for this practice card, then re-run verification."
+        elif verification_required:
+            next_step = "Run at least one dynamic verifier, then re-run verification."
         elif training_acceptance_blocks:
             acceptance_progress = _acceptance_progress_from_detail(
                 training_acceptance_check.detail if training_acceptance_check else ""
@@ -597,8 +665,6 @@ class EvaluatorService:
                 )
             else:
                 next_step = "Implement the missing practice acceptance signals in the current file, then re-run verification."
-        elif verification_required:
-            next_step = "Run at least one dynamic verifier, then re-run verification."
         elif failed_tool_labels:
             next_step = "Fix failed checks first, then re-run evaluation."
         elif report.missing_requirements:
@@ -611,9 +677,8 @@ class EvaluatorService:
             EvaluationCheck(
                 id="semantic-review",
                 label="semantic-review",
-                status="passed"
-                if report.semantic_review.status == CheckStatus.PASSED
-                else "failed",
+                status="skipped" if report.semantic_review.status == CheckStatus.SKIPPED
+                else "passed" if report.semantic_review.status == CheckStatus.PASSED else "failed",
                 detail=semantic_detail or report.semantic_review.summary,
             )
         ]
@@ -672,11 +737,15 @@ class EvaluatorService:
         acceptance_criteria: list[str],
         learner_deliverables: list[str],
         expected_symbols: list[str],
+        execution_passed: bool = False,
+        script_stdout: str | None = None,
     ) -> EvaluationCheck | None:
         if source != "training":
             return None
 
-        criteria = _dedupe_non_empty([*acceptance_criteria, *learner_deliverables])
+        # Explanations, screenshots and reflections are collected by the return
+        # flow. They must not become impossible source-code presence checks.
+        criteria = _dedupe_non_empty(acceptance_criteria or learner_deliverables)
         symbols = _dedupe_non_empty(expected_symbols)
         if not criteria and not symbols:
             return EvaluationCheck(
@@ -691,12 +760,35 @@ class EvaluatorService:
 
         requires_code_evidence = _requires_code_evidence(language_id)
         evidence = _code_evidence_text(code, language_id) if requires_code_evidence else code
+        implicit_protocols: set[str] = set()
+        python_expressions: set[str] = set()
+        if str(language_id or "").lower() in _PYTHON_LANGUAGE_IDS:
+            try:
+                syntax = ast.parse(code)
+            except SyntaxError:
+                syntax = None
+            if syntax is not None:
+                python_expressions = {
+                    ast.dump(node, include_attributes=False)
+                    for node in ast.walk(syntax)
+                    if isinstance(node, _PYTHON_EVIDENCE_EXPRESSIONS)
+                    and not isinstance(getattr(node, "ctx", None), ast.Store)
+                }
+            if syntax is not None and any(
+                isinstance(node, ast.Subscript) and isinstance(node.ctx, ast.Store)
+                for node in ast.walk(syntax)
+            ):
+                implicit_protocols.add("__setitem__")
         criteria_results = [
             _criterion_result(
                 item,
                 evidence,
                 requires_code_evidence=requires_code_evidence,
                 expected_symbols=symbols,
+                execution_passed=execution_passed,
+                implicit_protocols=implicit_protocols,
+                python_expressions=python_expressions,
+                script_stdout=script_stdout,
             )
             for item in criteria
         ]
@@ -705,6 +797,7 @@ class EvaluatorService:
                 item,
                 evidence,
                 requires_code_evidence=requires_code_evidence,
+                python_expressions=python_expressions,
             )
             for item in symbols
         ]
@@ -747,6 +840,12 @@ class EvaluatorService:
             CheckStatus.PENDING: "warning",
         }
         detail = check.summary or check.stderr or check.stdout or "No output."
+        if check.name == "python-script" and check.status == CheckStatus.PASSED:
+            detail = "Script exited successfully.\n" + (check.stdout.strip() or "No stdout.")
+        if check.status in {CheckStatus.FAILED, CheckStatus.ERROR}:
+            output = (check.stderr or check.stdout).strip()
+            if output and output != detail:
+                detail = f"{detail}\n{output[-1000:]}"
         return EvaluationCheck(
             id=check.name, label=check.name, status=status_map[check.status], detail=detail[:1200]
         )
@@ -755,22 +854,14 @@ class EvaluatorService:
 def _convert_spec(
     spec: ApiTaskSpec | None,
     task_spec_id: str | None,
-    *,
-    include_default_requirement: bool = True,
 ) -> TaskSpec:
     if spec is None:
         generated = TaskSpec.create(
             title="Trainer task", objective="Validate the current implementation against the task."
         )
         generated.id = task_spec_id or generated.id
-        if include_default_requirement:
-            generated.requirements = [
-                RequirementItem(
-                    category="constraint",
-                    text="Validate the current implementation against the task.",
-                    source="generated",
-                )
-            ]
+        # A missing task is not an implicit keyword requirement on the code.
+        # The executable checks still run, but cannot establish task completion.
         return generated
     generated = TaskSpec.create(title=spec.title, objective=spec.natural_language_goal)
     generated.id = spec.id
@@ -991,6 +1082,57 @@ def _code_evidence_text(source: str, language_id: str | None) -> str:
     return "".join(characters)
 
 
+
+_PYTHON_EVIDENCE_EXPRESSIONS = (
+    ast.Name, ast.Attribute, ast.Subscript, ast.Call, ast.Dict, ast.List, ast.Tuple, ast.Set,
+)
+
+
+def _has_python_script_entrypoint(code: str) -> bool:
+    """Run explicit executable entry points, never credit an empty library module."""
+    try:
+        module = ast.parse(code)
+    except SyntaxError:
+        return False
+    for statement in module.body:
+        if not isinstance(statement, ast.If) or not isinstance(statement.test, ast.Compare):
+            continue
+        test = statement.test
+        if len(test.ops) != 1 or not isinstance(test.ops[0], ast.Eq):
+            continue
+        operands = [test.left, *test.comparators]
+        if not (any(isinstance(node, ast.Name) and node.id == "__name__" for node in operands)
+                and any(isinstance(node, ast.Constant) and node.value == "__main__"
+                        for node in operands)):
+            continue
+        if any(isinstance(node, (ast.Assert, ast.Call))
+               for item in statement.body for node in ast.walk(item)
+               if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))):
+            return True
+    return False
+
+
+def _criterion_output_numbers(criterion: str) -> list[str]:
+    """Recognize an explicit numeric stdout requirement; never scan input literals."""
+    match = re.search(
+        r"(?:\bprint\s+|跑出\s*|输出(?:分别)?(?:为|是|中包含)?\s*|outputs?\s+(?:is\s+|are\s+)?)"
+        r"(?P<numbers>-?\d+(?:\.\d+)?(?:\s*[、,，]\s*-?\d+(?:\.\d+)?)*)",
+        criterion, re.IGNORECASE,
+    )
+    return re.split(r"\s*[、,，]\s*", match.group("numbers")) if match else []
+
+
+def _python_expression_key(value: str) -> str | None:
+    """Compare expressions as syntax, never by prose, comments, or string contents."""
+    try:
+        expression = ast.parse(value.strip().strip("`").strip(), mode="eval").body
+    except (SyntaxError, ValueError):
+        return None
+    if not isinstance(expression, _PYTHON_EVIDENCE_EXPRESSIONS):
+        return None
+    return ast.dump(expression, include_attributes=False)
+
+
 def _normalize_code_symbol(value: str) -> str | None:
     normalized = value.strip().strip("`").strip()
     normalized = re.sub(r"\(\s*\)$", "", normalized)
@@ -1015,9 +1157,18 @@ def _matches_code_symbol(symbol: str, evidence: str) -> bool:
 
 def _criterion_code_signals(criterion: str, expected_symbols: list[str]) -> list[str]:
     signals: list[str] = []
+    # File references provide location, not a required function named after
+    # the file stem. Mask the complete reference before scanning identifiers.
+    criterion = re.sub(r"`(?:python(?:3(?:\.\d+)?)?|py|pytest)\s+[^`]*`", " ", criterion)
+    criterion = re.sub(
+        r"[A-Za-z0-9_./\\-]+\.(?:py|pyi|js|jsx|ts|tsx|json|md|txt|rs|go|java|cpp|c|cs)\b",
+        " ", criterion, flags=re.IGNORECASE,
+    )
 
     def add(value: str) -> None:
-        normalized = _normalize_code_symbol(value)
+        normalized = _normalize_code_symbol(value) or (
+            value.strip() if _python_expression_key(value) is not None else None
+        )
         if normalized and normalized not in signals:
             signals.append(normalized)
 
@@ -1041,9 +1192,24 @@ def _criterion_result(
     *,
     requires_code_evidence: bool,
     expected_symbols: list[str],
+    execution_passed: bool = False,
+    implicit_protocols: set[str] | None = None,
+    python_expressions: set[str] | None = None,
+    script_stdout: str | None = None,
 ) -> dict[str, list[str] | str]:
     if requires_code_evidence:
+        output_numbers = _criterion_output_numbers(criterion)
         signals = _criterion_code_signals(criterion, expected_symbols)
+        expects_no_exception = re.search(
+            r"\b(?:without|no|not\s+raise)\b|不抛|不触发|无|没有|不得", criterion, re.IGNORECASE,
+        )
+        execution_signals = (
+            [signal for signal in signals if signal.endswith(("Error", "Exception"))]
+            if expects_no_exception else []
+        )
+        code_signals = [signal for signal in signals if signal not in execution_signals]
+        if output_numbers:
+            signals.append("actual script output")
         if not signals:
             return {
                 "text": criterion,
@@ -1051,7 +1217,24 @@ def _criterion_result(
                 "matched_signals": [],
                 "missing_signals": ["a verifiable code symbol or explicit acceptance test"],
             }
-        matched_signals = [signal for signal in signals if _matches_code_symbol(signal, evidence)]
+        describes_protocol = bool(re.search(r"\b(?:from|via)\b|来自|对应", criterion, re.IGNORECASE))
+        matched_signals = [
+            signal for signal in code_signals
+            if _matches_code_symbol(signal, evidence)
+            or _python_expression_key(signal) in (python_expressions or set()) or (
+                describes_protocol and signal not in expected_symbols
+                and signal in (implicit_protocols or set())
+            )
+        ]
+        if execution_passed:
+            matched_signals.extend(execution_signals)
+            if output_numbers and script_stdout is not None:
+                actual = [line.strip() for line in script_stdout.splitlines() if line.strip()]
+                # Require exact numeric lines in order, not matching text inside
+                # debug prose or merely present print calls in unexecuted code.
+                if any(actual[index:index + len(output_numbers)] == output_numbers
+                       for index in range(len(actual) - len(output_numbers) + 1)):
+                    matched_signals.append("actual script output")
         return {
             "text": criterion,
             "status": "matched" if len(matched_signals) == len(signals) else "missing",
@@ -1084,10 +1267,12 @@ def _expected_symbol_result(
     evidence: str,
     *,
     requires_code_evidence: bool,
+    python_expressions: set[str] | None = None,
 ) -> dict[str, list[str] | str]:
     normalized = symbol.strip()
     matched = (
-        _matches_code_symbol(normalized, evidence)
+        (_matches_code_symbol(normalized, evidence)
+         or _python_expression_key(normalized) in (python_expressions or set()))
         if requires_code_evidence
         else bool(normalized and normalized.lower() in evidence.lower())
     )

@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import type { TrainingPlanBinding } from "../../../shared/src/models";
 import type { CommandContext } from "../core/commandContext";
 import type { CommandExecutionResult } from "../core/types";
 import { SidecarRequestAbortedError, type SSEMessage } from "../core/httpClient";
@@ -144,6 +145,7 @@ async function attachLiveProviderToTrainingRequest(
 }
 
 type TrainingGenerateCardWaiterInput = {
+  planBinding?: TrainingPlanBinding;
   source: string;
   cardType: string;
   submode: string;
@@ -189,6 +191,7 @@ async function settleTrainingGenerateCardWaiter(
     context_hint: string;
     workspace_id: string;
     plan_stage_id: string;
+    plan_binding?: TrainingPlanBinding;
     current_file: TrainingCurrentFilePayload | undefined;
     response_language?: string;
     stream_id?: string;
@@ -212,7 +215,8 @@ async function settleTrainingGenerateCardWaiter(
       input.currentFile,
     ),
     workspace_id: input.workspaceId,
-    plan_stage_id: "",
+    plan_stage_id: input.planBinding?.stageId ?? "",
+    plan_binding: input.planBinding,
     current_file: input.currentFile,
     // Distinct stream_id for transport; UI events reuse owner messageId.
     stream_id: `training_waiter_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -817,7 +821,7 @@ export async function trainingGenerateCardCommand(
   context: CommandContext,
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
-  const { source, cardType, submode, focusArea, targetSkill, resourceId, prompt, requestId: payloadRequestId } =
+  const { source, cardType, submode, focusArea, targetSkill, resourceId, prompt, planBinding, requestId: payloadRequestId } =
     extractGenerateCardPayload(payload);
   const resourceTrainingBlock = resourceTrainingGate(context, source, resourceId);
   if (resourceTrainingBlock) {
@@ -844,6 +848,7 @@ export async function trainingGenerateCardCommand(
       activeOwnerStream.requestId === incomingRequestId
     ) {
       return settleTrainingGenerateCardWaiter(context, activeOwnerStream, {
+        planBinding,
         source,
         cardType: finalCardType,
         submode: submode ?? "",
@@ -874,6 +879,7 @@ export async function trainingGenerateCardCommand(
       context_hint: string;
       workspace_id: string;
       plan_stage_id: string;
+      plan_binding?: TrainingPlanBinding;
       current_file: TrainingCurrentFilePayload | undefined;
       response_language?: string;
       stream_id?: string;
@@ -897,7 +903,8 @@ export async function trainingGenerateCardCommand(
         currentFile,
       ),
       workspace_id: workspaceId,
-      plan_stage_id: "",
+      plan_stage_id: planBinding?.stageId ?? "",
+      plan_binding: planBinding,
       current_file: currentFile,
     };
     if (responseLanguage) {
@@ -1539,6 +1546,7 @@ function extractCardStatusPayload(
 function extractGenerateCardPayload(
   payload: unknown,
 ): {
+  planBinding?: TrainingPlanBinding;
   source: string;
   cardType: string;
   submode: string;
@@ -1549,6 +1557,7 @@ function extractGenerateCardPayload(
   requestId?: string;
 } {
   const p = payload as {
+    planBinding?: TrainingPlanBinding;
     source?: string;
     cardType?: string;
     submode?: string;
@@ -1561,6 +1570,7 @@ function extractGenerateCardPayload(
     request_id?: string;
   } | undefined;
   return {
+    planBinding: p?.planBinding,
     source: p?.source ?? "conversation_gap",
     cardType: p?.cardType ?? "practice",
     submode: p?.submode ?? "",
@@ -1791,10 +1801,14 @@ export async function trainingAttemptUpdateCommand(
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
   const p = payload as TrainingAttemptCommandPayload | undefined;
-  if (!p?.attemptId) {
-    return { ok: false, message: 'Attempt update requires an attempt id.' };
+  if (!p?.attemptId && !p?.cardId) {
+    return { ok: false, message: 'Attempt update requires an attempt or card id.' };
   }
-  const body: Record<string, unknown> = { attempt_id: p.attemptId };
+  // Hint clicks identify the card; the sidecar resolves its active attempt
+  // within this workspace rather than trusting a client-selected attempt.
+  const body: Record<string, unknown> = p.attemptId
+    ? { attempt_id: p.attemptId }
+    : { card_id: p.cardId };
   if (p.answerDraft !== undefined) {
     body.answer_draft = p.answerDraft;
   }

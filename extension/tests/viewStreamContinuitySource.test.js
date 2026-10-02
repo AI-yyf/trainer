@@ -22,9 +22,9 @@ test('view rails keep an active stream visible after switching away from its sou
     railSource,
     /const isResourcesContextWorthSurfacing =\s*!isResources \|\| streaming\.isStreaming \|\| lastTurnView === "resources";/,
   );
-  assert.match(source, /renderContextualResultRail\("plan"\)/);
-  assert.match(source, /renderContextualResultRail\("resources"\)/);
-  assert.match(source, /renderContextualResultRail\("training"\)/);
+  assert.doesNotMatch(source, /renderContextualResultRail\("plan"\)/);
+  assert.doesNotMatch(source, /renderContextualResultRail\("resources"\)/);
+  assert.doesNotMatch(source, /renderContextualResultRail\("training"\)/);
 });
 
 test('resource limit copy is shown only when the library reaches its upload limit', () => {

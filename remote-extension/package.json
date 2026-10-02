@@ -7,7 +7,7 @@
   "private": true,
   "engines": { "vscode": "^1.96.0" },
   "extensionKind": ["workspace"],
-  "activationEvents": ["onCommand:trainer.remote.capabilities", "onCommand:trainer.remote.request"],
+  "activationEvents": [],
   "main": "./dist/remote-extension/src/extension.js",
   "contributes": {
     "commands": [

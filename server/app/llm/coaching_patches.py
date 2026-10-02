@@ -89,6 +89,8 @@ async def _maybe_auto_verify_practice_current_file(
     current_file: dict[str, object] | None,
     coach_context: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
+    if isinstance(coach_context, dict) and coach_context.get("completed_training_return_feedback") is True:
+        return []
     if _current_file_practice_verification_result(tool_events) is not None:
         return []
     if not _agentic_practice_verification_context_active(
@@ -151,14 +153,14 @@ def _practice_verification_requested_or_claimed(*, message: str, content: str) -
             "complete",
             "done",
             "review my practice",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
+            "验证",
+            "核验",
+            "验收",
+            "通过",
+            "完成",
+            "评估我的练习",
+            "评审我的练习",
+            "检查我的训练",
         )
     )
 
