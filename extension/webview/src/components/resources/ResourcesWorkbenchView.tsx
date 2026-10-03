@@ -1,3 +1,7 @@
+import { SystemState } from "../../templates/SystemState";
+import { Library } from "../../templates/Library";
+import { ResourceReader } from "../../templates/ResourceReader";
+import { templateCopy } from "../../templates/templateCopy";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import { useTranslation } from "../../lib/i18n/useTranslation";
@@ -62,6 +66,8 @@ export interface ResourcesWorkbenchViewProps {
   onPreviewResource?: (resourceId: string) => void;
   onStartTrainingFromResource?: (resourceId: string) => Promise<ResourceTrainingHandoffResult>;
   onOpenTraining?: () => void;
+  onAskCoach?: (resourceIds: string[]) => void;
+  onJoinLearning?: (resourceIds: string[]) => void;
   onRefreshResources?: () => void | Promise<void>;
   onDeleteResources?: (resourceIds: string[]) => void | Promise<void>;
   onRestoreResources?: (resourceIds: string[]) => void | Promise<void>;
@@ -1718,10 +1724,6 @@ function ResourceTreeItem({
         </label>
         <span className="resources-library-tree__copy">
           <strong>{node.resource.title}</strong>
-          {node.resource.summary?.trim() &&
-          node.resource.summary.trim() !== node.resource.title ? (
-            <span className="resources-library-tree__summary">{node.resource.summary.trim()}</span>
-          ) : null}
         </span>
         {indexNotice ? (
           <span className={`resources-library-tree__status is-${indexNotice.tone}`}>
@@ -1755,6 +1757,7 @@ function ResourceTreeItem({
       onKeyDown={(event) => {
         if (event.key === "ArrowRight") {
           event.preventDefault();
+          event.stopPropagation();
           if (!isExpanded) {
             onToggle(node.id);
           } else if (firstChildId) {
@@ -1763,6 +1766,7 @@ function ResourceTreeItem({
         }
         if (event.key === "ArrowLeft") {
           event.preventDefault();
+          event.stopPropagation();
           if (isExpanded) {
             onToggle(node.id);
           } else if (parentId) {
@@ -1910,6 +1914,8 @@ export function ResourcesWorkbenchView({
   orientation,
   leftoverNote,
   onOrientationAction,
+  onAskCoach,
+  onJoinLearning,
   onDebugVisibleFacts,
   organizationConfirm,
 }: ResourcesWorkbenchViewProps) {
@@ -1923,9 +1929,8 @@ export function ResourcesWorkbenchView({
   useEffect(() => { onSearchQueryChange?.(query); }, [onSearchQueryChange, query]);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(
-    () => pickInitialResourceId(resources, initialResourceContextIds, sandboxPreviewInput),
+    () => restoreContext?.surface === "detail" ? restoreContext.resourceId ?? null : null,
   );
-  const didAutoSelectResource = useRef(false);
   const [selectedResourceIds, setSelectedResourceIds] = useState<Set<string>>(
     () => new Set(initialResourceContextIds),
   );
@@ -2307,8 +2312,10 @@ export function ResourcesWorkbenchView({
     if (restoreContext?.surface !== "sandbox") {
       return;
     }
-    setSelectedResourceId((current) => (current ? null : current));
-  }, [restoreContext]);
+    const path = restoreContext.previewPath ?? restoreContext.sandboxPath;
+    const resource = resources.find((item) => item.sandboxPath === path);
+    setSelectedResourceId(resource?.id ?? null);
+  }, [resources, restoreContext]);
 
   useEffect(() => {
     setSelectedResourceIds((current) => {
@@ -2351,18 +2358,6 @@ export function ResourcesWorkbenchView({
     });
     didRevealFirstResourcePath.current = true;
   }, [firstVisibleResourceAncestorIds, visibleResourceTree.length]);
-
-  useEffect(() => {
-    if (didAutoSelectResource.current || selectedResourceId) {
-      return;
-    }
-    const nextId = pickInitialResourceId(resources, initialResourceContextIds, sandboxPreviewInput);
-    if (!nextId) {
-      return;
-    }
-    didAutoSelectResource.current = true;
-    setSelectedResourceId(nextId);
-  }, [initialResourceContextIds, resources, sandboxPreviewInput, selectedResourceId]);
 
   useEffect(() => {
     if (!isDeletePending || !trashSnapshotAvailable) {
@@ -2735,6 +2730,9 @@ export function ResourcesWorkbenchView({
     selectedResource && sandboxPreviewInput?.path === selectedResource.sandboxPath
       ? sandboxPreviewInput
       : undefined;
+  const standaloneSandboxPreview = !selectedResource && restoreContext?.surface === "sandbox" &&
+    sandboxPreviewInput?.path === (restoreContext.previewPath ?? restoreContext.sandboxPath)
+      ? sandboxPreviewInput : undefined;
   const selectedResourceReuseSummary = selectedResource ? resourceReuseSummary(language) : undefined;
   const hasSelectedResourceFacts = Boolean(
     selectedResourceSource.length ||
@@ -2798,29 +2796,29 @@ export function ResourcesWorkbenchView({
       resourceDetailId: selectedResource?.id,
       resourceDetailTitle: selectedResource?.title,
       selectedResourceId: selectedResource?.id,
-      sandboxPreviewEmbedded: false,
-      sandboxPreviewVisible: false,
+      sandboxPreviewEmbedded: Boolean(sandboxPreview || standaloneSandboxPreview),
+      sandboxPreviewVisible: Boolean(sandboxPreview || standaloneSandboxPreview),
       selectedSandboxPath: restoreContext?.sandboxPath ?? sandboxRoot,
       previewPath: restoreContext?.previewPath,
       singleWorkbenchSurface: true,
       compactMode: true,
       modebarHiddenInCompact: true,
-      detailPaneVisible: Boolean(selectedResource),
+      detailPaneVisible: Boolean(selectedResource || standaloneSandboxPreview),
       sandboxPaneVisible: activeSurface === "sandbox",
       previewPaneVisible: false,
     });
-  }, [language, onDebugVisibleFacts, orientation, restoreContext, sandboxRoot, selectedResource]);
+  }, [language, onDebugVisibleFacts, orientation, restoreContext, sandboxRoot, selectedResource, sandboxPreview, standaloneSandboxPreview]);
 
   return (
     <section
       className={`workbench-pane resources-pane resources-pane--library resources-knowledge resources-knowledge--workspace-tree${selectedResource ? " is-detail-open" : ""}${selectedResourceIds.size > 0 ? " has-selection" : ""}`}
-      aria-label={localize(language, "title")}
+      data-resource-library-container="true"
       data-resources-leftover-not-live={leftoverStoredNote ? "true" : undefined}
     >
       <div className="workbench-pane__heading resources-knowledge__heading sr-only">
         <h2>{localize(language, "title")}</h2>
       </div>
-      {omitLeftoverLibrary ? null : (
+      <Library title={localize(language, "title")} hidden={Boolean(selectedResource || standaloneSandboxPreview)} toolbar={omitLeftoverLibrary ? null : (
       <div className="resources-knowledge__toolbar">
         <label className="resources-search resources-search--hero resources-knowledge__search">
           <span className="sr-only">{localize(language, "searchPlaceholder")}</span>
@@ -2884,7 +2882,7 @@ export function ResourcesWorkbenchView({
               <div className="resources-knowledge__import-menu-wrap">
                 <button
                   ref={importMenuTriggerRef}
-                  className={`button button--primary button--compact resources-knowledge__add-resource${canWriteResources && isImportMenuOpen ? " is-open" : ""}`}
+                  className={`button ${orientationCanAct ? "button--ghost" : "button--accent"} button--compact resources-knowledge__add-resource${canWriteResources && isImportMenuOpen ? " is-open" : ""}`}
                   type="button"
                   aria-haspopup="menu"
                   aria-expanded={canWriteResources && isImportMenuOpen}
@@ -2923,7 +2921,8 @@ export function ResourcesWorkbenchView({
           )}
         </div>
       </div>
-      )}
+      )}>
+
 
       {leftoverStoredNote ? (
         <p
@@ -2936,26 +2935,11 @@ export function ResourcesWorkbenchView({
         </p>
       ) : null}
 
-      {orientationState ? (
-        <div
-          className={`resources-knowledge__orientation is-${orientationTone ?? "neutral"}`}
-          role={mutationStatus ? undefined : "status"}
-          aria-live="polite"
-        >
-          <strong>{orientationState}</strong>
-          {orientation?.why ? <span className="resources-knowledge__orientation-why">{orientation.why}</span> : null}
-          {orientation && orientationCanAct ? (
-            <button
-              className="button button--primary button--compact"
-              type="button"
-              aria-label={orientation.primaryActionLabel}
-              onClick={() => onOrientationAction?.(orientation.primaryAction)}
-            >
-              {orientation.primaryActionLabel}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      {orientationState && (orientation?.state === "needs_setup" || orientationTone === "blocker" || !canWriteResources) ? (
+        <SystemState kind={orientation?.state === "needs_setup" ? "workspace-required" : orientationTone === "blocker" ? "recoverable-error" : "read-only"}
+          title={orientationState} detail={orientation?.why}
+          action={orientation && orientationCanAct ? { label: orientation.primaryActionLabel, onClick: () => onOrientationAction?.(orientation.primaryAction) } : undefined} />
+      ) : orientation?.why && resources.length > 0 ? <p className="template-metadata">{orientation.why}</p> : null}
 
       {isImportMenuOpen && canWriteResources ? (
         <div
@@ -3036,15 +3020,7 @@ export function ResourcesWorkbenchView({
         </div>
       ) : null}
 
-      {searchStatus ? (
-        <div
-          className={`resources-knowledge__mutation is-${searchStatus.tone}`}
-          role="status"
-          aria-live="polite"
-        >
-          <span>{searchStatus.label}</span>
-        </div>
-      ) : null}
+      {searchStatus ? <SystemState kind={searchStatus.tone === "failed" ? "recoverable-error" : searchStatus.tone === "pending" ? "processing" : "information"} title={searchStatus.label} /> : null}
 
       {organizationConfirm ? (
         <div
@@ -3127,26 +3103,8 @@ export function ResourcesWorkbenchView({
         </div>
       ) : null}
 
-      {mutationStatus ? (
-        <div
-          className={`resources-knowledge__mutation is-${mutationStatus.tone}`}
-          role="status"
-          aria-live="polite"
-        >
-          <span>{mutationStatus.label}</span>
-          {mutationStatus.tone === "failed" && onRefreshDeletedResources ? (
-            <button
-              className="resources-knowledge__icon-button"
-              type="button"
-              onClick={onRefreshDeletedResources}
-              aria-label={localize(language, "refreshTrash")}
-              title={localize(language, "refreshTrash")}
-            >
-              <RefreshIcon size={14} />
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      {mutationStatus ? <SystemState kind={mutationStatus.tone === "failed" ? "recoverable-error" : mutationStatus.tone === "pending" ? "processing" : "success"} title={mutationStatus.label}
+        action={mutationStatus.tone === "failed" && onRefreshDeletedResources ? { label: localize(language, "refreshTrash"), onClick: onRefreshDeletedResources } : undefined} /> : null}
 
       {omitLeftoverLibrary ? null : (
       <div
@@ -3189,25 +3147,11 @@ export function ResourcesWorkbenchView({
                 ("needs setup / library is empty" + import action); rendering
                 this generic empty block too duplicated the same message. */}
             {resources.length === 0 && !hasSearchQuery && orientation?.state !== "needs_setup" ? (
-              <div className="resources-empty">
-                <p className="resources-empty__title">{localize(language, "emptyTitle")}</p>
-                <p className="resources-empty__hint">{localize(language, "emptyBody")}</p>
-                {canWriteResources ? (
-                  <button
-                    className="resources-empty__action"
-                    type="button"
-                    onClick={() => openImportMenu()}
-                  >
-                    {localize(language, "addResource")}
-                  </button>
-                ) : null}
-              </div>
+              <SystemState kind="empty" title={localize(language, "emptyTitle")} detail={localize(language, "emptyBody")} />
             ) : null}
 
             {shouldShowNoMatches ? (
-              <div className="resources-empty">
-                <p className="resources-empty__title">{localize(language, "noMatches")}</p>
-              </div>
+              <SystemState kind="empty" title={localize(language, "noMatches")} />
             ) : null}
           </>
         )}
@@ -3299,36 +3243,31 @@ export function ResourcesWorkbenchView({
       </div>
       )}
 
+      </Library>
+
+      {standaloneSandboxPreview ? (
+        <ResourceReader parent={localize(language, "title")} title={(standaloneSandboxPreview.relativePath ?? standaloneSandboxPreview.path ?? "").split(/[\\/]/).pop() ?? resourcePreviewHeading(language)} source={standaloneSandboxPreview.path} onBack={() => { setResourceDetail(null); onRestoreContextChange?.(undefined); }}>
+          {standaloneSandboxPreview.previewKind === "markdown" ? <MessageRichContent body={standaloneSandboxPreview.content ?? standaloneSandboxPreview.excerpt ?? ""} language={language} /> : <pre className="resources-knowledge__content-preview-body">{standaloneSandboxPreview.content ?? standaloneSandboxPreview.excerpt ?? standaloneSandboxPreview.html ?? ""}</pre>}
+        </ResourceReader>
+      ) : null}
+
       {selectedResource ? (
-        <section
-          className="resources-knowledge__detail"
-          aria-label={[localize(language, "resourceDetail"), selectedResource.title]
-            .filter(Boolean)
-            .join(". ")}
-          aria-live="polite"
+        <ResourceReader
+          parent={localize(language, "title")}
+          title={selectedResource.title}
+          source={selectedResourceSourceLabel}
+          updatedAt={selectedResource.updatedAt}
+          onBack={() => setResourceDetail(null)}
+          askCoach={onAskCoach ? { label: templateCopy[language].askCoach, onClick: () => onAskCoach([selectedResource.id]) } : undefined}
+          joinLearning={onJoinLearning ? { label: templateCopy[language].joinLearning, onClick: () => onJoinLearning([selectedResource.id]) } : undefined}
+          generatePractice={!sandboxPreview && selectedResourceCanStartTraining ? {
+            label: selectedResourceTrainingIsAvailable ? localize(language, "openCurrentTraining") : templateCopy[language].generatePractice,
+            onClick: selectedResourceTrainingIsAvailable ? () => onOpenTraining?.() : startTrainingFromSelectedResource,
+            disabled: selectedResourceTrainingIsAvailable ? !onOpenTraining : !onStartTrainingFromResource,
+            busy: selectedResourceTrainingState?.phase === "loading",
+          } : undefined}
         >
-          <section
-            className="resources-knowledge__detail-object"
-            role="region"
-            aria-label={selectedResource.title}
-          >
-          <header
-            className="resources-knowledge__current resources-knowledge__detail-header"
-            data-view-identity="true"
-          >
-            <strong className="resources-knowledge__current-object" data-view-object="">
-              {selectedResource.title}
-            </strong>
-            <button
-              className="resources-knowledge__icon-button"
-              type="button"
-              onClick={() => setResourceDetail(null)}
-              aria-label={localize(language, "closeDetails")}
-              title={localize(language, "closeDetails")}
-            >
-              <CloseIcon size={13} />
-            </button>
-          </header>
+          <section className="resources-knowledge__detail-object" aria-label={selectedResource.title}>
           {sandboxPreview ? (
             <div className="resources-knowledge__content-preview" aria-label={resourcePreviewHeading(language)}>
               {sandboxPreview.previewKind === "markdown" ||
@@ -3415,34 +3354,7 @@ export function ResourcesWorkbenchView({
           {selectedResourceTrainingState || selectedResourceCanStartTraining ? (
             <details className="resources-knowledge__training-handoff">
               <summary><strong>{localize(language, "training")}</strong></summary>
-              {selectedResourceTrainingState ? (
-                <div
-                  className={`resources-knowledge__mutation is-${
-                    selectedResourceTrainingState.phase === "loading"
-                      ? "pending"
-                      : selectedResourceTrainingState.phase === "failed"
-                        ? "failed"
-                        : "info"
-                  }`}
-                  role="status"
-                  aria-live="polite"
-                >
-                  <span>{selectedResourceTrainingStatusMessage}</span>
-                </div>
-              ) : null}
-              {selectedResourceCanStartTraining ? (
-                selectedResourceTrainingIsAvailable ? (
-                  <button className="button button--primary button--compact" type="button" onClick={onOpenTraining} disabled={!onOpenTraining}>
-                    <ArrowRightIcon size={12} />
-                    <span>{localize(language, "openCurrentTraining")}</span>
-                  </button>
-                ) : (
-                  <button className="button button--primary button--compact" type="button" onClick={startTrainingFromSelectedResource} disabled={selectedResourceTrainingState?.phase === "loading"} aria-busy={selectedResourceTrainingState?.phase === "loading"}>
-                    <ArrowRightIcon size={12} />
-                    <span>{resourceTrainingStartCopy(language, selectedResourceTrainingState?.phase === "loading" ? "loading" : undefined)}</span>
-                  </button>
-                )
-              ) : null}
+              {selectedResourceTrainingState ? <SystemState kind={selectedResourceTrainingState.phase === "loading" ? "processing" : selectedResourceTrainingState.phase === "failed" ? "recoverable-error" : "information"} title={selectedResourceTrainingStatusMessage ?? localize(language, "training")} /> : null}
             </details>
           ) : null}
           </>
@@ -3462,7 +3374,7 @@ export function ResourcesWorkbenchView({
             ) : null}
             {selectedResourceTrainingReadiness?.canRefresh ? (
               <button
-                className="button button--primary button--compact"
+                className="button button--ghost button--compact"
                 type="button"
                 onClick={refreshResources}
                 disabled={indexActionDisabled}
@@ -3473,7 +3385,7 @@ export function ResourcesWorkbenchView({
               </button>
             ) : null}
             <button
-              className="button button--primary button--compact resources-knowledge__open-action"
+              className="button button--ghost button--compact resources-knowledge__open-action"
               type="button"
               onClick={() => openResourceInVsCode(selectedResource)}
               disabled={selectedResourceOpenTarget.kind === "unavailable"}
@@ -3486,7 +3398,7 @@ export function ResourcesWorkbenchView({
           </div>
           ) : null}
           </section>
-        </section>
+        </ResourceReader>
       ) : null}
     </section>
   );

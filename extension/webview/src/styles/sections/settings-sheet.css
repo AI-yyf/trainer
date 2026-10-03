@@ -57,197 +57,24 @@
 
 .settings-sheet__layout {
   display: flex;
-  flex: 1 1 0;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
-  min-height: 0;
 }
 
-/* The pane hosts the sheet: keep it non-scrolling so the category nav can
-   sit as a real footer and never overlay the content beneath it. */
+/* The index/detail surface owns scrolling; detail content uses normal flow. */
 .coach-settings-view.settings-pane {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
-}
-
-.coach-settings-view .settings-sheet__body {
-  flex: 1 1 0;
-  min-height: 0;
-}
-
-.settings-nav-bar {
-  order: 2;
-  display: flex;
-  flex: none;
-  flex-direction: column-reverse;
-  align-items: stretch;
-  border-top: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
-  background: var(--bg-0, var(--panel));
-}
-
-/* The action rail sits above the category row and is right-aligned; the
-   category nav then gets the full width of the pane instead of sharing it
-   with three unrelated buttons. */
-.settings-nav__actions--rail {
-  justify-content: flex-end;
-  gap: 2px;
-  padding: 6px 4px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
-  margin-bottom: 2px;
-}
-
-.settings-nav {
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  flex-direction: row;
-  justify-content: center;
-  gap: 2px;
-  padding: 6px 2px 4px;
-  /* Six categories now own the whole row. Rather than let every cell shrink
-     until its label is one glyph wide, keep cells at their natural width and
-     let the row scroll as a last resort. Labels stay whole. */
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  overscroll-behavior-x: contain;
-}
-
-.settings-nav::-webkit-scrollbar {
-  display: none;
-}
-
-.settings-nav__item {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 0;
-  padding: 6px 8px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--fg-2);
-  font-family: inherit;
-  font-size: var(--trainer-font-2xs);
-  line-height: 1.3;
-  text-align: center;
-  white-space: nowrap;
-  cursor: pointer;
-  position: relative;
-}
-
-.settings-nav__icon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-}
-
-.settings-nav--measuring .settings-nav__item {
-  flex: none;
-}
-
-.settings-nav--measuring .settings-nav__label {
-  display: inline;
-  -webkit-line-clamp: unset;
-  overflow: visible;
-  text-overflow: clip;
-}
-
-/* Dense mode keeps a short label beside each icon instead of dropping the
-   text entirely — six unlabelled glyphs are not navigable. The component swaps
-   in the abbreviated copy and this only tightens the cell. */
-.settings-nav--icon .settings-nav__item {
-  padding: 6px 5px;
-  gap: 3px;
-}
-
-.settings-nav--icon .settings-nav__icon {
-  display: inline-flex;
-}
-
-.settings-nav--icon .settings-nav__label {
-  display: inline;
-  font-size: var(--trainer-font-3xs);
-}
-
-.settings-nav--icon .settings-nav__item.is-active {
-  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--fg-0) 65%, transparent);
-}
-
-.settings-nav--icon .settings-section-dot {
-  position: absolute;
-  top: 4px;
-  right: calc(50% - 14px);
-}
-
-.settings-nav__actions {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: auto;
-  padding: 0 4px 0 6px;
-  border-left: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
-}
-
-.settings-nav__action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--fg-muted);
-  cursor: pointer;
-}
-
-.settings-nav__action:hover {
-  color: var(--fg-0);
-  background: color-mix(in srgb, var(--fg-0) 5%, transparent);
-}
-
-.settings-nav__action:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -1px;
-}
-
-.settings-nav__item:hover {
-  color: var(--fg-0);
-  background: color-mix(in srgb, var(--fg-0) 5%, transparent);
-}
-
-.settings-nav__item.is-active {
-  color: var(--fg-0);
-  font-weight: var(--trainer-font-weight-medium);
-  background: color-mix(in srgb, var(--fg-0) 6%, transparent);
-  box-shadow: inset 0 2px 0 color-mix(in srgb, var(--fg-0) 55%, transparent);
-}
-
-.settings-nav__label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.25;
+  overflow-y: auto;
 }
 
 .settings-sheet__pane {
-  flex: 1 1 0;
   min-width: 0;
-  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  overflow-y: auto;
   padding-bottom: 4px;
 }
 
@@ -534,7 +361,6 @@
 .toolbar-button:active:not(:disabled),
 .settings-sheet__choice-pill:active:not(:disabled),
 .context-chip:active:not(:disabled),
-.header-switcher__item:active:not(:disabled),
 .menu-list__item:active:not(:disabled),
 .composer-session-list__item:active:not(:disabled) {
   transform: scale(0.98);
@@ -640,134 +466,6 @@
 
 .settings-sheet__status--dense .context-chip strong {
   font-weight: 400;
-}
-
-.settings-availability-strip {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 0 6px;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
-  background: transparent;
-}
-
-.settings-availability-strip__topline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.settings-availability-strip__topline .status-pill {
-  flex: none;
-}
-
-.settings-availability-strip__main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 10px;
-}
-
-.settings-availability-strip__copy {
-  min-width: 0;
-  display: block;
-}
-
-.settings-availability-strip__copy > strong {
-  display: inline;
-  color: var(--fg-1);
-  font-size: var(--trainer-font-2xs);
-  line-height: 1.32;
-  font-weight: 400;
-}
-
-.settings-availability-strip__more {
-  min-width: 0;
-  color: var(--fg-muted);
-  font-size: var(--trainer-font-3xs);
-  line-height: 1.35;
-}
-
-.settings-availability-strip__more > summary {
-  cursor: pointer;
-  color: var(--fg-muted);
-}
-
-.settings-availability-strip__more > summary:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -1px;
-}
-
-.settings-availability-strip__more .eyebrow,
-.settings-availability-strip__more .settings-availability-strip__meta,
-.settings-availability-strip__more .settings-availability-strip__facts {
-  margin-top: 6px;
-}
-
-.settings-availability-strip__copy > p:not(.settings-availability-strip__trust) {
-  margin: 2px 0 0;
-  color: var(--fg-1);
-  font-size: var(--trainer-font-3xs);
-  line-height: 1.42;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.settings-availability-strip__trust {
-  margin: 4px 0 0;
-  color: var(--fg-muted);
-  font-size: var(--trainer-font-3xs);
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.settings-availability-strip__meta {
-  display: block;
-  color: var(--fg-muted);
-  font-size: var(--trainer-font-3xs);
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.settings-availability-strip__primary {
-  width: auto;
-  min-width: 96px;
-  min-height: 28px;
-  padding: 4px 7px;
-}
-
-.settings-availability-strip__primary .action-button__icon {
-  width: 18px;
-  height: 18px;
-  border: 0;
-  background: transparent;
-}
-
-.settings-availability-strip__primary .action-button__label {
-  font-size: var(--trainer-font-2xs);
-  line-height: 1.2;
-}
-
-.settings-availability-strip__primary .action-button__detail {
-  display: none;
-}
-
-.settings-availability-strip__primary .action-button__chev {
-  display: none;
-}
-
-.settings-availability-strip__facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 14px;
 }
 
 .settings-availability-fact {
@@ -1894,27 +1592,6 @@
     grid-template-columns: 1fr;
   }
 
-  .settings-availability-strip__main {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
-  }
-
-  .settings-availability-strip__copy > p {
-    -webkit-line-clamp: 2;
-  }
-
-  .settings-availability-strip__primary {
-    width: min(126px, 100%);
-  }
-
-  .settings-availability-strip__primary .action-button__label {
-    white-space: normal;
-  }
-
-  .settings-availability-strip__facts {
-    gap: 0;
-  }
-
   .settings-availability-fact {
     width: 100%;
     grid-template-columns: 58px minmax(0, 1fr);
@@ -1940,11 +1617,6 @@
 
   .settings-setup-checks {
     grid-template-columns: 1fr;
-  }
-
-  .header-switcher__item {
-    padding: 6px 2px 8px;
-    font-size: var(--trainer-font-2xs);
   }
 
   .settings-sheet__utility-grid {
@@ -2065,42 +1737,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* Managed skill list: bordered rows with the $ trigger as a lead chip. */
-.settings-skill-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 8px;
-  border: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
-  border-radius: var(--radius-sm);
-  background: var(--bg-1);
-}
-
-.settings-skill-row .settings-skill-row__title {
-  color: var(--fg-0);
-}
-
-.settings-skill-row .settings-skill-row__detail {
-  color: var(--fg-1);
-}
-
-.settings-skill-row + .settings-skill-row {
-  margin-top: 4px;
-}
-
-.settings-skill-row__trigger {
-  flex: none;
-  min-width: 34px;
-  padding: 1px 6px;
-  border-radius: var(--radius-full);
-  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
-  font-size: var(--trainer-font-2xs);
-  font-weight: 400;
-  text-align: center;
 }
 
 /* Section entrance animations create stacking contexts. Raise the section

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 
 import type {
   RemoteCompanionCapabilities,
@@ -258,10 +259,45 @@ export class RemoteWorkspaceGateway implements WorkspaceGateway {
   private async request(
     request: Omit<RemoteCompanionRequest, 'protocol_version'>,
   ): Promise<RemoteCompanionResponse> {
+    // The UI host sees vscode-remote: URIs; the workspace host sees file: URIs.
+    // Translate only within this window's admitted workspace and the root
+    // advertised by its Companion. The public protocol stays unchanged.
+    const hostRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
+    const capabilities = await vscode.commands.executeCommand<RemoteCompanionCapabilities>(
+      COMPANION_CAPABILITIES_COMMAND,
+    );
+    if (!hostRoot || !capabilities?.available || !capabilities.workspace_uri) {
+      throw new Error('Remote companion workspace is unavailable.');
+    }
+    const companionRoot = vscode.Uri.parse(capabilities.workspace_uri, true);
+    const translate = (value: string, from: vscode.Uri, to: vscode.Uri): string => {
+      const uri = vscode.Uri.parse(value, true);
+      if (uri.scheme !== from.scheme || uri.authority !== from.authority) {
+        throw new Error('Remote request URI belongs to a different workspace authority.');
+      }
+      const relative = path.posix.relative(from.path, uri.path);
+      if (relative === '..' || relative.startsWith('../') || path.posix.isAbsolute(relative)) {
+        throw new Error('Remote request URI is outside the active workspace.');
+      }
+      return vscode.Uri.joinPath(to, relative).toString(true);
+    };
+    const outgoing = {
+      ...request,
+      ...(request.uri ? { uri: translate(request.uri, hostRoot, companionRoot) } : {}),
+      ...(request.spec?.cwd ? { spec: { ...request.spec, cwd: translate(request.spec.cwd, hostRoot, companionRoot) } } : {}),
+    };
     const response = await vscode.commands.executeCommand<RemoteCompanionResponse>(
       COMPANION_REQUEST_COMMAND,
-      { protocol_version: 2, ...request },
+      { protocol_version: 2, ...outgoing },
     );
-    return assertRemoteResponse(response);
+    const result = assertRemoteResponse(response);
+    const toHost = (uri: string) => translate(uri, companionRoot, hostRoot);
+    return {
+      ...result,
+      ...(result.stat ? { stat: { ...result.stat, uri: toHost(result.stat.uri) } } : {}),
+      ...(result.files ? { files: result.files.map(toHost) } : {}),
+      ...(result.matches ? { matches: result.matches.map(match => ({ ...match, uri: toHost(match.uri) })) } : {}),
+      ...(result.diagnostics ? { diagnostics: result.diagnostics.map(item => ({ ...item, uri: toHost(item.uri) })) } : {}),
+    };
   }
 }

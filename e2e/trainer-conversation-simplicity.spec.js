@@ -25,7 +25,7 @@ test('Coach shows the reply and usable next actions without duplicate explanatio
     await page.setViewportSize({ width, height: 760 });
     await expect(page.locator('.message-bubble strong').filter({ hasText: '边界检查' })).toHaveCount(1);
     await expect(page.getByRole('button', { name: '下一步：设为练习', exact: true })).toBeVisible();
-    await expect(page.getByText(/HIDDEN_/)).toHaveCount(0);
+    await expect(page.getByText(/HIDDEN_/).filter({ visible: true })).toHaveCount(0);
     await expect(page.locator('.message-bubble__tool-trail, .skill-projection-strip')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   }
@@ -37,8 +37,8 @@ test('Learning keeps its current step and action without statistics, history or 
   const primary = page.locator('[data-plan-primary="true"]');
   await expect(primary).toBeVisible();
   await expect(primary.locator('[data-plan-fact="next"]')).toBeVisible();
-  await expect(primary.locator('.coach-plan-view__compact-primary-action button')).toBeVisible();
-  await expect(page.locator('.coach-plan-view__governance, .coach-plan-view__summary-chips, .learning-home-overview, .skill-projection-strip, [data-view-context-rail="plan"], [data-view-agent-reply="plan"]')).toHaveCount(0);
+  await expect(primary.locator('[data-template=NextAction] > button')).toBeVisible();
+  await expect(page.locator('.coach-plan-view__governance, .learning-home-overview, .skill-projection-strip').filter({ visible: true })).toHaveCount(0);
   await expect(primary.locator('.coach-plan-view__empty-more')).toHaveCount(0);
   for (const width of [300, 360, 800]) {
     await page.setViewportSize({ width, height: 760 });
@@ -77,7 +77,7 @@ test('the single Learning action adopts only current step evidence and respects 
     await page.evaluate(data => window.postMessage({ type: 'bootstrap', payload: data }, location.origin), payload);
   }
   await apply();
-  const primary = page.locator('[data-plan-primary="true"] .coach-plan-view__compact-primary-action button');
+  const primary = page.locator('[data-plan-primary="true"] [data-template=NextAction] > button');
   await expect(primary).toContainText(/接纳|采纳/);
   await primary.click();
   await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
@@ -102,15 +102,16 @@ test('long stage titles wrap without generation buttons or empty material panels
   await page.evaluate(data => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: data }),
     { ...current, plan: { ...current.plan, stages: [{ id: 'long-stage', title, status: 'active' },
       { id: 'later-stage', title: '实现 sum_nested', status: 'queued' }] } });
-  await page.locator('[data-plan-stage-disclosure] > summary').click();
-  await expect(page.locator('.coach-plan-view__compact-stage')).toHaveCount(2);
-  await expect(page.getByText(title, { exact: true })).toBeVisible();
-  await expect(page.locator('[data-stage-materials], [data-stage-materials-generate], .stage-material-empty')).toHaveCount(0);
+  await page.locator('[data-learning-section=route] > summary').click();
+  await expect(page.locator('.stage-row')).toHaveCount(2);
+  await expect(page.locator('.stage-row').getByText(title, { exact: true })).toBeVisible();
+  await expect(page.locator('.stage-row')).toHaveCount(2);
+  await expect(page.locator('[data-stage-materials-generate]')).toHaveCount(2);
   for (const width of [300, 360, 800]) {
     await page.setViewportSize({ width, height: 760 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-    const row = await page.locator('.coach-plan-view__compact-stage').first().boundingBox();
-    const text = await page.locator('.coach-plan-view__compact-stage strong').first().boundingBox();
+    const row = await page.locator('.stage-row').first().boundingBox();
+    const text = await page.locator('.stage-block__title-text').first().boundingBox();
     expect(text.x + text.width).toBeLessThanOrEqual(row.x + row.width + 1);
   }
 });

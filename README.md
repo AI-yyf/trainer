@@ -22,7 +22,7 @@ English · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · [Fr
 [Install](#install) ·
 [Setup](#three-steps-no-fourth) ·
 [Mechanics](#core-mechanics) ·
-[Five Views](#five-views) ·
+[Three Destinations](#three-destinations) ·
 [Comparison](#compare) ·
 [5-Min Demo](#five-minute-demo) ·
 [Design](#why-it-feels-different) ·
@@ -166,17 +166,19 @@ The coach reads your files, checks diagnostics, and searches the workspace — b
 
 ---
 
-## Five Views
+## Three Destinations
 
-> Five fixed top-level views. Each has a strict responsibility boundary.
+> Chat, Learning and Resources are always visible. History and Settings are header utilities; training and growth live inside Learning.
 
 | View | Role | One-liner |
 |-----------|------|--------|
 | **Coach** | Streaming chat | **Entry**: tool access + `$` skill palette + image attachments + answer modes |
 | **Plan** | Learning plan | **Map**: stages, progress, evidence, plan freeze/unfreeze |
 | **Resources** | Library | **Bookshelf**: FTS5 search + 3-tier sandbox preview + restorable trash |
-| **Training** | Training | **Playground**: FSRS flash cards + theory drills + scenario experiments + verification gates |
-| **Settings** | Settings | **Console**: 59 commands + endpoint speed test + thinking intensity + workspace admission |
+| **Training (inside Learning)** | Focused activity | **Playground**: FSRS flash cards + theory drills + scenario experiments + verification gates |
+| **Settings (header utility)** | Index → detail | **Console**: 59 commands + endpoint speed test + thinking intensity + workspace admission |
+
+The full chat composer belongs to Chat. Learning and Resources carry structured context back through **Ask Coach**; focused practice owns its answer and reflection forms. The six existing routes and commands remain available. Learning contains the formal plan, FSRS review and four evidence-derived growth dimensions. Settings opens an index for Connection, Coach, Workspace and Preferences.
 
 <p align="center">
   <img src="assets/screenshots/plan.png" alt="Plan view" width="260" />
@@ -188,7 +190,7 @@ The coach reads your files, checks diagnostics, and searches the workspace — b
 
 Streaming coach chat with tool access, `$` skill palette, image attachments, answer modes, context-usage ring, session history and share.
 
-**Every coach reply carries three quick actions underneath:**
+**A coach reply highlights one next step. Its overflow menu retains:**
 
 - **Copy reply as Markdown**
 - **Save to library** (searchable + previewable)
@@ -198,7 +200,7 @@ Streaming coach chat with tool access, `$` skill palette, image attachments, ans
 
 ### Custom `$` Skills — create, share, install
 
-Type `$` to open the skill palette: beyond built-ins, you can wrap your own prompts into skills with trigger words and keywords, share them with others, or install skills others share — **all through a pure data channel, no code execution**.
+Type `$` in Chat to open a searchable palette with six default entries. Manage custom skills in Settings → Coach → Skills: beyond built-ins, you can wrap your own prompts into skills with trigger words and keywords, share them with others, or install skills others share — **all through a pure data channel, no code execution**.
 
 <p align="center">
   <img src="assets/screenshots/skill-deck.png" alt="Skill palette" width="380" />
@@ -369,7 +371,7 @@ Plans freeze and unfreeze; sessions survive restarts; card progress lives in SQL
 | Folder | Contents | Size |
 |---|---|---|
 | `extension/src/` | Host: commands, workspace trust, secret storage, sidecar lifecycle | ~30k lines TS |
-| `extension/webview/` | React workbench: 5 views + Zustand + 8 languages | ~50k lines TSX |
+| `extension/webview/` | React workbench: 3 destinations / 6 routes + Zustand + 8 languages | ~50k lines TSX |
 | `extension/tests/` | node:test suite (220 files / 1,679 cases) | 73,744 lines |
 | `server/app/` | FastAPI brain: agent / pedagogy / memory / FSRS / training | ~120k lines Python |
 | `server/tests/` | pytest suite (159 files / 1,649 cases) | 106,422 lines |

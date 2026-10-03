@@ -87,7 +87,7 @@ test('cold-start recovered stamp lights leftover overlay without leftover plan o
   assert.match(coachPlanSource, /data-plan-leftover-not-live=\{leftoverNote \? "true" : undefined\}/);
   assert.match(
     coachPlanSource,
-    /leftoverNote \? \(\s*<p[\s\S]*?data-plan-leftover-note="true"/,
+    /leftoverNote \? <p[\s\S]*?data-plan-leftover-note="true"/,
   );
 
   // Training / Resources: leftover sentence from recovered chrome flags, Open Coach primary.
@@ -205,6 +205,6 @@ test('recovered true + matching live plan_id keeps leftover overlay off (source)
   assert.match(coachPlanSource, /data-plan-leftover-not-live=\{leftoverNote \? "true" : undefined\}/);
   assert.match(
     coachPlanSource,
-    /leftoverNote \? \(\s*<p[\s\S]*?data-plan-leftover-note="true"/,
+    /leftoverNote \? <p[\s\S]*?data-plan-leftover-note="true"/,
   );
 });

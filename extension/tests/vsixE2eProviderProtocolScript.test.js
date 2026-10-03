@@ -454,7 +454,7 @@ test('settings provider form wires the CC-Switch-style quick setup card', () => 
   // The card is rendered at the top of the provider section, above the
   // availability strip, so the ≤3-action path is the first thing users see.
   const quickStart = source.indexOf('<ProviderQuickSetup');
-  const stripStart = source.indexOf('settings-availability-strip');
+  const stripStart = source.indexOf('{showAvailabilityStrip ? availabilityState');
   assert.ok(quickStart > 0, 'expected the quick setup card in the settings view');
   assert.ok(stripStart > quickStart, 'quick setup must render before the availability strip');
 

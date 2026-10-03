@@ -48,70 +48,12 @@ body,
   z-index: 1;
 }
 
-.trainer-header {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 0;
-  margin: 0;
-  padding: 0 0 2px;
-  border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  flex-shrink: 0;
-}
-
-.trainer-shell--coach-quiet .trainer-header {
-  padding-bottom: 2px;
-  border-color: color-mix(in srgb, var(--line) 50%, transparent);
-}
-
-.trainer-shell--coach-quiet .header-switcher__item {
-  transition:
-    color var(--motion-fast) var(--motion-ease),
-    border-bottom-color var(--motion-fast) var(--motion-ease),
-    opacity var(--motion-fast) var(--motion-ease);
-  opacity: 0.8;
-}
-
-.trainer-shell--coach-quiet .header-switcher__item.is-active {
-  opacity: 1;
-}
-
 /* Row 1 — utility/identity layer: a small muted brand mark on the start
    edge, History + Settings icon actions pinned to the end edge. This row
    never wraps; the actions always stay flush to the top corner. */
-.trainer-header__utility {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0;
-  width: 100%;
-  min-width: 0;
-  padding-top: 6px;
-}
-
-.trainer-header__brand {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  color: var(--fg-1);
-  font-size: var(--trainer-font-xs);
-  letter-spacing: 0.04em;
-  line-height: 1;
-  user-select: none;
-}
 
 /* Row 2 — primary nav: the daily view switcher owns the full row with even
    columns. It is a real second layer, not a wrapped leftover. */
-.trainer-header__nav {
-  display: block;
-  width: 100%;
-  min-width: 0;
-}
 
 .button__icon {
   display: inline-flex;
@@ -216,59 +158,12 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
   background: color-mix(in srgb, var(--danger) 10%, var(--bg-1));
 }
 
-.header-actions {
-  display: none;
-  align-items: center;
-  gap: 3px;
-  justify-content: flex-end;
-  flex-shrink: 0;
-  margin-left: auto;
-  padding-top: 1px;
-}
-
-.header-actions:has(*) {
-  display: flex;
-}
-
 /* Utility-layer buttons are content-sized icon hits, not stretching tabs —
    the base .header-switcher__item grid contract (width: 100%; min-width: 0)
    collapses them to invisibility inside this flex row. */
-.header-actions .header-switcher__item {
-  width: auto;
-  min-width: 28px;
-  min-height: 24px;
-  padding: 3px 6px;
-}
 
 /* Icon spans stay display:none outside .header-switcher--icon containers;
    the utility row is exactly such an icon-only context. */
-.header-actions .header-switcher__icon {
-  display: inline-flex;
-}
-
-.trainer-header .status-pill {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--fg-muted);
-  font-size: var(--trainer-font-3xs);
-  letter-spacing: 0;
-}
-
-.trainer-header .status-pill--starting,
-.trainer-header .status-pill--pending,
-.trainer-header .status-pill--offline,
-.trainer-header .status-pill--fail,
-.trainer-header .status-pill--connected {
-  color: var(--fg-muted);
-  border-color: transparent;
-  background: transparent;
-}
-
-.trainer-header .status-pill--starting,
-.trainer-header .status-pill--pending {
-  animation: status-pill-pending 2.4s var(--motion-ease) infinite;
-}
 
 @keyframes status-pill-pending {
   0%,
@@ -280,159 +175,8 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
   }
 }
 
-.trainer-header__action {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-}
-
-.trainer-header__action-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--bg-2) 70%, var(--bg-1));
-  color: var(--fg-0);
-  border: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
-  box-shadow: none;
-}
-
-.header-switcher {
-  display: grid;
-  /* Phase-C nav: 3 primary tabs (+ conditional training) — columns follow
-     the rendered count instead of a fixed five. */
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  align-items: stretch;
-  gap: 0;
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  scrollbar-width: none;
-  white-space: nowrap;
-  padding: 8px 0 0;
-}
-
-.header-switcher::-webkit-scrollbar {
-  display: none;
-}
-
-.header-switcher__item {
-  appearance: none;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  background: transparent;
-  color: var(--fg-muted);
-  border-radius: 0;
-  padding: 0 2px 6px;
-  font-size: var(--trainer-font-xs);
-  line-height: 1.2;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-width: 0;
-  text-align: center;
-  cursor: pointer;
-  transition:
-    color var(--motion-fast) var(--motion-ease),
-    border-color var(--motion-fast) var(--motion-ease),
-    background var(--motion-fast) var(--motion-ease),
-    box-shadow var(--motion-fast) var(--motion-ease),
-    transform var(--motion-fast) var(--motion-ease);
-  box-shadow: none;
-}
-
-.header-switcher__label {
-  min-width: 0;
-  overflow: visible;
-  text-overflow: clip;
-}
-
-.header-switcher__icon {
-  display: none;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-}
-
-.header-switcher--icon .header-switcher__item {
-  padding: 7px 2px 8px;
-  justify-content: center;
-}
-
-.header-switcher--icon .header-switcher__icon {
-  display: inline-flex;
-}
-
-.header-switcher--icon .header-switcher__label {
-  display: none;
-}
-
-.header-switcher__item:hover {
-  background: transparent;
-  color: var(--fg-0);
-  border-bottom-color: color-mix(in srgb, var(--fg-0) 58%, var(--line));
-  transform: none;
-}
-
-.header-switcher__item:focus-visible {
-  outline: none;
-  border-bottom-color: var(--fg-0);
-  box-shadow: 0 2px 0 color-mix(in srgb, var(--fg-0) 28%, transparent);
-}
-
-.header-switcher__item.is-active {
-  background: transparent;
-  border-bottom-color: var(--fg-0);
-  color: var(--fg-0);
-  font-weight: 400;
-  box-shadow: none;
-}
-
-.header-switcher--compact {
-  gap: 0;
-}
-
-.header-switcher--compact .header-switcher__item {
-  width: 100%;
-  padding: 6px 2px 8px;
-  font-size: var(--trainer-font-2xs);
-  justify-content: center;
-}
-
-.header-switcher--compact .header-switcher__label {
-  font-size: var(--trainer-font-2xs);
-}
-
-@media (max-width: 540px) {
-  .trainer-header {
-    padding-inline: 0;
-  }
-
-  .header-switcher__item {
-    padding: 6px 2px 8px;
-    font-size: var(--trainer-font-2xs);
-  }
-
-  .header-switcher__label {
-    line-height: 1.1;
-  }
-}
-
-@media (max-width: 340px) {
-  /* Very narrow: row 1 keeps only the History/Settings icon buttons, flush
-     to the end edge — the brand mark yields first. Rows never wrap. */
-  .trainer-header__brand {
-    display: none;
-  }
-}
-
 
 /* High-resolution polish: crisp text and thinner hairlines at scale. */
-.trainer-header,
 .trainer-preview-sidebar {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;

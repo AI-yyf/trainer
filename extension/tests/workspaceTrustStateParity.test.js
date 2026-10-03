@@ -289,13 +289,13 @@ test('Settings first screen paints live trust sentence, not leftover sandbox chr
   const settings = fs.readFileSync(settingsViewPath, 'utf8');
   const app = fs.readFileSync(appPath, 'utf8');
 
-  assert.match(settings, /data-workspace-trust-state=\{resolvedWorkspaceTrustState\}/);
-  assert.match(settings, /data-settings-workspace-trust="true"/);
+  assert.match(settings, /data-workspace-trust-state=\{issue.id === "trust" \? resolvedWorkspaceTrustState : undefined\}/);
+  assert.match(settings, /data-settings-workspace-trust=\{issue.id === "trust" \? "true" : undefined\}/);
   assert.match(settings, /describeWorkspaceTrustState\(resolvedWorkspaceTrustState, language\)/);
-  assert.match(
-    settings,
-    /data-settings-workspace-trust="true"\s*[\s\S]*?role="status"\s*[\s\S]*?aria-live="polite"/,
-  );
+  const { render } = require('./templateAssertions');
+  const state = render('templates/SystemState.tsx', 'SystemState', { kind: 'permission-required', title: 'Workspace is untrusted.' });
+  assert.match(state, /role="status" aria-live="polite"/);
+  assert.match(state, /Workspace is untrusted\./);
   assert.doesNotMatch(settings, /data-workspace-trust-state=\{"trusted"\}/);
 
   assert.match(app, /readWorkspaceTrustStateFromCapabilitySummary\(/);

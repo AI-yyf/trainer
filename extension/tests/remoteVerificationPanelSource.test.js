@@ -21,7 +21,8 @@ test('the streaming remote verification panel ships with eight-language copy (§
   assert.match(view, /onStop=\{onStopRemoteVerification\}/);
   assert.match(view, /remoteVerifyCopy\(language\)\.verifyOn/);
   assert.match(panel, /remote-verify-panel__output/);
-  assert.match(panel, /role="status"/);
+  assert.match(panel, /<SystemState kind="processing"/);
+  assert.match(panel, /<VerificationResult/);
   // Completed runs show the honest verdict; anything else shows outcome-unknown.
   assert.match(panel, /copy\.passed/);
   assert.match(panel, /copy\.interrupted/);

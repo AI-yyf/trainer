@@ -127,7 +127,7 @@ test('Resources separates tree selection from explicit native opening', () => {
   assert.match(treeItemSource, /aria-keyshortcuts="Enter Space"/);
   assert.match(treeItemSource, /type="checkbox"/);
   assert.match(treeItemSource, /onToggleSelection\(node\.resource!\.id\)/);
-  assert.match(viewSource, /className="button button--primary button--compact resources-knowledge__open-action"[\s\S]*?onClick=\{\(\) => openResourceInVsCode\(selectedResource\)\}/);
+  assert.match(viewSource, /className="button button--ghost button--compact resources-knowledge__open-action"[\s\S]*?onClick=\{\(\) => openResourceInVsCode\(selectedResource\)\}/);
 });
 
 test('Resources does not expose a project file manager or destructive sandbox controls', () => {
@@ -476,9 +476,9 @@ test('Resources starts a review card only from fresh, trusted, indexed material 
     viewSource,
     /const selectedResourceTrainingIsAvailable =\s*selectedResourceTrainingState\?\.phase === "ready"\s*\|\|\s*selectedResourceTrainingState\?\.phase === "not-current"/,
   );
-  assert.match(viewSource, /selectedResourceTrainingIsAvailable \? \(/);
+  assert.match(viewSource, /selectedResourceTrainingIsAvailable \?/);
   assert.match(viewSource, /\|\|\s*selectedResourceTrainingIsAvailable/);
-  assert.match(viewSource, /onClick=\{onOpenTraining\}/);
+  assert.match(viewSource, /onClick: selectedResourceTrainingIsAvailable \? \(\) => onOpenTraining\?\.\(\)/);
   assert.match(viewSource, /openCurrentTraining/);
   assert.match(
     viewSource,
@@ -487,8 +487,8 @@ test('Resources starts a review card only from fresh, trusted, indexed material 
   assert.match(viewSource, /function resourceReuseSummary\(language: ComposerLanguage\): string/);
   assert.match(viewSource, /const selectedResourceReuseSummary = selectedResource \? resourceReuseSummary\(language\) : undefined;/);
   assert.match(viewSource, /resources-knowledge__reuse-summary/);
-  assert.match(viewSource, /resources-empty__title/);
-  assert.match(viewSource, /resources-empty__hint/);
+  assert.match(viewSource, /<SystemState kind="empty" title=\{localize\(language, "emptyTitle"\)\}/);
+  assert.match(viewSource, /detail=\{localize\(language, "emptyBody"\)\}/);
 
   assert.match(appSource, /const requestResourceTrainingHandoff = useCallback/);
   assert.match(appSource, /source: "resource_knowledge",[\s\S]*?cardType: "flash",[\s\S]*?submode: "flash"/);

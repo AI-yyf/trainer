@@ -191,7 +191,7 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
       type: "state/patch",
       payload: { resources: [lifecycleResource("indexing")], deletedResources: [] },
     });
-    const resourceTreeItem = tree.getByRole("treeitem", { name: RESOURCE_TITLE, exact: true });
+    const resourceTreeItem = page.getByRole("treeitem", { name: RESOURCE_TITLE, exact: true, includeHidden: true });
     await expect(resourceTreeItem).toBeVisible();
     await expect(resourceTreeItem.locator(".resources-library-tree__status")).toHaveText("Indexing");
 
@@ -214,7 +214,7 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
 
     await resourceTreeItem.click();
     await expect(resourceTreeItem).toHaveAttribute("aria-current", "true");
-    const detail = library.getByRole("region", { name: RESOURCE_TITLE, exact: true });
+    const detail = page.locator('[data-template=ResourceReader]');
     await expect(detail).toBeVisible();
 
     const openStart = await actionCount(page);
@@ -226,6 +226,7 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     );
     expect(openAction).toEqual({ type: "resource/open", payload: { resourceId: RESOURCE_ID } });
 
+    await detail.locator(".template-back").first().click();
     const resourceCheckbox = tree.getByRole("checkbox", {
       name: `Select resource: ${RESOURCE_TITLE}`,
       exact: true,
@@ -274,7 +275,7 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     await sendResourceOperationStatus(page, "delete", deleteRequestId, "Moved 1 resource to Trash.");
     await expect(tree.getByRole("treeitem", { name: RESOURCE_TITLE, exact: true })).toHaveCount(0);
     await expect(library.locator(".resources-knowledge__selection-count")).toHaveCount(0);
-    await expect(library.getByRole("status")).toContainText("Moved 1 resource to Trash.");
+    await expect(library.getByRole("status").filter({ hasText: /Moved|Restored/ })).toContainText("Moved 1 resource to Trash.");
 
     const trash = library.locator(".resources-knowledge__trash");
     await expect(trash).toContainText(RESOURCE_TITLE);
@@ -298,7 +299,7 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     const restoredTreeItem = tree.getByRole("treeitem", { name: RESOURCE_TITLE, exact: true });
     await expect(restoredTreeItem).toBeVisible();
     await expect(restoredTreeItem).toHaveAttribute("aria-checked", "false");
-    await expect(library.getByRole("status")).toContainText("Restored 1 resource.");
+    await expect(library.getByRole("status").filter({ hasText: /Moved|Restored/ })).toContainText("Restored 1 resource.");
 
     const restoredOpenStart = await actionCount(page);
     await restoredTreeItem.press("Enter");

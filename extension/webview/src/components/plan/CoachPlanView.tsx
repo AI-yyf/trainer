@@ -1,3 +1,7 @@
+import { LearningHome } from "../../templates/LearningHome";
+import { SystemState } from "../../templates/SystemState";
+import { templateCopy } from "../../templates/templateCopy";
+import { trainingViewLabel } from "../../lib/viewLabels";
 import {
   isValidElement,
   useEffect,
@@ -1602,7 +1606,6 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const [evidenceFilter, setEvidenceFilter] = useState<"all" | "pending" | "deferred" | "adopted" | "rejected" | "history" | "unscoped">(
     "pending",
   );
-  const [planTab, setPlanTab] = useState<"plan" | "progress">("plan");
   const composerDraftReplacementCancelRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -1791,6 +1794,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         role="alertdialog"
         aria-modal="false"
         aria-label={composerDraftReplacement.title}
+        onKeyDown={(event) => { if (event.key === "Escape" && composerDraftReplacement) { event.stopPropagation(); composerDraftReplacement.onCancel(); } }}
       >
         <span className="coach-plan-view__decision-rail" aria-hidden="true" />
         <div className="coach-plan-view__decision-copy">
@@ -1878,161 +1882,19 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   // Reuse the plan-generate action the host already supplies; never invent a new command.
   const planGenerateAction =
     (actions ?? []).find((action) => action.id === "refresh-plan") ?? emptyPrimaryAction;
-  const planTabBar = (
-    <div className="plan-dashboard__tabs" role="tablist" aria-label={t("planDashboardTabProgress")}>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={planTab === "plan"}
-        data-plan-tab="plan"
-        className={`plan-dashboard__tab${planTab === "plan" ? " is-active" : ""}`}
-        onClick={() => setPlanTab("plan")}
-      >
-        {t("planDashboardTabPlan")}
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={planTab === "progress"}
-        data-plan-tab="progress"
-        className={`plan-dashboard__tab${!compactPrimary && planTab === "progress" ? " is-active" : ""}`}
-        onClick={() => setPlanTab("progress")}
-      >
-        {t("planDashboardTabProgress")}
-      </button>
-    </div>
-  );
-
   if (!plan) {
     return (
-      <section
-        className={classes}
-        data-plan-leftover-not-live={leftoverNote ? "true" : undefined}
-      >
-        {compactPrimary ? null : (
-        <div className="section-block__header">
-          <div>
-            {showEyebrow ? <span className="eyebrow">{resolvedEyebrow}</span> : null}
-            <h2>{resolvedEmptyTitle}</h2>
-          </div>
-        </div>
-        )}
-        {!compactPrimary ? planTabBar : null}
-        {!compactPrimary && planTab === "progress" ? (
-          <div className="plan-dashboard__empty" data-plan-dashboard-empty="true">
-            <PlanIcon size={20} />
-            <p>{t("planDashboardEmptyTitle")}</p>
-            {planGenerateAction ? (
-              <ActionButton
-                className="plan-dashboard__empty-action"
-                tone={planGenerateAction.tone ?? "accent"}
-                icon={planGenerateAction.icon}
-                label={planGenerateAction.label}
-                detail={planGenerateAction.detail}
-                disabled={planGenerateAction.disabled}
-                onClick={planGenerateAction.onClick}
-              />
-            ) : null}
-          </div>
-        ) : (
-          <>
-        <div className="coach-plan-view__empty">
-          <div className="coach-plan-view__empty-card coach-plan-view__empty-card--quiet">
-            {leftoverNote ? (
-              <p
-                className="coach-plan-view__leftover-note"
-                data-plan-leftover-note="true"
-                role="status"
-                aria-live="polite"
-              >
-                {leftoverNote}
-              </p>
-            ) : (
-              emptyState
-            )}
-            {compactPrimary && emptyPrimaryAction ? (
-              <div className="coach-plan-view__compact-primary-action">
-                <ActionButton
-                  className="coach-plan-view__action-button"
-                  tone={emptyPrimaryAction.tone ?? "accent"}
-                  icon={emptyPrimaryAction.icon}
-                  label={emptyPrimaryAction.label}
-                  detail={emptyPrimaryAction.detail}
-                  disabled={emptyPrimaryAction.disabled}
-                  onClick={emptyPrimaryAction.onClick}
-                  fullWidth
-                />
-              </div>
-            ) : leftoverNote ? null : (
-            <details className="coach-plan-view__empty-more">
-              <summary>{planCopy(language, "leftoverOutlineMore")}</summary>
-              <div className="coach-plan-view__empty-outline" aria-label={planCopy(language, "emptyOutlineLabel")}>
-                <div className="coach-plan-view__empty-outline-row is-current">
-                  <span>{planCopy(language, "connectFirst")}</span>
-                  <strong>{planCopy(language, "workingConnection")}</strong>
-                  <p>{planCopy(language, "formalPlanHonest")}</p>
-                </div>
-                <div className="coach-plan-view__empty-outline-row">
-                  <span>{planCopy(language, "formalThread")}</span>
-                  <strong>{planCopy(language, "compressThread")}</strong>
-                  <p>{planCopy(language, "noSilentMutation")}</p>
-                </div>
-                <div className="coach-plan-view__empty-outline-row">
-                  <span>{planCopy(language, "emptyVerify")}</span>
-                  <strong>{planCopy(language, "everyStepReturns")}</strong>
-                  <p>{planCopy(language, "completionFlow")}</p>
-                </div>
-              </div>
-            </details>
-            )}
-          </div>
-        </div>
-        {compactPrimary ? null : memoryScopeContext}
-        {compactPrimary ? null : globalPlanContext}
-        {compactPrimary ? null : emptyPrimaryAction || emptySecondaryActions.length ? (
-          <section
-            className="coach-plan-view__actions-inline"
-            aria-label={props.actionsLabel ?? resolvedNextStepLabel}
-          >
-            {emptyPrimaryAction ? (
-              <div className="coach-plan-view__compact-primary-action">
-                <ActionButton
-                  className="coach-plan-view__action-button"
-                  tone={emptyPrimaryAction.tone ?? "accent"}
-                  icon={emptyPrimaryAction.icon}
-                  label={emptyPrimaryAction.label}
-                  detail={emptyPrimaryAction.detail}
-                  disabled={emptyPrimaryAction.disabled}
-                  onClick={emptyPrimaryAction.onClick}
-                  fullWidth
-                />
-                {emptyPrimaryAction.id === "plan-review-evidence" ? liveEvidenceDecisionRow : null}
-              </div>
-            ) : null}
-            {emptySecondaryActions.length ? (
-              <details className="coach-plan-view__empty-more">
-                <summary>{resolvedActionsLabel}</summary>
-                <div className="coach-plan-view__actions-stack">
-                  {emptySecondaryActions.map((action) => (
-                    <ActionButton
-                      key={action.id}
-                      className="coach-plan-view__action-button"
-                      tone="ghost"
-                      icon={action.icon}
-                      label={action.label}
-                      detail={action.detail}
-                      disabled={action.disabled}
-                      onClick={action.onClick}
-                      fullWidth
-                    />
-                  ))}
-                </div>
-              </details>
-            ) : null}
-          </section>
-        ) : null}
-          </>
-        )}
+      <section className="template-learning-home" data-template="LearningHome" data-plan-leftover-not-live={leftoverNote ? "true" : undefined}>
+        <SystemState kind="empty" title={resolvedEmptyTitle} detail={leftoverNote ? <p data-plan-leftover-note="true">{leftoverNote}</p> : emptyState}
+          action={emptyPrimaryAction?.onClick ? { label: emptyPrimaryAction.label, onClick: emptyPrimaryAction.onClick, disabled: emptyPrimaryAction.disabled } : undefined}>
+          {emptyPrimaryAction?.id === "plan-review-evidence" ? liveEvidenceDecisionRow : null}
+        </SystemState>
+        {renderComposerDraftReplacement("stage")}
+        {emptySecondaryActions.length ? <details className="template-disclosure"><summary>{resolvedActionsLabel}</summary><div>{emptySecondaryActions.map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} disabled={action.disabled} onClick={action.onClick} />)}</div></details> : null}
+        {memoryScopeContext}
+        {globalPlanContext}
+        <button type="button" className="template-back" onClick={() => props.onNavigateToView?.("training")}>{trainingViewLabel(language)}</button>
+        <button type="button" className="template-back" onClick={() => props.onNavigateToView?.("progress")}>{templateCopy[language].growth}</button>
       </section>
     );
   }
@@ -2350,541 +2212,37 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const primarySummaryChips = compactPrimary ? [] : summaryChips;
   const primaryRouteStripItems = routeStripItems;
 
+  const nextAction = compactPrimaryAction ?? pickPlanPrimaryAction(actions);
   return (
-    <section
-      className={classes}
-      data-plan-leftover-not-live={leftoverNote ? "true" : undefined}
-      aria-labelledby={!compactPrimary && resolvedTitleText ? "coach-plan-view-title" : undefined}
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && composerDraftReplacement) {
-          event.preventDefault();
-          composerDraftReplacement.onCancel();
-        }
-      }}
-    >
-      {showHeader && !compactPrimary ? (
-        <div className="section-block__header">
-          <div>
-            {showEyebrow ? <span className="eyebrow">{resolvedEyebrow}</span> : null}
-            {resolvedTitleText ? <h2 id="coach-plan-view-title">{resolvedTitleText}</h2> : null}
-            {titleNote ? <p className="inline-note">{titleNote}</p> : null}
-          </div>
-        </div>
-      ) : null}
-
-      {!compactPrimary ? planTabBar : null}
-
-      {!compactPrimary ? <LearningHomeOverview
-        activeStageTitle={activeStageTitle ?? ""}
-        currentStageLabel={resolvedCurrentStageLabel}
-        onStageContinue={
-          onStageSelect && activeStage ? () => onStageSelect(activeStage) : undefined
-        }
-      /> : null}
-
-      {compactPrimary || planTab === "progress" ? null : (
-        <SkillProjectionStrip
-          language={language}
-          projection={skillProjection}
-          variant="compact"
-        />
-      )}
-
-      {!compactPrimary && planTab === "progress" ? (
-        <PlanDashboard plan={plan} />
-      ) : (
-      <div className="coach-plan-view__flow coach-plan-view__flow--linear">
-        <article
-          className="coach-plan-view__main-card"
-          data-plan-primary={compactPrimary ? "true" : undefined}
-          aria-label={resolvedLinearOverviewLabel}
-          aria-labelledby={compactPrimary ? undefined : "coach-plan-view-mainline-heading"}
-        >
-          <div className="coach-plan-view__main-card-head">
-              <div className="coach-plan-view__main-card-title">
-                {!compactPrimary ? (
-                  <h3 id="coach-plan-view-mainline-heading" className="coach-plan-view__mainline-heading">
-                    {resolvedMainlineLabel}
-                  </h3>
-                ) : null}
-                {!compactPrimary && resolvedNextStepResumeThread ? (
-                  <div className="coach-plan-view__resume-banner">
-                    <span className="eyebrow">{resolvedResumeActionLabel}</span>
-                  <p className="coach-plan-view__resume-copy">{resolvedNextStepResumeThread}</p>
-                  {onResumeThread ? (
-                    <ActionButton
-                      tone="accent"
-                      icon={<ArrowRightIcon size={12} />}
-                      label={resolvedResumeActionLabel}
-                      detail={resolvedNextStepHint}
-                      onClick={onResumeThread}
-                      fullWidth={false}
-                    />
-                  ) : null}
-                </div>
-              ) : null}
-              {!compactPrimary && showGoalLead ? (
-                <>
-                  {shouldRepeatGoalLabel ? (
-                    <p className="coach-plan-view__lane-note coach-plan-view__lane-note--quiet">
-                      {resolvedGoalLabel}
-                    </p>
-                  ) : null}
-                  <div className="coach-plan-view__goal-title">
-                    <p>{currentMainlineText}</p>
-                  </div>
-                </>
-              ) : null}
-              {!compactPrimary && showGoalSummary ? renderNodeWithParagraph(currentGoalSummary) : null}
-              {!compactPrimary && primarySummaryChips.length ? (
-                <div className="coach-plan-view__summary-chips" aria-label={planCopy(language, "overviewLabel")}>
-                  {primarySummaryChips.map((chip) => (
-                    <StatusLabel key={chip} label={chip} />
-                  ))}
-                </div>
-              ) : null}
-              {governanceItems.length && !compactPrimary ? (
-                <div className="coach-plan-view__governance-strip" aria-label={resolvedGovernanceLabel}>
-                  {governanceItems.slice(0, 4).map((item) => {
-                    const detail = inlineText(item.detail);
-                    return (
-                      <div
-                        key={item.id}
-                        className={`coach-plan-view__governance-item is-${item.tone ?? "neutral"}`}
-                        title={[item.label, inlineText(item.value), detail].filter(Boolean).join(" · ")}
-                      >
-                        <span>{item.label}</span>
-                        <strong>{inlineText(item.value)}</strong>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
-              {shouldShowDecisionCard ? (
-                <div
-                  className={`coach-plan-view__decision-strip is-${planDecisionStrip.tone}`}
-                  role="status"
-                  aria-live="polite"
-                >
-                  <span className="coach-plan-view__decision-rail" aria-hidden="true" />
-                  <div className="coach-plan-view__decision-copy">
-                    <span>{planDecisionStrip.eyebrow}</span>
-                    <strong>{planDecisionStrip.title}</strong>
-                    <p>{planDecisionStrip.detail}</p>
-                    <em>{planDecisionStrip.next}</em>
-                  </div>
-                </div>
-              ) : null}
-              {!compactPrimary ? (
-              <div
-                className="coach-plan-view__now-card"
-                data-plan-fact="next"
-                title={inlineText(currentLane.body)}
-              >
-                <span>{currentLane.label}</span>
-                <strong>{currentLane.body}</strong>
-                {currentLane.detail ? <em>{inlineText(currentLane.detail)}</em> : null}
-                {resolvedNextStepResumeThread ? (
-                  <p className="inline-note">{resolvedNextStepResumeThread}</p>
-                ) : null}
-              </div>
-              ) : null}
-              {compactPrimary ? (
-                <div className="coach-plan-view__compact-summary">
-                  {leftoverNote ? (
-                    <p
-                      className="coach-plan-view__leftover-note"
-                      data-plan-leftover-note="true"
-                      role="status"
-                      aria-live="polite"
-                    >
-                      {leftoverNote}
-                    </p>
-                  ) : null}
-                  <div
-                    className="coach-plan-view__now-card"
-                    data-plan-fact="next"
-                    title={inlineText(currentLane.body)}
-                  >
-                    <span className="coach-plan-view__now-label">{currentLane.label}</span>
-                    <strong>{currentLane.body}</strong>
-                  </div>
-                  {compactPrimaryAction ? (
-                    <div className="coach-plan-view__compact-primary-action">
-                      <ActionButton
-                        className="coach-plan-view__action-button"
-                        tone={compactPrimaryAction.tone ?? "accent"}
-                        icon={compactPrimaryAction.icon}
-                        label={compactPrimaryAction.label}
-                        detail={compactPrimaryAction.detail}
-                        disabled={compactPrimaryAction.disabled}
-                        onClick={compactPrimaryAction.onClick}
-                        fullWidth
-                      />
-                    </div>
-                  ) : null}
-                  {!compactPrimary && compactSecondaryActions.length ? (
-                    <details className="coach-plan-view__empty-more">
-                      <summary>{resolvedActionsLabel}</summary>
-                      <div className="coach-plan-view__actions-stack">
-                        {compactSecondaryActions.map((action) => (
-                          <ActionButton
-                            key={action.id}
-                            className="coach-plan-view__action-button"
-                            tone={action.tone ?? "ghost"}
-                            icon={action.icon}
-                            label={action.label}
-                            detail={action.detail}
-                            disabled={action.disabled}
-                            onClick={action.onClick}
-                            fullWidth
-                          />
-                        ))}
-                      </div>
-                    </details>
-                  ) : null}
-                </div>
-              ) : null}
-              {!hideDecisionStrip && !shouldShowDecisionCard && !compactPrimary ? (
-                <div className={`coach-plan-view__decision-inline is-${planDecisionStrip.tone}`} role="status" aria-live="polite">
-                  <span>{planDecisionStrip.eyebrow}</span>
-                  <strong>{planDecisionStrip.detail}</strong>
-                </div>
-              ) : null}
-              {!compactPrimary ? (
-                <div className="coach-plan-view__route-strip" aria-label={planCopy(language, "currentPlanRoute")}>
-                {primaryRouteStripItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="coach-plan-view__route-item"
-                    data-plan-fact={item.id}
-                    title={[item.label, item.body, item.detail]
-                      .map((value) => inlineText(value))
-                      .filter(Boolean)
-                      .join(" · ")}
-                  >
-                    <span>{item.label}</span>
-                    <strong>{item.body}</strong>
-                    {item.detail ? <em>{item.detail}</em> : null}
-                  </div>
-                ))}
-                </div>
-              ) : null}
-            </div>
-          </div>
-          {compactPrimary && plan.stages.length > 0 ? (
-            <details className="coach-plan-view__details" data-plan-stage-disclosure="true">
-              <summary>{`${t("planStages")} (${plan.stages.length})`}</summary>
-              <div className="coach-plan-view__details-body">
-                {renderComposerDraftReplacement("stage")}
-                <div className="coach-plan-view__stage-list">
-                  {plan.stages.map((stage) => (
-                    <div
-                      key={stage.id}
-                      className="coach-plan-view__compact-stage"
-                      data-plan-stage={stage.id}
-                      data-stage-status={stage.status}
-                      aria-current={stage.id === activeStage?.id ? "step" : undefined}
-                    >
-                      <span className="coach-plan-view__compact-stage-marker" aria-hidden="true">
-                        {stage.status === "done" ? <CheckMarkIcon size={14} /> : plan.stages.indexOf(stage) + 1}
-                      </span>
-                      <div>
-                        <strong>{stage.title}</strong>
-                        <span className="coach-plan-view__compact-stage-status">{resolveStageStatusLabel(
-                          stage.status, stageStatusLabels?.[stage.status], language,
-                        )}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </details>
-          ) : null}
-          {compactPrimary ? null : memoryScopeContext}
-          {compactPrimary ? null : globalPlanContext}
-          {!compactPrimary && !hasStageDetails && plan.stages.length === 1 && plan.stages[0] ? (
-            <PlanStageSection
-              stage={plan.stages[0]}
-              planId={plan.id}
-              isActive={plan.stages[0].id === activeStage?.id}
-              statusLabel={resolveStageStatusLabel(
-                plan.stages[0].status,
-                stageStatusLabels?.[plan.stages[0].status],
-                language,
-              )}
-              onStageSelect={onStageSelect}
-            />
-          ) : null}
-          {projectSubplans.length > 0 ? (
-            <details className="coach-plan-view__details coach-plan-view__project-subplans">
-              <summary>{`${resolvedProjectSubplansLabel} (${projectSubplans.length})`}</summary>
-              <div className="coach-plan-view__details-body">
-                <section className="coach-plan-view__details-group">
-                  {renderComposerDraftReplacement("project-subplan")}
-                  <div className="coach-plan-view__stage-list">
-                    {projectSubplans.map((subplan) => {
-                      const statusLabel =
-                        props.projectSubplanStatusLabels?.[subplan.status] ??
-                        defaultProjectSubplanStatusLabel(subplan.status, language);
-                      const detail = projectSubplanDetail(subplan, language);
-
-                      return (
-                        <button
-                          key={subplan.id}
-                          className={`coach-plan-view__stage-row is-${subplan.status}`}
-                          type="button"
-                          disabled={!props.onProjectSubplanSelect}
-                          title={[subplan.title, statusLabel, detail].join(" / ")}
-                          onClick={() => props.onProjectSubplanSelect?.(subplan)}
-                        >
-                          <span className="coach-plan-view__stage-dot" aria-hidden="true" />
-                          <div className="coach-plan-view__stage-copy">
-                            <div className="coach-plan-view__stage-topline">
-                              <strong>{subplan.title}</strong>
-                              <StatusLabel label={statusLabel} />
-                            </div>
-                            <p>{detail}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              </div>
-            </details>
-          ) : null}
-          {!compactPrimary && hasDetails ? (
-          <details className="coach-plan-view__details" data-plan-governance-disclosure="true">
-            <summary>{detailsSummary}</summary>
-            {hasDetails ? (
-            <div className="coach-plan-view__details-body">
-              <div className="coach-plan-view__details-intro">
-                <p className="coach-plan-view__lane-note coach-plan-view__lane-note--quiet coach-plan-view__details-hint">
-                  {resolvedSupportHint}
-                </p>
-              </div>
-
-              {compactDetailRows.length && !compactPrimary ? (
-                <section className="coach-plan-view__details-group">
-                  <div className="coach-plan-view__details-group-head">
-                    <span>{planCopy(language, "threadContext")}</span>
-                  </div>
-                  <div className="coach-plan-view__micro-list">
-                    {compactDetailRows.map((lane) => (
-                      <div key={lane.id} className="coach-plan-view__micro-item">
-                        <span>{lane.label}</span>
-                        <div>{renderNodeWithParagraph(lane.body)}</div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {hasCompactGovernance ? (
-                <section className="coach-plan-view__details-group">
-                  <div className="coach-plan-view__details-group-head">
-                    <span>{resolvedGovernanceLabel}</span>
-                  </div>
-                  <div className="coach-plan-view__governance-strip" aria-label={resolvedGovernanceLabel}>
-                    {governanceItems.map((item) => {
-                      const detail = inlineText(item.detail);
-                      return (
-                        <div
-                          key={item.id}
-                          className={`coach-plan-view__governance-item is-${item.tone ?? "neutral"}`}
-                          title={[item.label, inlineText(item.value), detail].filter(Boolean).join(" · ")}
-                        >
-                          <span>{item.label}</span>
-                          <strong>{inlineText(item.value)}</strong>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              ) : null}
-
-              {/* When compactPrimary is on, the same action list already renders as
-                  its own first-class "动作" disclosure directly under the current
-                  step. Repeating it here rendered 生成计划 twice in one view — the
-                  identical accent button, same label, same detail text. */}
-              {compactSecondaryActions.length && !compactPrimary ? (
-                <section className="coach-plan-view__details-group">
-                  <div className="coach-plan-view__details-group-head">
-                    <span>{resolvedActionsLabel}</span>
-                  </div>
-                  <div className="coach-plan-view__actions-stack">
-                    {compactSecondaryActions.map((action) => (
-                      <ActionButton
-                        key={action.id}
-                        className="coach-plan-view__action-button"
-                        tone={action.tone}
-                        icon={action.icon}
-                        label={action.label}
-                        detail={action.detail}
-                        disabled={action.disabled}
-                        onClick={action.onClick}
-                        fullWidth
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {hasStageDetails && !compactPrimary ? (
-                <section className="coach-plan-view__details-group">
-                  <div className="coach-plan-view__details-group-head">
-                    <span>{resolvedStagesLabel}</span>
-                  </div>
-                  {renderComposerDraftReplacement("stage")}
-                  <div className="coach-plan-view__stage-list">
-                    {plan.stages.map((stage) => {
-                      const stageLabel = resolveStageStatusLabel(
-                        stage.status,
-                        stageStatusLabels?.[stage.status],
-                        language,
-                      );
-
-                      return (
-                        <PlanStageSection
-                          key={stage.id}
-                          stage={stage}
-                          planId={plan.id}
-                          isActive={stage.id === activeStage?.id}
-                          statusLabel={stageLabel}
-                          onStageSelect={onStageSelect}
-                        />
-                      );
-                    })}
-                  </div>
-                </section>
-              ) : null}
-
-              {hasReviewDetails ? (
-                <section className="coach-plan-view__details-group">
-                  <div className="coach-plan-view__details-group-head">
-                    <span>{resolvedRevisitSummaryLabel}</span>
-                  </div>
-                  <div className="coach-plan-view__review-list">
-                    <p className="coach-plan-view__lane-note coach-plan-view__lane-note--quiet">
-                      {resolvedReviewFocusLabel}
-                    </p>
-                    {reviewSupportRow ? (
-                      <div className="coach-plan-view__micro-item">
-                        <span>{resolvedReviewWindowLabel}</span>
-                        <div>{renderNodeWithParagraph(reviewSupportRow.body)}</div>
-                      </div>
-                    ) : null}
-                    {props.dueReviewItems?.slice(0, 4).map((item) => {
-                      const meta = compactReviewMeta(item, language);
-                      const lane = compactReviewLane(item, language);
-                      return (
-                        <div key={item.id} className="coach-plan-view__review-row">
-                          <strong>{item.title}</strong>
-
-                          <p>{lane}</p>
-                          {meta ? <span>{meta}</span> : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              ) : null}
-
-              {hasBackgroundDetails ? (
-                <section className="coach-plan-view__details-group">
-                  <div className="coach-plan-view__details-group-head">
-                    <span>{resolvedSupportSummaryLabel}</span>
-                  </div>
-                  <div className="coach-plan-view__micro-list">
-                    {trajectoryRows.length ? (
-                      <div className="coach-plan-view__note-line">
-                        <p className="coach-plan-view__lane-note coach-plan-view__lane-note--quiet">
-                          {props.trajectoryLabel ?? planCopy(language, "sourceShortlist")}
-                        </p>
-                        {trajectoryRows.map((row) => (
-                          <div key={row.id} className="coach-plan-view__note-item">
-                            <span>{row.label}</span>
-                            <strong>{row.value}</strong>
-                            {row.detail ? <em>{row.detail}</em> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {backgroundRows.map((row) => (
-                      <div key={row.id} className="coach-plan-view__micro-item">
-                        <span>{row.label}</span>
-                        <div>{renderNodeWithParagraph(row.body)}</div>
-                      </div>
-                    ))}
-
-                    {noteRows.length ? (
-                      <div className="coach-plan-view__note-line">
-                        <p className="coach-plan-view__lane-note coach-plan-view__lane-note--quiet">
-                          {resolvedNotesLabel}
-                        </p>
-                        {noteRows.map((row) => (
-                          <div key={row.id} className="coach-plan-view__note-item">
-                            <span>{row.label}</span>
-                            <strong>{row.value}</strong>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                </section>
-              ) : null}
-
-              {planChangeCandidates.length > 0 ? (
-                <section className="coach-plan-view__details-group coach-plan-view__details-group--evidence">
-                  <div className="coach-plan-view__details-group-head">
-                    <span>{planCopy(language, "planChangeCandidatesLabel")}</span>
-                    <StatusLabel label={`${planChangeCandidates.filter((item) => item.status === "pending").length}`} />
-                  </div>
-                  {planChangeCandidates.map((candidate) => (
-                    <div key={candidate.id} className="coach-plan-view__evidence-item">
-                      <strong>
-                        {candidate.status === "pending"
-                          ? planCopy(language, "pendingConfirmation")
-                          : candidate.status}
-                      </strong>
-                      <p>
-                        {sanitizeErrorSurfaceText(candidate.reason, language) ||
-                          planCopy(language, "candidateNeedsConfirmation")}
-                      </p>
-                      <p>
-                        {planCopy(language, "diffLabel")}:{" "}
-                        {describeSafeStructuredValue(
-                          candidate.diff,
-                          language,
-                          planCopy(language, "noVisibleDiff"),
-                        )}
-                      </p>
-                      <p>
-                        {planCopy(language, "impactLabel")}:{" "}
-                        {describeSafeStructuredValue(
-                          candidate.impact,
-                          language,
-                          planCopy(language, "noVisibleImpact"),
-                        )}
-                      </p>
-                      {candidate.status === "pending" ? (
-                        <div className="coach-plan-view__evidence-actions">
-                          {onAcknowledgePlanChange ? <ActionButton tone="accent" label={planCopy(language, "acknowledgeCandidate")} onClick={() => onAcknowledgePlanChange(candidate.id)} fullWidth={false} /> : null}
-                          {onRejectPlanChange ? <ActionButton tone="ghost" label={planCopy(language, "rejectCandidate")} onClick={() => onRejectPlanChange(candidate.id)} fullWidth={false} /> : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
-                </section>
-              ) : null}
-
-              {hasEvidenceDetails ? (
-                <details className="coach-plan-view__nested-details coach-plan-view__evidence-details">
-                  <summary>
-                    <span>{t("evidenceGovernance")}</span>
-                    <StatusLabel label={`${evidenceCounts.total}`} />
-                  </summary>
+    <LearningHome
+      currentLabel={templateCopy[language].currentLearning}
+      title={plan.title}
+      stage={stageProgressText ? `${stageProgressText} · ${activeStageTitle}` : activeStageTitle}
+      state={shouldShowDecisionCard ? <SystemState kind={plan.frozen ? "read-only" : "recoverable-error"} title={planDecisionStrip.title} detail={planDecisionStrip.detail} /> : undefined}
+      next={{ label: resolvedNextStepLabel, title: inlineText(currentLane.body) || activeStageTitle,
+        detail: shouldShowDecisionCard && (plan.frozen || blockedReason)
+          ? <div data-plan-fact="next">{planDecisionStrip.next}</div>
+          : <div data-plan-fact="next"><span>{templateCopy[language].complete}: </span>{verifyText}</div>,
+        action: { label: nextAction?.label ?? templateCopy[language].askCoach, disabled: nextAction?.disabled,
+          onClick: nextAction?.onClick ?? (() => props.onNavigateToView?.("coach")) } }}
+      nextTools={nextAction?.id === "plan-review-evidence" ? liveEvidenceDecisionRow : undefined}
+      review={hasReviewDetails ? { label: resolvedRevisitSummaryLabel, content: <>
+        {reviewSupportRow ? renderNodeWithParagraph(reviewSupportRow.body) : null}
+        {props.dueReviewItems?.slice(0, 4).map((item) => <div key={item.id}><strong>{item.title}</strong><p>{compactReviewLane(item, language)}</p></div>)}
+        <button type="button" className="template-back" onClick={() => useWorkbenchState.getState().openTrainingReviewQueue()}>{templateCopy[language].startReview}</button>
+      </> } : undefined}
+      route={{ label: resolvedStagesLabel, content: <>
+        {renderComposerDraftReplacement("stage")}
+        {plan.stages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={stage.id === activeStage?.id} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} onStageSelect={onStageSelect} />)}
+      </> }}
+      growth={{ label: templateCopy[language].growth, content: <>
+        <SkillProjectionStrip language={language} projection={skillProjection} variant="compact" />
+        <button type="button" className="template-back" onClick={() => props.onNavigateToView?.("progress")}>{templateCopy[language].evidence}</button>
+        <button type="button" className="template-back" onClick={() => props.onNavigateToView?.("training")}>{trainingViewLabel(language)}</button>
+      </> }}
+      evidence={hasEvidenceDetails ? { label: `${t("evidenceGovernance")} (${evidenceCounts.total})`, content: <>
+        {liveEvidenceDecisionRow}
+{hasEvidenceDetails ? (<>
                   <section
                     className={`coach-plan-view__details-group coach-plan-view__details-group--evidence is-${evidenceTone}`}
                   >
@@ -3029,284 +2387,37 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                     </div>
                   )}
                   </section>
-                </details>
-              ) : null}
-            </div>
-            ) : null}
-          </details>
-        ) : null}
-        </article>
-      </div>
-      )}
-
-      {!compactPrimary && planTab === "plan" && actions?.length ? (
-        <section className="coach-plan-view__actions-inline" aria-label={resolvedActionsLabel}>
-          <div className="coach-plan-view__actions-stack">
-            {actions.map((action) => (
-              <ActionButton
-                key={action.id}
-                className="coach-plan-view__action-button"
-                tone={action.tone}
-                icon={action.icon}
-                label={action.label}
-                detail={action.detail}
-                disabled={action.disabled}
-                onClick={action.onClick}
-                fullWidth
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
-    </section>
-  );
-}
-
-interface PlanMasteryEntry {
-  concept: string;
-  score: number;
-}
-
-/**
- * Merge FSRS mastery scores already present in the store (plan runtime review
- * points + due review queue) into one score per concept. No fetching: when the
- * store carries no scores the dashboard renders its empty note.
- */
-function collectPlanMastery(
-  reviewPoints: PlanRuntimeReviewPoint[] | undefined,
-  dueReviews: ReviewQueueItem[] | undefined,
-): Map<string, number> {
-  const masteryByConcept = new Map<string, number>();
-  const consider = (concept: string | undefined, score: number | undefined) => {
-    const key = concept?.trim();
-    if (!key || typeof score !== "number" || !Number.isFinite(score)) {
-      return;
-    }
-    const normalized = Math.max(0, Math.min(score, 1));
-    const existing = masteryByConcept.get(key);
-    if (existing === undefined || normalized > existing) {
-      masteryByConcept.set(key, normalized);
-    }
-  };
-  (dueReviews ?? []).forEach((item) => consider(item.concept, item.masteryScore));
-  (reviewPoints ?? []).forEach((item) => consider(item.concept, item.masteryScore));
-  return masteryByConcept;
-}
-
-/**
- * Learning-home overview for the top of the Plan (学习) view. Reads the
- * shared workbench store directly — due reviews, wins and view switching come
- * from the store, so no new external props are threaded through App.
- */
-function LearningHomeOverview({
-  activeStageTitle,
-  currentStageLabel,
-  onStageContinue,
-}: {
-  activeStageTitle: string;
-  currentStageLabel: string;
-  onStageContinue?: () => void;
-}) {
-  const { t, language } = useTranslation();
-  const openTrainingReviewQueue = useWorkbenchState((state) => state.openTrainingReviewQueue);
-  const storedDueReviews = useWorkbenchState((state) => state.data.memory.dueReviews);
-  const storedDueCount = useWorkbenchState((state) => state.data.memory.dueReviewCount);
-  const recentWins = useWorkbenchState((state) => state.data.memory.recentWins);
-  const dueCount = storedDueCount ?? storedDueReviews.length;
-  // getMotivationalMessage is fed zeros here, so on this surface it could only
-  // ever fall through to "N 张卡片待复习" — a verbatim restatement of the
-  // "今日到期复习 / 2" tile sitting directly above it. This line now says
-  // something the tile does not: what to do next.
-  const motivation = {
-    type: dueCount > 0 ? ("reminder" as const) : ("encouragement" as const),
-    message:
-      planCopy(language, dueCount > 0 ? "learningHomeDueTitle" : "learningHomeClearTitle"),
-  };
-  const nextReview = storedDueReviews[0];
-  const dueCountDisplay = dueCount > 0 ? String(dueCount) : "0";
-
-  return (
-    <div className="coach-plan-view__home-overview" data-learning-home-overview="true">
-      {/* These were three inline spans in one flex row: "2 今日到期复习　下次复习:
-          …　最近成果: 2" read as a single run-on sentence, the widest item
-          pushed the rest off the line, and the stage name orphaned onto its own
-          row. A labelled grid makes each number scannable on its own. */}
-      <dl className="coach-plan-view__home-stats" aria-label={t("learningHomeDueLabel")}>
-        <div className="coach-plan-view__home-stat">
-          <dt>{t("learningHomeDueLabel")}</dt>
-          <dd>{dueCountDisplay}</dd>
-        </div>
-        {nextReview ? (
-          <div
-            className="coach-plan-view__home-stat coach-plan-view__home-stat--wide"
-            title={[reviewConceptLabel(nextReview.concept), nextReview.reason].filter(Boolean).join(" · ")}
-          >
-            <dt>{t("learningHomeNextLabel")}</dt>
-            <dd>{reviewConceptLabel(nextReview.concept)}</dd>
-          </div>
-        ) : null}
-        <div className="coach-plan-view__home-stat">
-          <dt>{t("learningHomeWinsLabel")}</dt>
-          <dd>{String(recentWins.length)}</dd>
-        </div>
-        {activeStageTitle ? (
-          <div className="coach-plan-view__home-stat" title={activeStageTitle}>
-            <dt>{currentStageLabel}</dt>
-            <dd>{activeStageTitle}</dd>
-          </div>
-        ) : null}
-      </dl>
-      <p className="coach-plan-view__home-message" data-motivation-type={motivation.type}>
-        {motivation.message}
-      </p>
-      <div className="coach-plan-view__home-cta">
-        {dueCount > 0 ? (
-          <ActionButton
-            tone="accent"
-            label={t("learningHomeStartReview")}
-            onClick={openTrainingReviewQueue}
-            fullWidth={false}
-          />
-        ) : (
-          <ActionButton
-            tone="accent"
-            label={t("learningHomeContinueTask")}
-            onClick={onStageContinue}
-            disabled={!onStageContinue}
-            fullWidth={false}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Learning progress dashboard for the Plan view "进度" tab. Reads the shared
- * workbench store directly (same pattern as StageMaterialsSection) so the plan
- * view props stay untouched.
- */
-function PlanDashboard({ plan }: { plan: LearningPlan }) {
-  const { t, language } = useTranslation();
-  const stageMaterials = useWorkbenchState((state) => state.stageMaterials);
-  const dueReviewCount = useWorkbenchState((state) => state.data.memory.dueReviewCount);
-  const dueReviews = useWorkbenchState((state) => state.data.memory.dueReviews);
-  const reviewPoints = useWorkbenchState((state) => state.data.planRuntimeStatus?.reviewPoints);
-
-  const totalStages = plan.stages.length;
-  const doneStages = plan.stages.filter((stage) => stage.status === "done").length;
-  const stagePercent = totalStages > 0 ? Math.round((doneStages / totalStages) * 100) : 0;
-
-  const masteryByConcept = useMemo(
-    () => collectPlanMastery(reviewPoints, dueReviews),
-    [reviewPoints, dueReviews],
-  );
-  const masteryEntries = useMemo(
-    () =>
-      [...masteryByConcept.entries()]
-        .map(([concept, score]): PlanMasteryEntry => ({ concept, score }))
-        .sort((left, right) => left.score - right.score)
-        .slice(0, 5),
-    [masteryByConcept],
-  );
-
-  const dueCount = typeof dueReviewCount === "number" ? dueReviewCount : dueReviews.length;
-  const reviewedCount = masteryByConcept.size;
-  const materialCount = Object.values(stageMaterials).reduce(
-    (sum, items) => sum + items.length,
-    0,
-  );
-  const stagesWithMaterials = Object.values(stageMaterials).filter(
-    (items) => items.length > 0,
-  ).length;
-
-  return (
-    <section
-      className="plan-dashboard"
-      data-plan-dashboard="true"
-      aria-label={t("planDashboardTabProgress")}
+</>) : null}
+      </> } : undefined}
     >
-      <div className="plan-dashboard__grid">
-        <article
-          className="plan-dashboard__block plan-material-enter"
-          data-plan-dashboard-block="stages"
-          style={{ animationDelay: planStaggerDelay(0) }}
-        >
-          <h4 className="plan-dashboard__block-title">{t("planDashboardStagesTitle")}</h4>
-          <p className="plan-dashboard__metric">
-            {doneStages} / {totalStages}
-          </p>
-          <div
-            className="plan-dashboard__bar"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={stagePercent}
-          >
-            <div
-              className="plan-dashboard__bar-fill"
-              style={{ "--bar-fill": String(stagePercent / 100) } as CSSProperties}
-            />
-          </div>
-        </article>
-
-        <article
-          className="plan-dashboard__block plan-material-enter"
-          data-plan-dashboard-block="mastery"
-          style={{ animationDelay: planStaggerDelay(1) }}
-        >
-          <h4 className="plan-dashboard__block-title">{t("planDashboardMasteryTitle")}</h4>
-          {masteryEntries.length > 0 ? (
-            <ul className="plan-dashboard__mastery-list">
-              {masteryEntries.map((entry) => (
-                <li
-                  key={entry.concept}
-                  className="plan-dashboard__mastery-item"
-                  style={{ gridTemplateColumns: "minmax(0, 1fr) auto" }}
-                >
-                  <span className="plan-dashboard__mastery-name" title={reviewConceptLabel(entry.concept)}>
-                    {reviewConceptLabel(entry.concept)}
-                  </span>
-                  <span className="plan-dashboard__mastery-score">
-                    {capabilityBandLabel(entry.score, language)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="empty-state stage-dashboard-empty">
-              <PlanIcon size={16} />
-              <p className="empty-state__title">{t("planDashboardMasteryEmpty")}</p>
-            </div>
-          )}
-        </article>
-
-        <article
-          className="plan-dashboard__block plan-material-enter"
-          data-plan-dashboard-block="reviews"
-          style={{ animationDelay: planStaggerDelay(2) }}
-        >
-          <h4 className="plan-dashboard__block-title">{t("planDashboardReviewTitle")}</h4>
-          <p className="plan-dashboard__metric">
-            <span>{t("planDashboardReviewDue")} {dueCount}</span>
-            <span aria-hidden="true">·</span>
-            <span>{t("planDashboardReviewDone")} {reviewedCount}</span>
-          </p>
-        </article>
-
-        <article
-          className="plan-dashboard__block plan-material-enter"
-          data-plan-dashboard-block="materials"
-          style={{ animationDelay: planStaggerDelay(3) }}
-        >
-          <h4 className="plan-dashboard__block-title">{t("planDashboardMaterialsTitle")}</h4>
-          <p className="plan-dashboard__metric">{materialCount}</p>
-          <p className="plan-dashboard__stat">
-            {t("planDashboardMaterialsStages")} {stagesWithMaterials} / {totalStages}
-          </p>
-        </article>
-      </div>
-    </section>
+      {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
+      {renderComposerDraftReplacement("project-subplan")}
+      <details className="template-disclosure"><summary>{t("globalPlanLabel")}</summary><div>{globalPlanContext}</div></details>
+      {projectSubplans.length > 0 ? <details className="template-disclosure coach-plan-view__project-subplans"><summary>{`${resolvedProjectSubplansLabel} (${projectSubplans.length})`}</summary><div>{projectSubplans.map((subplan) => {
+        const detail = projectSubplanDetail(subplan, language);
+        return <button key={subplan.id} type="button" className="template-back" disabled={!props.onProjectSubplanSelect} onClick={() => props.onProjectSubplanSelect?.(subplan)}><span>{subplan.title}</span>{detail ? <span className="template-metadata"> · {detail}</span> : null}</button>;
+      })}</div></details> : null}
+      <details className="template-disclosure" data-plan-governance-disclosure="true">
+        <summary>{resolvedDetailsSummaryLabel}</summary>
+        <div>
+          {governanceItems.map((item) => <p key={item.id}><strong>{item.label}: </strong>{item.value}{item.detail ? <span> · {item.detail}</span> : null}</p>)}
+          {compactDetailRows.map((row) => <div key={row.id}><strong>{row.label}</strong>{renderNodeWithParagraph(row.body)}</div>)}
+          {backgroundRows.map((row) => <div key={row.id}>{renderNodeWithParagraph(row.body)}</div>)}
+          {noteRows.map((row) => <p key={row.id}>{row.label}: {row.value}</p>)}
+          {memoryScopeContext}
+          {(actions ?? []).filter((action) => action.id !== nextAction?.id).map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} detail={action.detail} disabled={action.disabled} onClick={action.onClick} />)}
+          {planChangeCandidates.map((candidate) => <div key={candidate.id}>
+            <p>{sanitizeErrorSurfaceText(candidate.reason, language)}</p>
+            <p>{describeSafeStructuredValue(candidate.diff, language, planCopy(language, "noVisibleDiff"))}</p>
+            <p>{describeSafeStructuredValue(candidate.impact, language, planCopy(language, "noVisibleImpact"))}</p>
+            {candidate.status === "pending" ? <>
+              <ActionButton tone="ghost" label={planCopy(language, "acknowledgeCandidate")} onClick={() => onAcknowledgePlanChange?.(candidate.id)} />
+              <ActionButton tone="ghost" label={planCopy(language, "rejectCandidate")} onClick={() => onRejectPlanChange?.(candidate.id)} />
+            </> : null}
+          </div>)}
+        </div>
+      </details>
+    </LearningHome>
   );
 }
 

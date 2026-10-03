@@ -1,9 +1,148 @@
 import { useMemo, useState } from "react";
 
-import { TrainerSpinner } from "../common/TrainerSpinner";
+import { SystemState } from "../../templates/SystemState";
 
 import { CheckMarkIcon, RefreshIcon } from "../icons";
-import type { CoachSessionSummary } from "../../lib/types";
+import type { CoachSessionSummary, ComposerLanguage } from "../../lib/types";
+
+const HISTORY_COPY: Record<ComposerLanguage, Record<"title" | "newChat" | "refresh" | "search" | "untitled" | "messages" | "loading" | "error" | "empty" | "noMatches" | "current" | "today" | "yesterday" | "last7" | "earlier", string>> = {
+  "zh-CN": {
+    "title": "历史会话",
+    "newChat": "+ 新对话",
+    "refresh": "刷新会话列表",
+    "search": "搜索会话",
+    "untitled": "未命名会话",
+    "messages": "{n} 条消息",
+    "loading": "正在读取会话…",
+    "error": "暂时读不到会话，稍后再试。",
+    "empty": "还没有历史会话。新的对话会出现在这里。",
+    "noMatches": "没有匹配的会话。",
+    "current": "当前会话",
+    "today": "今天",
+    "yesterday": "昨天",
+    "last7": "过去 7 天",
+    "earlier": "更早"
+  },
+  "en-US": {
+    "title": "Conversations",
+    "newChat": "+ New chat",
+    "refresh": "Refresh conversation list",
+    "search": "Search chats",
+    "untitled": "Untitled conversation",
+    "messages": "{n} messages",
+    "loading": "Loading conversations…",
+    "error": "Couldn’t load conversations. Try again.",
+    "empty": "No past conversations yet. New chats will appear here.",
+    "noMatches": "No matching conversations.",
+    "current": "Current",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "last7": "Last 7 Days",
+    "earlier": "Earlier"
+  },
+  "es-ES": {
+    "title": "Conversaciones",
+    "newChat": "+ Nuevo chat",
+    "refresh": "Actualizar conversaciones",
+    "search": "Buscar chats",
+    "untitled": "Conversación sin título",
+    "messages": "{n} mensajes",
+    "loading": "Cargando conversaciones…",
+    "error": "No se pudieron cargar las conversaciones. Inténtalo de nuevo.",
+    "empty": "Todavía no hay conversaciones anteriores.",
+    "noMatches": "No hay conversaciones coincidentes.",
+    "current": "Actual",
+    "today": "Hoy",
+    "yesterday": "Ayer",
+    "last7": "Últimos 7 días",
+    "earlier": "Anterior"
+  },
+  "fr-FR": {
+    "title": "Conversations",
+    "newChat": "+ Nouvelle discussion",
+    "refresh": "Actualiser les conversations",
+    "search": "Rechercher des discussions",
+    "untitled": "Conversation sans titre",
+    "messages": "{n} messages",
+    "loading": "Chargement des conversations…",
+    "error": "Impossible de charger les conversations. Réessayez.",
+    "empty": "Aucune conversation précédente.",
+    "noMatches": "Aucune conversation correspondante.",
+    "current": "Actuelle",
+    "today": "Aujourd’hui",
+    "yesterday": "Hier",
+    "last7": "7 derniers jours",
+    "earlier": "Plus anciennes"
+  },
+  "de-DE": {
+    "title": "Unterhaltungen",
+    "newChat": "+ Neuer Chat",
+    "refresh": "Unterhaltungen aktualisieren",
+    "search": "Chats suchen",
+    "untitled": "Unbenannte Unterhaltung",
+    "messages": "{n} Nachrichten",
+    "loading": "Unterhaltungen werden geladen…",
+    "error": "Unterhaltungen konnten nicht geladen werden. Erneut versuchen.",
+    "empty": "Noch keine früheren Unterhaltungen.",
+    "noMatches": "Keine passenden Unterhaltungen.",
+    "current": "Aktuell",
+    "today": "Heute",
+    "yesterday": "Gestern",
+    "last7": "Letzte 7 Tage",
+    "earlier": "Früher"
+  },
+  "ja-JP": {
+    "title": "会話履歴",
+    "newChat": "+ 新しい対話",
+    "refresh": "会話一覧を更新",
+    "search": "会話を検索",
+    "untitled": "無題の会話",
+    "messages": "{n} 件のメッセージ",
+    "loading": "会話を読み込み中…",
+    "error": "会話を読み込めません。再試行してください。",
+    "empty": "過去の会話はまだありません。",
+    "noMatches": "一致する会話はありません。",
+    "current": "現在の会話",
+    "today": "今日",
+    "yesterday": "昨日",
+    "last7": "過去7日間",
+    "earlier": "それ以前"
+  },
+  "ko-KR": {
+    "title": "대화 기록",
+    "newChat": "+ 새 대화",
+    "refresh": "대화 목록 새로고침",
+    "search": "대화 검색",
+    "untitled": "제목 없는 대화",
+    "messages": "메시지 {n}개",
+    "loading": "대화 불러오는 중…",
+    "error": "대화를 불러올 수 없습니다. 다시 시도하세요.",
+    "empty": "이전 대화가 없습니다.",
+    "noMatches": "일치하는 대화가 없습니다.",
+    "current": "현재 대화",
+    "today": "오늘",
+    "yesterday": "어제",
+    "last7": "최근 7일",
+    "earlier": "이전"
+  },
+  "pt-BR": {
+    "title": "Conversas",
+    "newChat": "+ Nova conversa",
+    "refresh": "Atualizar conversas",
+    "search": "Buscar conversas",
+    "untitled": "Conversa sem título",
+    "messages": "{n} mensagens",
+    "loading": "Carregando conversas…",
+    "error": "Não foi possível carregar as conversas. Tente novamente.",
+    "empty": "Ainda não há conversas anteriores.",
+    "noMatches": "Nenhuma conversa correspondente.",
+    "current": "Atual",
+    "today": "Hoje",
+    "yesterday": "Ontem",
+    "last7": "Últimos 7 dias",
+    "earlier": "Anteriores"
+  }
+};
 
 export type CoachHistoryGroupKey = "today" | "yesterday" | "last7" | "earlier";
 
@@ -87,6 +226,7 @@ export function sessionTitle(session: CoachSessionSummary, untitledLabel: string
 
 export interface CoachHistoryDrawerProps {
   zh: boolean;
+  language?: ComposerLanguage;
   sessions: CoachSessionSummary[];
   status: "idle" | "loading" | "ready" | "error";
   statusMessage?: string;
@@ -99,6 +239,7 @@ export interface CoachHistoryDrawerProps {
 /** ChatGPT-style history: new chat on top, search, grouped by recency. */
 export function CoachHistoryDrawer({
   zh,
+  language = zh ? "zh-CN" : "en-US",
   sessions,
   status,
   statusMessage,
@@ -107,14 +248,15 @@ export function CoachHistoryDrawer({
   onNewChat,
 }: CoachHistoryDrawerProps) {
   const [query, setQuery] = useState("");
-  const untitledLabel = zh ? "未命名会话" : "Untitled conversation";
+  const copy = HISTORY_COPY[language];
+  const untitledLabel = copy.untitled;
   const visible = useMemo(
     () => filterSessions(sessions, query, untitledLabel),
     [sessions, query, untitledLabel],
   );
-  const groups = useMemo(() => groupSessionsByRecency(visible, zh), [visible, zh]);
+  const groups = useMemo(() => groupSessionsByRecency(visible, zh).map(group => ({ ...group, label: copy[group.key] })), [visible, zh, copy]);
   const messageCountLabel = (count: number) =>
-    zh ? `${count} 条消息` : `${count} message${count === 1 ? "" : "s"}`;
+    copy.messages.replace("{n}", String(count));
   const formatSessionTime = (value?: string | null) => {
     if (!value) {
       return "";
@@ -123,7 +265,7 @@ export function CoachHistoryDrawer({
     if (Number.isNaN(stamp.getTime())) {
       return "";
     }
-    return stamp.toLocaleString(zh ? "zh-CN" : undefined, {
+    return stamp.toLocaleString(language, {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -134,15 +276,15 @@ export function CoachHistoryDrawer({
   return (
     <>
       <div className="composer-menu-panel__header">
-        <span className="eyebrow">{zh ? "历史会话" : "Conversations"}</span>
+        <span className="eyebrow">{copy.title}</span>
         <div className="composer-menu-panel__header-actions">
           <button className="composer-history-new" type="button" onClick={onNewChat}>
-            {zh ? "+ 新对话" : "+ New chat"}
+            {copy.newChat}
           </button>
           <button
             type="button"
-            aria-label={zh ? "刷新会话列表" : "Refresh conversation list"}
-            title={zh ? "刷新会话列表" : "Refresh conversation list"}
+            aria-label={copy.refresh}
+            title={copy.refresh}
             disabled={status === "loading"}
             onClick={onRefresh}
           >
@@ -154,30 +296,20 @@ export function CoachHistoryDrawer({
         <input
           type="text"
           value={query}
-          placeholder={zh ? "搜索会话…" : "Search chats…"}
-          aria-label={zh ? "搜索会话" : "Search chats"}
+          placeholder={`${copy.search}…`}
+          aria-label={copy.search}
           onChange={(event) => setQuery(event.target.value)}
         />
       </div>
       <div className="composer-menu-panel__section">
         {status === "loading" ? (
-          <p className="composer-menu-panel__hint">
-            <TrainerSpinner size="sm" label={zh ? "正在读取会话" : "Loading conversations"}>
-              {zh ? "正在读取会话…" : "Loading conversations…"}
-            </TrainerSpinner>
-          </p>
+          <SystemState kind="loading" title={copy.loading} />
         ) : status === "error" ? (
-          <p className="composer-menu-panel__hint">
-            {statusMessage ?? (zh ? "暂时读不到会话，稍后再试。" : "Couldn't load conversations. Try again.")}
-          </p>
+          <SystemState kind="recoverable-error" title={statusMessage ?? copy.error} action={{ label: copy.refresh, onClick: onRefresh }} />
         ) : sessions.length === 0 ? (
-          <p className="composer-menu-panel__hint">
-            {zh ? "还没有历史会话。新的对话会出现在这里。" : "No past conversations yet. New chats will appear here."}
-          </p>
+          <SystemState kind="empty" title={copy.empty} />
         ) : groups.length === 0 ? (
-          <p className="composer-menu-panel__hint">
-            {zh ? "没有匹配的会话。" : "No matching conversations."}
-          </p>
+          <SystemState kind="empty" title={copy.noMatches} />
         ) : (
           groups.map((group) => (
             <div key={group.key} className="composer-history-group" role="group">
@@ -211,7 +343,7 @@ export function CoachHistoryDrawer({
                         {active ? (
                           <span className="composer-provider-list__state">
                             <CheckMarkIcon size={12} />
-                            <span className="sr-only">{zh ? "当前会话" : "Current"}</span>
+                            <span className="sr-only">{copy.current}</span>
                           </span>
                         ) : null}
                       </div>

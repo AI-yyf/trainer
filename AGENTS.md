@@ -5,7 +5,7 @@
 **Branch:** main
 
 ## OVERVIEW
-Desktop-first VS Code extension + FastAPI Python sidecar for conversation-driven coding training. Five-view React workbench (`Coach / Plan / Resources / Training / Settings`) with keyboard-first navigation, ReAct coach agent loop, and FSRS-based spaced repetition.
+Desktop-first VS Code extension + FastAPI Python sidecar for conversation-driven coding training. Three-destination React workbench (`Coach / Learning / Resources`, with six internal routes) with keyboard-first navigation, ReAct coach agent loop, and FSRS-based spaced repetition.
 
 ## STRUCTURE
 
@@ -230,24 +230,27 @@ trainer/                            # Repository root
 
 ## SIDEBAR IA (SHIPPED)
 
-Six top-level surfaces. Five live in the header nav row and are **always
-present**; Settings is reached through the header gear, which is its permanent
-entry point.
+Three stable primary destinations: **Coach / Learning / Resources**. History and
+Settings are permanent header utilities. Keep all six internal routes and their
+commands, deep links and restore actions.
 
-| View | ID | Chinese | In nav row | Purpose |
-|------|----|---------|-----------|---------|
-| Coach | `coach` | 对话 | yes | Conversation with the coach agent (messages, artifacts, composer) |
-| Plan | `plan` | 学习 | yes | Learning plan stages, current task, evidence governance |
-| Resources | `resources` | 资料 | yes | Uploaded materials, search (FTS5), preview (Tier A/B/C) |
-| Training | `training` | 训练 | yes | Active training card, flash cards, scenario lab, FSRS reviews |
-| Progress | `progress` | 成长 | yes | Capability bands (理解/实现/调试/迁移), verified-evidence counts |
-| Settings | `settings` | 设置 | no (gear) | Provider config, coach defaults, language, workspace control |
+| Route | UI destination | Template |
+| --- | --- | --- |
+| `coach` | 对话 / Chat | Conversation, CoachReply, NextAction |
+| `plan` | 学习 / Learning | LearningHome |
+| `resources` | 资料 / Resources | Library, ResourceReader |
+| `training` | 学习内部 | FocusedPractice, VerificationResult |
+| `progress` | 学习 → 成长 | GrowthEvidence |
+| `settings` | header gear | SettingsIndex, SettingsDetail |
 
-The nav row used to hide 训练 until a training card existed and 成长 until the
-learner was already inside it, so both were unreachable from a fresh session
-and the row changed shape depending on where you stood. A nav is a map: every
-destination must be visible at all times. `scripts/verify-ui-geometry.mjs`
-asserts this across every view and scenario.
+`lib/workbenchDestinations.ts` owns route mapping. The full CoachComposer renders
+only in Coach; training owns PracticeResponse. Plan and Resource CTAs return
+structured context to Coach. Choose a `templates/` owner before adding feature
+UI. Preserve governed state and actual verification identities. Use SystemState
+for product status, one primary action per initial viewport and disclosure for
+advanced facts. `scripts/verify-ui-geometry.mjs` checks the three destinations,
+composer ownership, overflow and primary-action budget at 340/420/460 across
+dark/light and Chinese/English. Browser fixtures prove layout, not real evidence.
 
 ## WHERE TO LOOK
 

@@ -1,3 +1,4 @@
+const { openSettingsCategory } = require("./template-navigation");
 const { test, expect } = require("playwright/test");
 
 // Diagnostic regressions use the same visible controls as learners.
@@ -10,15 +11,16 @@ test("compact blocked Plan keeps its next action reachable without management pa
     }
   });
   await page.goto("/vscode-preview.html?view=plan&lang=en-US&scenario=plan-blocked&connection=connected");
-  const primary = page.locator('[data-plan-primary="true"] .coach-plan-view__compact-primary-action button');
+  const primary = page.locator('[data-template=NextAction] button');
   await expect(primary).toBeVisible();
   await primary.click();
   await expect(page.locator('.composer-shell textarea')).toBeFocused();
-  await expect(page.locator('details[data-plan-governance-disclosure]')).toHaveCount(0);
+  await expect(page.locator('details[data-plan-governance-disclosure]')).not.toHaveAttribute('open', '');
 });
 
 test("Provider configuration has editable service, key and model fields", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=settings&lang=en-US&connection=connected&run=provider-edit-controls");
+  await openSettingsCategory(page, "connection");
   await page.getByRole("button", { name: "Edit configuration", exact: true }).click();
   const fields = page.locator("form.settings-sheet__minor-body");
   await expect(fields).toBeVisible();
@@ -29,5 +31,5 @@ test("Provider configuration has editable service, key and model fields", async 
   const model = fields.getByRole("textbox", { name: /^Model\b/ });
   await model.fill("test-model");
   await expect(model).toHaveValue("test-model");
-  await expect(page.locator('[data-settings-nav="connection"]')).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator('[data-settings-detail="connection"]')).toBeVisible();
 });

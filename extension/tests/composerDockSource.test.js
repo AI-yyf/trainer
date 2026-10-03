@@ -82,10 +82,6 @@ test('conversation markdown headings are distinguishable inside message-markdown
 });
 
 test('compact nav labels are not ellipsized to a single character', () => {
-  const styles = readStylesSource();
-  const labelStart = styles.indexOf('.header-switcher__label {');
-  const labelBlock = styles.slice(labelStart, labelStart + 180);
-  assert.match(labelBlock, /overflow:\s*visible;/);
-  assert.match(labelBlock, /text-overflow:\s*clip;/);
-  assert.match(styles, /\.header-switcher--compact\s*\{[\s\S]*?gap:\s*0;/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').navigation();
 });

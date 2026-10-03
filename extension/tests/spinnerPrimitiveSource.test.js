@@ -69,7 +69,7 @@ test('async surfaces use the spinner instead of bare text ellipses', () => {
     path.join(webviewRoot, 'components', 'coach', 'CoachHistoryDrawer.tsx'),
     'utf8',
   );
-  assert.match(drawer, /<TrainerSpinner size="sm" label=\{zh \? "正在读取会话" : "Loading conversations"\}>/);
+  assert.match(drawer, /<SystemState kind="loading" title=\{copy.loading\}/);
 
   // The streaming dots keep their own reduced-motion fallback.
   const dots = fs.readFileSync(

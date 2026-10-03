@@ -38,7 +38,7 @@ test('Resources view renders snapshot-backed orientation instead of inferred rea
     /canInjectTrainingCard/,
   );
 
-  assert.match(viewSource, /resources-knowledge__current/);
+  assert.match(viewSource, /<SystemState/);
   assert.match(viewSource, /selectedResource\.title/);
   assert.match(viewSource, /resources-knowledge__add-resource/);
   assert.match(viewSource, /resources-knowledge__search/);

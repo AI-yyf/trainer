@@ -82,7 +82,7 @@ test.describe("Trainer preview plan governance", () => {
       connection: "connected",
     });
 
-    const plan = page.locator(".plan-pane");
+    const plan = page.locator(".plan-view");
     const composer = page.locator("#coach-composer");
     const settingsGear = page.getByTestId("trainer-view-nav-settings");
 
@@ -91,7 +91,7 @@ test.describe("Trainer preview plan governance", () => {
     // reachable recovery path. No controls pretend a formal plan exists.
     await expect(plan.getByRole("button", { name: "Freeze plan", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Freeze plan", exact: true })).toHaveCount(0);
-    await expect(composer).toBeEditable();
+    await expect(composer).toHaveCount(0);
 
     await settingsGear.click();
     await expect(settingsGear).toHaveAttribute("aria-current", "page");
@@ -108,11 +108,11 @@ test.describe("Trainer preview plan governance", () => {
       connection: "connected",
     });
 
-    const plan = page.locator(".plan-pane");
-    await expect(plan.locator(".coach-plan-view__decision-strip")).toContainText("Formal plan is frozen");
-    await expect(plan.getByText("Next Move", { exact: true })).toBeVisible();
+    const plan = page.locator(".plan-view");
+    await expect(plan.locator("[data-template=SystemState]")).toContainText("Formal plan is frozen");
+    await expect(plan.getByText("Next Move", { exact: true }).first()).toBeVisible();
 
-    const liveControl = plan.locator('.coach-plan-view__compact-primary-action button');
+    const liveControl = plan.locator('[data-template=NextAction] > button');
     await expect(liveControl).toHaveText("Unfreeze plan");
     await expect(plan.locator('.coach-plan-view__governance')).toHaveCount(0);
     await expect(liveControl).toBeEnabled();
@@ -135,15 +135,15 @@ test.describe("Trainer preview plan governance", () => {
       connection: "connected",
     });
 
-    const plan = page.locator(".plan-pane");
-    await expect(plan.locator(".coach-plan-view__decision-strip")).toContainText("Plan is blocked");
+    const plan = page.locator(".plan-view");
+    await expect(plan.locator("[data-template=SystemState]")).toContainText("Plan is blocked");
     await expect(
       plan
-        .locator(".coach-plan-view__decision-strip")
+        .locator("[data-template=SystemState]")
         .getByText("The current file verification does not yet support this plan step.", { exact: true }),
     ).toBeVisible();
 
-    const recovery = plan.locator('.coach-plan-view__compact-primary-action button');
+    const recovery = plan.locator('[data-template=NextAction] > button');
     await expect(recovery).toBeEnabled();
     await recovery.click();
     await expect(page.locator('#coach-composer')).toBeFocused();
@@ -187,11 +187,11 @@ test.describe("Trainer preview plan governance", () => {
         lang: testCase.language,
       });
 
-      const plan = page.locator(".plan-pane");
-      const decisionStrip = plan.locator(".coach-plan-view__decision-strip");
+      const plan = page.locator(".plan-view");
+      const decisionStrip = plan.locator("[data-template=SystemState]");
       await expect(decisionStrip).toContainText(testCase.title);
       await expect(decisionStrip).toContainText(testCase.blocker);
-      await expect(decisionStrip).toContainText(testCase.nextStepPrefix);
+      await expect(page.locator("[data-template=NextAction]")).toContainText(testCase.nextStepPrefix.replace(/[:：]$/, ""));
       await expect(decisionStrip).not.toContainText(testCase.leak);
     }
     expect(errors).toEqual([]);

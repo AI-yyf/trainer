@@ -53,7 +53,7 @@ a Remote-SSH VS Code Server window):
 | Artifact | Contents |
 | --- | --- |
 | `trainer-remote-ssh-l2-vsix` | The packaged extension VSIX(s) (`extension/*.vsix`) built by that run |
-| `trainer-remote-ssh-l2-manual-checklist` | Bilingual (zh-CN + en-US) click-path checklist: install VSIX → open sidebar → verify five views → one coaching turn → attach workspace → verify Companion capability, each with its expected outcome and a blank pass/fail column |
+| `trainer-remote-ssh-l2-manual-checklist` | Bilingual (zh-CN + en-US) click-path checklist: install VSIX → open sidebar → verify three destinations and six routes → one coaching turn → attach workspace → verify Companion capability, each with its expected outcome and a blank pass/fail column |
 
 The workflow run summary links both artifacts. To execute the acceptance:
 

@@ -24,29 +24,11 @@ const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'Ap
 const stylesPath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css');
 
 test('responsive sidebar labels retain the official five-view names', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
-
-  // §四十八: compactSidebarViewLabel lives in lib/viewLabels.ts.
-  const vlSource = fs.readFileSync(path.resolve(__dirname, "..", "webview", "src", "lib", "viewLabels.ts"), "utf8");
-  assert.match(vlSource, /function compactSidebarViewLabel/);
-  assert.match(source, /const displayLabel = headerSwitcherDensity === "compact" \? compactLabel : label;/);
-  assert.doesNotMatch(source, /return "Res";/);
-  assert.doesNotMatch(source, /return "Train";/);
-  assert.doesNotMatch(source, /return "Setup";/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').navigation();
 });
 
 test('responsive sidebar density swaps squeezed labels for icons', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
-  const styles = readStylesSource();
-
-  assert.match(styles, /\.header-switcher--compact\s*\{\s*gap:\s*0;/);
-  assert.match(styles, /\.header-switcher--compact \.header-switcher__item\s*\{[\s\S]*?padding:\s*6px 2px 8px;[\s\S]*?font-size:\s*var\(--trainer-font-2xs\);/);
-  assert.match(styles, /\.header-switcher--compact \.header-switcher__label\s*\{\s*font-size:\s*var\(--trainer-font-2xs\);/);
-  // The narrowest tier hides the text label and shows the per-view icon;
-  // the button keeps its aria-label so the accessible name is unchanged.
-  assert.match(source, /"full" \| "compact" \| "icon"/);
-  assert.match(source, /header-switcher__icon/);
-  assert.match(source, /return "icon";/);
-  assert.match(styles, /\.header-switcher--icon \.header-switcher__icon\s*\{[\s\S]*?display:\s*inline-flex;/);
-  assert.match(styles, /\.header-switcher--icon \.header-switcher__label\s*\{[\s\S]*?display:\s*none;/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').navigation();
 });

@@ -293,8 +293,7 @@ async function environment(): Promise<RemoteEnvironment> {
  * shell-string path at all).
  */
 async function verifyStart(value: unknown): Promise<RemoteCompanionResponse['verification_session']> {
-  const record = isRecord(value) ? value : {};
-  const rawSpec = isRecord(record.spec) ? record.spec : {};
+  const rawSpec = isRecord(value) ? value : {};
   const executable = typeof rawSpec.executable === 'string' ? rawSpec.executable.trim() : '';
   const args = Array.isArray(rawSpec.args) ? rawSpec.args.map((entry) => String(entry)) : [];
   if (!executable) {

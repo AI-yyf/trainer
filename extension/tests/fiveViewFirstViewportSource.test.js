@@ -26,39 +26,8 @@ function read(relativePath, root = webviewRoot) {
 }
 
 test('five views stay the Codex three-layer shell without identity chrome', () => {
-  const app = read('app/App.tsx');
-  const types = read('lib/types.ts');
-  const styles = readStylesSource();
-
-  assert.match(
-    types,
-    /export const COACH_FIRST_SIDEBAR_VIEWS = \[\s*"coach",\s*"plan",\s*"resources",\s*"training",\s*"progress",\s*"settings",\s*\] as const;/s,
-  );
-  assert.doesNotMatch(types, /"research"/);
-  assert.match(app, /const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS\.filter\(/);
-  assert.match(app, /data-testid=\{`trainer-view-nav-\$\{view\}`\}/);
-  assert.doesNotMatch(app, /from ["'].*mockData["']/);
-  assert.doesNotMatch(app, /<CoachOrientationRail/);
-  assert.doesNotMatch(app, /startSpeak/);
-  assert.doesNotMatch(app, />开始说</);
-
-  assert.doesNotMatch(
-    styles,
-    /\.view-stack--plan > \.view-stack__primary > \.plan-view[\s\S]{0,220}inline-size:\s*fit-content/,
-  );
-  assert.doesNotMatch(
-    styles,
-    /--view-stack-max-inline-size,\s*720px/,
-  );
-  assert.doesNotMatch(
-    styles,
-    /\.view-stack--plan\.view-stack--content-left > \.view-stack__primary/,
-  );
-  assert.doesNotMatch(styles, /max-inline-size:\s*min\(100%,\s*80ch\)/);
-  assert.match(
-    styles,
-    /\.view-stack--plan > \.view-stack__primary > \.plan-view[\s\S]{0,280}max-inline-size:\s*none/,
-  );
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').navigation();
 });
 
 test('production workbench views consume CSS variables rather than hardcoded hex colors', () => {
@@ -97,62 +66,11 @@ test('production workbench views consume CSS variables rather than hardcoded hex
 });
 
 test('plan first viewport keeps a work-surface object without a governance dump', () => {
-  const app = read('app/App.tsx');
-  const plan = read('components/plan/CoachPlanView.tsx');
-  assert.match(app, /derivePlanOrientation\(/);
-  assert.doesNotMatch(app, /<CoachOrientationRail/);
-  assert.match(plan, /data-plan-leftover-not-live=\{leftoverNote \? "true" : undefined\}/);
-  assert.match(plan, /leftoverNotLive/);
-  assert.match(plan, /coach-plan-view__now-card/);
-  assert.doesNotMatch(plan, /coach-plan-view__compact-more/);
-  const compactStart = plan.indexOf('className="coach-plan-view__compact-summary"');
-  const compactEnd = plan.indexOf('!hideDecisionStrip && !shouldShowDecisionCard && !compactPrimary', compactStart);
-  assert.ok(compactStart >= 0 && compactEnd > compactStart, 'expected compact first viewport');
-  const compactSummary = plan.slice(compactStart, compactEnd);
-  assert.doesNotMatch(compactSummary, /data-plan-evidence-list/);
-  assert.doesNotMatch(compactSummary, /coach-plan-view__compact-fact/);
-  assert.doesNotMatch(compactSummary, /memoryScopeContext/);
-  assert.match(compactSummary, /coach-plan-view__now-card/);
-  assert.match(compactSummary, /data-plan-fact="next"/);
-  assert.match(compactSummary, /compactPrimaryAction\.onClick/);
-  assert.match(app, /openPlanComposerMode\("evidence"\)/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').learning();
 });
 
 test('training first viewport is the current card plus one primary, with skip/grade on the composer', () => {
-  const training = read('components/training/TrainingWorkbenchView.tsx');
-  const app = read('app/App.tsx');
-  const cardOnlyStart = training.indexOf('{cardOnly ? (');
-  const cardOnlyEnd = training.indexOf('{!cardOnly ? (', cardOnlyStart);
-  assert.ok(cardOnlyStart >= 0 && cardOnlyEnd > cardOnlyStart, 'expected card-only first viewport');
-  const cardOnly = training.slice(cardOnlyStart, cardOnlyEnd);
-  assert.match(cardOnly, /data-view-object=""/);
-  assert.match(cardOnly, /data-view-why=""/);
-  assert.match(cardOnly, /data-view-primary=""/);
-  assert.match(cardOnly, /training-current__card-section/);
-  assert.doesNotMatch(cardOnly, /training-current__more/);
-  // Phase-C training slice: the loop rail and step-start action live on the
-  // card-only first viewport.
-  assert.doesNotMatch(cardOnly, /training-loop-rail/);
-  assert.match(cardOnly, /data-training-card-footer="true"/);
-  // The step-start label is App-composed (localizable), the affordance lives
-  // on the card.
-  assert.match(training, /startStep: "Start this step"/);
-  assert.doesNotMatch(cardOnly, /card-status-nav/);
-  assert.doesNotMatch(cardOnly, /handleSkipCard/);
-  assert.doesNotMatch(cardOnly, /handleGradeCard/);
-  assert.doesNotMatch(cardOnly, /TrainingNextHopLine/);
-  assert.match(training, /training-current__verify-result/);
-  const trainingActions = fs.readFileSync(
-    path.join(webviewRoot, 'components', 'training', 'trainingCardActions.ts'),
-    'utf8',
-  );
-  assert.match(trainingActions, /export function interpretTrainingComposerCardCommand/);
-  assert.match(trainingActions, /export function applyTrainingCardSkip/);
-  assert.match(trainingActions, /export function applyTrainingCardGrade/);
-  assert.match(app, /interpretTrainingComposerCardCommand\(normalizedDraft\)/);
-  assert.match(app, /applyTrainingCardSkip\(/);
-  assert.match(app, /applyTrainingCardGrade\(/);
-  assert.doesNotMatch(app, /onClick=\{handleVerifyTrainingFromIde\}[\s\S]{0,80}trainingFilePracticeTextCopy\.verifyCurrentFile/);
-  assert.match(app, /id: "composer-verify-file"/);
-  assert.match(app, /onClick: handleVerifyTrainingFromIde/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').practice();
 });

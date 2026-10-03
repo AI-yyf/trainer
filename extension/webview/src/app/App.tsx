@@ -1,3 +1,5 @@
+import { SystemState } from "../templates/SystemState";
+import { CommandPalette } from "../templates/CommandPalette";
 import {
   Suspense,
   forwardRef,
@@ -160,8 +162,12 @@ import {
 } from "./providerRecoveryCopy";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
 import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
+import { UtilityOverlay } from "../templates/UtilityOverlay";
+import { templateCopy } from "../templates/templateCopy";
 import { buildComposerProviderMenuItems, composerModelAutoRefreshDecision, composerModelPolicyHint, compactComposerModelLabel, settingsModelAutoPrimeDecision, type ComposerProviderMenuItem } from "../lib/composerModelHelpers";
-import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel, progressViewLabel, compactSidebarViewLabel } from "../lib/viewLabels";
+import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel } from "../lib/viewLabels";
+import { WorkbenchSurfaces } from "./WorkbenchSurfaces";
+import { getSurfaceScrollElement, useSurfaceScroll } from "./useSurfaceScroll";
 import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
 import { useComposerModelQuery } from "./useComposerModelQuery";
@@ -179,6 +185,10 @@ import {
   CoachConversationView,
   CoachMessageBubble,
 } from "../components/coach";
+import { AppShell } from "../templates/AppShell";
+import { PracticeResponse } from "../templates/PracticeResponse";
+import { ActivityHeader } from "../templates/ActivityHeader";
+import { ownsCoachComposer } from "../lib/workbenchDestinations";
 import { CoachComposer, ComposerIconButton } from "../components/composer";
 import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
 import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
@@ -195,18 +205,14 @@ import type {
   TrainingReviewItem,
   TrainingSummaryCard,
 } from "../components/training/TrainingWorkbenchView";
-import { CoachNavIcon, LearningNavIcon, ResourcesNavIcon, TrainingNavIcon } from "../components/icons/navigation/coreNav";
 import {
   CheckMarkIcon,
   ChevronRightIcon,
   ContextLayersIcon,
   FolderIcon,
-  HistoryIcon,
   LinkIcon,
-  NavProgressIcon,
   RefreshIcon,
   ResourcesIcon,
-  SettingsIcon,
   UploadIcon,
   WarningIcon,
 } from "../components/icons";
@@ -256,7 +262,6 @@ import type {
   ProviderEndpointSpeedTestResult,
 } from "../lib/types";
 import {
-  COACH_FIRST_SIDEBAR_VIEWS,
   normalizeSidebarView,
   normalizeTeachingStyle,
 } from "../lib/types";
@@ -305,7 +310,6 @@ type PlanComposerDraftReplacement = {
   targetTitle: string;
 };
 type ResourcesComposerMode = "locate" | "download" | "organize" | "cards";
-type HeaderSwitcherDensity = "full" | "compact" | "icon";
 const COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT = 6;
 const COACH_SETTINGS_AUTOSAVE_DELAY_MS = 250;
 const RESOURCE_UPLOAD_LIMIT = 100;
@@ -860,8 +864,8 @@ const CoachSettingsView = lazy(async () => {
   return { default: module.CoachSettingsView };
 });
 const ResourcesWorkbenchView = lazy(async () => {
-  const module = await import("../components/resources/ResourcesReaderView");
-  return { default: module.ResourcesReaderView };
+  const module = await import("../components/resources/ResourcesWorkbenchView");
+  return { default: module.ResourcesWorkbenchView };
 });
 const TrainingWorkbenchView = lazy(async () => {
   const module = await import("../components/training/TrainingWorkbenchView");
@@ -957,11 +961,7 @@ function ViewFallback({
   language: ComposerLanguage;
 }) {
   return (
-    <section className="section-block section-block--placeholder">
-      <p className="muted">
-        {appUiCopy(language, "正在加载{v}…").replace("{v}", label)}
-      </p>
-    </section>
+    <SystemState kind="loading" title={appUiCopy(language, "正在加载{v}…").replace("{v}", label)} />
   );
 }
 
@@ -1539,75 +1539,6 @@ function localizeKnownCoachUiText(
     "call-site reading": "call site 判断",
   };
   return localizeUiViewReferences(exactFocusMap[cleaned.trim().toLowerCase()] ?? cleaned, language);
-}
-
-function estimateHeaderSwitcherLabelWidth(label: string): number {
-  return Array.from(label).reduce((width, char) => {
-    if (/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/u.test(char)) {
-      return width + 14;
-    }
-    if (/[A-Z]/.test(char)) {
-      return width + 8;
-    }
-    return width + 7;
-  }, 0);
-}
-
-function resolveHeaderSwitcherDensity(widthPerTab: number): HeaderSwitcherDensity {
-  if (widthPerTab < 100) {
-    return "compact";
-  }
-  return "full";
-}
-
-function resolveHeaderSwitcherDensityForTabs(
-  containerWidth: number,
-  labels: string[],
-  compactLabels: string[] = labels,
-): HeaderSwitcherDensity {
-  const tabCount = Math.max(labels.length, 1);
-  const widthPerTab = containerWidth / tabCount;
-  const labelAllowance = Math.max(...labels.map(estimateHeaderSwitcherLabelWidth), 0) + 18;
-  if (widthPerTab >= labelAllowance) {
-    return resolveHeaderSwitcherDensity(widthPerTab);
-  }
-  const compactAllowance =
-    Math.max(...compactLabels.map(estimateHeaderSwitcherLabelWidth), 0) + 12;
-  if (widthPerTab >= compactAllowance) {
-    return "compact";
-  }
-  return "icon";
-}
-
-// §四十七: nav icons use 20px optical canvas. `sidebarViewIcon` forwards the
-// real active state so TrainerIconBase renders its Selective Fill variant
-// (§四十六). CoachIcons-based glyphs have no `active` prop; the shared
-// `.trainer-icon is-active` class drives the same CSS contract for them.
-function sidebarViewIcon(view: ActiveWorkbenchView, active: boolean): ReactNode {
-  switch (view) {
-    case "coach":
-      return <CoachNavIcon size={20} active={active} />;
-    case "plan":
-      return <LearningNavIcon size={20} active={active} />;
-    case "resources":
-      return <ResourcesNavIcon size={20} active={active} />;
-    case "training":
-      return <TrainingNavIcon size={20} active={active} />;
-    case "progress":
-      return (
-        <NavProgressIcon
-          size={20}
-          className={active ? "trainer-icon is-active" : "trainer-icon"}
-        />
-      );
-    case "settings":
-      return (
-        <SettingsIcon
-          size={18}
-          className={active ? "trainer-icon is-active" : "trainer-icon"}
-        />
-      );
-  }
 }
 
 function skillSectionTargetView(section: TrainerSkillSection): ActiveWorkbenchView {
@@ -3881,7 +3812,7 @@ export function App() {
   const { openMenu, setOpenMenu } = useMenuState();
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [dismissedComposerDeck, setDismissedComposerDeck] = useState<ComposerDeckKind>();
-  const [skillManagerOpen, setSkillManagerOpen] = useState(false);
+  const [settingsSectionRequest, setSettingsSectionRequest] = useState<{ category: "teaching"; requestId: number; skillTrigger?: string }>();
   const [pendingDeleteSkillId, setPendingDeleteSkillId] = useState<string>();
   const [skillDraftFields, setSkillDraftFields] = useState({
     trigger: "",
@@ -3937,7 +3868,6 @@ export function App() {
   }, []);
   const [composerModelActionDensity, setComposerModelActionDensity] =
     useState<ComposerModelActionDensity>("default");
-  const [headerSwitcherDensity, setHeaderSwitcherDensity] = useState<HeaderSwitcherDensity>("full");
   const [settingsActionState, updateSettingsActionState] = useState<SettingsActionState>();
   const [settingsFeedbackState, setSettingsFeedbackState] = useState<SettingsFeedbackState>({});
   const [providerApiKeyFocusRequest, setProviderApiKeyFocusRequest] = useState(0);
@@ -3952,6 +3882,7 @@ export function App() {
     card: "",
     coach: "",
   });
+  const [coachPlanContext, setCoachPlanContext] = useState<PlanComposerMode>();
   const [planComposerMode, setPlanComposerMode] = useState<PlanComposerMode>("explain");
   const [trainingVerifyNotice, setTrainingVerifyNotice] = useState<string | undefined>();
   // §十一: companion install state for the Settings remote-support panel.
@@ -3980,7 +3911,6 @@ export function App() {
   const [coachContextTransition, setCoachContextTransition] = useState<
     { signature: string; conversationLength: number } | undefined
   >();
-  const headerSwitcherRef = useRef<HTMLDivElement | null>(null);
   const composerShellRef = useRef<HTMLDivElement | null>(null);
   const composerModelAutoRefreshKeyRef = useRef("");
   const settingsModelAutoPrimeKeyRef = useRef("");
@@ -4262,9 +4192,9 @@ export function App() {
         return;
       }
       const replyDoc = coachReplyMarkdown(message, layout.composerLanguage);
-      if (action === "share") {
+      if (action === "share" || action === "copy") {
         try {
-          await navigator.clipboard.writeText(replyDoc.markdown);
+          await navigator.clipboard.writeText(action === "copy" ? message.body : replyDoc.markdown);
           setOperationMessage({
             tone: "success",
             message: appUiCopy(layout.composerLanguage, "这条教练回复已复制到剪贴板。"),
@@ -4707,7 +4637,7 @@ export function App() {
       settingsActionState,
     ],
   );
-  const showComposerShell = activeView !== "settings";
+  const showComposerShell = ownsCoachComposer(activeView);
   const openTrainingCoachBridge = useCallback(
     (bridge: Parameters<typeof composeTrainingCoachBridgeDraft>[0]) => {
       setActiveView("coach");
@@ -4809,22 +4739,14 @@ export function App() {
     [],
   );
   const draft = layout.composerDraft;
-  const composerSessionRef = useRef<string>();
-  const composerSessionDraftsRef = useRef(new Map<string, string>());
   const composerSessionKey = `${data.memory.workspace?.resourceSandbox?.effectivePath
     ?? data.memory.workspace?.workspaceId ?? data.workspaceName}\u0000${data.sessionLabel}`;
+  const surfaceInstanceKey = `${composerSessionKey}\u0000${data.runtimeDataGeneration ?? ""}`;
   useEffect(() => {
-    if (!hasReceivedHostState || !data.sessionLabel) {
-      return;
+    if (hasReceivedHostState && data.sessionLabel) {
+      useWorkbenchState.getState().selectComposerDraftScope(composerSessionKey);
     }
-    const previousSession = composerSessionRef.current;
-    composerSessionRef.current = composerSessionKey;
-    if (!previousSession || previousSession === composerSessionKey) {
-      return;
-    }
-    composerSessionDraftsRef.current.set(previousSession, draft);
-    setComposerDraft(composerSessionDraftsRef.current.get(composerSessionKey) ?? "");
-  }, [composerSessionKey, data.sessionLabel, draft, hasReceivedHostState, setComposerDraft]);
+  }, [composerSessionKey, data.sessionLabel, hasReceivedHostState]);
   const normalizedDraft = draft.trim();
   useEffect(() => {
     if (activeView === "plan" && normalizedDraft) {
@@ -4835,6 +4757,7 @@ export function App() {
   }, [activeView, normalizedDraft]);
 
   const applyPlanComposerGuidance = (targetTitle: string) => {
+    setActiveView("coach");
     setPendingPlanComposerDraftReplacement(undefined);
     setComposerDraft(planText.stageGuidancePrompt(targetTitle));
     window.requestAnimationFrame(() => {
@@ -4881,12 +4804,9 @@ export function App() {
     (nextDraft: string) => {
       resetComposerHistoryNavigation();
       setDismissedComposerDeck(undefined);
-      if (activeView === "training") {
-        trainingRouteDraftsRef.current[trainingComposerRoute] = nextDraft;
-      }
       setComposerDraft(nextDraft);
     },
-    [activeView, resetComposerHistoryNavigation, setComposerDraft, trainingComposerRoute],
+    [resetComposerHistoryNavigation, setComposerDraft],
   );
   const previewDirectionOverride = isBrowserPreview
     ? readBrowserPreviewLocationOverrides().direction
@@ -5888,126 +5808,18 @@ export function App() {
     return () => observer.disconnect();
   }, [activeView]);
 
-  // Phase-C navigation: the switcher carries the three daily entries
-  // (对话/学习/资料). Training is an activity-driven "continue training"
-  // entry — it appears while a card is active or the learner is on the
-  // training surface — and Progress follows the same pattern while the
-  // learner is on the progress surface. Settings lives in the header as a
-  // gear button. All five views stay routable and every legacy command
-  // still lands.
-  // The nav is a map of the workbench, so every top-level destination has to be
-  // reachable from it at all times. These tabs used to appear only once you were
-  // already inside them (or only after a training card existed), which made
-  // "训练" and "成长" unreachable from a fresh session — the row changed shape
-  // depending on where you stood. Settings stays out of the row because the
-  // header gear is its permanent, always-visible entry point.
-  const sidebarViewTabs = COACH_FIRST_SIDEBAR_VIEWS.filter((view) => view !== "settings").map((view) => {
-    if (view === "coach") {
-      const label = coachViewLabel(layout.composerLanguage);
-      return {
-        view,
-        label,
-        compactLabel: compactSidebarViewLabel(view, layout.composerLanguage, label),
-      };
-    }
-    if (view === "plan") {
-      const label = planViewLabel(layout.composerLanguage);
-      return {
-        view,
-        label,
-        compactLabel: compactSidebarViewLabel(view, layout.composerLanguage, label),
-      };
-    }
-    if (view === "resources") {
-      const label = resourcesViewLabel(layout.composerLanguage);
-      return {
-        view,
-        label,
-        compactLabel: compactSidebarViewLabel(view, layout.composerLanguage, label),
-      };
-    }
-    if (view === "training") {
-      const label = trainingViewLabel(layout.composerLanguage);
-      return {
-        view,
-        label,
-        compactLabel: compactSidebarViewLabel(view, layout.composerLanguage, label),
-      };
-    }
-    if (view === "progress") {
-      const label = progressViewLabel(layout.composerLanguage);
-      return {
-        view,
-        label,
-        compactLabel: compactSidebarViewLabel(view, layout.composerLanguage, label),
-      };
-    }
-    const label = settingsViewLabel(layout.composerLanguage);
-    return {
-      view,
-      label,
-      compactLabel: compactSidebarViewLabel(view, layout.composerLanguage, label),
-    };
-  });
-  const sidebarViewTabLabels = sidebarViewTabs.map(({ label }) => label).join("\u0000");
-
-  useEffect(() => {
-    const element = headerSwitcherRef.current;
-    if (!element) {
-      return;
-    }
-
-    const updateDensity = () => {
-      const containerWidth = element.getBoundingClientRect().width;
-      setHeaderSwitcherDensity(
-        resolveHeaderSwitcherDensityForTabs(
-          containerWidth,
-          sidebarViewTabs.map(({ label }) => label),
-          sidebarViewTabs.map(({ compactLabel }) => compactLabel),
-        ),
-      );
-    };
-
-    updateDensity();
-
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", updateDensity);
-      return () => window.removeEventListener("resize", updateDensity);
-    }
-
-    const observer = new ResizeObserver(() => updateDensity());
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [sidebarViewTabLabels, sidebarViewTabs]);
-
   useEffect(() => {
     setSelectedCommandIndex(0);
   }, [normalizedDraft]);
 
-  useEffect(() => {
-    const container = viewContentRef.current;
-    if (!container) {
-      return;
-    }
-    if (activeView === "coach") {
-      // A conversation opens on its newest turn, not its oldest. Every other
-      // surface starts at the top, but landing mid-history in a chat reads as
-      // "the app forgot the thread" — and it hides whatever the coach just said.
-      coachAutoScrollPinnedRef.current = true;
-      const frame = window.requestAnimationFrame(() => {
-        container.scrollTop = container.scrollHeight;
-      });
-      return () => window.cancelAnimationFrame(frame);
-    }
-    container.scrollTop = 0;
-  }, [activeView]);
+  useSurfaceScroll(viewContentRef, activeView, composerSessionKey);
 
   useEffect(() => {
     if (activeView !== "coach") {
       return;
     }
 
-    const container = viewContentRef.current;
+    const container = viewContentRef.current && getSurfaceScrollElement(viewContentRef.current, "coach");
     if (!container) {
       return;
     }
@@ -6022,6 +5834,7 @@ export function App() {
     };
     container.addEventListener("scroll", handleScroll, { passive: true });
 
+    coachAutoScrollPinnedRef.current = isPinnedToBottom();
     const handle = window.requestAnimationFrame(() => {
       if (coachAutoScrollPinnedRef.current) {
         container.scrollTop = container.scrollHeight;
@@ -6932,8 +6745,9 @@ export function App() {
     coachContextTransition.conversationLength === data.conversation.length;
   const openPlanComposerMode = useCallback(
     (mode: PlanComposerMode) => {
-      setActiveView("plan");
+      setActiveView("coach");
       setPlanComposerMode(mode);
+      setCoachPlanContext(mode);
       const modeCopy = resolvePlanComposerCopy(layout.composerLanguage).modes[mode];
       const prompt =
         mode === "blocker" ? modeCopy.secondaryPrompt.prompt : modeCopy.primaryPrompt.prompt;
@@ -7423,6 +7237,16 @@ export function App() {
       selectedTrainingRouteCard.cardId === trainingState?.selectedCardId
         ? selectedTrainingRouteCard.cardId
         : undefined));
+  const activityDraftKey = `${composerSessionKey}\u0000${activeTrainingCardId ?? "unselected"}`;
+  const activityDraft = layout.activityDrafts?.[activityDraftKey] ?? "";
+  const [activityAttachmentBank, setActivityAttachmentBank] = useState<Record<string, MessageAttachment[]>>({});
+  const activityAttachments = activityAttachmentBank[activityDraftKey] ?? [];
+  const setActivityAttachments = (attachments: MessageAttachment[]) => {
+    setActivityAttachmentBank((bank) => ({ ...bank, [activityDraftKey]: attachments }));
+  };
+  const setActivityDraft = useCallback((value: string) => {
+    useWorkbenchState.getState().setActivityDraft(activityDraftKey, value);
+  }, [activityDraftKey]);
   const trainingRestoreReplacesSelectedCard = Boolean(
     trainingRestoreForeground &&
       activeTrainingCardId &&
@@ -8244,7 +8068,7 @@ export function App() {
       reviewArtifactId: reviewArtifactVisible ? trainingState?.reviewArtifact?.id : undefined,
       reviewArtifactStatus: reviewArtifactVisible ? trainingState?.reviewArtifact?.status : undefined,
       nextHopVisible,
-      nextHopTitle: nextHopVisible ? trainingState?.latestTrainingNextHop?.title : undefined,
+      nextHopTitle: nextHopVisible ? visibleTrainingCardTitle : undefined,
       nextHopStatus: nextHopVisible ? trainingState?.latestTrainingNextHop?.status : undefined,
       nextHopContinueIn: nextHopVisible
         ? trainingState?.latestTrainingNextHop?.continueIn
@@ -8284,30 +8108,8 @@ export function App() {
   ]);
   const trainingComposerEnabled = activeView === "training" && hasTrainingCard;
   const resolvedReviewArtifact = reviewArtifactForeground && trainingState?.reviewArtifact?.status === "resolved";
-  const trainingComposerTalkMode = trainingComposerEnabled &&
-    (trainingComposerRoute === "coach" || resolvedReviewArtifact);
+  const trainingComposerTalkMode = false; // Chat is owned exclusively by Coach.
   const trainingComposerUsesAnswerMode = trainingComposerPhase === "answer";
-  const handleTrainingComposerRouteChange = useCallback(
-    (nextRoute: TrainingComposerRoute) => {
-      if (nextRoute === trainingComposerRoute) {
-        return;
-      }
-      trainingRouteDraftsRef.current[trainingComposerRoute] = draft;
-      const nextDraft = trainingRouteDraftsRef.current[nextRoute] ?? "";
-      setTrainingComposerRoute(nextRoute);
-      resetComposerHistoryNavigation();
-      setDismissedComposerDeck(undefined);
-      setComposerDraft(nextDraft);
-    },
-    [
-      draft,
-      resetComposerHistoryNavigation,
-      setComposerDraft,
-      setDismissedComposerDeck,
-      setTrainingComposerRoute,
-      trainingComposerRoute,
-    ],
-  );
   const trainingComposerPracticeInputMode =
     trainingCardType === "practice" && trainingComposerPhase === "try";
   const trainingComposerManualPracticeMode =
@@ -8340,11 +8142,12 @@ export function App() {
       return;
     }
 
-    setComposerDraft("");
+    setActivityDraft("");
   }, [
     normalizedTrainingNextHopStatus,
     setActiveView,
     setComposerDraft,
+    setActivityDraft,
     trainingCoachBridge,
     trainingHandoffReturnRequired,
     trainingState?.selectedCardId,
@@ -8815,7 +8618,7 @@ export function App() {
       return [];
     }
 
-    return filterTrainerSkills(triggerToken, trainerSkillContext, 10, availableSkillCatalog);
+    return filterTrainerSkills(triggerToken, trainerSkillContext, triggerToken === "$" ? 6 : 10, availableSkillCatalog);
   }, [
     normalizedDraft,
     trainerSkillContext,
@@ -8845,7 +8648,7 @@ export function App() {
 
   useEffect(() => {
     const activeItem = composerDeckRef.current?.querySelector<HTMLElement>(
-      ".command-deck__item.is-active, .skill-deck__item.is-active",
+      ".command-deck__item.is-active, .template-command-palette__entry[aria-selected=true]",
     );
     activeItem?.scrollIntoView({ block: "nearest" });
   }, [dismissedComposerDeck, normalizedDraft, selectedCommandIndex]);
@@ -9546,8 +9349,10 @@ export function App() {
     });
   };
 
-  const handleSubmit = async () => {
-    const hasImageAttachments = composerAttachments.length > 0;
+  const handleSubmit = async (activityResponse?: string) => {
+    const normalizedDraft = activityResponse === undefined ? draft.trim() : activityResponse.trim();
+    const submissionAttachments = activityResponse === undefined ? composerAttachments : activityAttachments;
+    const hasImageAttachments = submissionAttachments.length > 0;
     const allowEmptyTrainingReturnSubmission =
       composerUsesTrainingFlow &&
       trainingComposerReturnMode &&
@@ -9587,7 +9392,7 @@ export function App() {
       return;
     }
 
-    const localCommandDefinition = hasImageAttachments
+    const localCommandDefinition = activityResponse !== undefined || hasImageAttachments
       ? undefined
       : findSidebarControlCommand(normalizedDraft);
     const localCommand = localCommandDefinition
@@ -9602,7 +9407,7 @@ export function App() {
 
     const submittedSkillTrigger = normalizedDraft.split(/\s+/, 1)[0] ?? "";
     const submittedSkill =
-      submittedSkillTrigger.startsWith("$")
+      activityResponse === undefined && submittedSkillTrigger.startsWith("$")
         ? availableSkillCatalog.find((skill) =>
             skill.trigger.toLowerCase() === submittedSkillTrigger.toLowerCase() &&
             (!skill.when || skill.when(trainerSkillContext)),
@@ -9747,8 +9552,8 @@ export function App() {
               )
             : false;
       if (appliedTrainingCardCommand) {
-        setComposerDraft("");
-        setComposerAttachments([]);
+        setActivityDraft("");
+        setActivityAttachments([]);
         return;
       }
 
@@ -9784,10 +9589,10 @@ export function App() {
           includeCurrentFile: false,
           includeDiagnostics: false,
           contextDetail: "focused",
-          attachments: composerAttachments,
+          attachments: submissionAttachments,
         });
-        setComposerDraft("");
-        setComposerAttachments([]);
+        setActivityDraft("");
+        setActivityAttachments([]);
         return;
       }
 
@@ -9843,7 +9648,7 @@ export function App() {
           learnerAnswer: normalizedAnswer,
           evidenceItems: authoritativeVerifyItems,
         });
-        setComposerDraft("");
+        setActivityDraft("");
       } else {
         let shouldStartFeedback = false;
         try {
@@ -9869,14 +9674,14 @@ export function App() {
             ? selectedTrainingCardCandidate?.verificationSteps ?? []
             : authoritativeVerifyItems,
         });
-        setComposerDraft("");
+        setActivityDraft("");
       }
       return;
     }
 
     const waitingComposerEvidence =
-      activeView === "plan" &&
-      resolvedPlanComposerMode === "evidence" &&
+      (activeView === "plan" || coachPlanContext !== undefined) &&
+      (coachPlanContext ?? resolvedPlanComposerMode) === "evidence" &&
       recoveredRuntime &&
       planRuntimeStatus?.resumeState === "waiting" &&
       Boolean(planRuntimeStatus?.currentStep?.trim()) &&
@@ -9919,9 +9724,10 @@ export function App() {
       sendAnalysis.intent === "task"
         ? sendAnalysis.intent
         : "coach";
-    const planComposerSubmission = activeView === "plan";
+    const planComposerSubmission = activeView === "plan" || coachPlanContext !== undefined;
+    const submittedPlanMode = coachPlanContext ?? resolvedPlanComposerMode;
     const formalPlanGeneration =
-      (planComposerSubmission && resolvedPlanComposerMode === "generate") ||
+      (planComposerSubmission && submittedPlanMode === "generate") ||
       (activeView === "coach" && sendAnalysis.intent === "plan");
     const previewPlanCandidateGeneration =
       formalPlanGeneration && isBrowserPreview && Boolean(window.__TRAINER_BOOTSTRAP__);
@@ -9950,10 +9756,10 @@ export function App() {
       text: messageText,
       intent,
       goals: formalPlanGeneration ? data.profile.goals : undefined,
-      activeView,
+      activeView: planComposerSubmission ? "plan" : activeView,
       stream: true,
       formalPlanMutation: formalPlanGeneration && !previewPlanCandidateGeneration,
-      planComposerMode: planComposerSubmission ? resolvedPlanComposerMode : undefined,
+      planComposerMode: planComposerSubmission ? submittedPlanMode : undefined,
       resourceComposerIntent:
         activeView === "resources"
           ? {
@@ -9967,6 +9773,7 @@ export function App() {
     });
     setComposerDraft("");
     setComposerAttachments([]);
+    setCoachPlanContext(undefined);
   };
 
   // Re-arm the bootstrap request guard only on the false -> true transition of
@@ -10605,9 +10412,9 @@ export function App() {
 
     if (trainingHandoffReflectionRequired) {
       setTrainingComposerRoute("card");
-      setComposerDraft("");
+      setActivityDraft("");
       window.requestAnimationFrame(() => {
-        focusComposerInput();
+        document.getElementById("training-response")?.focus();
       });
       return;
     }
@@ -10929,7 +10736,7 @@ export function App() {
         >
           <div className="composer-context-strip__chips composer-context-strip__chips--training-choice">
             {normalizedTrainingFlashChoices.slice(0, 4).map((choice, index) => {
-              const isActive = normalizeInlineComparisonText(choice) === normalizeInlineComparisonText(draft);
+              const isActive = normalizeInlineComparisonText(choice) === normalizeInlineComparisonText(activityDraft);
               return (
                 <button
                   key={`${choice}:${index}`}
@@ -10937,9 +10744,9 @@ export function App() {
                   type="button"
                   aria-pressed={isActive}
                   onClick={() => {
-                    setComposerDraft(choice);
+                    setActivityDraft(choice);
                     window.requestAnimationFrame(() => {
-                      focusComposerInput();
+                      document.getElementById("training-response")?.focus();
                     });
                   }}
                 >
@@ -10975,7 +10782,7 @@ export function App() {
             onClick={() => {
               setTrainingComposerPracticeReturnMode("result");
               window.requestAnimationFrame(() => {
-                focusComposerInput();
+                document.getElementById("training-response")?.focus();
               });
             }}
           >
@@ -10989,7 +10796,7 @@ export function App() {
             onClick={() => {
               setTrainingComposerPracticeReturnMode("blocked");
               window.requestAnimationFrame(() => {
-                focusComposerInput();
+                document.getElementById("training-response")?.focus();
               });
             }}
           >
@@ -11135,24 +10942,6 @@ export function App() {
               ) : null}
             </div>
           ) : null}
-        </section>
-      );
-    }
-
-    if (openMenu === "history") {
-      const zh = layout.composerLanguage === "zh-CN";
-      return (
-        <section className="composer-menu-panel composer-menu-panel--history">
-          <CoachHistoryDrawer
-            zh={zh}
-            sessions={coachSessions}
-            status={coachSessionsStatus}
-            statusMessage={coachSessionsMessage}
-            onActivate={activateCoachSession}
-            onRefresh={requestCoachSessions}
-            onNewChat={startNewCoachChat}
-            onClose={() => setOpenMenu(undefined)}
-          />
         </section>
       );
     }
@@ -11738,212 +11527,26 @@ export function App() {
     }
   };
 
+  const openSkillSettings = (skillTrigger?: string) => {
+    setSettingsSectionRequest({ category: "teaching", requestId: Date.now(), skillTrigger });
+    setActiveView("settings");
+  };
+  const renderSkillSharing = () => <details className="template-disclosure"><summary>{appUiCopy(layout.composerLanguage, "分享")}</summary><div>
+    {customSkills.map((skill) => <div className="template-context" key={skill.id}><span>{skill.trigger} · {skill.title}</span><button type="button" className="template-back" onClick={() => void copyCustomSkillShare(skill)}>{appUiCopy(layout.composerLanguage, "复制分享包")}</button></div>)}
+    <textarea className="settings-skill-import" value={skillImportText} placeholder={appUiCopy(layout.composerLanguage, "粘贴技能分享包 JSON 进行安装")} aria-label={appUiCopy(layout.composerLanguage, "安装技能")} rows={2} onChange={(event) => setSkillImportText(event.target.value)} />
+    <button type="button" className="button button--ghost" disabled={!skillImportText.trim()} onClick={installCustomSkillFromPaste}>{appUiCopy(layout.composerLanguage, "安装技能")}</button>
+  </div></details>;
   const renderSkillDeck = () => {
-    if (
-      dismissedComposerDeck === "skill" ||
-      !normalizedDraft.startsWith("$")
-    ) {
-      return null;
-    }
-
+    if (dismissedComposerDeck === "skill" || !normalizedDraft.startsWith("$")) return null;
     const draftTriggerToken = trainerSkillTriggerToken(normalizedDraft) ?? "$";
-    // Check the merged catalog — not the narrowed suggestion list — so an
-    // existing trigger (including one whose `when` context currently hides it
-    // from the list) never gets a "create" affordance that would collide on
-    // save or silently overwrite a custom skill.
-    const hasExactTrigger = availableSkillCatalog.some(
-      (skill) => skill.trigger.toLowerCase() === draftTriggerToken.toLowerCase(),
-    );
-    const creatableTrigger =
-      draftTriggerToken.length > 1 && !hasExactTrigger ? draftTriggerToken : undefined;
-
-    return (
-      <div ref={composerDeckRef} className="skill-deck" role="list" aria-label={appUiCopy(layout.composerLanguage, "技能")}>
-        <div className="skill-deck__header">
-          <strong>{appUiCopy(layout.composerLanguage, "技能")}</strong>
-          <span className="skill-deck__hint">
-            {appUiCopy(layout.composerLanguage, "继续输入可收窄范围，删除 $ 就会按普通消息发送。")}
-          </span>
-        </div>
-        {matchingLocalSkills.length === 0 ? (
-          <p className="skill-deck__empty">
-            {appUiCopy(layout.composerLanguage, "没有匹配到 skill。继续输入，或者直接当作普通消息发送。")}
-          </p>
-        ) : (
-          <div className="skill-deck__list">
-            {matchingLocalSkills.map((skill) => (
-              <button
-              key={skill.id}
-              className={`skill-deck__item ${
-                matchingLocalSkills[selectedCommandIndex]?.id === skill.id ? "is-active" : ""
-              }`}
-              type="button"
-              aria-label={`${skill.trigger}: ${resolveTrainerSkillText(skill.title, layout.composerLanguage)}`}
-              title={[
-                skill.trigger,
-                resolveTrainerSkillText(skill.title, layout.composerLanguage),
-                resolveTrainerSkillText(skill.detail, layout.composerLanguage),
-                trainerSkillSectionLabel(skill.section, layout.composerLanguage),
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-                onMouseEnter={() => {
-                  const index = matchingLocalSkills.findIndex((item) => item.id === skill.id);
-                  if (index >= 0) {
-                    setSelectedCommandIndex(index);
-                  }
-                }}
-                onClick={() => selectSkillSuggestion(skill)}
-              >
-                <span className="skill-deck__trigger">{skill.trigger}</span>
-                <span className="skill-deck__body">
-                  <strong>{resolveTrainerSkillText(skill.title, layout.composerLanguage)}</strong>
-                  <span>{resolveTrainerSkillText(skill.detail, layout.composerLanguage)}</span>
-                </span>
-                <span className="skill-deck__section">
-                  {trainerSkillSectionLabel(skill.section, layout.composerLanguage)}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-        {creatableTrigger && !skillManagerOpen ? (
-          <button
-            type="button"
-            className="skill-deck__create-row"
-            onClick={() => {
-              setSkillDraftFields((fields) => ({ ...fields, trigger: creatableTrigger }));
-              setSkillManagerOpen(true);
-            }}
-          >
-            {appUiCopy(layout.composerLanguage, "创建技能 {v}").replace("{v}", creatableTrigger)}
-          </button>
-        ) : null}
-        {/* The deck header is display:none chrome — the manager entry must live
-            outside it or custom skills become unreachable. */}
-        <button
-          type="button"
-          className="skill-deck__create-row skill-deck__manage-row"
-          aria-expanded={skillManagerOpen}
-          onClick={() => {
-            setPendingDeleteSkillId(undefined);
-            setSkillManagerOpen((open) => !open);
-          }}
-        >
-          {skillManagerOpen
-            ? appUiCopy(layout.composerLanguage, "收起技能管理")
-            : appUiCopy(layout.composerLanguage, "管理技能")}
-        </button>
-        {skillManagerOpen ? (
-          <div className="skill-deck__manager">
-            {customSkills.length > 0 ? (
-              <ul className="skill-deck__custom-list">
-                {customSkills.map((skill) => (
-                  <li key={skill.id} className="skill-deck__custom-item">
-                    <span className="skill-deck__custom-label">
-                      <strong>{skill.trigger}</strong>
-                      <span>{skill.title}</span>
-                    </span>
-                    <button
-                      type="button"
-                      className="skill-deck__mini-button"
-                      title={appUiCopy(layout.composerLanguage, "复制分享包")}
-                      onClick={() => void copyCustomSkillShare(skill)}
-                    >
-                      {appUiCopy(layout.composerLanguage, "分享")}
-                    </button>
-                    <button
-                      type="button"
-                      className="skill-deck__mini-button skill-deck__mini-button--danger"
-                      title={
-                        pendingDeleteSkillId === skill.id
-                          ? appUiCopy(layout.composerLanguage, "再次点击确认删除")
-                          : appUiCopy(layout.composerLanguage, "删除技能")
-                      }
-                      onClick={() => removeCustomSkill(skill.id)}
-                    >
-                      {pendingDeleteSkillId === skill.id
-                        ? appUiCopy(layout.composerLanguage, "确认删除")
-                        : appUiCopy(layout.composerLanguage, "删除")}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="skill-deck__manager-note">
-                {appUiCopy(layout.composerLanguage, "还没有自定义技能。下面创建一个，或粘贴别人分享的技能包。")}
-              </p>
-            )}
-            <div className="skill-deck__form">
-              <div className="skill-deck__form-row">
-                <input
-                  className="skill-deck__input skill-deck__input--trigger"
-                  value={skillDraftFields.trigger}
-                  placeholder={appUiCopy(layout.composerLanguage, "$触发词")}
-                  aria-label={appUiCopy(layout.composerLanguage, "技能触发词")}
-                  onChange={(event) =>
-                    setSkillDraftFields((fields) => ({ ...fields, trigger: event.target.value }))
-                  }
-                />
-                <input
-                  className="skill-deck__input"
-                  value={skillDraftFields.title}
-                  placeholder={appUiCopy(layout.composerLanguage, "名称（可选）")}
-                  aria-label={appUiCopy(layout.composerLanguage, "技能名称")}
-                  onChange={(event) =>
-                    setSkillDraftFields((fields) => ({ ...fields, title: event.target.value }))
-                  }
-                />
-              </div>
-              <input
-                className="skill-deck__input"
-                value={skillDraftFields.detail}
-                placeholder={appUiCopy(layout.composerLanguage, "描述（可选）：选择时显示的说明")}
-                aria-label={appUiCopy(layout.composerLanguage, "技能描述")}
-                onChange={(event) =>
-                  setSkillDraftFields((fields) => ({ ...fields, detail: event.target.value }))
-                }
-              />
-              <textarea
-                className="skill-deck__textarea"
-                value={skillDraftFields.prompt}
-                placeholder={appUiCopy(layout.composerLanguage, "提示词：输入 $触发词 后发给教练的指令")}
-                aria-label={appUiCopy(layout.composerLanguage, "技能提示词")}
-                rows={3}
-                onChange={(event) =>
-                  setSkillDraftFields((fields) => ({ ...fields, prompt: event.target.value }))
-                }
-              />
-              <button
-                type="button"
-                className="skill-deck__mini-button skill-deck__mini-button--primary"
-                onClick={saveCustomSkillDraft}
-              >
-                {appUiCopy(layout.composerLanguage, "保存技能")}
-              </button>
-            </div>
-            <div className="skill-deck__form">
-              <textarea
-                className="skill-deck__textarea"
-                value={skillImportText}
-                placeholder={appUiCopy(layout.composerLanguage, "粘贴技能分享包 JSON 进行安装")}
-                aria-label={appUiCopy(layout.composerLanguage, "安装技能")}
-                rows={2}
-                onChange={(event) => setSkillImportText(event.target.value)}
-              />
-              <button
-                type="button"
-                className="skill-deck__mini-button skill-deck__mini-button--primary"
-                disabled={!skillImportText.trim()}
-                onClick={installCustomSkillFromPaste}
-              >
-                {appUiCopy(layout.composerLanguage, "安装技能")}
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    );
+    const creatableTrigger = draftTriggerToken.length > 1 && !availableSkillCatalog.some((skill) => skill.trigger.toLowerCase() === draftTriggerToken.toLowerCase()) ? draftTriggerToken : undefined;
+    return <CommandPalette containerRef={composerDeckRef} label={appUiCopy(layout.composerLanguage, "技能")}
+      hint={appUiCopy(layout.composerLanguage, "继续输入可收窄范围，删除 $ 就会按普通消息发送。")}
+      empty={appUiCopy(layout.composerLanguage, "没有匹配到 skill。继续输入，或者直接当作普通消息发送。")}
+      selectedIndex={selectedCommandIndex} onHighlight={setSelectedCommandIndex}
+      entries={matchingLocalSkills.map((skill) => ({ id: skill.id, trigger: skill.trigger,
+        title: resolveTrainerSkillText(skill.title, layout.composerLanguage), detail: resolveTrainerSkillText(skill.detail, layout.composerLanguage), onSelect: () => selectSkillSuggestion(skill) }))}
+      footer={<><button type="button" className="template-back" onClick={() => openSkillSettings(creatableTrigger)}>{creatableTrigger ? appUiCopy(layout.composerLanguage, "创建技能 {v}").replace("{v}", creatableTrigger) : appUiCopy(layout.composerLanguage, "管理技能")}</button></>} />;
   };
 
   const renderSuggestedActions = () => {
@@ -13116,7 +12719,7 @@ export function App() {
           }
           restoreContext={resourceRestoreContext}
           onDebugVisibleFacts={(facts) =>
-            postDebugVisibleFacts({ activeView: "resources", resources: facts })
+            activeView === "resources" ? postDebugVisibleFacts({ activeView: "resources", resources: facts }) : undefined
           }
           organizationConfirm={
             resourceOrganizationPending?.pending && !leftoverResourceLibraryListNotLive
@@ -13145,6 +12748,19 @@ export function App() {
             browserPreviewFixture ? undefined : requestResourceTrainingHandoff
           }
           onOpenTraining={() => setActiveView("training")}
+          onAskCoach={(resourceIds) => {
+            setSelectedResourceContextIds(resourceIds);
+            setResourceConversationContextIds(resourceIds);
+            setActiveView("coach");
+            window.requestAnimationFrame(focusComposerInput);
+          }}
+          onJoinLearning={(resourceIds) => {
+            setSelectedResourceContextIds(resourceIds);
+            setResourceConversationContextIds(resourceIds);
+            setCoachPlanContext("explain");
+            setActiveView("coach");
+            window.requestAnimationFrame(focusComposerInput);
+          }}
           initialResourceContextIds={resourceConversationContextIds}
           onResourceSelectionChange={handleResourceSelectionChange}
           onRestoreContextChange={setResourceRestoreContext}
@@ -13335,6 +12951,30 @@ export function App() {
           cardType={trainingCardType}
           trainingSubmode={effectiveTrainingSubmode}
           cardOnly={true}
+          onBackToLearning={() => setActiveView("plan")}
+          response={resolvedReviewArtifact ? (
+            <SystemState kind="success" title={templateCopy[layout.composerLanguage].reviewRecorded}
+              detail={trainingState?.reviewArtifact?.verifiedResult ?? trainingState?.reviewArtifact?.summary}
+              action={{ label: templateCopy[layout.composerLanguage].askCoach, onClick: handleResumeTrainingInCoach }} />
+          ) : hasTrainingCard && !leftoverTrainingHandoffChromeNotLive && !trainingComposerReturnMode ? (
+            <PracticeResponse
+              label={localizedTrainingComposerAccessibilityLabel}
+              prompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : trainingComposerReflectMode ? trainingReflectionPrompt : undefined}
+              value={activityDraft}
+              language={layout.composerLanguage}
+              attachments={activityAttachments}
+              onAttachmentsChange={setActivityAttachments}
+              attachmentsAvailable={providerImageInputState.supported && !trainingComposerReflectMode}
+              attachmentError={providerImageInputState.detail ?? providerImageInputState.reason}
+              submitLabel={trainingComposerReflectMode ? templateCopy[layout.composerLanguage].recordReflection : templateCopy[layout.composerLanguage].submitAnswer}
+              busy={trainingPersistencePending || streaming.isStreaming}
+              disabled={workspaceSessionBlocked}
+              onChange={setActivityDraft}
+              onSubmit={(value) => { void handleSubmit(value); }}
+            >
+              {renderTrainingComposerAccessory()}
+            </PracticeResponse>
+          ) : null}
           cardId={activeTrainingCardId}
           selectedCardStatus={effectiveSelectedTrainingCardStatus}
           onCardStatusTransition={leftoverTrainingHandoffChromeNotLive ? undefined : handleTrainingCardStatusTransition}
@@ -13449,7 +13089,7 @@ export function App() {
                 ) ?? trainingState?.latestLearningVerifiedResult
           }
           latestLearningBlocker={
-            (reviewArtifactForeground ? trainingState?.reviewArtifact?.blockedReason : trainingVerifyNotice) ??
+            (reviewArtifactForeground ? trainingState?.reviewArtifact?.blockedReason : undefined) ??
             (leftoverTrainingHandoffChromeNotLive || reviewArtifactForeground || trainingRestoreReplacesSelectedCard
               ? undefined
               : pickLanguageAlignedTrainingText(
@@ -13463,6 +13103,7 @@ export function App() {
                     : undefined
                 ))
           }
+          verificationNotice={trainingVerifyNotice}
           latestLearningFollowup={
             leftoverTrainingHandoffChromeNotLive || reviewArtifactForeground || trainingRestoreReplacesSelectedCard
               ? undefined
@@ -13502,17 +13143,8 @@ export function App() {
           actions={hasTrainingCard ? trainingCoachAction : undefined}
           emptyState={
             leftoverTrainingHandoffChromeNotLive ? undefined : (
-            <div className="workbench-empty">
-              <h3>{t.trainingEmptyTitle}</h3>
-              <p>{t.trainingEmptyDescription}</p>
-              <button
-                className="button button--accent"
-                type="button"
-                onClick={() => handleGenerateTrainingCard()}
-              >
-                {t.startTraining}
-              </button>
-            </div>
+            <SystemState kind={workspaceSessionBlocked ? "workspace-required" : "empty"} title={t.trainingEmptyTitle} detail={workspaceSessionBlockMessage || t.trainingEmptyDescription}
+              action={{ label: workspaceSessionBlocked ? t.settings : t.startTraining, onClick: () => workspaceSessionBlocked ? openWorkspaceAdmission() : handleGenerateTrainingCard() }} />
             )
           }
           onNextCard={handleGenerateTrainingCard}
@@ -13520,6 +13152,7 @@ export function App() {
           flashPrompt={trainingFlashPrompt}
           expectedSymbols={trainingCardType === "practice" ? practiceExpectedSymbols : []}
           />
+
         </Suspense>
 
       </section>
@@ -13624,6 +13257,20 @@ export function App() {
           queued: t.stageQueued,
         }}
         actions={[
+          {
+            id: "plan-ask-coach",
+            label: templateCopy[layout.composerLanguage].askCoach,
+            tone: "ghost" as const,
+            onClick: () => openPlanComposerMode("explain"),
+          },
+          {
+            id: "plan-adjust",
+            label: templateCopy[layout.composerLanguage].adjustPlan,
+            tone: "ghost" as const,
+            disabled: !providerCanMutateFormalPlan,
+            detail: providerCanMutateFormalPlan ? undefined : formalPlanCapabilityMessage,
+            onClick: () => openPlanComposerMode("generate"),
+          },
           ...(liveEvidenceQueue.pending.length > 0 && formalPlanLive && !livePlanFrozen && !workspaceSessionBlocked
             ? [
                 {
@@ -13909,6 +13556,8 @@ export function App() {
     <section className="settings-view">
       <Suspense fallback={<ViewFallback label={t.settings} language={layout.composerLanguage} />}>
         <CoachSettingsView
+          sectionRequest={settingsSectionRequest}
+          skillSharing={renderSkillSharing()}
         className="settings-pane"
         companionInstallState={companionInstallState}
         remoteWorkspaceName={data.workspace?.isRemoteWorkspace ? data.workspace.remoteName : undefined}
@@ -14431,40 +14080,32 @@ export function App() {
           language={layout.composerLanguage}
           projection={data.workspaceTrainingState?.skillProjection}
           onOpenTraining={() => setActiveView("training")}
+          onBack={() => setActiveView("plan")}
         />
       </Suspense>
     </section>
   );
 
-  let activeViewContent = renderCoachRootView();
-  switch (activeView) {
-    case "plan":
-      activeViewContent = renderDockedView("plan", renderPlanView());
-      break;
-    case "resources":
-      activeViewContent = renderDockedView("resources", renderResourcesView());
-      break;
-    case "training":
-      activeViewContent = renderDockedView("training", renderTrainingView());
-      break;
-    case "progress":
-      activeViewContent = renderDockedView("progress", renderProgressView());
-      break;
-    case "settings":
-      activeViewContent = renderDockedView("settings", renderSettingsView());
-      break;
-    case "coach":
-    default:
-      activeViewContent = renderCoachRootView();
-      break;
-  }
+  const renderWorkbenchSurface = (view: ActiveWorkbenchView) => {
+    switch (view) {
+      case "plan": return renderDockedView("plan", renderPlanView());
+      case "resources": return renderDockedView("resources", renderResourcesView());
+      case "training": return renderDockedView("training", renderTrainingView());
+      case "progress": return renderDockedView("progress", renderProgressView());
+      case "settings": return renderDockedView("settings", renderSettingsView());
+      default: return renderCoachRootView();
+    }
+  };
 
   const workbenchShell = (
-      <div
-        className="trainer-shell"
-        lang={layout.composerLanguage}
-        dir={uiDirection}
-        data-text-direction={uiDirection}
+      <AppShell
+        language={layout.composerLanguage}
+        direction={uiDirection}
+        activeView={activeView}
+        context={data.workspaceName}
+        historyOpen={openMenu === "history"}
+        onHistory={toggleComposerHistoryMenu}
+        onNavigate={setActiveView}
       >
       <input
         ref={uploadFilesInputRef}
@@ -14495,95 +14136,30 @@ export function App() {
           event.currentTarget.value = "";
         }}
       />
-      <header className="trainer-header">
-        <div className="trainer-header__utility">
-          <div className="header-actions">
-            <button
-              className="header-switcher__item header-switcher__item--history"
-              data-testid="trainer-history-toggle"
-              onClick={toggleComposerHistoryMenu}
-              type="button"
-              aria-label={appUiAltCopy(layout.composerLanguage, "会话历史")}
-              title={appUiAltCopy(layout.composerLanguage, "会话历史")}
-              aria-expanded={openMenu === "history"}
-            >
-              <span className="header-switcher__icon" aria-hidden="true">
-                <HistoryIcon size={18} />
-              </span>
-            </button>
-            <button
-              className={`header-switcher__item header-switcher__item--gear ${
-                activeView === "settings" ? "is-active" : ""
-              }`}
-              data-testid="trainer-view-nav-settings"
-              onClick={() => setActiveView("settings")}
-              type="button"
-              aria-label={settingsViewLabel(layout.composerLanguage)}
-              title={settingsViewLabel(layout.composerLanguage)}
-              aria-pressed={activeView === "settings"}
-              aria-current={activeView === "settings" ? "page" : undefined}
-            >
-              <span className="header-switcher__icon" aria-hidden="true">
-                {sidebarViewIcon("settings", activeView === "settings")}
-              </span>
-            </button>
-            {activeView === "coach" && displayConnectionState !== "connected" ? (
-              <StatusPill tone={displayConnectionState}>
-                {connectionStateLabel(displayConnectionState, t)}
-              </StatusPill>
-            ) : null}
-          </div>
-        </div>
-        <nav className="trainer-header__nav" aria-label={t.viewNavigation}>
-          <div
-            ref={headerSwitcherRef}
-            className={`header-switcher header-switcher--${headerSwitcherDensity}`}
-          >
-            {sidebarViewTabs.map(({ view, label, compactLabel }) => {
-              const displayLabel = headerSwitcherDensity === "compact" ? compactLabel : label;
-              return (
-                <button
-                  key={view}
-                  className={`header-switcher__item ${activeView === view ? "is-active" : ""}`}
-                  data-testid={`trainer-view-nav-${view}`}
-                  onClick={() => setActiveView(view)}
-                  type="button"
-                  aria-label={label}
-                  title={label}
-                  aria-pressed={activeView === view}
-                  aria-current={activeView === view ? "page" : undefined}
-                >
-                  <span className="header-switcher__icon" aria-hidden="true">
-                    {sidebarViewIcon(view, activeView === view)}
-                  </span>
-                  <span className="header-switcher__label">{displayLabel}</span>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-      </header>
+      {openMenu === "history" ? (
+        <UtilityOverlay label={appUiCopy(layout.composerLanguage, "历史会话")} closeLabel={appUiCopy(layout.composerLanguage, "关闭")} onClose={() => setOpenMenu(undefined)}>
+            <CoachHistoryDrawer
+              zh={layout.composerLanguage === "zh-CN"}
+              language={layout.composerLanguage}
+              sessions={coachSessions}
+              status={coachSessionsStatus}
+              statusMessage={coachSessionsMessage}
+              onActivate={activateCoachSession}
+              onRefresh={requestCoachSessions}
+              onNewChat={startNewCoachChat}
+              onClose={() => setOpenMenu(undefined)}
+            />
+        </UtilityOverlay>
+      ) : null}
 
       {operationMessage &&
       !(operationMessageSurface === "training" && activeView !== "training") &&
       !(operationMessageSurface === "plan" && activeView !== "plan") ? (
-        <div
-          className={`notice notice--${operationMessage.tone}${operationMessageLeaving ? " notice--leaving" : ""}`}
-          role="status"
-        >
-          <span className="notice__text">
-            {sanitizeErrorSurfaceText(operationMessage.message, layout.composerLanguage)}
-          </span>
-          {operationMessage.tone === "error" ? (
-            <button
-              type="button"
-              className="notice__dismiss"
-              aria-label={appUiCopy(layout.composerLanguage, "关闭提示")}
-              onClick={dismissOperationMessage}
-            >
-              ×
-            </button>
-          ) : null}
+        <div className="template-global-state">
+          <SystemState kind={operationMessage.tone === "error" ? "recoverable-error" : operationMessage.tone === "success" ? "success" : "information"}
+            title={sanitizeErrorSurfaceText(operationMessage.message, layout.composerLanguage)}>
+            {operationMessage.tone === "error" ? <button type="button" className="template-back" aria-label={appUiCopy(layout.composerLanguage, "关闭提示")} onClick={dismissOperationMessage}>×</button> : null}
+          </SystemState>
         </div>
       ) : null}
 
@@ -14592,15 +14168,9 @@ export function App() {
         ref={viewContentRef}
       >
         {hasReceivedHostState || isBrowserPreview ? (
-          activeViewContent
+          <WorkbenchSurfaces key={surfaceInstanceKey} activeView={activeView} render={renderWorkbenchSurface} />
         ) : (
-          <div className="workbench-skeleton" aria-busy="true">
-            <span className="skeleton workbench-skeleton__bar" style={{ width: "34%" }} />
-            <span className="skeleton workbench-skeleton__bar" style={{ width: "88%" }} />
-            <span className="skeleton workbench-skeleton__bar" style={{ width: "76%" }} />
-            <span className="skeleton workbench-skeleton__bar" style={{ width: "82%" }} />
-            <span className="skeleton workbench-skeleton__bar" style={{ width: "58%" }} />
-          </div>
+          <SystemState kind="loading" title={appUiCopy(layout.composerLanguage, "正在加载{v}…").replace("{v}", "Trainer")} />
         )}
       </main>
 
@@ -14704,6 +14274,10 @@ export function App() {
               </div>
             ) : null}
 
+            {coachPlanContext ? <div className="template-context" role="group">
+              <span>{resolvePlanComposerCopy(layout.composerLanguage).modes[coachPlanContext].label}</span>
+              <button type="button" className="template-back" onClick={() => setCoachPlanContext(undefined)}>{appUiCopy(layout.composerLanguage, "清除")}</button>
+            </div> : null}
             <CoachComposer
               value={allowEmptyTrainingReturnSubmission ? "" : draft}
               onChange={handleComposerDraftChange}
@@ -14762,26 +14336,6 @@ export function App() {
                     })
                   : undefined
               }
-              modeControl={
-                !composerUsesTrainingFlow && activeView === "plan"
-                  ? {
-                      id: "plan-composer-mode",
-                      label: resolvePlanComposerCopy(layout.composerLanguage).planLabel,
-                      value: resolvedPlanComposerMode,
-                      options: planComposerModes.map((mode) => ({
-                        value: mode.id,
-                        label: mode.label,
-                        description: mode.header,
-                      })),
-                      onChange: (value) => {
-                        const nextMode = planComposerModes.find((mode) => mode.id === value);
-                        if (nextMode) {
-                          setPlanComposerMode(nextMode.id);
-                        }
-                      },
-                    }
-                  : undefined
-              }
               accessory={
                 <>
                   {openMenu ? (
@@ -14793,7 +14347,6 @@ export function App() {
                       aria-hidden="true"
                     />
                   ) : null}
-                  {renderTrainingComposerAccessory()}
                   {renderComposerAccessory()}
                   {renderSkillDeck()}
                   {renderCommandDeck()}
@@ -15004,7 +14557,7 @@ export function App() {
           </div>
         </footer>
       ) : null}
-      </div>
+      </AppShell>
   );
 
   return (

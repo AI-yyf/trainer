@@ -45,17 +45,8 @@ test('training answers and reflections keep authoritative commands before stream
 });
 
 test('training card and Coach routes preserve separate drafts when the route changes', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
-  const routeHandler = sourceSection(
-    source,
-    'const handleTrainingComposerRouteChange',
-    'const trainingComposerPracticeInputMode',
-  );
-  assert.match(routeHandler, /trainingRouteDraftsRef\.current\[trainingComposerRoute\] = draft;/);
-  assert.match(routeHandler, /const nextDraft = trainingRouteDraftsRef\.current\[nextRoute\] \?\? "";/);
-  assert.match(routeHandler, /setTrainingComposerRoute\(nextRoute\);/);
-  assert.match(routeHandler, /setComposerDraft\(nextDraft\);/);
-  assert.doesNotMatch(source, /id: "training-composer-route"/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').practice();
 });
 
 test('utility surfaces avoid duplicate conversation panels', () => {

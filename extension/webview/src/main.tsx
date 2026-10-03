@@ -14,6 +14,7 @@ import "./styles/sections/reset-base.css";
 import "./styles/sections/utilities.css";
 import "./styles/sections/buttons.css";
 import "./styles/sections/app-shell.css";
+import "./templates/templates.css";
 import "./styles/sections/views-panes.css";
 import "./styles/sections/section-blocks.css";
 import "./styles/sections/coach-action-pills.css";

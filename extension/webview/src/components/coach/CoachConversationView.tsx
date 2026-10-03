@@ -1,3 +1,4 @@
+import { Conversation } from "../../templates/Conversation";
 import { memo } from "react";
 
 import type { ConversationMessage } from "../../lib/types";
@@ -116,11 +117,7 @@ function CoachConversationViewImpl({
   const streamingStripVisible = Boolean(streamingMessage && agentActivity && agentActivity.length > 0);
 
   return (
-    <section
-      className={classes}
-      aria-labelledby={showHeader ? "coach-conversation-view-title" : undefined}
-      data-language={language}
-    >
+    <Conversation className={classes} label={title}>
       {showHeader ? (
         <div className="section-block__header">
           <div className="coach-conversation-view__heading">
@@ -180,7 +177,7 @@ function CoachConversationViewImpl({
       </div>
 
       {footer ? <div className="coach-conversation-view__footer">{footer}</div> : null}
-    </section>
+    </Conversation>
   );
 }
 

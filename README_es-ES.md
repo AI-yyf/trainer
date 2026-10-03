@@ -22,7 +22,7 @@
 [Instalación](#instalación) ·
 [Configuración](#tres-pasos-sin-cuarto) ·
 [Mecánicas](#mecánicas-centrales) ·
-[Cinco vistas](#cinco-vistas) ·
+[Tres destinos](#tres-destinos) ·
 [Comparativa](#comparativa) ·
 [Demo de 5 min](#demo-de-cinco-minutos) ·
 [Diseño](#por-qué-se-siente-distinto) ·
@@ -166,17 +166,17 @@ El coach lee tus archivos, consulta los diagnósticos y busca en el workspace �
 
 ---
 
-## Cinco vistas
+## Tres destinos
 
-> Cinco vistas fijas de primer nivel. Cada una con una frontera de responsabilidad estricta.
+> Chat, aprendizaje y recursos siempre están visibles. Historial y ajustes son utilidades de la cabecera; entrenamiento y progreso pertenecen al aprendizaje.
 
 | Vista | Rol | En una línea |
 |-----------|------|--------|
 | **Coach** | Chat en streaming | **Entrada**: acceso a herramientas + paleta de skills `$` + adjuntos de imagen + modos de respuesta |
 | **Plan** | Plan de aprendizaje | **Mapa**: etapas, progreso, evidencias, congelar/descongelar el plan |
 | **Resources** | Biblioteca | **Estantería**: búsqueda FTS5 + previsualización sandbox de 3 niveles + papelera restaurable |
-| **Training** | Entrenamiento | **Zona de juegos**: flash cards FSRS + ejercicios de teoría + experimentos de escenario + compuertas de verificación |
-| **Settings** | Ajustes | **Consola**: 59 comandos + test de velocidad de endpoints + intensidad de razonamiento + admisión de workspace |
+| **Training (dentro del aprendizaje)** | Entrenamiento | **Zona de juegos**: flash cards FSRS + ejercicios de teoría + experimentos de escenario + compuertas de verificación |
+| **Settings (utilidad de la cabecera)** | Ajustes | **Consola**: 59 comandos + test de velocidad de endpoints + intensidad de razonamiento + admisión de workspace |
 
 <p align="center">
   <img src="assets/screenshots/plan.png" alt="Vista Plan" width="260" />
@@ -188,7 +188,7 @@ El coach lee tus archivos, consulta los diagnósticos y busca en el workspace �
 
 Chat en streaming con el coach: acceso a herramientas, paleta de skills `$`, adjuntos de imagen, modos de respuesta, anillo de uso de contexto, historial de sesiones y compartir.
 
-**Cada respuesta del coach lleva tres acciones rápidas debajo:**
+**Una respuesta del coach destaca un siguiente paso. El menú de más acciones conserva:**
 
 - **Copiar la respuesta como Markdown**
 - **Guardar en la biblioteca** (buscable + previsualizable)
@@ -198,7 +198,7 @@ Chat en streaming con el coach: acceso a herramientas, paleta de skills `$`, adj
 
 ### Skills `$` personalizadas — crea, comparte, instala
 
-Escribe `$` para abrir la paleta de skills: además de las integradas, puedes envolver tus propios prompts en skills con palabras de disparo y keywords, compartirlos con otros o instalar skills que compartan los demás — **todo por un canal de datos puro, sin ejecución de código**.
+Escribe `$` en Chat para abrir una paleta con búsqueda y seis opciones iniciales. Gestiona skills personalizadas en Ajustes → Coach → Skills: además de las integradas, puedes envolver tus propios prompts en skills con palabras de disparo y keywords, compartirlos con otros o instalar skills que compartan los demás — **todo por un canal de datos puro, sin ejecución de código**.
 
 <p align="center">
   <img src="assets/screenshots/skill-deck.png" alt="Paleta de skills" width="380" />
@@ -369,7 +369,7 @@ Los planes se congelan y descongelan; las sesiones sobreviven a los reinicios; e
 | Carpeta | Contenido | Tamaño |
 |---|---|---|
 | `extension/src/` | Host: comandos, confianza del workspace, almacenamiento de secretos, ciclo de vida del sidecar | ~30k líneas de TS |
-| `extension/webview/` | Workbench en React: 5 vistas + Zustand + 8 idiomas | ~50k líneas de TSX |
+| `extension/webview/` | Workbench en React: 3 destinos y 6 rutas + Zustand + 8 idiomas | ~50k líneas de TSX |
 | `extension/tests/` | suite node:test (220 archivos / 1.679 casos) | 73.744 líneas |
 | `server/app/` | Cerebro FastAPI: agente / pedagogía / memoria / FSRS / entrenamiento | ~120k líneas de Python |
 | `server/tests/` | suite pytest (159 archivos / 1.649 casos) | 106.422 líneas |

@@ -1,3 +1,6 @@
+import { templateCopy } from "../../templates/templateCopy";
+import { CoachReply } from "../../templates/CoachReply";
+import { OverflowActions } from "../../templates/OverflowActions";
 import { memo, type ReactNode } from "react";
 
 import {
@@ -20,7 +23,7 @@ import { coachMessageBubbleCopy } from "./coachMessageBubbleCopy";
 import { CoachMessageParts } from "./CoachMessageParts";
 import { MessageRichContent } from "./MessageRichContent";
 
-export type CoachMessageAction = "share" | "save-resource" | "training-card" | "retry";
+export type CoachMessageAction = "copy" | "share" | "save-resource" | "training-card" | "retry";
 
 export interface CoachMessageBubbleProps {
   message: ConversationMessage;
@@ -47,14 +50,14 @@ const COACH_MESSAGE_ACTION_LABELS: Record<
   ComposerLanguage,
   Record<CoachMessageAction, string>
 > = {
-  "zh-CN": { share: "分享", "save-resource": "加入资料库", "training-card": "加入训练卡片", retry: "重新生成" },
-  "en-US": { share: "Share", "save-resource": "Save to Resources", "training-card": "Create training card", retry: "Regenerate" },
-  "es-ES": { share: "Compartir", "save-resource": "Guardar en Recursos", "training-card": "Crear tarjeta", retry: "Regenerar" },
-  "fr-FR": { share: "Partager", "save-resource": "Ajouter aux Ressources", "training-card": "Créer une carte", retry: "Régénérer" },
-  "de-DE": { share: "Teilen", "save-resource": "In Bibliothek speichern", "training-card": "Karte erstellen", retry: "Neu generieren" },
-  "ja-JP": { share: "共有", "save-resource": "ライブラリに保存", "training-card": "カードを作成", retry: "再生成" },
-  "ko-KR": { share: "공유", "save-resource": "라이브러리에 저장", "training-card": "카드 만들기", retry: "다시 생성" },
-  "pt-BR": { share: "Compartilhar", "save-resource": "Salvar na Biblioteca", "training-card": "Criar cartão", retry: "Regenerar" },
+  "zh-CN": { copy: "复制", share: "分享", "save-resource": "加入资料库", "training-card": "加入训练卡片", retry: "重新生成" },
+  "en-US": { copy: "Copy", share: "Share", "save-resource": "Save to Resources", "training-card": "Create training card", retry: "Regenerate" },
+  "es-ES": { copy: "Copiar", share: "Compartir", "save-resource": "Guardar en Recursos", "training-card": "Crear tarjeta", retry: "Regenerar" },
+  "fr-FR": { copy: "Copier", share: "Partager", "save-resource": "Ajouter aux Ressources", "training-card": "Créer une carte", retry: "Régénérer" },
+  "de-DE": { copy: "Kopieren", share: "Teilen", "save-resource": "In Bibliothek speichern", "training-card": "Karte erstellen", retry: "Neu generieren" },
+  "ja-JP": { copy: "コピー", share: "共有", "save-resource": "ライブラリに保存", "training-card": "カードを作成", retry: "再生成" },
+  "ko-KR": { copy: "복사", share: "공유", "save-resource": "라이브러리에 저장", "training-card": "카드 만들기", retry: "다시 생성" },
+  "pt-BR": { copy: "Copiar", share: "Compartilhar", "save-resource": "Salvar na Biblioteca", "training-card": "Criar cartão", retry: "Regenerar" },
 };
 
 function fallbackRoleLabel(message: ConversationMessage): string {
@@ -260,26 +263,20 @@ function CoachMessageBubbleImpl({
   const detailBlocks: ReactNode[] = [];
   const messageHasArtifacts = artifactCount > 0;
 
+  const primaryArtifact = message.artifacts?.find((artifact) => Boolean(artifact.recommendedAction));
+  const primaryNextAction = primaryArtifact && onArtifactOpen && !streaming ? (
+    <CoachArtifactBlock artifact={primaryArtifact} compact language={language} onOpen={(artifact) => onArtifactOpen(artifact, message)} />
+  ) : null;
   if (message.artifacts?.length) {
     detailBlocks.push(
-      <div key="artifacts" className="message-bubble__artifacts">
-        {message.artifacts.map((artifact, index) => (
-          <CoachArtifactBlock
-            key={`${artifact.kind}:${artifact.title}:${index}`}
-            artifact={artifact}
-            compact={message.role === "assistant" && Boolean(message.body.trim())}
-            language={language}
-            openLabel={openArtifactLabel}
-            onOpen={
-              onArtifactOpen
-                ? (currentArtifact) => {
-                    onArtifactOpen(currentArtifact, message);
-                  }
-                : undefined
-            }
-          />
-        ))}
-      </div>,
+      <details key="artifacts" className="template-reply-evidence">
+        <summary>{templateCopy[language].evidence}</summary>
+        <div className="message-bubble__artifacts">
+          {message.artifacts.map((artifact, index) => (
+            <CoachArtifactBlock key={`${artifact.kind}:${index}`} artifact={artifact} language={language} openLabel={openArtifactLabel} onOpen={onArtifactOpen ? (current) => onArtifactOpen(current, message) : undefined} />
+          ))}
+        </div>
+      </details>,
     );
   }
 
@@ -365,6 +362,8 @@ function CoachMessageBubbleImpl({
         </div>
       ) : null}
 
+      <CoachReply
+        body={(
       <div className="message-bubble__body">
         {showAssistantRail ? (
           <div className="message-bubble__assistant-rail">
@@ -407,8 +406,8 @@ function CoachMessageBubbleImpl({
           )
         ) : null}
       </div>
-
-      {hasSupplementMaterial ? (
+        )}
+        evidence={hasSupplementMaterial ? (
         shouldShowUserContextInline ? (
           <p className={`message-bubble__context ${message.role === "user" ? "message-bubble__context--user" : ""}`}>
             {supportDetails[0]}
@@ -419,61 +418,19 @@ function CoachMessageBubbleImpl({
           </div>
         )
       ) : null}
-
-      {showAssistantActions ? (
-        <div
-          className="message-bubble__actions"
-          role="group"
-          aria-label={coachMessageBubbleCopy(language, "这条回复的快捷操作")}
-        >
-          {isLatestAssistant ? (
-            <button
-              type="button"
-              className="message-bubble__action"
-              disabled={pendingAssistantAction === "retry"}
-              aria-label={messageActionLabels.retry}
-              title={messageActionLabels.retry}
-              onClick={() => onMessageAction?.("retry", message)}
-            >
-              <RefreshIcon size={13} aria-hidden="true" />
-              <span>{messageActionLabels.retry}</span>
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="message-bubble__action"
-            disabled={pendingAssistantAction === "share"}
-            aria-label={messageActionLabels.share}
-            title={messageActionLabels.share}
-            onClick={() => onMessageAction?.("share", message)}
-          >
-            <ShareIcon size={13} aria-hidden="true" />
-            <span>{messageActionLabels.share}</span>
-          </button>
-          <button
-            type="button"
-            className="message-bubble__action"
-            disabled={pendingAssistantAction === "save-resource"}
-            aria-label={messageActionLabels["save-resource"]}
-            title={messageActionLabels["save-resource"]}
-            onClick={() => onMessageAction?.("save-resource", message)}
-          >
-            <ResourcesIcon size={13} aria-hidden="true" />
-            <span>{messageActionLabels["save-resource"]}</span>
-          </button>
-          <button
-            type="button"
-            className="message-bubble__action"
-            disabled={pendingAssistantAction === "training-card"}
-            aria-label={messageActionLabels["training-card"]}
-            title={messageActionLabels["training-card"]}
-            onClick={() => onMessageAction?.("training-card", message)}
-          >
-            <TrainingIcon size={13} aria-hidden="true" />
-            <span>{messageActionLabels["training-card"]}</span>
-          </button>
-        </div>
-      ) : null}
+        nextAction={primaryNextAction}
+        tools={showAssistantActions ? (
+          <OverflowActions
+            label={coachMessageBubbleCopy(language, "这条回复的快捷操作")}
+            actions={(["copy", "share", "save-resource", "training-card", ...(isLatestAssistant ? ["retry"] : [])] as CoachMessageAction[]).map((action) => ({
+              id: action,
+              label: messageActionLabels[action],
+              disabled: Boolean(pendingAssistantAction),
+              onClick: () => onMessageAction?.(action, message),
+            }))}
+          />
+        ) : null}
+      />
     </article>
   );
 }

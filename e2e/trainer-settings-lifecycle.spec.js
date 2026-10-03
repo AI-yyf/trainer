@@ -1,3 +1,4 @@
+const { openSettingsCategory } = require("./template-navigation");
 /**
  * Browser-preview coverage for Settings scenarios 32 and 33 in the 50-case matrix.
  *
@@ -66,6 +67,7 @@ async function clickDisclosureToggle(locator) {
 }
 
 async function openProviderDetails(page) {
+  await openSettingsCategory(page, "connection");
   // Connected state shows the compact summary card — the "Edit configuration"
   // level exposes the connection form directly (advanced diagnostics live one
   // level deeper and are not needed for field edits).
@@ -306,6 +308,7 @@ test.describe("Trainer Settings provider lifecycle", () => {
 
     // Connected state shows the compact summary card; the details fold only
     // exists once the edit form is opened.
+    await openSettingsCategory(page, "connection");
     const editButton = page.getByRole("button", { name: "Edit configuration", exact: true });
     await expect(editButton).toBeVisible();
     await editButton.click();
@@ -326,7 +329,7 @@ test.describe("Trainer Settings provider lifecycle", () => {
 
     const profiles = await openProviderProfiles(page);
     await profiles.getByRole("button", { name: "Save as connection", exact: true }).click();
-    await expect(page.locator(".notice.notice--success")).toContainText("Saved");
+    await expect(page.locator(".template-global-state [data-system-state=success]")).toContainText("Saved");
     await expect(
       profiles.locator(".settings-provider-profile").filter({ hasText: providerName }),
     ).toBeVisible();
@@ -380,6 +383,7 @@ test.describe("Trainer Settings provider lifecycle", () => {
     await expectPreviewHarness(page);
     // Live mode starts unconfigured: the first level is the paste card plus
     // the template-directory entry; applying a template lands in edit mode.
+    await openSettingsCategory(page, "connection");
     const templateEntry = page.locator('[data-settings-template-entry="true"]');
     if (await templateEntry.count()) {
       await templateEntry.click();
@@ -408,9 +412,9 @@ test.describe("Trainer Settings provider lifecycle", () => {
     );
     await firstTestButton.click();
     await firstTestRequest;
-    await expect(page.locator(".notice.notice--error")).toBeVisible();
-    await expect(page.locator(".notice.notice--error")).not.toContainText(failedDetail);
-    await expect(page.locator(".settings-availability-strip")).toContainText(
+    await expect(page.locator("[data-system-state=recoverable-error]")).toBeVisible();
+    await expect(page.locator("[data-system-state=recoverable-error]")).not.toContainText(failedDetail);
+    await expect(page.locator("[data-settings-availability=true]")).toContainText(
       "No model is available right now",
     );
 
@@ -436,7 +440,7 @@ test.describe("Trainer Settings provider lifecycle", () => {
       .getByRole("button", { name: `Save and use ${correctedModel}`, exact: true })
       .first()
       .click();
-    await expect(page.locator(".notice.notice--success")).toBeVisible();
+    await expect(page.locator(".template-global-state [data-system-state=success]")).toBeVisible();
     const secondTestButton = providerTestButton(page);
     await expect(secondTestButton).toBeEnabled();
     const secondTestRequest = page.waitForRequest(
@@ -444,11 +448,11 @@ test.describe("Trainer Settings provider lifecycle", () => {
     );
     await secondTestButton.click();
     await secondTestRequest;
-    await expect(page.locator(".notice.notice--success")).toBeVisible();
-    await expect(page.locator(".settings-availability-strip")).toContainText(
+    await expect(page.locator(".template-global-state [data-system-state=success]")).toBeVisible();
+    await expect(page.locator("[data-settings-availability=true]")).toContainText(
       "use this connection",
     );
-    await expect(page.locator(".settings-availability-strip")).not.toContainText(
+    await expect(page.locator("[data-settings-availability=true]")).not.toContainText(
       "No model is available right now",
     );
 
@@ -460,7 +464,7 @@ test.describe("Trainer Settings provider lifecycle", () => {
     await providerTestButton(page).click();
     await repeatedTestRequest;
     await expect(providerTestButton(page)).toBeEnabled();
-    await expect(page.locator(".settings-availability-strip")).toContainText("use this connection");
+    await expect(page.locator("[data-settings-availability=true]")).toContainText("use this connection");
     expect(providerTestPayloads).toHaveLength(3);
 
     const correctedPayload = providerTestPayloads[1];

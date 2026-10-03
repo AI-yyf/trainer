@@ -170,10 +170,10 @@ test('Resources restores one requested surface and keeps it through ordinary vie
   assert.match(viewSource, /onRestoreContextChange\?: \(context\?: ResourceRestoreContext\) => void;/);
   assert.match(viewSource, /const setResourceDetail = \(resourceId: string \| null\) => \{/);
   assert.match(viewSource, /onRestoreContextChange\?\.\(\s*resourceId\s*\?/);
-  assert.match(
-    viewSource,
-    /useEffect\(\(\) => \{\s*if \(restoreContext\?\.surface !== "sandbox"\) \{\s*return;\s*\}\s*setSelectedResourceId\(\(current\) => \(current \? null : current\)\);\s*\}, \[restoreContext\]\);/,
-  );
+  assert.match(viewSource, /const path = restoreContext.previewPath \?\? restoreContext.sandboxPath/);
+  assert.match(viewSource, /resources.find\(\(item\) => item.sandboxPath === path\)/);
+  assert.match(viewSource, /setSelectedResourceId\(resource\?\.id \?\? null\)/);
+  assert.match(viewSource, /standaloneSandboxPreview/);
   assert.match(viewSource, /onDebugVisibleFacts\?: \(facts: DebugVisibleResourcesFacts\) => void;/);
   assert.match(viewSource, /activeSurface,/);
   assert.match(viewSource, /resourceDetailVisible: Boolean\(selectedResource\)/);

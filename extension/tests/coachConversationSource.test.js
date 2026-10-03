@@ -143,16 +143,8 @@ test('coach composer keeps the resources button label short', () => {
 });
 
 test('coach sidebar tabs keep the resources label short', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
-  const tabsStart = source.indexOf('const sidebarViewTabs');
-  const tabsEnd = source.indexOf('const handleBrowserUploads', tabsStart);
-  assert.ok(tabsStart > -1, 'expected sidebarViewTabs definition');
-  assert.ok(tabsEnd > tabsStart, 'expected sidebarViewTabs block before uploads');
-  const tabsBlock = source.slice(tabsStart, tabsEnd);
-
-  assert.match(tabsBlock, /const label = resourcesViewLabel\(layout\.composerLanguage\);/);
-  assert.match(tabsBlock, /compactLabel:\s*compactSidebarViewLabel\(view, layout\.composerLanguage, label\)/);
-  assert.doesNotMatch(tabsBlock, /label: t\.resourcesSummary/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').navigation();
 });
 
 test('coach next-step artifact exposes finalize metadata without becoming a visible status part', () => {
@@ -462,16 +454,8 @@ test('Coach first-run state starts from the learner goal before optional code co
 });
 
 test('Training keeps card submission default while allowing a contextual Coach route', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
-
-  assert.match(source, /type TrainingComposerRoute = "card" \| "coach"/);
-  assert.match(source, /useState<TrainingComposerRoute>\("card"\)/);
-  assert.match(source, /trainingComposerTalkMode = trainingComposerEnabled &&\s*\(trainingComposerRoute === "coach" \|\| resolvedReviewArtifact\)/);
-  assert.match(source, /const resolvedReviewArtifact = reviewArtifactForeground && trainingState\?\.reviewArtifact\?\.status === "resolved"/);
-  assert.match(source, /composerUsesTrainingFlow = trainingComposerEnabled && !trainingComposerTalkMode/);
-  assert.doesNotMatch(source, /id: "training-composer-route"/);
-  assert.match(source, /type TrainingComposerRoute = "card" \| "coach"/);
-  assert.match(source, /if \(composerUsesTrainingFlow\)/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').practice();
 });
 
 test('Training review entry uses shared localized copy and hides mismatched review prose', () => {
@@ -510,7 +494,7 @@ test('Composer candidate decks keep Codex-style draft ownership and keyboard dis
   assert.match(skillDeck, /dismissedComposerDeck === "skill"/);
   assert.match(
     styles,
-    /\.composer__accessory :is\(\.command-deck__header, \.skill-deck__header, \.skill-deck__empty\)\s*\{[\s\S]*?display:\s*none/,
+    /\.composer__accessory \.command-deck__header\s*\{[\s\S]*?display:\s*none/,
   );
   // Autocomplete owns the draft: it swaps only the typed $token for the chosen
   // trigger and preserves any arguments the user already typed after it.
@@ -563,55 +547,23 @@ test('Composer candidate decks keep Codex-style draft ownership and keyboard dis
 });
 
 test('Composer expansion lists stay anchored, bounded, scrollable, and keyboard-visible', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
-  const styles = readStylesSource();
-
-  const accessory = styles.match(/\.composer__accessory\s*\{[\s\S]*?\n\}/);
-  const panels = styles.match(
-    /\.composer__accessory > :is\(\.composer-menu-panel, \.command-deck, \.skill-deck\)\s*\{[\s\S]*?\n\}/,
-  );
-  assert.ok(accessory, 'expected a composer-anchored accessory layer');
-  assert.ok(panels, 'expected bounded expansion panel styles');
-  assert.match(accessory[0], /position:\s*absolute/);
-  assert.match(accessory[0], /bottom:\s*calc\(100% \+ 6px\)/);
-  // The palette tracks the composer's own measure. It used to be capped at
-  // 320px inside a ~395px composer, which left it visibly detached and let it
-  // sit on top of the last coach message.
-  assert.match(panels[0], /inline-size:\s*100%/);
-  assert.match(panels[0], /max-inline-size:\s*100%/);
-  assert.match(panels[0], /max-block-size:\s*min\(36vh, 260px\)/);
-  assert.match(panels[0], /overflow:\s*auto/);
-  assert.match(panels[0], /overflow-x:\s*hidden/);
-  assert.match(panels[0], /overscroll-behavior:\s*contain/);
-  assert.match(panels[0], /scrollbar-width:\s*thin/);
-  assert.match(styles, /\.composer__accessory :is\(\.command-deck__item, \.skill-deck__item\):focus-visible/);
-  assert.match(styles, /@media \(max-width: 360px\)[\s\S]*?\.composer__accessory > :is\(\.composer-menu-panel, \.command-deck, \.skill-deck\)/);
-  assert.match(source, /title=\{\[command\.command, command\.title, command\.description\]/);
-  assert.match(source, /title=\{\[\s*skill\.trigger,/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').palette();
 });
 
-test('Composer expansion decks keep idle rows flat while preserving explicit interaction states', () => {
+test('Composer expansion decks keep flat idle rows and visible selected/focus states', () => {
   const styles = readStylesSource();
+  const paletteStyles = fs.readFileSync(path.join(__dirname, '../webview/src/templates/templates.css'), 'utf8');
   const commandItem = styles.match(/\.command-deck__item\s*\{[\s\S]*?\n\}/);
-  const skillItem = [...styles.matchAll(/\.skill-deck__item\s*\{[\s\S]*?\n\}/g)].find((match) =>
-    match[0].includes('display: grid'),
-  );
   const commandTrigger = styles.match(/\.command-deck__command\s*\{[\s\S]*?\n\}/);
-  const skillTrigger = styles.match(/\.skill-deck__trigger\s*\{[\s\S]*?\n\}/);
-
-  assert.ok(commandItem, 'expected command deck item styles');
-  assert.ok(skillItem, 'expected skill deck item styles');
-  assert.ok(commandTrigger, 'expected command trigger styles');
-  assert.ok(skillTrigger, 'expected skill trigger styles');
-  assert.match(commandItem[0], /border:\s*1px solid transparent/);
+  assert.ok(commandItem);
+  assert.ok(commandTrigger);
   assert.match(commandItem[0], /background:\s*transparent/);
-  assert.match(skillItem[0], /border:\s*1px solid transparent/);
-  assert.match(skillItem[0], /background:\s*transparent/);
   assert.match(commandTrigger[0], /border:\s*0/);
-  assert.match(skillTrigger[0], /border:\s*0/);
-  assert.match(styles, /\.command-deck__item:hover,[\s\S]*?background:/);
-  assert.match(styles, /\.skill-deck__item\.is-active\s*\{[\s\S]*?background:/);
-  assert.match(styles, /\.composer__accessory :is\(\.command-deck__item, \.skill-deck__item\):focus-visible/);
+  assert.match(paletteStyles, /\.template-command-palette__entry \{[^}]*border: 0;[^}]*background: transparent;/);
+  assert.match(paletteStyles, /\.template-command-palette__entry:is\(:hover, \.is-active\) \{[^}]*background: var\(--bg-1\)/);
+  assert.match(paletteStyles, /\.template-command-palette__entry\[aria-selected="true"\] \{[^}]*var\(--accent\)/);
+  assert.match(paletteStyles, /\.template-command-palette__entry:focus-visible/);
 });
 
 test('Unavailable image capability stays accessible and only surfaces inline after a paste or drop attempt', () => {

@@ -1,7 +1,9 @@
+const { openSettingsCategory } = require("./template-navigation");
 const { test, expect } = require("playwright/test");
 
 test("connection editing exposes required fields first and keeps optional tools in details", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=settings&lang=en-US&connection=connected&run=simplified-settings");
+  await openSettingsCategory(page, "connection");
   await page.getByRole("button", { name: "Edit configuration", exact: true }).click();
   await expect(page.getByLabel("Service root")).toBeVisible();
   await expect(page.getByLabel("API Key", { exact: true })).toBeVisible();
@@ -18,7 +20,7 @@ test("connection editing exposes required fields first and keeps optional tools 
 
 test('remote support uses the host window identity and is absent in a local window', async ({ page }) => {
   await page.goto('/vscode-preview.html?view=settings&lang=en-US&connection=connected&run=remote-settings-identity');
-  await page.locator('.settings-nav').getByRole('tab', { name: 'Workspace', exact: true }).click();
+  await openSettingsCategory(page, "workspace");
   const remotePanel = page.locator('[data-settings-subsection="remote-support"]');
   await expect(remotePanel).toHaveCount(0);
   await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'state/patch', payload: {
@@ -34,19 +36,22 @@ test('remote support uses the host window identity and is absent in a local wind
 
 test("settings keyboard navigation cycles only through visible destinations", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=settings&lang=en-US&connection=connected&run=settings-keyboard");
-  const tabs = page.locator(".settings-nav").getByRole("tab");
-  await expect(tabs).toHaveCount(4);
-  await tabs.last().click();
-  await tabs.last().press("ArrowRight");
-  await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
-  await expect(tabs.first()).toBeFocused();
-  await tabs.first().press("ArrowLeft");
-  await expect(tabs.last()).toHaveAttribute("aria-selected", "true");
+  const entries = page.locator('[data-template=SettingsIndex] button');
+  await expect(entries).toHaveCount(4);
+  await entries.first().focus();
+  await page.keyboard.press("Tab");
+  await expect(entries.nth(1)).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator('[data-settings-detail="teaching"]')).toBeVisible();
+  await page.locator('[data-template=SettingsDetail] .template-back').first().click();
+  await expect(entries).toHaveCount(4);
+  await entries.last().press("Enter");
+  await expect(page.locator('[data-settings-detail="preferences"]')).toBeVisible();
 });
 
 test("closed folding regions cannot retain keyboard focus in hidden controls", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=settings&lang=en-US&connection=connected&run=settings-fold-focus");
-  await page.locator(".settings-nav").getByRole("tab").last().click();
+  await openSettingsCategory(page, "preferences");
   const section = page.locator('.collapse-section.is-open').first();
   const header = section.locator('.collapse-section__header').first();
   const bodyId = await header.getAttribute('aria-controls');
@@ -64,7 +69,7 @@ test("closed folding regions cannot retain keyboard focus in hidden controls", a
 
 test("mouse-opened preference menus move from the selected choice with arrow keys", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=settings&lang=en-US&connection=connected&run=preference-arrows");
-  await page.locator(".settings-nav").getByRole("tab").last().click();
+  await openSettingsCategory(page, "preferences");
   const choice = page.locator(".settings-choice").first();
   const trigger = choice.getByRole("button");
   await trigger.click();

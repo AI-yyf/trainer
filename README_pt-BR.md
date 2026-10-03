@@ -22,7 +22,7 @@
 [Instalação](#instalação) ·
 [Configuração](#três-passos-não-quatro) ·
 [Mecânicas](#mecânicas-centrais) ·
-[Cinco visões](#cinco-visões) ·
+[Três destinos](#três-destinos) ·
 [Comparação](#comparação) ·
 [Demo de 5 min](#demo-de-cinco-minutos) ·
 [Design](#por-que-parece-diferente) ·
@@ -166,17 +166,17 @@ Respostas `direct` saem na hora; `coach-first` faz você pensar primeiro. **A ca
 
 ---
 
-## Cinco visões
+## Três destinos
 
-> Cinco visões fixas de nível superior. Cada uma com um limite estrito de responsabilidade.
+> Chat, aprendizado e recursos ficam sempre visíveis. Histórico e configurações estão no cabeçalho; treino e progresso fazem parte do aprendizado.
 
 | Visão | Papel | Em uma linha |
 |-----------|------|--------|
 | **Coach** | Chat com streaming | **Porta de entrada**: acesso a ferramentas + paleta de habilidades `$` + anexos de imagem + modos de resposta |
 | **Plan** | Plano de aprendizado | **Mapa**: estágios, progresso, evidências, congelar/descongelar plano |
 | **Resources** | Biblioteca | **Estante**: busca com FTS5 + preview em sandbox de 3 níveis + lixeira restaurável |
-| **Training** | Treino | **Playground**: flash cards FSRS + exercícios de teoria + experimentos de cenário + portões de verificação |
-| **Settings** | Configurações | **Console**: 59 comandos + teste de velocidade de endpoint + intensidade de thinking + admissão de workspace |
+| **Training (dentro do aprendizado)** | Treino | **Playground**: flash cards FSRS + exercícios de teoria + experimentos de cenário + portões de verificação |
+| **Settings (no cabeçalho)** | Configurações | **Console**: 59 comandos + teste de velocidade de endpoint + intensidade de thinking + admissão de workspace |
 
 <p align="center">
   <img src="assets/screenshots/plan.png" alt="Visão Plan" width="260" />
@@ -188,7 +188,7 @@ Respostas `direct` saem na hora; `coach-first` faz você pensar primeiro. **A ca
 
 Chat com streaming do coach, com acesso a ferramentas, paleta de habilidades `$`, anexos de imagem, modos de resposta, anel de uso de contexto, histórico de sessões e compartilhamento.
 
-**Toda resposta do coach vem com três ações rápidas embaixo:**
+**Uma resposta do coach destaca o próximo passo. O menu de mais ações mantém:**
 
 - **Copiar resposta como Markdown**
 - **Salvar na biblioteca** (pesquisável + com preview)
@@ -198,7 +198,7 @@ Chat com streaming do coach, com acesso a ferramentas, paleta de habilidades `$`
 
 ### Habilidades `$` personalizadas — crie, compartilhe, instale
 
-Digite `$` para abrir a paleta de habilidades: além das que vêm de fábrica, você pode transformar os seus próprios prompts em habilidades com trigger words e keywords, compartilhá-las com outras pessoas ou instalar habilidades que outras pessoas compartilharam — **tudo por um canal de dados puro, sem execução de código**.
+Digite `$` no Chat para abrir uma paleta pesquisável com seis sugestões iniciais. Gerencie habilidades personalizadas em Configurações → Coach → Skills: além das que vêm de fábrica, você pode transformar os seus próprios prompts em habilidades com trigger words e keywords, compartilhá-las com outras pessoas ou instalar habilidades que outras pessoas compartilharam — **tudo por um canal de dados puro, sem execução de código**.
 
 <p align="center">
   <img src="assets/screenshots/skill-deck.png" alt="Paleta de habilidades" width="380" />
@@ -369,7 +369,7 @@ Planos congelam e descongelam; sessões sobrevivem a reinícios; o progresso dos
 | Pasta | Conteúdo | Tamanho |
 |---|---|---|
 | `extension/src/` | Host: comandos, workspace trust, secret storage, ciclo de vida do sidecar | ~30k linhas TS |
-| `extension/webview/` | Workbench React: 5 visões + Zustand + 8 idiomas | ~50k linhas TSX |
+| `extension/webview/` | Workbench React: 3 destinos e 6 rotas + Zustand + 8 idiomas | ~50k linhas TSX |
 | `extension/tests/` | suíte node:test (220 arquivos / 1.679 casos) | 73.744 linhas |
 | `server/app/` | Cérebro FastAPI: agent / pedagogy / memory / FSRS / training | ~120k linhas Python |
 | `server/tests/` | suíte pytest (159 arquivos / 1.649 casos) | 106.422 linhas |

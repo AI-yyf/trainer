@@ -12,10 +12,10 @@
  *   training.png              Training (训练) view with the active card
  *   settings-connected.png    Settings connection summary (connected)
  *   settings-quick-setup.png  Settings connection edit level (quick setup)
- *   message-actions.png       Coach reply with its per-message action row
- *   message-actions-row.png   Element close-up of that action row
+ *   message-actions.png       Coach reply with its closed action overflow
+ *   message-actions-row.png   Element close-up of the action overflow
  *   skill-deck.png            `$` skill palette open in the composer
- *   skill-manager.png         Skill palette with the manager expanded
+ *   skill-manager.png         Settings → Coach custom Skill manager
  *   progress.png              Progress (成长) view
  *   coach-narrow.png          Coach view at the 340px narrow width
  *
@@ -195,6 +195,7 @@ const SHOTS = [
     name: "settings-connected",
     file: "settings-connected.png",
     title: "Settings connection summary (connected)",
+    async interact(page) { await page.locator('[data-settings-category="connection"]').click(); },
     urlParams: { view: "settings", scenario: "ready" },
   },
   {
@@ -205,6 +206,7 @@ const SHOTS = [
     async interact(page) {
       // Connected state shows the compact summary card; the README quick-setup
       // shot is the edit level below it (same entry the settings e2e uses).
+      await page.locator('[data-settings-category="connection"]').click();
       await page.getByRole("button", { name: "编辑配置", exact: true }).click();
     },
   },
@@ -221,9 +223,10 @@ const SHOTS = [
   {
     name: "message-actions-row",
     file: "message-actions-row.png",
-    title: "Per-message action row close-up",
+    title: "Per-message overflow actions",
+    async interact(page) { await page.locator(".template-overflow > summary").last().click(); },
     urlParams: { view: "coach", scenario: "ready" },
-    elementSelector: ".message-bubble__actions >> nth=-1",
+    elementSelector: ".template-overflow >> nth=-1",
   },
   {
     name: "skill-deck",
@@ -232,19 +235,19 @@ const SHOTS = [
     urlParams: { view: "coach", scenario: "ready" },
     async interact(page) {
       await page.locator("#coach-composer").fill("$");
-      await page.locator(".skill-deck").waitFor({ state: "visible" });
+      await page.locator(".template-command-palette").waitFor({ state: "visible" });
     },
   },
   {
     name: "skill-manager",
     file: "skill-manager.png",
-    title: "$ skill palette with manager expanded",
+    title: "Settings Coach custom skill management",
     urlParams: { view: "coach", scenario: "ready" },
     async interact(page) {
       await page.locator("#coach-composer").fill("$");
-      await page.locator(".skill-deck").waitFor({ state: "visible" });
-      await page.locator(".skill-deck__manage-row").click();
-      await page.locator(".skill-deck__manager").waitFor({ state: "visible" });
+      await page.locator(".template-command-palette").waitFor({ state: "visible" });
+      await page.locator(".template-command-palette__footer button").click();
+      await page.locator('[data-settings-detail="teaching"]').waitFor({ state: "visible" });
     },
   },
   {

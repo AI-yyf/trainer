@@ -312,6 +312,9 @@ export interface WorkbenchStore {
   setFollowCurrentFile: (enabled: boolean) => void;
   setCoachDefaults: (defaults: Partial<CoachDefaults>) => void;
   setComposerDraft: (draft: string) => void;
+  selectComposerDraftScope: (scope: string) => void;
+  rememberSurfaceScroll: (key: string, position: number) => void;
+  setActivityDraft: (key: string, draft: string) => void;
   setOperationMessage: (message?: OperationMessage) => void;
   patchData: (patch: WorkbenchBootstrapInput) => void;
   applyHostMessage: (message: HostMessage) => void;
@@ -755,6 +758,28 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       layout: persistLayout({
         ...state.layout,
         composerDraft,
+        composerDrafts: state.layout.composerDraftScope
+          ? { ...state.layout.composerDrafts, [state.layout.composerDraftScope]: composerDraft }
+          : state.layout.composerDrafts,
+      }),
+    })),
+  selectComposerDraftScope: (scope) => set((state) => {
+    if (state.layout.composerDraftScope === scope) return state;
+    const previous = state.layout.composerDraftScope;
+    const drafts = previous
+      ? { ...state.layout.composerDrafts, [previous]: state.layout.composerDraft }
+      : state.layout.composerDrafts ?? {};
+    return { layout: persistLayout({ ...state.layout, composerDraftScope: scope,
+      composerDrafts: drafts, composerDraft: drafts[scope] ?? (previous ? "" : state.layout.composerDraft) }) };
+  }),
+  rememberSurfaceScroll: (key, position) => set((state) => ({
+    layout: persistLayout({ ...state.layout, surfaceScrollPositions: { ...state.layout.surfaceScrollPositions, [key]: position } }),
+  })),
+  setActivityDraft: (key, draft) =>
+    set((state) => ({
+      layout: persistLayout({
+        ...state.layout,
+        activityDrafts: { ...state.layout.activityDrafts, [key]: draft },
       }),
     })),
   setOperationMessage: (operationMessage) => set({ operationMessage }),

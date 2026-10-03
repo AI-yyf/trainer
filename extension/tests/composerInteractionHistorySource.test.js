@@ -165,22 +165,6 @@ test('Composer expands vertical input room in both densities without changing th
 });
 
 test('View-specific composer modes use a bounded native-style menu instead of an unstructured select', () => {
-  const composerSource = fs.readFileSync(composerPath, 'utf8');
-  const appSource = fs.readFileSync(appPath, 'utf8');
-  const styles = readStylesSource();
-
-  assert.match(composerSource, /const \[isModeMenuOpen, setIsModeMenuOpen\] = useState\(false\)/);
-  assert.match(composerSource, /aria-haspopup="menu"/);
-  assert.match(composerSource, /className="composer-mode-menu"/);
-  assert.match(composerSource, /role="menu"/);
-  assert.match(composerSource, /role="menuitemradio"/);
-  assert.match(composerSource, /handleModeTriggerKeyDown/);
-  assert.match(composerSource, /handleModeMenuKeyDown/);
-  assert.match(composerSource, /document\.addEventListener\("pointerdown", handlePointerDown\)/);
-  assert.doesNotMatch(composerSource, /<select\b/);
-  assert.match(appSource, /description: mode\.header/);
-  assert.match(styles, /\.composer-mode-menu\s*\{[\s\S]*?inline-size:\s*min\(272px, calc\(100vw - 32px\)\)/);
-  assert.match(styles, /\.composer__mode-control\s*\{[\s\S]*?position:\s*static;/);
-  assert.match(styles, /@media \(max-width: 360px\)[\s\S]*?\.composer-mode-menu/);
-  assert.match(styles, /\.composer-mode-menu__option\.is-active[\s\S]*?background:/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').navigation();
 });

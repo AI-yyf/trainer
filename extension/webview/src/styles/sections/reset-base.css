@@ -39,8 +39,7 @@ body {
   text-transform: none !important;
 }
 
-.trainer-shell .training-current h2,
-.trainer-shell .settings-availability-strip__copy > strong {
+.trainer-shell .training-current h2 {
   font-weight: 500 !important;
 }
 

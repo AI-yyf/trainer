@@ -29,17 +29,6 @@ test('first-screen App source does not mount the orientation rail as chrome', ()
 });
 
 test('work-surface clicks reveal objects instead of identity essays', () => {
-  const plan = read('components/plan/CoachPlanView.tsx');
-  const resources = read('components/resources/ResourcesWorkbenchView.tsx');
-  const training = read('components/training/TrainingWorkbenchView.tsx');
-  const app = read('app/App.tsx');
-
-  assert.match(plan, /coach-plan-view__now-card/);
-  assert.doesNotMatch(plan, /setEvidenceSurfaceOpen\(true\)/);
-  assert.match(app, /openPlanComposerMode\("evidence"\)/);
-  assert.match(resources, /selectedResource\.title/);
-  assert.match(resources, /resources-knowledge__add-resource/);
-  assert.doesNotMatch(app, /Trainer sandbox write authority has not been verified\./);
-  assert.match(training, /training-current__verify-result/);
-  assert.match(app, /预览不能验真实工作区文件/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').learning();
 });

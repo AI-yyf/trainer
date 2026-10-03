@@ -5715,23 +5715,6 @@ button.resources-sandbox-layout__chip:focus-visible {
   outline: none;
 }
 
-.training-current__card-face {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.training-current__card-stack:hover .training-current__card-face {
-  border-color: transparent;
-  box-shadow: none;
-  transform: none;
-}
-
 .training-current__lead--floating {
   gap: 5px;
 }
@@ -5829,11 +5812,6 @@ button.resources-sandbox-layout__chip:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.training-current__card-face h2 {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
 .training-current__learn-block {
   display: flex;
   flex-direction: column;
@@ -5920,16 +5898,6 @@ button.resources-sandbox-layout__chip:focus-visible {
   overflow: visible;
   text-overflow: clip;
   white-space: normal;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .training-current__card-face {
-    transition: none;
-  }
-
-  .training-current__card-stack:hover .training-current__card-face {
-    transform: none;
-  }
 }
 
 .training-current h2,
@@ -7388,13 +7356,6 @@ button.resources-sandbox-layout__chip:focus-visible {
 }
 
 /* Reading-focused training card: content first, one footer action. */
-.training-pane--card-only .training-current__card-face {
-  gap: var(--trainer-space-3);
-  padding: var(--trainer-space-4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: var(--bg-1);
-}
 .training-pane--card-only .training-current__card-section {
   gap: var(--trainer-space-2);
   padding-block: var(--trainer-space-3);

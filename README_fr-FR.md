@@ -22,7 +22,7 @@
 [Installation](#installation) ·
 [Configuration](#trois-étapes-pas-de-quatrième) ·
 [Mécanismes](#mécanismes-clés) ·
-[Cinq vues](#cinq-vues) ·
+[Trois destinations](#trois-destinations) ·
 [Comparaison](#comparaison) ·
 [Démo 5 min](#démo-de-cinq-minutes) ·
 [Conception](#pourquoi-cest-différent) ·
@@ -166,17 +166,17 @@ Le coach lit tes fichiers, consulte les diagnostics et fouille le workspace — 
 
 ---
 
-## Cinq vues
+## Trois destinations
 
-> Cinq vues fixes au premier niveau. Chacune a une frontière de responsabilité stricte.
+> Chat, apprentissage et ressources restent visibles. Historique et paramètres sont accessibles en haut ; entraînement et progrès appartiennent à l’apprentissage.
 
 | Vue | Rôle | En une ligne |
 |-----------|------|--------|
 | **Coach** | Chat en streaming | **Porte d'entrée** : accès outils + palette de skills `$` + images en pièce jointe + modes de réponse |
 | **Plan** | Plan d'apprentissage | **Carte** : étapes, progression, preuves, gel/dégel du plan |
 | **Resources** | Bibliothèque | **Étagère** : recherche FTS5 + aperçu sandbox à 3 niveaux + corbeille restaurable |
-| **Training** | Entraînement | **Aire de jeu** : flash cards FSRS + exercices de théorie + expériences scénarisées + portes de vérification |
-| **Settings** | Réglages | **Console** : 59 commandes + test de vitesse des endpoints + intensité de réflexion + admission du workspace |
+| **Training (dans l’apprentissage)** | Entraînement | **Aire de jeu** : flash cards FSRS + exercices de théorie + expériences scénarisées + portes de vérification |
+| **Settings (utilitaire en haut)** | Réglages | **Console** : 59 commandes + test de vitesse des endpoints + intensité de réflexion + admission du workspace |
 
 <p align="center">
   <img src="assets/screenshots/plan.png" alt="Vue Plan" width="260" />
@@ -188,7 +188,7 @@ Le coach lit tes fichiers, consulte les diagnostics et fouille le workspace — 
 
 Chat de coach en streaming avec accès aux outils, palette de skills `$`, images en pièce jointe, modes de réponse, anneau d'utilisation du contexte, historique de sessions et partage.
 
-**Chaque réponse du coach embarque trois actions rapides en dessous :**
+**Une réponse du coach met en avant une prochaine étape. Le menu des autres actions conserve :**
 
 - **Copier la réponse en Markdown**
 - **Enregistrer dans la bibliothèque** (recherchable + avec aperçu)
@@ -198,7 +198,7 @@ Chat de coach en streaming avec accès aux outils, palette de skills `$`, images
 
 ### Skills `$` personnalisés — créer, partager, installer
 
-Tape `$` pour ouvrir la palette de skills : au-delà des skills intégrés, tu peux empaqueter tes propres prompts en skills avec mots déclencheurs et mots-clés, les partager avec d'autres, ou installer ceux que d'autres partagent — **le tout via un pur canal de données, sans exécution de code**.
+Tape `$` dans Chat pour ouvrir une palette avec recherche et six suggestions initiales. Gère les skills personnalisés dans Paramètres → Coach → Skills : au-delà des skills intégrés, tu peux empaqueter tes propres prompts en skills avec mots déclencheurs et mots-clés, les partager avec d'autres, ou installer ceux que d'autres partagent — **le tout via un pur canal de données, sans exécution de code**.
 
 <p align="center">
   <img src="assets/screenshots/skill-deck.png" alt="Palette de skills" width="380" />
@@ -369,7 +369,7 @@ Les plans se gèlent et se dégèlent ; les sessions survivent aux redémarrages
 | Dossier | Contenu | Taille |
 |---|---|---|
 | `extension/src/` | Hôte : commandes, workspace trust, stockage des secrets, cycle de vie du sidecar | ~30k lignes TS |
-| `extension/webview/` | Atelier React : 5 vues + Zustand + 8 langues | ~50k lignes TSX |
+| `extension/webview/` | Atelier React : 3 destinations et 6 routes + Zustand + 8 langues | ~50k lignes TSX |
 | `extension/tests/` | Suite node:test (220 fichiers / 1 679 cas) | 73 744 lignes |
 | `server/app/` | Cerveau FastAPI : agent / pédagogie / mémoire / FSRS / entraînement | ~120k lignes Python |
 | `server/tests/` | Suite pytest (159 fichiers / 1 649 cas) | 106 422 lignes |

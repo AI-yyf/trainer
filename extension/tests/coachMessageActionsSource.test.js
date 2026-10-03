@@ -51,25 +51,8 @@ const browserPreviewHarnessPath = path.resolve(
 );
 
 test('coach reply quick actions render only under assistant messages', () => {
-  const source = fs.readFileSync(coachMessageBubblePath, 'utf8');
-
-  assert.match(source, /export type CoachMessageAction = "share" \| "save-resource" \| "training-card"/);
-  assert.match(source, /onMessageAction\?: \(action: CoachMessageAction, message: ConversationMessage\)/);
-  assert.match(source, /pendingMessageAction\?: string \| null/);
-  assert.match(
-    source,
-    /const showAssistantActions =\s*message\.role === "assistant" &&\s*!streaming &&\s*Boolean\(onMessageAction\)/,
-  );
-  const actionsStart = source.indexOf('message-bubble__actions');
-  assert.ok(actionsStart > -1, 'expected the actions row markup');
-  const actionsBlock = source.slice(actionsStart);
-  assert.match(actionsBlock, /onMessageAction\?\.\("share", message\)/);
-  assert.match(actionsBlock, /onMessageAction\?\.\("save-resource", message\)/);
-  assert.match(actionsBlock, /onMessageAction\?\.\("training-card", message\)/);
-  assert.match(actionsBlock, /disabled=\{pendingAssistantAction === "share"\}/);
-  assert.match(actionsBlock, /disabled=\{pendingAssistantAction === "save-resource"\}/);
-  assert.match(actionsBlock, /disabled=\{pendingAssistantAction === "training-card"\}/);
-  assert.match(actionsBlock, /role="group"/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').reply();
 });
 
 test('coach reply action styles stay on theme tokens', () => {
@@ -147,7 +130,7 @@ test('share action copies the selected reply to the clipboard', () => {
   const handler = source.slice(handlerStart, handlerStart + 2500);
 
   assert.match(handler, /action === "share"/);
-  assert.match(handler, /navigator\.clipboard\.writeText\(replyDoc\.markdown\)/);
+  assert.match(handler, /navigator\.clipboard\.writeText\(action === "copy" \? message\.body : replyDoc\.markdown\)/);
   assert.match(handler, /appUiCopy\(layout\.composerLanguage, "这条教练回复已复制到剪贴板。"\)/);
   const appUiCopySource = fs.readFileSync(appUiCopyPath, 'utf8');
   assert.match(appUiCopySource, /"en-US": "Coach reply copied to clipboard\."/);
@@ -198,13 +181,6 @@ test('browser preview mirrors the inline upload and card generation paths', () =
 });
 
 test('share resources and training actions moved off the header into each reply', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
-  const headerStart = source.indexOf('className="header-actions"');
-  assert.ok(headerStart > -1, 'expected the header actions container');
-  const headerBlock = source.slice(headerStart, headerStart + 1200);
-
-  assert.doesNotMatch(headerBlock, /handleShareSession/);
-  assert.doesNotMatch(headerBlock, /setActiveView\("resources"\)/);
-  assert.doesNotMatch(headerBlock, /setActiveView\("training"\)/);
-  assert.doesNotMatch(source, /headerActionLabels/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').reply();
 });

@@ -12,7 +12,6 @@
 
 .coach-plan-view__compact-more > summary,
 .training-current__more > summary,
-.settings-availability-strip__more > summary,
 .coach-plan-view__details > summary {
   display: inline-flex;
   align-items: center;
@@ -27,14 +26,12 @@
 
 .coach-plan-view__compact-more > summary::-webkit-details-marker,
 .training-current__more > summary::-webkit-details-marker,
-.settings-availability-strip__more > summary::-webkit-details-marker,
 .coach-plan-view__details > summary::-webkit-details-marker {
   display: none;
 }
 
 .coach-plan-view__compact-more > summary::before,
 .training-current__more > summary::before,
-.settings-availability-strip__more > summary::before,
 .coach-plan-view__details > summary::before {
   content: "";
   width: 6px;
@@ -48,20 +45,13 @@
 
 .coach-plan-view__compact-more[open] > summary::before,
 .training-current__more[open] > summary::before,
-.settings-availability-strip__more[open] > summary::before,
 .coach-plan-view__details[open] > summary::before {
   transform: rotate(45deg);
 }
 
 .coach-plan-view__compact-more[open] > summary,
-.training-current__more[open] > summary,
-.settings-availability-strip__more[open] > summary {
+.training-current__more[open] > summary {
   color: var(--fg-1);
-}
-
-.settings-availability-strip__next[data-view-next],
-.settings-availability-strip__copy > p:not(.settings-availability-strip__trust) {
-  display: none;
 }
 
 [data-settings-language] .settings-sheet__choices {
@@ -150,10 +140,6 @@ details[open] > :not(summary) {
 
 /* Crafted first surface: one input object, no leftover chrome. */
 .coach-conversation-view--quiet-surface .message-bubble__assistant-rail {
-  display: none;
-}
-
-.settings-availability-strip__state {
   display: none;
 }
 
@@ -373,9 +359,5 @@ details[open] > :not(summary) {
 
 .settings-sheet__defaults-summary-main {
   display: contents;
-}
-
-.settings-availability-strip__copy > p {
-  max-width: 42ch;
 }
 

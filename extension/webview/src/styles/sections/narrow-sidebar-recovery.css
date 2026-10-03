@@ -10,11 +10,6 @@
    History/Settings stay in the header utility row at every width. */
 
 @media (max-width: 380px) {
-  .header-switcher__item,
-  .header-switcher--compact .header-switcher__item,
-  .header-switcher--compact .header-switcher__label {
-    font-size: var(--trainer-font-3xs);
-  }
 
   .composer--compact.composer--with-secondary-actions .composer__frame {
     min-height: 0;
@@ -128,10 +123,6 @@
   .coach-plan-view__route-strip {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
-  }
-
-  .settings-availability-strip__facts {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .settings-availability-fact__text {

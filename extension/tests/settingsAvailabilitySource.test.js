@@ -64,11 +64,11 @@ function readStylesSource() {
 }
 
 function availabilityStripSource(source) {
-  const start = source.indexOf('className={`settings-availability-strip');
+  const start = source.indexOf('const availabilityState =');
   // The strip stays a self-contained read-only region; the provider
   // configuration section (required trio + key + test) is anchored right
   // after it, so bound the extraction there to keep the secret-scan exact.
-  const end = source.indexOf('data-settings-section="connection"', start);
+  const end = source.indexOf('  return (', start);
 
   assert.ok(start >= 0, 'expected the availability strip render');
   assert.ok(end > start, 'expected provider configuration after the availability strip');
@@ -153,7 +153,9 @@ test('settings keeps availability as the compact source of provider truth', () =
   assert.match(source, /const localizedResolvedAvailabilityHeadline =/);
   assert.match(source, /const localizedResolvedAvailabilityDetail =/);
   assert.match(source, /const effectiveAvailabilityPrimaryCta:/);
-  assert.match(strip, /<StatusPill tone=\{resolvedAvailabilityTone\}>\{localizedResolvedAvailabilityStatusLabel\}<\/StatusPill>/);
+  assert.match(strip, /<SystemState/);
+  assert.match(strip, /title=\{displayAvailabilityHeadline\}/);
+  assert.match(strip, /localizedResolvedAvailabilityStatusLabel/);
   assert.match(strip, /effectiveAvailabilityPrimaryCta\.label/);
   // The compact connected summary hides the strip; it stays mounted while
   // configuring or whenever the saved connection needs attention. The strip
@@ -163,7 +165,7 @@ test('settings keeps availability as the compact source of provider truth', () =
     source,
     /const showAvailabilityStrip =\s*providerSetupReason !== "workspace_untrusted" &&\s*\(Boolean\(backendRecovery\) \|\| \(showConnectionForm && connectionView !== "advanced"\) \|\|\s*\(showConnectionSummary && resolvedAvailabilityTone !== "connected"\)\);/,
   );
-  assert.match(source, /\{showAvailabilityStrip \? \(/);
+  assert.match(source, /\{showAvailabilityStrip \? availabilityState : null\}/);
   assert.match(source, /\{connectionView === "advanced" \? \(/);
   assert.doesNotMatch(source, /providerDetailRequested/);
   assert.doesNotMatch(source, /const providerDetailOpen =/);
@@ -550,8 +552,8 @@ test('settings uses plain-language localized recovery copy for unavailable conne
   const source = readSettingsSource();
   const strip = availabilityStripSource(source);
 
-  assert.match(strip, /data-view-object/);
-  assert.match(strip, /data-view-why/);
+  assert.match(strip, /title=\{displayAvailabilityHeadline\}/);
+  assert.match(strip, /detail=\{showAvailabilityPrimaryAction \? displayAvailabilityDetail/);
   assert.match(source, /setupModelAccess: "设置模型连接"/);
   assert.match(source, /fillProviderFields: "填写连接信息和 API key 后即可测试。"/);
   assert.match(source, /\{providerDetailRequirementNote\}/);

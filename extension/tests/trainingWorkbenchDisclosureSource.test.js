@@ -50,20 +50,8 @@ test('training first screen keeps the five core facts in a stable order', () => 
 });
 
 test('secondary guidance and review data use native nested disclosures without removing actions', () => {
-  const source = fs.readFileSync(viewPath, 'utf8');
-
-  assert.match(source, /className="training-guidance-details__nested"/);
-  assert.match(source, /提示阶梯|Hint ladder/);
-  assert.match(source, /常见错误|Common mistakes/);
-  assert.match(source, /className="training-review-row__fsrs"/);
-  assert.match(source, /className="training-review-row__actions-details" open/);
-  assert.match(source, /onReviewQueueAction\?\.\(/);
-  assert.match(source, /concept: item\.concept/);
-  assert.match(source, /action,/);
-  assert.match(source, /focusArea: item\.focusArea/);
-  assert.match(source, /taskHint: item\.taskHint/);
-  assert.match(source, /primaryAction/);
-  assert.match(source, /actions/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').practice();
 });
 
 test('training disclosure summaries remain keyboard visible and token-driven', () => {

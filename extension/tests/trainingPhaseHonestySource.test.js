@@ -16,21 +16,8 @@ const trainingViewPath = path.resolve(
 );
 
 test('training keeps Learn-first honest and makes card-only mode a focused card surface', () => {
-  const source = fs.readFileSync(trainingViewPath, 'utf8');
-
-  assert.match(source, /const hasLearnFirstBlock = Boolean\(/);
-  assert.match(
-    source,
-    /const learnPhaseActive =\s*\(needsPrimerState \|\| isFlashCard\) && hasLearnFirstBlock && verificationReturn\.kind === "waiting";/,
-  );
-  assert.match(source, /const showLearnFirstPanel = learnPhaseActive && hasLearnFirstBlock;/);
-  assert.match(source, /const showLearnPrimerNote = !cardOnly && !learnPhaseActive && hasLearnFirstBlock;/);
-  assert.match(source, /const showCardOnlyTryStep = cardOnly && !isFlashCard;/);
-  assert.match(source, /const cardOnlyBodySections: TrainingCardOnlySection\[\] = \[/);
-  assert.match(source, /\{!cardOnly \? \(isFlashCard \? flashProofSurface : practiceProofSurface\) : null\}/);
-  assert.match(source, /\{!learnPhaseActive && !cardOnly && adjustmentCopy \?/);
-  assert.match(source, /data-training-card-fact=\{section\.key\}/);
-  assert.doesNotMatch(source, /const showLearnStageBlock =/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').practice();
 });
 
 test('training distinguishes verified evidence from formal plan confirmation', () => {

@@ -17,9 +17,8 @@
  *      clientWidth, which never differ once items are allowed to shrink.
  *   3. The $ skill palette never covers the conversation, and matches the
  *      composer's own width.
- *   4. Every top-level view is reachable from the tab row in every view and
- *      every scenario. 训练 and 成长 used to appear only once you were already
- *      inside them, so a fresh session had no way in.
+ *   4. Exactly three primary destinations remain stable across all six routes.
+ *      Training and Growth select Learning, and Settings uses its utility.
  *   5. No action is rendered twice in the plan view.
  *
  * Usage:
@@ -258,57 +257,31 @@ async function main() {
     `coach: banner→first-message gap ${coach.gapAfterBanner}px (limit ${MAX_RESUME_GAP}px); first item offset ${coach.firstOffsetTop}px in a ${coach.listHeight}px list`,
   );
 
-  // ---- 2. settings labels stay whole ----------------------------------
+  // Settings index rows remain whole; detail is a separate destination.
   await page.goto(`${base}?view=settings&scenario=ready`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(600);
-  await page.getByRole("button", { name: "编辑配置", exact: true }).click().catch(() => {});
-  await page.waitForTimeout(500);
-  const settings = await page.evaluate((maxLabelLines) => {
-    const nav = document.querySelector(".settings-nav");
-    if (!nav) return { error: "no settings nav" };
-    const items = [...nav.querySelectorAll(".settings-nav__item")].map((item) => {
-      const label = item.querySelector(".settings-nav__label");
-      const style = label ? getComputedStyle(label) : null;
-      const box = label?.getBoundingClientRect();
-      const itemBox = item.getBoundingClientRect();
-      const lineHeight = style ? parseFloat(style.lineHeight) || 14 : 14;
-      return {
-        label: label?.textContent?.trim() ?? "",
-        hidden: style?.display === "none",
-        labelWidth: box ? Math.round(box.width) : 0,
-        // Truncation is the real failure: the element is narrower than its own
-        // content. Length-agnostic, so it holds for every language and for the
-        // abbreviated dense labels.
-        truncated: label ? label.scrollWidth > label.clientWidth + 1 : false,
-        // CJK wrapping one glyph per line also inflates the box height.
-        wrapped: box ? box.height > lineHeight * maxLabelLines : false,
-        nowrap: style ? style.whiteSpace === "nowrap" : false,
-        itemWidth: Math.round(itemBox.width),
-      };
-    });
-    return { dense: nav.classList.contains("settings-nav--icon"), items };
-  }, MAX_LABEL_LINES);
-  const squashed = settings.items.filter(
-    (item) => !item.hidden && (item.truncated || item.wrapped || !item.nowrap),
-  );
-  check(
-    squashed.length === 0,
-    squashed.length === 0
-      ? `settings: all ${settings.items.length} category labels render whole (dense=${settings.dense})`
-      : `settings: ${squashed.length} label(s) squashed: ${squashed
-          .map((item) => `"${item.label}" ${item.labelWidth}px${item.truncated ? " truncated" : ""}${item.wrapped ? " wrapped" : ""}`)
-          .join(", ")}`,
-  );
+  const settings = await page.locator('[data-template="SettingsIndex"] button').evaluateAll(items =>
+    items.map(item => ({ label: item.querySelector('strong')?.textContent, width: item.clientWidth, scroll: item.scrollWidth })));
+  check(settings.length === 4 && settings.every(item => item.scroll <= item.width + 1), "settings: four full-width index destinations stay readable");
+  await page.locator('[data-settings-category="connection"]').click();
+  check(await page.locator('[data-settings-detail="connection"]').isVisible(), "settings: connection opens through the index with a back action");
+  for (const category of ["connection", "teaching", "workspace", "preferences"]) {
+    if (category !== "connection") {
+      await page.locator('[data-template="SettingsDetail"] .template-activity-header > .template-back').click();
+      await page.locator(`[data-settings-category="${category}"]`).click();
+    }
+    const height = await page.locator('.settings-sheet__pane').evaluate(node => node.clientHeight);
+    check(height > 120, `settings/${category}: actual content pane is usable (${height}px)`);
+  }
   if (keepShots) await page.screenshot({ path: path.join(shotDir, "settings.png") });
 
   // ---- 3. $ palette does not cover the thread -------------------------
   await page.goto(`${base}?view=coach&scenario=ready`, { waitUntil: "networkidle" });
   await page.waitForTimeout(600);
   await page.locator("#coach-composer").fill("$");
-  await page.locator(".skill-deck").waitFor({ state: "visible" }).catch(() => {});
+  await page.locator(".template-command-palette").waitFor({ state: "visible" }).catch(() => {});
   await page.waitForTimeout(400);
   const palette = await page.evaluate(() => {
-    const deck = document.querySelector(".skill-deck");
+    const deck = document.querySelector(".template-command-palette");
     const composer = document.querySelector(".composer");
     if (!deck || !composer) return { error: "missing deck or composer" };
     const deckBox = deck.getBoundingClientRect();
@@ -333,24 +306,13 @@ async function main() {
   );
   if (keepShots) await page.screenshot({ path: path.join(shotDir, "skill-deck.png") });
 
-  // ---- 4. every top-level view is reachable everywhere -----------------
-  const expectedTabs = ["对话", "学习", "资料", "训练", "成长"];
+  // Every internal route maps to exactly three stable primary destinations.
   for (const view of ["coach", "plan", "resources", "training", "progress", "settings"]) {
     for (const scenario of ["ready", "empty"]) {
       await page.goto(`${base}?view=${view}&scenario=${scenario}`, { waitUntil: "networkidle" });
-      await page.waitForTimeout(420);
-      const tabs = await page.evaluate(() =>
-        [...document.querySelectorAll("header button")]
-          .map((button) => button.textContent?.trim())
-          .filter(Boolean),
-      );
-      const missing = expectedTabs.filter((tab) => !tabs.includes(tab));
-      check(
-        missing.length === 0,
-        missing.length === 0
-          ? `tabs: ${view}/${scenario} exposes all ${expectedTabs.length} destinations`
-          : `tabs: ${view}/${scenario} is missing ${missing.join(", ")} (found ${tabs.join(", ") || "none"})`,
-      );
+      const tabs = await page.locator('.app-shell-nav button').allTextContents();
+      check(tabs.join('|') === '对话|学习|资料', `navigation: ${view}/${scenario} has three stable destinations`);
+      check(await page.locator('.composer-shell').count() === (view === 'coach' ? 1 : 0), `composer: ${view}/${scenario} has the correct owner`);
     }
   }
 
@@ -445,66 +407,31 @@ async function main() {
   );
   if (keepShots) await page.screenshot({ path: path.join(shotDir, "progress.png") });
 
-  // ---- 7. the plan home states numbers, it does not narrate them --------
+  // Learning presents the current task before closed secondary destinations.
   await page.goto(`${base}?view=plan&scenario=ready`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(500);
-  const planHome = await page.evaluate(() => {
-    const stats = [...document.querySelectorAll(".coach-plan-view__home-stat")];
-    const stat = stats[0];
-    if (!stat) return { error: "no plan stat grid" };
-    const label = stat.querySelector("dt");
-    const value = stat.querySelector("dd");
-    const headline = document.querySelector(".coach-plan-view__home-message");
-    const due = stats[0]?.querySelector("dd")?.textContent?.trim() ?? "";
-    const text = headline?.textContent?.trim() ?? "";
-    return {
-      statCount: stats.length,
-      hasLabel: Boolean(label),
-      hasValue: Boolean(value),
-      labelAbove: Boolean(
-        label && value && label.getBoundingClientRect().top <= value.getBoundingClientRect().top,
-      ),
-      // The tile already states how many are due; the line beneath it must add
-      // guidance rather than read the number back as prose.
-      headlineRepeatsCount: /^\d/.test(due) ? new RegExp(`(^|\\D)${due}(\\D|$)`).test(text) : false,
-    };
-  });
-  check(
-    !planHome.error && planHome.hasLabel && planHome.hasValue && planHome.labelAbove,
-    `plan: ${planHome.statCount} stats are label-over-value pairs, not one run-on sentence`,
-  );
-  check(
-    !planHome.error && !planHome.headlineRepeatsCount,
-    "plan: the line under the stats adds guidance instead of restating the due count",
-  );
+  check(await page.locator('[data-template="LearningHome"]').isVisible(), "learning: current learning uses the shared home template");
+  const learningDisclosures = await page.locator('[data-template="LearningHome"] > [data-learning-section]').evaluateAll(items => items.map(item => item.open));
+  check(learningDisclosures.length === 4 && learningDisclosures.every(open => !open), "learning: review, route, growth and evidence start closed");
 
-  // ---- 8. narrow sidebar keeps the same guarantees ---------------------
-  await page.setViewportSize({ width: 340, height: 900 });
-  await page.goto(`${base}?view=settings&scenario=ready`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(600);
-  await page.getByRole("button", { name: "编辑配置", exact: true }).click().catch(() => {});
-  await page.waitForTimeout(500);
-  const narrow = await page.evaluate((maxLabelLines) => {
-    const nav = document.querySelector(".settings-nav");
-    if (!nav) return { error: "no settings nav" };
-    const squashed = [...nav.querySelectorAll(".settings-nav__label")].filter((label) => {
-      const style = getComputedStyle(label);
-      if (style.display === "none") return false;
-      const lineHeight = parseFloat(style.lineHeight) || 14;
-      const box = label.getBoundingClientRect();
-      return (
-        label.scrollWidth > label.clientWidth + 1 ||
-        style.whiteSpace !== "nowrap" ||
-        box.height > lineHeight * maxLabelLines
-      );
-    });
-    return { squashed: squashed.length, dense: nav.classList.contains("settings-nav--icon") };
-  }, MAX_LABEL_LINES);
-  check(
-    narrow.squashed === 0,
-    `settings @340px: no squashed labels (dense=${narrow.dense}, squashed=${narrow.squashed})`,
-  );
-  if (keepShots) await page.screenshot({ path: path.join(shotDir, "settings-narrow.png") });
+  // Visual fixtures validate geometry, not native/backend completion.
+  for (const width of [340, 420, 460]) for (const theme of ['dark', 'light']) for (const lang of ['zh-CN', 'en-US']) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const view of ['coach', 'plan', 'resources', 'training', 'progress', 'settings']) {
+      await page.goto(`${base}?view=${view}&scenario=ready&theme=${theme}&lang=${lang}`, { waitUntil: 'domcontentloaded' });
+      await page.locator('#root[data-trainer-app-ready="true"]').waitFor();
+      await page.waitForTimeout(100);
+      const metrics = await page.evaluate(() => {
+        const visible = [...document.querySelectorAll('[data-primary-action="true"], .button--accent, .button--primary, .composer__send')].filter(el => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.top < innerHeight && r.bottom > 0;
+        });
+        return { overflow: document.documentElement.scrollWidth - innerWidth, primary: new Set(visible).size };
+      });
+      check(metrics.overflow <= 1, `${view}/${width}/${theme}/${lang}: no horizontal overflow`);
+      check(metrics.primary <= 1, `${view}/${width}/${theme}/${lang}: ${metrics.primary} primary action(s) in the first viewport`);
+      if (keepShots) await page.screenshot({ path: path.join(shotDir, `${view}-${width}-${theme}-${lang}.png`) });
+    }
+  }
 
   await browser.close();
   stopServer();

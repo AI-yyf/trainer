@@ -22,17 +22,22 @@
  {
   "file": "styles/sections/buttons.css",
   "title": "Buttons",
-  "lines": 761
+  "lines": 759
  },
  {
   "file": "styles/sections/app-shell.css",
   "title": "App Shell",
-  "lines": 414
+  "lines": 184
+ },
+ {
+  "file": "templates/templates.css",
+  "title": "Design templates",
+  "lines": 111
  },
  {
   "file": "styles/sections/views-panes.css",
   "title": "Views & Panes",
-  "lines": 7343
+  "lines": 7486
  },
  {
   "file": "styles/sections/section-blocks.css",
@@ -52,12 +57,12 @@
  {
   "file": "styles/sections/composer.css",
   "title": "Composer",
-  "lines": 1658
+  "lines": 1662
  },
  {
   "file": "styles/sections/message-bubbles.css",
   "title": "Message Bubbles",
-  "lines": 853
+  "lines": 885
  },
  {
   "file": "styles/sections/message-markdown.css",
@@ -92,7 +97,7 @@
  {
   "file": "styles/sections/artifact-card.css",
   "title": "Artifact Card",
-  "lines": 91
+  "lines": 104
  },
  {
   "file": "styles/sections/collapsible-block.css",
@@ -102,7 +107,7 @@
  {
   "file": "styles/sections/coach-conversation-view.css",
   "title": "Coach Conversation View",
-  "lines": 679
+  "lines": 686
  },
  {
   "file": "styles/sections/coach-empty-state.css",
@@ -112,17 +117,17 @@
  {
   "file": "styles/sections/coach-plan-view.css",
   "title": "Coach Plan View",
-  "lines": 1211
+  "lines": 1304
  },
  {
   "file": "styles/sections/coach-settings-view.css",
   "title": "Coach Settings View",
-  "lines": 30
+  "lines": 44
  },
  {
   "file": "styles/sections/settings-sheet.css",
   "title": "Settings Sheet",
-  "lines": 1919
+  "lines": 2092
  },
  {
   "file": "styles/sections/settings-section.css",
@@ -177,12 +182,12 @@
  {
   "file": "styles/sections/composer-image-attachments.css",
   "title": "Composer image attachments",
-  "lines": 267
+  "lines": 216
  },
  {
   "file": "styles/sections/narrow-sidebar-recovery.css",
   "title": "Narrow Sidebar Recovery",
-  "lines": 284
+  "lines": 279
  },
  {
   "file": "styles/sections/surface-materials-document-column-hairline-chrome-crafted-disclosure.css",
@@ -197,7 +202,7 @@
  {
   "file": "styles/sections/plan-progress-dashboard-plan-view-inner-progress-tab.css",
   "title": "Plan progress dashboard (Plan view inner \"progress\" tab)",
-  "lines": 162
+  "lines": 8
  },
  {
   "file": "styles/sections/collapsesection-the-unified-multi-level-folding-primitive.css",
@@ -222,7 +227,7 @@
  {
   "file": "styles/sections/plan-view-staging-w3-w1-stage-collapsesections-with-the.css",
   "title": "Plan view staging (W3+W1): stage CollapseSections with the",
-  "lines": 127
+  "lines": 126
  },
  {
   "file": "styles/sections/w4-w1-training-unified-card-texture-motion.css",
@@ -242,6 +247,6 @@
  {
   "file": "styles/sections/message-bubble-refinement-pass-premium-surfaces-calmer-hierarchy.css",
   "title": "Message bubble refinement pass — premium surfaces, calmer hierarchy",
-  "lines": 884
+  "lines": 892
  }
 ]

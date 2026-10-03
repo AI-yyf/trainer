@@ -1,7 +1,10 @@
+import { templateCopy } from "../../templates/templateCopy";
+import { SettingsIndex, type SettingsSectionId } from "../../templates/SettingsIndex";
+import { SettingsDetail } from "../../templates/SettingsDetail";
+import { SystemState } from "../../templates/SystemState";
 import {
   type ReactNode,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -1457,6 +1460,8 @@ export interface CoachSettingsViewProps {
   companionInstallState?: import("../../../../../shared/src/companionInstallState").CompanionInstallState;
   remoteWorkspaceActive?: boolean;
   providerApiKeyFocusRequest?: number;
+  sectionRequest?: { category: SettingsSectionId; requestId: number; skillTrigger?: string };
+  skillSharing?: ReactNode;
   onThemePreferenceChange?: (value: ThemePreference) => void;
   onLearningSurfaceAlignmentChange?: (value: LearningSurfaceAlignment) => void;
   onLanguageChange?: (value: ComposerLanguage) => void;
@@ -4100,6 +4105,8 @@ export function CoachSettingsView({
   companionInstallState,
   remoteWorkspaceActive,
   providerApiKeyFocusRequest,
+  sectionRequest,
+  skillSharing,
   onProviderDraftChange,
   onThemePreferenceChange,
   onLearningSurfaceAlignmentChange,
@@ -4178,21 +4185,12 @@ export function CoachSettingsView({
   const preferencesAnchorRef = useRef<HTMLDivElement | null>(null);
   const sectionFlashTimerRef = useRef<number | null>(null);
   const [modelPickerOpen, setModelPickerOpen] = useState(() => !providerDraft.model.trim());
-  type SettingsCategory =
-    | "connection"
-    | "workspace"
-    | "teaching"
-    | "preferences";
-  // Keyboard navigation follows the same four destinations as the visible tabs.
-  const SETTINGS_CATEGORY_ORDER: SettingsCategory[] = [
-    "connection",
-    "workspace",
-    "teaching",
-    "preferences",
-  ];
+  type SettingsCategory = SettingsSectionId;
+  const [settingsIndexOpen, setSettingsIndexOpen] = useState(!providerApiKeyFocusRequest);
   const [activeSettingsCategory, setActiveSettingsCategory] =
     useState<SettingsCategory>("connection");
   const openSettingsCategorySection = (id: SettingsCategory) => {
+    setSettingsIndexOpen(false);
     setActiveSettingsCategory(id);
   };
   const [advancedContextPinned, setAdvancedContextPinned] = useState<boolean | undefined>();
@@ -4206,6 +4204,12 @@ export function CoachSettingsView({
   const [customSkillGenerating, setCustomSkillGenerating] = useState(false);
   const [customSkillSource, setCustomSkillSource] = useState<"model" | "template" | null>(null);
   const [customSkillError, setCustomSkillError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!sectionRequest) return;
+    setSettingsIndexOpen(false);
+    setActiveSettingsCategory(sectionRequest.category);
+    if (sectionRequest.skillTrigger) setCustomSkillDraft((draft) => ({ ...draft, trigger: sectionRequest.skillTrigger ?? "" }));
+  }, [sectionRequest]);
   const [providerApiKeyFocusRequested, setProviderApiKeyFocusRequested] = useState(false);
   const [providerProfilesFocusRequested, setProviderProfilesFocusRequested] = useState(false);
   const [providerTemplatesFocusRequested, setProviderTemplatesFocusRequested] = useState(false);
@@ -4248,6 +4252,7 @@ export function CoachSettingsView({
    * then flash its header once (skipped entirely under reduced motion).
    */
   const revealSettingsSection = (target: SettingsCategory) => {
+    setSettingsIndexOpen(false);
     setActiveSettingsCategory(target);
     // The anchor node mounts only after the category pane swaps in, so wait
     // two frames before scrolling/flashing.
@@ -4319,6 +4324,7 @@ export function CoachSettingsView({
     if (!providerApiKeyFocusRequest) {
       return;
     }
+    setSettingsIndexOpen(false);
     setActiveSettingsCategory("connection");
     setConnectionView("edit");
     setProviderApiKeyFocusRequested(true);
@@ -6403,66 +6409,28 @@ export function CoachSettingsView({
     {
       id: "connection",
       label: settingsGlobalCopy.settingsSectionConnection,
-      shortLabel: settingsGlobalCopy.settingsNavShortConnection,
       dirty: connectionDirty,
       icon: <SettingsConnectionIcon size={16} active={activeSettingsCategory === "connection"} />,
     },
     {
       id: "workspace",
       label: settingsPhrase(language, "navWorkspace"),
-      shortLabel: settingsGlobalCopy.settingsNavShortWorkspace,
       dirty: false,
       icon: <SettingsWorkspaceIcon size={16} active={activeSettingsCategory === "workspace"} />,
     },
     {
       id: "teaching",
-      label: settingsGlobalCopy.settingsTeachingPrefs,
-      shortLabel: settingsGlobalCopy.settingsNavShortTeaching,
+      label: templateCopy[language].coach,
       dirty: false,
       icon: <SettingsTeachingIcon size={16} active={activeSettingsCategory === "teaching"} />,
     },
     {
       id: "preferences",
       label: settingsGlobalCopy.settingsPreferences,
-      shortLabel: settingsGlobalCopy.settingsNavShortPreferences,
       dirty: false,
       icon: <SettingsPreferencesIcon size={16} active={activeSettingsCategory === "preferences"} />,
     },
   ] as const;
-  const settingsNavRef = useRef<HTMLElement | null>(null);
-  const [settingsNavDense, setSettingsNavDense] = useState(false);
-  // Measure the *labels*, not the nav. The nav row uses `flex: 1` on every
-  // item, so it shrinks its children instead of overflowing — `scrollWidth`
-  // stayed equal to `clientWidth` at every width, the icon-only fallback never
-  // armed, and each label silently collapsed to one glyph per line
-  // ("高级上下文" rendered as "高级"). Comparing each label's laid-out width
-  // against its scroll width detects the squeeze that actually happens.
-  useLayoutEffect(() => {
-    const nav = settingsNavRef.current;
-    if (!nav) {
-      return;
-    }
-    const measure = () => {
-      nav.classList.remove("settings-nav--icon");
-      nav.classList.add("settings-nav--measuring");
-      const labels = Array.from(nav.querySelectorAll<HTMLElement>(".settings-nav__label"));
-      // A label whose content is wider than the box it was given is being
-      // truncated or wrapped — both mean the text does not fit.
-      const squeezed = labels.some(
-        (label) => label.scrollWidth > label.clientWidth + 1 || label.scrollHeight > label.clientHeight + 1,
-      );
-      const rowOverflows = nav.scrollWidth > nav.clientWidth + 1;
-      nav.classList.remove("settings-nav--measuring");
-      const dense = squeezed || rowOverflows;
-      nav.classList.toggle("settings-nav--icon", dense);
-      setSettingsNavDense(dense);
-    };
-    const observer = new ResizeObserver(measure);
-    observer.observe(nav);
-    measure();
-    return () => observer.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsNavItems.map((item) => item.label).join("|")]);
   const settingsStatusConnectionReady = providerCoachReady && !providerHasDraftChanges;
   // Blocker banner — one row per real problem, each with the action that
   // clears it. Same truth sources as the availability strip; hidden when
@@ -6496,12 +6464,17 @@ export function CoachSettingsView({
     });
   }
   if (connectionDirty) {
-    settingsStatusIssues.push({
-      id: "unsaved",
-      label: settingsGlobalCopy.settingsStatusUnsaved,
-      target: "connection",
-      action: () => setConnectionView("edit"),
-    });
+    const keyIssue = settingsStatusIssues.find(issue => issue.id === "key");
+    if (keyIssue) {
+      keyIssue.label = `${keyIssue.label} · ${settingsGlobalCopy.settingsStatusUnsaved}`;
+    } else {
+      settingsStatusIssues.push({
+        id: "unsaved",
+        label: settingsGlobalCopy.settingsStatusUnsaved,
+        target: "connection",
+        action: () => setConnectionView("edit"),
+      });
+    }
   }
   const providerConnectionSummary =
     `${settingsPhrase(language, "currentConnectionPrefix")}: ${providerSummary}`;
@@ -7293,12 +7266,47 @@ export function CoachSettingsView({
             : localizedResolvedAvailabilityDetail)
     : providerRequirementNote ?? localizedResolvedAvailabilityDetail;
 
+  const availabilityState = <div data-settings-availability="true">
+    <SystemState
+      kind={backendStarting || providerTestPending ? "processing" : backendUnavailable ? "disconnected" : workspaceRootMissing ? "workspace-required" : providerCredentialsRejected ? "recoverable-error" : availabilityMode !== "ready" ? "provider-required" : "success"}
+      title={displayAvailabilityHeadline}
+      detail={showAvailabilityPrimaryAction ? displayAvailabilityDetail : localizedResolvedAvailabilityStatusLabel}
+      action={showAvailabilityPrimaryAction && !backendStarting && !providerTestPending ? {
+        label: effectiveAvailabilityPrimaryCta.label,
+        onClick: () => effectiveAvailabilityPrimaryCta.action?.(),
+        disabled: !effectiveAvailabilityPrimaryCta.action,
+      } : undefined}
+    />
+  </div>;
+
   return (
     <section className={classes} aria-labelledby="coach-settings-view-title">
       <h2 id="coach-settings-view-title" className="sr-only">
         {copy.title}
       </h2>
 
+      {settingsIndexOpen && backendRecovery ? availabilityState : null}
+      {settingsIndexOpen ? (
+        <SettingsIndex
+          title={copy.title}
+          items={(["connection", "teaching", "workspace", "preferences"] as const).map((id) => {
+            const item = settingsNavItems.find((item) => item.id === id)!;
+            return { ...item, summary: id === "connection"
+              ? [provider.model, providerRequirementNote].filter(Boolean).join(" · ")
+              : id === "workspace" ? remoteWorkspaceName || resourceSandbox?.effectivePath || trainerWorkspace?.rootPath
+              : id === "teaching" ? teachingStyleItems.find((item) => item.value === teachingStyle)?.label ?? copy.auto
+              : `${language} · ${themePreference}` };
+          })}
+          onSelect={openSettingsCategorySection}
+        />
+      ) : null}
+      <div hidden={settingsIndexOpen}>
+      <SettingsDetail
+        parent={copy.title}
+        section={activeSettingsCategory}
+        title={settingsNavItems.find((item) => item.id === activeSettingsCategory)?.label ?? copy.title}
+        onBack={() => setSettingsIndexOpen(true)}
+      >
       <div className="settings-sheet__body settings-sheet__body--hierarchical">
         {settingsStatusIssues.length > 0 ? (
         <div
@@ -7314,23 +7322,17 @@ export function CoachSettingsView({
               className={`settings-status-bar__row is-${issue.id}`}
               data-settings-status-issue={issue.id}
             >
-              <span className="settings-status-bar__dot" aria-hidden="true" />
-              {issue.id === "trust" ? (
-                <span
-                  className="settings-status-bar__text"
-                  data-workspace-trust-state={resolvedWorkspaceTrustState}
-                  data-settings-workspace-trust="true"
-                  role="status"
-                  aria-live="polite"
+              <div
+                data-workspace-trust-state={issue.id === "trust" ? resolvedWorkspaceTrustState : undefined}
+                data-settings-workspace-trust={issue.id === "trust" ? "true" : undefined}
+              >
+                <SystemState
+                  kind={issue.id === "trust" ? "permission-required" : issue.id === "unsaved" ? "information" : "provider-required"}
+                  title={issue.id === "trust" ? workspaceTrustSentence : issue.label}
                 >
-                  {workspaceTrustSentence}
-                </span>
-              ) : (
-                <span className="settings-status-bar__text">{issue.label}</span>
-              )}
               <button
                 type="button"
-                className="settings-status-bar__issue"
+                className="template-back"
                 onClick={() => {
                   if (issue.action) {
                     issue.action();
@@ -7350,13 +7352,15 @@ export function CoachSettingsView({
                     ? settingsPhrase(language, "editConfiguration")
                     : settingsGlobalCopy.settingsSectionConnection}
               </button>
+                </SystemState>
+              </div>
             </div>
           ))}
         </div>
         ) : null}
 
         <div className="settings-sheet__layout">
-          <div className="settings-sheet__pane" role="tabpanel">
+          <div className="settings-sheet__pane">
         {activeSettingsCategory === "connection" ? (
         <section className="settings-section settings-section--panel settings-section--setup settings-section--summary">
           {showQuickSetup ? (
@@ -7391,39 +7395,7 @@ export function CoachSettingsView({
               <ChevronRightIcon size={14} aria-hidden />
             </button>
           ) : null}
-          {showAvailabilityStrip ? (
-          <div
-            className={`settings-availability-strip settings-availability-strip--${resolvedAvailabilityTone}`}
-            data-view-identity="true"
-          >
-            <div className="settings-availability-strip__main">
-              <div className="settings-availability-strip__copy">
-                <strong data-view-object="">{displayAvailabilityHeadline}</strong>
-                <span className="settings-availability-strip__state" data-view-state="">
-                  <StatusPill tone={resolvedAvailabilityTone}>{localizedResolvedAvailabilityStatusLabel}</StatusPill>
-                </span>
-                {showAvailabilityPrimaryAction && displayAvailabilityDetail ? (
-                  <p data-view-why="">{displayAvailabilityDetail}</p>
-                ) : null}
-              </div>
-              {showAvailabilityPrimaryAction ? (
-                <ActionButton
-                  className="settings-availability-strip__primary"
-                  tone={effectiveAvailabilityPrimaryTone}
-                  fullWidth={false}
-                  icon={effectiveAvailabilityPrimaryCta.icon}
-                  label={effectiveAvailabilityPrimaryCta.label}
-                  detail={effectiveAvailabilityPrimaryCta.detail}
-                  ariaLabel={effectiveAvailabilityPrimaryCta.label}
-                  onClick={effectiveAvailabilityPrimaryCta.action}
-                  disabled={!effectiveAvailabilityPrimaryCta.action}
-                  title={effectiveAvailabilityPrimaryCta.detail}
-                  data-view-primary=""
-                />
-              ) : null}
-            </div>
-          </div>
-          ) : null}
+          {showAvailabilityStrip ? availabilityState : null}
 
           <div
             ref={connectionAnchorRef}
@@ -8196,19 +8168,7 @@ export function CoachSettingsView({
                 </div>
               </div>
 
-              <div className="settings-grid settings-grid--compact settings-grid--tight">
-                <div className="settings-row" data-settings-language="true">
-                  <span className="eyebrow">{copy.language}</span>
-                  <ChoiceList
-                    active={language}
-                    items={SUPPORTED_LANGUAGES.map((value) => ({
-                      label: LANGUAGE_LABELS[value],
-                      value,
-                    }))}
-                    onChange={onLanguageChange}
-                  />
-                </div>
-              </div>
+
 
           </div>
         </section>
@@ -8229,6 +8189,19 @@ export function CoachSettingsView({
             {coachSettingsAutosaveNode}
           </header>
           <div className="settings-sheet__minor-body settings-sheet__defaults-body">
+              <div className="settings-grid settings-grid--compact settings-grid--tight">
+                <div className="settings-row" data-settings-language="true">
+                  <span className="eyebrow">{copy.language}</span>
+                  <ChoiceList
+                    active={language}
+                    items={SUPPORTED_LANGUAGES.map((value) => ({
+                      label: LANGUAGE_LABELS[value],
+                      value,
+                    }))}
+                    onChange={onLanguageChange}
+                  />
+                </div>
+              </div>
             <div className="settings-subsection" data-settings-subsection="appearance">
               <span className="eyebrow settings-subsection__title">{settingsGlobalCopy.settingsAppearance}</span>
               <div className="settings-grid settings-grid--compact settings-grid--tight">
@@ -8440,7 +8413,7 @@ export function CoachSettingsView({
             </span>
           </header>
           <div className="settings-sheet__minor-body settings-sheet__defaults-body">
-            <div className="settings-skill-groups">
+            <details className="template-disclosure" data-skill-catalog="true"><summary>{templateCopy[language].builtinSkills}</summary><div className="settings-skill-groups">
               {(
                 ["Coach", "Plan", "Training", "Resources", "Workspace", "Provider"] as TrainerSkillSection[]
               ).map((section) => {
@@ -8473,8 +8446,9 @@ export function CoachSettingsView({
                   </div>
                 );
               })}
-            </div>
+            </div></details>
 
+            {skillSharing}
             <div className="settings-subsection" data-settings-subsection="skills-custom">
               <span className="eyebrow settings-subsection__title">
                 {settingsText(language, "我的技能", "My skills")}
@@ -8779,67 +8753,9 @@ export function CoachSettingsView({
         </section>
         ) : null}
           </div>
-          <div className="settings-nav-bar">
-          <nav
-            ref={settingsNavRef}
-            className={`settings-nav${settingsNavDense ? " settings-nav--icon" : ""}`}
-            role="tablist"
-            aria-orientation="horizontal"
-            aria-label={copy.title}
-            onKeyDown={(event) => {
-              if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
-                return;
-              }
-              event.preventDefault();
-              const index = SETTINGS_CATEGORY_ORDER.indexOf(activeSettingsCategory);
-              const next =
-                event.key === "ArrowRight"
-                  ? SETTINGS_CATEGORY_ORDER[(index + 1) % SETTINGS_CATEGORY_ORDER.length]
-                  : SETTINGS_CATEGORY_ORDER[
-                      (index - 1 + SETTINGS_CATEGORY_ORDER.length) %
-                        SETTINGS_CATEGORY_ORDER.length
-                    ];
-              openSettingsCategorySection(next);
-              const nav = event.currentTarget as HTMLElement;
-              nav
-                .querySelector<HTMLButtonElement>(`[data-settings-nav="${next}"]`)
-                ?.focus();
-            }}
-          >
-            {settingsNavItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={activeSettingsCategory === item.id}
-                aria-label={item.label}
-                title={item.label}
-                className={`settings-nav__item${
-                  activeSettingsCategory === item.id ? " is-active" : ""
-                }`}
-                data-settings-nav={item.id}
-                onClick={() => openSettingsCategorySection(item.id)}
-              >
-                <span className="settings-nav__icon" aria-hidden="true">
-                  {item.icon}
-                </span>
-                <span className="settings-nav__label" data-settings-nav-full={item.label}>
-                  {settingsNavDense ? item.shortLabel : item.label}
-                </span>
-                {item.dirty ? (
-                  <span
-                    className="settings-section-dot"
-                    data-settings-dirty={item.id}
-                    title={settingsGlobalCopy.settingsStatusUnsaved}
-                  >
-                    <span className="sr-only">{settingsGlobalCopy.settingsStatusUnsaved}</span>
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </nav>
-          </div>
         </div>
+      </div>
+      </SettingsDetail>
       </div>
     </section>
   );

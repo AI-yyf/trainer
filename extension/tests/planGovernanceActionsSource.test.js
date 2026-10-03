@@ -54,18 +54,8 @@ test('Plan exposes formal evidence actions and an explicit freeze control', () =
 });
 
 test('Plan composer modes are selectable and Plan and Settings keep a single primary surface', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
-  const styles = readStylesSource();
-
-  assert.doesNotMatch(source, /showEmbeddedCoachTranscript/);
-  assert.match(source, /view-stack--single/);
-  assert.match(source, /modeControl=\{/);
-  assert.match(source, /!composerUsesTrainingFlow && activeView === "plan"/);
-  assert.match(source, /id: "plan-composer-mode",/);
-  assert.match(source, /planComposerModes\.map\(\(mode\) =>/);
-  assert.match(source, /const nextMode = planComposerModes\.find\(\(mode\) => mode\.id === value\);/);
-  assert.match(source, /setPlanComposerMode\(nextMode\.id\)/);
-  assert.match(styles, /\.view-stack--single\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0, 1fr\);/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').learning();
 });
 
 test('Plan composer uses complete eight-language copy for modes, placeholders, and accessibility labels', () => {
@@ -113,10 +103,10 @@ test('formal plan generation is explicit while Plan discussion stays conversatio
   );
   assert.match(source, /if \(action === "generate_plan"\) \{\s*openPlanComposerMode\("generate"\);/);
   assert.match(source, /if \(action === "continue_without_plan"\) \{\s*setActiveView\("coach"\);\s*focusComposerInput\(\);/);
-  assert.match(source, /const planComposerSubmission = activeView === "plan";/);
+  assert.match(source, /const planComposerSubmission = activeView === "plan" \|\| coachPlanContext !== undefined;/);
   assert.match(
     source,
-    /const formalPlanGeneration =\s*\(planComposerSubmission && resolvedPlanComposerMode === "generate"\) \|\|\s*\(activeView === "coach" && sendAnalysis.intent === "plan"\);/,
+    /const formalPlanGeneration =\s*\(planComposerSubmission && submittedPlanMode === "generate"\) \|\|\s*\(activeView === "coach" && sendAnalysis.intent === "plan"\);/,
   );
   assert.match(source, /function providerHasVerifiedToolsProbe\([\s\S]*?lastTest\.toolsReady === true[\s\S]*?lastTest\.toolProbeStatus === "verified"[\s\S]*?toolsEvidence\?\.state === "verified"[\s\S]*?toolsEvidence\.observed === true/);
   assert.match(source, /const providerSupportsFormalPlanTools = providerHasVerifiedToolsProbe\(\{\s*lastTestResult: scopedProviderLastTest,\s*\}\);/);
@@ -322,7 +312,7 @@ test('recovered runtime makes orientation the primary Plan action and folds gene
   assert.match(source, /openPlanComposerMode\("evidence"\);/);
   assert.match(
     source,
-    /const waitingComposerEvidence =\s*activeView === "plan" &&\s*resolvedPlanComposerMode === "evidence" &&\s*recoveredRuntime &&\s*planRuntimeStatus\?\.resumeState === "waiting" &&\s*Boolean\(planRuntimeStatus\?\.currentStep\?\.trim\(\)\) &&\s*liveEvidenceQueue\.pending\.length === 0;/,
+    /const waitingComposerEvidence =\s*\(activeView === "plan" \|\| coachPlanContext !== undefined\) &&\s*\(coachPlanContext \?\? resolvedPlanComposerMode\) === "evidence" &&\s*recoveredRuntime &&\s*planRuntimeStatus\?\.resumeState === "waiting" &&\s*Boolean\(planRuntimeStatus\?\.currentStep\?\.trim\(\)\) &&\s*liveEvidenceQueue\.pending\.length === 0;/,
   );
   assert.match(source, /trainerCommands\.evidenceEnqueue/);
   assert.match(source, /waitingComposer: true,/);
@@ -425,7 +415,7 @@ test('waiting live pending keeps adopt primary and exposes reject/defer beside i
   assert.match(coachPlanSource, /data-plan-evidence-decision="reject"/);
   assert.match(
     coachPlanSource,
-    /emptyPrimaryAction\.id === "plan-review-evidence" \? liveEvidenceDecisionRow : null/,
+    /nextAction\?\.id === "plan-review-evidence" \? liveEvidenceDecisionRow : undefined/,
   );
   assert.match(
     coachPlanSource,
@@ -439,7 +429,7 @@ test('waiting live pending keeps adopt primary and exposes reject/defer beside i
   assert.doesNotMatch(decisionRow, /tone="accent"/);
   assert.doesNotMatch(decisionRow, /ActionButton/);
   const evidenceDetailsStart = coachPlanSource.indexOf(
-    '<details className="coach-plan-view__nested-details coach-plan-view__evidence-details">',
+    'evidence={hasEvidenceDetails',
   );
   assert.ok(
     coachPlanSource.indexOf('data-plan-evidence-decisions="true"') < evidenceDetailsStart,
@@ -519,9 +509,9 @@ test('Plan first screen keeps one primary action and leftover-not-live honesty',
   assert.match(coachPlanSource, /leftoverNote\?: string/);
   assert.match(coachPlanSource, /data-plan-leftover-not-live=/);
   assert.match(coachPlanSource, /data-plan-leftover-note="true"/);
-  assert.match(coachPlanSource, /leftoverNote \? \(\s*[\s\S]*?emptyState/);
-  assert.match(coachPlanSource, /leftoverNote \? null : \(/);
-  assert.match(coachPlanSource, /coach-plan-view__leftover-note/);
+  assert.match(coachPlanSource, /detail=\{leftoverNote \? <p[\s\S]*?emptyState/);
+  assert.match(coachPlanSource, /<SystemState kind="empty"/);
+  assert.match(coachPlanSource, /data-plan-leftover-note="true"/);
   assert.match(
     coachPlanSource,
     /data-plan-leftover-note="true"\s*[\s\S]*?role="status"\s*[\s\S]*?aria-live="polite"/,

@@ -1,3 +1,4 @@
+const { openSettingsCategory } = require("./template-navigation");
 /**
  * Visible failure-surface contract for Coach tool failures and Settings provider-test
  * failures. Uses the browser preview harness — no VSIX and no real secrets.
@@ -153,7 +154,7 @@ test.describe("Trainer error-surface contract", () => {
       },
     });
 
-    const notice = page.locator(".notice.notice--error");
+    const notice = page.locator("[data-system-state=recoverable-error]");
     await expect(notice).toBeVisible();
     const noticeText = await notice.innerText();
     assertNoLeak(noticeText);
@@ -189,7 +190,7 @@ test.describe("Trainer error-surface contract", () => {
       },
     });
 
-    await expect(page.locator('details[data-plan-governance-disclosure], .coach-plan-view__evidence-item')).toHaveCount(0);
+    await expect(page.locator('details[data-plan-governance-disclosure][open], .coach-plan-view__evidence-item').filter({ visible: true })).toHaveCount(0);
     await expect(page.locator('[data-plan-primary="true"]')).toBeVisible();
     const visible = await page.locator('body').innerText();
     assertNoLeak(visible);

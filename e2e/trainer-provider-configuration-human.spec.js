@@ -1,3 +1,4 @@
+const { openSettingsCategory } = require("./template-navigation");
 /**
  * Human-style Provider setup lifecycle in the browser preview.
  *
@@ -39,10 +40,11 @@ function connectionFields(page) {
 }
 
 async function openDetails(page) {
+  await openSettingsCategory(page, "connection");
   // Connected state shows the compact summary card — the "Edit configuration"
   // level exposes the connection form directly. Advanced diagnostics live one
   // level deeper behind the "Connection details" drill-in row.
-  const editButton = page.getByRole("button", { name: /Edit configuration|编辑配置/ });
+  const editButton = page.getByRole("button", { name: /^(Edit configuration|编辑配置)$/ });
   if (await editButton.count()) {
     await editButton.click();
   }
@@ -139,6 +141,7 @@ test.describe("human Provider configuration preview", () => {
     // Empty state is a single-purpose screen: the paste card plus one entry
     // into the template directory. The full form only appears after a
     // template is applied (or edit is opened explicitly).
+    await openSettingsCategory(page, "connection");
     await expect(page.locator(".settings-quick-setup")).toBeVisible();
     await expect(connectionFields(page)).toHaveCount(0);
     await expect(page.locator(".settings-provider-profile")).toHaveCount(0);
@@ -202,7 +205,7 @@ test.describe("human Provider configuration preview", () => {
     const testButton = page.getByRole("button", { name: /Test Connection|Test again/ }).first();
     await expect(testButton).toBeEnabled();
     await testButton.click();
-    await expect(page.locator(".notice.notice--error")).toBeVisible();
+    await expect(page.locator("[data-system-state=recoverable-error]")).toBeVisible();
     expect(testPayloads[0].api_key).toBe(credential);
     expect(testPayloads[0].provider.apiKey).toBeUndefined();
     expect(JSON.stringify(testPayloads[0].provider)).not.toContain(credential);
@@ -224,7 +227,7 @@ test.describe("human Provider configuration preview", () => {
     const retrySave = page.getByRole("button", { name: `Save and use ${retryModel}`, exact: true });
     if (await retrySave.isEnabled()) await retrySave.click();
     await testButton.click();
-    await expect(page.locator(".notice.notice--success")).toBeVisible();
+    await expect(page.locator(".template-global-state [data-system-state=success]")).toBeVisible();
     expect(await persistedProvider(page)).toHaveProperty("lastTestResult.ok", true);
     expect(testPayloads[1].provider.model).toBe(retryModel);
     expect(testPayloads[1].api_key).toBe(credential);

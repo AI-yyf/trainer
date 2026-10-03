@@ -1,5 +1,6 @@
+import { SystemState } from "../../templates/SystemState";
+import { VerificationResult } from "../../templates/VerificationResult";
 import type { ComposerLanguage } from "../../lib/types";
-import { TrainerSpinner } from "../common/TrainerSpinner";
 
 export type RemoteVerificationViewState = {
   running: boolean;
@@ -119,35 +120,11 @@ export function RemoteVerificationPanel({
 }) {
   const copy = COPY[language];
   const remote = remoteName || copy.fallbackRemote;
-  return (
-    <div className="remote-verify-panel" role="status">
-      <div className="remote-verify-panel__head">
-        {verification.running ? (
-          <TrainerSpinner size="sm" label={copy.runningLabel}>
-            {copy.running(remote)}
-          </TrainerSpinner>
-        ) : (
-          <span
-            className={`remote-verify-panel__verdict ${
-              verification.finishedState === "completed" ? "is-passed" : ""
-            }`}
-          >
-            {verification.finishedState === "completed"
-              ? verification.passed
-                ? copy.passed
-                : copy.failed
-              : (verification.summary ?? copy.interrupted)}
-          </span>
-        )}
-        {verification.running && onStop ? (
-          <button type="button" className="button" onClick={() => onStop()}>
-            {copy.stop}
-          </button>
-        ) : null}
-      </div>
-      {verification.output ? (
-        <pre className="remote-verify-panel__output">{verification.output}</pre>
-      ) : null}
-    </div>
-  );
+  const output = verification.output ? <pre className="remote-verify-panel__output">{verification.output}</pre> : undefined;
+  return verification.running ? <SystemState kind="processing" title={copy.running(remote)}>
+    {onStop ? <button type="button" className="template-back" onClick={onStop}>{copy.stop}</button> : null}
+    {output ? <details className="template-disclosure"><summary>{remote}</summary>{output}</details> : null}
+  </SystemState> : <VerificationResult language={language}
+    verdict={verification.finishedState === "completed" ? verification.passed ? "passed" : "failed" : "unknown"}
+    summary={verification.summary ?? (verification.finishedState === "completed" ? verification.passed ? copy.passed : copy.failed : copy.interrupted)} details={output} />;
 }

@@ -80,73 +80,14 @@ test('Plan localizes its own honest empty, blocked, frozen, and stage fallback s
 
   assert.match(source, /function resolvePlanDecisionStrip\(input: \{[\s\S]*?language: PlanLanguage;/);
   assert.doesNotMatch(source, /input\.isChinese/);
-  assert.match(source, /aria-label=\{planCopy\(language, "emptyOutlineLabel"\)\}/);
+  assert.match(source, /<SystemState kind="empty"/);
   assert.match(source, /function resolveStageStatusLabel/);
   assert.match(source, /status === "queued" \? planCopy\(language, "pending"\)/);
 });
 
 test('Plan keeps the compact first viewport focused on governed route facts', () => {
-  const source = fs.readFileSync(planViewPath, 'utf8');
-
-  assert.doesNotMatch(source, /compactPlanText/, 'first-screen facts must not use character truncation');
-  assert.match(source, /governanceItems\.length && !compactPrimary/);
-  assert.match(source, /const shouldShowDecisionCard =/);
-  assert.match(source, /coach-plan-view__decision-strip/);
-  assert.match(source, /coach-plan-view__decision-inline/);
-  assert.match(source, /data-plan-fact="next"/);
-  assert.match(source, /data-plan-fact=\{item\.id\}/);
-  assert.match(source, /data-plan-primary=\{compactPrimary \? "true" : undefined\}/);
-  assert.match(source, /const primaryRouteStripItems = routeStripItems;/);
-  assert.doesNotMatch(source, /const compactPrimaryFactRows/);
-  assert.match(
-    source,
-    /const compactDetailRows: Array<\{ id: string; label: string; body: ReactNode \}> = compactPrimary/,
-  );
-  assert.match(
-    source,
-    /id: "stage",\s*label: resolvedCurrentStageLabel,\s*body: stageProgressText \? `\$\{activeStageTitle\} · \$\{stageProgressText\}` : activeStageTitle,/s,
-  );
-  assert.match(source, /const liveStageIsCurrent = props\.liveStageIsCurrent !== false;/);
-  assert.match(source, /const liveCurrentStep = plan\.currentStep\?\.trim\(\) \|\| "";/);
-  assert.match(source, /const recoveredVerifyLocked =/);
-  assert.match(source, /\.\.\.\(queue\.history \?\? \[\]\)/);
-  assert.match(source, /case "history":\s*return evidenceQueue\?\.history \?\? \[\];/);
-  assert.match(source, /planCopy\(language, "continueCurrent"\)/);
-  assert.match(source, /\.\.\.mainLanes\.slice\(1\)\.map\(\(lane\) => \(\{/);
-  assert.match(source, /compactDetailRows\.length > 0/);
-  assert.match(source, /compactDetailRows\.map\(\(lane\) => \(/);
-  assert.match(source, /<div>\{renderNodeWithParagraph\(lane\.body\)\}<\/div>/);
-  assert.match(source, /id: "current",\s*label: resolvedCurrentStageLabel,\s*body: activeStageTitle,/s);
-  assert.match(source, /id: "why",\s*label: resolvedWhyNowLabel,\s*body: whyNowBody,/s);
-  assert.match(
-    source,
-    /const recoveredWhyLocked = Boolean\(plan\.currentStep\?\.trim\(\)\) && !plan\.whyNow\?\.trim\(\);/,
-  );
-  assert.match(
-    source,
-    /const whyFallback = recoveredWhyLocked \? "" : \(plan\.whyNow\?\.trim\(\) \|\| activeStageObjective\);/,
-  );
-  assert.match(source, /id: "verify",\s*label: resolvedVerifyLabel,\s*body: verifyText,/s);
-  assert.match(source, /id: "return",\s*label: resolvedReturnLabel,\s*body: returnPathText,/s);
-  assert.match(source, /<strong>\{currentLane\.body\}<\/strong>/);
-  assert.match(source, /<strong>\{item\.body\}<\/strong>/);
-  const compactSummary = sourceBetween(
-    source,
-    '<div className="coach-plan-view__compact-summary">',
-    '!hideDecisionStrip && !shouldShowDecisionCard && !compactPrimary',
-  );
-  assert.match(compactSummary, /coach-plan-view__now-card/);
-  assert.doesNotMatch(compactSummary, /data-plan-evidence-list/);
-  assert.doesNotMatch(compactSummary, /coach-plan-view__compact-fact/);
-  assert.doesNotMatch(source, /coach-plan-view__compact-more/);
-  assert.match(source, /<details className="coach-plan-view__details" data-plan-governance-disclosure="true">/);
-  assert.match(source, /<details className="coach-plan-view__nested-details coach-plan-view__evidence-details">/);
-  assert.match(source, /evidenceActions\?\.onAdoptEvidence/);
-  assert.match(source, /evidenceActions\?\.onDeferEvidence/);
-  assert.match(source, /evidenceActions\?\.onRejectEvidence/);
-  assert.match(source, /data-plan-evidence-decisions="true"/);
-  assert.match(source, /const compactBlockerText = blockedReason/);
-  assert.doesNotMatch(source, /<textarea\b/i, 'Plan view must not embed a chat composer');
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').learning();
 });
 
 test('Plan calls its hooks before the empty-state early return', () => {
@@ -183,7 +124,7 @@ test('Plan keeps project subplans collapsed, concise, and truthfully selectable'
   assert.match(source, /status === "pending"/);
   assert.match(source, /status === "blocked"/);
   assert.match(source, /status === "frozen"/);
-  assert.match(source, /<details className="coach-plan-view__details coach-plan-view__project-subplans">/);
+  assert.match(source, /<details className="template-disclosure coach-plan-view__project-subplans">/);
   assert.match(source, /projectSubplans\.length > 0/);
   assert.match(source, /disabled=\{!props\.onProjectSubplanSelect\}/);
   assert.match(source, /onClick=\{\(\) => props\.onProjectSubplanSelect\?\.\(subplan\)\}/);
@@ -191,29 +132,17 @@ test('Plan keeps project subplans collapsed, concise, and truthfully selectable'
 });
 
 test('Plan keeps project subplans inside the master current-plan card and outside evidence rendering', () => {
-  const source = fs.readFileSync(planViewPath, 'utf8');
-  const masterCardStart = source.indexOf('<article\n          className="coach-plan-view__main-card"');
-  const masterCardEnd = source.indexOf('\n        </article>\n      </div>', masterCardStart);
-  const subplansStart = source.indexOf(
-    '<details className="coach-plan-view__details coach-plan-view__project-subplans">',
-  );
-  const evidenceStart = source.indexOf('{hasEvidenceDetails ? (');
-
-  assert.ok(masterCardStart >= 0, 'expected master current-plan card');
-  assert.ok(masterCardEnd > masterCardStart, 'expected master current-plan card closing tag');
-  assert.ok(subplansStart > masterCardStart && subplansStart < masterCardEnd);
-  assert.ok(evidenceStart > subplansStart, 'project subplans must not be nested in evidence rendering');
-  assert.match(source, /<summary>\{`\$\{resolvedProjectSubplansLabel\} \(\$\{projectSubplans\.length\}\)`\}<\/summary>/);
-  assert.match(source, /const detail = projectSubplanDetail\(subplan, language\);/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').learning();
 });
 
 test('Plan keeps the global-to-project relationship compact and explicitly actionable', () => {
   const source = fs.readFileSync(planViewPath, 'utf8');
   const appSource = fs.readFileSync(appPath, 'utf8');
-  const masterCardStart = source.indexOf('<article\n          className="coach-plan-view__main-card"');
-  const masterCardEnd = source.indexOf('\n        </article>\n      </div>', masterCardStart);
-  const globalContextStart = source.indexOf('globalPlanContext', masterCardStart);
-  const subplansStart = source.indexOf('coach-plan-view__project-subplans');
+  const masterCardStart = source.indexOf('<LearningHome');
+  const masterCardEnd = source.indexOf('</LearningHome>', masterCardStart);
+  const globalContextStart = source.indexOf('{globalPlanContext}', masterCardStart);
+  const subplansStart = source.indexOf('coach-plan-view__project-subplans', masterCardStart);
 
   assert.match(source, /globalPlan\?: GlobalPlan;/);
   assert.match(source, /projectPlanLink\?: GlobalPlanProjectLink;/);

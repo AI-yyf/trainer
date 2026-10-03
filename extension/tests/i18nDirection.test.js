@@ -89,7 +89,9 @@ test('the provider synchronizes root language and direction while App keeps prev
     appSource,
     /<I18nProvider language=\{layout\.composerLanguage\} direction=\{uiDirection\}>/,
   );
-  assert.match(appSource, /className="trainer-shell"[\s\S]*?lang=\{layout\.composerLanguage\}[\s\S]*?dir=\{uiDirection\}/);
+  assert.match(appSource, /<AppShell[\s\S]*?language=\{layout\.composerLanguage\}[\s\S]*?direction=\{uiDirection\}/);
+  const shell = require("./templateAssertions").read("templates/AppShell.tsx");
+  assert.match(shell, /className="trainer-shell" lang=\{language\} dir=\{direction\}/);
 });
 
 test('RTL shell uses logical text direction while source code stays LTR', () => {

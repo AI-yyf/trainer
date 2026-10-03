@@ -101,45 +101,8 @@ test('training pasted proof stays hidden until it can change the verdict', () =>
 });
 
 test('training single-card keeps the knowledge card separate from composer verification', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
-  const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
-  const stylesSource = readStylesSource();
-
-  const cardFaceIndex = trainingViewSource.indexOf('className="training-current__card-face"');
-  const whyIndex = trainingViewSource.indexOf('data-view-why=""');
-  const cardOnlySectionsStart = trainingViewSource.indexOf('const cardOnlyBodySections');
-  const cardOnlySectionsEnd = trainingViewSource.indexOf('const hasAdjustmentOutcome', cardOnlySectionsStart);
-  const cardOnlySections = trainingViewSource.slice(cardOnlySectionsStart, cardOnlySectionsEnd);
-
-  assert.notEqual(cardFaceIndex, -1, 'expected the current card face');
-  assert.notEqual(whyIndex, -1, 'expected why-now on the card face');
-  assert.ok(cardFaceIndex < whyIndex, 'why-now stays on the current card face');
-  assert.match(cardOnlySections, /key: "current"/);
-  assert.match(cardOnlySections, /key: "why-now"/);
-  assert.match(cardOnlySections, /key: "deliverable"/);
-  assert.match(cardOnlySections, /key: "verify"/);
-  assert.match(cardOnlySections, /key: "return"/);
-  assert.match(cardOnlySections, /detail: cardOnlyVerification/);
-  assert.match(cardOnlySections, /detail: routeReturnSummary/);
-  assert.doesNotMatch(trainingViewSource, /training-current__card-footer/);
-  assert.match(appSource, /const renderTrainingComposerAccessory = \(\) => \{/);
-  assert.doesNotMatch(appSource, /id: "training-verify-current-file"/);
-  const primaryActionStart = appSource.indexOf('const trainingPrimaryAction =');
-  const primaryActionEnd = appSource.indexOf('const trainingCoachActionLabel =', primaryActionStart);
-  assert.ok(primaryActionStart >= 0 && primaryActionEnd > primaryActionStart, 'expected current-card action');
-  const primaryAction = appSource.slice(primaryActionStart, primaryActionEnd);
-  assert.doesNotMatch(primaryAction, /onClick=\{handleVerifyTrainingFromIde\}/);
-  assert.match(appSource, /id: "composer-verify-file"/);
-  assert.match(appSource, /onClick: handleVerifyTrainingFromIde/);
-  assert.match(appSource, /showComposerTrainingVerify/);
-  assert.equal(
-    (appSource.match(/onClick=\{handleVerifyTrainingFromIde\}/g) ?? []).length,
-    0,
-    'file verification lives on the composer, not the card primary',
-  );
-  assert.doesNotMatch(trainingViewSource, /training-current__response-shell/);
-  assert.doesNotMatch(stylesSource, /\.training-current__response-shell/);
-  assertNoCssOrderProperty(stylesSource, '.training-current__card-face');
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').practice();
 });
 
 test('training structured guidance is wired from App into a collapsed single-card helper layer', () => {
@@ -201,9 +164,10 @@ test('training verification-return strip is driven by snapshot status, not summa
     appSource,
     /latestVerifiedResult=\{\s*reviewArtifactForeground\s*\? undefined\s*:\s*trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText\(/,
   );
+  assert.match(appSource, /verificationNotice=\{trainingVerifyNotice\}/);
   assert.match(
     appSource,
-    /latestLearningBlocker=\{\s*\(reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.blockedReason : trainingVerifyNotice\) \?\?[\s\S]*?trainingRestoreReplacesSelectedCard[\s\S]*?pickLanguageAlignedTrainingText\(/,
+    /latestLearningBlocker=\{\s*\(reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.blockedReason : undefined\) \?\?[\s\S]*?trainingRestoreReplacesSelectedCard[\s\S]*?pickLanguageAlignedTrainingText\(/,
   );
   assert.match(appSource, /const trainingComposerManualPracticeMode =/);
   assert.match(appSource, /const trainingComposerFilePracticeMode =/);

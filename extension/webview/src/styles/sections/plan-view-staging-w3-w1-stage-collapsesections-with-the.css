@@ -30,17 +30,19 @@
 }
 
 .stage-block__head {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
   max-width: 100%;
+  width: 100%;
 }
 
 .stage-block__title-text {
+  flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .stage-block__subtitle {
@@ -118,9 +120,7 @@
   .stage-material-generate__shimmer {
     animation: none;
   }
-  .stage-ring__value,
-  .plan-dashboard__bar-fill {
+  .stage-ring__value {
     transition: none;
   }
 }
-

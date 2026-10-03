@@ -1,3 +1,6 @@
+import { GrowthEvidence } from "../../templates/GrowthEvidence";
+import { SystemState } from "../../templates/SystemState";
+import { planViewLabel } from "../../lib/viewLabels";
 import { useState } from "react";
 
 import { EvidenceIcon } from "../icons/brand/trainerBrand";
@@ -300,6 +303,7 @@ export interface ProgressViewProps {
   language: ComposerLanguage;
   projection?: TrainingSkillProjection;
   onOpenTraining: () => void;
+  onBack: () => void;
 }
 
 /**
@@ -309,7 +313,7 @@ export interface ProgressViewProps {
  * §十五: all eight supported languages flow through the label maps —
  * no zh/en binaries in this surface.
  */
-export function ProgressView({ language, projection, onOpenTraining }: ProgressViewProps) {
+export function ProgressView({ language, projection, onOpenTraining, onBack }: ProgressViewProps) {
   const copy = COPY[language];
   const [expandedDimension, setExpandedDimension] = useState<DimensionKey | undefined>();
   const hasAnyEvidence = DIMENSION_KEYS.some((key) => {
@@ -328,13 +332,7 @@ export function ProgressView({ language, projection, onOpenTraining }: ProgressV
       : "";
 
   return (
-    <section className="progress-view" aria-label={copy.ariaLabel}>
-      <header className="progress-view__header">
-        <p className="eyebrow">{copy.title}</p>
-        {updatedLabel ? (
-          <p className="progress-view__updated">{copy.updated(updatedLabel)}</p>
-        ) : null}
-      </header>
+    <GrowthEvidence parent={planViewLabel(language)} title={copy.title} updated={updatedLabel ? copy.updated(updatedLabel) : undefined} onBack={onBack}>
       {hasAnyEvidence ? (
         <ul className="progress-view__dimensions">
           {DIMENSION_KEYS.map((key) => {
@@ -408,13 +406,8 @@ export function ProgressView({ language, projection, onOpenTraining }: ProgressV
           })()}
         </ul>
       ) : (
-        <div className="progress-view__empty">
-          <p>{copy.empty}</p>
-          <button className="button button--accent" type="button" onClick={onOpenTraining}>
-            {copy.startPracticing}
-          </button>
-        </div>
+        <SystemState kind="empty" title={copy.empty} action={{ label: copy.startPracticing, onClick: onOpenTraining }} />
       )}
-    </section>
+    </GrowthEvidence>
   );
 }

@@ -490,11 +490,6 @@
   overflow-wrap: anywhere;
 }
 
-.settings-availability-strip--warn .settings-availability-strip__copy > p,
-.settings-availability-strip--danger .settings-availability-strip__copy > p {
-  color: var(--fg-muted);
-}
-
 .coach-plan-view__compact-evidence-decisions {
   display: flex;
   flex-wrap: wrap;

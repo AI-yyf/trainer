@@ -42,38 +42,18 @@ const bubblePath = path.resolve(
 const stylesPath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css');
 
 test('workbench header keeps only the connection pill; reply actions live under each coach reply', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
-  const headerStart = source.indexOf('className="header-actions"');
-  assert.ok(headerStart > -1, 'expected header-actions container');
-  const header = source.slice(headerStart, headerStart + 1200);
-
-  assert.doesNotMatch(header, /handleShareSession/);
-  assert.doesNotMatch(header, /header-actions__button/);
-
-  const bubble = fs.readFileSync(bubblePath, 'utf8');
-  assert.match(bubble, /message-bubble__actions/);
-  assert.match(bubble, /onMessageAction\?\.\("share", message\)/);
-  assert.match(bubble, /onMessageAction\?\.\("save-resource", message\)/);
-  assert.match(bubble, /onMessageAction\?\.\("training-card", message\)/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').reply();
 });
 
 test('share icon exists and is wired into each coach reply action row', () => {
-  const icons = fs.readFileSync(iconsPath, 'utf8');
-  assert.match(icons, /export function ShareIcon/);
-
-  const bubble = fs.readFileSync(bubblePath, 'utf8');
-  assert.match(bubble, /<ShareIcon size=\{13\}/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').reply();
 });
 
 test('skill deck offers manage flow for custom skills', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
-  assert.match(source, /skill-deck__manage-row/);
-  assert.match(source, /skill-deck__custom-list/);
-  assert.match(source, /skill-deck__create-row/);
-  assert.match(source, /parseTrainerSkillShare\(skillImportText\)/);
-  assert.match(source, /serializeTrainerSkillShare/);
-  assert.match(source, /mergeSkillCatalog\(customSkills\)/);
-  assert.match(source, /pendingDeleteSkillId/);
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').palette();
 });
 
 test('skill deck resolves on the trigger token so arguments keep the match', () => {

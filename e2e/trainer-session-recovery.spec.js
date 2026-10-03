@@ -1,3 +1,4 @@
+const { openSettingsCategory } = require("./template-navigation");
 const { test, expect } = require("playwright/test");
 
 test("an English recovery step does not hide its matching formal plan in Chinese", async ({ page }) => {
@@ -17,7 +18,7 @@ test("an English recovery step does not hide its matching formal plan in Chinese
     } });
   });
   await expect(page.getByText("这是此工作区里存下的旧痕迹，不是当前正式计划。", { exact: true })).toHaveCount(0);
-  await expect(page.locator('[data-plan-stage-disclosure="true"]')).toBeVisible();
+  await expect(page.locator('[data-learning-section=route]')).toBeVisible();
 });
 
 test("compact Plan keeps its stages reachable from a dedicated disclosure", async ({ page }) => {
@@ -37,7 +38,7 @@ test("compact Plan keeps its stages reachable from a dedicated disclosure", asyn
       planRuntimeStatus: { recovered: false, currentStep: "运行可变性验证", reviewPoints: [] },
     } });
   });
-  const stages = page.locator('[data-plan-stage-disclosure="true"]');
+  const stages = page.locator('[data-learning-section=route]');
   await expect(stages).toBeVisible();
   await stages.locator('summary').click();
   await expect(stages.getByText('验证元组内列表', { exact: true })).toBeVisible();
@@ -63,7 +64,7 @@ test("restored workspace settings show saved custom skills without a formal plan
       } },
     } });
   });
-  await page.locator('.settings-nav').getByRole('tab').nth(2).click();
+  await openSettingsCategory(page, "teaching");
   await expect(page.getByText('$restored-check', { exact: true })).toBeVisible();
   await expect(page.getByText('Restored Python check', { exact: true })).toBeVisible();
 });
@@ -158,7 +159,10 @@ test("Chinese flash questions keep inline code identifiers visible", async ({ pa
       },
     } });
   });
-  await expect(page.getByText("给定 `pair = ([1, 2], 3)`，执行 `pair[0].append(4)` 与尝试 `pair[1] = 9` 各自的结果是什么？请说明为什么其中一条合法、另一条抛错。", { exact: true }).first()).toBeVisible();
+  const question = page.locator('.template-focused-practice__phase p').filter({ hasText: '请说明为什么其中一条合法、另一条抛错。' }).first();
+  await expect(question).toBeVisible();
+  await expect(question).toContainText('各自的结果是什么？');
+  await expect(question.locator('code')).toHaveText(['pair = ([1, 2], 3)', 'pair[0].append(4)', 'pair[1] = 9']);
   await expect(page.getByRole("heading", { name: "元组中嵌套列表的可变性边界", exact: true })).toBeVisible();
 });
 
@@ -195,12 +199,13 @@ test("empty Plan honors an explicit Generate plan action", async ({ page }) => {
   });
   await expect(page.getByText(/先启用一组可用连接/)).toHaveCount(0);
   await page.getByRole("button", { name: "生成计划", exact: true }).click();
-  await expect(page.getByRole("button", { name: /计划.*生成/ })).toBeVisible();
+  await expect(page.locator(".template-context")).toContainText("生成计划");
+  await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("textbox")).toHaveValue(/生成正式计划/);
 });
 
 test("training generation keeps raw card JSON out of the conversation surface", async ({ page }) => {
-  await page.goto("/vscode-preview.html?view=training&lang=en-US&connection=connected&run=card-stream");
+  await page.goto("/vscode-preview.html?view=coach&lang=en-US&connection=connected&run=card-stream");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
   await page.evaluate(() => {
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'stream/start', payload: { messageId: 'training_raw_card' } });
@@ -233,7 +238,7 @@ test("generated documents do not count as completed learning and old plan materi
       })) },
     } });
   });
-  const stages = page.locator('[data-plan-stage-disclosure="true"]');
+  const stages = page.locator('[data-learning-section=route]');
   await stages.locator('summary').click();
   const active = stages.locator('[data-plan-stage="stage-1"]');
   await expect(active.getByRole('img', { name: '阶段完成度 0%', exact: true })).toBeVisible();
@@ -341,7 +346,9 @@ test('same-context backups isolate growth evidence and unsent drafts by database
   const input = page.getByRole('textbox', { name: '消息输入框', exact: true });
   await switchDatabase('/original/data', 'original-one', true);
   await input.fill('原目录草稿，尚未发送。');
-  await page.getByTestId('trainer-view-nav-progress').click();
+  await page.getByTestId('trainer-view-nav-plan').click();
+  await page.locator('[data-learning-section=growth] > summary').click();
+  await page.locator('[data-learning-section=growth] .template-back').first().click();
   await expect(page.getByRole('button', { name: '实现 有辅助完成 1 次验证通过', exact: true })).toBeVisible();
   await switchDatabase('/backup/data', 'backup-one', false);
   await expect(page.getByText('完成一次练习的验证后，这里会显示你在理解、实现、调试和迁移上的真实成长。', { exact: true })).toBeVisible();
@@ -404,11 +411,13 @@ test('Start review opens the due queue while preserving the current practice car
       },
     } });
   });
+  await page.locator('[data-learning-section=reviews] > summary').click();
   await page.getByRole('button', { name: '开始复习', exact: true }).click();
   await expect(page.getByRole('heading', { name: '保留当前元组练习', exact: true })).toBeVisible();
   const queue = page.locator('[data-training-review-queue="true"]');
   await expect(queue).toHaveAttribute('open', '');
   await expect(queue.getByRole('heading', { name: '元组赋值边界', exact: true })).toBeVisible();
+  await queue.locator('.training-review-row__actions-details > summary').click();
   await expect(queue.getByRole('button', { name: '开始复习', exact: true })).toBeVisible();
   await expect(queue.getByRole('button', { name: '开始复习', exact: true })).toBeInViewport();
   const geometry = await page.evaluate(() => {
@@ -437,7 +446,8 @@ test('Start review opens the due queue while preserving the current practice car
   await expect(currentCard.getByRole('heading', { name: '复习：元组赋值边界', exact: true })).toBeInViewport();
   await expect(currentCard.getByText('不看笔记解释 tuple 槽位为何不可写。', { exact: true }).first()).toBeVisible();
   await expect(currentCard.getByRole('button', { name: '验证当前文件', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('textbox').last()).toHaveAttribute('placeholder', '写下你刚确认的规则，以及下次如何复用它。');
+  await expect(page.locator('[data-template=PracticeResponse] textarea')).toBeEditable();
+  await expect(page.locator('[data-template=PracticeResponse]')).toContainText('不看笔记解释 tuple 槽位为何不可写。');
   expect(await page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.filter(
     (message) => message.payload?.commandId === 'trainer.training.attempt.start' &&
       message.payload.payload?.cardId === 'review-tuple-slot',
@@ -486,7 +496,9 @@ test('a recorded review resumes as recall without a coding verification or empty
     } }, window.location.origin);
   });
   await expect(page.getByRole('heading', { name: '复习：元组槽位', exact: true })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: '就当前训练卡片向教练提问', exact: true })).toBeVisible();
+  await expect(page.getByText('元组槽位不可写，内层列表仍可变。', { exact: true }).filter({ visible: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '问教练', exact: true })).toBeVisible();
+  await expect(page.locator('#coach-composer')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '完成训练回流', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '验证当前文件', exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.filter(

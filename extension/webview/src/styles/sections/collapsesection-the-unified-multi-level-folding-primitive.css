@@ -61,7 +61,8 @@
 }
 
 .collapse-section__title {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -120,4 +121,3 @@
     transition: none;
   }
 }
-

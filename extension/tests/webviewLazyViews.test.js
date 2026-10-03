@@ -12,7 +12,7 @@ test('Resources and Training stay out of the Coach entry bundle until their view
 
   assert.match(
     source,
-    /const ResourcesWorkbenchView = lazy\(async \(\) => \{[\s\S]*?import\("\.\.\/components\/resources\/ResourcesReaderView"\)/,
+    /const ResourcesWorkbenchView = lazy\(async \(\) => \{[\s\S]*?import\("\.\.\/components\/resources\/ResourcesWorkbenchView"\)/,
   );
   assert.match(
     source,
@@ -20,7 +20,7 @@ test('Resources and Training stay out of the Coach entry bundle until their view
   );
   assert.doesNotMatch(
     source,
-    /import \{\s*ResourcesWorkbenchView,[\s\S]*?\} from "\.\.\/components\/resources\/ResourcesReaderView"/,
+    /import \{\s*ResourcesWorkbenchView,[\s\S]*?\} from "\.\.\/components\/resources\/ResourcesWorkbenchView"/,
   );
   assert.doesNotMatch(
     source,

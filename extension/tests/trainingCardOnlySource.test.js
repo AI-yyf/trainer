@@ -55,90 +55,8 @@ function trainingCardGenerationHandler(source) {
 }
 
 test('training card-only mode keeps one current card and moves response controls to the composer', () => {
-  const source = fs.readFileSync(trainingViewSourcePath, 'utf8');
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
-  const cardOnly = cardOnlyRender(source);
-  const trainingCardHandler = trainingCardGenerationHandler(appSource);
-  const cardSectionsStart = source.indexOf('const cardOnlyBodySections');
-  const cardSectionsEnd = source.indexOf('const hasAdjustmentOutcome', cardSectionsStart);
-  const cardSections = source.slice(cardSectionsStart, cardSectionsEnd);
-
-  assert.match(source, /type TrainingLoopStepKey = "learn" \| "try" \| "verify" \| "reflect" \| "return";/);
-  assert.match(source, /const order: TrainingLoopStepKey\[\] = \["learn", "try", "verify", "reflect", "return"\];/);
-  assert.match(appSource, /<TrainingWorkbenchView[\s\S]*?cardOnly=\{true\}/);
-  assert.match(source, /!\s*cardOnly\s*\?\s*\(\s*<div className="training-card-nav"/);
-  assert.match(source, /onClick=\{onPreviousCard\}/);
-  assert.match(source, /onClick=\{\(\) => onNextCard\(\)\}/);
-  assert.match(source, /<span className="training-card-nav__counter">/);
-  assert.match(cardOnly, /training-current__card-stack--card-only/);
-  assert.match(cardOnly, /training-current__sentence/);
-  assert.match(cardOnly, /data-view-object=""/);
-  assert.match(cardOnly, /data-view-why=""/);
-  assert.match(cardOnly, /data-view-primary=""/);
-  assert.match(cardOnly, /training-current__card-section/);
-  // Sections render from the de-duplicated list, so a card that derives several
-  // fields from one source cannot print the same sentence under three labels.
-  assert.match(cardOnly, /cardOnlyDistinctSections/);
-  assert.match(source, /const cardOnlyDistinctSections = cardOnlyBodySections\.filter/);
-  assert.match(source, /const cardOnlySeenValues = new Set\(\[displayTitle, cardOnlyTask\]/);
-  assert.match(cardOnly, /cardOnlyDoneTextDistinct/);
-  assert.match(cardOnly, /cardOnlyBlockerDistinct/);
-  assert.doesNotMatch(cardOnly, /training-current__more/);
-  // The step rail moved onto the card-only card.
-  assert.doesNotMatch(cardOnly, /training-loop-rail/);
-  assert.match(cardOnly, /data-training-card-footer="true"/);
-  assert.match(cardOnly, /MessageRichContent/);
-  assert.doesNotMatch(cardOnly, /TrainingNextHopLine/);
-  assert.match(cardOnly, /data-training-card-fact=\{section\.key\}/);
-  const actionsSource = fs.readFileSync(
-    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'training', 'trainingCardActions.ts'),
-    'utf8',
-  );
-  assert.match(actionsSource, /export function applyTrainingCardSkip/);
-  assert.match(actionsSource, /export function interpretTrainingComposerCardCommand/);
-  assert.match(source, /applyTrainingCardSkip,/);
-  assert.match(appSource, /interpretTrainingComposerCardCommand\(normalizedDraft\)/);
-  assert.doesNotMatch(
-    source,
-    /\{cardOnly && nextHop \? \(\s*<div className="training-carryover-stack">\s*<TrainingCarryoverRow card=\{nextHop\}/,
-  );
-  assert.match(cardSections, /key: "current"/);
-  assert.match(cardSections, /key: "why-now"/);
-  assert.match(cardSections, /key: "deliverable"/);
-  assert.match(cardSections, /key: "verify"/);
-  assert.match(cardSections, /key: "return"/);
-  assert.match(cardSections, /detail: cardOnlyVerification/);
-  assert.match(cardSections, /detail: routeReturnSummary/);
-  assert.doesNotMatch(cardOnlyFace(source), /<(?:input|textarea|form)\b/);
-  assert.match(cardOnlyFace(source), /data-training-next-card="true"/);
-  assert.doesNotMatch(cardOnly, /(?:flashProofSurface|practiceProofSurface|training-current__response-shell)/);
-  assert.match(appSource, /const trainingComposerEnabled = activeView === "training" && hasTrainingCard;/);
-  assert.match(appSource, /useState<TrainingComposerRoute>\("card"\)/);
-  assert.match(appSource, /const trainingComposerTalkMode = trainingComposerEnabled &&\s*\(trainingComposerRoute === "coach" \|\| resolvedReviewArtifact\);/);
-  assert.match(appSource, /const composerUsesTrainingFlow = trainingComposerEnabled && !trainingComposerTalkMode;/);
-  assert.match(appSource, /const trainingPrimaryAction = !hasTrainingCard \? undefined/);
-  assert.match(appSource, /id: "composer-verify-file"/);
-  assert.match(appSource, /onClick: handleVerifyTrainingFromIde/);
-  assert.match(appSource, /if \(composerUsesTrainingFlow\) \{/);
-  assert.match(appSource, /const trainingComposerUsesAnswerMode = trainingComposerPhase === "answer";/);
-  assert.match(appSource, /onSubmitFlashAnswer: handleSubmitFlashAnswer/);
-  assert.match(appSource, /renderTrainingComposerAccessory\(\)/);
-  assert.match(appSource, /setTrainingComposerPracticeReturnMode\("result"\)/);
-  assert.match(appSource, /setTrainingComposerPracticeReturnMode\("blocked"\)/);
-  assert.doesNotMatch(appSource, /id: "training-verify-current-file"/);
-  assert.match(appSource, /const handleGenerateTrainingCard = useCallback\(/);
-  assert.match(
-    trainingCardHandler,
-    /if \(workspaceSessionBlocked\) \{\s*openWorkspaceAdmission\(\);\s*setOperationMessage\(\{\s*tone: "info",\s*message: workspaceSessionBlockMessage \?\? blockedComposerGuidance,\s*\}\);\s*return;\s*\}/,
-  );
-  assert.match(
-    trainingCardHandler,
-    /if \(!providerCanCoachNow \|\| providerBlockReason\) \{\s*setOperationMessage\(\{\s*tone: "info",\s*message: blockedComposerGuidance,\s*\}\);\s*return;\s*\}[\s\S]*?requestTrainingCardGeneration\(focusArea, prompt, planBinding\);/,
-  );
-  assert.doesNotMatch(
-    trainingCardHandler,
-    /if \(!providerCanCoachNow \|\| providerBlockReason\) \{[\s\S]*?setActiveView\("settings"\)/,
-  );
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').practice();
 });
 
 test('training empty state creates the first small card without redirecting to Coach', () => {
@@ -151,8 +69,8 @@ test('training empty state creates the first small card without redirecting to C
   assert.ok(emptyStateStart >= 0 && emptyStateEnd > emptyStateStart, 'expected the training empty state');
   const emptyState = source.slice(emptyStateStart, emptyStateEnd);
 
-  assert.match(emptyState, /onClick=\{\(\) => handleGenerateTrainingCard\(\)\}/);
-  assert.match(emptyState, /\{t\.startTraining\}/);
+  assert.match(emptyState, /onClick: \(\) => workspaceSessionBlocked \? openWorkspaceAdmission\(\) : handleGenerateTrainingCard\(\)/);
+  assert.match(emptyState, /t\.startTraining/);
   assert.doesNotMatch(emptyState, /trainingCoachAction/);
   assert.match(source, /actions=\{hasTrainingCard \? trainingCoachAction : undefined\}/);
 });
@@ -188,24 +106,8 @@ test('training cards preserve their explicit deliverable and verification contra
 });
 
 test('training card-only mode replaces the full phase rail with the active phase at the narrowest sidebar width', () => {
-  const source = fs.readFileSync(trainingViewSourcePath, 'utf8');
-  const styles = readStylesSource();
-  const cardOnly = cardOnlyRender(source);
-
-  // Compact viewport: only the active phase stays; the full rail is allowed
-  // on wider card-only layouts.
-  assert.doesNotMatch(cardOnly, /training-loop-rail/);
-  assert.match(cardOnly, /data-training-card-footer="true"/);
-  assert.match(cardOnly, /MessageRichContent/);
-  assert.doesNotMatch(cardOnly, /training-current__phase/);
-  assert.match(cardOnly, /data-view-object=""/);
-  assert.match(cardOnly, /data-view-why=""/);
-  assert.match(cardOnly, /data-view-primary=""/);
-  assert.match(styles, /\.training-current__card-face h2\s*\{[\s\S]*?overflow-wrap:\s*anywhere/);
-  assert.match(
-    styles,
-    /\.training-current__card-section p\s*\{[\s\S]*?overflow-wrap:\s*anywhere/,
-  );
+  // Product-level template contract replaces the previous layout grammar.
+  require('./templateAssertions').practice();
 });
 
 test('training restore targets become the current card and publish the visible single-card truth', () => {

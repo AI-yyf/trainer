@@ -1,3 +1,4 @@
+import { NextAction } from "../../templates/NextAction";
 import type { ReactNode } from "react";
 
 import type { ComposerLanguage } from "../../lib/types";
@@ -248,11 +249,12 @@ export function CoachArtifactBlock({
     if (["evaluation", "review"].includes(artifact.kind) && !artifact.recommendedAction) return null;
     if (!onOpen || (!interactive && !artifact.recommendedAction)) return null;
     return (
-      <article className={`${classes} coach-artifact-card--compact`} data-artifact-kind={artifact.kind}>
-        <button className="artifact-card__next-action" type="button" onClick={() => onOpen(artifact)}>
-          {artifact.recommendedAction ? actionLabel : displayTitle}
-        </button>
-      </article>
+      <NextAction
+        label={artifactBlockCopy(language, "下一步")}
+        title={displayTitle}
+        detail={artifact.verification?.[0]}
+        action={{ label: actionLabel, onClick: () => onOpen(artifact) }}
+      />
     );
   }
   const decision = artifactMetadataText(metadata, ["decision"]);

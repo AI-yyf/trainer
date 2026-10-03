@@ -101,7 +101,7 @@ test('Resources localizes review-card handoff actions and replaces duplicate gen
     source,
     /const selectedResourceTrainingIsAvailable =\s*selectedResourceTrainingState\?\.phase === "ready"\s*\|\|\s*selectedResourceTrainingState\?\.phase === "not-current"/,
   );
-  assert.match(source, /selectedResourceTrainingIsAvailable \? \([\s\S]*?onClick=\{onOpenTraining\}/);
+  assert.match(source, /onClick: selectedResourceTrainingIsAvailable \? \(\) => onOpenTraining\?\.\(\) : startTrainingFromSelectedResource/);
 });
 
 test('Resources keeps host failure details out of ordinary search feedback', () => {

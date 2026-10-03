@@ -18,9 +18,12 @@ test("Coach keeps the actual recall reply without displaying review records or g
     } });
   });
   await expect(page.getByText('这个概念解释准确。', { exact: true })).toBeVisible();
-  await expect(page.locator('.coach-artifact-card')).toHaveCount(0);
-  await expect(page.locator('.message-bubble')).not.toContainText('trainer-python:next-step');
-  await expect(page.locator('.message-bubble')).not.toContainText('我自己的复习标题');
+  await expect(page.locator('.coach-artifact-card').filter({ visible: true })).toHaveCount(0);
+  await page.locator('.template-reply-evidence > summary').click();
+  await expect(page.locator('.coach-artifact-card')).toHaveCount(3);
+  await page.locator('.template-reply-evidence > summary').click();
+  expect(await page.locator('.message-bubble').innerText()).not.toContain('trainer-python:next-step');
+  expect(await page.locator('.message-bubble').innerText()).not.toContain('我自己的复习标题');
 });
 
 test("a saved plan reply remains visible without the historical tool panel", async ({ page }) => {
@@ -57,11 +60,11 @@ test("Learning keeps historical and independent records out of the current actio
   });
   const primary = page.locator('[data-plan-primary="true"]');
   await expect(primary).toBeVisible();
-  await expect(primary.locator('.coach-plan-view__compact-primary-action button')).not.toHaveText(/接纳|采纳/);
-  await expect(page.locator('.coach-plan-view__evidence-row, [data-plan-governance-disclosure]')).toHaveCount(0);
-  await expect(page.getByText('旧阶段的文件检查', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('未绑定计划的独立检查', { exact: true })).toHaveCount(0);
-  await expect(page.locator('#coach-composer')).toBeEditable();
+  await expect(primary.locator('[data-template=NextAction] > button')).not.toHaveText(/接纳|采纳/);
+  await expect(page.locator('.coach-plan-view__evidence-row, [data-plan-governance-disclosure][open]').filter({ visible: true })).toHaveCount(0);
+  await expect(page.getByText('旧阶段的文件检查', { exact: true }).filter({ visible: true })).toHaveCount(0);
+  await expect(page.getByText('未绑定计划的独立检查', { exact: true }).filter({ visible: true })).toHaveCount(0);
+  await expect(page.locator('#coach-composer')).toHaveCount(0);
 });
 
 test("long historical records cannot overflow or take over the current Learning view", async ({ page }) => {
@@ -77,8 +80,8 @@ test("long historical records cannot overflow or take over the current Learning 
       ...current, sessionHistoryRestored: true, evidenceQueue, memory: { ...current.memory, evidenceQueue },
     } });
   });
-  await expect(page.locator('.coach-plan-view__evidence-row, [data-plan-governance-disclosure]')).toHaveCount(0);
-  await expect(page.getByText(/long_unbroken_identifier/)).toHaveCount(0);
+  await expect(page.locator('.coach-plan-view__evidence-row, [data-plan-governance-disclosure][open]').filter({ visible: true })).toHaveCount(0);
+  await expect(page.getByText(/long_unbroken_identifier/).filter({ visible: true })).toHaveCount(0);
   const primary = page.locator('[data-plan-primary="true"]');
   await expect(primary).toBeVisible();
   for (const width of [300, 360, 800]) {

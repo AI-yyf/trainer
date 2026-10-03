@@ -22,7 +22,7 @@
 [Installation](#installation) ·
 [Einrichtung](#drei-schritte-kein-vierter) ·
 [Mechaniken](#kernmechaniken) ·
-[Fünf Ansichten](#fünf-ansichten) ·
+[Drei Ziele](#drei-ziele) ·
 [Vergleich](#vergleich) ·
 [5-Min-Demo](#fünf-minuten-demo) ·
 [Design](#warum-es-sich-anders-anfühlt) ·
@@ -166,17 +166,17 @@ Der Coach liest deine Dateien, prüft Diagnostics und durchsucht den Workspace �
 
 ---
 
-## Fünf Ansichten
+## Drei Ziele
 
-> Fünf feste Ansichten auf oberster Ebene. Jede mit einer strikten Verantwortungsgrenze.
+> Chat, Lernen und Materialien bleiben sichtbar. Verlauf und Einstellungen sind oben erreichbar; Training und Fortschritt gehören zum Lernen.
 
 | Ansicht | Rolle | Kurzfassung |
 |-----------|------|--------|
 | **Coach** | Streaming-Chat | **Einstieg**: Tool-Zugriff + `$`-Skill-Palette + Bildanhänge + Antwortmodi |
 | **Plan** | Lernplan | **Karte**: Etappen, Fortschritt, Evidenz, Plan einfrieren/auftauen |
 | **Resources** | Bibliothek | **Bücherregal**: FTS5-Suche + 3-stufige Sandbox-Vorschau + wiederherstellbarer Papierkorb |
-| **Training** | Training | **Spielplatz**: FSRS-Lernkarten + Theorie-Drills + Szenario-Experimente + Verifikationsgates |
-| **Settings** | Einstellungen | **Konsole**: 59 Befehle + Endpoint-Speedtest + Denkintensität + Workspace-Zulassung |
+| **Training (innerhalb von Lernen)** | Training | **Spielplatz**: FSRS-Lernkarten + Theorie-Drills + Szenario-Experimente + Verifikationsgates |
+| **Settings (oben erreichbar)** | Einstellungen | **Konsole**: 59 Befehle + Endpoint-Speedtest + Denkintensität + Workspace-Zulassung |
 
 <p align="center">
   <img src="assets/screenshots/plan.png" alt="Plan-Ansicht" width="260" />
@@ -188,7 +188,7 @@ Der Coach liest deine Dateien, prüft Diagnostics und durchsucht den Workspace �
 
 Streaming-Coach-Chat mit Tool-Zugriff, `$`-Skill-Palette, Bildanhängen, Antwortmodi, Kontextnutzungs-Ring, Sitzungsverlauf und Teilen-Funktion.
 
-**Unter jeder Coach-Antwort sitzen drei Schnellaktionen:**
+**Eine Coach-Antwort hebt einen nächsten Schritt hervor. Das Menü für weitere Aktionen enthält:**
 
 - **Antwort als Markdown kopieren**
 - **In die Bibliothek speichern** (durchsuchbar + in der Vorschau ansehbar)
@@ -198,7 +198,7 @@ Streaming-Coach-Chat mit Tool-Zugriff, `$`-Skill-Palette, Bildanhängen, Antwort
 
 ### Eigene `$`-Skills — erstellen, teilen, installieren
 
-Tippe `$`, um die Skill-Palette zu öffnen: Neben den eingebauten Skills kannst du eigene Prompts in Skills mit Trigger-Wörtern und Keywords verpacken, sie mit anderen teilen oder Skills installieren, die andere teilen — **alles über einen reinen Datenkanal, ohne Code-Ausführung**.
+Tippe `$` im Chat für eine durchsuchbare Palette mit sechs Vorschlägen. Eigene Skills verwaltest du unter Einstellungen → Coach → Skills: Neben den eingebauten Skills kannst du eigene Prompts in Skills mit Trigger-Wörtern und Keywords verpacken, sie mit anderen teilen oder Skills installieren, die andere teilen — **alles über einen reinen Datenkanal, ohne Code-Ausführung**.
 
 <p align="center">
   <img src="assets/screenshots/skill-deck.png" alt="Skill-Palette" width="380" />
@@ -369,7 +369,7 @@ Pläne frieren ein und tauen auf; Sitzungen überleben Neustarts; der Karten-For
 | Ordner | Inhalt | Größe |
 |---|---|---|
 | `extension/src/` | Host: Commands, Workspace-Trust, Secret Storage, Sidecar-Lebenszyklus | ~30k Zeilen TS |
-| `extension/webview/` | React-Workbench: 5 Ansichten + Zustand + 8 Sprachen | ~50k Zeilen TSX |
+| `extension/webview/` | React-Workbench: 3 Ziele und 6 Routen + Zustand + 8 Sprachen | ~50k Zeilen TSX |
 | `extension/tests/` | node:test-Suite (220 Dateien / 1.679 Fälle) | 73.744 Zeilen |
 | `server/app/` | FastAPI-Gehirn: Agent / Pädagogik / Memory / FSRS / Training | ~120k Zeilen Python |
 | `server/tests/` | pytest-Suite (159 Dateien / 1.649 Fälle) | 106.422 Zeilen |

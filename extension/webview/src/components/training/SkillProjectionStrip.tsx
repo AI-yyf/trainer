@@ -86,7 +86,7 @@ export function SkillProjectionStrip({ language, projection, variant = "compact"
         {entries.map(({ dimension, state, verifiedCount }) => (
           <span
             key={dimension}
-            className="skill-projection-chip"
+            className="skill-projection-entry"
             data-skill-dimension={dimension}
             data-skill-state={state}
             title={`${dimensionLabels[language]?.[dimension] ?? dimension} · ${labelFor(language, stateLabels, state, state)}`}

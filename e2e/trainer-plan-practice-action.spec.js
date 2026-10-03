@@ -121,19 +121,20 @@ test('training reads Markdown and keeps Next below the card without management s
   await page.evaluate(data => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: data }), data);
   for (const width of [300, 360, 800]) {
     await page.setViewportSize({ width, height: 760 });
-    const face = page.locator('.training-current__card-face');
+    const face = page.locator('.template-focused-practice__phase');
     await expect(face.getByText('一个测试函数', { exact: true })).toBeVisible();
     await expect(face.locator('strong').filter({ hasText: '一个测试函数' })).toHaveCount(1);
     await expect(face.locator('ol > li')).toHaveCount(2);
     await expect(face.locator('pre')).toHaveCount(1);
-    await expect(face.locator('[data-training-next-card]')).toHaveCount(0);
-    const footer = page.locator('[data-training-card-footer]');
+    await expect(face.locator('[data-training-next-card]').filter({ visible: true })).toHaveCount(0);
+    const footer = page.locator('details:has([data-training-next-card])');
+    if (!await footer.evaluate(el => el.open)) await footer.locator(':scope > summary').click();
     await expect(footer.getByRole('button', { name: '下一张', exact: true })).toBeVisible();
     const bottom = await face.boundingBox(); const next = await footer.boundingBox();
     expect(next.y).toBeGreaterThanOrEqual(bottom.y + bottom.height - 1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await expect(page.locator('[data-training-review-queue], .training-loop-rail, .skill-projection-strip')).toHaveCount(0);
-    await expect(page.getByText('SHOULD_NOT_SHOW_REASON', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('SHOULD_NOT_SHOW_REASON', { exact: true }).filter({ visible: true })).toHaveCount(0);
     await expect(page.getByText('SHOULD_NOT_SHOW_REVIEW', { exact: true })).toHaveCount(0);
   }
   // An explicit action belongs to this card; a prior plan step must not replace
@@ -141,8 +142,8 @@ test('training reads Markdown and keeps Next below the card without management s
   card.suggestedWorkspaceAction = '在 `list_pairs.py` 添加 **负向断言**，再运行测试。';
   card.problemStatement = 'SHOULD_NOT_SHOW_BACKGROUND_REASON';
   await page.evaluate(data => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: data }), data);
-  await expect(page.locator('.training-current__card-face strong').filter({ hasText: '负向断言' })).toHaveCount(1);
-  await expect(page.getByText('SHOULD_NOT_SHOW_BACKGROUND_REASON', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.template-focused-practice__phase strong').filter({ hasText: '负向断言' })).toHaveCount(1);
+  await expect(page.getByText('SHOULD_NOT_SHOW_BACKGROUND_REASON', { exact: true }).filter({ visible: true })).toHaveCount(0);
 });
 
 test('the active practice shows verification failure without borrowing an older result', async ({ page }) => {
@@ -164,9 +165,9 @@ test('the active practice shows verification failure without borrowing an older 
     },
   };
   await page.evaluate(data => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: data }), payload);
-  await expect(page.locator('.training-current__verify-result')).toHaveText(failure);
+  await expect(page.locator('[data-template=VerificationResult] > p')).toHaveText(failure);
   await expect(page.getByRole('button', { name: '验证当前文件', exact: true })).toBeVisible();
   payload.workspaceTrainingState.latestTrainingNextHop.candidateId = 'script-older';
   await page.evaluate(data => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: data }), payload);
-  await expect(page.locator('.training-current__verify-result')).toHaveCount(0);
+  await expect(page.locator('[data-template=VerificationResult]')).toHaveCount(0);
 });

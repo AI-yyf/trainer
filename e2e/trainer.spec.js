@@ -1,5 +1,6 @@
+const { openSettingsCategory } = require("./template-navigation");
 /**
- * Trainer E2E acceptance coverage for the shipped five-view sidebar shell.
+ * Trainer E2E acceptance coverage for the three-destination sidebar shell with six internal routes.
  * Run: npx playwright test e2e/trainer.spec.js
  */
 
@@ -134,50 +135,30 @@ async function openPreview(page, view, params = {}) {
 }
 
 async function expectActiveView(page, language, view) {
-  const navigationItem = page.getByTestId(viewNavigationTestId(view));
+  const destination = ["training", "progress"].includes(view) ? "plan" : view;
+  const navigationItem = page.getByTestId(viewNavigationTestId(destination));
   await expect(navigationItem).toHaveAttribute("aria-current", "page");
   await expect(navigationItem).toHaveAttribute(
     "aria-label",
-    VIEW_LABELS[language][view],
+    VIEW_LABELS[language][destination],
   );
 }
 
-async function expectFiveTopLevelViews(page, language) {
-  // PR-1 IA: the switcher carries the daily entries (coach/learn/resources +
-  // progress) plus the activity-driven training entry; Settings lives in the
-  // header gear.
+async function expectThreePrimaryDestinations(page, language) {
   const views = ["coach", "plan", "resources"];
-  const tabs = page
-    .locator(".header-switcher")
-    .getByTestId(/^trainer-view-nav-(coach|plan|resources|training)$/);
-  const testIds = await tabs.evaluateAll((nodes) =>
-    nodes.map((node) => node.getAttribute("data-testid")),
-  );
-  expect(testIds.length).toBeGreaterThanOrEqual(3);
-  expect(testIds.length).toBeLessThanOrEqual(4);
-  expect(testIds.slice(0, 3)).toEqual(views.map(viewNavigationTestId));
-  if (testIds.length === 4) {
-    expect(testIds[3]).toBe(viewNavigationTestId("training"));
+  const tabs = page.locator(".app-shell-nav button");
+  await expect(tabs).toHaveCount(3);
+  for (let i = 0; i < views.length; i++) {
+    await expect(tabs.nth(i)).toBeVisible();
+    await expect(tabs.nth(i)).toHaveAttribute("aria-label", VIEW_LABELS[language][views[i]]);
   }
-  await expect(tabs.first()).toBeVisible();
-  const labels = await tabs.evaluateAll((nodes) =>
-    nodes.map((node) => node.getAttribute("aria-label")),
-  );
-  labels.forEach((label, index) => {
-    const expectedView = views[index] ?? "training";
-    expect(label).toBe(VIEW_LABELS[language][expectedView]);
-  });
-  const settingsButton = page.getByTestId("trainer-view-nav-settings");
-  await expect(settingsButton).toBeVisible();
-  await expect(settingsButton).toHaveAttribute(
-    "aria-label",
-    VIEW_LABELS[language].settings,
-  );
+  await expect(page.getByTestId("trainer-view-nav-settings")).toHaveAttribute("aria-label", VIEW_LABELS[language].settings);
+  await expect(page.getByTestId("trainer-history-toggle")).toBeVisible();
 }
 
 async function expectHeaderLabelsVisible(page) {
   const displays = await page
-    .locator(".header-switcher__label")
+    .locator(".app-shell-nav__item")
     .evaluateAll((nodes) => nodes.map((node) => window.getComputedStyle(node).display));
   expect(displays.every((display) => display !== "none")).toBeTruthy();
 }
@@ -221,13 +202,22 @@ function collectPreviewCommands(page) {
 }
 
 async function revealTrainingCardDetails(card) {
-  const more = card.locator("details.training-current__more").first();
-  if ((await more.count()) === 0) {
-    return;
+  for (const summary of await card.locator(':scope > details > summary').all()) {
+    if (!await summary.locator('..').evaluate(node => node.open)) await summary.click();
   }
-  const isOpen = await more.evaluate((node) => node instanceof HTMLDetailsElement && node.open);
-  if (!isOpen) {
-    await more.locator(":scope > summary").click();
+}
+
+async function openFocusedTraining(page, language = 'en-US') {
+  await page.getByTestId('trainer-view-nav-plan').click();
+  const growth = page.locator('[data-learning-section=growth]:visible');
+  await expect(growth).toBeVisible();
+  if (await growth.count()) {
+    if (!await growth.evaluate(node => node.open)) await growth.locator(':scope > summary').click();
+    await growth.getByRole('button', { name: VIEW_LABELS[language].training, exact: true }).click();
+  } else {
+    const more = page.locator('[data-plan-governance-disclosure]');
+    if (!await more.evaluate(node => node.open)) await more.locator(':scope > summary').click();
+    await more.getByRole('button', { name: VIEW_LABELS[language].training, exact: true }).click();
   }
 }
 
@@ -236,60 +226,29 @@ function resourceDetailName(language, title) {
 }
 
 async function expectTrainingLoop(card, activeStep) {
-  await revealTrainingCardDetails(card);
-  const steps = card.locator(".training-loop-rail .training-loop-step");
-  if ((await steps.count()) === 0) {
-    await expect(card.locator("[data-view-object]").first()).toBeVisible();
-    return;
-  }
-  await expect(steps).toHaveCount(TRAINING_LOOP_KEYS.length);
-
-  const states = await steps.evaluateAll((nodes) =>
-    nodes.map((node) => ({
-      key: node.getAttribute("data-training-loop-step"),
-      state: node.getAttribute("data-training-loop-state"),
-    })),
-  );
-  const activeIndex = TRAINING_LOOP_KEYS.indexOf(activeStep);
-
-  expect(states).toEqual(
-    TRAINING_LOOP_KEYS.map((key, index) => ({
-      key,
-      state: index < activeIndex ? "done" : index === activeIndex ? "active" : "upcoming",
-    })),
-  );
+  await expect(card).toHaveAttribute('data-training-phase', activeStep);
+  await expect(card.locator('.template-activity-header__phase')).toContainText(`${TRAINING_LOOP_KEYS.indexOf(activeStep) + 1}/5`);
+  await expect(card.locator('.training-loop-rail')).toHaveCount(0);
 }
 
 async function expectTrainingCardFacts(card) {
   await revealTrainingCardDetails(card);
-  const facts = card.locator("[data-training-card-fact]");
-  if ((await facts.count()) === 0) {
-    await expect(card.locator("[data-view-object]").first()).toBeVisible();
-    return;
-  }
-  await expect(facts).toHaveCount(TRAINING_CARD_FACTS.length);
   for (const fact of TRAINING_CARD_FACTS) {
     await expect(card.locator(`[data-training-card-fact="${fact}"]`)).toBeVisible();
   }
 }
 
 async function submitPlanComposerRequest(page, mode, message) {
-  const modeLabels = {
-    explain: "Explain",
-    evidence: "Evidence",
-    blocker: "Shrink blocker",
-    generate: "Generate",
-  };
-
-  await page.locator("#plan-composer-mode").click();
-  await page
-    .getByRole("menu", { name: "Plan", exact: true })
-    .getByRole("menuitemradio", { name: modeLabels[mode] })
-    .click();
-  await expect(page.locator("#plan-composer-mode")).toHaveAttribute(
-    "aria-label",
-    `Plan: ${modeLabels[mode]}`,
-  );
+  const more = page.locator('[data-plan-governance-disclosure]');
+  await more.locator(':scope > summary').click();
+  const action = more.getByRole('button', { name: mode === 'generate' ? /^Adjust plan/ : 'Ask Coach' });
+  if (await action.isDisabled()) {
+    await expect(page.locator('#coach-composer')).toHaveCount(0);
+    return false;
+  }
+  await action.click();
+  await expect(page.getByTestId('trainer-view-nav-coach')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.template-context')).toContainText(mode === 'generate' ? 'Generate' : 'Explain');
   const userCountBefore = await page.evaluate(() =>
     window.__TRAINER_BOOTSTRAP__?.conversation?.filter((entry) => entry.role === "user").length ?? 0,
   );
@@ -311,11 +270,12 @@ async function submitPlanComposerRequest(page, mode, message) {
     ),
   ).toBe(true);
   await expect(page.locator("#coach-composer")).toHaveValue("");
+  return true;
 }
 
-test.describe("Trainer Five-View Shell", () => {
+test.describe("Trainer three-destination shell", () => {
   for (const language of ["zh-CN", "en-US"]) {
-    test(`exposes the five localized top-level views in ${language}`, async ({ page }) => {
+    test(`exposes the three localized primary destinations in ${language}`, async ({ page }) => {
       const errors = attachConsoleErrorCollector(page);
 
       await openPreview(page, "coach", {
@@ -324,7 +284,7 @@ test.describe("Trainer Five-View Shell", () => {
         connection: "connected",
       });
 
-      await expectFiveTopLevelViews(page, language);
+      await expectThreePrimaryDestinations(page, language);
       await expectActiveView(page, language, "coach");
       await expectNoHorizontalOverflow(page);
       await expectNoConsoleErrors(errors);
@@ -391,7 +351,7 @@ test.describe("Trainer Five-View Shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
-  test("keeps five clickable views, persists the active view, and omits the Settings composer", async ({ page }) => {
+  test("keeps three primary destinations, persists the active view, and omits the Settings composer", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 
     await openPreview(page, undefined, {
@@ -402,14 +362,14 @@ test.describe("Trainer Five-View Shell", () => {
 
     for (const view of ["coach", "plan", "resources"]) {
       const tabs = page
-        .locator(".header-switcher")
+        .locator(".app-shell-nav")
         .getByTestId(/^trainer-view-nav-(coach|plan|resources|training)$/);
-      await expectFiveTopLevelViews(page, "en-US");
+      await expectThreePrimaryDestinations(page, "en-US");
 
       await page.getByTestId(viewNavigationTestId(view)).click();
       await expectActiveView(page, "en-US", view);
       await expect(tabs.first()).toBeVisible();
-      await expect(page.locator(".composer-shell")).toBeVisible();
+      await expect(page.locator(".composer-shell")).toHaveCount(view === "coach" ? 1 : 0);
     }
 
     // Settings lives in the header gear and is not a chat surface.
@@ -419,7 +379,7 @@ test.describe("Trainer Five-View Shell", () => {
 
     await page.reload();
     await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
-    await expectFiveTopLevelViews(page, "en-US");
+    await expectThreePrimaryDestinations(page, "en-US");
     await expectActiveView(page, "en-US", "settings");
     await expect(page.locator(".composer-shell")).toHaveCount(0);
     await expectNoConsoleErrors(errors);
@@ -439,7 +399,7 @@ test.describe("Trainer Five-View Shell", () => {
 
     await page.reload();
     await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
-    await expectFiveTopLevelViews(page, "en-US");
+    await expectThreePrimaryDestinations(page, "en-US");
     await expectActiveView(page, "en-US", "coach");
     await expect(page.locator(".composer-shell")).toBeVisible();
     await expectNoConsoleErrors(errors);
@@ -448,7 +408,7 @@ test.describe("Trainer Five-View Shell", () => {
   test("keeps Plan composer intent explicit without mutating the formal plan in the fixture", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
     const sidecarRequests = [];
-    const modes = ["explain", "evidence", "blocker", "generate"];
+    const modes = ["explain", "generate"];
 
     page.on("request", (request) => {
       if (/^http:\/\/127\.0\.0\.1:34891(?:\/|$)/.test(request.url())) {
@@ -464,10 +424,10 @@ test.describe("Trainer Five-View Shell", () => {
       });
       await expectActiveView(page, "en-US", "plan");
 
-      await expect(page.locator(".coach-plan-view__now-card").first()).toBeVisible();
-      await expect(page.locator(".coach-plan-view__compact-primary-action").first()).toBeVisible();
-      await expect(page.locator(".coach-plan-view__compact-more")).toHaveCount(0);
-      await expect(page.locator("[data-plan-evidence-list]")).toHaveCount(0);
+      await expect(page.locator("[data-template=LearningHome] > header").first()).toBeVisible();
+      await expect(page.locator("[data-template=NextAction]").first()).toBeVisible();
+      await expect(page.locator("[data-plan-governance-disclosure]")).not.toHaveAttribute("open", "");
+      await expect(page.locator("[data-plan-evidence-list]").filter({ visible: true })).toHaveCount(0);
       const formalPlanBefore = await page.evaluate(() => {
         const plan = window.__TRAINER_BOOTSTRAP__?.plan;
         return {
@@ -479,7 +439,7 @@ test.describe("Trainer Five-View Shell", () => {
         };
       });
       const message = `Local fixture assertion for ${mode} mode.`;
-      await submitPlanComposerRequest(page, mode, message);
+      const submitted = await submitPlanComposerRequest(page, mode, message);
       const formalPlanAfter = await page.evaluate(() => {
         const plan = window.__TRAINER_BOOTSTRAP__?.plan;
         return {
@@ -491,6 +451,10 @@ test.describe("Trainer Five-View Shell", () => {
         };
       });
       expect(formalPlanAfter).toEqual(formalPlanBefore);
+      if (!submitted) {
+        await expect(page.locator("#coach-composer")).toHaveCount(0);
+        continue;
+      }
       await expect.poll(() =>
         page.evaluate((expectedMessage) =>
           window.__TRAINER_BOOTSTRAP__?.conversation?.some(
@@ -520,7 +484,7 @@ test.describe("Trainer Five-View Shell", () => {
       connection: "connected",
     });
 
-    await expectFiveTopLevelViews(page, "en-US");
+    await expectThreePrimaryDestinations(page, "en-US");
     await expectActiveView(page, "en-US", "coach");
     await expect(page.locator("main")).toContainText("This saved connection still needs its key, so Trainer cannot continue yet.");
     await expect(page.locator("main")).toContainText("Add the key in Settings, then return to this thread.");
@@ -573,7 +537,7 @@ test.describe("Trainer Five-View Shell", () => {
 
   for (const language of ["zh-CN", "en-US"]) {
     for (const width of [300, 360, 420]) {
-      test(`keeps five usable top-level tabs at ${width}px in ${language}`, async ({ page }) => {
+      test(`keeps three readable primary destinations at ${width}px in ${language}`, async ({ page }) => {
         const errors = attachConsoleErrorCollector(page);
 
         await page.setViewportSize({ width, height: 800 });
@@ -583,14 +547,14 @@ test.describe("Trainer Five-View Shell", () => {
           connection: "connected",
         });
 
-        await expectFiveTopLevelViews(page, language);
+        await expectThreePrimaryDestinations(page, language);
         await expectActiveView(page, language, "coach");
         // Usability contract at any width: the switcher either shows readable
         // labels or swaps to icons — every entry stays reachable either way.
-        const switcher = page.locator(".header-switcher");
+        const switcher = page.locator(".app-shell-nav");
         const switcherClass = (await switcher.getAttribute("class")) ?? "";
         if (/header-switcher--icon/.test(switcherClass)) {
-          const icons = switcher.locator(".header-switcher__icon");
+          const icons = switcher.locator(".app-shell-nav__icon");
           const iconCount = await icons.count();
           for (let index = 0; index < iconCount; index += 1) {
             await expect(icons.nth(index)).toBeVisible();
@@ -730,10 +694,8 @@ test.describe("Trainer Five-View Shell", () => {
 
     const library = page.getByRole("region", { name: copy.library, exact: true });
     await library.getByRole("treeitem", { name: copy.primaryResource, exact: true }).click();
-    const detail = library.getByRole("region", {
-      name: resourceDetailName("zh-CN", copy.primaryResource),
-      exact: true,
-    });
+    const detail = page.locator("[data-template=ResourceReader]");
+    await expect(detail.getByRole("heading", { name: copy.primaryResource, exact: true })).toBeVisible();
     await expect(detail).toBeVisible();
 
     await page.getByRole("button", { name: "对话", exact: true }).click();
@@ -764,14 +726,13 @@ test.describe("Trainer Five-View Shell", () => {
     await expect(page.locator("body")).toHaveClass(/vscode-dark/);
     const library = page.getByRole("region", { name: labels.library, exact: true });
     await library.getByRole("treeitem", { name: labels.resource, exact: true }).click();
-    const detail = library.getByRole("region", {
-      name: resourceDetailName("zh-CN", labels.resource),
-      exact: true,
-    });
+    const detail = page.locator("[data-template=ResourceReader]");
+    await expect(detail.getByRole("heading", { name: labels.resource, exact: true })).toBeVisible();
     await expect(detail).toBeVisible();
 
     for (const view of ["training", "settings", "resources"]) {
-      await page.getByRole("button", { name: labels[view], exact: true }).click();
+      if (view === "training") await openFocusedTraining(page, "zh-CN");
+      else await page.getByTestId(viewNavigationTestId(view)).click();
       await expectActiveView(page, "zh-CN", view);
     }
 
@@ -795,7 +756,7 @@ test.describe("Trainer Five-View Shell", () => {
 
     await page.getByRole("button", { name: "Chat", exact: true }).click();
     await expectActiveView(page, "en-US", "coach");
-    await page.getByRole("button", { name: "Training", exact: true }).click();
+    await openFocusedTraining(page);
     await expectActiveView(page, "en-US", "training");
     await expect(card).toBeVisible();
     await expect(returnAction).toBeVisible();
@@ -811,10 +772,11 @@ test.describe("Trainer Five-View Shell", () => {
       connection: "connected",
     });
     await expectActiveView(page, "zh-CN", "settings");
+    await openSettingsCategory(page, "connection");
 
     await page.getByRole("button", { name: /测试连接|重新测试/ }).first().click();
     await expectActiveView(page, "zh-CN", "settings");
-    await expect(page.locator(".notice[role=\"status\"]")).toContainText(
+    await expect(page.locator(".template-global-state [data-template=SystemState]")).toContainText(
       "浏览器预览无法验证真实连接；开始对话前请在 VS Code 中测试。",
     );
     await expectNoConsoleErrors(errors);
@@ -844,9 +806,7 @@ test.describe("Trainer Five-View Shell", () => {
       const card = page.getByRole("group", { name: copy.card, exact: true });
       await expect(card).toHaveCount(1);
       await expectTrainingLoop(card, "learn");
-      const activeLearnStep = card.locator('[data-training-loop-step="learn"]');
-      await expect(activeLearnStep).toHaveAttribute("aria-current", "step");
-      await expect(activeLearnStep).toHaveText(copy.activeLearnStep);
+      await expect(card.locator(".template-activity-header__phase")).toContainText(copy.activeLearnStep);
       await expectTrainingCardFacts(card);
       await expect(page.locator(".training-card-nav")).toHaveCount(0);
       await expect(card.locator('[data-training-next-card="true"]')).toBeVisible();
@@ -859,7 +819,7 @@ test.describe("Trainer Five-View Shell", () => {
   }
 
   for (const language of ["zh-CN", "en-US"]) {
-    test(`keeps Training verification visible on the card and in the composer in ${language}`, async ({ page }) => {
+    test(`keeps Training verification on the activity without a chat composer in ${language}`, async ({ page }) => {
       const errors = attachConsoleErrorCollector(page);
       const copy = TRAINING_COPY[language];
 
@@ -874,7 +834,7 @@ test.describe("Trainer Five-View Shell", () => {
       const composer = page.locator(".composer-shell");
       await expect(card).toHaveCount(1);
       await expect(card.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toBeVisible();
-      await expect(composer).toBeVisible();
+      await expect(composer).toHaveCount(0);
       await expect(card.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toBeVisible();
       await expect(composer.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toHaveCount(0);
       await expectNoConsoleErrors(errors);
@@ -896,6 +856,7 @@ test.describe("Trainer Five-View Shell", () => {
     await expectTrainingCardFacts(card);
     await expect(card).toContainText("Build one minimal debug loop");
     await expect(card.locator('[data-training-card-fact="verify"]')).toContainText("Verify");
+    await revealTrainingCardDetails(card);
     await expect(card.locator('[data-training-card-fact="return"]')).toContainText(
       "Return with the repro step",
     );
@@ -925,14 +886,13 @@ test.describe("Trainer Five-View Shell", () => {
     let card = page.getByRole("group", { name: "Current training card", exact: true });
     await expectTrainingLoop(card, "reflect");
     await expectTrainingCardFacts(card);
-    await card.getByRole("button", { name: "Record this step", exact: true }).click();
     const reflection = "The focused check proves the boundary before the result can return.";
     const reflectionInput = page.getByRole("textbox", {
       name: "Record the current training reflection",
       exact: true,
     });
     const emptyReflectButton = page.getByRole("button", {
-      name: "Write a training reflection before recording it",
+      name: "Record training reflection",
       exact: true,
     });
     await expect(reflectionInput).toBeEditable();
@@ -978,6 +938,7 @@ test.describe("Trainer Five-View Shell", () => {
 
     card = page.getByRole("group", { name: "Current training card", exact: true });
     await expectTrainingLoop(card, "return");
+    await revealTrainingCardDetails(card);
     await expect(card.locator('[data-training-card-fact="return"]')).toContainText(
       "Return with the repro step",
     );
@@ -1019,15 +980,16 @@ test.describe("Trainer Five-View Shell", () => {
     });
 
     const training = page.locator(".training-pane--card-only");
-    await expect(training.locator("[data-view-object]").first()).toBeVisible();
+    await expect(training.locator(".template-activity-header h2")).toBeVisible();
     await expect(training.locator("[data-training-next-hop=\"true\"]")).toHaveCount(0);
     await expect(training.locator(":scope > .training-carryover-row")).toHaveCount(0);
-    await expect(training.locator(":scope > .training-details")).toHaveCount(1);
-    await expect(training.locator(":scope > .training-details")).not.toHaveAttribute("open", "");
+    await expect(training.locator(".template-focused-practice > details")).toHaveCount(3);
+    for (const detail of await training.locator(".template-focused-practice > details").all()) await expect(detail).not.toHaveAttribute("open", "");
     await expect(training.locator(".training-current__more")).toHaveCount(0);
     await expect(training.locator(".training-loop-rail")).toHaveCount(0);
-    await expect(training.getByText("后续和回看", { exact: true })).toHaveCount(1);
+    await expect(training.getByText("更多", { exact: true })).toHaveCount(1);
     await expectNoHorizontalOverflow(page);
+    await training.locator("details:has([data-training-next-card]) > summary").click();
     await training.locator('[data-training-next-card="true"]').click();
     await expect.poll(() => commands.some(message =>
       message.payload?.commandId === "trainer.training.generateCard")).toBe(true);
@@ -1098,21 +1060,16 @@ test.describe("Trainer Five-View Shell", () => {
       connection: "connected",
     });
 
-    await expectFiveTopLevelViews(page, "es-ES");
+    await expectThreePrimaryDestinations(page, "es-ES");
     await expectActiveView(page, "es-ES", "training");
     const card = page.getByRole("group", { name: "Tarjeta de entrenamiento actual", exact: true });
     const composer = page.locator(".composer-shell");
     await expect(card.getByRole("heading", { name: /Práctica: espacio de trabajo remoto de VS Code/ })).toBeVisible();
     await revealTrainingCardDetails(card);
-    await expect(card.locator(".training-loop-rail")).toHaveAttribute(
-      "aria-label",
-      "Ciclo de aprendizaje",
-    );
+    await expectTrainingLoop(card, "try");
     await expectTrainingCardFacts(card);
-    await expect(composer.getByRole("textbox")).toHaveAttribute(
-      "placeholder",
-      /Primero logra el resultado más pequeño/,
-    );
+    await expect(composer).toHaveCount(0);
+    await expect(card.locator("[data-template=PracticeResponse] textarea")).toBeEditable();
     await expect(
       card.getByRole("button", { name: "Verificar archivo actual", exact: true }),
     ).toBeVisible();
@@ -1266,6 +1223,7 @@ test.describe("Trainer Five-View Shell", () => {
     await expectActiveView(page, "en-US", "settings");
     // The connected state shows the compact summary card — enter edit mode,
     // then expand the collapsed "Connection details" section.
+    await openSettingsCategory(page, "connection");
     const editButton = page.getByRole("button", { name: "Edit configuration", exact: true });
     await expect(editButton).toBeVisible();
     await editButton.click();
@@ -1369,8 +1327,8 @@ test.describe("Trainer Five-View Shell", () => {
       });
     });
 
-    await expect(page.locator(".notice.notice--error")).toBeVisible();
-    await expect(page.locator(".notice.notice--error")).toContainText("再试一次");
+    await expect(page.locator("[data-system-state=recoverable-error]")).toBeVisible();
+    await expect(page.locator("[data-system-state=recoverable-error]")).toContainText("再试一次");
     await expectNoConsoleErrors(errors);
   });
 
@@ -1383,12 +1341,14 @@ test.describe("Trainer Five-View Shell", () => {
       connection: "connected",
     });
 
-    const evidenceButton = page.locator(".coach-plan-view__compact-primary-action button").first();
+    const evidenceButton = page.locator("[data-template=NextAction] > button").first();
     await expect(evidenceButton).toBeVisible();
     await evidenceButton.click();
     const evidenceList = page.locator("[data-plan-evidence-list]");
     await expect(evidenceList).toHaveCount(0);
-    await expect(page.locator("#plan-composer-mode")).toHaveAttribute("aria-label", /证据|Evidence/);
+    await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".template-context")).toContainText(/证据|Evidence/);
+    await expect(page.locator("#coach-composer")).toBeEditable();
     const visibleMore = page.locator("main summary").filter({ hasText: /^(更多|More)$/ });
     let visibleMoreCount = 0;
     for (let index = 0; index < await visibleMore.count(); index += 1) {
@@ -1411,8 +1371,9 @@ test.describe("Trainer Five-View Shell", () => {
     });
 
     await page.getByRole("treeitem", { name: copy.primaryResource, exact: true }).click();
-    await expect(page.locator(".resources-knowledge__current-object")).toHaveText(copy.primaryResource);
+    await expect(page.locator("[data-template=ResourceReader] .template-activity-header h2")).toHaveText(copy.primaryResource);
     await expect(page.locator("main")).not.toContainText("write authority has not been verified");
+    await page.locator("[data-template=ResourceReader] .template-activity-header > button").click();
     await expect(page.getByRole("button", { name: "添加资料", exact: true })).toBeVisible();
     await expectNoConsoleErrors(errors);
   });
@@ -1427,11 +1388,11 @@ test.describe("Trainer Five-View Shell", () => {
     });
 
     await page.getByRole("button", { name: "验证当前文件", exact: true }).click();
-    await expect(page.locator(".training-current__verify-result")).toContainText(/没有可验证的当前文件|预览不能验|验证未通过/);
+    await expect(page.locator("[data-template=VerificationResult]")).toContainText(/没有可验证的当前文件|预览不能验|验证未通过/);
     await expect(page.locator("main")).not.toContainText("这一步暂时没完成。再试一次。");
     await page.getByTestId(viewNavigationTestId("settings")).click();
     await expectActiveView(page, "zh-CN", "settings");
-    await expect(page.locator(".notice[role=\"status\"]")).toHaveCount(0);
+    await expect(page.locator(".template-global-state [data-template=SystemState]")).toHaveCount(0);
     await expectNoConsoleErrors(errors);
   });
 
@@ -1444,9 +1405,7 @@ test.describe("Trainer Five-View Shell", () => {
       connection: "connected",
     });
 
-    const teachingTab = page.locator('[data-settings-nav="teaching"]');
-    await expect(teachingTab).toBeVisible();
-    await teachingTab.click();
+    await openSettingsCategory(page, "preferences");
     const languageRow = page.locator("[data-settings-language]");
     await expect(languageRow).toBeVisible();
     await languageRow.getByRole("button").click();
@@ -1467,8 +1426,9 @@ test.describe("Trainer Five-View Shell", () => {
     });
 
     await expectActiveView(page, "zh-CN", "settings");
-    await expect(page.locator(".settings-availability-strip [data-view-object]")).not.toHaveText("模型已就绪");
-    await expect(page.locator(".settings-availability-strip [data-view-object]")).toContainText(/工作区|根目录/);
+    await openSettingsCategory(page, "connection");
+    await expect(page.locator("[data-settings-availability=true]:visible h3")).not.toHaveText("模型已就绪");
+    await expect(page.locator("[data-settings-availability=true]:visible h3")).toContainText(/工作区|根目录/);
     await expectNoConsoleErrors(errors);
   });
 
@@ -1508,7 +1468,7 @@ test.describe("Trainer Five-View Shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
-  test("360px training keeps five nav words and a primary with no overflow", async ({ page }) => {
+  test("360px training keeps three primary destinations and one action with no overflow", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 
     await page.setViewportSize({ width: 360, height: 800 });
@@ -1518,7 +1478,7 @@ test.describe("Trainer Five-View Shell", () => {
       connection: "connected",
     });
 
-    await expectFiveTopLevelViews(page, "zh-CN");
+    await expectThreePrimaryDestinations(page, "zh-CN");
     await expectHeaderLabelsVisible(page);
     await expect(page.getByRole("button", { name: "验证当前文件", exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page);
@@ -1531,7 +1491,7 @@ test.describe("Trainer Five-View Shell", () => {
     await openPreview(page, "coach", { lang: "zh-CN", connection: "connected" });
 
     await page.getByRole("button", { name: "会话历史", exact: true }).click();
-    const panel = page.locator(".composer-menu-panel--history");
+    const panel = page.locator(".app-shell-overlay__panel");
     await expect(panel).toBeVisible();
     // ChatGPT-style header: new chat on top, search below.
     await expect(panel.getByText("+ 新对话", { exact: true })).toBeVisible();

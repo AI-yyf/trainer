@@ -1,3 +1,4 @@
+const { openSettingsCategory } = require("./template-navigation");
 const { test, expect } = require("playwright/test");
 const { SCENARIOS } = require("./trainer-experience-matrix");
 
@@ -139,13 +140,13 @@ async function openScenario(page, scenario) {
 async function expectPrimaryNavigation(page) {
   // Phase-C IA: three daily tabs (training appears on activity) plus the
   // Settings gear in the header.
-  const switcher = page.locator(".header-switcher");
+  const switcher = page.locator(".app-shell-nav");
   await expect(switcher.getByTestId("trainer-view-nav-coach")).toBeVisible();
   await expect(switcher.getByTestId("trainer-view-nav-plan")).toBeVisible();
   await expect(switcher.getByTestId("trainer-view-nav-resources")).toBeVisible();
   await expect(page.getByTestId("trainer-view-nav-settings")).toBeVisible();
   const switcherTabs = switcher.getByTestId(TOP_LEVEL_VIEW_TEST_ID);
-  expect(await switcherTabs.count()).toBeLessThanOrEqual(4);
+  expect(await switcherTabs.count()).toBe(3);
 }
 
 async function assertVisibleContract(page, scenario, contract) {
@@ -169,7 +170,7 @@ async function assertVisibleContract(page, scenario, contract) {
       await expectSingleVisible(page.locator(".plan-view"));
       return;
     case "resources_surface":
-      await expectSingleVisible(page.locator(".resources-reader"));
+      await expectSingleVisible(page.locator(".resources-knowledge"));
       return;
     case "training_card":
       await expect(page.locator(".training-pane--card-only")).toBeVisible();
@@ -178,6 +179,7 @@ async function assertVisibleContract(page, scenario, contract) {
       await expect(page.locator(".coach-settings-view")).toBeVisible();
       return;
     case "provider_profiles":
+      await openSettingsCategory(page, "connection");
       await expect.poll(() => page.locator(".settings-provider-profile").count()).toBeGreaterThanOrEqual(2);
       return;
     default:
@@ -244,8 +246,8 @@ async function exercisePlan(page, scenario) {
 }
 
 async function exerciseResources(page, scenario) {
-  await expectSingleVisible(page.locator(".resources-reader"));
-  const search = page.locator('.resources-reader__search input[type="search"]');
+  await expectSingleVisible(page.locator(".resources-knowledge"));
+  const search = page.locator('.resources-knowledge__search input[type="search"]');
   await expectSingleVisible(search);
   const query = scenario.userAction.input;
   await search.fill(query);
@@ -254,15 +256,12 @@ async function exerciseResources(page, scenario) {
 }
 
 async function expectTrainingCardFacts(card) {
-  const facts = card.locator('[data-training-card-fact]');
-  const keys = await facts.evaluateAll((elements) =>
-    elements.map((element) => element.getAttribute('data-training-card-fact')));
-  expect(keys.every(key => ['deliverable', 'verify'].includes(key))).toBe(true);
-  expect(new Set(keys).size).toBe(keys.length);
-  await expect(card.locator('.training-current__heading [data-view-object]').first()).toBeVisible();
-  await expect(card.locator('[data-training-card-footer]')).toBeVisible();
-  await expect(card.locator('[data-training-review-queue], .training-loop-rail, .skill-projection-strip')).toHaveCount(0);
-  await expect(card.locator('[data-training-card-fact="why-now"], [data-training-card-fact="return"]')).toHaveCount(0);
+  const focus = card.locator('[data-template=FocusedPractice]');
+  await expect(focus).toBeVisible();
+  await expect(focus.locator('.template-activity-header h2')).toContainText(/\S/);
+  await expect(focus.locator('.template-activity-header .template-metadata')).toContainText(/[1-5]\/5/);
+  expect(await focus.locator('[data-primary-action="true"]:visible').count()).toBeLessThanOrEqual(1);
+  await expect(card.locator('.training-loop-rail, .skill-projection-strip')).toHaveCount(0);
 }
 
 async function exerciseTraining(page, scenario) {
@@ -275,6 +274,7 @@ async function exerciseTraining(page, scenario) {
 }
 
 async function openConnectionDetails(page) {
+  await openSettingsCategory(page, "connection");
   // Connected state shows the compact summary card — enter the edit level,
   // then drill into the advanced "Connection details" level through the
   // collapsible entry row.
@@ -357,9 +357,7 @@ async function exerciseSettings(page, scenario) {
   if (scenario.userAction.kind === "switch_language") {
     const targetLanguage = scenario.language === "en-US" ? "zh-CN" : "en-US";
     // The response language is a keyboard-accessible listbox in Teaching.
-    const teachingTab = page.locator('[data-settings-nav="teaching"]');
-    await expect(teachingTab).toBeVisible();
-    await teachingTab.click();
+    await openSettingsCategory(page, "preferences");
     const languageRow = page.locator('.settings-row[data-settings-language="true"]');
     await expectSingleVisible(languageRow);
     const trigger = languageRow.getByRole("button").first();
@@ -374,11 +372,18 @@ async function exerciseSettings(page, scenario) {
 }
 
 async function exerciseCrossView(page, scenario) {
-  const targetLabel = VIEW_LABELS[scenario.language][scenario.userAction.targetView];
-  const target = page.getByRole("button", { name: targetLabel, exact: true });
+  const destination = scenario.userAction.targetView;
+  let target;
+  if (destination === "training") {
+    await page.getByTestId("trainer-view-nav-plan").click();
+    await page.locator('[data-learning-section=growth] > summary').click();
+    target = page.locator('[data-learning-section=growth]').getByRole('button', { name: VIEW_LABELS[scenario.language].training, exact: true });
+  } else {
+    target = page.getByTestId(`trainer-view-nav-${destination}`);
+  }
   await expect(target).toHaveCount(1);
   await target.click();
-  await expect(target).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId(`trainer-view-nav-${destination === 'training' ? 'plan' : destination}`)).toHaveAttribute("aria-current", "page");
   await expect.poll(() =>
     page.evaluate(() => {
       const key = window.__TRAINER_PREVIEW_STORAGE_KEY__;
@@ -399,7 +404,7 @@ async function assertRecoveryContract(page, scenario) {
       if (scenario.runner === "coach") {
         await expectSingleVisible(page.locator(".composer-shell"));
       } else if (scenario.runner === "resources") {
-        await expectSingleVisible(page.locator(".resources-reader"));
+        await expectSingleVisible(page.locator(".resources-knowledge"));
       } else if (scenario.runner === "plan") {
         await expectSingleVisible(page.locator(".plan-view"));
       } else {
@@ -442,8 +447,8 @@ async function assertPersistenceContract(page, scenario, actionResult) {
       await expectSingleVisible(page.locator(".plan-view"));
       return;
     case "resource_query":
-      await expectSingleVisible(page.locator('.resources-reader__search input[type="search"]'));
-      await expect(page.locator('.resources-reader__search input[type="search"]')).toHaveValue(actionResult.query);
+      await expectSingleVisible(page.locator('.resources-knowledge__search input[type="search"]'));
+      await expect(page.locator('.resources-knowledge__search input[type="search"]')).toHaveValue(actionResult.query);
       return;
     case "current_training_card":
       await expectTrainingCardFacts(page.locator(".training-pane--card-only"));
@@ -488,9 +493,9 @@ async function assertForbiddenContracts(page, scenario, consoleErrors) {
     switch (forbidden.id) {
       case "no_sixth_top_level_view": {
         const extraViews = page
-          .locator(".header-switcher")
+          .locator(".app-shell-nav")
           .getByTestId(TOP_LEVEL_VIEW_TEST_ID);
-        expect(await extraViews.count()).toBeLessThanOrEqual(4);
+        expect(await extraViews.count()).toBe(3);
         await expect(page.getByTestId("trainer-view-nav-settings")).toBeVisible();
         break;
       }

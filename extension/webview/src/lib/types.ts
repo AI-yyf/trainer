@@ -1540,7 +1540,7 @@ export interface CoachDefaults {
   customSkills?: TrainerCustomSkill[];
 }
 
-export const COACH_FIRST_SIDEBAR_VIEWS = [
+export const WORKBENCH_ROUTES = [
   "coach",
   "plan",
   "resources",
@@ -1548,7 +1548,9 @@ export const COACH_FIRST_SIDEBAR_VIEWS = [
   "progress",
   "settings",
 ] as const;
-export type SidebarView = (typeof COACH_FIRST_SIDEBAR_VIEWS)[number];
+/** @deprecated Route compatibility only; primary navigation uses PRIMARY_DESTINATIONS. */
+export const COACH_FIRST_SIDEBAR_VIEWS = WORKBENCH_ROUTES;
+export type SidebarView = (typeof WORKBENCH_ROUTES)[number];
 export type ActiveWorkbenchView = SidebarView;
 
 export function normalizeSidebarView(
@@ -1905,6 +1907,11 @@ export interface UiLayoutState {
 
 export interface PersistedWorkbenchState extends UiLayoutState {
   composerDraft: string;
+  composerDraftScope?: string;
+  composerDrafts?: Record<string, string>;
+  surfaceScrollPositions?: Record<string, number>;
+  /** Activity responses are isolated by workspace, session and card identity. */
+  activityDrafts?: Record<string, string>;
   previewProviderConfig?: Partial<ProviderConfigView>;
 }
 

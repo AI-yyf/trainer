@@ -1,3 +1,4 @@
+const { openSettingsCategory } = require("./template-navigation");
 const { test, expect } = require("playwright/test");
 
 test("Settings recovers an offline backend before provider setup and stops offering restart while starting", async ({ page }) => {
@@ -25,7 +26,7 @@ test("Settings recovers an offline backend before provider setup and stops offer
     });
   }
   await update("offline");
-  const strip = page.locator('.settings-availability-strip');
+  const strip = page.locator('[data-settings-availability=true]:visible');
   await expect(strip).toContainText("Trainer 暂时还不能继续");
   await expect(strip).toContainText("重新启动本地后端");
   await strip.getByRole('button', { name: "重新启动 Trainer", exact: true }).click();
@@ -39,9 +40,9 @@ test("Settings recovers an offline backend before provider setup and stops offer
   await expect(strip.getByRole('button', { name: "重新启动 Trainer", exact: true })).toBeVisible();
   await update("starting");
   await expect(strip).toContainText("Trainer 正在准备中");
-  await expect(strip.getByRole('button')).toBeDisabled();
+  await expect(strip.getByRole('button')).toHaveCount(0);
   await expect(strip.getByRole('button', { name: "重新启动 Trainer", exact: true })).toHaveCount(0);
   await update("connected", { ...bootstrap.providerConfig, lastTestResult: undefined });
   await expect(page.getByRole('button', { name: "重新启动 Trainer", exact: true })).toHaveCount(0);
-  await expect(page.locator('.settings-availability-strip')).not.toContainText("Trainer 暂时还不能继续");
+  await expect(page.locator('[data-settings-availability=true]:visible')).not.toContainText("Trainer 暂时还不能继续");
 });

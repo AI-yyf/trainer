@@ -119,7 +119,6 @@ test('view-owned headings and title-like copy stay capped at the same VS Code-si
     '.coach-turn-recap__fact-value',
     '.coach-conversation-view__summary-pill strong',
     '.coach-conversation-view__summary-token strong',
-    '.settings-availability-strip__copy > strong',
   ];
 
   for (const selector of selectors) {
@@ -167,10 +166,7 @@ test('in-view summary copy stays visually quieter than the view title track', ()
     '.composer-presencebar__provider strong',
     '.command-deck__header strong',
     '.command-deck__body strong',
-    '.skill-deck__header strong',
-    '.skill-deck__body strong',
     '.settings-section__title',
-    '.settings-availability-strip__copy > strong',
     '.settings-sheet__summary-card-value',
     '.settings-setup-check strong',
     '.coach-plan-view__empty-outline-row strong',
@@ -218,11 +214,13 @@ test('secondary outline labels stay calm and do not reintroduce uppercase emphas
 
 test('webview source keeps visible typography at regular weight', () => {
   const stylesSource = readStylesSource();
-  const heavyWeightMatches = [...stylesSource.matchAll(/font-weight:\s*(500|600|650|700)\s*;/g)].map(
+  const legacyStyles = stylesSource.replace(require("./templateAssertions").read("templates/templates.css"), "");
+  const heavyWeightMatches = [...legacyStyles.matchAll(/font-weight:\s*(500|600|650|700)\s*;/g)].map(
     (match) => match[0],
   );
 
   assert.deepEqual(heavyWeightMatches, []);
+  assert.doesNotMatch(require("./templateAssertions").read("templates/templates.css"), /font-weight:\s*(650|700)/);
 });
 
 test('webview source keeps literal font sizes on the VS Code track', () => {

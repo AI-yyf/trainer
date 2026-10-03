@@ -445,6 +445,9 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const vscode = require("vscode");
+let sidecarInstanceToken;
+let sidecarInstancePid;
+
 
 async function activate() {
   const startedAt = Date.now();
@@ -551,6 +554,7 @@ const steps = [];
     }, { ok: (data) => data && data.focused === true });
 
     const sidecarResult = await record("restart-sidecar", async () => {
+      sidecarInstanceToken = undefined;
       const result = await vscode.commands.executeCommand("trainer.sidecar.restart");
       return result;
     }, {
@@ -899,6 +903,22 @@ const steps = [];
         });
       }, { ok: (data) => data && data.ok === true });
 
+      await record("await-provider-verification", async () => {
+        const deadline = Date.now() + providerBoundRequestTimeoutMs;
+        while (Date.now() < deadline) {
+          const extension = vscode.extensions.getExtension(extensionId);
+          const state = extension.exports.getDebugState();
+          const provider = state.bootstrap.providerConfig;
+          if (provider && provider.lastTestResult) {
+            const result = provider.lastTestResult;
+            if (result.ok === true) return { ready: true };
+            if (result.ok === false) throw new Error("Real provider verification did not allow coaching.");
+          }
+          await sleep(500);
+        }
+        throw new Error("Real provider verification did not finish before the timeout.");
+      }, { ok: (data) => data && data.ready === true });
+
       const coachMessageResult = await record("send-coach-message", async () => {
         return await vscode.commands.executeCommand("trainer.session.sendMessage", {
           text: "请只作为代码教练回答：我想理解这个临时项目，先给我一个不替我写代码的最小训练切片。",
@@ -920,6 +940,14 @@ const steps = [];
     });
 
     const reviewQueueSeed = await record("seed-review-queue-through-public-command", async () => {
+      const accepted = await vscode.commands.executeCommand("trainer.training.reviewQueueAction", {
+        concept: "dependency injection",
+        action: "accept",
+        taskHint: "Recall dependency injection before checking a small example.",
+      });
+      if (!accepted || accepted.ok !== true) {
+        throw new Error("The installed extension could not accept the real review item.");
+      }
       const reviewResult = await vscode.commands.executeCommand("trainer.training.reviewQueueAction", {
         concept: "dependency injection",
         action: "reset",
@@ -2065,7 +2093,7 @@ const steps = [];
                 facts.selectedSandboxPath === sandboxPath &&
                 facts.singleWorkbenchSurface === true &&
                 facts.sandboxPaneVisible === true &&
-                facts.detailPaneVisible === false &&
+                facts.detailPaneVisible === true &&
                 facts.previewPaneVisible === false,
             ),
         );
@@ -2097,7 +2125,7 @@ const steps = [];
               typeof data.selectedSandboxPath === "string" &&
               data.selectedSandboxPath === data.sandboxPath &&
               data.singleWorkbenchSurface === true &&
-              data.detailPaneVisible === false &&
+              data.detailPaneVisible === true &&
               data.sandboxPaneVisible === true &&
               data.previewPaneVisible === false
           ),
@@ -2369,15 +2397,29 @@ const steps = [];
           response_language: "en-US",
         });
 
-        const routedCard = await postProviderBoundJson(port, "/training/generate-card", {
-          workspace_id: newWorkspaceId,
-          source: "practice_feedback",
-          card_type: "practice",
-          focus_area: "Installed-state cross-workspace reopen proof",
-          target_skill: "Keep the new workspace state isolated and verifiable.",
-          context_hint: "Generate a small practice card for the reopened workspace.",
-          response_language: "en-US",
-        });
+        let routedCard;
+        let routedCardGenerationAttempts = 0;
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+          routedCardGenerationAttempts = attempt;
+          try {
+            routedCard = await postProviderBoundJson(port, "/training/generate-card", {
+              workspace_id: newWorkspaceId,
+              source: "practice_feedback",
+              card_type: "practice",
+              focus_area: "Installed-state cross-workspace reopen proof",
+              target_skill: "Keep the new workspace state isolated and verifiable.",
+              context_hint: "Generate a small practice card for the reopened workspace.",
+              response_language: "en-US",
+            });
+            break;
+          } catch (error) {
+            // A real model can return a card rejected by the domain validator.
+            // Retry the same public request; retain the real accepted card and
+            // report the attempt count. Never substitute a fixture card.
+            if (attempt === 3 || !String(error).includes("model-authored card was not accepted")) throw error;
+            await sleep(500);
+          }
+        }
         if (!routedCard || !routedCard.card) {
           throw new Error("Installed-state reopen smoke did not route a training card.");
         }
@@ -2478,6 +2520,7 @@ const steps = [];
           planId,
           currentStageTitle,
           routedCardId,
+          routedCardGenerationAttempts,
           trainingRouteCardId,
           resourceNames,
           userHasNewWorkspaceMarker: userMessages.some((item) => String(item).includes("NEW-WORKSPACE-MARKER")),
@@ -2958,6 +3001,23 @@ async function applyThemeScenario(scenario) {
   };
 }
 
+function sidecarAuthHeaders() {
+  const extension = vscode.extensions.getExtension(process.env.TRAINER_E2E_TARGET_EXTENSION_ID || "local.trainer-extension");
+  const state = extension && extension.exports.getDebugState();
+  const pid = state && state.sidecar.pid;
+  if (pid && pid !== sidecarInstancePid && process.platform !== "win32") {
+    // Read only this isolated driver's child. Never return/persist the token.
+    const environment = process.platform === "linux"
+      ? fs.readFileSync("/proc/" + pid + "/environ", "utf8").replaceAll("\0", " ")
+      : execFileSync("ps", ["eww", "-p", String(pid), "-o", "command="], { encoding: "utf8" });
+    const match = environment.match(/(?:^|\s)TRAINER_SIDECAR_TOKEN=([^\s]+)/);
+    sidecarInstanceToken = match && match[1];
+    sidecarInstancePid = pid;
+  }
+  if (!sidecarInstanceToken) throw new Error("The native test driver could not authenticate its isolated sidecar process.");
+  return { "x-trainer-token": sidecarInstanceToken };
+}
+
 function getJson(port, requestPath, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     const request = http.request(
@@ -2967,6 +3027,7 @@ function getJson(port, requestPath, timeoutMs = 15000) {
         port,
         path: requestPath,
         timeout: timeoutMs,
+        headers: sidecarAuthHeaders(),
       },
       (response) => {
         const chunks = [];
@@ -3002,6 +3063,7 @@ function postJson(port, requestPath, body, timeoutMs = 15000) {
         path: requestPath,
         timeout: timeoutMs,
         headers: {
+          ...sidecarAuthHeaders(),
           "content-type": "application/json",
           "content-length": payload.length,
         },

@@ -61,7 +61,7 @@ test('training return and evidence adopt do not mint a plan, card, or task turn'
   const returnStart = appSource.indexOf('if (pending.phase === "return")');
   const returnComplete = appSource.slice(
     returnStart,
-    appSource.indexOf('setComposerDraft("");', returnStart),
+    appSource.indexOf('setActivityDraft("");', returnStart),
   );
   assert.match(returnComplete, /setActiveView\("coach"\)/);
   assert.doesNotMatch(returnComplete, /sendTurn\(/);

@@ -206,7 +206,7 @@ test('click path sets stamp: host arms only after pending; request body consumes
   assert.match(view, /autoFocus/);
   assert.match(view, /aria-label=\{organizationCopy\.confirm\}/);
   assert.match(view, /aria-label=\{organizationCopy\.cancel\}/);
-  assert.match(view, /aria-label=\{orientation\.primaryActionLabel\}/);
+  assert.match(view, /label: orientation\.primaryActionLabel/);
 
   assert.match(models, /resource_organization_confirmed: bool/);
   assert.match(runtime, /resource_organization_pending/);

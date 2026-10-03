@@ -257,8 +257,7 @@
 }
 
 .resources-knowledge__next,
-.training-current__next,
-.settings-availability-strip__next {
+.training-current__next {
   margin: 2px 0 0;
   color: var(--fg-0);
   font-size: var(--trainer-font-3xs);

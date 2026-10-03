@@ -30,7 +30,7 @@ function presetTableSource(source) {
 test('settings opens on a blocker banner that only renders when something is wrong', () => {
   const source = readSettingsSource();
   const barStart = source.indexOf('data-settings-status-bar="true"');
-  const stripStart = source.indexOf('className={`settings-availability-strip');
+  const stripStart = source.indexOf('{showAvailabilityStrip ? availabilityState');
   const bodyStart = source.indexOf('settings-sheet__body settings-sheet__body--hierarchical');
 
   assert.ok(barStart > bodyStart, 'expected the banner inside the settings body');
@@ -48,10 +48,10 @@ test('settings opens on a blocker banner that only renders when something is wro
   assert.match(source, /resolvedWorkspaceTrustState !== "trusted"/);
   assert.match(source, /target: "workspace",\s*action: onTrustWindow,/);
   // Trust is stated once — inside the banner — and nowhere else on the sheet.
-  assert.equal((source.match(/data-settings-workspace-trust="true"/g) ?? []).length, 1);
+  assert.equal((source.match(/data-settings-workspace-trust=\{issue.id === "trust" \? "true" : undefined\}/g) ?? []).length, 1);
   assert.doesNotMatch(source, /settings-availability-strip__trust/);
   // Teaching/preferences save on change, so "unsaved" only ever means the connection draft.
-  assert.match(source, /if \(connectionDirty\) \{\s*settingsStatusIssues\.push\(\{\s*id: "unsaved"/);
+  assert.match(source, /if \(connectionDirty\) \{[\s\S]*?keyIssue\.label = `[\s\S]*?settingsStatusUnsaved[\s\S]*?settingsStatusIssues\.push\(\{\s*id: "unsaved"/);
   assert.match(source, /revealSettingsSection\(issue\.target\)/);
 });
 
@@ -118,8 +118,10 @@ test('teaching is a flat section: preset radio, feedback + style, language, adva
   // Feedback mode and teaching style moved here from the dissolved Advanced tab.
   assert.match(section, /onChange=\{onAnswerModeChange\}/);
   assert.match(section, /onChange=\{onTeachingStyleChange\}/);
-  assert.match(section, /data-settings-language="true"/);
-  assert.match(section, /onChange=\{onLanguageChange\}/);
+  assert.doesNotMatch(section, /data-settings-language="true"/);
+  const preferences = source.slice(source.indexOf('data-settings-section="preferences"'));
+  assert.match(preferences, /data-settings-language="true"/);
+  assert.match(preferences, /onChange=\{onLanguageChange\}/);
   // §14: advanced context knobs moved to the Advanced category.
   assert.doesNotMatch(section, /persistenceKey="settings-advanced-context"/);
   // Save-on-change: no per-section Save button or dirty dot; a live status
@@ -140,12 +142,13 @@ test('settings navigation has four categories with matching keyboard order and s
   // Skills live under Teaching; advanced defaults live under Preferences.
   assert.match(
     source,
-    /type SettingsCategory =\s*\| "connection"\s*\| "workspace"\s*\| "teaching"\s*\| "preferences";/,
+    /type SettingsCategory = SettingsSectionId;/,
   );
   assert.doesNotMatch(source, /id: "memory",/);
-  const order = source.match(/const SETTINGS_CATEGORY_ORDER: SettingsCategory\[\] = \[([\s\S]*?)\];/)[1];
+  require('./templateAssertions').settings();
+  const order = source.match(/items=\{\(\[([^\]]+)\] as const\)\.map/)[1];
   assert.deepEqual([...order.matchAll(/"([^"]+)"/g)].map((match) => match[1]),
-    ['connection', 'workspace', 'teaching', 'preferences']);
+    ['connection', 'teaching', 'workspace', 'preferences']);
   assert.doesNotMatch(source, /id: "skills",|id: "advanced",/);
   assert.doesNotMatch(source, /useState\(false\);\s*\n\s*type SettingsCategory/);
   for (const id of ['connection', 'workspace', 'teaching', 'skills', 'preferences', 'advanced']) {
@@ -200,7 +203,7 @@ test('connection details live behind an explicit advanced level', () => {
 test('preferences groups appearance, memory, review and maintenance with original handlers', () => {
   const source = readSettingsSource();
   const start = source.indexOf('data-settings-section="preferences"');
-  const end = source.indexOf('<nav', start);
+  const end = source.indexOf('data-settings-section="skills"', start);
   assert.ok(start >= 0 && end > start, 'expected the preferences section');
   const section = source.slice(start, end);
 
