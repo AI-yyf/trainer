@@ -1474,6 +1474,9 @@
 .resources-library-tree__node {
   appearance: none;
   display: grid;
+  /* r1-g2-0: the row renders three children (indent, kind, title) into this
+     five-column contract; the title copy spans columns 3 / -1 (see below) so
+     it owns the whole remaining row instead of slipping into an 18px track. */
   grid-template-columns: 18px 18px 18px minmax(0, 1fr) auto;
   align-items: center;
   gap: 4px;
@@ -1523,6 +1526,20 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  /* r1-g2-0: the title spans from the third track to the row end. Without the
+     span it landed in the third 18px track and wrapped CJK titles one
+     character per line ("登录错误码对照" became unreadable). */
+  grid-column: 3 / -1;
+}
+
+/* r2-g2-0: expanded groups whose items all live in nested subgroups say so,
+   instead of reading as an empty group. */
+.resources-library-tree__nested-note {
+  margin: 0;
+  padding: 2px 0 4px;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.4;
 }
 
 .resources-library-tree__indent,
@@ -2719,6 +2736,37 @@
   flex-direction: column;
   gap: 8px;
   padding: 10px 14px 14px;
+}
+
+/* r1-g1-1: priority files render one per line — the inline "·" separators used
+   to sit inside the text line and read as a run-on path sentence. */
+.training-card-files {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+.training-card-files__item {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* r2-g1-1: completion-criteria / deliverable lists render one item per row
+   with real list spacing instead of a " - " joined paragraph. */
+.training-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-inline-start: 18px;
+}
+
+.training-card-list li {
+  min-width: 0;
+  font-size: var(--trainer-font-sm, var(--trainer-font-xs));
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .training-review-row {

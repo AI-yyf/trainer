@@ -2,3 +2,15 @@
    Plan progress dashboard (Plan view inner "progress" tab)
    ========================================================================== */
 
+/* r1-g1-2: the transfer-verification primary action sits under the nudge
+   sentence, carried by the page's lower whitespace. */
+.progress-view__nudge {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.progress-view__nudge-action {
+  margin-top: 4px;
+}
+

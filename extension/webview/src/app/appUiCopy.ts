@@ -10,6 +10,24 @@
 import type { ComposerLanguage } from "../lib/types";
 
 export const APP_UI_TEXT: Record<string, Record<string, string>> = {
+  "↓ 还有 {n} 条": {
+    "en-US": "↓ {n} more",
+    "es-ES": "↓ {n} más",
+    "fr-FR": "↓ {n} de plus",
+    "de-DE": "↓ {n} weitere",
+    "ja-JP": "↓ 他 {n} 件",
+    "ko-KR": "↓ {n}개 더 있음",
+    "pt-BR": "↓ mais {n}",
+  },
+  "从当前任务开始": {
+    "en-US": "Start from the current task",
+    "es-ES": "Empieza por la tarea actual",
+    "fr-FR": "Commencer par la tâche en cours",
+    "de-DE": "Mit der aktuellen Aufgabe starten",
+    "ja-JP": "現在のタスクから始める",
+    "ko-KR": "현재 작업부터 시작",
+    "pt-BR": "Começar pela tarefa atual",
+  },
   "解冻计划": {
     "en-US": "Unfreeze plan",
     "es-ES": "Descongelar el plan",

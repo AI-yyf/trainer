@@ -51,10 +51,10 @@
 .template-metadata { overflow-wrap: anywhere; margin: 0; color: var(--fg-muted); font-size: var(--trainer-font-xs); line-height: 1.5; }
 .template-next-action { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-block: 16px; }
 .template-next-action h3 { margin: 0; font-size: var(--trainer-font-md); font-weight: 600; line-height: 1.5; }
-.template-next-action__detail { color: var(--fg-1); font-size: var(--trainer-font-sm); line-height: 1.5; max-height: 3em; overflow: hidden; }
+/* r1-g1-1: completion criteria render in full — the old 3em clamp hid the
+   tail and forced a titleless "···" fold that read as broken. */
+.template-next-action__detail { color: var(--fg-1); font-size: var(--trainer-font-sm); line-height: 1.5; }
 .template-next-action__detail p { margin: 0; }
-.template-next-action__full { margin: 0; }
-.template-next-action__full > summary { padding: 0; }
 .template-next-action > button { margin-top: 4px; }
 .template-system-state { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 24px 0; }
 .template-system-state h3 { margin: 0; color: var(--fg-0); font-size: var(--trainer-font-md); font-weight: 600; }
@@ -84,13 +84,15 @@
 .template-settings-index strong { display: block; font-size: var(--trainer-font-md); font-weight: 500; }
 .template-settings-index small { display: block; margin-top: 4px; color: var(--fg-muted); font-size: var(--trainer-font-xs); overflow-wrap: anywhere; }
 .template-settings-index__icon { display: inline-flex; color: var(--fg-muted); }
-.template-overflow { position: relative; width: fit-content; margin-top: 8px; }
-.template-overflow > summary { display: grid; place-items: center; width: 28px; height: 28px; list-style: none; border-radius: 6px; color: var(--fg-muted); cursor: pointer; }
+.template-overflow { position: relative; width: fit-content; margin-top: 6px; }
+.template-overflow > summary { display: grid; place-items: center; width: 24px; height: 24px; list-style: none; border-radius: 6px; color: var(--fg-muted); cursor: pointer; }
 .template-overflow > summary::-webkit-details-marker { display: none; }
-.template-overflow > summary:hover { background: var(--bg-1); }
-.template-overflow__actions { display: flex; flex-direction: column; align-items: stretch; min-width: 160px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-0); }
-.template-overflow__actions button { padding: 8px 12px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-1); text-align: start; font: inherit; font-size: var(--trainer-font-sm); cursor: pointer; }
-.template-overflow__actions button:hover { background: var(--bg-1); }
+.template-overflow > summary:hover, .template-overflow > summary:focus-visible { background: var(--bg-1); color: var(--fg-0); }
+.template-overflow > summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -1px; }
+.template-overflow__actions { display: flex; flex-direction: column; align-items: stretch; min-width: 150px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-0); }
+.template-overflow__actions button { padding: 5px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-1); text-align: start; font: inherit; font-size: var(--trainer-font-xs); line-height: 1.35; cursor: pointer; }
+.template-overflow__actions button:hover { background: var(--bg-1); color: var(--fg-0); }
+.template-overflow__divider { margin: 4px 6px; border: 0; border-top: 1px solid color-mix(in srgb, var(--line) 62%, transparent); }
 .template-reply-evidence { margin-block: 8px; color: var(--fg-muted); font-size: var(--trainer-font-xs); }
 .template-reply-evidence > summary { cursor: pointer; padding-block: 4px; }
 .template-learning-home { padding-block: 16px; }
@@ -115,8 +117,14 @@
 .template-attachment-input input { max-width: 100%; font: inherit; font-size: var(--trainer-font-xs); }
 .template-attachment, .template-context { display: flex; align-items: center; gap: 12px; min-width: 0; padding-block: 4px; color: var(--fg-muted); font-size: var(--trainer-font-xs); }
 .template-context > span, .template-attachment > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.template-command-palette { padding: 8px; max-height: min(260px, 36vh); overflow-y: auto; background: var(--bg-0); border: 1px solid var(--line); border-radius: 8px; }
-.template-command-palette > p { margin: 4px 4px 8px; }
+/* r1-g0-4: the palette splits into a positioned wrapper plus a scroller whose
+   max-height CommandPalette row-aligns to whole entries; the wrapper hosts the
+   bottom fade + "↓ N more" hint while rows sit below the fold. */
+.template-command-palette { position: relative; background: var(--bg-0); border: 1px solid var(--line); border-radius: 8px; }
+.template-command-palette__scroll { padding: 8px; max-height: min(260px, 36vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--line) 70%, transparent) transparent; }
+.template-command-palette.is-scrollable::after { content: ""; position: absolute; inset-inline: 1px; bottom: 1px; height: 18px; pointer-events: none; background: linear-gradient(to bottom, transparent, var(--bg-0) 88%); border-radius: 0 0 8px 8px; }
+.template-command-palette__more { position: absolute; inset-inline: 0; bottom: 0; margin: 0; padding: 1px 8px 3px; text-align: center; color: var(--fg-muted); font-size: var(--trainer-font-3xs); pointer-events: none; }
+.template-command-palette__scroll > p { margin: 4px 4px 8px; }
 .template-command-palette__entry { display: flex; gap: 12px; width: 100%; text-align: start; padding: 8px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-0); font: inherit; cursor: pointer; }
 .template-command-palette__entry:is(:hover, .is-active) { background: var(--bg-1); }
 .template-command-palette__entry[aria-selected="true"] { box-shadow: inset 2px 0 var(--accent); }

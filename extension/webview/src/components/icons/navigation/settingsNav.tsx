@@ -88,29 +88,20 @@ export function SettingsSkillsIcon({ active, ...props }: SettingsNavIconProps) {
 }
 
 /**
- * Refined minimal cog: rounded hub + eight round-cap teeth (20-box).
- * Reads cleanly at 16-18px where the old toothed-outline gear turned to mud.
+ * Canonical cog (20-box): a single square-tooth gear ring + center hole.
+ * r2-g0-2: radial hub-and-spoke sketches kept reading as a sun at 16px — a
+ * real toothed silhouette (outer tip radius 9.1, root 6.9, eight teeth) reads
+ * as a gear at header size. currentColor stroke and the active fill semantic
+ * (the center hole fills) are unchanged.
  */
 function CogGlyph({ active }: { active?: boolean }) {
-  const teeth: Array<[number, number, number, number]> = [
-    [10, 2.7, 10, 4.2],
-    [10, 15.8, 10, 17.3],
-    [2.7, 10, 4.2, 10],
-    [15.8, 10, 17.3, 10],
-    [4.45, 4.45, 5.5, 5.5],
-    [15.55, 15.55, 14.5, 14.5],
-    [4.45, 15.55, 5.5, 14.5],
-    [15.55, 4.45, 14.5, 5.5],
-  ];
   return (
     <>
-      {teeth.map(([x1, y1, x2, y2]) => (
-        <path key={`${x1},${y1}`} d={`M${x1} ${y1}L${x2} ${y2}`} />
-      ))}
+      <path d="M8.34 1.05 L11.66 1.05 L11.55 3.28 L13.66 4.15 L15.15 2.5 L17.5 4.85 L15.85 6.34 L16.72 8.45 L18.95 8.34 L18.95 11.66 L16.72 11.55 L15.85 13.66 L17.5 15.15 L15.15 17.5 L13.66 15.85 L11.55 16.72 L11.66 18.95 L8.34 18.95 L8.45 16.72 L6.34 15.85 L4.85 17.5 L2.5 15.15 L4.15 13.66 L3.28 11.55 L1.05 11.66 L1.05 8.34 L3.28 8.45 L4.15 6.34 L2.5 4.85 L4.85 2.5 L6.34 4.15 L8.45 3.28 Z" />
       {active ? (
-        <circle cx="10" cy="10" r="2.7" fill="currentColor" stroke="none" />
+        <circle cx="10" cy="10" r="2" fill="currentColor" stroke="none" />
       ) : (
-        <circle cx="10" cy="10" r="2.7" />
+        <circle cx="10" cy="10" r="2" />
       )}
     </>
   );

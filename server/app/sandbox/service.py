@@ -465,6 +465,12 @@ class SandboxService:
 
     def validate_workspace_sandbox_root(self, workspace_id: str, root_path: str | Path) -> Path:
         candidate = Path(root_path).expanduser().resolve(strict=False)
+        # A persisted override that exists but is not a directory (a stale file
+        # path restored from a moved snapshot, for example) must fail closed so
+        # callers fall back to the managed default root instead of crashing on
+        # a makedirs/exist_ok step that only tolerates existing directories.
+        if candidate.exists() and not candidate.is_dir():
+            raise ValueError("Sandbox root must be a directory path.")
         active_workspace_root = self._resolved_workspace_path(workspace_id)
         if active_workspace_root is None:
             return candidate

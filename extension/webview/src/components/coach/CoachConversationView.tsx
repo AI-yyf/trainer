@@ -17,6 +17,18 @@ export interface StreamingMessageState {
   note?: string;
 }
 
+/** In-message typing label: text carries the state, the dots only decorate it. */
+const COACH_TYPING_LABELS: Record<ComposerLanguage, string> = {
+  "zh-CN": "教练正在输入…",
+  "en-US": "Coach is typing…",
+  "es-ES": "El entrenador está escribiendo…",
+  "fr-FR": "Le coach écrit…",
+  "de-DE": "Coach schreibt…",
+  "ja-JP": "コーチが入力中…",
+  "ko-KR": "코치가 입력 중…",
+  "pt-BR": "O coach está digitando…",
+};
+
 export interface CoachConversationViewProps {
   messages: ConversationMessage[];
   className?: string;
@@ -143,13 +155,6 @@ function CoachConversationViewImpl({
             }`}
           >
             <div className="coach-conversation-view__message-lane">
-              {item.streaming && streamingStripVisible ? (
-                <AgentActivityStrip
-                  activities={agentActivity ?? []}
-                  step={agentStep}
-                  language={language}
-                />
-              ) : null}
               <CoachMessageBubble
                 assistantLabel={
                   item.streaming ? streamingMessage?.roleLabel ?? assistantLabel : assistantLabel
@@ -164,10 +169,24 @@ function CoachConversationViewImpl({
                 onArtifactOpen={onArtifactOpen}
                 onMessageAction={onMessageAction}
                 pendingMessageAction={pendingMessageAction}
+                headNote={
+                  item.streaming && streamingStripVisible ? (
+                    <AgentActivityStrip
+                      activities={agentActivity ?? []}
+                      step={agentStep}
+                      language={language}
+                    />
+                  ) : undefined
+                }
               >
                 {item.streaming ? (
-                  <div className="coach-streaming-dots" aria-hidden>
-                    <span /><span /><span />
+                  <div className="coach-streaming-dots" role="status" aria-live="polite">
+                    <span className="coach-streaming-dots__label">
+                      {COACH_TYPING_LABELS[language] ?? COACH_TYPING_LABELS["en-US"]}
+                    </span>
+                    <span className="coach-streaming-dots__dots" aria-hidden="true">
+                      <span /><span /><span />
+                    </span>
                   </div>
                 ) : null}
               </CoachMessageBubble>

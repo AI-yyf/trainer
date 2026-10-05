@@ -23,7 +23,11 @@ def _snapshot(tmp_path: Path, *, marker: bool = False, old_root: str | None = No
     file.parent.mkdir(parents=True)
     content = "# 元组\n\n内部列表可变。\n"
     file.write_text(content, encoding="utf-8")
-    original = str(file) if old_root is None else old_root + "/" + relative.as_posix()
+    # On Windows str(file) joins with backslashes, so the stored sandbox root
+    # must be composed from the stored prefix instead of split off the native
+    # path string (rsplit("/sources/") never matches a backslash path).
+    base = old_root if old_root is not None else str(source)
+    original = str(file) if old_root is None else base + "/" + relative.as_posix()
     external = str(tmp_path / "external-original.md")
     resource = ResourceRecord(
         id="resource-one", name="lesson.md", kind="markdown", source=external,
@@ -32,7 +36,7 @@ def _snapshot(tmp_path: Path, *, marker: bool = False, old_root: str | None = No
     )
     repository.save_resource("context-one", resource)
     repository.save_structured_memory("context-one", {
-        "workspace": {"sandbox_root_override": original.rsplit("/sources/", 1)[0]},
+        "workspace": {"sandbox_root_override": base + "/sandboxes/context-one"},
         "active_thread": {"summary": "Read " + original},
     })
     repository.save_session("session-one", "context-one", {

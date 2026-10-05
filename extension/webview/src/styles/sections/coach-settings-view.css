@@ -41,3 +41,54 @@
   margin-top: 2px;
 }
 
+
+/* r1-g2-3: trust is a real control — unconfirmed ring marker on the button,
+   confirmed filled marker once the window is trusted. Tokens only. */
+.settings-trust-action {
+  align-self: flex-start;
+}
+
+.settings-trust-action__state {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid color-mix(in srgb, var(--warning) 78%, var(--fg-0));
+  background: transparent;
+}
+
+.settings-trust-action__state[data-trust-state="trusted"] {
+  border-color: var(--pass, var(--trainer-fallback-success));
+  background: var(--pass, var(--trainer-fallback-success));
+}
+
+.settings-quick-setup__trust {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  justify-self: start;
+  margin: 2px 0;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-xs);
+}
+
+.settings-quick-setup__trust.is-trusted {
+  color: var(--fg-muted);
+}
+
+/* r1-g2-5: the four answer-style presets drop the decorative "●" dot; the
+   selected state reads from an accent border + light accent wash only, so the
+   surface's saturation marks the active choice. */
+.settings-answer-style .settings-answer-style__option::before {
+  display: none;
+}
+
+.settings-answer-style .settings-answer-style__option.is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
+}
+
+.settings-answer-style .settings-answer-style__option.is-active:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}

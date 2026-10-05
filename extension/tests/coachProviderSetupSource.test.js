@@ -91,9 +91,11 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
   assert.match(source, /const hasDurableCoachContext = Boolean\(/);
   assert.match(source, /data\.memory\.activeThread/);
   assert.match(source, /data\.memory\.workspaceUnderstanding/);
+  // r2-g0-1: first-run starters gate on "no user turn yet" — a coach-only
+  // greeting seed must not hide them; durable context still does.
   assert.match(
     source,
-    /const isFirstCoachConversation =\s*data\.conversation\.length === 0 && !hasDurableCoachContext;/,
+    /const isFirstCoachConversation =\s*!data\.conversation\.some\(\(message\) => message\.role === "user"\) &&\s*!hasDurableCoachContext;/,
   );
   assert.match(source, /const providerSetupAction = \{/);
   assert.match(source, /label: providerSetupState\.actionLabel,/);

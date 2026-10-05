@@ -5145,8 +5145,12 @@ export function App() {
       data.profile.projectContext?.trim() ||
       data.memory.workspace?.projectContext?.trim(),
   );
+  // r2-g0-1: the first-run gate is "the learner has not spoken yet", not
+  // "the thread is empty" — the capture-ready seed ships one coach greeting,
+  // which must not hide the starters.
   const isFirstCoachConversation =
-    data.conversation.length === 0 && !hasDurableCoachContext;
+    !data.conversation.some((message) => message.role === "user") &&
+    !hasDurableCoachContext;
   const baselineConnectedMessage = useMemo(
     () =>
       appUiCopy(layout.composerLanguage, "已连接到扩展宿主。"),
@@ -5584,13 +5588,15 @@ export function App() {
       aria-hidden="true"
       className={`composer-context-ring composer-context-ring--${composerContextUsageTone}`}
     >
+      {/* r1-g0-3: the idle ring reads as "◎" only when the track is visible —
+          the old 0.18-opacity track all but vanished at 18px. */}
       <circle
         cx="9"
         cy="9"
         r="7"
         fill="none"
         stroke="currentColor"
-        strokeOpacity="0.18"
+        strokeOpacity="0.32"
         strokeWidth="2.2"
       />
       {composerContextUsage.ratio !== undefined ? (
@@ -5606,7 +5612,7 @@ export function App() {
           transform="rotate(-90 9 9)"
         />
       ) : (
-        <circle cx="9" cy="9" r="1.6" fill="currentColor" />
+        <circle cx="9" cy="9" r="1.9" fill="currentColor" />
       )}
     </svg>
   );
@@ -7192,7 +7198,10 @@ export function App() {
       trainingSourceChain: data.workspaceTrainingState?.latestTrainingHandoff?.sourceChain,
     });
     return deriveResourcesOrientation({
-      resourceCount: liveResources.length,
+      // r2-g2-0: the library header total counts distinct resources — the same
+      // distinct-leaf source the tree group badges use, so the header number
+      // always equals the sum of the group badges.
+      resourceCount: new Set(liveResources.map((resource) => resource.id)).size,
       selectedResourceId: selectedResource?.id,
       selectedResourceTitle: selectedResource?.title,
       indexState: selectedResource?.indexState,
@@ -11625,6 +11634,7 @@ export function App() {
     return <CommandPalette containerRef={composerDeckRef} label={appUiCopy(layout.composerLanguage, "技能")}
       hint={appUiCopy(layout.composerLanguage, "继续输入可收窄范围，删除 $ 就会按普通消息发送。")}
       empty={appUiCopy(layout.composerLanguage, "没有匹配到 skill。继续输入，或者直接当作普通消息发送。")}
+      moreLabel={appUiCopy(layout.composerLanguage, "↓ 还有 {n} 条")}
       selectedIndex={selectedCommandIndex} onHighlight={setSelectedCommandIndex}
       entries={matchingLocalSkills.map((skill) => ({ id: skill.id, trigger: skill.trigger,
         title: resolveTrainerSkillText(skill.title, layout.composerLanguage), detail: resolveTrainerSkillText(skill.detail, layout.composerLanguage), onSelect: () => selectSkillSuggestion(skill) }))}
@@ -12093,6 +12103,50 @@ export function App() {
       pendingMessageAction={pendingMessageAction}
     />
   );
+
+  // r1-g0-2: first-run task suggestions — at most two task-relevant chips above
+  // the one coach input while the thread is still nearly empty. A click fills
+  // the draft and sends through the same submit path; the chips are plain
+  // secondary buttons, no banner and no second input.
+  const coachThreadNearEmpty =
+    coachRenderConversation.length === 0 && !streaming.isStreaming;
+  const coachSuggestionChipTexts = (
+    activeView === "coach" &&
+    !composerUsesTrainingFlow &&
+    coachThreadNearEmpty &&
+    providerCanCoachNow &&
+    !shouldShowNeutralEmptyState &&
+    !workspaceSessionBlocked
+  )
+    ? [
+        recoveredDisplayFacts.currentStep?.trim() || activePlanStage?.title?.trim() || "",
+        liveSuggestedActions[0]?.prompt?.trim() || liveSuggestedActions[0]?.label?.trim() || "",
+      ]
+        .filter((text, index, all) => text.length > 0 && all.indexOf(text) === index)
+        .slice(0, 2)
+    : [];
+  const coachSuggestionChips = coachSuggestionChipTexts.length > 0 ? (
+    <div
+      className="composer-suggestion-chips"
+      role="group"
+      aria-label={appUiCopy(layout.composerLanguage, "从当前任务开始")}
+    >
+      {coachSuggestionChipTexts.map((text) => (
+        <button
+          key={text}
+          type="button"
+          className="toolbar-button composer-suggestion-chip"
+          title={text}
+          onClick={() => {
+            setComposerDraft(text);
+            void handleSubmit(text);
+          }}
+        >
+          {truncateInlineText(text, 18) ?? text}
+        </button>
+      ))}
+    </div>
+  ) : null;
 
   const renderContextualResultRail = (view: "plan" | "resources" | "training" | "settings") => {
     const isTraining = view === "training";
@@ -13379,23 +13433,51 @@ export function App() {
               ]
             : [
                 ...(recoveredPlanPrimary && !recoveredAdoptPrimary
-                  ? [
-                      {
-                        id:
-                          recoveredPlanPrimary === "clear_blocker"
-                            ? "plan-clear-blocker"
-                            : recoveredPlanPrimary === "unfreeze_plan"
-                              ? "resume-plan"
-                            : recoveredPlanPrimary === "wait"
-                              ? "plan-needs-evidence"
-                              : "plan-continue-step",
-                        label: recoveredPlanPrimary === "unfreeze_plan"
-                          ? appUiCopy(layout.composerLanguage, "解冻计划")
-                          : planOrientation.primaryActionLabel,
-                        tone: "accent" as const,
-                        onClick: () => handlePlanOrientationAction(recoveredPlanPrimary),
-                      },
-                    ]
+                  ? (() => {
+                      // 证据待整理时,主操作仍对准『下一步』本身;整理证据降为次级,
+                      // 避免主按钮与『下一步』文案指向两个不同的动作。
+                      const stepText = (
+                        recoveredDisplayFacts.currentStep ||
+                        liveCoachTaskChrome.currentStep ||
+                        resolvedCoachNextStep ||
+                        ""
+                      ).trim();
+                      if (recoveredPlanPrimary === "wait" && stepText) {
+                        const short = stepText.length > 18 ? `${stepText.slice(0, 17)}…` : stepText;
+                        return [
+                          {
+                            id: "plan-start-step",
+                            label:
+                              layout.composerLanguage === "zh-CN"
+                                ? `开始:${short}`
+                                : `Start: ${short}`,
+                            tone: "accent" as const,
+                            onClick: () => handlePlanOrientationAction("continue_step"),
+                          },
+                          {
+                            id: "plan-needs-evidence",
+                            label: planOrientation.primaryActionLabel,
+                            tone: "ghost" as const,
+                            onClick: () => handlePlanOrientationAction("wait"),
+                          },
+                        ];
+                      }
+                      return [
+                        {
+                          id:
+                            recoveredPlanPrimary === "clear_blocker"
+                              ? "plan-clear-blocker"
+                              : recoveredPlanPrimary === "unfreeze_plan"
+                                ? "resume-plan"
+                                : "plan-continue-step",
+                          label: recoveredPlanPrimary === "unfreeze_plan"
+                            ? appUiCopy(layout.composerLanguage, "解冻计划")
+                            : planOrientation.primaryActionLabel,
+                          tone: "accent" as const,
+                          onClick: () => handlePlanOrientationAction(recoveredPlanPrimary),
+                        },
+                      ];
+                    })()
                   : []),
                 ...(firstLookContinuePrimary
                   ? [
@@ -14354,6 +14436,7 @@ export function App() {
               <span>{resolvePlanComposerCopy(layout.composerLanguage).modes[coachPlanContext].label}</span>
               <button type="button" className="template-back" onClick={() => setCoachPlanContext(undefined)}>{appUiCopy(layout.composerLanguage, "清除")}</button>
             </div> : null}
+            {coachSuggestionChips}
             <CoachComposer
               value={allowEmptyTrainingReturnSubmission ? "" : draft}
               onChange={handleComposerDraftChange}

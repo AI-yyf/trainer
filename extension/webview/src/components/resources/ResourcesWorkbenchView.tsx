@@ -171,6 +171,7 @@ type ResourceTextKey =
   | "restoreResource"
   | "deleteResourceConfirmation"
   | "recoveryAvailable"
+  | "nestedInSubgroups"
   | "deleteConfirmation"
   | "logicalCollection"
   | "unavailable"
@@ -237,6 +238,7 @@ const resourceText: Record<ResourceTextKey, { zh: string; en: string }> = {
     en: "Move this resource to Trash? You can restore it from the guarded sandbox.",
   },
   recoveryAvailable: { zh: "\u56de\u6536\u7ad9\u4e2d\u7684\u8d44\u6599\uff1a{count}", en: "Resources in Trash: {count}" },
+  nestedInSubgroups: { zh: "{count} 条在子分组", en: "{count} in subgroups" },
   deleteConfirmation: {
     zh: "\u5c06\u9009\u4e2d\u7684 {count} \u9879\u8d44\u6599\u79fb\u5165\u56de\u6536\u7ad9\uff1f\u53ef\u4ece\u53d7\u63a7\u6c99\u7bb1\u6062\u590d\u3002",
     en: "Move {count} selected resources to Trash? You can restore them from the guarded sandbox.",
@@ -305,6 +307,7 @@ const resourceTextLocaleOverrides: Record<
     restoreResource: "Restaurar recurso",
     deleteResourceConfirmation: "Mover este recurso a la Papelera? Se puede restaurar desde el sandbox protegido.",
     recoveryAvailable: "Recursos en la Papelera: {count}",
+    nestedInSubgroups: "{count} en subcarpetas",
     deleteConfirmation: "Mover los recursos seleccionados ({count}) a la Papelera? Se pueden restaurar desde el sandbox protegido.",
     logicalCollection: "Coleccion",
     unavailable: "No disponible",
@@ -363,6 +366,7 @@ const resourceTextLocaleOverrides: Record<
     restoreResource: "Restaurer la ressource",
     deleteResourceConfirmation: "Deplacer cette ressource dans la corbeille ? Elle peut etre restauree depuis le sandbox protege.",
     recoveryAvailable: "Ressources dans la corbeille : {count}",
+    nestedInSubgroups: "{count} dans des sous-groupes",
     deleteConfirmation: "Deplacer les ressources selectionnees ({count}) dans la corbeille ? Elles peuvent etre restaurees depuis le sandbox protege.",
     logicalCollection: "Collection",
     unavailable: "Indisponible",
@@ -421,6 +425,7 @@ const resourceTextLocaleOverrides: Record<
     restoreResource: "Material wiederherstellen",
     deleteResourceConfirmation: "Dieses Material in den Papierkorb verschieben? Sie koennen es im geschuetzten Sandbox-Bereich wiederherstellen.",
     recoveryAvailable: "Materialien im Papierkorb: {count}",
+    nestedInSubgroups: "{count} in Untergruppen",
     deleteConfirmation: "Ausgewaehlte Materialien ({count}) in den Papierkorb verschieben? Sie koennen im geschuetzten Sandbox-Bereich wiederhergestellt werden.",
     logicalCollection: "Sammlung",
     unavailable: "Nicht verfuegbar",
@@ -479,6 +484,7 @@ const resourceTextLocaleOverrides: Record<
     restoreResource: "資料を復元",
     deleteResourceConfirmation: "この資料をごみ箱に移動しますか？保護されたサンドボックスから復元できます。",
     recoveryAvailable: "ごみ箱内の資料: {count}",
+    nestedInSubgroups: "サブグループに {count} 件",
     deleteConfirmation: "選択した資料 {count} 件をごみ箱に移動しますか？保護されたサンドボックスから復元できます。",
     logicalCollection: "\u8ad6\u7406\u30b3\u30ec\u30af\u30b7\u30e7\u30f3",
     unavailable: "\u5229\u7528\u4e0d\u53ef",
@@ -537,6 +543,7 @@ const resourceTextLocaleOverrides: Record<
     restoreResource: "자료 복원",
     deleteResourceConfirmation: "이 자료를 휴지통으로 옮길까요? 보호된 샌드박스에서 복원할 수 있습니다.",
     recoveryAvailable: "휴지통의 자료: {count}",
+    nestedInSubgroups: "하위 그룹에 {count}개",
     deleteConfirmation: "선택한 자료 {count}개를 휴지통으로 옮길까요? 보호된 샌드박스에서 복원할 수 있습니다.",
     logicalCollection: "\ub17c\ub9ac \uceec\ub809\uc158",
     unavailable: "\uc0ac\uc6a9\ud560 \uc218 \uc5c6\uc74c",
@@ -595,6 +602,7 @@ const resourceTextLocaleOverrides: Record<
     restoreResource: "Restaurar recurso",
     deleteResourceConfirmation: "Mover este recurso para a Lixeira? Ele pode ser restaurado no sandbox protegido.",
     recoveryAvailable: "Recursos na Lixeira: {count}",
+    nestedInSubgroups: "{count} em subgrupos",
     deleteConfirmation: "Mover os recursos selecionados ({count}) para a Lixeira? Eles podem ser restaurados no sandbox protegido.",
     logicalCollection: "Colecao",
     unavailable: "Indisponivel",
@@ -1348,7 +1356,12 @@ function collectionLabel(segment: string, language: ComposerLanguage): string {
   if (segment === `${collectionSegmentPrefix}imported`) {
     return localize(language, "imported");
   }
-  return segment;
+  // r1-g2-1: one casing rule for folder-named groups — "Docs"/"docs"/"knowledge"
+  // all display with a single leading capital instead of three rival styles.
+  const trimmed = segment.trim().replace(/\s+/g, " ");
+  return trimmed.length > 0
+    ? trimmed.charAt(0).toLocaleUpperCase() + trimmed.slice(1)
+    : trimmed;
 }
 
 function resourcePathCandidates(resource: ResourceRecord, sandboxRoot: string | undefined): string[] {
@@ -1419,8 +1432,15 @@ function buildResourceTree(
   const root: ResourceTreeNode = { id: "root", label: "", kind: "collection", children: [] };
   const sandboxRoot = sandboxState?.sandboxRootPath ?? sandboxState?.rootPath;
   const sandboxNodes = toSandboxNodePaths(sandboxState?.nodes, sandboxRoot);
+  // r1-g2-1: one leaf per resource id — the same resource arriving twice must
+  // not inflate a group badge above the header total.
+  const seenResourceIds = new Set<string>();
 
   for (const resource of resources) {
+    if (seenResourceIds.has(resource.id)) {
+      continue;
+    }
+    seenResourceIds.add(resource.id);
     const segments = resourceTreeSegments(resource, sandboxRoot, sandboxNodes);
     const collectionKind = resourceTreeCollectionKind(resource, sandboxRoot, sandboxNodes);
     let parent = root;
@@ -1456,7 +1476,18 @@ function buildResourceTree(
     });
   }
 
-  return compactUnaryCollections(sortResourceTree(root.children));
+  return compactUnaryCollections(pruneEmptyCollections(sortResourceTree(root.children)));
+}
+
+/** r1-g2-1: groups that expand to nothing are removed, not rendered empty. */
+function pruneEmptyCollections(nodes: ResourceTreeNode[]): ResourceTreeNode[] {
+  return nodes.flatMap((node) => {
+    if (node.kind !== "collection") {
+      return [node];
+    }
+    const children = pruneEmptyCollections(node.children);
+    return children.length > 0 ? [{ ...node, children }] : [];
+  });
 }
 
 function compactUnaryCollections(nodes: ResourceTreeNode[]): ResourceTreeNode[] {
@@ -1546,7 +1577,9 @@ function resourceIdsInTreeNode(node: ResourceTreeNode): string[] {
   if (node.kind === "resource") {
     return node.resource ? [node.resource.id] : [];
   }
-  return node.children.flatMap(resourceIdsInTreeNode);
+  // r1-g2-1: badges count distinct resources, so the sum of the group badges
+  // equals the header total even if a resource id appears in two subtrees.
+  return Array.from(new Set(node.children.flatMap(resourceIdsInTreeNode)));
 }
 
 function visibleTreeItemIds(nodes: ResourceTreeNode[], expandedIds: Set<string>): string[] {
@@ -1639,6 +1672,12 @@ function ResourceTreeItem({
   const descendantResourceIds = resourceIdsInTreeNode(node);
   const firstChildId = node.children[0]?.id;
   const isLogicalCollection = node.collectionKind === "logical";
+  // r2-g2-0: a group whose count lives entirely in nested subgroups must not
+  // read as empty once expanded — say where the items are.
+  const directResourceCount = node.children.filter((child) => child.kind === "resource").length;
+  const nestedResourceCount = descendantResourceIds.length - directResourceCount;
+  const showNestedItemsNote =
+    isExpanded && directResourceCount === 0 && nestedResourceCount > 0;
   const collectionDescription = isLogicalCollection
     ? `${localize(language, "logicalCollection")}: ${node.label}`
     : node.label;
@@ -1687,6 +1726,11 @@ function ResourceTreeItem({
         open={isExpanded}
         onToggle={() => onToggle(node.id)}
       >
+        {showNestedItemsNote ? (
+          <p className="resources-library-tree__nested-note" data-resource-nested-note="true">
+            {localizeCount(language, "nestedInSubgroups", nestedResourceCount)}
+          </p>
+        ) : null}
         {isExpanded
           ? node.children.map((child) => (
               <ResourceTreeItem
@@ -2842,13 +2886,13 @@ export function ResourcesWorkbenchView({
         <summary>
           <span>
             <TrashIcon size={13} aria-hidden="true" />
-            <strong>{localize(language, "trashTitle")}</strong>
+            {/* r1-g2-1: one expression — "回收站 (1)" — instead of a title row
+                plus a second count sentence on the far edge. */}
+            <strong>
+              {localize(language, "trashTitle")}
+              {trashSnapshotAvailable ? ` (${trashedResources.length})` : ""}
+            </strong>
           </span>
-          <em>
-            {trashSnapshotAvailable
-              ? localizeCount(language, "recoveryAvailable", trashedResources.length)
-              : localize(language, "unavailable")}
-          </em>
         </summary>
         <div className="resources-knowledge__trash-body">
           {!trashSnapshotAvailable ? (

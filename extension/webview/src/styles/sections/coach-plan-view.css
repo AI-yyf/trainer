@@ -661,3 +661,13 @@
   gap: 6px;
 }
 
+
+/* r1-g1-0: the demoted evidence-review action renders as a quiet secondary
+   link directly under the 下一步 primary action. */
+.coach-plan-view__secondary-action {
+  margin-top: -2px;
+}
+
+.coach-plan-view .template-next-action + .coach-plan-view__secondary-action {
+  margin-top: 2px;
+}

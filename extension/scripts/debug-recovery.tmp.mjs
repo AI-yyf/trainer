@@ -28,19 +28,20 @@ try {
 
   try {
     const cases = [];
-    cases.push(await verifyOperationStatusBridge(page, previewUrl));
-    cases.push(await verifyCompletedBootstrapRecovery(page, previewUrl));
-    cases.push(await verifyRecoveredPatchRefresh(page, previewUrl));
-    cases.push(await verifyErrorBootstrapRecovery(page, previewUrl));
-    cases.push(await verifyInProgressBootstrapSilence(page, previewUrl));
-    cases.push(await verifyInProgressBootstrapCoachRecovery(page, previewUrl));
-    cases.push(await verifyInProgressPatchRefresh(page, previewUrl));
-    cases.push(await verifyInteractiveCoachLoopProgression(page, previewUrl));
-    cases.push(await verifyManualNoticePreserved(page, previewUrl));
-    cases.push(await verifyStreamStartClearsRecoveredNotice(page, previewUrl));
-    cases.push(await verifyRestoreTrainingView(page, previewUrl));
-    cases.push(await verifyRestoreResourcesSandboxPreview(page, previewUrl));
-    cases.push(await verifyPlanFirstViewport(page, previewUrl));
+    const pushCase = (result) => { console.error("CASE-RESULT " + JSON.stringify(result).slice(0, 400)); cases.push(result); };
+    try { pushCase(await verifyOperationStatusBridge(page, previewUrl)); } catch (error) { console.error("CASE-FAIL '" + " :: " + (error instanceof Error ? error.message : String(error)).split("\n")[0]); }
+    try { pushCase(await verifyCompletedBootstrapRecovery(page, previewUrl)); } catch (error) { console.error("CASE-FAIL '" + " :: " + (error instanceof Error ? error.message : String(error)).split("\n")[0]); }
+    try { pushCase(await verifyRecoveredPatchRefresh(page, previewUrl)); } catch (error) { console.error("CASE-FAIL '" + " :: " + (error instanceof Error ? error.message : String(error)).split("\n")[0]); }
+    try { pushCase(await verifyErrorBootstrapRecovery(page, previewUrl)); } catch (error) { console.error("CASE-FAIL '" + " :: " + (error instanceof Error ? error.message : String(error)).split("\n")[0]); }
+    try { pushCase(await verifyInProgressBootstrapSilence(page, previewUrl)); } catch (error) { console.error("CASE-FAIL '" + " :: " + (error instanceof Error ? error.message : String(error)).split("\n")[0]); }
+    try { pushCase(await verifyInProgressBootstrapCoachRecovery(page, previewUrl)); } catch (error) { console.error("CASE-FAIL '" + " :: " + (error instanceof Error ? error.message : String(error)).split("\n")[0]); }
+    try { pushCase(await verifyInProgressPatchRefresh(page, previewUrl)); } catch (error) { console.error("CASE-FAIL '" + " :: " + (error instanceof Error ? error.message : String(error)).split("\n")[0]); }
+    try { pushCase(await verifyInteractiveCoachLoopProgression(page, previewUrl)); } catch (error) { console.error("CASE-FAIL '" + " :: " + (error instanceof Error ? error.message : String(error)).split("\n")[0]); }
+    try { pushCase(await verifyManualNoticePreserved(page, previewUrl)); } catch (error) { console.error("CASE-FAIL '" + " :: " + (error instanceof Error ? error.message : String(error)).split("\n")[0]); }
+    try { pushCase(await verifyStreamStartClearsRecoveredNotice(page, previewUrl)); } catch (error) { console.error("CASE-FAIL '" + " :: " + (error instanceof Error ? error.message : String(error)).split("\n")[0]); }
+    try { pushCase(await verifyRestoreTrainingView(page, previewUrl)); } catch (error) { console.error("CASE-FAIL '" + " :: " + (error instanceof Error ? error.message : String(error)).split("\n")[0]); }
+    try { pushCase(await verifyRestoreResourcesSandboxPreview(page, previewUrl)); } catch (error) { console.error("CASE-FAIL '" + " :: " + (error instanceof Error ? error.message : String(error)).split("\n")[0]); }
+    try { pushCase(await verifyPlanFirstViewport(page, previewUrl)); } catch (error) { console.error("CASE-FAIL '" + " :: " + (error instanceof Error ? error.message : String(error)).split("\n")[0]); }
 
     console.log(
       JSON.stringify(

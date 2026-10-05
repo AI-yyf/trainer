@@ -30,6 +30,11 @@ export interface CoachMessageBubbleProps {
   isLatestAssistant?: boolean;
   /** Optional trailing node (e.g. streaming dots) rendered inside the body. */
   children?: ReactNode;
+  /**
+   * r2-g0-0: live run meta ("正在进行") rendered inside the container head,
+   * next to the speaker label — never as a floating strip above the message.
+   */
+  headNote?: ReactNode;
   onArtifactOpen?: (artifact: CoachArtifactBlockData, message: ConversationMessage) => void;
   /** Quick actions under an assistant reply: share / save to library / create a training card. */
   onMessageAction?: (action: CoachMessageAction, message: ConversationMessage) => void;
@@ -177,6 +182,7 @@ function CoachMessageBubbleImpl({
   language = "en-US",
   streaming = false,
   isLatestAssistant = false,
+  headNote,
   onArtifactOpen,
   onMessageAction,
   pendingMessageAction,
@@ -246,8 +252,10 @@ function CoachMessageBubbleImpl({
   const showSystemMeta = message.role === "system";
   // Feed chrome stays out of the way: user turns render without a repeated
   // author/timestamp row; the timestamp remains available as a tooltip.
+  // Coach replies carry the one identity line (r1-g0-0): a small name above
+  // the body plus the lane hairline styled in the conversation CSS.
   const showUserMeta = false;
-  const showAssistantRail = false;
+  const showAssistantRail = message.role === "assistant";
   const visibleBody = message.body;
   const hasBody = visibleBody.trim().length > 0;
   const pendingAssistantAction = pendingMessageAction?.startsWith(`${message.id}:`)
@@ -315,6 +323,7 @@ function CoachMessageBubbleImpl({
         {showAssistantRail ? (
           <div className="message-bubble__assistant-rail">
             <span className="message-bubble__assistant-label">{resolvedRoleLabel}</span>
+            {headNote}
             {streaming ? (
               <span className="message-bubble__assistant-time">…</span>
             ) : timestamp ? (
@@ -373,12 +382,25 @@ function CoachMessageBubbleImpl({
         tools={showAssistantActions ? (
           <OverflowActions
             label={coachMessageBubbleCopy(language, "这条回复的快捷操作")}
-            actions={(["copy", "share", "save-resource", "training-card", ...(isLatestAssistant ? ["retry"] : [])] as CoachMessageAction[]).map((action) => ({
-              id: action,
-              label: messageActionLabels[action],
-              disabled: Boolean(pendingAssistantAction),
-              onClick: () => onMessageAction?.(action, message),
-            }))}
+            actions={([
+              // Learning-value actions lead; a divider separates the utility
+              // actions (r1-g0-5) so the menu reads learning-first.
+              "training-card",
+              "save-resource",
+              "separator",
+              "copy",
+              "share",
+              ...(isLatestAssistant ? ["retry"] : []),
+            ] as Array<CoachMessageAction | "separator">).map((entry) => (
+              entry === "separator"
+                ? { id: "separator", label: "", separator: true, disabled: false, onClick: () => {} }
+                : {
+                    id: entry,
+                    label: messageActionLabels[entry],
+                    disabled: Boolean(pendingAssistantAction),
+                    onClick: () => onMessageAction?.(entry, message),
+                  }
+            ))}
           />
         ) : null}
       />

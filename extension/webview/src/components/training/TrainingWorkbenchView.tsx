@@ -2514,10 +2514,16 @@ export function TrainingWorkbenchView({
   const needsPrimerState = trainingExecutionState.needsPrimer;
   const displayTitle = stripTrainingCardTitlePrefix(title);
   const visibleExpectedSymbols = expectedSymbols.map((symbol) => symbol.trim()).filter(Boolean).slice(0, 4);
+  // r1-g1-5: scenario packs can ship unfilled placeholders ("<current failing
+  // file>"). The renderer never shows them raw — an entry with no resolvable
+  // value is dropped, and a files line with no entries left is omitted whole.
+  const resolvedFilesToTouch = filesToTouch
+    .map((file) => file.trim())
+    .filter((file) => file.length > 0 && !/^<[^>]*>$/.test(file) && !file.includes("<current failing file>"));
   const practiceVerificationMode = resolvePracticeVerificationMode({
     isFlashCard,
     learningFamily,
-    filesToTouch,
+    filesToTouch: resolvedFilesToTouch,
     apiHints,
     expectedSymbols: visibleExpectedSymbols,
   });
@@ -2623,6 +2629,15 @@ export function TrainingWorkbenchView({
   const cardOnlyDeliverable = resolvedDeliverables.length > 1
     ? resolvedDeliverables.map(item => `- ${item.replace(/\n/g, "\n  ")}`).join("\n")
     : firstText(resolvedDeliverables[0]?.trim(), resolvedSuccessSignal, cardOnlyTask) ?? cardOnlyTask;
+  // r2-g1-1: multi-item deliverables render as real list items (one row per
+  // item) instead of the " - " joined run-on paragraph.
+  const deliverablesListNode = resolvedDeliverables.length > 1 ? (
+    <ul className="training-card-list" data-training-deliverables="true">
+      {resolvedDeliverables.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
+  ) : null;
   const cardOnlyVerification = resolvedVerifyItems.length > 1
     ? resolvedVerifyItems.map(item => `- ${item.replace(/\n/g, "\n  ")}`).join("\n")
     : firstText(
@@ -2670,7 +2685,7 @@ export function TrainingWorkbenchView({
         {resolvedWhyNow ? <div data-training-card-fact="why-now" title={cardOnlyWhyNowSummary}><MessageRichContent body={resolvedWhyNow} language={language} /></div> : null}
         {sourceDetail ? <MessageRichContent body={sourceDetail} language={language} /> : null}
         {currentStep && normalizeCardText(currentStep) !== normalizeCardText(cardOnlyTask) ? <MessageRichContent body={currentStep} language={language} /> : null}
-        <div data-training-card-fact="deliverable"><MessageRichContent body={cardOnlyDeliverable ?? ""} language={language} /></div>
+        <div data-training-card-fact="deliverable">{deliverablesListNode ?? <MessageRichContent body={cardOnlyDeliverable ?? ""} language={language} />}</div>
         <div data-training-card-fact="verify"><span className="template-metadata">{trainingWorkbenchText(language, "verifyNow")}</span><MessageRichContent body={cardOnlyVerification ?? ""} language={language} /></div>
         <div data-training-card-fact="return"><MessageRichContent body={resolvedReturnWith || defaultReturnPath} language={language} /></div>
         {visibleNextAfterCompletion ? (
@@ -2775,12 +2790,18 @@ export function TrainingWorkbenchView({
                   <NextAction label={templateCopy[language].nextAction} title={cardOnlyTask || displayTitle} action={{ label: trainingSurfaceLabel(language, "startStep"), disabled: !onCardStatusTransition || !cardId || reliabilityInFlight, onClick: () => { if (cardId) onCardStatusTransition?.(cardId, "active", "start_step"); } }} />
                 </> : trainingExecutionState.composerPhase === "try" || trainingExecutionState.composerPhase === "answer" ? <>
                   <MessageRichContent body={isFlashCard ? flashPrompt || cardOnlyTask : cardOnlyTask} language={language} />
-                  {filesToTouch.length ? <p className="template-metadata">{filesToTouch.join(" · ")}</p> : null}
+                  {resolvedFilesToTouch.length ? (
+                    <p className="template-metadata training-card-files" data-training-files="true">
+                      {resolvedFilesToTouch.map((file) => (
+                        <span key={file} className="training-card-files__item">{file}</span>
+                      ))}
+                    </p>
+                  ) : null}
                   {cardOnlyBlockerDistinct ? <VerificationResult language={language} verdict={trainingExecutionState.blocked ? "failed" : "unknown"} summary={cardOnlyBlockerDistinct} /> : null}
                   {selectedCardStatus === "candidate" || !selectedCardStatus ? (
                     <NextAction label={templateCopy[language].nextAction} title={cardOnlyTask || displayTitle} action={{ label: trainingSurfaceLabel(language, "startStep"), disabled: !onCardStatusTransition || !cardId || reliabilityInFlight, onClick: () => { if (cardId) onCardStatusTransition?.(cardId, "active", "start_step"); } }} />
                   ) : !isFlashCard && practiceVerificationMode === "file" ? (
-                    <NextAction label={templateCopy[language].nextAction} title={trainingSurfaceLabel(language, "verifyCurrentFile")} detail={`${templateCopy[language].complete}: ${cardOnlyDeliverable}`} action={{ label: remoteName ? remoteVerifyCopy(language).verifyOn(remoteName) : trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: !onVerifyCurrentFile || Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: () => onVerifyCurrentFile?.() }} />
+                    <NextAction label={templateCopy[language].nextAction} title={trainingSurfaceLabel(language, "verifyCurrentFile")} detail={deliverablesListNode ? <><span className="template-metadata">{templateCopy[language].complete}: </span>{deliverablesListNode}</> : `${templateCopy[language].complete}: ${cardOnlyDeliverable}`} action={{ label: remoteName ? remoteVerifyCopy(language).verifyOn(remoteName) : trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: !onVerifyCurrentFile || Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: () => onVerifyCurrentFile?.() }} />
                   ) : response}
                   {hintLadder.length && cardType === "practice" ? <HintLadderReveal hints={hintLadder} onReveal={onHintReveal} language={language} /> : null}
                 </> : trainingExecutionState.composerPhase === "verify" ? <>

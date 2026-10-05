@@ -40,6 +40,8 @@ const QUICK_SETUP_COPY: Record<QuickSetupLanguage, Record<string, string>> = {
     saveLabel: "③ 保存并连接",
     saving: "连接中…",
     connected: "已连接",
+    trustTitle: "信任此窗口",
+    trustDone: "已信任此窗口",
     connectedLine: "已连接,可以直接开始对话。模型与密钥可在下方完整表单中调整。",
     parsedHint: "已识别:服务地址与密钥已自动填入。",
     modelHint: "模型将在保存时自动选择。",
@@ -58,6 +60,8 @@ const QUICK_SETUP_COPY: Record<QuickSetupLanguage, Record<string, string>> = {
     saveLabel: "③ Save & connect",
     saving: "Connecting…",
     connected: "Connected",
+    trustTitle: "Trust this window",
+    trustDone: "Window trusted",
     connectedLine: "Connected — start chatting. Model and key can be tuned in the full form below.",
     parsedHint: "Recognized: base URL and key were filled in automatically.",
     modelHint: "A model will be picked automatically when you save.",
@@ -76,6 +80,8 @@ const QUICK_SETUP_COPY: Record<QuickSetupLanguage, Record<string, string>> = {
     saveLabel: "③ Guardar y conectar",
     saving: "Conectando…",
     connected: "Conectado",
+    trustTitle: "Confiar en esta ventana",
+    trustDone: "Ventana de confianza",
     connectedLine: "Conectado: empieza a conversar. Ajusta modelo y clave en el formulario completo de abajo.",
     parsedHint: "Reconocido: la URL y la clave se rellenaron automáticamente.",
     modelHint: "El modelo se seleccionará automáticamente al guardar.",
@@ -94,6 +100,8 @@ const QUICK_SETUP_COPY: Record<QuickSetupLanguage, Record<string, string>> = {
     saveLabel: "③ Enregistrer et connecter",
     saving: "Connexion…",
     connected: "Connecté",
+    trustTitle: "Approuver cette fenêtre",
+    trustDone: "Fenêtre approuvée",
     connectedLine: "Connecté : commencez à discuter. Ajustez modèle et clé dans le formulaire complet ci-dessous.",
     parsedHint: "Reconnu : l'URL et la clé ont été remplies automatiquement.",
     modelHint: "Un modèle sera sélectionné automatiquement à l'enregistrement.",
@@ -112,6 +120,8 @@ const QUICK_SETUP_COPY: Record<QuickSetupLanguage, Record<string, string>> = {
     saveLabel: "③ Speichern & verbinden",
     saving: "Verbinde…",
     connected: "Verbunden",
+    trustTitle: "Diesem Fenster vertrauen",
+    trustDone: "Fenster vertraut",
     connectedLine: "Verbunden — leg los. Modell und Schlessel lassen sich im vollständigen Formular unten anpassen.",
     parsedHint: "Erkannt: Dienstadresse und Schlüssel wurden automatisch eingetragen.",
     modelHint: "Ein Modell wird beim Speichern automatisch ausgewählt.",
@@ -130,6 +140,8 @@ const QUICK_SETUP_COPY: Record<QuickSetupLanguage, Record<string, string>> = {
     saveLabel: "③ 保存して接続",
     saving: "接続中…",
     connected: "接続済み",
+    trustTitle: "このウィンドウを信頼",
+    trustDone: "ウィンドウを信頼済み",
     connectedLine: "接続済み — すぐに会話を開始できます。モデルとキーは下の完全なフォームで調整できます。",
     parsedHint: "認識しました:アドレスとキーを自動入力しました。",
     modelHint: "保存時にモデルが自動選択されます。",
@@ -148,6 +160,8 @@ const QUICK_SETUP_COPY: Record<QuickSetupLanguage, Record<string, string>> = {
     saveLabel: "③ 저장 후 연결",
     saving: "연결 중…",
     connected: "연결됨",
+    trustTitle: "이 창 신뢰",
+    trustDone: "창 신뢰됨",
     connectedLine: "연결됨 — 바로 대화를 시작하세요. 모델과 키는 아래 전체 폼에서 조정할 수 있습니다.",
     parsedHint: "인식됨: 주소와 키가 자동으로 채워졌습니다.",
     modelHint: "저장 시 모델이 자동으로 선택됩니다.",
@@ -166,6 +180,8 @@ const QUICK_SETUP_COPY: Record<QuickSetupLanguage, Record<string, string>> = {
     saveLabel: "③ Salvar e conectar",
     saving: "Conectando…",
     connected: "Conectado",
+    trustTitle: "Confiar nesta janela",
+    trustDone: "Janela confiável",
     connectedLine: "Conectado — comece a conversar. Ajuste modelo e chave no formulário completo abaixo.",
     parsedHint: "Reconhecido: endereço e chave preenchidos automaticamente.",
     modelHint: "Um modelo será escolhido automaticamente ao salvar.",
@@ -186,7 +202,9 @@ export function ProviderQuickSetup({
   savedModel,
   connected,
   hasStoredApiKey,
+  trusted = false,
   busy,
+  onTrustWindow,
   onDraftChange,
   onSave,
 }: ProviderQuickSetupProps) {
@@ -289,6 +307,27 @@ export function ProviderQuickSetup({
           {copy(language, "modelHint")}
         </p>
       </label>
+
+      {/* r1-g2-3: the trust step is a real control, not gray prose — an
+          unconfirmed marker + button before trusting, a confirmed state after. */}
+      {onTrustWindow ? (
+        trusted ? (
+          <p className="settings-quick-setup__trust is-trusted" data-settings-trust-action="true">
+            <span className="settings-trust-action__state" data-trust-state="trusted" aria-hidden="true" />
+            <span>{copy(language, "trustDone")}</span>
+          </p>
+        ) : (
+          <button
+            type="button"
+            className="button button--ghost button--compact settings-quick-setup__trust settings-trust-action"
+            data-settings-trust-action="true"
+            onClick={() => onTrustWindow()}
+          >
+            <span className="settings-trust-action__state" data-trust-state="untrusted" aria-hidden="true" />
+            <span>{copy(language, "trustTitle")}</span>
+          </button>
+        )
+      ) : null}
 
       <button
         type="submit"

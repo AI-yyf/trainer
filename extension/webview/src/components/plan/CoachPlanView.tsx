@@ -109,7 +109,8 @@ interface PlanDecisionStripState {
   tone: "good" | "warning" | "danger" | "muted";
   eyebrow: string;
   title: string;
-  detail: string;
+  /** Optional: the merged evidence strip states the fact in the title alone. */
+  detail?: string;
   next: string;
 }
 
@@ -263,6 +264,7 @@ type PlanCopyKey =
   | "planStatusLabel"
   | "projectPlansLabel"
   | "thenPrefix"
+  | "startPrefix"
   | "verifyFallback"
   | "returnFallback"
   | "stageProgress"
@@ -342,6 +344,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     planStatusLabel: "计划状态",
     projectPlansLabel: "项目子计划",
     thenPrefix: "再后面：{step}",
+    startPrefix: "开始：{step}",
     verifyFallback: "完成后做一次最小验证，确认这一步真的成立。",
     returnFallback: "带着验证结果回到对话，再决定这条主线的下一步。",
     stageProgress: "第 {index} / {total} 段",
@@ -421,6 +424,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     planStatusLabel: "Plan status",
     projectPlansLabel: "Project plans",
     thenPrefix: "Then: {step}",
+    startPrefix: "Start: {step}",
     verifyFallback: "Run one small verification to confirm this step really landed.",
     returnFallback: "Return to Coach with the verified result before moving the thread forward.",
     stageProgress: "Stage {index} of {total}",
@@ -500,6 +504,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     planStatusLabel: "Estado del plan",
     projectPlansLabel: "Planes del proyecto",
     thenPrefix: "Después: {step}",
+    startPrefix: "Empieza: {step}",
     verifyFallback: "Ejecuta una verificación mínima para confirmar que este paso realmente quedó hecho.",
     returnFallback:
       "Vuelve al coach con el resultado verificado antes de avanzar el hilo.",
@@ -580,6 +585,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     planStatusLabel: "Statut du plan",
     projectPlansLabel: "Plans de projet",
     thenPrefix: "Ensuite: {step}",
+    startPrefix: "Commencer : {step}",
     verifyFallback: "Faites une petite vérification pour confirmer que cette étape est vraiment acquise.",
     returnFallback:
       "Revenez dans Coach avec le résultat vérifié avant de faire avancer le fil.",
@@ -660,6 +666,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     planStatusLabel: "Planstatus",
     projectPlansLabel: "Projektpläne",
     thenPrefix: "Danach: {step}",
+    startPrefix: "Start: {step}",
     verifyFallback: "Führen Sie eine kleine Prüfung durch, um zu bestätigen, dass dieser Schritt wirklich sitzt.",
     returnFallback:
       "Kehren Sie mit dem überprüften Ergebnis in den Coach zurück, bevor Sie den Pfad weiterführen.",
@@ -740,6 +747,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     planStatusLabel: "計画の状態",
     projectPlansLabel: "プロジェクト計画",
     thenPrefix: "次回: {step}",
+    startPrefix: "開始:{step}",
     verifyFallback: "小さな検証を一度行い、このステップが本当に成立したかを確かめます。",
     returnFallback:
       "検証結果を持って Coach に戻り、この流れの次の一手を決めます。",
@@ -820,6 +828,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     planStatusLabel: "계획 상태",
     projectPlansLabel: "프로젝트 계획",
     thenPrefix: "다음: {step}",
+    startPrefix: "시작: {step}",
     verifyFallback: "작은 검증을 한 번 실행해 이 단계가 정말 자리 잡았는지 확인하세요.",
     returnFallback:
       "검증 결과를 가지고 코치로 돌아온 뒤 이 흐름의 다음 단계를 정하세요.",
@@ -900,6 +909,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     planStatusLabel: "Status do plano",
     projectPlansLabel: "Planos do projeto",
     thenPrefix: "Depois: {step}",
+    startPrefix: "Começar: {step}",
     verifyFallback: "Faça uma verificação mínima para confirmar que esta etapa realmente ficou pronta.",
     returnFallback:
       "Volte ao coach com o resultado verificado antes de avançar este fluxo.",
@@ -1232,11 +1242,13 @@ function resolvePlanDecisionStrip(input: {
   }
 
   if (hasPendingEvidence) {
+    // r1-g1-3: one neutral sentence. The title alone states the fact — the
+    // previous detail repeated the same sentence, and the alert tone competed
+    // with the primary action for the surface's only saturated color.
     return {
       tone: "warning",
       eyebrow: planCopy(input.language, "needsConfirmation"),
       title: planCopy(input.language, "evidenceUnchanged"),
-      detail: planCopy(input.language, "evidenceUnchangedDetail"),
       next: verifyNow
         ? planCopy(input.language, "verifyFirst", { step: verifyNow })
         : planCopy(input.language, "reviewPending"),
@@ -1787,19 +1799,73 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const primaryRouteStripItems = routeStripItems;
 
   const nextAction = compactPrimaryAction ?? pickPlanPrimaryAction(actions);
+  // r1-g1-0: the 下一步 block's one primary action is named after the copy it
+  // starts ("开始:<step>"); the evidence-review action ("整理证据") is demoted
+  // to a quiet secondary link so accent saturation stays on the start action.
+  const evidenceReviewAction = !compactPrimary
+    ? (actions ?? []).find(
+        (action) =>
+          !action.disabled &&
+          (action.id === "plan-review-evidence" || action.id === "plan-needs-evidence"),
+      )
+    : undefined;
+  const stepStartAction = !compactPrimary
+    ? pickPlanPrimaryAction(
+        (actions ?? []).filter((action) => action.id !== evidenceReviewAction?.id),
+      )
+    : undefined;
+  // Setup and recovery intents keep their own names — renaming them to
+  // "start" would lie about what the button does. Every other next-step
+  // action renders under the copy-matched 开始：{step} label (r2-g1-0), so
+  // the primary button never disappears behind the evidence demotion and
+  // the screen keeps exactly one primary.
+  const setupRecoveryActionIds = new Set([
+    "open-settings",
+    "refresh-plan",
+    "plan-continue-without-plan",
+    "resume-plan",
+    "plan-clear-blocker",
+  ]);
+  const stepStartTitle = inlineText(currentLane.body) || activeStageTitle;
+  const stepStartLabel = planCopy(language, "startPrefix", {
+    step: stepStartTitle.length > 22 ? `${stepStartTitle.slice(0, 21)}…` : stepStartTitle,
+  });
+  const learningPrimaryKeepsOwnName =
+    !compactPrimary &&
+    Boolean(stepStartAction && setupRecoveryActionIds.has(stepStartAction.id));
   return (
     <LearningHome
       currentLabel={templateCopy[language].currentLearning}
       title={plan.title}
       stage={stageProgressText ? `${stageProgressText} · ${activeStageTitle}` : activeStageTitle}
-      state={shouldShowDecisionCard && planDecisionStrip ? <SystemState kind={plan.frozen ? "read-only" : "recoverable-error"} title={planDecisionStrip.title} detail={planDecisionStrip.detail} /> : undefined}
-      next={{ label: resolvedNextStepLabel, title: inlineText(currentLane.body) || activeStageTitle,
+      state={shouldShowDecisionCard && planDecisionStrip ? <SystemState kind={plan.frozen ? "read-only" : blockedReason ? "recoverable-error" : "information"} title={planDecisionStrip.title} detail={planDecisionStrip.detail} /> : undefined}
+      next={{ label: resolvedNextStepLabel, title: stepStartTitle,
         detail: shouldShowDecisionCard && planDecisionStrip && (plan.frozen || blockedReason)
           ? <div data-plan-fact="next">{planDecisionStrip.next}</div>
           : <div data-plan-fact="next"><span>{templateCopy[language].complete}: </span>{verifyText}</div>,
-        action: { label: nextAction?.label ?? templateCopy[language].askCoach, disabled: nextAction?.disabled,
-          onClick: nextAction?.onClick ?? (() => props.onNavigateToView?.("coach")) } }}
-      nextTools={nextAction?.id === "plan-review-evidence" ? liveEvidenceDecisionRow : undefined}
+        action: compactPrimary
+          ? { label: nextAction?.label ?? templateCopy[language].askCoach, disabled: nextAction?.disabled,
+              onClick: nextAction?.onClick ?? (() => props.onNavigateToView?.("coach")) }
+          : {
+              label: learningPrimaryKeepsOwnName ? stepStartAction?.label ?? stepStartLabel : stepStartLabel,
+              disabled: learningPrimaryKeepsOwnName ? stepStartAction?.disabled ?? false : false,
+              onClick: stepStartAction?.onClick ?? (() => props.onNavigateToView?.("coach")),
+            } }}
+      nextTools={compactPrimary ? (nextAction?.id === "plan-review-evidence" ? liveEvidenceDecisionRow : undefined) : (
+        <>
+          {evidenceReviewAction ? (
+            <button
+              type="button"
+              className="template-back coach-plan-view__secondary-action"
+              data-plan-evidence-secondary="true"
+              onClick={evidenceReviewAction.onClick}
+            >
+              {evidenceReviewAction.label}
+            </button>
+          ) : null}
+          {liveEvidenceDecisionRow}
+        </>
+      )}
       review={hasReviewDetails ? { label: resolvedRevisitSummaryLabel, content: <>
         {reviewSupportRow ? renderNodeWithParagraph(reviewSupportRow.body) : null}
         {props.dueReviewItems?.slice(0, 4).map((item) => <div key={item.id}><strong>{item.title}</strong><p>{compactReviewLane(item, language)}</p></div>)}

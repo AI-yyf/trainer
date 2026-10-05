@@ -12,7 +12,7 @@
  *   training.png              Training (训练) view with the active card
  *   settings-connected.png    Settings connection summary (connected)
  *   settings-quick-setup.png  Settings connection edit level (quick setup)
- *   message-actions.png       Coach reply with its closed action overflow
+ *   message-actions.png       Coach reply with its action overflow opened
  *   message-actions-row.png   Element close-up of the action overflow
  *   skill-deck.png            `$` skill palette open in the composer
  *   skill-manager.png         Settings → Coach custom Skill manager
@@ -211,14 +211,14 @@ const SHOTS = [
     },
   },
   {
-    // The ready coach seed is one compact reply with its quick actions row in
-    // the default viewport. (The rich-content scenario would add a mermaid
-    // diagram that renders as illegible black nodes in the dark preview theme,
-    // so it is deliberately not used for the README action-row shot.)
+    // The ready coach seed is one compact reply. r2-g0-4: the overflow is
+    // opened so this shot shows the expanded per-message actions instead of
+    // duplicating the chat-first-run capture (same urlParams otherwise).
     name: "message-actions",
     file: "message-actions.png",
-    title: "Coach reply with per-message actions (ready)",
+    title: "Coach reply with per-message actions open (ready)",
     urlParams: { view: "coach", scenario: "ready" },
+    async interact(page) { await page.locator(".template-overflow > summary").last().click(); },
   },
   {
     name: "message-actions-row",

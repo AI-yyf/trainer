@@ -1438,3 +1438,21 @@
 .composer__accessory .command-deck__header {
   display: none;
 }
+
+/* r1-g0-2: first-run task suggestion chips — quiet secondary buttons sitting
+   above the single coach input. No banner surface, no second input. */
+.composer-suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 2px 6px;
+}
+
+.composer-suggestion-chip {
+  max-inline-size: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

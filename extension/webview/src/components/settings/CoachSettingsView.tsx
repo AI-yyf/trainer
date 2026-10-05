@@ -4187,7 +4187,10 @@ export function CoachSettingsView({
   const sectionFlashTimerRef = useRef<number | null>(null);
   const [modelPickerOpen, setModelPickerOpen] = useState(() => !providerDraft.model.trim());
   type SettingsCategory = SettingsSectionId;
-  const [settingsIndexOpen, setSettingsIndexOpen] = useState(!providerApiKeyFocusRequest);
+  // 已配置过的连接回访时直接落在连接详情;只有冷启动(未配置)才先看 Index。
+  const [settingsIndexOpen, setSettingsIndexOpen] = useState(
+    !providerApiKeyFocusRequest && !(provider.configured && Boolean(provider.model.trim())),
+  );
   const [activeSettingsCategory, setActiveSettingsCategory] =
     useState<SettingsCategory>("connection");
   const openSettingsCategorySection = (id: SettingsCategory) => {
@@ -4203,6 +4206,9 @@ export function CoachSettingsView({
   });
   const [customSkillDescription, setCustomSkillDescription] = useState("");
   const [customSkillGenerating, setCustomSkillGenerating] = useState(false);
+  // r1-g2-5: the empty state shows ONE "添加技能" primary; the creation form
+  // expands on click so the create CTA is reachable in the first screenful.
+  const [customSkillFormOpen, setCustomSkillFormOpen] = useState(false);
   const [customSkillSource, setCustomSkillSource] = useState<"model" | "template" | null>(null);
   const [customSkillError, setCustomSkillError] = useState<string | null>(null);
   useEffect(() => {
@@ -6080,8 +6086,16 @@ export function CoachSettingsView({
     setConnectionView("edit");
     setProviderApiKeyFocusRequested(true);
   };
+  // r1-g2-4: one connection identity summary per screen. When the saved-profile
+  // selector renders, its active row already carries the identity (name · model
+  // · state) and the "连接详情" row expands to the full truth — so the big
+  // summary card stands down and the selector stays the single summary.
+  const providerIdentityListVisible =
+    providerProfiles.length > 0 ||
+    canSaveProviderProfile ||
+    (providerSaved && (onRefreshProviderProfiles || onUseProviderTemplateLabel));
   const showConnectionSummary =
-    providerSaved && !providerHasDraftChanges && connectionView === "auto";
+    providerSaved && !providerHasDraftChanges && connectionView === "auto" && !providerIdentityListVisible;
   const showProviderTemplates = Boolean(onUseProviderTemplateLabel) && connectionView === "add";
   // Empty state stays a single-purpose screen: the paste card plus one entry
   // into the template directory. The full form only appears once the user
@@ -6363,7 +6377,11 @@ export function CoachSettingsView({
     ),
     44,
   );
-  const shouldShowProviderConnectionSummary = providerSaved || providerHasDraftChanges;
+  // A configured connection always shows its summary card in the detail —
+  // returning users must see name/model/state at a glance, not an empty pane
+  // between tests.
+  const shouldShowProviderConnectionSummary =
+    providerSaved || providerHasDraftChanges || (provider.configured && Boolean(provider.baseUrl.trim()));
   const showAvailabilityChecklist =
     providerHasDraftChanges || (!providerCoachReady && !shouldRoutePrimaryToSavedProfiles);
   const renderProviderSetupChecks = (className: string) => (
@@ -7058,6 +7076,17 @@ export function CoachSettingsView({
           ))}
           </div>
           <div className="settings-provider-bar__actions">
+            {providerSaved && !showConnectionSummary ? (
+              <button
+                type="button"
+                className="settings-provider-bar__icon-button"
+                title={settingsPhrase(language, "editConfiguration")}
+                aria-label={settingsPhrase(language, "editConfiguration")}
+                onClick={() => setConnectionView("edit")}
+              >
+                <SettingsPreferencesIcon size={14} />
+              </button>
+            ) : null}
             {canSaveProviderProfile && !showConnectionSummary ? (
               <button
                 type="button"
@@ -7164,29 +7193,9 @@ export function CoachSettingsView({
   const showProviderDetailStatePill =
     shouldShowProviderConnectionSummary &&
     (providerHasDraftChanges || !providerCoachReady || providerNeedsRetest);
-  const connectionLevelTitles: Record<"add" | "edit" | "advanced", string> = {
-    add: settingsPhrase(language, "addProvider"),
-    edit: settingsPhrase(language, "editConfiguration"),
-    advanced: settingsGlobalCopy.settingsConnectionDetails,
-  };
-  const connectionLevelHead =
-    connectionView === "add" || connectionView === "edit" ? (
-      <div className="settings-level-head">
-        <button
-          type="button"
-          className="settings-level-head__back"
-          aria-label={settingsGlobalCopy.settingsSectionConnection}
-          title={settingsGlobalCopy.settingsSectionConnection}
-          onClick={() => setConnectionView("auto")}
-        >
-          <ChevronLeftIcon size={14} aria-hidden />
-          <span>{settingsGlobalCopy.settingsSectionConnection}</span>
-        </button>
-        <span className="eyebrow settings-level-head__title">
-          {connectionLevelTitles[connectionView]}
-        </span>
-      </div>
-    ) : null;
+  // r1-g2-4: the duplicate "连接" eyebrow and the mid-level "‹ 连接" back were
+  // removed — SettingsDetail already owns the section title and the single
+  // back affordance, and the provider bar row carries the identity summary.
   const providerAdvancedEntry = (
     <div className="settings-sheet__support coach-settings-view__provider-detail collapse-section collapse-section--level-2">
       <div className="collapse-section__header-row">
@@ -7236,6 +7245,9 @@ export function CoachSettingsView({
           }
           label={saveProviderConnectionLabel}
           ariaLabel={saveProviderConnectionLabel}
+          // r1-g2-4: 保存并使用 is this screen's single solid primary; retest
+          // and model-list refresh stay quiet secondary actions below it.
+          tone="accent"
           detail={
             canSaveProviderConnection
               ? settingsPhrase(language, "saveToApply")
@@ -7370,7 +7382,12 @@ export function CoachSettingsView({
                 >
               <button
                 type="button"
-                className="template-back"
+                className={`button button--ghost button--compact settings-trust-action${
+                  issue.id === "trust" && resolvedWorkspaceTrustState === "trusted"
+                    ? " is-trusted"
+                    : ""
+                }`}
+                data-settings-trust-action={issue.id === "trust" ? "true" : undefined}
                 onClick={() => {
                   if (issue.action) {
                     issue.action();
@@ -7382,6 +7399,11 @@ export function CoachSettingsView({
                   revealSettingsSection(issue.target);
                 }}
               >
+                <span
+                  className="settings-trust-action__state"
+                  data-trust-state={issue.id === "trust" ? resolvedWorkspaceTrustState : undefined}
+                  aria-hidden="true"
+                />
                 {issue.id === "trust"
                   ? onTrustWindow
                     ? settingsText(language, "信任此窗口", "Trust this window")
@@ -7411,6 +7433,7 @@ export function CoachSettingsView({
             hasStoredApiKey={providerDraftCanReuseSavedApiKey}
             trusted={resolvedWorkspaceTrustState === "trusted"}
             busy={providerSaveBusy || providerTestPending}
+            onTrustWindow={onTrustWindow}
             onDraftChange={onProviderDraftChange}
             onSave={() => {
               if (onSaveProvider) {
@@ -7440,26 +7463,9 @@ export function CoachSettingsView({
             className={`settings-anchor${sectionFlash === "connection" ? " settings-anchor--flash" : ""}`}
             data-settings-section="connection"
           >
-            {providerSaved ? (
-            <header className="settings-section-head">
-              <span className="eyebrow">{settingsGlobalCopy.settingsSectionConnection}</span>
-              {connectionDirty ? (
-                <span
-                  className="settings-section-dot"
-                  data-settings-dirty="connection"
-                  title={settingsGlobalCopy.settingsStatusUnsaved}
-                >
-                  <span className="sr-only">{settingsGlobalCopy.settingsStatusUnsaved}</span>
-                </span>
-              ) : null}
-            </header>
-            ) : null}
-
             {providerListBar}
 
             {connectionSummaryCard}
-
-            {connectionLevelHead}
 
             {providerDirectory}
 
@@ -8528,6 +8534,8 @@ export function CoachSettingsView({
                 </p>
               )}
 
+              <div className="settings-skill-form-wrap">
+              {customSkillFormOpen ? (
               <div className="settings-skill-form">
                 <div className="settings-skill-form__field">
                   <span className="eyebrow">
@@ -8696,10 +8704,21 @@ export function CoachSettingsView({
                     setCustomSkillDescription("");
                     setCustomSkillSource(null);
                     setCustomSkillError(null);
+                    setCustomSkillFormOpen(false);
                   }}
                 >
                   {settingsText(language, "添加技能", "Add skill")}
                 </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="button button--accent settings-skill-form__toggle"
+                onClick={() => setCustomSkillFormOpen(true)}
+              >
+                {settingsText(language, "添加技能", "Add skill")}
+              </button>
+            )}
               </div>
             </div>
           </div>

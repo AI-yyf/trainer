@@ -76,6 +76,63 @@
   border: 0;
 }
 
+/* r2-g0-0: minimal identity containers, different shape per side.
+   Coach turns keep the flat thread but gain a left hairline plus the small
+   name line; user turns keep a light, inset bubble. Same three tokens only.
+   r2-g0-4: the hairline uses the panel-border semantic variable at full
+   strength — one notch up from the Round 2 62% mix. */
+.coach-conversation-view--quiet-surface .message-bubble--assistant {
+  border-left: 1px solid var(--vscode-panel-border, var(--line));
+  padding-left: 10px;
+}
+
+.coach-conversation-view--quiet-surface .message-bubble--assistant .message-bubble__assistant-rail {
+  margin-bottom: 0;
+}
+
+/* r2-g0-0: the live "正在进行" meta rides in the head row beside the speaker
+   label instead of floating above the message container. */
+.coach-conversation-view .message-bubble__assistant-rail .agent-activity-strip {
+  margin: 0;
+  min-width: 0;
+}
+
+.coach-conversation-view--quiet-surface .message-bubble--user {
+  align-self: flex-end;
+  max-width: min(88%, 500px);
+  margin-inline-end: 3px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
+  border-radius: 10px 10px 3px 10px;
+  background: color-mix(in srgb, var(--bg-2) 62%, var(--bg-1));
+}
+
+/* r2-g0-0: the quick-action ⋯ lives at the end of the message row as a real
+   24px button. At rest it stays present but dimmed (token-mixed color, never
+   fully invisible); hover/focus raises it to full. */
+.coach-conversation-view .template-overflow {
+  margin: 2px 0 0 auto;
+}
+
+.coach-conversation-view .template-overflow > summary {
+  color: color-mix(in srgb, var(--fg-muted) 55%, transparent);
+  transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease);
+}
+
+.coach-conversation-view .message-bubble:hover .template-overflow > summary,
+.coach-conversation-view .message-bubble:focus-within .template-overflow > summary,
+.coach-conversation-view .template-overflow > summary:hover,
+.coach-conversation-view .template-overflow > summary:focus-visible,
+.coach-conversation-view .template-overflow[open] > summary {
+  color: var(--fg-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-conversation-view .template-overflow > summary {
+    transition: none;
+  }
+}
+
 .coach-conversation-view--quiet-surface .message-bubble__body {
   gap: 4px;
 }
