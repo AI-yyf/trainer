@@ -6,37 +6,10 @@
   margin-bottom: 10px;
 }
 
-.settings-section__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 7px;
-  gap: 10px;
-}
-
-.settings-section__header-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .settings-section__title {
   font-size: var(--trainer-font-xs);
   font-weight: 400;
   color: var(--fg-1);
-}
-
-.settings-section__desc {
-  font-size: var(--trainer-font-3xs);
-  color: var(--fg-muted);
-  line-height: 1.35;
-}
-
-.settings-section__header > .status-pill {
-  margin-top: 1px;
-  padding: 2px 7px;
-  font-weight: 400;
-  letter-spacing: 0;
 }
 
 .settings-section--panel {
@@ -62,10 +35,6 @@
   border-radius: 0;
   padding: 4px 0 0;
   box-shadow: none;
-}
-
-.settings-section--setup > .settings-sheet__state-panel {
-  display: none;
 }
 
 .settings-section--setup > .settings-sheet__summary-grid {

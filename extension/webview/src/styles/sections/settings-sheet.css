@@ -22,26 +22,11 @@
   border-bottom: 0;
 }
 
-.settings-sheet__header-main {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-}
-
 .settings-sheet__header h2 {
   font-size: var(--trainer-font-xs);
   line-height: 1.3;
   letter-spacing: 0;
   font-weight: 400;
-}
-
-.settings-sheet__subtitle {
-  font-size: var(--trainer-font-2xs);
-  color: var(--fg-muted);
-  margin-top: 0;
-  max-width: 32ch;
-  line-height: 1.35;
 }
 
 .settings-sheet__body {
@@ -291,12 +276,6 @@
 
 .settings-sheet__simple-row:last-child {
   border-bottom: none;
-}
-
-.settings-sheet__choices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
 }
 
 .training-hint-reveal {
@@ -563,10 +542,6 @@
   gap: 4px;
 }
 
-.settings-sheet__summary-grid--firstlook {
-  margin-top: 6px;
-}
-
 .settings-sheet__provider-profiles > summary {
   display: flex;
   align-items: baseline;
@@ -581,20 +556,8 @@
   margin-top: 4px;
 }
 
-.settings-provider-profile-panel {
-  display: grid;
-  gap: 4px;
-}
-
-.settings-provider-profile-panel__note {
-  color: var(--fg-muted);
-  font-size: var(--trainer-font-3xs);
-  line-height: 1.42;
-}
-
 .settings-sheet__provider-catalog > .settings-sheet__minor-body > .settings-sheet__note--compact,
-.settings-sheet__provider-catalog .settings-sheet__minor-panel > .settings-sheet__minor-body > .settings-sheet__note--compact:not(.settings-sheet__note--warning),
-.settings-provider-profile-panel__note {
+.settings-sheet__provider-catalog .settings-sheet__minor-panel > .settings-sheet__minor-body > .settings-sheet__note--compact:not(.settings-sheet__note--warning) {
   display: none;
 }
 
@@ -1158,17 +1121,6 @@
   font-weight: 400;
 }
 
-.settings-sheet__setup-kicker {
-  font-size: var(--trainer-font-xs);
-  color: var(--fg-muted);
-  margin-bottom: 8px;
-}
-
-.settings-sheet__setup-copy {
-  font-size: var(--trainer-font-xs);
-  line-height: 1.6;
-}
-
 .settings-sheet__setup-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1179,20 +1131,6 @@
   border: 0;
   border-top: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
   border-radius: 0;
-}
-
-.settings-sheet__setup-guidance {
-  grid-column: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.settings-sheet__setup-guidance p {
-  color: var(--fg-1);
-  font-size: var(--trainer-font-2xs);
-  line-height: 1.35;
 }
 
 .settings-sheet__setup-card > .action-button,
@@ -1355,37 +1293,8 @@
   opacity: 0.5;
 }
 
-.settings-sheet__defaults-panel {
-  margin-top: 2px;
-}
-
-.settings-sheet__defaults-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  cursor: pointer;
-  color: var(--fg-1);
-}
-
-.settings-sheet__defaults-summary:hover,
 .settings-section--summary > .collapsible-block > summary:hover {
   color: var(--fg-0);
-}
-
-.settings-sheet__defaults-summary:hover::marker {
-  color: var(--fg-0);
-}
-
-.settings-sheet__defaults-summary--inline {
-  justify-content: space-between;
-}
-
-.settings-sheet__defaults-summary-main {
-  min-width: 0;
-}
-
-.settings-sheet__defaults-summary::marker {
-  color: var(--fg-muted);
 }
 
 .settings-sheet__defaults-preview {
@@ -1396,10 +1305,6 @@
 
 .trainer-shell:lang(zh-CN) .settings-sheet__defaults-preview {
   word-break: keep-all;
-}
-
-.settings-sheet__defaults-panel[open] .settings-sheet__defaults-body {
-  margin-top: 8px;
 }
 
 .settings-sheet__remembered-panel {
@@ -1431,10 +1336,6 @@
   font-size: var(--trainer-font-2xs);
   color: var(--fg-muted);
   margin-top: 2px;
-}
-
-.settings-sheet__support--workspace {
-  margin-top: 8px;
 }
 
 .settings-sheet__workspace-card {
@@ -1492,35 +1393,6 @@
   color: var(--fg-0);
 }
 
-.settings-sheet__workspace-list-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-  font-size: var(--trainer-font-xs);
-  color: var(--fg-1);
-}
-
-.settings-sheet__workspace-list-copy > strong {
-  font-weight: 400;
-  color: var(--fg-1);
-}
-
-.settings-sheet__workspace-list-item.is-enabled .settings-sheet__workspace-list-copy > strong {
-  color: var(--fg-0);
-}
-
-.settings-sheet__workspace-list-copy > span {
-  font-size: var(--trainer-font-3xs);
-  color: var(--fg-muted);
-}
-
-.settings-sheet__workspace-meta {
-  font-size: var(--trainer-font-3xs);
-  color: var(--fg-muted);
-  margin-top: 4px;
-}
-
 .settings-sheet__utility-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1531,53 +1403,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.settings-sheet__rail-tag {
-  font-size: var(--trainer-font-3xs);
-  color: var(--fg-muted);
-  white-space: nowrap;
-}
-
-.settings-sheet__feedback-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.settings-sheet__state-panel {
-  padding: 6px 0 0;
-  background: transparent;
-  border: 0;
-  border-top: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
-  border-radius: 0;
-}
-
-.settings-sheet__state-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.settings-sheet__state-row {
-  display: grid;
-  grid-template-columns: minmax(70px, 0.36fr) minmax(0, 1fr);
-  align-items: start;
-  gap: 10px;
-  font-size: var(--trainer-font-2xs);
-}
-
-.settings-sheet__state-row > span {
-  color: var(--fg-muted);
-  line-height: 1.35;
-}
-
-.settings-sheet__state-row > strong {
-  min-width: 0;
-  color: var(--fg-1);
-  font-weight: 400;
-  line-height: 1.35;
 }
 
 .settings-row {
@@ -1603,10 +1428,9 @@
     width: 100%;
   }
 
-  .settings-sheet__setup-guidance,
   .settings-sheet__setup-card > .action-button,
-  .settings-sheet__setup-card > .settings-sheet__note,
-  .settings-sheet__setup-card > .settings-sheet__summary-grid {
+.settings-sheet__setup-card > .settings-sheet__note,
+.settings-sheet__setup-card > .settings-sheet__summary-grid {
     grid-column: auto;
     grid-row: auto;
   }
@@ -1632,16 +1456,6 @@
     align-items: flex-start;
   }
 
-  .settings-sheet__choices {
-    width: 100%;
-  }
-
-  .settings-sheet__choices .toolbar-button,
-  .settings-sheet__choices .settings-sheet__choice-pill {
-    flex: 1 1 auto;
-    justify-content: center;
-  }
-
 }
 
 @media (max-width: 320px) {
@@ -1665,22 +1479,6 @@
   min-height: 24px;
 }
 
-.settings-status-bar--blockers .settings-status-bar__text {
-  color: var(--fg-2);
-}
-
-.settings-status-bar--blockers .settings-status-bar__issue {
-  min-height: 20px;
-  padding: 1px 8px;
-  background: transparent;
-  color: var(--fg-2);
-}
-
-.settings-status-bar--blockers .settings-status-bar__issue:hover {
-  color: var(--fg-1);
-  background: color-mix(in srgb, var(--bg-2) 70%, transparent);
-}
-
 /* Primary save: own the row. Secondary actions sit beneath as quiet peers. */
 .settings-section--setup .settings-actions--primary .action-button--accent {
   width: 100%;
@@ -1700,28 +1498,6 @@
 }
 
 /* Pull-down option lists: one regular control per settings row. */
-.settings-sheet__choice-select {
-  width: 100%;
-  min-height: 28px;
-  padding: 4px 8px;
-  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
-  border-radius: var(--radius-sm);
-  background: var(--bg-1);
-  color: var(--fg-1);
-  font-family: inherit;
-  font-size: var(--trainer-font-xs);
-  line-height: 1.3;
-  cursor: pointer;
-}
-
-.settings-sheet__choice-select:hover {
-  border-color: color-mix(in srgb, var(--line) 80%, transparent);
-}
-
-.settings-sheet__choice-select:focus-visible {
-  outline: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
-  outline-offset: 1px;
-}
 
 /* Regular preference rows: one grid — fixed label column, control fills.
    Applies to the consolidated preferences body so every row lines up. */

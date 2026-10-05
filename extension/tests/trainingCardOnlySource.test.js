@@ -29,22 +29,6 @@ const trainingViewSourcePath = path.resolve(
 );
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
-function cardOnlyRender(source) {
-  const start = source.indexOf('{cardOnly ? (');
-  const end = source.indexOf('{!cardOnly ? (', start);
-
-  assert.ok(start >= 0, 'expected the card-only render branch');
-  assert.ok(end > start, 'expected the card-only branch to close before secondary content');
-  return source.slice(start, end);
-}
-
-function cardOnlyFace(source) {
-  const start = source.indexOf('{cardOnly ? (');
-  const end = source.indexOf('{!cardOnly ? (', start);
-  assert.ok(start >= 0 && end > start, 'expected the card-only face before secondary content');
-  return source.slice(start, end);
-}
-
 function trainingCardGenerationHandler(source) {
   const start = source.indexOf('  const handleGenerateTrainingCard = useCallback(');
   const end = source.indexOf('  const composerUsesTrainingFlow', start);
@@ -78,10 +62,15 @@ test('training empty state creates the first small card without redirecting to C
 test('training card-only mode keeps secondary primer and guidance surfaces out of the floating card face', () => {
   const source = fs.readFileSync(trainingViewSourcePath, 'utf8');
 
-  assert.match(source, /const showSourceDetails =\s*!learnPhaseActive &&\s*!cardOnly/);
-  assert.match(source, /const showRouteDetails =\s*!learnPhaseActive &&\s*!cardOnly/);
-  assert.match(source, /const hasGuidanceDetails =\s*!cardOnly &&/);
-  assert.match(source, /const showLearnPrimerNote = !cardOnly && !learnPhaseActive && hasLearnFirstBlock;/);
+  // Focus mode: the secondary primer/guidance/route surfaces shipped only in
+  // the removed non-card-only branch; they must not grow back silently.
+  assert.doesNotMatch(source, /const showSourceDetails/);
+  assert.doesNotMatch(source, /const showRouteDetails/);
+  assert.doesNotMatch(source, /const hasGuidanceDetails/);
+  assert.doesNotMatch(source, /const showLearnPrimerNote/);
+  assert.doesNotMatch(source, /training-guidance-details/);
+  assert.doesNotMatch(source, /training-source-details/);
+  assert.doesNotMatch(source, /training-card-route-details/);
 });
 
 test('training cards preserve their explicit deliverable and verification contract', () => {
@@ -102,7 +91,8 @@ test('training cards preserve their explicit deliverable and verification contra
   assert.match(source, /verificationMethod\?: string;/);
   assert.match(source, /const resolvedDeliverables = uniqueTrainingCardItems\(\[deliverable, \.\.\.deliverables\]\);/);
   assert.match(source, /const resolvedVerifyItems = uniqueTrainingCardItems\(\[[\s\S]*?validationMethod,[\s\S]*?verificationMethod,[\s\S]*?\.\.\.verifyItems,/);
-  assert.match(source, /const routeVerifySummary = resolvedVerifyItems\[0\]/);
+  assert.match(source, /const cardOnlyVerification = resolvedVerifyItems\.length > 1/);
+  assert.match(source, /firstText\(\s*resolvedVerifyItems\[0\],/);
 });
 
 test('training card-only mode replaces the full phase rail with the active phase at the narrowest sidebar width', () => {
@@ -161,10 +151,11 @@ test('training restore targets become the current card and publish the visible s
   const trainingSource = fs.readFileSync(trainingViewSourcePath, "utf8");
   assert.doesNotMatch(trainingSource, /data-training-next-hop="true"/);
   assert.doesNotMatch(trainingSource, /function TrainingNextHopLine/);
-  assert.match(
-    trainingSource,
-    /const carryoverCards = \[restoredFocus, outcome, cardOnly \? undefined : nextHop\]/,
-  );
+  // Focus mode renders the single current card; the carryover row stack
+  // (restored focus / outcome / next hop) shipped only in the removed
+  // non-card-only branch and must not grow back.
+  assert.doesNotMatch(trainingSource, /const carryoverCards/);
+  assert.doesNotMatch(trainingSource, /function TrainingCarryoverRow/);
   assert.doesNotMatch(trainingSource, /<details className="training-current__more">/);
   // Queue access and its layout beside a current card are exercised by the
   // Start review scenario in trainer-session-recovery.spec.js.

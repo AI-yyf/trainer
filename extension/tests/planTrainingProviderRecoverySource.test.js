@@ -33,7 +33,7 @@ test('workspace admission takes priority over provider recovery across coaching 
   );
   assert.match(
     source,
-    /const sendTurn = \(\{[\s\S]*?if \(workspaceSessionBlocked\) \{\s*openWorkspaceAdmission\(\);[\s\S]*?return;\s*\}\s*if \(!providerCanCoachNow \|\| providerBlockReason \|\| capabilitySendBlocked\) \{\s*setActiveView\("settings"\);\s*setOperationMessage\(\{\s*tone: "info",\s*message: blockedComposerGuidance,[\s\S]*?return;/,
+    /const sendTurn = \(\{[\s\S]*?if \(workspaceSessionBlocked\) \{\s*openWorkspaceAdmission\(\);[\s\S]*?return;\s*\}\s*if \(!providerCanCoachNow \|\| providerBlockReason \|\| capabilitySendBlocked\) \{\s*useWorkbenchState\.getState\(\)\.requestSettingsCategory\("connection"\);\s*setActiveView\("settings"\);\s*setOperationMessage\(\{\s*tone: "info",\s*message: blockedComposerGuidance,[\s\S]*?return;/,
   );
   // providerCoachBanner (holding this line) moved into providerRecoveryCopy.ts.
 const recoveryCopySource = fs.readFileSync(
@@ -41,11 +41,26 @@ const recoveryCopySource = fs.readFileSync(
   'utf8',
   );
   assert.match(recoveryCopySource, /const scenario = providerRecoveryScenario\(provider, language, connectionState\);/);
-  assert.match(source, /const showComposerBlockingNotice =\s*sendBlocked &&/);
-  assert.match(source, /!hasFullCoachRecoverySurface &&/);
-  assert.match(source, /!hasCoachWorkspaceAdmissionSurface;/);
-  assert.match(source, /const showComposerPresenceBar =\s*!suppressComposerRecoverySurface\s*&&/);
-  assert.match(source, /\(\!hasCoachWorkspaceAdmissionSurface && workspaceSessionBlocked\)/);
+  // §六 arbitration: admission is decided before any provider surface, so the
+  // workspace takeover always outranks provider recovery (the former
+  // suppression flags were folded into resolveCoachBlockingSurface).
+  const arbitration = source.slice(
+    source.indexOf('function resolveCoachBlockingSurface'),
+    source.indexOf('function planStageStatusLabel'),
+  );
+  assert.ok(arbitration.length > 0, 'expected resolveCoachBlockingSurface');
+  const admissionAt = arbitration.indexOf('return "workspace-admission";');
+  const setupAt = arbitration.indexOf('return "provider-setup";');
+  const noticeAt = arbitration.indexOf('return "provider-notice";');
+  assert.ok(
+    admissionAt > -1 && setupAt > admissionAt && noticeAt > setupAt,
+    'expected admission to outrank provider setup and provider notice',
+  );
+  assert.match(source, /const showComposerBlockingNotice = coachBlockingSurface === "provider-notice";/);
+  assert.match(
+    source,
+    /const showComposerPresenceBar =\s*\(coachBlockingSurface === null \|\| coachBlockingSurface === "provider-notice"\) &&/,
+  );
   assert.match(
     source,
     /showComposerBlockingNotice[\s\S]*?showComposerProviderPill[\s\S]*?showComposerProviderNote/,
@@ -59,7 +74,7 @@ const recoveryCopySource = fs.readFileSync(
   assert.match(source, /providerRecoverySummary|providerRecoveryScenario/);
   assert.match(
     planView,
-    /\.\.\.\(sendBlocked\s*\?\s*\[[\s\S]*?id: "open-settings",[\s\S]*?onClick: \(\) => \{\s*if \(workspaceSessionBlocked\) \{\s*openWorkspaceAdmission\(\);\s*return;\s*\}\s*setActiveView\("settings"\);\s*\}/,
+    /\.\.\.\(sendBlocked\s*\?\s*\[[\s\S]*?id: "open-settings",[\s\S]*?onClick: \(\) => \{\s*if \(workspaceSessionBlocked\) \{\s*openWorkspaceAdmission\(\);\s*return;\s*\}\s*useWorkbenchState\.getState\(\)\.requestSettingsCategory\("connection"\);\s*setActiveView\("settings"\);\s*\}/,
   );
   assert.match(
     planView,

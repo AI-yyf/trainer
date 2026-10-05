@@ -105,8 +105,4 @@ body {
   color: var(--vscode-focusBorder, var(--accent));
 }
 
-.trainer-icon.is-active .trainer-icon__fill,
-.trainer-icon[data-active] .trainer-icon__fill,
-.trainer-icon__fill {
-  opacity: unset;
-}
+

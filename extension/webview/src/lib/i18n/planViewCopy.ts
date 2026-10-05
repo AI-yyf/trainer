@@ -33,6 +33,10 @@ export type PlanViewCopy = {
   subplanComplete: string;
   subplanArchived: string;
   projectSubplansLabel: string;
+  /** Learner-language label for the collapsed practice-record list (was "Evidence governance"). */
+  practiceRecordsLabel: string;
+  /** Plain text-style link inside the Growth disclosure that opens the progress route. */
+  viewGrowth: string;
 };
 
 const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
@@ -69,6 +73,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanComplete: "这条子计划已完成。",
     subplanArchived: "这条子计划已归档。",
     projectSubplansLabel: "项目子计划",
+    practiceRecordsLabel: "练习记录确认",
+    viewGrowth: "查看成长",
   },
   "en-US": {
     goalHint: "Compress this turn into one verifiable result first.",
@@ -103,6 +109,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanComplete: "This project plan is complete.",
     subplanArchived: "This project plan is archived.",
     projectSubplansLabel: "Project plans",
+    practiceRecordsLabel: "Practice records",
+    viewGrowth: "View growth",
   },
   "es-ES": {
     goalHint: "Primero convierte esta ronda en un resultado verificable.",
@@ -137,6 +145,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanComplete: "Este plan de proyecto está completado.",
     subplanArchived: "Este plan de proyecto está archivado.",
     projectSubplansLabel: "Planes de proyecto",
+    practiceRecordsLabel: "Registros de práctica",
+    viewGrowth: "Ver crecimiento",
   },
   "fr-FR": {
     goalHint: "Commencez par transformer cette étape en un résultat vérifiable.",
@@ -171,6 +181,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanComplete: "Ce plan de projet est terminé.",
     subplanArchived: "Ce plan de projet est archivé.",
     projectSubplansLabel: "Plans de projet",
+    practiceRecordsLabel: "Registres d'exercices",
+    viewGrowth: "Voir la progression",
   },
   "de-DE": {
     goalHint: "Verdichte diese Runde zuerst zu einem überprüfbaren Ergebnis.",
@@ -205,6 +217,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanComplete: "Dieser Projektplan ist abgeschlossen.",
     subplanArchived: "Dieser Projektplan ist archiviert.",
     projectSubplansLabel: "Projektpläne",
+    practiceRecordsLabel: "Übungsprotokoll",
+    viewGrowth: "Entwicklung ansehen",
   },
   "ja-JP": {
     goalHint: "この回を、まず検証できる一つの結果に絞り込みます。",
@@ -239,6 +253,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanComplete: "このプロジェクト計画は完了しました。",
     subplanArchived: "このプロジェクト計画はアーカイブされました。",
     projectSubplansLabel: "プロジェクト計画",
+    practiceRecordsLabel: "練習記録の確認",
+    viewGrowth: "成長を見る",
   },
   "ko-KR": {
     goalHint: "이번 단계를 먼저 검증 가능한 하나의 결과로 좁혀 주세요.",
@@ -273,6 +289,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanComplete: "이 프로젝트 계획은 완료되었습니다.",
     subplanArchived: "이 프로젝트 계획은 보관되었습니다.",
     projectSubplansLabel: "프로젝트 계획",
+    practiceRecordsLabel: "연습 기록 확인",
+    viewGrowth: "성장 보기",
   },
   "pt-BR": {
     goalHint: "Primeiro reduza esta etapa a um resultado verificável.",
@@ -307,6 +325,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanComplete: "Este plano de projeto está concluído.",
     subplanArchived: "Este plano de projeto está arquivado.",
     projectSubplansLabel: "Planos de projeto",
+    practiceRecordsLabel: "Registros de prática",
+    viewGrowth: "Ver crescimento",
   },
 };
 

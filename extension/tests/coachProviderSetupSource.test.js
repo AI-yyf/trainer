@@ -99,7 +99,7 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
   assert.match(source, /label: providerSetupState\.actionLabel,/);
   assert.match(
     source,
-    /const openProviderSetup = useCallback\(\(\) => \{\s*setActiveView\("settings"\);\s*if \(!data\.providerConfig\.apiKeyConfigured\) \{\s*setProviderApiKeyFocusRequest\(\(request\) => request \+ 1\);/,
+    /const openProviderSetup = useCallback\(\(\) => \{[\s\S]{0,200}?useWorkbenchState\.getState\(\)\.requestSettingsCategory\("connection"\);\s*setActiveView\("settings"\);\s*if \(!data\.providerConfig\.apiKeyConfigured\) \{\s*setProviderApiKeyFocusRequest\(\(request\) => request \+ 1\);/,
   );
   assert.doesNotMatch(source, /coach-empty-state__truth-rail/);
   assert.doesNotMatch(source, /moreContent=\{/);
@@ -115,15 +115,40 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
     /function blockedComposerPresenceMessage\(/,
   );
   assert.match(source, /const blockedComposerPresenceCopy =/);
-  assert.match(source, /const hasFullCoachRecoverySurface = activeView === "coach" && shouldShowNeutralEmptyState;/);
-  assert.match(source, /const hasCoachWorkspaceAdmissionSurface = activeView === "coach" && workspaceSessionBlocked;/);
+  // §六: one arbitration function decides the single visible blocking surface
+  // (the former suppression flags were folded into resolveCoachBlockingSurface).
   assert.match(
     source,
-    /const showComposerBlockingNotice =\s*sendBlocked &&\s*!suppressComposerRecoverySurface &&\s*!hasFullCoachRecoverySurface &&\s*!hasCoachWorkspaceAdmissionSurface;/,
+    /function resolveCoachBlockingSurface\(input: \{\s*coachViewActive: boolean;\s*workspaceSessionBlocked: boolean;\s*neutralSetupTakeover: boolean;\s*providerSendBlocked: boolean;\s*streamRecovering: boolean;\s*\}\): CoachBlockingSurface \| null \{/,
+  );
+  const arbitration = source.slice(
+    source.indexOf('function resolveCoachBlockingSurface'),
+    source.indexOf('function planStageStatusLabel'),
+  );
+  assert.ok(arbitration.length > 0, 'expected resolveCoachBlockingSurface');
+  const admissionAt = arbitration.indexOf('return "workspace-admission";');
+  const setupAt = arbitration.indexOf('return "provider-setup";');
+  const noticeAt = arbitration.indexOf('return "provider-notice";');
+  const recoveringAt = arbitration.indexOf('return "recovering";');
+  const nullAt = arbitration.indexOf('return null;', arbitration.indexOf('if (input.streamRecovering)'));
+  assert.ok(
+    admissionAt > -1 &&
+      setupAt > admissionAt &&
+      noticeAt > setupAt &&
+      recoveringAt > noticeAt &&
+      nullAt > recoveringAt,
+    'expected precedence workspace-admission > provider-setup > provider-notice > recovering > null',
   );
   assert.match(
     source,
-    /const showComposerPresenceBar =\s*!suppressComposerRecoverySurface &&\s*\(\s*\(!hasCoachWorkspaceAdmissionSurface && workspaceSessionBlocked\) \|\|/,
+    /const coachBlockingSurface = resolveCoachBlockingSurface\(\{\s*coachViewActive: activeView === "coach",\s*workspaceSessionBlocked,\s*neutralSetupTakeover: shouldShowNeutralEmptyState,\s*providerSendBlocked: sendBlocked,/,
+  );
+  assert.match(source, /const showComposerBlockingNotice = coachBlockingSurface === "provider-notice";/);
+  // The presence bar renders only with no blocking surface or the provider
+  // notice — it stays suppressed under admission and provider setup.
+  assert.match(
+    source,
+    /const showComposerPresenceBar =\s*\(coachBlockingSurface === null \|\| coachBlockingSurface === "provider-notice"\) &&/,
   );
   assert.match(
     source,
@@ -142,11 +167,11 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
   );
   assert.match(
     source,
-    /providerCoachNotice && \(sendBlocked || !shouldShowNeutralEmptyState\)/,
+    /coachBlockingSurface === "provider-notice" && providerCoachNotice \?/,
   );
   assert.match(
     source,
-    /workspaceSessionBlocked && workspaceAdmissionContent[\s\S]*?!providerCanCoachNow && providerCoachNotice[\s\S]*?coach-workspace-admission__provider-action[\s\S]*?onClick=\{openProviderSetup\}/,
+    /coachBlockingSurface === "workspace-admission" && workspaceAdmissionContent[\s\S]*?!providerCanCoachNow && providerCoachNotice[\s\S]*?coach-workspace-admission__provider-action[\s\S]*?onClick=\{openProviderSetup\}/,
   );
   assert.match(
     source,
@@ -168,11 +193,11 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
   assert.match(source, /onClick=\{\(\) => openProviderSetup\(\)\}/);
   assert.match(
     source,
-    /const sendTurn = \(\{[\s\S]*?if \(workspaceSessionBlocked\) \{\s*openWorkspaceAdmission\(\);[\s\S]*?return;\s*\}\s*if \(!providerCanCoachNow \|\| providerBlockReason \|\| capabilitySendBlocked\) \{\s*setActiveView\("settings"\);\s*setOperationMessage\(\{\s*tone: "info",\s*message: blockedComposerGuidance,/,
+    /const sendTurn = \(\{[\s\S]*?if \(workspaceSessionBlocked\) \{\s*openWorkspaceAdmission\(\);[\s\S]*?return;\s*\}\s*if \(!providerCanCoachNow \|\| providerBlockReason \|\| capabilitySendBlocked\) \{\s*useWorkbenchState\.getState\(\)\.requestSettingsCategory\("connection"\);\s*setActiveView\("settings"\);\s*setOperationMessage\(\{\s*tone: "info",\s*message: blockedComposerGuidance,/,
   );
   assert.match(
     source,
-    /className="composer-presencebar__blocked"[\s\S]*?onClick=\{\(\) => \{\s*if \(workspaceSessionBlocked\) \{\s*openWorkspaceAdmission\(\);\s*return;\s*\}\s*setActiveView\("settings"\);\s*\}\}/,
+    /className="composer-presencebar__blocked"[\s\S]*?onClick=\{\(\) => \{\s*if \(workspaceSessionBlocked\) \{\s*openWorkspaceAdmission\(\);\s*return;\s*\}\s*useWorkbenchState\.getState\(\)\.requestSettingsCategory\("connection"\);\s*setActiveView\("settings"\);\s*\}\}/,
   );
   assert.doesNotMatch(source, /summaryBar=\{/);
   assert.match(

@@ -40,7 +40,7 @@ test("compact Plan keeps its stages reachable from a dedicated disclosure", asyn
   });
   const stages = page.locator('[data-learning-section=route]');
   await expect(stages).toBeVisible();
-  await stages.locator('summary').click();
+  await stages.locator(':scope > summary').click();
   await expect(stages.getByText('验证元组内列表', { exact: true })).toBeVisible();
   await expect(stages.getByText('实现嵌套求和', { exact: true })).toBeVisible();
   await expect(stages.getByText('覆盖异常边界', { exact: true })).toBeVisible();
@@ -219,7 +219,7 @@ test("training generation keeps raw card JSON out of the conversation surface", 
   await expect(page.getByRole("textbox")).toBeEnabled();
 });
 
-test("generated documents do not count as completed learning and old plan materials clear", async ({ page }) => {
+test("stage materials live inside per-stage disclosures and old plan materials clear", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=plan&lang=zh-CN&connection=connected&run=material-progress");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
   await page.evaluate(() => {
@@ -239,21 +239,55 @@ test("generated documents do not count as completed learning and old plan materi
     } });
   });
   const stages = page.locator('[data-learning-section=route]');
-  await stages.locator('summary').click();
+  await stages.locator(':scope > summary').click();
+  // The roadmap is quiet text rows: the progress ring and material badges are gone.
+  await expect(stages.locator('[data-plan-stage]')).toHaveCount(2);
+  await expect(stages.getByRole('img', { name: /阶段完成度/ })).toHaveCount(0);
+  await expect(stages.locator('[title^="已生成资料"]')).toHaveCount(0);
   const active = stages.locator('[data-plan-stage="stage-1"]');
-  await expect(active.getByRole('img', { name: '阶段完成度 0%', exact: true })).toBeVisible();
-  await expect(active.locator('[title="已生成资料 4/4"]')).toBeVisible();
   const done = stages.locator('[data-plan-stage="stage-2"]');
-  await expect(done.getByRole('img', { name: '阶段完成度 100%', exact: true })).toBeVisible();
-  await expect(done.locator('[title="已生成资料 0/4"]')).toBeVisible();
-  await active.getByRole('button', { name: /生成资料0/ }).click();
-  await expect(active.getByRole('heading', { name: '正文' })).toBeVisible();
-  await expect(active.getByText('模板 · 可重新生成', { exact: true })).toBeVisible();
+  await expect(active).toHaveAttribute('data-stage-status', 'active');
+  await expect(done).toHaveAttribute('data-stage-status', 'done');
+  // Per-stage details stay closed until opened; they hold the objective, the
+  // 生成资料 action and the generated materials.
+  const activeDetails = active.locator('details');
+  await expect(activeDetails).not.toHaveAttribute('open', '');
+  // CSS locator on purpose: role queries skip content inside a closed details.
+  await expect(activeDetails.locator('button:has-text("生成资料0")')).toHaveCount(1);
+  // Old plan materials clear when the formal plan is replaced.
   await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'state/patch', payload: {
     plan: { id: 'replacement-plan', title: '新的计划', currentStageId: 'stage-1',
       currentStep: '新的验证', stages: [{ id: 'stage-1', title: '新的阶段', status: 'active', objective: '新的验证' }] },
   } }));
   await expect(page.getByText('生成资料0', { exact: true })).toHaveCount(0);
+  // Restage the materials and open the stage details to read one.
+  await page.evaluate(() => {
+    const current = window.__TRAINER_BOOTSTRAP__;
+    window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: {
+      ...current, sessionHistoryRestored: true,
+      plan: { id: 'plan-material-progress', title: '列表和元组', frozen: false, cadence: '每天20分钟',
+        currentStageId: 'stage-1', currentStep: '亲手运行验证', stages: [
+          { id: 'stage-1', title: '验证引用', objective: '运行代码', status: 'active' },
+          { id: 'stage-2', title: '已经验证的阶段', objective: '完成断言', status: 'done' },
+        ] },
+      planRuntimeStatus: { recovered: false, currentStep: '亲手运行验证', reviewPoints: [] },
+      stageMaterials: { 'stage-1': ['study_guide'].map((kind, i) => ({
+        id: 'material-' + i, planStageId: 'stage-1', kind, title: '生成资料' + i, summary: '真正的学习内容',
+        generationSource: 'template', content: '## 正文\n\n```python\nif True:\n    print(1)\n```',
+      })) },
+    } });
+  });
+  if (!(await stages.evaluate((el) => el.open))) {
+    await stages.locator(':scope > summary').click();
+  }
+  const reopenedDetails = stages.locator('[data-plan-stage="stage-1"]').locator('details');
+  if (!(await reopenedDetails.evaluate((el) => el.open))) {
+    await reopenedDetails.locator(':scope > summary').click();
+  }
+  await expect(reopenedDetails.getByText('运行代码', { exact: true })).toBeVisible();
+  await expect(reopenedDetails.locator('[data-stage-materials-generate]')).toBeVisible();
+  await reopenedDetails.getByRole('button', { name: /生成资料0/ }).click();
+  await expect(reopenedDetails.getByRole('heading', { name: '正文' })).toBeVisible();
 });
 
 test('restored trusted verification advances to reflection and carries its full record to Coach', async ({ page }) => {

@@ -12,7 +12,7 @@ const tsc = path.resolve(__dirname, '..', '..', 'extension', 'node_modules', 'ty
 
 let mod;
 test('setup', () => {
-  const outDir = require('node:fs').mkdtempSync(require('node:os').tmpdir() + '/agent-skill-');
+  const outDir = require('node:fs').mkdtempSync(path.join(require('node:os').tmpdir(), 'agent-skill-'));
   require('node:child_process').execFileSync(process.execPath, [
     tsc, tsPath, '--outDir', outDir,
     '--module', 'commonjs', '--target', 'es2022', '--skipLibCheck', '--declaration', 'false',

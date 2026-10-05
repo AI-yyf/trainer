@@ -111,7 +111,7 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(appUiCopySource, /"en-US": "Browser preview cannot restore real resources\. Use the VS Code sidebar\."/);
 });
 
-test('Resources separates tree selection from explicit native opening', () => {
+test('Resources opens the reader from one click, opens in VS Code from Enter, and has no row double-click handler', () => {
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
   const treeItemStart = viewSource.indexOf('function ResourceTreeItem(');
   const treeItemEnd = viewSource.indexOf('export function ResourcesWorkbenchView', treeItemStart);
@@ -122,11 +122,14 @@ test('Resources separates tree selection from explicit native opening', () => {
 
   assert.match(treeItemSource, /onClick=\{\(\) => onSelect\(node\.resource!\)\}/);
   assert.doesNotMatch(treeItemSource, /onClick=\{\(\) => onOpen\(node\.resource!\)\}/);
-  assert.match(treeItemSource, /onDoubleClick=\{\(\) => onOpen\(node\.resource!\)\}/);
+  // A raw row double-click can never fire: the first click opens the reader
+  // and hides the tree, so the handler is gone.
+  assert.doesNotMatch(treeItemSource, /onDoubleClick/);
   assert.match(treeItemSource, /event\.key === "Enter"[\s\S]*?onOpen\(node\.resource!\);/);
-  assert.match(treeItemSource, /aria-keyshortcuts="Enter Space"/);
-  assert.match(treeItemSource, /type="checkbox"/);
-  assert.match(treeItemSource, /onToggleSelection\(node\.resource!\.id\)/);
+  assert.match(treeItemSource, /aria-keyshortcuts="Enter"/);
+  // Reading-first tree: no per-row checkboxes, no batch-selection handlers.
+  assert.doesNotMatch(treeItemSource, /type="checkbox"/);
+  assert.doesNotMatch(treeItemSource, /onToggleSelection/);
   assert.match(viewSource, /className="button button--ghost button--compact resources-knowledge__open-action"[\s\S]*?onClick=\{\(\) => openResourceInVsCode\(selectedResource\)\}/);
 });
 
@@ -161,7 +164,9 @@ test('Resources collapses imports into one named, keyboard-accessible menu while
     viewSource,
     /onClick=\{\(\) => runImportAction\(onImportUrl\)\}[\s\S]*?disabled=\{isBrowserPreview && !isLiveBrowserPreview\}[\s\S]*?browserPreviewMutationNotice/,
   );
-  assert.match(viewSource, /resources-knowledge__refresh-button/);
+  assert.doesNotMatch(viewSource, /resources-knowledge__refresh-button/);
+  // The one remaining refresh path lives in the reader detail actions.
+  assert.match(viewSource, /selectedResourceTrainingReadiness\?\.canRefresh \? \(/);
   assert.match(viewSource, /onClick=\{refreshResources\}/);
   assert.match(viewSource, /localize\(language, "addResource"\)/);
   assert.match(viewSource, /addResource: \{ zh: "\\u6dfb\\u52a0\\u8d44\\u6599", en: "Add resource" \}/);
@@ -178,11 +183,14 @@ test('Resources keeps the first screen focused and folds secondary governance ac
 
   assert.match(viewSource, /resources-knowledge__search/);
   assert.match(viewSource, /resources-knowledge__open-action/);
-  assert.match(viewSource, /<details className="resources-knowledge__batch-actions">/);
+  // Reading-first first screen: no batch-selection bar; per-resource delete
+  // moved into the reader detail actions.
+  assert.doesNotMatch(viewSource, /resources-knowledge__batch-actions/);
+  assert.match(viewSource, /resources-knowledge__delete-action/);
   assert.match(viewSource, /<dl className="resources-knowledge__facts">/);
   assert.match(viewSource, /<details className="resources-knowledge__training-handoff">/);
   assert.match(viewSource, /<details[\s\S]*?className="resources-knowledge__trash/);
-  assert.match(stylesSource, /\.resources-knowledge__batch-actions/);
+  assert.doesNotMatch(stylesSource, /\.resources-knowledge__batch-actions/);
   assert.match(stylesSource, /\.resources-knowledge__facts/);
   assert.match(stylesSource, /\.resources-knowledge__training-handoff/);
   assert.match(stylesSource, /\.resources-knowledge__trash/);
@@ -203,7 +211,10 @@ test('Resources makes library writes visibly unavailable without blocking search
   assert.match(viewSource, /const indexActionDisabled = !canWriteResources \|\| !onRefreshResources \|\| isIndexRefreshing;/);
   assert.match(viewSource, /disabled=\{indexActionDisabled\}/);
   assert.match(viewSource, /const deleteActionDisabled =[\s\S]*?!canWriteResources/);
-  assert.match(viewSource, /const restoreActionDisabled =[\s\S]*?!canWriteResources/);
+  assert.match(
+    viewSource,
+    /const restoreDeletedResource = \(resourceId: string\) => \{[\s\S]*?!canWriteResources \|\| isBrowserPreview \|\| !onRestoreResources/,
+  );
   assert.match(viewSource, /const runImportAction =[\s\S]*?if \(!canWriteResources\) \{[\s\S]*?return;/);
   assert.match(
     viewSource,
@@ -269,86 +280,50 @@ test('Resources treats URL material as webpage snapshots without restoring statu
   assert.doesNotMatch(stylesSource, /\.resources-knowledge__state/);
 });
 
-test('Resources recursively selects filtered folder descendants and scopes deletion to visible items', () => {
+test('Resources keeps folder counts recursive and moves deletion into the reader detail', () => {
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
   const treeItemStart = viewSource.indexOf('function ResourceTreeItem(');
   const treeItemEnd = viewSource.indexOf('export function ResourcesWorkbenchView', treeItemStart);
-  const rootTreeMatch = viewSource.match(
-    /\{visibleResourceTree\.map\(\(node\)\s*=>\s*\(([\s\S]*?)\)\)\}/,
-  );
-  const deleteHandlerStart = viewSource.indexOf('const deleteSelectedResources =');
-  const deleteHandlerEnd = viewSource.indexOf('const openResourceInVsCode', deleteHandlerStart);
+  const deleteRequestStart = viewSource.indexOf('const requestResourceDelete =');
+  const deleteRequestEnd = viewSource.indexOf('const confirmDeleteSelectedResources', deleteRequestStart);
 
   assert.ok(treeItemStart >= 0 && treeItemEnd > treeItemStart, 'expected the resource tree item renderer');
-  assert.ok(rootTreeMatch, 'expected the filtered root tree renderer');
-  assert.ok(deleteHandlerStart >= 0 && deleteHandlerEnd > deleteHandlerStart, 'expected the batch delete handler');
+  assert.ok(deleteRequestStart >= 0 && deleteRequestEnd > deleteRequestStart, 'expected the per-resource delete request handler');
 
   const treeItemSource = viewSource.slice(treeItemStart, treeItemEnd);
   const collectionStart = treeItemSource.indexOf('const isExpanded =');
   const collectionSource = treeItemSource.slice(collectionStart);
-  const folderCheckboxStart = collectionSource.indexOf('<input');
-  const folderCheckboxEnd = collectionSource.indexOf('/>', folderCheckboxStart);
-  const folderCheckboxSource = collectionSource.slice(folderCheckboxStart, folderCheckboxEnd + 2);
-  const folderCountStart = collectionSource.indexOf('resources-library-tree__count');
-  const folderCountSource = collectionSource.slice(folderCountStart, folderCountStart + 240);
-  const rootTreeSource = rootTreeMatch[0];
-  const deleteHandlerSource = viewSource.slice(deleteHandlerStart, deleteHandlerEnd);
+  const deleteRequestSource = viewSource.slice(deleteRequestStart, deleteRequestEnd);
 
   assert.ok(collectionStart >= 0, 'expected the collection branch of the resource tree item renderer');
-  assert.ok(folderCheckboxStart >= 0 && folderCheckboxEnd > folderCheckboxStart, 'expected the folder selection checkbox');
-  assert.ok(folderCountStart >= 0, 'expected the recursive folder resource count');
+  // Selection checkboxes are gone; folders keep only their recursive resource count.
+  assert.doesNotMatch(treeItemSource, /type="checkbox"/);
+  assert.doesNotMatch(treeItemSource, /onSetSelection/);
+  assert.doesNotMatch(treeItemSource, /selectedResourceIds/);
   assert.match(
     viewSource,
     /function resourceIdsInTreeNode\(node: ResourceTreeNode\): string\[\][\s\S]*?node\.children\.flatMap\(resourceIdsInTreeNode\)/,
   );
   assert.match(
     viewSource,
-    /const setResourceSelection = \(\s*resourceIds: string\[\],\s*selected: boolean,?\s*\) =>[\s\S]*?setSelectedResourceIds\(\(current\)\s*=>[\s\S]*?resourceIds\.forEach\(\s*\(?resourceId\)?\s*=>/,
-  );
-
-  // The collection receives the filtered node, so its recursive IDs are exactly the visible descendants.
-  assert.match(
-    viewSource,
     /const visibleResourceTree = useMemo\([\s\S]*?filterResourceTree\(resourceTree, visibleResourceIds\)/,
   );
   assert.match(collectionSource, /resourceIdsInTreeNode\(node\)/);
-  assert.match(collectionSource, /selectedResourceIds\.has\(resourceId\)/);
-  assert.match(collectionSource, /event\.stopPropagation\(\)/);
-  assert.match(
-    treeItemSource,
-    /event\.key === " "[\s\S]*?event\.stopPropagation\(\)/,
-    "only Space should stay within a checkbox; Escape and tree navigation must bubble to the tree",
-  );
-  assert.match(
-    viewSource,
-    /event\.target instanceof HTMLInputElement && event\.key === " "/,
-    "tree navigation must remain available when a checkbox has focus",
-  );
-  assert.match(folderCheckboxSource, /type="checkbox"/);
-  assert.match(folderCheckboxSource, /checked=/);
-  assert.match(folderCheckboxSource, /localize\(language, "selectFolder"\)/);
-  assert.match(folderCheckboxSource, /onChange=\{/);
-  assert.match(collectionSource, /onSetSelection\(\s*[^,]+,\s*(?:!\s*[^)]+|event\.target\.checked)\)/);
-  assert.match(folderCheckboxSource, /indeterminate/);
+  assert.match(collectionSource, /resources-library-tree__count/);
+  assert.doesNotMatch(collectionSource, /node\.children\.length/);
   assert.match(treeItemSource, /aria-label=\{node\.resource\.title\}/);
   assert.match(treeItemSource, /aria-current=\{isSelected \? "true" : undefined\}/);
   assert.match(collectionSource, /aria-label=\{node\.label\}/);
-  assert.match(viewSource, /aria-multiselectable="true"/);
-  assert.match(collectionSource, /aria-checked=\{isPartiallyMarked \? "mixed" : isMarked\}/);
-  assert.match(folderCountSource, /(?:resourceIdsInTreeNode\(node\)|\b[A-Za-z0-9_]*(?:Resource|resource)Ids)\.length/);
-  assert.doesNotMatch(folderCountSource, /node\.children\.length/);
+  assert.doesNotMatch(viewSource, /aria-multiselectable="true"/);
 
-  // Both the filtered roots and recursive descendants must receive the same bulk-selection action.
-  assert.match(rootTreeSource, /onSetSelection=\{setResourceSelection\}/);
-  assert.match(treeItemSource, /onSetSelection=\{onSetSelection\}/);
-
-  // Folder selection feeds the existing selected-ID set; deletion remains one explicit, visible-only batch action.
+  // Deletion is per resource, requested from the reader detail and confirmed
+  // through the existing alertdialog flow.
   assert.match(
-    deleteHandlerSource,
-    /const resourceIds = \[\.\.\.selectedResourceIds\]\.filter\(\(resourceId\) => visibleResourceIds\.has\(resourceId\)\);/,
+    deleteRequestSource,
+    /setDeleteConfirmationResourceIds\(\[resourceId\]\);/,
   );
-  assert.match(deleteHandlerSource, /const deleteRequest = onDeleteResources\(resourceIds\);/);
-  assert.match(deleteHandlerSource, /Promise\.resolve\(deleteRequest\)\.catch/);
+  assert.match(viewSource, /resources-knowledge__delete-action/);
+  assert.match(viewSource, /onClick=\{\(\) => requestResourceDelete\(selectedResource\.id\)\}/);
 });
 
 test('Resources keeps search-result folders visibly collapsible', () => {
@@ -378,7 +353,10 @@ test('Resources derives compact Trash and mutation feedback from persistent host
 
   assert.match(viewSource, /const trashSnapshotAvailable = deletedResources !== undefined;/);
   assert.match(viewSource, /const trashedResources = deletedResources \?\? \[\];/);
-  assert.match(viewSource, /const restorableDeletedResources = useMemo/);
+  // Trash restores per item; there is no bulk-restore set anymore.
+  assert.doesNotMatch(viewSource, /restorableDeletedResources/);
+  assert.match(viewSource, /const restoreDeletedResource = \(resourceId: string\) => \{/);
+  assert.match(viewSource, /pendingRestoredResourceIds\.includes\(resourceId\)/);
   assert.match(viewSource, /const isDeletePending = pendingDeletedResourceIds\.length > 0;/);
   assert.match(viewSource, /const isRestorePending = pendingRestoredResourceIds\.length > 0;/);
   assert.match(viewSource, /trashedResourceIds\.has\(resourceId\)/);
@@ -392,7 +370,7 @@ test('Resources derives compact Trash and mutation feedback from persistent host
   assert.match(viewSource, /collectionKind\?: "directory" \| "logical";/);
   assert.doesNotMatch(viewSource, /ContextLayersIcon|resources-library-tree__icon/);
   assert.match(viewSource, /resources-library-tree__kind/);
-  assert.match(stylesSource, /grid-template-columns: 24px minmax\(0, 1fr\)/);
+  assert.match(stylesSource, /\.resources-library-tree__kind\s*\{[\s\S]*?width: 18px;/);
   assert.match(viewSource, /const firstVisibleResourceAncestorIds = useMemo/);
   assert.match(viewSource, /firstResourceAncestorCollectionIds\(visibleResourceTree\)/);
 

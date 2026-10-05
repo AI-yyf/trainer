@@ -115,7 +115,7 @@ async function sendResourceOperationStatus(page, kind, requestId, message) {
 }
 
 test.describe("Trainer Resources lifecycle through the VS Code host bridge", () => {
-  test("34: preserves identity and selection through upload, index, open, delete, and restore", async ({ page }) => {
+  test("34: preserves resource identity through upload, open, delete, and per-item restore", async ({ page }) => {
     const consoleErrors = [];
     page.on("console", (message) => {
       if (message.type() === "error") {
@@ -193,18 +193,11 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     });
     const resourceTreeItem = page.getByRole("treeitem", { name: RESOURCE_TITLE, exact: true, includeHidden: true });
     await expect(resourceTreeItem).toBeVisible();
-    await expect(resourceTreeItem.locator(".resources-library-tree__status")).toHaveText("Indexing");
-
-    const indexStart = await actionCount(page);
-    await library.getByRole("button", { name: "Refresh index", exact: true }).click();
-    const indexAction = await waitForHostAction(
-      page,
-      indexStart,
-      (action) =>
-        action.type === "command/execute" && action.payload?.commandId === "trainer.resource.index",
-    );
-    expect(indexAction.payload).toMatchObject({ commandId: "trainer.resource.index" });
-    expect(indexAction.payload.payload.__trainerResourceOperationId).toMatch(/^resource-operation-/);
+    // Rows are plain entries now: no checkbox, no per-row index-status badge,
+    // and no multi-select on the tree.
+    await expect(tree).not.toHaveAttribute("aria-multiselectable");
+    await expect(tree.getByRole("checkbox")).toHaveCount(0);
+    await expect(resourceTreeItem.locator(".resources-library-tree__status")).toHaveCount(0);
 
     await sendHostMessage(page, {
       type: "state/patch",
@@ -227,22 +220,15 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     expect(openAction).toEqual({ type: "resource/open", payload: { resourceId: RESOURCE_ID } });
 
     await detail.locator(".template-back").first().click();
-    const resourceCheckbox = tree.getByRole("checkbox", {
-      name: `Select resource: ${RESOURCE_TITLE}`,
-      exact: true,
-    });
-    await resourceCheckbox.check();
-    await expect(resourceTreeItem).toHaveAttribute("aria-checked", "true");
-    await expect(library.locator(".resources-knowledge__selection-count")).toHaveAttribute(
+    // Delete moved into the reader detail actions; it keeps the confirm dialog.
+    await resourceTreeItem.click();
+    await expect(detail).toBeVisible();
+    const deleteResourceButton = detail.locator(".resources-knowledge__delete-action");
+    await expect(deleteResourceButton).toHaveAttribute(
       "aria-label",
-      "Selected resources: 1",
+      `Delete resource: ${RESOURCE_TITLE}`,
     );
-
-    const batchActions = library.locator(".resources-knowledge__batch-actions");
-    if (!(await batchActions.evaluate((element) => element.open))) {
-      await batchActions.locator(":scope > summary").click();
-    }
-    await library.getByRole("button", { name: "Delete selected resources", exact: true }).click();
+    await deleteResourceButton.click();
     const deleteConfirmation = library.getByRole("alertdialog");
     await expect(deleteConfirmation).toBeVisible();
 
@@ -274,13 +260,14 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     });
     await sendResourceOperationStatus(page, "delete", deleteRequestId, "Moved 1 resource to Trash.");
     await expect(tree.getByRole("treeitem", { name: RESOURCE_TITLE, exact: true })).toHaveCount(0);
-    await expect(library.locator(".resources-knowledge__selection-count")).toHaveCount(0);
     await expect(library.getByRole("status").filter({ hasText: /Moved|Restored/ })).toContainText("Moved 1 resource to Trash.");
 
+    // Trash restores per item now; there is no bulk "Restore available resources".
     const trash = library.locator(".resources-knowledge__trash");
     await expect(trash).toContainText(RESOURCE_TITLE);
+    await expect(trash.getByRole("button", { name: "Restore available resources", exact: true })).toHaveCount(0);
     const restoreStart = await actionCount(page);
-    await trash.getByRole("button", { name: "Restore available resources", exact: true }).click();
+    await trash.getByRole("button", { name: `Restore resource: ${RESOURCE_TITLE}`, exact: true }).click();
     const restoreAction = await waitForHostAction(
       page,
       restoreStart,
@@ -298,7 +285,6 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     await sendResourceOperationStatus(page, "restore", restoreRequestId, "Restored 1 resource.");
     const restoredTreeItem = tree.getByRole("treeitem", { name: RESOURCE_TITLE, exact: true });
     await expect(restoredTreeItem).toBeVisible();
-    await expect(restoredTreeItem).toHaveAttribute("aria-checked", "false");
     await expect(library.getByRole("status").filter({ hasText: /Moved|Restored/ })).toContainText("Restored 1 resource.");
 
     const restoredOpenStart = await actionCount(page);

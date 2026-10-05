@@ -3,35 +3,12 @@
    Additive, token-driven styles only.
    ========================================================================== */
 
-.coach-plan-view__stage-material-group {
-  min-width: 0;
-}
-
 .coach-plan-view__stage-materials {
   margin: 0 0 6px 22px;
   padding: 6px 8px;
   border: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--bg-1) 62%, transparent);
-}
-
-.coach-plan-view__stage-materials-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--trainer-space-2);
-}
-
-.coach-plan-view__stage-materials-label {
-  color: var(--fg-muted);
-  font-size: var(--trainer-font-2xs);
-  letter-spacing: 0.02em;
-}
-
-.coach-plan-view__stage-materials-empty {
-  margin: 4px 0 0;
-  color: var(--fg-muted);
-  font-size: var(--trainer-font-2xs);
 }
 
 .coach-plan-view__stage-material-list {
@@ -83,41 +60,6 @@
   color: var(--fg-1);
   font-size: var(--trainer-font-2xs);
   line-height: 1.3;
-}
-
-.stage-material-badge {
-  flex-shrink: 0;
-  padding: 1px 6px;
-  border-radius: var(--radius-full);
-  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
-  color: color-mix(in srgb, var(--accent) 78%, var(--fg-1));
-  font-size: var(--trainer-font-2xs);
-  line-height: 1.4;
-}
-
-.stage-material-badge--study-guide {
-  border-color: color-mix(in srgb, var(--accent) 52%, transparent);
-  color: color-mix(in srgb, var(--accent) 82%, var(--fg-1));
-}
-
-.stage-material-badge--cheat-sheet {
-  border-color: color-mix(in srgb, var(--success) 48%, transparent);
-  color: color-mix(in srgb, var(--success) 82%, var(--fg-1));
-}
-
-.stage-material-badge--exercise-set {
-  border-color: color-mix(in srgb, var(--warning) 48%, transparent);
-  color: color-mix(in srgb, var(--warning) 82%, var(--fg-1));
-}
-
-.stage-material-badge--code-examples {
-  border-color: color-mix(in srgb, var(--fg-muted) 46%, transparent);
-  color: color-mix(in srgb, var(--fg-muted) 88%, var(--fg-1));
-}
-
-.stage-material-badge--other {
-  border-color: color-mix(in srgb, var(--line) 70%, transparent);
-  color: var(--fg-muted);
 }
 
 .coach-plan-view__stage-material-summary {

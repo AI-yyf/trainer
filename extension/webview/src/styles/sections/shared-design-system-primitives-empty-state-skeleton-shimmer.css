@@ -60,15 +60,6 @@
   animation: trainer-shimmer var(--motion-slow) var(--ease-out) infinite;
 }
 
-@keyframes trainer-score-pulse {
-  0% { box-shadow: 0 0 0 0 var(--accent-soft); }
-  100% { box-shadow: 0 0 0 10px transparent; }
-}
-
-.score-pulse {
-  animation: trainer-score-pulse 600ms var(--ease-out) 1;
-}
-
 @keyframes trainer-spin {
   to {
     transform: rotate(360deg);
@@ -109,9 +100,7 @@
   .skeleton::after {
     animation: none;
   }
-  .score-pulse {
-    animation: none;
-  }
+  
   /* No rotation under reduced motion: a calm ring-and-dot mark keeps the
      "something is happening" signal without movement. */
   .trainer-spinner {
@@ -137,21 +126,6 @@
   border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--fg, var(--accent)) 3%, transparent);
-}
-
-.remote-verify-panel__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.remote-verify-panel__verdict {
-  color: var(--vscode-descriptionForeground, inherit);
-}
-
-.remote-verify-panel__verdict.is-passed {
-  color: var(--vscode-testing-iconPassed, var(--accent));
 }
 
 .remote-verify-panel__output {

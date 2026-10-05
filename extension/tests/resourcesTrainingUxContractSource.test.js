@@ -25,20 +25,11 @@ const trainingPath = path.resolve(
   'TrainingWorkbenchView.tsx',
 );
 
-function cardOnlyRender(source) {
-  const start = source.indexOf('{cardOnly ? (');
-  const end = source.indexOf('{!cardOnly ? (', start);
-
-  assert.ok(start >= 0, 'expected the card-only render branch');
-  assert.ok(end > start, 'expected the card-only render branch to close before secondary content');
-  return source.slice(start, end);
-}
-
 test('resources stay a searchable knowledge library with a controlled sandbox disclosure', () => {
   // Product-level template contract replaces the previous layout grammar.
   const { read } = require('./templateAssertions');
   const source = read('components/resources/ResourcesWorkbenchView.tsx');
-  for (const marker of ['<Library', '<ResourceReader', 'type="search"', 'onSelect={selectResource}', 'onToggleSelection={toggleResourceSelection}', 'onRestore', 'onStartTrainingFromResource', 'openResourceInVsCode']) assert.ok(source.includes(marker), marker);
+  for (const marker of ['<Library', '<ResourceReader', 'type="search"', 'onSelect={selectResource}', 'onRestore', 'onStartTrainingFromResource', 'openResourceInVsCode']) assert.ok(source.includes(marker), marker);
   assert.ok(!source.includes('didAutoSelectResource'));
   assert.ok(source.includes('onAskCoach([selectedResource.id])'));
 });

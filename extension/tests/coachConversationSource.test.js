@@ -147,19 +147,19 @@ test('coach sidebar tabs keep the resources label short', () => {
   require('./templateAssertions').navigation();
 });
 
-test('coach next-step artifact exposes finalize metadata without becoming a visible status part', () => {
+test('coach next-step artifact stays bare: identity and one action, no flat meta dump', () => {
   const source = fs.readFileSync(coachArtifactBlockPath, 'utf8');
 
+  // The card keeps its identity (kind label / title / summary) and the single
+  // primary action; recall-review titles still resolve through artifact metadata.
   assert.match(source, /artifactMetadataRecord/);
-  assert.match(source, /artifactMetadataText/);
-  assert.match(source, /artifactMetadataList/);
-  assert.match(source, /artifactMetaLabel\("decision"/);
-  assert.match(source, /artifactMetaLabel\("blocker"/);
-  assert.match(source, /artifactMetaLabel\("resumeThread"/);
-  assert.match(source, /artifactMetadataText\(metadata, \["resumeThread", "resume_thread"\]\)/);
-  assert.match(source, /artifactMetaLabel\("teachingNote"/);
-  assert.match(source, /artifactMetaLabel\("confidence"/);
   assert.match(source, /artifact\.metadata/);
+  assert.match(source, /artifact-card__next-action/);
+  // The flat meta dump (决策/卡点/续接/教学提示/把握/证据) was removed outright.
+  assert.doesNotMatch(source, /artifactMetadataText/);
+  assert.doesNotMatch(source, /artifactMetadataList/);
+  assert.doesNotMatch(source, /artifactMetaLabel/);
+  assert.doesNotMatch(source, /artifact-card__detail-note/);
 });
 
 test('coach agent activity renders as a normalized lightweight progress rail', () => {
@@ -387,7 +387,7 @@ test('coach composer does not gate sending on an unverified streaming probe', ()
   );
 });
 
-test('Coach interrupted recovery exposes checkpoint resume and replay without resending the draft', () => {
+test('Coach interrupted recovery exposes last-progress resume and replay without resending the draft', () => {
   const source = fs.readFileSync(appPath, 'utf8');
   const appUiCopySource = fs.readFileSync(appUiCopyPath, 'utf8');
   assert.match(source, /function isCoachCheckpointRecoveryState\(/);
@@ -396,10 +396,14 @@ test('Coach interrupted recovery exposes checkpoint resume and replay without re
   assert.match(source, /trainerCommands\.resumeLatestCoachCheckpoint/);
   assert.match(source, /trainerCommands\.replayLatestCoachCheckpoint/);
   assert.match(source, /COACH_CHECKPOINT_RECOVERY_COPY\[layout\.composerLanguage\]/);
-  assert.match(appUiCopySource, /resume: "恢复最近进度"/);
+  // §simplification: learner-facing copy drops the "checkpoint" jargon —
+  // zh speaks of 上次进度 and the no-resend promise names what was typed.
+  assert.match(appUiCopySource, /title: "本轮已中断，可从上次进度继续"/);
+  assert.match(appUiCopySource, /resume: "恢复上次进度"/);
   assert.match(appUiCopySource, /replay: "查看本轮记录"/);
-  assert.match(appUiCopySource, /不会重新发送当前草稿/);
-  assert.match(appUiCopySource, /does not resend your draft/);
+  assert.match(appUiCopySource, /不会重复发送你输入的内容/);
+  assert.match(appUiCopySource, /does not resend what you typed/);
+  assert.doesNotMatch(appUiCopySource, /checkpoint|检查点/);
   assert.match(source, /action === "resume"/);
   assert.doesNotMatch(
     source.slice(source.indexOf('const coachCheckpointRecoveryActions'), source.indexOf('const renderCoachConversationPane')),
@@ -608,7 +612,7 @@ test('hint suggested action fills the composer and does not mint a task turn', (
   assert.doesNotMatch(hintBlock, /intent:\s*"next_task"/);
 });
 
-test('handleSuggestedAction does not sendTurn task or next_task when leftover is not live', () => {
+test('handleSuggestedAction prefills task, next_task, and review drafts without sendTurn when leftover is not live', () => {
   const source = fs.readFileSync(appPath, 'utf8');
   const gateStart = source.indexOf('const leftoverSuggestedActionNotLive');
   const submitStart = source.indexOf('const handleSubmit', gateStart);
@@ -618,27 +622,41 @@ test('handleSuggestedAction does not sendTurn task or next_task when leftover is
     consume,
     /const leftoverSuggestedActionNotLive =\s*\(Boolean\(recoveredRuntime\) && !formalPlanLive && !liveTask\) \|\|\s*streakAdaptsWithoutInventingLiveObjects\([\s\S]*?streakBlocksLiveObjectMint:[\s\S]*?\)\s*\|\|\s*pressureAdaptsWithoutInventingLiveObjects\([\s\S]*?pressureBlocksLiveObjectMint:[\s\S]*?\)\s*\|\|\s*data\.memory\.coachingAdaptation\?\.closedLoopReturnBlocksTaskMint === true \|\|\s*data\.coachFocus\?\.closedLoopReturnBlocksTaskMint === true/,
   );
-  const nextStart = consume.indexOf('if (action === "next_task")');
-  const reviewStart = consume.indexOf('if (action === "review"');
+  const handlerStart = consume.indexOf('const handleSuggestedAction');
+  assert.ok(handlerStart > -1, 'expected handleSuggestedAction to consume the leftover gate');
+  const handler = consume.slice(handlerStart);
+
+  // Sending stays with the learner: no suggested-action path may dispatch a turn.
+  assert.doesNotMatch(handler, /sendTurn/);
+
+  const nextStart = handler.indexOf('if (action === "next_task")');
+  const reviewStart = handler.indexOf('if (action === "review"', nextStart);
   assert.ok(nextStart > -1 && reviewStart > nextStart, 'expected next_task before review');
-  const nextBlock = consume.slice(nextStart, reviewStart);
-  assert.match(nextBlock, /if \(leftoverSuggestedActionNotLive\) \{[\s\S]*?setComposerDraft\(reviewOnlyDraft\);[\s\S]*?return;/);
-  assert.match(nextBlock, /intent:\s*"next_task"/);
-  const leftoverNext = nextBlock.slice(
-    nextBlock.indexOf('if (leftoverSuggestedActionNotLive)'),
-    nextBlock.indexOf('sendTurn'),
+  const nextBlock = handler.slice(nextStart, reviewStart);
+  assert.match(
+    nextBlock,
+    /if \(leftoverSuggestedActionNotLive\) \{\s*setComposerDraft\(reviewOnlyDraft\);\s*requestCoachComposerFocus\(\);\s*return;\s*\}/,
   );
-  assert.ok(leftoverNext.includes('return;'), 'expected leftover next_task to return before sendTurn');
-  assert.doesNotMatch(leftoverNext, /intent:\s*"next_task"/);
-  const taskStart = consume.lastIndexOf('setActiveView("coach")');
-  const taskBlock = consume.slice(taskStart);
-  assert.match(taskBlock, /if \(leftoverSuggestedActionNotLive\) \{[\s\S]*?setComposerDraft\(reviewOnlyDraft\);[\s\S]*?return;/);
-  assert.match(taskBlock, /intent:\s*"task"/);
-  const leftoverTask = taskBlock.slice(
-    taskBlock.indexOf('if (leftoverSuggestedActionNotLive)'),
-    taskBlock.indexOf('sendTurn'),
+  assert.match(nextBlock, /setComposerDraft\(prompt \?\? defaultPromptText\("next_task"/);
+  assert.match(nextBlock, /requestCoachComposerFocus\(\)/);
+
+  // The task fallback is the handler's final statement; everything between the
+  // review branch and it must stay inside the review prefill.
+  const taskFallbackStart = handler.lastIndexOf('setActiveView("coach");');
+  assert.ok(taskFallbackStart > reviewStart, 'expected the task fallback after the review branch');
+  const reviewBlock = handler.slice(reviewStart, taskFallbackStart);
+  assert.match(reviewBlock, /setComposerDraft\(prompt \?\? defaultPromptText\("review"/);
+  assert.match(reviewBlock, /requestCoachComposerFocus\(\)/);
+  assert.doesNotMatch(reviewBlock, /sendTurn/);
+
+  // The task fallback keeps the review-only draft when leftover is not live.
+  const taskBlock = handler.slice(taskFallbackStart);
+  assert.match(
+    taskBlock,
+    /if \(leftoverSuggestedActionNotLive\) \{\s*setComposerDraft\(reviewOnlyDraft\);\s*requestCoachComposerFocus\(\);\s*return;\s*\}/,
   );
-  assert.ok(leftoverTask.includes('return;'), 'expected leftover task to return before sendTurn');
-  assert.doesNotMatch(leftoverTask, /intent:\s*"task"/);
+  assert.match(taskBlock, /setComposerDraft\(prompt \?\? defaultPromptText\("task"/);
+  assert.match(taskBlock, /requestCoachComposerFocus\(\)/);
+  assert.doesNotMatch(taskBlock, /sendTurn/);
 });
 const recoveryCopySourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'providerRecoveryCopy.ts');

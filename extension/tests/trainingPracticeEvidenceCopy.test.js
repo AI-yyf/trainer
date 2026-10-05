@@ -92,11 +92,15 @@ test('training pasted proof stays hidden until it can change the verdict', () =>
   assert.match(appSource, /id: "composer-verify-file"/);
   assert.match(appSource, /onClick: handleVerifyTrainingFromIde/);
   assert.doesNotMatch(appSource, /onClick=\{handleVerifyTrainingFromIde\}/);
-  assert.match(trainingViewSource, /const cardOnlyBodySections: TrainingCardOnlySection\[\] = \[/);
-  assert.match(trainingViewSource, /key: "current"/);
-  assert.match(trainingViewSource, /key: "verify"/);
-  assert.match(trainingViewSource, /key: "return"/);
-  assert.match(trainingViewSource, /!cardOnly \? \(isFlashCard \? flashProofSurface : practiceProofSurface\) : null/);
+  // The pasted-proof facts live in the single collapsed task-details
+  // disclosure; the separate body-section plumbing and the flash/practice
+  // proof cards shipped only in the removed secondary branch.
+  assert.doesNotMatch(trainingViewSource, /const cardOnlyBodySections/);
+  assert.doesNotMatch(trainingViewSource, /flashProofSurface/);
+  assert.doesNotMatch(trainingViewSource, /practiceProofSurface/);
+  assert.match(trainingViewSource, /data-training-card-fact="deliverable"/);
+  assert.match(trainingViewSource, /data-training-card-fact="verify"/);
+  assert.match(trainingViewSource, /data-training-card-fact="return"/);
   assert.doesNotMatch(trainingViewSource, /training-current__response-shell/);
 });
 
@@ -122,27 +126,22 @@ test('training structured guidance is wired from App into a collapsed single-car
   assert.match(appSource, /stuckRecovery=\{reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail : hasTrainingCard \? trainingStuckRecovery : undefined\}/);
   assert.match(appSource, /reflectionPrompt=\{reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail : hasTrainingCard \? trainingReflectionPrompt : undefined\}/);
 
-  assert.match(trainingViewSource, /className="training-next-move"/);
-  assert.match(trainingViewSource, /className="training-guidance-details"/);
+  // Focus mode keeps App's structured-guidance wiring, but the view surfaces
+  // only the hint ladder inline (try phase); the guardrails/next-move helper
+  // disclosures shipped only in the removed secondary branch.
+  assert.doesNotMatch(trainingViewSource, /className="training-next-move"/);
+  assert.doesNotMatch(trainingViewSource, /className="training-guidance-details"/);
   assert.match(trainingViewSource, /cardOnly\?: boolean;/);
   assert.match(
     trainingViewSource,
     /scenarioPackLabel\s*\?\s*`\$\{trainingWorkbenchText\(language, "scenarioPack"\)\}: \$\{scenarioPackLabel\}`/,
   );
-  assert.match(trainingViewSource, /isFlashCard && !cardOnly && nextMovePrimary && !learnPhaseActive/);
+  assert.match(trainingViewSource, /hintLadder\.length && cardType === "practice" \? <HintLadderReveal/);
   assert.match(trainingViewSource, /Hints and guardrails/);
   assert.match(trainingViewSource, /Files to touch/);
   assert.match(trainingViewSource, /API hints/);
-  assert.match(trainingViewSource, /constraints\.length > 0/);
-  assert.match(trainingViewSource, /selfCheck\.length > 0/);
-  assert.match(trainingViewSource, /hintLadder\.length > 0/);
-  assert.match(trainingViewSource, /commonMistakes\.length > 0/);
   assert.match(trainingViewSource, /stuckRecovery\?\.trim\(\)/);
-  assert.match(trainingViewSource, /reflectionPrompt\?\.trim\(\)/);
-  assert.match(trainingViewSource, /open=\{verificationReturn\.kind === "blocked" && Boolean\(stuckRecovery\?\.trim\(\)\)\}/);
 
-  assert.match(stylesSource, /\.training-next-move\s*\{/);
-  assert.match(stylesSource, /\.training-guidance-details\s*\{/);
   assert.match(stylesSource, /\.training-code-list\s*\{/);
 });
 
@@ -234,7 +233,11 @@ test('training composer uses explicit try reflect return phases for practice', (
   assert.match(appSource, /trainingComposerReflectMode\s*\?\s*trainingComposerReflectReason === "flash_answered"/);
   assert.match(
     appSource,
-    /trainingComposerPracticeReturnMode === "result" \? "动手：结果记录" : "动手：Blocker"/,
+    /trainingComposerPracticeReturnMode === "result" \? "动手：结果记录" : "动手：遇到的问题"/,
+  );
+  assert.match(
+    appSource,
+    /trainingComposerPracticeReturnMode === "result" \? "动手：结果" : "动手：遇到的问题"/,
   );
   assert.match(appSource, /appUiCopy\(layout\.composerLanguage, "回流：\{v\}"\)\.replace\("\{v\}", \(\) => returnModeText\)/);
   assert.match(appSource, /appUiCopy\(layout\.composerLanguage, "复盘：\{v\}"\)\.replace\("\{v\}", \(\) => reflectFallbackText\)/);
@@ -352,10 +355,11 @@ test('training view stays truthful when no governed card exists and keeps verifi
 
   assert.match(trainingViewSource, /successSignal\?: string;/);
   assert.match(trainingViewSource, /const resolvedSuccessSignal = firstText\(successSignal\?\.trim\(\)\);/);
-  assert.match(trainingViewSource, /const cardOnlyBodySections: TrainingCardOnlySection\[\] = \[/);
-  assert.match(trainingViewSource, /detail: cardOnlyVerification/);
-  assert.match(trainingViewSource, /detail: routeReturnSummary/);
-  assert.match(trainingViewSource, /!cardOnly \? \(isFlashCard \? flashProofSurface : practiceProofSurface\) : null/);
+  // Verification stays card-scoped: the task-details disclosure renders the
+  // card's own verify fact and return fact, never a global next-hop summary.
+  assert.match(trainingViewSource, /data-training-card-fact="verify"><span className="template-metadata">/);
+  assert.match(trainingViewSource, /\{cardOnlyVerification \?\? ""\}/);
+  assert.match(trainingViewSource, /data-training-card-fact="return"><MessageRichContent body=\{resolvedReturnWith \|\| defaultReturnPath\}/);
 });
 
 test('training current card never borrows a global action or another card\'s next-hop copy', () => {
@@ -364,7 +368,7 @@ test('training current card never borrows a global action or another card\'s nex
   const currentStepStart = appSource.indexOf('const currentStep = hasRenderableTrainingCard');
   const currentStepEnd = appSource.indexOf('const localizedSuggestedWorkspaceAction', currentStepStart);
   const visibleNextStart = trainingViewSource.indexOf('const visibleNextAfterCompletion =');
-  const visibleNextEnd = trainingViewSource.indexOf('const normalizedCardTitle', visibleNextStart);
+  const visibleNextEnd = trainingViewSource.indexOf('const hasPrimaryLoop', visibleNextStart);
 
   assert.ok(currentStepStart >= 0 && currentStepEnd > currentStepStart, 'expected current-card copy');
   assert.ok(visibleNextStart >= 0 && visibleNextEnd > visibleNextStart, 'expected completion-copy guard');

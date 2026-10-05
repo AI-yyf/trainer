@@ -40,24 +40,18 @@ test('Plan keeps formal truth, evidence, and blockers distinct without silent mu
 
   assert.match(source, /export interface PlanGovernanceItem/);
   assert.match(source, /governanceItems\?: PlanGovernanceItem\[\]/);
-  assert.match(source, /const fallbackGovernanceItems: PlanGovernanceItem\[\] = \[/);
-  assert.match(
-    source,
-    /id: "formal-plan",[\s\S]*?value: planStateValue,[\s\S]*?tone: plan\.frozen \? "warning" : "good"/,
-  );
-  assert.match(source, /id: "evidence-adoption",/);
-  assert.match(source, /id: "blocker-state",/);
-  assert.match(
-    source,
-    /props\.governanceItems && props\.governanceItems\.length > 0[\s\S]*?: fallbackGovernanceItems/,
-  );
+  // No invented governance rows: the decision card uses only real runtime facts.
+  assert.doesNotMatch(source, /fallbackGovernanceItems/);
+  assert.doesNotMatch(source, /id: "evidence-adoption"/);
   assert.match(source, /function resolvePlanDecisionStrip/);
+  assert.match(source, /language: PlanLanguage;\n  pendingEvidenceCount: number;/);
   assert.match(source, /planFrozen: plan\.frozen/);
-  assert.match(source, /hasPendingEvidence = evidenceItem\?\.tone === "warning" && !input\.planFrozen/);
+  assert.match(source, /const hasPendingEvidence = input\.pendingEvidenceCount > 0 && !input\.planFrozen;/);
+  assert.match(source, /\): PlanDecisionStripState \| null \{/);
+  assert.match(source, /const shouldShowDecisionCard = !hideDecisionStrip && planDecisionStrip !== null;/);
   assert.match(source, /Plan is blocked/);
   assert.match(source, /Evidence has not changed the plan/);
   assert.match(source, /Formal plan is frozen/);
-  assert.match(source, /Plan can move/);
   assert.match(source, /(?:Ordinary chat|Chat evidence) will not rewrite it silently/);
 });
 
@@ -96,9 +90,9 @@ test('Plan calls its hooks before the empty-state early return', () => {
 
   assert.ok(emptyStateReturnIndex >= 0, 'expected empty-state return');
   for (const hookMarker of [
-    'const evidenceItems = useMemo(',
+    'const pendingEvidenceItems = useMemo(',
+    'const settledEvidenceItems = useMemo(',
     'const evidenceCounts = useMemo(',
-    'const filteredEvidenceItems = useMemo(',
   ]) {
     const hookIndex = source.indexOf(hookMarker);
     assert.ok(hookIndex >= 0, `expected hook marker: ${hookMarker}`);
@@ -153,10 +147,14 @@ test('Plan keeps the global-to-project relationship compact and explicitly actio
   assert.match(source, /globalPlanAction: PlanActionItem \| undefined/);
   assert.ok(globalContextStart > masterCardStart && globalContextStart < masterCardEnd);
   assert.ok(globalContextStart < subplansStart, 'global context must appear before project subplans');
-  assert.match(source, /const globalPlanNeedsAction = !globalPlan \|\| \(!hasCurrentProjectPlanLink/);
+  // Always collapsed: the global-plan disclosure must not compete with the current step.
+  assert.doesNotMatch(source, /open=\{globalPlanNeedsAction\}/);
+  assert.match(source, /coach-plan-view__global-plan-context"\s*\n\s*aria-label=/);
+  // The create/link action is demoted to ghost so the NextAction stays the single accent primary.
+  assert.match(source, /id: "create-global-plan",[\s\S]{0,300}tone: "ghost"/);
+  assert.match(source, /id: "link-current-project-plan",[\s\S]{0,300}tone: "ghost"/);
   assert.match(source, /const globalPlanContextKey = \[/);
   assert.match(source, /key=\{globalPlanContextKey\}/);
-  assert.match(source, /open=\{globalPlanNeedsAction\}/);
   assert.match(source, /label: t\("globalPlanCreate"\)/);
   assert.match(source, /label: t\("globalPlanLinkCurrentProject"\)/);
   assert.match(appSource, /globalPlan=\{data\.globalPlan\}/);
@@ -175,7 +173,6 @@ test('Plan global-plan copy stays honest across missing, unlinked, and linked st
   assert.match(source, /const globalPlanRelationshipSummary = !globalPlan/);
   assert.match(source, /t\("globalPlanNotCreated"\)/);
   assert.match(source, /t\("globalPlanNotLinked"\)/);
-  assert.match(source, /const globalPlanNeedsAction = !globalPlan \|\| \(!hasCurrentProjectPlanLink/);
   assert.match(source, /globalPlanAction: PlanActionItem \| undefined/);
   assert.match(source, /t\("globalPlanCreate"\)/);
   assert.match(source, /t\("globalPlanLinkCurrentProject"\)/);

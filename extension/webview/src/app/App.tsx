@@ -445,6 +445,10 @@ const coachFirstComposerPlaceholder: Record<ComposerLanguage, string> = {
   "pt-BR": "Comece me contando seu nível, objetivo, projeto ou onde está travado.",
 };
 
+// §四十四: domain failures localize to their owning surface. "global" renders
+// on every view; every other scope renders only while its own view is active.
+type OperationMessageSurface = "global" | "training" | "plan" | "resources";
+
 const RESOURCE_OPERATION_STATUS_PATTERN =
   /^\[\[trainer-resource-operation:(delete|restore|search|index|upload):([a-z0-9-]{1,96})\]\]\s*/i;
 const RESOURCE_OPERATION_TIMEOUT_MS = 45_000;
@@ -1587,20 +1591,48 @@ function basename(value: string): string {
   return parts[parts.length - 1] || value;
 }
 
-function connectionStateLabel(state: "starting" | "connected" | "offline", t: Copy): string {
-  if (state === "connected") {
-    return t.connected;
-  }
-  if (state === "starting") {
-    return t.starting;
-  }
-  return t.offline;
-}
-
 function effectiveConnectionState(
   connectionState: "starting" | "connected" | "offline",
 ): "starting" | "connected" | "offline" {
   return connectionState;
+}
+
+/** §六: the single blocking surface allowed to own the coach pane. */
+type CoachBlockingSurface =
+  | "workspace-admission"
+  | "provider-setup"
+  | "provider-notice"
+  | "recovering";
+
+/**
+ * §六 coach status arbitration. Explicit precedence so at most one blocking
+ * surface is visible at a time:
+ * workspace admission > neutral setup takeover > provider send-blocked notice
+ * > stream recovery > none.
+ */
+function resolveCoachBlockingSurface(input: {
+  coachViewActive: boolean;
+  workspaceSessionBlocked: boolean;
+  neutralSetupTakeover: boolean;
+  providerSendBlocked: boolean;
+  streamRecovering: boolean;
+}): CoachBlockingSurface | null {
+  if (!input.coachViewActive) {
+    return null;
+  }
+  if (input.workspaceSessionBlocked) {
+    return "workspace-admission";
+  }
+  if (input.neutralSetupTakeover) {
+    return "provider-setup";
+  }
+  if (input.providerSendBlocked) {
+    return "provider-notice";
+  }
+  if (input.streamRecovering) {
+    return "recovering";
+  }
+  return null;
 }
 
 function planStageStatusLabel(status: PlanStage["status"], t: Copy): string {
@@ -3899,7 +3931,7 @@ export function App() {
     finishedState?: "completed" | "cancelled" | "timed_out" | "spawn_failed" | "connection_lost";
     passed?: boolean;
   }>({ running: false, output: "" });
-  const [operationMessageSurface, setOperationMessageSurface] = useState<"global" | "training" | "plan">("global");
+  const [operationMessageSurface, setOperationMessageSurface] = useState<OperationMessageSurface>("global");
   const [pendingPlanComposerDraftReplacement, setPendingPlanComposerDraftReplacement] =
     useState<PlanComposerDraftReplacement>();
   const [resourcesComposerMode, setResourcesComposerMode] =
@@ -3966,12 +3998,35 @@ export function App() {
     { phase: "reflect" | "return"; cardId: string } | undefined
   >();
   const pendingLivePlanTaskMintRef = useRef<{ commandId: string } | undefined>();
+  // Composer focus follows explicit coach intent only (deep-link prompts,
+  // artifact/handoff bridges, suggested-action prefill). Plain navigation to
+  // the coach tab must not steal focus from whatever the learner was doing.
+  const coachComposerFocusRequestRef = useRef(false);
+  const requestCoachComposerFocus = useCallback(() => {
+    coachComposerFocusRequestRef.current = true;
+    // Same-view handoffs focus right away; if the view is still switching,
+    // the composer-shell effect below completes the request after commit.
+    window.requestAnimationFrame(() => {
+      if (!coachComposerFocusRequestRef.current) {
+        return;
+      }
+      coachComposerFocusRequestRef.current = false;
+      focusComposerInput();
+    });
+  }, []);
   const resolvedTheme = useMemo(() => resolveTheme(layout.themePreference), [layout.themePreference]);
   const isBrowserPreview = inBrowserPreviewEnvironment();
   const activeView = normalizeSidebarView(layout.activeView);
+  // §四十四: a surface-scoped operation message only renders on its own view;
+  // "global" stays visible everywhere.
+  const operationMessageVisible =
+    operationMessageSurface === "global" || operationMessageSurface === activeView;
   const browserPreviewFixture = isBrowserPreviewFixtureMode();
   const t = resolveWorkbenchCopy(layout.composerLanguage);
   const openProviderSetup = useCallback(() => {
+    // Deep link: Settings retains its surfaces, so pin the connection category
+    // instead of landing on whatever detail was visited last.
+    useWorkbenchState.getState().requestSettingsCategory("connection");
     setActiveView("settings");
     if (!data.providerConfig.apiKeyConfigured) {
       setProviderApiKeyFocusRequest((request) => request + 1);
@@ -3979,8 +4034,26 @@ export function App() {
   }, [data.providerConfig.apiKeyConfigured, setActiveView]);
   const localizedResourceOperationFallback = t.stageDone;
   const planText = resolvePlanViewCopy(layout.composerLanguage);
+  // §四十四: one atomic helper for the operation banner. `surface` localizes a
+  // message to its owning view ("global" renders everywhere); every call sets
+  // message + surface together, so a domain-scoped message never inherits a
+  // previous domain's scope and a later global message resets the scope. If a
+  // generic caller relays a plan-state failure (revision conflict, live-plan
+  // gate markers), it auto-scopes to Learning, where plan state is owned.
   const setOperationMessage = useCallback(
-    (message?: OperationMessage) => {
+    (message?: OperationMessage, surface?: OperationMessageSurface) => {
+      let nextSurface: OperationMessageSurface = "global";
+      if (message) {
+        if (surface) {
+          nextSurface = surface;
+        } else if (
+          detectPlanRevisionConflict(message.message) ||
+          parseLivePlanTaskGateMarker(message.message)
+        ) {
+          nextSurface = "plan";
+        }
+      }
+      setOperationMessageSurface(nextSurface);
       setRawOperationMessage(
         message ? sanitizeOperationFailureMessage(message, layout.composerLanguage) : undefined,
       );
@@ -4612,6 +4685,27 @@ export function App() {
       ) {
         setProviderApiKeyFocusRequest((request) => request + 1);
       }
+      if (message.type === "operation/status") {
+        // §四十四: a store-written banner inherits its host domain. Resource
+        // operation results (upload/index/delete/restore acks) render only in
+        // Library — the Library view already reports its own mutation status —
+        // and plan-state failures (revision conflict, live-plan gate) render
+        // only in Learning. Stream-scoped non-errors clear the banner instead
+        // of setting one, so they never claim a scope.
+        const hostSurfaceScope: OperationMessageSurface | undefined =
+          detectPlanRevisionConflict(message.payload.message) ||
+          parseLivePlanTaskGateMarker(message.payload.message)
+            ? "plan"
+            : resourceOperationStatus && resourceOperationStatus.kind !== "search"
+              ? "resources"
+              : undefined;
+        if (
+          hostSurfaceScope &&
+          !(message.payload.surface === "stream" && message.payload.tone !== "error")
+        ) {
+          setOperationMessageSurface(hostSurfaceScope);
+        }
+      }
       if (resourceOperationStatus?.kind !== "search") {
         applyRawHostMessage(
           sanitizeHostFailureMessage(
@@ -4623,15 +4717,14 @@ export function App() {
         );
       }
       if (resolvedMessage.type === "ui/coachPrompt" && typeof window !== "undefined") {
-        window.requestAnimationFrame(() => {
-          document.getElementById("coach-composer")?.focus();
-        });
+        requestCoachComposerFocus();
       }
     },
     [
       applyRawHostMessage,
       layout.composerLanguage,
       localizedResourceOperationFallback,
+      requestCoachComposerFocus,
       resolveTrainingPersistenceAck,
       resolveResourceOperationStatus,
       settingsActionState,
@@ -4642,11 +4735,9 @@ export function App() {
     (bridge: Parameters<typeof composeTrainingCoachBridgeDraft>[0]) => {
       setActiveView("coach");
       setComposerDraft(composeTrainingCoachBridgeDraft(bridge));
-      window.requestAnimationFrame(() => {
-        focusComposerInput();
-      });
+      requestCoachComposerFocus();
     },
-    [setActiveView, setComposerDraft],
+    [requestCoachComposerFocus, setActiveView, setComposerDraft],
   );
   const {
     onRefreshTask: requestTrainingCardGeneration,
@@ -4722,7 +4813,12 @@ export function App() {
           ? t.workspaceAdmissionIgnoredDetail
           : undefined;
   const openWorkspaceAdmission = useCallback(() => {
-    setActiveView(trainerWorkspaceAdmission?.status === "root-missing" ? "settings" : "coach");
+    if (trainerWorkspaceAdmission?.status === "root-missing") {
+      useWorkbenchState.getState().requestSettingsCategory("workspace");
+      setActiveView("settings");
+      return;
+    }
+    setActiveView("coach");
   }, [setActiveView, trainerWorkspaceAdmission?.status]);
   const defaultCoachDefaults = useMemo(
     () => ({
@@ -4760,9 +4856,7 @@ export function App() {
     setActiveView("coach");
     setPendingPlanComposerDraftReplacement(undefined);
     setComposerDraft(planText.stageGuidancePrompt(targetTitle));
-    window.requestAnimationFrame(() => {
-      focusComposerInput();
-    });
+    requestCoachComposerFocus();
   };
   const requestPlanComposerGuidance = (
     targetTitle: string,
@@ -4899,7 +4993,10 @@ export function App() {
       ),
     [data.providerConfig, scopedProviderLastTest, layout.composerLanguage, providerTestClock],
   );
-  // Connection state stays a status pill only; it never gates features.
+  // Capability gating keys off provider readiness (configured + API key + a
+  // live passing test). Sidecar connection state is informational only — the
+  // host lazy-starts the sidecar per request, so an offline indicator must
+  // never lock the workbench.
   const capabilityVerdict = useMemo(
     () => deriveTrainerCapabilityVerdict({
       connectionState: data.connection.state,
@@ -6752,11 +6849,9 @@ export function App() {
       const prompt =
         mode === "blocker" ? modeCopy.secondaryPrompt.prompt : modeCopy.primaryPrompt.prompt;
       setComposerDraft(prompt);
-      window.requestAnimationFrame(() => {
-        focusComposerInput();
-      });
+      requestCoachComposerFocus();
     },
-    [layout.composerLanguage, setActiveView],
+    [layout.composerLanguage, requestCoachComposerFocus, setActiveView],
   );
   const handlePlanOrientationAction = useCallback(
     (action: PlanOrientationAction | string | null) => {
@@ -6769,7 +6864,7 @@ export function App() {
       }
       if (action === "continue_without_plan") {
         setActiveView("coach");
-        focusComposerInput();
+        requestCoachComposerFocus();
         return;
       }
       if (action === "clear_blocker" || action === "continue_step") {
@@ -6783,7 +6878,7 @@ export function App() {
             tone: "info",
             message:
               appUiCopy(layout.composerLanguage, "预览不能改真实数据，请回 VS Code。请在输入框里核对证据。"),
-          });
+          }, "plan");
         }
         return;
       }
@@ -6813,7 +6908,7 @@ export function App() {
         setOperationMessage({
           tone: "info",
           message: livePlanUpdatePendingMessage(layout.composerLanguage),
-        });
+        }, "plan");
         postMessage({
           type: "plan/freeze",
           payload: { frozen: false },
@@ -6827,6 +6922,7 @@ export function App() {
       isBrowserPreview,
       openPlanComposerMode,
       postMessage,
+      requestCoachComposerFocus,
       setActiveView,
       setOperationMessage,
     ],
@@ -8134,18 +8230,16 @@ export function App() {
 
     pendingTrainingHandoffSubmissionRef.current = undefined;
     if (pending.phase === "return") {
-      setActiveView("coach");
+      // Draft handoff only: the bridge draft waits in the coach composer
+      // (stored per scope). Navigation and focus stay with the learner — the
+      // training card shows its own explicit "回到对话" exit.
       setComposerDraft(composeTrainingCoachBridgeDraft(trainingCoachBridge));
-      window.requestAnimationFrame(() => {
-        focusComposerInput();
-      });
       return;
     }
 
     setActivityDraft("");
   }, [
     normalizedTrainingNextHopStatus,
-    setActiveView,
     setComposerDraft,
     setActivityDraft,
     trainingCoachBridge,
@@ -8708,28 +8802,24 @@ export function App() {
         ? providerSendState.warning
         : undefined,
     );
-  const hasFullCoachRecoverySurface = activeView === "coach" && shouldShowNeutralEmptyState;
-  const hasCoachWorkspaceAdmissionSurface = activeView === "coach" && workspaceSessionBlocked;
-  const suppressComposerRecoverySurface =
-    activeView === "coach" &&
-    !streaming.isStreaming &&
-    (Boolean(streaming.streamError?.trim()) ||
-      /interrupted|aborted|failed|timeout|network|error/.test(
-        streaming.completionStopReason?.trim().toLowerCase() ?? "",
-      ));
-  const showComposerBlockingNotice =
-    sendBlocked &&
-    !suppressComposerRecoverySurface &&
-    !hasFullCoachRecoverySurface &&
-    !hasCoachWorkspaceAdmissionSurface;
+  // §六: one arbitration result drives both the coach pane takeover and the
+  // composer presence bar, so at most one blocking surface is ever visible.
+  const coachBlockingSurface = resolveCoachBlockingSurface({
+    coachViewActive: activeView === "coach",
+    workspaceSessionBlocked,
+    neutralSetupTakeover: shouldShowNeutralEmptyState,
+    providerSendBlocked: sendBlocked,
+    streamRecovering:
+      !streaming.isStreaming &&
+      (Boolean(streaming.streamError?.trim()) ||
+        /interrupted|aborted|failed|timeout|network|error/.test(
+          streaming.completionStopReason?.trim().toLowerCase() ?? "",
+        )),
+  });
+  const showComposerBlockingNotice = coachBlockingSurface === "provider-notice";
   const showComposerPresenceBar =
-    !suppressComposerRecoverySurface &&
-    (
-      (!hasCoachWorkspaceAdmissionSurface && workspaceSessionBlocked) ||
-      showComposerBlockingNotice ||
-      showComposerProviderPill ||
-      showComposerProviderNote
-    );
+    (coachBlockingSurface === null || coachBlockingSurface === "provider-notice") &&
+    (showComposerBlockingNotice || showComposerProviderPill || showComposerProviderNote);
 
   const sendTurn = ({
     text,
@@ -8770,6 +8860,7 @@ export function App() {
     }
 
     if (!providerCanCoachNow || providerBlockReason || capabilitySendBlocked) {
+      useWorkbenchState.getState().requestSettingsCategory("connection");
       setActiveView("settings");
       setOperationMessage({
         tone: "info",
@@ -8926,6 +9017,7 @@ export function App() {
       return;
     }
     setActiveView("coach");
+    requestCoachComposerFocus();
     sendTurn({
       text: recoveredPlanResumeMessage(resume, layout.composerLanguage),
       intent: "plan",
@@ -8963,7 +9055,7 @@ export function App() {
           tone: "error",
           message:
             appUiCopy(layout.composerLanguage, "没有找到可导入的支持文件。"),
-        });
+        }, "resources");
         return;
       }
 
@@ -9028,12 +9120,12 @@ export function App() {
           .map((fragment) => ` ${fragment}`)
           .join("")
           .trim(),
-      });
+      }, "resources");
     } catch {
       setOperationMessage({
         tone: "error",
         message: recoverableFailureMessage("upload", layout.composerLanguage),
-      });
+      }, "resources");
     }
   };
 
@@ -9060,7 +9152,7 @@ export function App() {
         tone: "error",
         message:
           appUiCopy(layout.composerLanguage, "\u8bf7\u8f93\u5165\u6709\u6548\u7684 http \u6216 https URL\u3002"),
-      });
+      }, "resources");
       return;
     }
 
@@ -9091,12 +9183,12 @@ export function App() {
                 String(result.uploadedCount),
               )
             : appUiCopy(layout.composerLanguage, "网页已导入并完成索引。"),
-      });
+      }, "resources");
     } catch {
       setOperationMessage({
         tone: "error",
         message: recoverableFailureMessage("upload", layout.composerLanguage),
-      });
+      }, "resources");
     }
   };
 
@@ -9292,12 +9384,15 @@ export function App() {
     const reviewOnlyDraft =
       prompt ??
       (appUiCopy(layout.composerLanguage, "先继续当前复习项，不要新开正式任务。"));
+    // Suggested actions prefill the composer draft; pressing send stays with
+    // the learner. Pure navigation actions keep their navigate-only behavior.
     if (action === "hint") {
       setActiveView("coach");
       setComposerDraft(
         prompt ??
           (appUiCopy(layout.composerLanguage, "请继续给我一个更小、更具体的下一步。")),
       );
+      requestCoachComposerFocus();
       return;
     }
 
@@ -9314,39 +9409,29 @@ export function App() {
       setActiveView("coach");
       if (leftoverSuggestedActionNotLive) {
         setComposerDraft(reviewOnlyDraft);
+        requestCoachComposerFocus();
         return;
       }
-      sendTurn({
-        text: prompt ?? defaultPromptText("next_task", layout.composerLanguage, focusArea),
-        intent: "next_task",
-        activeView: "coach",
-      });
+      setComposerDraft(prompt ?? defaultPromptText("next_task", layout.composerLanguage, focusArea));
+      requestCoachComposerFocus();
       return;
     }
 
     if (action === "review" || action === "retry_review") {
       setActiveView("coach");
-      sendTurn({
-        text: prompt ?? defaultPromptText("review", layout.composerLanguage, focusArea),
-        intent: "review",
-        activeView: "coach",
-        includeCurrentFile: true,
-        includeDiagnostics: true,
-        contextDetail: "full",
-      });
+      setComposerDraft(prompt ?? defaultPromptText("review", layout.composerLanguage, focusArea));
+      requestCoachComposerFocus();
       return;
     }
 
     setActiveView("coach");
     if (leftoverSuggestedActionNotLive) {
       setComposerDraft(reviewOnlyDraft);
+      requestCoachComposerFocus();
       return;
     }
-    sendTurn({
-      text: prompt ?? defaultPromptText("task", layout.composerLanguage, focusArea),
-      intent: "task",
-      activeView: "coach",
-    });
+    setComposerDraft(prompt ?? defaultPromptText("task", layout.composerLanguage, focusArea));
+    requestCoachComposerFocus();
   };
 
   const handleSubmit = async (activityResponse?: string) => {
@@ -9794,9 +9879,10 @@ export function App() {
   }, [hasReceivedHostState]);
 
   useEffect(() => {
-    if (!showComposerShell) {
+    if (!showComposerShell || !coachComposerFocusRequestRef.current) {
       return;
     }
+    coachComposerFocusRequestRef.current = false;
     const handle = window.requestAnimationFrame(() => {
       focusComposerInput();
     });
@@ -9816,6 +9902,7 @@ export function App() {
   const openComposerModelSettings = useCallback(() => {
     setOpenMenu(undefined);
     setComposerModelQuery("");
+    useWorkbenchState.getState().requestSettingsCategory("connection");
     setActiveView("settings");
   }, [setActiveView]);
 
@@ -10390,9 +10477,7 @@ export function App() {
   const handleResumeTrainingInCoach = useCallback(() => {
     if (leftoverTrainingHandoffChromeNotLive) {
       setActiveView("coach");
-      window.requestAnimationFrame(() => {
-        focusComposerInput();
-      });
+      requestCoachComposerFocus();
       return;
     }
     if (reviewArtifactForeground && trainingState?.reviewArtifact?.status === "resolved") {
@@ -10404,9 +10489,7 @@ export function App() {
           .replace("{t}", () => title)
           .replace("{r}", () => result),
       );
-      window.requestAnimationFrame(() => {
-        focusComposerInput();
-      });
+      requestCoachComposerFocus();
       return;
     }
 
@@ -10431,13 +10514,12 @@ export function App() {
 
     setActiveView("coach");
     setComposerDraft(composeTrainingCoachBridgeDraft(trainingCoachBridge));
-    window.requestAnimationFrame(() => {
-      focusComposerInput();
-    });
+    requestCoachComposerFocus();
   }, [
     handleSubmitTrainingEvidence,
     layout.composerLanguage,
     leftoverTrainingHandoffChromeNotLive,
+    requestCoachComposerFocus,
     reviewArtifactForeground,
     setActiveView,
     setComposerDraft,
@@ -12120,9 +12202,7 @@ export function App() {
                 ? lastTurnView
                 : "coach",
             );
-            window.requestAnimationFrame(() => {
-              focusComposerInput();
-            });
+            requestCoachComposerFocus();
           }}
         >
           {t.openCoach}
@@ -12237,23 +12317,22 @@ export function App() {
         const cardId = ts?.selectedCardId?.trim();
         const cardTitle = ts?.selectedCardTitle?.trim();
         if (!cardId || !cardTitle) return null;
+        // §十一: one quiet context line, not a module — the card itself stays
+        // the primary surface for the in-progress training card.
         return (
-          <div className="coach-training-resume" role="status">
-            <span className="coach-training-resume__label">
-              {appUiCopy(layout.composerLanguage, "进行中")}
-            </span>
-            <span className="coach-training-resume__title">{cardTitle}</span>
+          <p className="muted" data-coach-training-resume="true">
+            {appUiCopy(layout.composerLanguage, "正在进行：{v}").replace("{v}", () => cardTitle)}
             <button
               type="button"
-              className="toolbar-button coach-training-resume__go"
+              className="template-back"
               onClick={() => setActiveView("training")}
             >
               {appUiCopy(layout.composerLanguage, "继续")}
             </button>
-          </div>
+          </p>
         );
       })()}
-      {workspaceSessionBlocked && workspaceAdmissionContent ? (
+      {coachBlockingSurface === "workspace-admission" && workspaceAdmissionContent ? (
         <>
           {onboardingWizard ? <div className="coach-onboarding">{onboardingWizard}</div> : null}
           <div className="coach-workspace-admission">{workspaceAdmissionContent}</div>
@@ -12268,7 +12347,7 @@ export function App() {
             </button>
           ) : null}
         </>
-      ) : providerCoachNotice && sendBlocked && !shouldShowNeutralEmptyState && !workspaceSessionBlocked ? (
+      ) : coachBlockingSurface === "provider-notice" && providerCoachNotice ? (
         <button
           type="button"
           className={`coach-inline-notice coach-inline-notice--${providerCoachNotice.tone}`}
@@ -12445,7 +12524,7 @@ export function App() {
     activeView === "resources"
       ? appUiCopy(layout.composerLanguage, "可以让教练先找文件、判断最该打开哪一个，或建议如何整理当前资料区。")
       : activeView === "plan"
-        ? appUiCopy(layout.composerLanguage, "这里适合解释当前阶段、梳理 evidence，或把 blocker 压成更小的下一步。")
+        ? appUiCopy(layout.composerLanguage, "这里适合解释当前阶段、整理练习记录，或把遇到的问题变成更小的一步。")
         : providerCanCoachNow && !providerBlockReason
           ? composerSurfaceHint()
           : undefined;
@@ -12495,11 +12574,11 @@ export function App() {
         ? trainingComposerFilePracticeMode
           ? appUiCopy(
               layout.composerLanguage,
-              trainingComposerPracticeReturnMode === "result" ? "动手：结果记录" : "动手：Blocker",
+              trainingComposerPracticeReturnMode === "result" ? "动手：结果记录" : "动手：遇到的问题",
             )
           : appUiCopy(
               layout.composerLanguage,
-              trainingComposerPracticeReturnMode === "result" ? "动手：结果" : "动手：Blocker",
+              trainingComposerPracticeReturnMode === "result" ? "动手：结果" : "动手：遇到的问题",
             )
       : trainingComposerStudyMode
         ? studyFocusText
@@ -12518,7 +12597,7 @@ export function App() {
               ? appUiCopy(layout.composerLanguage, "\u590d\u76d8\uff1a\u5df2\u9a8c\u8bc1\u7684\u89c4\u5219")
             : reflectFallbackText
               ? appUiCopy(layout.composerLanguage, "复盘：{v}").replace("{v}", () => reflectFallbackText)
-              : appUiCopy(layout.composerLanguage, "复盘：收紧 blocker")
+              : appUiCopy(layout.composerLanguage, "复盘：收紧遇到的问题")
       : trainingComposerSelectedVerifyItem
         ? appUiCopy(layout.composerLanguage, "当前检查：{v}").replace("{v}", () => currentCheckText)
         : appUiCopy(layout.composerLanguage, "\u8bb0\u4e0b\u8fd9\u4e00\u8f6e\u7684\u7ed3\u679c\u3002")
@@ -12752,14 +12831,14 @@ export function App() {
             setSelectedResourceContextIds(resourceIds);
             setResourceConversationContextIds(resourceIds);
             setActiveView("coach");
-            window.requestAnimationFrame(focusComposerInput);
+            requestCoachComposerFocus();
           }}
           onJoinLearning={(resourceIds) => {
             setSelectedResourceContextIds(resourceIds);
             setResourceConversationContextIds(resourceIds);
             setCoachPlanContext("explain");
             setActiveView("coach");
-            window.requestAnimationFrame(focusComposerInput);
+            requestCoachComposerFocus();
           }}
           initialResourceContextIds={resourceConversationContextIds}
           onResourceSelectionChange={handleResourceSelectionChange}
@@ -13133,7 +13212,10 @@ export function App() {
                 className="button button--accent"
                 type="button"
                 aria-label={t.openCoach}
-                onClick={() => setActiveView("coach")}
+                onClick={() => {
+                  setActiveView("coach");
+                  requestCoachComposerFocus();
+                }}
               >
                 {t.openCoach}
               </button>
@@ -13202,16 +13284,9 @@ export function App() {
         }
         goalLabel={t.currentFocus}
         goalSummary={
-          <>
-            <p>
-              {!formalPlanLive && recoveredDisplayFacts.currentStep
-                ? recoveredDisplayFacts.currentStep
-                : !liveStageChrome.stageIsCurrent && recoveredDisplayFacts.currentStep
-                  ? recoveredDisplayFacts.currentStep
-                  : resolvedCoachFocus ||
-                    activeStageObjectiveText(activePlanStage, livePlanSummary)}
-            </p>
-          </>
+          // Stage/plan-level objective only. The concrete next-step sentence is
+          // owned by the nextStep prop below — never duplicated here.
+          <p>{resolvedCoachFocus || activeStageObjectiveText(activePlanStage, livePlanSummary)}</p>
         }
         liveStageIsCurrent={liveStageChrome.stageIsCurrent}
         goalHint={planText.goalHint}
@@ -13297,6 +13372,7 @@ export function App() {
                       openWorkspaceAdmission();
                       return;
                     }
+                    useWorkbenchState.getState().requestSettingsCategory("connection");
                     setActiveView("settings");
                   },
                 },
@@ -13354,6 +13430,7 @@ export function App() {
                   tone: "ghost" as const,
                   onClick: () => {
                     setActiveView("coach");
+                    requestCoachComposerFocus();
                     sendTurn({
                       text: defaultPromptText("next_task", layout.composerLanguage, activePlanStage?.title),
                       intent: "next_task",
@@ -13377,7 +13454,7 @@ export function App() {
                     setOperationMessage({
                       tone: "info",
                       message: livePlanUpdatePendingMessage(layout.composerLanguage),
-                    });
+                    }, "plan");
                     postMessage({
                       type: "plan/freeze",
                       payload: { frozen: !livePlanFrozen },
@@ -14152,9 +14229,7 @@ export function App() {
         </UtilityOverlay>
       ) : null}
 
-      {operationMessage &&
-      !(operationMessageSurface === "training" && activeView !== "training") &&
-      !(operationMessageSurface === "plan" && activeView !== "plan") ? (
+      {operationMessage && operationMessageVisible ? (
         <div className="template-global-state">
           <SystemState kind={operationMessage.tone === "error" ? "recoverable-error" : operationMessage.tone === "success" ? "success" : "information"}
             title={sanitizeErrorSurfaceText(operationMessage.message, layout.composerLanguage)}>
@@ -14217,6 +14292,7 @@ export function App() {
                         openWorkspaceAdmission();
                         return;
                       }
+                      useWorkbenchState.getState().requestSettingsCategory("connection");
                       setActiveView("settings");
                     }}
                   >

@@ -99,10 +99,7 @@
 }
 
 /* CollapseSection-hosted long artifact details. */
-.coach-artifact-details {
-  width: 100%;
-  min-width: 0;
-}
+
 
 @media (prefers-reduced-motion: reduce) {
   .coach-msg-enter,

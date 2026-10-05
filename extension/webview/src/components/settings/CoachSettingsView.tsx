@@ -2,6 +2,7 @@ import { templateCopy } from "../../templates/templateCopy";
 import { SettingsIndex, type SettingsSectionId } from "../../templates/SettingsIndex";
 import { SettingsDetail } from "../../templates/SettingsDetail";
 import { SystemState } from "../../templates/SystemState";
+import { useWorkbenchState } from "../../app/useWorkbenchState";
 import {
   type ReactNode,
   useEffect,
@@ -4210,6 +4211,30 @@ export function CoachSettingsView({
     setActiveSettingsCategory(sectionRequest.category);
     if (sectionRequest.skillTrigger) setCustomSkillDraft((draft) => ({ ...draft, trigger: sectionRequest.skillTrigger ?? "" }));
   }, [sectionRequest]);
+  // Deep-link contract: another surface calls
+  // `useWorkbenchState.getState().requestSettingsCategory(category)` right
+  // before `setActiveView("settings")`. Open the requested section once (the
+  // four SettingsSectionId values; anything unknown falls back to the index),
+  // then consume the request so it never re-fires.
+  const settingsCategoryRequest = useWorkbenchState((state) => state.settingsCategoryRequest);
+  useEffect(() => {
+    if (!settingsCategoryRequest) {
+      return;
+    }
+    const category = settingsCategoryRequest;
+    useWorkbenchState.getState().consumeSettingsCategoryRequest();
+    if (
+      category === "connection" ||
+      category === "workspace" ||
+      category === "teaching" ||
+      category === "preferences"
+    ) {
+      setSettingsIndexOpen(false);
+      setActiveSettingsCategory(category);
+    } else {
+      setSettingsIndexOpen(true);
+    }
+  }, [settingsCategoryRequest]);
   const [providerApiKeyFocusRequested, setProviderApiKeyFocusRequested] = useState(false);
   const [providerProfilesFocusRequested, setProviderProfilesFocusRequested] = useState(false);
   const [providerTemplatesFocusRequested, setProviderTemplatesFocusRequested] = useState(false);
@@ -6252,8 +6277,6 @@ export function CoachSettingsView({
                       icon: resolvedAvailabilityPrimaryIcon,
                       action: resolvedAvailabilityPrimaryAction,
                     };
-  const showProviderDetailTestAction =
-    !canRetestProvider || effectiveAvailabilityPrimaryCta.action !== onTestProvider;
   const effectiveAvailabilityPrimaryTone =
     availabilityMode === "ready" && !providerHasDraftChanges ? "ghost" : "accent";
   const connectionSummaryCard = showConnectionSummary ? (
@@ -6476,6 +6499,21 @@ export function CoachSettingsView({
       });
     }
   }
+  // De-duplication: the blocker bar at the top of the detail body is the
+  // single actionable issue list. When it is visible alongside the strip
+  // (detail pane only — the index hides the bar), the strip drops its action
+  // button so it repeats none of the per-issue actions; the form-level Test
+  // button renders instead (showProviderDetailTestAction below). The strip
+  // keeps the full connection explanation. Backend recovery keeps its full
+  // strip: the blocker bar has no row for it.
+  const availabilityStripReduced =
+    !settingsIndexOpen &&
+    !backendRecovery &&
+    settingsStatusIssues.some((issue) => issue.target === "connection");
+  const showProviderDetailTestAction =
+    availabilityStripReduced ||
+    !canRetestProvider ||
+    effectiveAvailabilityPrimaryCta.action !== onTestProvider;
   const providerConnectionSummary =
     `${settingsPhrase(language, "currentConnectionPrefix")}: ${providerSummary}`;
   const coachBehaviorSummary = shortenSummary(
@@ -7271,7 +7309,7 @@ export function CoachSettingsView({
       kind={backendStarting || providerTestPending ? "processing" : backendUnavailable ? "disconnected" : workspaceRootMissing ? "workspace-required" : providerCredentialsRejected ? "recoverable-error" : availabilityMode !== "ready" ? "provider-required" : "success"}
       title={displayAvailabilityHeadline}
       detail={showAvailabilityPrimaryAction ? displayAvailabilityDetail : localizedResolvedAvailabilityStatusLabel}
-      action={showAvailabilityPrimaryAction && !backendStarting && !providerTestPending ? {
+      action={availabilityStripReduced ? undefined : showAvailabilityPrimaryAction && !backendStarting && !providerTestPending ? {
         label: effectiveAvailabilityPrimaryCta.label,
         onClick: () => effectiveAvailabilityPrimaryCta.action?.(),
         disabled: !effectiveAvailabilityPrimaryCta.action,

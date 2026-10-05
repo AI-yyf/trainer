@@ -24,8 +24,6 @@ body,
   width: 100%;
 }
 
-
-
 .trainer-shell::before,
 .trainer-shell::after {
   content: "";
@@ -124,25 +122,21 @@ button.coach-inline-notice:hover {
   color: var(--fg-3);
 }
 
-.notice--info,
 .coach-inline-notice--info {
   border-color: color-mix(in srgb, var(--accent) 26%, transparent);
   background: color-mix(in srgb, var(--accent) 6%, var(--bg-1));
 }
 
-.notice--success,
 .coach-inline-notice--pass {
   border-color: color-mix(in srgb, var(--success) 28%, transparent);
   background: color-mix(in srgb, var(--success) 6%, var(--bg-1));
 }
 
-.notice--error,
 .coach-inline-notice--fail {
   border-color: color-mix(in srgb, var(--danger) 28%, transparent);
   background: color-mix(in srgb, var(--danger) 7%, var(--bg-1));
 }
 
-.notice--pending,
 .coach-inline-notice--pending {
   border-color: color-mix(in srgb, var(--warning) 28%, transparent);
   background: color-mix(in srgb, var(--warning) 6%, var(--bg-1));
@@ -164,17 +158,6 @@ button.coach-inline-notice:hover.coach-inline-notice--fail {
 
 /* Icon spans stay display:none outside .header-switcher--icon containers;
    the utility row is exactly such an icon-only context. */
-
-@keyframes status-pill-pending {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
-
 
 /* High-resolution polish: crisp text and thinner hairlines at scale. */
 .trainer-preview-sidebar {

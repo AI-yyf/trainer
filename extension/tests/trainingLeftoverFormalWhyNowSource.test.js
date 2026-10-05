@@ -26,7 +26,6 @@ test('Training why-now does not backfill leftover formal title or focus', () => 
     appSource,
     /const localizedWhyNow = hasRenderableTrainingCard\s*\?\s*pickLanguageAlignedTrainingText\(\s*layout\.composerLanguage,\s*trainingWhyThisCard,/,
   );
-  assert.match(viewSource, /const routeWhyNowSummary = compactCardText\(resolvedWhyNow, 96\);/);
   assert.match(viewSource, /const cardOnlyWhyNowSummary = compactCardText\(firstText\(resolvedWhyNow\), 120\);/);
   assert.doesNotMatch(
     viewSource,

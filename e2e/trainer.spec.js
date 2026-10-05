@@ -43,18 +43,11 @@ const RESOURCE_COPY = {
     searchPlaceholder: "\u641c\u7d22\u8d44\u6599",
     primaryResource: "\u767b\u5f55\u9519\u8bef\u7801\u5bf9\u7167",
     indexingResource: "\u5f53\u524d\u6587\u4ef6\u9519\u8bef\u5904\u7406\u7b14\u8bb0",
-    indexingLabel: "\u7d22\u5f15\u4e2d",
     noMatchesLabel: "\u6ca1\u6709\u5339\u914d\u7684\u8d44\u6599",
-    selectResource: "\u9009\u62e9\u8d44\u6599",
-    selectedResourcesLabel: "\u5df2\u9009\u62e9\u8d44\u6599",
-    selectAllVisible: "\u5168\u9009\u5f53\u524d\u8d44\u6599",
-    clearSelection: "\u6e05\u7a7a\u9009\u62e9",
-    deleteUnavailable: "\u6d4f\u89c8\u5668\u9884\u89c8\u4e0d\u4f1a\u66f4\u6539\u771f\u5b9e\u8d44\u6599\u3002\u8bf7\u5728 VS Code \u4fa7\u680f\u4e2d\u64cd\u4f5c\u3002",
+    restoreResource: "\u6062\u590d\u8d44\u6599",
     restoreUnavailable: "\u6d4f\u89c8\u5668\u9884\u89c8\u4e0d\u4f1a\u66f4\u6539\u771f\u5b9e\u8d44\u6599\u3002\u8bf7\u5728 VS Code \u4fa7\u680f\u4e2d\u64cd\u4f5c\u3002",
     trash: "\u56de\u6536\u7ad9",
     search: "搜索资料文件夹与文件",
-    enableMultiSelect: "开启多选",
-    disableMultiSelect: "退出多选",
     newFolder: "新建文件夹",
     noMatches: "没有匹配的文件夹或文件",
   },
@@ -65,18 +58,11 @@ const RESOURCE_COPY = {
     searchPlaceholder: "Search",
     primaryResource: "Coach prompt patterns",
     indexingResource: "Project refactor brief",
-    indexingLabel: "Indexing",
     noMatchesLabel: "No matching resources",
-    selectResource: "Select resource",
-    selectedResourcesLabel: "Selected resources",
-    selectAllVisible: "Select all visible resources",
-    clearSelection: "Clear selection",
-    deleteUnavailable: "Browser preview cannot change real resources. Use the VS Code sidebar.",
+    restoreResource: "Restore resource",
     restoreUnavailable: "Browser preview cannot change real resources. Use the VS Code sidebar.",
     trash: "Trash",
     search: "Search folders and files",
-    enableMultiSelect: "Turn on multi-select",
-    disableMultiSelect: "Leave multi-select",
     newFolder: "New folder",
     noMatches: "No matching folders or files",
   },
@@ -208,17 +194,15 @@ async function revealTrainingCardDetails(card) {
 }
 
 async function openFocusedTraining(page, language = 'en-US') {
-  await page.getByTestId('trainer-view-nav-plan').click();
-  const growth = page.locator('[data-learning-section=growth]:visible');
-  await expect(growth).toBeVisible();
-  if (await growth.count()) {
-    if (!await growth.evaluate(node => node.open)) await growth.locator(':scope > summary').click();
-    await growth.getByRole('button', { name: VIEW_LABELS[language].training, exact: true }).click();
-  } else {
-    const more = page.locator('[data-plan-governance-disclosure]');
-    if (!await more.evaluate(node => node.open)) await more.locator(':scope > summary').click();
-    await more.getByRole('button', { name: VIEW_LABELS[language].training, exact: true }).click();
-  }
+  // Training has no top-level tab and the growth section no longer carries a
+  // Training button — the host restores the internal route directly.
+  await page.evaluate(() =>
+    window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__?.({
+      type: 'ui/restoreView',
+      payload: { activeView: 'training' },
+    }),
+  );
+  await expectActiveView(page, language, 'training');
 }
 
 function resourceDetailName(language, title) {
@@ -232,6 +216,10 @@ async function expectTrainingLoop(card, activeStep) {
 }
 
 async function expectTrainingCardFacts(card) {
+  // One task-details disclosure carries the facts; it is absent while the
+  // learn phase owns the card face.
+  const details = card.locator('[data-training-card-details]');
+  if ((await details.count()) === 0) return;
   await revealTrainingCardDetails(card);
   for (const fact of TRAINING_CARD_FACTS) {
     await expect(card.locator(`[data-training-card-fact="${fact}"]`)).toBeVisible();
@@ -589,17 +577,15 @@ test.describe("Trainer three-destination shell", () => {
         name: language === "zh-CN" ? "添加资料" : "Add resource",
         exact: true,
       });
-      const refreshResources = library.getByRole("button", { name: language === "zh-CN" ? "刷新索引" : "Refresh index", exact: true });
 
       await expect(search).toBeVisible();
       await expect(search).toHaveAttribute("placeholder", copy.searchPlaceholder);
       await expect(addResource).toBeVisible();
-      await expect(toolbarButtons).toHaveCount(2);
-      const resourcesMore = library.locator(".resources-knowledge__toolbar .resources-knowledge__more > summary");
-      if ((await resourcesMore.count()) > 0) {
-        await resourcesMore.click();
-      }
-      await expect(refreshResources).toBeVisible();
+      // The toolbar is one action now — the standalone refresh-index button is gone.
+      await expect(toolbarButtons).toHaveCount(1);
+      await expect(
+        library.getByRole("button", { name: language === "zh-CN" ? "刷新索引" : "Refresh index", exact: true }),
+      ).toHaveCount(0);
       await addResource.click();
       const importMenu = page.getByRole("menu", {
         name: language === "zh-CN" ? "添加资料" : "Add resource",
@@ -609,14 +595,12 @@ test.describe("Trainer three-destination shell", () => {
       await expect(importMenu.getByRole("menuitem")).toHaveCount(3);
       await addResource.click();
       await expect(importMenu).toHaveCount(0);
-      await expect(tree).toHaveAttribute("aria-multiselectable", "true");
+      // Rows are plain entries: no multi-select tree and no checkboxes.
+      await expect(tree).not.toHaveAttribute("aria-multiselectable");
+      await expect(tree.getByRole("checkbox")).toHaveCount(0);
 
       const primaryTreeItem = tree.getByRole("treeitem", {
         name: copy.primaryResource,
-        exact: true,
-      });
-      const primaryCheckbox = tree.getByRole("checkbox", {
-        name: `${copy.selectResource}: ${copy.primaryResource}`,
         exact: true,
       });
       await expect(primaryTreeItem).toBeVisible();
@@ -624,9 +608,6 @@ test.describe("Trainer three-destination shell", () => {
       await expect(
         primaryTreeItem.locator(".resources-library-tree__kind svg"),
       ).toHaveCount(1);
-      await expect(primaryCheckbox).toBeVisible();
-      const checkboxCountBeforeSelection = await tree.getByRole("checkbox").count();
-      expect(checkboxCountBeforeSelection).toBeGreaterThan(1);
 
       await search.fill(copy.indexingResource);
       const indexingTreeItem = tree.getByRole("treeitem", {
@@ -634,48 +615,35 @@ test.describe("Trainer three-destination shell", () => {
         exact: true,
       });
       await expect(indexingTreeItem).toBeVisible();
-      await expect(indexingTreeItem.locator(".resources-library-tree__status")).toHaveText(
-        copy.indexingLabel,
-      );
+      // Per-row index-status badges are gone; the reader holds the status line.
+      await expect(indexingTreeItem.locator(".resources-library-tree__status")).toHaveCount(0);
 
       await search.fill("no-resource-match");
       await expect(tree.getByRole("treeitem")).toHaveCount(0);
       await expect(tree).toContainText(copy.noMatchesLabel);
       await search.fill("");
-      await expect(primaryCheckbox).toBeVisible();
+      await expect(primaryTreeItem).toBeVisible();
 
-      await primaryCheckbox.click();
-      await expect(primaryTreeItem).toHaveAttribute("aria-checked", "true");
-      const selectionCount = library.locator(".resources-knowledge__selection-count");
-      await expect(selectionCount).toHaveAttribute(
-        "aria-label",
-        `${copy.selectedResourcesLabel}: 1`,
-      );
-      const batchActions = library.locator(".resources-knowledge__batch-actions");
-      await expect(batchActions).not.toHaveAttribute("open", "");
-      await batchActions.locator(":scope > summary").click();
-      const deleteButton = library.getByRole("button", { name: copy.deleteUnavailable, exact: true });
-      await expect(deleteButton).toBeDisabled();
-      await expect(deleteButton).toHaveAttribute("title", copy.deleteUnavailable);
+      // Enter opens the reader directly — no selection step in between.
+      await primaryTreeItem.press("Enter");
+      const detail = page.locator("[data-template=ResourceReader]");
+      await expect(detail.getByRole("heading", { name: copy.primaryResource, exact: true })).toBeVisible();
+      await detail.locator(".template-back").first().click();
+      await expect(library).toBeVisible();
 
-      await library.getByRole("button", { name: copy.selectAllVisible, exact: true }).click();
-      await expect(selectionCount).toHaveAttribute(
-        "aria-label",
-        `${copy.selectedResourcesLabel}: 3`,
-      );
-      await library.getByRole("button", { name: copy.clearSelection, exact: true }).click();
-      await expect(selectionCount).toHaveCount(0);
-      await expect(tree.getByRole("checkbox")).toHaveCount(checkboxCountBeforeSelection);
-      await expect(primaryCheckbox).toBeVisible();
-
+      // Trash stays collapsed with per-item restore actions only; the bulk
+      // restore and its refresh button are gone. The browser preview cannot
+      // mutate real resources, so it offers no restore action at all — the
+      // host bridge exercises the per-item restore in the lifecycle spec.
       const trash = library.locator(".resources-knowledge__trash");
       await expect(trash.locator("summary")).toContainText(copy.trash);
       await expect(trash.locator("summary")).toContainText("1");
       await trash.locator("summary").click();
       await expect(trash.getByText("Archived reference notes", { exact: true })).toBeVisible();
-      const restoreButton = trash.getByRole("button", { name: copy.restoreUnavailable, exact: true });
-      await expect(restoreButton).toBeDisabled();
-      await expect(restoreButton).toHaveAttribute("title", copy.restoreUnavailable);
+      await expect(
+        trash.getByRole("button", { name: "Restore available resources", exact: true }),
+      ).toHaveCount(0);
+      await expect(trash.getByRole("button")).toHaveCount(0);
 
       await expectNoHorizontalOverflow(page);
       await expectNoConsoleErrors(errors);
@@ -809,7 +777,8 @@ test.describe("Trainer three-destination shell", () => {
       await expect(card.locator(".template-activity-header__phase")).toContainText(copy.activeLearnStep);
       await expectTrainingCardFacts(card);
       await expect(page.locator(".training-card-nav")).toHaveCount(0);
-      await expect(card.locator('[data-training-next-card="true"]')).toBeVisible();
+      // Next Card lives only on the Return/terminal state, never during learn.
+      await expect(card.locator('[data-training-next-card="true"]')).toHaveCount(0);
       await expect(card.locator('[data-training-card-fact="current"]')).toHaveCount(0);
       await expect(card.getByRole("button", { name: copy.startThisStep, exact: true })).toBeVisible();
       await expect(card.getByText(copy.verifyCurrentFile, { exact: true })).toHaveCount(0);
@@ -869,6 +838,8 @@ test.describe("Trainer three-destination shell", () => {
     });
     card = page.getByRole("group", { name: "Current training card", exact: true });
     await expectTrainingLoop(card, "learn");
+    // The learn face owns the card; the task-details disclosure is hidden.
+    await expect(card.locator('[data-training-card-details]')).toHaveCount(0);
     await expectTrainingCardFacts(card);
 
   });
@@ -964,13 +935,19 @@ test.describe("Trainer three-destination shell", () => {
         (command) => command?.payload?.commandId === "trainer.training.return",
       ),
     ).toBeTruthy();
-    await expectActiveView(page, "en-US", "coach");
+    // No auto-jump to Coach: the card settles in its terminal state and the
+    // Training route stays active, with Next Card available from there.
+    const complete = card.locator('[data-training-return-complete="true"]');
+    await expect(complete).toBeVisible();
+    await expect(complete).toContainText("Done");
+    await expect(complete).toContainText("Your result is with the coach");
+    await expect(complete.locator('[data-training-next-card="true"]')).toBeVisible();
+    await expectActiveView(page, "en-US", "training");
     await expectNoConsoleErrors(errors);
   });
 
-  test("keeps the next training step lightweight beside the one current card", async ({ page }) => {
+  test("keeps task details lightweight beside the one current card", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
-    const commands = collectPreviewCommands(page);
 
     await page.setViewportSize({ width: 360, height: 900 });
     await openPreview(page, "training", {
@@ -983,19 +960,21 @@ test.describe("Trainer three-destination shell", () => {
     await expect(training.locator(".template-activity-header h2")).toBeVisible();
     await expect(training.locator("[data-training-next-hop=\"true\"]")).toHaveCount(0);
     await expect(training.locator(":scope > .training-carryover-row")).toHaveCount(0);
-    await expect(training.locator(".template-focused-practice > details")).toHaveCount(3);
-    for (const detail of await training.locator(".template-focused-practice > details").all()) await expect(detail).not.toHaveAttribute("open", "");
+    // The three background disclosures collapsed into one task-details
+    // disclosure, closed by default; the "More → Next Card" disclosure is gone
+    // because Next Card now lives only on the Return/terminal state.
+    const taskDetails = training.locator("[data-training-card-details]");
+    await expect(training.locator(".template-focused-practice > details")).toHaveCount(1);
+    await expect(taskDetails).toHaveCount(1);
+    await expect(taskDetails).not.toHaveAttribute("open", "");
+    await expect(taskDetails.locator(":scope > summary")).toContainText("任务详情");
     await expect(training.locator(".training-current__more")).toHaveCount(0);
     await expect(training.locator(".training-loop-rail")).toHaveCount(0);
-    await expect(training.getByText("更多", { exact: true })).toHaveCount(1);
+    await expect(training.locator('[data-training-next-card]')).toHaveCount(0);
+    await expect(training.getByText("更多", { exact: true })).toHaveCount(0);
+    await taskDetails.locator(":scope > summary").click();
+    await expectTrainingCardFacts(training);
     await expectNoHorizontalOverflow(page);
-    await training.locator("details:has([data-training-next-card]) > summary").click();
-    await training.locator('[data-training-next-card="true"]').click();
-    await expect.poll(() => commands.some(message =>
-      message.payload?.commandId === "trainer.training.generateCard")).toBe(true);
-    const generated = commands.find(message => message.payload?.commandId === "trainer.training.generateCard");
-    expect(generated.payload.payload.cardType).toBe("practice");
-    expect(generated.payload.payload.focusArea).toBeUndefined();
     await expectNoConsoleErrors(errors);
   });
 
@@ -1069,7 +1048,9 @@ test.describe("Trainer three-destination shell", () => {
     await expectTrainingLoop(card, "try");
     await expectTrainingCardFacts(card);
     await expect(composer).toHaveCount(0);
-    await expect(card.locator("[data-template=PracticeResponse] textarea")).toBeEditable();
+    // The duplicate practice composer is gone: file-verified practice keeps
+    // the verify action on the card face instead of a second composer.
+    await expect(card.locator("[data-template=PracticeResponse] textarea")).toHaveCount(0);
     await expect(
       card.getByRole("button", { name: "Verificar archivo actual", exact: true }),
     ).toBeVisible();

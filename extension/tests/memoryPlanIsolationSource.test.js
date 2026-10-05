@@ -8,15 +8,13 @@ const path = require('node:path');
 const planPath = path.resolve(__dirname, '..', 'webview', 'src', 'components', 'plan', 'CoachPlanView.tsx');
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
-test('Plan visibly distinguishes global memory from isolated project memory', () => {
+test('Plan renders no memory-scope diagram (Settings owns memory scope)', () => {
   const source = fs.readFileSync(planPath, 'utf8');
-  assert.match(source, /const memoryScopeContext = \(/);
-  assert.match(source, /Global memory/);
-  assert.match(source, /Current project memory/);
-  assert.match(source, /Connected/);
-  assert.match(source, /Isolated/);
-  assert.match(source, /Project evidence stays here first/);
-  assert.match(source, /memoryScopeContext/);
+  assert.doesNotMatch(source, /memoryScopeContext/);
+  assert.doesNotMatch(source, /coach-plan-view__memory-scope/);
+  assert.doesNotMatch(source, /Global memory/);
+  assert.doesNotMatch(source, /Current project memory/);
+  assert.doesNotMatch(source, /Project evidence stays here first/);
 });
 
 test('Plan still receives authoritative global plan and current project link state', () => {

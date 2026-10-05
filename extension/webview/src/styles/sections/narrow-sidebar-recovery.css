@@ -72,18 +72,11 @@
     line-height: 1.15;
   }
 
-  .training-current__learning-family,
-  .training-current__meta--context[data-training-context-layout="optional-second-line"] {
+  .training-current__learning-family {
     max-width: none;
   }
 
-  .training-current__meta--context[data-training-context-layout="optional-second-line"] {
-    flex-basis: 100%;
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-    line-height: 1.35;
-  }
+  
 }
 
 @media (max-width: 480px) {
@@ -111,8 +104,7 @@
   }
 }
 
-.coach-plan-view__now-card[data-plan-fact="next"] strong,
-.coach-plan-view__route-item[data-plan-fact] strong {
+.coach-plan-view__now-card[data-plan-fact=      ] strong {
   display: block;
   overflow: visible;
   overflow-wrap: anywhere;
@@ -120,10 +112,7 @@
 }
 
 @media (max-width: 420px) {
-  .coach-plan-view__route-strip {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-  }
+  
 
   .settings-availability-fact__text {
     display: block;
@@ -186,18 +175,6 @@
   }
 }
 
-.resources-knowledge__row .resource-library-row__action {
-  opacity: 1;
-  pointer-events: auto;
-  transform: none;
-}
-
-.resources-knowledge__row .resource-library-row__action:hover,
-.resources-knowledge__row .resource-library-row__action:focus-visible {
-  color: var(--fg-0);
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
-}
-
 /* Resources owns the available work canvas; list and preview scroll internally. */
 .view-stack--resources > .view-stack__primary {
   align-items: stretch;
@@ -241,13 +218,6 @@
   th
 ) {
   text-align: start;
-}
-
-.trainer-shell[dir="rtl"] .message-bubble-v2--assistant .message-bubble-v2__content {
-  border-left: 0;
-  border-inline-start: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
-  padding-left: 0;
-  padding-inline-start: 10px;
 }
 
 .trainer-shell[dir="rtl"] .agent-activity-strip {

@@ -1,4 +1,3 @@
-export { FirstLookSummaryPanel } from "./FirstLookSummaryPanel";
 export {
   WorkspaceAdmissionPanel,
   type WorkspaceAdmissionPanelProps,

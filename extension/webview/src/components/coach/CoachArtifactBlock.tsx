@@ -68,69 +68,12 @@ function artifactActionLabel(
   return artifactBlockCopy(language, ACTION_LABEL_KEYS[action]);
 }
 
-const META_LABEL_KEYS = {
-  focus: "重点",
-  why: "原因",
-  verify: "验证",
-  decision: "决策",
-  blocker: "卡点",
-  resumeThread: "续接",
-  teachingNote: "教学提示",
-  confidence: "把握",
-  evidence: "证据",
-} as const;
-
-function artifactMetaLabel(
-  key: "focus" | "why" | "verify" | "decision" | "blocker" | "resumeThread" | "teachingNote" | "confidence" | "evidence",
-  language: ComposerLanguage,
-): string {
-  return artifactBlockCopy(language, META_LABEL_KEYS[key]);
-}
-
 function artifactMetadataRecord(artifact: CoachArtifactBlockData): Record<string, unknown> | undefined {
   const metadata = artifact.metadata;
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return undefined;
   }
   return metadata;
-}
-
-function artifactMetadataText(
-  metadata: Record<string, unknown> | undefined,
-  keys: string[],
-): string | undefined {
-  if (!metadata) {
-    return undefined;
-  }
-  for (const key of keys) {
-    const value = metadata[key];
-    if (typeof value === "string" && value.trim()) {
-      return value.trim();
-    }
-  }
-  return undefined;
-}
-
-function artifactMetadataList(
-  metadata: Record<string, unknown> | undefined,
-  keys: string[],
-): string[] {
-  if (!metadata) {
-    return [];
-  }
-  for (const key of keys) {
-    const value = metadata[key];
-    if (!Array.isArray(value)) {
-      continue;
-    }
-    const items = value
-      .map((item) => (typeof item === "string" ? item.trim() : ""))
-      .filter(Boolean);
-    if (items.length > 0) {
-      return items;
-    }
-  }
-  return [];
 }
 
 function actionSentence(
@@ -150,26 +93,6 @@ function actionButtonLabel(
   return artifactBlockCopy(language, "下一步：{action}").replace(
     "{action}",
     artifactActionLabel(action, language),
-  );
-}
-
-function contentSummaryLabel(kind: CoachArtifactKind, language: ComposerLanguage): string {
-  if (kind === "review" || kind === "evaluation") {
-    return artifactBlockCopy(language, "判断依据");
-  }
-  return artifactBlockCopy(language, "补充说明");
-}
-
-function verificationLead(
-  items: string[],
-  language: ComposerLanguage,
-): string {
-  if (items.length === 0) {
-    return "";
-  }
-  return artifactBlockCopy(language, "做完先看 {items}。").replace(
-    "{items}",
-    items.join(artifactBlockCopy(language, "；")),
   );
 }
 
@@ -211,8 +134,10 @@ function artifactTeaser(
 }
 
 /**
- * Artifact details render flat: folding supplementary reasoning away hid the
- * coach's actual answer and read as broken/empty cards.
+ * The artifact card stays bare: title, kind, summary/teaser and the single
+ * action. Supplementary meta (决策/卡点/续接/教学提示/把握/证据) is not
+ * rendered here — it remains available in the message parts and evidence
+ * disclosure.
  */
 
 export function CoachArtifactBlock({
@@ -257,25 +182,6 @@ export function CoachArtifactBlock({
       />
     );
   }
-  const decision = artifactMetadataText(metadata, ["decision"]);
-  const blocker = artifactMetadataText(metadata, ["blocker"]);
-  const resumeThread = artifactMetadataText(metadata, ["resumeThread", "resume_thread"]);
-  const teachingNote = artifactMetadataText(metadata, ["teachingNote", "teaching_note"]);
-  const confidence = artifactMetadataText(metadata, ["confidence"]);
-  const evidence = artifact.verification?.length
-    ? artifact.verification
-    : artifactMetadataList(metadata, ["evidence"]);
-  const showDetailBlock = Boolean(
-    artifact.rationale ||
-      artifact.focusArea ||
-      artifact.content ||
-      decision ||
-      blocker ||
-      resumeThread ||
-      teachingNote ||
-      confidence ||
-      evidence.length,
-  );
   const inlineLead = artifactInlineLead(artifact.kind, language);
   const isPrimaryLaneArtifact =
     artifact.kind === "idea_implementation" ||
@@ -284,84 +190,11 @@ export function CoachArtifactBlock({
     artifact.kind === "next_step";
   const kindLabel = artifactKindLabel(artifact.kind, language);
   const showKindLabel = Boolean(kindLabel) && !isPrimaryLaneArtifact;
-  const detailSummary = contentSummaryLabel(artifact.kind, language);
   const teaser = artifactTeaser({ ...artifact, focusArea: displayFocus }, language);
-  const showInlineDetails = isPrimaryLaneArtifact;
   const showTeaser =
     Boolean(teaser) &&
     teaser?.trim() !== artifact.summary?.trim() &&
     teaser?.trim() !== displayTitle.trim();
-  const detailBody: ReactNode = (
-    <>
-      {artifact.focusArea ? (
-        <p className="artifact-card__detail-note">
-          <strong>{artifactMetaLabel("focus", language)}</strong>
-          {artifactBlockCopy(language, "：")}
-          {displayFocus}
-        </p>
-      ) : null}
-      {artifact.content ? (
-        <MessageRichContent body={artifact.content} language={language} />
-      ) : null}
-      {artifact.rationale ? (
-        <>
-          <p className="artifact-card__detail-note">
-            <strong>{artifactMetaLabel("why", language)}</strong>
-            {artifactBlockCopy(language, "：")}
-          </p>
-          <MessageRichContent body={artifact.rationale} language={language} />
-        </>
-      ) : null}
-      {decision ? (
-        <p className="artifact-card__detail-note">
-            <strong>{artifactMetaLabel("decision", language)}</strong>
-            {artifactBlockCopy(language, "：")}
-            {decision}
-        </p>
-      ) : null}
-      {blocker ? (
-        <p className="artifact-card__detail-note">
-            <strong>{artifactMetaLabel("blocker", language)}</strong>
-            {artifactBlockCopy(language, "：")}
-            {blocker}
-        </p>
-      ) : null}
-      {resumeThread ? (
-        <p className="artifact-card__detail-note">
-            <strong>{artifactMetaLabel("resumeThread", language)}</strong>
-            {artifactBlockCopy(language, "：")}
-            {resumeThread}
-        </p>
-      ) : null}
-      {teachingNote ? (
-        <p className="artifact-card__detail-note">
-            <strong>{artifactMetaLabel("teachingNote", language)}</strong>
-            {artifactBlockCopy(language, "：")}
-            {teachingNote}
-        </p>
-      ) : null}
-      {confidence ? (
-        <p className="artifact-card__detail-note">
-            <strong>{artifactMetaLabel("confidence", language)}</strong>
-            {artifactBlockCopy(language, "：")}
-            {confidence}
-        </p>
-      ) : null}
-      {evidence.length ? (
-        <>
-          <p className="artifact-card__detail-note">
-            <strong>{artifactMetaLabel("verify", language)}</strong>
-            {artifactBlockCopy(language, "：")}
-          </p>
-          <ul>
-            {evidence.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </>
-      ) : null}
-    </>
-  );
 
   return (
     <article className={classes} data-artifact-kind={artifact.kind} data-artifact-primary={isPrimaryLaneArtifact ? "true" : "false"}>
@@ -388,21 +221,6 @@ export function CoachArtifactBlock({
             <li key={bullet}>{bullet}</li>
           ))}
         </ul>
-      ) : null}
-      {showDetailBlock ? (
-        <div
-          className={`artifact-card__details-body${showInlineDetails ? " artifact-card__details-body--inline" : ""}${
-            showInlineDetails ? " coach-artifact-details" : ""
-          }`}
-          aria-label={detailSummary}
-        >
-          {detailBody}
-        </div>
-      ) : null}
-      {!showDetailBlock && evidence.length ? (
-        <p className="artifact-card__next-note">
-          {verificationLead(evidence, language)}
-        </p>
       ) : null}
       {artifact.recommendedAction && onOpen ? (
         <button className="artifact-card__next-action" type="button" onClick={() => onOpen(artifact)}>

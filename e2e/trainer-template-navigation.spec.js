@@ -41,7 +41,38 @@ test('surface switches retain the Coach draft and resource search without sharin
   await expect(page.locator('#coach-composer')).toHaveValue('Keep my question while I read');
   await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'ui/restoreView', payload: { activeView: 'training' } }));
   await expect(page.locator('#coach-composer')).toHaveCount(0);
-  await page.locator('[data-template=FocusedPractice] summary').filter({ hasText: 'Full acceptance' }).click();
+  // Training owns a concept-practice card here so the surface has both its own
+  // activity input and the single task-details disclosure (file-verified
+  // practice replaces the response with the verify action instead).
+  await page.evaluate(() => {
+    const current = window.__TRAINER_BOOTSTRAP__;
+    const card = {
+      cardId: 'card-template-nav', type: 'practice', title: 'Boundary check card',
+      status: 'active', learningPhase: 'try', learningFamily: 'concept',
+      problemStatement: 'State one precise rule before expanding the topic.',
+      deliverable: 'One precise rule', learnerDeliverables: ['Explain the invariant'],
+      verificationSteps: ['Compare against the written rule'],
+      targetSkill: 'Boundaries', focusArea: 'Boundaries',
+    };
+    window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: {
+      ...current,
+      plan: null,
+      planRuntimeStatus: { recovered: true, currentStep: '', reviewPoints: [] },
+      memory: { ...current.memory, workspace: { ...current.memory.workspace,
+        workspaceId: 'workspace-template-nav',
+        liveTrainingSelection: { workspaceId: 'workspace-template-nav', cardId: card.cardId, selectedAt: '2026-10-02T03:00:00Z' } } },
+      workspaceTrainingState: { ...current.workspaceTrainingState, workspaceId: 'workspace-template-nav',
+        selectedCardId: card.cardId, selectedCardType: 'practice', selectedCardTitle: card.title,
+        selectedCardStatus: 'active', trainingCardCandidates: [card],
+        activeTrainingCardRouting: { selectedCardId: card.cardId, selectedCard: card, selectionScore: 100 } },
+    } });
+  });
+  // One task-details disclosure per card; the flash response sits on the card
+  // face instead of a nested "Full acceptance" composer.
+  const cardDetails = page.locator('[data-training-card-details]');
+  await expect(cardDetails).toHaveCount(1);
+  await expect(cardDetails.locator(':scope > summary')).toContainText(/任务详情|Task details/);
+  await expect(cardDetails).not.toHaveAttribute('open', '');
   await expect(page.locator('#training-response')).toBeVisible();
   await page.locator('#training-response').fill('My attempt note');
   await page.getByTestId('trainer-view-nav-coach').click();

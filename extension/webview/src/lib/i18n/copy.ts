@@ -30,17 +30,6 @@ export type CopyKey =
   | "viewContextCoach"
   | "backgroundAnalysis"
   | "backgroundCoachWork"
-  | "firstLookBadge"
-  | "firstLookProjectType"
-  | "firstLookFolderRole"
-  | "firstLookWhyGuess"
-  | "firstLookEntryPoints"
-  | "firstLookDirectoryAnchors"
-  | "firstLookCoreModules"
-  | "firstLookRiskZones"
-  | "firstLookOpportunities"
-  | "firstLookUnknowns"
-  | "firstLookNextStep"
   | "workspaceAdmissionRootMissing"
   | "workspaceAdmissionRootMissingDetail"
   | "workspaceAdmissionGoalSaved"
@@ -543,12 +532,6 @@ export type CopyKey =
   | "evidenceOutcomeObservation"
 
   // 证据来源
-  | "evidenceSourceCardResult"
-  | "evidenceSourceEvaluation"
-  | "evidenceSourceLearningSignal"
-  | "evidenceSourceCoachingObservation"
-  | "evidenceSourceResourceImport"
-  | "evidenceSourceReviewQueue"
 
   // 人类友好状态
   | "reviewReminderNone"
@@ -580,32 +563,6 @@ export type CopyKey =
   | "coachAdjustingPlan"
 
   // 教练动作状态
-  | "coachActionIdle"
-  | "coachActionCheckingResources"
-  | "coachActionSearchingResources"
-  | "coachActionAligningPlan"
-  | "coachActionPlanAlignment"
-  | "coachActionSchedulingTraining"
-  | "coachActionGeneratingCard"
-  | "coachActionCardGeneration"
-  | "coachActionEvaluatingResult"
-  | "coachActionEvaluation"
-  | "coachActionReviewingEvidence"
-  | "coachActionResourceUpload"
-  | "coachActionWorkspaceClassification"
-  | "coachActionDoneIdle"
-  | "coachActionDoneCheckingResources"
-  | "coachActionDoneSearchingResources"
-  | "coachActionDoneAligningPlan"
-  | "coachActionDonePlanAlignment"
-  | "coachActionDoneSchedulingTraining"
-  | "coachActionDoneGeneratingCard"
-  | "coachActionDoneCardGeneration"
-  | "coachActionDoneEvaluatingResult"
-  | "coachActionDoneEvaluation"
-  | "coachActionDoneReviewingEvidence"
-  | "coachActionDoneResourceUpload"
-  | "coachActionDoneWorkspaceClassification"
 
   // 掌握度阶段
   | "masteryUnderstood"
@@ -616,7 +573,6 @@ export type CopyKey =
   | "masteryNotEstablished"
 
   // Phase-D 技能投影 (evidence → skill states)
-  | "skillProjectionTitle"
   | "skillDimComprehension"
   | "skillDimImplementation"
   | "skillDimDebugging"
@@ -654,7 +610,6 @@ export type CopyKey =
   | "resourcesMenu"
   | "resourcesSummary"
   | "resourcesSandbox"
-  | "resourcesSandboxRoot"
   | "resourcesSandboxRefresh"
   | "resourcesSandboxNewFile"
   | "resourcesSandboxNewFolder"
@@ -675,7 +630,6 @@ export type CopyKey =
   | "resourcesSandboxWorkspaceRoot"
   | "resourcesSandboxSourceLabel"
   | "resourcesSandboxLedger"
-  | "resourcesSandboxTrashRoot"
   | "resourcesSandboxMountedSources"
   | "resourcesSandboxNextSafeMove"
   | "resourcesSandboxFilePlaceholder"
@@ -754,17 +708,11 @@ export type CopyKey =
   | "globalPlanFrozen"
 
   // Plan evidence governance
-  | "evidenceConfidence"
-  | "evidenceGovernance"
-  | "evidenceFilterUnscoped"
-  | "evidenceFilterAll"
   | "evidenceFilterDeferred"
   | "evidenceFilterAdopted"
   | "evidenceFilterRejected"
   | "evidenceAdopt"
   | "evidenceDefer"
-  | "evidenceTargetPrefix"
-  | "evidenceNoMatches"
 
   // Provider capabilities
   | "capabilityChat"
@@ -807,15 +755,11 @@ export type CopyKey =
   | "leftoverNotLiveHint"
 
   // Plan stage learning materials
-  | "planStageMaterialsTitle"
   | "planStageMaterialsGenerate"
   | "planStageMaterialsGenerating"
   | "planStageMaterialsView"
   | "planStageMaterialsHide"
-  | "planStageMaterialsTemplate"
   | "planStageMaterialsEmpty"
-  | "planStageCompletionLabel"
-  | "planStageMaterialsBadgeTitle"
 
   // Plan progress dashboard (Plan view inner tab)
   | "planDashboardTabPlan"
@@ -946,17 +890,6 @@ export const copyTable = {
     latestReview: "最近检查",
     backgroundAnalysis: "后台准备",
     backgroundCoachWork: "教练准备",
-    firstLookBadge: "项目概览",
-    firstLookProjectType: "项目类型",
-    firstLookFolderRole: "文件夹角色",
-    firstLookWhyGuess: "为什么这样判断",
-    firstLookEntryPoints: "入口",
-    firstLookDirectoryAnchors: "重点位置",
-    firstLookCoreModules: "核心模块 / 资料",
-    firstLookRiskZones: "风险区",
-    firstLookOpportunities: "训练机会",
-    firstLookUnknowns: "未确认项",
-    firstLookNextStep: "下一步",
     workspaceAdmissionRootMissing: "未设置工作区根目录",
     workspaceAdmissionRootMissingDetail: "先选一个保存学习记录的位置，再决定如何处理此项目。",
     onboardingModelDetail: "粘贴中转站连接信息或服务地址，也可以先试用内置练习模式。",
@@ -1048,15 +981,11 @@ export const copyTable = {
     planStages: "阶段",
     trainingWhyNow: "为什么是现在",
     trainingDeliverable: "交付物",
-    planStageMaterialsTitle: "学习资料",
     planStageMaterialsGenerate: "生成资料",
     planStageMaterialsGenerating: "生成中…",
     planStageMaterialsView: "查看",
     planStageMaterialsHide: "收起",
-    planStageMaterialsTemplate: "模板 · 可重新生成",
     planStageMaterialsEmpty: "这个阶段还没有学习资料。",
-    planStageCompletionLabel: "阶段完成度",
-    planStageMaterialsBadgeTitle: "已生成资料",
     planDashboardTabPlan: "计划",
     planDashboardTabProgress: "进度",
     planDashboardStagesTitle: "阶段完成度",
@@ -1254,17 +1183,11 @@ export const copyTable = {
     globalPlanLinkCurrentProject: "\u5173\u8054\u5f53\u524d\u9879\u76ee\u8ba1\u5212",
     globalPlanLinkUnavailable: "\u8bf7\u5148\u751f\u6210\u5f53\u524d\u9879\u76ee\u8ba1\u5212",
     globalPlanFrozen: "\u603b\u8ba1\u5212\u5df2\u51bb\u7ed3",
-    evidenceConfidence: "\u7f6e\u4fe1",
-    evidenceGovernance: "\u8bc1\u636e\u6cbb\u7406",
-    evidenceFilterAll: "\u5168\u90e8",
-    evidenceFilterUnscoped: "独立记录",
     evidenceFilterDeferred: "\u5df2\u5ef6\u671f",
     evidenceFilterAdopted: "\u5df2\u63a5\u7eb3",
     evidenceFilterRejected: "\u5df2\u9a73\u56de",
     evidenceAdopt: "\u63a5\u7eb3",
     evidenceDefer: "\u5ef6\u671f",
-    evidenceTargetPrefix: "\u76ee\u6807",
-    evidenceNoMatches: "\u8fd9\u4e2a\u7b5b\u9009\u4e0b\u6ca1\u6709\u8bc1\u636e\u3002",
     capabilityChat: "\u5bf9\u8bdd",
     capabilityResponses: "Responses API",
     capabilityTools: "\u5de5\u5177\u8c03\u7528",
@@ -1541,32 +1464,6 @@ export const copyTable = {
     evidenceOutcomeObservation: "有观察",
 
     // 教练动作状态
-    coachActionIdle: "空闲",
-    coachActionCheckingResources: "检查资料",
-    coachActionSearchingResources: "搜索资料",
-    coachActionAligningPlan: "对齐计划",
-    coachActionPlanAlignment: "计划对齐",
-    coachActionSchedulingTraining: "安排训练",
-    coachActionGeneratingCard: "生成训练卡",
-    coachActionCardGeneration: "训练卡生成",
-    coachActionEvaluatingResult: "评估结果",
-    coachActionEvaluation: "结果评估",
-    coachActionReviewingEvidence: "审核证据",
-    coachActionResourceUpload: "上传资料",
-    coachActionWorkspaceClassification: "工作区分类",
-    coachActionDoneIdle: "完成 - 空闲",
-    coachActionDoneCheckingResources: "完成 - 检查资料",
-    coachActionDoneSearchingResources: "完成 - 搜索资料",
-    coachActionDoneAligningPlan: "完成 - 对齐计划",
-    coachActionDonePlanAlignment: "完成 - 计划对齐",
-    coachActionDoneSchedulingTraining: "完成 - 安排训练",
-    coachActionDoneGeneratingCard: "完成 - 生成训练卡",
-    coachActionDoneCardGeneration: "完成 - 训练卡生成",
-    coachActionDoneEvaluatingResult: "完成 - 评估结果",
-    coachActionDoneEvaluation: "完成 - 结果评估",
-    coachActionDoneReviewingEvidence: "完成 - 审核证据",
-    coachActionDoneResourceUpload: "完成 - 上传资料",
-    coachActionDoneWorkspaceClassification: "完成 - 工作区分类",
 
     // 掌握度阶段
     masteryUnderstood: "已理解",
@@ -1577,7 +1474,6 @@ export const copyTable = {
     masteryNotEstablished: "待建立",
 
     // Phase-D 技能投影
-    skillProjectionTitle: "技能投影",
     skillDimComprehension: "理解",
     skillDimImplementation: "实现",
     skillDimDebugging: "调试",
@@ -1609,7 +1505,6 @@ export const copyTable = {
     resourcesMenu: "资料",
     resourcesSummary: "资料概要",
     resourcesSandbox: "沙箱",
-    resourcesSandboxRoot: "沙箱根目录",
     resourcesSandboxRefresh: "刷新",
     resourcesSandboxNewFile: "新建文件",
     resourcesSandboxNewFolder: "新建文件夹",
@@ -1630,7 +1525,6 @@ export const copyTable = {
     resourcesSandboxWorkspaceRoot: "Workspace 根目录",
     resourcesSandboxSourceLabel: "来源",
     resourcesSandboxLedger: "Ledger / checkpoints",
-    resourcesSandboxTrashRoot: "Trash",
     resourcesSandboxMountedSources: "挂载来源",
     resourcesSandboxNextSafeMove: "下一步",
     resourcesSandboxFilePlaceholder: "输入文件路径，如 packs/remote/ssh/notes.md",
@@ -1693,12 +1587,6 @@ export const copyTable = {
     history: "历史记录",
     composerAccessibility: "输入框",
     reviewNotFull: "复习未完成",
-    evidenceSourceCardResult: "训练卡结果",
-    evidenceSourceCoachingObservation: "教练观察",
-    evidenceSourceEvaluation: "评估结果",
-    evidenceSourceLearningSignal: "学习信号",
-    evidenceSourceResourceImport: "资料导入",
-    evidenceSourceReviewQueue: "复习队列",
     greetingMorning: "早上好",
     greetingAfternoon: "下午好",
     greetingEvening: "晚上好",
@@ -1776,17 +1664,6 @@ export const copyTable = {
     latestReview: "Latest Review",
     backgroundAnalysis: "Background Analysis",
     backgroundCoachWork: "Coach Preparation",
-    firstLookBadge: "Project overview",
-    firstLookProjectType: "Project type",
-    firstLookFolderRole: "Folder role",
-    firstLookWhyGuess: "Why this guess",
-    firstLookEntryPoints: "Entry points",
-    firstLookDirectoryAnchors: "Key locations",
-    firstLookCoreModules: "Core modules / materials",
-    firstLookRiskZones: "Risk zones",
-    firstLookOpportunities: "Training opportunities",
-    firstLookUnknowns: "Unknowns",
-    firstLookNextStep: "Next step",
     workspaceAdmissionRootMissing: "Workspace root is not set",
     workspaceAdmissionRootMissingDetail: "Choose where Trainer keeps learning records, then decide how to handle this project.",
     onboardingModelDetail: "Paste relay connection info or a service address, or start with the built-in practice mode.",
@@ -1876,15 +1753,11 @@ export const copyTable = {
     planStages: "Stages",
     trainingWhyNow: "Why now",
     trainingDeliverable: "Deliverable",
-    planStageMaterialsTitle: "Study materials",
     planStageMaterialsGenerate: "Generate materials",
     planStageMaterialsGenerating: "Generating…",
     planStageMaterialsView: "View",
     planStageMaterialsHide: "Hide",
-    planStageMaterialsTemplate: "Template · retry generation",
     planStageMaterialsEmpty: "No study materials for this stage yet.",
-    planStageCompletionLabel: "Stage completion",
-    planStageMaterialsBadgeTitle: "Materials generated",
     planDashboardTabPlan: "Plan",
     planDashboardTabProgress: "Progress",
     planDashboardStagesTitle: "Stage completion",
@@ -2074,17 +1947,11 @@ export const copyTable = {
     globalPlanLinkCurrentProject: "Link current project plan",
     globalPlanLinkUnavailable: "Generate a current project plan first",
     globalPlanFrozen: "Global plan is frozen",
-    evidenceConfidence: "Confidence",
-    evidenceGovernance: "Evidence governance",
-    evidenceFilterAll: "All",
-    evidenceFilterUnscoped: "Independent records",
     evidenceFilterDeferred: "Deferred",
     evidenceFilterAdopted: "Adopted",
     evidenceFilterRejected: "Rejected",
     evidenceAdopt: "Adopt",
     evidenceDefer: "Defer",
-    evidenceTargetPrefix: "Target",
-    evidenceNoMatches: "No evidence matches this filter.",
     capabilityChat: "Chat",
     capabilityResponses: "Responses API",
     capabilityTools: "Tool Calls",
@@ -2312,12 +2179,6 @@ export const copyTable = {
     evidenceOutcomePartial: "Partial",
     evidenceOutcomeInsight: "Insight",
     evidenceOutcomeObservation: "Observation",
-    evidenceSourceCardResult: "Training card result",
-    evidenceSourceEvaluation: "Server evaluation",
-    evidenceSourceLearningSignal: "Learning signal",
-    evidenceSourceCoachingObservation: "Coach observation",
-    evidenceSourceResourceImport: "Resource import",
-    evidenceSourceReviewQueue: "Review queue",
 
     // Human-friendly status
     streakMessageBeginning: "Training started",
@@ -2354,32 +2215,6 @@ export const copyTable = {
     signalsWaiting: "signals waiting to boost your training",
 
     // Coach action status
-    coachActionIdle: "Idle",
-    coachActionCheckingResources: "Checking Resources",
-    coachActionSearchingResources: "Searching Resources",
-    coachActionAligningPlan: "Aligning Plan",
-    coachActionPlanAlignment: "Plan Alignment",
-    coachActionSchedulingTraining: "Scheduling Training",
-    coachActionGeneratingCard: "Generating Card",
-    coachActionCardGeneration: "Card Generation",
-    coachActionEvaluatingResult: "Evaluating Result",
-    coachActionEvaluation: "Evaluation",
-    coachActionReviewingEvidence: "Reviewing Evidence",
-    coachActionResourceUpload: "Uploading Resource",
-    coachActionWorkspaceClassification: "Workspace Classification",
-    coachActionDoneIdle: "Done - Idle",
-    coachActionDoneCheckingResources: "Done - Checked Resources",
-    coachActionDoneSearchingResources: "Done - Searched Resources",
-    coachActionDoneAligningPlan: "Done - Aligned Plan",
-    coachActionDonePlanAlignment: "Done - Plan Aligned",
-    coachActionDoneSchedulingTraining: "Done - Scheduled Training",
-    coachActionDoneGeneratingCard: "Done - Generated Card",
-    coachActionDoneCardGeneration: "Done - Card Generated",
-    coachActionDoneEvaluatingResult: "Done - Evaluated Result",
-    coachActionDoneEvaluation: "Done - Evaluated",
-    coachActionDoneReviewingEvidence: "Done - Reviewed Evidence",
-    coachActionDoneResourceUpload: "Done - Uploaded Resource",
-    coachActionDoneWorkspaceClassification: "Done - Classified Workspace",
 
     // Mastery stages
     masteryUnderstood: "Understood",
@@ -2390,7 +2225,6 @@ export const copyTable = {
     masteryNotEstablished: "Not established",
 
     // Phase-D skill projection
-    skillProjectionTitle: "Skill projection",
     skillDimComprehension: "Comprehension",
     skillDimImplementation: "Implementation",
     skillDimDebugging: "Debugging",
@@ -2427,7 +2261,6 @@ export const copyTable = {
     resourcesMenu: "Resources",
     resourcesSummary: "Resources summary",
     resourcesSandbox: "Sandbox",
-    resourcesSandboxRoot: "Sandbox root",
     resourcesSandboxRefresh: "Refresh",
     resourcesSandboxNewFile: "New file",
     resourcesSandboxNewFolder: "New folder",
@@ -2448,7 +2281,6 @@ export const copyTable = {
     resourcesSandboxWorkspaceRoot: "Workspace root",
     resourcesSandboxSourceLabel: "Source",
     resourcesSandboxLedger: "Ledger / checkpoints",
-    resourcesSandboxTrashRoot: "Trash",
     resourcesSandboxMountedSources: "Mounted sources",
     resourcesSandboxNextSafeMove: "Next safe move",
     resourcesSandboxFilePlaceholder: "New file path, for example packs/remote/ssh/notes.md",
@@ -2578,17 +2410,6 @@ export const copyTable = {
     latestReview: "Última Revisión",
     backgroundAnalysis: "Análisis en Segundo Plano",
     backgroundCoachWork: "Preparación del Entrenador",
-    firstLookBadge: "Resumen del proyecto",
-    firstLookProjectType: "Tipo de proyecto",
-    firstLookFolderRole: "Rol de la carpeta",
-    firstLookWhyGuess: "Por qué esta suposición",
-    firstLookEntryPoints: "Puntos de entrada",
-    firstLookDirectoryAnchors: "Ubicaciones clave",
-    firstLookCoreModules: "Módulos / materiales clave",
-    firstLookRiskZones: "Zonas de riesgo",
-    firstLookOpportunities: "Oportunidades de práctica",
-    firstLookUnknowns: "Desconocidos",
-    firstLookNextStep: "Siguiente paso",
     workspaceAdmissionRootMissing: "No se configuró la raíz del espacio",
     workspaceAdmissionRootMissingDetail: "Elige dónde Trainer guarda los registros de aprendizaje antes de decidir cómo tratar este proyecto.",
     onboardingModelDetail: "Pega la información de conexión o la dirección del servicio, o empieza con el modo de práctica integrado.",
@@ -2678,15 +2499,11 @@ export const copyTable = {
     planStages: "Etapas",
     trainingWhyNow: "Por qué ahora",
     trainingDeliverable: "Entregable",
-    planStageMaterialsTitle: "Materiales de estudio",
     planStageMaterialsGenerate: "Generar materiales",
     planStageMaterialsGenerating: "Generando…",
     planStageMaterialsView: "Ver",
     planStageMaterialsHide: "Ocultar",
-    planStageMaterialsTemplate: "Plantilla · volver a generar",
     planStageMaterialsEmpty: "Todavía no hay materiales de estudio para esta etapa.",
-    planStageCompletionLabel: "Progreso de la etapa",
-    planStageMaterialsBadgeTitle: "Materiales generados",
     planDashboardTabPlan: "Plan",
     planDashboardTabProgress: "Progreso",
     planDashboardStagesTitle: "Avance de etapas",
@@ -2930,32 +2747,6 @@ export const copyTable = {
     evidenceOutcomeObservation: "Observación",
 
     // Estado de acciones del coach
-    coachActionIdle: "Inactivo",
-    coachActionCheckingResources: "Revisando Recursos",
-    coachActionSearchingResources: "Buscando Recursos",
-    coachActionAligningPlan: "Alineando Plan",
-    coachActionPlanAlignment: "Alineación del Plan",
-    coachActionSchedulingTraining: "Programando Entrenamiento",
-    coachActionGeneratingCard: "Generando Tarjeta",
-    coachActionCardGeneration: "Generación de Tarjeta",
-    coachActionEvaluatingResult: "Evaluando Resultado",
-    coachActionEvaluation: "Evaluación",
-    coachActionReviewingEvidence: "Revisando Evidencia",
-    coachActionResourceUpload: "Subiendo Recurso",
-    coachActionWorkspaceClassification: "Clasificación del Espacio",
-    coachActionDoneIdle: "Hecho - Inactivo",
-    coachActionDoneCheckingResources: "Hecho - Recursos Revisados",
-    coachActionDoneSearchingResources: "Hecho - Recursos Buscados",
-    coachActionDoneAligningPlan: "Hecho - Plan Alineado",
-    coachActionDonePlanAlignment: "Hecho - Plan Alineado",
-    coachActionDoneSchedulingTraining: "Hecho - Entrenamiento Programado",
-    coachActionDoneGeneratingCard: "Hecho - Tarjeta Generada",
-    coachActionDoneCardGeneration: "Hecho - Tarjeta Generada",
-    coachActionDoneEvaluatingResult: "Hecho - Resultado Evaluado",
-    coachActionDoneEvaluation: "Hecho - Evaluado",
-    coachActionDoneReviewingEvidence: "Hecho - Evidencia Revisada",
-    coachActionDoneResourceUpload: "Hecho - Recurso Subido",
-    coachActionDoneWorkspaceClassification: "Hecho - Espacio Clasificado",
 
     // Mastery stages
     masteryUnderstood: "Comprendido",
@@ -2966,7 +2757,6 @@ export const copyTable = {
     masteryNotEstablished: "Por establecer",
 
     // Proyección de habilidades (Phase-D)
-    skillProjectionTitle: "Proyección de habilidades",
     skillDimComprehension: "Comprensión",
     skillDimImplementation: "Implementación",
     skillDimDebugging: "Depuración",
@@ -3093,17 +2883,11 @@ export const copyTable = {
     globalPlanLinkCurrentProject: "Vincular el plan del proyecto actual",
     globalPlanLinkUnavailable: "Primero genera un plan para el proyecto actual",
     globalPlanFrozen: "El plan global est\u00e1 congelado",
-    evidenceConfidence: "Confianza",
-    evidenceGovernance: "Gobernanza de evidencia",
-    evidenceFilterAll: "Todo",
-    evidenceFilterUnscoped: "Registros independientes",
     evidenceFilterDeferred: "Pospuesto",
     evidenceFilterAdopted: "Adoptado",
     evidenceFilterRejected: "Rechazado",
     evidenceAdopt: "Adoptar",
     evidenceDefer: "Posponer",
-    evidenceTargetPrefix: "Objetivo",
-    evidenceNoMatches: "No hay evidencia que coincida con este filtro.",
   },
 
   // ==========================================================================
@@ -3113,7 +2897,6 @@ export const copyTable = {
     settingsStatusRegionLabel: "État actuel",
 
     // Projection des compétences (Phase-D)
-    skillProjectionTitle: "Projection des compétences",
     skillDimComprehension: "Compréhension",
     skillDimImplementation: "Implémentation",
     skillDimDebugging: "Débogage",
@@ -3168,17 +2951,6 @@ export const copyTable = {
     latestReview: "Dernière révision",
     backgroundAnalysis: "Analyse en arrière-plan",
     backgroundCoachWork: "Préparation du coach",
-    firstLookBadge: "Aperçu du projet",
-    firstLookProjectType: "Type de projet",
-    firstLookFolderRole: "Rôle du dossier",
-    firstLookWhyGuess: "Pourquoi cette estimation",
-    firstLookEntryPoints: "Points d'entrée",
-    firstLookDirectoryAnchors: "Emplacements clés",
-    firstLookCoreModules: "Modules / supports clés",
-    firstLookRiskZones: "Zones de risque",
-    firstLookOpportunities: "Possibilités d'entraînement",
-    firstLookUnknowns: "Inconnues",
-    firstLookNextStep: "Prochaine étape",
     workspaceAdmissionRootMissing: "Racine de l'espace non définie",
     workspaceAdmissionRootMissingDetail: "Choisissez où Trainer conserve les suivis d’apprentissage avant de décider comment traiter ce projet.",
     onboardingModelDetail: "Collez les infos de connexion ou l’adresse du service, ou commencez avec le mode d’entraînement intégré.",
@@ -3269,15 +3041,11 @@ export const copyTable = {
     planStages: "Étapes",
     trainingWhyNow: "Pourquoi maintenant",
     trainingDeliverable: "Livrable",
-    planStageMaterialsTitle: "Supports d'étude",
     planStageMaterialsGenerate: "Générer les supports",
     planStageMaterialsGenerating: "Génération…",
     planStageMaterialsView: "Voir",
     planStageMaterialsHide: "Masquer",
-    planStageMaterialsTemplate: "Modèle · relancer la génération",
     planStageMaterialsEmpty: "Il n'y a pas encore de supports d'étude pour cette étape.",
-    planStageCompletionLabel: "Avancement de l'étape",
-    planStageMaterialsBadgeTitle: "Supports générés",
     planDashboardTabPlan: "Plan",
     planDashboardTabProgress: "Progression",
     planDashboardStagesTitle: "Avancement des étapes",
@@ -3453,17 +3221,11 @@ export const copyTable = {
     globalPlanLinkCurrentProject: "Lier le plan du projet actuel",
     globalPlanLinkUnavailable: "Cr\u00e9ez d'abord un plan pour le projet actuel",
     globalPlanFrozen: "Le plan global est gel\u00e9",
-    evidenceConfidence: "Confiance",
-    evidenceGovernance: "Gouvernance des preuves",
-    evidenceFilterAll: "Tout",
-    evidenceFilterUnscoped: "Enregistrements indépendants",
     evidenceFilterDeferred: "Diff\u00e9r\u00e9",
     evidenceFilterAdopted: "Adopt\u00e9",
     evidenceFilterRejected: "Rejet\u00e9",
     evidenceAdopt: "Adopter",
     evidenceDefer: "Reporter",
-    evidenceTargetPrefix: "Cible",
-    evidenceNoMatches: "Aucune preuve ne correspond \u00e0 ce filtre.",
   },
 
   // ==========================================================================
@@ -3473,7 +3235,6 @@ export const copyTable = {
     settingsStatusRegionLabel: "Aktueller Status",
 
     // Fähigkeitsprojektion (Phase-D)
-    skillProjectionTitle: "Fähigkeitsprojektion",
     skillDimComprehension: "Verständnis",
     skillDimImplementation: "Implementierung",
     skillDimDebugging: "Fehlersuche",
@@ -3528,17 +3289,6 @@ export const copyTable = {
     latestReview: "Letzte Überprüfung",
     backgroundAnalysis: "Hintergrundanalyse",
     backgroundCoachWork: "Coach-Vorbereitung",
-    firstLookBadge: "Projektüberblick",
-    firstLookProjectType: "Projekttyp",
-    firstLookFolderRole: "Ordnerrolle",
-    firstLookWhyGuess: "Warum diese Vermutung",
-    firstLookEntryPoints: "Einstiegspunkte",
-    firstLookDirectoryAnchors: "Wichtige Stellen",
-    firstLookCoreModules: "Kernmodule / Materialien",
-    firstLookRiskZones: "Risikobereiche",
-    firstLookOpportunities: "Übungsmöglichkeiten",
-    firstLookUnknowns: "Unbekanntes",
-    firstLookNextStep: "Nächster Schritt",
     workspaceAdmissionRootMissing: "Arbeitsbereich-Stamm fehlt",
     workspaceAdmissionRootMissingDetail: "Wählen Sie zuerst, wo Trainer Lernaufzeichnungen speichert, und entscheiden Sie dann über dieses Projekt.",
     onboardingModelDetail: "Füge Verbindungsinfos oder eine Dienstadresse ein, oder starte mit dem integrierten Übungsmodus.",
@@ -3629,15 +3379,11 @@ export const copyTable = {
     planStages: "Phasen",
     trainingWhyNow: "Warum jetzt",
     trainingDeliverable: "Abgabe",
-    planStageMaterialsTitle: "Lernmaterialien",
     planStageMaterialsGenerate: "Materialien erstellen",
     planStageMaterialsGenerating: "Wird erstellt…",
     planStageMaterialsView: "Anzeigen",
     planStageMaterialsHide: "Ausblenden",
-    planStageMaterialsTemplate: "Vorlage · erneut generieren",
     planStageMaterialsEmpty: "Für diese Phase gibt es noch keine Lernmaterialien.",
-    planStageCompletionLabel: "Phasenfortschritt",
-    planStageMaterialsBadgeTitle: "Materialien erstellt",
     planDashboardTabPlan: "Plan",
     planDashboardTabProgress: "Fortschritt",
     planDashboardStagesTitle: "Phasen-Abschluss",
@@ -3813,17 +3559,11 @@ export const copyTable = {
     globalPlanLinkCurrentProject: "Plan des aktuellen Projekts verkn\u00fcpfen",
     globalPlanLinkUnavailable: "Erstellen Sie zuerst einen Plan f\u00fcr das aktuelle Projekt",
     globalPlanFrozen: "Gesamtplan ist eingefroren",
-    evidenceConfidence: "Konfidenz",
-    evidenceGovernance: "Evidenzsteuerung",
-    evidenceFilterAll: "Alle",
-    evidenceFilterUnscoped: "Unabhängige Aufzeichnungen",
     evidenceFilterDeferred: "Zur\u00fcckgestellt",
     evidenceFilterAdopted: "\u00dcbernommen",
     evidenceFilterRejected: "Abgelehnt",
     evidenceAdopt: "\u00dcbernehmen",
     evidenceDefer: "Verschieben",
-    evidenceTargetPrefix: "Ziel",
-    evidenceNoMatches: "Keine Evidenz passt zu diesem Filter.",
   },
 
   // ==========================================================================
@@ -3833,7 +3573,6 @@ export const copyTable = {
     settingsStatusRegionLabel: "現在の状態",
 
     // Phase-D スキル投影
-    skillProjectionTitle: "スキル投影",
     skillDimComprehension: "理解",
     skillDimImplementation: "実装",
     skillDimDebugging: "デバッグ",
@@ -3888,17 +3627,6 @@ export const copyTable = {
     latestReview: "最新の復習",
     backgroundAnalysis: "バックグラウンド分析",
     backgroundCoachWork: "Coach準備",
-    firstLookBadge: "プロジェクト概要",
-    firstLookProjectType: "プロジェクト種別",
-    firstLookFolderRole: "フォルダの役割",
-    firstLookWhyGuess: "そう判断した理由",
-    firstLookEntryPoints: "入口",
-    firstLookDirectoryAnchors: "重要な場所",
-    firstLookCoreModules: "主要モジュール / 資料",
-    firstLookRiskZones: "リスク領域",
-    firstLookOpportunities: "学習機会",
-    firstLookUnknowns: "未確認項目",
-    firstLookNextStep: "次の一手",
     workspaceAdmissionRootMissing: "ワークスペースのルートが未設定です",
     workspaceAdmissionRootMissingDetail: "このプロジェクトの扱いを決める前に、学習記録の保存場所を選択してください。",
     onboardingModelDetail: "中継の接続情報またはサービスアドレスを貼り付けるか、内蔵の練習モードで始めましょう。",
@@ -3989,15 +3717,11 @@ export const copyTable = {
     planStages: "ステージ",
     trainingWhyNow: "なぜ今か",
     trainingDeliverable: "成果物",
-    planStageMaterialsTitle: "学習資料",
     planStageMaterialsGenerate: "資料を生成",
     planStageMaterialsGenerating: "生成中…",
     planStageMaterialsView: "表示",
     planStageMaterialsHide: "閉じる",
-    planStageMaterialsTemplate: "テンプレート · 再生成できます",
     planStageMaterialsEmpty: "このステージにはまだ学習資料がありません。",
-    planStageCompletionLabel: "ステージ完了度",
-    planStageMaterialsBadgeTitle: "資料の生成状況",
     planDashboardTabPlan: "計画",
     planDashboardTabProgress: "進捗",
     planDashboardStagesTitle: "ステージ完了度",
@@ -4173,17 +3897,11 @@ export const copyTable = {
     globalPlanLinkCurrentProject: "\u73fe\u5728\u306e\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u8a08\u753b\u3092\u95a2\u9023\u4ed8\u3051",
     globalPlanLinkUnavailable: "\u5148\u306b\u73fe\u5728\u306e\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u8a08\u753b\u3092\u4f5c\u6210\u3057\u3066\u304f\u3060\u3055\u3044",
     globalPlanFrozen: "\u5168\u4f53\u8a08\u753b\u306f\u51cd\u7d50\u3055\u308c\u3066\u3044\u307e\u3059",
-    evidenceConfidence: "\u4fe1\u983c\u5ea6",
-    evidenceGovernance: "\u8a3c\u64da\u7ba1\u7406",
-    evidenceFilterAll: "\u3059\u3079\u3066",
-    evidenceFilterUnscoped: "独立した記録",
     evidenceFilterDeferred: "\u5ef6\u671f",
     evidenceFilterAdopted: "\u63a1\u7528\u6e08\u307f",
     evidenceFilterRejected: "\u5374\u4e0b\u6e08\u307f",
     evidenceAdopt: "\u63a1\u7528",
     evidenceDefer: "\u5ef6\u671f",
-    evidenceTargetPrefix: "\u5bfe\u8c61",
-    evidenceNoMatches: "\u3053\u306e\u30d5\u30a3\u30eb\u30bf\u306b\u4e00\u81f4\u3059\u308b\u8a3c\u62e0\u306f\u3042\u308a\u307e\u305b\u3093\u3002",
   },
 
   // ==========================================================================
@@ -4193,7 +3911,6 @@ export const copyTable = {
     settingsStatusRegionLabel: "현재 상태",
 
     // Phase-D 스킬 프로젝션
-    skillProjectionTitle: "스킬 프로젝션",
     skillDimComprehension: "이해",
     skillDimImplementation: "구현",
     skillDimDebugging: "디버깅",
@@ -4248,17 +3965,6 @@ export const copyTable = {
     latestReview: "최근 복습",
     backgroundAnalysis: "백그라운드 분석",
     backgroundCoachWork: "코치 준비",
-    firstLookBadge: "프로젝트 개요",
-    firstLookProjectType: "프로젝트 유형",
-    firstLookFolderRole: "폴더 역할",
-    firstLookWhyGuess: "이렇게 본 이유",
-    firstLookEntryPoints: "진입점",
-    firstLookDirectoryAnchors: "주요 위치",
-    firstLookCoreModules: "핵심 모듈 / 자료",
-    firstLookRiskZones: "위험 구역",
-    firstLookOpportunities: "학습 기회",
-    firstLookUnknowns: "미확인 항목",
-    firstLookNextStep: "다음 단계",
     workspaceAdmissionRootMissing: "작업 영역 루트가 설정되지 않았습니다",
     workspaceAdmissionRootMissingDetail: "이 프로젝트의 처리 방식을 정하기 전에 학습 기록을 저장할 위치를 선택하세요.",
     onboardingModelDetail: "중계 연결 정보나 서비스 주소를 붙여넣거나, 내장 연습 모드로 시작할 수 있습니다.",
@@ -4349,15 +4055,11 @@ export const copyTable = {
     planStages: "단계",
     trainingWhyNow: "왜 지금",
     trainingDeliverable: "제출물",
-    planStageMaterialsTitle: "학습 자료",
     planStageMaterialsGenerate: "자료 생성",
     planStageMaterialsGenerating: "생성 중…",
     planStageMaterialsView: "보기",
     planStageMaterialsHide: "접기",
-    planStageMaterialsTemplate: "템플릿 · 다시 생성 가능",
     planStageMaterialsEmpty: "이 단계에는 아직 학습 자료가 없습니다.",
-    planStageCompletionLabel: "단계 완료도",
-    planStageMaterialsBadgeTitle: "자료 생성 현황",
     planDashboardTabPlan: "계획",
     planDashboardTabProgress: "진도",
     planDashboardStagesTitle: "단계 완료도",
@@ -4533,17 +4235,11 @@ export const copyTable = {
     globalPlanLinkCurrentProject: "\ud604\uc7ac \ud504\ub85c\uc81d\ud2b8 \uacc4\ud68d \uc5f0\uacb0",
     globalPlanLinkUnavailable: "\uba3c\uc800 \ud604\uc7ac \ud504\ub85c\uc81d\ud2b8 \uacc4\ud68d\uc744 \uc0dd\uc131\ud558\uc138\uc694",
     globalPlanFrozen: "\uc804\uccb4 \uacc4\ud68d\uc774 \ub3d9\uacb0\ub428",
-    evidenceConfidence: "\uc2e0\ub8b0\ub3c4",
-    evidenceGovernance: "\uc99d\uac70 \uad00\ub9ac",
-    evidenceFilterAll: "\uc804\uccb4",
-    evidenceFilterUnscoped: "독립 기록",
     evidenceFilterDeferred: "\ubcf4\ub958\ub428",
     evidenceFilterAdopted: "\ucc44\ud0dd\ub428",
     evidenceFilterRejected: "\uac70\ubd80\ub428",
     evidenceAdopt: "\ucc44\ud0dd",
     evidenceDefer: "\ubcf4\ub958",
-    evidenceTargetPrefix: "\ub300\uc0c1",
-    evidenceNoMatches: "\uc774 \ud544\ud130\uc5d0 \ub9de\ub294 \uc99d\uac70\uac00 \uc5c6\uc2b5\ub2c8\ub2e4.",
   },
 
   // ==========================================================================
@@ -4553,7 +4249,6 @@ export const copyTable = {
     settingsStatusRegionLabel: "Estado atual",
 
     // Projeção de habilidades (Phase-D)
-    skillProjectionTitle: "Projeção de habilidades",
     skillDimComprehension: "Compreensão",
     skillDimImplementation: "Implementação",
     skillDimDebugging: "Depuração",
@@ -4608,17 +4303,6 @@ export const copyTable = {
     latestReview: "Última revisão",
     backgroundAnalysis: "Análise em segundo plano",
     backgroundCoachWork: "Preparação do Coach",
-    firstLookBadge: "Visão geral do projeto",
-    firstLookProjectType: "Tipo de projeto",
-    firstLookFolderRole: "Papel da pasta",
-    firstLookWhyGuess: "Por que esse palpite",
-    firstLookEntryPoints: "Pontos de entrada",
-    firstLookDirectoryAnchors: "Locais principais",
-    firstLookCoreModules: "Módulos / materiais principais",
-    firstLookRiskZones: "Zonas de risco",
-    firstLookOpportunities: "Oportunidades de treino",
-    firstLookUnknowns: "Desconhecidos",
-    firstLookNextStep: "Próximo passo",
     workspaceAdmissionRootMissing: "Raiz do workspace não configurada",
     workspaceAdmissionRootMissingDetail: "Escolha onde o Trainer guarda os registros de aprendizagem antes de decidir como tratar este projeto.",
     onboardingModelDetail: "Cole as informações de conexão ou o endereço do serviço, ou comece com o modo de prática integrado.",
@@ -4709,15 +4393,11 @@ export const copyTable = {
     planStages: "Estágios",
     trainingWhyNow: "Por que agora",
     trainingDeliverable: "Entregável",
-    planStageMaterialsTitle: "Materiais de estudo",
     planStageMaterialsGenerate: "Gerar materiais",
     planStageMaterialsGenerating: "Gerando…",
     planStageMaterialsView: "Ver",
     planStageMaterialsHide: "Ocultar",
-    planStageMaterialsTemplate: "Modelo · gerar novamente",
     planStageMaterialsEmpty: "Ainda não há materiais de estudo para este estágio.",
-    planStageCompletionLabel: "Progresso do estágio",
-    planStageMaterialsBadgeTitle: "Materiais gerados",
     planDashboardTabPlan: "Plano",
     planDashboardTabProgress: "Progresso",
     planDashboardStagesTitle: "Conclusão de estágios",
@@ -4893,17 +4573,11 @@ export const copyTable = {
     globalPlanLinkCurrentProject: "Vincular plano do projeto atual",
     globalPlanLinkUnavailable: "Primeiro gere um plano para o projeto atual",
     globalPlanFrozen: "O plano global est\u00e1 congelado",
-    evidenceConfidence: "Confian\u00e7a",
-    evidenceGovernance: "Governan\u00e7a de evid\u00eancias",
-    evidenceFilterAll: "Tudo",
-    evidenceFilterUnscoped: "Registros independentes",
     evidenceFilterDeferred: "Adiado",
     evidenceFilterAdopted: "Adotado",
     evidenceFilterRejected: "Rejeitado",
     evidenceAdopt: "Adotar",
     evidenceDefer: "Adiar",
-    evidenceTargetPrefix: "Alvo",
-    evidenceNoMatches: "Nenhuma evid\u00eancia corresponde a este filtro.",
   },
 } satisfies CopyTable;
 
@@ -4927,7 +4601,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesMenu: "Menú de recursos",
     resourcesSummary: "Resumen de recursos",
     resourcesSandbox: "Sandbox",
-    resourcesSandboxRoot: "Raíz del sandbox",
     resourcesSandboxRefresh: "Actualizar",
     resourcesSandboxNewFile: "Nuevo archivo",
     resourcesSandboxNewFolder: "Nueva carpeta",
@@ -4948,7 +4621,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesSandboxWorkspaceRoot: "Raíz del workspace",
     resourcesSandboxSourceLabel: "Origen",
     resourcesSandboxLedger: "Ledger / checkpoints",
-    resourcesSandboxTrashRoot: "Trash",
     resourcesSandboxMountedSources: "Orígenes montados",
     resourcesSandboxNextSafeMove: "Siguiente paso seguro",
     resourcesSandboxFilePlaceholder: "Ruta del archivo, por ejemplo packs/remote/ssh/notes.md",
@@ -4976,7 +4648,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesMenu: "Menu des ressources",
     resourcesSummary: "Résumé des ressources",
     resourcesSandbox: "Sandbox",
-    resourcesSandboxRoot: "Racine du sandbox",
     resourcesSandboxRefresh: "Actualiser",
     resourcesSandboxNewFile: "Nouveau fichier",
     resourcesSandboxNewFolder: "Nouveau dossier",
@@ -4997,7 +4668,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesSandboxWorkspaceRoot: "Racine du workspace",
     resourcesSandboxSourceLabel: "Source",
     resourcesSandboxLedger: "Ledger / checkpoints",
-    resourcesSandboxTrashRoot: "Trash",
     resourcesSandboxMountedSources: "Sources montées",
     resourcesSandboxNextSafeMove: "Prochaine action sûre",
     resourcesSandboxFilePlaceholder: "Chemin du fichier, par exemple packs/remote/ssh/notes.md",
@@ -5025,7 +4695,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesMenu: "Ressourcenmenü",
     resourcesSummary: "Ressourcenübersicht",
     resourcesSandbox: "Sandbox",
-    resourcesSandboxRoot: "Sandbox-Stamm",
     resourcesSandboxRefresh: "Aktualisieren",
     resourcesSandboxNewFile: "Neue Datei",
     resourcesSandboxNewFolder: "Neuer Ordner",
@@ -5046,7 +4715,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesSandboxWorkspaceRoot: "Workspace-Stamm",
     resourcesSandboxSourceLabel: "Quelle",
     resourcesSandboxLedger: "Ledger / checkpoints",
-    resourcesSandboxTrashRoot: "Trash",
     resourcesSandboxMountedSources: "Eingehängte Quellen",
     resourcesSandboxNextSafeMove: "Nächster sicherer Schritt",
     resourcesSandboxFilePlaceholder: "Dateipfad, zum Beispiel packs/remote/ssh/notes.md",
@@ -5074,7 +4742,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesMenu: "リソースメニュー",
     resourcesSummary: "リソース概要",
     resourcesSandbox: "Sandbox",
-    resourcesSandboxRoot: "Sandbox ルート",
     resourcesSandboxRefresh: "更新",
     resourcesSandboxNewFile: "新しいファイル",
     resourcesSandboxNewFolder: "新しいフォルダ",
@@ -5095,7 +4762,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesSandboxWorkspaceRoot: "Workspace ルート",
     resourcesSandboxSourceLabel: "ソース",
     resourcesSandboxLedger: "Ledger / checkpoints",
-    resourcesSandboxTrashRoot: "Trash",
     resourcesSandboxMountedSources: "マウント済みソース",
     resourcesSandboxNextSafeMove: "次の安全な一手",
     resourcesSandboxFilePlaceholder: "ファイルパス。例: packs/remote/ssh/notes.md",
@@ -5123,7 +4789,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesMenu: "리소스 메뉴",
     resourcesSummary: "리소스 요약",
     resourcesSandbox: "Sandbox",
-    resourcesSandboxRoot: "Sandbox 루트",
     resourcesSandboxRefresh: "새로 고침",
     resourcesSandboxNewFile: "새 파일",
     resourcesSandboxNewFolder: "새 폴더",
@@ -5144,7 +4809,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesSandboxWorkspaceRoot: "Workspace 루트",
     resourcesSandboxSourceLabel: "소스",
     resourcesSandboxLedger: "Ledger / checkpoints",
-    resourcesSandboxTrashRoot: "Trash",
     resourcesSandboxMountedSources: "마운트된 소스",
     resourcesSandboxNextSafeMove: "다음 안전한 단계",
     resourcesSandboxFilePlaceholder: "파일 경로. 예: packs/remote/ssh/notes.md",
@@ -5172,7 +4836,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesMenu: "Menu de recursos",
     resourcesSummary: "Resumo dos recursos",
     resourcesSandbox: "Sandbox",
-    resourcesSandboxRoot: "Raiz do sandbox",
     resourcesSandboxRefresh: "Atualizar",
     resourcesSandboxNewFile: "Novo arquivo",
     resourcesSandboxNewFolder: "Nova pasta",
@@ -5193,7 +4856,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesSandboxWorkspaceRoot: "Raiz do workspace",
     resourcesSandboxSourceLabel: "Origem",
     resourcesSandboxLedger: "Ledger / checkpoints",
-    resourcesSandboxTrashRoot: "Trash",
     resourcesSandboxMountedSources: "Origens montadas",
     resourcesSandboxNextSafeMove: "Próximo passo seguro",
     resourcesSandboxFilePlaceholder: "Caminho do arquivo, por exemplo packs/remote/ssh/notes.md",

@@ -348,60 +348,6 @@
 }
 
 /* Resources orientation banner (needs setup / waiting / blocked / ready) */
-.resources-knowledge__orientation {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 0 10px;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bg-1) 84%, var(--bg-0));
-  color: var(--fg-1);
-  font-size: var(--trainer-font-2xs);
-  line-height: 1.45;
-}
-
-.resources-knowledge__orientation::before {
-  content: "";
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--fg-3);
-}
-
-.resources-knowledge__orientation > strong {
-  font-weight: var(--trainer-font-weight-medium);
-}
-
-.resources-knowledge__orientation-why {
-  flex: 1 1 100%;
-  order: 3;
-  color: var(--fg-muted);
-  font-size: var(--trainer-font-2xs, 11px);
-}
-
-.resources-knowledge__orientation.is-blocked,
-.resources-knowledge__orientation.is-needs_setup {
-  border-color: color-mix(in srgb, var(--warning, var(--trainer-fallback-warning)) 28%, transparent);
-  background: color-mix(in srgb, var(--warning, var(--trainer-fallback-warning)) 6%, var(--bg-1));
-}
-
-.resources-knowledge__orientation.is-blocked::before,
-.resources-knowledge__orientation.is-needs_setup::before {
-  background: var(--warning, var(--trainer-fallback-warning));
-}
-
-.resources-knowledge__orientation.is-ready {
-  border-color: color-mix(in srgb, var(--success) 26%, transparent);
-  background: color-mix(in srgb, var(--success) 5%, var(--bg-1));
-}
-
-.resources-knowledge__orientation.is-ready::before {
-  background: var(--success);
-}
 
 .settings-quick-setup__untrusted {
   margin: 0;
@@ -415,21 +361,5 @@
 
 .notice__text {
   flex: 1 1 auto;
-}
-
-.notice__dismiss {
-  flex: none;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font-size: var(--trainer-font-base, 13px);
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0.7;
-  padding: 0 4px;
-}
-
-.notice__dismiss:hover {
-  opacity: 1;
 }
 

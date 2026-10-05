@@ -33,20 +33,22 @@ const stylesPath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css')
 
 test('training first screen keeps the five core facts in a stable order', () => {
   const source = fs.readFileSync(viewPath, 'utf8');
-  const sections = ['current', 'why-now', 'deliverable', 'verify', 'next'];
-  const routeStart = source.indexOf('const routeStripItems = [');
-  const routeEnd = source.indexOf('const showRouteDetails', routeStart);
-  const routeSource = source.slice(routeStart, routeEnd);
 
-  assert.ok(routeStart >= 0 && routeEnd > routeStart, 'expected the five-item core route');
-  assert.deepEqual(
-    [...sections.slice(1, 4), 'return'],
-    [...routeSource.matchAll(/key: "([^"]+)"/g)].map((match) => match[1]),
-  );
-  assert.match(source, /data-training-core-section="current"/);
-  assert.match(source, /data-training-core-section=\{item\.key === "return" \? "next" : item\.key\}/);
-  assert.match(source, /training-current__core-label/);
-  assert.match(source, /routeStripItems\.map/);
+  // Focus mode: the card face shows the task; every supporting fact lives in
+  // ONE collapsed "Task details" disclosure in reading order — why-now
+  // (reason), deliverable, verify, return (+ after-this when present).
+  const detailsStart = source.indexOf('data-training-card-details="true"');
+  const detailsEnd = source.indexOf('</details>', detailsStart);
+  assert.ok(detailsStart >= 0 && detailsEnd > detailsStart, 'expected the single task-details disclosure');
+
+  assert.doesNotMatch(source, /data-training-core-section/);
+  assert.doesNotMatch(source, /training-current__core-label/);
+  const details = source.slice(detailsStart, detailsEnd);
+  const factOrder = [...details.matchAll(/data-training-card-fact="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(factOrder.slice(0, 4), ['why-now', 'deliverable', 'verify', 'return']);
+  assert.match(details, /\{resolvedWhyNow \?/);
+  assert.match(details, /\{visibleNextAfterCompletion \?/);
+  assert.doesNotMatch(details, /response/);
 });
 
 test('secondary guidance and review data use native nested disclosures without removing actions', () => {

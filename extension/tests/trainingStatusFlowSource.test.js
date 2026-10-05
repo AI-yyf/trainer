@@ -6,40 +6,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const webviewRoot = path.resolve(__dirname, '..', 'webview', 'src');
-const practicePath = path.join(webviewRoot, 'components', 'practice', 'CoachPracticeView.tsx');
-const coachTrainingPath = path.join(webviewRoot, 'components', 'training', 'CoachTrainingView.tsx');
 const commandsPath = path.join(webviewRoot, 'app', 'useTrainingCommands.ts');
 const appPath = path.join(webviewRoot, 'app', 'App.tsx');
 
-test('practice completion verifies the current file instead of forging a completed status', () => {
-  const source = fs.readFileSync(practicePath, 'utf8');
-  const verifyStart = source.indexOf('function handleVerifyCurrentFile');
-  const skipStart = source.indexOf('function handleSkip', verifyStart);
-
-  assert.ok(verifyStart >= 0 && skipStart > verifyStart, 'expected practice verification handler');
-  const verifyHandler = source.slice(verifyStart, skipStart);
-  assert.match(verifyHandler, /onVerifyCurrentFile\(/);
-  assert.match(verifyHandler, /acceptanceCriteria:/);
-  assert.match(verifyHandler, /learnerDeliverables:/);
-  assert.doesNotMatch(verifyHandler, /implemented|completed/);
-  assert.match(source, /onClick=\{handleVerifyCurrentFile\}/);
-  assert.match(source, /Verify current file/);
-});
-
-test('practice skipping uses the governed skipped transition', () => {
-  const source = fs.readFileSync(practicePath, 'utf8');
-
-  assert.match(source, /onCardStatusTransition\(task\.id, "skipped"/);
-  assert.doesNotMatch(source, /onCardStatusTransition\(task\.id, "archived"/);
-});
-
-test('training keeps practice and flash bridges attached to the next action', () => {
-  const coachTrainingSource = fs.readFileSync(coachTrainingPath, 'utf8');
+test('training keeps the coach bridge attached to the next action', () => {
   const commandsSource = fs.readFileSync(commandsPath, 'utf8');
   const appSource = fs.readFileSync(appPath, 'utf8');
 
-  assert.match(coachTrainingSource, /onVerifyCurrentFile\?: \(request: PracticeFileVerificationRequest\)/);
-  assert.match(coachTrainingSource, /onVerifyCurrentFile=\{onVerifyCurrentFile\}/);
   assert.match(commandsSource, /onOpenCoachWithBridge\?: \(bridge: TrainingCoachBridgeInput\)/);
   assert.match(commandsSource, /onOpenCoachWithBridge\(bridge\)/);
   assert.match(commandsSource, /source: "conversation_gap"/);
@@ -75,13 +48,11 @@ test('useTrainingCommands card-status / reflect / return attach persistence wrap
 
 test('TrainingWorkbenchView skip uses hooked onCardStatusTransition persistence path', () => {
   const workbenchPath = path.join(webviewRoot, 'components', 'training', 'TrainingWorkbenchView.tsx');
-  const cardPanelPath = path.join(webviewRoot, 'components', 'training', 'TrainingCardPanel.tsx');
   const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
   const actionsSource = fs.readFileSync(
     path.join(webviewRoot, 'components', 'training', 'trainingCardActions.ts'),
     'utf8',
   );
-  const cardPanelSource = fs.readFileSync(cardPanelPath, 'utf8');
   const appSource = fs.readFileSync(appPath, 'utf8');
   const commandsSource = fs.readFileSync(commandsPath, 'utf8');
 
@@ -111,21 +82,6 @@ test('TrainingWorkbenchView skip uses hooked onCardStatusTransition persistence 
   assert.match(appSource, /applyTrainingCardGrade\(/);
   assert.doesNotMatch(workbenchSource, /postMessage\(\{\s*type:\s*"command\/execute"/);
   assert.doesNotMatch(workbenchSource, /trainerCommands\.trainingCardStatusTransition/);
-
-  assert.match(cardPanelSource, /onCardStatusTransition\?/);
-  assert.match(cardPanelSource, /onCardStatusTransition\(\s*card\.id,\s*"skipped"/);
-  assert.match(cardPanelSource, /onCardStatusTransition\(card\.id, "reviewed"/);
-  assert.doesNotMatch(cardPanelSource, /onSkip\?\.\(\)/);
-  assert.doesNotMatch(cardPanelSource, /onRate\?\.\(/);
-  assert.doesNotMatch(cardPanelSource, /disabled=\{!canTransitionCardStatus && !onRate\}/);
-  assert.doesNotMatch(cardPanelSource, /disabled=\{!canTransitionCardStatus && !onSkip\}/);
-
-  const flashPath = path.join(webviewRoot, 'components', 'flash', 'CoachFlashView.tsx');
-  const flashSource = fs.readFileSync(flashPath, 'utf8');
-  assert.match(flashSource, /onCardStatusTransition\(card\.cardId, "reviewed"/);
-  assert.match(flashSource, /if \(!card\?\.cardId \|\| !onCardStatusTransition\)/);
-  assert.match(flashSource, /disabled=\{cardStatusBusy \|\| !canTransitionCardStatus\}/);
-  assert.doesNotMatch(flashSource, /setMasteryMark\(level\);\s*\n\s*if \(card && onCardStatusTransition\)/);
 
   assert.match(
     commandsSource,
@@ -207,7 +163,7 @@ test('live reflect and return persist; leftover cannot fire them', () => {
   );
   assert.match(
     appSource,
-    /leftoverTrainingHandoffChromeNotLive \? \(\s*<button[\s\S]*?onClick=\{\(\) => setActiveView\("coach"\)\}/,
+    /leftoverTrainingHandoffChromeNotLive \? \(\s*<button[\s\S]*?onClick=\{\(\) => \{\s*setActiveView\("coach"\);\s*requestCoachComposerFocus\(\);\s*\}\}/,
   );
   assert.doesNotMatch(
     appSource,

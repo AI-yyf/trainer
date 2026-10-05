@@ -20,15 +20,18 @@ test('selected root scopes runtime storage before a discovered project is manage
   const { getRuntimeWorkspaceContext } = loadWithVscodeMock(workspaceContextModulePath, {
     workspace: { workspaceFolders: [] }, window: {},
   });
+  // Windows-style drive-absolute fixtures keep every host on the same opaque
+  // identity: normalizeFsPath passes drive-absolute values through unchanged
+  // instead of resolving them against the host cwd.
   const runtime = getRuntimeWorkspaceContext({ getHostState: () => ({
-    workspace: { workspaceFolder: '/projects/new-project' },
+    workspace: { workspaceFolder: 'F:\\projects\\new-project' },
     bootstrap: { memory: { workspace: { trainerWorkspace: {
-      status: 'project-found', rootId: 'root-selected', rootPath: '/learning',
+      status: 'project-found', rootId: 'root-selected', rootPath: 'F:\\learning',
     } } } },
   }) });
   assert.equal(runtime.rootId, 'root-selected');
   assert.equal(runtime.contextId, undefined);
-  assert.equal(runtime.workspaceId, '/projects/new-project');
+  assert.equal(runtime.workspaceId, 'F:\\projects\\new-project');
 });
 
 test('getWorkspaceId and getWorkspaceName prefer activeWorkspaceRoot over workspaceFolder', () => {

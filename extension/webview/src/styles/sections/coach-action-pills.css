@@ -2,11 +2,6 @@
    Coach Action Pills
    ========================================================================== */
 
-.coach-action-wrapper {
-  display: inline-flex;
-  max-width: 100%;
-}
-
 .coach-action-pill {
   display: inline-flex;
   align-items: center;
@@ -98,16 +93,5 @@
 .coach-action-pill__err {
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 10%, transparent);
-}
-
-@keyframes coach-action-pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.3);
-    opacity: 0.72;
-  }
 }
 

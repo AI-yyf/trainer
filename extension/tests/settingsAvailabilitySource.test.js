@@ -313,7 +313,7 @@ test('settings routes incomplete drafts back to the form and only tests ready dr
   assert.match(cta, /canRetestProvider\s*\? onTestProvider/);
   assert.match(
     source,
-    /const showProviderDetailTestAction =\s*!canRetestProvider \|\| effectiveAvailabilityPrimaryCta\.action !== onTestProvider;/,
+    /const showProviderDetailTestAction =\s*availabilityStripReduced \|\|\s*!canRetestProvider \|\|\s*effectiveAvailabilityPrimaryCta\.action !== onTestProvider;/,
   );
 });
 
@@ -553,7 +553,18 @@ test('settings uses plain-language localized recovery copy for unavailable conne
   const strip = availabilityStripSource(source);
 
   assert.match(strip, /title=\{displayAvailabilityHeadline\}/);
-  assert.match(strip, /detail=\{showAvailabilityPrimaryAction \? displayAvailabilityDetail/);
+  // When the blocker bar is visible in the detail pane the strip drops only
+  // its action button (the form-level Test button renders instead); the full
+  // connection explanation stays so the failure stays explainable.
+  assert.match(
+    strip,
+    /detail=\{\s*showAvailabilityPrimaryAction\s*\?\s*displayAvailabilityDetail\s*:\s*localizedResolvedAvailabilityStatusLabel/,
+  );
+  assert.match(strip, /action=\{\s*availabilityStripReduced\s*\?\s*undefined\s*:/);
+  assert.match(
+    source,
+    /const availabilityStripReduced =\s*!settingsIndexOpen &&\s*!backendRecovery &&\s*settingsStatusIssues\.some\(\(issue\) => issue\.target === "connection"\);/,
+  );
   assert.match(source, /setupModelAccess: "设置模型连接"/);
   assert.match(source, /fillProviderFields: "填写连接信息和 API key 后即可测试。"/);
   assert.match(source, /\{providerDetailRequirementNote\}/);

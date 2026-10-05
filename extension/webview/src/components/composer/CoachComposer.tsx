@@ -513,7 +513,8 @@ export function CoachComposer({
         ? attachmentCapabilityText
         : "";
   const charCount = value.length;
-  const isNearLimit = charCount > maxLength * 0.9;
+  // Count surfaces only near the limit (§ subtraction): quiet until 90% of max.
+  const isNearLimit = charCount >= maxLength * 0.9;
   const dropPromptText = attachmentsInteractive ? localizedCopy.dropToAttach : localizedCopy.imageUnavailable;
 
   const handleClear = useCallback(() => {
@@ -977,7 +978,7 @@ export function CoachComposer({
               <span>{dropPromptText}</span>
             </div>
           ) : null}
-          {showCharCount && (
+          {showCharCount && isNearLimit && (
             <span className={`composer__char-count ${isNearLimit ? "composer__char-count--near-limit" : ""}`}>
               {charCount}/{maxLength}
             </span>

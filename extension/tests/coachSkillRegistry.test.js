@@ -9,7 +9,7 @@ const tsc = path.resolve(__dirname, '..', '..', 'extension', 'node_modules', 'ty
 
 let mod;
 test('setup', () => {
-  const outDir = require('node:fs').mkdtempSync(require('node:os').tmpdir() + '/coach-skill-reg-');
+  const outDir = require('node:fs').mkdtempSync(path.join(require('node:os').tmpdir(), 'coach-skill-reg-'));
   require('node:child_process').execFileSync(process.execPath, [
     tsc,
     path.join(sharedSrc, 'coachSkillRegistry.ts'),

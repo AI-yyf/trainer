@@ -9,15 +9,6 @@ import {
 } from "../../../../../shared/src/protocol";
 import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
 import type { ComposerLanguage, ConversationMessage } from "../../lib/types";
-import {
-  ArrowRightIcon,
-  InsightIcon,
-  RefreshIcon,
-  ResourcesIcon,
-  ShareIcon,
-  TrainingIcon,
-} from "../icons/CoachIcons";
-import { AgentActivityStrip } from "./AgentActivityStripSmart";
 import { CoachArtifactBlock, type CoachArtifactBlockData } from "./CoachArtifactBlock";
 import { coachMessageBubbleCopy } from "./coachMessageBubbleCopy";
 import { CoachMessageParts } from "./CoachMessageParts";
@@ -81,50 +72,6 @@ function supportPreview(message: ConversationMessage): string | undefined {
     return message.attachments[0]?.value;
   }
   return undefined;
-}
-
-interface ReplySuffixMeta {
-  coach_focus?: { summary?: string; next_step?: string; review_rhythm?: string };
-  coach_turn?: { summary?: string; next_step?: string };
-  next_step_hint?: { title?: string };
-}
-
-/**
- * The coaching suffix (focus / next step / review rhythm) renders as quiet
- * icons with tooltips instead of trailing text paragraphs — the reply body
- * ends with the coach's own words.
- */
-function ReplySuffixIcons({ message }: { message: ConversationMessage }) {
-  const meta = (message.metadata ?? {}) as ReplySuffixMeta;
-  const focus = meta.coach_focus?.summary || meta.coach_turn?.summary || "";
-  const nextStep =
-    meta.coach_turn?.next_step ||
-    meta.coach_focus?.next_step ||
-    meta.next_step_hint?.title ||
-    "";
-  const review = meta.coach_focus?.review_rhythm || "";
-  if (!focus && !nextStep && !review) {
-    return null;
-  }
-  return (
-    <div className="message-suffix-icons" role="group" aria-label="Coach cues">
-      {focus ? (
-        <span className="message-suffix-icons__item" title={focus}>
-          <InsightIcon />
-        </span>
-      ) : null}
-      {nextStep ? (
-        <span className="message-suffix-icons__item" title={nextStep}>
-          <ArrowRightIcon />
-        </span>
-      ) : null}
-      {review ? (
-        <span className="message-suffix-icons__item" title={review}>
-          <RefreshIcon />
-        </span>
-      ) : null}
-    </div>
-  );
 }
 
 function supportDetailLines(
@@ -397,7 +344,11 @@ function CoachMessageBubbleImpl({
         {streaming ? (
           hasBody || hasParts ? (
             <span className="coach-cursor" aria-hidden="true" />
-          ) : (
+          ) : children ? null : (
+            // §四十八: one loading idiom per bubble. When the caller supplies
+            // children (`.coach-streaming-dots`), the pending skeleton stays
+            // off so the dots are the only idiom; the dots CSS carries the
+            // `prefers-reduced-motion` fallback.
             <div className="coach-msg-pending" aria-hidden="true">
               <div className="skeleton coach-msg-pending__line coach-msg-pending__line--long" />
               <div className="skeleton coach-msg-pending__line coach-msg-pending__line--mid" />

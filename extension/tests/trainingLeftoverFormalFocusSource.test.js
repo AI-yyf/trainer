@@ -6,24 +6,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
-const trainingViewPath = path.resolve(
-  __dirname,
-  '..',
-  'webview',
-  'src',
-  'components',
-  'training',
-  'CoachTrainingView.tsx',
-);
-const practiceViewPath = path.resolve(
-  __dirname,
-  '..',
-  'webview',
-  'src',
-  'components',
-  'practice',
-  'CoachPracticeView.tsx',
-);
 
 test('Training currentFocus does not use leftover formal title or coach focus', () => {
   const source = fs.readFileSync(appPath, 'utf8');
@@ -45,21 +27,15 @@ test('Training currentFocus does not use leftover formal title or coach focus', 
 });
 
 test('Training and Practice views gate leftover teachingDecision.focusArea', () => {
-  const trainingSource = fs.readFileSync(trainingViewPath, 'utf8');
-  const practiceSource = fs.readFileSync(practiceViewPath, 'utf8');
-  assert.match(trainingSource, /preferRecoveredTrainingFocusChrome\(/);
-  assert.match(trainingSource, /teachingDecisionFocusArea: teachingDecision\?\.focusArea/);
-  assert.match(trainingSource, /liveTrainingFocusChrome\.teachingDecisionFocusArea/);
+  // The standalone CoachTrainingView / CoachPracticeView panels are gone; the
+  // focus chrome is assembled once in App and handed to the single-card view.
+  const source = fs.readFileSync(appPath, 'utf8');
+  assert.match(source, /preferRecoveredTrainingFocusChrome\(/);
+  assert.match(source, /teachingDecisionFocusArea: data\.teachingDecision\?\.focusArea/);
+  assert.match(source, /liveTrainingFocusChrome\.teachingDecisionFocusArea/);
   assert.doesNotMatch(
-    trainingSource,
+    source,
     /workspaceTrainingState\?\.latestLearningFocusArea \|\|\s*teachingDecision\?\.focusArea/,
-  );
-  assert.match(practiceSource, /preferRecoveredTrainingFocusChrome\(/);
-  assert.match(practiceSource, /teachingDecisionFocusArea: teachingDecision\?\.focusArea/);
-  assert.match(practiceSource, /liveTrainingFocusChrome\.teachingDecisionFocusArea/);
-  assert.doesNotMatch(
-    practiceSource,
-    /workspaceUnderstanding\?\.currentStep \|\|\s*teachingDecision\?\.focusArea/,
   );
 });
 

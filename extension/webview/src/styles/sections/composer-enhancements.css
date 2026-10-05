@@ -70,11 +70,6 @@
   cursor: not-allowed;
 }
 
-.composer__quick-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .composer__frame--with-count {
   position: relative;
 }

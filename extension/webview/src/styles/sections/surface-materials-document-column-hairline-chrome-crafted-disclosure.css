@@ -10,7 +10,6 @@
   justify-content: flex-start;
 }
 
-.coach-plan-view__compact-more > summary,
 .training-current__more > summary,
 .coach-plan-view__details > summary {
   display: inline-flex;
@@ -24,13 +23,11 @@
   list-style: none;
 }
 
-.coach-plan-view__compact-more > summary::-webkit-details-marker,
 .training-current__more > summary::-webkit-details-marker,
 .coach-plan-view__details > summary::-webkit-details-marker {
   display: none;
 }
 
-.coach-plan-view__compact-more > summary::before,
 .training-current__more > summary::before,
 .coach-plan-view__details > summary::before {
   content: "";
@@ -43,19 +40,13 @@
   transition: transform var(--motion-fast) var(--motion-ease);
 }
 
-.coach-plan-view__compact-more[open] > summary::before,
 .training-current__more[open] > summary::before,
 .coach-plan-view__details[open] > summary::before {
   transform: rotate(45deg);
 }
 
-.coach-plan-view__compact-more[open] > summary,
 .training-current__more[open] > summary {
   color: var(--fg-1);
-}
-
-[data-settings-language] .settings-sheet__choices {
-  gap: 2px 4px;
 }
 
 [data-settings-language] .settings-sheet__choice-pill {
@@ -96,7 +87,6 @@
   color: var(--fg-0);
 }
 
-.composer__mode-menu,
 .menu-list {
   transform-origin: bottom left;
   transition:
@@ -105,7 +95,6 @@
 }
 
 @starting-style {
-  .composer__mode-menu,
   .menu-list {
     opacity: 0;
     transform: scale(0.98);
@@ -131,9 +120,8 @@ details[open] > :not(summary) {
     scroll-behavior: auto !important;
   }
 
-  .training-state__spinner,
   .composer__send .trainer-spin,
-  [class*="spinner"] {
+[class*=         ] {
     animation: trainer-spin 0.65s linear infinite !important;
   }
 }
@@ -155,8 +143,7 @@ details[open] > :not(summary) {
   padding-top: 6px;
 }
 
-.settings-section--summary > .collapsible-block > summary,
-.settings-sheet__defaults-summary--inline {
+.settings-section--summary > .collapsible-block > summary {
   min-height: 28px;
   padding: 4px 0;
   color: var(--fg-muted);
@@ -184,16 +171,12 @@ details[open] > :not(summary) {
 }
 
 .training-current__actions--primary .button,
-.training-current__actions--primary .button.button--accent,
-.coach-plan-view__compact-primary-action .action-button,
-.coach-plan-view__compact-primary-action .action-button--ghost,
-.coach-plan-view__compact-primary-action .action-button--accent {
+.training-current__actions--primary .button.button--accent {
   background: transparent;
   border-color: color-mix(in srgb, var(--line) 62%, transparent);
 }
 
-.training-current__actions--primary .button:hover,
-.coach-plan-view__compact-primary-action .action-button:hover {
+.training-current__actions--primary .button:hover {
   background: color-mix(in srgb, var(--bg-2) 54%, transparent);
 }
 
@@ -325,39 +308,10 @@ details[open] > :not(summary) {
   color: var(--fg-0);
 }
 
-.coach-plan-view__now-done,
-.coach-plan-view__now-next,
-.training-current__done {
-  margin: 6px 0 0;
-  color: var(--fg-muted);
-  font-size: var(--type-ui);
-  line-height: var(--leading-body);
-}
-
-.training-current__lead--card-face h2 {
-  font-size: var(--trainer-font-xs);
-  font-weight: 400;
-  color: var(--fg-0);
-}
-
 .training-current__sentence p {
   margin: 6px 0 0;
   color: var(--fg-1);
   font-size: var(--type-ui);
   line-height: var(--leading-body);
-}
-
-.settings-sheet__defaults-summary--inline {
-  display: grid;
-  grid-template-columns: minmax(5.5em, 0.34fr) minmax(0, 1fr);
-  align-items: center;
-  gap: 8px 12px;
-  width: 100%;
-  min-height: 32px;
-  padding: 6px 0;
-}
-
-.settings-sheet__defaults-summary-main {
-  display: contents;
 }
 

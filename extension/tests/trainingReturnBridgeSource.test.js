@@ -7,7 +7,7 @@ const path = require('node:path');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
-test('formal training handoff steps persist before opening Coach', () => {
+test('formal training handoff draft persists without forcing navigation to Coach', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
 
   assert.match(source, /const trainingCoachBridge = useMemo\(/);
@@ -16,10 +16,25 @@ test('formal training handoff steps persist before opening Coach', () => {
     source,
     /const handleResumeTrainingInCoach = useCallback\(\(\) => \{[\s\S]*?if \(trainingHandoffReflectionRequired\) \{[\s\S]*?setTrainingComposerRoute\("card"\);[\s\S]*?return;[\s\S]*?if \(trainingHandoffReturnRequired && trainingState\?\.selectedCardId\) \{[\s\S]*?void handleSubmitTrainingEvidence\(""\)\.catch/,
   );
-  assert.match(
-    source,
-    /if \(pending\.phase === "return"\) \{\s*setActiveView\("coach"\);\s*setComposerDraft\(composeTrainingCoachBridgeDraft\(trainingCoachBridge\)\);/,
+  // §simplification: the handoff effect only stores the bridge draft in the
+  // coach composer — navigation and focus stay with the learner, who keeps the
+  // explicit "回到对话" button (handleResumeTrainingInCoach) as the way over.
+  const handoffEffect = source.slice(
+    source.indexOf('const pending = pendingTrainingHandoffSubmissionRef.current'),
+    source.indexOf(
+      'setActivityDraft("");',
+      source.indexOf('const pending = pendingTrainingHandoffSubmissionRef.current'),
+    ),
   );
+  assert.ok(handoffEffect.length > 0, 'expected the training handoff completion effect');
+  assert.match(
+    handoffEffect,
+    /if \(pending\.phase === "return"\) \{[\s\S]*?setComposerDraft\(composeTrainingCoachBridgeDraft\(trainingCoachBridge\)\);[\s\S]*?return;/,
+  );
+  assert.match(handoffEffect, /composeTrainingCoachBridgeDraft\(trainingCoachBridge\)/);
+  assert.doesNotMatch(handoffEffect, /setActiveView\(/);
+  assert.doesNotMatch(handoffEffect, /requestCoachComposerFocus\(\)/);
+  assert.doesNotMatch(handoffEffect, /sendTurn\(/);
   assert.match(
     source,
     /const trainingCoachActionLabel = trainingHandoffReflectionRequired\s*\?\s*t\.trainingRecordStep\s*:\s*trainingHandoffReturnRequired\s*\?\s*t\.trainingReturnToCoach\s*:\s*trainingComposerPhase === "return"\s*\?\s*t\.trainingReturnToCoach\s*:\s*trainingCoachBridge\.ctaLabel;/,
@@ -63,7 +78,10 @@ test('training return and evidence adopt do not mint a plan, card, or task turn'
     returnStart,
     appSource.indexOf('setActivityDraft("");', returnStart),
   );
-  assert.match(returnComplete, /setActiveView\("coach"\)/);
+  // The return completes in place: the bridge draft is stored for Coach, but
+  // no navigation, forced focus, or turn is minted.
+  assert.match(returnComplete, /setComposerDraft\(composeTrainingCoachBridgeDraft\(trainingCoachBridge\)\)/);
+  assert.doesNotMatch(returnComplete, /setActiveView\("coach"\)/);
   assert.doesNotMatch(returnComplete, /sendTurn\(/);
   assert.doesNotMatch(returnComplete, /trainerCommands\.generatePlan/);
   const adoptStart = appSource.indexOf('if (action === "adopt_evidence")');

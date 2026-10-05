@@ -14,10 +14,6 @@
   border: 0;
 }
 
-.trainer-hidden-file-input {
-  display: none;
-}
-
 .muted {
   color: var(--fg-muted);
 }
@@ -78,20 +74,5 @@
   line-height: 1.5;
   color: var(--fg-1);
   white-space: pre-wrap;
-}
-
-.trainer-startup-error__stack {
-  margin: 0;
-  padding: 10px;
-  overflow-x: auto;
-  border-radius: var(--radius-lg);
-  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
-  background: var(--bg-1);
-  color: var(--fg-1);
-  font-family: var(--font-mono);
-  font-size: var(--trainer-font-3xs);
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 

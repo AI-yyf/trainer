@@ -33,14 +33,6 @@
   margin-bottom: 2px;
 }
 
-.section-block--placeholder {
-  background: var(--bg-1);
-  border: 1px dashed color-mix(in srgb, var(--line) 76%, transparent);
-  color: var(--fg-muted);
-  text-align: center;
-  padding: 24px;
-}
-
 .status-pill {
   display: inline-flex;
   align-items: center;

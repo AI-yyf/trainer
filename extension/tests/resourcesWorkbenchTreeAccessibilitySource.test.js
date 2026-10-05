@@ -48,7 +48,8 @@ test('Resources uses a single roving tree stop and standard parent-child navigat
   assert.match(source, /function visibleTreeItemIds\(nodes: ResourceTreeNode\[\], expandedIds: Set<string>\)/);
   assert.match(source, /tabIndex=\{activeTreeItemId === node\.id \? 0 : -1\}/);
   assert.match(source, /data-resource-tree-item-id=\{node\.id\}/);
-  assert.match(source, /type="checkbox"[\s\S]*?tabIndex=\{-1\}/);
+  // Reading-first tree: no checkboxes in the roving-tabindex tree.
+  assert.doesNotMatch(source, /type="checkbox"/);
   assert.match(source, /event\.key === "ArrowRight"[\s\S]*?onMoveTreeFocus\(firstChildId\)/);
   assert.match(source, /event\.key === "ArrowLeft"[\s\S]*?onMoveTreeFocus\(parentId\)/);
   assert.match(source, /const nextIndex = Math\.min\(Math\.max\(currentIndex \+ delta, 0\), items\.length - 1\);/);
@@ -58,7 +59,7 @@ test('Resources lets its workspace tree fill the unused primary panel area', () 
   // Product-level template contract replaces the previous layout grammar.
   const { read } = require('./templateAssertions');
   const source = read('components/resources/ResourcesWorkbenchView.tsx');
-  for (const marker of ['<Library', '<ResourceReader', 'type="search"', 'onSelect={selectResource}', 'onToggleSelection={toggleResourceSelection}', 'onRestore', 'onStartTrainingFromResource', 'openResourceInVsCode']) assert.ok(source.includes(marker), marker);
+  for (const marker of ['<Library', '<ResourceReader', 'type="search"', 'onSelect={selectResource}', 'onRestore', 'onStartTrainingFromResource', 'openResourceInVsCode']) assert.ok(source.includes(marker), marker);
   assert.ok(!source.includes('didAutoSelectResource'));
   assert.ok(source.includes('onAskCoach([selectedResource.id])'));
 });

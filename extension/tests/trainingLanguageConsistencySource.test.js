@@ -222,19 +222,19 @@ test('training entry actions and empty state use complete locale copy', () => {
   }
 });
 
-test('training card navigation uses the shared locale copy', () => {
+test('training card navigation stays a single explicit next-card action in shared locale copy', () => {
   const source = fs.readFileSync(trainingViewPath, 'utf8');
-  const navStart = source.indexOf('<div className="training-card-nav"');
-  const navEnd = source.indexOf('</div>', navStart);
 
-  assert.ok(navStart >= 0 && navEnd > navStart, 'expected training card navigation');
-  const nav = source.slice(navStart, navEnd);
-  assert.match(nav, /aria-label=\{t\.training\}/);
-  assert.match(nav, /title=\{t\.previousCard\}/);
-  assert.match(nav, /<span>\{t\.previousCard\}<\/span>/);
-  assert.match(nav, /title=\{t\.nextCard\}/);
-  assert.match(nav, /<span>\{t\.nextCard\}<\/span>/);
-  assert.doesNotMatch(nav, /Review previous card|Generate or move to the next card/);
+  // Focus mode has no previous/next deck toolbar; the only deck move is the
+  // explicit Next Card button on the return/terminal state, in shared copy.
+  assert.doesNotMatch(source, /className="training-card-nav"/);
+  assert.doesNotMatch(source, /t\.previousCard/);
+  assert.match(source, /data-training-next-card="true"/);
+  const nextCardStart = source.indexOf('data-training-next-card="true"');
+  const nextCardEnd = source.indexOf('</button>', nextCardStart);
+  const nextCardButton = source.slice(nextCardStart, nextCardEnd);
+  assert.match(nextCardButton, /\{t\.nextCard\}/);
+  assert.doesNotMatch(nextCardButton, /Review previous card|Generate or move to the next card/);
 });
 
 test('training composer labels and placeholders stay localized across every card state', () => {

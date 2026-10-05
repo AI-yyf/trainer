@@ -30,9 +30,14 @@ test('the reading library opens one file directly and removes management panels'
   await expect(page.locator('.resources-knowledge__trash')).not.toHaveAttribute('open', '');
   await expect(page.getByText('HIDDEN_MANAGEMENT_SUMMARY', { exact: true }).filter({ visible: true })).toHaveCount(0);
   const note = page.getByRole('treeitem', { name: '边界验证.md', exact: true });
+  // Enter opens the reader now (VS Code opens moved to the reader's Open
+  // action; a raw row double-click cannot fire because the first click already
+  // opens the reader and hides the tree).
   await note.focus(); await page.keyboard.press('Enter');
-  await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
-    .filter(action => action.type === 'resource/open'))).toEqual([{ type: 'resource/open', payload: { resourceId: 'reader-note' } }]);
+  const reader = page.locator('[data-template=ResourceReader]');
+  await expect(reader).toBeVisible();
+  await reader.locator('.template-activity-header > button').click();
+  await expect(page.getByRole('treeitem', { name: '边界验证.md', exact: true })).toBeVisible();
   await expect(page.locator('.resources-knowledge')).toBeVisible();
   if (await page.locator('[data-template=ResourceReader]').isVisible()) await page.locator('[data-template=ResourceReader] .template-activity-header > button').click();
   for (const width of [300, 360, 800]) {
@@ -84,10 +89,14 @@ test('nested folders stay distinct, support keyboard navigation and open their f
   await expect(folderButton).toHaveAttribute('aria-expanded', 'true');
   const file = page.getByRole('treeitem', { name: '边界验证.md', exact: true });
   await expect(file).toBeVisible();
+  // Enter opens the reader now (VS Code opens moved to the reader's Open
+  // action; a raw row double-click cannot fire because the first click already
+  // opens the reader and hides the tree).
   await file.press("Enter");
-  await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
-    .filter(action => action.type === 'resource/open')))
-    .toEqual([{ type: 'resource/open', payload: { resourceId: 'nested-note' } }]);
+  const reader = page.locator('[data-template=ResourceReader]');
+  await expect(reader).toBeVisible();
+  await reader.locator('.template-activity-header > button').click();
+  await expect(page.getByRole('treeitem', { name: '边界验证.md', exact: true })).toBeVisible();
   for (const width of [300, 360, 800]) {
     await page.setViewportSize({ width, height: 760 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);

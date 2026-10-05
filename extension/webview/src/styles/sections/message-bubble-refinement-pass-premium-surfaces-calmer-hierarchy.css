@@ -5,18 +5,6 @@
    ========================================================================== */
 
 /* Bootstrap skeleton: shown until the host posts its first state snapshot. */
-.workbench-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px var(--trainer-gutter, 12px);
-}
-
-.workbench-skeleton__bar {
-  display: block;
-  height: 14px;
-  border-radius: var(--radius-sm);
-}
 
 /* Availability strip: smooth warn→connected transition + one-shot pop */
 
@@ -59,11 +47,6 @@
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 
-.notice__dismiss:focus-visible {
-  outline: 1px solid var(--focus-ring);
-  outline-offset: 1px;
-}
-
 /* Coaching reply code blocks — the primary content of a coding coach */
 .message-bubble-v2 .message-markdown pre {
   background: color-mix(in srgb, var(--bg-0) 78%, var(--bg-2));
@@ -89,21 +72,6 @@
 
 .settings-quick-setup__connected-dot {
   animation: trainer-step-pop var(--motion-base, 180ms) var(--motion-ease);
-}
-
-.notice--leaving {
-  animation: trainer-notice-out var(--motion-fast) var(--motion-ease) both;
-}
-
-@keyframes trainer-notice-out {
-  from {
-    opacity: 1;
-    transform: none;
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
 }
 
 /* Settings sections: calm staggered entrance on view mount (capped). */
@@ -174,12 +142,6 @@
   text-align: left;
 }
 
-.onboarding-wizard__title {
-  margin: 0;
-  color: var(--fg-0);
-  font-size: var(--trainer-font-xs);
-}
-
 .onboarding-wizard__steps {
   display: flex;
   flex-wrap: wrap;
@@ -197,89 +159,6 @@
   border-radius: var(--radius-full);
   border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
   color: var(--fg-muted);
-}
-
-.onboarding-wizard__step--done {
-  color: var(--pass, var(--fg-1));
-  border-color: var(--pass, var(--fg-1));
-}
-
-.onboarding-wizard__step--active {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.onboarding-wizard__marker {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-inline-size: 18px;
-  height: 18px;
-  border-radius: var(--radius-full);
-  background: var(--bg-2);
-  font-size: var(--trainer-font-3xs);
-}
-
-.onboarding-wizard__step-label {
-  font-size: var(--trainer-font-2xs);
-}
-
-.onboarding-wizard__panel {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.onboarding-wizard__detail {
-  margin: 0;
-  color: var(--fg-1);
-  font-size: var(--trainer-font-2xs);
-}
-
-.onboarding-wizard__field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  color: var(--fg-muted);
-  font-size: var(--trainer-font-2xs);
-}
-
-.onboarding-wizard__field input {
-  width: 100%;
-  padding: 5px 8px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--vscode-input-border, var(--trainer-fallback-border, var(--border, transparent)));
-  background: var(--vscode-input-background, var(--bg-0));
-  color: var(--vscode-input-foreground, var(--fg-0));
-}
-
-.onboarding-wizard__hint {
-  margin: 0;
-  color: var(--fg-muted);
-  font-size: var(--trainer-font-3xs);
-}
-
-.onboarding-wizard__inline-trust,
-.onboarding-wizard__trial {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding-block-start: 4px;
-  border-block-start: 1px dashed var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
-  width: 100%;
-}
-
-.onboarding-wizard__link {
-  border: 0;
-  background: none;
-  padding: 0;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: var(--trainer-font-2xs);
-  text-decoration: underline;
 }
 
 .coach-onboarding {
@@ -507,46 +386,6 @@
   flex-direction: column;
   gap: 4px;
   margin: 4px 0;
-}
-
-.skill-projection-title {
-  font-size: var(--trainer-font-3xs);
-  font-weight: var(--trainer-font-weight-medium);
-  letter-spacing: 0.02em;
-  color: var(--fg-muted);
-}
-
-.skill-projection-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.skill-projection-dimension {
-  font-weight: var(--trainer-font-weight-medium);
-  color: var(--text-1);
-}
-
-.skill-projection-state {
-  color: var(--text-2);
-}
-
-.skill-projection-chip[data-skill-state="independent"],
-.skill-projection-chip[data-skill-state="repeat_verified"] {
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-}
-
-.skill-projection-chip[data-skill-state="independent"] .skill-projection-state,
-.skill-projection-chip[data-skill-state="repeat_verified"] .skill-projection-state {
-  color: var(--accent);
-}
-
-.skill-projection-chip[data-skill-state="needs_review"] {
-  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
-}
-
-.skill-projection-chip[data-skill-state="needs_review"] .skill-projection-state {
-  color: var(--danger);
 }
 
 .skill-projection[data-variant="full"] {

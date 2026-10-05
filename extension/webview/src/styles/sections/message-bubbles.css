@@ -560,59 +560,6 @@
   min-width: 0;
 }
 
-.message-bubble__agent-status-line {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  width: 100%;
-  font-size: var(--trainer-font-3xs);
-  color: var(--fg-muted);
-}
-
-.message-bubble__agent-status-line--static {
-  padding: 2px 0;
-}
-
-.message-bubble__agent-status-line .message-bubble__agent-status-tone {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  font-size: inherit;
-  font-weight: var(--trainer-font-weight-medium);
-}
-
-.message-bubble__agent-status-line .message-bubble__agent-status-tone--working {
-  color: var(--accent);
-}
-
-.message-bubble__agent-status-line .message-bubble__agent-status-tone--done {
-  color: var(--success);
-}
-
-.message-bubble__agent-status-line .message-bubble__agent-status-tone--blocked {
-  color: var(--danger);
-}
-
-.message-bubble__agent-status-line .message-bubble__agent-status-tone--degraded {
-  color: var(--warning);
-}
-
-.message-bubble__agent-status-line-counters {
-  color: var(--fg-muted);
-  white-space: nowrap;
-}
-
-.message-bubble__agent-status-line-preview {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: right;
-  color: color-mix(in srgb, var(--fg-muted) 74%, transparent);
-}
-
 .message-bubble__agent-status-summary {
   margin: 0;
   font-size: var(--trainer-font-xs);
@@ -623,153 +570,6 @@
 
 .message-bubble__agent-status .agent-activity-strip {
   margin: 0;
-}
-
-.message-bubble__agent-status-counts {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-
-.message-bubble__agent-status-tone,
-.message-bubble__agent-status-source,
-.message-bubble__agent-status-count,
-.message-bubble__agent-status-stop {
-  padding: 2px 7px;
-  border-radius: var(--radius-full);
-  font-size: var(--trainer-font-3xs);
-  font-weight: 400;
-  border: 1px solid color-mix(in srgb, var(--line) 56%, transparent);
-  background: color-mix(in srgb, var(--bg-2) 72%, transparent);
-  color: var(--fg-0);
-}
-
-.message-bubble__agent-status-source,
-.message-bubble__agent-status-count {
-  color: var(--fg-muted);
-  font-weight: 400;
-}
-
-.message-bubble__agent-status-tone--working {
-  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-2));
-}
-
-.message-bubble__agent-status-tone--done {
-  border-color: color-mix(in srgb, var(--success) 24%, transparent);
-  background: color-mix(in srgb, var(--success) 10%, var(--bg-2));
-}
-
-.message-bubble__agent-status-tone--blocked {
-  border-color: color-mix(in srgb, var(--danger) 26%, transparent);
-  background: color-mix(in srgb, var(--danger) 10%, var(--bg-2));
-}
-
-.message-bubble__agent-status-tone--degraded {
-  border-color: color-mix(in srgb, var(--warning) 24%, transparent);
-  background: color-mix(in srgb, var(--warning) 10%, var(--bg-2));
-}
-
-.message-bubble__agent-status-facts {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 4px;
-}
-
-.message-bubble__agent-status-evidence-label {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 7px;
-  border-radius: var(--radius-full);
-  border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
-  background: color-mix(in srgb, var(--bg-2) 68%, transparent);
-  color: var(--fg-muted);
-  font-size: var(--trainer-font-3xs);
-  font-weight: 400;
-}
-
-.message-bubble__agent-status-fact {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 4px;
-  max-width: 100%;
-  min-width: 0;
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
-  background: color-mix(in srgb, var(--bg-2) 70%, transparent);
-  color: var(--fg-1);
-  font-size: var(--trainer-font-3xs);
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-
-.message-bubble__agent-status-fact strong {
-  flex: none;
-  color: var(--fg-muted);
-  font-weight: 400;
-}
-
-.message-bubble__agent-status-fact span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.message-bubble__agent-status-fact--blocker {
-  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
-  background: color-mix(in srgb, var(--danger) 8%, var(--bg-2));
-  color: var(--fg-0);
-}
-
-.message-bubble__agent-status-fact--decision {
-  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg-2));
-  color: var(--fg-0);
-}
-
-.message-bubble__agent-status-fact--teachingNote {
-  border-color: color-mix(in srgb, var(--line) 62%, transparent);
-}
-
-.message-bubble__agent-status-fact--confidence {
-  border-color: color-mix(in srgb, var(--success) 24%, transparent);
-  background: color-mix(in srgb, var(--success) 7%, var(--bg-2));
-  color: var(--fg-0);
-}
-
-.message-bubble__agent-status-fact--evidence {
-  border-color: color-mix(in srgb, var(--line) 58%, transparent);
-  background: color-mix(in srgb, var(--bg-1) 68%, transparent);
-}
-
-.message-bubble__agent-status-detail,
-.message-bubble__agent-status-next,
-.message-bubble__agent-status-resume {
-  margin: 0;
-  color: var(--fg-1);
-  font-size: var(--trainer-font-xs);
-  line-height: 1.45;
-}
-
-.message-bubble__agent-status-next {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.message-bubble__agent-status-next strong {
-  color: var(--fg-muted);
-  font-weight: 400;
-}
-
-.message-bubble__agent-status-resume {
-  padding: 4px 6px;
-  border-left: 2px solid color-mix(in srgb, var(--accent) 24%, transparent);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--bg-2) 34%, transparent);
 }
 
 .message-bubble__agent-status-disclosure {
@@ -786,10 +586,6 @@
   align-items: center;
   gap: 6px;
   padding: 2px 0;
-}
-
-.message-bubble__agent-status-disclosure > summary > .message-bubble__agent-status-line {
-  flex: 1 1 auto;
 }
 
 .message-bubble__agent-status-disclosure > summary::after {
@@ -818,19 +614,12 @@
   border-radius: 0;
 }
 
-.message-bubble__agent-status-details-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 .message-bubble__body > * {
   min-width: 0;
   width: 100%;
 }
 
 .message-bubble__body .message-markdown,
-.message-bubble__body .message-rich-content__fold,
 .message-bubble__body .message-bubble__details,
 .message-bubble__body .message-bubble__artifacts,
 .message-bubble__body .message-bubble__parts,
@@ -853,32 +642,4 @@
 
 /* Reply suffix cues: the coaching focus / next step / review rhythm render as
    quiet icons with tooltips instead of trailing text paragraphs. */
-.message-suffix-icons {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  padding-top: 6px;
-  border-top: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
-}
 
-.message-suffix-icons__item {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-sm);
-  color: var(--fg-3);
-  cursor: default;
-}
-
-.message-suffix-icons__item:hover {
-  color: var(--fg-1);
-  background: color-mix(in srgb, var(--bg-2) 60%, transparent);
-}
-
-.message-suffix-icons__item svg {
-  width: 13px;
-  height: 13px;
-}

@@ -56,46 +56,39 @@ function sourceBlock(source, startMarker, endMarker) {
   return source.slice(start, end);
 }
 
-test('Resources bulk-select control stays scoped to the current visible search result set', () => {
+test('Resources toolbar stays reading-first: search plus one import entry, no batch controls', () => {
   const source = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
-  const selectAllSource = sourceBlock(
-    source,
-    'const selectAllVisibleResources =',
-    'const clearResourceSelection =',
-  );
   const toolbarSource = sourceBlock(
     source,
     '<div className="resources-knowledge__actions"',
     '<div\n        className="resources-knowledge__tree"',
   );
 
-  assert.match(selectAllSource, /visibleResources\.forEach\(\(resource\) => next\.add\(resource\.id\)\)/);
-  assert.doesNotMatch(selectAllSource, /\bresources\.forEach\(/);
-  assert.match(toolbarSource, /onClick=\{selectAllVisibleResources\}/);
-  assert.match(toolbarSource, /disabled=\{allVisibleResourcesSelected\}/);
-  assert.match(toolbarSource, /onClick=\{clearResourceSelection\}/);
-  assert.match(toolbarSource, /aria-live="polite"/);
+  // Batch selection is fully removed from the library first screen.
+  assert.doesNotMatch(source, /selectAllVisibleResources|clearResourceSelection/);
+  assert.doesNotMatch(toolbarSource, /resources-knowledge__batch-actions/);
+  assert.doesNotMatch(source, /resources-knowledge__refresh-button/);
+  assert.match(toolbarSource, /resources-knowledge__add-resource/);
+  assert.match(toolbarSource, /aria-haspopup="menu"/);
+  assert.match(source, /<div className="resources-knowledge__toolbar">/);
 });
 
-test('Resources batch deletion confirms and preserves only the visible selection for recovery', () => {
+test('Resources deletion confirms per resource and preserves recovery through the trash', () => {
   const source = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
   const requestDeleteSource = sourceBlock(
     source,
-    'const deleteSelectedResources =',
+    'const requestResourceDelete =',
     'const confirmDeleteSelectedResources =',
   );
   const confirmDeleteSource = sourceBlock(
     source,
     'const confirmDeleteSelectedResources =',
-    'const restoreDeletedResources =',
+    'const cancelDeleteSelectedResources =',
   );
 
-  assert.match(
-    requestDeleteSource,
-    /const resourceIds = \[\.\.\.selectedResourceIds\]\.filter\(\(resourceId\) => visibleResourceIds\.has\(resourceId\)\);/,
-  );
-  assert.match(requestDeleteSource, /setDeleteConfirmationResourceIds\(resourceIds\);/);
-  assert.match(source, /Move \{count\} selected resources to Trash/);
+  // One resource per request; the shared confirm flow still guards the write.
+  assert.match(requestDeleteSource, /setDeleteConfirmationResourceIds\(\[resourceId\]\);/);
+  assert.match(source, /Move this resource to Trash/);
   assert.match(confirmDeleteSource, /const resourceIds = deleteConfirmationResourceIds \?\? \[\];/);
   assert.match(confirmDeleteSource, /setPendingDeletedResourceIds\(resourceIds\);/);
   assert.match(confirmDeleteSource, /onDeleteResources\(resourceIds\)/);
@@ -106,7 +99,6 @@ test('Resources batch deletion confirms and preserves only the visible selection
   assert.match(source, /role="alertdialog"/);
   assert.match(source, /onKeyDown=\{\(event\) => \{[\s\S]*?event\.key === "Escape"/);
   assert.match(source, /onClick=\{confirmDeleteSelectedResources\}/);
-  assert.doesNotMatch(confirmDeleteSource, /clearResourceSelection\(/);
 });
 
 test('Resources keeps its narrow toolbar and tree dense without reserving an empty workspace panel', () => {

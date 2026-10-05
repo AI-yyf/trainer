@@ -1,7 +1,6 @@
 import { FocusedPractice } from "../../templates/FocusedPractice";
 import { NextAction } from "../../templates/NextAction";
 import { VerificationResult } from "../../templates/VerificationResult";
-import { planViewLabel } from "../../lib/viewLabels";
 import { templateCopy } from "../../templates/templateCopy";
 import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
 
@@ -15,13 +14,9 @@ import {
   type TrainingReliabilityRecord,
 } from "../../../../../shared/src/trainingReliabilityGovernance";
 import type { TrainingReliability, TrainingSkillProjection } from "../../lib/types";
-import { CheckMarkIcon, ChevronRightIcon, SparklesIcon, TargetIcon } from "../icons";
-import { ActionButton } from "../common/ActionButton";
-import { TrainerSpinner } from "../common/TrainerSpinner";
 import { RemoteVerificationPanel } from "./RemoteVerificationPanel";
 import { remoteVerifyCopy } from "./remoteVerificationCopy";
 import { MessageRichContent } from "../coach/MessageRichContent";
-import { CollapseSection } from "../common/CollapseSection";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type { ComposerLanguage, TrainingCardType } from "../../lib/types";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
@@ -159,28 +154,6 @@ export interface TrainingWorkbenchViewProps {
   flashPrompt?: string;
   expectedSymbols?: string[];
 }
-
-function SectionHeading({ icon, label }: { icon: ReactNode; label: string }) {
-  return (
-    <span className="training-current__section-head">
-      <span className="training-current__section-icon" aria-hidden="true">
-        {icon}
-      </span>
-      <span className="training-current__section-label">{label}</span>
-    </span>
-  );
-}
-
-function TrainingCarryoverRow({ card }: { card: TrainingSummaryCard }) {
-  return (
-    <article className="training-carryover-row">
-      <h4>{card.title}</h4>
-      {card.detail ? <p>{card.detail}</p> : null}
-      {card.meta ? <p className="training-loop-card__meta">{card.meta}</p> : null}
-    </article>
-  );
-}
-
 
 /** Governance failures that mean "you acted on a card that does not own the live handoff". */
 const CARD_HANDOFF_MISMATCH_PATTERN =
@@ -698,13 +671,6 @@ interface TrainingLoopStep {
   state: TrainingLoopStepState;
 }
 
-interface TrainingCardOnlySection {
-  key: "current" | "why-now" | "deliverable" | "verify" | "return" | "reliability";
-  label: string;
-  title?: string;
-  detail?: string;
-}
-
 function trainingLoopStepLabel(step: TrainingLoopStepKey, language: ComposerLanguage): string {
   const labels: Record<ComposerLanguage, Record<TrainingLoopStepKey, string>> = {
     "zh-CN": { learn: "\u5b66\u4e60", try: "\u52a8\u624b", verify: "\u9a8c\u8bc1", reflect: "\u590d\u76d8", return: "\u56de\u6d41" },
@@ -964,6 +930,7 @@ type TrainingWorkbenchTextKey =
   | "followUpReview"
   | "fsrsInterval"
   | "fsrsMastery"
+  | "reviewDayUnit"
   | "reviewActions"
   | "reviewAccept"
   | "reviewSnooze"
@@ -973,7 +940,12 @@ type TrainingWorkbenchTextKey =
   | "reviewDone"
   | "recentWins"
   | "watchOuts"
-  | "hintProgressPrefix";
+  | "hintProgressPrefix"
+  | "taskDetails"
+  | "returnCompleteEyebrow"
+  | "returnCompleteTitle"
+  | "mismatchCardHint"
+  | "mismatchSwitchLabel";
 
 const trainingWorkbenchTextCopy: Record<
   ComposerLanguage,
@@ -1017,7 +989,7 @@ const trainingWorkbenchTextCopy: Record<
     flashVerificationAria: "闪记验证",
     choiceFillShort: "选择 / 填空 / 简答",
     readCurrentIdeFile: "读取 IDE 当前文件",
-    mismatchRecoveryReason: "从交接错配中恢复：切换到交接所属卡片",
+    mismatchRecoveryReason: "切换到与当前进度一致的卡片",
     currentTrainingRoute: "当前训练路线",
     studyCuesFirst: "先看这些线索",
     primerCues: "前置线索",
@@ -1038,6 +1010,7 @@ const trainingWorkbenchTextCopy: Record<
     followUpReview: "后续和回看",
     fsrsInterval: "间隔",
     fsrsMastery: "掌握度",
+    reviewDayUnit: "天",
     reviewActions: "复习操作",
     reviewAccept: "开始复习",
     reviewSnooze: "稍后",
@@ -1048,6 +1021,11 @@ const trainingWorkbenchTextCopy: Record<
     recentWins: "最近进步",
     watchOuts: "需要留意",
     hintProgressPrefix: "提示",
+    taskDetails: "任务详情",
+    returnCompleteEyebrow: "已完成",
+    returnCompleteTitle: "结果已带给教练",
+    mismatchCardHint: "这张卡与当前进度不一致。",
+    mismatchSwitchLabel: "切换到当前卡",
   },
   "en-US": {
     ungrouped: "Ungrouped",
@@ -1087,7 +1065,7 @@ const trainingWorkbenchTextCopy: Record<
     flashVerificationAria: "Flash verification",
     choiceFillShort: "Choice / fill / short",
     readCurrentIdeFile: "Read current IDE file",
-    mismatchRecoveryReason: "Recover from handoff mismatch: activate the handoff-owner card",
+    mismatchRecoveryReason: "Switch to the card that matches your current progress",
     currentTrainingRoute: "Current training route",
     studyCuesFirst: "Study cues first",
     primerCues: "Primer cues",
@@ -1108,6 +1086,7 @@ const trainingWorkbenchTextCopy: Record<
     followUpReview: "Follow-up and review",
     fsrsInterval: "Interval",
     fsrsMastery: "Mastery",
+    reviewDayUnit: "days",
     reviewActions: "Review actions",
     reviewAccept: "Start review",
     reviewSnooze: "Later",
@@ -1118,6 +1097,11 @@ const trainingWorkbenchTextCopy: Record<
     recentWins: "Recent wins",
     watchOuts: "Watch-outs",
     hintProgressPrefix: "Hint",
+    taskDetails: "Task details",
+    returnCompleteEyebrow: "Done",
+    returnCompleteTitle: "Your result is with the coach",
+    mismatchCardHint: "This card does not match your current progress.",
+    mismatchSwitchLabel: "Switch to the current card",
   },
   "es-ES": {
     ungrouped: "Sin agrupar",
@@ -1157,7 +1141,7 @@ const trainingWorkbenchTextCopy: Record<
     flashVerificationAria: "Verificación flash",
     choiceFillShort: "Opción / completar / corta",
     readCurrentIdeFile: "Leer el archivo actual del IDE",
-    mismatchRecoveryReason: "Recuperarse del desajuste de traspaso: activar la tarjeta propietaria del traspaso",
+    mismatchRecoveryReason: "Cambiar a la tarjeta que coincide con tu progreso actual",
     currentTrainingRoute: "Ruta de entrenamiento actual",
     studyCuesFirst: "Primero mira estas pistas",
     primerCues: "Pistas previas",
@@ -1178,6 +1162,7 @@ const trainingWorkbenchTextCopy: Record<
     followUpReview: "Seguimiento y repaso",
     fsrsInterval: "Intervalo",
     fsrsMastery: "Dominio",
+    reviewDayUnit: "días",
     reviewActions: "Acciones de repaso",
     reviewAccept: "Comenzar repaso",
     reviewSnooze: "Más tarde",
@@ -1188,6 +1173,11 @@ const trainingWorkbenchTextCopy: Record<
     recentWins: "Progresos recientes",
     watchOuts: "Puntos a vigilar",
     hintProgressPrefix: "Pista",
+    taskDetails: "Detalles de la tarea",
+    returnCompleteEyebrow: "Completado",
+    returnCompleteTitle: "Tu resultado ya está con el coach",
+    mismatchCardHint: "Esta tarjeta no coincide con tu progreso actual.",
+    mismatchSwitchLabel: "Cambiar a la tarjeta actual",
   },
   "fr-FR": {
     ungrouped: "Non groupé",
@@ -1227,7 +1217,7 @@ const trainingWorkbenchTextCopy: Record<
     flashVerificationAria: "Vérification carte flash",
     choiceFillShort: "Choix / trous / courte",
     readCurrentIdeFile: "Lire le fichier actuel de l'IDE",
-    mismatchRecoveryReason: "Reprise après désalignement de passation : activer la carte propriétaire de la passation",
+    mismatchRecoveryReason: "Passer à la carte qui correspond à votre progression actuelle",
     currentTrainingRoute: "Parcours d'entraînement actuel",
     studyCuesFirst: "Commencez par ces indices",
     primerCues: "Indices de base",
@@ -1248,6 +1238,7 @@ const trainingWorkbenchTextCopy: Record<
     followUpReview: "Suivi et révision",
     fsrsInterval: "Intervalle",
     fsrsMastery: "Maîtrise",
+    reviewDayUnit: "jours",
     reviewActions: "Actions de révision",
     reviewAccept: "Commencer la révision",
     reviewSnooze: "Plus tard",
@@ -1258,6 +1249,11 @@ const trainingWorkbenchTextCopy: Record<
     recentWins: "Progrès récents",
     watchOuts: "Points de vigilance",
     hintProgressPrefix: "Indice",
+    taskDetails: "Détails de la tâche",
+    returnCompleteEyebrow: "Terminé",
+    returnCompleteTitle: "Votre résultat est chez le coach",
+    mismatchCardHint: "Cette carte ne correspond pas à votre progression actuelle.",
+    mismatchSwitchLabel: "Aller à la carte actuelle",
   },
   "de-DE": {
     ungrouped: "Ungruppiert",
@@ -1297,7 +1293,7 @@ const trainingWorkbenchTextCopy: Record<
     flashVerificationAria: "Karten-Verifizierung",
     choiceFillShort: "Auswahl / Lücke / kurz",
     readCurrentIdeFile: "Aktuelle IDE-Datei lesen",
-    mismatchRecoveryReason: "Erholung nach Übergabe-Diskrepanz: zur Karte wechseln, der die Übergabe gehört",
+    mismatchRecoveryReason: "Zur Karte wechseln, die zu deinem aktuellen Fortschritt passt",
     currentTrainingRoute: "Aktuelle Trainingsroute",
     studyCuesFirst: "Zuerst diese Hinweise ansehen",
     primerCues: "Grundlagen-Hinweise",
@@ -1318,6 +1314,7 @@ const trainingWorkbenchTextCopy: Record<
     followUpReview: "Anschluss und Wiederholung",
     fsrsInterval: "Abstand",
     fsrsMastery: "Beherrschung",
+    reviewDayUnit: "Tage",
     reviewActions: "Wiederholungsaktionen",
     reviewAccept: "Wiederholung starten",
     reviewSnooze: "Später",
@@ -1328,6 +1325,11 @@ const trainingWorkbenchTextCopy: Record<
     recentWins: "Neue Fortschritte",
     watchOuts: "Beobachtungspunkte",
     hintProgressPrefix: "Hinweis",
+    taskDetails: "Aufgabendetails",
+    returnCompleteEyebrow: "Abgeschlossen",
+    returnCompleteTitle: "Dein Ergebnis ist beim Coach",
+    mismatchCardHint: "Diese Karte passt nicht zu deinem aktuellen Fortschritt.",
+    mismatchSwitchLabel: "Zur aktuellen Karte wechseln",
   },
   "ja-JP": {
     ungrouped: "未グループ",
@@ -1367,7 +1369,7 @@ const trainingWorkbenchTextCopy: Record<
     flashVerificationAria: "フラッシュ検証",
     choiceFillShort: "選択 / 穴埋め / 短答",
     readCurrentIdeFile: "現在の IDE ファイルを読む",
-    mismatchRecoveryReason: "ハンドオフ不整合から回復：ハンドオフ保持カードに切り替える",
+    mismatchRecoveryReason: "現在の進捗に合うカードに切り替える",
     currentTrainingRoute: "現在のトレーニング経路",
     studyCuesFirst: "まずこの手がかりを見る",
     primerCues: "導入の手がかり",
@@ -1388,6 +1390,7 @@ const trainingWorkbenchTextCopy: Record<
     followUpReview: "フォローアップと復習",
     fsrsInterval: "間隔",
     fsrsMastery: "習熟度",
+    reviewDayUnit: "日",
     reviewActions: "復習アクション",
     reviewAccept: "復習を開始",
     reviewSnooze: "後で",
@@ -1398,6 +1401,11 @@ const trainingWorkbenchTextCopy: Record<
     recentWins: "最近の進歩",
     watchOuts: "注意ポイント",
     hintProgressPrefix: "ヒント",
+    taskDetails: "タスクの詳細",
+    returnCompleteEyebrow: "完了",
+    returnCompleteTitle: "結果をコーチに渡しました",
+    mismatchCardHint: "このカードは現在の進捗と一致していません。",
+    mismatchSwitchLabel: "現在のカードに切り替え",
   },
   "ko-KR": {
     ungrouped: "그룹 없음",
@@ -1437,7 +1445,7 @@ const trainingWorkbenchTextCopy: Record<
     flashVerificationAria: "플래시 검증",
     choiceFillShort: "선택 / 빈칸 / 단답",
     readCurrentIdeFile: "현재 IDE 파일 읽기",
-    mismatchRecoveryReason: "인수 불일치 복구: 인수를 소유한 카드로 전환",
+    mismatchRecoveryReason: "현재 진행과 일치하는 카드로 전환",
     currentTrainingRoute: "현재 훈련 경로",
     studyCuesFirst: "먼저 이 단서 보기",
     primerCues: "기초 단서",
@@ -1458,6 +1466,7 @@ const trainingWorkbenchTextCopy: Record<
     followUpReview: "후속 조치와 복습",
     fsrsInterval: "간격",
     fsrsMastery: "숙달도",
+    reviewDayUnit: "일",
     reviewActions: "복습 작업",
     reviewAccept: "복습 시작",
     reviewSnooze: "나중에",
@@ -1468,6 +1477,11 @@ const trainingWorkbenchTextCopy: Record<
     recentWins: "최근 진전",
     watchOuts: "주의 포인트",
     hintProgressPrefix: "힌트",
+    taskDetails: "과제 세부 정보",
+    returnCompleteEyebrow: "완료",
+    returnCompleteTitle: "결과를 코치에게 전달했습니다",
+    mismatchCardHint: "이 카드는 현재 진행과 일치하지 않습니다.",
+    mismatchSwitchLabel: "현재 카드로 전환",
   },
   "pt-BR": {
     ungrouped: "Sem grupo",
@@ -1507,7 +1521,7 @@ const trainingWorkbenchTextCopy: Record<
     flashVerificationAria: "Verificação de cartão flash",
     choiceFillShort: "Escolha / lacuna / curta",
     readCurrentIdeFile: "Ler o arquivo atual do IDE",
-    mismatchRecoveryReason: "Recuperar de divergência de transição: ativar o cartão dono da transição",
+    mismatchRecoveryReason: "Trocar para o cartão que corresponde ao seu progresso atual",
     currentTrainingRoute: "Rota de treinamento atual",
     studyCuesFirst: "Veja primeiro estas pistas",
     primerCues: "Pistas da base",
@@ -1528,6 +1542,7 @@ const trainingWorkbenchTextCopy: Record<
     followUpReview: "Acompanhamento e revisão",
     fsrsInterval: "Intervalo",
     fsrsMastery: "Domínio",
+    reviewDayUnit: "dias",
     reviewActions: "Ações de revisão",
     reviewAccept: "Iniciar revisão",
     reviewSnooze: "Mais tarde",
@@ -1538,6 +1553,11 @@ const trainingWorkbenchTextCopy: Record<
     recentWins: "Progressos recentes",
     watchOuts: "Pontos de atenção",
     hintProgressPrefix: "Dica",
+    taskDetails: "Detalhes da tarefa",
+    returnCompleteEyebrow: "Concluído",
+    returnCompleteTitle: "Seu resultado está com o coach",
+    mismatchCardHint: "Este cartão não corresponde ao seu progresso atual.",
+    mismatchSwitchLabel: "Trocar para o cartão atual",
   },
 };
 
@@ -2433,31 +2453,23 @@ export function TrainingWorkbenchView({
     handoffOwnerCardId,
     selectedCardId: cardId,
   });
-  // Narrow sidebars swap the step rail for the active-phase line (design §10:
-  // one current card, one visible next action) — evaluated at mount.
-  const [trainingRailHiddenForViewport] = useState(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-      return false;
-    }
-    return window.matchMedia("(max-width: 420px)").matches;
-  });
+  // Focus mode: the card may live mounted in a background view, so the
+  // per-card scroll jump only runs while training is the active view and
+  // per-surface scroll restoration stays in charge everywhere else.
+  const activeWorkbenchView = useWorkbenchState((state) => state.layout.activeView);
   const isFlashCard = cardType === "flash";
   const currentCardRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    if (!reviewQueueOpenRequest && cardId) {
+    if (!reviewQueueOpenRequest && cardId && activeWorkbenchView === "training") {
       currentCardRef.current?.scrollIntoView({ block: "start" });
     }
-  }, [cardId, reviewQueueOpenRequest]);
+  }, [cardId, reviewQueueOpenRequest, activeWorkbenchView]);
   const reviewQueueRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     if (reviewQueueOpenRequest && reviewItems.length > 0) {
       reviewQueueRef.current?.scrollIntoView({ block: "start" });
     }
   }, [reviewQueueOpenRequest, reviewItems.length]);
-  const normalizedTrainingSubmode = (trainingSubmode ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/_/g, "-");
   const trainingExecutionState = deriveTrainingExecutionState({
     cardType: isFlashCard ? "flash" : "practice",
     trainingSubmode,
@@ -2500,32 +2512,8 @@ export function TrainingWorkbenchView({
     language,
   });
   const needsPrimerState = trainingExecutionState.needsPrimer;
-  const isReviewSubmode = normalizedTrainingSubmode === "review";
-  const isScenarioSubmode = normalizedTrainingSubmode === "scenario";
-  const isTransferSubmode = normalizedTrainingSubmode === "transfer";
   const displayTitle = stripTrainingCardTitlePrefix(title);
   const visibleExpectedSymbols = expectedSymbols.map((symbol) => symbol.trim()).filter(Boolean).slice(0, 4);
-  const currentCardLabel = trainingSurfaceLabel(language, "currentCard");
-  const cardTypeLabel = isFlashCard
-    ? trainingSurfaceLabel(language, "flash")
-    : trainingSurfaceLabel(language, "practice");
-  const toplineLabel = cardOnly ? cardTypeLabel : currentCardLabel;
-  const trainingTrackLabel =
-    needsPrimerState
-      ? trainingSurfaceLabel(language, "primer")
-      : isReviewSubmode
-        ? trainingSurfaceLabel(language, "review")
-        : isScenarioSubmode
-          ? trainingSurfaceLabel(language, "scenario")
-          : isTransferSubmode
-            ? trainingSurfaceLabel(language, "transfer")
-            : isFlashCard
-              ? trainingSurfaceLabel(language, "theory")
-              : learningFamily === "theory"
-                ? trainingSurfaceLabel(language, "theory")
-                : filesToTouch.length > 0 || apiHints.length > 0 || visibleExpectedSymbols.length > 0
-                ? trainingSurfaceLabel(language, "code")
-                : trainingSurfaceLabel(language, "practice");
   const practiceVerificationMode = resolvePracticeVerificationMode({
     isFlashCard,
     learningFamily,
@@ -2561,42 +2549,14 @@ export function TrainingWorkbenchView({
     !isCurrentCardActionLabel(resolvedNextAfterCompletion)
       ? resolvedNextAfterCompletion
       : undefined;
-  const normalizedCardTitle = normalizeCardText(title);
-  const normalizedCardFocus = normalizeCardText(currentFocus);
-  const headerContextItems = Array.from(
-    new Set(
-      [
-        trainingTrackLabel,
-        resolvedTargetSkill && normalizeCardText(resolvedTargetSkill) !== normalizedCardTitle
-          ? resolvedTargetSkill
-          : undefined,
-        scenarioPackLabel?.trim()
-          ? scenarioPackLabel
-        : !cardOnly && currentFocus?.trim() && normalizedCardFocus !== normalizedCardTitle
-            ? currentFocus
-            : undefined,
-      ].filter(Boolean) as string[],
-    ),
-  );
-  const headerContext = headerContextItems.join(" \u00b7 ");
-  const headerContextDetails = headerContextItems.slice(1);
-  const showHeaderContext = Boolean(headerContext);
-  const showTopline = true;
   const hasPrimaryLoop =
     currentStep.trim().length > 0 ||
     resolvedDeliverables.length > 0 ||
     Boolean(resolvedWhyNow?.trim()) ||
     Boolean(outcome) ||
     Boolean(nextHop);
-  const carryoverCards = [restoredFocus, outcome, cardOnly ? undefined : nextHop].filter(
-    (card): card is TrainingSummaryCard => Boolean(card),
-  );
-  const normalizedTitle = normalizeCardText(title);
-  const normalizedStep = normalizeCardText(currentStep);
   const normalizedSuggestedWorkspaceAction = normalizeCardText(suggestedWorkspaceAction);
-  const shouldShowStep = normalizedStep.length > 0 && normalizedStep !== normalizedTitle;
-  const stepPreview = shouldShowStep ? compactCardText(currentStep, 180) : "";
-  const isStepLong = currentStep.trim().length > stepPreview.length;
+  const normalizedStep = normalizeCardText(currentStep);
   const suggestedWorkspaceActionPreview = suggestedWorkspaceAction?.trim()
     ? compactCardText(suggestedWorkspaceAction, 160)
     : undefined;
@@ -2611,20 +2571,6 @@ export function TrainingWorkbenchView({
     ? trainingWorkbenchText(language, "startHere")
     : trainingWorkbenchText(language, "currentScenario");
   const whyNowPreview = resolvedWhyNow ? compactCardText(resolvedWhyNow, cardOnly ? 88 : 120) : undefined;
-  const formattedFilesToTouch = compactArtifactList(filesToTouch, 40, 4);
-  const formattedApiHints = compactArtifactList(apiHints, 44, 4);
-  const studyArtifacts = compactArtifactList([...filesToTouch, ...apiHints], 40, 2);
-  const flashLearnCues = compactArtifactList(
-    [hintLadder[0]?.trim(), ...studyArtifacts, constraints[0]?.trim()],
-    46,
-    2,
-  );
-  const learnFirstTitle = cardOnly
-    ? firstText(nextMovePrimary, scenarioPackLabel?.trim())
-    : firstText(
-        shouldShowStep ? stepPreview : undefined,
-        shouldShowStep ? currentStep.trim() : undefined,
-      );
   const learnFirstDetailBase =
     firstText(
       whyNowPreview,
@@ -2640,21 +2586,7 @@ export function TrainingWorkbenchView({
     ? (firstText(sourceSummary?.trim(), sourceDetail?.trim()) ??
       trainingCardOnlyText(language, "learnFirst"))
     : learnFirstDetailBase;
-  const learnFirstArtifacts = isFlashCard ? flashLearnCues : studyArtifacts;
-  const showCardOnlyTryStep = cardOnly && !isFlashCard;
-  const learnFirstArtifactsRepeatTryStep =
-    showCardOnlyTryStep &&
-    learnFirstArtifacts.length > 0 &&
-    formattedFilesToTouch.length > 0 &&
-    learnFirstArtifacts.every((item) =>
-      formattedFilesToTouch.some((candidate) => candidate.trim().toLowerCase() === item.trim().toLowerCase()),
-    );
-  const visibleLearnFirstArtifacts = learnFirstArtifactsRepeatTryStep ? [] : learnFirstArtifacts;
-  const hasLearnFirstBlock = Boolean(
-    learnFirstTitle ||
-      learnFirstDetail ||
-      visibleLearnFirstArtifacts.length > 0,
-  );
+  const hasLearnFirstBlock = Boolean(learnFirstDetail || resolvedTargetSkill);
   const verificationReturn = resolveVerificationReturnState({
     language,
     isFlashCard,
@@ -2669,67 +2601,7 @@ export function TrainingWorkbenchView({
   });
   const learnPhaseActive =
     (needsPrimerState || isFlashCard) && hasLearnFirstBlock && verificationReturn.kind === "waiting";
-  const showSourceDetails =
-    !learnPhaseActive &&
-    !cardOnly &&
-    Boolean(sourceDetail?.trim() || (shouldShowStep && isStepLong) || resolvedWhyNow?.trim());
-  const routeWhyNowSummary = compactCardText(resolvedWhyNow, 96);
   const defaultReturnPath = trainingCardOnlySurfaceText(language, "returnResultOrBlocker");
-  const routeDeliverableSummary =
-    resolvedDeliverables.length > 0
-      ? compactCardText(resolvedDeliverables[0], 90)
-      : trainingCardOnlySurfaceText(language, "smallestDeliverable");
-  const routeVerifySummary = resolvedVerifyItems[0]
-    ? compactCardText(resolvedVerifyItems[0], 92)
-    : isFlashCard
-      ? trainingCardOnlySurfaceText(language, "flashAnswerMethod")
-      : resolvedSuccessSignal
-        ? compactCardText(resolvedSuccessSignal, 92)
-      : practiceVerificationMode === "file"
-        ? trainingCardOnlySurfaceText(language, "currentFileDiagnostics")
-        : manualPracticeCopy.shortcut;
-  const routeReturnSummary = compactCardText(resolvedReturnWith || defaultReturnPath, 96);
-  const routeStripItems = [
-    { key: "why-now", label: t.trainingWhyNow, value: routeWhyNowSummary },
-    { key: "deliverable", label: t.trainingDeliverable, value: routeDeliverableSummary },
-    { key: "verify", label: trainingLoopStepLabel("verify", language), value: routeVerifySummary },
-    { key: "return", label: trainingLoopStepLabel("return", language), value: routeReturnSummary },
-  ];
-  const showRouteDetails =
-    !learnPhaseActive &&
-    !cardOnly &&
-    (resolvedDeliverables.length > 1 ||
-      resolvedVerifyItems.length > 0 ||
-      Boolean(resolvedReturnWith) ||
-      Boolean(visibleNextAfterCompletion) ||
-      Boolean(actions));
-  const hasGuidanceDetails =
-    !cardOnly &&
-    (filesToTouch.length > 0 ||
-      apiHints.length > 0 ||
-      constraints.length > 0 ||
-      selfCheck.length > 0 ||
-      hintLadder.length > 0 ||
-      commonMistakes.length > 0 ||
-      Boolean(stuckRecovery?.trim()) ||
-      Boolean(reflectionPrompt?.trim()));
-  const guidanceSummary =
-    firstText(
-      formattedFilesToTouch[0]
-        ? `${trainingWorkbenchText(language, "startIn")} ${formattedFilesToTouch[0]}`
-        : undefined,
-      formattedApiHints[0]
-        ? `${trainingWorkbenchText(language, "apiHint")} ${formattedApiHints[0]}`
-        : undefined,
-      constraints[0]
-        ? `${trainingWorkbenchText(language, "boundary")} ${compactCardText(constraints[0], 54)}`
-        : undefined,
-      hintLadder[0]
-        ? `${trainingWorkbenchText(language, "ifStuck")} ${compactCardText(hintLadder[0], 54)}`
-        : undefined,
-      stuckRecovery?.trim() ? compactCardText(stuckRecovery, 58) : undefined,
-      practiceVerificationMode === "manual" ? compactCardText(manualPracticeCopy.fallbackHint, 58) : undefined,
-    ) ?? trainingWorkbenchText(language, "guidanceFallback");
   const trainingLoopSteps = buildTrainingLoopSteps({
     language,
     composerPhase: trainingExecutionState.composerPhase,
@@ -2741,12 +2613,6 @@ export function TrainingWorkbenchView({
       label: trainingSurfaceLabel(language, "currentCard"),
       state: "upcoming" as const,
     };
-  const flashSectionLabel = cardOnly
-    ? trainingWorkbenchText(language, "answerNow")
-    : trainingWorkbenchText(language, "flashCheck");
-  const practiceSectionLabel = cardOnly
-    ? trainingWorkbenchText(language, "verifyNow")
-    : trainingWorkbenchText(language, "practiceVerificationLabel");
   const practiceSectionNote =
     practiceVerificationMode === "file"
       ? cardOnly
@@ -2754,210 +2620,67 @@ export function TrainingWorkbenchView({
         : trainingWorkbenchText(language, "verifyFileNote")
       : manualPracticeCopy.verifyNote;
   const cardOnlyTask = resolvedProblemStatement;
-  const cardOnlyDoneLine = firstText(latestVerifiedResult);
-  const cardOnlyDoneText =
-    cardOnlyDoneLine &&
-    normalizeCardText(cardOnlyDoneLine) !== normalizeCardText(displayTitle) &&
-    normalizeCardText(cardOnlyDoneLine) !== normalizeCardText(cardOnlyTask)
-      ? cardOnlyDoneLine
-      : undefined;
   const cardOnlyDeliverable = resolvedDeliverables.length > 1
     ? resolvedDeliverables.map(item => `- ${item.replace(/\n/g, "\n  ")}`).join("\n")
     : firstText(resolvedDeliverables[0]?.trim(), resolvedSuccessSignal, cardOnlyTask) ?? cardOnlyTask;
   const cardOnlyVerification = resolvedVerifyItems.length > 1
     ? resolvedVerifyItems.map(item => `- ${item.replace(/\n/g, "\n  ")}`).join("\n")
-    : firstText(resolvedVerifyItems[0], resolvedSuccessSignal, practiceSectionNote);
+    : firstText(
+        resolvedVerifyItems[0],
+        resolvedSuccessSignal,
+        isFlashCard
+          ? trainingCardOnlySurfaceText(language, "flashAnswerMethod")
+          : practiceVerificationMode === "file"
+            ? trainingCardOnlySurfaceText(language, "currentFileDiagnostics")
+            : practiceSectionNote,
+      );
   const cardOnlyWhyNowSummary = compactCardText(firstText(resolvedWhyNow), 120);
-  const learnSectionLabel = learnPhaseActive
-    ? trainingWorkbenchText(language, "studyFirstLabel")
-    : trainingWorkbenchText(language, "primerLabel");
-  const visibleLearnFirstDetail =
-    learnFirstDetail && !learnPhaseActive ? compactCardText(learnFirstDetail, 108) : learnFirstDetail;
-  const showLearnFirstPanel = learnPhaseActive && hasLearnFirstBlock;
-  const showLearnPrimerNote = !cardOnly && !learnPhaseActive && hasLearnFirstBlock;
-  const composerVerificationHint = isFlashCard
-    ? trainingWorkbenchText(language, "flashComposerHint")
-    : practiceVerificationMode === "file"
-      ? trainingWorkbenchText(language, "fileComposerHint")
-      : manualPracticeCopy.composerHint;
-  const cardOnlyBodySections: TrainingCardOnlySection[] = [
-    ...(reliabilityCopy
-      ? [
-          {
-            key: "reliability",
-            label: trainingWorkbenchText(language, "saveStatus"),
-            title: reliabilityCopy.what,
-            detail: `${reliabilityCopy.why} ${reliabilityCopy.next}`,
-          } satisfies TrainingCardOnlySection,
-        ]
-      : []),
-    {
-      key: "current",
-      label: t.currentTask,
-      title: cardOnlyTask,
-    },
-    {
-      key: "why-now",
-      label: t.trainingWhyNow,
-      detail: cardOnlyWhyNowSummary,
-    },
-    {
-      key: "deliverable",
-      label: t.trainingDeliverable,
-      title: cardOnlyDeliverable,
-    },
-    {
-      key: "verify",
-      label: trainingLoopStepLabel("verify", language),
-      detail: cardOnlyVerification,
-    },
-    {
-      key: "return",
-      label: trainingLoopStepLabel("return", language),
-      detail: routeReturnSummary,
-    },
-  ];
   // A card often derives several of these fields from one source, so the same
-  // sentence surfaced three times ("当前训练动作" == "交付物") and the trailing
-  // done/blocker lines restated the verify step without a label. Walk the
-  // sections in reading order and keep only the first occurrence of each
-  // normalized value, so every line on the card earns its place.
+  // sentence can surface twice ("当前训练动作" == "交付物"). Seed the seen set
+  // with the title/task so the task-details disclosure never restates them.
   const cardOnlySeenValues = new Set([displayTitle, cardOnlyTask].filter(Boolean).map(normalizeCardText));
-  const cardOnlyDistinctSections = cardOnlyBodySections.filter((section) => {
-    if (section.key !== "deliverable" && section.key !== "verify") return false;
-    const title = section.title?.trim();
-    const detail = section.detail?.trim();
-    if (!title && !detail) {
-      return false;
-    }
-    for (const candidate of [title, detail]) {
-      if (!candidate) continue;
-      const key = normalizeCardText(candidate);
-      if (!key) continue;
-      if (cardOnlySeenValues.has(key)) {
-        return false;
-      }
-      cardOnlySeenValues.add(key);
-    }
-    return true;
-  });
-  const cardOnlyDoneTextDistinct =
-    cardOnlyDoneText &&
-    !cardOnlySeenValues.has(normalizeCardText(cardOnlyDoneText)) &&
-    normalizeCardText(cardOnlyDoneText) !== normalizeCardText(displayTitle)
-      ? cardOnlyDoneText
-      : null;
   const cardOnlyBlockerDistinct =
     latestLearningBlocker &&
     !cardOnlySeenValues.has(normalizeCardText(latestLearningBlocker)) &&
     normalizeCardText(latestLearningBlocker) !== normalizeCardText(displayTitle)
       ? latestLearningBlocker
       : null;
-  const flashDeckActionLabel = isFlashCard
-    ? trainingWorkbenchText(language, "flashDeckNext")
-    : trainingWorkbenchText(language, "flashDeckPractice");
-  const hasAdjustmentOutcome =
-    verificationReturn.kind !== "waiting" ||
-    Boolean(latestVerifiedResult?.trim() || latestLearningBlocker?.trim());
-  const isReadyToReturn = trainingExecutionState.composerPhase === "return";
-  const adjustmentCopy = hasAdjustmentOutcome
-    ? {
-        label: isReadyToReturn
-          ? trainingWorkbenchText(language, "adjustReturnLabel")
-          : trainingWorkbenchText(language, "adjustReflectLabel"),
-        title: isReadyToReturn
-          ? trainingWorkbenchText(language, "adjustCarryTitle")
-          : verificationReturn.kind === "verified"
-            ? trainingWorkbenchText(language, "adjustEvidenceTitle")
-            : verificationReturn.kind === "blocked"
-              ? trainingWorkbenchText(language, "adjustNarrowTitle")
-              : trainingWorkbenchText(language, "adjustTightenTitle"),
-        detail:
-          firstText(
-            isReadyToReturn ? latestLearningFollowup : undefined,
-            stuckRecovery,
-            reflectionPrompt,
-          ) ?? trainingWorkbenchText(language, "adjustDetailFallback"),
-        next: isReadyToReturn
-          ? trainingWorkbenchText(language, "adjustReturnNext")
-          : verificationReturn.kind === "verified"
-            ? trainingWorkbenchText(language, "adjustEvidenceNext")
-            : trainingWorkbenchText(language, "adjustRetestNext"),
-      }
-    : undefined;
-  const shouldElevateReturnAction = Boolean(actions) && isReadyToReturn;
-
-  const flashProofSurface = (
-    <section
-      className="training-proof-card training-proof-card--flash"
-      aria-label={trainingWorkbenchText(language, "flashVerificationAria")}
+  // Return Contract: once the handoff acks "continued in chat", the card's job
+  // is done — show the terminal state instead of a phase action (TASK 4).
+  const returnContinuedInChat = latestTrainingNextHopStatus?.trim() === "continued_in_chat";
+  const nextCardButton = onNextCard ? (
+    <button
+      type="button"
+      className="template-back"
+      data-training-next-card="true"
+      disabled={cardGenerationPending}
+      onClick={() => onNextCard()}
     >
-      <div className="training-proof-card__head">
-        <SectionHeading icon={<CheckMarkIcon size={12} />} label={flashSectionLabel} />
-        {!cardOnly ? (
-          <span className="training-proof-card__shortcut">
-            {trainingWorkbenchText(language, "choiceFillShort")}
-          </span>
+      {t.nextCard}
+    </button>
+  ) : null;
+
+  // One collapsed disclosure per card (TASK 2): source, reason, deliverable,
+  // verify and return facts as plain text — no nested composer, no competing
+  // disclosures. Hidden while the learn phase owns the card face.
+  const cardTaskDetails = learnPhaseActive ? undefined : (
+    <details className="template-disclosure" data-training-card-details="true">
+      <summary>{trainingWorkbenchText(language, "taskDetails")}</summary>
+      <div>
+        {resolvedWhyNow ? <div data-training-card-fact="why-now" title={cardOnlyWhyNowSummary}><MessageRichContent body={resolvedWhyNow} language={language} /></div> : null}
+        {sourceDetail ? <MessageRichContent body={sourceDetail} language={language} /> : null}
+        {currentStep && normalizeCardText(currentStep) !== normalizeCardText(cardOnlyTask) ? <MessageRichContent body={currentStep} language={language} /> : null}
+        <div data-training-card-fact="deliverable"><MessageRichContent body={cardOnlyDeliverable ?? ""} language={language} /></div>
+        <div data-training-card-fact="verify"><span className="template-metadata">{trainingWorkbenchText(language, "verifyNow")}</span><MessageRichContent body={cardOnlyVerification ?? ""} language={language} /></div>
+        <div data-training-card-fact="return"><MessageRichContent body={resolvedReturnWith || defaultReturnPath} language={language} /></div>
+        {visibleNextAfterCompletion ? (
+          <div data-training-card-fact="after-this">
+            <span className="template-metadata">{trainingCardOnlySurfaceText(language, "afterThis")}</span>
+            <MessageRichContent body={visibleNextAfterCompletion} language={language} />
+          </div>
         ) : null}
       </div>
-      <p className="training-proof-card__note">{composerVerificationHint}</p>
-      {verifyItems.length > 0 ? (
-        <ul className="training-inline-list">
-          {verifyItems.slice(0, 4).map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      ) : resolvedSuccessSignal ? (
-        <ul className="training-inline-list">
-          <li>{resolvedSuccessSignal}</li>
-        </ul>
-      ) : null}
-    </section>
-  );
-
-  const practiceProofSurface = (
-    <section
-      className="training-proof-card training-proof-card--practice"
-      aria-label={trainingWorkbenchText(language, "practiceVerificationLabel")}
-    >
-      <div className="training-proof-card__head">
-        <SectionHeading icon={<CheckMarkIcon size={12} />} label={practiceSectionLabel} />
-        {!cardOnly ? (
-          <span className="training-proof-card__shortcut">
-            {practiceVerificationMode === "file"
-              ? trainingWorkbenchText(language, "readCurrentIdeFile")
-              : manualPracticeCopy.shortcut}
-          </span>
-        ) : null}
-      </div>
-      {!cardOnly ? (
-        <p className="training-proof-card__note">
-          {practiceSectionNote}
-        </p>
-      ) : null}
-      {practiceVerificationMode === "file" && visibleExpectedSymbols.length > 0 ? (
-        <div className="training-proof-card__symbols" aria-label={trainingSurfaceLabel(language, "codeSymbols")}>
-          <span>{trainingSurfaceLabel(language, "checks")}</span>
-          {visibleExpectedSymbols.map((symbol) => (
-            <code key={symbol}>{symbol}</code>
-          ))}
-        </div>
-      ) : null}
-      {verifyItems.length > 0 ? (
-        <ul className="training-inline-list">
-          {verifyItems.slice(0, 4).map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      ) : resolvedSuccessSignal ? (
-        <ul className="training-inline-list">
-          <li>{resolvedSuccessSignal}</li>
-        </ul>
-      ) : null}
-      {!cardOnly ? (
-        <p className="training-proof-card__note">{composerVerificationHint}</p>
-      ) : null}
-    </section>
+    </details>
   );
 
   return (
@@ -2967,7 +2690,7 @@ export function TrainingWorkbenchView({
     >
       {mismatchRecovery && onCardStatusTransition ? (
         <div className="training-card-recovery" role="alert" data-training-card-recovery="true">
-          <p>{t.trainingHandoffMismatchHint}</p>
+          <p>{trainingWorkbenchText(language, "mismatchCardHint")}</p>
           <button
             type="button"
             className="button button--micro"
@@ -2980,7 +2703,7 @@ export function TrainingWorkbenchView({
               )
             }
           >
-            {t.trainingSwitchToCard}
+            {trainingWorkbenchText(language, "mismatchSwitchLabel")}
           </button>
         </div>
       ) : null}
@@ -3022,31 +2745,32 @@ export function TrainingWorkbenchView({
           <section ref={currentCardRef} className="training-current training-current--primary training-current--single-card">
             {cardOnly ? (
               <FocusedPractice
-                parent={planViewLabel(language)}
+                parent={t.plan}
                 label={trainingSurfaceLabel(language, "currentTrainingCard")}
                 title={displayTitle}
                 phase={trainingExecutionState.composerPhase === "answer" ? "try" : trainingExecutionState.composerPhase}
                 phaseLabel={activeLoopStep.label}
                 onBack={onBackToLearning}
-                details={<>
-                  <details className="template-disclosure"><summary>{trainingWorkbenchText(language, "sourceAndReason")}</summary><div>
-                    {resolvedWhyNow ? <div data-training-card-fact="why-now"><MessageRichContent body={resolvedWhyNow} language={language} /></div> : null}
-                    {sourceDetail ? <MessageRichContent body={sourceDetail} language={language} /> : null}
-                  </div></details>
-                  {trainingExecutionState.composerPhase !== "try" || (cardType === "practice" && practiceVerificationMode === "file") ? (
-                    <details className="template-disclosure"><summary>{trainingWorkbenchText(language, "fullAcceptance")}</summary><div>
-                      {currentStep && normalizeCardText(currentStep) !== normalizeCardText(cardOnlyTask) ? <MessageRichContent body={currentStep} language={language} /> : null}
-                      <div data-training-card-fact="deliverable"><MessageRichContent body={cardOnlyDeliverable ?? ""} language={language} /></div>
-                      <div data-training-card-fact="verify"><span className="template-metadata">{trainingWorkbenchText(language, "verifyNow")}</span><MessageRichContent body={cardOnlyVerification ?? ""} language={language} /></div>
-                      <div data-training-card-fact="return"><MessageRichContent body={resolvedReturnWith || defaultReturnPath} language={language} /></div>
-                      {trainingExecutionState.composerPhase === "try" ? response : null}
-                    </div></details>
-                  ) : null}
-                {onNextCard ? <details className="template-disclosure"><summary>{trainingWorkbenchText(language, "moreLabel")}</summary><div><button type="button" className="template-back" data-training-next-card="true" disabled={cardGenerationPending} onClick={() => onNextCard()}>{t.nextCard}</button></div></details> : null}
-                </>}
+                details={cardTaskDetails}
               >
                 {verificationNotice ? <VerificationResult language={language} verdict="unknown" summary={verificationNotice} /> : null}
-                {trainingExecutionState.composerPhase === "learn" ? <>
+                {returnContinuedInChat ? (
+                  <section
+                    className="training-verification-return is-verified"
+                    role="status"
+                    aria-live="polite"
+                    data-training-return-complete="true"
+                  >
+                    <span className="training-verification-return__rail" aria-hidden="true" />
+                    <div className="training-verification-return__copy">
+                      <span className="training-verification-return__eyebrow">{trainingWorkbenchText(language, "returnCompleteEyebrow")}</span>
+                      <strong>{trainingWorkbenchText(language, "returnCompleteTitle")}</strong>
+                      {latestVerifiedResult?.trim() ? <p>{latestVerifiedResult}</p> : null}
+                      {actions ? <div className="training-verification-return__actions">{actions}</div> : null}
+                      {nextCardButton}
+                    </div>
+                  </section>
+                ) : trainingExecutionState.composerPhase === "learn" ? <>
                   <MessageRichContent body={learnFirstDetail ?? cardOnlyTask ?? ""} language={language} />
                   <NextAction label={templateCopy[language].nextAction} title={cardOnlyTask || displayTitle} action={{ label: trainingSurfaceLabel(language, "startStep"), disabled: !onCardStatusTransition || !cardId || reliabilityInFlight, onClick: () => { if (cardId) onCardStatusTransition?.(cardId, "active", "start_step"); } }} />
                 </> : trainingExecutionState.composerPhase === "try" || trainingExecutionState.composerPhase === "answer" ? <>
@@ -3067,400 +2791,16 @@ export function TrainingWorkbenchView({
                 </> : trainingExecutionState.composerPhase === "reflect" ? response : <>
                   <MessageRichContent body={latestVerifiedResult || latestLearningBlocker || resolvedReturnWith || defaultReturnPath} language={language} />
                   {actions}
+                  {nextCardButton}
                 </>}
                 {remoteVerification && (remoteVerification.running || remoteVerification.summary) ? <RemoteVerificationPanel verification={remoteVerification} remoteName={remoteName} language={language} onStop={onStopRemoteVerification} /> : null}
               </FocusedPractice>
             ) : null}
-            {!cardOnly ? (
-              <>
-            {showTopline ? (
-              <div className="training-current__topline">
-                <span className="eyebrow training-current__tag">
-                  {cardOnly ? currentCardLabel : toplineLabel}
-                </span>
-                {showHeaderContext ? (
-                  <span
-                    className="training-current__meta training-current__meta--context"
-                    data-training-context-layout="optional-second-line"
-                    data-training-context-count={headerContextItems.length}
-                    data-training-learning-family={learningFamily ?? (isFlashCard ? "theory" : "practice")}
-                    aria-label={headerContext}
-                  >
-                    <span className="training-current__learning-family">{trainingTrackLabel}</span>
-                    {headerContextDetails.map((item) => (
-                      <span key={item} className="training-current__context-item">
-                        <span className="training-current__context-separator" aria-hidden="true">
-                          {" \u00b7 "}
-                        </span>
-                        {item}
-                      </span>
-                    ))}
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
-
-            {!cardOnly ? (
-              <div className="training-card-nav" aria-label={t.training}>
-                <button
-                  className="training-card-nav__button"
-                  type="button"
-                  disabled={!onPreviousCard}
-                  onClick={onPreviousCard}
-                  title={t.previousCard}
-                >
-                  <span className="training-card-nav__icon training-card-nav__icon--previous" aria-hidden="true">
-                    <ChevronRightIcon size={13} />
-                  </span>
-                  <span>{t.previousCard}</span>
-                </button>
-                <span className="training-card-nav__counter">
-                  {`${cardTypeLabel} · ${currentCardLabel}`}
-                </span>
-                <button
-                  className="training-card-nav__button"
-                  type="button"
-                  disabled={!onNextCard}
-                  onClick={() => onNextCard?.()}
-                  title={t.nextCard}
-                >
-                  <span>{t.nextCard}</span>
-                  <span className="training-card-nav__icon" aria-hidden="true">
-                    <ChevronRightIcon size={13} />
-                  </span>
-                </button>
-              </div>
-            ) : null}
-
-            {!cardOnly && !trainingRailHiddenForViewport ? (
-              <div
-                className="training-loop-rail"
-                aria-label={trainingSurfaceLabel(language, "trainingLoop")}
-                data-training-loop-layout="3-plus-2"
-                data-training-loop-step-count={trainingLoopSteps.length}
-              >
-                {trainingLoopSteps.map((step) => (
-                  <div
-                    key={step.key}
-                    className={`training-loop-step is-${step.state}`}
-                    aria-current={step.state === "active" ? "step" : undefined}
-                    title={step.label}
-                    data-training-loop-step={step.key}
-                    data-training-loop-state={step.state}
-                    data-training-loop-label={step.label}
-                  >
-                    <span className="training-loop-step__dot" aria-hidden="true" />
-                    <span className="training-loop-step__label" data-training-loop-step-label={step.label}>
-                      {step.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            <div
-              className="training-current__lead training-current__lead--card-face"
-              data-training-core-section="current"
-            >
-              <span className="training-current__core-label">{currentCardLabel}</span>
-              <h2>{title}</h2>
-              {isFlashCard && shouldShowStep && !learnPhaseActive ? <p className="training-current__step">{stepPreview}</p> : null}
-              {isFlashCard && whyNowPreview && !learnPhaseActive ? <p className="training-current__why">{whyNowPreview}</p> : null}
-            </div>
-
-            <div
-              className="training-current__route-strip"
-              aria-label={trainingWorkbenchText(language, "currentTrainingRoute")}
-            >
-              {routeStripItems.map((item) => (
-                <div
-                  key={item.key}
-                  className="training-current__route-item"
-                  data-training-core-section={item.key === "return" ? "next" : item.key}
-                  title={item.value}
-                >
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                </div>
-              ))}
-            </div>
-
-            {showLearnFirstPanel ? (
-              <div className="training-next-move">
-                <span className="training-next-move__label">{learnSectionLabel}</span>
-                {learnFirstTitle ? <strong>{learnFirstTitle}</strong> : null}
-                <p>{learnFirstDetail}</p>
-                {visibleLearnFirstArtifacts.length > 0 ? (
-                  <div
-                    className="training-code-list"
-                    aria-label={trainingWorkbenchText(language, "studyCuesFirst")}
-                  >
-                    {visibleLearnFirstArtifacts.map((item, index) => (
-                      <code key={`${item}-${index}`}>{item}</code>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {showLearnPrimerNote ? (
-              <div className="training-primer-note">
-                <span className="training-primer-note__label">{learnSectionLabel}</span>
-                {learnFirstTitle ? <strong>{learnFirstTitle}</strong> : null}
-                {visibleLearnFirstDetail ? <p>{visibleLearnFirstDetail}</p> : null}
-                {visibleLearnFirstArtifacts.length > 0 ? (
-                  <div
-                    className="training-code-list"
-                    aria-label={trainingWorkbenchText(language, "primerCues")}
-                  >
-                    {visibleLearnFirstArtifacts.slice(0, 2).map((item, index) => (
-                      <code key={`${item}-${index}`}>{item}</code>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {isFlashCard && !cardOnly && nextMovePrimary && !learnPhaseActive ? (
-              <div className="training-next-move">
-                <span className="training-next-move__label">{nextMoveLabel}</span>
-                <strong>{nextMovePrimary}</strong>
-                {nextMoveSecondary ? (
-                  <p>
-                    <span>{trainingSurfaceLabel(language, "scenario")}</span>{" "}
-                    {nextMoveSecondary}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-
-            {!cardOnly && verificationReturn.kind !== "waiting" ? (
-              <div
-                key={`${verificationReturn.kind}-${verificationReturn.title}`}
-                className={`training-verification-return is-${verificationReturn.kind} score-pulse`}
-                role="status"
-                aria-live="polite"
-              >
-                <span className="training-verification-return__rail" aria-hidden="true" />
-                <div className="training-verification-return__copy">
-                  {!cardOnly ? (
-                    <span className="training-verification-return__eyebrow">{verificationReturn.eyebrow}</span>
-                  ) : null}
-                  <strong>{verificationReturn.title}</strong>
-                  <p>{verificationReturn.detail}</p>
-                  {!cardOnly ? <span>{verificationReturn.next}</span> : null}
-                  {shouldElevateReturnAction ? (
-                    <div className="training-verification-return__actions">{actions}</div>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-
-            {!cardOnly ? (isFlashCard ? flashProofSurface : practiceProofSurface) : null}
-              </>
-            ) : null}
-
-            {!learnPhaseActive && !cardOnly && adjustmentCopy ? (
-              <div className="training-next-move training-next-move--adjust">
-                <span className="training-next-move__label">{adjustmentCopy.label}</span>
-                <strong>{adjustmentCopy.title}</strong>
-                <p>{adjustmentCopy.detail}</p>
-                <span>{adjustmentCopy.next}</span>
-              </div>
-            ) : null}
-
-            {!learnPhaseActive && hasGuidanceDetails ? (
-              <details
-                className="training-guidance-details"
-                open={verificationReturn.kind === "blocked" && Boolean(stuckRecovery?.trim())}
-              >
-                <summary>
-                  <span>{trainingWorkbenchText(language, "hintsGuardrails")}</span>
-                  <strong>{guidanceSummary}</strong>
-                </summary>
-                <div className="training-guidance-details__body">
-                  {formattedFilesToTouch.length > 0 ? (
-                    <details className="training-guidance-details__nested">
-                      <summary>{trainingWorkbenchText(language, "verifyLikeThis")}</summary>
-                      <section className="training-guidance-details__section">
-                        <ul className="training-inline-list">
-                          {verifyItems.map((item) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                      </section>
-                    </details>
-                  ) : null}
-                  {resolvedReturnWith?.trim() ? (
-                    <section className="training-card-route-details__section">
-                      <h3>{trainingWorkbenchText(language, "bringBackAfterCompletion")}</h3>
-                      <p>{resolvedReturnWith}</p>
-                    </section>
-                  ) : null}
-                  {(filesToTouch.length > 0 ||
-                    apiHints.length > 0 ||
-                    constraints.length > 0 ||
-                    selfCheck.length > 0 ||
-                    hintLadder.length > 0 ||
-                    commonMistakes.length > 0 ||
-                    Boolean(stuckRecovery?.trim()) ||
-                    Boolean(reflectionPrompt?.trim())) ? (
-                    <section className="training-card-route-details__section">
-                      <h3>{trainingWorkbenchText(language, "hintsGuardrailsBody")}</h3>
-                      {formattedFilesToTouch.length > 0 ? (
-                        <div
-                          className="training-code-list"
-                          aria-label={trainingWorkbenchText(language, "filesToTouchLabel")}
-                        >
-                          {formattedFilesToTouch.map((item, index) => (
-                            <code key={`${item}-${index}`}>{item}</code>
-                          ))}
-                        </div>
-                      ) : null}
-                      {formattedApiHints.length > 0 ? (
-                        <CollapseSection
-                          level={2}
-                          title={t.trainingCardDetailsApiHints}
-                          persistenceKey={`card-${cardId ?? "current"}-api-hints`}
-                        >
-                          <div
-                            className="training-code-list"
-                            aria-label={trainingWorkbenchText(language, "apiHintsLabel")}
-                          >
-                            {formattedApiHints.map((item, index) => (
-                              <code key={`${item}-${index}`}>{item}</code>
-                            ))}
-                          </div>
-                        </CollapseSection>
-                      ) : null}
-                      {constraints.length > 0 ? (
-                        <ul className="training-inline-list">
-                          {constraints.slice(0, 3).map((item) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                      ) : null}
-                      {selfCheck.length > 0 ? (
-                        <CollapseSection
-                          level={2}
-                          title={t.trainingCardDetailsSelfCheck}
-                          persistenceKey={`card-${cardId ?? "current"}-self-check`}
-                        >
-                          <ul className="training-inline-list">
-                            {selfCheck.slice(0, 3).map((item) => (
-                              <li key={item}>{item}</li>
-                            ))}
-                          </ul>
-                        </CollapseSection>
-                      ) : null}
-                      {hintLadder.length > 0 ? (
-                        <details className="training-guidance-details__nested">
-                          <summary>{trainingWorkbenchText(language, "hintLadderLabel")}</summary>
-                          <ul className="training-inline-list">
-                            {hintLadder.map((item) => (
-                              <li key={item}>{item}</li>
-                            ))}
-                          </ul>
-                        </details>
-                      ) : null}
-                      {commonMistakes.length > 0 ? (
-                        <details className="training-guidance-details__nested">
-                          <summary>{trainingWorkbenchText(language, "commonMistakesLabel")}</summary>
-                          <ul className="training-inline-list">
-                            {commonMistakes.map((item) => (
-                              <li key={item}>{item}</li>
-                            ))}
-                          </ul>
-                        </details>
-                      ) : null}
-                      {stuckRecovery?.trim() || reflectionPrompt?.trim() ? (
-                        <details className="training-guidance-details__nested">
-                          <summary>{trainingWorkbenchText(language, "stuckRecoveryLabel")}</summary>
-                          {stuckRecovery?.trim() ? <p>{stuckRecovery}</p> : null}
-                          {reflectionPrompt?.trim() ? <p>{reflectionPrompt}</p> : null}
-                        </details>
-                      ) : null}
-                    </section>
-                  ) : null}
-                </div>
-              </details>
-            ) : null}
-
-            {showSourceDetails ? (
-              <details className="training-source-details">
-                <summary>{trainingWorkbenchText(language, "sourceAndReason")}</summary>
-                <div className="training-source-details__body">
-                  {sourceDetail?.trim() ? <p>{sourceDetail}</p> : null}
-                  {shouldShowStep && isStepLong ? <p>{currentStep}</p> : null}
-                  {resolvedWhyNow ? <p>{resolvedWhyNow}</p> : null}
-                </div>
-              </details>
-            ) : null}
-
-            {showRouteDetails ? (
-              <details className="training-card-route-details">
-                <summary>{trainingWorkbenchText(language, "fullAcceptance")}</summary>
-                <div className="training-card-route-details__body">
-                  {resolvedDeliverables.length > 0 ? (
-                    <section className="training-card-route-details__section">
-                      <h3>{trainingWorkbenchText(language, "deliverablesLabel")}</h3>
-                      <ul className="training-inline-list">
-                        {resolvedDeliverables.map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
-                    </section>
-                  ) : null}
-                  <CollapseSection
-                    level={2}
-                    title={t.trainingCardDetailsAcceptance}
-                    persistenceKey={`card-${cardId ?? "current"}-acceptance`}
-                  >
-                    <section className="training-card-route-details__section">
-                      <h3>{trainingWorkbenchText(language, "acceptanceMethod")}</h3>
-                      {resolvedVerifyItems.length > 0 ? (
-                        <ul className="training-inline-list">
-                          {resolvedVerifyItems.map((item) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="muted">
-                          {trainingWorkbenchText(language, "landSmallResultFirst")}
-                        </p>
-                      )}
-                    </section>
-                  </CollapseSection>
-                  <section className="training-card-route-details__section">
-                    <h3>{trainingWorkbenchText(language, "returnPath")}</h3>
-                    <p>{resolvedReturnWith || defaultReturnPath}</p>
-                  </section>
-                  {visibleNextAfterCompletion ? (
-                    <section className="training-card-route-details__section">
-                      <h3>{trainingCardOnlySurfaceText(language, "afterThis")}</h3>
-                      <p>{visibleNextAfterCompletion}</p>
-                    </section>
-                  ) : null}
-                </div>
-              </details>
-            ) : null}
           </section>
 
-          {(!cardOnly || reviewQueueOpenRequest) && (reviewItems.length > 0 || carryoverCards.length > 0 ||
-            reviewSummary || recentWins.length > 0 || weakSpots.length > 0) ? (
+          {reviewQueueOpenRequest && (reviewItems.length > 0 || reviewSummary?.trim()) ? (
             <details ref={reviewQueueRef} className="training-details" data-training-review-queue="true" open={reviewQueueOpenRequest}>
               <summary>{trainingWorkbenchText(language, "followUpReview")}</summary>
-
-              {!cardOnly && carryoverCards.length > 0 ? (
-                <div className="training-carryover-stack">
-                  {carryoverCards.map((card) => (
-                    <TrainingCarryoverRow
-                      key={`${card.title}:${card.meta ?? card.detail ?? ""}`}
-                      card={card}
-                    />
-                  ))}
-                </div>
-              ) : null}
 
               {reviewSummary && reviewItems.length === 0 ? <p className="training-details__summary">{reviewSummary}</p> : null}
 
@@ -3478,17 +2818,15 @@ export function TrainingWorkbenchView({
                           {item.detail ? <p>{item.detail}</p> : null}
                           {item.meta ? <p className="muted">{item.meta}</p> : null}
                           {item.fsrs ? (
-                            <details className="training-review-row__fsrs">
-                              <summary>FSRS</summary>
-                              <p>
-                                {item.fsrs.intervalDays !== undefined
-                                  ? `${trainingWorkbenchText(language, "fsrsInterval")}: ${item.fsrs.intervalDays}d`
-                                  : null}
-                                {item.fsrs.masteryScore !== undefined
-                                  ? ` · ${trainingWorkbenchText(language, "fsrsMastery")}: ${item.fsrs.masteryScore}`
-                                  : null}
-                              </p>
-                            </details>
+                            <p className="training-review-row__memory muted">
+                              {item.fsrs.intervalDays !== undefined
+                                ? `${trainingWorkbenchText(language, "fsrsInterval")} ${item.fsrs.intervalDays} ${trainingWorkbenchText(language, "reviewDayUnit")}`
+                                : null}
+                              {item.fsrs.intervalDays !== undefined && item.fsrs.masteryScore !== undefined ? " · " : null}
+                              {item.fsrs.masteryScore !== undefined
+                                ? `${trainingWorkbenchText(language, "fsrsMastery")} ${item.fsrs.masteryScore}`
+                                : null}
+                            </p>
                           ) : null}
                           <details className="training-review-row__actions-details">
                             <summary>{trainingWorkbenchText(language, "reviewActions")}</summary>
@@ -3498,7 +2836,7 @@ export function TrainingWorkbenchView({
                             >
                               {(["accept", "snooze"] as const).map((action) => (
                                 <button
-                                  className={action === "accept" ? "button button--accent" : "button button--ghost"}
+                                  className="button button--ghost"
                                   key={action}
                                   type="button"
                                   onClick={() => onReviewQueueAction?.({
@@ -3547,41 +2885,6 @@ export function TrainingWorkbenchView({
                       ))}
                     </section>
                   ))}
-                </div>
-              ) : null}
-
-              {!cardOnly && (recentWins.length > 0 || weakSpots.length > 0) ? (
-                <div className="training-signal-grid">
-                  {recentWins.length > 0 ? (
-                    <section className="training-signal-card">
-                      <h4>
-                        <SectionHeading
-                          icon={<TargetIcon size={12} />}
-                          label={trainingWorkbenchText(language, "recentWins")}
-                        />
-                      </h4>
-                      <ul className="training-inline-list">
-                        {recentWins.slice(0, 3).map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
-                    </section>
-                  ) : null}
-                  {weakSpots.length > 0 ? (
-                    <section className="training-signal-card">
-                      <h4>
-                        <SectionHeading
-                          icon={<SparklesIcon size={12} />}
-                          label={trainingWorkbenchText(language, "watchOuts")}
-                        />
-                      </h4>
-                      <ul className="training-inline-list">
-                        {weakSpots.slice(0, 3).map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
-                    </section>
-                  ) : null}
                 </div>
               ) : null}
             </details>

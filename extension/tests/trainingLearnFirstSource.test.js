@@ -37,16 +37,14 @@ test('training view keeps the learn-first loop explicit in source', () => {
   assert.match(source, /type TrainingLoopStepKey = "learn" \| "try" \| "verify" \| "reflect" \| "return";/);
   assert.match(source, /function buildTrainingLoopSteps\(/);
   assert.match(source, /input\.composerPhase === "answer" \? "try" : input\.composerPhase/);
-  assert.match(source, /className="training-loop-rail"/);
+  // Focus mode swaps the five-step rail for the active-phase line; the rail
+  // and its topline chrome shipped only in the removed secondary branch.
+  assert.doesNotMatch(source, /className="training-loop-rail"/);
   assert.match(source, /const needsPrimerState = trainingExecutionState\.needsPrimer;/);
-  assert.match(source, /needsPrimerState\s*\?\s*trainingSurfaceLabel\(language, "primer"\)/);
   assert.match(
     source,
     /const learnPhaseActive =\s*\(needsPrimerState \|\| isFlashCard\) && hasLearnFirstBlock && verificationReturn\.kind === "waiting";/,
   );
-  assert.match(source, /aria-label=\{trainingSurfaceLabel\(language, "trainingLoop"\)\}/);
-  assert.match(source, /verificationReturn\.kind === "verified"/);
-  assert.match(source, /verificationReturn\.kind === "blocked"\s*\?/);
   assert.match(source, /kind: "needs-review"/);
   assert.match(source, /kind: selectedStatus === "blocked" \? "blocked" : "needs-review",/);
   assert.match(source, /"Return"/);
@@ -62,16 +60,15 @@ test('training loop rail styles stay compact for the VS Code sidebar', () => {
   assert.match(styles, /\.training-loop-step\.is-active\s*\{[\s\S]*?background:\s*color-mix/);
 });
 
-test('training rail exposes complete localized labels and narrow-layout hooks', () => {
+test('training focus surface keeps the phase line as the only loop chrome', () => {
   const source = fs.readFileSync(trainingViewPath, 'utf8');
 
-  assert.match(source, /data-training-loop-layout="3-plus-2"/);
-  assert.match(source, /data-training-loop-step-count=\{trainingLoopSteps\.length\}/);
-  assert.match(source, /data-training-loop-step=\{step\.key\}/);
-  assert.match(source, /data-training-loop-state=\{step\.state\}/);
-  assert.match(source, /data-training-loop-label=\{step\.label\}/);
-  assert.match(source, /data-training-loop-step-label=\{step\.label\}/);
-  assert.match(source, /data-training-context-layout="optional-second-line"/);
-  assert.match(source, /className="training-current__learning-family"/);
+  // The loop-rail DOM hooks and the optional-second-line topline shipped only
+  // in the removed secondary branch; the phase line in FocusedPractice owns
+  // loop visibility now.
+  assert.doesNotMatch(source, /data-training-loop-layout=/);
+  assert.doesNotMatch(source, /data-training-loop-step=/);
+  assert.doesNotMatch(source, /data-training-context-layout=/);
+  assert.doesNotMatch(source, /training-current__learning-family/);
   assert.doesNotMatch(source, /compactCardText\(headerContextSource/);
 });

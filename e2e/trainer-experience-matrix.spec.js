@@ -373,16 +373,20 @@ async function exerciseSettings(page, scenario) {
 
 async function exerciseCrossView(page, scenario) {
   const destination = scenario.userAction.targetView;
-  let target;
   if (destination === "training") {
-    await page.getByTestId("trainer-view-nav-plan").click();
-    await page.locator('[data-learning-section=growth] > summary').click();
-    target = page.locator('[data-learning-section=growth]').getByRole('button', { name: VIEW_LABELS[scenario.language].training, exact: true });
+    // Training is an internal route without a top-level tab: the host restores
+    // it through ui/restoreView (the growth section has no Training button).
+    await page.evaluate(() =>
+      window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__?.({
+        type: "ui/restoreView",
+        payload: { activeView: "training" },
+      }),
+    );
   } else {
-    target = page.getByTestId(`trainer-view-nav-${destination}`);
+    const target = page.getByTestId(`trainer-view-nav-${destination}`);
+    await expect(target).toHaveCount(1);
+    await target.click();
   }
-  await expect(target).toHaveCount(1);
-  await target.click();
   await expect(page.getByTestId(`trainer-view-nav-${destination === 'training' ? 'plan' : destination}`)).toHaveAttribute("aria-current", "page");
   await expect.poll(() =>
     page.evaluate(() => {

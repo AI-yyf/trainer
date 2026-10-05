@@ -283,6 +283,15 @@ export interface WorkbenchStore {
   trainingReviewQueueRequested: boolean;
   openTrainingReviewQueue: () => void;
   beginTrainingReview: () => void;
+  /**
+   * One-shot deep link into a Settings section. The caller sets it (e.g.
+   * `requestSettingsCategory("connection")`) right before switching the active
+   * view to "settings"; CoachSettingsView consumes and clears it. Never
+   * persisted.
+   */
+  settingsCategoryRequest: string | null;
+  requestSettingsCategory: (category: string) => void;
+  consumeSettingsCategoryRequest: () => void;
   data: WorkbenchBootstrapState;
   layout: PersistedWorkbenchState;
   /** Local language intent remains visible until the host echoes the same value. */
@@ -631,6 +640,9 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
     trainingReviewQueueRequested: true,
     layout: persistLayout({ ...state.layout, activeView: "training" }),
   })),
+  settingsCategoryRequest: null,
+  requestSettingsCategory: (category) => set({ settingsCategoryRequest: category }),
+  consumeSettingsCategoryRequest: () => set({ settingsCategoryRequest: null }),
   beginTrainingReview: () => set((state) => ({
     trainingReviewQueueRequested: false,
     trainingRestoreContext: undefined,

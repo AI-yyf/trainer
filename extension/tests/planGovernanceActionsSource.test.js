@@ -102,7 +102,7 @@ test('formal plan generation is explicit while Plan discussion stays conversatio
     /id: "refresh-plan",[\s\S]*?onClick: \(\) => handlePlanOrientationAction\("generate_plan"\)/,
   );
   assert.match(source, /if \(action === "generate_plan"\) \{\s*openPlanComposerMode\("generate"\);/);
-  assert.match(source, /if \(action === "continue_without_plan"\) \{\s*setActiveView\("coach"\);\s*focusComposerInput\(\);/);
+  assert.match(source, /if \(action === "continue_without_plan"\) \{\s*setActiveView\("coach"\);\s*requestCoachComposerFocus\(\);/);
   assert.match(source, /const planComposerSubmission = activeView === "plan" \|\| coachPlanContext !== undefined;/);
   assert.match(
     source,

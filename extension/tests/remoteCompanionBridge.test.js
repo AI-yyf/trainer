@@ -6,19 +6,33 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const Module = require('node:module');
-const { pathToFileURL } = require('node:url');
+const { pathToFileURL, fileURLToPath } = require('node:url');
 const { buildSync } = require('../webview/node_modules/esbuild');
 
 const root = path.resolve(__dirname, '../..');
 const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-companion-bridge-'));
 fs.writeFileSync(path.join(fixture, 'notes.md'), 'Keep the quiet fix in this workspace.\n');
-const hostRoot = `vscode-remote://ssh-remote+bridge-host${fixture}`;
+// vscode-remote URIs always carry a slash-form host path; on Windows a raw
+// fixture (C:\Users\...) would place ':' and '\' inside the URI authority,
+// which throws Invalid URL. '/C:/Users/...' is the shape real vscode-remote
+// URIs use; on POSIX this is the fixture path unchanged.
+const hostPath = `/${fixture.split(path.sep).filter(Boolean).join('/')}`;
+const hostRoot = `vscode-remote://ssh-remote+bridge-host${hostPath}`;
 const workspaceRoot = pathToFileURL(fixture).href;
+
+function toFsPath(parsed) {
+  // Real vscode maps file: URIs to native OS paths (file:///C:/x → C:\x);
+  // other schemes keep a decoded-pathname compatibility value.
+  if (parsed.protocol === 'file:') {
+    return fileURLToPath(parsed.href);
+  }
+  return decodeURIComponent(parsed.pathname);
+}
 
 function uri(value) {
   const parsed = new URL(value);
   return { scheme: parsed.protocol.slice(0, -1), authority: decodeURIComponent(parsed.host), path: decodeURIComponent(parsed.pathname),
-    fsPath: decodeURIComponent(parsed.pathname), toString: () => parsed.href };
+    fsPath: toFsPath(parsed), toString: () => parsed.href };
 }
 const Uri = { parse: uri, joinPath: (base, relative) => uri(`${base.scheme}://${base.authority}${path.posix.join(base.path, relative)}`) };
 function load(source, vscode) {
@@ -61,8 +75,8 @@ test('UI and workspace hosts exchange real file bytes, search results and hashes
 
 test('foreign authority and outside paths are rejected before a file request crosses the bridge', async () => {
   const before = calls.filter(call => call.name === 'trainer.remote.request').length;
-  await assert.rejects(gateway.readFile(uri(`vscode-remote://ssh-remote+other-host${fixture}/notes.md`)), /different workspace authority/);
-  await assert.rejects(gateway.readFile(uri('vscode-remote://ssh-remote+bridge-host/tmp/outside.md')), /outside the active workspace/);
+  await assert.rejects(gateway.readFile(uri(`vscode-remote://ssh-remote+other-host${hostPath}/notes.md`)), /different workspace authority/);
+  await assert.rejects(gateway.readFile(uri(`vscode-remote://ssh-remote+bridge-host${hostPath}-outside/outside.md`)), /outside the active workspace/);
   assert.equal(calls.filter(call => call.name === 'trainer.remote.request').length, before);
 });
 

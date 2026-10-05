@@ -25,9 +25,7 @@ import type {
 } from "../../lib/types";
 import {
   ArrowRightIcon,
-  CheckIcon,
   ChevronDownIcon,
-  CloseIcon,
   FileIcon,
   FolderIcon,
   LinkIcon,
@@ -74,9 +72,9 @@ export interface ResourcesWorkbenchViewProps {
   onRefreshDeletedResources?: () => void | Promise<void>;
   onChooseWorkspaceRoot?: () => void;
   /**
-   * The App owns the cross-view conversation context.  The library keeps its
-   * local selection UI, but reports whether this is a deliberate selection or
-   * merely an unmount so switching views does not silently discard context.
+   * The App owns the cross-view conversation context.  The library reports the
+   * resource currently open in the reader (explicit selection only, empty when
+   * nothing is open) so switching views does not silently discard context.
    */
   initialResourceContextIds?: string[];
   onResourceSelectionChange?: (
@@ -134,7 +132,6 @@ type ResourceTextKey =
   | "references"
   | "imported"
   | "captureWebSnapshot"
-  | "index"
   | "pendingIndex"
   | "indexing"
   | "indexFailed"
@@ -149,8 +146,6 @@ type ResourceTextKey =
   | "readOnlyNotice"
   | "browserPreviewMutationNotice"
   | "source"
-  | "trust"
-  | "freshness"
   | "fresh"
   | "stale"
   | "unknown"
@@ -169,20 +164,15 @@ type ResourceTextKey =
   | "trainingEligible"
   | "createReviewCard"
   | "openCurrentTraining"
-  | "selectResource"
-  | "selectFolder"
-  | "selectAllVisible"
-  | "clearSelection"
-  | "deleteSelected"
-  | "restoreDeleted"
+  | "status"
+  | "indexed"
+  | "notIndexed"
+  | "deleteResource"
+  | "restoreResource"
+  | "deleteResourceConfirmation"
   | "recoveryAvailable"
-  | "selectedResources"
   | "deleteConfirmation"
   | "logicalCollection"
-  | "storageRoots"
-  | "workspaceRoot"
-  | "sandboxRoot"
-  | "trashRoot"
   | "unavailable"
   | "trashTitle"
   | "trashEmpty"
@@ -205,7 +195,6 @@ const resourceText: Record<ResourceTextKey, { zh: string; en: string }> = {
   references: { zh: "\u53c2\u8003\u8d44\u6599", en: "References" },
   imported: { zh: "\u5df2\u5bfc\u5165", en: "Imported" },
   captureWebSnapshot: { zh: "\u5bfc\u5165\u7f51\u9875\u5feb\u7167", en: "Capture webpage snapshot" },
-  index: { zh: "\u7d22\u5f15", en: "Index" },
   pendingIndex: { zh: "\u5f85\u7d22\u5f15", en: "Waiting to be indexed" },
   indexing: { zh: "\u7d22\u5f15\u4e2d", en: "Indexing" },
   indexFailed: { zh: "\u5931\u8d25", en: "Failed" },
@@ -220,11 +209,12 @@ const resourceText: Record<ResourceTextKey, { zh: string; en: string }> = {
   readOnlyNotice: { zh: "\u5f53\u524d\u9879\u76ee\u4e3a\u53ea\u8bfb\u72b6\u6001\uff1a\u53ef\u641c\u7d22\u548c\u6253\u5f00\u8d44\u6599\u3002", en: "This project is read-only. You can search and open resources." },
   browserPreviewMutationNotice: { zh: "\u6d4f\u89c8\u5668\u9884\u89c8\u4e0d\u4f1a\u66f4\u6539\u771f\u5b9e\u8d44\u6599\u3002\u8bf7\u5728 VS Code \u4fa7\u680f\u4e2d\u64cd\u4f5c\u3002", en: "Browser preview cannot change real resources. Use the VS Code sidebar." },
   source: { zh: "\u6765\u6e90", en: "Source" },
-  trust: { zh: "\u4fe1\u4efb", en: "Trust" },
-  freshness: { zh: "\u65b0\u9c9c\u5ea6", en: "Freshness" },
   fresh: { zh: "\u65b0\u9c9c", en: "Fresh" },
   stale: { zh: "\u5f85\u66f4\u65b0", en: "Stale" },
   unknown: { zh: "\u672a\u77e5", en: "Unknown" },
+  status: { zh: "\u72b6\u6001", en: "Status" },
+  indexed: { zh: "\u5df2\u7d22\u5f15", en: "Indexed" },
+  notIndexed: { zh: "\u672a\u7d22\u5f15", en: "Not indexed" },
   openInVsCode: { zh: "\u5728 VS Code \u4e2d\u6253\u5f00", en: "Open in VS Code" },
   openInBrowser: { zh: "\u5728\u6d4f\u89c8\u5668\u4e2d\u6253\u5f00", en: "Open in browser" },
   openUnavailable: { zh: "\u6ca1\u6709\u53ef\u6253\u5f00\u7684\u6765\u6e90", en: "No openable source" },
@@ -240,23 +230,18 @@ const resourceText: Record<ResourceTextKey, { zh: string; en: string }> = {
   trainingEligible: { zh: "\u53ef\u8fdb\u5165\u8bad\u7ec3\u4e0e\u8ba1\u5212\u8bc1\u636e", en: "Ready for training and plan evidence" },
   createReviewCard: { zh: "\u751f\u6210\u590d\u4e60\u5361", en: "Create review card" },
   openCurrentTraining: { zh: "\u67e5\u770b\u5f53\u524d\u8bad\u7ec3", en: "Open current training" },
-  selectResource: { zh: "\u9009\u62e9\u8d44\u6599", en: "Select resource" },
-  selectFolder: { zh: "\u9009\u62e9\u76ee\u5f55", en: "Select folder" },
-  selectAllVisible: { zh: "\u5168\u9009\u5f53\u524d\u8d44\u6599", en: "Select all visible resources" },
-  clearSelection: { zh: "\u6e05\u7a7a\u9009\u62e9", en: "Clear selection" },
-  deleteSelected: { zh: "\u5220\u9664\u9009\u4e2d\u8d44\u6599", en: "Delete selected resources" },
-  restoreDeleted: { zh: "\u6062\u590d\u53ef\u6062\u590d\u7684\u8d44\u6599", en: "Restore available resources" },
+  deleteResource: { zh: "\u5220\u9664\u8d44\u6599", en: "Delete resource" },
+  restoreResource: { zh: "\u6062\u590d\u8d44\u6599", en: "Restore resource" },
+  deleteResourceConfirmation: {
+    zh: "\u5c06\u8fd9\u4efd\u8d44\u6599\u79fb\u5165\u56de\u6536\u7ad9\uff1f\u53ef\u4ece\u53d7\u63a7\u6c99\u7bb1\u6062\u590d\u3002",
+    en: "Move this resource to Trash? You can restore it from the guarded sandbox.",
+  },
   recoveryAvailable: { zh: "\u56de\u6536\u7ad9\u4e2d\u7684\u8d44\u6599\uff1a{count}", en: "Resources in Trash: {count}" },
-  selectedResources: { zh: "\u5df2\u9009\u62e9\u8d44\u6599", en: "Selected resources" },
   deleteConfirmation: {
     zh: "\u5c06\u9009\u4e2d\u7684 {count} \u9879\u8d44\u6599\u79fb\u5165\u56de\u6536\u7ad9\uff1f\u53ef\u4ece\u53d7\u63a7\u6c99\u7bb1\u6062\u590d\u3002",
     en: "Move {count} selected resources to Trash? You can restore them from the guarded sandbox.",
   },
   logicalCollection: { zh: "\u903b\u8f91\u96c6\u5408", en: "Collection" },
-  storageRoots: { zh: "\u5b58\u50a8\u4f4d\u7f6e", en: "Storage locations" },
-  workspaceRoot: { zh: "\u5de5\u4f5c\u533a\u6839\u76ee\u5f55", en: "Workspace root" },
-  sandboxRoot: { zh: "\u6c99\u7bb1\u6839\u76ee\u5f55", en: "Sandbox root" },
-  trashRoot: { zh: "\u56de\u6536\u7ad9\u6839\u76ee\u5f55", en: "Trash root" },
   unavailable: { zh: "\u6682\u4e0d\u53ef\u7528", en: "Not available" },
   trashTitle: { zh: "\u56de\u6536\u7ad9", en: "Trash" },
   trashEmpty: { zh: "\u56de\u6536\u7ad9\u4e3a\u7a7a\u3002", en: "Trash is empty." },
@@ -284,7 +269,6 @@ const resourceTextLocaleOverrides: Record<
     references: "Referencias",
     imported: "Importados",
     captureWebSnapshot: "Capturar instantanea de pagina web",
-    index: "Indice",
     indexing: "Indexando",
     indexFailed: "Error de indexacion",
     refresh: "Actualizar indice",
@@ -298,11 +282,12 @@ const resourceTextLocaleOverrides: Record<
     readOnlyNotice: "Este proyecto es de solo lectura. Puedes buscar y abrir recursos.",
     browserPreviewMutationNotice: "La vista previa del navegador no puede cambiar recursos reales. Usa la barra lateral de VS Code.",
     source: "Fuente",
-    trust: "Confianza",
-    freshness: "Vigencia",
     fresh: "Actualizado",
     stale: "Pendiente de actualizar",
     unknown: "Desconocido",
+    status: "Estado",
+    indexed: "Indexado",
+    notIndexed: "Sin indexar",
     openInVsCode: "Abrir en VS Code",
     sandboxTitle: "Sandbox protegido",
     sandboxReady: "Sandbox disponible",
@@ -316,20 +301,12 @@ const resourceTextLocaleOverrides: Record<
     trainingEligible: "Listo para entrenamiento y evidencia del plan",
     createReviewCard: "Crear tarjeta de repaso",
     openCurrentTraining: "Abrir entrenamiento actual",
-    selectResource: "Seleccionar recurso",
-    selectFolder: "Seleccionar carpeta",
-    selectAllVisible: "Seleccionar todos los recursos visibles",
-    clearSelection: "Borrar seleccion",
-    deleteSelected: "Eliminar recursos seleccionados",
-    restoreDeleted: "Restaurar recursos disponibles",
+    deleteResource: "Eliminar recurso",
+    restoreResource: "Restaurar recurso",
+    deleteResourceConfirmation: "Mover este recurso a la Papelera? Se puede restaurar desde el sandbox protegido.",
     recoveryAvailable: "Recursos en la Papelera: {count}",
-    selectedResources: "Recursos seleccionados",
     deleteConfirmation: "Mover los recursos seleccionados ({count}) a la Papelera? Se pueden restaurar desde el sandbox protegido.",
     logicalCollection: "Coleccion",
-    storageRoots: "Ubicaciones de almacenamiento",
-    workspaceRoot: "Raiz del espacio de trabajo",
-    sandboxRoot: "Raiz del sandbox",
-    trashRoot: "Raiz de la Papelera",
     unavailable: "No disponible",
     trashTitle: "Papelera",
     trashEmpty: "La Papelera esta vacia.",
@@ -350,7 +327,6 @@ const resourceTextLocaleOverrides: Record<
     references: "References",
     imported: "Importes",
     captureWebSnapshot: "Capturer une page web",
-    index: "Index",
     indexing: "Indexation en cours",
     indexFailed: "Echec de l'indexation",
     refresh: "Actualiser l'index",
@@ -364,11 +340,12 @@ const resourceTextLocaleOverrides: Record<
     readOnlyNotice: "Ce projet est en lecture seule. Vous pouvez rechercher et ouvrir des ressources.",
     browserPreviewMutationNotice: "L'apercu dans le navigateur ne peut pas modifier les ressources reelles. Utilisez la barre laterale de VS Code.",
     source: "Source",
-    trust: "Confiance",
-    freshness: "Actualite",
     fresh: "A jour",
     stale: "A actualiser",
     unknown: "Inconnue",
+    status: "Statut",
+    indexed: "Index\u00e9",
+    notIndexed: "Non index\u00e9",
     openInVsCode: "Ouvrir dans VS Code",
     sandboxTitle: "Sandbox protege",
     sandboxReady: "Sandbox disponible",
@@ -382,20 +359,12 @@ const resourceTextLocaleOverrides: Record<
     trainingEligible: "Pret pour l'entrainement et les preuves du plan",
     createReviewCard: "Creer une carte de revision",
     openCurrentTraining: "Ouvrir l'entrainement en cours",
-    selectResource: "Selectionner la ressource",
-    selectFolder: "Selectionner le dossier",
-    selectAllVisible: "Selectionner toutes les ressources visibles",
-    clearSelection: "Effacer la selection",
-    deleteSelected: "Supprimer les ressources selectionnees",
-    restoreDeleted: "Restaurer les ressources disponibles",
+    deleteResource: "Supprimer la ressource",
+    restoreResource: "Restaurer la ressource",
+    deleteResourceConfirmation: "Deplacer cette ressource dans la corbeille ? Elle peut etre restauree depuis le sandbox protege.",
     recoveryAvailable: "Ressources dans la corbeille : {count}",
-    selectedResources: "Ressources selectionnees",
     deleteConfirmation: "Deplacer les ressources selectionnees ({count}) dans la corbeille ? Elles peuvent etre restaurees depuis le sandbox protege.",
     logicalCollection: "Collection",
-    storageRoots: "Emplacements de stockage",
-    workspaceRoot: "Racine de l'espace de travail",
-    sandboxRoot: "Racine du sandbox",
-    trashRoot: "Racine de la corbeille",
     unavailable: "Indisponible",
     trashTitle: "Corbeille",
     trashEmpty: "La corbeille est vide.",
@@ -416,7 +385,6 @@ const resourceTextLocaleOverrides: Record<
     references: "Referenzen",
     imported: "Importiert",
     captureWebSnapshot: "Webseite erfassen",
-    index: "Index",
     indexing: "Wird indexiert",
     indexFailed: "Indexierung fehlgeschlagen",
     refresh: "Index aktualisieren",
@@ -430,11 +398,12 @@ const resourceTextLocaleOverrides: Record<
     readOnlyNotice: "Dieses Projekt ist schreibgeschuetzt. Sie koennen Materialien suchen und oeffnen.",
     browserPreviewMutationNotice: "Die Browser-Vorschau kann keine echten Materialien aendern. Verwenden Sie die VS Code-Seitenleiste.",
     source: "Quelle",
-    trust: "Vertrauen",
-    freshness: "Aktualitaet",
     fresh: "Aktuell",
     stale: "Veraltet",
     unknown: "Unbekannt",
+    status: "Status",
+    indexed: "Indexiert",
+    notIndexed: "Nicht indexiert",
     openInVsCode: "In VS Code oeffnen",
     sandboxTitle: "Geschuetzte Sandbox",
     sandboxReady: "Sandbox verfuegbar",
@@ -448,20 +417,12 @@ const resourceTextLocaleOverrides: Record<
     trainingEligible: "Fuer Training und Planevidenz bereit",
     createReviewCard: "Wiederholungskarte erstellen",
     openCurrentTraining: "Aktuelles Training oeffnen",
-    selectResource: "Material auswaehlen",
-    selectFolder: "Ordner auswaehlen",
-    selectAllVisible: "Alle sichtbaren Materialien auswaehlen",
-    clearSelection: "Auswahl aufheben",
-    deleteSelected: "Ausgewaehlte Materialien loeschen",
-    restoreDeleted: "Verfuegbare Materialien wiederherstellen",
+    deleteResource: "Material loeschen",
+    restoreResource: "Material wiederherstellen",
+    deleteResourceConfirmation: "Dieses Material in den Papierkorb verschieben? Sie koennen es im geschuetzten Sandbox-Bereich wiederherstellen.",
     recoveryAvailable: "Materialien im Papierkorb: {count}",
-    selectedResources: "Ausgewaehlte Materialien",
     deleteConfirmation: "Ausgewaehlte Materialien ({count}) in den Papierkorb verschieben? Sie koennen im geschuetzten Sandbox-Bereich wiederhergestellt werden.",
     logicalCollection: "Sammlung",
-    storageRoots: "Speicherorte",
-    workspaceRoot: "Arbeitsbereich-Stammordner",
-    sandboxRoot: "Sandbox-Stammordner",
-    trashRoot: "Papierkorb-Stammordner",
     unavailable: "Nicht verfuegbar",
     trashTitle: "Papierkorb",
     trashEmpty: "Der Papierkorb ist leer.",
@@ -482,7 +443,6 @@ const resourceTextLocaleOverrides: Record<
     references: "参考資料",
     imported: "インポート済み",
     captureWebSnapshot: "Web ページを保存",
-    index: "索引",
     indexing: "索引作成中",
     indexFailed: "索引に失敗",
     refresh: "索引を更新",
@@ -496,11 +456,12 @@ const resourceTextLocaleOverrides: Record<
     readOnlyNotice: "このプロジェクトは読み取り専用です。資料の検索と閲覧はできます。",
     browserPreviewMutationNotice: "ブラウザープレビューでは実際の資料を変更できません。VS Code のサイドバーで操作してください。",
     source: "ソース",
-    trust: "信頼度",
-    freshness: "鮮度",
     fresh: "新鮮",
     stale: "更新待ち",
     unknown: "不明",
+    status: "状態",
+    indexed: "索引済み",
+    notIndexed: "未索引",
     openInVsCode: "VS Code で開く",
     sandboxTitle: "保護されたサンドボックス",
     sandboxReady: "サンドボックスを利用できます",
@@ -514,20 +475,12 @@ const resourceTextLocaleOverrides: Record<
     trainingEligible: "トレーニングと計画の証拠に利用できます",
     createReviewCard: "復習カードを作る",
     openCurrentTraining: "現在のトレーニングを開く",
-    selectResource: "資料を選択",
-    selectFolder: "フォルダーを選択",
-    selectAllVisible: "表示中の資料をすべて選択",
-    clearSelection: "選択を解除",
-    deleteSelected: "選択した資料を削除",
-    restoreDeleted: "最近削除した資料を復元",
+    deleteResource: "資料を削除",
+    restoreResource: "資料を復元",
+    deleteResourceConfirmation: "この資料をごみ箱に移動しますか？保護されたサンドボックスから復元できます。",
     recoveryAvailable: "ごみ箱内の資料: {count}",
-    selectedResources: "選択した資料",
     deleteConfirmation: "選択した資料 {count} 件をごみ箱に移動しますか？保護されたサンドボックスから復元できます。",
     logicalCollection: "\u8ad6\u7406\u30b3\u30ec\u30af\u30b7\u30e7\u30f3",
-    storageRoots: "\u4fdd\u5b58\u5148",
-    workspaceRoot: "\u30ef\u30fc\u30af\u30b9\u30da\u30fc\u30b9\u30eb\u30fc\u30c8",
-    sandboxRoot: "\u30b5\u30f3\u30c9\u30dc\u30c3\u30af\u30b9\u30eb\u30fc\u30c8",
-    trashRoot: "\u3054\u307f\u7bb1\u30eb\u30fc\u30c8",
     unavailable: "\u5229\u7528\u4e0d\u53ef",
     trashTitle: "\u3054\u307f\u7bb1",
     trashEmpty: "\u3054\u307f\u7bb1\u306f\u7a7a\u3067\u3059\u3002",
@@ -548,7 +501,6 @@ const resourceTextLocaleOverrides: Record<
     references: "참고 자료",
     imported: "가져옴",
     captureWebSnapshot: "웹페이지 스냅샷 가져오기",
-    index: "색인",
     indexing: "색인 중",
     indexFailed: "색인 실패",
     refresh: "색인 새로 고침",
@@ -562,11 +514,12 @@ const resourceTextLocaleOverrides: Record<
     readOnlyNotice: "이 프로젝트는 읽기 전용입니다. 자료를 검색하고 열 수 있습니다.",
     browserPreviewMutationNotice: "브라우저 미리 보기에서는 실제 자료를 변경할 수 없습니다. VS Code 사이드바에서 작업하세요.",
     source: "출처",
-    trust: "신뢰도",
-    freshness: "최신성",
     fresh: "최신",
     stale: "업데이트 필요",
     unknown: "알 수 없음",
+    status: "상태",
+    indexed: "색인됨",
+    notIndexed: "색인 안 됨",
     openInVsCode: "VS Code에서 열기",
     sandboxTitle: "보호된 샌드박스",
     sandboxReady: "샌드박스를 사용할 수 있습니다",
@@ -580,20 +533,12 @@ const resourceTextLocaleOverrides: Record<
     trainingEligible: "훈련과 계획 증거에 사용할 수 있습니다",
     createReviewCard: "복습 카드 만들기",
     openCurrentTraining: "현재 훈련 열기",
-    selectResource: "자료 선택",
-    selectFolder: "폴더 선택",
-    selectAllVisible: "표시된 자료 모두 선택",
-    clearSelection: "선택 해제",
-    deleteSelected: "선택한 자료 삭제",
-    restoreDeleted: "최근 삭제한 자료 복원",
+    deleteResource: "자료 삭제",
+    restoreResource: "자료 복원",
+    deleteResourceConfirmation: "이 자료를 휴지통으로 옮길까요? 보호된 샌드박스에서 복원할 수 있습니다.",
     recoveryAvailable: "휴지통의 자료: {count}",
-    selectedResources: "선택한 자료",
     deleteConfirmation: "선택한 자료 {count}개를 휴지통으로 옮길까요? 보호된 샌드박스에서 복원할 수 있습니다.",
     logicalCollection: "\ub17c\ub9ac \uceec\ub809\uc158",
-    storageRoots: "\uc800\uc7a5 \uc704\uce58",
-    workspaceRoot: "\uc791\uc5c5 \uc601\uc5ed \ub8e8\ud2b8",
-    sandboxRoot: "\uc0cc\ub4dc\ubc15\uc2a4 \ub8e8\ud2b8",
-    trashRoot: "\ud734\uc9c0\ud1b5 \ub8e8\ud2b8",
     unavailable: "\uc0ac\uc6a9\ud560 \uc218 \uc5c6\uc74c",
     trashTitle: "\ud734\uc9c0\ud1b5",
     trashEmpty: "\ud734\uc9c0\ud1b5\uc774 \ube44\uc5b4 \uc788\uc2b5\ub2c8\ub2e4.",
@@ -614,7 +559,6 @@ const resourceTextLocaleOverrides: Record<
     references: "Referencias",
     imported: "Importados",
     captureWebSnapshot: "Capturar pagina da web",
-    index: "Indice",
     indexing: "Indexando",
     indexFailed: "Falha na indexacao",
     refresh: "Atualizar indice",
@@ -628,11 +572,12 @@ const resourceTextLocaleOverrides: Record<
     readOnlyNotice: "Este projeto esta somente para leitura. Voce pode pesquisar e abrir recursos.",
     browserPreviewMutationNotice: "A visualizacao no navegador nao pode alterar recursos reais. Use a barra lateral do VS Code.",
     source: "Fonte",
-    trust: "Confianca",
-    freshness: "Atualidade",
     fresh: "Atual",
     stale: "Desatualizado",
     unknown: "Desconhecido",
+    status: "Status",
+    indexed: "Indexado",
+    notIndexed: "N\u00e3o indexado",
     openInVsCode: "Abrir no VS Code",
     sandboxTitle: "Sandbox protegido",
     sandboxReady: "Sandbox disponivel",
@@ -646,20 +591,12 @@ const resourceTextLocaleOverrides: Record<
     trainingEligible: "Pronto para treinamento e evidencia do plano",
     createReviewCard: "Criar cartao de revisao",
     openCurrentTraining: "Abrir treinamento atual",
-    selectResource: "Selecionar recurso",
-    selectFolder: "Selecionar pasta",
-    selectAllVisible: "Selecionar todos os recursos visiveis",
-    clearSelection: "Limpar selecao",
-    deleteSelected: "Excluir recursos selecionados",
-    restoreDeleted: "Restaurar recursos disponiveis",
+    deleteResource: "Excluir recurso",
+    restoreResource: "Restaurar recurso",
+    deleteResourceConfirmation: "Mover este recurso para a Lixeira? Ele pode ser restaurado no sandbox protegido.",
     recoveryAvailable: "Recursos na Lixeira: {count}",
-    selectedResources: "Recursos selecionados",
     deleteConfirmation: "Mover os recursos selecionados ({count}) para a Lixeira? Eles podem ser restaurados no sandbox protegido.",
     logicalCollection: "Colecao",
-    storageRoots: "Locais de armazenamento",
-    workspaceRoot: "Raiz do espaco de trabalho",
-    sandboxRoot: "Raiz do sandbox",
-    trashRoot: "Raiz da Lixeira",
     unavailable: "Indisponivel",
     trashTitle: "Lixeira",
     trashEmpty: "A Lixeira esta vazia.",
@@ -1634,12 +1571,9 @@ interface ResourceTreeItemProps {
   language: ComposerLanguage;
   expandedIds: Set<string>;
   selectedResourceId: string | null;
-  selectedResourceIds: Set<string>;
   activeTreeItemId: string | null;
   onToggle: (id: string) => void;
   onSelect: (resource: ResourceRecord) => void;
-  onToggleSelection: (resourceId: string) => void;
-  onSetSelection: (resourceIds: string[], selected: boolean) => void;
   onOpen: (resource: ResourceRecord) => void;
   onActiveTreeItemChange: (id: string) => void;
   onMoveTreeFocus: (id: string) => void;
@@ -1652,29 +1586,23 @@ function ResourceTreeItem({
   language,
   expandedIds,
   selectedResourceId,
-  selectedResourceIds,
   activeTreeItemId,
   onToggle,
   onSelect,
-  onToggleSelection,
-  onSetSelection,
   onOpen,
   onActiveTreeItemChange,
   onMoveTreeFocus,
 }: ResourceTreeItemProps) {
   if (node.kind === "resource" && node.resource) {
     const isSelected = selectedResourceId === node.resource.id;
-    const isMarked = selectedResourceIds.has(node.resource.id);
-    const indexNotice = resourceIndexNotice(node.resource, language);
     return (
       <div
         className={`resources-library-tree__node resources-library-tree__node--resource resources-row ${
           isSelected ? "is-selected" : ""
-        } ${isMarked ? "is-marked" : ""}`}
+        }`}
         role="treeitem"
         aria-level={depth + 1}
         aria-label={node.resource.title}
-        aria-checked={isMarked}
         aria-current={isSelected ? "true" : undefined}
         data-resource-tree-item-id={node.id}
         tabIndex={activeTreeItemId === node.id ? 0 : -1}
@@ -1684,63 +1612,31 @@ function ResourceTreeItem({
         title={node.resource.title}
         onFocus={() => onActiveTreeItemChange(node.id)}
         onClick={() => onSelect(node.resource!)}
-        onDoubleClick={() => onOpen(node.resource!)}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
             onOpen(node.resource!);
-          }
-          if (event.key === " ") {
-            event.preventDefault();
-            onToggleSelection(node.resource!.id);
           }
           if (event.key === "ArrowLeft" && parentId) {
             event.preventDefault();
             onMoveTreeFocus(parentId);
           }
         }}
-        aria-keyshortcuts="Enter Space"
+        aria-keyshortcuts="Enter"
       >
         <span className="resources-library-tree__indent" aria-hidden="true" />
         <span className="resources-library-tree__kind" aria-hidden="true">
           <ResourceKindIcon kind={node.resource.kind} />
         </span>
-        <label
-          className="resources-library-tree__selection"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <input
-            type="checkbox"
-            checked={isMarked}
-            tabIndex={-1}
-            onChange={() => onToggleSelection(node.resource!.id)}
-            onKeyDown={(event) => {
-              if (event.key === " ") {
-                event.stopPropagation();
-              }
-            }}
-            aria-label={`${localize(language, "selectResource")}: ${node.resource.title}`}
-          />
-        </label>
         <span className="resources-library-tree__copy">
           <strong>{node.resource.title}</strong>
         </span>
-        {indexNotice ? (
-          <span className={`resources-library-tree__status is-${indexNotice.tone}`}>
-            {indexNotice.label}
-          </span>
-        ) : null}
       </div>
     );
   }
 
   const isExpanded = expandedIds.has(node.id);
   const descendantResourceIds = resourceIdsInTreeNode(node);
-  const markedDescendantCount = descendantResourceIds.filter((resourceId) =>
-    selectedResourceIds.has(resourceId),
-  ).length;
-  const isMarked = descendantResourceIds.length > 0 && markedDescendantCount === descendantResourceIds.length;
-  const isPartiallyMarked = markedDescendantCount > 0 && !isMarked;
   const firstChildId = node.children[0]?.id;
   const isLogicalCollection = node.collectionKind === "logical";
   const collectionDescription = isLogicalCollection
@@ -1790,30 +1686,6 @@ function ResourceTreeItem({
         }
         open={isExpanded}
         onToggle={() => onToggle(node.id)}
-        actions={
-          <label
-            className="resources-library-tree__selection"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <input
-              type="checkbox"
-              checked={isMarked}
-              aria-checked={isPartiallyMarked ? "mixed" : isMarked}
-              ref={(input) => {
-                if (input) {
-                  input.indeterminate = isPartiallyMarked;
-                }
-              }}
-              onChange={() => onSetSelection(descendantResourceIds, !isMarked)}
-              onKeyDown={(event) => {
-                if (event.key === " ") {
-                  event.stopPropagation();
-                }
-              }}
-              aria-label={`${localize(language, "selectFolder")}: ${node.label}`}
-            />
-          </label>
-        }
       >
         {isExpanded
           ? node.children.map((child) => (
@@ -1825,12 +1697,9 @@ function ResourceTreeItem({
                 language={language}
                 expandedIds={expandedIds}
                 selectedResourceId={selectedResourceId}
-                selectedResourceIds={selectedResourceIds}
                 activeTreeItemId={activeTreeItemId}
                 onToggle={onToggle}
                 onSelect={onSelect}
-                onToggleSelection={onToggleSelection}
-                onSetSelection={onSetSelection}
                 onOpen={onOpen}
                 onActiveTreeItemChange={onActiveTreeItemChange}
                 onMoveTreeFocus={onMoveTreeFocus}
@@ -1905,7 +1774,6 @@ export function ResourcesWorkbenchView({
   onRestoreResources,
   onRefreshDeletedResources,
   onChooseWorkspaceRoot,
-  initialResourceContextIds = [],
   onResourceSelectionChange,
   onRestoreContextChange,
   resourceWriteAccess,
@@ -1930,9 +1798,6 @@ export function ResourcesWorkbenchView({
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(
     () => restoreContext?.surface === "detail" ? restoreContext.resourceId ?? null : null,
-  );
-  const [selectedResourceIds, setSelectedResourceIds] = useState<Set<string>>(
-    () => new Set(initialResourceContextIds),
   );
   const [deleteConfirmationResourceIds, setDeleteConfirmationResourceIds] = useState<string[] | null>(
     null,
@@ -2078,12 +1943,10 @@ export function ResourcesWorkbenchView({
         }),
       );
   };
-  const selectedResourceContextIds = useMemo(() => {
-    if (selectedResourceIds.size > 0) {
-      return [...selectedResourceIds];
-    }
-    return selectedResourceId ? [selectedResourceId] : [];
-  }, [selectedResourceId, selectedResourceIds]);
+  const selectedResourceContextIds = useMemo(
+    () => (selectedResourceId ? [selectedResourceId] : []),
+    [selectedResourceId],
+  );
 
   useEffect(() => {
     onResourceSelectionChange?.(selectedResourceContextIds, "selection");
@@ -2122,27 +1985,13 @@ export function ResourcesWorkbenchView({
     return () => document.removeEventListener("pointerdown", closeWhenPointerLeavesMenu);
   }, [isImportMenuOpen]);
 
-  const visibleResourceIds = useMemo(
-    () => new Set(visibleResources.map((resource) => resource.id)),
-    [visibleResources],
-  );
   const trashedResourceIds = useMemo(
     () => new Set(trashedResources.map(deletedResourceId).filter((resourceId): resourceId is string => Boolean(resourceId))),
     [trashedResources],
   );
-  const restorableDeletedResources = useMemo(
-    () => trashedResources.filter(isDeletedResourceRecoverable),
-    [trashedResources],
-  );
   const isDeletePending = pendingDeletedResourceIds.length > 0;
   const isRestorePending = pendingRestoredResourceIds.length > 0;
-  const hasResourceSelection = selectedResourceIds.size > 0;
 
-  useEffect(() => {
-    if (hasResourceSelection) {
-      setIsImportMenuOpen(false);
-    }
-  }, [hasResourceSelection]);
   useEffect(() => {
     if (canWriteResources) {
       return;
@@ -2150,34 +1999,8 @@ export function ResourcesWorkbenchView({
     setIsImportMenuOpen(false);
     setDeleteConfirmationResourceIds(null);
   }, [canWriteResources]);
-  const deleteSelectedLabel = isDeletePending
-    ? localizeCount(language, "deletePending", pendingDeletedResourceIds.length)
-    : !canWriteResources
-      ? resourceWriteBlockedReason ?? resourceReadOnlyNotice(language)
-      : isBrowserPreview
-        ? localize(language, "browserPreviewMutationNotice")
-        : onDeleteResources
-          ? localize(language, "deleteSelected")
-          : deleteUnavailableReason ?? localize(language, "deleteSelected");
-  const restoreDeletedLabel = isRestorePending
-    ? localizeCount(language, "restorePending", pendingRestoredResourceIds.length)
-    : !canWriteResources
-      ? resourceWriteBlockedReason ?? resourceReadOnlyNotice(language)
-      : isBrowserPreview
-        ? localize(language, "browserPreviewMutationNotice")
-        : onRestoreResources
-          ? localize(language, "restoreDeleted")
-          : restoreUnavailableReason ?? localize(language, "restoreDeleted");
   const deleteActionDisabled =
     !canWriteResources || isBrowserPreview || !onDeleteResources || isDeletePending || isRestorePending;
-  const restoreActionDisabled =
-    !canWriteResources ||
-    isBrowserPreview ||
-    !onRestoreResources ||
-    !trashSnapshotAvailable ||
-    restorableDeletedResources.length === 0 ||
-    isDeletePending ||
-    isRestorePending;
   const indexActionDisabled = !canWriteResources || !onRefreshResources || isIndexRefreshing;
   const refreshResourcesLabel = !canWriteResources
     ? resourceWriteBlockedReason ?? localize(language, "refresh")
@@ -2219,8 +2042,10 @@ export function ResourcesWorkbenchView({
   const shouldShowNoMatches =
     hasSearchQuery && !isServerSearchPending && !searchFailure && visibleResources.length === 0;
   const isResourceListLoading = isServerSearchPending;
-  const allVisibleResourcesSelected =
-    visibleResources.length > 0 && visibleResources.every((resource) => selectedResourceIds.has(resource.id));
+  const visibleResourceIds = useMemo(
+    () => new Set(visibleResources.map((resource) => resource.id)),
+    [visibleResources],
+  );
   const visibleResourceTree = useMemo(
     () => filterResourceTree(resourceTree, visibleResourceIds),
     [resourceTree, visibleResourceIds],
@@ -2318,13 +2143,6 @@ export function ResourcesWorkbenchView({
   }, [resources, restoreContext]);
 
   useEffect(() => {
-    setSelectedResourceIds((current) => {
-      const next = new Set([...current].filter((resourceId) => visibleResourceIds.has(resourceId)));
-      return next.size === current.size ? current : next;
-    });
-  }, [visibleResourceIds]);
-
-  useEffect(() => {
     if (!deleteConfirmationResourceIds) {
       return;
     }
@@ -2370,11 +2188,6 @@ export function ResourcesWorkbenchView({
     if (!deletionConfirmed) {
       return;
     }
-    setSelectedResourceIds((current) => {
-      const next = new Set(current);
-      pendingDeletedResourceIds.forEach((resourceId) => next.delete(resourceId));
-      return next;
-    });
     setSelectedResourceId((current) =>
       current && pendingDeletedResourceIds.includes(current) ? null : current,
     );
@@ -2447,46 +2260,9 @@ export function ResourcesWorkbenchView({
     }
   }, [pendingTreeFocusId, renderedTreeItemIds]);
 
+  /** One click opens the resource in the reader; the reader replaces the list. */
   const selectResource = (resource: ResourceRecord) => {
-    setResourceDetail(selectedResourceId === resource.id ? null : resource.id);
-  };
-
-  const toggleResourceSelection = (resourceId: string) => {
-    setSelectedResourceIds((current) => {
-      const next = new Set(current);
-      if (next.has(resourceId)) {
-        next.delete(resourceId);
-      } else {
-        next.add(resourceId);
-      }
-      return next;
-    });
-  };
-
-  const setResourceSelection = (resourceIds: string[], selected: boolean) => {
-    setSelectedResourceIds((current) => {
-      const next = new Set(current);
-      resourceIds.forEach((resourceId) => {
-        if (selected) {
-          next.add(resourceId);
-        } else {
-          next.delete(resourceId);
-        }
-      });
-      return next;
-    });
-  };
-
-  const selectAllVisibleResources = () => {
-    setSelectedResourceIds((current) => {
-      const next = new Set(current);
-      visibleResources.forEach((resource) => next.add(resource.id));
-      return next;
-    });
-  };
-
-  const clearResourceSelection = () => {
-    setSelectedResourceIds(new Set<string>());
+    setResourceDetail(resource.id);
   };
 
   const reportMutationFailure = (kind: ResourceMutationKind, resourceIds: string[]) => {
@@ -2498,12 +2274,12 @@ export function ResourcesWorkbenchView({
     setMutationResult({ kind, resourceIds, status: "failed" });
   };
 
-  const deleteSelectedResources = () => {
-    const resourceIds = [...selectedResourceIds].filter((resourceId) => visibleResourceIds.has(resourceId));
-    if (resourceIds.length === 0 || !canWriteResources || deleteActionDisabled || !onDeleteResources) {
+  /** Per-resource delete: opens the existing confirm dialog for this one resource. */
+  const requestResourceDelete = (resourceId: string) => {
+    if (!canWriteResources || deleteActionDisabled || !onDeleteResources) {
       return;
     }
-    setDeleteConfirmationResourceIds(resourceIds);
+    setDeleteConfirmationResourceIds([resourceId]);
   };
 
   const confirmDeleteSelectedResources = () => {
@@ -2532,13 +2308,11 @@ export function ResourcesWorkbenchView({
     setDeleteConfirmationResourceIds(null);
   };
 
-  const restoreDeletedResources = () => {
-    const resourceIds = restorableDeletedResources
-      .map(deletedResourceId)
-      .filter((resourceId): resourceId is string => Boolean(resourceId));
-    if (resourceIds.length === 0 || !canWriteResources || restoreActionDisabled || !onRestoreResources) {
+  const restoreDeletedResource = (resourceId: string) => {
+    if (!canWriteResources || isBrowserPreview || !onRestoreResources || isDeletePending || isRestorePending) {
       return;
     }
+    const resourceIds = [resourceId];
     setPendingRestoredResourceIds(resourceIds);
     setMutationResult(null);
     try {
@@ -2651,19 +2425,9 @@ export function ResourcesWorkbenchView({
   };
 
   const handleTreeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape" && selectedResourceIds.size > 0) {
-      event.preventDefault();
-      clearResourceSelection();
-      return;
-    }
-
     if (event.key === "Escape" && selectedResourceId) {
       event.preventDefault();
       setResourceDetail(null);
-      return;
-    }
-
-    if (event.target instanceof HTMLInputElement && event.key === " ") {
       return;
     }
 
@@ -2723,6 +2487,23 @@ export function ResourcesWorkbenchView({
   const selectedResourcePreviewMode = selectedResource
     ? resourcePreviewMode(selectedResource, language)
     : undefined;
+  // Facts trim: one Source line plus ONE merged status line (index · trust ·
+  // freshness · preview). Unindexed resources surface the index notice (or
+  // "not indexed") and the reader keeps the existing refresh action.
+  const selectedResourceStatusSegments = selectedResource
+    ? [
+        selectedResourceIndexNotice
+          ? selectedResourceIndexNotice.label
+          : selectedResource.indexState === "indexed"
+            ? localize(language, "indexed")
+            : localize(language, "notIndexed"),
+        selectedResourceTrust,
+        selectedResourceFreshness && selectedResourceFreshness !== "unknown"
+          ? describeFreshness(selectedResourceFreshness, language)
+          : undefined,
+        selectedResourcePreviewMode,
+      ].filter((value): value is string => Boolean(value))
+    : [];
   const selectedResourcePreviewSummary = selectedResource
     ? resourcePreviewSummary(selectedResource)
     : undefined;
@@ -2735,12 +2516,7 @@ export function ResourcesWorkbenchView({
       ? sandboxPreviewInput : undefined;
   const selectedResourceReuseSummary = selectedResource ? resourceReuseSummary(language) : undefined;
   const hasSelectedResourceFacts = Boolean(
-    selectedResourceSource.length ||
-    selectedResourceIndexNotice ||
-    selectedResourceTrust ||
-    (selectedResourceFreshness && selectedResourceFreshness !== "unknown") ||
-    selectedResourcePreviewMode ||
-    selectedResourceTrainingReadiness,
+    selectedResourceSource.length || selectedResourceStatusSegments.length || selectedResourceTrainingReadiness,
   );
   const selectedResourceStateLabel =
     selectedResourceIndexNotice?.label
@@ -2811,14 +2587,15 @@ export function ResourcesWorkbenchView({
 
   return (
     <section
-      className={`workbench-pane resources-pane resources-pane--library resources-knowledge resources-knowledge--workspace-tree${selectedResource ? " is-detail-open" : ""}${selectedResourceIds.size > 0 ? " has-selection" : ""}`}
+      className={`workbench-pane resources-pane resources-pane--library resources-knowledge resources-knowledge--workspace-tree${selectedResource ? " is-detail-open" : ""}`}
       data-resource-library-container="true"
+      aria-label={localize(language, "title")}
       data-resources-leftover-not-live={leftoverStoredNote ? "true" : undefined}
     >
       <div className="workbench-pane__heading resources-knowledge__heading sr-only">
         <h2>{localize(language, "title")}</h2>
       </div>
-      <Library title={localize(language, "title")} hidden={Boolean(selectedResource || standaloneSandboxPreview)} toolbar={omitLeftoverLibrary ? null : (
+      <Library hidden={Boolean(selectedResource || standaloneSandboxPreview)} toolbar={omitLeftoverLibrary ? null : (
       <div className="resources-knowledge__toolbar">
         <label className="resources-search resources-search--hero resources-knowledge__search">
           <span className="sr-only">{localize(language, "searchPlaceholder")}</span>
@@ -2832,93 +2609,33 @@ export function ResourcesWorkbenchView({
         </label>
 
         <div className="resources-knowledge__actions" aria-label={localize(language, "title")}>
-          {hasResourceSelection ? (
-            <details className="resources-knowledge__batch-actions">
-              <summary>
-                <span
-                  className="resources-knowledge__selection-count"
-                  aria-live="polite"
-                  aria-label={`${localize(language, "selectedResources")}: ${selectedResourceIds.size}`}
-                >
-                  {selectedResourceIds.size}
-                </span>
-                <strong>{localize(language, "selectedResources")}</strong>
-              </summary>
-              <div className="resources-knowledge__batch-actions-body">
-                <button
-                  className="resources-knowledge__icon-button"
-                  type="button"
-                  onClick={selectAllVisibleResources}
-                  disabled={allVisibleResourcesSelected}
-                  aria-label={localize(language, "selectAllVisible")}
-                  title={localize(language, "selectAllVisible")}
-                >
-                  <CheckIcon size={16} />
-                </button>
-                <button
-                  className="resources-knowledge__icon-button"
-                  type="button"
-                  onClick={clearResourceSelection}
-                  aria-label={localize(language, "clearSelection")}
-                  title={localize(language, "clearSelection")}
-                >
-                  <CloseIcon size={15} />
-                </button>
-                <button
-                  className="resources-knowledge__icon-button resources-knowledge__delete-button"
-                  type="button"
-                  onClick={deleteSelectedResources}
-                  disabled={deleteActionDisabled}
-                  aria-busy={isDeletePending}
-                  aria-label={deleteSelectedLabel}
-                  title={deleteSelectedLabel}
-                >
-                  <TrashIcon size={16} />
-                </button>
-              </div>
-            </details>
-          ) : (
-            <>
-              <div className="resources-knowledge__import-menu-wrap">
-                <button
-                  ref={importMenuTriggerRef}
-                  className={`button ${orientationCanAct ? "button--ghost" : "button--accent"} button--compact resources-knowledge__add-resource${canWriteResources && isImportMenuOpen ? " is-open" : ""}`}
-                  type="button"
-                  aria-haspopup="menu"
-                  aria-expanded={canWriteResources && isImportMenuOpen}
-                  aria-controls={canWriteResources && isImportMenuOpen ? importMenuId : undefined}
-                  disabled={!canWriteResources}
-                  aria-label={localize(language, "addResource")}
-                  title={resourceWriteBlockedReason ?? localize(language, "addResource")}
-                  onClick={toggleImportMenu}
-                  onKeyDown={(event) => {
-                    if (event.key === "ArrowDown") {
-                      event.preventDefault();
-                      openImportMenu(true);
-                    } else if (event.key === "Escape" && isImportMenuOpen) {
-                      event.preventDefault();
-                      closeImportMenu();
-                    }
-                  }}
-                >
-                  <UploadIcon size={14} aria-hidden="true" />
-                  <span>{localize(language, "addResource")}</span>
-                  <ChevronDownIcon size={12} aria-hidden="true" />
-                </button>
-              </div>
-              <button
-                className="resources-knowledge__icon-button resources-knowledge__refresh-button"
-                type="button"
-                onClick={refreshResources}
-                disabled={indexActionDisabled}
-                aria-busy={isIndexRefreshing}
-                aria-label={refreshResourcesLabel}
-                title={refreshResourcesLabel}
-              >
-                <RefreshIcon size={16} />
-              </button>
-            </>
-          )}
+          <div className="resources-knowledge__import-menu-wrap">
+            <button
+              ref={importMenuTriggerRef}
+              className={`button ${orientationCanAct ? "button--ghost" : "button--accent"} button--compact resources-knowledge__add-resource${canWriteResources && isImportMenuOpen ? " is-open" : ""}`}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={canWriteResources && isImportMenuOpen}
+              aria-controls={canWriteResources && isImportMenuOpen ? importMenuId : undefined}
+              disabled={!canWriteResources}
+              aria-label={localize(language, "addResource")}
+              title={resourceWriteBlockedReason ?? localize(language, "addResource")}
+              onClick={toggleImportMenu}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  openImportMenu(true);
+                } else if (event.key === "Escape" && isImportMenuOpen) {
+                  event.preventDefault();
+                  closeImportMenu();
+                }
+              }}
+            >
+              <UploadIcon size={14} aria-hidden="true" />
+              <span>{localize(language, "addResource")}</span>
+              <ChevronDownIcon size={12} aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </div>
       )}>
@@ -3066,43 +2783,6 @@ export function ResourcesWorkbenchView({
         </div>
       ) : null}
 
-      {deleteConfirmationResourceIds ? (
-        <div
-          className="resources-knowledge__delete-confirmation"
-          role="alertdialog"
-          aria-modal="false"
-          aria-labelledby="resources-delete-confirmation-message"
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              cancelDeleteSelectedResources();
-            }
-          }}
-        >
-          <span id="resources-delete-confirmation-message">
-            {localizeCount(language, "deleteConfirmation", deleteConfirmationResourceIds.length)}
-          </span>
-          <div className="resources-knowledge__delete-confirmation-actions">
-            <button
-              ref={deleteConfirmationFocusRef}
-              className="button button--compact"
-              type="button"
-              onClick={cancelDeleteSelectedResources}
-            >
-              <span>{t("cancel")}</span>
-            </button>
-            <button
-              className="button button--compact resources-knowledge__confirm-delete-action"
-              type="button"
-              onClick={confirmDeleteSelectedResources}
-            >
-              <TrashIcon size={13} />
-              <span>{t("confirm")}</span>
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       {mutationStatus ? <SystemState kind={mutationStatus.tone === "failed" ? "recoverable-error" : mutationStatus.tone === "pending" ? "processing" : "success"} title={mutationStatus.label}
         action={mutationStatus.tone === "failed" && onRefreshDeletedResources ? { label: localize(language, "refreshTrash"), onClick: onRefreshDeletedResources } : undefined} /> : null}
 
@@ -3112,7 +2792,6 @@ export function ResourcesWorkbenchView({
         ref={treeRef}
         role="tree"
         aria-label={localize(language, "title")}
-        aria-multiselectable="true"
         onKeyDown={handleTreeKeyDown}
       >
         {isResourceListLoading ? (
@@ -3131,12 +2810,9 @@ export function ResourcesWorkbenchView({
                 language={language}
                 expandedIds={renderedExpandedCollectionIds}
                 selectedResourceId={selectedResourceId}
-                selectedResourceIds={selectedResourceIds}
                 activeTreeItemId={resolvedActiveTreeItemId}
                 onToggle={toggleCollection}
                 onSelect={selectResource}
-                onToggleSelection={toggleResourceSelection}
-                onSetSelection={setResourceSelection}
                 onOpen={openResourceInVsCode}
                 onActiveTreeItemChange={(id) => setActiveTreeItemId(id)}
                 onMoveTreeFocus={moveTreeFocus}
@@ -3186,56 +2862,52 @@ export function ResourcesWorkbenchView({
             </p>
           ) : null}
           {trashSnapshotAvailable && trashedResources.length > 0 ? (
-            <>
-              <ul className="resources-knowledge__trash-list">
-                {trashedResources.map((resource, index) => {
-                  const resourceId = deletedResourceId(resource);
-                  const canRestore = isDeletedResourceRecoverable(resource);
-                  return (
-                    <li key={resourceId ?? `unknown-deleted-resource-${index}`}>
-                      <span className="resources-knowledge__trash-item-title" title={resource.title}>
-                        {resource.title}
+            <ul className="resources-knowledge__trash-list">
+              {trashedResources.map((resource, index) => {
+                const resourceId = deletedResourceId(resource);
+                const canRestore = isDeletedResourceRecoverable(resource);
+                const restorePendingForItem =
+                  resourceId !== undefined && pendingRestoredResourceIds.includes(resourceId);
+                const restoreLabel = localize(language, "restoreResource");
+                const restoreTitle = `${restoreLabel}: ${resource.title}`;
+                const restoreDisabledReason = !canWriteResources
+                  ? resourceWriteBlockedReason ?? resourceReadOnlyNotice(language)
+                  : isBrowserPreview
+                    ? localize(language, "browserPreviewMutationNotice")
+                    : restoreUnavailableReason;
+                return (
+                  <li key={resourceId ?? `unknown-deleted-resource-${index}`}>
+                    <span className="resources-knowledge__trash-item-title" title={resource.title}>
+                      {resource.title}
+                    </span>
+                    {resource.collectionPath ? (
+                      <span className="resources-knowledge__trash-item-path" title={resource.collectionPath}>
+                        {resource.collectionPath}
                       </span>
-                      {resource.collectionPath ? (
-                        <span className="resources-knowledge__trash-item-path" title={resource.collectionPath}>
-                          {resource.collectionPath}
-                        </span>
-                      ) : null}
-                      {!canRestore ? (
-                        <span className="resources-knowledge__trash-item-status">
-                          {localize(language, "notRestorable")}
-                        </span>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-              <div className="resources-knowledge__trash-actions">
-                <button
-                  className="button button--compact resources-knowledge__restore-action"
-                  type="button"
-                  onClick={restoreDeletedResources}
-                  disabled={restoreActionDisabled}
-                  aria-busy={isRestorePending}
-                  aria-label={restoreDeletedLabel}
-                  title={restoreDeletedLabel}
-                >
-                  <RefreshIcon size={13} />
-                  <span>{restoreDeletedLabel}</span>
-                </button>
-                {onRefreshDeletedResources ? (
-                  <button
-                    className="resources-knowledge__icon-button"
-                    type="button"
-                    onClick={onRefreshDeletedResources}
-                    aria-label={localize(language, "refreshTrash")}
-                    title={localize(language, "refreshTrash")}
-                  >
-                    <RefreshIcon size={14} />
-                  </button>
-                ) : null}
-              </div>
-            </>
+                    ) : null}
+                    {!canRestore ? (
+                      <span className="resources-knowledge__trash-item-status">
+                        {localize(language, "notRestorable")}
+                      </span>
+                    ) : null}
+                    {canRestore && onRestoreResources && resourceId ? (
+                      <button
+                        className="button button--compact resources-knowledge__restore-action"
+                        type="button"
+                        onClick={() => restoreDeletedResource(resourceId)}
+                        disabled={!canWriteResources || isBrowserPreview || !onRestoreResources || isDeletePending || isRestorePending}
+                        aria-busy={restorePendingForItem}
+                        aria-label={restoreTitle}
+                        title={restoreDisabledReason ?? restoreTitle}
+                      >
+                        <RefreshIcon size={12} />
+                        <span>{restoreLabel}</span>
+                      </button>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
           ) : null}
         </div>
       </details>
@@ -3244,6 +2916,47 @@ export function ResourcesWorkbenchView({
       )}
 
       </Library>
+
+      {/* Delete confirmation lives at the root so it stays reachable while the
+          reader is open — the Library container is hidden behind the reader. */}
+      {deleteConfirmationResourceIds ? (
+        <div
+          className="resources-knowledge__delete-confirmation"
+          role="alertdialog"
+          aria-modal="false"
+          aria-labelledby="resources-delete-confirmation-message"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              cancelDeleteSelectedResources();
+            }
+          }}
+        >
+          <span id="resources-delete-confirmation-message">
+            {deleteConfirmationResourceIds.length === 1
+              ? localize(language, "deleteResourceConfirmation")
+              : localizeCount(language, "deleteConfirmation", deleteConfirmationResourceIds.length)}
+          </span>
+          <div className="resources-knowledge__delete-confirmation-actions">
+            <button
+              ref={deleteConfirmationFocusRef}
+              className="button button--compact"
+              type="button"
+              onClick={cancelDeleteSelectedResources}
+            >
+              <span>{t("cancel")}</span>
+            </button>
+            <button
+              className="button button--compact resources-knowledge__confirm-delete-action"
+              type="button"
+              onClick={confirmDeleteSelectedResources}
+            >
+              <TrashIcon size={13} />
+              <span>{t("confirm")}</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {standaloneSandboxPreview ? (
         <ResourceReader parent={localize(language, "title")} title={(standaloneSandboxPreview.relativePath ?? standaloneSandboxPreview.path ?? "").split(/[\\/]/).pop() ?? resourcePreviewHeading(language)} source={standaloneSandboxPreview.path} onBack={() => { setResourceDetail(null); onRestoreContextChange?.(undefined); }}>
@@ -3312,38 +3025,18 @@ export function ResourcesWorkbenchView({
                   <dd title={selectedResourceSource.join(" / ")}>{selectedResourceSourceLabel}</dd>
                 </div>
               ) : null}
-              {selectedResourceIndexNotice ? (
-                <div className={`resources-knowledge__fact resources-knowledge__fact--index ${selectedResourceIndexNotice.tone}`}>
-                  <dt>{localize(language, "index")}</dt>
-                  <dd>{selectedResourceIndexNotice.label}</dd>
-                </div>
-              ) : null}
-              {selectedResourceTrust ? (
-                <div className="resources-knowledge__fact">
-                  <dt>{localize(language, "trust")}</dt>
-                  <dd>{selectedResourceTrust}</dd>
-                </div>
-              ) : null}
-              {selectedResourceFreshness && selectedResourceFreshness !== "unknown" ? (
-                <div className="resources-knowledge__fact">
-                  <dt>{localize(language, "freshness")}</dt>
-                  <dd>{describeFreshness(selectedResourceFreshness, language)}</dd>
-                </div>
-              ) : null}
-              {selectedResourcePreviewMode ? (
-                <div className="resources-knowledge__fact resources-knowledge__fact--preview">
-                  <dt>{resourcePreviewHeading(language)}</dt>
-                  <dd title={selectedResourcePreviewMode}>{selectedResourcePreviewMode}</dd>
-                </div>
-              ) : null}
-              {selectedResourceTrainingReadiness ? (
-                <div
-                  className={`resources-knowledge__fact resources-knowledge__fact--training is-${
-                    selectedResourceTrainingReadiness.tone
-                  }`}
-                >
-                  <dt>{localize(language, "training")}</dt>
-                  <dd>{selectedResourceTrainingReadiness.message}</dd>
+              {selectedResourceStatusSegments.length > 0 ? (
+                <div className="resources-knowledge__fact resources-knowledge__fact--status">
+                  <dt>{localize(language, "status")}</dt>
+                  <dd title={selectedResourceStatusSegments.join(" \u00b7 ")}>
+                    {selectedResourceStatusSegments.join(" \u00b7 ")}
+                    {selectedResourceTrainingReadiness?.tone === "unavailable" &&
+                    selectedResourceTrainingReadiness.message ? (
+                      <small className="resources-knowledge__fact-note">
+                        {selectedResourceTrainingReadiness.message}
+                      </small>
+                    ) : null}
+                  </dd>
                 </div>
               ) : null}
             </dl>
@@ -3395,6 +3088,26 @@ export function ResourcesWorkbenchView({
               <ArrowRightIcon size={12} />
               <span>{selectedResourceOpenLabel}</span>
             </button>
+            {onDeleteResources ? (
+              <button
+                className="button button--ghost button--compact resources-knowledge__delete-action"
+                type="button"
+                onClick={() => requestResourceDelete(selectedResource.id)}
+                disabled={deleteActionDisabled}
+                aria-busy={pendingDeletedResourceIds.includes(selectedResource.id)}
+                aria-label={`${localize(language, "deleteResource")}: ${selectedResource.title}`}
+                title={
+                  deleteActionDisabled
+                    ? resourceWriteBlockedReason
+                      ?? deleteUnavailableReason
+                      ?? localize(language, "deleteResource")
+                    : `${localize(language, "deleteResource")}: ${selectedResource.title}`
+                }
+              >
+                <TrashIcon size={12} />
+                <span>{localize(language, "deleteResource")}</span>
+              </button>
+            ) : null}
           </div>
           ) : null}
           </section>
