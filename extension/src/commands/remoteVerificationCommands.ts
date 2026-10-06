@@ -220,8 +220,8 @@ const REMOTE_VERIFICATION_SUMMARY_COPY: Record<
     interrupted: '远程验证已中断,执行结果未知。',
   },
   'en-US': {
-    passed: 'Verified passed (exit {exit})',
-    failed: 'Verified failed (exit {exit})',
+    passed: 'Verification passed (exit {exit})',
+    failed: 'Verification failed (exit {exit})',
     timed_out: 'The remote verification timed out; its outcome is unknown.',
     cancelled: 'The remote verification was stopped; its outcome is unknown.',
     interrupted: 'The remote verification was interrupted; its outcome is unknown.',

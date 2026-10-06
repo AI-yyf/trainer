@@ -53,6 +53,8 @@ budgetTimer.unref?.();
 
 /** A gap larger than this between the resume banner and the first message is a hole. */
 const MAX_RESUME_GAP = 24;
+/** Content shorter than the viewport must rest this close to the list bottom (anchor-bottom). */
+const MAX_BOTTOM_GAP = 24;
 /** Palette may not extend past the composer it belongs to. */
 const PALETTE_WIDTH_TOLERANCE = 4;
 /** A label taller than this has wrapped onto a second line. */
@@ -240,22 +242,44 @@ async function main() {
   await page.waitForTimeout(600);
   const coach = await page.evaluate(() => {
     const list = document.querySelector(".coach-conversation-view__list");
-    const resume = document.querySelector(".coach-training-resume");
+    // The resume line carries a data attribute (App.tsx renders
+    // data-coach-training-resume), not a class name. A ".coach-training-resume"
+    // class probe here returned null every run and, combined with the
+    // null-tolerant assertion below, kept this rule fake-green.
+    const resume = document.querySelector("[data-coach-training-resume]");
     const first = document.querySelector(".coach-conversation-view__item");
     if (!list) return { error: "no message list" };
     const listBox = list.getBoundingClientRect();
+    const last = list.lastElementChild;
     return {
       listHeight: Math.round(listBox.height),
       firstOffsetTop: first ? Math.round(first.getBoundingClientRect().top - listBox.top) : null,
       gapAfterBanner: resume && first
         ? Math.round(first.getBoundingClientRect().top - resume.getBoundingClientRect().bottom)
         : null,
+      // Dead-zone probe: with content shorter than the viewport, the message
+      // block must rest against the bottom of the list (anchor-bottom), so no
+      // large empty band separates the thread from the composer.
+      bottomGap: last ? Math.round(listBox.bottom - last.getBoundingClientRect().bottom) : null,
     };
   });
-  check(
-    coach.gapAfterBanner === null || coach.gapAfterBanner <= MAX_RESUME_GAP,
-    `coach: banner→first-message gap ${coach.gapAfterBanner}px (limit ${MAX_RESUME_GAP}px); first item offset ${coach.firstOffsetTop}px in a ${coach.listHeight}px list`,
-  );
+  if (coach.error) {
+    check(false, `coach: ${coach.error}`);
+  } else {
+    // Fail closed: the ready scenario renders a live training card, so the
+    // resume banner must be present and measurable. A missing banner is a
+    // regression, never a pass.
+    check(
+      coach.gapAfterBanner !== null && coach.gapAfterBanner <= MAX_RESUME_GAP,
+      `coach: banner→first-message gap ${coach.gapAfterBanner}px (limit ${MAX_RESUME_GAP}px); first item offset ${coach.firstOffsetTop}px in a ${coach.listHeight}px list`,
+    );
+    // The actual dead zone this rule exists for: the space below the last
+    // message before the composer must stay within budget.
+    check(
+      coach.bottomGap !== null && coach.bottomGap <= MAX_BOTTOM_GAP,
+      `coach: content sits ${coach.bottomGap}px above the list bottom (limit ${MAX_BOTTOM_GAP}px) in a ${coach.listHeight}px list`,
+    );
+  }
 
   // Settings: a configured connection lands on its detail; the index is the
   // cold-start surface. Both paths must keep index rows whole and panes usable.
@@ -299,19 +323,28 @@ async function main() {
     if (!deck || !composer) return { error: "missing deck or composer" };
     const deckBox = deck.getBoundingClientRect();
     const composerBox = composer.getBoundingClientRect();
-    const first = document.querySelector(".coach-conversation-view__item")?.getBoundingClientRect();
-    const covers = (box) =>
-      box ? !(box.bottom < deckBox.top || box.top > deckBox.bottom) : false;
+    // r3: the thread is bottom-anchored now (the resume line lives in the
+    // list with margin-top:auto), so the most recent message always sits
+    // right above the composer and ANY composer popup overlaps it. The
+    // takeover this rule guards against is the deck covering the UPPER half
+    // of the thread, not touching the newest message.
+    const list = document.querySelector(".coach-conversation-view__list")?.getBoundingClientRect();
+    const upperHalfTop = list ? list.top + list.height / 2 : Infinity;
+    const coversThread = list
+      ? deckBox.top < upperHalfTop
+      : true;
     return {
       deckWidth: Math.round(deckBox.width),
       composerWidth: Math.round(composerBox.width),
-      coversThread: covers(first),
+      coversThread,
+      deckTop: Math.round(deckBox.top),
+      listMid: list ? Math.round(upperHalfTop) : null,
       leftInsideViewport: deckBox.left >= 0,
     };
   });
   check(
     palette.coversThread === false,
-    `palette: does not cover the coach thread (coversThread=${palette.coversThread})`,
+    `palette: does not cover the upper half of the coach thread (deckTop=${palette.deckTop}px vs list mid ${palette.listMid}px)`,
   );
   check(
     Math.abs(palette.deckWidth - palette.composerWidth) <= PALETTE_WIDTH_TOLERANCE,

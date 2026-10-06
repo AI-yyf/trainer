@@ -129,7 +129,6 @@ const COPY: Record<
     evidenceCount: (count: number) => string;
     noEvidence: string;
     notVerified: string;
-    transferNudge: string;
     transferAction: string;
     empty: string;
     startPracticing: string;
@@ -148,7 +147,6 @@ const COPY: Record<
     evidenceCount: (count) => `${count} 次验证通过`,
     noEvidence: "还没有验证记录",
     notVerified: "还未验证",
-    transferNudge: "迁移能力还未验证。做一个陌生的练习来检验你真正掌握了吗。",
         transferAction: "验证迁移：做一道陌生练习",
     empty: "完成一次练习的验证后，这里会显示你在理解、实现、调试和迁移上的真实成长。",
     startPracticing: "去练习",
@@ -166,8 +164,6 @@ const COPY: Record<
     evidenceCount: (count) => `${count} verification${count === 1 ? "" : "s"} passed`,
     noEvidence: "No verifications yet",
     notVerified: "Not verified yet",
-    transferNudge:
-      "Transfer hasn't been verified yet. Try an unfamiliar exercise to test your real understanding.",
         transferAction: "Verify transfer: try an unfamiliar exercise",
     empty:
       "Once you verify a practice card, your real growth in comprehension, implementation, debugging, and transfer shows up here.",
@@ -186,8 +182,6 @@ const COPY: Record<
     evidenceCount: (count) => `${count} verificación${count === 1 ? "" : "es"} superada${count === 1 ? "" : "s"}`,
     noEvidence: "Aún no hay verificaciones",
     notVerified: "Aún sin verificar",
-    transferNudge:
-      "La transferencia aún no está verificada. Prueba un ejercicio poco familiar para comprobar tu comprensión real.",
         transferAction: "Verificar la transferencia: prueba un ejercicio poco familiar",
     empty:
       "Cuando verifiques una tarjeta de práctica, tu crecimiento real en comprensión, implementación, depuración y transferencia aparecerá aquí.",
@@ -206,8 +200,6 @@ const COPY: Record<
     evidenceCount: (count) => `${count} vérification${count === 1 ? "" : "s"} réussie${count === 1 ? "" : "s"}`,
     noEvidence: "Pas encore de vérifications",
     notVerified: "Pas encore vérifié",
-    transferNudge:
-      "Le transfert n'est pas encore vérifié. Essayez un exercice inhabituel pour tester votre vraie compréhension.",
         transferAction: "Vérifier le transfert : essayez un exercice inhabituel",
     empty:
       "Après la vérification d'une carte d'exercice, votre progression réelle en compréhension, implémentation, débogage et transfert apparaît ici.",
@@ -226,8 +218,6 @@ const COPY: Record<
     evidenceCount: (count) => `${count} bestandene Überprüfung${count === 1 ? "" : "en"}`,
     noEvidence: "Noch keine Überprüfungen",
     notVerified: "Noch nicht überprüft",
-    transferNudge:
-      "Transfer ist noch nicht überprüft. Probiere eine ungewohnte Aufgabe, um dein echtes Verständnis zu testen.",
         transferAction: "Transfer überprüfen: eine ungewohnte Aufgabe versuchen",
     empty:
       "Sobald du eine Übungskarte überprüfst, erscheint hier dein echtes Wachstum in Verständnis, Implementierung, Fehlersuche und Transfer.",
@@ -246,8 +236,6 @@ const COPY: Record<
     evidenceCount: (count) => `${count} 回の検証に合格`,
     noEvidence: "検証記録はまだありません",
     notVerified: "まだ検証なし",
-    transferNudge:
-      "転用はまだ検証されていません。見慣れない練習で本当の理解を確かめてみましょう。",
         transferAction: "転用を検証する：見慣れない練習をひとつ",
     empty:
       "練習カードを検証すると、理解・実装・デバッグ・転用の本当の成長がここに表示されます。",
@@ -266,8 +254,6 @@ const COPY: Record<
     evidenceCount: (count) => `${count}회 검증 통과`,
     noEvidence: "아직 검증 기록이 없습니다",
     notVerified: "아직 검증 안 됨",
-    transferNudge:
-      "전이는 아직 검증되지 않았습니다. 익숙하지 않은 연습으로 진짜 이해를 확인해 보세요.",
         transferAction: "전이 검증: 익숙하지 않은 연습 하나 하기",
     empty:
       "연습 카드를 검증하면 이해·구현·디버깅·전이에 대한 실제 성장이 여기에 표시됩니다.",
@@ -286,8 +272,6 @@ const COPY: Record<
     evidenceCount: (count) => `${count} verificação${count === 1 ? "" : "es"} aprovada${count === 1 ? "" : "s"}`,
     noEvidence: "Nenhuma verificação ainda",
     notVerified: "Ainda não verificado",
-    transferNudge:
-      "A transferência ainda não foi verificada. Tente um exercício pouco familiar para testar sua compreensão real.",
         transferAction: "Verificar transferência: tente um exercício pouco familiar",
     empty:
       "Depois de verificar um cartão de prática, seu crescimento real em compreensão, implementação, depuração e transferência aparece aqui.",
@@ -409,10 +393,10 @@ export function ProgressView({ language, projection, onOpenTraining, onBack }: P
             if (strongest.length < 2) return null;
             return (
               <li className="progress-view__row progress-view__nudge">
-                <span className="progress-view__state">{copy.transferNudge}</span>
-                {/* r1-g1-2: the page's single primary action — verify transfer
-                    with an unfamiliar exercise — sits under the conclusion
-                    sentence and routes through the existing training view. */}
+                {/* r1-g1-2/r3: the page's single primary action — verify transfer
+                    with an unfamiliar exercise — states the invitation itself;
+                    the former italic conclusion sentence above it was removed as
+                    a same-meaning duplicate (subtraction discipline). */}
                 <button
                   type="button"
                   className="button button--accent progress-view__nudge-action"

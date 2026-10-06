@@ -472,6 +472,12 @@ npx playwright test e2e/trainer-settings-lifecycle.spec.js
 # serves the existing preview dist, report-only unless --strict; budgets:
 # streaming burst longtask = 0, warm nav p90 < 100ms. Baseline:
 # docs/verification/perf-probe-baseline.json)
+# Discipline: re-shoot the baseline JSON whenever UI geometry or surface
+# structure changes (banner/list moves, keep-alive changes, new surfaces) —
+# single-machine single-sample deltas under ~20% are noise. --strict verdict:
+# NOT part of the verify matrix — headless single-sample numbers are too noisy
+# to gate CI; run it locally (or in a dedicated perf job) before/after
+# performance-relevant changes and fail on budget misses there.
 npm run perf:probe
 
 # Release verification + packaging

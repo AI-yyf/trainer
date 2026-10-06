@@ -313,9 +313,9 @@
       "previewScenario": "training-debug",
       "sourceChain": {
         "zh-CN": [
-          "最小复现",
-          "断点边界",
-          "验证过的异常状态"
+          "最短重现",
+          "断点位置",
+          "确认过的异常状态"
         ],
         "en-US": [
           "Minimal repro",
@@ -328,7 +328,7 @@
         "en-US": "Minimal debug loop"
       },
       "coachSummary": {
-        "zh-CN": "先把调试闭环缩成一个复现、一个暂停点和一个被证实的错误状态，再决定改什么。",
+        "zh-CN": "先把调试闭环缩成一个重现、一个暂停点和一个你确认过的错误状态，再决定改什么。",
         "en-US": "First shrink the debug loop to one repro, one pause point, and one verified bad state before deciding what to change."
       },
       "practiceGoal": {
@@ -371,11 +371,11 @@
           "en-US": "A file is failing and you need one minimal VS Code debug loop before changing more code."
         },
         "problemStatement": {
-          "zh-CN": "构建一个最小调试闭环：可复现问题、在状态第一次出错的地方暂停，并带回一个被证实的发现。",
+          "zh-CN": "构建一个最小调试闭环：重现问题、在状态第一次出错的地方暂停，并带回一个你确认过的发现。",
           "en-US": "Build one minimal debug loop that reproduces the issue, stops where the state first changes, and returns one verified finding."
         },
         "suggestedWorkspaceAction": {
-          "zh-CN": "选一个最小失败命令或文件，在状态边界打第一个有用断点，然后跑最小复现。",
+          "zh-CN": "选一个总是失败的最短命令或文件，在状态第一次出错的地方打第一个断点，然后跑一遍重现。",
           "en-US": "Pick one failing command or file, set the first useful breakpoint at the state boundary, and run the smallest repro."
         },
         "apiHints": [

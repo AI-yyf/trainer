@@ -37,6 +37,8 @@ export interface CoachConversationViewProps {
   title?: string;
   subtitle?: string;
   emptyState?: React.ReactNode;
+  /** Renders inside the list before every entry (e.g. the in-progress-card resume line). */
+  listHead?: React.ReactNode;
   footer?: React.ReactNode;
   openArtifactLabel?: string;
   userLabel?: string;
@@ -66,6 +68,7 @@ function CoachConversationViewImpl({
   title,
   subtitle,
   emptyState,
+  listHead,
   footer,
   openArtifactLabel,
   userLabel,
@@ -145,6 +148,7 @@ function CoachConversationViewImpl({
           hasMessages ? "coach-conversation-view__list--active" : "coach-conversation-view__list--empty"
         }`}
       >
+        {listHead}
         {messages.length === 0 && emptyState ? emptyState : null}
 
         {items.map((item, itemIndex) => (

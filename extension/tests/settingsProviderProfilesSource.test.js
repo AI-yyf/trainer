@@ -51,9 +51,10 @@ test('settings provider profile actions are wired through App and rendered in Se
   assert.match(settingsSource, /onSaveProviderProfile\?: \(\) => void;/);
   assert.match(settingsSource, /const canSaveProviderProfile = Boolean\(/);
   assert.match(settingsSource, /const canSaveProviderConnection = Boolean\(/);
+  // r3 settings dedup: connection-level save label, not a repeated model string.
   assert.match(
     settingsSource,
-    /const saveProviderConnectionLabel = currentDraftModel\s*\?\s*modelPickerCopy\.saveAndUse\(shortenSummary\(currentDraftModel, 32\)\)\s*:\s*copy\.setupAction;/,
+    /const saveProviderConnectionLabel = modelPickerCopy\.saveAndUseConnection;/,
   );
   assert.match(settingsSource, /label=\{saveProviderConnectionLabel\}/);
   assert.match(settingsSource, /title=\{saveProviderConnectionTitle\}/);

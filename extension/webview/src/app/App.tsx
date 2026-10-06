@@ -11935,6 +11935,7 @@ export function App() {
       systemLabel={appUiCopy(layout.composerLanguage, "\u7cfb\u7edf")}
       language={layout.composerLanguage}
       emptyState={embedded || workspaceSessionBlocked ? null : coachSuperEntryContent(false)}
+      listHead={embedded ? undefined : coachTrainingResumeLine}
       footer={embedded ? undefined : coachCheckpointRecoveryActions}
       streamingMessage={
         streaming.isStreaming
@@ -12216,31 +12217,35 @@ export function App() {
     );
   };
 
+  // §十一: one quiet context line, not a module — the card itself stays the
+  // primary surface for the in-progress training card. r3: it renders as the
+  // list's first entry (listHead) instead of a floating banner above the pane,
+  // so on a short thread it anchors with the conversation instead of opening a
+  // dead zone. The data attribute stays for the UI-geometry gate.
+  const coachTrainingResumeLine = (() => {
+    const ts = data.workspaceTrainingState;
+    const cardId = ts?.selectedCardId?.trim();
+    const cardTitle = ts?.selectedCardTitle?.trim();
+    if (!cardId || !cardTitle) return null;
+    return (
+      <p className="muted" data-coach-training-resume="true">
+        {appUiCopy(layout.composerLanguage, "正在进行：{v}").replace("{v}", () => cardTitle)}
+        {/* r2 first-screen affordance: a bordered quiet button (existing
+            .button--ghost) reads as the next step; the bare .template-back
+            text link rendered as part of the sentence. */}
+        <button
+          type="button"
+          className="button button--ghost"
+          onClick={() => setActiveView("training")}
+        >
+          {appUiCopy(layout.composerLanguage, "继续")}
+        </button>
+      </p>
+    );
+  })();
+
   const renderCoachRootView = () => (
     <section className="coach-view">
-      {(() => {
-        const ts = data.workspaceTrainingState;
-        const cardId = ts?.selectedCardId?.trim();
-        const cardTitle = ts?.selectedCardTitle?.trim();
-        if (!cardId || !cardTitle) return null;
-        // §十一: one quiet context line, not a module — the card itself stays
-        // the primary surface for the in-progress training card.
-        return (
-          <p className="muted" data-coach-training-resume="true">
-            {appUiCopy(layout.composerLanguage, "正在进行：{v}").replace("{v}", () => cardTitle)}
-            {/* r2 first-screen affordance: a bordered quiet button (existing
-                .button--ghost) reads as the next step; the bare .template-back
-                text link rendered as part of the sentence. */}
-            <button
-              type="button"
-              className="button button--ghost"
-              onClick={() => setActiveView("training")}
-            >
-              {appUiCopy(layout.composerLanguage, "继续")}
-            </button>
-          </p>
-        );
-      })()}
       {coachBlockingSurface === "workspace-admission" && onboardingWizard ? (
         // R1①: on a true cold start the wizard's workspace step owns the
         // root-selection ask; the admission panel must not stack under it

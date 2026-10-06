@@ -273,6 +273,18 @@
   padding-bottom: 10px;
 }
 
+/* Chat convention, second act: once the resume banner renders INSIDE the list
+   (it moves in from App.tsx as the list's first child), the auto margin pins
+   the whole banner+thread group to the composer, so a short thread no longer
+   strands ~70% dead pane between the last message and the input. The banner
+   travels WITH the messages, so the banner→first-message hole that killed the
+   old spacer cannot reopen. Until that DOM move lands this rule matches
+   nothing; once it does, an overflowing thread makes the auto margin resolve
+   to 0 and normal top-down scrolling is untouched. */
+.coach-conversation-view__list > [data-coach-training-resume] {
+  margin-top: auto;
+}
+
 @media (max-width: 360px) {
   .coach-conversation-view__summary {
     margin-inline: 2px;

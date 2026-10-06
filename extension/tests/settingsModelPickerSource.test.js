@@ -135,7 +135,7 @@ test('Settings localizes model picker actions in every supported language', () =
   assert.match(pickerCopy, /refreshListDetail:/);
   assert.match(pickerCopy, /enterModelName:/);
   assert.match(pickerCopy, /useTypedModel:/);
-  assert.match(pickerCopy, /saveAndUse:/);
+  assert.match(pickerCopy, /saveAndUseConnection:/);
 });
 
 test('Settings turns successful discovery into model selection without auto-selecting a model', () => {
@@ -238,8 +238,10 @@ test('Settings keeps the long model list searchable and defers inner save or tes
 
   assert.match(source, /refreshListDetail: string;/);
   assert.match(source, /modelPickerCopy\.refreshListDetail/);
-  assert.match(source, /saveAndUse: \(model: string\) => string;/);
-  assert.match(source, /const saveProviderConnectionLabel = currentDraftModel/);
+  // r3 settings dedup: the save button states the connection-level action
+  // instead of repeating the model string (it already shows in chip + picker).
+  assert.match(source, /saveAndUseConnection: string;/);
+  assert.match(source, /const saveProviderConnectionLabel = modelPickerCopy\.saveAndUseConnection/);
   assert.match(source, /label=\{saveProviderConnectionLabel\}/);
   assert.match(source, /const modelDiscoveryGuidanceActive = canFindDraftModels \|\| hasDiscoveredDraftModels;/);
   assert.match(source, /const showProviderDetailActions =\s*!modelDiscoveryGuidanceActive \|\| showSecondaryModelDiscoveryAction;/);

@@ -937,7 +937,7 @@ function providerModelPickerCopy(language: ComposerLanguage): {
   enterModelName: string;
   useTypedModel: (model: string) => string;
   moreMatchesHint: (count: number) => string;
-  saveAndUse: (model: string) => string;
+  saveAndUseConnection: string;
   directModelPlaceholder: string;
   directModelHint: string;
   modelRequiredNote: string;
@@ -954,7 +954,7 @@ function providerModelPickerCopy(language: ComposerLanguage): {
       enterModelName: "输入完整模型名",
       useTypedModel: (model) => `使用 ${model}`,
       moreMatchesHint: (count) => `还有 ${count} 个匹配项，请继续输入。`,
-      saveAndUse: (model) => `保存并使用 ${model}`,
+      saveAndUseConnection: "保存并使用此连接",
     },
     "en-US": {
       filterPlaceholder: "Filter by model name",
@@ -967,7 +967,7 @@ function providerModelPickerCopy(language: ComposerLanguage): {
       enterModelName: "Enter a full model name",
       useTypedModel: (model) => `Use ${model}`,
       moreMatchesHint: (count) => `${count} more matches. Keep typing to narrow them down.`,
-      saveAndUse: (model) => `Save and use ${model}`,
+      saveAndUseConnection: "Save and use this connection",
     },
     "es-ES": {
       filterPlaceholder: "Filtrar por nombre de modelo",
@@ -980,7 +980,7 @@ function providerModelPickerCopy(language: ComposerLanguage): {
       enterModelName: "Escribir el nombre completo del modelo",
       useTypedModel: (model) => `Usar ${model}`,
       moreMatchesHint: (count) => `${count} coincidencias mas. Sigue escribiendo para acotar.`,
-      saveAndUse: (model) => `Guardar y usar ${model}`,
+      saveAndUseConnection: "Guardar y usar esta conexión",
     },
     "fr-FR": {
       filterPlaceholder: "Filtrer par nom de modele",
@@ -993,7 +993,7 @@ function providerModelPickerCopy(language: ComposerLanguage): {
       enterModelName: "Saisir le nom complet du modele",
       useTypedModel: (model) => `Utiliser ${model}`,
       moreMatchesHint: (count) => `${count} resultats supplementaires. Continuez a saisir le nom.`,
-      saveAndUse: (model) => `Enregistrer et utiliser ${model}`,
+      saveAndUseConnection: "Enregistrer et utiliser cette connexion",
     },
     "de-DE": {
       filterPlaceholder: "Nach Modellnamen filtern",
@@ -1006,7 +1006,7 @@ function providerModelPickerCopy(language: ComposerLanguage): {
       enterModelName: "Vollstandigen Modellnamen eingeben",
       useTypedModel: (model) => `${model} verwenden`,
       moreMatchesHint: (count) => `${count} weitere Treffer. Tippe weiter zum Eingrenzen.`,
-      saveAndUse: (model) => `${model} speichern und verwenden`,
+      saveAndUseConnection: "Verbindung speichern und verwenden",
     },
     "ja-JP": {
       filterPlaceholder: "モデル名で絞り込む",
@@ -1019,7 +1019,7 @@ function providerModelPickerCopy(language: ComposerLanguage): {
       enterModelName: "モデル名を直接入力",
       useTypedModel: (model) => `${model} を使用`,
       moreMatchesHint: (count) => `他に ${count} 件あります。さらに入力して絞り込んでください。`,
-      saveAndUse: (model) => `${model} を保存して使用`,
+      saveAndUseConnection: "この接続を保存して使用",
     },
     "ko-KR": {
       filterPlaceholder: "모델 이름으로 검색",
@@ -1032,7 +1032,7 @@ function providerModelPickerCopy(language: ComposerLanguage): {
       enterModelName: "전체 모델 이름 입력",
       useTypedModel: (model) => `${model} 사용`,
       moreMatchesHint: (count) => `${count}개 결과가 더 있습니다. 더 입력해 좁혀 보세요.`,
-      saveAndUse: (model) => `${model} 저장 후 사용`,
+      saveAndUseConnection: "이 연결 저장 후 사용",
     },
     "pt-BR": {
       filterPlaceholder: "Filtrar por nome do modelo",
@@ -1045,7 +1045,7 @@ function providerModelPickerCopy(language: ComposerLanguage): {
       enterModelName: "Digite o nome completo do modelo",
       useTypedModel: (model) => `Usar ${model}`,
       moreMatchesHint: (count) => `Ha mais ${count} resultados. Continue digitando para filtrar.`,
-      saveAndUse: (model) => `Salvar e usar ${model}`,
+      saveAndUseConnection: "Salvar e usar esta conexão",
     },
   };
 
@@ -5602,15 +5602,12 @@ export function CoachSettingsView({
       !requestDefaultsTextHasDrift &&
       (providerHasDraftChanges || !providerSaved),
   );
-  const saveProviderConnectionLabel = currentDraftModel
-    ? modelPickerCopy.saveAndUse(shortenSummary(currentDraftModel, 32))
-    : copy.setupAction;
+  // r3 settings dedup: the model name already shows in the chip and the
+  // picker; the save button states the connection-level action instead of
+  // repeating the model string a third and fourth time on one screen.
+  const saveProviderConnectionLabel = modelPickerCopy.saveAndUseConnection;
   const saveProviderConnectionTitle = canSaveProviderConnection
-    ? currentDraftModel
-      ? modelPickerCopy.saveAndUse(currentDraftModel)
-      : providerHasDraftChanges
-        ? settingsPhrase(language, "saveToApply")
-        : copy.setupAction
+    ? modelPickerCopy.saveAndUseConnection
     : providerDraftEditorBlocked || requestDefaultsTextHasDrift
       ? localizedRequestDefaultsInvalidJson
     : currentDraftModelPolicyMessage
