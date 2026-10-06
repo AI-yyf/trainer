@@ -28,12 +28,17 @@ export interface AppShellProps {
 /** One identity row, three stable destinations, then the owning surface. */
 export function AppShell({ language, direction, activeView, context, historyOpen, onHistory, onNavigate, children }: AppShellProps) {
   const selected = primaryDestinationForRoute(activeView);
+  // A workspace literally named "trainer" would read as "Trainer trainer" next
+  // to the brand; same name (trimmed, case-insensitive) renders no context.
+  const trimmedContext = context?.trim();
+  const contextDistinctFromBrand =
+    Boolean(trimmedContext) && trimmedContext!.toLowerCase() !== "trainer";
   return (
     <div className="trainer-shell" lang={language} dir={direction} data-text-direction={direction} data-template="AppShell">
       <header className="app-shell-header">
         <div className="app-shell-header__identity">
           <span className="app-shell-header__brand">Trainer</span>
-          {context ? <span className="app-shell-header__context" title={context}>{context}</span> : null}
+          {contextDistinctFromBrand && trimmedContext ? <span className="app-shell-header__context" title={trimmedContext}>{trimmedContext}</span> : null}
           <div className="app-shell-header__utilities">
             <button type="button" className="app-shell-header__utility" data-testid="trainer-history-toggle" aria-label={HISTORY_LABEL[language]} title={HISTORY_LABEL[language]} aria-expanded={historyOpen} onClick={onHistory}>
               <HistoryIcon size={16} aria-hidden="true" />

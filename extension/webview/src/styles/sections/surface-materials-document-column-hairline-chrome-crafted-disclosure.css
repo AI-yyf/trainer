@@ -119,11 +119,6 @@ details[open] > :not(summary) {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-
-  .composer__send .trainer-spin,
-[class*=         ] {
-    animation: trainer-spin 0.65s linear infinite !important;
-  }
 }
 
 /* Crafted first surface: one input object, no leftover chrome. */
@@ -170,8 +165,7 @@ details[open] > :not(summary) {
   line-height: var(--leading-body);
 }
 
-.training-current__actions--primary .button,
-.training-current__actions--primary .button.button--accent {
+.training-current__actions--primary .button {
   background: transparent;
   border-color: color-mix(in srgb, var(--line) 62%, transparent);
 }

@@ -930,12 +930,42 @@ function resourceTrainingHandoffFailureMessage(
       connection: "The model connection is unavailable right now. Check it in Settings, then try again.",
       unavailable: "The training card could not be prepared yet. Refresh Resources and try again.",
     },
-    "es-ES": {},
-    "fr-FR": {},
-    "de-DE": {},
-    "ja-JP": {},
-    "ko-KR": {},
-    "pt-BR": {},
+    "es-ES": {
+      resource_missing: "Este recurso ya no está en la biblioteca. Actualiza Recursos y vuelve a seleccionarlo.",
+      resource_needs_refresh: "Este recurso todavía necesita indexarse o actualizarse. Actualiza el índice e inténtalo de nuevo.",
+      connection: "La conexión con el modelo no está disponible ahora. Revísala en Ajustes e inténtalo de nuevo.",
+      unavailable: "La tarjeta de práctica aún no se pudo preparar. Actualiza Recursos e inténtalo de nuevo.",
+    },
+    "fr-FR": {
+      resource_missing: "Cette ressource n'est plus dans la bibliothèque. Actualisez Ressources, puis resélectionnez-la.",
+      resource_needs_refresh: "Cette ressource doit encore être indexée ou mise à jour. Actualisez l'index et réessayez.",
+      connection: "La connexion au modèle est indisponible pour le moment. Vérifiez-la dans Paramètres, puis réessayez.",
+      unavailable: "La carte d'exercice n'a pas encore pu être préparée. Actualisez Ressources et réessayez.",
+    },
+    "de-DE": {
+      resource_missing: "Diese Ressource ist nicht mehr in der Bibliothek. Aktualisiere Ressourcen und wähle sie erneut.",
+      resource_needs_refresh: "Diese Ressource muss noch indiziert oder aktualisiert werden. Aktualisiere den Index und versuche es erneut.",
+      connection: "Die Modellverbindung ist gerade nicht verfügbar. Prüfe sie in den Einstellungen und versuche es erneut.",
+      unavailable: "Die Übungskarte konnte noch nicht vorbereitet werden. Aktualisiere Ressourcen und versuche es erneut.",
+    },
+    "ja-JP": {
+      resource_missing: "この資料はもう資料ライブラリにありません。資料を更新してから、もう一度選んでください。",
+      resource_needs_refresh: "この資料はまだインデックスまたは更新が必要です。インデックスを更新してからもう一度お試しください。",
+      connection: "モデル接続が現在使用できません。設定で確認してからもう一度お試しください。",
+      unavailable: "トレーニングカードをまだ準備できませんでした。資料を更新してもう一度お試しください。",
+    },
+    "ko-KR": {
+      resource_missing: "이 자료는 더 이상 자료 라이브러리에 없습니다. 자료를 새로 고친 후 다시 선택해 주세요.",
+      resource_needs_refresh: "이 자료는 아직 인덱싱 또는 업데이트가 필요합니다. 인덱스를 새로 고친 후 다시 시도해 주세요.",
+      connection: "모델 연결을 지금 사용할 수 없습니다. 설정에서 확인한 후 다시 시도해 주세요.",
+      unavailable: "훈련 카드를 아직 준비하지 못했습니다. 자료를 새로 고친 후 다시 시도해 주세요.",
+    },
+    "pt-BR": {
+      resource_missing: "Este recurso não está mais na biblioteca. Atualize Recursos e selecione-o novamente.",
+      resource_needs_refresh: "Este recurso ainda precisa ser indexado ou atualizado. Atualize o índice e tente novamente.",
+      connection: "A conexão com o modelo está indisponível no momento. Verifique em Configurações e tente novamente.",
+      unavailable: "Não foi possível preparar o cartão de prática ainda. Atualize Recursos e tente novamente.",
+    },
   };
   return reason ? copy[language]?.[reason] ?? copy["en-US"][reason] : undefined;
 }

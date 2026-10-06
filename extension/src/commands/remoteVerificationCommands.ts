@@ -6,12 +6,35 @@ import { deriveCompanionInstallState } from '../../../shared/src/companionInstal
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
 import {
+  ATTESTATION_UNDELIVERED_MARKER,
+  attestationIdempotencyKey,
   buildTestRunAttestationBody,
   dispatchTestRunAttestation,
   resolveAttestationWorkspaceId,
   resolveLivePracticeCardId,
   truncateTestsOutput,
+  type TrainingAttestationRuntime,
 } from '../testing/trainingAttestation';
+
+/**
+ * Attestation runtime with the undelivered notice wired: a failed delivery
+ * posts the marker message the webview scopes to Training (localized there).
+ */
+function attestationRuntimeWithUndeliveredNotice(context: CommandContext): TrainingAttestationRuntime {
+  return {
+    sidecarClient: context.sidecarClient,
+    sidecarManager: context.sidecarManager,
+    outputChannel: context.outputChannel,
+    getHostState: () => context.getHostState(),
+    getSessionId: () => context.getSessionId(),
+    notifyAttestationUndelivered: () => {
+      void context.workbench.postMessage({
+        type: 'operation/status',
+        payload: { tone: 'error', message: ATTESTATION_UNDELIVERED_MARKER },
+      });
+    },
+  };
+}
 
 export interface RemoteVerificationCommandPayload {
   /** Structured process spec — protocol v2 has no shell-string path. */
@@ -89,8 +112,14 @@ export async function remoteVerifyCommand(
   let stderr = '';
   let exitCode: number | null = null;
   let passed = false;
+  // Companion-side session id: the stable run identity behind the attestation
+  // idempotency key, so a delivery retry can never double-record evidence.
+  let companionRunId = '';
   try {
     const verification = await context.workspaceGateway.runVerification(spec, {
+      onStart: (session) => {
+        companionRunId = session.session_id;
+      },
       onChunk: (chunk) => {
         if (chunk.stream === 'stdout') {
           stdout = (stdout + chunk.text).slice(-100_000);
@@ -141,14 +170,17 @@ export async function remoteVerifyCommand(
       testsOutput: truncateTestsOutput(`${stdout}\n${stderr}`.trim()),
       sessionId: context.getSessionId(),
       workspaceId: resolveAttestationWorkspaceId(hostState),
+      idempotencyKey: attestationIdempotencyKey({ cardId, runId: companionRunId }),
     });
-    void dispatchTestRunAttestation(context, body);
+    // Fire-and-forget with classification + one connect-class retry; a failed
+    // delivery surfaces the training-scoped undelivered notice from the runtime.
+    void dispatchTestRunAttestation(attestationRuntimeWithUndeliveredNotice(context), body);
   }
 
   return {
     ok: passed,
     message: cardId
-      ? `Remote verification ${passed ? 'passed' : 'failed'} (exit ${exitCode}); the result was attested to the trainer.`
+      ? `Remote verification ${passed ? 'passed' : 'failed'} (exit ${exitCode}); the result is being attested to the trainer.`
       : `Remote verification ${passed ? 'passed' : 'failed'} (exit ${exitCode}); no live practice card, so nothing was attested.`,
     data: { spec, exit_code: exitCode, passed, stdout, stderr },
   };
@@ -271,8 +303,11 @@ export async function remoteVerifyActiveFileCommand(
           testsOutput: truncateTestsOutput(`${verification.stdout}\n${verification.stderr}`.trim()),
           sessionId: context.getSessionId(),
           workspaceId: resolveAttestationWorkspaceId(hostState),
+          idempotencyKey: attestationIdempotencyKey({ cardId, runId: sessionId }),
         });
-        void dispatchTestRunAttestation(context, body);
+        // Fire-and-forget with classification + one connect-class retry; a
+        // failed delivery surfaces the training-scoped undelivered notice.
+        void dispatchTestRunAttestation(attestationRuntimeWithUndeliveredNotice(context), body);
       }
 
       const summary = completed

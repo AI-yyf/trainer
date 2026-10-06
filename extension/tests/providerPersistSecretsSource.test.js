@@ -21,8 +21,11 @@ test('sanitizeHostFailureMessage never forwards host error prose', () => {
     path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx'),
     'utf8',
   );
+  // The store-side sanitizeOperationFailureMessage moved to the governance
+  // module; the host-status chain stays in App and ends at the next top-level
+  // declaration after it.
   const start = appSource.indexOf('function sanitizeHostFailureMessage(');
-  const end = appSource.indexOf('function sanitizeOperationFailureMessage(', start);
+  const end = appSource.indexOf('interface SettingsActionState', start);
   assert.ok(start >= 0 && end > start);
   const sanitizer = appSource.slice(start, end);
   assert.doesNotMatch(sanitizer, /message:\s*message\.payload\.message/);

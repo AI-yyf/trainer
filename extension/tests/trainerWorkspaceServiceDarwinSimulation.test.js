@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const hostPath = require('node:path');
+const os = require('node:os');
 
 
 // Mock vscode before requiring the compiled module
@@ -52,7 +53,16 @@ _Mod._load = function (request, parent, isMain) {
 // fixture below; after the fix the rebase flow completes.
 // ---------------------------------------------------------------------------
 
-const SIM_ROOT = `/tmp/trainer-darwin-sim-${process.pid}-${Date.now().toString(36)}`;
+// Base the simulation tree on the host temp directory: this fixture creates
+// real files and directories, and a hardcoded /tmp/... root is not a writable
+// location on every platform (Windows resolves it against the current drive).
+// The darwin realpath simulation below deliberately stays, because the
+// /var -> /private/var canonicalization it mimics applies to os.tmpdir()
+// output on macOS too.
+const SIM_ROOT = hostPath.join(
+  os.tmpdir(),
+  `trainer-darwin-sim-${process.pid}-${Date.now().toString(36)}`,
+);
 const WINDOWS_DRIVE_ABSOLUTE = /^[a-zA-Z]:[\\/]/;
 const realPlatform = process.platform;
 const realRealpath = fs.realpath.bind(fs);

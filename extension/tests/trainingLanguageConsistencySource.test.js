@@ -6,6 +6,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+const operationMessageGovernancePath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'operationMessageGovernance.ts',
+);
 const copyPath = path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'copy.ts');
 const trainingCoachBridgePath = path.resolve(
   __dirname,
@@ -311,12 +319,14 @@ test('training composer labels and placeholders stay localized across every card
 
 test('training no-card and recoverable states keep actions, labels, and errors localized', () => {
   const appSource = fs.readFileSync(appPath, 'utf8');
+  // Recoverable-failure copy moved from App.tsx into the pure governance module.
+  const governanceSource = fs.readFileSync(operationMessageGovernancePath, 'utf8');
   const bridgeSource = fs.readFileSync(trainingCoachBridgePath, 'utf8');
   const languages = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
   const ctaStart = bridgeSource.indexOf('const trainingCoachCtaCopy');
   const ctaEnd = bridgeSource.indexOf('function trainingCoachCtaLabel', ctaStart);
-  const failureStart = appSource.indexOf('const recoverableFailureCopy');
-  const failureEnd = appSource.indexOf('const RESOURCE_OPERATION_STATUS_PATTERN', failureStart);
+  const failureStart = governanceSource.indexOf('const recoverableFailureCopy');
+  const failureEnd = governanceSource.indexOf('const PLAN_REVISION_CONFLICT_MARKER', failureStart);
   const refinedAccessibilityStart = appSource.indexOf('const refinedComposerAccessibilityLabel');
   const refinedAccessibilityEnd = appSource.indexOf('const laneAwareComposerAccessibilityLabel', refinedAccessibilityStart);
   const submitAccessibilityStart = appSource.indexOf('const localizedTrainingComposerSubmitAriaLabel');
@@ -334,7 +344,7 @@ test('training no-card and recoverable states keep actions, labels, and errors l
   );
 
   const ctaCopy = bridgeSource.slice(ctaStart, ctaEnd);
-  const failureCopy = appSource.slice(failureStart, failureEnd);
+  const failureCopy = governanceSource.slice(failureStart, failureEnd);
   for (const [index, language] of languages.entries()) {
     const nextLanguage = languages[index + 1];
     const ctaLocaleStart = ctaCopy.indexOf(`"${language}": {`);
@@ -364,7 +374,7 @@ test('training no-card and recoverable states keep actions, labels, and errors l
   assert.match(bridgeSource, /ctaLabel: trainingCoachCtaLabel\(input\.language, "continue"\)/);
   assert.match(bridgeSource, /ctaLabel: trainingCoachCtaLabel\(input\.language, "result"\)/);
   assert.match(bridgeSource, /ctaLabel: trainingCoachCtaLabel\(input\.language, "blocker"\)/);
-  assert.match(appSource, /return recoverableFailureCopy\[language\]\?\.\[kind\] \?\? recoverableFailureCopy\["en-US"\]\[kind\];/);
+  assert.match(governanceSource, /return recoverableFailureCopy\[language\]\?\.\[kind\] \?\? recoverableFailureCopy\["en-US"\]\[kind\];/);
   assert.ok(
     appSource.slice(refinedAccessibilityStart, refinedAccessibilityEnd).includes(
       'trainingComposerModeTextCopy.genericAccessibilityLabel',

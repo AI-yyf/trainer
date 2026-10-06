@@ -1,6 +1,5 @@
 export { TrainerIconBase, type TrainerIconProps } from "./TrainerIconBase";
 export {
-  CoachNavIcon,
   LearningNavIcon,
   NavProgressIcon,
   ResourcesNavIcon,
@@ -15,7 +14,7 @@ export {
   SettingsTeachingIcon,
   SettingsWorkspaceIcon,
 } from "./navigation/settingsNav";
-export { TrainerMarkIcon, ModelLayersIcon, EvidenceIcon, RemoteIcon } from "./brand/trainerBrand";
+export { EvidenceIcon, RemoteIcon } from "./brand/trainerBrand";
 export {
   AlertTriangleIcon,
   DataFolderIcon,

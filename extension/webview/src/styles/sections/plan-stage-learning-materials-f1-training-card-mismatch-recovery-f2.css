@@ -45,7 +45,7 @@
 }
 
 .coach-plan-view__stage-material-toggle:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
 }
 
@@ -109,7 +109,7 @@
 }
 
 .training-card-recovery button:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 

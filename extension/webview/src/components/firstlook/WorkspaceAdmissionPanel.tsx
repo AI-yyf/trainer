@@ -108,13 +108,57 @@ function resolveActions(props: WorkspaceAdmissionPanelProps): {
   }
 }
 
+/** Localization labels for the reconciliation state enum; unknown runtime values fall back to neutral copy. */
+const RECONCILIATION_STATE_LABEL: Record<string, CopyKey> = {
+  waiting: "workspaceAdmissionReconciliationWaiting",
+  "retry-required": "workspaceAdmissionReconciliationRetryRequired",
+};
+
+const RECONCILIATION_LOCALE_TAG: Record<string, string> = {
+  "zh-CN": "zh-CN",
+  "en-US": "en-US",
+  "es-ES": "es-ES",
+  "fr-FR": "fr-FR",
+  "de-DE": "de-DE",
+  "ja-JP": "ja-JP",
+  "ko-KR": "ko-KR",
+  "pt-BR": "pt-BR",
+};
+
+/**
+ * The reconciliation state renders in learner language: a localized state
+ * label, the host's engineering `reason` string is never rendered raw, and
+ * the timestamp only appears when it is a real date (the host defaults to
+ * epoch 0 when no reconciliation time is known).
+ */
+function buildReconciliationCopy(reconciliation: NonNullable<WorkspaceAdmissionPanelProps["reconciliation"]>, t: (key: string) => string, language: string) {
+  const stateLabel = t(RECONCILIATION_STATE_LABEL[reconciliation.state] ?? "workspaceAdmissionReconciliationStateUnknown");
+  const updatedAt = new Date(reconciliation.updatedAt);
+  const timestamp =
+    !Number.isNaN(updatedAt.getTime()) && updatedAt.getFullYear() >= 2000
+      ? t("workspaceAdmissionReconciliationUpdatedAt").replace(
+          "{time}",
+          updatedAt.toLocaleString(RECONCILIATION_LOCALE_TAG[language] ?? "en-US"),
+        )
+      : undefined;
+  const hint = t(
+    reconciliation.state === "waiting"
+      ? "workspaceAdmissionReconciliationWaitingHint"
+      : "workspaceAdmissionReconciliationRetryHint",
+  );
+  return { stateLabel, timestamp, hint };
+}
+
 export function WorkspaceAdmissionPanel(props: WorkspaceAdmissionPanelProps) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const titleId = useId();
   const stateCopy = STATUS_COPY[props.status];
   const actions = resolveActions(props);
   const projectName = props.projectName?.trim();
   const projectPath = props.projectPath?.trim();
+  const reconciliationCopy = props.reconciliation
+    ? buildReconciliationCopy(props.reconciliation, t, language)
+    : null;
 
   return (
     <section className="workspace-admission" aria-labelledby={titleId} data-status={props.status}>
@@ -131,11 +175,13 @@ export function WorkspaceAdmissionPanel(props: WorkspaceAdmissionPanelProps) {
         </div>
       </div>
 
-      {props.reconciliation ? (
+      {props.reconciliation && reconciliationCopy ? (
         <div className="workspace-admission__reconciliation" role="status">
-          <p>{props.reconciliation.reason}</p>
-          <p>{props.reconciliation.state} · {new Date(props.reconciliation.updatedAt).toLocaleString()}</p>
-          <p>{props.reconciliation.state === "waiting" ? "Continue waiting or retry if the job does not progress." : "Retry the admission, or abandon the pending record without changing the project."}</p>
+          <p>
+            {reconciliationCopy.stateLabel}
+            {reconciliationCopy.timestamp ? ` · ${reconciliationCopy.timestamp}` : ""}
+          </p>
+          <p>{reconciliationCopy.hint}</p>
         </div>
       ) : null}
 

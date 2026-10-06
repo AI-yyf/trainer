@@ -178,8 +178,10 @@ test('recovered runtime makes orientation the primary Plan action and folds gene
   assert.match(planView, /recoveredAdoptPrimary/);
   assert.match(
     planView,
-    /id:\s*recoveredPlanPrimary === "clear_blocker"\s*\?\s*"plan-clear-blocker"\s*:\s*recoveredPlanPrimary === "unfreeze_plan"\s*\?\s*"resume-plan"\s*:\s*recoveredPlanPrimary === "wait"\s*\?\s*"plan-needs-evidence"\s*:\s*"plan-continue-step"/,
+    /id:\s*recoveredPlanPrimary === "clear_blocker"\s*\?\s*"plan-clear-blocker"\s*:\s*recoveredPlanPrimary === "unfreeze_plan"\s*\?\s*"resume-plan"\s*:\s*"plan-continue-step"/,
   );
+  // The wait primary renders as its own needs-evidence entry beside it.
+  assert.match(planView, /id: "plan-needs-evidence",/);
   assert.match(planView, /label: planOrientation\.primaryActionLabel/);
   assert.match(planView, /tone: "accent" as const/);
   assert.match(planView, /onClick: \(\) => handlePlanOrientationAction\(recoveredPlanPrimary\)/);
@@ -437,7 +439,7 @@ test('waiting live pending keeps adopt primary and exposes reject/defer beside i
   );
   assert.match(
     source,
-    /id:\s*recoveredPlanPrimary === "clear_blocker"\s*\?\s*"plan-clear-blocker"\s*:\s*recoveredPlanPrimary === "unfreeze_plan"\s*\?\s*"resume-plan"\s*:\s*recoveredPlanPrimary === "wait"\s*\?\s*"plan-needs-evidence"/,
+    /id:\s*recoveredPlanPrimary === "clear_blocker"\s*\?\s*"plan-clear-blocker"\s*:\s*recoveredPlanPrimary === "unfreeze_plan"\s*\?\s*"resume-plan"\s*:\s*"plan-continue-step"/,
   );
   assert.match(source, /commandId: trainerCommands\.evidenceDefer/);
   assert.match(source, /commandId: trainerCommands\.evidenceReject/);
@@ -455,9 +457,15 @@ test('Plan moves next-task replies to Coach and protects an unsent composer draf
   const planView = appSource.slice(planStart, planEnd);
 
   assert.ok(planStart >= 0 && planEnd > planStart, 'expected the Plan view block');
+  // R1③: next-task prefill — navigate + draft + focus, pressing send stays
+  // with the learner (same shape as handleSuggestedAction's next_task lane).
   assert.match(
     planView,
-    /id: "plan-next-task",[\s\S]*?onClick: \(\) => \{\s*setActiveView\("coach"\);[\s\S]*?activeView: "coach",/,
+    /id: "plan-next-task",[\s\S]*?onClick: \(\) => \{\s*setActiveView\("coach"\);\s*setComposerDraft\(\s*defaultPromptText\("next_task", layout\.composerLanguage, activePlanStage\?\.title\),?\s*\);\s*requestCoachComposerFocus\(\);\s*\},/,
+  );
+  assert.doesNotMatch(
+    planView,
+    /id: "plan-next-task",[\s\S]{0,600}?sendTurn\(/,
   );
   assert.match(appSource, /!recoveredAdoptPrimary && hasFormalPlan && formalPlanLive/);
   assert.doesNotMatch(

@@ -195,7 +195,14 @@ const SHOTS = [
     name: "settings-connected",
     file: "settings-connected.png",
     title: "Settings connection summary (connected)",
-    async interact(page) { await page.locator('[data-settings-category="connection"]').click(); },
+    async interact(page) {
+      // r-final: a configured connection skips the index and lands directly on
+      // the connection detail (CoachSettingsView settingsIndexOpen gate) — the
+      // index row only exists on the cold-start surface (same fallback the
+      // geometry gate uses).
+      const indexRow = page.locator('[data-settings-category="connection"]');
+      if (await indexRow.count()) await indexRow.click();
+    },
     urlParams: { view: "settings", scenario: "ready" },
   },
   {
@@ -206,7 +213,8 @@ const SHOTS = [
     async interact(page) {
       // Connected state shows the compact summary card; the README quick-setup
       // shot is the edit level below it (same entry the settings e2e uses).
-      await page.locator('[data-settings-category="connection"]').click();
+      const indexRow = page.locator('[data-settings-category="connection"]');
+      if (await indexRow.count()) await indexRow.click();
       await page.getByRole("button", { name: "编辑配置", exact: true }).click();
     },
   },

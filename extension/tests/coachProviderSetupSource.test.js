@@ -167,9 +167,20 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
     fs.readFileSync(recoveryCopySourcePath, 'utf8'),
     /providerRecoveryLocale\(language\)\.languageIntegrityDetail/,
   );
+  // R1②: the pane-top provider notice is gone — provider-notice blocking is
+  // owned by the composer presence bar alone ("at most one blocking surface
+  // visible" is now literal).
+  assert.doesNotMatch(source, /coach-inline-notice/);
   assert.match(
     source,
-    /coachBlockingSurface === "provider-notice" && providerCoachNotice \?/,
+    /showComposerBlockingNotice \? \([\s\S]*?composer-presencebar__blocked/,
+  );
+  // R1①: the cold-start wizard owns the root-selection ask; the admission
+  // panel renders only when the wizard is absent, and keeps its provider
+  // action button.
+  assert.match(
+    source,
+    /coachBlockingSurface === "workspace-admission" && onboardingWizard \?[\s\S]*?coach-onboarding">\{onboardingWizard\}[\s\S]*?coachBlockingSurface === "workspace-admission" && workspaceAdmissionContent/,
   );
   assert.match(
     source,

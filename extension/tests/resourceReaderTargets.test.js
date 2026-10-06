@@ -4,6 +4,9 @@ const assert = require('node:assert/strict');
 const { resolveResourceOpenTarget } = require('../dist/shared/src/resourceOpen.js');
 
 test('reading opens captured URL content in VS Code and preserves uncaptured external URLs', () => {
+  // The /tmp/... values are opaque string fixtures for a pure mapping
+  // function — resolveResourceOpenTarget never touches the filesystem — so
+  // they stay platform-neutral and need no os.tmpdir() indirection.
   assert.deepEqual(resolveResourceOpenTarget({ kind: 'url', source: 'https://example.com/guide', sandboxPath: '/tmp/captured-guide.md' }),
     { kind: 'vscode', source: '/tmp/captured-guide.md' });
   assert.deepEqual(resolveResourceOpenTarget({ kind: 'url', source: 'https://example.com/guide' }),

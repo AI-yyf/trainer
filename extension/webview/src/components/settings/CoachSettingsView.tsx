@@ -7238,7 +7238,7 @@ export function CoachSettingsView({
           fullWidth={false}
           icon={
             providerSaveBusy ? (
-              <span className="settings-quick-setup__saving-dot" aria-hidden />
+              <span aria-hidden="true" className="trainer-spinner trainer-spinner--sm" />
             ) : (
               <DoneIcon size={14} />
             )

@@ -45,32 +45,28 @@ trainer/                            # Repository root
 │   │   │   ├── workspaceGateway.ts # WorkspaceGateway interface + protocol DTOs
 │   │   │   ├── localWorkspaceGateway.ts  # vscode.workspace.fs implementation
 │   │   │   └── remoteWorkspaceGateway.ts # Companion command-bridge client
-│   │   ├── testing/                # VS Code Testing API
-│   │   │   ├── testController.ts   # TrainerTestController
-│   │   │   └── trainingAttestation.ts  # Host-trusted /training/verification/attest
-│   │   └── views/                  # Native VS Code tree views
+│   │   └── testing/                # VS Code Testing API
+│   │       ├── testController.ts   # TrainerTestController
+│   │       └── trainingAttestation.ts  # Host-trusted /training/verification/attest
 │   ├── webview/                    # React workbench UI (Vite + Zustand + i18n)
 │   │   └── src/
 │   │       ├── app/
-│   │       │   ├── App.tsx         # Root workbench (~15k lines — renders all 5 views)
+│   │       │   ├── App.tsx         # Root workbench (single-file orchestrator; line count drifts with each consolidation round)
 │   │       │   ├── useWorkbenchState.ts  # Zustand store
-│   │       │   ├── views/          # (empty)
 │   │       │   └── useTrainingCommands.ts
 │   │       ├── components/
 │   │       │   ├── coach/          # CoachConversationView, CoachMessageBubble, etc.
 │   │       │   ├── plan/           # CoachPlanView + evidence governance
-│   │       │   ├── resources/      # ResourcesWorkbenchView (~3.5k lines)
+│   │       │   ├── resources/      # ResourcesWorkbenchView
 │   │       │   ├── training/       # TrainingWorkbenchView, CardPanel, etc.
-│   │       │   ├── settings/       # CoachSettingsView (~8.2k lines)
+│   │       │   ├── settings/       # CoachSettingsView
 │   │       │   ├── composer/       # CoachComposer
 │   │       │   ├── common/         # Shared UI parts
-│   │       │   ├── flash/          # Flash card components
 │   │       │   ├── firstlook/      # First-time experience
 │   │       │   ├── icons/          # SVG icon components
 │   │       │   ├── parts/          # Typed message part renderers
 │   │       │   ├── preview/        # Preview-related components
-│   │       │   ├── shell/          # App shell components
-│   │       │   └── practice/       # Practice components
+│   │       │   └── shell/          # App shell components
 │   │       ├── lib/
 │   │       │   ├── types.ts        # Webview-side types (~2k lines)
 │   │       │   ├── mockData.ts     # Mock bootstrap data for dev
@@ -85,11 +81,11 @@ trainer/                            # Repository root
 │   │       │   ├── vscode.ts       # VS Code webview message helpers
 │   │       │   ├── htmlSanitizer.ts
 │   │       │   └── i18n/
-│   │       │       └── copy.ts     # 8-language i18n (~5.2k lines)
-│   │       └── styles.css          # ~20k lines — token-driven design system
+│   │       │       └── copy.ts     # 8-language i18n
+│   │       └── styles/             # Token-driven design system (styles.css is a tombstone; the live sections live in styles/sections/)
 │   ├── bundled/                    # Bundled Python sidecar (~245 MB, 98 .py files)
 │   │   └── remote/                 # trainer-workspace-companion.vsix (build output, gitignored)
-│   ├── tests/                      # 215 node:test files (node --test)
+│   ├── tests/                      # node:test suite (many are source-text guards — prefer behavior tests for new work)
 │   ├── dist/                       # Build output
 │   └── package.json                # Extension manifest (24 commands, 1 webview view)
 ├── remote-extension/               # Trainer Workspace Companion (extensionKind: ["workspace"])
@@ -147,7 +143,7 @@ trainer/                            # Repository root
 │   │   ├── affect/service.py       # AffectService
 │   │   ├── planner/service.py      # PlannerService (~2k lines)
 │   │   ├── memory/
-│   │   │   ├── service.py          # MemoryService (~11.5k lines)
+│   │   │   ├── service.py          # MemoryService (~9k lines)
 │   │   │   ├── models.py
 │   │   │   ├── review_scheduler.py # FSRS review scheduler
 │   │   │   ├── semantic.py         # Qdrant semantic memory
@@ -169,7 +165,7 @@ trainer/                            # Repository root
 │   │   ├── resources/service.py    # ResourceService
 │   │   ├── ingest/service.py       # IngestService (file parsing)
 │   │   └── specs/service.py        # SpecService
-│   ├── tests/                      # 161 pytest files (test_api.py alone ~10.9k lines)
+│   ├── tests/                      # pytest suite (test_api.py is the largest file)
 │   └── pyproject.toml              # Package config (ruff, pytest, setuptools)
 ├── shared/                         # Shared TypeScript types & protocol
 │   └── src/
@@ -265,8 +261,8 @@ dark/light and Chinese/English. Browser fixtures prove layout, not real evidence
 | **Configure provider** | `extension/src/provider/providerConfigStore.ts` | VS Code SecretStorage for API keys |
 | **Coach agent loop** | `server/app/llm/agent_loop.py` + `agent_binding.py` | ReAct loop with tool execution |
 | **Training card flow** | `server/app/training/` | card_generator, card_router, fsrs_scheduler, handoff |
-| **Test backend** | `server/tests/` | pytest + FastAPI TestClient (161 files) |
-| **Test frontend** | `extension/tests/` | `node --test` (215 files; many are source-text guards — prefer behavior tests for new work) |
+| **Test backend** | `server/tests/` | pytest + FastAPI TestClient |
+| **Test frontend** | `extension/tests/` | `node --test` (many are source-text guards — prefer behavior tests for new work) |
 
 ## CODE MAP
 
@@ -287,13 +283,13 @@ dark/light and Chinese/English. Browser fixtures prove layout, not real evidence
 
 | Symbol | File | Role |
 |--------|------|------|
-| `App` | `extension/webview/src/app/App.tsx` (~14.1k lines) | Root workbench — handles all 5 view renders, state, messaging |
+| `App` | `extension/webview/src/app/App.tsx` | Root workbench — renders the three destinations and all six internal routes |
 | `useWorkbenchState` | `extension/webview/src/app/useWorkbenchState.ts` | Zustand store — workbench data + actions |
 | `CoachConversationView` | `extension/webview/src/components/coach/` | Coach message history + streaming |
 | `CoachPlanView` | `extension/webview/src/components/plan/` | Plan stages, current task, evidence |
 | `ResourcesWorkbenchView` | `extension/webview/src/components/resources/` | Resource list, upload, search, preview |
-| `CoachTrainingView` | `extension/webview/src/components/training/` | Training cards, flash, scenario lab |
-| `TrainingWorkbenchView` | `extension/webview/src/components/training/` | Training entry-point container |
+| `TrainingWorkbenchView` | `extension/webview/src/components/training/` | Focused single-card practice + verification (the former multi-panel training chrome was removed) |
+| `RemoteVerificationPanel` | `extension/webview/src/components/training/` | Remote verify streaming + unknown-verdict rendering |
 | `CoachSettingsView` | `extension/webview/src/components/settings/` | Provider config, coach defaults, language |
 
 ### Sidecar (Python/FastAPI)
@@ -309,7 +305,7 @@ dark/light and Chinese/English. Browser fixtures prove layout, not real evidence
 | `AgentBinding` | `server/app/llm/agent_binding.py` | Tool definition binding |
 | `Prompts` | `server/app/llm/prompts.py` (~3.7k lines) | System prompts for coach modes |
 | `Tools` | `server/app/llm/tools.py` | Tool implementations (read_file, diagnostics, search, etc.) |
-| `MemoryService` | `server/app/memory/service.py` (~11.5k lines) | Profile, reflections, weaknesses, teaching assets |
+| `MemoryService` | `server/app/memory/service.py` (~9k lines) | Profile, reflections, weaknesses, teaching assets |
 | `ReviewScheduler` | `server/app/memory/review_scheduler.py` | FSRS-based spaced repetition scheduling |
 | `SemanticMemory` | `server/app/memory/semantic.py` | Qdrant vector storage for semantic search |
 | `PedagogyService` | `server/app/pedagogy/service.py` (~2.4k lines) | Teaching decision engine |
@@ -501,5 +497,5 @@ cd extension/webview && npm run dev   # then open the printed URL
 - Bundled sidecar: `extension/bundled/` (~245 MB, 98 .py files) — for .vsix distribution
 - Companion VSIX (`extension/bundled/remote/`) and native sidecar binaries are build-time artifacts (gitignored, `*.vsix`); `vscode:prepublish` rebuilds the companion before packaging, and `verify-package.mjs` asserts its presence and entrypoint
 - Provider API keys always live in the local UI host's SecretStorage (`ui_proxy`); the remote Companion never receives credentials
-- Largest files: `routers.py` (~25.5k lines), `styles.css` (~20k lines), `App.tsx` (~15k lines), `memory/service.py` (~11.5k lines), `test_api.py` (~10.9k lines), `CoachSettingsView.tsx` (~8.2k lines), `provider_service.py` (~8.1k lines)
+- Largest files (approximate; line counts drift with each consolidation round — re-measure before relying on them): `routers.py`, `App.tsx`, `test_api.py`, `memory/service.py`, `CoachSettingsView.tsx`, `provider_service.py`, `copy.ts`; webview CSS lives across `webview/src/styles/sections/` (the top-level `styles.css` is a tombstone)
 - i18n covered: zh-CN, en-US, es-ES, fr-FR, de-DE, ja-JP, ko-KR, pt-BR

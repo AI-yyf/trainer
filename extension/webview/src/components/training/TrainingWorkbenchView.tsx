@@ -701,7 +701,8 @@ type TrainingSurfaceLabelKey =
   | "codeSymbols"
   | "checks"
   | "startStep"
-  | "verifyCurrentFile";
+  | "verifyCurrentFile"
+  | "verifyStepTitle";
 
 const trainingSurfaceLabels: Record<
   ComposerLanguage,
@@ -710,42 +711,42 @@ const trainingSurfaceLabels: Record<
   "zh-CN": {
     currentCard: "当前卡片", flash: "闪记", practice: "实战", primer: "学习", review: "复盘",
     scenario: "场景", transfer: "迁移", theory: "理论", code: "代码", requirements: "具体要求",
-    currentTrainingCard: "当前训练卡片", trainingLoop: "学习循环", codeSymbols: "将检查的代码符号", checks: "检查", startStep: "开始这一步", verifyCurrentFile: "验证当前文件",
+    currentTrainingCard: "当前训练卡片", trainingLoop: "学习循环", codeSymbols: "将检查的代码符号", checks: "检查", startStep: "开始这一步", verifyCurrentFile: "验证当前文件", verifyStepTitle: "做完这一步，验证一下结果",
   },
   "en-US": {
     currentCard: "Current card", flash: "Flash", practice: "Practice", primer: "Primer", review: "Review",
     scenario: "Scenario", transfer: "Transfer", theory: "Theory", code: "Code", requirements: "Requirements",
-    currentTrainingCard: "Current training card", trainingLoop: "Training loop", codeSymbols: "Code symbols to check", checks: "Checks", startStep: "Start this step", verifyCurrentFile: "Verify current file",
+    currentTrainingCard: "Current training card", trainingLoop: "Training loop", codeSymbols: "Code symbols to check", checks: "Checks", startStep: "Start this step", verifyCurrentFile: "Verify current file", verifyStepTitle: "Done with the step? Verify the result",
   },
   "es-ES": {
     currentCard: "Tarjeta actual", flash: "Tarjeta", practice: "Práctica", primer: "Base", review: "Repaso",
     scenario: "Escenario", transfer: "Transferencia", theory: "Teoría", code: "Código", requirements: "Requisitos",
-    currentTrainingCard: "Tarjeta de entrenamiento actual", trainingLoop: "Ciclo de aprendizaje", codeSymbols: "Símbolos de código a comprobar", checks: "Comprobaciones", startStep: "Comenzar este paso", verifyCurrentFile: "Verificar archivo actual",
+    currentTrainingCard: "Tarjeta de entrenamiento actual", trainingLoop: "Ciclo de aprendizaje", codeSymbols: "Símbolos de código a comprobar", checks: "Comprobaciones", startStep: "Comenzar este paso", verifyCurrentFile: "Verificar archivo actual", verifyStepTitle: "¿Terminaste el paso? Comprueba el resultado",
   },
   "fr-FR": {
     currentCard: "Carte actuelle", flash: "Carte", practice: "Exercice", primer: "Base", review: "Révision",
     scenario: "Scénario", transfer: "Transfert", theory: "Théorie", code: "Code", requirements: "Exigences",
-    currentTrainingCard: "Carte d'entraînement actuelle", trainingLoop: "Boucle d'apprentissage", codeSymbols: "Symboles de code à vérifier", checks: "Vérifications", startStep: "Commencer cette étape", verifyCurrentFile: "Vérifier le fichier actuel",
+    currentTrainingCard: "Carte d'entraînement actuelle", trainingLoop: "Boucle d'apprentissage", codeSymbols: "Symboles de code à vérifier", checks: "Vérifications", startStep: "Commencer cette étape", verifyCurrentFile: "Vérifier le fichier actuel", verifyStepTitle: "Étape terminée ? Vérifiez le résultat",
   },
   "de-DE": {
     currentCard: "Aktuelle Karte", flash: "Karte", practice: "Übung", primer: "Grundlage", review: "Wiederholung",
     scenario: "Szenario", transfer: "Transfer", theory: "Theorie", code: "Code", requirements: "Anforderungen",
-    currentTrainingCard: "Aktuelle Trainingskarte", trainingLoop: "Lernzyklus", codeSymbols: "Zu prüfende Codesymbole", checks: "Prüfungen", startStep: "Diesen Schritt starten", verifyCurrentFile: "Aktuelle Datei prüfen",
+    currentTrainingCard: "Aktuelle Trainingskarte", trainingLoop: "Lernzyklus", codeSymbols: "Zu prüfende Codesymbole", checks: "Prüfungen", startStep: "Diesen Schritt starten", verifyCurrentFile: "Aktuelle Datei prüfen", verifyStepTitle: "Schritt geschafft? Prüfe das Ergebnis",
   },
   "ja-JP": {
     currentCard: "現在のカード", flash: "カード", practice: "練習", primer: "導入", review: "復習",
     scenario: "場面", transfer: "転移", theory: "理論", code: "コード", requirements: "要件",
-    currentTrainingCard: "現在のトレーニングカード", trainingLoop: "学習サイクル", codeSymbols: "確認するコードシンボル", checks: "確認", startStep: "このステップを開始", verifyCurrentFile: "現在のファイルを検証",
+    currentTrainingCard: "現在のトレーニングカード", trainingLoop: "学習サイクル", codeSymbols: "確認するコードシンボル", checks: "確認", startStep: "このステップを開始", verifyCurrentFile: "現在のファイルを検証", verifyStepTitle: "このステップができたら、結果を検証しましょう",
   },
   "ko-KR": {
     currentCard: "현재 카드", flash: "카드", practice: "연습", primer: "기초", review: "복습",
     scenario: "시나리오", transfer: "전이", theory: "이론", code: "코드", requirements: "요구 사항",
-    currentTrainingCard: "현재 훈련 카드", trainingLoop: "학습 순환", codeSymbols: "확인할 코드 기호", checks: "확인", startStep: "이 단계 시작", verifyCurrentFile: "현재 파일 검증",
+    currentTrainingCard: "현재 훈련 카드", trainingLoop: "학습 순환", codeSymbols: "확인할 코드 기호", checks: "확인", startStep: "이 단계 시작", verifyCurrentFile: "현재 파일 검증", verifyStepTitle: "이 단계를 마쳤다면 결과를 검증해 보세요",
   },
   "pt-BR": {
     currentCard: "Cartão atual", flash: "Cartão", practice: "Prática", primer: "Base", review: "Revisão",
     scenario: "Cenário", transfer: "Transferência", theory: "Teoria", code: "Código", requirements: "Requisitos",
-    currentTrainingCard: "Cartão de treinamento atual", trainingLoop: "Ciclo de aprendizagem", codeSymbols: "Símbolos de código para verificar", checks: "Verificações", startStep: "Iniciar esta etapa", verifyCurrentFile: "Verificar arquivo atual",
+    currentTrainingCard: "Cartão de treinamento atual", trainingLoop: "Ciclo de aprendizagem", codeSymbols: "Símbolos de código para verificar", checks: "Verificações", startStep: "Iniciar esta etapa", verifyCurrentFile: "Verificar arquivo atual", verifyStepTitle: "Terminou a etapa? Verifique o resultado",
   },
 };
 
@@ -2801,14 +2802,14 @@ export function TrainingWorkbenchView({
                   {selectedCardStatus === "candidate" || !selectedCardStatus ? (
                     <NextAction label={templateCopy[language].nextAction} title={cardOnlyTask || displayTitle} action={{ label: trainingSurfaceLabel(language, "startStep"), disabled: !onCardStatusTransition || !cardId || reliabilityInFlight, onClick: () => { if (cardId) onCardStatusTransition?.(cardId, "active", "start_step"); } }} />
                   ) : !isFlashCard && practiceVerificationMode === "file" ? (
-                    <NextAction label={templateCopy[language].nextAction} title={trainingSurfaceLabel(language, "verifyCurrentFile")} detail={deliverablesListNode ? <><span className="template-metadata">{templateCopy[language].complete}: </span>{deliverablesListNode}</> : `${templateCopy[language].complete}: ${cardOnlyDeliverable}`} action={{ label: remoteName ? remoteVerifyCopy(language).verifyOn(remoteName) : trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: !onVerifyCurrentFile || Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: () => onVerifyCurrentFile?.() }} />
+                    <NextAction label={templateCopy[language].nextAction} title={trainingSurfaceLabel(language, "verifyStepTitle")} detail={deliverablesListNode ? <><span className="template-metadata">{templateCopy[language].complete}: </span>{deliverablesListNode}</> : `${templateCopy[language].complete}: ${cardOnlyDeliverable}`} action={{ label: remoteName ? remoteVerifyCopy(language).verifyOn(remoteName) : trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: !onVerifyCurrentFile || Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: () => onVerifyCurrentFile?.() }} />
                   ) : response}
                   {hintLadder.length && cardType === "practice" ? <HintLadderReveal hints={hintLadder} onReveal={onHintReveal} language={language} /> : null}
                 </> : trainingExecutionState.composerPhase === "verify" ? <>
                   {trainingExecutionState.verified || trainingExecutionState.blocked ? (
                     <VerificationResult language={language} verdict={trainingExecutionState.verified ? "passed" : "failed"} summary={latestVerifiedResult || latestLearningBlocker} />
                   ) : <MessageRichContent body={cardOnlyVerification || practiceSectionNote} language={language} />}
-                  {onVerifyCurrentFile ? <NextAction label={templateCopy[language].nextAction} title={trainingSurfaceLabel(language, "verifyCurrentFile")} action={{ label: trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: onVerifyCurrentFile }} /> : response}
+                  {onVerifyCurrentFile ? <NextAction label={templateCopy[language].nextAction} title={trainingSurfaceLabel(language, "verifyStepTitle")} action={{ label: trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: onVerifyCurrentFile }} /> : response}
                 </> : trainingExecutionState.composerPhase === "reflect" ? response : <>
                   <MessageRichContent body={latestVerifiedResult || latestLearningBlocker || resolvedReturnWith || defaultReturnPath} language={language} />
                   {actions}

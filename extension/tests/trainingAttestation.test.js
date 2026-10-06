@@ -145,13 +145,23 @@ function createRuntimeMock(vscodeMock, hostState, overrides = {}) {
   const calls = {
     posts: [],
     logs: [],
+    undeliveredNotices: [],
   };
+  const rejectQueue = Array.isArray(overrides.rejectPostSequence)
+    ? [...overrides.rejectPostSequence]
+    : undefined;
+  const ensureRunningQueue = Array.isArray(overrides.ensureRunningStatuses)
+    ? [...overrides.ensureRunningStatuses]
+    : undefined;
   const runtime = {
     sidecarClient: {
       postJson(port, requestPath, body) {
         calls.posts.push({ port, path: requestPath, body });
-        if (overrides.rejectPost) {
-          return Promise.reject(overrides.rejectPost);
+        const rejection = rejectQueue
+          ? rejectQueue.shift()
+          : overrides.rejectPost;
+        if (rejection) {
+          return Promise.reject(rejection);
         }
         return Promise.resolve({ ok: true });
       },
@@ -159,7 +169,10 @@ function createRuntimeMock(vscodeMock, hostState, overrides = {}) {
     sidecarManager: {
       ensureRunning() {
         calls.ensureRunning = (calls.ensureRunning ?? 0) + 1;
-        return Promise.resolve(overrides.sidecarStatus ?? { lifecycle: 'ready', port: 8765 });
+        const status = ensureRunningQueue
+          ? ensureRunningQueue.shift()
+          : overrides.sidecarStatus;
+        return Promise.resolve(status ?? { lifecycle: 'ready', port: 8765 });
       },
     },
     outputChannel: {
@@ -172,6 +185,9 @@ function createRuntimeMock(vscodeMock, hostState, overrides = {}) {
     },
     getSessionId() {
       return 'session-1';
+    },
+    notifyAttestationUndelivered() {
+      calls.undeliveredNotices.push('undelivered');
     },
   };
   return { runtime, calls };
@@ -278,18 +294,101 @@ test('no live practice card means no attestation post', async () => {
   }
 });
 
-test('an explicit host attestation failure is logged and remains bounded', async () => {
+test('an ambiguous attestation failure is logged with a sanitized message and surfaced once, without retry', async () => {
   const vscodeMock = createVscodeMock();
   loadWithVscodeMock(testControllerModulePath, vscodeMock);
   const { dispatchTestRunAttestation } = loadWithVscodeMock(trainingAttestationModulePath, vscodeMock);
   const { runtime, calls } = createRuntimeMock(vscodeMock, createHostState({ trainingState: livePracticeTrainingState() }), {
-    rejectPost: new Error('fixture-secret'),
+    // Secret-shaped fixture: the raw value must never reach the output channel.
+    rejectPost: new Error('request failed: api_key=sk-fixture-secret-value'),
   });
-  await dispatchTestRunAttestation(runtime, { card_id: 'card-practice-1', passed: true, evidence_source: 'test_runner' });
+  const outcome = await dispatchTestRunAttestation(runtime, { card_id: 'card-practice-1', passed: true, evidence_source: 'test_runner' });
+  assert.equal(outcome, 'undelivered');
+  // Ambiguous failure (no connect-class error code): no automatic resend.
   assert.equal(calls.posts.length, 1);
   assert.equal(calls.logs.length, 1);
   assert.match(calls.logs[0], /training-attestation/);
-  assert.equal(calls.logs[0].includes('fixture-secret'), false);
+  assert.match(calls.logs[0], /ambiguous/);
+  // The diagnostic message is logged, but secret-shaped values are redacted.
+  assert.equal(calls.logs[0].includes('sk-fixture-secret-value'), false);
+  assert.match(calls.logs[0], /request failed/);
+  // The failure is never silent: the caller's undelivered notice fires.
+  assert.equal(calls.undeliveredNotices.length, 1);
+});
+
+test('a connect-class failure is retried once and the resend delivers without a notice', async () => {
+  const vscodeMock = createVscodeMock();
+  loadWithVscodeMock(testControllerModulePath, vscodeMock);
+  const { dispatchTestRunAttestation } = loadWithVscodeMock(trainingAttestationModulePath, vscodeMock);
+  const refused = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:8765'), { code: 'ECONNREFUSED' });
+  const { runtime, calls } = createRuntimeMock(vscodeMock, createHostState({ trainingState: livePracticeTrainingState() }), {
+    rejectPostSequence: [refused],
+  });
+  const outcome = await dispatchTestRunAttestation(runtime, { card_id: 'card-practice-1', passed: true, evidence_source: 'test_runner' });
+  assert.equal(outcome, 'delivered');
+  assert.equal(calls.posts.length, 2);
+  assert.equal(calls.undeliveredNotices.length, 0);
+  assert.equal(calls.logs.length, 1);
+  assert.match(calls.logs[0], /not_arrived/);
+});
+
+test('a pre-send readiness failure retries after the sidecar recovers', async () => {
+  const vscodeMock = createVscodeMock();
+  loadWithVscodeMock(testControllerModulePath, vscodeMock);
+  const { dispatchTestRunAttestation } = loadWithVscodeMock(trainingAttestationModulePath, vscodeMock);
+  const { runtime, calls } = createRuntimeMock(vscodeMock, createHostState({ trainingState: livePracticeTrainingState() }), {
+    ensureRunningStatuses: [{ lifecycle: 'error', detail: 'Sidecar exited before readiness (code=1)' }],
+  });
+  const outcome = await dispatchTestRunAttestation(runtime, { card_id: 'card-practice-1', passed: true, evidence_source: 'test_runner' });
+  assert.equal(outcome, 'delivered');
+  assert.equal(calls.ensureRunning, 2);
+  assert.equal(calls.posts.length, 1);
+  assert.equal(calls.undeliveredNotices.length, 0);
+});
+
+test('a readiness failure that persists through the retry surfaces the undelivered notice', async () => {
+  const vscodeMock = createVscodeMock();
+  loadWithVscodeMock(testControllerModulePath, vscodeMock);
+  const { dispatchTestRunAttestation } = loadWithVscodeMock(trainingAttestationModulePath, vscodeMock);
+  const { runtime, calls } = createRuntimeMock(vscodeMock, createHostState({ trainingState: livePracticeTrainingState() }), {
+    sidecarStatus: { lifecycle: 'unavailable', detail: 'Sidecar is unavailable; training attestation not sent.' },
+  });
+  const outcome = await dispatchTestRunAttestation(runtime, { card_id: 'card-practice-1', passed: true, evidence_source: 'test_runner' });
+  assert.equal(outcome, 'undelivered');
+  assert.equal(calls.posts.length, 0);
+  assert.equal(calls.ensureRunning, 2);
+  assert.equal(calls.undeliveredNotices.length, 1);
+});
+
+test('the idempotency key is stable per run+card and ships on the attestation body', async () => {
+  const vscodeMock = createVscodeMock();
+  const { attestationIdempotencyKey, buildTestRunAttestationBody } = loadWithVscodeMock(
+    trainingAttestationModulePath,
+    vscodeMock,
+  );
+
+  const first = attestationIdempotencyKey({ cardId: 'card-1', runId: 'companion-session-7' });
+  assert.equal(first, 'remote-verify:companion-session-7:card-1');
+  // Deterministic: a resend of the same run reuses the key and replays.
+  assert.equal(first, attestationIdempotencyKey({ cardId: 'card-1', runId: 'companion-session-7' }));
+  // A genuinely new run gets a fresh key and records normally.
+  assert.notEqual(first, attestationIdempotencyKey({ cardId: 'card-1', runId: 'companion-session-8' }));
+  // Missing run identity never fabricates a key.
+  assert.equal(attestationIdempotencyKey({ cardId: 'card-1', runId: '  ' }), '');
+
+  const body = buildTestRunAttestationBody({
+    card: { cardId: 'card-1' },
+    summary: 'Remote verify passed',
+    testsOutput: '1 passed',
+    idempotencyKey: first,
+  });
+  assert.equal(body.idempotency_key, 'remote-verify:companion-session-7:card-1');
+  const keyless = buildTestRunAttestationBody({
+    card: { cardId: 'card-1' },
+    summary: 'Remote verify passed',
+    testsOutput: '1 passed',
+  });
+  assert.equal('idempotency_key' in keyless, false);
 });
 
 test('tests_output longer than the limit is truncated', async () => {

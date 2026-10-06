@@ -341,6 +341,31 @@ function persistLayout(next: PersistedWorkbenchState): PersistedWorkbenchState {
   return next;
 }
 
+// R3①: composer draft keystrokes used to serialize the ENTIRE layout through
+// persistLayout on every keypress. The in-memory store update stays
+// immediate; the persistence write is debounced. Recovery semantics are
+// "the draft survives a restart" — a typing pause longer than the debounce
+// window (and any other layout setter, which persists the latest layout
+// immediately, draft included) covers it.
+const COMPOSER_DRAFT_PERSIST_DEBOUNCE_MS = 500;
+let composerDraftPersistTimer: number | undefined;
+
+function scheduleComposerDraftPersist(getLayout: () => PersistedWorkbenchState): void {
+  if (typeof window === "undefined") {
+    setPersistedState(getLayout());
+    return;
+  }
+  if (composerDraftPersistTimer !== undefined) {
+    window.clearTimeout(composerDraftPersistTimer);
+  }
+  composerDraftPersistTimer = window.setTimeout(() => {
+    composerDraftPersistTimer = undefined;
+    // Read the layout at fire time: it is at least as new as the keystroke
+    // that scheduled this write, even if another setter persisted in between.
+    setPersistedState(getLayout());
+  }, COMPOSER_DRAFT_PERSIST_DEBOUNCE_MS);
+}
+
 function freshStreamingState(): StreamingState {
   return createEmptyTrainerStreamingState();
 }
@@ -766,15 +791,17 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       }),
     })),
   setComposerDraft: (composerDraft) =>
-    set((state) => ({
-      layout: persistLayout({
+    set((state) => {
+      const nextLayout: PersistedWorkbenchState = {
         ...state.layout,
         composerDraft,
         composerDrafts: state.layout.composerDraftScope
           ? { ...state.layout.composerDrafts, [state.layout.composerDraftScope]: composerDraft }
           : state.layout.composerDrafts,
-      }),
-    })),
+      };
+      scheduleComposerDraftPersist(() => get().layout);
+      return { layout: nextLayout };
+    }),
   selectComposerDraftScope: (scope) => set((state) => {
     if (state.layout.composerDraftScope === scope) return state;
     const previous = state.layout.composerDraftScope;

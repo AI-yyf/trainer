@@ -1646,7 +1646,7 @@
 
 .settings-skill-form__field input:focus,
 .settings-skill-form__field textarea:focus {
-  outline: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
 }
 

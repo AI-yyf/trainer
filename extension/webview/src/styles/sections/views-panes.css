@@ -239,7 +239,7 @@
 }
 
 .view-context-rail__open-coach:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
@@ -282,7 +282,7 @@
 }
 
 .view-agent-reply > summary:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
 }
 
@@ -396,7 +396,7 @@
 }
 
 .view-stack__divider:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
@@ -573,7 +573,7 @@
 }
 
 .resource-library-authority > summary:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
   border-radius: var(--radius-sm);
 }
@@ -859,7 +859,7 @@
 }
 
 .evidence-input:focus {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
   border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
 }
@@ -1011,12 +1011,6 @@
   }
 }
 
-@keyframes trainer-spin {
-  to {
-    transform: rotate(1turn);
-  }
-}
-
 .resources-library-hero {
   display: flex;
   flex-direction: column;
@@ -1049,7 +1043,7 @@
 }
 
 .resources-library-hero__root:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -1501,7 +1495,7 @@
 }
 
 .resources-library-tree__node:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
 }
 
@@ -1971,7 +1965,7 @@
 }
 
 .resources-sandbox-row__main:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
@@ -1997,7 +1991,7 @@
 }
 
 .resources-sandbox-tree__node:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
 }
 
@@ -2665,7 +2659,7 @@
 .training-card-route-details summary:focus-visible,
 .training-review-row__fsrs summary:focus-visible,
 .training-review-row__actions-details summary:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 

@@ -30,19 +30,29 @@
   transform: none;
 }
 
+/* Pressed feedback, mirroring the .action-button:active precedent (scale,
+   no animation dependency — safe under prefers-reduced-motion). */
+.button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 .button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
 .button--accent {
-  background: color-mix(in srgb, var(--accent) 12%, var(--bg-1));
-  border-color: color-mix(in srgb, var(--accent) 20%, transparent);
-  color: var(--fg-0);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--vscode-button-foreground, var(--bg-0));
 }
 
 .button--accent:hover {
-  background: color-mix(in srgb, var(--accent) 16%, var(--bg-1));
+  background: color-mix(in srgb, var(--accent) 86%, var(--bg-0));
+}
+
+.button--accent:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 78%, var(--bg-0));
 }
 
 .button--ghost {
@@ -87,8 +97,8 @@
 }
 
 .button--accent .button__icon {
-  background: var(--icon-surface-active);
-  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  background: color-mix(in srgb, var(--vscode-button-foreground, var(--bg-0)) 14%, transparent);
+  border-color: color-mix(in srgb, var(--vscode-button-foreground, var(--bg-0)) 22%, transparent);
 }
 
 .button--ghost .button__icon {

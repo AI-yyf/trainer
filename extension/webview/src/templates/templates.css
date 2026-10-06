@@ -47,7 +47,7 @@
 }
 .app-shell-nav__item:hover { color: var(--fg-0); }
 .app-shell-nav__item[aria-current="page"] { color: var(--fg-0); border-bottom-color: var(--accent); }
-:where(.app-shell-header button, .template-back):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+:where(.app-shell-header button, .template-back):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 .template-metadata { overflow-wrap: anywhere; margin: 0; color: var(--fg-muted); font-size: var(--trainer-font-xs); line-height: 1.5; }
 .template-next-action { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-block: 16px; }
 .template-next-action h3 { margin: 0; font-size: var(--trainer-font-md); font-weight: 600; line-height: 1.5; }
@@ -68,7 +68,7 @@
 .template-practice-response { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; padding-block: 16px; }
 .template-practice-response label { font-size: var(--trainer-font-sm); font-weight: 600; }
 .template-practice-response textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-0); color: var(--fg-0); font: inherit; line-height: 1.5; resize: vertical; }
-.template-practice-response textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.template-practice-response textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .template-surface { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .template-surface[hidden] { display: none; }
 .app-shell-overlay { position: absolute; inset: 0; z-index: 10; }
@@ -108,7 +108,7 @@
 .template-focused-practice__phase { padding-block: 8px 16px; }
 .template-focused-practice__phase p { line-height: 1.6; }
 .template-focused-practice__phase > button { margin-top: 12px; }
-.template-verification h3 { margin: 0 0 8px; color: var(--fg-0); font-size: var(--trainer-font-md); font-weight: 600; }
+.template-verification h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; color: var(--fg-0); font-size: var(--trainer-font-md); font-weight: 600; }
 .template-verification > p { margin-block: 8px; font-size: var(--trainer-font-sm); line-height: 1.5; }
 .template-verification ul { margin: 12px 0; padding-inline-start: 20px; }
 .template-verification li { margin-block: 4px; }
@@ -122,8 +122,8 @@
    bottom fade + "↓ N more" hint while rows sit below the fold. */
 .template-command-palette { position: relative; background: var(--bg-0); border: 1px solid var(--line); border-radius: 8px; }
 .template-command-palette__scroll { padding: 8px; max-height: min(260px, 36vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--line) 70%, transparent) transparent; }
-.template-command-palette.is-scrollable::after { content: ""; position: absolute; inset-inline: 1px; bottom: 1px; height: 18px; pointer-events: none; background: linear-gradient(to bottom, transparent, var(--bg-0) 88%); border-radius: 0 0 8px 8px; }
-.template-command-palette__more { position: absolute; inset-inline: 0; bottom: 0; margin: 0; padding: 1px 8px 3px; text-align: center; color: var(--fg-muted); font-size: var(--trainer-font-3xs); pointer-events: none; }
+.template-command-palette.is-scrollable::after { content: ""; position: absolute; inset-inline: 1px; bottom: 1px; height: 28px; pointer-events: none; background: linear-gradient(to bottom, transparent, var(--bg-0) 70%); border-radius: 0 0 8px 8px; }
+.template-command-palette__more { position: absolute; inset-inline: 0; bottom: 0; margin: 0; padding: 6px 8px 7px; text-align: center; color: var(--fg-muted); font-size: var(--trainer-font-3xs); background: var(--bg-0); border-radius: 0 0 8px 8px; pointer-events: none; }
 .template-command-palette__scroll > p { margin: 4px 4px 8px; }
 .template-command-palette__entry { display: flex; gap: 12px; width: 100%; text-align: start; padding: 8px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-0); font: inherit; cursor: pointer; }
 .template-command-palette__entry:is(:hover, .is-active) { background: var(--bg-1); }
@@ -139,6 +139,6 @@
 .template-global-state .template-system-state { flex-direction: row; align-items: center; padding-block: 8px; }
 .template-global-state .template-system-state h3 { flex: 1; font-size: var(--trainer-font-xs); font-weight: 400; }
 
-.template-command-palette__entry:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.template-command-palette__entry:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 
 .settings-skill-import { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-0); color: var(--fg-0); font: inherit; resize: vertical; }

@@ -545,12 +545,12 @@
 
 .composer__send:focus-visible,
 .composer__clear-btn:focus-visible {
-  outline: 2px solid var(--focus-ring, var(--accent));
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 .action-button:focus-visible {
-  outline: 2px solid var(--focus-ring, var(--accent));
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -945,7 +945,9 @@
   text-align: left;
   cursor: pointer;
   box-shadow: none;
-  transition: border-color 120ms ease, background 120ms ease;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease);
 }
 
 .composer-presencebar__blocked:hover {

@@ -31,20 +31,8 @@
 
 /* Speed test rows: keyboard focus ring matches hover */
 .settings-endpoint-speed__row:focus-visible {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
-}
-
-/* Save & connect busy indicator */
-.settings-quick-setup__saving-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  animation: trainer-spin 0.65s linear infinite;
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 
 /* Coaching reply code blocks — the primary content of a coding coach */

@@ -61,7 +61,9 @@ test('training disclosure summaries remain keyboard visible and token-driven', (
 
   assert.match(styles, /training-guidance-details__nested summary:focus-visible/);
   assert.match(styles, /training-review-row__fsrs summary:focus-visible/);
-  assert.match(styles, /outline:\s*2px solid var\(--accent\)/);
+  // Focus-idiom pass (visual polish round R2) converged outlines onto the
+  // --focus-ring token; --accent remains its fallback, not the direct value.
+  assert.match(styles, /outline:\s*2px solid var\(--focus-ring\)/);
   assert.match(styles, /training-guidance-details__nested\s*>\s*summary::before/);
   assert.match(styles, /color-mix\(in srgb, var\(--line\)/);
 });

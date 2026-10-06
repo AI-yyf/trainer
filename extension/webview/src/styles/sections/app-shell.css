@@ -61,23 +61,20 @@ body,
   color: inherit;
 }
 
-.notice,
-.coach-inline-notice {
+.notice {
   transition:
     opacity var(--motion-in) var(--motion-ease),
     transform var(--motion-in) var(--motion-ease);
 }
 
 @starting-style {
-  .notice,
-  .coach-inline-notice {
+  .notice {
     opacity: 0;
     transform: translateY(-6px);
   }
 }
 
-.notice,
-.coach-inline-notice {
+.notice {
   margin: 8px 10px 0;
   padding: 8px 10px;
   width: auto;
@@ -92,8 +89,7 @@ body,
   box-shadow: none;
 }
 
-.notice::before,
-.coach-inline-notice::before {
+.notice::before {
   content: "";
   flex: none;
   width: 6px;
@@ -101,55 +97,6 @@ body,
   margin-top: 5px;
   border-radius: 50%;
   background: var(--accent);
-}
-
-button.coach-inline-notice {
-  cursor: pointer;
-}
-
-button.coach-inline-notice:hover {
-  border-color: color-mix(in srgb, var(--fg-3) 40%, transparent);
-}
-
-.coach-inline-notice__text {
-  flex: 1;
-  min-width: 0;
-}
-
-.coach-inline-notice > svg {
-  flex: none;
-  margin-top: 3px;
-  color: var(--fg-3);
-}
-
-.coach-inline-notice--info {
-  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
-  background: color-mix(in srgb, var(--accent) 6%, var(--bg-1));
-}
-
-.coach-inline-notice--pass {
-  border-color: color-mix(in srgb, var(--success) 28%, transparent);
-  background: color-mix(in srgb, var(--success) 6%, var(--bg-1));
-}
-
-.coach-inline-notice--fail {
-  border-color: color-mix(in srgb, var(--danger) 28%, transparent);
-  background: color-mix(in srgb, var(--danger) 7%, var(--bg-1));
-}
-
-.coach-inline-notice--pending {
-  border-color: color-mix(in srgb, var(--warning) 28%, transparent);
-  background: color-mix(in srgb, var(--warning) 6%, var(--bg-1));
-}
-
-button.coach-inline-notice:hover.coach-inline-notice--info {
-  border-color: color-mix(in srgb, var(--accent) 46%, transparent);
-  background: color-mix(in srgb, var(--accent) 9%, var(--bg-1));
-}
-
-button.coach-inline-notice:hover.coach-inline-notice--fail {
-  border-color: color-mix(in srgb, var(--danger) 46%, transparent);
-  background: color-mix(in srgb, var(--danger) 10%, var(--bg-1));
 }
 
 /* Utility-layer buttons are content-sized icon hits, not stretching tabs —

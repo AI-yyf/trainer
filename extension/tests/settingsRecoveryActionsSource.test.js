@@ -15,6 +15,14 @@ const settingsPath = path.resolve(
   'CoachSettingsView.tsx',
 );
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+const governancePath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'operationMessageGovernance.ts',
+);
 
 test('Settings offers a direct sidecar restart and avoids duplicate model discovery actions', () => {
   const source = fs.readFileSync(settingsPath, 'utf8');
@@ -43,10 +51,13 @@ test('Settings routes the sidecar recovery action through the existing extension
 
 test('provider errors retain a safe, actionable recovery message in Settings', () => {
   const source = fs.readFileSync(appPath, 'utf8');
+  // The localized recovery copy lives in the pure governance module; App.tsx
+  // keeps only the call sites (asserted below).
+  const governanceSource = fs.readFileSync(governancePath, 'utf8');
 
-  assert.match(source, /function providerRecoveryMessage\(language: ComposerLanguage\)/);
-  assert.match(source, /Check the service address, API key, and model name, then try again\./);
-  assert.match(source, /if \(kind === "provider"\) \{\s*return providerRecoveryMessage\(language\);/);
+  assert.match(governanceSource, /function providerRecoveryMessage\(language: ComposerLanguage\)/);
+  assert.match(governanceSource, /Check the service address, API key, and model name, then try again\./);
+  assert.match(governanceSource, /if \(kind === "provider"\) \{\s*return providerRecoveryMessage\(language\);/);
   assert.match(
     source,
     /Boolean\(isProviderActionOverride \|\| settingsActionState\?\.targets\.includes\("provider"\)\)/,

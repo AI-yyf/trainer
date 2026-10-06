@@ -1,11 +1,29 @@
 'use strict';
 
+// §四十四: error operation/status messages may use only local recovery copy —
+// a narrowly parsed resource count, a locally classified resource recovery, an
+// attestation delivery marker, a live-plan task-gate marker, a Provider
+// recovery hint while that action is pending, or the generic operation
+// recovery. Host error prose must never pass through.
+//
+// Since the operation-message governance extraction, the marker parsing and
+// the store-side sanitizer live in lib/operationMessageGovernance.ts; App.tsx
+// keeps the host-status sanitizer chain and the App-owned copy builders.
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+const governanceSourcePath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'operationMessageGovernance.ts',
+);
 
 function sourceSection(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker);
@@ -18,6 +36,7 @@ function sourceSection(source, startMarker, endMarker) {
 
 test('operation-status errors preserve only local recovery copy', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
+  const governance = fs.readFileSync(governanceSourcePath, 'utf8');
   const parser = sourceSection(
     source,
     'function parsePartialResourceDeletionFailure(',
@@ -26,12 +45,12 @@ test('operation-status errors preserve only local recovery copy', () => {
   const formatter = sourceSection(
     source,
     'function partialResourceDeletionFailureMessage(',
-    'function sanitizeHostFailureMessage(',
+    'function resourceOperationFailureMessage(',
   );
   const sanitizer = sourceSection(
     source,
     'function sanitizeHostFailureMessage(',
-    'function sanitizeOperationFailureMessage(',
+    'interface SettingsActionState',
   );
 
   // This is intentionally an anchored whitelist for the host's aggregate-delete summary.
@@ -55,10 +74,6 @@ test('operation-status errors preserve only local recovery copy', () => {
   assert.match(formatter, /\$\{failedCount\} could not be deleted\./);
   assert.doesNotMatch(formatter, /message\.payload|rawMessage|originalMessage/);
 
-  // Error operation/status messages may use only local copy: a narrowly parsed
-  // resource count, a locally classified resource recovery, a live-plan task-gate
-  // marker, a Provider recovery hint while that action is pending, or the generic
-  // operation recovery. Host error prose must never pass through.
   assert.match(
     sanitizer,
     /message\.type !== "operation\/status" \|\| message\.payload\.tone !== "error"/,
@@ -72,20 +87,28 @@ test('operation-status errors preserve only local recovery copy', () => {
   assert.match(sanitizer, /livePlanTaskGateFailureMessage\(livePlanGate, language\)/);
   assert.match(sanitizer, /providerRecoveryMessage\(language\)/);
   assert.match(sanitizer, /recoverableFailureMessage\("operation", language\)/);
+  // The attestation-undelivered marker maps to local copy ahead of every
+  // generic branch, so a failed evidence delivery never reads as a generic
+  // operation failure.
+  assert.match(sanitizer, /detectAttestationUndelivered\(message\.payload\.message\)/);
+  assert.match(sanitizer, /attestationUndeliveredMessage\(language\)/);
   assert.match(
     sanitizer,
-    /partialDeletion\s*\?\s*partialResourceDeletionFailureMessage\(partialDeletion, language\)\s*:\s*resourceRecovery\s*\?\s*resourceRecovery\s*:\s*livePlanGate\s*\?\s*livePlanTaskGateFailureMessage\(livePlanGate, language\)\s*:\s*isProviderAction\s*\?\s*providerCategoryFailureMessage\(message\.payload\.providerTest, language\)\s*\?\?\s*providerRecoveryMessage\(language\)\s*:\s*recoverableFailureMessage\("operation", language\)/,
+    /detectAttestationUndelivered\(message\.payload\.message\)\s*\?\s*attestationUndeliveredMessage\(language\)\s*:\s*revisionConflict\s*\?\s*planRevisionConflictMessage\(revisionConflict\.revision, language\)\s*:\s*partialDeletion\s*\?\s*partialResourceDeletionFailureMessage\(partialDeletion, language\)\s*:\s*resourceRecovery\s*\?\s*resourceRecovery\s*:\s*livePlanGate\s*\?\s*livePlanTaskGateFailureMessage\(livePlanGate, language\)\s*:\s*isProviderAction\s*\?\s*providerCategoryFailureMessage\(message\.payload\.providerTest, language\)\s*\?\?\s*providerRecoveryMessage\(language\)\s*:\s*recoverableFailureMessage\("operation", language\)/,
   );
   // Structured provider categories must render localized hints, never host prose.
   assert.match(source, /function providerCategoryFailureMessage\(/);
   assert.match(source, /providerErrorHint\(/);
   assert.doesNotMatch(sanitizer, /message:\s*message\.payload\.message/);
+  // The marker copy itself is owned by the governance module, not inlined here.
+  assert.match(governance, /export function attestationUndeliveredMessage\(/);
 });
 
 test('live-plan task mint 409 markers map to local copy and keep composer draft until ack', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
-  assert.match(source, /trainer-live-plan-task-gate:\(no_live\|leftover\)/);
-  assert.match(source, /function livePlanTaskGateFailureMessage\(/);
+  const governance = fs.readFileSync(governanceSourcePath, 'utf8');
+  assert.match(governance, /trainer-live-plan-task-gate:\(no_live\|leftover\)/);
+  assert.match(governance, /export function livePlanTaskGateFailureMessage\(/);
   assert.match(source, /function livePlanTaskMintPendingMessage\(/);
   assert.match(source, /function livePlanUpdatePendingMessage\(/);
   assert.match(source, /function trainingGenerateCardPendingMessage\(/);
@@ -104,16 +127,16 @@ test('live-plan task mint 409 markers map to local copy and keep composer draft 
     source,
     /Keep draft until authoritative success\/failure ack/,
   );
-  assert.match(source, /will not invent a task or mutate leftover as live/);
-  assert.match(source, /will not resurrect leftover as live/);
+  assert.match(governance, /will not invent a task or mutate leftover as live/);
+  assert.match(governance, /will not resurrect leftover as live/);
 });
 
-test('local Provider recovery copy remains actionable without passing through arbitrary errors', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+test('store-side sanitizer keeps provider recovery copy local without passing through arbitrary errors', () => {
+  const governance = fs.readFileSync(governanceSourcePath, 'utf8');
   const localSanitizer = sourceSection(
-    source,
-    'function sanitizeOperationFailureMessage(',
-    'interface SettingsActionState',
+    governance,
+    'export function sanitizeOperationFailureMessage(',
+    '/** Surface attribution for a banner message',
   );
 
   assert.match(localSanitizer, /message\.tone !== "error"/);

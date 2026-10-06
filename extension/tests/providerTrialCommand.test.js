@@ -62,6 +62,8 @@ function createContext() {
     },
     trainerWorkspace: {
       getRoot() {
+        // Opaque workspace identifier for a mocked context: the command under
+        // test relays it in payloads and never resolves it on the filesystem.
         return '/tmp/trainer-workspace';
       },
     },
@@ -124,6 +126,7 @@ function createContext() {
           connection: {},
         },
         sidecar: { lifecycle: 'ready', port: 34891, host: '127.0.0.1', canStart: true },
+        // Opaque workspace identifier (mocked host state, never fs-resolved).
         workspace: { workspaceFolder: '/tmp/trainer-a' },
       };
     },

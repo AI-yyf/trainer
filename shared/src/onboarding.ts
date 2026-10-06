@@ -1,8 +1,7 @@
 /**
  * Cold-start onboarding derivation shared by the webview wizard and host tests.
  *
- * Step precedence mirrors the CoachGuidance priority ladder
- * (extension/webview/src/components/coach/CoachGuidance.tsx): the provider
+ * Step precedence follows the coach guidance priority ladder: the provider
  * setup item is the highest-priority guidance, but a learner cannot even save
  * a provider until a Trainer workspace root is selected and the window is
  * trusted, so the wizard walks: workspace root → trust window → connect model.

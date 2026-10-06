@@ -304,6 +304,8 @@ test('root package.json exposes portable lifecycle entrypoints', async () => {
     path.join('H:/trainer', 'server', '.venv', 'Scripts', 'python.exe'),
   );
   assert.equal(
+    // An opaque fixture with an explicit platform argument: getVenvPythonPath
+    // only joins path segments, so the /tmp/... value never touches the fs.
     lifecycle.getVenvPythonPath('/tmp/trainer', 'linux'),
     path.join('/tmp/trainer', 'server', '.venv', 'bin', 'python'),
   );

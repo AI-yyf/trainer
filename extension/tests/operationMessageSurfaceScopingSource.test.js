@@ -3,8 +3,9 @@
 // §四十四: a module's failure localizes to its owning surface. Resource
 // operation results only affect the Resources view; plan-state failures only
 // render inside Learning; everything else stays global. This guard locks the
-// surface-scoping mechanism in App.tsx: the union, the atomic helper, the
-// host-status interception and the banner gate.
+// surface-scoping mechanism: the union and the pure attribution rules live in
+// lib/operationMessageGovernance.ts (extracted from App.tsx); App keeps the
+// atomic banner write, the host-status interception and the banner gate.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -12,13 +13,27 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+const governancePath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'operationMessageGovernance.ts',
+);
 
 test('operation message surface union and banner gate localize scoped messages to their own view', () => {
   const source = fs.readFileSync(appPath, 'utf8');
+  const governance = fs.readFileSync(governancePath, 'utf8');
 
+  // The union and the pure surface rules moved to the governance module.
   assert.match(
-    source,
-    /type OperationMessageSurface = "global" \| "training" \| "plan" \| "resources";/,
+    governance,
+    /export type OperationMessageSurface = "global" \| "training" \| "plan" \| "resources";/,
+  );
+  assert.match(
+    governance,
+    /export function resolveOperationMessageSurface\(/,
   );
   assert.match(
     source,
@@ -36,22 +51,18 @@ test('operation message surface union and banner gate localize scoped messages t
   );
 });
 
-test('setOperationMessage sets message and surface atomically with a global default', () => {
+test('setOperationMessage writes message and surface atomically through the governance module', () => {
   const source = fs.readFileSync(appPath, 'utf8');
 
+  // One atomic entry point: surface attribution and failure sanitization both
+  // come from the pure module; App only performs the two state writes.
   assert.match(
     source,
-    /const setOperationMessage = useCallback\(\s*\(message\?: OperationMessage, surface\?: OperationMessageSurface\) => \{[\s\S]*?setOperationMessageSurface\(nextSurface\);[\s\S]*?setRawOperationMessage\(/,
+    /const setOperationMessage = useCallback\(\s*\(message\?: OperationMessage, surface\?: OperationMessageSurface\) => \{\s*setOperationMessageSurface\(\s*resolveOperationMessageSurface\(message\?\.message, surface\),\s*\);\s*setRawOperationMessage\(/,
   );
-  // Default keeps unscoped calls global; a later global message resets any scope.
   assert.match(
     source,
-    /let nextSurface: OperationMessageSurface = "global";\s*if \(message\) \{\s*if \(surface\) \{\s*nextSurface = surface;/,
-  );
-  // Plan-state failures relayed by generic callers stay inside Learning.
-  assert.match(
-    source,
-    /detectPlanRevisionConflict\(message\.message\) \|\|\s*parseLivePlanTaskGateMarker\(message\.message\)\s*\) \{\s*nextSurface = "plan";/,
+    /message \? sanitizeOperationFailureMessage\(message, layout\.composerLanguage\) : undefined,/,
   );
 });
 
@@ -60,7 +71,7 @@ test('host resource and plan statuses are intercepted before the store banner wr
 
   assert.match(
     source,
-    /const hostSurfaceScope: OperationMessageSurface \| undefined =\s*detectPlanRevisionConflict\(message\.payload\.message\) \|\|\s*parseLivePlanTaskGateMarker\(message\.payload\.message\)\s*\? "plan"\s*: resourceOperationStatus && resourceOperationStatus\.kind !== "search"\s*\? "resources"\s*: undefined;/,
+    /const hostSurfaceScope: OperationMessageSurface \| undefined =\s*detectAttestationUndelivered\(message\.payload\.message\)\s*\? "training"\s*: detectPlanRevisionConflict\(message\.payload\.message\) \|\|\s*parseLivePlanTaskGateMarker\(message\.payload\.message\)\s*\? "plan"\s*: resourceOperationStatus && resourceOperationStatus\.kind !== "search"\s*\? "resources"\s*: undefined;/,
   );
   assert.match(
     source,

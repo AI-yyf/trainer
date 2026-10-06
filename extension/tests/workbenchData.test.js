@@ -6504,6 +6504,8 @@ test('workspace recovery retains acknowledged imported resources while dropping 
       resources: [
         {
           id: 'resource-imported', title: 'Uploaded notes', kind: 'markdown',
+          // Opaque bootstrap fixture: the merge under test never resolves it
+          // against the filesystem, so the POSIX-style value stays as-is.
           status: 'ready', source: '/tmp/notes.md',
           sandbox_path: '/trainer/sandboxes/workspace-import-reload/notes.md',
           index_status: 'indexed',

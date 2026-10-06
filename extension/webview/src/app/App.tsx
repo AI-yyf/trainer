@@ -189,6 +189,19 @@ import { AppShell } from "../templates/AppShell";
 import { PracticeResponse } from "../templates/PracticeResponse";
 import { ActivityHeader } from "../templates/ActivityHeader";
 import { ownsCoachComposer } from "../lib/workbenchDestinations";
+import {
+  attestationUndeliveredMessage,
+  detectAttestationUndelivered,
+  detectPlanRevisionConflict,
+  livePlanTaskGateFailureMessage,
+  parseLivePlanTaskGateMarker,
+  planRevisionConflictMessage,
+  providerRecoveryMessage,
+  recoverableFailureMessage,
+  resolveOperationMessageSurface,
+  sanitizeOperationFailureMessage,
+  type OperationMessageSurface,
+} from "../lib/operationMessageGovernance";
 import { CoachComposer, ComposerIconButton } from "../components/composer";
 import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
 import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
@@ -355,8 +368,6 @@ type SettingsActionKind =
   | "reset-defaults"
   | "start-provider-trial";
 
-type RecoverableFailureKind = "bootstrap" | "send" | "upload" | "provider" | "operation";
-
 type CoachCheckpointRecoveryAction = "resume" | "replay";
 
 function isCoachCheckpointRecoveryState(
@@ -372,68 +383,6 @@ function isCoachCheckpointRecoveryState(
   return /interrupted|aborted|failed|timeout|network|error/.test(stopReason);
 }
 
-const recoverableFailureCopy: Record<
-  ComposerLanguage,
-  Record<RecoverableFailureKind, string>
-> = {
-  "zh-CN": {
-    bootstrap: "暂时没能打开预览。等一会儿再试。",
-    send: "这条消息没有发出去。检查一下连接，再试一次。",
-    upload: "这个文件暂时没导入成功。确认文件没问题后再试。",
-    provider: "还没连上模型。检查一下设置，再试一次。",
-    operation: "这一步暂时没完成。再试一次。",
-  },
-  "en-US": {
-    bootstrap: "Preview data could not load. Try again shortly.",
-    send: "The message was not sent. Check the connection and try again.",
-    upload: "The resource could not be imported. Check the file and try again.",
-    provider: "The provider action did not finish. Check the settings and try again.",
-    operation: "That action did not finish. Try again.",
-  },
-  "es-ES": {
-    bootstrap: "La vista previa no se pudo abrir por ahora. Vuelve a intentarlo en un momento.",
-    send: "El mensaje no se envió. Revisa la conexión e inténtalo de nuevo.",
-    upload: "El archivo no se pudo importar. Revisa el archivo e inténtalo de nuevo.",
-    provider: "No se pudo completar la conexión del modelo. Revisa los ajustes e inténtalo de nuevo.",
-    operation: "Esta acción no se pudo completar. Inténtalo de nuevo.",
-  },
-  "fr-FR": {
-    bootstrap: "La prévisualisation ne s'est pas ouverte. Réessayez dans un instant.",
-    send: "Le message n'a pas été envoyé. Vérifiez la connexion puis réessayez.",
-    upload: "Le fichier n'a pas pu être importé. Vérifiez-le puis réessayez.",
-    provider: "La connexion au modèle n'a pas abouti. Vérifiez les réglages puis réessayez.",
-    operation: "Cette action n'a pas pu être terminée. Réessayez.",
-  },
-  "de-DE": {
-    bootstrap: "Die Vorschau konnte nicht geöffnet werden. Versuche es gleich noch einmal.",
-    send: "Die Nachricht wurde nicht gesendet. Prüfe die Verbindung und versuche es erneut.",
-    upload: "Die Datei konnte nicht importiert werden. Prüfe die Datei und versuche es erneut.",
-    provider: "Die Modellverbindung konnte nicht abgeschlossen werden. Prüfe die Einstellungen und versuche es erneut.",
-    operation: "Dieser Schritt konnte nicht abgeschlossen werden. Versuche es erneut.",
-  },
-  "ja-JP": {
-    bootstrap: "プレビューを開けませんでした。少し待ってからもう一度試してください。",
-    send: "メッセージを送信できませんでした。接続を確認して、もう一度試してください。",
-    upload: "ファイルを取り込めませんでした。ファイルを確認して、もう一度試してください。",
-    provider: "モデルへの接続を完了できませんでした。設定を確認して、もう一度試してください。",
-    operation: "この操作を完了できませんでした。もう一度試してください。",
-  },
-  "ko-KR": {
-    bootstrap: "미리 보기를 열 수 없었습니다. 잠시 후 다시 시도하세요.",
-    send: "메시지를 보내지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.",
-    upload: "파일을 가져오지 못했습니다. 파일을 확인한 뒤 다시 시도하세요.",
-    provider: "모델 연결을 완료하지 못했습니다. 설정을 확인한 뒤 다시 시도하세요.",
-    operation: "이 작업을 완료하지 못했습니다. 다시 시도하세요.",
-  },
-  "pt-BR": {
-    bootstrap: "Não foi possível abrir a visualização agora. Tente novamente em instantes.",
-    send: "Não foi possível enviar a mensagem. Verifique a conexão e tente novamente.",
-    upload: "Não foi possível importar o arquivo. Verifique o arquivo e tente novamente.",
-    provider: "Não foi possível concluir a conexão com o modelo. Verifique as configurações e tente novamente.",
-    operation: "Não foi possível concluir esta ação. Tente novamente.",
-  },
-};
-
 const coachFirstComposerPlaceholder: Record<ComposerLanguage, string> = {
   "zh-CN": "问教练",
   "en-US": "Ask the coach",
@@ -444,10 +393,6 @@ const coachFirstComposerPlaceholder: Record<ComposerLanguage, string> = {
   "ko-KR": "현재 수준, 목표, 프로젝트 또는 막힌 부분을 먼저 알려 주세요.",
   "pt-BR": "Comece me contando seu nível, objetivo, projeto ou onde está travado.",
 };
-
-// §四十四: domain failures localize to their owning surface. "global" renders
-// on every view; every other scope renders only while its own view is active.
-type OperationMessageSurface = "global" | "training" | "plan" | "resources";
 
 const RESOURCE_OPERATION_STATUS_PATTERN =
   /^\[\[trainer-resource-operation:(delete|restore|search|index|upload):([a-z0-9-]{1,96})\]\]\s*/i;
@@ -485,76 +430,6 @@ function parseResourceOperationStatus(
     requestId,
     message: message.payload.message.slice(marker[0].length).trim() || fallbackMessage,
   };
-}
-
-function recoverableFailureMessage(
-  kind: RecoverableFailureKind,
-  language: ComposerLanguage,
-): string {
-  if (kind === "provider") {
-    return providerRecoveryMessage(language);
-  }
-  return recoverableFailureCopy[language]?.[kind] ?? recoverableFailureCopy["en-US"][kind];
-}
-
-type LivePlanTaskGateKind = "no_live" | "leftover";
-
-const LIVE_PLAN_TASK_GATE_MARKER =
-  /^\[\[trainer-live-plan-task-gate:(no_live|leftover)\]\](?:\s|$)/i;
-
-function livePlanTaskGateFailureMessage(
-  kind: LivePlanTaskGateKind,
-  language: ComposerLanguage,
-): string {
-  const copy: Record<ComposerLanguage, Record<LivePlanTaskGateKind, string>> = {
-    "zh-CN": {
-      no_live: "当前没有正式计划，所以还不能改计划或生成任务。先生成计划，再试一次。",
-      leftover: "这里只有旧计划痕迹，不是当前正式计划。先生成计划，再试一次。",
-    },
-    "en-US": {
-      no_live:
-        "No live plan is bound, so Trainer will not invent a task or mutate leftover as live. Generate a plan first.",
-      leftover:
-        "Only leftover plan traces remain, not a live plan. Generate a plan first; Trainer will not resurrect leftover as live.",
-    },
-    "es-ES": {
-      no_live:
-        "No hay un plan en vivo, así que Trainer no inventará una tarea ni mutará un resto como vivo. Genera un plan primero.",
-      leftover:
-        "Solo quedan rastros de un plan anterior, no un plan en vivo. Genera un plan primero; Trainer no resucitará el resto como vivo.",
-    },
-    "fr-FR": {
-      no_live:
-        "Aucun plan actif n'est lié, donc Trainer n'inventera pas de tâche et ne mutera pas un reste comme actif. Générez d'abord un plan.",
-      leftover:
-        "Il ne reste que des traces d'ancien plan, pas un plan actif. Générez d'abord un plan ; Trainer ne ressuscitera pas le reste comme actif.",
-    },
-    "de-DE": {
-      no_live:
-        "Es ist kein live-Plan gebunden, daher erfindet Trainer keine Aufgabe und mutiert keinen Rest als live. Erzeuge zuerst einen Plan.",
-      leftover:
-        "Nur Restspuren eines Plans sind da, kein live-Plan. Erzeuge zuerst einen Plan; Trainer belebt keinen Rest als live wieder.",
-    },
-    "ja-JP": {
-      no_live:
-        "正式な計画がないため、タスク作成や古い計画の更新はできません。先に計画を生成してください。",
-      leftover:
-        "残っているのは古い計画の痕跡だけで、正式な計画ではありません。先に計画を生成してください。",
-    },
-    "ko-KR": {
-      no_live:
-        "살아있는 계획이 없어 과제를 만들거나 남은 계획을 바꾸지 않습니다. 먼저 계획을 생성하세요.",
-      leftover:
-        "남은 건 예전 계획 흔적일 뿐, 현재 계획이 아닙니다. 먼저 계획을 생성하세요. 남은 계획을 되살리지 않습니다.",
-    },
-    "pt-BR": {
-      no_live:
-        "Não há plano ao vivo vinculado, então o Trainer não inventará uma tarefa nem mutará resto como ao vivo. Gere um plano primeiro.",
-      leftover:
-        "Só restam rastros de plano antigo, não um plano ao vivo. Gere um plano primeiro; o Trainer não ressuscitará o resto como ao vivo.",
-    },
-  };
-  return copy[language]?.[kind] ?? copy["en-US"][kind];
 }
 
 function livePlanTaskMintPendingMessage(language: ComposerLanguage): string {
@@ -599,54 +474,8 @@ function trainingGenerateCardPendingMessage(language: ComposerLanguage): string 
   return copy[language] ?? copy["en-US"];
 }
 
-const PLAN_REVISION_CONFLICT_MARKER =
-  /\[\[trainer-plan-revision-conflict(?::(\d+))?\]\](?:\s|$)/i;
-
-function planRevisionConflictMessage(
-  currentRevision: string | undefined,
-  language: ComposerLanguage,
-): string {
-  const rev = currentRevision ?? "?";
-  const copy: Record<ComposerLanguage, string> = {
-    "zh-CN": `计划已被另一个窗口修改（当前版本 ${rev}）。请刷新后重试，系统已阻止覆盖。`,
-    "en-US": `The plan was modified in another window (current revision ${rev}). Refresh and retry — the overwrite was blocked.`,
-    "es-ES": `El plan fue modificado en otra ventana (revisión actual ${rev}). Actualice y reintente; la sobrescritura fue bloqueada.`,
-    "fr-FR": `Le plan a été modifié dans une autre fenêtre (révision actuelle ${rev}). Actualisez et réessayez ; l'écrasement a été bloqué.`,
-    "de-DE": `Der Plan wurde in einem anderen Fenster geändert (aktuelle Revision ${rev}). Aktualisieren und wiederholen — die Überschreibung wurde blockiert.`,
-    "ja-JP": `プランが別のウィンドウで変更されました（現在のリビジョン ${rev}）。更新して再試行してください。上書きはブロックされました。`,
-    "ko-KR": `플랜이 다른 창에서 수정되었습니다 (현재 버전 ${rev}). 새로고침 후 재시도하세요. 덮어쓰기가 차단되었습니다.`,
-    "pt-BR": `O plano foi modificado em outra janela (revisão atual ${rev}). Atualize e tente novamente; a sobrescrita foi bloqueada.`,
-  };
-  return copy[language] ?? copy["en-US"];
-}
-
-function detectPlanRevisionConflict(message: string): { revision: string } | undefined {
-  const match = PLAN_REVISION_CONFLICT_MARKER.exec(message.trim());
-  return match ? { revision: match[1] ?? "?" } : undefined;
-}
-
-function parseLivePlanTaskGateMarker(message: string): LivePlanTaskGateKind | undefined {
-  const match = LIVE_PLAN_TASK_GATE_MARKER.exec(message.trim());
-  const kind = match?.[1]?.toLowerCase();
-  return kind === "no_live" || kind === "leftover" ? kind : undefined;
-}
-
 function trainingPersistenceFailureMessage(language: ComposerLanguage): string {
   return appUiCopy(language, "训练记录没有保存，因此没有开始教练流式回复。输入已保留，可以重试。");
-}
-
-function providerRecoveryMessage(language: ComposerLanguage): string {
-  const copy: Record<ComposerLanguage, string> = {
-    "zh-CN": "连接还没有通过。请检查服务地址、API key 和模型名称，然后再试一次。",
-    "en-US": "The connection did not pass yet. Check the service address, API key, and model name, then try again.",
-    "es-ES": "La conexión aún no pasó la comprobación. Revisa la dirección del servicio, la clave API y el modelo, e inténtalo de nuevo.",
-    "fr-FR": "La connexion n'a pas encore passé la vérification. Vérifiez l'adresse du service, la clé API et le modèle, puis réessayez.",
-    "de-DE": "Die Verbindung hat die Prüfung noch nicht bestanden. Prüfen Sie Serviceadresse, API-Schlüssel und Modellnamen und versuchen Sie es erneut.",
-    "ja-JP": "接続はまだ確認できていません。サービスのアドレス、API キー、モデル名を確認して、もう一度試してください。",
-    "ko-KR": "연결 확인이 아직 끝나지 않았습니다. 서비스 주소, API 키, 모델 이름을 확인한 뒤 다시 시도하세요.",
-    "pt-BR": "A conexão ainda não passou na verificação. Confira o endereço do serviço, a chave de API e o modelo, depois tente novamente.",
-  };
-  return copy[language] ?? copy["en-US"];
 }
 
 type PartialResourceDeletionFailure = {
@@ -780,7 +609,9 @@ function sanitizeHostFailureMessage(
     ...message,
     payload: {
       ...message.payload,
-      message: revisionConflict
+      message: detectAttestationUndelivered(message.payload.message)
+        ? attestationUndeliveredMessage(language)
+        : revisionConflict
         ? planRevisionConflictMessage(revisionConflict.revision, language)
         : partialDeletion
           ? partialResourceDeletionFailureMessage(partialDeletion, language)
@@ -793,42 +624,6 @@ function sanitizeHostFailureMessage(
             providerRecoveryMessage(language)
           : recoverableFailureMessage("operation", language),
     },
-  };
-}
-
-function sanitizeOperationFailureMessage(
-  message: OperationMessage,
-  language: ComposerLanguage,
-): OperationMessage {
-  if (message.tone !== "error") {
-    return message;
-  }
-
-  const localRecoveryMessages = Object.values(
-    recoverableFailureCopy[language] ?? recoverableFailureCopy["en-US"],
-  );
-  localRecoveryMessages.push(providerRecoveryMessage(language));
-  localRecoveryMessages.push(livePlanTaskGateFailureMessage("no_live", language));
-  localRecoveryMessages.push(livePlanTaskGateFailureMessage("leftover", language));
-  localRecoveryMessages.push(
-    "验证未通过：当前训练卡片不是实时状态。",
-    "没有可验证的当前文件。",
-    "预览不能验真实工作区文件。请回 VS Code 打开文件后再验证。",
-    "Verification failed: this training card is not live.",
-    "There is no current file to verify.",
-    "Preview cannot verify a real workspace file. Open the file in VS Code, then verify there.",
-  );
-  const revisionConflict2 = detectPlanRevisionConflict(message.message);
-  const livePlanGate = parseLivePlanTaskGateMarker(message.message);
-  return {
-    tone: "error",
-    message: revisionConflict2
-      ? planRevisionConflictMessage(revisionConflict2.revision, language)
-      : livePlanGate
-      ? livePlanTaskGateFailureMessage(livePlanGate, language)
-      : localRecoveryMessages.includes(message.message)
-        ? message.message
-        : recoverableFailureMessage("operation", language),
   };
 }
 
@@ -4042,18 +3837,9 @@ export function App() {
   // gate markers), it auto-scopes to Learning, where plan state is owned.
   const setOperationMessage = useCallback(
     (message?: OperationMessage, surface?: OperationMessageSurface) => {
-      let nextSurface: OperationMessageSurface = "global";
-      if (message) {
-        if (surface) {
-          nextSurface = surface;
-        } else if (
-          detectPlanRevisionConflict(message.message) ||
-          parseLivePlanTaskGateMarker(message.message)
-        ) {
-          nextSurface = "plan";
-        }
-      }
-      setOperationMessageSurface(nextSurface);
+      setOperationMessageSurface(
+        resolveOperationMessageSurface(message?.message, surface),
+      );
       setRawOperationMessage(
         message ? sanitizeOperationFailureMessage(message, layout.composerLanguage) : undefined,
       );
@@ -4690,11 +4476,14 @@ export function App() {
         // operation results (upload/index/delete/restore acks) render only in
         // Library — the Library view already reports its own mutation status —
         // and plan-state failures (revision conflict, live-plan gate) render
-        // only in Learning. Stream-scoped non-errors clear the banner instead
-        // of setting one, so they never claim a scope.
+        // only in Learning. A failed evidence delivery after a completed
+        // verification renders only in Training. Stream-scoped non-errors
+        // clear the banner instead of setting one, so they never claim a scope.
         const hostSurfaceScope: OperationMessageSurface | undefined =
-          detectPlanRevisionConflict(message.payload.message) ||
-          parseLivePlanTaskGateMarker(message.payload.message)
+          detectAttestationUndelivered(message.payload.message)
+            ? "training"
+            : detectPlanRevisionConflict(message.payload.message) ||
+              parseLivePlanTaskGateMarker(message.payload.message)
             ? "plan"
             : resourceOperationStatus && resourceOperationStatus.kind !== "search"
               ? "resources"
@@ -5225,7 +5014,13 @@ export function App() {
       data.providerConfig.thinkingConfig,
     ],
   );
-  const providerDraftSourceKey = JSON.stringify(providerDraftSource);
+  // R3③: full-object JSON.stringify ran in the render body on every App
+  // render (every stream chunk); providerDraftSource is already memoized on
+  // its fields, so the key only needs to recompute when that memo recomputes.
+  const providerDraftSourceKey = useMemo(
+    () => JSON.stringify(providerDraftSource),
+    [providerDraftSource],
+  );
 
   useEffect(() => {
     if (providerDraftSourceKeyRef.current === providerDraftSourceKey) {
@@ -5514,16 +5309,43 @@ export function App() {
     data.providerConfig.thinkingConfig,
   ]);
 
+  // R3②: context usage used to re-tally the entire conversation plus the
+  // full streamed content character-by-character on every stream chunk
+  // (O(conversation + stream) per chunk, O(n²) per turn). Both tallies are
+  // now cached: the conversation part recomputes only when the conversation
+  // array identity changes (per turn, not per chunk), and the stream part
+  // only tallies the newly appended slice (streamedContent grows
+  // monotonically per streamMessageId; any shrink or id change resets it).
+  // StrictMode double-invocation is safe: both caches are keyed by identity
+  // and re-run with the same inputs returns the cached values untouched.
+  const composerContextTallyRef = useRef<{
+    conversation: typeof data.conversation | undefined;
+    conversationCjk: number;
+    conversationOther: number;
+    streamMessageId: string | undefined;
+    streamConsumedChars: number;
+    streamCjk: number;
+    streamOther: number;
+  }>({
+    conversation: undefined,
+    conversationCjk: 0,
+    conversationOther: 0,
+    streamMessageId: undefined,
+    streamConsumedChars: 0,
+    streamCjk: 0,
+    streamOther: 0,
+  });
+
   const composerContextUsage = useMemo(() => {
     const provider = data.providerConfig;
     const model = provider.resolvedModel ?? provider.model;
     const limit =
       (model ? provider.modelTokenLimits?.[model]?.contextWindowTokens : undefined) ??
       provider.contextWindowTokens;
-    let cjk = 0;
-    let other = 0;
     const cjkPattern = /[\u1100-\u11ff\u2e80-\u9fff\uac00-\ud7af\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]/;
-    const tally = (text: string) => {
+    const tally = (text: string): { cjk: number; other: number } => {
+      let cjk = 0;
+      let other = 0;
       for (const ch of text) {
         if (cjkPattern.test(ch)) {
           cjk += 1;
@@ -5531,24 +5353,54 @@ export function App() {
           other += 1;
         }
       }
+      return { cjk, other };
     };
-    for (const message of data.conversation) {
-      tally(message.body ?? "");
-      for (const attachment of message.attachments ?? []) {
-        tally(attachment.value ?? "");
+    const cache = composerContextTallyRef.current;
+    if (cache.conversation !== data.conversation) {
+      let cjk = 0;
+      let other = 0;
+      for (const message of data.conversation) {
+        const bodyTally = tally(message.body ?? "");
+        cjk += bodyTally.cjk;
+        other += bodyTally.other;
+        for (const attachment of message.attachments ?? []) {
+          const attachmentTally = tally(attachment.value ?? "");
+          cjk += attachmentTally.cjk;
+          other += attachmentTally.other;
+        }
+        // Per-message framing overhead (role tags, separators).
+        other += 16;
       }
-      // Per-message framing overhead (role tags, separators).
-      other += 16;
+      cache.conversation = data.conversation;
+      cache.conversationCjk = cjk;
+      cache.conversationOther = other;
     }
-    if (streaming.streamedContent) {
-      tally(streaming.streamedContent);
+    let cjk = cache.conversationCjk;
+    let other = cache.conversationOther;
+    const streamed = streaming.streamedContent ?? "";
+    const streamReset =
+      streaming.streamMessageId !== cache.streamMessageId ||
+      streamed.length < cache.streamConsumedChars;
+    if (streamReset) {
+      const full = tally(streamed);
+      cache.streamMessageId = streaming.streamMessageId;
+      cache.streamConsumedChars = streamed.length;
+      cache.streamCjk = full.cjk;
+      cache.streamOther = full.other;
+    } else if (streamed.length > cache.streamConsumedChars) {
+      const delta = tally(streamed.slice(cache.streamConsumedChars));
+      cache.streamConsumedChars = streamed.length;
+      cache.streamCjk += delta.cjk;
+      cache.streamOther += delta.other;
     }
+    cjk += cache.streamCjk;
+    other += cache.streamOther;
     // A system/pedagogy prompt is always prepended server-side.
     const systemOverhead = 1200;
     const used = Math.ceil(cjk + other / 4) + systemOverhead;
     const ratio = limit && limit > 0 ? Math.min(1, used / limit) : undefined;
     return { used, limit, ratio };
-  }, [data.conversation, data.providerConfig, streaming.streamedContent]);
+  }, [data.conversation, data.providerConfig, streaming.streamMessageId, streaming.streamedContent]);
 
   const composerContextUsageTone = composerContextUsage.ratio === undefined
     ? "unknown"
@@ -12386,9 +12238,13 @@ export function App() {
           </p>
         );
       })()}
-      {coachBlockingSurface === "workspace-admission" && workspaceAdmissionContent ? (
+      {coachBlockingSurface === "workspace-admission" && onboardingWizard ? (
+        // R1①: on a true cold start the wizard's workspace step owns the
+        // root-selection ask; the admission panel must not stack under it
+        // (its reconciliation details stay available once the wizard clears).
+        <div className="coach-onboarding">{onboardingWizard}</div>
+      ) : coachBlockingSurface === "workspace-admission" && workspaceAdmissionContent ? (
         <>
-          {onboardingWizard ? <div className="coach-onboarding">{onboardingWizard}</div> : null}
           <div className="coach-workspace-admission">{workspaceAdmissionContent}</div>
           {!providerCanCoachNow && providerCoachNotice ? (
             <button
@@ -12401,15 +12257,6 @@ export function App() {
             </button>
           ) : null}
         </>
-      ) : coachBlockingSurface === "provider-notice" && providerCoachNotice ? (
-        <button
-          type="button"
-          className={`coach-inline-notice coach-inline-notice--${providerCoachNotice.tone}`}
-          onClick={() => openProviderSetup()}
-        >
-          <span className="coach-inline-notice__text">{providerCoachNotice.message}</span>
-          <ChevronRightIcon size={12} aria-hidden="true" />
-        </button>
       ) : null}
       {renderCoachConversationPane("coach-pane", false)}
     </section>
@@ -13510,14 +13357,17 @@ export function App() {
                   id: "plan-next-task",
                   label: planText.nextTaskLabel,
                   tone: "ghost" as const,
+                  // R1③: prefill like every other next-task entry point
+                  // (handleSuggestedAction) — navigation + draft + focus,
+                  // pressing send stays with the learner. The recovered-plan
+                  // resume lane ("开始：X" / clear blocker) intentionally keeps
+                  // its governed direct send.
                   onClick: () => {
                     setActiveView("coach");
+                    setComposerDraft(
+                      defaultPromptText("next_task", layout.composerLanguage, activePlanStage?.title),
+                    );
                     requestCoachComposerFocus();
-                    sendTurn({
-                      text: defaultPromptText("next_task", layout.composerLanguage, activePlanStage?.title),
-                      intent: "next_task",
-                      activeView: "coach",
-                    });
                   },
                 },
                   ]

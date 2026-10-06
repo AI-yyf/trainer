@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { parseProviderConnectionPaste } from "../../../../../shared/src/providerGateway";
 import type { ComposerLanguage } from "../../../../../shared/src/types";
 import { CheckMarkIcon } from "../icons";
+import { DoneIcon } from "../icons/inline";
 
 interface ProviderQuickSetupDraft {
   name: string;
@@ -239,10 +240,10 @@ export function ProviderQuickSetup({
       <div className="settings-quick-setup settings-quick-setup--connected">
         <span
           className="settings-quick-setup__connected-dot"
-          aria-hidden
+          aria-hidden="true"
           style={{ color: "var(--pass, var(--trainer-fallback-success))" }}
         >
-          ✓
+          <DoneIcon size={14} />
         </span>
         <span className="settings-quick-setup__connected-line">
           {copy(language, "connectedLine")}
@@ -279,7 +280,13 @@ export function ProviderQuickSetup({
       <label className="settings-field">
         <span>
           {copy(language, "pasteLabel")}
-          {step1Done ? <span className="settings-quick-setup__done">✓</span> : ""}
+          {step1Done ? (
+            <span className="settings-quick-setup__done" aria-hidden="true">
+              <DoneIcon size={12} />
+            </span>
+          ) : (
+            ""
+          )}
         </span>
         <input
           type="text"
@@ -295,7 +302,13 @@ export function ProviderQuickSetup({
       <label className="settings-field">
         <span>
           {copy(language, "keyLabel")}
-          {step2Done ? <span className="settings-quick-setup__done">✓</span> : ""}
+          {step2Done ? (
+            <span className="settings-quick-setup__done" aria-hidden="true">
+              <DoneIcon size={12} />
+            </span>
+          ) : (
+            ""
+          )}
         </span>
         <input
           type="password"
@@ -336,7 +349,7 @@ export function ProviderQuickSetup({
       >
         {busy ? (
           <>
-            <span className="settings-quick-setup__saving-dot" aria-hidden />
+            <span aria-hidden="true" className="trainer-spinner trainer-spinner--sm" />
             {copy(language, "saving")}
           </>
         ) : (

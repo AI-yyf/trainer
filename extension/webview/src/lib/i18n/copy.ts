@@ -90,6 +90,12 @@ export type CopyKey =
   | "workspaceAdmissionBrowseAction"
   | "workspaceAdmissionIgnore"
   | "workspaceAdmissionDelete"
+  | "workspaceAdmissionReconciliationWaiting"
+  | "workspaceAdmissionReconciliationRetryRequired"
+  | "workspaceAdmissionReconciliationStateUnknown"
+  | "workspaceAdmissionReconciliationUpdatedAt"
+  | "workspaceAdmissionReconciliationWaitingHint"
+  | "workspaceAdmissionReconciliationRetryHint"
   | "workspaceRootControl"
   | "workspaceRootReady"
   | "workspaceRootPath"
@@ -483,7 +489,6 @@ export type CopyKey =
   | "dropout"
   | "batchNorm"
   | "earlyStopping"
-  | "checkpoint"
   | "saveModel"
   | "loadModel"
   | "export"
@@ -629,7 +634,6 @@ export type CopyKey =
   | "resourcesSandboxSourcePath"
   | "resourcesSandboxWorkspaceRoot"
   | "resourcesSandboxSourceLabel"
-  | "resourcesSandboxLedger"
   | "resourcesSandboxMountedSources"
   | "resourcesSandboxNextSafeMove"
   | "resourcesSandboxFilePlaceholder"
@@ -766,7 +770,6 @@ export type CopyKey =
   | "planDashboardTabProgress"
   | "planDashboardStagesTitle"
   | "planDashboardMasteryTitle"
-  | "planDashboardReviewTitle"
   | "planDashboardMaterialsTitle"
   | "planDashboardMaterialsStages"
   | "planDashboardMasteryEmpty"
@@ -775,7 +778,6 @@ export type CopyKey =
   | "planDashboardEmptyTitle"
 
   // Training card recovery
-  | "trainingHandoffMismatchHint"
   | "trainingSwitchToCard"
 
   // Training card detail sections (CollapseSection titles)
@@ -950,6 +952,12 @@ export const copyTable = {
     workspaceAdmissionBrowseAction: "仅浏览",
     workspaceAdmissionIgnore: "忽略项目",
     workspaceAdmissionDelete: "删除项目",
+    workspaceAdmissionReconciliationWaiting: "正在后台准备项目",
+    workspaceAdmissionReconciliationRetryRequired: "后台准备需要重试",
+    workspaceAdmissionReconciliationStateUnknown: "后台状态更新中",
+    workspaceAdmissionReconciliationUpdatedAt: "更新于 {time}",
+    workspaceAdmissionReconciliationWaitingHint: "可以继续等待；如果一直没有进展，可以重试。",
+    workspaceAdmissionReconciliationRetryHint: "可以重试继续准备；也可以放弃这条未完成的记录，项目保持原样。",
     workspaceRootControl: "Trainer 工作区",
     workspaceRootReady: "学习记录正保存在此工作区。",
     workspaceRootPath: "根目录",
@@ -990,14 +998,12 @@ export const copyTable = {
     planDashboardTabProgress: "进度",
     planDashboardStagesTitle: "阶段完成度",
     planDashboardMasteryTitle: "依赖掌握度",
-    planDashboardReviewTitle: "FSRS 复习保持率",
     planDashboardMaterialsTitle: "资料使用次数",
     planDashboardMaterialsStages: "覆盖阶段",
     planDashboardMasteryEmpty: "还没有掌握度数据。完成训练卡片后会在这里积累。",
     planDashboardReviewDue: "到期",
     planDashboardReviewDone: "已完成",
     planDashboardEmptyTitle: "先生成计划",
-    trainingHandoffMismatchHint: "当前卡片和训练交接不一致，可切换到交接所属的卡片。",
     trainingSwitchToCard: "切换到该卡",
     trainingCardDetailsApiHints: "API 提示",
     trainingCardDetailsSelfCheck: "自查",
@@ -1416,7 +1422,6 @@ export const copyTable = {
     dropout: "Dropout",
     batchNorm: "批归一化",
     earlyStopping: "早停",
-    checkpoint: "检查点",
     saveModel: "保存模型",
     loadModel: "加载模型",
     export: "导出",
@@ -1524,7 +1529,6 @@ export const copyTable = {
     resourcesSandboxSourcePath: "来源路径",
     resourcesSandboxWorkspaceRoot: "Workspace 根目录",
     resourcesSandboxSourceLabel: "来源",
-    resourcesSandboxLedger: "Ledger / checkpoints",
     resourcesSandboxMountedSources: "挂载来源",
     resourcesSandboxNextSafeMove: "下一步",
     resourcesSandboxFilePlaceholder: "输入文件路径，如 packs/remote/ssh/notes.md",
@@ -1724,6 +1728,12 @@ export const copyTable = {
     workspaceAdmissionBrowseAction: "Browse only",
     workspaceAdmissionIgnore: "Ignore project",
     workspaceAdmissionDelete: "Delete project",
+    workspaceAdmissionReconciliationWaiting: "Preparing the project in the background",
+    workspaceAdmissionReconciliationRetryRequired: "Background preparation needs a retry",
+    workspaceAdmissionReconciliationStateUnknown: "Background status is updating",
+    workspaceAdmissionReconciliationUpdatedAt: "Updated {time}",
+    workspaceAdmissionReconciliationWaitingHint: "You can keep waiting; retry if nothing progresses.",
+    workspaceAdmissionReconciliationRetryHint: "Retry to continue preparing, or abandon this pending record — the project stays as it is.",
     workspaceRootControl: "Trainer workspace",
     workspaceRootReady: "Learning records are being stored in this workspace.",
     workspaceRootPath: "Root",
@@ -1762,14 +1772,12 @@ export const copyTable = {
     planDashboardTabProgress: "Progress",
     planDashboardStagesTitle: "Stage completion",
     planDashboardMasteryTitle: "Dependency mastery",
-    planDashboardReviewTitle: "FSRS review retention",
     planDashboardMaterialsTitle: "Material usage",
     planDashboardMaterialsStages: "Stages covered",
     planDashboardMasteryEmpty: "No mastery data yet. It builds up as you finish training cards.",
     planDashboardReviewDue: "Due",
     planDashboardReviewDone: "Done",
     planDashboardEmptyTitle: "Generate a plan first",
-    trainingHandoffMismatchHint: "This card does not match the current training handoff. Switch to the card that owns the handoff.",
     trainingSwitchToCard: "Switch to that card",
     trainingCardDetailsApiHints: "API hints",
     trainingCardDetailsSelfCheck: "Self-check",
@@ -2137,7 +2145,6 @@ export const copyTable = {
     dropout: "Dropout",
     batchNorm: "Batch Norm",
     earlyStopping: "Early Stopping",
-    checkpoint: "Checkpoint",
     saveModel: "Save Model",
     loadModel: "Load Model",
     export: "Export",
@@ -2280,7 +2287,6 @@ export const copyTable = {
     resourcesSandboxSourcePath: "Source path",
     resourcesSandboxWorkspaceRoot: "Workspace root",
     resourcesSandboxSourceLabel: "Source",
-    resourcesSandboxLedger: "Ledger / checkpoints",
     resourcesSandboxMountedSources: "Mounted sources",
     resourcesSandboxNextSafeMove: "Next safe move",
     resourcesSandboxFilePlaceholder: "New file path, for example packs/remote/ssh/notes.md",
@@ -2470,6 +2476,12 @@ export const copyTable = {
     workspaceAdmissionBrowseAction: "Solo explorar",
     workspaceAdmissionIgnore: "Ignorar proyecto",
     workspaceAdmissionDelete: "Eliminar proyecto",
+    workspaceAdmissionReconciliationWaiting: "Preparando el proyecto en segundo plano",
+    workspaceAdmissionReconciliationRetryRequired: "La preparación en segundo plano necesita un reintento",
+    workspaceAdmissionReconciliationStateUnknown: "El estado en segundo plano se está actualizando",
+    workspaceAdmissionReconciliationUpdatedAt: "Actualizado {time}",
+    workspaceAdmissionReconciliationWaitingHint: "Puedes seguir esperando; reintenta si no hay avances.",
+    workspaceAdmissionReconciliationRetryHint: "Reintenta para seguir preparándolo, o descarta este registro pendiente: el proyecto queda como está.",
     workspaceRootControl: "Espacio de Trainer",
     workspaceRootReady: "Los registros de aprendizaje se guardan en este espacio.",
     workspaceRootPath: "Raíz",
@@ -2508,14 +2520,12 @@ export const copyTable = {
     planDashboardTabProgress: "Progreso",
     planDashboardStagesTitle: "Avance de etapas",
     planDashboardMasteryTitle: "Dominio de dependencias",
-    planDashboardReviewTitle: "Retención de repaso FSRS",
     planDashboardMaterialsTitle: "Uso de materiales",
     planDashboardMaterialsStages: "Etapas cubiertas",
     planDashboardMasteryEmpty: "Aún no hay datos de dominio. Se acumulan al completar tarjetas de entrenamiento.",
     planDashboardReviewDue: "Pendiente",
     planDashboardReviewDone: "Completado",
     planDashboardEmptyTitle: "Genera primero un plan",
-    trainingHandoffMismatchHint: "Esta tarjeta no coincide con el traspaso de entrenamiento actual. Cambia a la tarjeta propietaria del traspaso.",
     trainingSwitchToCard: "Cambiar a esa tarjeta",
     trainingCardDetailsApiHints: "Pistas de API",
     trainingCardDetailsSelfCheck: "Autoevaluación",
@@ -2703,7 +2713,6 @@ export const copyTable = {
     dropout: "Dropout",
     batchNorm: "Batch Norm",
     earlyStopping: "Early Stopping",
-    checkpoint: "Checkpoint",
     saveModel: "Guardar",
     loadModel: "Cargar",
     export: "Exportar",
@@ -3011,6 +3020,12 @@ export const copyTable = {
     workspaceAdmissionBrowseAction: "Consulter seulement",
     workspaceAdmissionIgnore: "Ignorer le projet",
     workspaceAdmissionDelete: "Supprimer le projet",
+    workspaceAdmissionReconciliationWaiting: "Préparation du projet en arrière-plan",
+    workspaceAdmissionReconciliationRetryRequired: "La préparation en arrière-plan doit être relancée",
+    workspaceAdmissionReconciliationStateUnknown: "Mise à jour de l'état en arrière-plan",
+    workspaceAdmissionReconciliationUpdatedAt: "Mis à jour {time}",
+    workspaceAdmissionReconciliationWaitingHint: "Vous pouvez continuer à attendre ; relancez si rien n'avance.",
+    workspaceAdmissionReconciliationRetryHint: "Relancez pour continuer la préparation, ou abandonnez cet enregistrement en attente — le projet reste inchangé.",
     workspaceRootControl: "Espace Trainer",
     workspaceRootReady: "Les dossiers d'apprentissage sont conservés dans cet espace.",
     workspaceRootPath: "Racine",
@@ -3050,14 +3065,12 @@ export const copyTable = {
     planDashboardTabProgress: "Progression",
     planDashboardStagesTitle: "Avancement des étapes",
     planDashboardMasteryTitle: "Maîtrise des dépendances",
-    planDashboardReviewTitle: "Rétention des révisions FSRS",
     planDashboardMaterialsTitle: "Utilisation des supports",
     planDashboardMaterialsStages: "Étapes couvertes",
     planDashboardMasteryEmpty: "Pas encore de données de maîtrise. Elles s'accumulent à chaque carte d'entraînement terminée.",
     planDashboardReviewDue: "À revoir",
     planDashboardReviewDone: "Terminé",
     planDashboardEmptyTitle: "Générez d'abord un plan",
-    trainingHandoffMismatchHint: "Cette carte ne correspond pas au transfert d'entraînement actuel. Passez à la carte qui détient le transfert.",
     trainingSwitchToCard: "Aller à cette carte",
     trainingCardDetailsApiHints: "Indices d'API",
     trainingCardDetailsSelfCheck: "Auto-vérification",
@@ -3349,6 +3362,12 @@ export const copyTable = {
     workspaceAdmissionBrowseAction: "Nur ansehen",
     workspaceAdmissionIgnore: "Projekt ignorieren",
     workspaceAdmissionDelete: "Projekt löschen",
+    workspaceAdmissionReconciliationWaiting: "Projekt wird im Hintergrund vorbereitet",
+    workspaceAdmissionReconciliationRetryRequired: "Die Vorbereitung im Hintergrund muss wiederholt werden",
+    workspaceAdmissionReconciliationStateUnknown: "Der Hintergrundstatus wird aktualisiert",
+    workspaceAdmissionReconciliationUpdatedAt: "Aktualisiert {time}",
+    workspaceAdmissionReconciliationWaitingHint: "Du kannst weiter warten; wiederhole den Vorgang, wenn nichts vorangeht.",
+    workspaceAdmissionReconciliationRetryHint: "Wiederhole den Vorgang, um fortzufahren, oder verwirf diesen offenen Eintrag — das Projekt bleibt unverändert.",
     workspaceRootControl: "Trainer-Arbeitsbereich",
     workspaceRootReady: "Lernaufzeichnungen werden in diesem Arbeitsbereich gespeichert.",
     workspaceRootPath: "Stammordner",
@@ -3388,14 +3407,12 @@ export const copyTable = {
     planDashboardTabProgress: "Fortschritt",
     planDashboardStagesTitle: "Phasen-Abschluss",
     planDashboardMasteryTitle: "Abhängigkeits-Beherrschung",
-    planDashboardReviewTitle: "FSRS-Wiederholungsrate",
     planDashboardMaterialsTitle: "Materialnutzung",
     planDashboardMaterialsStages: "Abgedeckte Phasen",
     planDashboardMasteryEmpty: "Noch keine Beherrschungsdaten. Sie sammeln sich mit jeder abgeschlossenen Trainingskarte.",
     planDashboardReviewDue: "Fällig",
     planDashboardReviewDone: "Erledigt",
     planDashboardEmptyTitle: "Zuerst einen Plan erstellen",
-    trainingHandoffMismatchHint: "Diese Karte passt nicht zum aktuellen Trainings-Handoff. Wechseln Sie zur Karte, die den Handoff besitzt.",
     trainingSwitchToCard: "Zu dieser Karte wechseln",
     trainingCardDetailsApiHints: "API-Hinweise",
     trainingCardDetailsSelfCheck: "Selbstprüfung",
@@ -3687,6 +3704,12 @@ export const copyTable = {
     workspaceAdmissionBrowseAction: "閲覧のみ",
     workspaceAdmissionIgnore: "プロジェクトを無視",
     workspaceAdmissionDelete: "プロジェクトを削除",
+    workspaceAdmissionReconciliationWaiting: "バックグラウンドでプロジェクトを準備しています",
+    workspaceAdmissionReconciliationRetryRequired: "バックグラウンドの準備を再試行する必要があります",
+    workspaceAdmissionReconciliationStateUnknown: "バックグラウンドの状態を更新中",
+    workspaceAdmissionReconciliationUpdatedAt: "{time} 更新",
+    workspaceAdmissionReconciliationWaitingHint: "このまま待っても構いません。進まない場合は再試行してください。",
+    workspaceAdmissionReconciliationRetryHint: "再試行して準備を続けるか、この未完了の記録を破棄してください。プロジェクトは元のままです。",
     workspaceRootControl: "Trainer ワークスペース",
     workspaceRootReady: "学習記録はこのワークスペースに保存されます。",
     workspaceRootPath: "ルート",
@@ -3726,14 +3749,12 @@ export const copyTable = {
     planDashboardTabProgress: "進捗",
     planDashboardStagesTitle: "ステージ完了度",
     planDashboardMasteryTitle: "依存の習熟度",
-    planDashboardReviewTitle: "FSRS 復習定着率",
     planDashboardMaterialsTitle: "資料の使用回数",
     planDashboardMaterialsStages: "対象ステージ",
     planDashboardMasteryEmpty: "まだ習熟度データがありません。トレーニングカードを完了すると蓄積されます。",
     planDashboardReviewDue: "期限",
     planDashboardReviewDone: "完了",
     planDashboardEmptyTitle: "先に計画を生成",
-    trainingHandoffMismatchHint: "このカードは現在のトレーニング引き継ぎと一致しません。引き継ぎを所有するカードに切り替えてください。",
     trainingSwitchToCard: "該当カードへ切り替え",
     trainingCardDetailsApiHints: "API ヒント",
     trainingCardDetailsSelfCheck: "セルフチェック",
@@ -4025,6 +4046,12 @@ export const copyTable = {
     workspaceAdmissionBrowseAction: "둘러보기만",
     workspaceAdmissionIgnore: "프로젝트 무시",
     workspaceAdmissionDelete: "프로젝트 삭제",
+    workspaceAdmissionReconciliationWaiting: "백그라운드에서 프로젝트를 준비하고 있어요",
+    workspaceAdmissionReconciliationRetryRequired: "백그라운드 준비를 다시 시도해야 해요",
+    workspaceAdmissionReconciliationStateUnknown: "백그라운드 상태를 업데이트하는 중이에요",
+    workspaceAdmissionReconciliationUpdatedAt: "{time} 업데이트",
+    workspaceAdmissionReconciliationWaitingHint: "기다려도 됩니다. 진행되지 않으면 다시 시도해 주세요.",
+    workspaceAdmissionReconciliationRetryHint: "다시 시도해 준비를 계속하거나, 이 미완료 기록을 버릴 수 있어요. 프로젝트는 그대로 유지됩니다.",
     workspaceRootControl: "Trainer 작업 영역",
     workspaceRootReady: "학습 기록은 이 작업 영역에 저장됩니다.",
     workspaceRootPath: "루트",
@@ -4064,14 +4091,12 @@ export const copyTable = {
     planDashboardTabProgress: "진도",
     planDashboardStagesTitle: "단계 완료도",
     planDashboardMasteryTitle: "의존성 숙달도",
-    planDashboardReviewTitle: "FSRS 복습 유지율",
     planDashboardMaterialsTitle: "자료 사용 횟수",
     planDashboardMaterialsStages: "커버한 단계",
     planDashboardMasteryEmpty: "아직 숙련도 데이터가 없습니다. 훈련 카드를 완료하면 쌓입니다.",
     planDashboardReviewDue: "예정",
     planDashboardReviewDone: "완료",
     planDashboardEmptyTitle: "먼저 계획을 생성하세요",
-    trainingHandoffMismatchHint: "이 카드는 현재 훈련 인계와 일치하지 않습니다. 인계를 소유한 카드로 전환하세요.",
     trainingSwitchToCard: "해당 카드로 전환",
     trainingCardDetailsApiHints: "API 힌트",
     trainingCardDetailsSelfCheck: "셀프 체크",
@@ -4363,6 +4388,12 @@ export const copyTable = {
     workspaceAdmissionBrowseAction: "Somente navegar",
     workspaceAdmissionIgnore: "Ignorar projeto",
     workspaceAdmissionDelete: "Excluir projeto",
+    workspaceAdmissionReconciliationWaiting: "Preparando o projeto em segundo plano",
+    workspaceAdmissionReconciliationRetryRequired: "A preparação em segundo plano precisa ser repetida",
+    workspaceAdmissionReconciliationStateUnknown: "O status em segundo plano está sendo atualizado",
+    workspaceAdmissionReconciliationUpdatedAt: "Atualizado {time}",
+    workspaceAdmissionReconciliationWaitingHint: "Você pode continuar esperando; repita se nada avançar.",
+    workspaceAdmissionReconciliationRetryHint: "Repita para continuar a preparação, ou descarte este registro pendente — o projeto permanece como está.",
     workspaceRootControl: "Espaço do Trainer",
     workspaceRootReady: "Os registros de aprendizagem são guardados neste espaço.",
     workspaceRootPath: "Raiz",
@@ -4402,14 +4433,12 @@ export const copyTable = {
     planDashboardTabProgress: "Progresso",
     planDashboardStagesTitle: "Conclusão de estágios",
     planDashboardMasteryTitle: "Domínio de dependências",
-    planDashboardReviewTitle: "Retenção de revisões FSRS",
     planDashboardMaterialsTitle: "Uso de materiais",
     planDashboardMaterialsStages: "Estágios cobertos",
     planDashboardMasteryEmpty: "Ainda não há dados de domínio. Eles se acumulam ao concluir cartões de treino.",
     planDashboardReviewDue: "Pendente",
     planDashboardReviewDone: "Concluído",
     planDashboardEmptyTitle: "Gere um plano primeiro",
-    trainingHandoffMismatchHint: "Este cartão não corresponde ao repasse de treino atual. Troque para o cartão que possui o repasse.",
     trainingSwitchToCard: "Trocar para esse cartão",
     trainingCardDetailsApiHints: "Dicas de API",
     trainingCardDetailsSelfCheck: "Autoavaliação",
@@ -4620,7 +4649,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesSandboxSourcePath: "Ruta de origen",
     resourcesSandboxWorkspaceRoot: "Raíz del workspace",
     resourcesSandboxSourceLabel: "Origen",
-    resourcesSandboxLedger: "Ledger / checkpoints",
     resourcesSandboxMountedSources: "Orígenes montados",
     resourcesSandboxNextSafeMove: "Siguiente paso seguro",
     resourcesSandboxFilePlaceholder: "Ruta del archivo, por ejemplo packs/remote/ssh/notes.md",
@@ -4667,7 +4695,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesSandboxSourcePath: "Chemin source",
     resourcesSandboxWorkspaceRoot: "Racine du workspace",
     resourcesSandboxSourceLabel: "Source",
-    resourcesSandboxLedger: "Ledger / checkpoints",
     resourcesSandboxMountedSources: "Sources montées",
     resourcesSandboxNextSafeMove: "Prochaine action sûre",
     resourcesSandboxFilePlaceholder: "Chemin du fichier, par exemple packs/remote/ssh/notes.md",
@@ -4714,7 +4741,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesSandboxSourcePath: "Quellpfad",
     resourcesSandboxWorkspaceRoot: "Workspace-Stamm",
     resourcesSandboxSourceLabel: "Quelle",
-    resourcesSandboxLedger: "Ledger / checkpoints",
     resourcesSandboxMountedSources: "Eingehängte Quellen",
     resourcesSandboxNextSafeMove: "Nächster sicherer Schritt",
     resourcesSandboxFilePlaceholder: "Dateipfad, zum Beispiel packs/remote/ssh/notes.md",
@@ -4761,7 +4787,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesSandboxSourcePath: "元のパス",
     resourcesSandboxWorkspaceRoot: "Workspace ルート",
     resourcesSandboxSourceLabel: "ソース",
-    resourcesSandboxLedger: "Ledger / checkpoints",
     resourcesSandboxMountedSources: "マウント済みソース",
     resourcesSandboxNextSafeMove: "次の安全な一手",
     resourcesSandboxFilePlaceholder: "ファイルパス。例: packs/remote/ssh/notes.md",
@@ -4808,7 +4833,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesSandboxSourcePath: "원본 경로",
     resourcesSandboxWorkspaceRoot: "Workspace 루트",
     resourcesSandboxSourceLabel: "소스",
-    resourcesSandboxLedger: "Ledger / checkpoints",
     resourcesSandboxMountedSources: "마운트된 소스",
     resourcesSandboxNextSafeMove: "다음 안전한 단계",
     resourcesSandboxFilePlaceholder: "파일 경로. 예: packs/remote/ssh/notes.md",
@@ -4855,7 +4879,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesSandboxSourcePath: "Caminho de origem",
     resourcesSandboxWorkspaceRoot: "Raiz do workspace",
     resourcesSandboxSourceLabel: "Origem",
-    resourcesSandboxLedger: "Ledger / checkpoints",
     resourcesSandboxMountedSources: "Origens montadas",
     resourcesSandboxNextSafeMove: "Próximo passo seguro",
     resourcesSandboxFilePlaceholder: "Caminho do arquivo, por exemplo packs/remote/ssh/notes.md",

@@ -3,7 +3,6 @@
  * language (§四十六 Premium Soft Outline + Selective Fill).
  *
  * Design notes per icon:
- * - Coach: conversation arc + a guide-point dot (not a speech bubble + sparkle)
  * - Learning: progressive learning path (3 ascending nodes, not a flag)
  * - Resources: layered knowledge pages (not a bar chart)
  * - Training: focused practice frame with a center diamond (not a checklist)
@@ -15,18 +14,6 @@
 import { TrainerIconBase, type TrainerIconProps } from "../TrainerIconBase";
 
 type NavIconProps = Omit<TrainerIconProps, "active"> & { active?: boolean };
-
-export function CoachNavIcon({ active, ...props }: NavIconProps) {
-  return (
-    <TrainerIconBase {...props} active={active}>
-      {/* Conversation arc: open curve suggesting dialogue */}
-      <path d="M4 14.5V7a5 5 0 0 1 10 0v.5a4.5 4.5 0 0 1-4.5 4.5H8.2" />
-      {/* Guide point: a small dot that fills when active */}
-      <circle cx="13.5" cy="15" r="1.4" />
-      {active ? <circle cx="13.5" cy="15" r="1.4" fill="currentColor" stroke="none" /> : null}
-    </TrainerIconBase>
-  );
-}
 
 export function LearningNavIcon({ active, ...props }: NavIconProps) {
   return (

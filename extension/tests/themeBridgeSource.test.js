@@ -141,8 +141,8 @@ test('host-themed interactive states avoid fixed white and retain visible keyboa
   assert.doesNotMatch(stylesSource, /\.message-bubble-v2--user \.message-bubble-v2__badge\s*\{[^}]*\bwhite\b/);
   assert.match(stylesSource, /\.message-bubble-v2--user \.message-bubble-v2__badge\s*\{[^}]*color:\s*var\(--fg-0\)/);
 
-  // Settings converged its focus language onto one 2px inset ring
-  // (settings focus-idiom pass); the other surfaces keep the 1px ring.
+  // The focus-idiom pass converged every surface onto one recipe:
+  // 2px solid var(--focus-ring) (visual polish round R2).
   for (const selector of [
     '.resources-library-hero__root',
     '.resources-library-tree__node',
@@ -153,7 +153,7 @@ test('host-themed interactive states avoid fixed white and retain visible keyboa
     const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     assert.match(
       stylesSource,
-      new RegExp(`${escapedSelector}:focus-visible\\s*\\{[^}]*outline:\\s*1px solid var\\(--focus-ring\\);[^}]*outline-offset:`),
+      new RegExp(`${escapedSelector}:focus-visible\\s*\\{[^}]*outline:\\s*2px solid var\\(--focus-ring\\);[^}]*outline-offset:`),
     );
   }
 

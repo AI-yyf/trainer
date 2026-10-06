@@ -84,6 +84,8 @@ test('trainer message parts normalize into the typed registry contract', () => {
     },
     { type: 'planUpdate', planId: 'plan-1', change: { field: 'currentStep' } },
     { type: 'testResult', command: 'npm test', status: 'pass', outputRef: 'logs/test.txt', detail: '42 tests passed' },
+    // Opaque path fixture for a pure renderer mapping — the part is never
+    // resolved against the filesystem, so /tmp/... stays platform-neutral.
     { type: 'filePreview', resourceId: 'file-1', path: '/tmp/notes.csv', previewKind: 'table', canNativeOpen: true },
     { type: 'checkList', checklist: ['Lock behavior', { text: 'Verify UI', done: true }] },
     { type: 'alert', severity: 'warn', title: 'Heads up', detail: 'Follow-up required' },

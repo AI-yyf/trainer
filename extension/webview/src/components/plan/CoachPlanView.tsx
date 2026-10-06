@@ -231,7 +231,6 @@ type PlanCopyKey =
   | "narrowNext"
   | "needsConfirmation"
   | "evidenceUnchanged"
-  | "evidenceUnchangedDetail"
   | "chatEvidenceNoRewrite"
   | "verifyFirst"
   | "reviewPending"
@@ -311,7 +310,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     backTo: "回到：{step}",
     narrowNext: "先收束下一步。",
     needsConfirmation: "待确认",
-    evidenceUnchanged: "证据还没有改写计划",
+    evidenceUnchanged: "正式计划会等你亲手验证后再更新",
     chatEvidenceNoRewrite: "聊天证据不会静默重写正式计划。",
     verifyFirst: "先验证：{step}",
     reviewPending: "先处理待确认内容。",
@@ -348,7 +347,6 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     verifyFallback: "完成后做一次最小验证，确认这一步真的成立。",
     returnFallback: "带着验证结果回到对话，再决定这条主线的下一步。",
     stageProgress: "第 {index} / {total} 段",
-    evidenceUnchangedDetail: "证据还没有改写计划。",
     trainerRemembers: "教练已记住",
     teachingObservationsLabel: "教学观察",
     sourceShortlist: "来源短名单",
@@ -391,7 +389,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     backTo: "Back to: {step}",
     narrowNext: "Narrow the next step first.",
     needsConfirmation: "Needs confirmation",
-    evidenceUnchanged: "Evidence has not changed the plan",
+    evidenceUnchanged: "The plan updates once you verify the work yourself",
     chatEvidenceNoRewrite: "Chat evidence will not rewrite it silently.",
     verifyFirst: "Verify first: {step}",
     reviewPending: "Review pending items first.",
@@ -428,7 +426,6 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     verifyFallback: "Run one small verification to confirm this step really landed.",
     returnFallback: "Return to Coach with the verified result before moving the thread forward.",
     stageProgress: "Stage {index} of {total}",
-    evidenceUnchangedDetail: "Evidence has not changed the plan",
     trainerRemembers: "Trainer remembers",
     teachingObservationsLabel: "Teaching observations",
     sourceShortlist: "Source shortlist",
@@ -471,7 +468,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     backTo: "Volver a: {step}",
     narrowNext: "Aclara primero el siguiente paso.",
     needsConfirmation: "Necesita confirmación",
-    evidenceUnchanged: "La evidencia aún no ha cambiado el plan",
+    evidenceUnchanged: "El plan se actualizará cuando tú mismo verifiques el trabajo",
     chatEvidenceNoRewrite: "La evidencia del chat no cambiará el plan formal en silencio.",
     verifyFirst: "Verifica primero: {step}",
     reviewPending: "Revisa primero los elementos pendientes.",
@@ -509,7 +506,6 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     returnFallback:
       "Vuelve al coach con el resultado verificado antes de avanzar el hilo.",
     stageProgress: "Etapa {index} de {total}",
-    evidenceUnchangedDetail: "La evidencia aún no ha cambiado el plan",
     trainerRemembers: "El trainer lo recuerda",
     teachingObservationsLabel: "Observaciones de enseñanza",
     sourceShortlist: "Lista corta de fuentes",
@@ -552,7 +548,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     backTo: "Retour à : {step}",
     narrowNext: "Précisez d’abord la prochaine étape.",
     needsConfirmation: "À confirmer",
-    evidenceUnchanged: "La preuve n’a pas encore modifié le plan",
+    evidenceUnchanged: "Le plan sera mis à jour une fois que vous aurez vérifié le travail vous-même",
     chatEvidenceNoRewrite: "Les preuves du chat ne réécrivent pas le plan formel en silence.",
     verifyFirst: "Vérifiez d’abord : {step}",
     reviewPending: "Examinez d’abord les éléments en attente.",
@@ -590,7 +586,6 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     returnFallback:
       "Revenez dans Coach avec le résultat vérifié avant de faire avancer le fil.",
     stageProgress: "Étape {index} sur {total}",
-    evidenceUnchangedDetail: "La preuve n’a pas encore modifié le plan",
     trainerRemembers: "Trainer s’en souvient",
     teachingObservationsLabel: "Observations pédagogiques",
     sourceShortlist: "Présélection de sources",
@@ -633,7 +628,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     backTo: "Zurück zu: {step}",
     narrowNext: "Grenzen Sie zuerst den nächsten Schritt ein.",
     needsConfirmation: "Bestätigung nötig",
-    evidenceUnchanged: "Die Evidenz hat den Plan noch nicht geändert",
+    evidenceUnchanged: "Der Plan aktualisiert sich, sobald du die Arbeit selbst überprüft hast",
     chatEvidenceNoRewrite: "Chat-Evidenz schreibt den formellen Plan nicht stillschweigend um.",
     verifyFirst: "Zuerst prüfen: {step}",
     reviewPending: "Prüfen Sie zuerst die offenen Punkte.",
@@ -671,7 +666,6 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     returnFallback:
       "Kehren Sie mit dem überprüften Ergebnis in den Coach zurück, bevor Sie den Pfad weiterführen.",
     stageProgress: "Phase {index} von {total}",
-    evidenceUnchangedDetail: "Die Evidenz hat den Plan noch nicht geändert",
     trainerRemembers: "Trainer hat es behalten",
     teachingObservationsLabel: "Didaktische Beobachtungen",
     sourceShortlist: "Kurzauswahl der Quellen",
@@ -714,7 +708,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     backTo: "戻る：{step}",
     narrowNext: "次の一手を先に絞り込みます。",
     needsConfirmation: "確認待ち",
-    evidenceUnchanged: "証拠はまだ計画を変えていません",
+    evidenceUnchanged: "自分で検証して完了すると、計画が更新されます",
     chatEvidenceNoRewrite: "チャットの証拠で正式な計画を書き換えることはありません。",
     verifyFirst: "先に確認：{step}",
     reviewPending: "保留中の項目を先に確認します。",
@@ -752,7 +746,6 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     returnFallback:
       "検証結果を持って Coach に戻り、この流れの次の一手を決めます。",
     stageProgress: "ステージ {index} / {total}",
-    evidenceUnchangedDetail: "証拠はまだ計画を変えていません",
     trainerRemembers: "Trainer が記憶しました",
     teachingObservationsLabel: "指導上の観察",
     sourceShortlist: "ソース短リスト",
@@ -795,7 +788,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     backTo: "돌아가기: {step}",
     narrowNext: "다음 단계를 먼저 좁혀 보세요.",
     needsConfirmation: "확인 필요",
-    evidenceUnchanged: "증거가 아직 계획을 바꾸지 않았습니다",
+    evidenceUnchanged: "직접 검증을 완료하면 학습 계획이 업데이트됩니다",
     chatEvidenceNoRewrite: "대화 증거가 공식 계획을 조용히 바꾸지 않습니다.",
     verifyFirst: "먼저 확인: {step}",
     reviewPending: "보류 중인 항목을 먼저 확인하세요.",
@@ -833,7 +826,6 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     returnFallback:
       "검증 결과를 가지고 코치로 돌아온 뒤 이 흐름의 다음 단계를 정하세요.",
     stageProgress: "{total}단계 중 {index}",
-    evidenceUnchangedDetail: "증거가 아직 계획을 바꾸지 않았습니다",
     trainerRemembers: "Trainer가 기억합니다",
     teachingObservationsLabel: "학습 지도 관찰",
     sourceShortlist: "출처 후보 목록",
@@ -876,7 +868,7 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     backTo: "Voltar para: {step}",
     narrowNext: "Defina primeiro o próximo passo.",
     needsConfirmation: "Precisa de confirmação",
-    evidenceUnchanged: "A evidência ainda não mudou o plano",
+    evidenceUnchanged: "O plano será atualizado quando você mesmo verificar o trabalho",
     chatEvidenceNoRewrite: "A evidência da conversa não reescreve o plano formal silenciosamente.",
     verifyFirst: "Verifique primeiro: {step}",
     reviewPending: "Revise primeiro os itens pendentes.",
@@ -914,7 +906,6 @@ const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     returnFallback:
       "Volte ao coach com o resultado verificado antes de avançar este fluxo.",
     stageProgress: "Estágio {index} de {total}",
-    evidenceUnchangedDetail: "A evidência ainda não mudou o plano",
     trainerRemembers: "O trainer lembra",
     teachingObservationsLabel: "Observações de ensino",
     sourceShortlist: "Lista curta de fontes",

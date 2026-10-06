@@ -218,6 +218,8 @@ test('VSIX E2E treats unsupported non-Windows window capture as an explicit skip
     isWindowCaptureVerified({
       skipped: false,
       exists: true,
+      // Opaque path fixtures for the verification predicate — the values are
+      // only checked for presence, never resolved against the filesystem.
       windowScreenshotPath: '/tmp/window.png',
       sidebarScreenshotPath: '/tmp/sidebar.png',
     }),
