@@ -313,9 +313,9 @@
       "previewScenario": "training-debug",
       "sourceChain": {
         "zh-CN": [
-          "最小复现",
-          "断点边界",
-          "验证过的异常状态"
+          "最短重现",
+          "断点位置",
+          "确认过的异常状态"
         ],
         "en-US": [
           "Minimal repro",
@@ -328,7 +328,7 @@
         "en-US": "Minimal debug loop"
       },
       "coachSummary": {
-        "zh-CN": "先把调试闭环缩成一个复现、一个暂停点和一个被证实的错误状态，再决定改什么。",
+        "zh-CN": "先把调试闭环缩成一个重现、一个暂停点和一个你确认过的错误状态，再决定改什么。",
         "en-US": "First shrink the debug loop to one repro, one pause point, and one verified bad state before deciding what to change."
       },
       "practiceGoal": {
@@ -371,11 +371,11 @@
           "en-US": "A file is failing and you need one minimal VS Code debug loop before changing more code."
         },
         "problemStatement": {
-          "zh-CN": "构建一个最小调试闭环：可复现问题、在状态第一次出错的地方暂停，并带回一个被证实的发现。",
+          "zh-CN": "构建一个最小调试闭环：重现问题、在状态第一次出错的地方暂停，并带回一个你确认过的发现。",
           "en-US": "Build one minimal debug loop that reproduces the issue, stops where the state first changes, and returns one verified finding."
         },
         "suggestedWorkspaceAction": {
-          "zh-CN": "选一个最小失败命令或文件，在状态边界打第一个有用断点，然后跑最小复现。",
+          "zh-CN": "选一个总是失败的最短命令或文件，在状态第一次出错的地方打第一个断点，然后跑一遍重现。",
           "en-US": "Pick one failing command or file, set the first useful breakpoint at the state boundary, and run the smallest repro."
         },
         "apiHints": [
@@ -394,7 +394,7 @@
           ]
         },
         "deliverable": {
-          "zh-CN": "一个可重复的失败步骤，以及对状态在哪里第一次偏离的一个已验证解释。",
+          "zh-CN": "一个能按需重现的失败步骤，加上一句说清状态从哪里开始不对的解释。",
           "en-US": "A reproducible failing step plus one verified explanation of where the state diverges."
         },
         "selfCheck": {
@@ -410,14 +410,14 @@
           ]
         },
         "validationMethod": {
-          "zh-CN": "复现一次、在边界暂停、记录第一个被证实的错误状态。",
+          "zh-CN": "重现一次、在断点暂停、记下你确认的第一个错误状态。",
           "en-US": "Reproduce once, pause at the boundary, and record the first verified bad state."
         },
         "learnerDeliverables": {
           "zh-CN": [
-            "写下最小复现步骤。",
-            "在第一个有用的断点或异常边界暂停。",
-            "记录第一个被证实的错误值、分支或缺失状态。"
+            "写下能稳定重现失败的最短步骤。",
+            "在第一个有用的断点或异常暂停处停下。",
+            "记录你确认的第一个错误值、分支或缺失状态。"
           ],
           "en-US": [
             "Write down the smallest repro step.",
@@ -427,9 +427,9 @@
         },
         "verificationSteps": {
           "zh-CN": [
-            "运行最小失败复现。",
+            "运行最短的失败重现。",
             "在第一个有用断点或异常处暂停。",
-            "写下第一个被证实的错误值或错误分支。"
+            "写下你确认的第一个错误值或错误分支。"
           ],
           "en-US": [
             "Run the smallest failing repro.",
@@ -518,7 +518,7 @@
         },
         "constraints": {
           "zh-CN": [
-            "把答案压成一个复现、一个暂停点和一个被证实的错误状态。",
+            "把答案压成一个重现、一个暂停点和一个你确认过的错误状态。",
             "不要把整条排错历史都塞进答案里。"
           ],
           "en-US": [
@@ -571,7 +571,7 @@
           "en-US": "text"
         },
         "expectedAnswer": {
-          "zh-CN": "先复现失败，再在第一个有用的断点或异常边界暂停，然后记录第一个被证实的错误值或错误分支，最后再改代码。",
+          "zh-CN": "先重现失败，再在第一个有用的断点或异常暂停处停下，然后记录你确认的第一个错误值或错误分支，最后再改代码。",
           "en-US": "Reproduce the failure, pause at the first useful breakpoint or exception boundary, and record the first verified wrong value or branch before editing."
         },
         "hintLadder": {

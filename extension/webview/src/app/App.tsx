@@ -11619,9 +11619,7 @@ export function App() {
   });
   // Only true cold starts get the wizard: a saved connection that merely lost
   // its key keeps the existing scenario-aware recovery surface.
-  const onboardingActive =
-    !onboarding.complete &&
-    (!data.providerConfig.configured || trainerWorkspaceAdmission?.status === "root-missing");
+  const onboardingActive = !onboarding.complete && !data.providerConfig.configured;
   // The onboarding paste only fills address + key, but a saveable provider
   // needs a model id. The browser preview can list models for an unsaved
   // draft directly; the VS Code host keeps the field free-form so the learner

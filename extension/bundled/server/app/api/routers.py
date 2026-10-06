@@ -11844,7 +11844,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         *,
         session_id: str | None,
         workspace_id: str,
-    ) -> tuple[str, object] | tuple[None, None]:
+    ) -> tuple[str, SessionState] | tuple[None, None]:
         if session_id:
             state = runtime.get_session(session_id)
             if state is not None and state.workspace_id == workspace_id:
@@ -16895,7 +16895,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 and independent_selection.get("workspace_id") == workspace_id
                 and bool(independent_selection.get("selected_at"))
                 and bool(independent_selection.get("card_id"))
-                and independent_selection.get("card_id") == runtime.memory_service.live_selected_training_card_id(workspace_id)
+                and independent_selection.get("card_id") == runtime.memory_service.live_selected_training_card_id(workspace_id or "")
             )
             if not independent_card_is_live and leftover_training_handoff_chrome_is_not_live(
                 runtime=leftover_runtime,

@@ -56,9 +56,11 @@ test('App derives onboarding state from workbench data and wires every wizard ac
     /const onboarding = deriveOnboardingSteps\(\{\s*workspaceAdmissionStatus: trainerWorkspaceAdmission\?\.status,\s*workspaceTrustState: effectiveWorkspaceTrustState,/,
   );
   // Wizard covers true cold starts only; saved-connection recovery stays untouched.
+  // A configured connection whose root went missing is recovery, not onboarding:
+  // the governed WorkspaceAdmissionPanel owns that ask (e2e C31/C32).
   assert.match(
     app,
-    /const onboardingActive =\s*!onboarding\.complete &&\s*\(!data\.providerConfig\.configured \|\| trainerWorkspaceAdmission\?\.status === "root-missing"\);/,
+    /const onboardingActive =\s*!onboarding\.complete &&\s*!data\.providerConfig\.configured;/,
   );
   assert.match(app, /commandId: trainerCommands\.startProviderTrial/);
   assert.match(app, /onChooseWorkspaceRoot=\{\(\) =>\s*runWorkspaceAdmissionCommand\(trainerCommands\.chooseTrainerWorkspaceRoot\)\s*\}/);

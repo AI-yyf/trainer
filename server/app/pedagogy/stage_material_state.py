@@ -7,12 +7,15 @@ from ..core.models import LearningPlan, StageMaterialItem, TeachingKnowledgeAsse
 
 
 def stage_material_payload(asset: TeachingKnowledgeAsset) -> StageMaterialItem:
+    # Construct via the wire aliases (camelCase); the model's populate_by_name
+    # keeps the runtime payload snake_case, but Pyright's synthesized __init__
+    # exposes the alias names only.
     return StageMaterialItem(
-        id=asset.id, plan_stage_id=asset.plan_stage_id, kind=asset.kind,
+        id=asset.id, planStageId=asset.plan_stage_id, kind=asset.kind,
         title=asset.title, summary=asset.summary,
         content=asset.concept_card or asset.example or asset.exercise_seed or asset.summary,
-        focus_area=asset.focus_area, created_at=asset.created_at or "",
-        generation_source="template" if "stage-material-fallback" in asset.tags else "model",
+        focusArea=asset.focus_area, createdAt=asset.created_at or "",
+        generationSource="template" if "stage-material-fallback" in asset.tags else "model",
     )
 
 

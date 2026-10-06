@@ -22,8 +22,12 @@ def merge_stream_agent_metadata(
         for event in source.get("tool_events") or []:
             if not isinstance(event, dict):
                 continue
-            identity = tuple(str(event.get(key) or "")
-                             for key in ("type", "id", "name", "step"))
+            identity = (
+                str(event.get("type") or ""),
+                str(event.get("id") or ""),
+                str(event.get("name") or ""),
+                str(event.get("step") or ""),
+            )
             if identity in seen:
                 continue
             seen.add(identity)

@@ -179,6 +179,9 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
             )
         tests_output = str(payload.get("tests_output") or payload.get("testsOutput") or "").strip()
         passed = bool(payload.get("passed"))
+        # Host attestations retry on transport loss; the stable per-run key lets
+        # the training-reliability ledger replay instead of double-recording.
+        idempotency_key = str(payload.get("idempotency_key") or payload.get("idempotencyKey") or "").strip()
         resolved_workspace_id = current_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
         updated = runtime.memory_service.record_training_practice_evaluation_result(
             workspace_id=resolved_workspace_id,
@@ -190,6 +193,7 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
             focus_area=str(payload.get("focus_area") or payload.get("focusArea") or ""),
             evidence_source=evidence_source,
             verified_by_evaluator=passed,
+            idempotency_key=idempotency_key,
         )
         return {"ok": True, "workspace": updated}
     return router

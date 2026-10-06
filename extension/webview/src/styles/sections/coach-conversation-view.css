@@ -278,11 +278,19 @@
    the whole banner+thread group to the composer, so a short thread no longer
    strands ~70% dead pane between the last message and the input. The banner
    travels WITH the messages, so the banner→first-message hole that killed the
-   old spacer cannot reopen. Until that DOM move lands this rule matches
-   nothing; once it does, an overflowing thread makes the auto margin resolve
-   to 0 and normal top-down scrolling is untouched. */
+   old spacer cannot reopen. Once the thread overflows the pane the auto margin
+   resolves to 0 and normal top-down scrolling is untouched. */
 .coach-conversation-view__list > [data-coach-training-resume] {
   margin-top: auto;
+}
+
+/* The $ skill palette is an overlay above the composer: with the thread
+   anchored, the palette would slide over the banner and the very messages the
+   user is narrowing (and trip the palette-must-not-cover-the-thread gate).
+   While it is open, drop the anchor — the thread returns to the top and the
+   palette covers only the empty tail, exactly as before the anchor existed. */
+.trainer-shell:has(.template-command-palette) .coach-conversation-view__list > [data-coach-training-resume] {
+  margin-top: 0;
 }
 
 @media (max-width: 360px) {
