@@ -65,9 +65,15 @@ test('App derives onboarding state from workbench data and wires every wizard ac
   assert.match(app, /payload: \{ commandId: trainerCommands\.trustWorkspaceWindow \}/);
   assert.match(app, /onSaveConnection=\{saveProviderDraft\}/);
   assert.match(app, /onStartTrial=\{startOnboardingTrial\}/);
-  // Rendered in both cold-start surfaces: blocked workspace root view and neutral empty state.
-  assert.match(app, /\{onboardingWizard \? <div className="coach-onboarding">\{onboardingWizard\}<\/div> : null\}/);
+  // Rendered in both cold-start surfaces: the workspace-admission blocking
+  // surface owns the wizard (the admission panel must not stack under it),
+  // and the neutral empty state hands it the whole cold-start ladder.
+  assert.match(
+    app,
+    /coachBlockingSurface === "workspace-admission" && onboardingWizard \? \([\s\S]*?<div className="coach-onboarding">\{onboardingWizard\}<\/div>/,
+  );
   assert.match(app, /if \(onboardingWizard\) \{/);
+  assert.match(app, /\{onboardingWizard\}\s*<\/div>\s*\);\s*\}/);
 });
 
 test('trial command, registry overrides and command id are all registered', () => {

@@ -18,17 +18,14 @@ export type CopyKey =
   | "settings"
   | "chat"
   | "workspace"
-  | "viewNavigation"
 
   // 视图标签
   | "currentFocus"
   | "currentTask"
-  | "latestReview"
   | "viewContextWorking"
   | "viewContextBlocker"
   | "viewContextLatest"
   | "viewContextCoach"
-  | "backgroundAnalysis"
   | "backgroundCoachWork"
   | "workspaceAdmissionRootMissing"
   | "workspaceAdmissionRootMissingDetail"
@@ -49,7 +46,6 @@ export type CopyKey =
   | "onboardingSetupRootDone"
   | "onboardingRootAction"
   | "onboardingTrustInlineHint"
-  | "onboardingTrustDetail"
   | "onboardingTrustAction"
   | "onboardingModelDetail"
   | "onboardingModelPasteLabel"
@@ -65,13 +61,6 @@ export type CopyKey =
   | "onboardingTrialAction"
   | "onboardingTrialHint"
   | "onboardingOpenSettings"
-  | "learningHomeDueLabel"
-  | "learningHomeClearTitle"
-  | "learningHomeDueTitle"
-  | "learningHomeNextLabel"
-  | "learningHomeWinsLabel"
-  | "learningHomeStartReview"
-  | "learningHomeContinueTask"
   | "settingsMemoryPersonalTrustTitle"
   | "settingsMemoryPersonalTrustDetail"
   | "settingsMemoryPersonalTrustEnable"
@@ -109,13 +98,10 @@ export type CopyKey =
   | "workspaceRootChange"
   | "workspaceRootChangeDetail"
   | "coachState"
-  | "coachSignal"
   | "reviewQueue"
-  | "reviewMemory"
   | "reviewRhythm"
   | "nextReview"
   | "teachingObservations"
-  | "coachSummaryDoing"
 
   // 计划相关
   | "goals"
@@ -126,7 +112,6 @@ export type CopyKey =
   | "weakSpots"
   | "planStages"
   | "trainingWhyNow"
-  | "trainingDeliverable"
 
   // 设置 - 界面
   | "language"
@@ -185,8 +170,6 @@ export type CopyKey =
   | "settingsSetupDetailReady"
   | "settingsSetupDetailBlocked"
   | "settingsSetupAction"
-  | "settingsInterfaceSection"
-  | "settingsCoachSection"
   | "settingsModelSection"
   | "settingsFollowCurrentFile"
   | "settingsContextMode"
@@ -309,20 +292,11 @@ export type CopyKey =
   | "settingsSaveCoachDefaults"
 
   // 设置文案
-  | "settingsIntro"
-  | "settingsGeneral"
-  | "settingsCoachBehavior"
-  | "settingsModelAccess"
-  | "settingsWorkspaceNote"
-  | "settingsProviderHint"
-  | "settingsCoachHint"
 
   // 对话状态
   | "send"
   | "streaming"
   | "configureProviderFirst"
-  | "configureProviderFirstPlan"
-  | "providerRequiredHint"
   | "composerPlaceholder"
   | "composerPlaceholderPlan"
 
@@ -359,17 +333,8 @@ export type CopyKey =
   | "openSettings"
 
   // 快捷键提示
-  | "shortcutSend"
-  | "shortcutNewline"
-  | "shortcutSlash"
-  | "shortcutClear"
 
   // 错误提示
-  | "reviewNeedsFile"
-  | "reviewFileDisabled"
-  | "selectionMissing"
-  | "selectionDisabled"
-  | "relatedMissing"
 
   // 训练相关
   | "training"
@@ -379,155 +344,38 @@ export type CopyKey =
   | "startTraining"
   | "nextCard"
   | "previousCard"
-  | "showAnswer"
   | "submitAnswer"
-  | "skipCard"
-  | "markAgain"
-  | "markHard"
-  | "markGood"
-  | "markEasy"
-  | "dueToday"
-  | "cardsToReview"
-  | "learningPath"
-  | "masteryLevel"
-  | "streak"
-  | "totalReviews"
-  | "accuracy"
 
   // 训练反馈与激励
-  | "streakMessageBeginning"
-  | "streakMessageBuilding"
-  | "streakMessageStrong"
-  | "streakMessageExcellent"
-  | "streakMessageExpert"
-  | "reviewReminderFew"
-  | "reviewReminderSome"
-  | "reviewReminderMany"
-  | "timeGreetingMorning"
-  | "timeGreetingAfternoon"
-  | "timeGreetingEvening"
-  | "timeGreetingNight"
-  | "masteryMilestone10"
-  | "masteryMilestone50"
-  | "practiceEncouragement"
-  | "growthMindset"
-  | "winCelebration"
-  | "practiceReady"
-  | "progressTip"
-  | "focusTime"
-  | "conceptProgress"
-  | "learningStreak"
-  | "sessionSummary"
 
   // 强化学习相关
-  | "reinforcementLearning"
-  | "qLearning"
   | "dqn"
-  | "policyGradient"
-  | "actorCritic"
   | "ddpg"
   | "ppo"
   | "mcts"
   | "algorithm"
   | "state"
   | "action"
-  | "reward"
-  | "policy"
-  | "valueFunction"
-  | "qTable"
-  | "epsilon"
-  | "discountFactor"
-  | "learningRate"
-  | "exploration"
-  | "exploitation"
-  | "bellmanEquation"
-  | "temporalDifference"
-  | "monteCarlo"
-  | "onPolicy"
-  | "offPolicy"
-  | "experienceReplay"
-  | "targetNetwork"
-  | "policyLoss"
-  | "valueLoss"
-  | "entropyBonus"
-  | "clipping"
-  | "gae"
-  | "advantage"
-  | "rollout"
-  | "backpropagation"
-  | "gradient"
-  | "optimizer"
-  | "adam"
-  | "sgd"
-  | "batchSize"
-  | "episode"
   | "step"
-  | "horizon"
   | "environment"
   | "agent"
   | "observation"
-  | "episodeEnd"
-  | "cumulativeReward"
-  | "convergence"
-  | "divergence"
-  | "trainingCurve"
-  | "evaluationMetric"
-  | "hyperparameter"
   | "architecture"
-  | "networkLayer"
-  | "inputLayer"
-  | "outputLayer"
-  | "hiddenLayer"
-  | "activation"
-  | "relu"
-  | "sigmoid"
-  | "softmax"
-  | "lossFunction"
-  | "crossEntropy"
-  | "mse"
-  | "regularization"
-  | "dropout"
-  | "batchNorm"
-  | "earlyStopping"
-  | "saveModel"
-  | "loadModel"
-  | "export"
   | "import"
 
   // 会话相关
-  | "newConversation"
-  | "continueConversation"
-  | "deleteConversation"
-  | "renameConversation"
-  | "searchConversations"
-  | "noConversations"
-  | "typing"
-  | "coachThinking"
-  | "coachTyping"
-  | "coachArtifactFullDetails"
-  | "regenerate"
-  | "copyMessage"
-  | "editMessage"
-  | "deleteMessage"
-  | "messageCopied"
-  | "errorOccurred"
-  | "tryAgain"
   | "cancel"
   | "confirm"
   | "save"
   | "close"
-  | "back"
   | "next"
   | "loading"
   | "empty"
-  | "noResults"
-  | "searchResults"
   | "filter"
   | "sort"
   | "refresh"
   | "timeout"
   | "networkError"
-  | "unknownError"
 
   // 证据相关
   | "evidenceOutcomePass"
@@ -539,73 +387,18 @@ export type CopyKey =
   // 证据来源
 
   // 人类友好状态
-  | "reviewReminderNone"
-  | "greetingMorning"
-  | "greetingAfternoon"
-  | "greetingEvening"
-  | "greetingNight"
-  | "masteryProgress"
-  | "practiceTimeInvested"
-  | "cardsMastered"
-  | "signalsWaiting"
   // 新增人性化引导
-  | "firstTimeWelcome"
-  | "firstTimeSetupHint"
-  | "quickStartGuide"
   | "providerConnected"
-  | "providerDisconnected"
   | "modelReady"
-  | "apiKeyStillMissing"
-  | "progressToGoal"
-  | "dailyGoalProgress"
-  | "keepGoingMessage"
-  | "almostThereMessage"
-  | "greatJobMessage"
-  | "newRecordMessage"
-  | "coachLearningGoal"
-  | "coachAssessingLevel"
-  | "coachGeneratingPlan"
-  | "coachAdjustingPlan"
 
   // 教练动作状态
 
   // 掌握度阶段
-  | "masteryUnderstood"
-  | "masteryRecalled"
-  | "masteryPracticed"
-  | "masteryApplied"
-  | "masteryTransferable"
-  | "masteryNotEstablished"
 
   // Phase-D 技能投影 (evidence → skill states)
-  | "skillDimComprehension"
-  | "skillDimImplementation"
-  | "skillDimDebugging"
-  | "skillDimTransfer"
-  | "skillStateNotVerified"
-  | "skillStateAssisted"
-  | "skillStateIndependent"
-  | "skillStateRepeatVerified"
-  | "skillStateNeedsReview"
 
   // 学习旅程
-  | "learningJourney"
-  | "learningJourneyProgress"
-  | "currentSuggestion"
-  | "nextActionHintUnderstood"
-  | "nextActionHintRecalled"
-  | "nextActionHintPracticed"
-  | "nextActionHintApplied"
-  | "nextActionHintTransferable"
-  | "sessionSummary"
-  | "cardsCompleted"
-  | "conceptsMastered"
   | "currentCard"
-  | "practiceCard"
-  | "flashCard"
-  | "waitingForRouting"
-  | "resourceRiskPaused"
-  | "refreshResourceFirst"
 
   // 资源视图
   | "addFiles"
@@ -614,58 +407,18 @@ export type CopyKey =
   | "resourcesEmpty"
   | "resourcesMenu"
   | "resourcesSummary"
-  | "resourcesSandbox"
-  | "resourcesSandboxRefresh"
-  | "resourcesSandboxNewFile"
-  | "resourcesSandboxNewFolder"
-  | "resourcesSandboxRename"
-  | "resourcesSandboxTrash"
-  | "resourcesSandboxEmpty"
-  | "resourcesSandboxBoundaryRefresh"
-  | "resourcesSandboxOpenRoot"
-  | "resourcesSandboxChooseRoot"
-  | "resourcesSandboxResetRoot"
-  | "resourcesSandboxActionBase"
-  | "resourcesSandboxCreateIn"
-  | "resourcesSandboxTargetCurrent"
-  | "resourcesSandboxTargetRoot"
-  | "resourcesSandboxParent"
-  | "resourcesSandboxResolvedPath"
-  | "resourcesSandboxSourcePath"
-  | "resourcesSandboxWorkspaceRoot"
-  | "resourcesSandboxSourceLabel"
-  | "resourcesSandboxMountedSources"
-  | "resourcesSandboxNextSafeMove"
-  | "resourcesSandboxFilePlaceholder"
-  | "resourcesSandboxFolderPlaceholder"
-  | "resourcesSandboxFileHint"
-  | "resourcesSandboxFolderHint"
-  | "resourcesSandboxRenamePlaceholder"
-  | "resourcesSandboxRenameHint"
-  | "resourcesSandboxManagedLayout"
 
   // 分析状态
-  | "analysisReady"
-  | "analysisStatus"
-  | "analysisProgress"
-  | "analysisFindings"
-  | "analysisDecision"
-  | "analysisNextStep"
   | "analysisAction"
-  | "analysisThreads"
-  | "advanceAnalysis"
 
   // 计划治理
   | "planLive"
   | "planFrozen"
   | "planFreeze"
   | "planSummary"
-  | "planCurrentStage"
-  | "planNextAction"
-  | "planAdjust"
-  | "planWhy"
   | "planCadence"
   | "approve"
+  | "planNeedsEvidenceAction"
   | "reject"
 
   // 阶段状态
@@ -676,18 +429,11 @@ export type CopyKey =
   // 上下文
   | "contextMode"
   | "contextAutoNote"
-  | "useFullContext"
 
   // 文件与诊断
-  | "enableFile"
-  | "enableSelection"
-  | "enableRelated"
-  | "relatedDisabled"
-  | "diagnosticsMissing"
   | "maxFilesHint"
 
   // 视图与历史
-  | "trainingView"
   | "trainingOpenCurrentCard"
   | "trainingReturnToCoach"
   | "trainingAnswerNow"
@@ -695,10 +441,8 @@ export type CopyKey =
   | "trainingStartStep"
   | "trainingEmptyTitle"
   | "trainingEmptyDescription"
-  | "summaryEmpty"
   | "history"
   | "composerAccessibility"
-  | "reviewNotFull"
 
   // Global plan relationship
   | "globalPlanLabel"
@@ -718,18 +462,6 @@ export type CopyKey =
   | "evidenceAdopt"
   | "evidenceDefer"
 
-  // Provider capabilities
-  | "capabilityChat"
-  | "capabilityResponses"
-  | "capabilityTools"
-  | "capabilityStreaming"
-  | "capabilityStructuredOutput"
-  | "capabilityVision"
-  | "capabilityEmbeddings"
-  | "capabilityJsonSchema"
-  | "capabilitySupported"
-  | "capabilityNotSupported"
-
   // Learning feedback
   | "feedbackTooHard"
   | "feedbackTooSimple"
@@ -742,13 +474,8 @@ export type CopyKey =
   | "feedbackLearningLabel"
   | "feedbackRecording"
   | "feedbackRecorded"
-  | "feedbackDismiss"
 
   // Orientation rail chrome
-  | "orientationNow"
-  | "orientationState"
-  | "orientationNext"
-  | "orientationMore"
   | "orientationStateNeedsSetup"
   | "orientationStateWaiting"
   | "orientationStateWorking"
@@ -766,25 +493,10 @@ export type CopyKey =
   | "planStageMaterialsEmpty"
 
   // Plan progress dashboard (Plan view inner tab)
-  | "planDashboardTabPlan"
-  | "planDashboardTabProgress"
-  | "planDashboardStagesTitle"
-  | "planDashboardMasteryTitle"
-  | "planDashboardMaterialsTitle"
-  | "planDashboardMaterialsStages"
-  | "planDashboardMasteryEmpty"
-  | "planDashboardReviewDue"
-  | "planDashboardReviewDone"
-  | "planDashboardEmptyTitle"
 
   // Training card recovery
-  | "trainingSwitchToCard"
 
   // Training card detail sections (CollapseSection titles)
-  | "trainingCardDetailsApiHints"
-  | "trainingCardDetailsSelfCheck"
-  | "trainingCardDetailsRubric"
-  | "trainingCardDetailsAcceptance"
 
   // Settings IA rebuild: status summary bar, answer-style presets, section titles
   | "settingsStatusRegionLabel"
@@ -806,14 +518,7 @@ export type CopyKey =
   | "answerStyleCustom"
   | "settingsAnswerStyleHint"
   | "settingsAdvancedContext"
-  | "settingsNavShortConnection"
-  | "settingsNavShortWorkspace"
-  | "settingsNavShortTeaching"
-  | "settingsNavShortSkills"
-  | "settingsNavShortPreferences"
-  | "settingsNavShortAdvanced"
   | "settingsMemoryPrivacy"
-  | "settingsAdvanced"
   | "settingsPreferences"
   | "settingsAppearance"
   | "settingsAutosaving"
@@ -853,14 +558,7 @@ export const copyTable = {
     answerStyleCustom: "自定义",
     settingsAnswerStyleHint: "预设决定上下文强度与附带内容，改动即时生效。",
     settingsAdvancedContext: "高级上下文",
-    settingsNavShortConnection: "连接",
-    settingsNavShortWorkspace: "工作区",
-    settingsNavShortTeaching: "教学",
-    settingsNavShortSkills: "技能",
-    settingsNavShortPreferences: "偏好",
-    settingsNavShortAdvanced: "高级",
     settingsMemoryPrivacy: "记忆与隐私",
-    settingsAdvanced: "高级",
     settingsPreferences: "偏好",
     settingsAppearance: "外观",
     settingsAutosaving: "保存中…",
@@ -876,7 +574,6 @@ export const copyTable = {
     settingsMemoryShareMastery: "掌握信号",
     // 核心角色
     coach: "教练",
-    coachArtifactFullDetails: "查看完整内容",
     trainer: "教练",
     you: "你",
     plan: "学习",
@@ -884,13 +581,10 @@ export const copyTable = {
     progress: "成长",
     chat: "对话",
     workspace: "工作区",
-    viewNavigation: "Trainer 视图导航",
 
     // 视图标签
     currentFocus: "当前聚焦",
     currentTask: "当前训练动作",
-    latestReview: "最近检查",
-    backgroundAnalysis: "后台准备",
     backgroundCoachWork: "教练准备",
     workspaceAdmissionRootMissing: "未设置工作区根目录",
     workspaceAdmissionRootMissingDetail: "先选一个保存学习记录的位置，再决定如何处理此项目。",
@@ -906,18 +600,11 @@ export const copyTable = {
     onboardingModelPastePlaceholder: "粘贴 {\"url\":…,\"key\":…} 或服务地址",
     onboardingModelSave: "保存并连接",
     onboardingOpenSettings: "打开完整设置",
-    learningHomeContinueTask: "继续当前任务",
     archivePrivacyNote: "备份包含学习记录与计划，不含 API key——密钥只保存在 VS Code 本机密钥库。",
     settingsMemoryPersonalTrustDetail: "打开后，偏好与掌握度会在自己所有 Trainer 项目间自动流动；计划、对话与资料保持隔离。",
     settingsMemoryPersonalTrustDisable: "停止跨项目流动",
     settingsMemoryPersonalTrustEnable: "信任此账户",
     settingsMemoryPersonalTrustTitle: "信任的个人账户",
-    learningHomeDueLabel: "今日到期复习",
-    learningHomeClearTitle: "今天没有到期的复习，先把当前这一步往前推。",
-    learningHomeDueTitle: "从最早到期的那张开始，一次一张。",
-    learningHomeNextLabel: "下次复习",
-    learningHomeStartReview: "开始复习",
-    learningHomeWinsLabel: "最近成果",
     onboardingRootAction: "选择工作区根目录",
     onboardingRootDetail: "选一个文件夹，Trainer 会把学习记录保存在本地。",
     onboardingSetupCaption: "完成两项设置即可使用完整能力：",
@@ -933,7 +620,6 @@ export const copyTable = {
     onboardingTrialAction: "先试用（本地练习模式）",
     onboardingTrialHint: "仅本机回环连接，随机密钥保存在本机；随时可在设置里换成真实模型。",
     onboardingTrustAction: "打开信任设置",
-    onboardingTrustDetail: "信任当前窗口后，Trainer 才能读写学习记录。完成后会自动继续。",
     onboardingTrustInlineHint: "选目录前需要先信任此窗口。",
     workspaceAdmissionGoalSaved: "你的目标还在输入框里。先选一个保存学习记录的位置，回来后可以直接发送。",
     workspaceAdmissionProjectFound: "发现项目",
@@ -953,6 +639,7 @@ export const copyTable = {
     workspaceAdmissionIgnore: "忽略项目",
     workspaceAdmissionDelete: "删除项目",
     workspaceAdmissionReconciliationWaiting: "正在后台准备项目",
+    planNeedsEvidenceAction: "我做完这步了，整理证据",
     workspaceAdmissionReconciliationRetryRequired: "后台准备需要重试",
     workspaceAdmissionReconciliationStateUnknown: "后台状态更新中",
     workspaceAdmissionReconciliationUpdatedAt: "更新于 {time}",
@@ -971,13 +658,10 @@ export const copyTable = {
     workspaceRootChange: "切换根目录",
     workspaceRootChangeDetail: "直接选择另一个根目录，不复制当前数据。",
     coachState: "教练状态",
-    coachSignal: "学习信号",
     reviewQueue: "复习队列",
-    reviewMemory: "记忆与复习节奏",
     reviewRhythm: "复习节奏",
     nextReview: "下次复习",
     teachingObservations: "教学观察",
-    coachSummaryDoing: "正在做",
 
     // 计划相关
     goals: "目标",
@@ -988,27 +672,11 @@ export const copyTable = {
     weakSpots: "薄弱点",
     planStages: "阶段",
     trainingWhyNow: "为什么是现在",
-    trainingDeliverable: "交付物",
     planStageMaterialsGenerate: "生成资料",
     planStageMaterialsGenerating: "生成中…",
     planStageMaterialsView: "查看",
     planStageMaterialsHide: "收起",
     planStageMaterialsEmpty: "这个阶段还没有学习资料。",
-    planDashboardTabPlan: "计划",
-    planDashboardTabProgress: "进度",
-    planDashboardStagesTitle: "阶段完成度",
-    planDashboardMasteryTitle: "依赖掌握度",
-    planDashboardMaterialsTitle: "资料使用次数",
-    planDashboardMaterialsStages: "覆盖阶段",
-    planDashboardMasteryEmpty: "还没有掌握度数据。完成训练卡片后会在这里积累。",
-    planDashboardReviewDue: "到期",
-    planDashboardReviewDone: "已完成",
-    planDashboardEmptyTitle: "先生成计划",
-    trainingSwitchToCard: "切换到该卡",
-    trainingCardDetailsApiHints: "API 提示",
-    trainingCardDetailsSelfCheck: "自查",
-    trainingCardDetailsRubric: "评分规则",
-    trainingCardDetailsAcceptance: "验收标准",
 
     // 设置 - 界面
     language: "语言",
@@ -1067,8 +735,6 @@ export const copyTable = {
     settingsSetupDetailReady: "对话、计划、训练可用。",
     settingsSetupDetailBlocked: "填写连接信息和访问密钥后，就可以开始。",
     settingsSetupAction: "保存连接",
-    settingsInterfaceSection: "教练默认",
-    settingsCoachSection: "默认上下文",
     settingsModelSection: "连接模型",
     settingsFollowCurrentFile: "实时跟随",
     settingsContextMode: "上下文强度",
@@ -1194,16 +860,6 @@ export const copyTable = {
     evidenceFilterRejected: "\u5df2\u9a73\u56de",
     evidenceAdopt: "\u63a5\u7eb3",
     evidenceDefer: "\u5ef6\u671f",
-    capabilityChat: "\u5bf9\u8bdd",
-    capabilityResponses: "Responses API",
-    capabilityTools: "\u5de5\u5177\u8c03\u7528",
-    capabilityStreaming: "\u6d41\u5f0f\u8f93\u51fa",
-    capabilityStructuredOutput: "\u7ed3\u6784\u5316\u8f93\u51fa",
-    capabilityVision: "\u89c6\u89c9\u7406\u89e3",
-    capabilityEmbeddings: "\u5411\u91cf\u5d4c\u5165",
-    capabilityJsonSchema: "JSON Schema",
-    capabilitySupported: "\u652f\u6301",
-    capabilityNotSupported: "\u4e0d\u652f\u6301",
     feedbackTooHard: "\u592a\u96be",
     feedbackTooSimple: "\u592a\u7b80\u5355",
     feedbackMisunderstood: "\u6ca1\u7406\u89e3",
@@ -1215,23 +871,13 @@ export const copyTable = {
     feedbackLearningLabel: "\u5b66\u4e60\u53cd\u9988",
     feedbackRecording: "\u6b63\u5728\u8bb0\u5f55\u2026",
     feedbackRecorded: "\u5df2\u8bb0\u5f55\u3002\u4e0b\u4e00\u6b65\u4f1a\u636e\u6b64\u8c03\u6574\uff1b\u8ba1\u5212\u53d8\u5316\u4ecd\u9700\u786e\u8ba4\u3002",
-    feedbackDismiss: "\u5ffd\u7565",
 
     // 设置文案
-    settingsIntro: "连接与默认项。",
-    settingsGeneral: "界面与回复",
-    settingsCoachBehavior: "教练行为",
-    settingsModelAccess: "模型与连接",
-    settingsWorkspaceNote: "高频偏好保存在工作区。",
-    settingsProviderHint: "大模型连接。",
-    settingsCoachHint: "上下文与反馈默认项。",
 
     // 对话状态
     send: "发送",
     streaming: "教练思考中…",
     configureProviderFirst: "还不能开始对话。请在“设置”里完成模型连接。",
-    configureProviderFirstPlan: "还不能生成或调整计划。请先完成模型连接。",
-    providerRequiredHint: "还没有可用的模型连接。",
     composerPlaceholder: "问教练",
     composerPlaceholderPlan: "写下这一步",
 
@@ -1268,17 +914,8 @@ export const copyTable = {
     openSettings: "打开设置",
 
     // 快捷键提示
-    shortcutSend: "发送 (Ctrl+Enter)",
-    shortcutNewline: "换行 (Ctrl+Shift+Enter)",
-    shortcutSlash: "斜杠命令 (/)",
-    shortcutClear: "清空 (Ctrl+L)",
 
     // 错误提示
-    reviewNeedsFile: "复习需要打开文件或选区",
-    reviewFileDisabled: "当前文件不可用于复习",
-    selectionMissing: "没有选区",
-    selectionDisabled: "选区功能已禁用",
-    relatedMissing: "没有相关文件",
 
     // 训练相关
     training: "训练",
@@ -1288,178 +925,42 @@ export const copyTable = {
     startTraining: "开始训练",
     nextCard: "下一张",
     previousCard: "上一张",
-    showAnswer: "显示答案",
     submitAnswer: "提交答案",
-    skipCard: "跳过",
-    markAgain: "再来一次",
-    markHard: "困难",
-    markGood: "良好",
-    markEasy: "简单",
-    dueToday: "今日待复习",
-    cardsToReview: "张卡片待复习",
-    learningPath: "学习路径",
-    masteryLevel: "掌握程度",
-    streak: "连续天数",
 
     // 训练反馈与激励
-    streakMessageBeginning: "训练已开始",
-    streakMessageBuilding: "坚持训练，习惯正在养成",
-    streakMessageStrong: "训练节奏已建立",
-    streakMessageExcellent: "你的坚持正在产生效果",
-    streakMessageExpert: "训练节奏稳定",
-    reviewReminderFew: "{n} 张卡片等待复习",
-    reviewReminderSome: "{n} 张卡片需要复习",
-    reviewReminderMany: "复习队列较长",
-    timeGreetingMorning: "上午好，专注训练",
-    timeGreetingAfternoon: "下午好，保持节奏",
-    timeGreetingEvening: "晚间训练黄金时间",
-    timeGreetingNight: "夜深了，注意休息",
-    masteryMilestone10: "10+ 概念已掌握",
-    masteryMilestone50: "50+ 概念已掌握",
-    practiceEncouragement: "练习已记录",
-    growthMindset: "每个错误都是学习机会",
-    winCelebration: "已完成",
-    practiceReady: "准备就绪",
-    progressTip: "持续投入会带来质的飞跃",
-    focusTime: "专注时间",
-    conceptProgress: "技能成长",
-    learningStreak: "专注投入",
-    sessionSummary: "本次总结",
-    reviewReminderNone: "暂无待复习卡片",
-    masteryProgress: "掌握进度",
-    practiceTimeInvested: "已投入专注时间",
-    cardsMastered: "已掌握概念",
-    signalsWaiting: "等待提升训练的信号",
-    totalReviews: "总复习次数",
-    accuracy: "正确率",
 
     // 人性化引导
-    firstTimeWelcome: "开始训练",
-    firstTimeSetupHint: "先配置大模型 API",
-    quickStartGuide: "3 分钟快速上手指南",
     providerConnected: "模型连接成功",
-    providerDisconnected: "模型未连接",
     modelReady: "模型已就绪",
-    apiKeyStillMissing: "还需要 API key 才能开始",
-    progressToGoal: "距离目标还有",
-    dailyGoalProgress: "今日目标进度",
-    keepGoingMessage: "进度已更新",
-    almostThereMessage: "接近完成",
-    greatJobMessage: "练习完成",
-    newRecordMessage: "新纪录",
-    coachLearningGoal: "学习目标",
-    coachAssessingLevel: "正在评估你的水平",
-    coachGeneratingPlan: "正在生成学习计划",
-    coachAdjustingPlan: "正在调整计划",
 
     // 强化学习相关
-    reinforcementLearning: "强化学习",
-    qLearning: "Q学习",
     dqn: "深度Q网络",
-    policyGradient: "策略梯度",
-    actorCritic: "演员评论家",
     ddpg: "深度确定性策略梯度",
     ppo: "近端策略优化",
     mcts: "蒙特卡洛树搜索",
     algorithm: "算法",
     state: "状态",
     action: "动作",
-    reward: "奖励",
-    policy: "策略",
-    valueFunction: "价值函数",
-    qTable: "Q表",
-    epsilon: "探索率",
-    discountFactor: "折扣因子",
-    learningRate: "学习率",
-    exploration: "探索",
-    exploitation: "利用",
-    bellmanEquation: "贝尔曼方程",
-    temporalDifference: "时序差分",
-    monteCarlo: "蒙特卡洛",
-    onPolicy: "在线策略",
-    offPolicy: "离线策略",
-    experienceReplay: "经验回放",
-    targetNetwork: "目标网络",
-    policyLoss: "策略损失",
-    valueLoss: "价值损失",
-    entropyBonus: "熵奖励",
-    clipping: "裁剪",
-    gae: "广义优势估计",
-    advantage: "优势函数",
-    rollout: "Rollout",
-    backpropagation: "反向传播",
-    gradient: "梯度",
-    optimizer: "优化器",
-    adam: "Adam",
-    sgd: "随机梯度下降",
-    batchSize: "批量大小",
-    episode: "回合",
     step: "步",
-    horizon: "视野",
     environment: "环境",
     agent: "智能体",
     observation: "观测",
-    episodeEnd: "回合结束",
-    cumulativeReward: "累计奖励",
-    convergence: "收敛",
-    divergence: "发散",
-    trainingCurve: "训练曲线",
-    evaluationMetric: "评估指标",
-    hyperparameter: "超参数",
     architecture: "架构",
-    networkLayer: "网络层",
-    inputLayer: "输入层",
-    outputLayer: "输出层",
-    hiddenLayer: "隐藏层",
-    activation: "激活函数",
-    relu: "ReLU",
-    sigmoid: "Sigmoid",
-    softmax: "Softmax",
-    lossFunction: "损失函数",
-    crossEntropy: "交叉熵",
-    mse: "均方误差",
-    regularization: "正则化",
-    dropout: "Dropout",
-    batchNorm: "批归一化",
-    earlyStopping: "早停",
-    saveModel: "保存模型",
-    loadModel: "加载模型",
-    export: "导出",
     import: "导入",
 
     // 会话相关
-    newConversation: "新对话",
-    continueConversation: "继续对话",
-    deleteConversation: "删除对话",
-    renameConversation: "重命名对话",
-    searchConversations: "搜索对话",
-    noConversations: "暂无对话",
-    typing: "正在输入…",
-    coachThinking: "教练思考中…",
-    coachTyping: "教练正在输入…",
-    regenerate: "重新生成",
-    copyMessage: "复制消息",
-    editMessage: "编辑消息",
-    deleteMessage: "删除消息",
-    messageCopied: "消息已复制",
-    errorOccurred: "出了点问题",
-    tryAgain: "重试",
     cancel: "取消",
     confirm: "确认",
     save: "保存",
     close: "关闭",
-    back: "返回",
     next: "下一步",
     loading: "加载中…",
     empty: "暂无内容",
-    noResults: "没有结果",
-    searchResults: "搜索结果",
     filter: "筛选",
     sort: "排序",
     refresh: "刷新",
     timeout: "等得有点久，请再试一次",
     networkError: "没能连上服务，请检查网络后再试",
-    unknownError: "暂时没能完成，请再试一次",
 
     // 证据相关
     evidenceOutcomePass: "通过",
@@ -1471,36 +972,11 @@ export const copyTable = {
     // 教练动作状态
 
     // 掌握度阶段
-    masteryUnderstood: "已理解",
-    masteryRecalled: "能回忆",
-    masteryPracticed: "已练过",
-    masteryApplied: "已落地",
-    masteryTransferable: "可迁移",
-    masteryNotEstablished: "待建立",
 
     // Phase-D 技能投影
-    skillDimComprehension: "理解",
-    skillDimImplementation: "实现",
-    skillDimDebugging: "调试",
-    skillDimTransfer: "迁移",
-    skillStateNotVerified: "未验证",
-    skillStateAssisted: "需辅助",
-    skillStateIndependent: "可独立",
-    skillStateRepeatVerified: "已重复验证",
-    skillStateNeedsReview: "需复查",
 
     // 学习旅程
-    learningJourney: "学习旅程",
-    learningJourneyProgress: "学习进度",
-    currentSuggestion: "当前建议",
-    cardsCompleted: "张卡片完成",
-    conceptsMastered: "概念已掌握",
     currentCard: "当前卡片",
-    practiceCard: "实战卡",
-    flashCard: "闪记卡",
-    waitingForRouting: "等待训练路由确认当前卡片",
-    resourceRiskPaused: "这张训练卡因资料风险暂停",
-    refreshResourceFirst: "先去资料页刷新，再继续这张训练卡",
 
     // 资源视图
     addFiles: "添加文件",
@@ -1509,56 +985,15 @@ export const copyTable = {
     resourcesEmpty: "资料库为空，导入文件或链接",
     resourcesMenu: "资料",
     resourcesSummary: "资料概要",
-    resourcesSandbox: "沙箱",
-    resourcesSandboxRefresh: "刷新",
-    resourcesSandboxNewFile: "新建文件",
-    resourcesSandboxNewFolder: "新建文件夹",
-    resourcesSandboxRename: "重命名",
-    resourcesSandboxTrash: "移到 Trash",
-    resourcesSandboxEmpty: "沙箱里还没有文件。",
-    resourcesSandboxBoundaryRefresh: "边界",
-    resourcesSandboxOpenRoot: "打开根目录",
-    resourcesSandboxChooseRoot: "固定路径",
-    resourcesSandboxResetRoot: "恢复默认",
-    resourcesSandboxActionBase: "目标基准",
-    resourcesSandboxCreateIn: "创建位置",
-    resourcesSandboxTargetCurrent: "当前目录",
-    resourcesSandboxTargetRoot: "沙箱根目录",
-    resourcesSandboxParent: "上一级",
-    resourcesSandboxResolvedPath: "结果路径",
-    resourcesSandboxSourcePath: "来源路径",
-    resourcesSandboxWorkspaceRoot: "Workspace 根目录",
-    resourcesSandboxSourceLabel: "来源",
-    resourcesSandboxMountedSources: "挂载来源",
-    resourcesSandboxNextSafeMove: "下一步",
-    resourcesSandboxFilePlaceholder: "输入文件路径，如 packs/remote/ssh/notes.md",
-    resourcesSandboxFolderPlaceholder: "输入嵌套目录，如 packs/remote/ssh",
-    resourcesSandboxFileHint: "在沙箱根目录内创建，支持多级路径。",
-    resourcesSandboxFolderHint: "相对沙箱根目录创建，支持多级目录。",
-    resourcesSandboxRenamePlaceholder: "输入新的相对路径，如 packs/debug/minimal-loop.md",
-    resourcesSandboxRenameHint: "重命名也支持在沙箱内移动路径。",
-    resourcesSandboxManagedLayout: "Trainer 布局",
 
     // 分析状态
-    analysisReady: "分析就绪",
-    analysisStatus: "分析状态",
-    analysisProgress: "分析进度",
-    analysisFindings: "分析发现",
-    analysisDecision: "分析决定",
-    analysisNextStep: "分析下一步",
     analysisAction: "分析动作",
-    analysisThreads: "分析线程",
-    advanceAnalysis: "推进分析",
 
     // 计划治理
     planLive: "进行中",
     planFrozen: "已冻结",
     planFreeze: "冻结计划",
     planSummary: "计划概要",
-    planCurrentStage: "当前阶段",
-    planNextAction: "下一步",
-    planAdjust: "调整计划",
-    planWhy: "原因",
     planCadence: "节奏",
     approve: "采纳",
     reject: "拒绝",
@@ -1571,35 +1006,17 @@ export const copyTable = {
     // 上下文
     contextMode: "上下文模式",
     contextAutoNote: "自动备注",
-    useFullContext: "使用完整上下文",
     viewContextWorking: "正在处理",
     viewContextBlocker: "当前阻塞",
     viewContextLatest: "最近状态",
     viewContextCoach: "教练上下文",
 
     // 文件与诊断
-    enableFile: "启用文件",
-    enableSelection: "启用选区",
-    enableRelated: "启用相关文件",
-    relatedDisabled: "相关文件已禁用",
-    diagnosticsMissing: "缺少诊断",
     maxFilesHint: "文件数量已达上限",
 
     // 视图与历史
-    trainingView: "训练视图",
-    summaryEmpty: "暂无概要",
     history: "历史记录",
     composerAccessibility: "输入框",
-    reviewNotFull: "复习未完成",
-    greetingMorning: "早上好",
-    greetingAfternoon: "下午好",
-    greetingEvening: "晚上好",
-    greetingNight: "夜深了",
-    nextActionHintUnderstood: "用自己的话确认这个想法。",
-    nextActionHintRecalled: "不看笔记回忆这个想法。",
-    nextActionHintPracticed: "在一个小任务中使用它。",
-    nextActionHintApplied: "在当前项目中应用它。",
-    nextActionHintTransferable: "迁移到新场景并解释取舍。",
     trainingOpenCurrentCard: "继续：打开当前训练卡",
     trainingReturnToCoach: "把结果带回教练",
     trainingAnswerNow: "现在回答",
@@ -1632,14 +1049,7 @@ export const copyTable = {
     answerStyleCustom: "Custom",
     settingsAnswerStyleHint: "Presets set context depth and attachments. Changes apply immediately.",
     settingsAdvancedContext: "Advanced context",
-    settingsNavShortConnection: "Connect",
-    settingsNavShortWorkspace: "Space",
-    settingsNavShortTeaching: "Teach",
-    settingsNavShortSkills: "Skills",
-    settingsNavShortPreferences: "Prefs",
-    settingsNavShortAdvanced: "Advanced",
     settingsMemoryPrivacy: "Memory & privacy",
-    settingsAdvanced: "Advanced",
     settingsPreferences: "Preferences",
     settingsAppearance: "Appearance",
     settingsAutosaving: "Saving…",
@@ -1654,7 +1064,6 @@ export const copyTable = {
     settingsMemorySharePreferences: "Preferences",
     settingsMemoryShareMastery: "Mastery signals",
     coach: "Coach",
-    coachArtifactFullDetails: "Full details",
     trainer: "Trainer",
     you: "You",
     plan: "Learning",
@@ -1662,11 +1071,8 @@ export const copyTable = {
     progress: "Progress",
     chat: "Chat",
     workspace: "Workspace",
-    viewNavigation: "Trainer views",
     currentFocus: "Current Focus",
     currentTask: "Current Task",
-    latestReview: "Latest Review",
-    backgroundAnalysis: "Background Analysis",
     backgroundCoachWork: "Coach Preparation",
     workspaceAdmissionRootMissing: "Workspace root is not set",
     workspaceAdmissionRootMissingDetail: "Choose where Trainer keeps learning records, then decide how to handle this project.",
@@ -1682,18 +1088,11 @@ export const copyTable = {
     onboardingModelPastePlaceholder: "Paste {\"url\":…,\"key\":…} or a service address",
     onboardingModelSave: "Save & connect",
     onboardingOpenSettings: "Open full settings",
-    learningHomeContinueTask: "Continue the current task",
     archivePrivacyNote: "Backups include learning records and plans, never API keys — keys live only in this machine's VS Code secret storage.",
     settingsMemoryPersonalTrustDetail: "When on, preferences and mastery flow across all your Trainer projects automatically; plans, conversations, and resources stay isolated.",
     settingsMemoryPersonalTrustDisable: "Stop cross-project flow",
     settingsMemoryPersonalTrustEnable: "Trust this account",
     settingsMemoryPersonalTrustTitle: "Trusted personal account",
-    learningHomeDueLabel: "Due for review",
-    learningHomeClearTitle: "Nothing is due for review today — push the current step forward.",
-    learningHomeDueTitle: "Start with the earliest due card, one at a time.",
-    learningHomeNextLabel: "Next review",
-    learningHomeStartReview: "Start review",
-    learningHomeWinsLabel: "Recent wins",
     onboardingRootAction: "Choose workspace root",
     onboardingRootDetail: "Pick a folder — Trainer keeps your learning records there, on this machine.",
     onboardingSetupCaption: "Two quick setups unlock the full experience:",
@@ -1709,7 +1108,6 @@ export const copyTable = {
     onboardingTrialAction: "Try it first (local practice mode)",
     onboardingTrialHint: "Loopback-only; a random key stays on this machine. Switch to a real model in Settings any time.",
     onboardingTrustAction: "Open trust settings",
-    onboardingTrustDetail: "Trust the current window so Trainer can read and write learning records. The wizard continues automatically.",
     onboardingTrustInlineHint: "Trust this window before choosing the folder.",
     workspaceAdmissionGoalSaved: "Your goal is still in the box. Choose where to keep learning records, then come back and send it.",
     workspaceAdmissionProjectFound: "Project found",
@@ -1729,6 +1127,7 @@ export const copyTable = {
     workspaceAdmissionIgnore: "Ignore project",
     workspaceAdmissionDelete: "Delete project",
     workspaceAdmissionReconciliationWaiting: "Preparing the project in the background",
+    planNeedsEvidenceAction: "Done with this step — organize the evidence",
     workspaceAdmissionReconciliationRetryRequired: "Background preparation needs a retry",
     workspaceAdmissionReconciliationStateUnknown: "Background status is updating",
     workspaceAdmissionReconciliationUpdatedAt: "Updated {time}",
@@ -1747,13 +1146,10 @@ export const copyTable = {
     workspaceRootChange: "Change root",
     workspaceRootChangeDetail: "Choose another root without copying the current data.",
     coachState: "Coach State",
-    coachSignal: "Learning Signal",
     reviewQueue: "Review Queue",
-    reviewMemory: "Memory & Rhythm",
     reviewRhythm: "Review Rhythm",
     nextReview: "Next Review",
     teachingObservations: "Teaching Observations",
-    coachSummaryDoing: "Doing",
     goals: "Goals",
     constraints: "Constraints",
     acceptance: "Acceptance Criteria",
@@ -1762,27 +1158,11 @@ export const copyTable = {
     weakSpots: "Weak Spots",
     planStages: "Stages",
     trainingWhyNow: "Why now",
-    trainingDeliverable: "Deliverable",
     planStageMaterialsGenerate: "Generate materials",
     planStageMaterialsGenerating: "Generating…",
     planStageMaterialsView: "View",
     planStageMaterialsHide: "Hide",
     planStageMaterialsEmpty: "No study materials for this stage yet.",
-    planDashboardTabPlan: "Plan",
-    planDashboardTabProgress: "Progress",
-    planDashboardStagesTitle: "Stage completion",
-    planDashboardMasteryTitle: "Dependency mastery",
-    planDashboardMaterialsTitle: "Material usage",
-    planDashboardMaterialsStages: "Stages covered",
-    planDashboardMasteryEmpty: "No mastery data yet. It builds up as you finish training cards.",
-    planDashboardReviewDue: "Due",
-    planDashboardReviewDone: "Done",
-    planDashboardEmptyTitle: "Generate a plan first",
-    trainingSwitchToCard: "Switch to that card",
-    trainingCardDetailsApiHints: "API hints",
-    trainingCardDetailsSelfCheck: "Self-check",
-    trainingCardDetailsRubric: "Grading rubric",
-    trainingCardDetailsAcceptance: "Acceptance criteria",
     language: "Language",
     answerMode: "Feedback Mode",
     auto: "Auto",
@@ -1833,8 +1213,6 @@ export const copyTable = {
     settingsSetupDetailReady: "Model connection is ready. You can start chatting, planning, and learning right away.",
     settingsSetupDetailBlocked: "Save the provider, base URL, model, and API key. Only then can Trainer start working with you.",
     settingsSetupAction: "Complete setup",
-    settingsInterfaceSection: "How Trainer guides you",
-    settingsCoachSection: "Default context for each turn",
     settingsModelSection: "Connect model",
     settingsFollowCurrentFile: "Live follow",
     settingsContextMode: "Context level",
@@ -1960,16 +1338,6 @@ export const copyTable = {
     evidenceFilterRejected: "Rejected",
     evidenceAdopt: "Adopt",
     evidenceDefer: "Defer",
-    capabilityChat: "Chat",
-    capabilityResponses: "Responses API",
-    capabilityTools: "Tool Calls",
-    capabilityStreaming: "Streaming",
-    capabilityStructuredOutput: "Structured Output",
-    capabilityVision: "Vision",
-    capabilityEmbeddings: "Embeddings",
-    capabilityJsonSchema: "JSON Schema",
-    capabilitySupported: "Supported",
-    capabilityNotSupported: "Not supported",
     feedbackTooHard: "Too hard",
     feedbackTooSimple: "Too simple",
     feedbackMisunderstood: "I didn't understand",
@@ -1981,19 +1349,9 @@ export const copyTable = {
     feedbackLearningLabel: "Learning feedback",
     feedbackRecording: "Recording…",
     feedbackRecorded: "Recorded. The next step will adapt; plan changes still require confirmation.",
-    feedbackDismiss: "Dismiss",
-    settingsIntro: "Only the most common coach settings here.",
-    settingsGeneral: "Interface & Response",
-    settingsCoachBehavior: "Coach Behavior",
-    settingsModelAccess: "Model & Connection",
-    settingsWorkspaceNote: "Frontend only shows model connection and high-frequency preferences.",
-    settingsProviderHint: "Focus on model connection. Deeper overrides go to config file.",
-    settingsCoachHint: "These options control how much context the coach reads.",
     send: "Send",
     streaming: "Coach thinking…",
     configureProviderFirst: "Trainer isn't ready yet. Please save provider and API key in settings first.",
-    configureProviderFirstPlan: "Trainer can't generate plans yet. Please complete model connection in settings.",
-    providerRequiredHint: "No available provider or API key. Trainer can't work yet.",
     composerPlaceholder: "Ask the coach",
     composerPlaceholderPlan: "Write the next step",
     slashCommands: "Slash Commands",
@@ -2026,15 +1384,6 @@ export const copyTable = {
     viewContextCoach: "Coach context",
     openPlan: "Open Plan",
     openSettings: "Open Settings",
-    shortcutSend: "Send (Ctrl+Enter)",
-    shortcutNewline: "Newline (Ctrl+Shift+Enter)",
-    shortcutSlash: "Slash (/)",
-    shortcutClear: "Clear (Ctrl+L)",
-    reviewNeedsFile: "Review requires open file or selection",
-    reviewFileDisabled: "Current file not available for review",
-    selectionMissing: "No selection",
-    selectionDisabled: "Selection disabled",
-    relatedMissing: "No related files",
     training: "Training",
     flashcards: "Flashcards",
     practice: "Practice",
@@ -2042,145 +1391,37 @@ export const copyTable = {
     startTraining: "Start Training",
     nextCard: "Next Card",
     previousCard: "Previous Card",
-    showAnswer: "Show Answer",
     submitAnswer: "Submit Answer",
-    skipCard: "Skip",
-    markAgain: "Again",
-    markHard: "Hard",
-    markGood: "Good",
-    markEasy: "Easy",
-    dueToday: "Due Today",
-    cardsToReview: "cards to review",
-    learningPath: "Learning Path",
-    masteryLevel: "Mastery",
-    streak: "Streak",
-    totalReviews: "Total Reviews",
-    accuracy: "Accuracy",
 
     // Humanized onboarding
-    firstTimeWelcome: "Start training",
-    firstTimeSetupHint: "Configure a model API first",
-    quickStartGuide: "3-Minute Quick Start Guide",
     providerConnected: "Model connected",
-    providerDisconnected: "Model not connected",
     modelReady: "Model ready",
-    apiKeyStillMissing: "API key still needed to start",
-    progressToGoal: "Progress to goal",
-    dailyGoalProgress: "Daily goal progress",
-    keepGoingMessage: "Progress is building",
-    almostThereMessage: "Almost there",
-    greatJobMessage: "Practice completed",
-    newRecordMessage: "New personal best",
-    coachLearningGoal: "Learning Goal",
-    coachAssessingLevel: "Assessing your level",
-    coachGeneratingPlan: "Generating learning plan",
-    coachAdjustingPlan: "Adjusting plan",
 
-    reinforcementLearning: "Reinforcement Learning",
-    qLearning: "Q-Learning",
     dqn: "Deep Q-Network",
-    policyGradient: "Policy Gradient",
-    actorCritic: "Actor-Critic",
     ddpg: "DDPG",
     ppo: "PPO",
     mcts: "MCTS",
     algorithm: "Algorithm",
     state: "State",
     action: "Action",
-    reward: "Reward",
-    policy: "Policy",
-    valueFunction: "Value Function",
-    qTable: "Q-Table",
-    epsilon: "Epsilon",
-    discountFactor: "Discount Factor",
-    learningRate: "Learning Rate",
-    exploration: "Exploration",
-    exploitation: "Exploitation",
-    bellmanEquation: "Bellman Equation",
-    temporalDifference: "Temporal Difference",
-    monteCarlo: "Monte Carlo",
-    onPolicy: "On-Policy",
-    offPolicy: "Off-Policy",
-    experienceReplay: "Experience Replay",
-    targetNetwork: "Target Network",
-    policyLoss: "Policy Loss",
-    valueLoss: "Value Loss",
-    entropyBonus: "Entropy Bonus",
-    clipping: "Clipping",
-    gae: "GAE",
-    advantage: "Advantage",
-    rollout: "Rollout",
-    backpropagation: "Backpropagation",
-    gradient: "Gradient",
-    optimizer: "Optimizer",
-    adam: "Adam",
-    sgd: "SGD",
-    batchSize: "Batch Size",
-    episode: "Episode",
     step: "Step",
-    horizon: "Horizon",
     environment: "Environment",
     agent: "Agent",
     observation: "Observation",
-    episodeEnd: "Episode End",
-    cumulativeReward: "Cumulative Reward",
-    convergence: "Convergence",
-    divergence: "Divergence",
-    trainingCurve: "Training Curve",
-    evaluationMetric: "Evaluation Metric",
-    hyperparameter: "Hyperparameter",
     architecture: "Architecture",
-    networkLayer: "Network Layer",
-    inputLayer: "Input Layer",
-    outputLayer: "Output Layer",
-    hiddenLayer: "Hidden Layer",
-    activation: "Activation",
-    relu: "ReLU",
-    sigmoid: "Sigmoid",
-    softmax: "Softmax",
-    lossFunction: "Loss Function",
-    crossEntropy: "Cross Entropy",
-    mse: "MSE",
-    regularization: "Regularization",
-    dropout: "Dropout",
-    batchNorm: "Batch Norm",
-    earlyStopping: "Early Stopping",
-    saveModel: "Save Model",
-    loadModel: "Load Model",
-    export: "Export",
     import: "Import",
-    newConversation: "New Chat",
-    continueConversation: "Continue",
-    deleteConversation: "Delete",
-    renameConversation: "Rename",
-    searchConversations: "Search",
-    noConversations: "No conversations",
-    typing: "Typing…",
-    coachThinking: "Coach thinking…",
-    coachTyping: "Coach typing…",
-    regenerate: "Regenerate",
-    copyMessage: "Copy",
-    editMessage: "Edit",
-    deleteMessage: "Delete",
-    messageCopied: "Copied",
-    errorOccurred: "Error occurred",
-    tryAgain: "Try Again",
     cancel: "Cancel",
     confirm: "Confirm",
     save: "Save",
     close: "Close",
-    back: "Back",
     next: "Next",
     loading: "Loading…",
     empty: "Empty",
-    noResults: "No results",
-    searchResults: "Search Results",
     filter: "Filter",
     sort: "Sort",
     refresh: "Refresh",
     timeout: "Timeout",
     networkError: "Network error",
-    unknownError: "Unknown error",
     evidenceOutcomePass: "Pass",
     evidenceOutcomeFail: "Fail",
     evidenceOutcomePartial: "Partial",
@@ -2188,77 +1429,15 @@ export const copyTable = {
     evidenceOutcomeObservation: "Observation",
 
     // Human-friendly status
-    streakMessageBeginning: "Training started",
-    streakMessageBuilding: "Keep training, habits are forming",
-    streakMessageStrong: "You've built a training rhythm!",
-    streakMessageExcellent: "Your consistency is showing results",
-    streakMessageExpert: "Strong training rhythm",
-    reviewReminderNone: "No cards due for review",
-    greetingMorning: "Good morning",
-    greetingAfternoon: "Good afternoon",
-    greetingEvening: "Good evening",
-    greetingNight: "Good night",
-    reviewReminderFew: "{n} card{s} waiting for review",
-    reviewReminderSome: "{n} card{s} to review",
-    reviewReminderMany: "Review queue is long",
-    timeGreetingMorning: "Morning training",
-    timeGreetingAfternoon: "Good afternoon, keep the rhythm",
-    timeGreetingEvening: "Evening training hour",
-    timeGreetingNight: "Late night. Remember to rest",
-    masteryMilestone10: "10+ concepts mastered",
-    masteryMilestone50: "50+ concepts mastered",
-    practiceEncouragement: "Practice recorded",
-    growthMindset: "Every mistake is a learning opportunity",
-    winCelebration: "Completed",
-    practiceReady: "Ready to practice",
-    progressTip: "Consistent investment leads to breakthroughs",
-    focusTime: "Focus time",
-    conceptProgress: "Skill growth",
-    learningStreak: "Dedicated investment",
-    sessionSummary: "Session summary",
-    masteryProgress: "Skill growth",
-    practiceTimeInvested: "Focus time invested",
-    cardsMastered: "concepts mastered",
-    signalsWaiting: "signals waiting to boost your training",
 
     // Coach action status
 
     // Mastery stages
-    masteryUnderstood: "Understood",
-    masteryRecalled: "Recalled",
-    masteryPracticed: "Practiced",
-    masteryApplied: "Applied",
-    masteryTransferable: "Transferable",
-    masteryNotEstablished: "Not established",
 
     // Phase-D skill projection
-    skillDimComprehension: "Comprehension",
-    skillDimImplementation: "Implementation",
-    skillDimDebugging: "Debugging",
-    skillDimTransfer: "Transfer",
-    skillStateNotVerified: "Not verified",
-    skillStateAssisted: "Needs help",
-    skillStateIndependent: "Independent",
-    skillStateRepeatVerified: "Repeat verified",
-    skillStateNeedsReview: "Needs review",
 
     // Learning journey
-    learningJourney: "Learning journey",
-    learningJourneyProgress: "Learning progress",
-    currentSuggestion: "Current suggestion",
-    nextActionHintUnderstood: "Confirm the idea in your own words.",
-    nextActionHintRecalled: "Recall the idea without notes.",
-    nextActionHintPracticed: "Use it in one small task.",
-    nextActionHintApplied: "Apply it in the current project.",
-    nextActionHintTransferable: "Transfer it to a new context and explain the tradeoff.",
-    cardsCompleted: "cards completed",
-    conceptsMastered: "concepts mastered",
     currentCard: "Current card",
-    practiceCard: "Practice card",
-    flashCard: "Flash card",
-    waitingForRouting: "Waiting for training router to confirm the card",
-    resourceRiskPaused: "This training card is paused by resource risk",
-    refreshResourceFirst: "Refresh the source material before continuing this card",
 
     // Resource view
     addFiles: "Add files",
@@ -2267,56 +1446,15 @@ export const copyTable = {
     resourcesEmpty: "Library is empty, start importing here",
     resourcesMenu: "Resources",
     resourcesSummary: "Resources summary",
-    resourcesSandbox: "Sandbox",
-    resourcesSandboxRefresh: "Refresh",
-    resourcesSandboxNewFile: "New file",
-    resourcesSandboxNewFolder: "New folder",
-    resourcesSandboxRename: "Rename",
-    resourcesSandboxTrash: "Move to Trash",
-    resourcesSandboxEmpty: "Sandbox is still empty.",
-    resourcesSandboxBoundaryRefresh: "Boundary",
-    resourcesSandboxOpenRoot: "Open root",
-    resourcesSandboxChooseRoot: "Choose root",
-    resourcesSandboxResetRoot: "Use default",
-    resourcesSandboxActionBase: "Target base",
-    resourcesSandboxCreateIn: "Create in",
-    resourcesSandboxTargetCurrent: "Current folder",
-    resourcesSandboxTargetRoot: "Sandbox root",
-    resourcesSandboxParent: "Parent",
-    resourcesSandboxResolvedPath: "Result path",
-    resourcesSandboxSourcePath: "Source path",
-    resourcesSandboxWorkspaceRoot: "Workspace root",
-    resourcesSandboxSourceLabel: "Source",
-    resourcesSandboxMountedSources: "Mounted sources",
-    resourcesSandboxNextSafeMove: "Next safe move",
-    resourcesSandboxFilePlaceholder: "New file path, for example packs/remote/ssh/notes.md",
-    resourcesSandboxFolderPlaceholder: "Nested folder path, for example packs/remote/ssh",
-    resourcesSandboxFileHint: "Create inside the sandbox root. Nested paths are supported.",
-    resourcesSandboxFolderHint: "Create inside the sandbox root. Nested directories are supported.",
-    resourcesSandboxRenamePlaceholder: "New relative path, for example packs/debug/minimal-loop.md",
-    resourcesSandboxRenameHint: "Rename can also move the path within the sandbox.",
-    resourcesSandboxManagedLayout: "Trainer layout",
 
     // Analysis status
-    analysisReady: "Analysis ready",
-    analysisStatus: "Analysis status",
-    analysisProgress: "Analysis progress",
-    analysisFindings: "Analysis findings",
-    analysisDecision: "Analysis decision",
-    analysisNextStep: "Analysis next step",
     analysisAction: "Analysis action",
-    analysisThreads: "Analysis threads",
-    advanceAnalysis: "Advance analysis",
 
     // Plan governance
     planLive: "Live",
     planFrozen: "Frozen",
     planFreeze: "Freeze plan",
     planSummary: "Plan summary",
-    planCurrentStage: "Current stage",
-    planNextAction: "Next action",
-    planAdjust: "Adjust plan",
-    planWhy: "Why",
     planCadence: "Cadence",
     approve: "Approve",
     reject: "Reject",
@@ -2329,18 +1467,11 @@ export const copyTable = {
     // Context
     contextMode: "Context mode",
     contextAutoNote: "Auto note",
-    useFullContext: "Use full context",
 
     // Files & diagnostics
-    enableFile: "Enable file",
-    enableSelection: "Enable selection",
-    enableRelated: "Enable related",
-    relatedDisabled: "Related files disabled",
-    diagnosticsMissing: "Diagnostics missing",
     maxFilesHint: "File limit reached",
 
     // Views & history
-    trainingView: "Training view",
     trainingOpenCurrentCard: "Continue: Open current card",
     trainingReturnToCoach: "Return result to Coach",
     trainingAnswerNow: "Answer now",
@@ -2348,10 +1479,6 @@ export const copyTable = {
     trainingStartStep: "Start this step",
     trainingEmptyTitle: "No training card yet",
     trainingEmptyDescription: "Ask Coach to turn the current thread into one verifiable card, then come back here to do it.",
-    orientationNow: "Now",
-    orientationState: "State",
-    orientationNext: "Next",
-    orientationMore: "More",
     orientationStateNeedsSetup: "Needs setup",
     orientationStateWaiting: "Waiting",
     orientationStateWorking: "Working",
@@ -2360,10 +1487,8 @@ export const copyTable = {
     orientationStateInterrupted: "Interrupted",
     leftoverNotLive: "This is stored leftover on this workspace, not the live plan.",
     leftoverNotLiveHint: "These chips are hints only. They do not create a plan or task.",
-    summaryEmpty: "No summary yet",
     history: "History",
     composerAccessibility: "Composer",
-    reviewNotFull: "Review incomplete",
   },
 
   // ==========================================================================
@@ -2389,20 +1514,12 @@ export const copyTable = {
     answerStyleCustom: "Personalizado",
     settingsAnswerStyleHint: "Los preajustes definen el contexto y los adjuntos. Los cambios se aplican al instante.",
     settingsAdvancedContext: "Contexto avanzado",
-    settingsNavShortConnection: "Conex.",
-    settingsNavShortWorkspace: "Espacio",
-    settingsNavShortTeaching: "Enseñ.",
-    settingsNavShortSkills: "Habil.",
-    settingsNavShortPreferences: "Prefer.",
-    settingsNavShortAdvanced: "Avanzado",
     settingsMemoryPrivacy: "Memoria y privacidad",
-    settingsAdvanced: "Avanzado",
     settingsPreferences: "Preferencias",
     settingsAppearance: "Apariencia",
     settingsAutosaving: "Guardando…",
     settingsAutosaved: "Guardado automáticamente",
     coach: "Entrenador",
-    coachArtifactFullDetails: "Detalles completos",
     trainer: "Entrenador",
     you: "Tú",
     plan: "Plan",
@@ -2410,11 +1527,8 @@ export const copyTable = {
     progress: "Progreso",
     chat: "Chat",
     workspace: "Espacio",
-    viewNavigation: "Vistas de Trainer",
     currentFocus: "Enfoque Actual",
     currentTask: "Tarea Actual",
-    latestReview: "Última Revisión",
-    backgroundAnalysis: "Análisis en Segundo Plano",
     backgroundCoachWork: "Preparación del Entrenador",
     workspaceAdmissionRootMissing: "No se configuró la raíz del espacio",
     workspaceAdmissionRootMissingDetail: "Elige dónde Trainer guarda los registros de aprendizaje antes de decidir cómo tratar este proyecto.",
@@ -2430,18 +1544,11 @@ export const copyTable = {
     onboardingModelPastePlaceholder: "Pega {\"url\":…,\"key\":…} o una dirección de servicio",
     onboardingModelSave: "Guardar y conectar",
     onboardingOpenSettings: "Abrir ajustes completos",
-    learningHomeContinueTask: "Continuar la tarea actual",
     archivePrivacyNote: "La copia incluye registros de aprendizaje y planes, nunca claves API: las claves viven solo en el almacenamiento secreto de VS Code.",
     settingsMemoryPersonalTrustDetail: "Si está activada, las preferencias y el dominio fluyen entre todos tus proyectos Trainer; los planes, conversaciones y recursos quedan aislados.",
     settingsMemoryPersonalTrustDisable: "Detener flujo entre proyectos",
     settingsMemoryPersonalTrustEnable: "Confiar en esta cuenta",
     settingsMemoryPersonalTrustTitle: "Cuenta personal de confianza",
-    learningHomeDueLabel: "Repeticiones de hoy",
-    learningHomeClearTitle: "Hoy no hay nada pendiente de repaso: avanza el paso actual.",
-    learningHomeDueTitle: "Empieza por la más antigua que toca, una a una.",
-    learningHomeNextLabel: "Próxima repetición",
-    learningHomeStartReview: "Empezar repaso",
-    learningHomeWinsLabel: "Logros recientes",
     onboardingRootAction: "Elegir raíz del espacio de trabajo",
     onboardingRootDetail: "Elige una carpeta: Trainer guardará allí tus registros de aprendizaje, en esta máquina.",
     onboardingSetupCaption: "Dos ajustes rápidos desbloquean todo:",
@@ -2457,7 +1564,6 @@ export const copyTable = {
     onboardingTrialAction: "Probar primero (modo de práctica local)",
     onboardingTrialHint: "Solo bucle local; una clave aleatoria se queda en esta máquina. Cambia a un modelo real en Ajustes cuando quieras.",
     onboardingTrustAction: "Abrir ajustes de confianza",
-    onboardingTrustDetail: "Confía en la ventana actual para que Trainer pueda leer y escribir registros de aprendizaje. El asistente continúa automáticamente.",
     onboardingTrustInlineHint: "Confía en esta ventana antes de elegir la carpeta.",
     workspaceAdmissionGoalSaved: "Tu objetivo sigue en el cuadro. Elige dónde guardar los registros de aprendizaje y vuelve para enviarlo.",
     workspaceAdmissionProjectFound: "Proyecto encontrado",
@@ -2477,6 +1583,7 @@ export const copyTable = {
     workspaceAdmissionIgnore: "Ignorar proyecto",
     workspaceAdmissionDelete: "Eliminar proyecto",
     workspaceAdmissionReconciliationWaiting: "Preparando el proyecto en segundo plano",
+    planNeedsEvidenceAction: "Terminé este paso: organizar la evidencia",
     workspaceAdmissionReconciliationRetryRequired: "La preparación en segundo plano necesita un reintento",
     workspaceAdmissionReconciliationStateUnknown: "El estado en segundo plano se está actualizando",
     workspaceAdmissionReconciliationUpdatedAt: "Actualizado {time}",
@@ -2495,13 +1602,10 @@ export const copyTable = {
     workspaceRootChange: "Cambiar raíz",
     workspaceRootChangeDetail: "Elige otra raíz sin copiar los datos actuales.",
     coachState: "Estado del Entrenador",
-    coachSignal: "Señal de Aprendizaje",
     reviewQueue: "Cola de Revisión",
-    reviewMemory: "Memoria y Ritmo",
     reviewRhythm: "Ritmo de Revisión",
     nextReview: "Próxima Revisión",
     teachingObservations: "Observaciones de Enseñanza",
-    coachSummaryDoing: "En curso",
     goals: "Objetivos",
     constraints: "Restricciones",
     acceptance: "Criterios de Aceptación",
@@ -2510,27 +1614,11 @@ export const copyTable = {
     weakSpots: "Puntos Débiles",
     planStages: "Etapas",
     trainingWhyNow: "Por qué ahora",
-    trainingDeliverable: "Entregable",
     planStageMaterialsGenerate: "Generar materiales",
     planStageMaterialsGenerating: "Generando…",
     planStageMaterialsView: "Ver",
     planStageMaterialsHide: "Ocultar",
     planStageMaterialsEmpty: "Todavía no hay materiales de estudio para esta etapa.",
-    planDashboardTabPlan: "Plan",
-    planDashboardTabProgress: "Progreso",
-    planDashboardStagesTitle: "Avance de etapas",
-    planDashboardMasteryTitle: "Dominio de dependencias",
-    planDashboardMaterialsTitle: "Uso de materiales",
-    planDashboardMaterialsStages: "Etapas cubiertas",
-    planDashboardMasteryEmpty: "Aún no hay datos de dominio. Se acumulan al completar tarjetas de entrenamiento.",
-    planDashboardReviewDue: "Pendiente",
-    planDashboardReviewDone: "Completado",
-    planDashboardEmptyTitle: "Genera primero un plan",
-    trainingSwitchToCard: "Cambiar a esa tarjeta",
-    trainingCardDetailsApiHints: "Pistas de API",
-    trainingCardDetailsSelfCheck: "Autoevaluación",
-    trainingCardDetailsRubric: "Rúbrica de evaluación",
-    trainingCardDetailsAcceptance: "Criterios de aceptación",
     language: "Idioma",
     answerMode: "Modo de Respuesta",
     teachingStyle: "Estilo de Enseñanza",
@@ -2574,18 +1662,9 @@ export const copyTable = {
     refreshProviderProfiles: "Actualizar perfiles",
     refreshWorkspaceAuthority: "Actualizar espacio",
     createProfileFromTemplate: "Crear desde plantilla",
-    settingsIntro: "Solo los ajustes más comunes aquí.",
-    settingsGeneral: "Interfaz",
-    settingsCoachBehavior: "Comportamiento",
-    settingsModelAccess: "Modelo y Conexión",
-    settingsWorkspaceNote: "Frontend solo muestra conexión y preferencias frecuentes.",
-    settingsProviderHint: "Enfoque en conexión del modelo.",
-    settingsCoachHint: "Estos controles afectan el contexto que lee el entrenador.",
     send: "Enviar",
     streaming: "Pensando…",
     configureProviderFirst: "Trainer no está listo. Configure proveedor y API key.",
-    configureProviderFirstPlan: "Trainer no puede generar planes. Complete la conexión.",
-    providerRequiredHint: "Sin proveedor disponible. Trainer no puede trabajar.",
     composerPlaceholder: "Dile al entrenador qué quieres construir o dónde estás bloqueado.",
     composerPlaceholderPlan: "Cómo ajustar este plan.",
     slashCommands: "Comandos",
@@ -2614,15 +1693,6 @@ export const copyTable = {
     openCoach: "Abrir Coach",
     openPlan: "Abrir Plan",
     openSettings: "Ajustes",
-    shortcutSend: "Enviar",
-    shortcutNewline: "Nueva Línea",
-    shortcutSlash: "Comando (/)",
-    shortcutClear: "Limpiar",
-    reviewNeedsFile: "Revisión requiere archivo abierto",
-    reviewFileDisabled: "Archivo no disponible",
-    selectionMissing: "Sin selección",
-    selectionDisabled: "Selección deshabilitada",
-    relatedMissing: "Sin archivos relacionados",
     training: "Entrenamiento",
     flashcards: "Tarjetas",
     practice: "Práctica",
@@ -2630,125 +1700,32 @@ export const copyTable = {
     startTraining: "Comenzar",
     nextCard: "Siguiente",
     previousCard: "Anterior",
-    showAnswer: "Mostrar",
     submitAnswer: "Enviar",
-    skipCard: "Saltar",
-    markAgain: "Otra vez",
-    markHard: "Difícil",
-    markGood: "Bien",
-    markEasy: "Fácil",
-    dueToday: "Para hoy",
-    cardsToReview: "tarjetas",
-    learningPath: "Ruta de Aprendizaje",
-    masteryLevel: "Dominio",
-    streak: "Racha",
-    totalReviews: "Total",
-    accuracy: "Precisión",
-    reinforcementLearning: "Aprendizaje por Refuerzo",
-    qLearning: "Q-Learning",
     dqn: "DQN",
-    policyGradient: "Gradiente de Política",
-    actorCritic: "Actor-Crítico",
     ddpg: "DDPG",
     ppo: "PPO",
     mcts: "MCTS",
     algorithm: "Algoritmo",
     state: "Estado",
     action: "Acción",
-    reward: "Recompensa",
-    policy: "Política",
-    valueFunction: "Función de Valor",
-    qTable: "Tabla-Q",
-    epsilon: "Epsilon",
-    discountFactor: "Factor de Descuento",
-    learningRate: "Tasa de Aprendizaje",
-    exploration: "Exploración",
-    exploitation: "Explotación",
-    bellmanEquation: "Ecuación de Bellman",
-    temporalDifference: "Diferencia Temporal",
-    monteCarlo: "Monte Carlo",
-    onPolicy: "On-Policy",
-    offPolicy: "Off-Policy",
-    experienceReplay: "Replay de Experiencia",
-    targetNetwork: "Red Objetivo",
-    policyLoss: "Pérdida de Política",
-    valueLoss: "Pérdida de Valor",
-    entropyBonus: "Bonus de Entropía",
-    clipping: "Recorte",
-    gae: "GAE",
-    advantage: "Ventaja",
-    rollout: "Rollout",
-    backpropagation: "Retropropagación",
-    gradient: "Gradiente",
-    optimizer: "Optimizador",
-    adam: "Adam",
-    sgd: "SGD",
-    batchSize: "Tamaño de Lote",
-    episode: "Episodio",
     step: "Paso",
-    horizon: "Horizonte",
     environment: "Entorno",
     agent: "Agente",
     observation: "Observación",
-    episodeEnd: "Fin de Episodio",
-    cumulativeReward: "Recompensa Acumulada",
-    convergence: "Convergencia",
-    divergence: "Divergencia",
-    trainingCurve: "Curva de Entrenamiento",
-    evaluationMetric: "Métrica",
-    hyperparameter: "Hiperparámetro",
     architecture: "Arquitectura",
-    networkLayer: "Capa",
-    inputLayer: "Entrada",
-    outputLayer: "Salida",
-    hiddenLayer: "Oculta",
-    activation: "Activación",
-    relu: "ReLU",
-    sigmoid: "Sigmoid",
-    softmax: "Softmax",
-    lossFunction: "Función de Pérdida",
-    crossEntropy: "Entropía Cruzada",
-    mse: "MSE",
-    regularization: "Regularización",
-    dropout: "Dropout",
-    batchNorm: "Batch Norm",
-    earlyStopping: "Early Stopping",
-    saveModel: "Guardar",
-    loadModel: "Cargar",
-    export: "Exportar",
     import: "Importar",
-    newConversation: "Nuevo Chat",
-    continueConversation: "Continuar",
-    deleteConversation: "Eliminar",
-    renameConversation: "Renombrar",
-    searchConversations: "Buscar",
-    noConversations: "Sin conversaciones",
-    typing: "Escribiendo…",
-    coachThinking: "Pensando…",
-    coachTyping: "Escribiendo…",
-    regenerate: "Regenerar",
-    copyMessage: "Copiar",
-    editMessage: "Editar",
-    deleteMessage: "Eliminar",
-    messageCopied: "Copiado",
-    errorOccurred: "Error",
-    tryAgain: "Reintentar",
     cancel: "Cancelar",
     confirm: "Confirmar",
     save: "Guardar",
     close: "Cerrar",
-    back: "Atrás",
     next: "Siguiente",
     loading: "Cargando…",
     empty: "Vacío",
-    noResults: "Sin resultados",
-    searchResults: "Resultados",
     filter: "Filtrar",
     sort: "Ordenar",
     refresh: "Actualizar",
     timeout: "Tiempo agotado",
     networkError: "Error de red",
-    unknownError: "Error desconocido",
     evidenceOutcomePass: "Aprobado",
     evidenceOutcomeFail: "Fallido",
     evidenceOutcomePartial: "Parcial",
@@ -2758,23 +1735,8 @@ export const copyTable = {
     // Estado de acciones del coach
 
     // Mastery stages
-    masteryUnderstood: "Comprendido",
-    masteryRecalled: "Recordado",
-    masteryPracticed: "Practicado",
-    masteryApplied: "Aplicado",
-    masteryTransferable: "Transferible",
-    masteryNotEstablished: "Por establecer",
 
     // Proyección de habilidades (Phase-D)
-    skillDimComprehension: "Comprensión",
-    skillDimImplementation: "Implementación",
-    skillDimDebugging: "Depuración",
-    skillDimTransfer: "Transferencia",
-    skillStateNotVerified: "Sin verificar",
-    skillStateAssisted: "Necesita ayuda",
-    skillStateIndependent: "Independiente",
-    skillStateRepeatVerified: "Verificado repetidamente",
-    skillStateNeedsReview: "Necesita repaso",
 
     // CoachSettingsView labels
     settingsSetupSection: "Conexión del modelo",
@@ -2783,8 +1745,6 @@ export const copyTable = {
     settingsSetupDetailReady: "La conexión del modelo está lista. Puedes comenzar a chatear, planificar y aprender.",
     settingsSetupDetailBlocked: "Guarda el proveedor, URL base, modelo y API key. Solo así Trainer podrá trabajar.",
     settingsSetupAction: "Completar configuración",
-    settingsInterfaceSection: "Cómo Trainer te guía",
-    settingsCoachSection: "Contexto predeterminado por turno",
     settingsModelSection: "Conectar modelo",
     settingsFollowCurrentFile: "Seguimiento en vivo",
     settingsContextMode: "Nivel de contexto",
@@ -2906,15 +1866,6 @@ export const copyTable = {
     settingsStatusRegionLabel: "État actuel",
 
     // Projection des compétences (Phase-D)
-    skillDimComprehension: "Compréhension",
-    skillDimImplementation: "Implémentation",
-    skillDimDebugging: "Débogage",
-    skillDimTransfer: "Transfert",
-    skillStateNotVerified: "Non vérifié",
-    skillStateAssisted: "Aide nécessaire",
-    skillStateIndependent: "Indépendant",
-    skillStateRepeatVerified: "Vérifié à répétition",
-    skillStateNeedsReview: "À revoir",
     settingsStatusConnected: "Connecté",
     settingsStatusNotConnected: "Non connecté",
     settingsStatusLanguage: "Langue",
@@ -2933,20 +1884,12 @@ export const copyTable = {
     answerStyleCustom: "Personnalisé",
     settingsAnswerStyleHint: "Les préréglages définissent le contexte et les pièces jointes. Les changements s'appliquent immédiatement.",
     settingsAdvancedContext: "Contexte avancé",
-    settingsNavShortConnection: "Connexion",
-    settingsNavShortWorkspace: "Espace",
-    settingsNavShortTeaching: "Pédago.",
-    settingsNavShortSkills: "Compét.",
-    settingsNavShortPreferences: "Préfs",
-    settingsNavShortAdvanced: "Avancé",
     settingsMemoryPrivacy: "Mémoire et confidentialité",
-    settingsAdvanced: "Avancé",
     settingsPreferences: "Préférences",
     settingsAppearance: "Apparence",
     settingsAutosaving: "Enregistrement…",
     settingsAutosaved: "Enregistré automatiquement",
     coach: "Coach",
-    coachArtifactFullDetails: "Détails complets",
     trainer: "Trainer",
     you: "Vous",
     plan: "Plan",
@@ -2954,11 +1897,8 @@ export const copyTable = {
     progress: "Progrès",
     chat: "Discussion",
     workspace: "Espace de travail",
-    viewNavigation: "Vues Trainer",
     currentFocus: "Focus actuel",
     currentTask: "Tâche actuelle",
-    latestReview: "Dernière révision",
-    backgroundAnalysis: "Analyse en arrière-plan",
     backgroundCoachWork: "Préparation du coach",
     workspaceAdmissionRootMissing: "Racine de l'espace non définie",
     workspaceAdmissionRootMissingDetail: "Choisissez où Trainer conserve les suivis d’apprentissage avant de décider comment traiter ce projet.",
@@ -2974,18 +1914,11 @@ export const copyTable = {
     onboardingModelPastePlaceholder: "Collez {\"url\":…,\"key\":…} ou une adresse de service",
     onboardingModelSave: "Enregistrer et connecter",
     onboardingOpenSettings: "Ouvrir tous les paramètres",
-    learningHomeContinueTask: "Continuer la tâche en cours",
     archivePrivacyNote: "La sauvegarde inclut les relevés d’apprentissage et les plans, jamais les clés API — les clés restent dans le stockage secret de VS Code.",
     settingsMemoryPersonalTrustDetail: "Une fois activé, les préférences et la maîtrise circulent entre tous vos projets Trainer ; les plans, conversations et ressources restent isolés.",
     settingsMemoryPersonalTrustDisable: "Arrêter le flux inter-projets",
     settingsMemoryPersonalTrustEnable: "Faire confiance à ce compte",
     settingsMemoryPersonalTrustTitle: "Compte personnel de confiance",
-    learningHomeDueLabel: "Révisions du jour",
-    learningHomeClearTitle: "Rien à réviser aujourd’hui : avancez sur l’étape en cours.",
-    learningHomeDueTitle: "Commencez par la plus ancienne à réviser, une par une.",
-    learningHomeNextLabel: "Prochaine révision",
-    learningHomeStartReview: "Commencer la révision",
-    learningHomeWinsLabel: "Réussites récentes",
     onboardingRootAction: "Choisir la racine de l’espace de travail",
     onboardingRootDetail: "Choisissez un dossier : Trainer y conservera vos relevés d’apprentissage, sur cette machine.",
     onboardingSetupCaption: "Deux réglages rapides débloquent tout :",
@@ -3001,7 +1934,6 @@ export const copyTable = {
     onboardingTrialAction: "Essayer d’abord (mode d’entraînement local)",
     onboardingTrialHint: "Boucle locale uniquement ; une clé aléatoire reste sur cette machine. Passez à un vrai modèle dans les paramètres à tout moment.",
     onboardingTrustAction: "Ouvrir les paramètres de confiance",
-    onboardingTrustDetail: "Faites confiance à la fenêtre actuelle pour que Trainer puisse lire et écrire vos relevés d’apprentissage. L’assistant continue automatiquement.",
     onboardingTrustInlineHint: "Faites confiance à cette fenêtre avant de choisir le dossier.",
     workspaceAdmissionGoalSaved: "Votre objectif est toujours dans le champ. Choisissez où conserver les suivis, puis revenez l’envoyer.",
     workspaceAdmissionProjectFound: "Projet détecté",
@@ -3021,6 +1953,7 @@ export const copyTable = {
     workspaceAdmissionIgnore: "Ignorer le projet",
     workspaceAdmissionDelete: "Supprimer le projet",
     workspaceAdmissionReconciliationWaiting: "Préparation du projet en arrière-plan",
+    planNeedsEvidenceAction: "Étape terminée : organiser les preuves",
     workspaceAdmissionReconciliationRetryRequired: "La préparation en arrière-plan doit être relancée",
     workspaceAdmissionReconciliationStateUnknown: "Mise à jour de l'état en arrière-plan",
     workspaceAdmissionReconciliationUpdatedAt: "Mis à jour {time}",
@@ -3039,14 +1972,11 @@ export const copyTable = {
     workspaceRootChange: "Changer la racine",
     workspaceRootChangeDetail: "Choisissez une autre racine sans copier les données actuelles.",
     coachState: "État du coach",
-    coachSignal: "Signal d'apprentissage",
     reviewQueue: "File de révision",
     runReview: "Commencer la révision",
-    reviewMemory: "Mémoire et rythme",
     reviewRhythm: "Rythme de révision",
     nextReview: "Prochaine révision",
     teachingObservations: "Observations pédagogiques",
-    coachSummaryDoing: "En cours",
     goals: "Objectifs",
     constraints: "Contraintes",
     acceptance: "Critères d'acceptation",
@@ -3055,27 +1985,11 @@ export const copyTable = {
     weakSpots: "Points faibles",
     planStages: "Étapes",
     trainingWhyNow: "Pourquoi maintenant",
-    trainingDeliverable: "Livrable",
     planStageMaterialsGenerate: "Générer les supports",
     planStageMaterialsGenerating: "Génération…",
     planStageMaterialsView: "Voir",
     planStageMaterialsHide: "Masquer",
     planStageMaterialsEmpty: "Il n'y a pas encore de supports d'étude pour cette étape.",
-    planDashboardTabPlan: "Plan",
-    planDashboardTabProgress: "Progression",
-    planDashboardStagesTitle: "Avancement des étapes",
-    planDashboardMasteryTitle: "Maîtrise des dépendances",
-    planDashboardMaterialsTitle: "Utilisation des supports",
-    planDashboardMaterialsStages: "Étapes couvertes",
-    planDashboardMasteryEmpty: "Pas encore de données de maîtrise. Elles s'accumulent à chaque carte d'entraînement terminée.",
-    planDashboardReviewDue: "À revoir",
-    planDashboardReviewDone: "Terminé",
-    planDashboardEmptyTitle: "Générez d'abord un plan",
-    trainingSwitchToCard: "Aller à cette carte",
-    trainingCardDetailsApiHints: "Indices d'API",
-    trainingCardDetailsSelfCheck: "Auto-vérification",
-    trainingCardDetailsRubric: "Barème de notation",
-    trainingCardDetailsAcceptance: "Critères d'acceptation",
     language: "Langue",
     answerMode: "Mode de réponse",
     teachingStyle: "Style pédagogique",
@@ -3125,8 +2039,6 @@ export const copyTable = {
     settingsSetupDetailReady: "La connexion au modèle est établie. Vous pouvez discuter, planifier et apprendre maintenant.",
     settingsSetupDetailBlocked: "Enregistrez le fournisseur, l'URL, le modèle et la clé API. Trainer ne peut travailler qu'ainsi.",
     settingsSetupAction: "Compléter la configuration",
-    settingsInterfaceSection: "Comment Trainer vous guide",
-    settingsCoachSection: "Contexte par défaut par tour",
     settingsModelSection: "Connecter le modèle",
     settingsFollowCurrentFile: "Suivi en direct",
     settingsContextMode: "Niveau de contexte",
@@ -3248,15 +2160,6 @@ export const copyTable = {
     settingsStatusRegionLabel: "Aktueller Status",
 
     // Fähigkeitsprojektion (Phase-D)
-    skillDimComprehension: "Verständnis",
-    skillDimImplementation: "Implementierung",
-    skillDimDebugging: "Fehlersuche",
-    skillDimTransfer: "Transfer",
-    skillStateNotVerified: "Nicht verifiziert",
-    skillStateAssisted: "Hilfe nötig",
-    skillStateIndependent: "Eigenständig",
-    skillStateRepeatVerified: "Wiederholt verifiziert",
-    skillStateNeedsReview: "Überarbeitung nötig",
     settingsStatusConnected: "Verbunden",
     settingsStatusNotConnected: "Nicht verbunden",
     settingsStatusLanguage: "Sprache",
@@ -3275,20 +2178,12 @@ export const copyTable = {
     answerStyleCustom: "Benutzerdefiniert",
     settingsAnswerStyleHint: "Presets legen Kontexttiefe und Anhänge fest. Änderungen gelten sofort.",
     settingsAdvancedContext: "Erweiterter Kontext",
-    settingsNavShortConnection: "Verbind.",
-    settingsNavShortWorkspace: "Bereich",
-    settingsNavShortTeaching: "Lehre",
-    settingsNavShortSkills: "Fähig.",
-    settingsNavShortPreferences: "Präf.",
-    settingsNavShortAdvanced: "Erweitert",
     settingsMemoryPrivacy: "Speicher & Datenschutz",
-    settingsAdvanced: "Erweitert",
     settingsPreferences: "Einstellungen",
     settingsAppearance: "Darstellung",
     settingsAutosaving: "Speichern…",
     settingsAutosaved: "Automatisch gespeichert",
     coach: "Coach",
-    coachArtifactFullDetails: "Vollständige Details",
     trainer: "Trainer",
     you: "Du",
     plan: "Plan",
@@ -3296,11 +2191,8 @@ export const copyTable = {
     progress: "Fortschritt",
     chat: "Chat",
     workspace: "Arbeitsbereich",
-    viewNavigation: "Trainer-Ansichten",
     currentFocus: "Aktueller Fokus",
     currentTask: "Aktuelle Aufgabe",
-    latestReview: "Letzte Überprüfung",
-    backgroundAnalysis: "Hintergrundanalyse",
     backgroundCoachWork: "Coach-Vorbereitung",
     workspaceAdmissionRootMissing: "Arbeitsbereich-Stamm fehlt",
     workspaceAdmissionRootMissingDetail: "Wählen Sie zuerst, wo Trainer Lernaufzeichnungen speichert, und entscheiden Sie dann über dieses Projekt.",
@@ -3316,18 +2208,11 @@ export const copyTable = {
     onboardingModelPastePlaceholder: "{\"url\":…,\"key\":…} oder Dienstadresse einfügen",
     onboardingModelSave: "Speichern & verbinden",
     onboardingOpenSettings: "Alle Einstellungen öffnen",
-    learningHomeContinueTask: "Aktuelle Aufgabe fortsetzen",
     archivePrivacyNote: "Backups enthalten Lernaufzeichnungen und Pläne, niemals API-Schlüssel — Schlüssel liegen nur im geheimen VS Code-Speicher.",
     settingsMemoryPersonalTrustDetail: "Wenn aktiv, fließen Präferenzen und Meisterschaft automatisch zwischen allen Trainer-Projekten; Pläne, Gespräche und Materialien bleiben isoliert.",
     settingsMemoryPersonalTrustDisable: "Projektübergreifenden Fluss stoppen",
     settingsMemoryPersonalTrustEnable: "Konto vertrauen",
     settingsMemoryPersonalTrustTitle: "Vertrauenswürdiges persönliches Konto",
-    learningHomeDueLabel: "Heute fällig",
-    learningHomeClearTitle: "Heute ist nichts zur Wiederholung fällig — bring den aktuellen Schritt voran.",
-    learningHomeDueTitle: "Fang mit der ältesten fälligen Karte an, eine nach der anderen.",
-    learningHomeNextLabel: "Nächste Wiederholung",
-    learningHomeStartReview: "Wiederholung starten",
-    learningHomeWinsLabel: "Neue Erfolge",
     onboardingRootAction: "Workspace-Root wählen",
     onboardingRootDetail: "Wähle einen Ordner — Trainer speichert deine Lernaufzeichnungen dort, auf diesem Rechner.",
     onboardingSetupCaption: "Zwei kurze Einstellungen schalten alles frei:",
@@ -3343,7 +2228,6 @@ export const copyTable = {
     onboardingTrialAction: "Erst ausprobieren (lokaler Übungsmodus)",
     onboardingTrialHint: "Nur lokaler Loopback; ein Zufallsschlüssel bleibt auf diesem Rechner. Wechsle jederzeit in den Einstellungen zu einem echten Modell.",
     onboardingTrustAction: "Vertrauenseinstellungen öffnen",
-    onboardingTrustDetail: "Vertraue dem aktuellen Fenster, damit Trainer Lernaufzeichnungen lesen und schreiben kann. Der Assistent fährt automatisch fort.",
     onboardingTrustInlineHint: "Vertraue diesem Fenster, bevor du den Ordner wählst.",
     workspaceAdmissionGoalSaved: "Ihr Ziel steht noch im Eingabefeld. Wählen Sie den Speicherort und senden Sie es danach direkt.",
     workspaceAdmissionProjectFound: "Projekt gefunden",
@@ -3363,6 +2247,7 @@ export const copyTable = {
     workspaceAdmissionIgnore: "Projekt ignorieren",
     workspaceAdmissionDelete: "Projekt löschen",
     workspaceAdmissionReconciliationWaiting: "Projekt wird im Hintergrund vorbereitet",
+    planNeedsEvidenceAction: "Schritt geschafft – Belege sortieren",
     workspaceAdmissionReconciliationRetryRequired: "Die Vorbereitung im Hintergrund muss wiederholt werden",
     workspaceAdmissionReconciliationStateUnknown: "Der Hintergrundstatus wird aktualisiert",
     workspaceAdmissionReconciliationUpdatedAt: "Aktualisiert {time}",
@@ -3381,14 +2266,11 @@ export const copyTable = {
     workspaceRootChange: "Stamm ändern",
     workspaceRootChangeDetail: "Einen anderen Stamm ohne Kopie der aktuellen Daten auswählen.",
     coachState: "Coach-Status",
-    coachSignal: "Lernsignal",
     reviewQueue: "Überprüfungswarteschlange",
     runReview: "Wiederholung starten",
-    reviewMemory: "Gedächtnis & Rhythmus",
     reviewRhythm: "Überprüfungsrhythmus",
     nextReview: "Nächste Überprüfung",
     teachingObservations: "Pädagogische Beobachtungen",
-    coachSummaryDoing: "In Arbeit",
     goals: "Ziele",
     constraints: "Einschränkungen",
     acceptance: "Akzeptanzkriterien",
@@ -3397,27 +2279,11 @@ export const copyTable = {
     weakSpots: "Schwachstellen",
     planStages: "Phasen",
     trainingWhyNow: "Warum jetzt",
-    trainingDeliverable: "Abgabe",
     planStageMaterialsGenerate: "Materialien erstellen",
     planStageMaterialsGenerating: "Wird erstellt…",
     planStageMaterialsView: "Anzeigen",
     planStageMaterialsHide: "Ausblenden",
     planStageMaterialsEmpty: "Für diese Phase gibt es noch keine Lernmaterialien.",
-    planDashboardTabPlan: "Plan",
-    planDashboardTabProgress: "Fortschritt",
-    planDashboardStagesTitle: "Phasen-Abschluss",
-    planDashboardMasteryTitle: "Abhängigkeits-Beherrschung",
-    planDashboardMaterialsTitle: "Materialnutzung",
-    planDashboardMaterialsStages: "Abgedeckte Phasen",
-    planDashboardMasteryEmpty: "Noch keine Beherrschungsdaten. Sie sammeln sich mit jeder abgeschlossenen Trainingskarte.",
-    planDashboardReviewDue: "Fällig",
-    planDashboardReviewDone: "Erledigt",
-    planDashboardEmptyTitle: "Zuerst einen Plan erstellen",
-    trainingSwitchToCard: "Zu dieser Karte wechseln",
-    trainingCardDetailsApiHints: "API-Hinweise",
-    trainingCardDetailsSelfCheck: "Selbstprüfung",
-    trainingCardDetailsRubric: "Bewertungsraster",
-    trainingCardDetailsAcceptance: "Abnahmekriterien",
     language: "Sprache",
     answerMode: "Antwortmodus",
     teachingStyle: "Lehrstil",
@@ -3467,8 +2333,6 @@ export const copyTable = {
     settingsSetupDetailReady: "Modellverbindung hergestellt. Du kannst jetzt chatten, planen und lernen.",
     settingsSetupDetailBlocked: "Speichere Anbieter, URL, Modell und API-Schlüssel. Nur so kann Trainer arbeiten.",
     settingsSetupAction: "Konfiguration abschließen",
-    settingsInterfaceSection: "Wie Trainer dich führt",
-    settingsCoachSection: "Standardkontext pro Runde",
     settingsModelSection: "Modell verbinden",
     settingsFollowCurrentFile: "Live-Verfolgung",
     settingsContextMode: "Kontextebene",
@@ -3590,15 +2454,6 @@ export const copyTable = {
     settingsStatusRegionLabel: "現在の状態",
 
     // Phase-D スキル投影
-    skillDimComprehension: "理解",
-    skillDimImplementation: "実装",
-    skillDimDebugging: "デバッグ",
-    skillDimTransfer: "転移",
-    skillStateNotVerified: "未検証",
-    skillStateAssisted: "支援が必要",
-    skillStateIndependent: "自力で可能",
-    skillStateRepeatVerified: "反復検証済み",
-    skillStateNeedsReview: "要復習",
     settingsStatusConnected: "接続済み",
     settingsStatusNotConnected: "未接続",
     settingsStatusLanguage: "言語",
@@ -3617,20 +2472,12 @@ export const copyTable = {
     answerStyleCustom: "カスタム",
     settingsAnswerStyleHint: "プリセットはコンテキストの深さと添付を決めます。変更はすぐに反映されます。",
     settingsAdvancedContext: "詳細コンテキスト",
-    settingsNavShortConnection: "接続",
-    settingsNavShortWorkspace: "ワーク",
-    settingsNavShortTeaching: "指導",
-    settingsNavShortSkills: "スキル",
-    settingsNavShortPreferences: "設定",
-    settingsNavShortAdvanced: "詳細",
     settingsMemoryPrivacy: "記憶とプライバシー",
-    settingsAdvanced: "詳細",
     settingsPreferences: "環境設定",
     settingsAppearance: "外観",
     settingsAutosaving: "保存中…",
     settingsAutosaved: "自動保存済み",
     coach: "コーチ",
-    coachArtifactFullDetails: "詳細を表示",
     trainer: "トレーナー",
     you: "あなた",
     plan: "計画",
@@ -3638,11 +2485,8 @@ export const copyTable = {
     progress: "成長",
     chat: "チャット",
     workspace: "ワークスペース",
-    viewNavigation: "Trainer のビュー",
     currentFocus: "現在の焦点",
     currentTask: "現在のタスク",
-    latestReview: "最新の復習",
-    backgroundAnalysis: "バックグラウンド分析",
     backgroundCoachWork: "Coach準備",
     workspaceAdmissionRootMissing: "ワークスペースのルートが未設定です",
     workspaceAdmissionRootMissingDetail: "このプロジェクトの扱いを決める前に、学習記録の保存場所を選択してください。",
@@ -3658,18 +2502,11 @@ export const copyTable = {
     onboardingModelPastePlaceholder: "{\"url\":…,\"key\":…} またはサービスアドレスを貼る",
     onboardingModelSave: "保存して接続",
     onboardingOpenSettings: "すべての設定を開く",
-    learningHomeContinueTask: "現在のタスクを続ける",
     archivePrivacyNote: "バックアップには学習記録とプランが含まれ、API キーは含まれません。キーはこのマシンの VS Code シークレットストレージのみに保存されます。",
     settingsMemoryPersonalTrustDetail: "オンにすると、設定と習熟がすべての Trainer プロジェクト間で自動的に流れます。プラン・会話・資料は分離されたままです。",
     settingsMemoryPersonalTrustDisable: "プロジェクト間の共有を停止",
     settingsMemoryPersonalTrustEnable: "このアカウントを信頼",
     settingsMemoryPersonalTrustTitle: "信頼する個人アカウント",
-    learningHomeDueLabel: "今日の復習",
-    learningHomeClearTitle: "本日の復習はありません。現在のステップを進めましょう。",
-    learningHomeDueTitle: "期限が古いカードから、一枚ずつ始めましょう。",
-    learningHomeNextLabel: "次の復習",
-    learningHomeStartReview: "復習を始める",
-    learningHomeWinsLabel: "最近の成果",
     onboardingRootAction: "ワークスペースルートを選択",
     onboardingRootDetail: "フォルダーを 1 つ選んでください。Trainer は学習記録をこのマシンのそこに保存します。",
     onboardingSetupCaption: "2 つの設定で全機能が使えます:",
@@ -3685,7 +2522,6 @@ export const copyTable = {
     onboardingTrialAction: "まず試す（ローカル練習モード）",
     onboardingTrialHint: "ローカルループバックのみ。ランダムなキーはこのマシンに保存され、いつでも設定で実際のモデルに切り替えられます。",
     onboardingTrustAction: "信頼設定を開く",
-    onboardingTrustDetail: "現在のウィンドウを信頼すると、Trainer が学習記録を読み書きできます。完了すると自動で次に進みます。",
     onboardingTrustInlineHint: "フォルダーを選ぶ前に、このウィンドウを信頼してください。",
     workspaceAdmissionGoalSaved: "目標は入力欄に残っています。保存場所を選んだ後、そのまま送信できます。",
     workspaceAdmissionProjectFound: "プロジェクトを検出しました",
@@ -3705,6 +2541,7 @@ export const copyTable = {
     workspaceAdmissionIgnore: "プロジェクトを無視",
     workspaceAdmissionDelete: "プロジェクトを削除",
     workspaceAdmissionReconciliationWaiting: "バックグラウンドでプロジェクトを準備しています",
+    planNeedsEvidenceAction: "このステップは完了、エビデンスを整理する",
     workspaceAdmissionReconciliationRetryRequired: "バックグラウンドの準備を再試行する必要があります",
     workspaceAdmissionReconciliationStateUnknown: "バックグラウンドの状態を更新中",
     workspaceAdmissionReconciliationUpdatedAt: "{time} 更新",
@@ -3723,14 +2560,11 @@ export const copyTable = {
     workspaceRootChange: "ルートを変更",
     workspaceRootChangeDetail: "現在のデータをコピーせず別のルートを選びます。",
     coachState: "Coach状態",
-    coachSignal: "学習シグナル",
     reviewQueue: "復習キュー",
     runReview: "復習を始める",
-    reviewMemory: "記憶とリズム",
     reviewRhythm: "復習リズム",
     nextReview: "次の復習",
     teachingObservations: "教育観察",
-    coachSummaryDoing: "進行中",
     goals: "目標",
     constraints: "制約",
     acceptance: "受入基準",
@@ -3739,27 +2573,11 @@ export const copyTable = {
     weakSpots: "弱点",
     planStages: "ステージ",
     trainingWhyNow: "なぜ今か",
-    trainingDeliverable: "成果物",
     planStageMaterialsGenerate: "資料を生成",
     planStageMaterialsGenerating: "生成中…",
     planStageMaterialsView: "表示",
     planStageMaterialsHide: "閉じる",
     planStageMaterialsEmpty: "このステージにはまだ学習資料がありません。",
-    planDashboardTabPlan: "計画",
-    planDashboardTabProgress: "進捗",
-    planDashboardStagesTitle: "ステージ完了度",
-    planDashboardMasteryTitle: "依存の習熟度",
-    planDashboardMaterialsTitle: "資料の使用回数",
-    planDashboardMaterialsStages: "対象ステージ",
-    planDashboardMasteryEmpty: "まだ習熟度データがありません。トレーニングカードを完了すると蓄積されます。",
-    planDashboardReviewDue: "期限",
-    planDashboardReviewDone: "完了",
-    planDashboardEmptyTitle: "先に計画を生成",
-    trainingSwitchToCard: "該当カードへ切り替え",
-    trainingCardDetailsApiHints: "API ヒント",
-    trainingCardDetailsSelfCheck: "セルフチェック",
-    trainingCardDetailsRubric: "採点基準",
-    trainingCardDetailsAcceptance: "合格基準",
     language: "言語",
     answerMode: "回答モード",
     teachingStyle: "Teachingスタイル",
@@ -3809,8 +2627,6 @@ export const copyTable = {
     settingsSetupDetailReady: "モデル接続準備完了。チャット、計画、学習を始められます。",
     settingsSetupDetailBlocked: "プロバイダー、URL、モデル、APIキーを保存してください。",
     settingsSetupAction: "設定を完了",
-    settingsInterfaceSection: "Trainerのガイド方法",
-    settingsCoachSection: "ターンごとのデフォルトコンテキスト",
     settingsModelSection: "モデル接続",
     settingsFollowCurrentFile: "ライブフォロー",
     settingsContextMode: "コンテキストレベル",
@@ -3932,15 +2748,6 @@ export const copyTable = {
     settingsStatusRegionLabel: "현재 상태",
 
     // Phase-D 스킬 프로젝션
-    skillDimComprehension: "이해",
-    skillDimImplementation: "구현",
-    skillDimDebugging: "디버깅",
-    skillDimTransfer: "전이",
-    skillStateNotVerified: "미검증",
-    skillStateAssisted: "도움 필요",
-    skillStateIndependent: "독립 수행",
-    skillStateRepeatVerified: "반복 검증됨",
-    skillStateNeedsReview: "복습 필요",
     settingsStatusConnected: "연결됨",
     settingsStatusNotConnected: "연결 안 됨",
     settingsStatusLanguage: "언어",
@@ -3959,20 +2766,12 @@ export const copyTable = {
     answerStyleCustom: "사용자 지정",
     settingsAnswerStyleHint: "프리셋은 컨텍스트 깊이와 첨부를 결정합니다. 변경 사항은 즉시 적용됩니다.",
     settingsAdvancedContext: "고급 컨텍스트",
-    settingsNavShortConnection: "연결",
-    settingsNavShortWorkspace: "작업",
-    settingsNavShortTeaching: "교육",
-    settingsNavShortSkills: "스킬",
-    settingsNavShortPreferences: "환경",
-    settingsNavShortAdvanced: "고급",
     settingsMemoryPrivacy: "기억 및 개인정보",
-    settingsAdvanced: "고급",
     settingsPreferences: "환경설정",
     settingsAppearance: "모양",
     settingsAutosaving: "저장 중…",
     settingsAutosaved: "자동 저장됨",
     coach: "코치",
-    coachArtifactFullDetails: "전체 내용 보기",
     trainer: "트레이너",
     you: "너",
     plan: "계획",
@@ -3980,11 +2779,8 @@ export const copyTable = {
     progress: "성장",
     chat: "챗",
     workspace: "워크스페이스",
-    viewNavigation: "Trainer 보기",
     currentFocus: "현재 초점",
     currentTask: "현재 작업",
-    latestReview: "최근 복습",
-    backgroundAnalysis: "백그라운드 분석",
     backgroundCoachWork: "코치 준비",
     workspaceAdmissionRootMissing: "작업 영역 루트가 설정되지 않았습니다",
     workspaceAdmissionRootMissingDetail: "이 프로젝트의 처리 방식을 정하기 전에 학습 기록을 저장할 위치를 선택하세요.",
@@ -4000,18 +2796,11 @@ export const copyTable = {
     onboardingModelPastePlaceholder: "{\"url\":…,\"key\":…} 또는 서비스 주소 붙여넣기",
     onboardingModelSave: "저장 후 연결",
     onboardingOpenSettings: "전체 설정 열기",
-    learningHomeContinueTask: "현재 과제 계속",
     archivePrivacyNote: "백업에는 학습 기록과 계획이 포함되며 API 키는 포함되지 않습니다. 키는 이 컴퓨터의 VS Code 시크릿 저장소에만 저장됩니다.",
     settingsMemoryPersonalTrustDetail: "켜면 설정과 숙련도가 모든 Trainer 프로젝트 사이에서 자동으로 흐릅니다. 계획, 대화, 자료는 분리된 상태로 유지됩니다.",
     settingsMemoryPersonalTrustDisable: "프로젝트 간 흐름 중지",
     settingsMemoryPersonalTrustEnable: "이 계정 신뢰",
     settingsMemoryPersonalTrustTitle: "신뢰하는 개인 계정",
-    learningHomeDueLabel: "오늘 복습",
-    learningHomeClearTitle: "오늘 복습할 카드가 없습니다. 지금 단계부터 진행하세요.",
-    learningHomeDueTitle: "마감된 카드 중 가장 오래된 것부터 하나씩 시작하세요.",
-    learningHomeNextLabel: "다음 복습",
-    learningHomeStartReview: "복습 시작",
-    learningHomeWinsLabel: "최근 성과",
     onboardingRootAction: "워크스페이스 루트 선택",
     onboardingRootDetail: "폴더를 하나 선택하세요. Trainer는 학습 기록을 이 컴퓨터의 그 폴더에 저장합니다.",
     onboardingSetupCaption: "두 가지 설정이면 전체 기능을 쓸 수 있습니다:",
@@ -4027,7 +2816,6 @@ export const copyTable = {
     onboardingTrialAction: "먼저 사용해 보기(로컬 연습 모드)",
     onboardingTrialHint: "로컬 루프백 전용이며, 무작위 키는 이 컴퓨터에 저장됩니다. 언제든 설정에서 실제 모델로 바꿀 수 있습니다.",
     onboardingTrustAction: "신뢰 설정 열기",
-    onboardingTrustDetail: "현재 창을 신뢰하면 Trainer가 학습 기록을 읽고 쓸 수 있습니다. 완료되면 자동으로 계속됩니다.",
     onboardingTrustInlineHint: "폴더를 고르기 전에 이 창을 신뢰해야 합니다.",
     workspaceAdmissionGoalSaved: "목표는 입력창에 남아 있습니다. 저장 위치를 고른 뒤 바로 보낼 수 있습니다.",
     workspaceAdmissionProjectFound: "프로젝트를 찾았습니다",
@@ -4047,6 +2835,7 @@ export const copyTable = {
     workspaceAdmissionIgnore: "프로젝트 무시",
     workspaceAdmissionDelete: "프로젝트 삭제",
     workspaceAdmissionReconciliationWaiting: "백그라운드에서 프로젝트를 준비하고 있어요",
+    planNeedsEvidenceAction: "이 단계 완료 — 증거 정리하기",
     workspaceAdmissionReconciliationRetryRequired: "백그라운드 준비를 다시 시도해야 해요",
     workspaceAdmissionReconciliationStateUnknown: "백그라운드 상태를 업데이트하는 중이에요",
     workspaceAdmissionReconciliationUpdatedAt: "{time} 업데이트",
@@ -4065,14 +2854,11 @@ export const copyTable = {
     workspaceRootChange: "루트 변경",
     workspaceRootChangeDetail: "현재 데이터를 복사하지 않고 다른 루트를 선택합니다.",
     coachState: "코치 상태",
-    coachSignal: "학습 신호",
     reviewQueue: "복습 대기열",
     runReview: "복습 시작",
-    reviewMemory: "기억과 리듬",
     reviewRhythm: "복습 리듬",
     nextReview: "다음 복습",
     teachingObservations: "교육 관찰",
-    coachSummaryDoing: "진행 중",
     goals: "목표",
     constraints: "제약조건",
     acceptance: "수용 기준",
@@ -4081,27 +2867,11 @@ export const copyTable = {
     weakSpots: "취약점",
     planStages: "단계",
     trainingWhyNow: "왜 지금",
-    trainingDeliverable: "제출물",
     planStageMaterialsGenerate: "자료 생성",
     planStageMaterialsGenerating: "생성 중…",
     planStageMaterialsView: "보기",
     planStageMaterialsHide: "접기",
     planStageMaterialsEmpty: "이 단계에는 아직 학습 자료가 없습니다.",
-    planDashboardTabPlan: "계획",
-    planDashboardTabProgress: "진도",
-    planDashboardStagesTitle: "단계 완료도",
-    planDashboardMasteryTitle: "의존성 숙달도",
-    planDashboardMaterialsTitle: "자료 사용 횟수",
-    planDashboardMaterialsStages: "커버한 단계",
-    planDashboardMasteryEmpty: "아직 숙련도 데이터가 없습니다. 훈련 카드를 완료하면 쌓입니다.",
-    planDashboardReviewDue: "예정",
-    planDashboardReviewDone: "완료",
-    planDashboardEmptyTitle: "먼저 계획을 생성하세요",
-    trainingSwitchToCard: "해당 카드로 전환",
-    trainingCardDetailsApiHints: "API 힌트",
-    trainingCardDetailsSelfCheck: "셀프 체크",
-    trainingCardDetailsRubric: "채점 기준",
-    trainingCardDetailsAcceptance: "수용 기준",
     language: "언어",
     answerMode: "응답 모드",
     teachingStyle: "가이드 스타일",
@@ -4151,8 +2921,6 @@ export const copyTable = {
     settingsSetupDetailReady: "모델 연결 준비 완료. 지금부터 챗, 계획, 학습 가능.",
     settingsSetupDetailBlocked: "제공자, URL, 모델, API 키를 저장하세요.",
     settingsSetupAction: "설정 완료",
-    settingsInterfaceSection: "Trainer의 안내 방식",
-    settingsCoachSection: "턴별 기본 컨텍스트",
     settingsModelSection: "모델 연결",
     settingsFollowCurrentFile: "실시간 추적",
     settingsContextMode: "컨텍스트 수준",
@@ -4274,15 +3042,6 @@ export const copyTable = {
     settingsStatusRegionLabel: "Estado atual",
 
     // Projeção de habilidades (Phase-D)
-    skillDimComprehension: "Compreensão",
-    skillDimImplementation: "Implementação",
-    skillDimDebugging: "Depuração",
-    skillDimTransfer: "Transferência",
-    skillStateNotVerified: "Não verificado",
-    skillStateAssisted: "Precisa de ajuda",
-    skillStateIndependent: "Independente",
-    skillStateRepeatVerified: "Verificado repetidamente",
-    skillStateNeedsReview: "Precisa de revisão",
     settingsStatusConnected: "Conectado",
     settingsStatusNotConnected: "Não conectado",
     settingsStatusLanguage: "Idioma",
@@ -4301,20 +3060,12 @@ export const copyTable = {
     answerStyleCustom: "Personalizado",
     settingsAnswerStyleHint: "Predefinições definem a profundidade do contexto e anexos. As alterações valem na hora.",
     settingsAdvancedContext: "Contexto avançado",
-    settingsNavShortConnection: "Conexão",
-    settingsNavShortWorkspace: "Espaço",
-    settingsNavShortTeaching: "Ensino",
-    settingsNavShortSkills: "Habil.",
-    settingsNavShortPreferences: "Prefer.",
-    settingsNavShortAdvanced: "Avanç.",
     settingsMemoryPrivacy: "Memória e privacidade",
-    settingsAdvanced: "Avançado",
     settingsPreferences: "Preferências",
     settingsAppearance: "Aparência",
     settingsAutosaving: "Salvando…",
     settingsAutosaved: "Salvo automaticamente",
     coach: "Treinador",
-    coachArtifactFullDetails: "Detalhes completos",
     trainer: "Trainer",
     you: "Você",
     plan: "Plano",
@@ -4322,11 +3073,8 @@ export const copyTable = {
     progress: "Progresso",
     chat: "Chat",
     workspace: "Workspace",
-    viewNavigation: "Vistas do Trainer",
     currentFocus: "Foco atual",
     currentTask: "Tarefa atual",
-    latestReview: "Última revisão",
-    backgroundAnalysis: "Análise em segundo plano",
     backgroundCoachWork: "Preparação do Coach",
     workspaceAdmissionRootMissing: "Raiz do workspace não configurada",
     workspaceAdmissionRootMissingDetail: "Escolha onde o Trainer guarda os registros de aprendizagem antes de decidir como tratar este projeto.",
@@ -4342,18 +3090,11 @@ export const copyTable = {
     onboardingModelPastePlaceholder: "Cole {\"url\":…,\"key\":…} ou um endereço de serviço",
     onboardingModelSave: "Salvar e conectar",
     onboardingOpenSettings: "Abrir configurações completas",
-    learningHomeContinueTask: "Continuar a tarefa atual",
     archivePrivacyNote: "O backup inclui registros de aprendizado e planos, nunca chaves de API — as chaves ficam apenas no armazenamento secreto do VS Code.",
     settingsMemoryPersonalTrustDetail: "Quando ativada, preferências e domínio fluem automaticamente entre todos os seus projetos Trainer; planos, conversas e recursos ficam isolados.",
     settingsMemoryPersonalTrustDisable: "Parar fluxo entre projetos",
     settingsMemoryPersonalTrustEnable: "Confiar nesta conta",
     settingsMemoryPersonalTrustTitle: "Conta pessoal confiável",
-    learningHomeDueLabel: "Revisões de hoje",
-    learningHomeClearTitle: "Nada para revisar hoje — avance o passo atual.",
-    learningHomeDueTitle: "Comece pela mais antiga que está em dia, uma de cada vez.",
-    learningHomeNextLabel: "Próxima revisão",
-    learningHomeStartReview: "Iniciar revisão",
-    learningHomeWinsLabel: "Vitórias recentes",
     onboardingRootAction: "Escolher raiz do workspace",
     onboardingRootDetail: "Escolha uma pasta — o Trainer guardará seus registros de aprendizado nela, nesta máquina.",
     onboardingSetupCaption: "Dois ajustes rápidos liberam tudo:",
@@ -4369,7 +3110,6 @@ export const copyTable = {
     onboardingTrialAction: "Experimentar primeiro (modo de prática local)",
     onboardingTrialHint: "Somente loopback local; uma chave aleatória fica nesta máquina. Troque para um modelo real nas configurações quando quiser.",
     onboardingTrustAction: "Abrir configurações de confiança",
-    onboardingTrustDetail: "Confie na janela atual para que o Trainer possa ler e gravar registros de aprendizado. O assistente continua automaticamente.",
     onboardingTrustInlineHint: "Confie nesta janela antes de escolher a pasta.",
     workspaceAdmissionGoalSaved: "Seu objetivo continua no campo. Escolha onde guardar os registros e volte para enviá-lo.",
     workspaceAdmissionProjectFound: "Projeto encontrado",
@@ -4389,6 +3129,7 @@ export const copyTable = {
     workspaceAdmissionIgnore: "Ignorar projeto",
     workspaceAdmissionDelete: "Excluir projeto",
     workspaceAdmissionReconciliationWaiting: "Preparando o projeto em segundo plano",
+    planNeedsEvidenceAction: "Terminei a etapa — organizar as evidências",
     workspaceAdmissionReconciliationRetryRequired: "A preparação em segundo plano precisa ser repetida",
     workspaceAdmissionReconciliationStateUnknown: "O status em segundo plano está sendo atualizado",
     workspaceAdmissionReconciliationUpdatedAt: "Atualizado {time}",
@@ -4407,14 +3148,11 @@ export const copyTable = {
     workspaceRootChange: "Alterar raiz",
     workspaceRootChangeDetail: "Escolha outra raiz sem copiar os dados atuais.",
     coachState: "Estado do Coach",
-    coachSignal: "Sinal de aprendizado",
     reviewQueue: "Fila de revisão",
     runReview: "Iniciar revisão",
-    reviewMemory: "Memória e ritmo",
     reviewRhythm: "Ritmo de revisão",
     nextReview: "Próxima revisão",
     teachingObservations: "Observações pedagógicas",
-    coachSummaryDoing: "Em andamento",
     goals: "Objetivos",
     constraints: "Restrições",
     acceptance: "Critérios de aceite",
@@ -4423,27 +3161,11 @@ export const copyTable = {
     weakSpots: "Pontos fracos",
     planStages: "Estágios",
     trainingWhyNow: "Por que agora",
-    trainingDeliverable: "Entregável",
     planStageMaterialsGenerate: "Gerar materiais",
     planStageMaterialsGenerating: "Gerando…",
     planStageMaterialsView: "Ver",
     planStageMaterialsHide: "Ocultar",
     planStageMaterialsEmpty: "Ainda não há materiais de estudo para este estágio.",
-    planDashboardTabPlan: "Plano",
-    planDashboardTabProgress: "Progresso",
-    planDashboardStagesTitle: "Conclusão de estágios",
-    planDashboardMasteryTitle: "Domínio de dependências",
-    planDashboardMaterialsTitle: "Uso de materiais",
-    planDashboardMaterialsStages: "Estágios cobertos",
-    planDashboardMasteryEmpty: "Ainda não há dados de domínio. Eles se acumulam ao concluir cartões de treino.",
-    planDashboardReviewDue: "Pendente",
-    planDashboardReviewDone: "Concluído",
-    planDashboardEmptyTitle: "Gere um plano primeiro",
-    trainingSwitchToCard: "Trocar para esse cartão",
-    trainingCardDetailsApiHints: "Dicas de API",
-    trainingCardDetailsSelfCheck: "Autoavaliação",
-    trainingCardDetailsRubric: "Rubrica de avaliação",
-    trainingCardDetailsAcceptance: "Critérios de aceitação",
     language: "Idioma",
     answerMode: "Modo de resposta",
     teachingStyle: "Estilo de ensino",
@@ -4493,8 +3215,6 @@ export const copyTable = {
     settingsSetupDetailReady: "Conexão do modelo pronta. Você pode chat, planejar e aprender agora.",
     settingsSetupDetailBlocked: "Salve provedor, URL, modelo e chave API. Só assim Trainer pode trabalhar.",
     settingsSetupAction: "Completar configuração",
-    settingsInterfaceSection: "Como Trainer te guia",
-    settingsCoachSection: "Contexto padrão por rodada",
     settingsModelSection: "Conectar modelo",
     settingsFollowCurrentFile: "Acompanhamento em tempo real",
     settingsContextMode: "Nível de contexto",
@@ -4629,35 +3349,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesEmpty: "La biblioteca está vacía. Empieza importando aquí",
     resourcesMenu: "Menú de recursos",
     resourcesSummary: "Resumen de recursos",
-    resourcesSandbox: "Sandbox",
-    resourcesSandboxRefresh: "Actualizar",
-    resourcesSandboxNewFile: "Nuevo archivo",
-    resourcesSandboxNewFolder: "Nueva carpeta",
-    resourcesSandboxRename: "Renombrar",
-    resourcesSandboxTrash: "Mover a Trash",
-    resourcesSandboxEmpty: "El sandbox sigue vacío.",
-    resourcesSandboxBoundaryRefresh: "Límite",
-    resourcesSandboxOpenRoot: "Abrir raíz",
-    resourcesSandboxChooseRoot: "Elegir raíz",
-    resourcesSandboxResetRoot: "Usar predeterminado",
-    resourcesSandboxActionBase: "Base de destino",
-    resourcesSandboxCreateIn: "Crear en",
-    resourcesSandboxTargetCurrent: "Carpeta actual",
-    resourcesSandboxTargetRoot: "Raíz del sandbox",
-    resourcesSandboxParent: "Superior",
-    resourcesSandboxResolvedPath: "Ruta resultante",
-    resourcesSandboxSourcePath: "Ruta de origen",
-    resourcesSandboxWorkspaceRoot: "Raíz del workspace",
-    resourcesSandboxSourceLabel: "Origen",
-    resourcesSandboxMountedSources: "Orígenes montados",
-    resourcesSandboxNextSafeMove: "Siguiente paso seguro",
-    resourcesSandboxFilePlaceholder: "Ruta del archivo, por ejemplo packs/remote/ssh/notes.md",
-    resourcesSandboxFolderPlaceholder: "Ruta de carpeta anidada, por ejemplo packs/remote/ssh",
-    resourcesSandboxFileHint: "Crea dentro de la raíz del sandbox. Se admiten rutas anidadas.",
-    resourcesSandboxFolderHint: "Crea dentro de la raíz del sandbox. Se admiten carpetas anidadas.",
-    resourcesSandboxRenamePlaceholder: "Nueva ruta relativa, por ejemplo packs/debug/minimal-loop.md",
-    resourcesSandboxRenameHint: "Renombrar también puede mover la ruta dentro del sandbox.",
-    resourcesSandboxManagedLayout: "Diseño de Trainer",
   },
   "fr-FR": {
     settingsMemorySharing: "Mémoire inter-projets",
@@ -4675,35 +3366,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesEmpty: "La bibliothèque est vide. Commencez l'import ici",
     resourcesMenu: "Menu des ressources",
     resourcesSummary: "Résumé des ressources",
-    resourcesSandbox: "Sandbox",
-    resourcesSandboxRefresh: "Actualiser",
-    resourcesSandboxNewFile: "Nouveau fichier",
-    resourcesSandboxNewFolder: "Nouveau dossier",
-    resourcesSandboxRename: "Renommer",
-    resourcesSandboxTrash: "Déplacer vers Trash",
-    resourcesSandboxEmpty: "Le sandbox est encore vide.",
-    resourcesSandboxBoundaryRefresh: "Frontière",
-    resourcesSandboxOpenRoot: "Ouvrir la racine",
-    resourcesSandboxChooseRoot: "Choisir la racine",
-    resourcesSandboxResetRoot: "Utiliser la valeur par défaut",
-    resourcesSandboxActionBase: "Base cible",
-    resourcesSandboxCreateIn: "Créer dans",
-    resourcesSandboxTargetCurrent: "Dossier actuel",
-    resourcesSandboxTargetRoot: "Racine du sandbox",
-    resourcesSandboxParent: "Parent",
-    resourcesSandboxResolvedPath: "Chemin obtenu",
-    resourcesSandboxSourcePath: "Chemin source",
-    resourcesSandboxWorkspaceRoot: "Racine du workspace",
-    resourcesSandboxSourceLabel: "Source",
-    resourcesSandboxMountedSources: "Sources montées",
-    resourcesSandboxNextSafeMove: "Prochaine action sûre",
-    resourcesSandboxFilePlaceholder: "Chemin du fichier, par exemple packs/remote/ssh/notes.md",
-    resourcesSandboxFolderPlaceholder: "Chemin du dossier imbriqué, par exemple packs/remote/ssh",
-    resourcesSandboxFileHint: "Créer dans la racine du sandbox. Les chemins imbriqués sont pris en charge.",
-    resourcesSandboxFolderHint: "Créer dans la racine du sandbox. Les dossiers imbriqués sont pris en charge.",
-    resourcesSandboxRenamePlaceholder: "Nouveau chemin relatif, par exemple packs/debug/minimal-loop.md",
-    resourcesSandboxRenameHint: "Renommer peut aussi déplacer le chemin dans le sandbox.",
-    resourcesSandboxManagedLayout: "Structure Trainer",
   },
   "de-DE": {
     settingsMemorySharing: "Projektübergreifender Speicher",
@@ -4721,35 +3383,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesEmpty: "Die Bibliothek ist leer. Hier mit dem Import beginnen",
     resourcesMenu: "Ressourcenmenü",
     resourcesSummary: "Ressourcenübersicht",
-    resourcesSandbox: "Sandbox",
-    resourcesSandboxRefresh: "Aktualisieren",
-    resourcesSandboxNewFile: "Neue Datei",
-    resourcesSandboxNewFolder: "Neuer Ordner",
-    resourcesSandboxRename: "Umbenennen",
-    resourcesSandboxTrash: "In Trash verschieben",
-    resourcesSandboxEmpty: "Die Sandbox ist noch leer.",
-    resourcesSandboxBoundaryRefresh: "Grenze",
-    resourcesSandboxOpenRoot: "Stamm öffnen",
-    resourcesSandboxChooseRoot: "Stamm wählen",
-    resourcesSandboxResetRoot: "Standard verwenden",
-    resourcesSandboxActionBase: "Zielbasis",
-    resourcesSandboxCreateIn: "Erstellen in",
-    resourcesSandboxTargetCurrent: "Aktueller Ordner",
-    resourcesSandboxTargetRoot: "Sandbox-Stamm",
-    resourcesSandboxParent: "Übergeordnet",
-    resourcesSandboxResolvedPath: "Ergebnispfad",
-    resourcesSandboxSourcePath: "Quellpfad",
-    resourcesSandboxWorkspaceRoot: "Workspace-Stamm",
-    resourcesSandboxSourceLabel: "Quelle",
-    resourcesSandboxMountedSources: "Eingehängte Quellen",
-    resourcesSandboxNextSafeMove: "Nächster sicherer Schritt",
-    resourcesSandboxFilePlaceholder: "Dateipfad, zum Beispiel packs/remote/ssh/notes.md",
-    resourcesSandboxFolderPlaceholder: "Verschachtelter Ordnerpfad, zum Beispiel packs/remote/ssh",
-    resourcesSandboxFileHint: "Innerhalb des Sandbox-Stamms erstellen. Verschachtelte Pfade werden unterstützt.",
-    resourcesSandboxFolderHint: "Innerhalb des Sandbox-Stamms erstellen. Verschachtelte Ordner werden unterstützt.",
-    resourcesSandboxRenamePlaceholder: "Neuer relativer Pfad, zum Beispiel packs/debug/minimal-loop.md",
-    resourcesSandboxRenameHint: "Umbenennen kann den Pfad auch innerhalb der Sandbox verschieben.",
-    resourcesSandboxManagedLayout: "Trainer-Struktur",
   },
   "ja-JP": {
     settingsMemorySharing: "プロジェクト間メモリ",
@@ -4767,35 +3400,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesEmpty: "ライブラリは空です。ここから取り込みを始めてください",
     resourcesMenu: "リソースメニュー",
     resourcesSummary: "リソース概要",
-    resourcesSandbox: "Sandbox",
-    resourcesSandboxRefresh: "更新",
-    resourcesSandboxNewFile: "新しいファイル",
-    resourcesSandboxNewFolder: "新しいフォルダ",
-    resourcesSandboxRename: "名前を変更",
-    resourcesSandboxTrash: "Trash へ移動",
-    resourcesSandboxEmpty: "Sandbox はまだ空です。",
-    resourcesSandboxBoundaryRefresh: "境界",
-    resourcesSandboxOpenRoot: "ルートを開く",
-    resourcesSandboxChooseRoot: "ルートを選択",
-    resourcesSandboxResetRoot: "既定を使う",
-    resourcesSandboxActionBase: "作成基準",
-    resourcesSandboxCreateIn: "作成先",
-    resourcesSandboxTargetCurrent: "現在のフォルダ",
-    resourcesSandboxTargetRoot: "Sandbox ルート",
-    resourcesSandboxParent: "親へ",
-    resourcesSandboxResolvedPath: "結果パス",
-    resourcesSandboxSourcePath: "元のパス",
-    resourcesSandboxWorkspaceRoot: "Workspace ルート",
-    resourcesSandboxSourceLabel: "ソース",
-    resourcesSandboxMountedSources: "マウント済みソース",
-    resourcesSandboxNextSafeMove: "次の安全な一手",
-    resourcesSandboxFilePlaceholder: "ファイルパス。例: packs/remote/ssh/notes.md",
-    resourcesSandboxFolderPlaceholder: "ネストしたフォルダパス。例: packs/remote/ssh",
-    resourcesSandboxFileHint: "Sandbox ルート内に作成します。ネストしたパスに対応します。",
-    resourcesSandboxFolderHint: "Sandbox ルート内に作成します。ネストしたフォルダに対応します。",
-    resourcesSandboxRenamePlaceholder: "新しい相対パス。例: packs/debug/minimal-loop.md",
-    resourcesSandboxRenameHint: "名前の変更では、Sandbox 内での移動もできます。",
-    resourcesSandboxManagedLayout: "Trainer レイアウト",
   },
   "ko-KR": {
     settingsMemorySharing: "프로젝트 간 메모리",
@@ -4813,35 +3417,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesEmpty: "라이브러리가 비어 있습니다. 여기서 가져오기를 시작하세요",
     resourcesMenu: "리소스 메뉴",
     resourcesSummary: "리소스 요약",
-    resourcesSandbox: "Sandbox",
-    resourcesSandboxRefresh: "새로 고침",
-    resourcesSandboxNewFile: "새 파일",
-    resourcesSandboxNewFolder: "새 폴더",
-    resourcesSandboxRename: "이름 바꾸기",
-    resourcesSandboxTrash: "Trash로 이동",
-    resourcesSandboxEmpty: "Sandbox가 아직 비어 있습니다.",
-    resourcesSandboxBoundaryRefresh: "경계",
-    resourcesSandboxOpenRoot: "루트 열기",
-    resourcesSandboxChooseRoot: "루트 선택",
-    resourcesSandboxResetRoot: "기본값 사용",
-    resourcesSandboxActionBase: "대상 기준",
-    resourcesSandboxCreateIn: "생성 위치",
-    resourcesSandboxTargetCurrent: "현재 폴더",
-    resourcesSandboxTargetRoot: "Sandbox 루트",
-    resourcesSandboxParent: "상위",
-    resourcesSandboxResolvedPath: "결과 경로",
-    resourcesSandboxSourcePath: "원본 경로",
-    resourcesSandboxWorkspaceRoot: "Workspace 루트",
-    resourcesSandboxSourceLabel: "소스",
-    resourcesSandboxMountedSources: "마운트된 소스",
-    resourcesSandboxNextSafeMove: "다음 안전한 단계",
-    resourcesSandboxFilePlaceholder: "파일 경로. 예: packs/remote/ssh/notes.md",
-    resourcesSandboxFolderPlaceholder: "중첩 폴더 경로. 예: packs/remote/ssh",
-    resourcesSandboxFileHint: "Sandbox 루트 안에 만듭니다. 중첩 경로를 지원합니다.",
-    resourcesSandboxFolderHint: "Sandbox 루트 안에 만듭니다. 중첩 폴더를 지원합니다.",
-    resourcesSandboxRenamePlaceholder: "새 상대 경로. 예: packs/debug/minimal-loop.md",
-    resourcesSandboxRenameHint: "이름 바꾸기는 Sandbox 안에서 경로를 이동하는 데도 쓸 수 있습니다.",
-    resourcesSandboxManagedLayout: "Trainer 레이아웃",
   },
   "pt-BR": {
     settingsMemorySharing: "Memória entre projetos",
@@ -4859,35 +3434,6 @@ const resourceViewLocaleOverrides: Partial<Record<ComposerLanguage, Partial<Copy
     resourcesEmpty: "A biblioteca está vazia. Comece a importar aqui",
     resourcesMenu: "Menu de recursos",
     resourcesSummary: "Resumo dos recursos",
-    resourcesSandbox: "Sandbox",
-    resourcesSandboxRefresh: "Atualizar",
-    resourcesSandboxNewFile: "Novo arquivo",
-    resourcesSandboxNewFolder: "Nova pasta",
-    resourcesSandboxRename: "Renomear",
-    resourcesSandboxTrash: "Mover para Trash",
-    resourcesSandboxEmpty: "O sandbox ainda está vazio.",
-    resourcesSandboxBoundaryRefresh: "Limite",
-    resourcesSandboxOpenRoot: "Abrir raiz",
-    resourcesSandboxChooseRoot: "Escolher raiz",
-    resourcesSandboxResetRoot: "Usar padrão",
-    resourcesSandboxActionBase: "Base de destino",
-    resourcesSandboxCreateIn: "Criar em",
-    resourcesSandboxTargetCurrent: "Pasta atual",
-    resourcesSandboxTargetRoot: "Raiz do sandbox",
-    resourcesSandboxParent: "Pai",
-    resourcesSandboxResolvedPath: "Caminho resultante",
-    resourcesSandboxSourcePath: "Caminho de origem",
-    resourcesSandboxWorkspaceRoot: "Raiz do workspace",
-    resourcesSandboxSourceLabel: "Origem",
-    resourcesSandboxMountedSources: "Origens montadas",
-    resourcesSandboxNextSafeMove: "Próximo passo seguro",
-    resourcesSandboxFilePlaceholder: "Caminho do arquivo, por exemplo packs/remote/ssh/notes.md",
-    resourcesSandboxFolderPlaceholder: "Caminho de pasta aninhada, por exemplo packs/remote/ssh",
-    resourcesSandboxFileHint: "Crie dentro da raiz do sandbox. Caminhos aninhados são aceitos.",
-    resourcesSandboxFolderHint: "Crie dentro da raiz do sandbox. Pastas aninhadas são aceitas.",
-    resourcesSandboxRenamePlaceholder: "Novo caminho relativo, por exemplo packs/debug/minimal-loop.md",
-    resourcesSandboxRenameHint: "Renomear também pode mover o caminho dentro do sandbox.",
-    resourcesSandboxManagedLayout: "Layout do Trainer",
   },
 };
 
@@ -5101,10 +3647,6 @@ type ComposerAccessibilityCopy = Pick<Copy, "composerAccessibility">;
 
 type OrientationRailCopy = Pick<
   Copy,
-  | "orientationNow"
-  | "orientationState"
-  | "orientationNext"
-  | "orientationMore"
   | "orientationStateNeedsSetup"
   | "orientationStateWaiting"
   | "orientationStateWorking"
@@ -5115,10 +3657,6 @@ type OrientationRailCopy = Pick<
 
 const orientationRailLocaleOverrides: Record<ComposerLanguage, OrientationRailCopy> = {
   "zh-CN": {
-    orientationNow: "对象",
-    orientationState: "状态",
-    orientationNext: "下一步",
-    orientationMore: "更多",
     orientationStateNeedsSetup: "待设置",
     orientationStateWaiting: "等待",
     orientationStateWorking: "进行中",
@@ -5127,10 +3665,6 @@ const orientationRailLocaleOverrides: Record<ComposerLanguage, OrientationRailCo
     orientationStateInterrupted: "中断",
   },
   "en-US": {
-    orientationNow: "Now",
-    orientationState: "State",
-    orientationNext: "Next",
-    orientationMore: "More",
     orientationStateNeedsSetup: "Needs setup",
     orientationStateWaiting: "Waiting",
     orientationStateWorking: "Working",
@@ -5139,10 +3673,6 @@ const orientationRailLocaleOverrides: Record<ComposerLanguage, OrientationRailCo
     orientationStateInterrupted: "Interrupted",
   },
   "es-ES": {
-    orientationNow: "Ahora",
-    orientationState: "Estado",
-    orientationNext: "Siguiente",
-    orientationMore: "Más",
     orientationStateNeedsSetup: "Falta configurar",
     orientationStateWaiting: "Esperando",
     orientationStateWorking: "En curso",
@@ -5151,10 +3681,6 @@ const orientationRailLocaleOverrides: Record<ComposerLanguage, OrientationRailCo
     orientationStateInterrupted: "Interrumpido",
   },
   "fr-FR": {
-    orientationNow: "Maintenant",
-    orientationState: "État",
-    orientationNext: "Suite",
-    orientationMore: "Plus",
     orientationStateNeedsSetup: "À configurer",
     orientationStateWaiting: "En attente",
     orientationStateWorking: "En cours",
@@ -5163,10 +3689,6 @@ const orientationRailLocaleOverrides: Record<ComposerLanguage, OrientationRailCo
     orientationStateInterrupted: "Interrompu",
   },
   "de-DE": {
-    orientationNow: "Jetzt",
-    orientationState: "Stand",
-    orientationNext: "Weiter",
-    orientationMore: "Mehr",
     orientationStateNeedsSetup: "Einrichtung nötig",
     orientationStateWaiting: "Warten",
     orientationStateWorking: "Läuft",
@@ -5175,10 +3697,6 @@ const orientationRailLocaleOverrides: Record<ComposerLanguage, OrientationRailCo
     orientationStateInterrupted: "Unterbrochen",
   },
   "ja-JP": {
-    orientationNow: "対象",
-    orientationState: "状態",
-    orientationNext: "次",
-    orientationMore: "詳細",
     orientationStateNeedsSetup: "要設定",
     orientationStateWaiting: "待機",
     orientationStateWorking: "進行中",
@@ -5187,10 +3705,6 @@ const orientationRailLocaleOverrides: Record<ComposerLanguage, OrientationRailCo
     orientationStateInterrupted: "中断",
   },
   "ko-KR": {
-    orientationNow: "대상",
-    orientationState: "상태",
-    orientationNext: "다음",
-    orientationMore: "더보기",
     orientationStateNeedsSetup: "설정 필요",
     orientationStateWaiting: "대기",
     orientationStateWorking: "진행 중",
@@ -5199,10 +3713,6 @@ const orientationRailLocaleOverrides: Record<ComposerLanguage, OrientationRailCo
     orientationStateInterrupted: "중단됨",
   },
   "pt-BR": {
-    orientationNow: "Agora",
-    orientationState: "Estado",
-    orientationNext: "Próximo",
-    orientationMore: "Mais",
     orientationStateNeedsSetup: "Precisa configurar",
     orientationStateWaiting: "Aguardando",
     orientationStateWorking: "Em andamento",

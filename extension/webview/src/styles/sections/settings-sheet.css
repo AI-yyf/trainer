@@ -661,6 +661,14 @@
 .settings-provider-bar .settings-provider-profile--bar .settings-provider-profile__row {
   flex-wrap: wrap;
   row-gap: 2px;
+  /* Narrow bar chip: pack dot + label + model on one left-aligned line —
+     the wide directory rows keep their space-between table alignment. */
+  justify-content: flex-start;
+}
+
+.settings-provider-bar .settings-provider-profile--bar .settings-provider-profile__meta {
+  justify-content: flex-start;
+  flex: 0 1 auto;
 }
 
 .settings-provider-bar .settings-provider-profile--bar.is-active {

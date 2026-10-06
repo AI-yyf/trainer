@@ -61,43 +61,6 @@ body,
   color: inherit;
 }
 
-.notice {
-  transition:
-    opacity var(--motion-in) var(--motion-ease),
-    transform var(--motion-in) var(--motion-ease);
-}
-
-@starting-style {
-  .notice {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-}
-
-.notice {
-  margin: 8px 10px 0;
-  padding: 8px 10px;
-  width: auto;
-  border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bg-1) 84%, var(--bg-0));
-  color: var(--fg-1);
-  font-size: var(--trainer-font-2xs);
-  font-family: inherit;
-  line-height: 1.45;
-  text-align: left;
-  box-shadow: none;
-}
-
-.notice::before {
-  content: "";
-  flex: none;
-  width: 6px;
-  height: 6px;
-  margin-top: 5px;
-  border-radius: 50%;
-  background: var(--accent);
-}
 
 /* Utility-layer buttons are content-sized icon hits, not stretching tabs —
    the base .header-switcher__item grid contract (width: 100%; min-width: 0)

@@ -1,0 +1,88 @@
+{
+  "generatedAt": "2026-10-06T18:09:27.498Z",
+  "config": {
+    "baseUrl": "http://127.0.0.1:4179",
+    "conversationSize": 300,
+    "streamChunks": 300,
+    "streamChunkChars": 100,
+    "streamChunkGapMs": 4,
+    "navSampleRounds": 3
+  },
+  "longSessionNav": {
+    "coldFirstVisitMs": {
+      "plan": 91,
+      "resources": 37,
+      "settings": 40,
+      "training": 14
+    },
+    "warmMs": {
+      "plan": {
+        "n": 3,
+        "min": 35,
+        "p50": 35,
+        "p90": 38,
+        "max": 38
+      },
+      "resources": {
+        "n": 3,
+        "min": 37,
+        "p50": 37,
+        "p90": 38,
+        "max": 38
+      },
+      "training": {
+        "n": 3,
+        "min": 13,
+        "p50": 13,
+        "p90": 15,
+        "max": 15
+      },
+      "settings": {
+        "n": 3,
+        "min": 36,
+        "p50": 39,
+        "p90": 41,
+        "max": 41
+      }
+    }
+  },
+  "streamingOverhead": {
+    "coachOnlyVisited": {
+      "streamWallMs": 1947,
+      "longtaskCount": 0,
+      "longtaskTotalMs": 0,
+      "longtaskMaxMs": 0,
+      "navDuringStreamMs": null,
+      "streamingRendered": true
+    },
+    "allVisited": {
+      "streamWallMs": 1527,
+      "longtaskCount": 0,
+      "longtaskTotalMs": 0,
+      "longtaskMaxMs": 0,
+      "navDuringStreamMs": 17,
+      "streamingRendered": true
+    },
+    "hiddenSurfaceDelta": {
+      "longtaskCountDelta": 0,
+      "longtaskTotalMsDelta": 0
+    }
+  },
+  "budgets": {
+    "streamingLongTasks": {
+      "budget": 0,
+      "observed": 0,
+      "pass": true
+    },
+    "warmNavP90Ms": {
+      "budget": 100,
+      "observed": 41,
+      "pass": true
+    }
+  },
+  "limitations": [
+    "headless Chromium, single machine, single sample — deltas under ~20% are noise",
+    "synthetic chunk injection through the store path, not a live provider stream",
+    "longtask observer has a 50ms floor; sub-50ms per-chunk costs are invisible"
+  ]
+}

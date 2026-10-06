@@ -37,6 +37,15 @@ export const APP_UI_TEXT: Record<string, Record<string, string>> = {
     "ko-KR": "계획 동결 해제",
     "pt-BR": "Descongelar o plano",
   },
+  "开始：{v}": {
+    "en-US": "Start: {v}",
+    "es-ES": "Empieza: {v}",
+    "fr-FR": "Commencer : {v}",
+    "de-DE": "Starte: {v}",
+    "ja-JP": "開始：{v}",
+    "ko-KR": "시작: {v}",
+    "pt-BR": "Começar: {v}",
+  },
   "训练记录没有保存，因此没有开始教练流式回复。输入已保留，可以重试。": {
     "en-US": "The training record was not saved, so the coach stream did not start. Your input is still here to retry.",
     "es-ES": "The training record was not saved, so the coach stream did not start. Your input is still here to retry.",

@@ -205,18 +205,20 @@ test('settings connection copy stays neutral when the model is already ready', (
 
 test('provider and feedback surfaces use central copy keys without hardcoded labels', () => {
   // CapabilityMatrix.tsx (the capability* keys' last component consumer) was
-  // removed as dead code in the visual polish round; the keys themselves stay
-  // in copy.ts pending the product lane's dead-copy sweep.
+  // removed as dead code in the visual polish round; the keys themselves were
+  // swept from copy.ts in the platform round 2 dead-copy pass (zero consumers
+  // verified by grep before removal).
   const feedbackSource = fs.readFileSync(path.resolve(__dirname, '..', 'webview', 'src', 'components', 'common', 'UserFeedbackDisclosure.tsx'), 'utf8');
   for (const source of [feedbackSource]) {
     assert.match(source, /resolveCopy/);
     assert.doesNotMatch(source, /language === ["']zh-CN["']/);
   }
+  const copySource = fs.readFileSync(path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'copy.ts'), 'utf8');
+  assert.doesNotMatch(copySource, /"capabilityChat"/, 'swept capability keys must not return via the CopyKey union');
   const { resolveCopy } = loadCopyModule();
   for (const language of expectedLanguages) {
     const copy = resolveCopy(language);
     for (const key of [
-      'capabilityChat', 'capabilityTools', 'capabilityStreaming', 'capabilitySupported',
       'feedbackTooHard', 'feedbackPlanMismatch', 'feedbackDisclosureSummary',
       'feedbackRecording', 'feedbackRecorded',
     ]) {

@@ -27,7 +27,8 @@
     "verify": "node ./scripts/verify-workspace.mjs",
     "package:vsix": "npm run package:vsix --prefix extension",
     "verify:delivery": "npm run verify && npm run test:experience-matrix && npm run package:vsix",
-    "test:remote-ssh-e2e": "node ./scripts/run-remote-ssh-e2e.mjs"
+    "test:remote-ssh-e2e": "node ./scripts/run-remote-ssh-e2e.mjs",
+    "perf:probe": "node ./scripts/perf-probe.mjs"
   },
   "repository": {
     "type": "git",

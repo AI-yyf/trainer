@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 
 import type { RemoteProcessSpec } from '../../../shared/src/remoteProtocol';
 import { deriveCompanionInstallState } from '../../../shared/src/companionInstallState';
+import type { ComposerLanguage } from '../../../shared/src/types';
+import { resolveProviderHostLanguage } from './providerHostCopy';
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
 import {
@@ -199,6 +201,92 @@ const activeRemoteVerification: {
 
 const PYTESTABLE_EXTENSIONS = new Set(['.py']);
 
+/**
+ * Localized one-line outcome summaries for the streaming remote verification.
+ * The host posts them before the webview can localize, so they ship in the
+ * workspace response language (same resolution rule as provider host copy).
+ */
+type RemoteVerificationSummaryKind = 'passed' | 'failed' | 'timed_out' | 'cancelled' | 'interrupted';
+
+const REMOTE_VERIFICATION_SUMMARY_COPY: Record<
+  ComposerLanguage,
+  Record<RemoteVerificationSummaryKind, string>
+> = {
+  'zh-CN': {
+    passed: '已验证通过 (exit {exit})',
+    failed: '已验证未通过 (exit {exit})',
+    timed_out: '远程验证超时,执行结果未知。',
+    cancelled: '远程验证已停止,执行结果未知。',
+    interrupted: '远程验证已中断,执行结果未知。',
+  },
+  'en-US': {
+    passed: 'Verified passed (exit {exit})',
+    failed: 'Verified failed (exit {exit})',
+    timed_out: 'The remote verification timed out; its outcome is unknown.',
+    cancelled: 'The remote verification was stopped; its outcome is unknown.',
+    interrupted: 'The remote verification was interrupted; its outcome is unknown.',
+  },
+  'es-ES': {
+    passed: 'Verificado como superado (exit {exit})',
+    failed: 'Verificado como fallido (exit {exit})',
+    timed_out: 'La verificación remota agotó el tiempo; su resultado es desconocido.',
+    cancelled: 'La verificación remota se detuvo; su resultado es desconocido.',
+    interrupted: 'La verificación remota se interrumpió; su resultado es desconocido.',
+  },
+  'fr-FR': {
+    passed: 'Vérifié : réussi (exit {exit})',
+    failed: 'Vérifié : échoué (exit {exit})',
+    timed_out: 'La vérification distante a expiré ; son résultat est inconnu.',
+    cancelled: 'La vérification distante a été arrêtée ; son résultat est inconnu.',
+    interrupted: 'La vérification distante a été interrompue ; son résultat est inconnu.',
+  },
+  'de-DE': {
+    passed: 'Verifiziert: bestanden (exit {exit})',
+    failed: 'Verifiziert: fehlgeschlagen (exit {exit})',
+    timed_out: 'Die Remote-Verifizierung hat Zeitüberschreitung; das Ergebnis ist unbekannt.',
+    cancelled: 'Die Remote-Verifizierung wurde gestoppt; das Ergebnis ist unbekannt.',
+    interrupted: 'Die Remote-Verifizierung wurde unterbrochen; das Ergebnis ist unbekannt.',
+  },
+  'ja-JP': {
+    passed: '検証をパスしました (exit {exit})',
+    failed: '検証はパスしませんでした (exit {exit})',
+    timed_out: 'リモート検証がタイムアウトし、結果は不明です。',
+    cancelled: 'リモート検証は停止され、結果は不明です。',
+    interrupted: 'リモート検証は中断され、結果は不明です。',
+  },
+  'ko-KR': {
+    passed: '검증 통과 (exit {exit})',
+    failed: '검증 실패 (exit {exit})',
+    timed_out: '원격 검증이 시간 초과되어 결과를 알 수 없습니다.',
+    cancelled: '원격 검증이 중지되어 결과를 알 수 없습니다.',
+    interrupted: '원격 검증이 중단되어 결과를 알 수 없습니다.',
+  },
+  'pt-BR': {
+    passed: 'Verificado como aprovado (exit {exit})',
+    failed: 'Verificado como reprovado (exit {exit})',
+    timed_out: 'A verificação remota excedeu o tempo; o resultado é desconhecido.',
+    cancelled: 'A verificação remota foi cancelada; o resultado é desconhecido.',
+    interrupted: 'A verificação remota foi interrompida; o resultado é desconhecido.',
+  },
+};
+
+function remoteVerificationSummary(
+  kind: RemoteVerificationSummaryKind,
+  language: ComposerLanguage | undefined,
+  exitCode?: number | null,
+): string {
+  const table = REMOTE_VERIFICATION_SUMMARY_COPY[language ?? 'en-US'] ?? REMOTE_VERIFICATION_SUMMARY_COPY['en-US'];
+  return table[kind].split('{exit}').join(String(exitCode ?? '?'));
+}
+
+/** Workspace response language for host-posted summaries (provider copy rule). */
+function remoteVerificationLanguage(context: CommandContext): ComposerLanguage | undefined {
+  return resolveProviderHostLanguage(
+    undefined,
+    context.getHostState().bootstrap.memory?.workspace?.responseLanguage,
+  );
+}
+
 function buildActiveFileVerificationSpec(
   activeFile: { fsPath: string; languageId?: string },
 ): RemoteProcessSpec | undefined {
@@ -311,12 +399,12 @@ export async function remoteVerifyActiveFileCommand(
       }
 
       const summary = completed
-        ? `已验证${passed ? '通过' : '未通过'} (exit ${exitCode})`
+        ? remoteVerificationSummary(passed ? 'passed' : 'failed', remoteVerificationLanguage(context), exitCode)
         : verification.state === 'timed_out'
-          ? '远程验证超时,执行结果未知。'
+          ? remoteVerificationSummary('timed_out', remoteVerificationLanguage(context))
           : verification.state === 'cancelled'
-            ? '远程验证已停止,执行结果未知。'
-            : '远程验证已中断,执行结果未知。';
+            ? remoteVerificationSummary('cancelled', remoteVerificationLanguage(context))
+            : remoteVerificationSummary('interrupted', remoteVerificationLanguage(context));
       void context.workbench.postMessage({
         type: 'remoteVerification/finished',
         payload: {
@@ -330,13 +418,14 @@ export async function remoteVerifyActiveFileCommand(
     })
     .catch((error) => {
       activeRemoteVerification.sessionId = undefined;
+      const detail = error instanceof Error ? error.message : String(error);
       void context.workbench.postMessage({
         type: 'remoteVerification/finished',
         payload: {
           sessionId: '',
           state: 'connection_lost',
           exitCode: null,
-          summary: `远程验证已中断,执行结果未知。${error instanceof Error ? error.message : String(error)}`,
+          summary: `${remoteVerificationSummary('interrupted', remoteVerificationLanguage(context))}${detail}`,
         },
       });
     });

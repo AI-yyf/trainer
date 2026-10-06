@@ -353,13 +353,3 @@
   margin: 0;
 }
 
-.notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.notice__text {
-  flex: 1 1 auto;
-}
-

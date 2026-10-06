@@ -50,7 +50,9 @@ test('Plan keeps formal truth, evidence, and blockers distinct without silent mu
   assert.match(source, /\): PlanDecisionStripState \| null \{/);
   assert.match(source, /const shouldShowDecisionCard = !hideDecisionStrip && planDecisionStrip !== null;/);
   assert.match(source, /Plan is blocked/);
-  assert.match(source, /Evidence has not changed the plan/);
+  // r1 learner-language pass: the evidence-honesty title states when the plan
+  // updates instead of naming the internal mechanism ("evidence").
+  assert.match(source, /The plan updates once you verify the work yourself/);
   assert.match(source, /Formal plan is frozen/);
   assert.match(source, /(?:Ordinary chat|Chat evidence) will not rewrite it silently/);
 });

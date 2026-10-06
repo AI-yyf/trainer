@@ -7326,6 +7326,7 @@ export function CoachSettingsView({
         onClick: () => effectiveAvailabilityPrimaryCta.action?.(),
         disabled: !effectiveAvailabilityPrimaryCta.action,
       } : undefined}
+      actionTone={effectiveAvailabilityPrimaryTone}
     />
   </div>;
 

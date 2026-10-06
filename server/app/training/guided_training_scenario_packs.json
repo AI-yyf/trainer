@@ -394,7 +394,7 @@
           ]
         },
         "deliverable": {
-          "zh-CN": "一个可重复的失败步骤，以及对状态在哪里第一次偏离的一个已验证解释。",
+          "zh-CN": "一个能按需重现的失败步骤，加上一句说清状态从哪里开始不对的解释。",
           "en-US": "A reproducible failing step plus one verified explanation of where the state diverges."
         },
         "selfCheck": {
@@ -410,14 +410,14 @@
           ]
         },
         "validationMethod": {
-          "zh-CN": "复现一次、在边界暂停、记录第一个被证实的错误状态。",
+          "zh-CN": "重现一次、在断点暂停、记下你确认的第一个错误状态。",
           "en-US": "Reproduce once, pause at the boundary, and record the first verified bad state."
         },
         "learnerDeliverables": {
           "zh-CN": [
-            "写下最小复现步骤。",
-            "在第一个有用的断点或异常边界暂停。",
-            "记录第一个被证实的错误值、分支或缺失状态。"
+            "写下能稳定重现失败的最短步骤。",
+            "在第一个有用的断点或异常暂停处停下。",
+            "记录你确认的第一个错误值、分支或缺失状态。"
           ],
           "en-US": [
             "Write down the smallest repro step.",
@@ -427,9 +427,9 @@
         },
         "verificationSteps": {
           "zh-CN": [
-            "运行最小失败复现。",
+            "运行最短的失败重现。",
             "在第一个有用断点或异常处暂停。",
-            "写下第一个被证实的错误值或错误分支。"
+            "写下你确认的第一个错误值或错误分支。"
           ],
           "en-US": [
             "Run the smallest failing repro.",
@@ -518,7 +518,7 @@
         },
         "constraints": {
           "zh-CN": [
-            "把答案压成一个复现、一个暂停点和一个被证实的错误状态。",
+            "把答案压成一个重现、一个暂停点和一个你确认过的错误状态。",
             "不要把整条排错历史都塞进答案里。"
           ],
           "en-US": [
@@ -571,7 +571,7 @@
           "en-US": "text"
         },
         "expectedAnswer": {
-          "zh-CN": "先复现失败，再在第一个有用的断点或异常边界暂停，然后记录第一个被证实的错误值或错误分支，最后再改代码。",
+          "zh-CN": "先重现失败，再在第一个有用的断点或异常暂停处停下，然后记录你确认的第一个错误值或错误分支，最后再改代码。",
           "en-US": "Reproduce the failure, pause at the first useful breakpoint or exception boundary, and record the first verified wrong value or branch before editing."
         },
         "hintLadder": {

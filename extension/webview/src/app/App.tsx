@@ -12228,9 +12228,12 @@ export function App() {
         return (
           <p className="muted" data-coach-training-resume="true">
             {appUiCopy(layout.composerLanguage, "正在进行：{v}").replace("{v}", () => cardTitle)}
+            {/* r2 first-screen affordance: a bordered quiet button (existing
+                .button--ghost) reads as the next step; the bare .template-back
+                text link rendered as part of the sentence. */}
             <button
               type="button"
-              className="template-back"
+              className="button button--ghost"
               onClick={() => setActiveView("training")}
             >
               {appUiCopy(layout.composerLanguage, "继续")}
@@ -13251,8 +13254,10 @@ export function App() {
             ? [
                 {
                   id: recoveredAdoptPrimary ? "plan-review-evidence" : "plan-needs-evidence",
-                  label: recoveredAdoptPrimary ? t.approve
-                    : resolvePlanComposerCopy(layout.composerLanguage).modes.evidence.primaryPrompt.label,
+                  // r2 learner-subject label: the accent names what the learner
+                  // did (finished the step) with the evidence tidying attached,
+                  // instead of a mechanism noun ("整理证据") next to a step text.
+                  label: recoveredAdoptPrimary ? t.approve : t.planNeedsEvidenceAction,
                   tone: "accent" as const,
                   onClick: () => handlePlanOrientationAction(recoveredAdoptPrimary ? "adopt_evidence" : "wait"),
                 },
@@ -13294,10 +13299,10 @@ export function App() {
                         return [
                           {
                             id: "plan-start-step",
-                            label:
-                              layout.composerLanguage === "zh-CN"
-                                ? `开始:${short}`
-                                : `Start: ${short}`,
+                            label: appUiCopy(layout.composerLanguage, "开始：{v}").replace(
+                              "{v}",
+                              short,
+                            ),
                             tone: "accent" as const,
                             onClick: () => handlePlanOrientationAction("continue_step"),
                           },

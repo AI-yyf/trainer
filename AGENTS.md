@@ -385,6 +385,7 @@ FastAPI sidecar (port 8765, extension-managed range 34891-34911):
 - `LearningPlan` dual-field sync (`id`/`plan_id`, `cadence`/`weekly_cadence`, `stages`/`phases`) — `server/app/core/models.py`
 - Formal plan saves are optimistic-locked: every plan write advances `_plan_revision` under the SQLite write lock (`save_plan_with_revision` / `save_plan_advancing_revision`); clients must send `expected_revision`, conflicts return 409 `plan_revision_conflict`
 - Evidence honesty: `/training/attempt/evidence` always records `self_reported` (client `trust_level` is ignored); host-trusted evidence only via `/training/verification/attest`; evidence citations resolve `resource_id`/`version_id`/`content_hash`/`location` server-side, and a deleted source flags citations until a same-hash re-index clears them
+- Host attestation delivery (R1): `/training/verification/attest` accepts an optional `idempotency_key`; remote verification sends `remote-verify:{companionSessionId}:{cardId}` (`attestationIdempotencyKey`, `extension/src/testing/trainingAttestation.ts`) so a resend replays via the training-reliability ledger instead of double-recording. Delivery failures are classified (`classifyAttestationDeliveryFailure`): `not_arrived` (typed pre-send guard `AttestationNotArrivedError`, connect/DNS-class error codes) is resent once; `ambiguous` (timeout, lost response, HTTP error) never auto-resends and surfaces the language-neutral marker `[[trainer-attestation-undelivered]]`, which the webview maps to eight-language Training-scoped copy (`operationMessageGovernance.ts`). Boundary: the replay window is the workspace's single-slot `latest_training_reliability` record — once another training save replaces it, a same-key retry executes again. Fail-closed unchanged: interrupted/cancelled/timed-out runs record NO evidence.
 - Typed Parts Registry: 16+ message artifact kinds, rendered via `shared/src/partsRendererRegistry.ts`
 - Coach agent loop: ReAct pattern with tool calling (`server/app/llm/agent_loop.py`)
 - Training handoff state machine: card generation → routing → feedback → next card
@@ -466,6 +467,12 @@ npm run build
 npm run test:experience-matrix
 npx playwright test e2e/trainer.spec.js
 npx playwright test e2e/trainer-settings-lifecycle.spec.js
+
+# Webview performance probe (long-session nav latency + streaming longtasks;
+# serves the existing preview dist, report-only unless --strict; budgets:
+# streaming burst longtask = 0, warm nav p90 < 100ms. Baseline:
+# docs/verification/perf-probe-baseline.json)
+npm run perf:probe
 
 # Release verification + packaging
 npm run verify
