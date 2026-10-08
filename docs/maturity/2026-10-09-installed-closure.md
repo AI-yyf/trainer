@@ -493,3 +493,62 @@ also verified closed. All original failure logs and old artifact bytes remain.
 Fresh clean packaging, installed screenshots and actual Remote-SSH validation
 are still required for this follow-up. Earlier a5 captures, compiled replays
 and the original 28188 remote receipt retain their exact scopes and outcomes.
+
+## Actual 7f installation and short-window consumer correction
+
+Clean `7f29fa1d4565d44eb11a4f1a5df3719c412ffdbd` packages are rebuilt and
+installed. Root independently inspects the darwin VSIX (115254984 bytes,
+SHA256 `1d961e531562cdff96cfc77a87842d9ee559a5d9fc3b419708ea965d2e9dcebb`),
+1416 build files, 156 server source files and exact credential absence.
+Official signed Code installs it, 1593 installed files match, and the actual
+frozen Sidecar answers health. CLI-owned profile cleanup passes.
+
+Actual original-profile native checks pass eight zh/en × 340/460 × before/after
+cases and two genuine Reload Window operations. The original card, Attempt,
+authored task, phase, empty Evidence and four unverified capability dimensions
+stay intact; projection updatedAt refreshes separately. Ordinary navigation
+adds zero provider requests and zero Sidecar starts. Original profile and user
+window remain, while exact owned test processes close. The ready note is not
+applicable because actual recovered=false. Scenario is not exercised on this
+profile because public memory refresh has no dependency keys or maps; no
+facts are invented to force a pass. Local iframe height 769 does not test the
+short-window defect found independently on Windows.
+
+Exact 7f ordinary CI and all nine cross-platform jobs pass. Separate Windows
+installed partial passes 34 executed checks and captures twenty original PNGs;
+Linux passes 31, skips seven captures and three theme pairs, and proves secure
+GNOME/SecretStorage plus owned cleanup. Original ZIPs match raw GitHub digests;
+root separately verifies source/credential/privacy/resource path contracts.
+Official visual-check count remains zero; all Windows PNGs have a distinct
+human review. The restored Scenario now displays its own intended task text
+and completion criterion without restore_history or old Flash instructions.
+
+Those actual Windows images reveal the next concrete consumer defect: the
+primary action is cropped while a large empty band remains beneath the pane.
+The short-height 760 media rule overrides the single-surface1fr row with the
+legacy 58%/divider/secondary-chat rows. App's docked surfaces have only one child,
+so that old reservation wastes available height. The canonical media selector
+now applies only to a stack that actually has multiple surfaces; no new CSS
+override is layered over it. A browser geometry regression measures occupied
+boxes on both sides of the breakpoint at 728/760/761 across 340/420/460,
+zh/en and dark/light. Actual unchanged CSS fails 192 new assertions; the final
+combined geometry gate passes 470. Fixtures prove layout, not learner Evidence.
+
+The native Learning detail still uses card/Attempt bookkeeping language.
+Its eight-language action copy now says to continue practice from where the
+learner left off. Action IDs, resolver priority, disabled conditions and
+original authored task facts are unchanged. The absent recovered-practice
+note is not relabeled as an installed pass.
+
+The follow-up `npm run verify` passes strict checks, full Node regression
+(1979 dot results including skips), Ruff/Pyright and 3284 backend tests plus 28
+subtests in 109.58s with 53 warnings. All 435 browser cases pass; enabled bundle
+gate passes 2/2. Actual TypeScript 5.9.3 Language Service reports 0 diagnostics on
+the two changed TS/MJS code files; checkJs=false is retained as an explicit
+limit. Refreshed strict synthetic performance p90 is 37ms/longtasks 0, meeting
+100ms/0 budgets; prior sample 48ms does not establish a causal speed improvement.
+Owned preview servers close before packaging. New clean packaging, short-height
+installed GREEN and actual Remote-SSH are still required for this final source
+round. The unchanged 155/b861 Python snapshot and historical artifact scopes
+are preserved. Genuine 20–30 teaching journeys remain unaccepted due to the
+recorded zero OpenRouter credits.

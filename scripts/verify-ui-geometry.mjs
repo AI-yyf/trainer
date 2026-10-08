@@ -20,6 +20,8 @@
  *   4. Exactly three primary destinations remain stable across all six routes.
  *      Training and Growth select Learning, and Settings uses its utility.
  *   5. No action is rendered twice in the plan view.
+ *   6. Short windows give a single surface all available height, without a
+ *      blank row reserved for a removed secondary conversation.
  *
  * Usage:
  *   node scripts/verify-ui-geometry.mjs
@@ -476,6 +478,39 @@ async function main() {
       check(metrics.overflow <= 1, `${view}/${width}/${theme}/${lang}: no horizontal overflow`);
       check(metrics.primary <= 1, `${view}/${width}/${theme}/${lang}: ${metrics.primary} primary action(s) in the first viewport`);
       if (keepShots) await page.screenshot({ path: path.join(shotDir, `${view}-${width}-${theme}-${lang}.png`) });
+    }
+  }
+
+  // Actual Windows installation exposed this below the 760px breakpoint.
+  // The normal 900px fixture above cannot cover a single pane losing nearly
+  // half its viewport to a legacy secondary-chat row. Measure occupied boxes
+  // on both sides of the breakpoint; this does not assert authored content.
+  for (const height of [728, 760, 761]) for (const width of [340, 420, 460]) {
+    for (const theme of ['dark', 'light']) for (const lang of ['zh-CN', 'en-US']) {
+      await page.setViewportSize({ width, height });
+      for (const view of ['plan', 'resources', 'training', 'progress']) {
+        await page.goto(`${base}?view=${view}&scenario=ready&theme=${theme}&lang=${lang}`, { waitUntil: 'domcontentloaded' });
+        await page.locator('#root[data-trainer-app-ready="true"]').waitFor();
+        const occupied = await page.evaluate(() => {
+          const stack = [...document.querySelectorAll('.view-stack--single')].find(el => {
+            const box = el.getBoundingClientRect();
+            return box.width > 0 && box.height > 0;
+          });
+          const primary = stack?.querySelector('.view-stack__primary');
+          if (!stack || !primary) return { error: 'missing visible single surface' };
+          const box = stack.getBoundingClientRect();
+          const content = primary.getBoundingClientRect();
+          return {
+            rows: getComputedStyle(stack).gridTemplateRows.trim().split(/\s+/).length,
+            height: box.height,
+            unusedHeight: box.height - content.height,
+          };
+        });
+        const label = `${view}/${width}x${height}/${theme}/${lang}`;
+        check(!occupied.error && occupied.rows === 1, `${label}: single surface has one occupied row`);
+        check(!occupied.error && occupied.height > 120 && Math.abs(occupied.unusedHeight) <= 2,
+          `${label}: single surface uses available height (${occupied.unusedHeight?.toFixed(1)}px unused)`);
+      }
     }
   }
 

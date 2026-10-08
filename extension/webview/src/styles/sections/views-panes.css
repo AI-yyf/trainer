@@ -487,7 +487,8 @@
 }
 
 @media (max-height: 760px) {
-  .view-stack {
+  /* Only a two-surface stack reserves room for a secondary conversation. */
+  .view-stack:not(.view-stack--single) {
     --view-stack-divider-height: 8px;
     --view-stack-chat-min-height: 144px;
     grid-template-rows:
