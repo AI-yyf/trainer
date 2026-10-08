@@ -346,9 +346,22 @@ function buildActiveFileVerificationSpec(
   };
 }
 
-export async function remoteVerifyActiveFileCommand(context: CommandContext): Promise<CommandExecutionResult> {
+export const TRAINING_VERIFICATION_TARGET_MISMATCH_MARKER = '[[trainer-training-verification-target-mismatch]]';
+
+/** A UI assertion never selects a card; the host remains the authority. */
+export interface RemoteActiveFileVerificationPayload {
+  expectedCardId?: string;
+}
+
+export async function remoteVerifyActiveFileCommand(context: CommandContext, payload?: unknown): Promise<CommandExecutionResult> {
   const workspace = context.getHostState().workspace;
   const scope = captureVerificationScope(context);
+  if (payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload, 'expectedCardId')) {
+    const expectedCardId = (payload as Record<string, unknown>).expectedCardId;
+    if (typeof expectedCardId !== 'string' || !expectedCardId.trim() || expectedCardId.trim() !== scope.cardId) {
+      return { ok: false, message: TRAINING_VERIFICATION_TARGET_MISMATCH_MARKER };
+    }
+  }
   const editor = vscode.window.activeTextEditor;
   if (!workspace.isRemoteWorkspace && !workspace.remoteName) return { ok: false,
     message: 'Remote verification is only available in a Remote-SSH, WSL, Tunnel, or Dev Container window.' };
@@ -400,11 +413,12 @@ export async function remoteVerifyActiveFileCommand(context: CommandContext): Pr
     onStart: session => {
       run.sessionId = session.session_id;
       post({ type: 'remoteVerification/started', payload: { sessionId: session.session_id,
+        ...(scope.cardId ? { cardId: scope.cardId } : {}),
         spec: { executable: spec.executable, args: spec.args } } });
     },
     onChunk: chunk => {
       if (run.sessionId) post({ type: 'remoteVerification/stream', payload: {
-        sessionId: run.sessionId, stream: chunk.stream, text: chunk.text } });
+        sessionId: run.sessionId, ...(scope.cardId ? { cardId: scope.cardId } : {}), stream: chunk.stream, text: chunk.text } });
     },
   }).then(async verification => {
     const completed = verification.state === 'completed' && typeof verification.exit_code === 'number';
@@ -430,10 +444,12 @@ export async function remoteVerifyActiveFileCommand(context: CommandContext): Pr
     const summary = completed ? remoteVerificationSummary(scope.cardId && delivery === 'not_requested' ? 'artifact_unavailable' : passed ? 'passed' : 'failed', language, exitCode)
       : remoteVerificationSummary(state === 'timed_out' ? 'timed_out' : state === 'cancelled' ? 'cancelled' : 'interrupted', language);
     post({ type: 'remoteVerification/finished', payload: { sessionId: run.sessionId ?? '', state,
+      ...(scope.cardId ? { cardId: scope.cardId } : {}),
       exitCode, ...(completed ? { passed } : {}), summary, attestation: delivery } });
   }).catch(error => {
     context.outputChannel.appendLine(`[remote] verification interrupted: ${error instanceof Error ? error.name : 'Request failed'}`);
     post({ type: 'remoteVerification/finished', payload: { sessionId: run.sessionId ?? '',
+      ...(scope.cardId ? { cardId: scope.cardId } : {}),
       state: 'connection_lost', exitCode: null, summary: remoteVerificationSummary('interrupted', language) } });
   }).finally(() => { if (activeRemoteVerification === run) activeRemoteVerification = undefined; });
   return { ok: true, message: `Remote verification starting on ${workspace.remoteName ?? 'remote'}.` };

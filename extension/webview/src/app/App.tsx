@@ -4,7 +4,7 @@ import {
   resolveLearningPrimaryAction,
   type LearningFacts,
 } from "../lib/learningActionResolver";
-import { resolveBoundTrainingCardFacts } from "../lib/boundTrainingCardFacts";
+import { readTrainingCardList, readTrainingCardText, resolveBoundTrainingCardFacts } from "../lib/boundTrainingCardFacts";
 import { CommandPalette } from "../templates/CommandPalette";
 import {
   Suspense,
@@ -198,12 +198,14 @@ import { ownsCoachComposer } from "../lib/workbenchDestinations";
 import {
   attestationUndeliveredMessage,
   detectAttestationUndelivered,
+  detectTrainingVerificationTargetMismatch,
   detectOperationScopeChanged,
   detectPlanRevisionConflict,
   livePlanTaskGateFailureMessage,
   parseLivePlanTaskGateMarker,
   planRevisionConflictMessage,
   operationScopeChangedMessage,
+  trainingVerificationTargetMismatchMessage,
   operationStatusMessageText,
   providerRecoveryMessage,
   recoverableFailureMessage,
@@ -211,6 +213,8 @@ import {
   sanitizeOperationFailureMessage,
   type OperationMessageSurface,
 } from "../lib/operationMessageGovernance";
+import { remoteVerificationEventMatchesDisplayedCard } from "../lib/remoteVerificationIdentity";
+import { operationMatchesWebviewScope } from "../../../../shared/src/webviewSync";
 import { CoachComposer, ComposerIconButton } from "../components/composer";
 import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
 import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
@@ -619,6 +623,8 @@ function sanitizeHostFailureMessage(
       ...message.payload,
       message: detectOperationScopeChanged(message.payload.message)
         ? operationScopeChangedMessage(language)
+        : detectTrainingVerificationTargetMismatch(message.payload.message)
+        ? trainingVerificationTargetMismatchMessage(language)
         : detectAttestationUndelivered(message.payload.message)
         ? attestationUndeliveredMessage(language)
         : revisionConflict
@@ -1925,8 +1931,8 @@ function restoredTrainingCard(
           title: scenarioLab.title ?? "Scenario practice",
           focusArea: scenarioLab.focusArea,
           targetSkill: scenarioLab.focusArea,
-          scenario: scenarioLab.lastAction ?? scenarioLab.reviewOutcome,
-          problemStatement: scenarioLab.lastAction ?? scenarioLab.reviewOutcome,
+          scenario: scenarioLab.summary,
+          problemStatement: scenarioLab.summary,
           learnerDeliverables: scenarioLab.learnerDeliverables,
           verificationSteps: scenarioLab.verificationSteps,
           successSignal: scenarioLab.successSignal,
@@ -3752,6 +3758,11 @@ export function App() {
     finishedState?: "completed" | "cancelled" | "timed_out" | "spawn_failed" | "connection_lost";
     passed?: boolean;
   }>({ running: false, output: "" });
+  const displayedTrainingCardIdRef = useRef<string | undefined>();
+  const remoteVerificationRequestRef = useRef<{
+    cardId: string;
+    operation: ReturnType<typeof postMessage>;
+  }>();
   const [operationMessageSurface, setOperationMessageSurface] = useState<OperationMessageSurface>("global");
   const [pendingPlanComposerDraftReplacement, setPendingPlanComposerDraftReplacement] =
     useState<PlanComposerDraftReplacement>();
@@ -4443,6 +4454,19 @@ export function App() {
         message.type === "remoteVerification/stream" ||
         message.type === "remoteVerification/finished"
       ) {
+        const cursor = useWorkbenchState.getState().syncCursor;
+        const pending = remoteVerificationRequestRef.current;
+        if (!remoteVerificationEventMatchesDisplayedCard(message.payload.cardId, displayedTrainingCardIdRef.current) ||
+            (message.scope && cursor.generation > 0 &&
+              (message.scope.generation !== cursor.generation || message.scope.workspaceId !== cursor.workspaceId ||
+                message.scope.sessionId !== cursor.sessionId)) ||
+            (message.operation && (!pending?.operation ||
+              pending.cardId !== displayedTrainingCardIdRef.current ||
+              message.operation.requestId !== pending.operation.requestId ||
+              message.operation.commandId !== pending.operation.commandId ||
+              !operationMatchesWebviewScope(message.operation, cursor)))) {
+          return;
+        }
         if (message.type === "remoteVerification/started") {
           setRemoteVerification({ sessionId: message.payload.sessionId, running: true, output: "" });
         } else if (message.type === "remoteVerification/stream") {
@@ -4499,6 +4523,23 @@ export function App() {
         setProviderApiKeyFocusRequest((request) => request + 1);
       }
       if (message.type === "operation/status") {
+        const pending = remoteVerificationRequestRef.current;
+        const remoteCommandFailure = message.payload.tone === "error" &&
+          (message.operation?.commandId === trainerCommands.remoteVerifyActiveFile ||
+            detectTrainingVerificationTargetMismatch(message.payload.message));
+        if (remoteCommandFailure) {
+          const cursor = useWorkbenchState.getState().syncCursor;
+          const matchesPending = pending?.cardId === displayedTrainingCardIdRef.current &&
+            (message.operation
+              ? pending?.operation?.requestId === message.operation.requestId &&
+                message.operation.commandId === trainerCommands.remoteVerifyActiveFile &&
+                operationMatchesWebviewScope(message.operation, cursor)
+              : !pending?.operation && detectTrainingVerificationTargetMismatch(message.payload.message));
+          if (!matchesPending) return;
+          remoteVerificationRequestRef.current = undefined;
+          setRemoteVerification({ running: false, output: "" });
+          setTrainingVerifyNotice(undefined);
+        }
         // §四十四: a store-written banner inherits its host domain. Resource
         // operation results (upload/index/delete/restore acks) render only in
         // Library — the Library view already reports its own mutation status —
@@ -7203,6 +7244,11 @@ export function App() {
       selectedTrainingRouteCard.cardId === trainingState?.selectedCardId
         ? selectedTrainingRouteCard.cardId
         : undefined));
+  displayedTrainingCardIdRef.current = activeTrainingCardId;
+  useEffect(() => {
+    remoteVerificationRequestRef.current = undefined;
+    setRemoteVerification({ running: false, output: "" });
+  }, [activeTrainingCardId, syncCursor.generation, syncCursor.workspaceId, syncCursor.sessionId]);
   const activityDraftKey = `${composerSessionKey}\u0000${activeTrainingCardId ?? "unselected"}`;
   const activityDraft = layout.activityDrafts?.[activityDraftKey] ?? "";
   const [activityAttachmentBank, setActivityAttachmentBank] = useState<Record<string, MessageAttachment[]>>({});
@@ -8031,7 +8077,7 @@ export function App() {
       scenarioLabTitle: scenarioLabVisible ? trainingState?.scenarioLab?.title : undefined,
       scenarioLabStatus: scenarioLabVisible ? trainingState?.scenarioLab?.status : undefined,
       scenarioLabScenario: scenarioLabVisible
-        ? trainingState?.scenarioLab?.lastAction ?? trainingState?.scenarioLab?.reviewOutcome
+        ? trainingState?.scenarioLab?.summary
         : undefined,
       theoryDrillVisible,
       theoryDrillId: theoryDrillVisible ? trainingState?.theoryDrill?.id : undefined,
@@ -10140,21 +10186,24 @@ export function App() {
         payload: {
           source: "training",
           cardId: activeTrainingCardId,
-          cardTitle: visibleTrainingCardTitle,
-          acceptanceCriteria: selectedTrainingCardCandidate?.acceptanceCriteria?.length
-            ? selectedTrainingCardCandidate.acceptanceCriteria
-            : selectedTrainingRouteCard?.acceptanceCriteria?.length
-              ? selectedTrainingRouteCard.acceptanceCriteria
-              : authoritativeVerifyItems,
-          learnerDeliverables: trainingDeliverables,
-          expectedSymbols: trainingCardType === "practice" ? practiceExpectedSymbols : [],
-          filesToTouch: trainingFilesToTouch,
+          cardTitle: readTrainingCardText(boundTrainingCardFacts, "title", () => visibleTrainingCardTitle),
+          acceptanceCriteria: boundTrainingCardFacts
+            ? boundTrainingCardFacts.lists.acceptanceCriteria ?? boundTrainingCardFacts.lists.verificationSteps ?? []
+            : selectedTrainingCardCandidate?.acceptanceCriteria?.length
+              ? selectedTrainingCardCandidate.acceptanceCriteria
+              : selectedTrainingRouteCard?.acceptanceCriteria?.length
+                ? selectedTrainingRouteCard.acceptanceCriteria
+                : authoritativeVerifyItems,
+          learnerDeliverables: readTrainingCardList(boundTrainingCardFacts, "learnerDeliverables", () => trainingDeliverables),
+          expectedSymbols: trainingCardType === "practice" ? readTrainingCardList(boundTrainingCardFacts, "expectedSymbols", () => practiceExpectedSymbols) : [],
+          filesToTouch: readTrainingCardList(boundTrainingCardFacts, "filesToTouch", () => trainingFilesToTouch),
         },
       },
     });
   }, [
     leftoverTrainingHandoffChromeNotLive,
     activeTrainingCardId,
+    boundTrainingCardFacts,
     authoritativeVerifyItems,
     selectedTrainingCardCandidate?.acceptanceCriteria,
     selectedTrainingRouteCard?.acceptanceCriteria,
@@ -12608,10 +12657,12 @@ export function App() {
       }
       setRemoteVerification({ running: true, output: "" });
       setTrainingVerifyNotice(undefined);
-      postMessage({
+      const operation = postMessage({
         type: "command/execute",
-        payload: { commandId: trainerCommands.remoteVerifyActiveFile },
+        payload: { commandId: trainerCommands.remoteVerifyActiveFile,
+          payload: { expectedCardId: activeTrainingCardId ?? "" } },
       });
+      remoteVerificationRequestRef.current = { cardId: activeTrainingCardId ?? "", operation };
       return;
     }
     if (isBrowserPreview) {
@@ -12817,25 +12868,27 @@ export function App() {
           }
           onRefreshResources={
             isBrowserPreview
-              ? () =>
+              ? () => {
                   postMessage({
                     type: "command/execute",
                     payload: {
                       commandId: trainerCommands.indexResources,
                     },
-                  })
+                  });
+                }
               : requestResourceIndex
           }
           onRefreshDeletedResources={
             isBrowserPreview
               ? undefined
-              : () =>
+              : () => {
                   postMessage({
                     type: "command/execute",
                     payload: {
                       commandId: trainerCommands.refreshResourceTrash,
                     },
-                  })
+                  });
+                }
           }
           onDeleteResources={
             isBrowserPreview
@@ -12866,7 +12919,7 @@ export function App() {
 
   const renderTrainingView = () => {
     const title = hasRenderableTrainingCard
-      ? boundTrainingCardFacts?.text.title ?? pickLanguageAlignedTrainingText(
+      ? readTrainingCardText(boundTrainingCardFacts, "title", () => pickLanguageAlignedTrainingText(
           layout.composerLanguage,
           visibleTrainingCardTitle,
           leftoverTrainingHandoffChromeNotLive
@@ -12883,12 +12936,14 @@ export function App() {
             : trainingState?.latestTrainingNextHop?.title,
           liveTrainingTitle,
           formalPlanLive || liveTask ? resolvedCoachFocus : undefined,
-        ) ?? trainingViewLabel(layout.composerLanguage)
+        )) ?? trainingViewLabel(layout.composerLanguage)
       : trainingViewLabel(layout.composerLanguage);
     const currentStep = hasRenderableTrainingCard
-      ? boundTrainingCardFacts?.text.problemStatement ??
-        boundTrainingCardFacts?.text.suggestedWorkspaceAction ??
-        boundTrainingCardFacts?.text.deliverable ?? pickLanguageAlignedTrainingText(
+      ? boundTrainingCardFacts
+        ? boundTrainingCardFacts.text.problemStatement ??
+          boundTrainingCardFacts.text.suggestedWorkspaceAction ??
+          boundTrainingCardFacts.text.deliverable ?? ""
+        : pickLanguageAlignedTrainingText(
           layout.composerLanguage,
           trainingProblemStatement,
           trainingSuggestedWorkspaceAction,
@@ -12898,20 +12953,22 @@ export function App() {
         ) ?? ""
       : "";
     const localizedSuggestedWorkspaceAction = hasRenderableTrainingCard
-      ? boundTrainingCardFacts?.text.suggestedWorkspaceAction ?? pickLanguageAlignedTrainingText(
+      ? readTrainingCardText(boundTrainingCardFacts, "suggestedWorkspaceAction", () => pickLanguageAlignedTrainingText(
           layout.composerLanguage,
           trainingSuggestedWorkspaceAction,
-        )
+        ))
       : undefined;
     const localizedScenario = hasRenderableTrainingCard
-      ? boundTrainingCardFacts?.text.scenario ?? boundTrainingCardFacts?.text.scenarioPack ?? pickLanguageAlignedTrainingText(
+      ? boundTrainingCardFacts
+        ? boundTrainingCardFacts.text.scenario ?? boundTrainingCardFacts.text.scenarioPack
+        : pickLanguageAlignedTrainingText(
           layout.composerLanguage,
           trainingScenario,
           trainingScenarioPackLabel,
         )
       : undefined;
     const localizedWhyNow = hasRenderableTrainingCard
-      ? boundTrainingCardFacts?.text.whyNow ?? pickLanguageAlignedTrainingText(layout.composerLanguage, liveTrainingWhy)
+      ? readTrainingCardText(boundTrainingCardFacts, "whyNow", () => pickLanguageAlignedTrainingText(layout.composerLanguage, liveTrainingWhy))
       : undefined;
     const localizedSourceSummary = hasRenderableTrainingCard
       ? pickLanguageAlignedTrainingText(
@@ -12935,7 +12992,7 @@ export function App() {
     const localizedCurrentFocus = hasTrainingCard
       // A matching card's technical focus remains authoritative across locale
       // changes, including a settings refresh that clears the recovered flag.
-      ? pickFirstText(
+      ? readTrainingCardText(boundTrainingCardFacts, "focusArea", () => pickFirstText(
           selectedTrainingCardCandidate && selectedTrainingCardCandidate.cardId === activeTrainingCardId
             ? selectedTrainingCardCandidate.focusArea : undefined,
           selectedTrainingRouteCard && selectedTrainingRouteCard.cardId === activeTrainingCardId
@@ -12955,7 +13012,7 @@ export function App() {
         ) ?? pickFirstText(
           liveTrainingCurrentFocus,
           liveTrainingFocus,
-        )
+        ))
       : undefined;
 
     return (
@@ -12975,7 +13032,7 @@ export function App() {
             <PracticeResponse
               attachmentScope={`${attachmentScope}\u0000${activeTrainingCardId ?? ""}\u0000${trainingComposerPhase}`}
               label={localizedTrainingComposerAccessibilityLabel}
-              prompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : trainingComposerReflectMode ? boundTrainingCardFacts?.text.reflectionPrompt ?? trainingReflectionPrompt : undefined}
+              prompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : trainingComposerReflectMode ? readTrainingCardText(boundTrainingCardFacts, "reflectionPrompt", () => trainingReflectionPrompt) : undefined}
               value={activityDraft}
               language={layout.composerLanguage}
               attachments={activityAttachments}
@@ -13004,8 +13061,8 @@ export function App() {
           learningFamily={trainingLearningFamily}
           learningSubtype={trainingLearningSubtype}
           whyThisCard={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : localizedWhyNow}
-          targetSkill={boundTrainingCardFacts?.text.targetSkill ?? liveTrainingSkill}
-          problemStatement={boundTrainingCardFacts?.text.problemStatement ?? trainingProblemStatement}
+          targetSkill={readTrainingCardText(boundTrainingCardFacts, "targetSkill", () => liveTrainingSkill)}
+          problemStatement={readTrainingCardText(boundTrainingCardFacts, "problemStatement", () => trainingProblemStatement)}
           suggestedWorkspaceAction={localizedSuggestedWorkspaceAction}
           scenario={localizedScenario}
           whyNow={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : localizedWhyNow}
@@ -13026,23 +13083,23 @@ export function App() {
                 )
               : undefined
           }
-          apiHints={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.lists.apiHints ?? trainingApiHints : []}
-          constraints={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.lists.constraints ?? trainingConstraints : []}
-          selfCheck={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.lists.selfCheck ?? trainingSelfCheck : []}
-          deliverable={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : hasTrainingCard ? boundTrainingCardFacts?.text.deliverable ?? trainingDeliverable : undefined}
-          deliverables={reviewArtifactForeground ? selectedTrainingCardCandidate?.learnerDeliverables ?? [] : hasTrainingCard ? boundTrainingCardFacts?.lists.learnerDeliverables ?? trainingDeliverables : []}
-          validationMethod={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.text.validationMethod ?? trainingValidationMethod : undefined}
-          verificationMethod={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.text.verificationMethod ?? trainingVerificationMethod : undefined}
-          verifyItems={reviewArtifactForeground ? selectedTrainingCardCandidate?.verificationSteps ?? [] : hasTrainingCard ? boundTrainingCardFacts?.lists.verificationSteps ?? boundTrainingCardFacts?.lists.acceptanceCriteria ?? authoritativeVerifyItems : []}
-          successSignal={reviewArtifactForeground ? trainingState?.reviewArtifact?.verifiedResult : hasTrainingCard ? boundTrainingCardFacts?.text.successSignal ?? trainingSuccessSignal : undefined}
-          returnWith={reviewArtifactForeground ? trainingState?.reviewArtifact?.nextSelfImplementationRule : hasTrainingCard ? boundTrainingCardFacts?.text.returnWith ?? trainingReturnWithText : undefined}
-          nextAfterCompletion={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.text.nextAfterCompletion ?? trainingNextAfterCompletionText : undefined}
-          fallbackAction={!reviewArtifactForeground && hasTrainingCard ? trainingFallbackActionText : undefined}
-          filesToTouch={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.lists.filesToTouch ?? trainingFilesToTouch : []}
-          hintLadder={!reviewArtifactForeground && hasTrainingCard && !trainingComposerReturnMode ? boundTrainingCardFacts?.lists.hintLadder ?? trainingHintLadder : []}
-          commonMistakes={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.lists.commonMistakes ?? trainingCommonMistakes : []}
-          stuckRecovery={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : hasTrainingCard ? boundTrainingCardFacts?.text.stuckRecovery ?? trainingStuckRecovery : undefined}
-          reflectionPrompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : hasTrainingCard ? boundTrainingCardFacts?.text.reflectionPrompt ?? trainingReflectionPrompt : undefined}
+          apiHints={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "apiHints", () => trainingApiHints) : []}
+          constraints={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "constraints", () => trainingConstraints) : []}
+          selfCheck={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "selfCheck", () => trainingSelfCheck) : []}
+          deliverable={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "deliverable", () => trainingDeliverable) : undefined}
+          deliverables={reviewArtifactForeground ? selectedTrainingCardCandidate?.learnerDeliverables ?? [] : hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "learnerDeliverables", () => trainingDeliverables) : []}
+          validationMethod={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "validationMethod", () => trainingValidationMethod) : undefined}
+          verificationMethod={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "verificationMethod", () => trainingVerificationMethod) : undefined}
+          verifyItems={reviewArtifactForeground ? selectedTrainingCardCandidate?.verificationSteps ?? [] : hasTrainingCard ? boundTrainingCardFacts ? boundTrainingCardFacts.lists.verificationSteps ?? boundTrainingCardFacts.lists.acceptanceCriteria ?? [] : authoritativeVerifyItems : []}
+          successSignal={reviewArtifactForeground ? trainingState?.reviewArtifact?.verifiedResult : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "successSignal", () => trainingSuccessSignal) : undefined}
+          returnWith={reviewArtifactForeground ? trainingState?.reviewArtifact?.nextSelfImplementationRule : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "returnWith", () => trainingReturnWithText) : undefined}
+          nextAfterCompletion={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "nextAfterCompletion", () => trainingNextAfterCompletionText) : undefined}
+          fallbackAction={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "fallbackAction", () => trainingFallbackActionText) : undefined}
+          filesToTouch={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "filesToTouch", () => trainingFilesToTouch) : []}
+          hintLadder={!reviewArtifactForeground && hasTrainingCard && !trainingComposerReturnMode ? readTrainingCardList(boundTrainingCardFacts, "hintLadder", () => trainingHintLadder) : []}
+          commonMistakes={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "commonMistakes", () => trainingCommonMistakes) : []}
+          stuckRecovery={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "stuckRecovery", () => trainingStuckRecovery) : undefined}
+          reflectionPrompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "reflectionPrompt", () => trainingReflectionPrompt) : undefined}
           outcome={!reviewArtifactForeground && hasTrainingCard ? trainingOutcomeCard : undefined}
           nextHop={
             hasRenderableTrainingCard && !trainingRestoreForeground && !reviewArtifactForeground
@@ -13055,7 +13112,7 @@ export function App() {
                 pickLanguageAlignedTrainingText(layout.composerLanguage, liveTrainingCoachChrome)
               : undefined
           }
-          scenarioPackLabel={hasTrainingCard ? boundTrainingCardFacts?.text.scenarioPack ?? trainingScenarioPackLabel : undefined}
+          scenarioPackLabel={hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "scenarioPack", () => trainingScenarioPackLabel) : undefined}
           currentFocus={localizedCurrentFocus}
           latestTrainingHandoffStatus={
             reviewArtifactForeground || trainingRestoreReplacesSelectedCard
@@ -13069,8 +13126,8 @@ export function App() {
                 selectedTrainingCardCandidate?.learningPhase)
           }
           latestTrainingReliability={
-            !reviewArtifactForeground || trainingState?.latestTrainingReliability?.cardId === activeTrainingCardId
-              ? trainingState?.latestTrainingReliability
+            activeTrainingCardId && trainingState?.latestTrainingReliability?.cardId === activeTrainingCardId
+              ? trainingState.latestTrainingReliability
               : undefined
           }
           reliabilityInFlight={trainingPersistencePending}
@@ -13169,7 +13226,7 @@ export function App() {
           onNextCard={handleGenerateTrainingCard}
           onRefreshDeck={handleRefreshTrainingDeck}
           flashPrompt={trainingFlashPrompt}
-          expectedSymbols={trainingCardType === "practice" ? boundTrainingCardFacts?.lists.expectedSymbols ?? practiceExpectedSymbols : []}
+          expectedSymbols={trainingCardType === "practice" ? readTrainingCardList(boundTrainingCardFacts, "expectedSymbols", () => practiceExpectedSymbols) : []}
           />
 
         </Suspense>
@@ -13227,7 +13284,7 @@ export function App() {
       ? {
           workspaceId: trainingState?.workspaceId ?? data.memory.workspace?.workspaceId ?? "",
           cardId: activeTrainingCardId,
-          title: boundTrainingCardFacts?.text.title ?? visibleTrainingCardTitle ?? selectedTrainingCardCandidate?.title ?? "",
+          title: readTrainingCardText(boundTrainingCardFacts, "title", () => visibleTrainingCardTitle ?? selectedTrainingCardCandidate?.title) ?? trainingViewLabel(layout.composerLanguage),
           status: normalizedTrainingNextHopStatus === "continued_in_chat" || resolvedReviewArtifact
             ? "completed" : trainingHandoffReturnRequired || trainingComposerReturnMode
               ? "return_pending" : "active",
@@ -13265,6 +13322,12 @@ export function App() {
       confirmStep: () => openPlanComposerMode("explain"),
     },
   );
+  const learningPracticeReadyToContinue = Boolean(
+    boundTrainingCardFacts && trainingCardType === "practice" && recoveredRuntime &&
+    syncStatus === "current" && learningPrimaryAction.intent === "resume_training" &&
+    learningPrimaryAction.target.cardId === boundTrainingCardFacts.cardId &&
+    !learningPrimaryAction.disabled && !learningPrimaryAction.busy,
+  );
   const renderPlanView = () => (
     <section className="plan-view">
       <Suspense fallback={<ViewFallback label={t.plan} language={layout.composerLanguage} />}>
@@ -13282,7 +13345,11 @@ export function App() {
         onNavigateToView={setActiveView}
         className="plan-pane"
         compactPrimary
-        leftoverNote={leftoverPlanNotLive ? t.leftoverNotLive : undefined}
+        leftoverNote={leftoverPlanNotLive
+          ? learningPracticeReadyToContinue
+            ? templateCopy[layout.composerLanguage].practiceReadyToContinue
+            : t.leftoverNotLive
+          : undefined}
         eyebrow=""
         title={
           workspaceSessionBlocked || !hasFormalPlan

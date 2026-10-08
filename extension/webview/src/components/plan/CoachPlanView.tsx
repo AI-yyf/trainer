@@ -1463,8 +1463,10 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         {renderComposerDraftReplacement("stage")}
         {actions?.length ? <details className="template-disclosure"><summary>{resolvedActionsLabel}</summary><div>{actions.map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} disabled={action.disabled} onClick={action.onClick} />)}</div></details> : null}
         {globalPlanContext}
-        <button type="button" className="template-back" onClick={() => props.onNavigateToView?.("training")}>{trainingViewLabel(language)}</button>
-        <button type="button" className="template-back" onClick={() => props.onNavigateToView?.("progress")}>{templateCopy[language].growth}</button>
+        <div className="template-secondary-links" data-learning-navigation="practice-growth">
+          <button type="button" className="template-back" data-learning-link="training" onClick={() => props.onNavigateToView?.("training")}>{trainingViewLabel(language)}</button>
+          <button type="button" className="template-back" data-learning-link="progress" onClick={() => props.onNavigateToView?.("progress")}>{templateCopy[language].growth}</button>
+        </div>
       </section>
     );
   }

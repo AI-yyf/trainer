@@ -313,3 +313,183 @@ These source results require a new clean installed package and fresh native
 acceptance. They do not rename f37's original native screenshots or its failed
 Windows workflow. Genuine model journeys remain blocked by the recorded zero
 credit balance and cannot be replaced by these preview/provider fixtures.
+
+## Clean a5 installed acceptance and remaining identity defects
+
+Commit `a5fc490cf1c192cc90947cb3866238e182a80dc8` was pushed to main and the
+original checkout was fast-forwarded. The final integrated Node run passes
+1957 of 1958 tests, with one explicit optional bundle skip and zero failures;
+the optional bundle gate is enabled separately and passes both checks.
+Strict checks and the actual TypeScript 5.9.3 Language Service report zero
+diagnostics across the eighteen changed code files. Browser regression remains
+402/402 and the strict synthetic performance result remains 37 ms / zero
+streaming long tasks.
+
+The clean darwin-arm64 VSIX is 115253316 bytes, SHA256
+`428ba05724c661a7a28cbab812088e51848f9d708e2ca6f667a4b0bb57bdd345`.
+Its external metadata records exact a5, `sourceDirty=false`, and the unchanged
+155-file Python source snapshot
+`b861323d5ca24f6d48d41642c2e1bf546fa3566182933df04660c8c7612eabe9`.
+The nested workspace-kind Companion is 1.0.0, SHA256
+`c303bb2139f8a767625f11c3d286276229548c7bff078ec609a0008a3c9f8dc7`.
+Root independently inspects the ZIP, nested archive, native binary, tracked
+source bytes and exact private credential absence. Official signed Code
+1.127.0 installs it in the isolated profile and the frozen installed Sidecar
+passes authenticated health. Code-added manifest/package metadata exceptions
+are inspected separately rather than treated as source-byte mismatches.
+
+Actual native Settings saves pass in Chinese and English. Learning Continue
+before and after two genuine Reload Window operations passes four checks at
+Chinese 460 px and English 340 px. The original complete-authored practice
+retains its session, workspace, card, Attempt, TRY phase and authored focus.
+Original Chinese task facts stay visible in English UI; this is preservation,
+not model translation. Evidence stays empty and all four capability dimensions
+stay `not_verified` with score zero. Projection `updatedAt` refreshes, so full
+projection-object byte equality is not claimed. Seven ordinary destination
+visits and Continue keep the current Sidecar PID/start count and all five
+provider counters unchanged at zero. The two explicit window reloads restart
+Sidecar separately. Public Sidecar stop and exact owned-process cleanup pass;
+the unrelated user window and recoverable isolated profile remain intact.
+
+Clean a5 [ordinary CI](https://github.com/AI-yyf/trainer/actions/runs/37839319252)
+and all nine [cross-platform jobs](https://github.com/AI-yyf/trainer/actions/runs/37839318921)
+pass. Their actual installed-host steps are explicit skips. Separate partial
+installed runs execute one Diagnostic job each and explicitly skip Server/UI:
+
+| Scope | Actual installed checks | Artifact identity |
+| --- | --- | --- |
+| [Linux](https://github.com/AI-yyf/trainer/actions/runs/37839455593) | 31 PASS, seven capture SKIP, zero failures | VSIX SHA256 `1d7fa58904b2536aea6858a34c1298f8c9ce72bc044e4bce0dcbdc7c982689c2` |
+| [Windows](https://github.com/AI-yyf/trainer/actions/runs/37839442984) | 34 PASS including seven captures, zero failures | VSIX SHA256 `2964590621c8d65764f073796e032fc429b91ebe8f6d2044cc1e97780a5d1100` |
+
+Both original uploaded ZIPs match GitHub digests. Root independently checks
+their complete bundled app directory: 152 entries, including 150 Python files,
+`AGENTS.md` and the scenario-pack JSON. The initial inspection's incorrect
+150-total-entry assumption is retained as an inspector error and corrected;
+it is not a product regression. The exact private credential and unwanted
+development state are absent in both VSIX archives and nested companions.
+
+Linux's actual GNOME Secret Service is unlocked; encrypted-keyring round trip,
+SecretStorage store/get/delete/confirmed absence, public Provider save and
+verification, Sidecar health and verified owned-root removal pass. Its seven
+screenshots and three theme pairs are explicit skips. Windows's physical
+root comparison accepts the recorded `runneradmin` / `RUNNER~1` aliases while
+preserving managed root/context/session predicates. ResourceReader reports
+the exact visible preview path and no nonexistent independent sandbox pane.
+Windows has twenty actual PNGs and three captured theme pairs, but the
+official report still records zero target-surface visual checks. No independent
+Windows profile-deletion receipt exists; deletion is not inferred.
+
+Human inspection of those Windows PNGs confirms a remaining Scenario defect:
+the restored Scenario title is correct, while missing authored fields fall
+back to an unrelated previous Flash card's action/completion. The earlier
+darwin native pass uses a complete-field card and cannot cover this case.
+The same per-field fallback also pairs the correct local verification card ID
+with foreign criteria. A follow-up source round must make a resolved bound
+object the owner of all optional fields: missing values remain missing and
+use neutral template defaults, with legacy access allowed only when no bound
+object exists. Learning's recovered-practice storage wording and adjacent
+Training/Growth utility buttons also need the recorded consumer refinement.
+
+A bounded replay of the actual a5 compiled remote command finds another
+identity boundary: a displayed restored Scenario does not accompany the
+remote Verify request, so a stable different live practice card can be run and
+attested. The old Flash fixture runs without attestation; the practice-card
+counterexample is reconstructed with in-memory gateways, not real remote
+execution. Existing workspace/session guards compare the old live card to
+itself and do not close this boundary. The follow-up must assert the displayed
+card ID against the host-authoritative live card before starting and keep
+late remote presentation tied to its actual card. No client-provided identity
+may select an attestation target. These defects prevent full product closure
+despite the green scoped engineering checks.
+
+The read-only OpenRouter credit query at `2026-10-08T20:34:35.320Z` returns
+HTTP 200, credits zero and usage 0.2242375. No paid retry or purchase occurs.
+The required twenty to thirty genuine teaching journeys remain unaccepted;
+loopback fixture successes, installed packages and screenshot captures do not
+replace that teaching-quality evidence. Original Remote-SSH acceptance remains
+bound to its own earlier exact artifact and unchanged backend source scope.
+
+## Follow-up: bind optional facts and remote presentation to their actual task
+
+Bound task fields now use explicit lazy selectors. When a bound object exists,
+absent text remains undefined and absent lists remain empty; legacy getters
+are not evaluated. Same-ID candidate/route fallback stays available inside
+the resolver. Local verification's title, criteria, deliverables, symbols and
+files use the same owner, as does authored focus. Review, Flash, freshness,
+restore phase and Evidence ownership remain on their existing paths.
+
+The native Scenario follow-up exposes a second task-description root cause:
+the backend already supplies `ScenarioLab.summary`, but the host adapter and
+webview summary types omit it. The restore adapter substitutes `lastAction`,
+making a control enum such as `restore_history` look like task instructions.
+The existing summary is now preserved through those adapters; restored task
+text reads summary only. Different explicit Scenario IDs cannot inherit the
+prior Scenario's title, description or other facts. Same-ID partial updates
+retain their own facts, and an explicit empty summary clears old task text.
+Four actual compiled-mapper cases fail before the correction; all 109 related
+mapping tests pass afterward. The backend model and stored data are unchanged.
+
+The UI remote Verify request now includes an expected-card assertion. The
+registry forwards it and the host rejects malformed, empty, absent-live or
+different-card assertions before trust, gateway, hashing or process execution.
+This assertion never chooses a card for attestation. No-argument Command
+Palette execution retains its host-owned behavior. Existing canonical URI,
+stable hash, workspace/session, cancellation, unknown outcome, idempotency and
+delivery guards remain. Remote lifecycle events carry the captured host card
+ID; the UI accepts only the current displayed card and originating operation.
+Switching cards clears presentation, and an A-to-B-to-A switch cannot make
+an old error clear a new request. It does not cancel a process or invent an
+Evidence verdict. A dedicated eight-language Training notice explains a
+target mismatch without claiming that verification ran.
+
+The receiving schema was also missing the three existing remote lifecycle
+variants and Companion-state message, dropping them before App's handler.
+Their explicit schemas now validate the existing fields and typed enum; no
+arbitrary-message passthrough is introduced. `postMessage` returns its same
+already-dispatched operation identity so the UI can associate errors with
+the originating request. It does not generate a second identity or change
+the wire format. Runtime's initial twenty-pass/six-failure behavioral run is
+retained; the final related suite passes 82/82. This is actual compiled-host
+and subscriber behavior with in-memory gateways, not real Remote-SSH proof.
+
+Learning's current-practice note uses the resolved, enabled, nonbusy resume
+action and the exact bound practice identity. It does not infer a second
+action priority or claim readiness for blocked workspaces, provider failures,
+frozen plans or stale state. The eight-language consumer wording is paired
+with two independent Training/Growth utility buttons and a token-based gap.
+Root inspects the stable preview screenshots: restored own task description,
+neutral missing-field defaults, one primary action and visibly separate links.
+The forty-two focused browser cases pass, including the actual decoder,
+local verification payload, scoped rejection and late-event boundaries.
+The initial fixture command/shape/selector mistakes remain separate from the
+unchanged-a5 reproduced product failures.
+
+Combined `npm run verify` passes root build, strict checks, full extension
+regression, Ruff, Pyright and 3284 backend tests plus 28 subtests in 98.73 s.
+The backend retains 53 warnings. The dot reporter emits 1979 test results;
+it does not provide a separate skip breakdown. The first combined attempt's
+two failures are preserved as stale direct-prop/source-condition anchors;
+their replacements retain the new lazy file owner and Training-only marker
+conditions. Actual TypeScript 5.9.3 Language Service diagnostics are zero for
+all twenty-six edited/new code files. JavaScript uses `checkJs=false` and is
+validated separately by executable Node/browser tests.
+
+The combined preview regression passes all 435 cases. The final added visible
+stdout assertion is checked separately against the same combined bundle and
+passes; production bytes do not change. The enabled bundle-size gate passes
+2/2, and the actual geometry script passes 182 assertions for three stable
+destinations, composer ownership, overflow and first-viewport primary actions
+at 340/420/460 across Chinese/English and dark/light. These fixture results
+prove layout and deterministic interactions, not learner Evidence.
+
+The refreshed strict synthetic probe records warm navigation p90 48 ms and
+zero streaming long tasks, both within the existing 100 ms / zero budgets.
+The prior sample was 37 ms. No speed improvement or causal regression claim
+is made from these single-machine samples; the synthetic stream and 50 ms
+observer-floor limitations remain. The owned preview process is stopped before
+the clean package build, and the two private RED/GREEN preview servers are
+also verified closed. All original failure logs and old artifact bytes remain.
+
+Fresh clean packaging, installed screenshots and actual Remote-SSH validation
+are still required for this follow-up. Earlier a5 captures, compiled replays
+and the original 28188 remote receipt retain their exact scopes and outcomes.

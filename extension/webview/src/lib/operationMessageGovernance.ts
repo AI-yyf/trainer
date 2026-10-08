@@ -110,6 +110,27 @@ export const ATTESTATION_UNDELIVERED_MARKER = "[[trainer-attestation-undelivered
 /** The host rejected this request before dispatch because its scope changed. */
 export const OPERATION_SCOPE_CHANGED_MARKER = "[[trainer-operation-scope-changed]]";
 
+/** The displayed practice did not match the host's live card; no run started. */
+export const TRAINING_VERIFICATION_TARGET_MISMATCH_MARKER = "[[trainer-training-verification-target-mismatch]]";
+
+export function detectTrainingVerificationTargetMismatch(message: string): boolean {
+  return message.includes(TRAINING_VERIFICATION_TARGET_MISMATCH_MARKER);
+}
+
+export function trainingVerificationTargetMismatchMessage(language: ComposerLanguage): string {
+  const copy: Record<ComposerLanguage, string> = {
+    "zh-CN": "这张练习与当前任务不一致。验证没有启动；请重新打开当前练习。",
+    "en-US": "This practice no longer matches the current task. Verification was not started; reopen the current practice.",
+    "es-ES": "Esta práctica ya no coincide con la tarea actual. La verificación no se inició; vuelve a abrir la práctica actual.",
+    "fr-FR": "Cet exercice ne correspond plus à la tâche actuelle. La vérification n’a pas démarré ; rouvrez l’exercice actuel.",
+    "de-DE": "Diese Übung entspricht nicht mehr der aktuellen Aufgabe. Die Verifizierung wurde nicht gestartet; öffne die aktuelle Übung erneut.",
+    "ja-JP": "この練習は現在のタスクと一致しません。検証は開始されていません。現在の練習を開き直してください。",
+    "ko-KR": "이 연습은 현재 과제와 일치하지 않습니다. 검증이 시작되지 않았습니다. 현재 연습을 다시 여세요.",
+    "pt-BR": "Esta prática não corresponde mais à tarefa atual. A verificação não foi iniciada; reabra a prática atual.",
+  };
+  return copy[language];
+}
+
 export function detectOperationScopeChanged(message: string): boolean {
   return message.includes(OPERATION_SCOPE_CHANGED_MARKER);
 }
@@ -289,7 +310,9 @@ export function sanitizeOperationFailureMessage(
   return {
     ...message,
     tone: "error",
-    message: detectOperationScopeChanged(message.message)
+    message: detectTrainingVerificationTargetMismatch(message.message)
+      ? trainingVerificationTargetMismatchMessage(language)
+      : detectOperationScopeChanged(message.message)
       ? operationScopeChangedMessage(language)
       : detectAttestationUndelivered(message.message)
       ? attestationUndeliveredMessage(language)
@@ -321,7 +344,7 @@ export function resolveOperationMessageSurface(
   const facts = typeof input === "object" ? input : { message: input, explicitSurface };
   const message = facts.message;
   if (!message) return "global";
-  if (detectAttestationUndelivered(message)) {
+  if (detectTrainingVerificationTargetMismatch(message) || detectAttestationUndelivered(message)) {
     return "training";
   }
   if (facts.explicitSurface) return facts.explicitSurface;

@@ -261,3 +261,23 @@ test('operation notices resolve each new owner without inheriting a prior surfac
   assert.equal(resolveOperationMessageSurface({ explicitSurface: 'plan' }), 'global');
   assert.equal(resolveOperationMessageSurface({ message: ATTESTATION_UNDELIVERED_MARKER, explicitSurface: 'resources' }), 'training');
 });
+
+test('a refused verification target is a localized Training notice, even with another explicit surface', () => {
+  const marker = '[[trainer-training-verification-target-mismatch]]';
+  const messages = new Set();
+  for (const language of ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR']) {
+    const operation = { requestId: 'request-owned', commandId: 'trainer.remote.verifyActiveFile', targetId: 'scenario',
+      tone: 'error', message: marker + ' hidden raw host detail' };
+    const sanitized = governance.sanitizeOperationFailureMessage(operation, language);
+    assert.equal(sanitized.message, governance.trainingVerificationTargetMismatchMessage(language));
+    assert.equal(sanitized.requestId, operation.requestId);
+    assert.equal(sanitized.commandId, operation.commandId);
+    assert.equal(sanitized.targetId, operation.targetId);
+    assert.equal(governance.resolveOperationMessageSurface(operation.message, 'global'), 'training');
+    assert.doesNotMatch(sanitized.message, /\[\[|hidden raw host detail|workspace or conversation|工作区或会话/);
+    messages.add(sanitized.message);
+  }
+  assert.equal(messages.size, 8);
+  assert.equal(governance.detectTrainingVerificationTargetMismatch('ordinary error'), false);
+  assert.match(governance.trainingVerificationTargetMismatchMessage('en-US'), /Verification was not started/);
+});

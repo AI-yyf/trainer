@@ -61,7 +61,7 @@ test('governance module maps the undelivered marker to eight-language copy and t
   // message is relayed by a generic caller.
   assert.match(
     governance,
-    /if \(detectAttestationUndelivered\(message\)\) \{\s*return "training";\s*\}/,
+    /if \(detectTrainingVerificationTargetMismatch\(message\) \|\| detectAttestationUndelivered\(message\)\) \{\s*return "training";\s*\}/,
   );
   // The store-side sanitizer maps the marker to local copy before the generic
   // operation-recovery fallback can swallow it.

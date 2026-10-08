@@ -82,9 +82,9 @@ test('training cards preserve their explicit deliverable and verification contra
   assert.match(appSource, /const trainingVerificationMethod = pickLanguageAlignedTrainingText/);
   assert.match(appSource, /trainingDeliverable,[\s\S]*?learnerDeliverables/);
   assert.match(appSource, /trainingValidationMethod,[\s\S]*?trainingVerificationMethod,[\s\S]*?verificationSteps/);
-  assert.match(appSource, /hasTrainingCard \? boundTrainingCardFacts\?\.text\.deliverable \?\? trainingDeliverable : undefined/);
-  assert.match(appSource, /hasTrainingCard \? boundTrainingCardFacts\?\.text\.validationMethod \?\? trainingValidationMethod : undefined/);
-  assert.match(appSource, /hasTrainingCard \? boundTrainingCardFacts\?\.text\.verificationMethod \?\? trainingVerificationMethod : undefined/);
+  assert.match(appSource, /hasTrainingCard \? readTrainingCardText\(boundTrainingCardFacts, "deliverable", \(\) => trainingDeliverable\) : undefined/);
+  assert.match(appSource, /hasTrainingCard \? readTrainingCardText\(boundTrainingCardFacts, "validationMethod", \(\) => trainingValidationMethod\) : undefined/);
+  assert.match(appSource, /hasTrainingCard \? readTrainingCardText\(boundTrainingCardFacts, "verificationMethod", \(\) => trainingVerificationMethod\) : undefined/);
 
   assert.match(source, /deliverable\?: string;/);
   assert.match(source, /validationMethod\?: string;/);
@@ -159,4 +159,17 @@ test('training restore targets become the current card and publish the visible s
   assert.doesNotMatch(trainingSource, /<details className="training-current__more">/);
   // Queue access and its layout beside a current card are exercised by the
   // Start review scenario in trainer-session-recovery.spec.js.
+});
+
+test('reliability facts passed into the focused card require its exact current identity', () => {
+  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const start = source.indexOf('          latestTrainingReliability={');
+  const end = source.indexOf('          reliabilityInFlight=', start);
+  assert.ok(start >= 0 && end > start);
+  const binding = source.slice(start, end);
+  assert.match(binding, /activeTrainingCardId && trainingState\?\.latestTrainingReliability\?\.cardId === activeTrainingCardId/);
+  assert.match(binding, /\? trainingState\.latestTrainingReliability\s*:\s*undefined/);
+  assert.doesNotMatch(binding, /!reviewArtifactForeground\s*\|\|/);
+  // The existing command/persistence guard continues to own in-flight state.
+  assert.match(source.slice(end, end + 120), /reliabilityInFlight=\{trainingPersistencePending\}/);
 });

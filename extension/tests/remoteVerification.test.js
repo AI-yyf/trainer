@@ -394,3 +394,124 @@ test('a canonical root change during execution invalidates equal-hash remote evi
   assert.equal(posts.length, 0);
   assert.equal(observations, 2);
 });
+
+test('active-file UI target assertions reject malformed or different IDs before trust, gateway or process', async () => {
+  for (const expectedCardId of [undefined, null, '', '   ', 9, {}, 'restored-scenario']) {
+    const { remoteVerifyActiveFileCommand } = loadWithVscodeMock(remoteVerificationModulePath, {});
+    let trustCalls = 0, gatewayCalls = 0;
+    const { context, posts } = createCommandContext({
+      sessionId: 'session-owned', workspace: { isRemoteWorkspace: true, remoteName: 'ssh-remote' },
+      trainingState: { selectedCardId: 'old-live-formal-card', selectedCardType: 'practice', selectedCardStatus: 'active' },
+    });
+    context.trustGuard.ensureTrusted = async () => { trustCalls += 1; return true; };
+    context.workspaceGateway.capabilities = async () => { gatewayCalls += 1; return { companionAvailable: true, verify: true }; };
+    const result = await remoteVerifyActiveFileCommand(context, { expectedCardId });
+    assert.equal(result.ok, false, String(expectedCardId));
+    assert.equal(result.message, '[[trainer-training-verification-target-mismatch]]');
+    assert.equal(trustCalls, 0);
+    assert.equal(gatewayCalls, 0);
+    assert.deepEqual(posts, []);
+  }
+});
+
+test('a UI target assertion cannot turn a flash, closed or missing host card into a live practice', async () => {
+  for (const trainingState of [null,
+    { selectedCardId: 'scenario', selectedCardType: 'flash', selectedCardStatus: 'active' },
+    { selectedCardId: 'scenario', selectedCardType: 'practice', selectedCardStatus: 'fed_back' },
+  ]) {
+    const { remoteVerifyActiveFileCommand } = loadWithVscodeMock(remoteVerificationModulePath, {});
+    const { context, posts } = createCommandContext({ workspace: { isRemoteWorkspace: true }, trainingState });
+    let trustCalls = 0;
+    context.trustGuard.ensureTrusted = async () => { trustCalls += 1; return true; };
+    assert.equal((await remoteVerifyActiveFileCommand(context, { expectedCardId: 'scenario' })).ok, false);
+    assert.equal(trustCalls, 0);
+    assert.deepEqual(posts, []);
+  }
+});
+
+async function waitForRemoteTerminal(messages) {
+  const deadline = Date.now() + 2000;
+  while (!messages.some(message => message.type === 'remoteVerification/finished')) {
+    if (Date.now() > deadline) throw new Error('Remote stub did not settle');
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  await new Promise(resolve => setImmediate(resolve));
+}
+
+test('matching UI assertion and no-argument palette both keep host-owned event and attestation identities', async () => {
+  for (const payload of [{ expectedCardId: ' live-card ' }, undefined]) {
+    const { remoteVerifyActiveFileCommand } = loadWithVscodeMock(remoteVerificationModulePath, {});
+    const { context, posts, messages } = createCommandContext({
+      sessionId: 'session-owned', workspace: { isRemoteWorkspace: true, remoteName: 'ssh-remote' },
+      trainingState: { selectedCardId: 'live-card', selectedCardType: 'practice', selectedCardStatus: 'active' },
+      gateway: { async runVerification(spec, options) {
+        options.onStart({ session_id: 'host-owned-run' });
+        options.onChunk({ stream: 'stdout', text: 'test output' });
+        return { state: 'completed', result: 'passed', exit_code: 0, execution_location: 'remote:ssh-remote', stdout: 'pass', stderr: '' };
+      } },
+    });
+    assert.equal((await remoteVerifyActiveFileCommand(context, payload)).ok, true);
+    await waitForRemoteTerminal(messages);
+    const lifecycle = messages.filter(message => message.type.startsWith('remoteVerification/'));
+    assert.equal(lifecycle.length, 3);
+    for (const message of lifecycle) assert.equal(message.payload.cardId, 'live-card');
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0][2].card_id, 'live-card');
+    assert.equal(posts[0][2].idempotency_key, 'remote-verify:host-owned-run:live-card');
+    assert.equal(posts[0][2].verification_artifact.companion_session_id, 'host-owned-run');
+  }
+});
+
+test('registered active-file command forwards the UI assertion instead of silently becoming a palette command', async () => {
+  const configPath = path.resolve(__dirname, '../dist/extension/src/commands/registry.config.js');
+  const { buildCommandRegistrations } = loadWithVscodeMock(configPath, {});
+  const { context, posts } = createCommandContext({
+    workspace: { isRemoteWorkspace: true, remoteName: 'ssh-remote' },
+    trainingState: { selectedCardId: 'old-live-formal-card', selectedCardType: 'practice', selectedCardStatus: 'active' },
+  });
+  let trustCalls = 0;
+  context.trustGuard.ensureTrusted = async () => { trustCalls += 1; return true; };
+  const registration = buildCommandRegistrations(context).find(entry => entry.commandId === 'trainer.remote.verifyActiveFile');
+  assert.ok(registration);
+  assert.equal((await registration.register(context, { expectedCardId: 'restored-scenario' })).ok, false);
+  assert.equal(trustCalls, 0);
+  assert.deepEqual(posts, []);
+});
+
+test('matching assertion keeps cancelled, timed-out and disconnected runs unknown without attestation', async () => {
+  for (const state of ['cancelled', 'timed_out', 'connection_lost']) {
+    const { remoteVerifyActiveFileCommand } = loadWithVscodeMock(remoteVerificationModulePath, {});
+    const { context, posts, messages } = createCommandContext({
+      workspace: { isRemoteWorkspace: true, remoteName: 'ssh-remote' }, sessionId: 'owned-session',
+      trainingState: { selectedCardId: 'live-card', selectedCardType: 'practice', selectedCardStatus: 'active' },
+      gateway: { async runVerification(spec, options) {
+        options.onStart({ session_id: 'interrupted-run' });
+        return { state, exit_code: null, execution_location: 'remote:ssh-remote', stdout: '', stderr: '' };
+      } },
+    });
+    assert.equal((await remoteVerifyActiveFileCommand(context, { expectedCardId: 'live-card' })).ok, true);
+    await waitForRemoteTerminal(messages);
+    const finished = messages.find(message => message.type === 'remoteVerification/finished').payload;
+    assert.equal(finished.state, state);
+    assert.equal(finished.cardId, 'live-card');
+    assert.equal('passed' in finished, false);
+    assert.deepEqual(posts, []);
+  }
+});
+
+test('a matched expected card still cannot start after the host card changes during preflight', async () => {
+  const { remoteVerifyActiveFileCommand } = loadWithVscodeMock(remoteVerificationModulePath, {});
+  let runs = 0;
+  const { context, posts } = createCommandContext({
+    workspace: { isRemoteWorkspace: true, remoteName: 'ssh-remote' }, sessionId: 'session-owned',
+    trainingState: { selectedCardId: 'live-card', selectedCardType: 'practice', selectedCardStatus: 'active' },
+  });
+  context.workspaceGateway.capabilities = async () => {
+    context.getHostState().bootstrap.workspaceTrainingState.selectedCardId = 'later-card';
+    return { companionAvailable: true, verify: true };
+  };
+  context.workspaceGateway.runVerification = async () => { runs += 1; throw new Error('must not run'); };
+  assert.equal((await remoteVerifyActiveFileCommand(context, { expectedCardId: 'live-card' })).ok, false);
+  assert.equal(runs, 0);
+  assert.deepEqual(posts, []);
+});

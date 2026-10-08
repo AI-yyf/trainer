@@ -51,6 +51,23 @@ const scopeSchema = z.object({ generation: z.number().int().nonnegative(), revis
   messageId: z.string(), workspaceId: z.string(), sessionId: z.string() });
 const operationPhaseSchema = z.enum(["pending", "running", "succeeded", "failed", "interrupted", "cancelled"]);
 const hostMessageSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("remoteVerification/started"), payload: z.object({
+    sessionId: z.string(), cardId: z.string().min(1).optional(),
+    spec: z.object({ executable: z.string(), args: z.array(z.string()) }),
+  }) }),
+  z.object({ type: z.literal("remoteVerification/stream"), payload: z.object({
+    sessionId: z.string(), cardId: z.string().min(1).optional(),
+    stream: z.enum(["stdout", "stderr"]), text: z.string(),
+  }) }),
+  z.object({ type: z.literal("remoteVerification/finished"), payload: z.object({
+    sessionId: z.string(), cardId: z.string().min(1).optional(),
+    state: z.enum(["completed", "cancelled", "timed_out", "spawn_failed", "connection_lost"]),
+    exitCode: z.number().nullable(), passed: z.boolean().optional(), summary: z.string(),
+  }) }),
+  z.object({ type: z.literal("remoteCompanion/state"), payload: z.object({
+    state: z.enum(["not_installed", "installing", "await_reload", "preparing", "ready", "version_incompatible", "connection_lost", "upgrade_available"]),
+    remoteName: z.string().optional(),
+  }) }),
   z.object({ type: z.literal("operation/lifecycle"), payload: z.object({
     identity: operationIdentitySchema, phase: operationPhaseSchema,
   }) }),
@@ -325,7 +342,7 @@ let hostSyncScope: WebviewSyncCursor | undefined;
 let operationRequestSequence = 0;
 export function adoptHostSyncScope(scope: WebviewSyncCursor): void { hostSyncScope = scope; }
 
-export function postMessage(action: WebviewAction): void {
+export function postMessage(action: WebviewAction): WebviewOperationIdentity | undefined {
   const api = getVsCodeApi();
   if (api) {
     const scope = hostSyncScope;
@@ -335,7 +352,7 @@ export function postMessage(action: WebviewAction): void {
         ? action.payload as Record<string, unknown> : undefined;
       const commandPayload = payload?.payload && typeof payload.payload === "object"
         ? payload.payload as Record<string, unknown> : payload;
-      const target = commandPayload?.cardId ?? commandPayload?.resourceId ?? commandPayload?.planId;
+      const target = commandPayload?.cardId ?? commandPayload?.resourceId ?? commandPayload?.planId ?? commandPayload?.expectedCardId;
       const operation: WebviewOperationIdentity = { generation: scope.generation, workspaceId: scope.workspaceId,
         sessionId: scope.sessionId, revision: scope.revision,
         commandId: typeof payload?.commandId === "string" ? payload.commandId : action.type,
@@ -343,8 +360,9 @@ export function postMessage(action: WebviewAction): void {
         ...(typeof target === "string" ? { targetId: target } : {}),
       };
       api.postMessage({ ...action, operation });
+      return operation;
     } else api.postMessage(action);
-    return;
+    return action.operation;
   }
 
   window.dispatchEvent(
@@ -352,6 +370,7 @@ export function postMessage(action: WebviewAction): void {
       detail: action,
     }),
   );
+  return action.operation;
 }
 
 export function announceReady(): void {

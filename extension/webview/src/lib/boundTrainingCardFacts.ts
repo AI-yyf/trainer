@@ -1,8 +1,8 @@
 const authoredTextFields = [
-  "title", "whyNow", "targetSkill", "scenarioPack", "scenario",
+  "title", "whyNow", "targetSkill", "focusArea", "scenarioPack", "scenario",
   "problemStatement", "suggestedWorkspaceAction", "deliverable",
   "validationMethod", "verificationMethod", "successSignal", "returnWith",
-  "nextAfterCompletion", "stuckRecovery", "reflectionPrompt",
+  "nextAfterCompletion", "fallbackAction", "stuckRecovery", "reflectionPrompt",
 ] as const;
 
 const authoredListFields = [
@@ -38,7 +38,9 @@ function nonempty(value: readonly string[] | undefined): string[] | undefined {
  * runtime/restore/review freshness; this helper never infers identity from a
  * title, ambient focus, or a legacy selected-card scalar. Authored content is
  * independent of the UI locale. Each field uses the matching candidate first,
- * then the matching route card, without mixing in foreign card facts.
+ * then the matching route card, without mixing in foreign card facts. A
+ * returned object remains authoritative even when all its fields are absent;
+ * absence of a field never permits borrowing from an unbound card.
  */
 export function resolveBoundTrainingCardFacts(input: {
   eligible: boolean;
@@ -63,4 +65,21 @@ export function resolveBoundTrainingCardFacts(input: {
     if (value !== undefined) lists[field] = value;
   }
   return { cardId: activeCardId, text, lists };
+}
+
+/** Missing fields on a bound card stay missing; legacy sources are lazy. */
+export function readTrainingCardText(
+  facts: BoundTrainingCardFacts | undefined,
+  field: TextField,
+  legacy: () => string | undefined,
+): string | undefined {
+  return facts ? facts.text[field] : legacy();
+}
+
+export function readTrainingCardList(
+  facts: BoundTrainingCardFacts | undefined,
+  field: ListField,
+  legacy: () => string[],
+): string[] {
+  return facts ? facts.lists[field] ?? [] : legacy();
 }

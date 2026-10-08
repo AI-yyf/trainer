@@ -59,7 +59,7 @@ test('composer dock unifies footer hit size, radius, gap, and icon box', () => {
   assert.match(composer, /<CloseIcon size=\{16\} \/>/);
   assert.match(composer, /<SendIcon size=\{16\} \/>/);
   assert.match(app, /id: "composer-verify-file"/);
-  assert.match(app, /filesToTouch: trainingFilesToTouch/);
+  assert.match(app, /filesToTouch: readTrainingCardList\(boundTrainingCardFacts, "filesToTouch", \(\) => trainingFilesToTouch\)/);
   assert.doesNotMatch(app, /请点“验证当前文件”/);
   assert.doesNotMatch(app, /Use Verify current file for the real pass/);
 });

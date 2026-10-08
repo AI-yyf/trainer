@@ -65,6 +65,7 @@
 .template-activity-header h2 { margin: 0; font-size: var(--trainer-font-lg); font-weight: 600; line-height: 1.4; }
 .template-back { padding: 4px 0; border: 0; background: transparent; color: var(--fg-muted); font: inherit; font-size: var(--trainer-font-sm); cursor: pointer; }
 .template-back:hover { color: var(--fg-0); }
+.template-secondary-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--trainer-space-3); }
 .template-practice-response { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; padding-block: 16px; }
 .template-practice-response label { font-size: var(--trainer-font-sm); font-weight: 600; }
 .template-practice-response textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-0); color: var(--fg-0); font: inherit; line-height: 1.5; resize: vertical; }

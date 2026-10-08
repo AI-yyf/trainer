@@ -228,7 +228,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.coachRemoteBoundary, register: (ctx) => openCoachScenarioCommand(ctx, 'remoteBoundary') },
     { commandId: COMMAND_IDS.installRemoteCompanion, register: (ctx) => installRemoteCompanionCommand(ctx) },
     { commandId: COMMAND_IDS.remoteVerify, register: (ctx, payload) => remoteVerifyCommand(ctx, payload) },
-    { commandId: COMMAND_IDS.remoteVerifyActiveFile, register: (ctx) => remoteVerifyActiveFileCommand(ctx) },
+    { commandId: COMMAND_IDS.remoteVerifyActiveFile, register: (ctx, payload) => remoteVerifyActiveFileCommand(ctx, payload) },
     { commandId: COMMAND_IDS.remoteVerifyCancel, register: (ctx) => remoteVerifyCancelCommand(ctx) },
     { commandId: COMMAND_IDS.remoteCompanionState, register: (ctx) => remoteCompanionStateCommand(ctx) },
     { commandId: COMMAND_IDS.coachDebugLoop, register: (ctx) => openCoachScenarioCommand(ctx, 'debugLoop') },

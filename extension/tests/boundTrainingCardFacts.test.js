@@ -10,7 +10,8 @@ const compiled = runtime('esbuild').buildSync({ entryPoints: [entry], bundle: tr
 const mod = { exports: {} };
 const evaluate = new Function('module', 'exports', 'require',
   `${compiled.outputFiles[0].text}\nreturn module.exports;`);
-const { resolveBoundTrainingCardFacts: resolve } = evaluate(mod, mod.exports, runtime);
+const { resolveBoundTrainingCardFacts: resolve, readTrainingCardText, readTrainingCardList } =
+  evaluate(mod, mod.exports, runtime);
 
 const authored = { cardId: 'active', title: '练习 workspace_id isolation',
   problemStatement: '比较原始 workspace_id。', suggestedWorkspaceAction: '先写一次边界断言。',
@@ -99,4 +100,43 @@ test('identity, phase, evidence, review and flash prompts are outside authored p
     assert.equal(result.text[field], undefined);
     assert.equal(result.lists[field], undefined);
   }
+});
+
+test('an exact empty card stays bound and never evaluates foreign legacy fields', () => {
+  const facts = resolve({ eligible: true, activeCardId: 'active',
+    candidate: { cardId: 'active', title: ' \n ' },
+    routeCard: { ...authored, cardId: 'foreign' } });
+  assert.equal(facts.cardId, 'active');
+  assert.deepEqual(facts.text, {});
+  assert.deepEqual(facts.lists, {});
+  const foreign = () => { throw new Error('Unbound legacy source evaluated'); };
+  for (const field of ['title', 'whyNow', 'targetSkill', 'focusArea', 'scenarioPack', 'scenario',
+    'problemStatement', 'suggestedWorkspaceAction', 'deliverable', 'validationMethod',
+    'verificationMethod', 'successSignal', 'returnWith', 'nextAfterCompletion',
+    'fallbackAction', 'stuckRecovery', 'reflectionPrompt']) {
+    assert.equal(readTrainingCardText(facts, field, foreign), undefined);
+  }
+  for (const field of ['apiHints', 'constraints', 'selfCheck', 'filesToTouch', 'learnerDeliverables',
+    'verificationSteps', 'acceptanceCriteria', 'hintLadder', 'commonMistakes', 'expectedSymbols']) {
+    assert.deepEqual(readTrainingCardList(facts, field, foreign), []);
+  }
+});
+
+test('same-ID field readers preserve raw author values without consulting legacy', () => {
+  const facts = resolve({ eligible: true, activeCardId: 'active',
+    candidate: { ...authored, focusArea: '  workspace_id isolation  ' } });
+  const foreign = () => { throw new Error('Legacy should be unused'); };
+  assert.equal(readTrainingCardText(facts, 'focusArea', foreign), '  workspace_id isolation  ');
+  assert.equal(readTrainingCardText(facts, 'suggestedWorkspaceAction', foreign), authored.suggestedWorkspaceAction);
+  assert.deepEqual(readTrainingCardList(facts, 'verificationSteps', foreign), authored.verificationSteps);
+  assert.equal(readTrainingCardText(facts, 'successSignal', foreign), undefined);
+});
+
+test('only an absent bound object permits the unchanged lazy legacy path', () => {
+  let calls = 0;
+  const list = ['Existing legacy check'];
+  assert.equal(readTrainingCardText(undefined, 'title', () => { calls++; return 'Existing legacy title'; }), 'Existing legacy title');
+  assert.equal(readTrainingCardList(undefined, 'verificationSteps', () => { calls++; return list; }), list);
+  assert.equal(calls, 2);
+  assert.equal(readTrainingCardText(undefined, 'focusArea', () => undefined), undefined);
 });

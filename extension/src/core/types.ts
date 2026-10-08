@@ -1353,6 +1353,7 @@ export interface ReviewArtifactSummaryView {
 export interface ScenarioLabSummaryView {
   id?: string;
   title?: string;
+  summary?: string;
   focusArea?: string;
   status?: string;
   successSignal?: string;

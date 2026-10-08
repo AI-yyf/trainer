@@ -58,7 +58,7 @@ test('cold-start recovered stamp lights leftover overlay without leftover plan o
   );
   assert.match(
     appSource,
-    /leftoverNote=\{leftoverPlanNotLive \? t\.leftoverNotLive : undefined\}/,
+    /leftoverNote=\{leftoverPlanNotLive\s*\? learningPracticeReadyToContinue\s*\? templateCopy\[layout\.composerLanguage\]\.practiceReadyToContinue\s*: t\.leftoverNotLive\s*: undefined\}/,
   );
   assert.doesNotMatch(
     appSource,
@@ -170,7 +170,7 @@ test('recovered true + matching live plan_id keeps leftover overlay off (source)
   );
   assert.match(
     appSource,
-    /leftoverNote=\{leftoverPlanNotLive \? t\.leftoverNotLive : undefined\}/,
+    /leftoverNote=\{leftoverPlanNotLive\s*\? learningPracticeReadyToContinue\s*\? templateCopy\[layout\.composerLanguage\]\.practiceReadyToContinue\s*: t\.leftoverNotLive\s*: undefined\}/,
   );
   assert.match(
     appSource,

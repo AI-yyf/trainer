@@ -849,6 +849,55 @@ test('mergeMemorySummary normalizes scenario and theory state from a training su
   );
 });
 
+test('scenario task summary remains authored content rather than an action enum', () => {
+  const summary = '  Build a minimum route that proves dependency ownership.  ';
+  const patch = mergeMemorySummary(createBootstrap(), {
+    memory: {
+      workspace: { workspace_id: 'scenario-context' },
+      scenario_lab: { id: 'scenario-own', title: 'Dependency practice', summary,
+        last_action: 'restore_history', review_outcome: 'Do not use review verdict as task' },
+    },
+  });
+  const scenario = patch.workspaceTrainingState.scenarioLab;
+  assert.equal(scenario.summary, summary);
+  assert.equal(scenario.lastAction, 'restore_history');
+  assert.equal(scenario.reviewOutcome, 'Do not use review verdict as task');
+});
+
+for (const sameIdentity of [true, false]) {
+  test(`partial scenario updates inherit facts only for the same identity (${sameIdentity})`, () => {
+    const bootstrap = createBootstrap();
+    bootstrap.memory.workspace = { ...bootstrap.memory.workspace, workspaceId: 'scenario-context' };
+    const prior = { id: 'scenario-before', title: 'Prior title', summary: 'Prior authored task',
+      focusArea: 'Prior focus', learnerDeliverables: ['prior.py'], verificationSteps: ['prior check'],
+      successSignal: 'Prior completion', lastAction: 'created' };
+    bootstrap.workspaceTrainingState = { workspaceId: 'scenario-context', scenarioLab: prior };
+    const patch = mergeMemorySummary(bootstrap, {
+      memory: { workspace: { workspace_id: 'scenario-context' },
+        scenario_lab: { id: sameIdentity ? 'scenario-before' : 'scenario-after', last_action: 'restore_history' } },
+    });
+    const scenario = patch.workspaceTrainingState.scenarioLab;
+    assert.equal(scenario.id, sameIdentity ? 'scenario-before' : 'scenario-after');
+    assert.equal(scenario.lastAction, 'restore_history');
+    for (const field of ['title', 'summary', 'focusArea', 'learnerDeliverables', 'verificationSteps', 'successSignal']) {
+      assert.deepEqual(scenario[field], sameIdentity ? prior[field] : undefined, field);
+    }
+    assert.equal(prior.lastAction, 'created');
+  });
+}
+
+test('an explicit empty scenario summary clears earlier task text without a fallback', () => {
+  const bootstrap = createBootstrap();
+  bootstrap.memory.workspace = { ...bootstrap.memory.workspace, workspaceId: 'scenario-context' };
+  bootstrap.workspaceTrainingState = { workspaceId: 'scenario-context',
+    scenarioLab: { id: 'scenario-own', summary: 'Earlier task text' } };
+  const patch = mergeMemorySummary(bootstrap, {
+    memory: { workspace: { workspace_id: 'scenario-context' },
+      scenario_lab: { id: 'scenario-own', summary: '' } },
+  });
+  assert.equal(patch.workspaceTrainingState.scenarioLab.summary, '');
+});
+
 test('mergePlanResult keeps the project plan when a global-plan route returns it in a snapshot', () => {
   const bootstrap = createBootstrap();
   bootstrap.plan = {

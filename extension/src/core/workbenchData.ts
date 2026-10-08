@@ -5569,32 +5569,38 @@ function mapScenarioLab(
     return fallback;
   }
 
+  const incomingId = asString(record.id);
+  // Partial refreshes may retain facts only for the same scenario. An explicit
+  // new identity must never inherit the previous task's authored content.
+  const inherited = incomingId === undefined || incomingId === fallback?.id ? fallback : undefined;
+
   const mapped: ScenarioLabStateView = {
-    id: asString(record.id) ?? fallback?.id,
-    title: asString(record.title) ?? fallback?.title,
-    focusArea: asString(record.focus_area) ?? asString(record.focusArea) ?? fallback?.focusArea,
-    status: asString(record.status) ?? fallback?.status,
+    id: incomingId ?? inherited?.id,
+    title: asString(record.title) ?? inherited?.title,
+    summary: asString(record.summary) ?? inherited?.summary,
+    focusArea: asString(record.focus_area) ?? asString(record.focusArea) ?? inherited?.focusArea,
+    status: asString(record.status) ?? inherited?.status,
     successSignal:
-      asString(record.success_signal) ?? asString(record.successSignal) ?? fallback?.successSignal,
+      asString(record.success_signal) ?? asString(record.successSignal) ?? inherited?.successSignal,
     reviewOutcome:
-      asString(record.review_outcome) ?? asString(record.reviewOutcome) ?? fallback?.reviewOutcome,
+      asString(record.review_outcome) ?? asString(record.reviewOutcome) ?? inherited?.reviewOutcome,
     learnerDeliverables:
       asStringArray(record.learner_deliverables ?? record.learnerDeliverables) ??
-      fallback?.learnerDeliverables,
+      inherited?.learnerDeliverables,
     verificationSteps:
       asStringArray(record.verification_steps ?? record.verificationSteps) ??
-      fallback?.verificationSteps,
+      inherited?.verificationSteps,
     migrateBackGuidance:
       asStringArray(record.migrate_back_guidance ?? record.migrateBackGuidance) ??
-      fallback?.migrateBackGuidance,
+      inherited?.migrateBackGuidance,
     dependencyKeys:
-      asStringArray(record.dependency_keys ?? record.dependencyKeys) ?? fallback?.dependencyKeys,
+      asStringArray(record.dependency_keys ?? record.dependencyKeys) ?? inherited?.dependencyKeys,
     relatedApis:
-      asStringArray(record.related_apis ?? record.relatedApis) ?? fallback?.relatedApis,
+      asStringArray(record.related_apis ?? record.relatedApis) ?? inherited?.relatedApis,
     lastAction:
-      asString(record.last_action) ?? asString(record.lastAction) ?? fallback?.lastAction,
+      asString(record.last_action) ?? asString(record.lastAction) ?? inherited?.lastAction,
     updatedAt:
-      asString(record.updated_at) ?? asString(record.updatedAt) ?? fallback?.updatedAt,
+      asString(record.updated_at) ?? asString(record.updatedAt) ?? inherited?.updatedAt,
   };
 
   return hasScenarioLabContent(mapped) ? mapped : undefined;
@@ -5823,6 +5829,7 @@ function hasScenarioLabContent(value: ScenarioLabStateView): boolean {
   return Boolean(
     value.id ||
       value.title ||
+      value.summary ||
       value.focusArea ||
       value.status ||
       value.successSignal ||

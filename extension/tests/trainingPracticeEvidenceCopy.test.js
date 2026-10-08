@@ -116,15 +116,15 @@ test('training structured guidance is wired from App into a collapsed single-car
 
   assert.match(appSource, /suggestedWorkspaceAction=\{localizedSuggestedWorkspaceAction\}/);
   assert.match(appSource, /scenario=\{localizedScenario\}/);
-  assert.match(appSource, /apiHints=\{!reviewArtifactForeground && hasTrainingCard \? boundTrainingCardFacts\?\.lists\.apiHints \?\? trainingApiHints : \[\]\}/);
+  assert.match(appSource, /apiHints=\{!reviewArtifactForeground && hasTrainingCard \? readTrainingCardList\(boundTrainingCardFacts, "apiHints", \(\) => trainingApiHints\) : \[\]\}/);
   assert.match(appSource, /cardOnly=\{true\}/);
-  assert.match(appSource, /constraints=\{!reviewArtifactForeground && hasTrainingCard \? boundTrainingCardFacts\?\.lists\.constraints \?\? trainingConstraints : \[\]\}/);
-  assert.match(appSource, /selfCheck=\{!reviewArtifactForeground && hasTrainingCard \? boundTrainingCardFacts\?\.lists\.selfCheck \?\? trainingSelfCheck : \[\]\}/);
-  assert.match(appSource, /filesToTouch=\{!reviewArtifactForeground && hasTrainingCard \? boundTrainingCardFacts\?\.lists\.filesToTouch \?\? trainingFilesToTouch : \[\]\}/);
-  assert.match(appSource, /hintLadder=\{!reviewArtifactForeground && hasTrainingCard && !trainingComposerReturnMode \? boundTrainingCardFacts\?\.lists\.hintLadder \?\? trainingHintLadder : \[\]\}/);
-  assert.match(appSource, /commonMistakes=\{!reviewArtifactForeground && hasTrainingCard \? boundTrainingCardFacts\?\.lists\.commonMistakes \?\? trainingCommonMistakes : \[\]\}/);
-  assert.match(appSource, /stuckRecovery=\{reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail : hasTrainingCard \? boundTrainingCardFacts\?\.text\.stuckRecovery \?\? trainingStuckRecovery : undefined\}/);
-  assert.match(appSource, /reflectionPrompt=\{reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail : hasTrainingCard \? boundTrainingCardFacts\?\.text\.reflectionPrompt \?\? trainingReflectionPrompt : undefined\}/);
+  assert.match(appSource, /constraints=\{!reviewArtifactForeground && hasTrainingCard \? readTrainingCardList\(boundTrainingCardFacts, "constraints", \(\) => trainingConstraints\) : \[\]\}/);
+  assert.match(appSource, /selfCheck=\{!reviewArtifactForeground && hasTrainingCard \? readTrainingCardList\(boundTrainingCardFacts, "selfCheck", \(\) => trainingSelfCheck\) : \[\]\}/);
+  assert.match(appSource, /filesToTouch=\{!reviewArtifactForeground && hasTrainingCard \? readTrainingCardList\(boundTrainingCardFacts, "filesToTouch", \(\) => trainingFilesToTouch\) : \[\]\}/);
+  assert.match(appSource, /hintLadder=\{!reviewArtifactForeground && hasTrainingCard && !trainingComposerReturnMode \? readTrainingCardList\(boundTrainingCardFacts, "hintLadder", \(\) => trainingHintLadder\) : \[\]\}/);
+  assert.match(appSource, /commonMistakes=\{!reviewArtifactForeground && hasTrainingCard \? readTrainingCardList\(boundTrainingCardFacts, "commonMistakes", \(\) => trainingCommonMistakes\) : \[\]\}/);
+  assert.match(appSource, /stuckRecovery=\{reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail : hasTrainingCard \? readTrainingCardText\(boundTrainingCardFacts, "stuckRecovery", \(\) => trainingStuckRecovery\) : undefined\}/);
+  assert.match(appSource, /reflectionPrompt=\{reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail : hasTrainingCard \? readTrainingCardText\(boundTrainingCardFacts, "reflectionPrompt", \(\) => trainingReflectionPrompt\) : undefined\}/);
 
   // Focus mode keeps App's structured-guidance wiring, but the view surfaces
   // only the hint ladder inline (try phase); the guardrails/next-move helper
@@ -293,8 +293,8 @@ test('training practice verification sends expected symbols while flash stays lo
   assert.match(appSource, /selectedTrainingCardCandidate\?\.expectedSymbols/);
   assert.match(appSource, /selectedTrainingRouteCard\?\.expectedSymbols/);
   assert.match(appSource, /trainingLedgerEntry\?\.expectedSymbols/);
-  assert.match(appSource, /expectedSymbols: trainingCardType === "practice" \? practiceExpectedSymbols : \[\]/);
-  assert.match(appSource, /expectedSymbols=\{trainingCardType === "practice" \? boundTrainingCardFacts\?\.lists\.expectedSymbols \?\? practiceExpectedSymbols : \[\]\}/);
+  assert.match(appSource, /expectedSymbols: trainingCardType === "practice" \? readTrainingCardList\(boundTrainingCardFacts, "expectedSymbols", \(\) => practiceExpectedSymbols\) : \[\]/);
+  assert.match(appSource, /expectedSymbols=\{trainingCardType === "practice" \? readTrainingCardList\(boundTrainingCardFacts, "expectedSymbols", \(\) => practiceExpectedSymbols\) : \[\]\}/);
 
   assert.match(appSource, /const handleVerifyTrainingFromIde = useCallback\(\(\) => \{/);
   assert.match(
@@ -319,7 +319,7 @@ test('training app prefers practice when selection is ambiguous and passes real 
   assert.match(appSource, /const selectedTrainingFlashCard =/);
   assert.match(appSource, /selectedTrainingFlashCard\?\.question/);
   assert.match(appSource, /selectedTrainingFlashCard\?\.choices\?\.length/);
-  assert.match(appSource, /scenarioPackLabel=\{hasTrainingCard \? boundTrainingCardFacts\?\.text\.scenarioPack \?\? trainingScenarioPackLabel : undefined\}/);
+  assert.match(appSource, /scenarioPackLabel=\{hasTrainingCard \? readTrainingCardText\(boundTrainingCardFacts, "scenarioPack", \(\) => trainingScenarioPackLabel\) : undefined\}/);
   assert.match(appSource, /flashPrompt=\{trainingFlashPrompt\}/);
   assert.match(appSource, /const trainingFlashChoices =/);
   assert.match(appSource, /const normalizedTrainingFlashChoices = useMemo\(/);
@@ -345,8 +345,8 @@ test('training view stays truthful when no governed card exists and keeps verifi
     appSource,
     /const currentStep = hasRenderableTrainingCard[\s\S]*?trainingProblemStatement,[\s\S]*?trainingSuggestedWorkspaceAction,[\s\S]*?trainingDeliverables\[0\],/,
   );
-  assert.match(appSource, /deliverables=\{reviewArtifactForeground \? selectedTrainingCardCandidate\?\.learnerDeliverables \?\? \[\] : hasTrainingCard \? boundTrainingCardFacts\?\.lists\.learnerDeliverables \?\? trainingDeliverables : \[\]\}/);
-  assert.match(appSource, /verifyItems=\{reviewArtifactForeground \? selectedTrainingCardCandidate\?\.verificationSteps \?\? \[\] : hasTrainingCard \? boundTrainingCardFacts\?\.lists\.verificationSteps \?\? boundTrainingCardFacts\?\.lists\.acceptanceCriteria \?\? authoritativeVerifyItems : \[\]\}/);
+  assert.match(appSource, /deliverables=\{reviewArtifactForeground \? selectedTrainingCardCandidate\?\.learnerDeliverables \?\? \[\] : hasTrainingCard \? readTrainingCardList\(boundTrainingCardFacts, "learnerDeliverables", \(\) => trainingDeliverables\) : \[\]\}/);
+  assert.match(appSource, /verifyItems=\{reviewArtifactForeground \? selectedTrainingCardCandidate\?\.verificationSteps \?\? \[\] : hasTrainingCard \? boundTrainingCardFacts \? boundTrainingCardFacts\.lists\.verificationSteps \?\? boundTrainingCardFacts\.lists\.acceptanceCriteria \?\? \[\] : authoritativeVerifyItems : \[\]\}/);
   assert.match(appSource, /outcome=\{!reviewArtifactForeground && hasTrainingCard \? trainingOutcomeCard : undefined\}/);
   assert.match(
     appSource,

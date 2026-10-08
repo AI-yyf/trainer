@@ -460,7 +460,7 @@ test('Plan first screen keeps one primary action and leftover-not-live honesty',
   assert.doesNotMatch(coachPlanSource, /pickPlanPrimaryAction|compactPrimaryAction|stepStartLabel/);
   assert.match(coachPlanSource, /leftoverNotLive: "This is stored leftover on this workspace, not the live plan."/);
   assert.match(appSource, /const leftoverPlanNotLive = Boolean\(recoveredRuntime\) && !formalPlanLive/);
-  assert.match(appSource, /leftoverNote=\{leftoverPlanNotLive \? t\.leftoverNotLive : undefined\}/);
+  assert.match(appSource, /leftoverNote=\{leftoverPlanNotLive\s*\? learningPracticeReadyToContinue\s*\? templateCopy\[layout\.composerLanguage\]\.practiceReadyToContinue\s*: t\.leftoverNotLive\s*: undefined\}/);
   assert.match(appSource, /hasFormalPlan: hasFormalPlan && formalPlanLive/);
   assert.match(appSource, /if \(leftoverPlanNotLive && !recoveredDisplayFacts\.currentStep\) \{\s*return null;/);
   assert.match(appSource, /data-coach-leftover-note="true"/);

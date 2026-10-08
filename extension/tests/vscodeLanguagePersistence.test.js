@@ -259,3 +259,77 @@ test('late browser preview API is captured after the module graph has loaded', (
     loaded.restore();
   }
 });
+
+test('host subscription validates remote lifecycle frames and preserves authoritative optional card identity', () => {
+  const listeners = new Map(), delivered = [];
+  const loaded = loadVscodeModule({
+    addEventListener: (type, listener) => listeners.set(type, listener),
+    removeEventListener: type => listeners.delete(type),
+  });
+  try {
+    const unsubscribe = loaded.module.subscribeToHostMessages(message => delivered.push(message));
+    const frames = [
+      { type: 'remoteVerification/started', payload: { sessionId: 'run', cardId: 'host-card', spec: { executable: 'python3', args: ['-m', 'pytest'] } } },
+      { type: 'remoteVerification/stream', payload: { sessionId: 'run', cardId: 'host-card', stream: 'stdout', text: 'test output' } },
+      { type: 'remoteVerification/finished', payload: { sessionId: 'run', cardId: 'host-card', state: 'completed', exitCode: 0, passed: true, summary: 'Verified' } },
+      { type: 'remoteVerification/finished', payload: { sessionId: 'palette-run', state: 'cancelled', exitCode: null, summary: 'Unknown' } },
+    ];
+    for (const data of frames) listeners.get('message')({ data });
+    assert.deepEqual(delivered, frames);
+    for (const data of [
+      { ...frames[0], payload: { ...frames[0].payload, cardId: 1 } },
+      { ...frames[1], payload: { ...frames[1].payload, stream: 'foreign' } },
+      { ...frames[2], payload: { ...frames[2].payload, state: 'invented' } },
+      { ...frames[2], payload: { ...frames[2].payload, exitCode: '0' } },
+      { type: 'unknown/remote', payload: frames[2].payload },
+    ]) listeners.get('message')({ data });
+    assert.equal(delivered.length, 4);
+    unsubscribe();
+    assert.equal(listeners.size, 0);
+  } finally { loaded.restore(); }
+});
+
+test('host subscription accepts only existing typed Companion states', () => {
+  const listeners = new Map(), delivered = [];
+  const loaded = loadVscodeModule({
+    addEventListener: (type, listener) => listeners.set(type, listener),
+    removeEventListener: type => listeners.delete(type),
+  });
+  try {
+    const unsubscribe = loaded.module.subscribeToHostMessages(message => delivered.push(message));
+    for (const state of ['not_installed', 'installing', 'await_reload', 'preparing', 'ready', 'version_incompatible', 'connection_lost', 'upgrade_available']) {
+      listeners.get('message')({ data: { type: 'remoteCompanion/state', payload: { state, remoteName: 'ssh-remote' } } });
+    }
+    assert.equal(delivered.length, 8);
+    for (const payload of [{ state: 'invented' }, { state: 'ready', remoteName: 1 }]) {
+      listeners.get('message')({ data: { type: 'remoteCompanion/state', payload } });
+    }
+    assert.equal(delivered.length, 8);
+    unsubscribe();
+  } finally { loaded.restore(); }
+});
+
+test('postMessage returns the same dispatched operation identity and preserves explicit identity and target precedence', () => {
+  const sent = [];
+  const loaded = loadVscodeModule({ acquireVsCodeApi: () => ({ postMessage: message => sent.push(message) }) });
+  try {
+    loaded.module.adoptHostSyncScope({ generation: 3, revision: 7, workspaceId: 'workspace', sessionId: 'session', messageId: 'applied' });
+    const action = { type: 'command/execute', payload: { commandId: 'trainer.remote.verifyActiveFile', payload: { expectedCardId: 'displayed-card' } } };
+    const identity = loaded.module.postMessage(action);
+    assert.equal(identity, sent[0].operation);
+    assert.equal(identity.targetId, 'displayed-card');
+    assert.equal(identity.generation, 3);
+    assert.equal(identity.revision, 7);
+    assert.equal(identity.commandId, action.payload.commandId);
+    const explicit = { ...identity, requestId: 'explicit-request' };
+    assert.equal(loaded.module.postMessage({ ...action, operation: explicit }), explicit);
+    assert.equal(sent[1].operation, explicit);
+    for (const [payload, target] of [[{ cardId: 'card', expectedCardId: 'other' }, 'card'],
+      [{ resourceId: 'resource', expectedCardId: 'other' }, 'resource'],
+      [{ planId: 'plan', expectedCardId: 'other' }, 'plan']]) {
+      assert.equal(loaded.module.postMessage({ ...action, payload: { ...action.payload, payload } }).targetId, target);
+    }
+    assert.equal(loaded.module.postMessage({ type: 'request/bootstrap' }), undefined);
+    assert.equal(sent.at(-1).operation, undefined);
+  } finally { loaded.restore(); }
+});

@@ -1,5 +1,6 @@
 import type { WebviewSyncEnvelope, WebviewSyncAck, WebviewSyncStatus, WebviewOperationIdentity, WebviewOperationPhase, WebviewSyncCursor } from "../../../../shared/src/webviewSync";
 import type { TrainerCommandCatalogItem } from "../../../../shared/src/commands";
+import type { CompanionInstallState } from "../../../../shared/src/companionInstallState";
 import type { TrainerMessagePart, TrainerStreamingState } from "../../../../shared/src/protocol";
 import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
 import type { TrainerCustomSkill } from "../../../../shared/src/skillCatalog";
@@ -1298,6 +1299,7 @@ export interface ReviewArtifactSummary {
 export interface ScenarioLabSummary {
   id?: string;
   title?: string;
+  summary?: string;
   focusArea?: string;
   status?: string;
   successSignal?: string;
@@ -2117,20 +2119,21 @@ type HostMessageBody =
   // Remote verification streaming (protocol v2)
   | {
       type: "remoteVerification/started";
-      payload: { sessionId: string; spec: { executable: string; args: string[] } };
+      payload: { sessionId: string; cardId?: string; spec: { executable: string; args: string[] } };
     }
   | {
       type: "remoteVerification/stream";
-      payload: { sessionId: string; stream: "stdout" | "stderr"; text: string };
+      payload: { sessionId: string; cardId?: string; stream: "stdout" | "stderr"; text: string };
     }
   | {
       type: "remoteCompanion/state";
-      payload: { state: string; remoteName?: string };
+      payload: { state: CompanionInstallState; remoteName?: string };
     }
   | {
       type: "remoteVerification/finished";
       payload: {
         sessionId: string;
+        cardId?: string;
         state: "completed" | "cancelled" | "timed_out" | "spawn_failed" | "connection_lost";
         exitCode: number | null;
         passed?: boolean;
