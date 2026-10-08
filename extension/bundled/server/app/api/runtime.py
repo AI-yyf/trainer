@@ -25,6 +25,7 @@ from ..db.repository import TrainerRepository
 from ..evaluator.service import EvaluatorService
 from ..llm.provider_protocols import normalize_provider_protocol
 from ..llm.provider_service import ProviderService
+from ..llm.vision_challenge import VISION_PROBE_VERSION
 from ..memory.service import MemoryService
 from ..memory.workspace_recovery import (
     PROVIDER_CAPABILITY_KEY,
@@ -1102,6 +1103,8 @@ class TrainerRuntime:
                     state = str(getattr(item, "state", "") or "").strip().lower()
                 if name and state:
                     states[name] = state
+            if states.get("vision") == "verified":
+                states["vision_probe_version"] = VISION_PROBE_VERSION
         # Failed/unknown/never must not leave sibling transport keys marking tools ready.
         if not live_ok:
             base_url, model, api_key_fingerprint = _provider_capability_transport_markers(
@@ -1134,6 +1137,10 @@ class TrainerRuntime:
         except Exception:
             return
         for cache_key, states in rows:
+            # White-pixel marker probes proved image acceptance, not visual
+            # understanding. Preserve all other cached capabilities on upgrade.
+            if states.get("vision") == "verified" and states.get("vision_probe_version") != VISION_PROBE_VERSION:
+                states = {**states, "vision": "unverified"}
             self.provider_capability_cache.setdefault(cache_key, states)
 
     @staticmethod

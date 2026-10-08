@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 export interface TemplateAction {
+  id?: string;
   label: string;
   onClick: () => void;
   disabled?: boolean;
@@ -25,7 +26,7 @@ export function NextAction({ label, title, detail, action }: NextActionProps) {
       <p className="template-metadata">{label}</p>
       <h3>{title}</h3>
       {detail ? <div className="template-next-action__detail">{detail}</div> : null}
-      <button type="button" className="button button--accent" data-primary-action="true" disabled={action.disabled || action.busy} aria-busy={action.busy || undefined} onClick={action.onClick}>{action.label}</button>
+      <button type="button" className="button button--accent" data-primary-action="true" data-action-intent={action.id} disabled={action.disabled || action.busy} aria-busy={action.busy || undefined} onClick={action.onClick}>{action.label}</button>
     </section>
   );
 }

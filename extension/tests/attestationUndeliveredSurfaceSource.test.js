@@ -73,12 +73,13 @@ test('governance module maps the undelivered marker to eight-language copy and t
 
 test('App host-status interception scopes the undelivered marker to Training', () => {
   const source = fs.readFileSync(appPath, 'utf8');
+  const { load } = require('./templateAssertions');
+  const { resolveOperationMessageSurface } = load('lib/operationMessageGovernance.ts');
 
   assert.match(source, /detectAttestationUndelivered\(/);
-  assert.match(
-    source,
-    /detectAttestationUndelivered\(message\.payload\.message\)\s*\?\s*"training"/,
-  );
+  assert.match(source, /const hostSurfaceScope = resolveOperationMessageSurface\(\{ message: message\.payload\.message/);
+  assert.equal(resolveOperationMessageSurface({ message: '[[trainer-attestation-undelivered]] transport detail',
+    resourceOperation: true, planStateFailure: true }), 'training');
   assert.match(source, /attestationUndeliveredMessage\(language\)/);
 });
 

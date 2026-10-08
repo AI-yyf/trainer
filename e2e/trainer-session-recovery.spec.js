@@ -1,5 +1,6 @@
 const { openSettingsCategory } = require("./template-navigation");
 const { test, expect } = require("playwright/test");
+const { planOnlyFixture } = require('./learning-fixtures');
 
 test("an English recovery step does not hide its matching formal plan in Chinese", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=plan&lang=zh-CN&connection=connected&run=plan-identity-language");
@@ -198,6 +199,7 @@ test("empty Plan honors an explicit Generate plan action", async ({ page }) => {
     } });
   });
   await expect(page.getByText(/先启用一组可用连接/)).toHaveCount(0);
+  await page.locator('[data-surface=plan] details > summary').filter({ hasText: /^动作$/ }).click();
   await page.getByRole("button", { name: "生成计划", exact: true }).click();
   await expect(page.locator(".template-context")).toContainText("生成计划");
   await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
@@ -399,8 +401,8 @@ test('same-context backups isolate growth evidence and unsent drafts by database
 test('an unbound evaluation cannot replace the formal plan next step', async ({ page }) => {
   await page.goto('/vscode-preview.html?view=plan&lang=zh-CN&connection=connected&run=unbound-plan-evaluation');
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
-  await page.evaluate(() => {
-    const current = window.__TRAINER_BOOTSTRAP__;
+  const source = planOnlyFixture(await page.evaluate(() => window.__TRAINER_BOOTSTRAP__));
+  await page.evaluate(current => {
     const step = '增加 hash(pair) 与字典键的负向断言，然后实际运行 pytest。';
     const reason = '当前阶段尚缺这两条边界证据。';
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: {
@@ -416,7 +418,7 @@ test('an unbound evaluation cannot replace the formal plan next step', async ({ 
         currentStep: step, whyNow: reason, revision: 19, resumeState: 'in_progress',
       } } },
     } });
-  });
+  }, source);
   await expect(page.getByText('增加 hash(pair) 与字典键的负向断言，然后实际运行 pytest。', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Record a reflection on the verified result, then bring it back to Coach.', { exact: true })).toHaveCount(0);
 });

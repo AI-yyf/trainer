@@ -142,6 +142,9 @@ function createViewHarness() {
       cspSource: 'vscode-webview://view',
       postMessage: async (message) => {
         postedMessages.push(message);
+        if (message.sync) queueMicrotask(() => messageHandler({ type: 'state/ack', payload: {
+          ...message.sync, status: 'applied', appliedRevision: message.sync.revision,
+        } }));
         return true;
       },
       onDidReceiveMessage(handler) {

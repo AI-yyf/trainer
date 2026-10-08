@@ -12,7 +12,7 @@
 
 [English](README.md) · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · [Français](README_fr-FR.md) · Deutsch · [日本語](README_ja-JP.md) · [한국어](README_ko-KR.md) · [Português](README_pt-BR.md)
 
-[![Release](https://img.shields.io/badge/release-v1.0.3-1f6feb)](https://github.com/AI-yyf/trainer/releases/tag/v1.0.3)
+[![Release](https://img.shields.io/badge/source-v1.3.4-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-8b949e)](#installation)
 [![Tests](https://img.shields.io/badge/tests-3%2C328%20cases-F59E0B)](#qualitätsgates)
@@ -72,7 +72,7 @@ Er ist keine Chat-Shell — er ist ein Coach mit Gedächtnis, Lehrplan und Prüf
 
 **Per VSIX (vorgebaut, drei Plattformen):**
 
-Hol dir die `.vsix` für deine Plattform (`darwin-arm64` / `linux-x64` / `win32-x64`) aus dem [v1.0.3-Release](https://github.com/AI-yyf/trainer/releases/tag/v1.0.3).
+Hol dir die `.vsix` für deine Plattform (`darwin-arm64` / `linux-x64` / `win32-x64`) aus dem [zuletzt veröffentlichten Release](https://github.com/AI-yyf/trainer/releases/latest).
 
 VS Code Extensions-Panel → `···` → *Install from VSIX* → Fenster neu laden.
 
@@ -586,7 +586,7 @@ Wenn Trainer deinem Workflow geholfen hat, zitiere es gern in deinem Blog / Pape
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.0.3}
+  note   = {v1.3.4}
 }
 ```
 
@@ -596,6 +596,6 @@ Wenn Trainer deinem Workflow geholfen hat, zitiere es gern in deinem Blog / Pape
 
 **// Trainiere deine KI · Wachse mit deiner KI**
 
-`v1.0.3` · Gemacht mit Kaffee, FSRS, 24 Pure Functions, 3.328 Tests und einem Herzen, das sich weigert, für dich Code zu schreiben.
+`v1.3.4` · Gemacht mit Kaffee, FSRS, 24 Pure Functions, 3.328 Tests und einem Herzen, das sich weigert, für dich Code zu schreiben.
 
 </div>

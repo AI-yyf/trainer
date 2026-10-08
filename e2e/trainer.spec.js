@@ -1,4 +1,5 @@
 const { openSettingsCategory } = require("./template-navigation");
+const { planOnlyFixture } = require('./learning-fixtures');
 /**
  * Trainer E2E acceptance coverage for the three-destination sidebar shell with six internal routes.
  * Run: npx playwright test e2e/trainer.spec.js
@@ -742,6 +743,10 @@ test.describe("Trainer three-destination shell", () => {
     await expectActiveView(page, "zh-CN", "settings");
     await openSettingsCategory(page, "connection");
 
+    // The neutral fixture does not infer workspace trust from provider state.
+    await page.getByRole("button", { name: "信任此窗口", exact: true }).click();
+    await page.locator('[data-settings-detail="connection"] .settings-sheet__pane')
+      .getByRole("button", { name: "编辑配置", exact: true }).click();
     await page.getByRole("button", { name: /测试连接|重新测试/ }).first().click();
     await expectActiveView(page, "zh-CN", "settings");
     await expect(page.locator(".template-global-state [data-template=SystemState]")).toContainText(
@@ -1140,9 +1145,19 @@ test.describe("Trainer three-destination shell", () => {
       connection: "connected",
     });
 
-    await page.locator(".composer__frame").evaluate((frame) => {
+    await page.locator(".composer__frame").evaluate(async (frame) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 320;
+      canvas.height = 80;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "white";
+      context.fillRect(0, 0, 320, 80);
+      context.fillStyle = "black";
+      context.font = "24px monospace";
+      context.fillText("HTTP 401: wrong password", 8, 40);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
       const image = new File(
-        [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])],
+        [blob],
         "scratch-paper.png",
         { type: "image/png" },
       );
@@ -1170,6 +1185,25 @@ test.describe("Trainer three-destination shell", () => {
     await expect(page.locator("#coach-composer")).toHaveValue("");
     expect(sidecarRequests).toEqual([]);
     await expectNoConsoleErrors(errors);
+  });
+
+  test("image staging rejects a malformed batch without changing the coach draft", async ({ page }) => {
+    await openPreview(page, "coach", { lang: "en-US", scenario: "vision-ready", connection: "connected" });
+    await page.locator("#coach-composer").fill("Keep this explanation while I attach a screenshot.");
+    await page.locator(".composer__frame").evaluate(async (frame) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 20;
+      canvas.height = 20;
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([blob], "valid.png", { type: "image/png" }));
+      transfer.items.add(new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], "broken.png", { type: "image/png" }));
+      frame.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }));
+    });
+    await expect(page.locator('.composer [data-template="SystemState"]')).toContainText("PNG");
+    await expect(page.locator(".composer__attachment-chip")).toHaveCount(0);
+    await expect(page.locator("#coach-composer")).toHaveValue("Keep this explanation while I attach a screenshot.");
+    await expect(page.locator(".composer__send")).toBeEnabled();
   });
 
   test("opens the resource panel from the coach input shell", async ({ page }) => {
@@ -1322,11 +1356,36 @@ test.describe("Trainer three-destination shell", () => {
       connection: "connected",
     });
 
-    const evidenceButton = page.locator("[data-template=NextAction] > button").first();
-    await expect(evidenceButton).toBeVisible();
-    await evidenceButton.click();
-    const evidenceList = page.locator("[data-plan-evidence-list]");
-    await expect(evidenceList).toHaveCount(0);
+    const source = planOnlyFixture(await page.evaluate(() => window.__TRAINER_BOOTSTRAP__));
+    const workspaceId = source.memory.workspace.workspaceId;
+    const step = '核对当前文件的边界检查结果';
+    const runtime = { recovered: true, planId: 'evidence-context-plan', currentStep: step, resumeState: 'in_progress' };
+    const payload = { ...source, conversation: [], sessionHistoryRestored: true, hasFormalPlan: true,
+      plan: { ...source.plan, id: runtime.planId, currentStep: step, frozen: false }, planRuntimeStatus: runtime,
+      memory: { ...source.memory, workspace: { ...source.memory.workspace, latestPlanRuntime: runtime },
+        evidenceQueue: { pending: [{ id: 'current-evidence', summary: '当前结果尚待核对', targetPlanStep: step,
+          outcome: 'self_reported', timestamp: new Date().toISOString() },
+          { id: 'old-evidence', summary: '其它步骤的结果', targetPlanStep: '其它步骤', outcome: 'self_reported' }],
+        adopted: [], rejected: [], deferred: [], totalCount: 2 } },
+    };
+    await page.addInitScript(({ payload, workspaceId }) => {
+      window.__EVIDENCE_CONTEXT_ACTIONS__ = [];
+      window.acquireVsCodeApi = () => ({ getState: () => ({ activeView: 'plan', composerLanguage: 'zh-CN' }),
+        setState() {}, postMessage(message) {
+          window.__EVIDENCE_CONTEXT_ACTIONS__.push(message);
+          if (message.type === 'request/bootstrap') setTimeout(() => window.postMessage({ type: 'bootstrap',
+            sync: { generation: 1, revision: 1, baseRevision: 0, messageId: 'evidence-context', workspaceId,
+              sessionId: 'evidence-context-session' }, payload }, location.origin), 0);
+        } });
+    }, { payload, workspaceId });
+    await page.goto('/');
+    const primary = page.locator('[data-surface=plan] [data-template=NextAction]');
+    await expect(primary.locator('h3')).toHaveText(step);
+    await expect(primary.getByRole('button')).toHaveAttribute('data-action-intent', 'continue_step');
+    await expect(page.locator('[data-plan-evidence-row="pending"]')).toHaveCount(1);
+    await page.locator('details[data-plan-governance-disclosure] > summary').click();
+    await page.getByRole('button', { name: '整理证据', exact: true }).click();
+    await expect(page.locator('[data-plan-evidence-row="pending"]').filter({ visible: true })).toHaveCount(0);
     await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
     await expect(page.locator(".template-context")).toContainText(/证据|Evidence/);
     await expect(page.locator("#coach-composer")).toBeEditable();
@@ -1338,6 +1397,17 @@ test.describe("Trainer three-destination shell", () => {
       }
     }
     expect(visibleMoreCount).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => window.__EVIDENCE_CONTEXT_ACTIONS__
+      .filter(message => message.type.startsWith('session/send') || message.payload?.commandId === 'trainer.evidence.adopt'))).toEqual([]);
+    await page.locator('.composer__send').click();
+    await expect.poll(() => page.evaluate(() => window.__EVIDENCE_CONTEXT_ACTIONS__
+      .some(message => message.type.startsWith('session/send')))).toBe(true);
+    const sent = await page.evaluate(() => window.__EVIDENCE_CONTEXT_ACTIONS__
+      .find(message => message.type.startsWith('session/send')));
+    expect(sent.payload).toMatchObject({ activeView: 'plan', planComposerMode: 'evidence', formalPlanMutation: false });
+    expect(sent.operation).toMatchObject({ workspaceId, sessionId: 'evidence-context-session' });
+    expect(await page.evaluate(() => window.__EVIDENCE_CONTEXT_ACTIONS__
+      .filter(message => message.payload?.commandId === 'trainer.evidence.adopt'))).toEqual([]);
     await expectNoConsoleErrors(errors);
   });
 
@@ -1408,6 +1478,8 @@ test.describe("Trainer three-destination shell", () => {
 
     await expectActiveView(page, "zh-CN", "settings");
     await openSettingsCategory(page, "connection");
+    await page.locator('[data-settings-detail="connection"] .settings-sheet__pane')
+      .getByRole("button", { name: "编辑配置", exact: true }).click();
     await expect(page.locator("[data-settings-availability=true]:visible h3")).not.toHaveText("模型已就绪");
     await expect(page.locator("[data-settings-availability=true]:visible h3")).toContainText(/工作区|根目录/);
     await expectNoConsoleErrors(errors);

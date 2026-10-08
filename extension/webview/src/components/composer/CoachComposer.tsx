@@ -11,6 +11,8 @@ import {
 } from "react";
 
 import type { ComposerLanguage, MessageAttachment } from "../../lib/types";
+import { useImageAttachmentStaging } from "../../lib/useImageAttachmentStaging";
+import { SystemState } from "../../templates/SystemState";
 import { AttachmentIcon, CheckMarkIcon, CloseIcon, PlusIcon, SendIcon, SquareIcon } from "../icons";
 import { ComposerIconButton } from "./ComposerIconButton";
 
@@ -243,6 +245,7 @@ export interface CoachComposerProps {
   accessory?: ReactNode;
   /** Image attachments staged for the next send (paste / drop). */
   attachments?: MessageAttachment[];
+  attachmentScope?: string;
   onAttachmentsChange?: (attachments: MessageAttachment[]) => void;
   attachmentsAvailable?: boolean;
   attachmentsUnavailableReason?: string;
@@ -283,6 +286,7 @@ export function CoachComposer({
   accessory,
   attachments,
   onAttachmentsChange,
+  attachmentScope = textareaId,
   attachmentsAvailable = true,
   attachmentsUnavailableReason,
   submitBlockedReason,
@@ -328,43 +332,13 @@ export function CoachComposer({
     }
   }, [attachmentsInteractive]);
 
-  const handleAttachFiles = useCallback(
-    async (files: FileList | File[]) => {
-      if (!attachmentsInteractive || !onAttachmentsChange) {
-        return;
-      }
-      const list = Array.from(files);
-      if (list.length === 0) {
-        return;
-      }
-      const next: MessageAttachment[] = [];
-      for (const file of list) {
-        const isImage = file.type.startsWith("image/");
-        if (!isImage) {
-          continue;
-        }
-        const buffer = await file.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        let binary = "";
-        for (let i = 0; i < bytes.byteLength; i += 1) {
-          binary += String.fromCharCode(bytes[i] ?? 0);
-        }
-        next.push({
-          id: `${Date.now()}-${file.name}`,
-          kind: "image",
-          mimeType: file.type || "image/png",
-          dataBase64: btoa(binary),
-          name: file.name,
-          byteSize: file.size,
-        });
-      }
-      if (next.length === 0) {
-        return;
-      }
-      onAttachmentsChange([...stagedAttachments, ...next].slice(0, MAX_STAGED_ATTACHMENTS));
-    },
-    [attachmentsInteractive, onAttachmentsChange, stagedAttachments],
-  );
+  const imageStaging = useImageAttachmentStaging({
+    scope: attachmentScope, language, attachments: stagedAttachments,
+    onChange: onAttachmentsChange,
+  });
+  const handleAttachFiles = useCallback(async (files: FileList | File[]) => {
+    if (attachmentsInteractive && onAttachmentsChange) await imageStaging.stage(files);
+  }, [attachmentsInteractive, onAttachmentsChange, imageStaging.stage]);
 
   const handlePaste = useCallback(
     (event: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -456,7 +430,7 @@ export function CoachComposer({
   const trimmedValue = value.trim();
   const hasSubmissionContent = trimmedValue.length > 0 || stagedAttachments.length > 0;
   const hasSubmissionPermission = allowEmptySubmit || hasSubmissionContent;
-  const isSubmitDisabled = submitDisabled || !hasSubmissionPermission;
+  const isSubmitDisabled = imageStaging.busy || submitDisabled || !hasSubmissionPermission;
   const canSubmit = !isTextareaDisabled && !isSubmitDisabled;
   const sendState = busy ? "streaming" : submitDisabled ? "blocked" : hasSubmissionPermission ? "ready" : "idle";
   const resolvedSummary = summary?.trim() ? summary : undefined;
@@ -922,6 +896,7 @@ export function CoachComposer({
           </span>
         </div>
       ) : null}
+      {imageStaging.error ? <SystemState kind="recoverable-error" title={imageStaging.error} /> : null}
       {attachmentsEnabled && showAttachmentCapabilityNote && attachmentCapabilityText ? (
         <div className="composer__capability-note" id={attachmentCapabilityNoteId} role="status">
           <AttachmentIcon size={13} />

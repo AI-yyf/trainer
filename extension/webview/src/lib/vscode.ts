@@ -1,3 +1,4 @@
+import type { WebviewSyncCursor, WebviewOperationIdentity } from "../../../../shared/src/webviewSync";
 import { z } from "zod";
 import { SUPPORTED_LANGUAGES } from "../../../../shared/src/types";
 import { stripProviderSnapshotSecrets } from "../../../../shared/src/hostLastTestGovernance";
@@ -36,7 +37,26 @@ declare global {
   }
 }
 
+const syncEnvelopeSchema = z.object({
+  generation: z.number().int().positive(), revision: z.number().int().positive(),
+  baseRevision: z.number().int().nonnegative(), messageId: z.string().min(1),
+  workspaceId: z.string(), sessionId: z.string(),
+});
+
+const operationIdentitySchema = z.object({
+  requestId: z.string().min(1).max(128), generation: z.number().int().nonnegative(),
+  workspaceId: z.string(), sessionId: z.string(), targetId: z.string().optional(), commandId: z.string().optional(), revision: z.number().int().nonnegative(),
+});
+const scopeSchema = z.object({ generation: z.number().int().nonnegative(), revision: z.number().int().nonnegative(),
+  messageId: z.string(), workspaceId: z.string(), sessionId: z.string() });
+const operationPhaseSchema = z.enum(["pending", "running", "succeeded", "failed", "interrupted", "cancelled"]);
 const hostMessageSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("operation/lifecycle"), payload: z.object({
+    identity: operationIdentitySchema, phase: operationPhaseSchema,
+  }) }),
+  z.object({ type: z.literal("state/syncStatus"), payload: z.object({
+    status: z.enum(["current", "recovering", "stale"]), generation: z.number().int().positive(),
+  }) }),
   z.object({ type: z.literal("stageMaterials/settled"), payload: z.object({
     workspaceId: z.string(), planId: z.string(), stageId: z.string(),
   }) }),
@@ -47,10 +67,12 @@ const hostMessageSchema = z.discriminatedUnion("type", [
   }) }),
   z.object({
     type: z.literal("bootstrap"),
+    sync: syncEnvelopeSchema.optional(),
     payload: z.any(),
   }),
   z.object({
     type: z.literal("state/patch"),
+    sync: syncEnvelopeSchema.optional(),
     payload: z.any(),
   }),
   z.object({
@@ -299,10 +321,29 @@ export function persistBrowserPreviewProviderConfig(providerConfig: unknown): vo
   }
 }
 
+let hostSyncScope: WebviewSyncCursor | undefined;
+let operationRequestSequence = 0;
+export function adoptHostSyncScope(scope: WebviewSyncCursor): void { hostSyncScope = scope; }
+
 export function postMessage(action: WebviewAction): void {
   const api = getVsCodeApi();
   if (api) {
-    api.postMessage(action);
+    const scope = hostSyncScope;
+    const tracked = scope && action.type !== "state/ack" && action.type !== "request/bootstrap" && action.type !== "ui/liveFollow";
+    if (tracked && !action.operation) {
+      const payload = "payload" in action && action.payload && typeof action.payload === "object"
+        ? action.payload as Record<string, unknown> : undefined;
+      const commandPayload = payload?.payload && typeof payload.payload === "object"
+        ? payload.payload as Record<string, unknown> : payload;
+      const target = commandPayload?.cardId ?? commandPayload?.resourceId ?? commandPayload?.planId;
+      const operation: WebviewOperationIdentity = { generation: scope.generation, workspaceId: scope.workspaceId,
+        sessionId: scope.sessionId, revision: scope.revision,
+        commandId: typeof payload?.commandId === "string" ? payload.commandId : action.type,
+        requestId: `webview-${Date.now()}-${++operationRequestSequence}`,
+        ...(typeof target === "string" ? { targetId: target } : {}),
+      };
+      api.postMessage({ ...action, operation });
+    } else api.postMessage(action);
     return;
   }
 
@@ -353,7 +394,15 @@ export function subscribeToHostMessages(
     if (!parsed.success) {
       return;
     }
-    listener(parsed.data as HostMessage);
+    const raw = value && typeof value === "object" ? value as Record<string, unknown> : {};
+    const scope = scopeSchema.safeParse(raw.scope);
+    const operation = operationIdentitySchema.safeParse(raw.operation);
+    const operationPhase = operationPhaseSchema.safeParse(raw.operationPhase);
+    listener({ ...parsed.data,
+      ...(scope.success ? { scope: scope.data } : {}),
+      ...(operation.success ? { operation: operation.data } : {}),
+      ...(operationPhase.success ? { operationPhase: operationPhase.data } : {}),
+    } as HostMessage);
   };
   const handler = (event: MessageEvent<unknown>) => {
     deliver(event.data);

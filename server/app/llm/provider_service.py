@@ -172,6 +172,7 @@ from .provider_protocols import (
     provider_protocol_family,
     provider_protocol_required_capability,
 )
+from .vision_challenge import build_vision_challenge
 from .vision_payload import openai_responses_input_image_parts
 
 DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS = 45.0
@@ -185,15 +186,7 @@ _TOOL_CAPABILITY_PROBE_PROMPT = (
     "Call the supplied trainer_capability_probe tool now with probe set to ok. "
     "Do not call external services and do not return text."
 )
-_VISION_CAPABILITY_PROBE_PROMPT = (
-    "Inspect the supplied image and reply with exactly VISION_OK if you can see it. "
-    "Do not explain your answer."
-)
-# A deterministic, harmless 1x1 white PNG. It is sent only by the live capability probe.
-_VISION_CAPABILITY_PROBE_IMAGE = (
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
-    "YAAAAAYAAjCB0C8AAAAASUVORK5CYII="
-)
+
 
 
 # _compact_text is imported from .provider.redaction above (§五十二 extraction).
@@ -4094,27 +4087,28 @@ class ProviderService:
             "gemini_generate_content",
         }:
             return None, "Vision probe is unsupported for this provider protocol."
+        challenge = build_vision_challenge()
         try:
             if protocol == "openai_responses":
                 client = self._create_sync_client(provider, api_key)
                 response = client.responses.create(
                     model=provider.model,
                     input=openai_responses_input_image_parts(
-                        prompt=_VISION_CAPABILITY_PROBE_PROMPT,
-                        image_url=_VISION_CAPABILITY_PROBE_IMAGE,
+                        prompt=challenge.prompt,
+                        image_url=challenge.image_url,
                     ),
                     temperature=0,
-                    max_output_tokens=16,
+                    max_output_tokens=96,
                 )
             elif protocol in {"openai_chat_completions", "openai_chat_completions_compatible"}:
                 client = self._create_sync_client(provider, api_key)
-                vision_max_tokens = 256 if _needs_generous_visible_probe_budget(provider) else 16
+                vision_max_tokens = 256 if _needs_generous_visible_probe_budget(provider) else 96
                 payload = self._apply_request_defaults(
                     {
                         "model": provider.model,
                         "messages": [{"role": "user", "content": [
-                            {"type": "text", "text": _VISION_CAPABILITY_PROBE_PROMPT},
-                            {"type": "image_url", "image_url": {"url": _VISION_CAPABILITY_PROBE_IMAGE}},
+                            {"type": "text", "text": challenge.prompt},
+                            {"type": "image_url", "image_url": {"url": challenge.image_url}},
                         ]}],
                         "temperature": 0,
                         "max_tokens": vision_max_tokens,
@@ -4129,15 +4123,15 @@ class ProviderService:
             elif protocol == "anthropic_messages":
                 from .agent_binding import _anthropic_image_blocks
 
-                image_data = _VISION_CAPABILITY_PROBE_IMAGE.split(",", 1)[1]
+                image_data = challenge.image_url.split(",", 1)[1]
                 image_block = _anthropic_image_blocks([
                     {"kind": "image", "mime_type": "image/png", "data_base64": image_data}
                 ])[0]
                 payload = self._apply_anthropic_native_probe_defaults({
                     "model": provider.model,
-                    "max_tokens": 16,
+                    "max_tokens": 96,
                     "messages": [{"role": "user", "content": [
-                        {"type": "text", "text": _VISION_CAPABILITY_PROBE_PROMPT},
+                        {"type": "text", "text": challenge.prompt},
                         image_block,
                     ]}],
                 }, provider)
@@ -4155,13 +4149,13 @@ class ProviderService:
                     return False, "Vision probe was rejected by the provider."
                 response = response.json()
             else:
-                image_data = _VISION_CAPABILITY_PROBE_IMAGE.split(",", 1)[1]
+                image_data = challenge.image_url.split(",", 1)[1]
                 payload = self._apply_gemini_native_probe_defaults({
                     "contents": [{"role": "user", "parts": [
-                        {"text": _VISION_CAPABILITY_PROBE_PROMPT},
+                        {"text": challenge.prompt},
                         {"inlineData": {"mimeType": "image/png", "data": image_data}},
                     ]}],
-                    "generationConfig": {"temperature": 0, "maxOutputTokens": 16},
+                    "generationConfig": {"temperature": 0, "maxOutputTokens": 96},
                 }, provider)
                 with self._direct_http_client(provider, timeout=60.0) as client:
                     response = client.post(
@@ -4180,11 +4174,10 @@ class ProviderService:
             return None, "Vision capability probe could not complete safely."
         visible = assessment.content.strip()
         # Think-text / hidden reasoning must never count as vision-ready.
-        normalized_visible = "".join(visible.split()).upper()
-        if assessment.has_visible_text and "VISION_OK" in normalized_visible:
-            return True, "Vision probe returned the expected token."
+        if assessment.has_visible_text and challenge.matches(visible):
+            return True, "Vision probe correctly read randomized image content."
         if assessment.has_visible_text:
-            return False, "Vision probe returned visible text other than the expected token."
+            return False, "Vision probe did not correctly read the randomized image content."
         if assessment.outcome == "reasoning_only":
             return None, "Vision probe returned hidden reasoning instead of a visible token."
         if assessment.outcome in {"protocol_mismatch", "provider_error"}:

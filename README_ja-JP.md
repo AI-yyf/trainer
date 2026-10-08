@@ -12,7 +12,7 @@
 
 [English](README.md) · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · [Français](README_fr-FR.md) · [Deutsch](README_de-DE.md) · 日本語 · [한국어](README_ko-KR.md) · [Português](README_pt-BR.md)
 
-[![Release](https://img.shields.io/badge/release-v1.0.3-1f6feb)](https://github.com/AI-yyf/trainer/releases/tag/v1.0.3)
+[![Release](https://img.shields.io/badge/source-v1.3.4-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-8b949e)](#インストール)
 [![Tests](https://img.shields.io/badge/tests-3%2C328%20cases-F59E0B)](#品質ゲート)
@@ -72,7 +72,7 @@ LLM との会話は終わった瞬間に蒸発し、動画は一方通行。火�
 
 **VSIX から（ビルド済み、3 プラットフォーム対応）:**
 
-お使いのプラットフォーム（`darwin-arm64` / `linux-x64` / `win32-x64`）向けの `.vsix` を [v1.0.3 リリース](https://github.com/AI-yyf/trainer/releases/tag/v1.0.3)からダウンロードしてください。
+お使いのプラットフォーム（`darwin-arm64` / `linux-x64` / `win32-x64`）向けの `.vsix` を [最新の公開リリース](https://github.com/AI-yyf/trainer/releases/latest)からダウンロードしてください。
 
 VS Code の拡張機能パネル → `···` → *VSIX からのインストール* → ウィンドウを再読み込み。
 
@@ -586,7 +586,7 @@ Trainer があなたのワークフローに役立ったなら、ブログ / 論
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.0.3}
+  note   = {v1.3.4}
 }
 ```
 
@@ -596,6 +596,6 @@ Trainer があなたのワークフローに役立ったなら、ブログ / 論
 
 **// AIを鍛える · AIとともに成長する**
 
-`v1.0.3` · コーヒーと、FSRS と、24 個の純粋関数と、3,328 個のテストと、あなたの代わりにコードを書くことを拒む心で作られています。
+`v1.3.4` · コーヒーと、FSRS と、24 個の純粋関数と、3,328 個のテストと、あなたの代わりにコードを書くことを拒む心で作られています。
 
 </div>

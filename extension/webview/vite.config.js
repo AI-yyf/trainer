@@ -20,6 +20,10 @@ export default defineConfig(function (_a) {
     return ({
         base: "./",
         plugins: [react()],
+        // Profiling is an explicit local acceptance build, never a shipping default.
+        resolve: process.env.TRAINER_WEBVIEW_PROFILE === '1' ? {
+            alias: { 'react-dom/client': 'react-dom/profiling' },
+        } : undefined,
         build: {
             outDir: (_b = process.env.TRAINER_WEBVIEW_OUT_DIR) !== null && _b !== void 0 ? _b : "dist",
             sourcemap: false,

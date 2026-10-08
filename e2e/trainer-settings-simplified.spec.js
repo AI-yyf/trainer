@@ -1,10 +1,10 @@
-const { openSettingsCategory } = require("./template-navigation");
+const { openSettingsCategory, openSettingsIndex } = require("./template-navigation");
 const { test, expect } = require("playwright/test");
 
 test("connection editing exposes required fields first and keeps optional tools in details", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=settings&lang=en-US&connection=connected&run=simplified-settings");
   await openSettingsCategory(page, "connection");
-  await page.getByRole("button", { name: "Edit configuration", exact: true }).click();
+  await page.locator('[data-settings-detail="connection"] .settings-sheet__pane').getByRole("button", { name: "Edit configuration", exact: true }).click();
   await expect(page.getByLabel("Service root")).toBeVisible();
   await expect(page.getByLabel("API Key", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Connection name (optional)", { exact: true })).toHaveCount(0);
@@ -36,6 +36,7 @@ test('remote support uses the host window identity and is absent in a local wind
 
 test("settings keyboard navigation cycles only through visible destinations", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=settings&lang=en-US&connection=connected&run=settings-keyboard");
+  await openSettingsIndex(page);
   const entries = page.locator('[data-template=SettingsIndex] button');
   await expect(entries).toHaveCount(4);
   await entries.first().focus();

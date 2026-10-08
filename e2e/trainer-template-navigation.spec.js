@@ -1,4 +1,5 @@
 const { test, expect } = require('playwright/test');
+const { openSettingsCategory } = require('./template-navigation');
 
 // Deterministic fixtures validate presentation and navigation, not real evidence.
 for (const width of [340, 420, 460]) {
@@ -133,6 +134,10 @@ test('reload restores the same session draft and reading position; history retur
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   await expect(history).toBeFocused();
+  // Reload immediately, before the draft persistence debounce can expire.
+  await input.fill('Last keystrokes survive an immediate reload');
+  await page.reload();
+  await expect(input).toHaveValue('Last keystrokes survive an immediate reload');
 });
 
 for (const width of [340, 420, 460]) {
@@ -142,10 +147,16 @@ for (const width of [340, 420, 460]) {
         await page.setViewportSize({ width, height: 800 });
         await page.goto(`/vscode-preview.html?view=settings&scenario=ready&connection=connected&theme=${theme}&lang=${language}`);
         for (const category of ['connection', 'teaching', 'workspace', 'preferences']) {
-          await page.locator(`[data-settings-category=${category}]`).click();
+          await openSettingsCategory(page, category);
           const detail = page.locator(`[data-settings-detail=${category}]`);
           await expect(detail).toBeVisible();
           const pane = detail.locator('.settings-sheet__pane');
+          if (category === 'connection') {
+            // A saved connection initially shows only its compact identity.
+            // Enter the editor to check the actual connection reading pane.
+            await pane.getByRole('button', { name: /^(Edit configuration|编辑配置)$/ }).click();
+            await expect(pane.locator('form.settings-sheet__minor-body')).toBeVisible();
+          }
           expect(await pane.evaluate(node => node.clientHeight)).toBeGreaterThan(120);
           const box = await pane.boundingBox();
           expect(box.y).toBeLessThan(700);

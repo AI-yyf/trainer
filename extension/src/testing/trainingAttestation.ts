@@ -209,6 +209,12 @@ export async function postTrainingVerificationAttestation(
       status.detail ?? 'Sidecar is unavailable; training attestation not sent.',
     );
   }
+  // ensureRunning can finish after the learner changes scope or selects another card.
+  if ((body.workspace_id && body.workspace_id !== resolveAttestationWorkspaceId(runtime.getHostState())) ||
+      (body.session_id && body.session_id !== runtime.getSessionId()) ||
+      (resolveLivePracticeCardId(runtime.getHostState()) && body.card_id !== resolveLivePracticeCardId(runtime.getHostState()))) {
+    throw new Error('Attestation scope changed before delivery; no evidence was sent.');
+  }
   await runtime.sidecarClient.postJson(status.port, TRAINING_ATTESTATION_PATH, body);
 }
 

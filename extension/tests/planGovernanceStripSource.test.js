@@ -40,21 +40,18 @@ test('Plan keeps formal truth, evidence, and blockers distinct without silent mu
 
   assert.match(source, /export interface PlanGovernanceItem/);
   assert.match(source, /governanceItems\?: PlanGovernanceItem\[\]/);
-  // No invented governance rows: the decision card uses only real runtime facts.
-  assert.doesNotMatch(source, /fallbackGovernanceItems/);
-  assert.doesNotMatch(source, /id: "evidence-adoption"/);
-  assert.match(source, /function resolvePlanDecisionStrip/);
-  assert.match(source, /language: PlanLanguage;\n  pendingEvidenceCount: number;/);
-  assert.match(source, /planFrozen: plan\.frozen/);
-  assert.match(source, /const hasPendingEvidence = input\.pendingEvidenceCount > 0 && !input\.planFrozen;/);
-  assert.match(source, /\): PlanDecisionStripState \| null \{/);
-  assert.match(source, /const shouldShowDecisionCard = !hideDecisionStrip && planDecisionStrip !== null;/);
-  assert.match(source, /Plan is blocked/);
-  // r1 learner-language pass: the evidence-honesty title states when the plan
-  // updates instead of naming the internal mechanism ("evidence").
-  assert.match(source, /The plan updates once you verify the work yourself/);
-  assert.match(source, /Formal plan is frozen/);
-  assert.match(source, /(?:Ordinary chat|Chat evidence) will not rewrite it silently/);
+  // Priority is domain-owned; optional facts never silently advance the plan.
+  const { learningAction, learningPlan } = require('./templateAssertions');
+  const pending = learningAction({ evidence: { pending: [{ id: 'e1', summary: 'Result pending' }] } });
+  assert.equal(pending.intent, 'continue_step');
+  const blocked = learningAction({ plan: { state: 'active', id: 'plan', currentStep: 'Write tests', blocker: 'Runner is missing' } });
+  assert.equal(blocked.intent, 'resolve_blocker');
+  const html = learningPlan(blocked);
+  assert.ok(html.includes('Runner is missing'));
+  assert.ok(html.includes('Resolve with coach'));
+  assert.equal((html.match(/data-primary-action="true"/g) || []).length, 1);
+  assert.doesNotMatch(source, /fallbackGovernanceItems|resolvePlanDecisionStrip|pickPlanPrimaryAction/);
+  assert.match(source, /next=\{props\.primaryAction\}/);
 });
 
 test('Plan localizes its own honest empty, blocked, frozen, and stage fallback states', () => {
@@ -74,9 +71,15 @@ test('Plan localizes its own honest empty, blocked, frozen, and stage fallback s
     }
   }
 
-  assert.match(source, /function resolvePlanDecisionStrip\(input: \{[\s\S]*?language: PlanLanguage;/);
-  assert.doesNotMatch(source, /input\.isChinese/);
-  assert.match(source, /<SystemState kind="empty"/);
+  const { learningAction } = require('./templateAssertions');
+  const labels = new Set();
+  for (const language of ['zh-CN','en-US','es-ES','fr-FR','de-DE','ja-JP','ko-KR','pt-BR']) {
+    const frozen = learningAction({ language, plan: { state: 'frozen', id: 'plan' } });
+    const empty = learningAction({ language, plan: { state: 'absent' } });
+    assert.ok(frozen.title && frozen.detail && empty.title && empty.detail);
+    labels.add(frozen.label);
+  }
+  assert.equal(labels.size, 8);
   assert.match(source, /function resolveStageStatusLabel/);
   assert.match(source, /status === "queued" \? planCopy\(language, "pending"\)/);
 });

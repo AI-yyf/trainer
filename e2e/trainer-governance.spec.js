@@ -4,6 +4,7 @@
  */
 
 const { test, expect } = require("playwright/test");
+const { applyPlanOnlyFixture } = require('./learning-fixtures');
 
 const PREVIEW_PATH = "/vscode-preview.html";
 
@@ -17,6 +18,10 @@ async function openPreview(page, view, params = {}) {
   await page.goto(buildPreviewUrl(view, params));
   await page.waitForLoadState("networkidle");
   await expect(page.locator("body")).toBeVisible();
+  if (view === 'plan' && ['plan-frozen', 'plan-blocked'].includes(params.scenario)) {
+    await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
+    await applyPlanOnlyFixture(page);
+  }
 }
 
 function collectPreviewMessages(page) {
@@ -109,11 +114,13 @@ test.describe("Trainer preview plan governance", () => {
     });
 
     const plan = page.locator(".plan-view");
-    await expect(plan.locator("[data-template=SystemState]")).toContainText("Formal plan is frozen");
-    await expect(plan.getByText("Next Move", { exact: true }).first()).toBeVisible();
+    const next = plan.locator('[data-template=NextAction]');
+    await expect(next.locator('h3')).toHaveText('The plan is paused');
+    await expect(next).toContainText('Resume the current step without creating a new plan.');
 
     const liveControl = plan.locator('[data-template=NextAction] > button');
-    await expect(liveControl).toHaveText("Unfreeze plan");
+    await expect(liveControl).toHaveText("Resume plan");
+    await expect(liveControl).toHaveAttribute('data-action-intent', 'resume_plan');
     await expect(plan.locator('.coach-plan-view__governance')).toHaveCount(0);
     await expect(liveControl).toBeEnabled();
     await expect(page.getByRole("button", { name: "Freeze plan", exact: true })).toHaveCount(0);
@@ -136,14 +143,17 @@ test.describe("Trainer preview plan governance", () => {
     });
 
     const plan = page.locator(".plan-view");
-    await expect(plan.locator("[data-template=SystemState]")).toContainText("Plan is blocked");
+    const next = plan.locator('[data-template=NextAction]');
+    await expect(next.locator('h3')).toHaveText('Resolve the current blocker');
     await expect(
       plan
-        .locator("[data-template=SystemState]")
+        .locator("[data-template=NextAction]")
         .getByText("The current file verification does not yet support this plan step.", { exact: true }),
     ).toBeVisible();
 
     const recovery = plan.locator('[data-template=NextAction] > button');
+    await expect(recovery).toHaveText('Resolve with coach');
+    await expect(recovery).toHaveAttribute('data-action-intent', 'resolve_blocker');
     await expect(recovery).toBeEnabled();
     await recovery.click();
     await expect(page.locator('#coach-composer')).toBeFocused();
@@ -159,23 +169,23 @@ test.describe("Trainer preview plan governance", () => {
     const cases = [
       {
         language: "zh-CN",
-        title: "计划被卡住了",
+        title: "先解决当前阻塞",
         blocker: "当前文件的验证证据还无法支撑该计划步骤。",
-        nextStepPrefix: "回到：",
+        action: "与教练解决阻塞",
         leak: "The current file verification does not yet support this plan step.",
       },
       {
         language: "en-US",
-        title: "Plan is blocked",
+        title: "Resolve the current blocker",
         blocker: "The current file verification does not yet support this plan step.",
-        nextStepPrefix: "Back to:",
+        action: "Resolve with coach",
         leak: "Die Überprüfung der aktuellen Datei unterstützt diesen Planschritt noch nicht.",
       },
       {
         language: "de-DE",
-        title: "Der Plan ist blockiert",
+        title: "Aktuelle Blockade lösen",
         blocker: "Die Überprüfung der aktuellen Datei unterstützt diesen Planschritt noch nicht.",
-        nextStepPrefix: "Zurück zu:",
+        action: "Mit dem Coach lösen",
         leak: "The current file verification does not yet support this plan step.",
       },
     ];
@@ -188,10 +198,11 @@ test.describe("Trainer preview plan governance", () => {
       });
 
       const plan = page.locator(".plan-view");
-      const decisionStrip = plan.locator("[data-template=SystemState]");
+      const decisionStrip = plan.locator("[data-template=NextAction]");
       await expect(decisionStrip).toContainText(testCase.title);
       await expect(decisionStrip).toContainText(testCase.blocker);
-      await expect(page.locator("[data-template=NextAction]")).toContainText(testCase.nextStepPrefix.replace(/[:：]$/, ""));
+      await expect(decisionStrip.getByRole('button')).toHaveText(testCase.action);
+      await expect(decisionStrip.getByRole('button')).toHaveAttribute('data-action-intent', 'resolve_blocker');
       await expect(decisionStrip).not.toContainText(testCase.leak);
     }
     expect(errors).toEqual([]);

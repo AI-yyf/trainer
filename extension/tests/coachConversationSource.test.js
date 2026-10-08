@@ -413,6 +413,25 @@ test('Coach interrupted recovery exposes last-progress resume and replay without
 
 test('Plan next-step copy prefers the live current step before stale artifact teasers', () => {
   const source = fs.readFileSync(appPath, 'utf8');
+  const { learningFacts, load } = require('./templateAssertions');
+  const { resolveLearningPrimaryAction, executeLearningPrimaryAction } = load('lib/learningActionResolver.ts');
+  const current = learningFacts({ plan: { state: 'active', id: 'live-plan', revision: 4,
+    currentStep: 'Run the boundary checks' }, firstLookStep: 'Older first-look suggestion' });
+  const action = resolveLearningPrimaryAction(current);
+  assert.equal(action.title, current.plan.currentStep);
+  assert.equal(action.target.step, current.plan.currentStep);
+  const continued = [];
+  assert.equal(executeLearningPrimaryAction(action, current, { continueStep: step => continued.push(step) }), true);
+  assert.deepEqual(continued, ['Run the boundary checks']);
+
+  const factsStart = source.indexOf('const learningFacts: LearningFacts = {');
+  const factsEnd = source.indexOf('const learningFactsRef', factsStart);
+  assert.ok(factsStart >= 0 && factsEnd > factsStart, 'expected the shared Learning facts producer');
+  const producer = source.slice(factsStart, factsEnd);
+  // Verified advancement and recovered live work outrank coach hints; a
+  // recovered session with no authoritative step cannot resurrect a teaser.
+  assert.match(producer, /currentStep: verifyPlanAdvanceNext \|\| recoveredDisplayFacts\.currentStep \|\|\s*\(!recoveredRuntime \? liveCoachTaskChrome\.currentStep \|\| resolvedCoachNextStep : undefined\)/);
+  assert.doesNotMatch(producer, /latestArtifactTeaser/);
   const nextStepStart = source.indexOf('nextStep={');
   const nextStepEnd = source.indexOf('whyNow={', nextStepStart);
 
@@ -421,7 +440,7 @@ test('Plan next-step copy prefers the live current step before stale artifact te
 
   assert.match(
     nextStepBlock,
-    /recoveredDisplayFacts\.currentStep \|\|\s*liveCoachTaskChrome\.currentStep \|\|\s*resolvedCoachNextStep \|\|\s*latestArtifactTeaser/,
+    /learningFacts\.plan\.currentStep \|\| learningFacts\.firstLookStep \|\| latestArtifactTeaser/,
   );
   assert.doesNotMatch(
     nextStepBlock,

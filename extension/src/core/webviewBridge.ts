@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import type { WebviewOperationIdentity, WebviewOperationPhase, WebviewSyncCursor } from '../../../shared/src/webviewSync';
 
 import { COMMAND_IDS, TRAINER_SIDEBAR_VIEW_ID } from './constants';
 import { buildWorkbenchHtml } from './webviewContent';
@@ -12,10 +14,16 @@ import { sanitizeErrorSurfaceJson, sanitizeErrorSurfaceText } from '../../../sha
 import {
   formatRuntimeMetrics,
   recordWebviewSync,
+  recordWebviewSyncApplied,
+  recordWebviewSyncReceipt,
+  recordWebviewSyncFailure,
+  recordWebviewSyncAttempt,
   recordWebviewVisibilityShow,
   snapshotRuntimeMetrics,
 } from './runtimeMetrics';
-import { toBootstrapPayload, toHostBootstrapMessage, toHostPatchMessage, toOperationStatus } from './workbenchData';
+import { toBootstrapPayload, toOperationStatus } from './workbenchData';
+import { WebviewStateTransport } from './webviewStateTransport';
+import { getRuntimeWorkspaceContext } from '../commands/workspaceContext';
 
 const RESOURCE_OPERATION_REQUEST_ID_KEY = '__trainerResourceOperationId';
 const RESOURCE_SEARCH_REQUEST_ID_KEY = 'requestId';
@@ -162,7 +170,7 @@ export class WorkbenchSidebarController
   private lastPostedMessageType?: string;
   private readonly recentOutboundMessageTypes: string[] = [];
   private lastRestorePayload?: unknown;
-  private pendingRestorePayload?: unknown;
+  private pendingRestoreMessage?: unknown;
   private lastOperationStatusPayload?: unknown;
   private lastVisibleFactsPayload?: unknown;
   /**
@@ -171,9 +179,10 @@ export class WorkbenchSidebarController
    * keys are never re-sent, so a sync after a tiny state change ships a small
    * `state/patch` instead of the full bootstrap.
    */
-  private lastSyncedPayload?: Record<string, unknown>;
-  private readonly syncedKeyFingerprints = new Map<string, string>();
   private lastSeenHostState?: TrainerHostState;
+  private readonly stateTransport: WebviewStateTransport;
+  private readonly operationContext = new AsyncLocalStorage<WebviewOperationIdentity>();
+  private readonly operationRequests = new Map<string, WebviewOperationPhase>();
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -181,7 +190,28 @@ export class WorkbenchSidebarController
     private readonly commandRegistry: CommandRegistry,
     private readonly getState: () => TrainerHostState,
     private readonly outputChannel: vscode.OutputChannel,
-  ) {}
+  ) {
+    this.stateTransport = new WebviewStateTransport({
+      send: async (message) => {
+        recordWebviewSync({ full: message.sync.baseRevision === 0, bytes: JSON.stringify(message).length });
+        const delivered = await this.deliverMessage(message);
+        if (!delivered) recordWebviewSyncFailure();
+        return delivered;
+      },
+      received: recordWebviewSyncReceipt,
+      attempt: recordWebviewSyncAttempt,
+      acknowledged: (hostState, elapsedMs) => {
+        this.lastSeenHostState = hostState as TrainerHostState;
+        if (elapsedMs >= 0) recordWebviewSyncApplied(elapsedMs);
+      },
+      status: (status, generation) => {
+        if (status === 'stale') {
+          this.outputChannel.appendLine('[webview] state apply acknowledgement exhausted; waiting for recovery');
+          void this.deliverMessage({ type: 'state/syncStatus', payload: { status, generation } });
+        }
+      },
+    });
+  }
 
   async show(): Promise<void> {
     await vscode.commands.executeCommand('workbench.view.extension.trainer');
@@ -220,6 +250,7 @@ export class WorkbenchSidebarController
         this.clearVisibilitySyncTimer();
         if (this.view === webviewView) {
           this.view = undefined;
+          this.resetSyncedPayload();
         }
       });
 
@@ -245,8 +276,7 @@ export class WorkbenchSidebarController
       await this.refreshHtml(webviewView, 'resolve');
       this.outputChannel.appendLine('[webview] html ready');
 
-      await this.postMessage(toHostBootstrapMessage(this.getState()));
-      this.adoptSyncedPayload();
+      await this.syncState({ forceFull: true });
       this.outputChannel.appendLine('[webview] bootstrap posted');
     } catch (error) {
       this.outputChannel.appendLine(
@@ -281,118 +311,66 @@ export class WorkbenchSidebarController
    * key (host state is rebuilt immutably); a serialized fingerprint guards
    * against equal-content rebuilds.
    */
-  private async postIncrementalPatch(
-    options?: { forceFull?: boolean },
-  ): Promise<void> {
-    const forceFull = options?.forceFull === true;
-    const next = toBootstrapPayload(this.getState()) as unknown as Record<string, unknown>;
-    const previous = this.lastSyncedPayload;
-    const changedKeys: string[] = [];
-    if (!forceFull) {
-      const keys = new Set<string>([
-        ...Object.keys(next),
-        ...(previous ? Object.keys(previous) : []),
-      ]);
-      for (const key of keys) {
-        const nextValue = next[key];
-        if (previous && Object.prototype.hasOwnProperty.call(previous, key)) {
-          if (nextValue === previous[key]) {
-            continue;
-          }
-          const fingerprint = JSON.stringify(nextValue ?? null);
-          if (this.syncedKeyFingerprints.get(key) === fingerprint) {
-            // Rebuilt object with identical content: keep the last-delivered
-            // reference so subsequent syncs stay on the fast path.
-            this.lastSyncedPayload = { ...this.lastSyncedPayload, [key]: nextValue };
-            continue;
-          }
-          this.syncedKeyFingerprints.set(key, fingerprint);
-        } else {
-          this.syncedKeyFingerprints.set(key, JSON.stringify(nextValue ?? null));
-        }
-        changedKeys.push(key);
-      }
-    } else {
-      this.syncedKeyFingerprints.clear();
-    }
-
-    if (changedKeys.length === 0 && !forceFull) {
-      return;
-    }
-
-    const runtimeDataChanged = previous &&
-      next.runtimeDataGeneration !== previous.runtimeDataGeneration;
-    if (!previous || forceFull || runtimeDataChanged) {
-      // Fresh webview (new html) or explicit repair request: deliver the
-      // complete payload.
-      this.lastSyncedPayload = next;
-      const payload = runtimeDataChanged
-        ? toHostBootstrapMessage(this.getState())
-        : toHostPatchMessage(this.getState());
-      recordWebviewSync({ full: true, bytes: JSON.stringify(payload).length });
-      await this.postMessage(payload);
-      return;
-    }
-
-    const partial: Record<string, unknown> = {};
-    for (const key of changedKeys) {
-      partial[key] = next[key];
-      this.lastSyncedPayload = { ...this.lastSyncedPayload, [key]: next[key] };
-    }
-    const message = { type: 'state/patch', payload: partial };
-    recordWebviewSync({ full: false, bytes: JSON.stringify(message).length });
-    this.markHostStateSeen();
-    await this.postMessage(message);
+  private async postIncrementalPatch(options?: { forceFull?: boolean }): Promise<void> {
+    const hostState = this.getState();
+    const payload = toBootstrapPayload(hostState) as unknown as Record<string, unknown>;
+    await this.stateTransport.publish({
+      payload,
+      hostState,
+      workspaceId: getRuntimeWorkspaceContext({ getHostState: () => hostState }).workspaceId,
+      sessionId: hostState.sessionId ?? '',
+      runtimeGeneration: payload.runtimeDataGeneration,
+    }, options?.forceFull === true);
   }
 
   private resetSyncedPayload(): void {
-    this.lastSyncedPayload = undefined;
-    this.syncedKeyFingerprints.clear();
+    this.stateTransport.reset();
+    this.lastSeenHostState = undefined;
   }
 
-  /**
-   * Dirty-revision check: the host state object is rebuilt immutably on every
-   * change, so an identical reference means nothing changed since the last
-   * delivery and visibility can skip derivation entirely.
-   */
   private isHostStateDirty(): boolean {
     return this.lastSeenHostState !== this.getState();
   }
 
-  private markHostStateSeen(): void {
-    this.lastSeenHostState = this.getState();
-  }
-
-  /** Align incremental-sync bookkeeping with a full bootstrap delivery. */
-  private adoptSyncedPayload(): void {
-    this.lastSyncedPayload = toBootstrapPayload(this.getState()) as unknown as Record<string, unknown>;
-    this.syncedKeyFingerprints.clear();
-    this.markHostStateSeen();
-  }
-
   async postMessage(message: unknown): Promise<void> {
+    // All state publications use the ACK-governed transport, including callers
+    // that formerly posted unversioned patches directly through CommandContext.
+    if (message && typeof message === 'object' && 'type' in message &&
+        (message.type === 'bootstrap' || message.type === 'state/patch')) {
+      await this.syncState({ forceFull: message.type === 'bootstrap' });
+      return;
+    }
+    await this.deliverMessage(message);
+  }
+
+  private async deliverMessage(message: unknown): Promise<boolean> {
+    const view = this.view;
+    if (!view) return false;
     try {
-      if (this.view) {
-        await this.ensureRendered(this.view, 'postMessage');
-      }
-      this.queueRestoreUntilWebviewReady(message);
-      this.recordOutboundMessage(message);
-      const delivered = await this.view?.webview.postMessage(message);
-      if (delivered === false) {
-        this.outputChannel.appendLine('[webview] postMessage returned false');
-      }
+      await this.ensureRendered(view, 'postMessage');
+      if (this.view !== view) return false;
+      const record = message && typeof message === 'object' ? message as Record<string, unknown> : undefined;
+      const operation = this.operationContext.getStore();
+      const stateMessage = record?.type === 'bootstrap' || record?.type === 'state/patch' || record?.type === 'state/syncStatus';
+      const scopedMessage = record && !stateMessage && (operation || record.scope) ? { ...record,
+        scope: record.scope ?? (operation ? { ...this.currentScope(), ...operation, messageId: '' } : this.currentScope()),
+        ...(operation && !record.operation ? { operation } : {}),
+      } : message;
+      this.queueRestoreUntilWebviewReady(scopedMessage);
+      this.recordOutboundMessage(scopedMessage);
+      const delivered = await view.webview.postMessage(scopedMessage);
+      if (!delivered) this.outputChannel.appendLine('[webview] postMessage returned false');
+      return delivered;
     } catch (error) {
-      this.outputChannel.appendLine(
-        `[webview] postMessage failed: ${
-          error instanceof Error ? error.stack ?? error.message : String(error)
-        }`,
-      );
+      this.outputChannel.appendLine(`[webview] postMessage failed: ${sanitizeErrorSurfaceText(error)}`);
+      return false;
     }
   }
 
   dispose(): void {
     this.clearVisibilityRecoveryTimer();
     this.clearVisibilitySyncTimer();
+    this.stateTransport.dispose();
     for (const disposable of this.disposables) {
       disposable.dispose();
     }
@@ -425,8 +403,10 @@ export class WorkbenchSidebarController
     lastRestorePayload?: unknown;
     lastOperationStatusPayload?: unknown;
     lastVisibleFactsPayload?: unknown;
+    stateSync: WebviewStateTransport['debug'];
   } {
     return {
+      stateSync: this.stateTransport.debug,
       bootstrapNonce: this.bootstrapNonce,
       awaitingLifecycleAck: this.awaitingLifecycleAck,
       lastLifecycleAckAt: this.lastLifecycleAckAt,
@@ -440,7 +420,49 @@ export class WorkbenchSidebarController
     };
   }
 
+  private currentScope(): WebviewSyncCursor {
+    const state = this.getState();
+    return { ...this.stateTransport.scope, messageId: '',
+      workspaceId: getRuntimeWorkspaceContext({ getHostState: () => state }).workspaceId,
+      sessionId: state.sessionId ?? '',
+    };
+  }
+
+  private async postOperationPhase(identity: WebviewOperationIdentity, phase: WebviewOperationPhase): Promise<void> {
+    this.operationRequests.set(identity.requestId, phase);
+    if (this.operationRequests.size > 128) {
+      for (const [requestId, value] of this.operationRequests) {
+        if (value !== 'pending' && value !== 'running') { this.operationRequests.delete(requestId); break; }
+      }
+    }
+    await this.postMessage({ type: 'operation/lifecycle', payload: { identity, phase } });
+  }
+
   private async handleMessage(message: TrainerWebviewMessage): Promise<void> {
+    const command = this.resolveCommand(message);
+    const identity = message.operation && command ? { ...message.operation, commandId: command.commandId } : undefined;
+    if (!identity) { await this.handleScopedMessage(message); return; }
+    const scope = this.currentScope();
+    if (!/^[a-z0-9-]{1,128}$/i.test(identity.requestId) || identity.generation !== scope.generation ||
+        identity.workspaceId !== scope.workspaceId || identity.sessionId !== scope.sessionId ||
+        identity.revision > scope.revision) {
+      this.outputChannel.appendLine('[webview] ignored command from an outdated UI scope');
+      return;
+    }
+    if (this.operationRequests.has(identity.requestId)) return;
+    await this.operationContext.run(identity, async () => {
+      await this.postOperationPhase(identity, 'pending');
+      await this.postOperationPhase(identity, 'running');
+      await this.handleScopedMessage(message);
+    });
+  }
+
+  private async synchronizeAppliedState(): Promise<boolean> {
+    await this.syncState();
+    return this.stateTransport.whenApplied();
+  }
+
+  private async handleScopedMessage(message: TrainerWebviewMessage): Promise<void> {
     if (!this.view) {
       return;
     }
@@ -449,17 +471,17 @@ export class WorkbenchSidebarController
         this.lastLifecycleAckAt = Date.now();
         this.awaitingLifecycleAck = false;
         this.outputChannel.appendLine(`[webview] lifecycle ${message.type}`);
-        const pendingRestorePayload = this.pendingRestorePayload;
-        this.pendingRestorePayload = undefined;
-        await this.postMessage(toHostBootstrapMessage(this.getState()));
-        this.adoptSyncedPayload();
-        await this.syncState();
-        if (pendingRestorePayload !== undefined) {
-          await this.postMessage({
-            type: 'ui/restoreView',
-            payload: pendingRestorePayload,
-          });
+        const pendingRestoreMessage = this.pendingRestoreMessage;
+        this.pendingRestoreMessage = undefined;
+        await this.syncState({ forceFull: true });
+        if (pendingRestoreMessage !== undefined) {
+          await this.postMessage(pendingRestoreMessage);
         }
+        return;
+      }
+
+      if (message.type === 'state/ack') {
+        this.stateTransport.acknowledge(message.payload);
         return;
       }
 
@@ -494,6 +516,17 @@ export class WorkbenchSidebarController
       const command = this.resolveCommand(message);
       if (command) {
         const result = await this.commandRegistry.execute(command.commandId, command.payload);
+        const identity = this.operationContext.getStore();
+        if (identity) {
+          const data = result.data && typeof result.data === 'object' ? result.data as Record<string, unknown> : undefined;
+          const phase: WebviewOperationPhase = result.cancelled || data?.state === 'cancelled' ? 'cancelled'
+            : data?.state === 'connection_lost' || data?.state === 'timed_out' ? 'interrupted'
+            : result.ok ? 'succeeded' : 'failed';
+          await this.postOperationPhase(identity, phase);
+          const current = this.currentScope();
+          if (identity.generation !== current.generation || identity.workspaceId !== current.workspaceId ||
+              identity.sessionId !== current.sessionId) { await this.syncState(); return; }
+        }
         if (command.commandId === COMMAND_IDS.remoteCompanionState) {
           // A quiet query: the Settings panel consumes the dedicated state
           // message instead of a toast.
@@ -514,7 +547,7 @@ export class WorkbenchSidebarController
           result,
         );
         if (resourceTrainingHandoff) {
-          await this.syncState();
+          if (!(await this.synchronizeAppliedState())) return;
           await this.postMessage({
             type: 'training/resourceHandoff',
             payload: resourceTrainingHandoff,
@@ -524,7 +557,7 @@ export class WorkbenchSidebarController
         if (trainingPersistence) {
           // The acknowledgement is emitted only after the refreshed snapshot has
           // reached the webview, so a follow-up training stream sees durable state.
-          await this.syncState();
+          if (!(await this.synchronizeAppliedState())) return;
           await this.postMessage({
             type: 'training/persistenceAck',
             payload: {
@@ -623,6 +656,8 @@ export class WorkbenchSidebarController
         `[webview] Unknown message: ${sanitizeErrorSurfaceJson(message)}`,
       );
     } catch (error) {
+      const identity = this.operationContext.getStore();
+      if (identity) await this.postOperationPhase(identity, 'failed');
       this.outputChannel.appendLine(
         `[webview] handleMessage failed: ${sanitizeErrorSurfaceText(
           error instanceof Error ? error.stack ?? error.message : String(error),
@@ -773,7 +808,6 @@ export class WorkbenchSidebarController
     }
 
     await this.refreshHostAndSync(reason);
-    this.markHostStateSeen();
     this.scheduleVisibilityRecovery(view, reason);
   }
 
@@ -981,7 +1015,7 @@ export class WorkbenchSidebarController
     }
     const record = message as { type?: unknown; payload?: unknown };
     if (record.type === 'ui/restoreView') {
-      this.pendingRestorePayload = cloneDebugValue(record.payload);
+      this.pendingRestoreMessage = cloneDebugValue(message);
     }
   }
 }

@@ -12,7 +12,7 @@
 
 [English](README.md) · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · [Français](README_fr-FR.md) · [Deutsch](README_de-DE.md) · [日本語](README_ja-JP.md) · [한국어](README_ko-KR.md) · Português
 
-[![Release](https://img.shields.io/badge/release-v1.0.3-1f6feb)](https://github.com/AI-yyf/trainer/releases/tag/v1.0.3)
+[![Release](https://img.shields.io/badge/source-v1.3.4-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-8b949e)](#instalação)
 [![Tests](https://img.shields.io/badge/tests-3%2C328%20cases-F59E0B)](#portões-de-qualidade)
@@ -72,7 +72,7 @@ Não é uma casca de chat — é um coach com memória, um currículo e uma pol�
 
 **Via VSIX (pré-compilado, três plataformas):**
 
-Baixe o `.vsix` da sua plataforma (`darwin-arm64` / `linux-x64` / `win32-x64`) na [release v1.0.3](https://github.com/AI-yyf/trainer/releases/tag/v1.0.3).
+Baixe o `.vsix` da sua plataforma (`darwin-arm64` / `linux-x64` / `win32-x64`) na [última release publicada](https://github.com/AI-yyf/trainer/releases/latest).
 
 Painel de extensões do VS Code → `···` → *Instalar do VSIX* → recarregue a janela.
 
@@ -586,7 +586,7 @@ Se o Trainer ajudou o seu fluxo de trabalho, fique à vontade para citá-lo no s
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.0.3}
+  note   = {v1.3.4}
 }
 ```
 
@@ -596,6 +596,6 @@ Se o Trainer ajudou o seu fluxo de trabalho, fique à vontade para citá-lo no s
 
 **// Treine sua IA · Cresça com sua IA**
 
-`v1.0.3` · Feito com café, FSRS, 24 funções puras, 3.328 testes e um coração que se recusa a escrever código por você.
+`v1.3.4` · Feito com café, FSRS, 24 funções puras, 3.328 testes e um coração que se recusa a escrever código por você.
 
 </div>

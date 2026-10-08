@@ -13,6 +13,7 @@ jobs:
   build:
     name: build (${{ matrix.os }} → ${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
@@ -41,26 +42,34 @@ jobs:
           node-version: 24
 
       # Python env for the sidecar + PyInstaller binary build.
-      - name: Create python environment
-        working-directory: server
-        run: |
-          python -m venv .venv
-          . .venv/bin/activate 2>/dev/null || . .venv/Scripts/activate
-          python -m pip install -U pip
-          pip install -e ".[dev]"
+      - name: Set up locked Python tooling
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.10"
 
-      # Node deps for root tooling + extension + webview (root postinstall).
+      - name: Create python environment from the lock
+        working-directory: server
+        run: uv sync --frozen --extra dev --extra build --python 3.12
+
       - name: Install node dependencies
         run: npm ci
 
+      - name: Product and tag version gate
+        run: npm run verify:version
+
+      - name: Python lint and types
+        working-directory: server
+        run: |
+          PYTHON=".venv/bin/python"
+          if [ "$RUNNER_OS" = "Windows" ]; then PYTHON=".venv/Scripts/python.exe"; fi
+          "$PYTHON" -m ruff check app tests
+          "$PYTHON" -m pyright app
+
+      - name: TypeScript and CSS gate
+        run: npm run check
+
       - name: Build webview + extension
         run: npm run build
-
-      - name: Mirror server sources into bundled runtime
-        run: npm run sync:server --prefix extension
-
-      - name: Bundle native sidecar binary (${{ matrix.target }})
-        run: npm run bundle:sidecar:binary --prefix extension
 
       # Extension tests run BEFORE packaging: the deterministic vsix build
       # strips the browserSidecar test entry, so tests must see the
@@ -69,6 +78,7 @@ jobs:
         run: npm run test:extension
 
       - name: Package VSIX (${{ matrix.target }})
+        id: package-vsix
         run: npm run package:vsix --prefix extension
 
       # Per-OS adaptation proof: the frozen binary must run on the OS it was
@@ -99,33 +109,41 @@ jobs:
           path: npm-debug-logs/
           if-no-files-found: ignore
 
-      # Full server suite blocks on the primary (linux-x64) target; the other
-      # platforms still run it so drift surfaces as uploaded reports.
-      - name: Server test suite (full)
-        if: matrix.target == 'linux-x64'
+      - name: Server test suite (all release platforms, blocking)
         working-directory: server
+        env:
+          PYTHONUTF8: "1"
         run: |
-          . .venv/bin/activate
-          python -m pytest tests -q --tb=short
+          PYTHON=".venv/bin/python"
+          if [ "$RUNNER_OS" = "Windows" ]; then PYTHON=".venv/Scripts/python.exe"; fi
+          set -o pipefail
+          "$PYTHON" -m pytest tests -q --tb=short 2>&1 | tee pytest-platform.log
 
-      - name: Server test suite (platform probe)
-        if: matrix.target != 'linux-x64'
-        working-directory: server
-        continue-on-error: true
-        run: |
-          . .venv/bin/activate 2>/dev/null || . .venv/Scripts/activate
-          python -m pytest tests -q --tb=short > pytest-platform.log 2>&1 || true
-          tail -5 pytest-platform.log
+      - name: Install browser acceptance dependencies
+        run: npm install --no-save --ignore-scripts "@playwright/test@1.62.1"
+
+      - name: Install Chromium (Linux)
+        if: runner.os == 'Linux'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Chromium (macOS and Windows)
+        if: runner.os != 'Linux'
+        run: npx playwright install chromium
+
+      - name: Browser teaching journey gate
+        run: npm run test:experience-matrix
 
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
         with:
           name: trainer-extension-${{ matrix.target }}
-          path: extension/*.vsix
+          path: |
+            ${{ steps.package-vsix.outputs.vsix_path }}
+            ${{ steps.package-vsix.outputs.vsix_metadata_path }}
           if-no-files-found: error
 
-      - name: Upload platform pytest report (non-blocking)
-        if: matrix.target != 'linux-x64' && always()
+      - name: Upload platform pytest report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pytest-report-${{ matrix.target }}
@@ -138,6 +156,12 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
       - name: Download all VSIX artifacts
         uses: actions/download-artifact@v4
         with:
@@ -145,9 +169,15 @@ jobs:
           pattern: trainer-extension-*
           merge-multiple: true
 
+      - name: Verify exact release artifacts and provenance
+        run: node scripts/verify-release-artifacts.mjs --dir artifacts --ref "$GITHUB_REF" --commit "$GITHUB_SHA"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Trainer ${{ github.ref_name }}
           generate_release_notes: true
-          files: artifacts/*.vsix
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/*.vsix
+            artifacts/*.vsix.build.json

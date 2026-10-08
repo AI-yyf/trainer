@@ -28,12 +28,8 @@ test('operation message surface union and banner gate localize scoped messages t
 
   // The union and the pure surface rules moved to the governance module.
   assert.match(
-    governance,
-    /export type OperationMessageSurface = "global" \| "training" \| "plan" \| "resources";/,
-  );
-  assert.match(
-    governance,
-    /export function resolveOperationMessageSurface\(/,
+    source,
+    /type OperationMessageSurface,/,
   );
   assert.match(
     source,
@@ -60,19 +56,19 @@ test('setOperationMessage writes message and surface atomically through the gove
     source,
     /const setOperationMessage = useCallback\(\s*\(message\?: OperationMessage, surface\?: OperationMessageSurface\) => \{\s*setOperationMessageSurface\(\s*resolveOperationMessageSurface\(message\?\.message, surface\),\s*\);\s*setRawOperationMessage\(/,
   );
-  assert.match(
-    source,
-    /message \? sanitizeOperationFailureMessage\(message, layout\.composerLanguage\) : undefined,/,
-  );
+  const { load } = require('./templateAssertions');
+  const { resolveOperationMessageSurface } = load('lib/operationMessageGovernance.ts');
+  assert.equal(resolveOperationMessageSurface({ message: 'Formal plan revision changed', planStateFailure: true }), 'plan');
+  assert.equal(resolveOperationMessageSurface({ message: 'Later ordinary notice' }), 'global');
+  assert.equal(resolveOperationMessageSurface({ message: 'Verify failure', explicitSurface: 'training' }), 'training');
+  assert.match(source, /resolveOperationMessageSurface\(message\?\.message, surface\)/);
 });
 
 test('host resource and plan statuses are intercepted before the store banner write', () => {
   const source = fs.readFileSync(appPath, 'utf8');
 
-  assert.match(
-    source,
-    /const hostSurfaceScope: OperationMessageSurface \| undefined =\s*detectAttestationUndelivered\(message\.payload\.message\)\s*\? "training"\s*: detectPlanRevisionConflict\(message\.payload\.message\) \|\|\s*parseLivePlanTaskGateMarker\(message\.payload\.message\)\s*\? "plan"\s*: resourceOperationStatus && resourceOperationStatus\.kind !== "search"\s*\? "resources"\s*: undefined;/,
-  );
+  assert.match(source, /const hostSurfaceScope = resolveOperationMessageSurface\(/);
+  assert.match(source, /resourceOperation: Boolean\(resourceOperationStatus && resourceOperationStatus\.kind !== "search"\)/);
   assert.match(
     source,
     /hostSurfaceScope &&\s*!\(message\.payload\.surface === "stream" && message\.payload\.tone !== "error"\)\s*\) \{\s*setOperationMessageSurface\(hostSurfaceScope\);/,

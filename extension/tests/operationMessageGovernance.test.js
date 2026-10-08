@@ -65,7 +65,7 @@ function loadGovernance() {
 
 const governance = loadGovernance();
 
-test('surface attribution: explicit surface wins over every marker', () => {
+test('surface attribution: explicit surface wins over plan markers', () => {
   assert.equal(
     governance.resolveOperationMessageSurface('[[trainer-plan-revision-conflict:7]] ', 'resources'),
     'resources',
@@ -181,4 +181,47 @@ test('App delegates surface attribution and sanitization to the governance modul
     moduleSource,
     /export type OperationMessageSurface = "global" \| "training" \| "plan" \| "resources";/,
   );
+});
+
+const { load } = require('./templateAssertions');
+const { attestationDeliveryNotice, resolveOperationMessageSurface, ATTESTATION_UNDELIVERED_MARKER } = load('lib/operationMessageGovernance.ts');
+
+test('uncertain attestation delivery is localized to Training in all eight languages', () => {
+  const messages = new Set();
+  for (const language of ['zh-CN','en-US','es-ES','fr-FR','de-DE','ja-JP','ko-KR','pt-BR']) {
+    const notice = attestationDeliveryNotice(`${ATTESTATION_UNDELIVERED_MARKER} hidden transport detail`, language);
+    assert.equal(notice.surface, 'training');
+    assert.ok(notice.message.length > 15);
+    assert.ok(!notice.message.includes('hidden transport detail'));
+    assert.ok(!notice.message.includes(ATTESTATION_UNDELIVERED_MARKER));
+    messages.add(notice.message);
+  }
+  assert.equal(messages.size, 8);
+});
+
+test('ordinary status cannot acquire attestation uncertainty or a Training scope', () => {
+  for (const text of ['', 'Tests passed', 'Verification failed', 'Connection lost', 'Self-reported success']) {
+    assert.equal(attestationDeliveryNotice(text, 'en-US'), undefined);
+  }
+});
+
+test('uncertain delivery keeps operation identity and never guarantees a missing write or successful replay', () => {
+  const operation = { tone: 'error', message: `${ATTESTATION_UNDELIVERED_MARKER} ambiguous timeout`,
+    requestId: 'verify-request', workspaceId: 'current-workspace', sessionId: 'current-session', cardId: 'current-card' };
+  const sanitized = governance.sanitizeOperationFailureMessage(operation, 'en-US');
+  assert.equal(sanitized.requestId, operation.requestId);
+  assert.equal(sanitized.workspaceId, operation.workspaceId);
+  assert.equal(sanitized.sessionId, operation.sessionId);
+  assert.equal(sanitized.cardId, operation.cardId);
+  assert.match(sanitized.message, /not been confirmed as saved/);
+  assert.doesNotMatch(sanitized.message, /did not reach|again to record|ambiguous timeout/);
+});
+
+test('operation notices resolve each new owner without inheriting a prior surface', () => {
+  assert.equal(resolveOperationMessageSurface({ message: 'Upload complete', resourceOperation: true }), 'resources');
+  assert.equal(resolveOperationMessageSurface({ message: 'Revision conflict', planStateFailure: true }), 'plan');
+  assert.equal(resolveOperationMessageSurface({ message: 'Validation error', explicitSurface: 'training' }), 'training');
+  assert.equal(resolveOperationMessageSurface({ message: 'Later global notice' }), 'global');
+  assert.equal(resolveOperationMessageSurface({ explicitSurface: 'plan' }), 'global');
+  assert.equal(resolveOperationMessageSurface({ message: ATTESTATION_UNDELIVERED_MARKER, explicitSurface: 'resources' }), 'training');
 });

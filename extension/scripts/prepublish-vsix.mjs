@@ -2,8 +2,9 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { verifyProductVersion } from "../../scripts/verify-version.mjs";
 
-import { resolveNpmExecPath, sanitizePackagedSymlinks } from "./package-vsix.mjs";
+import { resolveNpmExecPath, sanitizePackagedSymlinks } from "./vsix-build-helpers.mjs";
 import {
   clearForeignSidecarBinaries,
   resolveNativeSidecarTarget,
@@ -73,6 +74,7 @@ export function prepublishVsix({
   env = process.env,
   runScript = runNpmScript,
 } = {}) {
+  verifyProductVersion({ repoRoot, ref: env.GITHUB_REF ?? "" });
   for (const scriptName of ["clean", "build", "build:webview"]) {
     runScript(scriptName, { extensionDir, env });
   }
@@ -88,6 +90,9 @@ export function prepublishVsix({
 
   const removedForeignTargets = clearForeignSidecarBinaries({ extensionDir, targetPlatform });
   runScript("bundle:sidecar", { extensionDir, env });
+  // The final gate checks the Companion as well as the native runtime.
+  // Build it inside this dependency chain, before any verification runs.
+  runScript("package:remote-companion", { extensionDir, env });
   // Materialize or drop symlinks before the packaged trees are verified and
   // zipped: the vsce secret scanner reads every packaged file and aborts
   // packaging when it hits a symlinked directory or a dangling link (the
@@ -109,6 +114,13 @@ export function prepublishVsix({
 
 if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
   try {
+    if (process.env.TRAINER_VSIX_PREPARED === "1") {
+      // package-vsix already prepared this exact tree; vsce invokes its hook
+      // again. Recheck the inputs without a second native build.
+      assertPackageVerified();
+      console.log("Trainer VSIX prepared inputs verified.");
+      process.exit(0);
+    }
     const result = prepublishVsix();
     const detail = result.reusedBinary
       ? `Reused verified bundled sidecar binary at ${result.binaryReport.executablePath}.`

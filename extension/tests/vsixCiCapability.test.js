@@ -14,6 +14,25 @@ async function loadCapabilityModule() {
   return import(pathToFileURL(capabilityModulePath).href);
 }
 
+function artifactUploadPaths(source, artifactName) {
+  const step = source.split(/^      - /m).find((candidate) =>
+    candidate.includes('uses: actions/upload-artifact@v4') &&
+    candidate.includes(`name: ${artifactName}\n`));
+  assert.ok(step, `Missing artifact upload: ${artifactName}`);
+  const lines = step.split('\n');
+  const pathLine = lines.findIndex((line) => /^          path: /.test(line));
+  assert.ok(pathLine >= 0, `Missing paths for artifact: ${artifactName}`);
+  const value = lines[pathLine].slice('          path: '.length).trim();
+  if (value !== '|') return [value];
+  const paths = [];
+  for (const line of lines.slice(pathLine + 1)) {
+    if (!line.startsWith('            ')) break;
+    const entry = line.trim();
+    if (entry) paths.push(entry);
+  }
+  return paths;
+}
+
 test('VSIX CI capability distinguishes installation from Linux host-E2E readiness', async () => {
   const { detectVsixCiCapability } = await loadCapabilityModule();
   const result = detectVsixCiCapability({
@@ -68,8 +87,11 @@ test('cross-platform workflow keeps all experience layers and an explicit VSIX h
   assert.match(source, /uses: actions\/upload-artifact@v4/);
   // Parallel package jobs upload per-OS artifacts, so the matrix OS prefixes
   // the target-qualified name.
-  assert.match(source, /trainer-vsix-\$\{\{ matrix\.os \}\}-\$\{\{ steps\.package-vsix\.outputs\.vsix_target \}\}/);
-  assert.match(source, /path: \$\{\{ steps\.package-vsix\.outputs\.vsix_path \}\}/);
+  const artifactName = 'trainer-vsix-${{ matrix.os }}-${{ steps.package-vsix.outputs.vsix_target }}';
+  assert.deepEqual(artifactUploadPaths(source, artifactName), [
+    '${{ steps.package-vsix.outputs.vsix_path }}',
+    '${{ steps.package-vsix.outputs.vsix_metadata_path }}',
+  ]);
 });
 
 test('installed VSIX smoke starts the extracted native sidecar', () => {

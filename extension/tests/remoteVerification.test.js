@@ -20,6 +20,7 @@ const ATTEST_PATH = '/training/verification/attest';
 
 function createCommandContext(overrides = {}) {
   const posts = [];
+  const messages = [];
   const hostState = {
     sessionId: overrides.sessionId,
     workspace: {
@@ -69,9 +70,76 @@ function createCommandContext(overrides = {}) {
     },
     getHostState: () => hostState,
     getSessionId: () => overrides.sessionId,
+    workbench: { async postMessage(message) { messages.push(message); } },
   };
-  return { context, posts };
+  return { context, posts, messages };
 }
+
+test('remote evidence is bound to the starting card and changed identities cannot attest', async () => {
+  const { remoteVerifyCommand } = loadWithVscodeMock(remoteVerificationModulePath, {});
+  let finish;
+  const { context, posts } = createCommandContext({ sessionId: 'start-session',
+    workspace: { isRemoteWorkspace: true, remoteName: 'ssh-remote' },
+    trainingState: { selectedCardId: 'starting-card', selectedCardStatus: 'active', selectedCardType: 'practice' },
+    gateway: { async capabilities() { return { companionAvailable: true, verify: true }; },
+      async runVerification(_spec, options) {
+        options.onStart({ session_id: 'actual-companion-run' });
+        return new Promise(resolve => { finish = resolve; });
+      } },
+  });
+  const running = remoteVerifyCommand(context, { executable: 'python', args: ['practice.py'] });
+  while (!finish) await new Promise(resolve => setImmediate(resolve));
+  context.getHostState().bootstrap.workspaceTrainingState.selectedCardId = 'later-card';
+  finish({ state: 'completed', result: 'passed', exit_code: 0 });
+  const result = await running;
+  assert.equal(result.data.attestation, 'stale_scope');
+  assert.deepEqual(posts, []);
+  assert.doesNotMatch(result.message, /was attested/);
+});
+
+test('an ambiguous attestation response never claims recorded evidence or auto-resends', async () => {
+  const { remoteVerifyCommand } = loadWithVscodeMock(remoteVerificationModulePath, {});
+  const { context, messages } = createCommandContext({ sessionId: 's1',
+    workspace: { isRemoteWorkspace: true, remoteName: 'ssh-remote' },
+    trainingState: { selectedCardId: 'card', selectedCardStatus: 'active', selectedCardType: 'practice' },
+  });
+  let requests = 0;
+  context.sidecarClient.postJson = async () => { requests += 1; throw new Error('lost response'); };
+  const result = await remoteVerifyCommand(context, { executable: 'python', args: ['practice.py'] });
+  assert.equal(result.ok, true, 'the real process verdict remains a pass');
+  assert.equal(result.data.attestation, 'undelivered');
+  assert.equal(requests, 1);
+  assert.match(result.message, /trainer-attestation-undelivered/);
+  assert.equal(messages.filter(message => message.type === 'operation/status').length, 1);
+});
+
+test('active-file verification reserves the run before onStart and a second click cannot start another process', async () => {
+  const { remoteVerifyActiveFileCommand, remoteVerifyCancelCommand } = loadWithVscodeMock(remoteVerificationModulePath, {
+    window: { activeTextEditor: { document: { uri: { fsPath: '/project/practice.py' } } } },
+  });
+  let start, finish, signal, calls = 0;
+  const { context, posts, messages } = createCommandContext({ sessionId: 's1',
+    workspace: { isRemoteWorkspace: true, remoteName: 'ssh-remote' },
+    trainingState: { selectedCardId: 'card', selectedCardStatus: 'active', selectedCardType: 'practice' },
+    gateway: { async capabilities() { return { companionAvailable: true, verify: true }; },
+      async runVerification(_spec, options) {
+        calls += 1; signal = options.signal; start = options.onStart;
+        return new Promise(resolve => { finish = resolve; });
+      } },
+  });
+  assert.equal((await remoteVerifyActiveFileCommand(context)).ok, true);
+  assert.equal((await remoteVerifyActiveFileCommand(context)).ok, false);
+  assert.equal(calls, 1);
+  start({ session_id: 'r1' });
+  await remoteVerifyCancelCommand(context);
+  assert.equal(signal.aborted, true);
+  finish({ state: 'cancelled', exit_code: null, stdout: '', stderr: '' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(posts, []);
+  const finished = messages.find(message => message.type === 'remoteVerification/finished');
+  assert.equal(finished.payload.state, 'cancelled');
+  assert.equal('passed' in finished.payload, false);
+});
 
 test('remote verification requires a remote workspace window', async () => {
   const { remoteVerifyCommand } = loadWithVscodeMock(remoteVerificationModulePath, {});

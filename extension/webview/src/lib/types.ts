@@ -1,3 +1,4 @@
+import type { WebviewSyncEnvelope, WebviewSyncAck, WebviewSyncStatus, WebviewOperationIdentity, WebviewOperationPhase, WebviewSyncCursor } from "../../../../shared/src/webviewSync";
 import type { TrainerCommandCatalogItem } from "../../../../shared/src/commands";
 import type { TrainerMessagePart, TrainerStreamingState } from "../../../../shared/src/protocol";
 import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
@@ -2020,7 +2021,9 @@ export interface DebugVisibleWorkbenchFacts {
   resources?: DebugVisibleResourcesFacts;
 }
 
-export type WebviewAction =
+export type WebviewAction = WebviewActionBody & { operation?: WebviewOperationIdentity };
+type WebviewActionBody =
+  | { type: "state/ack"; payload: WebviewSyncAck }
   | { type: "request/bootstrap" }
   | { type: "settings/primeProviderModels" }
   | { type: "command/execute"; payload: { commandId: string; payload?: unknown } }
@@ -2067,11 +2070,14 @@ export interface HostProviderTestSummary {
   retryable?: boolean;
 }
 
-export type HostMessage =
+export type HostMessage = HostMessageBody & { scope?: WebviewSyncCursor; operation?: WebviewOperationIdentity; operationPhase?: WebviewOperationPhase };
+type HostMessageBody =
+  | { type: "operation/lifecycle"; payload: { identity: WebviewOperationIdentity; phase: WebviewOperationPhase } }
+  | { type: "state/syncStatus"; payload: { status: WebviewSyncStatus; generation: number } }
   | { type: "stageMaterials/settled"; payload: { workspaceId: string; planId: string; stageId: string } }
   | { type: "skills/draftResult"; payload: { requestId: string; ok: boolean; draft?: { trigger: string; title: string; detail: string; prompt: string; source: "model" | "template" }; message?: string } }
-  | { type: "bootstrap"; payload: BootstrapData }
-  | { type: "state/patch"; payload: Partial<BootstrapData> }
+  | { type: "bootstrap"; payload: BootstrapData; sync?: WebviewSyncEnvelope }
+  | { type: "state/patch"; payload: Partial<BootstrapData>; sync?: WebviewSyncEnvelope }
   | {
       type: "operation/status";
       payload: {

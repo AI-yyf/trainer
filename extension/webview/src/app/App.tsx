@@ -1,4 +1,9 @@
 import { SystemState } from "../templates/SystemState";
+import {
+  executeLearningPrimaryAction,
+  resolveLearningPrimaryAction,
+  type LearningFacts,
+} from "../lib/learningActionResolver";
 import { CommandPalette } from "../templates/CommandPalette";
 import {
   Suspense,
@@ -600,7 +605,6 @@ function sanitizeHostFailureMessage(
   if (message.type !== "operation/status" || message.payload.tone !== "error") {
     return message;
   }
-
   const partialDeletion = parsePartialResourceDeletionFailure(message.payload.message);
   const resourceRecovery = resourceOperationFailureMessage(resourceOperationKind, language);
   const revisionConflict = detectPlanRevisionConflict(message.payload.message);
@@ -3617,6 +3621,8 @@ export function App() {
     trainingReviewQueueRequested,
     beginTrainingReview,
     hasReceivedHostState,
+    syncStatus,
+    syncCursor,
     setActiveView,
     setResourceRestoreContext,
     setComposerDraft,
@@ -3635,6 +3641,7 @@ export function App() {
     setLearningSurfaceAlignment,
     applyHostMessage: applyRawHostMessage,
   } = useWorkbenchState();
+  const syncIdentity = syncCursor.generation > 0 ? syncCursor : undefined;
 
   const { openMenu, setOpenMenu } = useMenuState();
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
@@ -3676,6 +3683,7 @@ export function App() {
   const providerDraftIsDirtyRef = useRef(false);
   const providerDraftSourceKeyRef = useRef<string>();
   const [operationMessageLeaving, setOperationMessageLeaving] = useState(false);
+  const operationMessageDismissTimerRef = useRef<number>();
   const [providerSpeedTestResults, setProviderSpeedTestResults] = useState<
     ProviderEndpointSpeedTestResult[]
   >([]);
@@ -4476,18 +4484,12 @@ export function App() {
         // operation results (upload/index/delete/restore acks) render only in
         // Library — the Library view already reports its own mutation status —
         // and plan-state failures (revision conflict, live-plan gate) render
-        // only in Learning. A failed evidence delivery after a completed
-        // verification renders only in Training. Stream-scoped non-errors
-        // clear the banner instead of setting one, so they never claim a scope.
-        const hostSurfaceScope: OperationMessageSurface | undefined =
-          detectAttestationUndelivered(message.payload.message)
-            ? "training"
-            : detectPlanRevisionConflict(message.payload.message) ||
-              parseLivePlanTaskGateMarker(message.payload.message)
-            ? "plan"
-            : resourceOperationStatus && resourceOperationStatus.kind !== "search"
-              ? "resources"
-              : undefined;
+        // only in Learning. Stream-scoped non-errors clear the banner instead
+        // of setting one, so they never claim a scope.
+        const hostSurfaceScope = resolveOperationMessageSurface({ message: message.payload.message,
+          planStateFailure: Boolean(detectPlanRevisionConflict(message.payload.message) || parseLivePlanTaskGateMarker(message.payload.message)),
+          resourceOperation: Boolean(resourceOperationStatus && resourceOperationStatus.kind !== "search"),
+        });
         if (
           hostSurfaceScope &&
           !(message.payload.surface === "stream" && message.payload.tone !== "error")
@@ -4627,6 +4629,9 @@ export function App() {
   const composerSessionKey = `${data.memory.workspace?.resourceSandbox?.effectivePath
     ?? data.memory.workspace?.workspaceId ?? data.workspaceName}\u0000${data.sessionLabel}`;
   const surfaceInstanceKey = `${composerSessionKey}\u0000${data.runtimeDataGeneration ?? ""}`;
+  const attachmentScope = syncIdentity
+    ? JSON.stringify([syncIdentity.generation, syncIdentity.workspaceId, syncIdentity.sessionId])
+    : surfaceInstanceKey;
   useEffect(() => {
     if (hasReceivedHostState && data.sessionLabel) {
       useWorkbenchState.getState().selectComposerDraftScope(composerSessionKey);
@@ -5694,12 +5699,24 @@ export function App() {
   // Success/info notices self-dismiss; errors stay until explicitly closed.
   // Both paths play the exit animation before the message is removed.
   const dismissOperationMessage = useCallback(() => {
+    const expected = useWorkbenchState.getState().operationMessage;
+    if (!expected) return;
+    window.clearTimeout(operationMessageDismissTimerRef.current);
     setOperationMessageLeaving(true);
-    window.setTimeout(() => {
-      setOperationMessage(undefined);
+    operationMessageDismissTimerRef.current = window.setTimeout(() => {
+      operationMessageDismissTimerRef.current = undefined;
+      useWorkbenchState.getState().clearOperationMessage(expected);
       setOperationMessageLeaving(false);
     }, 180);
   }, []);
+
+  useEffect(() => {
+    // A later notice owns its animation; an earlier exit cannot remove it.
+    window.clearTimeout(operationMessageDismissTimerRef.current);
+    operationMessageDismissTimerRef.current = undefined;
+    setOperationMessageLeaving(false);
+    return () => window.clearTimeout(operationMessageDismissTimerRef.current);
+  }, [operationMessage]);
 
   useEffect(() => {
     if (!operationMessage || operationMessage.tone === "error") {
@@ -6984,34 +7001,6 @@ export function App() {
       planRuntimeStatus?.resumeState,
     ],
   );
-  const recoveredPlanPrimary =
-    recoveredRuntime &&
-    (planOrientation.primaryAction === "clear_blocker" ||
-      planOrientation.primaryAction === "continue_step" ||
-      planOrientation.primaryAction === "unfreeze_plan" ||
-      planOrientation.primaryAction === "adopt_evidence" ||
-      planOrientation.primaryAction === "wait")
-      ? planOrientation.primaryAction
-      : null;
-  const recoveredAdoptPrimary = recoveredPlanPrimary === "adopt_evidence";
-  const autoPlanComposerModeRef = useRef(false);
-  useEffect(() => {
-    if (activeView !== "plan") {
-      autoPlanComposerModeRef.current = false;
-      return;
-    }
-    if (autoPlanComposerModeRef.current) {
-      return;
-    }
-    if (
-      planOrientation.primaryAction === "wait" ||
-      planOrientation.primaryAction === "adopt_evidence"
-    ) {
-      setPlanComposerMode("evidence");
-      autoPlanComposerModeRef.current = true;
-    }
-  }, [activeView, planOrientation.primaryAction]);
-  const firstLookContinuePrimary = planOrientation.primaryAction === "continue_without_plan";
   const liveResources = leftoverResourceLibraryListNotLive
     ? data.resources.filter(resourceRecordIsAcknowledgedUpload)
     : data.resources;
@@ -12944,6 +12933,7 @@ export function App() {
               action={{ label: templateCopy[layout.composerLanguage].askCoach, onClick: handleResumeTrainingInCoach }} />
           ) : hasTrainingCard && !leftoverTrainingHandoffChromeNotLive && !trainingComposerReturnMode ? (
             <PracticeResponse
+              attachmentScope={`${attachmentScope}\u0000${activeTrainingCardId ?? ""}\u0000${trainingComposerPhase}`}
               label={localizedTrainingComposerAccessibilityLabel}
               prompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : trainingComposerReflectMode ? trainingReflectionPrompt : undefined}
               value={activityDraft}
@@ -13148,21 +13138,103 @@ export function App() {
     );
   };
 
-  const renderPlanView = () => (!hasFormalPlan || data.plan.id === "plan-pending") && data.connection.state !== "connected" ? (
-    <section className="plan-view" data-plan-backend-recovery="true">
-      <div className="coach-empty-state coach-empty-state--blocked" role="status">
-        <p>{providerSetupState.title}</p>
-        <p className="coach-empty-state__detail">{providerSetupState.detail}</p>
-        <button className="button button--accent" type="button" onClick={openProviderSetup}>
-          {providerSetupState.actionLabel}
-        </button>
-      </div>
-    </section>
-  ) : (
+  // Domain controller owns priority; views receive one complete descriptor.
+  const learningFacts: LearningFacts = {
+    scope: {
+      workspaceId: syncIdentity?.workspaceId ?? data.memory.workspace?.workspaceId ?? data.workspaceTrainingState?.workspaceId ?? composerSessionKey,
+      sessionId: syncIdentity?.sessionId ?? data.sessionLabel,
+      generation: String(syncIdentity?.generation ?? data.runtimeDataGeneration ?? "unversioned"),
+    },
+    language: layout.composerLanguage,
+    workspace: { ready: !workspaceSessionBlocked, detail: workspaceSessionBlockMessage },
+    provider: {
+      ready: providerCanCoachNow,
+      canGeneratePlan: providerCanMutateFormalPlan,
+      detail: providerCanCoachNow ? formalPlanCapabilityMessage : providerBlockReason ?? providerSetupState.detail,
+    },
+    freshness: syncStatus,
+    // An idle sidecar starts on demand; a verified provider still permits work.
+    connection: data.connection.state === "connected" ||
+      (data.connection.state === "offline" && providerCanCoachNow)
+        ? "ready" : data.connection.state === "starting" ? "recovering" : "offline",
+    connectionRecovery: {
+      title: providerSetupState.title,
+      label: t.openSettings,
+      detail: providerSetupState.detail,
+    },
+    plan: {
+      state: hasFormalPlan ? livePlanFrozen ? "frozen" : "active" : "absent",
+      id: formalPlanLive ? data.plan.id : undefined,
+      revision: formalPlanLive ? data.plan.revision : undefined,
+      currentStep: verifyPlanAdvanceNext || recoveredDisplayFacts.currentStep ||
+        (!recoveredRuntime ? liveCoachTaskChrome.currentStep || resolvedCoachNextStep : undefined),
+      blocker: recoveredDisplayFacts.blockedReason,
+      completion: planVerifyItems,
+    },
+    evidence: {
+      pending: liveEvidenceQueue.pending.map(item => ({ id: item.id, summary: item.summary })),
+      blockingId: planRuntimeStatus?.resumeState === "waiting"
+        ? liveEvidenceBinding({ binding: data.memory.workspace?.latestPlanRuntime?.evidenceBinding,
+            pendingIds: liveEvidenceQueue.pending.map(item => item.id), recovered: recoveredRuntime,
+            currentStep: recoveredDisplayFacts.currentStep }) || undefined
+        : undefined,
+    },
+    training: hasTrainingCard && activeTrainingCardId
+      ? {
+          workspaceId: trainingState?.workspaceId ?? data.memory.workspace?.workspaceId ?? "",
+          cardId: activeTrainingCardId,
+          title: visibleTrainingCardTitle ?? selectedTrainingCardCandidate?.title ?? "",
+          status: normalizedTrainingNextHopStatus === "continued_in_chat" || resolvedReviewArtifact
+            ? "completed" : trainingHandoffReturnRequired || trainingComposerReturnMode
+              ? "return_pending" : "active",
+        }
+      : undefined,
+    dueReview: planReviewItems.find(item => item.surfaceMode === "due"),
+    firstLookStep: !recoveredRuntime ? liveFirstLookSummary?.recommendedNextStep : undefined,
+    operationPending: streaming.isStreaming || trainingPersistencePending || Boolean(pendingLivePlanTaskMintRef.current),
+  };
+  const learningFactsRef = useRef(learningFacts);
+  learningFactsRef.current = learningFacts;
+  const learningPrimaryAction = resolveLearningPrimaryAction(learningFacts);
+  const runLearningPrimaryAction = () => executeLearningPrimaryAction(
+    learningPrimaryAction, learningFactsRef.current, {
+      chooseWorkspace: openWorkspaceAdmission,
+      configureProvider: openProviderSetup,
+      restoreState: () => postMessage({ type: "request/bootstrap" }),
+      openTraining: () => setActiveView("training"),
+      resumePlan: () => handlePlanOrientationAction("unfreeze_plan"),
+      resolveBlocker: () => handlePlanOrientationAction("clear_blocker"),
+      adoptEvidence: (evidenceId) => postMessage({ type: "command/execute", payload: {
+        commandId: trainerCommands.evidenceAdopt, payload: { evidenceId },
+      } }),
+      continueStep: (step) => {
+        if (planRuntimeStatus?.recovered && planRuntimeStatus.currentStep?.trim() === step) {
+          handlePlanOrientationAction("continue_step");
+        } else {
+          requestPlanComposerGuidance(step, "stage");
+        }
+      },
+      continueWithoutPlan: () => handlePlanOrientationAction("continue_without_plan"),
+      startReview: () => useWorkbenchState.getState().openTrainingReviewQueue(),
+      returnToCoach: handleResumeTrainingInCoach,
+      generatePlan: () => handlePlanOrientationAction("generate_plan"),
+      confirmStep: () => openPlanComposerMode("explain"),
+    },
+  );
+  const renderPlanView = () => (
     <section className="plan-view">
       <Suspense fallback={<ViewFallback label={t.plan} language={layout.composerLanguage} />}>
         <CoachPlanView
         plan={workspaceSessionBlocked ? null : visibleFormalPlan}
+        primaryAction={{
+          label: templateCopy[layout.composerLanguage].nextAction,
+          title: learningPrimaryAction.title,
+          detail: <div data-plan-fact="next">{learningPrimaryAction.detail}</div>,
+          action: { id: learningPrimaryAction.intent, label: learningPrimaryAction.label,
+            disabled: learningPrimaryAction.disabled, busy: learningPrimaryAction.busy,
+            onClick: runLearningPrimaryAction },
+        }}
+        primaryEvidenceId={learningPrimaryAction.target.evidenceId}
         onNavigateToView={setActiveView}
         className="plan-pane"
         compactPrimary
@@ -13254,134 +13326,29 @@ export function App() {
             onClick: () => openPlanComposerMode("generate"),
           },
           ...(liveEvidenceQueue.pending.length > 0 && formalPlanLive && !livePlanFrozen && !workspaceSessionBlocked
-            ? [
-                {
-                  id: recoveredAdoptPrimary ? "plan-review-evidence" : "plan-needs-evidence",
-                  // r2 learner-subject label: the accent names what the learner
-                  // did (finished the step) with the evidence tidying attached,
-                  // instead of a mechanism noun ("整理证据") next to a step text.
-                  label: recoveredAdoptPrimary ? t.approve : t.planNeedsEvidenceAction,
-                  tone: "accent" as const,
-                  onClick: () => handlePlanOrientationAction(recoveredAdoptPrimary ? "adopt_evidence" : "wait"),
-                },
-              ]
+            ? [{ id: "plan-ask-evidence", tone: "ghost" as const,
+                label: resolvePlanComposerCopy(layout.composerLanguage).modes.evidence.primaryPrompt.label,
+                disabled: !providerCanCoachNow || syncStatus !== "current",
+                onClick: () => openPlanComposerMode("evidence") }]
             : []),
-          ...(sendBlocked
-            ? [
-                {
-                  id: "open-settings",
-                  label: workspaceSessionBlocked
-                    ? trainerWorkspaceAdmission?.status === "root-missing"
-                      ? t.workspaceAdmissionSelectRoot
-                      : t.openCoach
-                    : t.openSettings,
-                  tone: "accent" as const,
-                  onClick: () => {
-                    if (workspaceSessionBlocked) {
-                      openWorkspaceAdmission();
-                      return;
-                    }
-                    useWorkbenchState.getState().requestSettingsCategory("connection");
-                    setActiveView("settings");
-                  },
-                },
-              ]
-            : [
-                ...(recoveredPlanPrimary && !recoveredAdoptPrimary
-                  ? (() => {
-                      // 证据待整理时,主操作仍对准『下一步』本身;整理证据降为次级,
-                      // 避免主按钮与『下一步』文案指向两个不同的动作。
-                      const stepText = (
-                        recoveredDisplayFacts.currentStep ||
-                        liveCoachTaskChrome.currentStep ||
-                        resolvedCoachNextStep ||
-                        ""
-                      ).trim();
-                      if (recoveredPlanPrimary === "wait" && stepText) {
-                        const short = stepText.length > 18 ? `${stepText.slice(0, 17)}…` : stepText;
-                        return [
-                          {
-                            id: "plan-start-step",
-                            label: appUiCopy(layout.composerLanguage, "开始：{v}").replace(
-                              "{v}",
-                              short,
-                            ),
-                            tone: "accent" as const,
-                            onClick: () => handlePlanOrientationAction("continue_step"),
-                          },
-                          {
-                            id: "plan-needs-evidence",
-                            label: planOrientation.primaryActionLabel,
-                            tone: "ghost" as const,
-                            onClick: () => handlePlanOrientationAction("wait"),
-                          },
-                        ];
-                      }
-                      return [
-                        {
-                          id:
-                            recoveredPlanPrimary === "clear_blocker"
-                              ? "plan-clear-blocker"
-                              : recoveredPlanPrimary === "unfreeze_plan"
-                                ? "resume-plan"
-                                : "plan-continue-step",
-                          label: recoveredPlanPrimary === "unfreeze_plan"
-                            ? appUiCopy(layout.composerLanguage, "解冻计划")
-                            : planOrientation.primaryActionLabel,
-                          tone: "accent" as const,
-                          onClick: () => handlePlanOrientationAction(recoveredPlanPrimary),
-                        },
-                      ];
-                    })()
-                  : []),
-                ...(firstLookContinuePrimary
-                  ? [
-                      {
-                        id: "plan-continue-without-plan",
-                        label: planOrientation.primaryActionLabel,
-                        tone: "accent" as const,
-                        onClick: () => handlePlanOrientationAction("continue_without_plan"),
-                      },
-                    ]
-                  : []),
-                ...(!recoveredAdoptPrimary && (!hasFormalPlan || !livePlanFrozen)
-                  ? [
-                      {
-                        id: "refresh-plan",
-                        label: t.generatePlan,
-                        tone:
-                          recoveredPlanPrimary || firstLookContinuePrimary
-                            ? ("ghost" as const)
-                            : ("accent" as const),
-                        disabled: !providerCanMutateFormalPlan,
-                        detail: providerCanMutateFormalPlan ? undefined : formalPlanCapabilityMessage,
-                        onClick: () => handlePlanOrientationAction("generate_plan"),
-                      },
-                    ]
-                  : []),
-                ...(!recoveredAdoptPrimary && hasFormalPlan && formalPlanLive
-                  ? [
-                {
-                  id: "plan-next-task",
-                  label: planText.nextTaskLabel,
-                  tone: "ghost" as const,
-                  // R1③: prefill like every other next-task entry point
-                  // (handleSuggestedAction) — navigation + draft + focus,
-                  // pressing send stays with the learner. The recovered-plan
-                  // resume lane ("开始：X" / clear blocker) intentionally keeps
-                  // its governed direct send.
-                  onClick: () => {
-                    setActiveView("coach");
-                    setComposerDraft(
-                      defaultPromptText("next_task", layout.composerLanguage, activePlanStage?.title),
-                    );
-                    requestCoachComposerFocus();
-                  },
-                },
-                  ]
-                  : []),
-              ]),
-          ...(hasFormalPlan && formalPlanLive && !recoveredAdoptPrimary && !workspaceSessionBlocked
+          ...(!hasFormalPlan || !livePlanFrozen
+            ? [{ id: "refresh-plan", label: t.generatePlan, tone: "ghost" as const,
+                disabled: !providerCanMutateFormalPlan || workspaceSessionBlocked || syncStatus !== "current",
+                detail: providerCanMutateFormalPlan ? undefined : formalPlanCapabilityMessage,
+                onClick: () => handlePlanOrientationAction("generate_plan") }]
+            : []),
+          ...(hasFormalPlan && formalPlanLive && !livePlanFrozen
+            ? [{ id: "plan-next-task", label: planText.nextTaskLabel, tone: "ghost" as const,
+                disabled: !providerCanCoachNow || workspaceSessionBlocked || syncStatus !== "current",
+                onClick: () => {
+                  setActiveView("coach");
+                  setComposerDraft(
+                    defaultPromptText("next_task", layout.composerLanguage, activePlanStage?.title),
+                  );
+                  requestCoachComposerFocus();
+                }, }]
+            : []),
+          ...(hasFormalPlan && formalPlanLive && !livePlanFrozen && !workspaceSessionBlocked
             ? [
                 {
                   id: livePlanFrozen ? "resume-plan" : "freeze-plan",
@@ -13411,12 +13378,7 @@ export function App() {
           <>
             <p>
               {verifyPlanAdvanceNext ||
-                (firstLookContinuePrimary
-                  ? planOrientation.nextStep
-                  : recoveredDisplayFacts.currentStep ||
-                    liveCoachTaskChrome.currentStep ||
-                    resolvedCoachNextStep ||
-                    latestArtifactTeaser)}
+                (learningFacts.plan.currentStep || learningFacts.firstLookStep || latestArtifactTeaser)}
             </p>
             {runtimeBlockedReason ? (
               <p className="inline-note">{runtimeBlockedReason}</p>
@@ -14296,6 +14258,7 @@ export function App() {
             </div> : null}
             {coachSuggestionChips}
             <CoachComposer
+              attachmentScope={attachmentScope}
               value={allowEmptyTrainingReturnSubmission ? "" : draft}
               onChange={handleComposerDraftChange}
               onSubmit={handleSubmit}

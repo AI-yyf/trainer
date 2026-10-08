@@ -27,6 +27,7 @@ export function useSurfaceScroll(containerRef: RefObject<HTMLElement>, activeVie
     let pane: HTMLElement | null = null;
     let restoring = true;
     let timeout: number | undefined;
+    let previousOverflowAnchor = "";
     const restore = () => {
       if (pane && restoring) pane.scrollTop = saved ?? (activeView === "coach" ? pane.scrollHeight : 0);
     };
@@ -35,8 +36,10 @@ export function useSurfaceScroll(containerRef: RefObject<HTMLElement>, activeVie
       if (pane) useWorkbenchState.getState().rememberSurfaceScroll(key, positions.current.get(key) ?? pane.scrollTop);
     };
     const finishRestore = () => {
+      if (!restoring) return;
       restoring = false;
       resize.disconnect();
+      if (pane) pane.style.overflowAnchor = previousOverflowAnchor;
       remember();
     };
     const resize = new ResizeObserver(restore);
@@ -44,6 +47,11 @@ export function useSurfaceScroll(containerRef: RefObject<HTMLElement>, activeVie
       if (pane) return;
       pane = getSurfaceScrollElement(root, activeView);
       if (!pane) return;
+      // Offscreen content-visibility estimates settle after showing the pane.
+      // Browser anchoring must not subtract their height changes from the
+      // explicitly restored reading offset.
+      previousOverflowAnchor = pane.style.overflowAnchor;
+      pane.style.overflowAnchor = "none";
       mutations.disconnect();
       restore();
       resize.observe(pane);
@@ -66,6 +74,7 @@ export function useSurfaceScroll(containerRef: RefObject<HTMLElement>, activeVie
       window.clearTimeout(timeout);
       mutations.disconnect();
       resize.disconnect();
+      if (pane) pane.style.overflowAnchor = previousOverflowAnchor;
       pane?.removeEventListener("scroll", remember);
       pane?.removeEventListener("wheel", finishRestore);
       pane?.removeEventListener("pointerdown", finishRestore);

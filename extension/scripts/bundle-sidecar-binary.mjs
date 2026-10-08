@@ -9,6 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const SIDECAR_BINARY_MANIFEST_FILE = "trainer-sidecar-manifest.json";
+export const PYINSTALLER_VERSION = "6.22.2";
 export const SUPPORTED_SIDECAR_TARGETS = [
   "win32-x64",
   "win32-arm64",
@@ -138,18 +139,12 @@ function ensurePyInstaller(serverDir) {
     encoding: "utf8",
   });
 
-  if (check.status === 0) {
+  if (check.status === 0 && check.stdout.trim() === PYINSTALLER_VERSION) {
     return;
   }
 
-  console.log("PyInstaller is missing from the local Trainer Python environment. Installing it...");
-  const install = spawnSync(pythonBin, ["-m", "pip", "install", "pyinstaller>=6.15.0"], {
-    cwd: serverDir,
-    stdio: "inherit",
-  });
-  if (install.status !== 0) {
-    fail("Could not install PyInstaller for the local Trainer Python environment.");
-  }
+  throw new Error(`Native packaging requires PyInstaller ${PYINSTALLER_VERSION}. ` +
+    "Run uv sync --project server --frozen --extra dev --extra build --python 3.12 before packaging.");
 }
 
 function runPyInstaller(paths) {
@@ -289,6 +284,16 @@ export function createSidecarBinaryManifest(paths) {
   };
 }
 
+function recordBuildEnvironment(paths) {
+  const pythonBin = resolvePythonBin(paths.serverDir);
+  const result = spawnSync(pythonBin, ["-c", "import importlib.metadata, json, platform; print(json.dumps({'python': platform.python_version(), 'dependencies': dict(sorted((dist.metadata['Name'], dist.version) for dist in importlib.metadata.distributions()))}))"],
+    { cwd: paths.serverDir, encoding: "utf8" });
+  if (result.status !== 0) {
+    throw new Error("Cannot record the native sidecar dependency environment.");
+  }
+  return JSON.parse(result.stdout);
+}
+
 export function writeSidecarBinaryManifest(paths) {
   const manifest = createSidecarBinaryManifest(paths);
   fs.mkdirSync(paths.bundleRoot, { recursive: true });
@@ -306,7 +311,8 @@ export function bundleSidecarBinary(options = {}) {
   ensurePyInstaller(paths.serverDir);
   runPyInstaller(paths);
   copyBundle(paths);
-  const manifest = writeSidecarBinaryManifest(paths);
+  const manifest = { ...createSidecarBinaryManifest(paths), buildEnvironment: recordBuildEnvironment(paths) };
+  fs.writeFileSync(paths.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
   return {
     ...paths,

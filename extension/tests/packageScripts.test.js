@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { zip } = require('./fixtures/zip');
 
 const bundleSidecarModulePath = path.resolve(
   __dirname,
@@ -158,6 +159,9 @@ function createSidecarFixture(tempRoot) {
   const extensionDir = path.join(repoRoot, 'extension');
   const serverDir = path.join(repoRoot, 'server');
 
+  for (const manifest of ['package.json', 'extension/package.json', 'package-lock.json', 'extension/package-lock.json']) {
+    writeFile(path.join(repoRoot, manifest), JSON.stringify({ version: '0.1.0' }));
+  }
   writeFile(path.join(serverDir, 'run_sidecar.py'), 'print("sidecar")\n');
   writeFile(path.join(serverDir, 'README.md'), '# Trainer sidecar\n');
   writeFile(path.join(serverDir, 'pyproject.toml'), '[project]\nname="trainer-sidecar"\n');
@@ -187,7 +191,7 @@ function createSidecarFixture(tempRoot) {
   );
   writeFile(
     path.join(extensionDir, 'bundled', 'remote', 'trainer-workspace-companion.vsix'),
-    'PK zip-bytes extension/dist/remote-extension/src/extension.js',
+    zip({ 'extension/package.json': JSON.stringify({ main: './dist/remote-extension/src/extension.js', extensionKind: ['workspace'] }), 'extension/dist/remote-extension/src/extension.js': 'exports.activate = () => {};' }),
   );
 
   return { repoRoot, extensionDir, serverDir };
@@ -201,7 +205,7 @@ test('package.json exposes the webview recovery verification script', () => {
   );
   assert.equal(
     packageJson.scripts['verify:webview-recovery'],
-    'npm exec --yes --package playwright -- node ./scripts/verify-webview-recovery.mjs',
+    'npm exec --yes --package playwright@1.62.1 -- node ./scripts/verify-webview-recovery.mjs',
   );
   assert.equal(fs.existsSync(verifyWebviewRecoveryScriptPath), true);
 });
@@ -232,7 +236,7 @@ test('package scripts keep VSIX preparation and output routing explicit', () => 
   // prepublish chain must build and bundle it before vsce runs.
   assert.equal(
     packageJson.scripts['vscode:prepublish'],
-    'node ./scripts/prepublish-vsix.mjs && npm run package:remote-companion',
+    'node ./scripts/prepublish-vsix.mjs',
   );
   assert.equal(
     packageJson.scripts['package:remote-companion'],
@@ -460,14 +464,9 @@ test('resolvePythonBin prefers platform-appropriate local environments', async (
 test('sidecar binary packaging messages stay platform-neutral', () => {
   const source = fs.readFileSync(bundleSidecarBinaryModulePath, 'utf8');
 
-  assert.match(
-    source,
-    /PyInstaller is missing from the local Trainer Python environment\. Installing it\.\.\./,
-  );
-  assert.match(
-    source,
-    /Could not install PyInstaller for the local Trainer Python environment\./,
-  );
+  assert.match(source, /Native packaging requires PyInstaller/);
+  assert.match(source, /uv sync --project server --frozen --extra dev --extra build/);
+  assert.doesNotMatch(source, /pip", "install"/);
   assert.doesNotMatch(source, /PyInstaller not found in server\/\.venv-mac/);
   assert.doesNotMatch(source, /Failed to install PyInstaller into server\/\.venv-mac/);
 });
@@ -678,8 +677,10 @@ test('prepublish sanitizes packaged symlinks before verifying the bundled runtim
   const prepublishSource = fs.readFileSync(prepublishVsixModulePath, 'utf8');
   const packageVsixSource = fs.readFileSync(packageVsixModulePath, 'utf8');
 
-  assert.match(packageVsixSource, /export function sanitizePackagedSymlinks\(/);
-  assert.match(prepublishSource, /import \{ resolveNpmExecPath, sanitizePackagedSymlinks \} from "\.\/package-vsix\.mjs";/);
+  const helpersSource = fs.readFileSync(path.join(path.dirname(packageVsixModulePath), 'vsix-build-helpers.mjs'), 'utf8');
+  assert.match(helpersSource, /export function sanitizePackagedSymlinks\(/);
+  assert.match(packageVsixSource, /export \{ resolveNpmExecPath, sanitizePackagedSymlinks \} from "\.\/vsix-build-helpers\.mjs";/);
+  assert.match(prepublishSource, /import \{ resolveNpmExecPath, sanitizePackagedSymlinks \} from "\.\/vsix-build-helpers\.mjs";/);
   assert.match(prepublishSource, /const sanitizedSymlinks = sanitizePackagedSymlinks\(\{ extensionDir \}\);/);
   const sanitizeCall = prepublishSource.indexOf('sanitizePackagedSymlinks({ extensionDir })');
   const runtimeVerifyCall = prepublishSource.indexOf('runScript("verify:sidecar-runtime"');
@@ -744,6 +745,10 @@ test('VSIX target inspection requires the declared native runtime and rejects fo
     manifestXml: '<Identity Id="trainer-extension" TargetPlatform="win32-x64"/>',
     entryNames: [
       'extension.vsixmanifest',
+      'extension/package.json',
+      'extension/dist/extension/src/extension.js',
+      'extension/webview/dist/index.html',
+      'extension/bundled/remote/trainer-workspace-companion.vsix',
       'extension/bundled/bin/win32-x64/trainer-sidecar.exe',
       'extension/bundled/bin/win32-x64/trainer-sidecar-manifest.json',
     ],
@@ -880,6 +885,7 @@ test('prepublish reuse performs full package verification after source bundle pa
       'build',
       'build:webview',
       'bundle:sidecar',
+      'package:remote-companion',
       'verify:sidecar-runtime',
     ]);
     assert.equal(
@@ -944,12 +950,12 @@ test('verifyRemoteCompanionBundle demands a bundled VSIX with the manifest entry
     writeFile(path.join(extensionDir, 'bundled', 'remote', 'trainer-workspace-companion.vsix'), 'PK empty');
     const emptyArchive = verifyRemoteCompanionBundle({ extensionDir });
     assert.equal(emptyArchive.ok, false);
-    assert.match(emptyArchive.errors[0], /lacks its entrypoint/);
+    assert.match(emptyArchive.errors[0], /archive is invalid/);
 
     // A VSIX that carries the manifest entrypoint passes.
     writeFile(
       path.join(extensionDir, 'bundled', 'remote', 'trainer-workspace-companion.vsix'),
-      'PK zip bytes: extension/dist/remote-extension/src/extension.js',
+      zip({ 'extension/package.json': JSON.stringify({ main: './dist/remote-extension/src/extension.js', extensionKind: ['workspace'] }), 'extension/dist/remote-extension/src/extension.js': 'exports.activate = () => {};' }),
     );
     const valid = verifyRemoteCompanionBundle({ extensionDir });
     assert.equal(valid.ok, true);

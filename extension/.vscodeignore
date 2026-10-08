@@ -4,9 +4,11 @@
 .tmp-*
 .vscode/**
 .vscode-test/**
+node_modules
 node_modules/**
 .sidecar-build/**
 src/**
+webview/node_modules
 webview/node_modules/**
 webview/src/**
 webview/vscode-preview.html

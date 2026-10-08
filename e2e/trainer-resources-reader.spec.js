@@ -74,7 +74,7 @@ test('nested folders stay distinct, support keyboard navigation and open their f
       { id: 'loose-note', title: '随手笔记.md', kind: 'markdown', status: 'ready', summary: '', source: '/tmp/loose.md' },
     ], conversation: [], sessionHistoryRestored: true,
   });
-  const looseFolder = page.getByRole('group', { name: '参考资料 / tmp', exact: true });
+  const looseFolder = page.getByRole('group', { name: '参考资料 / Tmp', exact: true });
   await looseFolder.locator('.collapse-section__header').first().click();
   await expect(page.getByRole('treeitem', { name: '随手笔记.md', exact: true })).toBeVisible();
   const python = page.getByRole('group', { name: 'Python', exact: true });

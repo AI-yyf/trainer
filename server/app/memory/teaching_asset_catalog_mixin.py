@@ -31,7 +31,7 @@ class TeachingAssetCatalogMixin:
 
     if TYPE_CHECKING:
         # Shared MemoryService collaborators used by the methods below.
-        _structured_for: Callable[[str], StructuredMemoryService]
+        def _structured_for(self, workspace_id: str) -> StructuredMemoryService: ...
         _context_pressure_from_lane: Callable[..., Any]
         list_teaching_assets: Callable[..., list[TeachingKnowledgeAsset]]
 

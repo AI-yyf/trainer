@@ -1,4 +1,5 @@
 const { test, expect } = require('playwright/test');
+const { planOnlyFixture } = require('./learning-fixtures');
 
 test('Coach shows the reply and usable next actions without duplicate explanations or management', async ({ page }) => {
   await page.goto('/vscode-preview.html?view=coach&lang=zh-CN&connection=connected&run=concise-coach');
@@ -49,7 +50,7 @@ test('Learning keeps its current step and action without statistics, history or 
 test('the single Learning action adopts only current step evidence and respects a frozen plan', async ({ page }) => {
   await page.goto('/vscode-preview.html?view=plan&lang=zh-CN&connection=connected&run=current-adoption');
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
-  const bootstrap = await page.evaluate(() => window.__TRAINER_BOOTSTRAP__);
+  const bootstrap = planOnlyFixture(await page.evaluate(() => window.__TRAINER_BOOTSTRAP__));
   await page.addInitScript(() => {
     window.__TRAINER_E2E_HOST_ACTIONS__ = [];
     window.acquireVsCodeApi = () => ({
@@ -62,7 +63,8 @@ test('the single Learning action adopts only current step evidence and respects 
   await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
     .some(action => action.type === 'request/bootstrap'))).toBe(true);
   const step = '验证 hash 与字典键的异常边界';
-  const runtime = { recovered: true, planId: 'adoption-plan', currentStep: step, frozen: false };
+  const runtime = { recovered: true, planId: 'adoption-plan', currentStep: step, frozen: false,
+    resumeState: 'waiting', evidenceBinding: 'current-return' };
   const evidence = { id: 'current-return', source: 'training_handoff_return', summary: '当前文件检查通过',
     outcome: 'pass', verified: true, adopted: false, confidence: 1, concepts: [], targetPlanStep: step };
   const payload = { ...bootstrap, conversation: [], hasFormalPlan: true, sessionHistoryRestored: true,
@@ -78,14 +80,17 @@ test('the single Learning action adopts only current step evidence and respects 
   }
   await apply();
   const primary = page.locator('[data-plan-primary="true"] [data-template=NextAction] > button');
-  await expect(primary).toContainText(/接纳|采纳/);
+  await expect(primary).toHaveText('确认采用这条证据');
+  await expect(primary).toHaveAttribute('data-action-intent', 'adopt_evidence');
+  await expect(primary.locator('..').locator('h3')).toHaveText(evidence.summary);
   await primary.click();
   await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
     .filter(action => action.type === 'command/execute' && action.payload.commandId === 'trainer.evidence.adopt')))
     .toEqual([{ type: 'command/execute', payload: { commandId: 'trainer.evidence.adopt', payload: { evidenceId: 'current-return' } } }]);
   payload.plan.frozen = true; runtime.frozen = true;
   await apply();
-  await expect(primary).toContainText('解冻计划');
+  await expect(primary).toHaveText('恢复计划');
+  await expect(primary).toHaveAttribute('data-action-intent', 'resume_plan');
   await primary.click();
   await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
     .filter(action => action.type === 'plan/freeze')))

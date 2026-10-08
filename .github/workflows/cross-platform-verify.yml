@@ -52,19 +52,16 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: server/pyproject.toml
+          cache-dependency-path: server/uv.lock
 
-      - name: Create python environment
+      - name: Set up locked Python tooling
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.10"
+
+      - name: Create python environment from the lock
         working-directory: server
-        shell: bash
-        run: |
-          PYTHON=".venv/bin/python"
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            PYTHON=".venv/Scripts/python.exe"
-          fi
-          python -m venv .venv
-          "$PYTHON" -m pip install -U pip
-          "$PYTHON" -m pip install -e ".[dev]"
+        run: uv sync --frozen --extra dev --extra build --python 3.12
 
       - name: Server tests (slowest slice, isolated here)
         working-directory: server
@@ -132,8 +129,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up locked Python tooling
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.10"
+
       - name: Bootstrap with the portable lifecycle
         run: npm run bootstrap -- --frozen
+
+      - name: Product version gate
+        run: npm run verify:version
 
       - name: Build with the portable lifecycle
         run: npm run dev -- --skip-install
@@ -146,14 +151,14 @@ jobs:
 
       - name: Install Chromium for recovery verification (Linux)
         if: runner.os == 'Linux'
-        run: npm exec --yes --package playwright -- playwright install --with-deps chromium
+        run: npm exec --yes --package playwright@1.62.1 -- playwright install --with-deps chromium
 
       - name: Install Chromium for recovery verification (macOS and Windows)
         if: runner.os != 'Linux'
-        run: npm exec --yes --package playwright -- playwright install chromium
+        run: npm exec --yes --package playwright@1.62.1 -- playwright install chromium
 
       - name: Install Playwright test runner (root dev dependency)
-        run: npm install --no-save --prefix . "@playwright/test@^1.61.0" "playwright@^1.61.0"
+        run: npm install --no-save --ignore-scripts --prefix . "@playwright/test@1.62.1" "playwright@1.62.1"
 
       - name: Run the 200-scenario preview experience matrix
         run: npm run test:experience-matrix
@@ -201,23 +206,24 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: server/pyproject.toml
+          cache-dependency-path: server/uv.lock
+
+      - name: Set up locked Python tooling
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.10"
 
       - name: Bootstrap with the portable lifecycle
         run: npm run bootstrap -- --frozen
 
+      - name: Product version gate
+        run: npm run verify:version
+
       - name: Build with the portable lifecycle
         run: npm run dev -- --skip-install
 
-      - name: Clear inherited sidecar binaries before native packaging
-        run: >-
-          node -e "require('node:fs').rmSync('extension/bundled/bin', { recursive: true, force: true })"
-
-      - name: Build the native sidecar binary
-        run: npm run bundle:sidecar:binary --prefix extension
-
-      - name: Package the Remote Workspace Companion
-        run: npm run package:remote-companion --prefix extension
+      - name: Sync locked native build dependencies
+        run: uv sync --project server --frozen --extra dev --extra build --python 3.12
 
       - name: Build and verify a native VSIX delivery artifact
         id: package-vsix
@@ -227,7 +233,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: trainer-vsix-${{ matrix.os }}-${{ steps.package-vsix.outputs.vsix_target }}
-          path: ${{ steps.package-vsix.outputs.vsix_path }}
+          path: |
+            ${{ steps.package-vsix.outputs.vsix_path }}
+            ${{ steps.package-vsix.outputs.vsix_metadata_path }}
           if-no-files-found: error
           retention-days: 7
 

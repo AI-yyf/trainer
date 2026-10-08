@@ -202,6 +202,8 @@ function createProtocolShim() {
 
 function loadWorkbenchState({ injectedBootstrap, persisted } = {}) {
   const fixture = createFixtureBootstrap();
+  const postedMessages = [];
+  const persistedWrites = [];
   const originalLoad = Module._load;
   const previousTsLoader = Module._extensions['.ts'];
   const target = new Module(stateSourcePath, module);
@@ -229,7 +231,9 @@ function loadWorkbenchState({ injectedBootstrap, persisted } = {}) {
           getInjectedBootstrapState: () => injectedBootstrap,
           getPersistedState: () => persisted,
           inVsCodeWebview: () => true,
-          setPersistedState() {},
+          setPersistedState(state) { persistedWrites.push(state); },
+          adoptHostSyncScope() {},
+          postMessage(message) { postedMessages.push(message); },
         };
       }
       if (request === '../lib/types') {
@@ -249,6 +253,8 @@ function loadWorkbenchState({ injectedBootstrap, persisted } = {}) {
     return {
       ...store.getState(),
       getState: store.getState,
+      postedMessages,
+      persistedWrites,
     };
   } finally {
     Module._load = originalLoad;
@@ -260,6 +266,34 @@ function loadWorkbenchState({ injectedBootstrap, persisted } = {}) {
     delete require.cache[neutralBootstrapSourcePath];
   }
 }
+
+test('page exit immediately persists the latest scoped draft before the debounce expires', () => {
+  const previousWindow = global.window;
+  const events = new EventTarget();
+  const timers = new Map();
+  let sequence = 0;
+  global.window = {
+    setTimeout(callback) { const id = ++sequence; timers.set(id, callback); return id; },
+    clearTimeout(id) { timers.delete(id); },
+    addEventListener: (...args) => events.addEventListener(...args),
+    removeEventListener: (...args) => events.removeEventListener(...args),
+  };
+  try {
+    const state = loadWorkbenchState();
+    state.getState().selectComposerDraftScope('workspace-one\0session-one');
+    state.persistedWrites.length = 0;
+    state.getState().setComposerDraft('first keystrokes');
+    state.getState().setComposerDraft('last keystrokes before reload');
+    assert.equal(state.persistedWrites.length, 0, 'typing stays batched');
+    events.dispatchEvent(new Event('pagehide'));
+    assert.equal(state.persistedWrites.length, 1);
+    assert.equal(state.persistedWrites[0].composerDraft, 'last keystrokes before reload');
+    assert.equal(state.persistedWrites[0].composerDrafts['workspace-one\0session-one'], 'last keystrokes before reload');
+    assert.equal(timers.size, 0, 'exit cannot leave a delayed stale write');
+    events.dispatchEvent(new Event('pagehide'));
+    assert.equal(state.persistedWrites.length, 1, 'a clean exit does not serialize again');
+  } finally { global.window = previousWindow; }
+});
 
 function assertNoFixtureData(data) {
   assert.doesNotMatch(
@@ -894,4 +928,50 @@ test('stream-scoped progress stays in the assistant bubble while failures remain
 
   assert.equal(state.getState().operationMessage?.tone, 'error');
   assert.equal(state.getState().streaming.reliabilityPhase, 'failed');
+});
+
+function versionedMessage(revision, baseRevision, title, generation = 1, workspaceId = 'workspace-1', sessionId = 'session-1') {
+  return { type: baseRevision === 0 ? 'bootstrap' : 'state/patch',
+    sync: { generation, revision, baseRevision, messageId: `${generation}:${revision}`, workspaceId, sessionId },
+    payload: { task: { title }, memory: { workspace: { workspaceId } } } };
+}
+
+test('actual store application ACK follows receipt and rejects gaps, duplicate events and older scope snapshots', () => {
+  const state = loadWorkbenchState();
+  state.applyHostMessage(versionedMessage(1, 0, 'current'));
+  assert.equal(state.getState().data.task.title, 'current');
+  assert.deepEqual(state.postedMessages.map(message => message.payload.status), ['received', 'applied']);
+  state.applyHostMessage(versionedMessage(3, 2, 'lost-base'));
+  assert.equal(state.getState().data.task.title, 'current');
+  assert.equal(state.getState().syncStatus, 'recovering');
+  assert.equal(state.postedMessages.at(-1).payload.status, 'rejected');
+  state.applyHostMessage(versionedMessage(1, 0, 'must-not-reapply'));
+  assert.equal(state.getState().data.task.title, 'current');
+  assert.equal(state.postedMessages.at(-1).payload.status, 'duplicate');
+  state.applyHostMessage(versionedMessage(4, 0, 'new-scope', 2, 'workspace-2', 'session-2'));
+  state.applyHostMessage(versionedMessage(5, 0, 'late-old-scope'));
+  assert.equal(state.getState().data.task.title, 'new-scope');
+  state.applyHostMessage({ type: 'state/patch', payload: { task: { title: 'legacy-bypass' } } });
+  assert.equal(state.getState().data.task.title, 'new-scope');
+});
+
+test('operation messages remain scoped and an older result cannot replace a newer request for the same target', () => {
+  const state = loadWorkbenchState();
+  state.applyHostMessage(versionedMessage(1, 0, 'task'));
+  const identity = { generation: 1, workspaceId: 'workspace-1', sessionId: 'session-1', revision: 1,
+    requestId: 'first', commandId: 'trainer.resource.index', targetId: 'resource-1' };
+  state.applyHostMessage({ type: 'operation/lifecycle', payload: { identity, phase: 'pending' } });
+  const second = { ...identity, requestId: 'second' };
+  state.applyHostMessage({ type: 'operation/lifecycle', payload: { identity: second, phase: 'pending' } });
+  state.applyHostMessage({ type: 'operation/status', operation: identity, payload: { tone: 'success', message: 'old result' } });
+  assert.equal(state.getState().operationMessage, undefined);
+  state.applyHostMessage({ type: 'operation/status', operation: second, payload: { tone: 'success', message: 'new result' } });
+  assert.equal(state.getState().operationMessage.message, 'new result');
+  const shown = state.getState().operationMessage;
+  state.getState().setOperationMessage({ tone: 'info', message: 'new notice during old dismissal' });
+  state.getState().clearOperationMessage(shown);
+  assert.equal(state.getState().operationMessage.message, 'new notice during old dismissal');
+  state.applyHostMessage(versionedMessage(2, 0, 'new-scope', 2, 'workspace-2', 'session-2'));
+  state.applyHostMessage({ type: 'operation/status', operation: second, payload: { tone: 'error', message: 'old-scope error' } });
+  assert.notEqual(state.getState().operationMessage?.message, 'old-scope error');
 });

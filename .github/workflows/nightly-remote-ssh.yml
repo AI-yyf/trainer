@@ -56,10 +56,18 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: server/pyproject.toml
+          cache-dependency-path: server/uv.lock
+
+      - name: Set up locked Python tooling
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.10"
 
       - name: Bootstrap with the portable lifecycle
         run: npm run bootstrap -- --frozen
+
+      - name: Product version gate
+        run: npm run verify:version
 
       - name: Build with the portable lifecycle
         run: npm run dev -- --skip-install
@@ -72,7 +80,7 @@ jobs:
             --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Install Playwright test runner (root dev dependency)
-        run: npm install --no-save --prefix . "@playwright/test@^1.61.0" "playwright@^1.61.0"
+        run: npm install --no-save --ignore-scripts --prefix . "@playwright/test@1.62.1" "playwright@1.62.1"
 
       - name: TypeScript and CSS section gate
         run: npm run check
@@ -81,14 +89,20 @@ jobs:
       - name: Remote-SSH transport E2E (§十 Layer 1)
         run: npm run test:remote-ssh-e2e
 
+      - name: Sync locked native build dependencies
+        run: uv sync --project server --frozen --extra dev --extra build --python 3.12
+
       - name: Package the extension VSIX for the L2 manual pass
+        id: package-vsix
         run: npm run package:vsix
 
       - name: Upload L2 VSIX artifacts
         uses: actions/upload-artifact@v4
         with:
           name: trainer-remote-ssh-l2-vsix
-          path: extension/*.vsix
+          path: |
+            ${{ steps.package-vsix.outputs.vsix_path }}
+            ${{ steps.package-vsix.outputs.vsix_metadata_path }}
           if-no-files-found: error
 
       - name: Upload the L2 manual acceptance checklist
@@ -108,7 +122,7 @@ jobs:
         run: npm run test:extension
 
       - name: Install Chromium for the preview experience matrix
-        run: npm exec --yes --package playwright -- playwright install --with-deps chromium
+        run: npm exec --yes --package playwright@1.62.1 -- playwright install --with-deps chromium
 
       - name: 200-scenario preview experience matrix
         run: npm run test:experience-matrix
@@ -147,15 +161,16 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: server/pyproject.toml
+          cache-dependency-path: server/uv.lock
 
-      - name: Create python environment
+      - name: Set up locked Python tooling
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.10"
+
+      - name: Create python environment from the lock
         working-directory: server
-        run: |
-          python -m venv .venv
-          . .venv/bin/activate
-          python -m pip install -U pip
-          pip install -e ".[dev]"
+        run: uv sync --frozen --extra dev --extra build --python 3.12
 
       - name: Server tests
         working-directory: server

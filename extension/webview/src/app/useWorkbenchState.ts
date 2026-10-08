@@ -1,4 +1,9 @@
 import { create } from "zustand";
+import {
+  emptyWebviewSyncCursor, decideWebviewSync, appliedWebviewSyncCursor,
+  type WebviewSyncCursor, type WebviewSyncStatus, type WebviewOperationIdentity, type WebviewOperationPhase,
+  operationMatchesWebviewScope, webviewOperationTargetKey,
+} from "../../../../shared/src/webviewSync";
 
 import { trainerCommands } from "../../../../shared/src/commands";
 import { sanitizeErrorSurfaceText } from "../../../../shared/src/errorSurfaceSanitizer";
@@ -24,6 +29,7 @@ import {
   splitSafeVisibleStreamText,
 } from "../lib/visibleText";
 import {
+  adoptHostSyncScope,
   getInjectedBootstrapState,
   getPersistedState,
   inVsCodeWebview,
@@ -301,6 +307,11 @@ export interface WorkbenchStore {
   resourceOrganizationPending?: { pending: true; operationCount?: number };
   resourceRestoreContext?: ResourceRestoreContext;
   trainingRestoreContext?: TrainingRestoreContext;
+  latestOperationRequests: Record<string, string>;
+  operations: Record<string, { identity: WebviewOperationIdentity; phase: WebviewOperationPhase }>;
+  syncCursor: WebviewSyncCursor;
+  syncStatus: WebviewSyncStatus;
+  clearOperationMessage: (expected: OperationMessage) => void;
   hasReceivedHostState: boolean;
   /** Generated stage learning materials keyed by plan stage id. */
   stageMaterials: Record<string, StageMaterialItem[]>;
@@ -341,29 +352,36 @@ function persistLayout(next: PersistedWorkbenchState): PersistedWorkbenchState {
   return next;
 }
 
-// R3①: composer draft keystrokes used to serialize the ENTIRE layout through
-// persistLayout on every keypress. The in-memory store update stays
-// immediate; the persistence write is debounced. Recovery semantics are
-// "the draft survives a restart" — a typing pause longer than the debounce
-// window (and any other layout setter, which persists the latest layout
-// immediately, draft included) covers it.
+// Keep draft updates immediate while batching expensive layout persistence.
+// Page exit flushes the latest scoped layout, including keystrokes inside the
+// debounce window.
 const COMPOSER_DRAFT_PERSIST_DEBOUNCE_MS = 500;
 let composerDraftPersistTimer: number | undefined;
+let pendingComposerDraftLayout: (() => PersistedWorkbenchState) | undefined;
+
+function flushComposerDraftPersist(): void {
+  if (typeof window !== "undefined") {
+    window.clearTimeout(composerDraftPersistTimer);
+    window.removeEventListener("pagehide", flushComposerDraftPersist);
+  }
+  composerDraftPersistTimer = undefined;
+  const getLayout = pendingComposerDraftLayout;
+  pendingComposerDraftLayout = undefined;
+  if (getLayout) setPersistedState(getLayout());
+}
 
 function scheduleComposerDraftPersist(getLayout: () => PersistedWorkbenchState): void {
   if (typeof window === "undefined") {
     setPersistedState(getLayout());
     return;
   }
+  pendingComposerDraftLayout = getLayout;
   if (composerDraftPersistTimer !== undefined) {
     window.clearTimeout(composerDraftPersistTimer);
+  } else {
+    window.addEventListener("pagehide", flushComposerDraftPersist);
   }
-  composerDraftPersistTimer = window.setTimeout(() => {
-    composerDraftPersistTimer = undefined;
-    // Read the layout at fire time: it is at least as new as the keystroke
-    // that scheduled this write, even if another setter persisted in between.
-    setPersistedState(getLayout());
-  }, COMPOSER_DRAFT_PERSIST_DEBOUNCE_MS);
+  composerDraftPersistTimer = window.setTimeout(flushComposerDraftPersist, COMPOSER_DRAFT_PERSIST_DEBOUNCE_MS);
 }
 
 function freshStreamingState(): StreamingState {
@@ -684,6 +702,11 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   resourceOrganizationPending: undefined,
   resourceRestoreContext: undefined,
   trainingRestoreContext: undefined,
+  latestOperationRequests: {},
+  operations: {},
+  syncCursor: emptyWebviewSyncCursor(),
+  syncStatus: inVsCodeWebview() ? "recovering" : "current",
+  clearOperationMessage: (expected) => set(state => state.operationMessage === expected ? { operationMessage: undefined } : {}),
   hasReceivedHostState: !inVsCodeWebview(),
   stageMaterials: initialData.stageMaterials ?? {},
   stageMaterialGenerating: {},
@@ -843,8 +866,49 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             : state.operationMessage,
       };
     }),
-  applyHostMessage: (message) =>
+  applyHostMessage: (message) => {
+    const versionedState = (message.type === "bootstrap" || message.type === "state/patch") ? message.sync : undefined;
+    const current = get();
+    if (message.scope && current.syncCursor.generation > 0 &&
+        (message.scope.generation !== current.syncCursor.generation ||
+         message.scope.workspaceId !== current.syncCursor.workspaceId || message.scope.sessionId !== current.syncCursor.sessionId)) return;
+    if (message.operation && current.syncCursor.generation > 0 && !operationMatchesWebviewScope(message.operation, current.syncCursor)) return;
+    if (message.operation && message.type === "operation/status") {
+      const latest = current.latestOperationRequests[webviewOperationTargetKey(message.operation)];
+      if (latest && latest !== message.operation.requestId) return;
+    }
+    if (versionedState) {
+      postMessage({ type: "state/ack", payload: { ...versionedState,
+        status: "received", appliedRevision: current.syncCursor.revision,
+      } });
+      const decision = decideWebviewSync(current.syncCursor, versionedState);
+      if (decision !== "apply") {
+        if (decision === "recover") set({ syncStatus: "recovering" });
+        postMessage({ type: "state/ack", payload: { ...versionedState,
+          status: decision === "duplicate" ? "duplicate" : "rejected", appliedRevision: current.syncCursor.revision,
+        } });
+        return;
+      }
+    } else if ((message.type === "bootstrap" || message.type === "state/patch") &&
+        current.syncCursor.generation > 0 && inVsCodeWebview()) {
+      // Legacy fixtures never enter the production versioned transport.
+      return;
+    }
     set((state) => {
+      if (message.type === "operation/lifecycle") {
+        const { identity, phase } = message.payload;
+        if (!operationMatchesWebviewScope(identity, state.syncCursor)) return {};
+        const previous = state.operations[identity.requestId];
+        if (previous && (!["pending", "running"].includes(previous.phase) || previous.phase === "running" && phase === "pending")) return {};
+        const entries = Object.entries(state.operations).slice(-127);
+        return { operations: { ...Object.fromEntries(entries), [identity.requestId]: { identity, phase } },
+          latestOperationRequests: phase === "pending" ? { ...Object.fromEntries(Object.entries(state.latestOperationRequests).slice(-127)),
+            [webviewOperationTargetKey(identity)]: identity.requestId } : state.latestOperationRequests,
+        };
+      }
+      if (message.type === "state/syncStatus") {
+        return message.payload.generation >= state.syncCursor.generation ? { syncStatus: message.payload.status } : {};
+      }
       if (message.type === "bootstrap") {
         const nextData = normalizeBootstrapData(message.payload as WorkbenchBootstrapInput);
         const runtimeDataChanged = nextData.runtimeDataGeneration !== state.data.runtimeDataGeneration;
@@ -924,6 +988,10 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             state.operationMessage,
             state.streaming,
           ),
+          latestOperationRequests: versionedState && versionedState.generation !== state.syncCursor.generation ? {} : state.latestOperationRequests,
+          operations: versionedState && versionedState.generation !== state.syncCursor.generation ? {} : state.operations,
+          syncCursor: versionedState ? appliedWebviewSyncCursor(versionedState) : state.syncCursor,
+          syncStatus: "current" as const,
           hasReceivedHostState: true,
         };
       }
@@ -969,6 +1037,10 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             state.operationMessage,
             state.streaming,
           ),
+          latestOperationRequests: versionedState && versionedState.generation !== state.syncCursor.generation ? {} : state.latestOperationRequests,
+          operations: versionedState && versionedState.generation !== state.syncCursor.generation ? {} : state.operations,
+          syncCursor: versionedState ? appliedWebviewSyncCursor(versionedState) : state.syncCursor,
+          syncStatus: "current" as const,
           hasReceivedHostState: true,
         };
       }
@@ -1338,7 +1410,14 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       }
 
       return {};
-    }),
+    });
+    if (versionedState) {
+      adoptHostSyncScope(get().syncCursor);
+      postMessage({ type: "state/ack", payload: {
+        ...versionedState, status: "applied", appliedRevision: get().syncCursor.revision,
+      } });
+    }
+  },
   requestStageMaterialGeneration: (planId, stageId) => {
     const normalizedStageId = stageId.trim();
     if (!normalizedStageId || get().stageMaterialGenerating[normalizedStageId]) {

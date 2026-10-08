@@ -18,7 +18,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "package:vsix": "npm exec --yes --package @vscode/vsce -- vsce package --out trainer-workspace-companion.vsix"
+    "package:vsix": "npm exec --yes --package @vscode/vsce@4.0.0 -- vsce package --out trainer-workspace-companion.vsix"
   },
   "devDependencies": {
     "@types/node": "^22.15.29",

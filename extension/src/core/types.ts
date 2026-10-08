@@ -1,3 +1,4 @@
+import type { WebviewSyncEnvelope, WebviewSyncAck, WebviewSyncStatus, WebviewOperationIdentity, WebviewOperationPhase, WebviewSyncCursor } from '../../../shared/src/webviewSync';
 import type { TrainerCommandCatalogItem } from '../../../shared/src/commands';
 import type {
   CoachingAdaptationProfile,
@@ -1765,7 +1766,9 @@ export interface TrainingPersistenceAck {
   message?: string;
 }
 
-export type TrainerWebviewMessage =
+export type TrainerWebviewMessage = TrainerWebviewMessageBody & { operation?: WebviewOperationIdentity };
+type TrainerWebviewMessageBody =
+  | { type: 'state/ack'; payload: WebviewSyncAck }
   | { type: 'webview/ready' }
   | { type: 'debug/error'; payload: { source: string; message: string; stack?: string } }
   | { type: 'debug/visibleFacts'; payload: DebugVisibleWorkbenchFacts }
@@ -1953,11 +1956,14 @@ export interface DebugVisibleWorkbenchFacts {
   resources?: DebugVisibleResourcesFacts;
 }
 
-export type HostMessage =
+export type HostMessage = HostMessageBody & { scope?: WebviewSyncCursor; operation?: WebviewOperationIdentity; operationPhase?: WebviewOperationPhase };
+type HostMessageBody =
+  | { type: 'operation/lifecycle'; payload: { identity: WebviewOperationIdentity; phase: WebviewOperationPhase } }
+  | { type: 'state/syncStatus'; payload: { status: WebviewSyncStatus; generation: number } }
   | { type: 'stageMaterials/settled'; payload: { workspaceId: string; planId: string; stageId: string } }
   | { type: 'skills/draftResult'; payload: { requestId: string; ok: boolean; draft?: unknown; message?: string } }
-  | { type: 'bootstrap'; payload: BootstrapData }
-  | { type: 'state/patch'; payload: Partial<BootstrapData> }
+  | { type: 'bootstrap'; payload: BootstrapData; sync?: WebviewSyncEnvelope }
+  | { type: 'state/patch'; payload: Partial<BootstrapData>; sync?: WebviewSyncEnvelope }
   | {
       type: 'operation/status';
       payload: {

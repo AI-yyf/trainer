@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readZipEntries, readZipEntry } from "./vsix-archive.mjs";
 
 import {
   createSidecarRuntimeSnapshot,
@@ -395,8 +396,9 @@ export function verifyRemoteCompanionBundle({ extensionDir } = {}) {
   }
   const manifestPath = path.resolve(extensionDir, REMOTE_COMPANION_PACKAGE_RELATIVE_PATH);
   let mainField = "";
+  let manifest;
   try {
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
     mainField = String(manifest.main ?? "").trim();
   } catch (error) {
     return {
@@ -413,15 +415,34 @@ export function verifyRemoteCompanionBundle({ extensionDir } = {}) {
     };
   }
   const entryName = `extension/${mainField.replace(/^\.\//, "")}`;
-  const bytes = fs.readFileSync(vsixPath);
-  const needle = Buffer.from(entryName, "utf8");
-  const entryPresent = bytes.indexOf(needle) !== -1;
+  const errors = [];
+  try {
+    const bytes = fs.readFileSync(vsixPath);
+    const entries = readZipEntries(bytes);
+    if (!entries.has(entryName)) {
+      errors.push(`Bundled Remote Workspace Companion VSIX lacks its entrypoint ${entryName}.`);
+    }
+    const packageEntry = entries.get("extension/package.json");
+    if (!packageEntry) {
+      errors.push("Bundled Remote Workspace Companion VSIX lacks extension/package.json.");
+    } else {
+      const packaged = JSON.parse(readZipEntry(bytes, packageEntry).toString("utf8"));
+      for (const field of ["name", "version", "main"]) {
+        if (packaged[field] !== manifest[field]) {
+          errors.push(`Bundled Remote Workspace Companion ${field} differs from current source.`);
+        }
+      }
+      if (!packaged.extensionKind?.includes("workspace")) {
+        errors.push("Bundled Remote Workspace Companion must run on the workspace host.");
+      }
+    }
+  } catch (error) {
+    errors.push(`Bundled Remote Workspace Companion archive is invalid: ${error instanceof Error ? error.message : String(error)}`);
+  }
   return {
-    ok: entryPresent,
+    ok: errors.length === 0,
     vsixRelativePath: REMOTE_COMPANION_RELATIVE_PATH,
-    errors: entryPresent
-      ? []
-      : [`Bundled Remote Workspace Companion VSIX lacks its entrypoint ${entryName}.`],
+    errors,
   };
 }
 

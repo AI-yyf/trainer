@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-10-06T18:34:49.034Z",
+  "generatedAt": "2026-10-08T14:57:02.497Z",
   "config": {
-    "baseUrl": "http://127.0.0.1:4179",
+    "baseUrl": "http://127.0.0.1:4195",
     "conversationSize": 300,
     "streamChunks": 300,
     "streamChunkChars": 100,
@@ -10,45 +10,45 @@
   },
   "longSessionNav": {
     "coldFirstVisitMs": {
-      "plan": 83,
-      "resources": 33,
-      "settings": 49,
-      "training": 15
+      "plan": 65,
+      "resources": 34,
+      "settings": 36,
+      "training": 12
     },
     "warmMs": {
       "plan": {
         "n": 3,
-        "min": 33,
-        "p50": 36,
-        "p90": 37,
-        "max": 37
+        "min": 37,
+        "p50": 40,
+        "p90": 40,
+        "max": 40
       },
       "resources": {
         "n": 3,
-        "min": 33,
-        "p50": 35,
-        "p90": 36,
-        "max": 36
+        "min": 35,
+        "p50": 38,
+        "p90": 43,
+        "max": 43
       },
       "training": {
         "n": 3,
-        "min": 10,
-        "p50": 11,
-        "p90": 12,
-        "max": 12
+        "min": 12,
+        "p50": 14,
+        "p90": 15,
+        "max": 15
       },
       "settings": {
         "n": 3,
-        "min": 35,
-        "p50": 36,
-        "p90": 36,
-        "max": 36
+        "min": 42,
+        "p50": 47,
+        "p90": 49,
+        "max": 49
       }
     }
   },
   "streamingOverhead": {
     "coachOnlyVisited": {
-      "streamWallMs": 1506,
+      "streamWallMs": 1539,
       "longtaskCount": 0,
       "longtaskTotalMs": 0,
       "longtaskMaxMs": 0,
@@ -56,11 +56,11 @@
       "streamingRendered": true
     },
     "allVisited": {
-      "streamWallMs": 1490,
+      "streamWallMs": 1548,
       "longtaskCount": 0,
       "longtaskTotalMs": 0,
       "longtaskMaxMs": 0,
-      "navDuringStreamMs": 7,
+      "navDuringStreamMs": 8,
       "streamingRendered": true
     },
     "hiddenSurfaceDelta": {
@@ -76,7 +76,7 @@
     },
     "warmNavP90Ms": {
       "budget": 100,
-      "observed": 37,
+      "observed": 49,
       "pass": true
     }
   },

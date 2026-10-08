@@ -39,11 +39,11 @@ class TrainingHandoffReturnMixin:
         _apply_card_learning_phase: Callable[..., Any]
         _leftover_persist_context: Callable[..., Any]
         _live_training_persist_chrome: Callable[..., Any]
-        _persist_structured: Callable[[str], None]
+        def _persist_structured(self, workspace_id: str) -> None: ...
         _record_training_event: Callable[..., Any]
-        _structured_for: Callable[[str], StructuredMemoryService]
+        def _structured_for(self, workspace_id: str) -> StructuredMemoryService: ...
         _sync_live_evidence_binding: Callable[..., Any]
-        _training_handoff_generator: Callable[[str], TrainingHandoffGenerator]
+        def _training_handoff_generator(self, workspace_id: str) -> TrainingHandoffGenerator: ...
         enqueue_evidence: Callable[..., Any]
         evidence_queue: Callable[..., Any]
         get_card: Callable[..., Any]

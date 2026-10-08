@@ -1,11 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.core.models import CapabilityFlags, ProviderConfig, ProviderTestResponse
 from app.llm.provider_service import ProviderService, _visible_probe_max_tokens
+from app.llm.vision_challenge import build_vision_challenge
+
+with patch("app.llm.vision_challenge.secrets.randbelow", side_effect=[31, 16, 69]):
+    VISUAL_CHALLENGE = build_vision_challenge()
+VISUAL_ANSWER = json.dumps(dict(zip(("left", "middle", "right"), VISUAL_CHALLENGE.expected, strict=True)))
+
+
+@pytest.fixture(autouse=True)
+def deterministic_visual_challenge():
+    with patch("app.llm.provider_service.build_vision_challenge", return_value=VISUAL_CHALLENGE):
+        yield
 
 
 def _tool_evidence(result: ProviderTestResponse):
@@ -68,7 +82,7 @@ def test_openai_responses_vision_probe_uses_input_image_and_bounded_tokens() -> 
         }
     )
     client = MagicMock()
-    client.responses.create.return_value = SimpleNamespace(output_text="VISION_OK")
+    client.responses.create.return_value = SimpleNamespace(output_text=VISUAL_ANSWER)
 
     with patch.object(service, "_get_sync_openai_class", return_value=MagicMock(return_value=client)):
         result = service._with_capability_truth(
@@ -81,13 +95,13 @@ def test_openai_responses_vision_probe_uses_input_image_and_bounded_tokens() -> 
     assert evidence.observed is True
     assert evidence.state == "verified"
     _, kwargs = client.responses.create.call_args
-    assert kwargs["max_output_tokens"] == 16
+    assert kwargs["max_output_tokens"] == 96
     assert kwargs["input"] == [
         {
             "role": "user",
             "content": [
-                {"type": "input_text", "text": "Inspect the supplied image and reply with exactly VISION_OK if you can see it. Do not explain your answer."},
-                {"type": "input_image", "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="},
+                {"type": "input_text", "text": VISUAL_CHALLENGE.prompt},
+                {"type": "input_image", "image_url": VISUAL_CHALLENGE.image_url},
             ],
         }
     ]
@@ -151,7 +165,7 @@ def test_minimax_capability_truth_does_not_mark_vision_ready_from_think_text() -
     assert "sk-test-secret" not in " ".join(result.diagnostics)
 
 
-def test_openai_vision_probe_requires_image_and_exact_token() -> None:
+def test_openai_vision_probe_requires_image_and_exact_content() -> None:
     service = ProviderService()
     client = MagicMock()
 
@@ -161,7 +175,7 @@ def test_openai_vision_probe_requires_image_and_exact_token() -> None:
         assert content[0]["text"].startswith("Inspect the supplied image")
         assert content[1]["type"] == "image_url"
         assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
-        return _openai_response("VISION_OK")
+        return _openai_response(VISUAL_ANSWER)
 
     client.chat.completions.create.side_effect = create
     with patch.object(service, "_get_sync_openai_class", return_value=MagicMock(return_value=client)):
@@ -179,7 +193,7 @@ def test_openai_vision_probe_requires_image_and_exact_token() -> None:
     assert "sk-test-secret" not in " ".join(result.diagnostics)
 
 
-def test_anthropic_vision_probe_uses_native_image_block_and_exact_token() -> None:
+def test_anthropic_vision_probe_uses_native_image_block_and_exact_content() -> None:
     provider = ProviderConfig(
         name="anthropic-compatible",
         base_url="https://gateway.example.com",
@@ -191,7 +205,7 @@ def test_anthropic_vision_probe_uses_native_image_block_and_exact_token() -> Non
     service = ProviderService()
 
     response = MagicMock(status_code=200)
-    response.json.return_value = {"content": [{"type": "text", "text": "VISION_OK"}]}
+    response.json.return_value = {"content": [{"type": "text", "text": VISUAL_ANSWER}]}
     client = MagicMock()
     client.post.return_value = response
     client_context = MagicMock()
@@ -212,7 +226,7 @@ def test_anthropic_vision_probe_uses_native_image_block_and_exact_token() -> Non
         "source": {
             "type": "base64",
             "media_type": "image/png",
-            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+            "data": VISUAL_CHALLENGE.image_url.split(",", 1)[1],
         },
     }
     assert payload["messages"][0]["content"][0]["text"].startswith("Inspect the supplied image")
@@ -225,7 +239,7 @@ def test_anthropic_vision_probe_uses_native_image_block_and_exact_token() -> Non
     assert "sk-test-secret" not in " ".join(result.diagnostics)
 
 
-def test_gemini_vision_probe_uses_native_inline_data_and_exact_token() -> None:
+def test_gemini_vision_probe_uses_native_inline_data_and_exact_content() -> None:
     provider = ProviderConfig(
         name="gemini-native",
         base_url="https://generativelanguage.googleapis.com/v1beta",
@@ -237,7 +251,7 @@ def test_gemini_vision_probe_uses_native_inline_data_and_exact_token() -> None:
     service = ProviderService()
     response = MagicMock(status_code=200)
     response.json.return_value = {
-        "candidates": [{"content": {"parts": [{"text": "VISION_OK"}]}}]
+        "candidates": [{"content": {"parts": [{"text": VISUAL_ANSWER}]}}]
     }
     client = MagicMock()
     client.post.return_value = response

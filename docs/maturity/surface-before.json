@@ -1,0 +1,136 @@
+{
+  "source": "profiling-preview-real-react-synthetic-stream",
+  "cases": [
+    {
+      "setup": "coach-only",
+      "metrics": {
+        "coach": {
+          "renders": 300,
+          "hiddenRenders": 0,
+          "commits": 301,
+          "hiddenCommits": 0,
+          "actualDurationMs": 504.7000001370907,
+          "baseDurationMs": 47.500000044703484
+        }
+      },
+      "streamingRendered": true,
+      "longtasks": [],
+      "durationMs": 1646.9000000059605
+    },
+    {
+      "setup": "all-six",
+      "metrics": {
+        "coach": {
+          "renders": 300,
+          "hiddenRenders": 0,
+          "commits": 301,
+          "hiddenCommits": 0,
+          "actualDurationMs": 510.4999998807907,
+          "baseDurationMs": 41.299999952316284
+        },
+        "plan": {
+          "renders": 300,
+          "hiddenRenders": 300,
+          "commits": 300,
+          "hiddenCommits": 300,
+          "actualDurationMs": 87.80000002682209,
+          "baseDurationMs": 0.19999998807907104
+        },
+        "resources": {
+          "renders": 300,
+          "hiddenRenders": 300,
+          "commits": 300,
+          "hiddenCommits": 300,
+          "actualDurationMs": 22.399999886751175,
+          "baseDurationMs": 0
+        },
+        "training": {
+          "renders": 300,
+          "hiddenRenders": 300,
+          "commits": 300,
+          "hiddenCommits": 300,
+          "actualDurationMs": 9.900000110268593,
+          "baseDurationMs": 0.3999999910593033
+        },
+        "progress": {
+          "renders": 300,
+          "hiddenRenders": 300,
+          "commits": 300,
+          "hiddenCommits": 300,
+          "actualDurationMs": 13.399999812245369,
+          "baseDurationMs": 0
+        },
+        "settings": {
+          "renders": 300,
+          "hiddenRenders": 300,
+          "commits": 300,
+          "hiddenCommits": 300,
+          "actualDurationMs": 78.60000020265579,
+          "baseDurationMs": 0.19999998807907104
+        }
+      },
+      "streamingRendered": true,
+      "longtasks": [],
+      "durationMs": 1761
+    },
+    {
+      "setup": "dirty-settings-large-reader",
+      "metrics": {
+        "coach": {
+          "renders": 300,
+          "hiddenRenders": 0,
+          "commits": 301,
+          "hiddenCommits": 0,
+          "actualDurationMs": 501.3999999463558,
+          "baseDurationMs": 41.50000011920929
+        },
+        "plan": {
+          "renders": 300,
+          "hiddenRenders": 300,
+          "commits": 300,
+          "hiddenCommits": 300,
+          "actualDurationMs": 84.79999999701977,
+          "baseDurationMs": 0.30000001192092896
+        },
+        "resources": {
+          "renders": 300,
+          "hiddenRenders": 300,
+          "commits": 300,
+          "hiddenCommits": 300,
+          "actualDurationMs": 26.300000071525574,
+          "baseDurationMs": 0
+        },
+        "training": {
+          "renders": 300,
+          "hiddenRenders": 300,
+          "commits": 300,
+          "hiddenCommits": 300,
+          "actualDurationMs": 10.399999976158142,
+          "baseDurationMs": 0.4999999850988388
+        },
+        "progress": {
+          "renders": 300,
+          "hiddenRenders": 300,
+          "commits": 300,
+          "hiddenCommits": 300,
+          "actualDurationMs": 12.199999958276749,
+          "baseDurationMs": 0
+        },
+        "settings": {
+          "renders": 300,
+          "hiddenRenders": 300,
+          "commits": 300,
+          "hiddenCommits": 300,
+          "actualDurationMs": 81.6999998986721,
+          "baseDurationMs": 0.20000000298023224
+        }
+      },
+      "streamingRendered": true,
+      "longtasks": [],
+      "durationMs": 1784.7000000029802
+    }
+  ],
+  "limitations": [
+    "Synthetic 300 chunks, not provider latency. Profiling bundle differs from shipping normal bundle. One-machine timing deltas are not quality proof."
+  ]
+}

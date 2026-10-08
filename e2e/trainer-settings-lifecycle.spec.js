@@ -71,7 +71,7 @@ async function openProviderDetails(page) {
   // Connected state shows the compact summary card — the "Edit configuration"
   // level exposes the connection form directly (advanced diagnostics live one
   // level deeper and are not needed for field edits).
-  const editButton = page.getByRole("button", { name: "Edit configuration", exact: true });
+  const editButton = page.locator('[data-settings-detail="connection"] .settings-sheet__pane').getByRole("button", { name: "Edit configuration", exact: true });
   if (await editButton.count()) {
     await editButton.click();
   }
@@ -437,8 +437,7 @@ test.describe("Trainer Settings provider lifecycle", () => {
     await openProviderDetails(page);
     await setProviderModel(liveDetail, correctedModel);
     await page
-      .getByRole("button", { name: `Save and use ${correctedModel}`, exact: true })
-      .first()
+      .getByRole("button", { name: "Save and use this connection", exact: true })
       .click();
     await expect(page.locator(".template-global-state [data-system-state=success]")).toBeVisible();
     const secondTestButton = providerTestButton(page);

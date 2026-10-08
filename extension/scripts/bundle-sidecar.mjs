@@ -84,6 +84,9 @@ export function resolveSidecarBundleTargets({
       { source: path.join(sourceServerDir, "pyproject.toml"), target: path.join(targetServerDir, "pyproject.toml") },
       { source: path.join(sourceServerDir, "README.md"), target: path.join(targetServerDir, "README.md") },
       { source: path.join(sourceServerDir, "run_sidecar.py"), target: path.join(targetServerDir, "run_sidecar.py") },
+      ...(fs.existsSync(path.join(sourceServerDir, "uv.lock"))
+        ? [{ source: path.join(sourceServerDir, "uv.lock"), target: path.join(targetServerDir, "uv.lock") }]
+        : []),
     ],
   };
 }
@@ -93,6 +96,7 @@ export function resolveSidecarRuntimeManifestTargets(serverDir) {
     path.join(serverDir, "app"),
     path.join(serverDir, "pyproject.toml"),
     path.join(serverDir, "run_sidecar.py"),
+    ...(fs.existsSync(path.join(serverDir, "uv.lock")) ? [path.join(serverDir, "uv.lock")] : []),
   ];
 }
 

@@ -22,7 +22,21 @@ import {
  * Attestation runtime with the undelivered notice wired: a failed delivery
  * posts the marker message the webview scopes to Training (localized there).
  */
-function attestationRuntimeWithUndeliveredNotice(context: CommandContext): TrainingAttestationRuntime {
+interface VerificationScope {
+  workspaceId?: string;
+  sessionId?: string;
+  cardId?: string;
+}
+function captureVerificationScope(context: CommandContext, cardId?: string): VerificationScope {
+  return { workspaceId: resolveAttestationWorkspaceId(context.getHostState()),
+    sessionId: context.getSessionId(), cardId: cardId ?? resolveLivePracticeCardId(context.getHostState()) };
+}
+function verificationScopeIsCurrent(context: CommandContext, scope: VerificationScope): boolean {
+  return scope.workspaceId === resolveAttestationWorkspaceId(context.getHostState()) &&
+    scope.sessionId === context.getSessionId() && (!scope.cardId || scope.cardId === resolveLivePracticeCardId(context.getHostState()));
+}
+
+function attestationRuntimeWithUndeliveredNotice(context: CommandContext, scope: VerificationScope): TrainingAttestationRuntime {
   return {
     sidecarClient: context.sidecarClient,
     sidecarManager: context.sidecarManager,
@@ -30,6 +44,7 @@ function attestationRuntimeWithUndeliveredNotice(context: CommandContext): Train
     getHostState: () => context.getHostState(),
     getSessionId: () => context.getSessionId(),
     notifyAttestationUndelivered: () => {
+      if (!verificationScopeIsCurrent(context, scope)) return;
       void context.workbench.postMessage({
         type: 'operation/status',
         payload: { tone: 'error', message: ATTESTATION_UNDELIVERED_MARKER },
@@ -85,6 +100,9 @@ export async function remoteVerifyCommand(
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
   const workspace = context.getHostState().workspace;
+  const record = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
+  const requestedCard = typeof record.cardId === 'string' && record.cardId.trim() ? record.cardId.trim() : undefined;
+  const scope = captureVerificationScope(context, requestedCard);
   if (!workspace.isRemoteWorkspace && !workspace.remoteName) {
     return {
       ok: false,
@@ -94,7 +112,6 @@ export async function remoteVerifyCommand(
   if (!(await context.trustGuard.ensureTrusted('run remote verification'))) {
     return { ok: false, message: 'Workspace trust is required to run remote verification.' };
   }
-  const record = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
   const spec = parseSpec(record);
   if (!spec) {
     return { ok: false, message: 'A verification executable is required.' };
@@ -109,6 +126,7 @@ export async function remoteVerifyCommand(
     };
   }
 
+  if (!verificationScopeIsCurrent(context, scope)) return { ok: false, message: 'Workspace, session or card changed before remote verification started.' };
   const described = describeSpec(spec);
   let stdout = '';
   let stderr = '';
@@ -162,29 +180,27 @@ export async function remoteVerifyCommand(
     };
   }
 
-  const hostState = context.getHostState();
-  const cardId = typeof record.cardId === 'string' && record.cardId.trim() ? record.cardId.trim() : resolveLivePracticeCardId(hostState);
-  if (cardId) {
+  const cardId = scope.cardId;
+  let attestation: 'delivered' | 'undelivered' | 'not_requested' | 'stale_scope' = 'not_requested';
+  if (!verificationScopeIsCurrent(context, scope)) attestation = 'stale_scope';
+  else if (cardId) {
     const body = buildTestRunAttestationBody({
-      card: { cardId },
-      passed,
+      card: { cardId }, passed,
       summary: `Remote verify ${passed ? 'passed' : 'failed'}: ${described} (exit ${exitCode})`,
       testsOutput: truncateTestsOutput(`${stdout}\n${stderr}`.trim()),
-      sessionId: context.getSessionId(),
-      workspaceId: resolveAttestationWorkspaceId(hostState),
+      sessionId: scope.sessionId, workspaceId: scope.workspaceId,
       idempotencyKey: attestationIdempotencyKey({ cardId, runId: companionRunId }),
     });
-    // Fire-and-forget with classification + one connect-class retry; a failed
-    // delivery surfaces the training-scoped undelivered notice from the runtime.
-    void dispatchTestRunAttestation(attestationRuntimeWithUndeliveredNotice(context), body);
+    attestation = await dispatchTestRunAttestation(attestationRuntimeWithUndeliveredNotice(context, scope), body);
   }
-
   return {
     ok: passed,
-    message: cardId
-      ? `Remote verification ${passed ? 'passed' : 'failed'} (exit ${exitCode}); the result is being attested to the trainer.`
+    message: attestation === 'delivered'
+      ? `Remote verification ${passed ? 'passed' : 'failed'} (exit ${exitCode}); the result was attested to the trainer.`
+      : attestation === 'undelivered' ? ATTESTATION_UNDELIVERED_MARKER
+      : attestation === 'stale_scope' ? 'Remote verification completed in an earlier workspace, session or card; no evidence was recorded.'
       : `Remote verification ${passed ? 'passed' : 'failed'} (exit ${exitCode}); no live practice card, so nothing was attested.`,
-    data: { spec, exit_code: exitCode, passed, stdout, stderr },
+    data: { spec, exit_code: exitCode, passed, stdout, stderr, attestation },
   };
 }
 
@@ -194,10 +210,11 @@ export async function remoteVerifyCommand(
  * One active session at a time per window: starting a new run while one is
  * active is rejected instead of silently racing two processes.
  */
-const activeRemoteVerification: {
+interface ActiveRemoteVerification {
   sessionId?: string;
   signal: { aborted: boolean };
-} = { signal: { aborted: false } };
+}
+let activeRemoteVerification: ActiveRemoteVerification | undefined;
 
 const PYTESTABLE_EXTENSIONS = new Set(['.py']);
 
@@ -301,145 +318,78 @@ function buildActiveFileVerificationSpec(
   };
 }
 
-export async function remoteVerifyActiveFileCommand(
-  context: CommandContext,
-): Promise<CommandExecutionResult> {
+export async function remoteVerifyActiveFileCommand(context: CommandContext): Promise<CommandExecutionResult> {
   const workspace = context.getHostState().workspace;
-  if (!workspace.isRemoteWorkspace && !workspace.remoteName) {
-    return {
-      ok: false,
-      message:
-        'Remote verification is only available in a Remote-SSH, WSL, Tunnel, or Dev Container window.',
-    };
-  }
-  if (!(await context.trustGuard.ensureTrusted('run remote verification'))) {
-    return { ok: false, message: 'Workspace trust is required to run remote verification.' };
-  }
-  if (activeRemoteVerification.sessionId) {
-    return {
-      ok: false,
-      message: 'A remote verification is already running. Stop it before starting another.',
-    };
-  }
+  const scope = captureVerificationScope(context);
   const editor = vscode.window.activeTextEditor;
-  if (!editor) {
-    return { ok: false, message: 'Open the practice file before verifying it.' };
-  }
+  if (!workspace.isRemoteWorkspace && !workspace.remoteName) return { ok: false,
+    message: 'Remote verification is only available in a Remote-SSH, WSL, Tunnel, or Dev Container window.' };
+  if (!(await context.trustGuard.ensureTrusted('run remote verification'))) return { ok: false,
+    message: 'Workspace trust is required to run remote verification.' };
+  if (activeRemoteVerification) return { ok: false,
+    message: 'A remote verification is already running. Stop it before starting another.' };
+  if (!editor) return { ok: false, message: 'Open the practice file before verifying it.' };
   const spec = buildActiveFileVerificationSpec({ fsPath: editor.document.uri.fsPath });
-  if (!spec) {
-    return {
-      ok: false,
-      message: 'Remote file verification currently supports Python practice files (pytest).',
-    };
+  if (!spec) return { ok: false, message: 'Remote file verification currently supports Python practice files (pytest).' };
+
+  // Reserve before any further await; onStart can arrive much later than the user's second click.
+  const run: ActiveRemoteVerification = { signal: { aborted: false } };
+  activeRemoteVerification = run;
+  const language = remoteVerificationLanguage(context);
+  let capabilities;
+  try { capabilities = await context.workspaceGateway.capabilities(); }
+  catch (error) {
+    if (activeRemoteVerification === run) activeRemoteVerification = undefined;
+    context.outputChannel.appendLine(`[remote] capabilities unavailable: ${error instanceof Error ? error.name : 'Request failed'}`);
+    return { ok: false, message: 'Remote Workspace Companion is unavailable. Reconnect before verifying.' };
   }
-
-  const capabilities = await context.workspaceGateway.capabilities();
-  if (!capabilities.companionAvailable || !capabilities.verify) {
-    return {
-      ok: false,
-      message:
-        'Remote Workspace Companion is not available in this window. Run "Trainer: Install Remote Workspace Support", reload the remote window, then verify again.',
-    };
+  if (!capabilities.companionAvailable || !capabilities.verify || !verificationScopeIsCurrent(context, scope)) {
+    if (activeRemoteVerification === run) activeRemoteVerification = undefined;
+    return { ok: false, message: 'Remote Workspace Companion is not available in this workspace. Reconnect before verifying.' };
   }
-
-  activeRemoteVerification.signal = { aborted: false };
-  const signal = activeRemoteVerification.signal;
-  void context.workspaceGateway
-    .runVerification(spec, {
-      signal,
-      onStart: (session) => {
-        activeRemoteVerification.sessionId = session.session_id;
-        void context.workbench.postMessage({
-          type: 'remoteVerification/started',
-          payload: {
-            sessionId: session.session_id,
-            spec: { executable: spec.executable, args: spec.args },
-          },
-        });
-      },
-      onChunk: (chunk) => {
-        if (!activeRemoteVerification.sessionId) {
-          return;
-        }
-        void context.workbench.postMessage({
-          type: 'remoteVerification/stream',
-          payload: {
-            sessionId: activeRemoteVerification.sessionId,
-            stream: chunk.stream,
-            text: chunk.text,
-          },
-        });
-      },
-    })
-    .then(async (verification) => {
-      const sessionId = activeRemoteVerification.sessionId;
-      activeRemoteVerification.sessionId = undefined;
-      if (!sessionId) {
-        return;
-      }
-      const completed = verification.state === 'completed';
-      const exitCode = verification.exit_code ?? null;
-      const passed = completed && verification.result === 'passed' && exitCode === 0;
-
-      const hostState = context.getHostState();
-      const cardId = resolveLivePracticeCardId(hostState);
-      if (cardId && completed) {
-        const body = buildTestRunAttestationBody({
-          card: { cardId },
-          passed,
-          summary: `Remote verify ${passed ? 'passed' : 'failed'} on ${workspace.remoteName ?? 'remote'}: ${path.basename(spec.args[spec.args.length - 1] ?? '')} (exit ${exitCode})`,
-          testsOutput: truncateTestsOutput(`${verification.stdout}\n${verification.stderr}`.trim()),
-          sessionId: context.getSessionId(),
-          workspaceId: resolveAttestationWorkspaceId(hostState),
-          idempotencyKey: attestationIdempotencyKey({ cardId, runId: sessionId }),
-        });
-        // Fire-and-forget with classification + one connect-class retry; a
-        // failed delivery surfaces the training-scoped undelivered notice.
-        void dispatchTestRunAttestation(attestationRuntimeWithUndeliveredNotice(context), body);
-      }
-
-      const summary = completed
-        ? remoteVerificationSummary(passed ? 'passed' : 'failed', remoteVerificationLanguage(context), exitCode)
-        : verification.state === 'timed_out'
-          ? remoteVerificationSummary('timed_out', remoteVerificationLanguage(context))
-          : verification.state === 'cancelled'
-            ? remoteVerificationSummary('cancelled', remoteVerificationLanguage(context))
-            : remoteVerificationSummary('interrupted', remoteVerificationLanguage(context));
-      void context.workbench.postMessage({
-        type: 'remoteVerification/finished',
-        payload: {
-          sessionId,
-          state: verification.state,
-          exitCode,
-          ...(completed ? { passed } : {}),
-          summary,
-        },
-      });
-    })
-    .catch((error) => {
-      activeRemoteVerification.sessionId = undefined;
-      const detail = error instanceof Error ? error.message : String(error);
-      void context.workbench.postMessage({
-        type: 'remoteVerification/finished',
-        payload: {
-          sessionId: '',
-          state: 'connection_lost',
-          exitCode: null,
-          summary: `${remoteVerificationSummary('interrupted', remoteVerificationLanguage(context))}${detail}`,
-        },
-      });
-    });
-
-  return {
-    ok: true,
-    message: `Remote verification starting on ${workspace.remoteName ?? 'remote'}.`,
+  const post = (message: unknown) => {
+    if (verificationScopeIsCurrent(context, scope)) void context.workbench.postMessage(message);
   };
+  void context.workspaceGateway.runVerification(spec, {
+    signal: run.signal,
+    onStart: session => {
+      run.sessionId = session.session_id;
+      post({ type: 'remoteVerification/started', payload: { sessionId: session.session_id,
+        spec: { executable: spec.executable, args: spec.args } } });
+    },
+    onChunk: chunk => {
+      if (run.sessionId) post({ type: 'remoteVerification/stream', payload: {
+        sessionId: run.sessionId, stream: chunk.stream, text: chunk.text } });
+    },
+  }).then(async verification => {
+    const completed = verification.state === 'completed' && typeof verification.exit_code === 'number';
+    const exitCode = completed ? verification.exit_code : null;
+    const passed = completed && verification.result === 'passed' && exitCode === 0;
+    let delivery: 'delivered' | 'undelivered' | 'not_requested' = 'not_requested';
+    if (scope.cardId && completed && verificationScopeIsCurrent(context, scope)) {
+      const body = buildTestRunAttestationBody({ card: { cardId: scope.cardId }, passed,
+        summary: `Remote verify ${passed ? 'passed' : 'failed'} on ${workspace.remoteName ?? 'remote'}: ${path.basename(spec.args[spec.args.length - 1] ?? '')} (exit ${exitCode})`,
+        testsOutput: truncateTestsOutput(`${verification.stdout}\n${verification.stderr}`.trim()),
+        sessionId: scope.sessionId, workspaceId: scope.workspaceId,
+        idempotencyKey: attestationIdempotencyKey({ cardId: scope.cardId, runId: run.sessionId ?? '' }),
+      });
+      delivery = await dispatchTestRunAttestation(attestationRuntimeWithUndeliveredNotice(context, scope), body);
+    }
+    const state = verification.state === 'completed' && !completed ? 'connection_lost' : verification.state;
+    const summary = completed ? remoteVerificationSummary(passed ? 'passed' : 'failed', language, exitCode)
+      : remoteVerificationSummary(state === 'timed_out' ? 'timed_out' : state === 'cancelled' ? 'cancelled' : 'interrupted', language);
+    post({ type: 'remoteVerification/finished', payload: { sessionId: run.sessionId ?? '', state,
+      exitCode, ...(completed ? { passed } : {}), summary, attestation: delivery } });
+  }).catch(error => {
+    context.outputChannel.appendLine(`[remote] verification interrupted: ${error instanceof Error ? error.name : 'Request failed'}`);
+    post({ type: 'remoteVerification/finished', payload: { sessionId: run.sessionId ?? '',
+      state: 'connection_lost', exitCode: null, summary: remoteVerificationSummary('interrupted', language) } });
+  }).finally(() => { if (activeRemoteVerification === run) activeRemoteVerification = undefined; });
+  return { ok: true, message: `Remote verification starting on ${workspace.remoteName ?? 'remote'}.` };
 }
 
-export async function remoteVerifyCancelCommand(
-  context: CommandContext,
-): Promise<CommandExecutionResult> {
-  activeRemoteVerification.signal.aborted = true;
+export async function remoteVerifyCancelCommand(_context: CommandContext): Promise<CommandExecutionResult> {
+  if (activeRemoteVerification) activeRemoteVerification.signal.aborted = true;
   return { ok: true, message: 'Stop requested for the running remote verification.' };
 }
 

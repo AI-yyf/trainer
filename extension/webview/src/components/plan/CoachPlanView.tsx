@@ -1,4 +1,5 @@
 import { LearningHome } from "../../templates/LearningHome";
+import { NextAction, type NextActionProps } from "../../templates/NextAction";
 import { SystemState } from "../../templates/SystemState";
 import { templateCopy } from "../../templates/templateCopy";
 import { trainingViewLabel } from "../../lib/viewLabels";
@@ -116,6 +117,9 @@ interface PlanDecisionStripState {
 
 export interface CoachPlanViewProps {
   plan: LearningPlan | null;
+  /** Resolved by the domain controller; the view never ranks actions. */
+  primaryAction: NextActionProps;
+  primaryEvidenceId?: string;
   /** §30: navigate to internal routes (progress, training). */
   onNavigateToView?: (view: "coach" | "plan" | "resources" | "training" | "progress" | "settings") => void;
   className?: string;
@@ -1138,28 +1142,6 @@ function formatEvidenceTime(
   }
 }
 
-const RECOVERED_PLAN_ACTION_IDS = new Set([
-  "resume-plan",
-  "plan-review-evidence",
-  "plan-clear-blocker",
-  "plan-continue-step",
-  "plan-needs-evidence",
-]);
-
-function pickPlanPrimaryAction(actions: PlanActionItem[] | undefined): PlanActionItem | undefined {
-  const list = actions ?? [];
-  const enabled = (id: string) => list.find((action) => action.id === id && !action.disabled);
-  return (
-    enabled("open-settings") ??
-    list.find((action) => !action.disabled && RECOVERED_PLAN_ACTION_IDS.has(action.id)) ??
-    enabled("plan-continue-without-plan") ??
-    enabled("refresh-plan") ??
-    list.find((action) => !action.disabled && action.id === "plan-next-task") ??
-    list.find((action) => !action.disabled && action.tone === "accent") ??
-    list.find((action) => !action.disabled)
-  );
-}
-
 function LiveEvidenceDecisionRow({
   pendingId,
   pendingSummary,
@@ -1199,64 +1181,6 @@ function LiveEvidenceDecisionRow({
       ) : null}
     </div>
   );
-}
-
-/**
- * Decision card derived from real runtime facts only (pending evidence count,
- * frozen flag, blocker). No invented governance rows: when nothing needs
- * attention the strip is absent entirely.
- */
-function resolvePlanDecisionStrip(input: {
-  language: PlanLanguage;
-  pendingEvidenceCount: number;
-  currentStep: ReactNode;
-  verifyNow: ReactNode;
-  planFrozen: boolean;
-  blockedReason?: string;
-}): PlanDecisionStripState | null {
-  const currentStep = inlineText(input.currentStep);
-  const verifyNow = inlineText(input.verifyNow);
-  const blockerDetail = input.blockedReason?.trim() ?? "";
-  const hasBlocker = blockerDetail.length > 0;
-  const hasPendingEvidence = input.pendingEvidenceCount > 0 && !input.planFrozen;
-
-  if (hasBlocker) {
-    return {
-      tone: "danger",
-      eyebrow: planCopy(input.language, "blocked"),
-      title: planCopy(input.language, "planBlocked"),
-      detail: blockerDetail || planCopy(input.language, "blockerDetailMissing"),
-      next: currentStep
-        ? planCopy(input.language, "backTo", { step: currentStep })
-        : planCopy(input.language, "narrowNext"),
-    };
-  }
-
-  if (hasPendingEvidence) {
-    // r1-g1-3: one neutral sentence. The title alone states the fact — the
-    // previous detail repeated the same sentence, and the alert tone competed
-    // with the primary action for the surface's only saturated color.
-    return {
-      tone: "warning",
-      eyebrow: planCopy(input.language, "needsConfirmation"),
-      title: planCopy(input.language, "evidenceUnchanged"),
-      next: verifyNow
-        ? planCopy(input.language, "verifyFirst", { step: verifyNow })
-        : planCopy(input.language, "reviewPending"),
-    };
-  }
-
-  if (input.planFrozen) {
-    return {
-      tone: "warning",
-      eyebrow: planCopy(input.language, "planLocked"),
-      title: planCopy(input.language, "formalPlanFrozen"),
-      detail: planCopy(input.language, "chatEvidenceNoRewrite"),
-      next: currentStep || planCopy(input.language, "continueCurrent"),
-    };
-  }
-
-  return null;
 }
 
 export function CoachPlanView(props: CoachPlanViewProps) {
@@ -1499,12 +1423,10 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     }),
     [evidenceQueue],
   );
-  const livePendingEvidence = evidenceQueue?.pending[0];
+  const livePendingEvidence = evidenceQueue?.pending.find(item => item.id === props.primaryEvidenceId);
   const livePendingEvidenceId = livePendingEvidence?.id?.trim() ?? "";
-  const reviewEvidenceAction = (actions ?? []).find((action) => action.id === "plan-review-evidence");
   const showLiveEvidenceDecisions = Boolean(
-    reviewEvidenceAction &&
-      livePendingEvidenceId &&
+    livePendingEvidenceId &&
       (evidenceActions?.onRejectEvidence || evidenceActions?.onDeferEvidence),
   );
   const liveEvidenceDecisionRow = showLiveEvidenceDecisions && livePendingEvidence ? (
@@ -1517,24 +1439,15 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       onReject={evidenceActions?.onRejectEvidence}
     />
   ) : null;
-  const emptyPlanActions = reviewEvidenceAction
-    ? (actions ?? []).filter((action) => action.id !== "plan-review-evidence")
-    : (actions ?? []);
   const leftoverNote = props.leftoverNote?.trim() || "";
-  const emptyPrimaryAction = reviewEvidenceAction ?? pickPlanPrimaryAction(emptyPlanActions);
-  const emptySecondaryActions = emptyPlanActions.filter((action) => action.id !== emptyPrimaryAction?.id);
-  // Reuse the plan-generate action the host already supplies; never invent a new command.
-  const planGenerateAction =
-    (actions ?? []).find((action) => action.id === "refresh-plan") ?? emptyPrimaryAction;
   if (!plan) {
     return (
       <section className="template-learning-home" data-template="LearningHome" data-plan-leftover-not-live={leftoverNote ? "true" : undefined}>
-        <SystemState kind="empty" title={resolvedEmptyTitle} detail={leftoverNote ? <p data-plan-leftover-note="true">{leftoverNote}</p> : emptyState}
-          action={emptyPrimaryAction?.onClick ? { label: emptyPrimaryAction.label, onClick: emptyPrimaryAction.onClick, disabled: emptyPrimaryAction.disabled } : undefined}>
-          {emptyPrimaryAction?.id === "plan-review-evidence" ? liveEvidenceDecisionRow : null}
-        </SystemState>
+        <NextAction {...props.primaryAction} />
+        {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
+        {liveEvidenceDecisionRow}
         {renderComposerDraftReplacement("stage")}
-        {emptySecondaryActions.length ? <details className="template-disclosure"><summary>{resolvedActionsLabel}</summary><div>{emptySecondaryActions.map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} disabled={action.disabled} onClick={action.onClick} />)}</div></details> : null}
+        {actions?.length ? <details className="template-disclosure"><summary>{resolvedActionsLabel}</summary><div>{actions.map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} disabled={action.disabled} onClick={action.onClick} />)}</div></details> : null}
         {globalPlanContext}
         <button type="button" className="template-back" onClick={() => props.onNavigateToView?.("training")}>{trainingViewLabel(language)}</button>
         <button type="button" className="template-back" onClick={() => props.onNavigateToView?.("progress")}>{templateCopy[language].growth}</button>
@@ -1601,17 +1514,6 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         ? whyFallback
         : pathProgressNote;
   const summaryChips = [stageProgressText, plan.cadence].filter(Boolean) as string[];
-  const blockedReason = plan.blockedReason?.trim();
-  const pendingEvidenceCount = evidenceQueue?.pending.length ?? 0;
-  const planDecisionStrip = resolvePlanDecisionStrip({
-    language,
-    pendingEvidenceCount,
-    currentStep: currentStepText,
-    verifyNow: verifyText,
-    planFrozen: plan.frozen,
-    blockedReason,
-  });
-  const shouldShowDecisionCard = !hideDecisionStrip && planDecisionStrip !== null;
   const mainLanes: Array<{
     id: string;
     label: string;
@@ -1754,109 +1656,13 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const hasBackgroundDetails = backgroundRows.length > 0 || noteRows.length > 0 || hasTrajectoryDetails;
   const evidenceTone = evidenceCounts.pending > 0 ? "warning" : evidenceCounts.deferred > 0 ? "muted" : "good";
   const hasEvidenceDetails = evidenceCounts.total > 0;
-  const pendingEvidenceAction = (actions ?? []).find(
-    (action) => action.id === "plan-review-evidence" || action.id === "plan-needs-evidence",
-  );
-  const compactPrimaryAction = compactPrimary
-    ? evidenceCounts.pending > 0 && pendingEvidenceAction
-      ? pendingEvidenceAction
-      : onResumeThread && resolvedNextStepResumeThread
-      ? {
-          id: "resume-thread",
-          label: resolvedResumeActionLabel,
-          detail: resolvedNextStepResumeThread,
-          icon: <ArrowRightIcon size={12} />,
-          tone: "accent" as const,
-          disabled: false,
-          onClick: onResumeThread,
-        }
-      : pickPlanPrimaryAction(actions)
-    : undefined;
-  const compactSecondaryActions = compactPrimary
-    ? (actions ?? []).filter((action) => action.id !== compactPrimaryAction?.id)
-    : [];
-  const detailSections = [
-    hasStageDetails ? resolvedStagesLabel : null,
-    hasReviewDetails ? resolvedRevisitSummaryLabel : null,
-    hasTrajectoryDetails ? (props.trajectoryLabel ?? planCopy(language, "sourceShortlist")) : null,
-    hasBackgroundDetails ? resolvedSupportSummaryLabel : null,
-    hasEvidenceDetails ? planViewText.practiceRecordsLabel : null,
-  ].filter(Boolean) as string[];
-  const detailsSummary =
-    compactPrimary && detailSections.length > 0
-      ? resolvedDetailsSummaryLabel
-      : `${resolvedDetailsSummaryLabel}${detailSections.length ? ` · ${detailSections.join(" / ")}` : ""}`;
-  const primarySummaryChips = compactPrimary ? [] : summaryChips;
-  const primaryRouteStripItems = routeStripItems;
-
-  const nextAction = compactPrimaryAction ?? pickPlanPrimaryAction(actions);
-  // r1-g1-0: the 下一步 block's one primary action is named after the copy it
-  // starts ("开始:<step>"); the evidence-review action ("整理证据") is demoted
-  // to a quiet secondary link so accent saturation stays on the start action.
-  const evidenceReviewAction = !compactPrimary
-    ? (actions ?? []).find(
-        (action) =>
-          !action.disabled &&
-          (action.id === "plan-review-evidence" || action.id === "plan-needs-evidence"),
-      )
-    : undefined;
-  const stepStartAction = !compactPrimary
-    ? pickPlanPrimaryAction(
-        (actions ?? []).filter((action) => action.id !== evidenceReviewAction?.id),
-      )
-    : undefined;
-  // Setup and recovery intents keep their own names — renaming them to
-  // "start" would lie about what the button does. Every other next-step
-  // action renders under the copy-matched 开始：{step} label (r2-g1-0), so
-  // the primary button never disappears behind the evidence demotion and
-  // the screen keeps exactly one primary.
-  const setupRecoveryActionIds = new Set([
-    "open-settings",
-    "refresh-plan",
-    "plan-continue-without-plan",
-    "resume-plan",
-    "plan-clear-blocker",
-  ]);
-  const stepStartTitle = inlineText(currentLane.body) || activeStageTitle;
-  const stepStartLabel = planCopy(language, "startPrefix", {
-    step: stepStartTitle.length > 22 ? `${stepStartTitle.slice(0, 21)}…` : stepStartTitle,
-  });
-  const learningPrimaryKeepsOwnName =
-    !compactPrimary &&
-    Boolean(stepStartAction && setupRecoveryActionIds.has(stepStartAction.id));
   return (
     <LearningHome
       currentLabel={templateCopy[language].currentLearning}
       title={plan.title}
       stage={stageProgressText ? `${stageProgressText} · ${activeStageTitle}` : activeStageTitle}
-      state={shouldShowDecisionCard && planDecisionStrip ? <SystemState kind={plan.frozen ? "read-only" : blockedReason ? "recoverable-error" : "information"} title={planDecisionStrip.title} detail={planDecisionStrip.detail} /> : undefined}
-      next={{ label: resolvedNextStepLabel, title: stepStartTitle,
-        detail: shouldShowDecisionCard && planDecisionStrip && (plan.frozen || blockedReason)
-          ? <div data-plan-fact="next">{planDecisionStrip.next}</div>
-          : <div data-plan-fact="next"><span>{templateCopy[language].complete}: </span>{verifyText}</div>,
-        action: compactPrimary
-          ? { label: nextAction?.label ?? templateCopy[language].askCoach, disabled: nextAction?.disabled,
-              onClick: nextAction?.onClick ?? (() => props.onNavigateToView?.("coach")) }
-          : {
-              label: learningPrimaryKeepsOwnName ? stepStartAction?.label ?? stepStartLabel : stepStartLabel,
-              disabled: learningPrimaryKeepsOwnName ? stepStartAction?.disabled ?? false : false,
-              onClick: stepStartAction?.onClick ?? (() => props.onNavigateToView?.("coach")),
-            } }}
-      nextTools={compactPrimary ? (nextAction?.id === "plan-review-evidence" ? liveEvidenceDecisionRow : undefined) : (
-        <>
-          {evidenceReviewAction ? (
-            <button
-              type="button"
-              className="template-back coach-plan-view__secondary-action"
-              data-plan-evidence-secondary="true"
-              onClick={evidenceReviewAction.onClick}
-            >
-              {evidenceReviewAction.label}
-            </button>
-          ) : null}
-          {liveEvidenceDecisionRow}
-        </>
-      )}
+      next={props.primaryAction}
+      nextTools={liveEvidenceDecisionRow}
       review={hasReviewDetails ? { label: resolvedRevisitSummaryLabel, content: <>
         {reviewSupportRow ? renderNodeWithParagraph(reviewSupportRow.body) : null}
         {props.dueReviewItems?.slice(0, 4).map((item) => <div key={item.id}><strong>{item.title}</strong><p>{compactReviewLane(item, language)}</p></div>)}
@@ -1870,7 +1676,6 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         <button type="button" className="template-back" data-plan-growth-link="progress" onClick={() => props.onNavigateToView?.("progress")}>{planViewText.viewGrowth}</button>
       ) }}
       evidence={hasEvidenceDetails ? { label: `${planViewText.practiceRecordsLabel} (${evidenceCounts.total})`, content: <>
-        {liveEvidenceDecisionRow}
         <section
           className={`coach-plan-view__details-group coach-plan-view__details-group--evidence is-${evidenceTone}`}
           aria-label={planViewText.practiceRecordsLabel}
@@ -1970,7 +1775,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         <div>
           {backgroundRows.map((row) => <div key={row.id}>{renderNodeWithParagraph(row.body)}</div>)}
           {noteRows.map((row) => <p key={row.id}>{row.label}: {row.value}</p>)}
-          {(actions ?? []).filter((action) => action.id !== nextAction?.id).map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} detail={action.detail} disabled={action.disabled} onClick={action.onClick} />)}
+          {(actions ?? []).map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} detail={action.detail} disabled={action.disabled} onClick={action.onClick} />)}
           {planChangeCandidates.map((candidate) => <div key={candidate.id}>
             <p>{sanitizeErrorSurfaceText(candidate.reason, language)}</p>
             <p>{describeSafeStructuredValue(candidate.diff, language, planCopy(language, "noVisibleDiff"))}</p>

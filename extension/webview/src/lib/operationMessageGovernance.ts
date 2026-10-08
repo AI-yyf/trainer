@@ -85,28 +85,34 @@ export const PLAN_REVISION_CONFLICT_MARKER =
 export const LIVE_PLAN_TASK_GATE_MARKER =
   /^\[\[trainer-live-plan-task-gate:(no_live|leftover)\]\](?:\s|$)/i;
 
-// Host attestation delivery failed: the run completed but the evidence never
-// reached the training ledger. The host ships only this language-neutral
-// marker; the copy and the Training-surface scoping live here.
-export const ATTESTATION_UNDELIVERED_MARKER =
-  /\[\[trainer-attestation-undelivered\]\](?:\s|$)/i;
+// Delivery may have arrived even when the response was lost. This notice
+// records uncertainty; it does not invent a verdict or promise replay success.
+export const ATTESTATION_UNDELIVERED_MARKER = "[[trainer-attestation-undelivered]]";
 
 export function detectAttestationUndelivered(message: string): boolean {
-  return ATTESTATION_UNDELIVERED_MARKER.test(message.trim());
+  return message.includes(ATTESTATION_UNDELIVERED_MARKER);
 }
 
 export function attestationUndeliveredMessage(language: ComposerLanguage): string {
   const copy: Record<ComposerLanguage, string> = {
-    "zh-CN": "结果已验证，但证据还没有送达教练。重新验证一次即可补记。",
-    "en-US": "The result was verified, but the evidence did not reach the trainer. Run the verification again to record it.",
-    "es-ES": "El resultado se verificó, pero la evidencia no llegó al entrenador. Vuelve a ejecutar la verificación para registrarlo.",
-    "fr-FR": "Le résultat a été vérifié, mais la preuve n'est pas parvenue au coach. Relancez la vérification pour l'enregistrer.",
-    "de-DE": "Das Ergebnis wurde verifiziert, aber der Nachweis hat den Trainer nicht erreicht. Führe die Verifizierung erneut aus, um ihn zu erfassen.",
-    "ja-JP": "結果は検証されましたが、エビデンスがまだコーチに届いていません。もう一度検証を実行すると記録されます。",
-    "ko-KR": "결과는 검증되었지만 증거가 아직 코치에 전달되지 않았습니다. 검증을 다시 실행하면 기록됩니다.",
-    "pt-BR": "O resultado foi verificado, mas a evidência não chegou ao treinador. Execute a verificação novamente para registrá-la.",
-  };
-  return copy[language] ?? copy["en-US"];
+  "zh-CN": "本次验证结果尚未确认保存。保留当前结果，检查学习状态后再继续。",
+  "en-US": "This verification result has not been confirmed as saved. Keep the current result and check the learning state before continuing.",
+  "es-ES": "No se ha confirmado que este resultado de verificación se haya guardado. Conserva el resultado y comprueba el estado de aprendizaje antes de continuar.",
+  "fr-FR": "L’enregistrement de ce résultat de vérification n’est pas confirmé. Conservez le résultat et vérifiez l’état d’apprentissage avant de continuer.",
+  "de-DE": "Die Speicherung dieses Prüfergebnisses ist unbestätigt. Behalte das Ergebnis und prüfe den Lernstand, bevor du fortfährst.",
+  "ja-JP": "今回の検証結果が保存されたか確認できていません。結果を保持し、学習状態を確認してから続けてください。",
+  "ko-KR": "이번 검증 결과의 저장 여부가 확인되지 않았습니다. 현재 결과를 보관하고 학습 상태를 확인한 뒤 계속하세요.",
+  "pt-BR": "O salvamento deste resultado de verificação não foi confirmado. Mantenha o resultado e confira o estado de aprendizagem antes de continuar.",
+};
+  return copy[language];
+}
+
+/** Delivery uncertainty is a Training notice, never a verification verdict. */
+export function attestationDeliveryNotice(message: string, language: ComposerLanguage):
+  { surface: "training"; message: string } | undefined {
+  return detectAttestationUndelivered(message)
+    ? { surface: "training", message: attestationUndeliveredMessage(language) }
+    : undefined;
 }
 
 export function providerRecoveryMessage(language: ComposerLanguage): string {
@@ -242,6 +248,7 @@ export function sanitizeOperationFailureMessage(
   const revisionConflict2 = detectPlanRevisionConflict(message.message);
   const livePlanGate = parseLivePlanTaskGateMarker(message.message);
   return {
+    ...message,
     tone: "error",
     message: detectAttestationUndelivered(message.message)
       ? attestationUndeliveredMessage(language)
@@ -255,25 +262,29 @@ export function sanitizeOperationFailureMessage(
   };
 }
 
-/** Surface attribution for a banner message: an explicit surface wins; plan
- * conflict / live-plan gate markers stay inside Learning and an attestation
- * delivery failure stays inside Training, even when relayed by a generic
- * caller; everything else stays global. */
+/** Surface attribution for a banner message uses current domain facts. */
+export interface OperationMessageSurfaceFacts {
+  message?: string;
+  explicitSurface?: OperationMessageSurface;
+  planStateFailure?: boolean;
+  resourceOperation?: boolean;
+}
+
+/** Every new message resolves its own owner; it cannot inherit a prior scope.
+ * Keep the earlier string adapter for callers of the extracted helpers.
+ * Attestation uncertainty always belongs to Training, including generic relays. */
 export function resolveOperationMessageSurface(
-  message: string | undefined,
+  input: string | undefined | OperationMessageSurfaceFacts,
   explicitSurface?: OperationMessageSurface,
 ): OperationMessageSurface {
-  if (!message) {
-    return "global";
-  }
-  if (explicitSurface) {
-    return explicitSurface;
-  }
+  const facts = typeof input === "object" ? input : { message: input, explicitSurface };
+  const message = facts.message;
+  if (!message) return "global";
   if (detectAttestationUndelivered(message)) {
     return "training";
   }
-  if (detectPlanRevisionConflict(message) || parseLivePlanTaskGateMarker(message)) {
-    return "plan";
-  }
+  if (facts.explicitSurface) return facts.explicitSurface;
+  if (facts.planStateFailure || detectPlanRevisionConflict(message) || parseLivePlanTaskGateMarker(message)) return "plan";
+  if (facts.resourceOperation) return "resources";
   return "global";
 }

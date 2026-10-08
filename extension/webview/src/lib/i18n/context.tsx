@@ -1,4 +1,4 @@
-import { createContext, useContext, useLayoutEffect } from "react";
+import { createContext, useContext, useLayoutEffect, useMemo } from "react";
 import type { ComposerLanguage } from "../types";
 import { resolveTextDirection, type TextDirection } from "./direction";
 
@@ -27,6 +27,7 @@ export function I18nProvider({
   children: React.ReactNode;
 }) {
   const direction = directionOverride ?? resolveTextDirection(language);
+  const value = useMemo(() => ({ language, direction }), [language, direction]);
 
   useLayoutEffect(() => {
     if (typeof document === "undefined") {
@@ -39,7 +40,7 @@ export function I18nProvider({
   }, [direction, language]);
 
   return (
-    <I18nContext.Provider value={{ language, direction }}>
+    <I18nContext.Provider value={value}>
       {children}
     </I18nContext.Provider>
   );

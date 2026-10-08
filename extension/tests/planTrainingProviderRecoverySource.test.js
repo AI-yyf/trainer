@@ -72,14 +72,32 @@ const recoveryCopySource = fs.readFileSync(
     /if \(!providerCanCoachNow \|\| providerBlockReason\) \{[\s\S]*?setActiveView\("settings"\)/,
   );
   assert.match(source, /providerRecoverySummary|providerRecoveryScenario/);
-  assert.match(
-    planView,
-    /\.\.\.\(sendBlocked\s*\?\s*\[[\s\S]*?id: "open-settings",[\s\S]*?onClick: \(\) => \{\s*if \(workspaceSessionBlocked\) \{\s*openWorkspaceAdmission\(\);\s*return;\s*\}\s*useWorkbenchState\.getState\(\)\.requestSettingsCategory\("connection"\);\s*setActiveView\("settings"\);\s*\}/,
-  );
-  assert.match(
-    planView,
-    /id: "refresh-plan",[\s\S]*?tone:\s*recoveredPlanPrimary \|\| firstLookContinuePrimary[\s\S]*?\? \("ghost" as const\)[\s\S]*?: \("accent" as const\),[\s\S]*?onClick: \(\) => handlePlanOrientationAction\("generate_plan"\)/,
-  );
+  const { learningFacts, load } = require('./templateAssertions');
+  const { resolveLearningPrimaryAction, executeLearningPrimaryAction } = load('lib/learningActionResolver.ts');
+  for (const state of ['absent', 'active', 'frozen']) {
+    const current = learningFacts({ workspace: { ready: false, detail: 'Choose an admitted workspace' },
+      provider: { ready: false, canGeneratePlan: false }, freshness: 'stale',
+      plan: { state, id: 'plan', currentStep: 'Check boundaries', blocker: 'Missing test runner' },
+      training: { workspaceId: 'workspace', cardId: 'current-card', title: 'Practice', status: 'return_pending' },
+      evidence: { pending: [{ id: 'pending', summary: 'Result to inspect' }], blockingId: 'pending' } });
+    const action = resolveLearningPrimaryAction(current);
+    assert.equal(action.intent, 'choose_workspace', 'admission precedes model, recovery, and work');
+    const called = [];
+    assert.equal(executeLearningPrimaryAction(action, current, {
+      chooseWorkspace: () => called.push('workspace'), configureProvider: () => called.push('provider'),
+    }), true);
+    assert.deepEqual(called, ['workspace']);
+  }
+  const admitted = learningFacts({ provider: { ready: false, canGeneratePlan: false } });
+  assert.equal(resolveLearningPrimaryAction(admitted).intent, 'configure_provider');
+  // App supplies admission truth and dispatches the controller's selected
+  // target. Learning's template receives no independent button ranker.
+  assert.match(source, /workspace: \{ ready: !workspaceSessionBlocked, detail: workspaceSessionBlockMessage \}/);
+  assert.match(source, /chooseWorkspace: openWorkspaceAdmission/);
+  assert.match(source, /configureProvider: openProviderSetup/);
+  assert.match(planView, /onClick: runLearningPrimaryAction/);
+  assert.match(planView, /id: "refresh-plan",[\s\S]{0,300}tone: "ghost" as const/);
+  assert.match(planView, /disabled: !providerCanMutateFormalPlan \|\| workspaceSessionBlocked \|\| syncStatus !== "current"/);
   assert.match(planView, /payload: \{ frozen: !livePlanFrozen \}/);
   assert.doesNotMatch(source, /47\.107\.101\.18/);
   assert.doesNotMatch(source, /aikey\.redfast/);

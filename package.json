@@ -1,7 +1,7 @@
 {
   "name": "trainer-workspace",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.3.4",
   "scripts": {
     "install:js": "npm install --prefix extension --ignore-scripts && npm install --prefix extension/webview --ignore-scripts",
     "postinstall": "npm run install:js",
@@ -28,7 +28,8 @@
     "package:vsix": "npm run package:vsix --prefix extension",
     "verify:delivery": "npm run verify && npm run test:experience-matrix && npm run package:vsix",
     "test:remote-ssh-e2e": "node ./scripts/run-remote-ssh-e2e.mjs",
-    "perf:probe": "node ./scripts/perf-probe.mjs"
+    "perf:probe": "node ./scripts/perf-probe.mjs",
+    "verify:version": "node ./scripts/verify-version.mjs"
   },
   "repository": {
     "type": "git",

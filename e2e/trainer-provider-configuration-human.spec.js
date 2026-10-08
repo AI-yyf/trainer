@@ -44,7 +44,7 @@ async function openDetails(page) {
   // Connected state shows the compact summary card — the "Edit configuration"
   // level exposes the connection form directly. Advanced diagnostics live one
   // level deeper behind the "Connection details" drill-in row.
-  const editButton = page.getByRole("button", { name: /^(Edit configuration|编辑配置)$/ });
+  const editButton = page.locator('[data-settings-detail="connection"] .settings-sheet__pane').getByRole("button", { name: /^(Edit configuration|编辑配置)$/ });
   if (await editButton.count()) {
     await editButton.click();
   }
@@ -86,11 +86,16 @@ test.describe("human Provider configuration preview", () => {
   }) => {
     const credential = `preview-ephemeral-${randomUUID()}`;
     const consoleErrors = [];
+    const failedRequests = [];
     const testPayloads = [];
+    const modelPayloads = [];
     let testCount = 0;
 
     page.on("console", (message) => {
       if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    page.on("requestfailed", (request) => {
+      failedRequests.push({ url: request.url(), error: request.failure()?.errorText });
     });
 
     await page.addInitScript(() => {
@@ -103,6 +108,16 @@ test.describe("human Provider configuration preview", () => {
     );
     await page.route("**/memory/settings", (route) => route.fulfill(jsonResponse({})));
     await page.route("**/memory/summary**", (route) => route.fulfill(jsonResponse({})));
+    await page.route("**/provider/models", async (route) => {
+      const payload = JSON.parse(route.request().postData() || "{}");
+      modelPayloads.push(payload);
+      await route.fulfill(jsonResponse({
+        ok: true,
+        available_models: [payload.provider.model],
+        resolved_model: payload.provider.model,
+        listed: true,
+      }));
+    });
     await page.route("**/provider/test", async (route) => {
       const payload = JSON.parse(route.request().postData() || "{}");
       testPayloads.push(payload);
@@ -223,8 +238,8 @@ test.describe("human Provider configuration preview", () => {
     if (hasChatOption) {
       await retrySelect.selectOption({ label: retryModel });
     }
-    await expect(page.getByRole("button", { name: `Save and use ${retryModel}`, exact: true })).toBeVisible();
-    const retrySave = page.getByRole("button", { name: `Save and use ${retryModel}`, exact: true });
+    await expect(page.getByRole("button", { name: "Save and use this connection", exact: true })).toBeVisible();
+    const retrySave = page.getByRole("button", { name: "Save and use this connection", exact: true });
     if (await retrySave.isEnabled()) await retrySave.click();
     await testButton.click();
     await expect(page.locator(".template-global-state [data-system-state=success]")).toBeVisible();
@@ -250,7 +265,14 @@ test.describe("human Provider configuration preview", () => {
 
     await page.getByTestId("trainer-view-nav-coach").click();
     await expect(page.locator('[data-testid="trainer-view-nav-coach"]')).toHaveAttribute("aria-current", "page");
+    expect(failedRequests).toEqual([]);
     expect(consoleErrors).toEqual([]);
+    expect(modelPayloads.length).toBeGreaterThan(0);
+    for (const payload of modelPayloads) {
+      expect(payload.api_key).toBe(credential);
+      expect(payload.provider).not.toHaveProperty("apiKey");
+      expect(JSON.stringify(payload.provider)).not.toContain(credential);
+    }
     const finalProvider = await persistedProvider(page);
     expect(JSON.stringify(finalProvider)).not.toContain(credential);
   });

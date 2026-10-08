@@ -194,7 +194,7 @@ async function createExtensionFixtureDir() {
   return tempRoot;
 }
 
-function createViewHarness() {
+function createViewHarness({ autoAck = true } = {}) {
   const postedMessages = [];
   let messageHandler = () => {};
   let disposeHandler = () => {};
@@ -208,6 +208,9 @@ function createViewHarness() {
       cspSource: 'vscode-webview://view',
       postMessage: async (message) => {
         postedMessages.push(message);
+        if (autoAck && message.sync) queueMicrotask(() => messageHandler({ type: 'state/ack', payload: {
+          ...message.sync, status: 'applied', appliedRevision: message.sync.revision,
+        } }));
         return true;
       },
       onDidReceiveMessage(handler) {
@@ -379,9 +382,10 @@ test('request/bootstrap posts a full state patch without executing host commands
 
   assert.equal(executedCommands.length, 0);
   assert.equal(refreshCalls, 1);
-  // An explicit repair request ships exactly one full state patch.
+  // An explicit repair request replaces state with one full ACK-governed snapshot.
   assert.equal(harness.postedMessages.length, 1);
-  assert.equal(harness.postedMessages[0].type, 'state/patch');
+  assert.equal(harness.postedMessages[0].type, 'bootstrap');
+  assert.equal(harness.postedMessages[0].sync.baseRevision, 0);
 });
 
 test('settings auto-prime executes quietly without posting operation status', async () => {
@@ -421,7 +425,7 @@ test('settings auto-prime executes quietly without posting operation status', as
     harness.postedMessages.some((message) => message.type === 'operation/status'),
     false,
   );
-  assert.equal(harness.postedMessages[0].type, 'state/patch');
+  assert.equal(harness.postedMessages.length, 0, 'an unchanged catalog produces no redundant state payload');
 });
 
 test('visibility recovery rehydrates empty html and syncs state again', async () => {
@@ -452,9 +456,9 @@ test('visibility recovery rehydrates empty html and syncs state again', async ()
 
   assert.match(harness.view.webview.html, /window\.__TRAINER_BOOTSTRAP__/);
   assert.ok(refreshCalls >= 1);
-  // A rebuilt webview gets one full state patch — never a bootstrap re-post.
-  assert.ok(harness.postedMessages.some((message) => message.type === 'state/patch'));
-  assert.ok(!harness.postedMessages.some((message) => message.type === 'bootstrap'));
+  // A rebuilt webview requires a replacing snapshot with a fresh generation.
+  assert.ok(harness.postedMessages.some((message) => message.type === 'bootstrap'));
+  assert.ok(harness.postedMessages.every(message => message.sync?.baseRevision === 0));
   assert.ok(outputLines.some((line) => /\[webview\] visible -> rehydrating state/.test(line)));
 });
 
@@ -631,12 +635,12 @@ test('visibility recovery with empty html rehydrates the latest completed stream
   await sleep(320);
   await flushAsyncBridgeWork();
 
-  const patch = harness.postedMessages.find((message) => message.type === 'state/patch');
+  const patch = harness.postedMessages.find((message) => message.type === 'bootstrap');
   assert.match(harness.view.webview.html, /window\.__TRAINER_BOOTSTRAP__/);
   assert.ok(refreshCalls >= 1);
   assert.ok(outputLines.some((line) => /\[webview\] visible -> rehydrating state/.test(line)));
-  assert.ok(!harness.postedMessages.some((message) => message.type === 'bootstrap'));
-  assert.ok(patch, 'expected a full state patch after html rebuild');
+  assert.equal(patch?.sync.baseRevision, 0);
+  assert.ok(patch, 'expected a full snapshot after html rebuild');
   assert.equal(patch.payload.streamingState.isStreaming, false);
   assert.equal(patch.payload.streamingState.streamMessageId, 'msg-complete-visibility');
   assert.equal(
@@ -652,13 +656,56 @@ test('visibility recovery with empty html rehydrates the latest completed stream
   assert.equal(patch.payload.streamingState.agentActivity[0].result.summary, 'Plan anchor found.');
 });
 
+test('operation identity deduplicates execution and prevents a late result restoring an old session', async () => {
+  const extensionPath = await createExtensionFixtureDir();
+  const harness = createViewHarness();
+  let hostState = createBootstrapState();
+  let calls = 0;
+  let finish;
+  const result = new Promise(resolve => { finish = resolve; });
+  const { WorkbenchSidebarController } = loadWithVscodeMock(bridgeModulePath, createVscodeMock());
+  const controller = new WorkbenchSidebarController(
+    { extensionPath, extensionUri: { fsPath: extensionPath } },
+    { async execute() { calls += 1; return result; } },
+    () => hostState,
+    { appendLine() {} },
+  );
+  await controller.resolveWebviewView(harness.view);
+  await flushAsyncBridgeWork();
+  const sync = harness.postedMessages.find(message => message.sync).sync;
+  const message = { type: 'plan/freeze', payload: { frozen: true }, operation: {
+    requestId: 'request-deduplicated', generation: sync.generation, revision: sync.revision,
+    workspaceId: sync.workspaceId, sessionId: sync.sessionId,
+  } };
+  harness.postedMessages.length = 0;
+  const executing = harness.dispatchMessage(message);
+  await flushAsyncBridgeWork();
+  await harness.dispatchMessage(message);
+  assert.equal(calls, 1);
+  assert.deepEqual(harness.postedMessages.filter(item => item.type === 'operation/lifecycle')
+    .map(item => item.payload.phase), ['pending', 'running']);
+  hostState = { ...hostState, sessionId: 'new-session' };
+  await controller.syncState();
+  await flushAsyncBridgeWork();
+  harness.postedMessages.length = 0;
+  finish({ ok: true, message: 'Old session completed.', ui: { focusProviderApiKey: true } });
+  await executing;
+  assert.equal(harness.postedMessages.some(item => item.type === 'operation/status'), false);
+  assert.equal(harness.postedMessages.some(item => item.type === 'ui/restoreView'), false);
+  await harness.dispatchMessage({ ...message, operation: { ...message.operation, requestId: 'another-old-request' } });
+  assert.equal(calls, 1, 'stale origin scope cannot execute a new command');
+  controller.dispose();
+});
+
 test('plan freeze messages route through the registry and emit status then patch', async () => {
   const extensionPath = await createExtensionFixtureDir();
   const harness = createViewHarness();
   const commandCalls = [];
+  let hostState = createBootstrapState();
   const commandRegistry = {
     async execute(commandId, payload) {
       commandCalls.push({ commandId, payload });
+      hostState = { ...hostState, bootstrap: { ...hostState.bootstrap, plan: { ...hostState.bootstrap.plan, frozen: payload.frozen } } };
       return { ok: true, message: 'Plan frozen.' };
     },
   };
@@ -668,7 +715,7 @@ test('plan freeze messages route through the registry and emit status then patch
   const controller = new WorkbenchSidebarController(
     { extensionPath, extensionUri: { fsPath: extensionPath } },
     commandRegistry,
-    () => createBootstrapState(),
+    () => hostState,
     { appendLine() {} },
   );
 
@@ -695,9 +742,11 @@ test('plan freeze messages route through the registry and emit status then patch
 test('webview template setup syncs state before restoring Settings focus to the API key', async () => {
   const extensionPath = await createExtensionFixtureDir();
   const harness = createViewHarness();
+  let hostState = createBootstrapState();
   const commandRegistry = {
     async execute(commandId, payload) {
       assert.equal(commandId, 'trainer.provider.useTemplate');
+      hostState = { ...hostState, bootstrap: { ...hostState.bootstrap, connection: { ...hostState.bootstrap.connection, provider: { ...hostState.bootstrap.connection.provider, name: 'MiniMax' } } } };
       assert.deepEqual(payload, { templateLabel: 'MiniMax', skipPicker: true });
       return {
         ok: true,
@@ -711,7 +760,7 @@ test('webview template setup syncs state before restoring Settings focus to the 
   const controller = new WorkbenchSidebarController(
     { extensionPath, extensionUri: { fsPath: extensionPath } },
     commandRegistry,
-    () => createBootstrapState(),
+    () => hostState,
     { appendLine() {} },
   );
 
@@ -764,7 +813,7 @@ test('cancelled resource commands only resync the view without showing an error'
   });
   await flushAsyncBridgeWork();
 
-  assert.deepEqual(harness.postedMessages.map((message) => message.type), ['state/patch']);
+  assert.deepEqual(harness.postedMessages.map((message) => message.type), []);
 });
 
 test('resource mutations echo their operation id in success and failure status messages', async () => {
@@ -819,7 +868,7 @@ test('resource mutations echo their operation id in success and failure status m
         '[[trainer-resource-operation:delete:resource-operation-test-1]] Could not delete the selected resource.',
     },
   });
-  assert.equal(harness.postedMessages[1].type, 'state/patch');
+  assert.equal(harness.postedMessages.length, 1, 'unchanged state does not need another payload');
 });
 
 test('resource indexing echoes its operation id so the webview can release its busy state', async () => {
@@ -858,7 +907,7 @@ test('resource indexing echoes its operation id so the webview can release its b
         '[[trainer-resource-operation:index:resource-index-bridge-1]] Resource index refreshed.',
     },
   });
-  assert.equal(harness.postedMessages[1].type, 'state/patch');
+  assert.equal(harness.postedMessages.length, 1, 'unchanged state does not need another payload');
 });
 
 test('resource search statuses echo their request id', async () => {
@@ -900,7 +949,7 @@ test('resource search statuses echo their request id', async () => {
         '[[trainer-resource-operation:search:resource-search-bridge-1]] Found 1 ranked resource.',
     },
   });
-  assert.equal(harness.postedMessages[1].type, 'state/patch');
+  assert.equal(harness.postedMessages.length, 1, 'unchanged state does not need another payload');
 });
 
 test('resource search failures echo their request id', async () => {
@@ -1036,8 +1085,8 @@ test('failed training persistence acknowledgement stays failed after state recon
   });
   await flushAsyncBridgeWork();
 
-  assert.equal(harness.postedMessages[0].type, 'state/patch');
-  assert.deepEqual(harness.postedMessages[1], {
+  assert.equal(controller.getDebugSnapshot().stateSync.status, 'current');
+  assert.deepEqual(harness.postedMessages[0], {
     type: 'training/persistenceAck',
     payload: {
       requestId: 'training-persistence-bridge-failure-1',
@@ -1046,7 +1095,7 @@ test('failed training persistence acknowledgement stays failed after state recon
       message: 'The training handoff is not ready to return.',
     },
   });
-  assert.deepEqual(harness.postedMessages[2], {
+  assert.deepEqual(harness.postedMessages[1], {
     type: 'operation/status',
     payload: {
       tone: 'error',
@@ -1094,7 +1143,7 @@ test('resource command exceptions return a correlated safe failure status', asyn
         '[[trainer-resource-operation:delete:resource-operation-exception-1]] Trainer could not complete this action. Try again.',
     },
   });
-  assert.equal(harness.postedMessages[1].type, 'state/patch');
+  assert.equal(harness.postedMessages.length, 1, 'unchanged state does not need another payload');
   assert.doesNotMatch(JSON.stringify(harness.postedMessages[0]), /private|outside-resource/);
 });
 
@@ -1459,6 +1508,7 @@ test('resource training handoff waits for state sync and only reports the select
   const extensionPath = await createExtensionFixtureDir();
   const harness = createViewHarness();
   const commandCalls = [];
+  let hostState = createBootstrapState();
   const vscodeMock = createVscodeMock();
   const { WorkbenchSidebarController } = loadWithVscodeMock(bridgeModulePath, vscodeMock);
   const controller = new WorkbenchSidebarController(
@@ -1466,6 +1516,7 @@ test('resource training handoff waits for state sync and only reports the select
     {
       async execute(commandId, payload) {
         commandCalls.push({ commandId, payload });
+        hostState = { ...hostState, bootstrap: { ...hostState.bootstrap, workspaceTrainingState: { selectedCardId: 'card-from-resource', selectedCardType: 'flash', selectedCardStatus: 'active' } } };
         return {
           ok: true,
           data: {
@@ -1476,7 +1527,7 @@ test('resource training handoff waits for state sync and only reports the select
         };
       },
     },
-    () => createBootstrapState(),
+    () => hostState,
     { appendLine() {} },
   );
 

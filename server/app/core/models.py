@@ -14,6 +14,13 @@ from pydantic import (
     model_validator,
 )
 
+from .image_attachments import (
+    MAX_IMAGE_BASE64_LENGTH,
+    MAX_IMAGE_COUNT,
+    MAX_TOTAL_IMAGE_BYTES,
+    validate_image_payload,
+)
+
 CoachRequestAnswerMode = Literal["auto", "coach-first", "guided", "balanced", "direct"]
 ResponseLanguage = Literal[
     "zh-CN",
@@ -2441,11 +2448,17 @@ class MessageAttachment(BaseModel):
     id: str = ""
     kind: Literal["image", "file"] = "image"
     mime_type: str = Field(default="image/png", alias="mimeType")
-    data_base64: str | None = Field(default=None, alias="dataBase64")
+    data_base64: str | None = Field(default=None, alias="dataBase64", max_length=MAX_IMAGE_BASE64_LENGTH)
     source_path: str | None = Field(default=None, alias="sourcePath")
     name: str | None = None
     caption: str | None = None
-    byte_size: int | None = Field(default=None, alias="byteSize")
+    byte_size: int | None = Field(default=None, alias="byteSize", ge=0)
+
+    @model_validator(mode="after")
+    def validate_image_transport(self) -> MessageAttachment:
+        if self.kind == "image" and self.data_base64 is not None:
+            self.byte_size = validate_image_payload(self.data_base64, self.mime_type, self.byte_size)
+        return self
 
 
 class WorkspaceMemoryToggles(BaseModel):
@@ -2548,7 +2561,7 @@ class SessionMessageRequest(BaseModel):
     answer_mode: CoachRequestAnswerMode | None = None
     teaching_style: str | None = None
     coach_defaults: CoachDefaults | None = None
-    attachments: list[MessageAttachment] = Field(default_factory=list)
+    attachments: list[MessageAttachment] = Field(default_factory=list, max_length=MAX_IMAGE_COUNT)
     use_agent_loop: bool | None = Field(default=None, alias="useAgentLoop")
     formal_plan_mutation: bool = Field(default=False, alias="formalPlanMutation")
     # Host/user attestation only — never trust model tool-arg self-attestation.
@@ -2561,6 +2574,12 @@ class SessionMessageRequest(BaseModel):
         default=None,
         alias="planRuntimeRecovery",
     )
+
+    @model_validator(mode="after")
+    def validate_attachment_budget(self) -> SessionMessageRequest:
+        if sum(item.byte_size or 0 for item in self.attachments if item.kind == "image") > MAX_TOTAL_IMAGE_BYTES:
+            raise ValueError("attachment_image_total_size_exceeded")
+        return self
 
 
 class CoachSettingsRequest(BaseModel):

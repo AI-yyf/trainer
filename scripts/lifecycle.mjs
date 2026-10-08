@@ -206,7 +206,11 @@ function bootstrapServer({ root, options }) {
     return;
   }
 
-  if (options.useUv && commandExists("uv")) {
+  const requireFrozen = Boolean(options.frozen);
+  if (requireFrozen && !fs.existsSync(path.join(serverDir, "uv.lock"))) {
+    fail("Frozen Python bootstrap requires server/uv.lock.");
+  }
+  if ((options.useUv || requireFrozen) && commandExists("uv")) {
     const args = ["sync", "--project", serverDir, "--extra", "dev"];
     if (options.frozen) {
       args.push("--frozen");
@@ -214,6 +218,9 @@ function bootstrapServer({ root, options }) {
     console.log("[RUN] uv sync --project server --extra dev");
     run("uv", args, { cwd: root, label: "Server uv sync" });
     return;
+  }
+  if (requireFrozen) {
+    fail("Frozen Python bootstrap requires uv; install uv or use a non-frozen development bootstrap.");
   }
   if (options.useUv) {
     console.log("[WARN] uv was requested but is unavailable; using venv + pip.");

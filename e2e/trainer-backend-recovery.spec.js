@@ -33,8 +33,11 @@ test("Settings recovers an offline backend before provider setup and stops offer
   await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
     .filter(action => action.type === "command/execute" && action.payload.commandId === "trainer.sidecar.restart").length)).toBe(1);
   await page.getByRole('button', { name: "学习", exact: true }).click();
-  const planRecovery = page.locator('[data-plan-backend-recovery="true"]');
+  // Learning owns one canonical NextAction for recovery.
+  const planRecovery = page.locator('[data-plan-primary="true"] [data-template="NextAction"]');
+  await expect(planRecovery).toHaveCount(1);
   await expect(planRecovery).toContainText("Trainer 暂时还不能继续");
+  await expect(planRecovery).toContainText("检查连接");
   await expect(planRecovery).not.toContainText("重新填写 API key");
   await planRecovery.getByRole('button', { name: "打开设置", exact: true }).click();
   await expect(strip.getByRole('button', { name: "重新启动 Trainer", exact: true })).toBeVisible();

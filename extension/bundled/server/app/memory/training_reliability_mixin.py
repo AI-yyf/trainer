@@ -36,9 +36,9 @@ class TrainingReliabilityMixin:
 
     if TYPE_CHECKING:
         # Shared MemoryService collaborators used by the methods below.
-        _resolve_workspace_for_write: Callable[[str | None], str]
-        _structured_for: Callable[[str], StructuredMemoryService]
-        _persist_structured: Callable[[str], None]
+        def _resolve_workspace_for_write(self, workspace_id: str | None) -> str: ...
+        def _structured_for(self, workspace_id: str) -> StructuredMemoryService: ...
+        def _persist_structured(self, workspace_id: str) -> None: ...
 
     def _load_training_reliability(self, structured: StructuredMemoryService) -> dict[str, Any] | None:
         payload = structured._workspace.get(WORKSPACE_RELIABILITY_KEY)

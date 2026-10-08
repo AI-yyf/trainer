@@ -8,6 +8,10 @@ const rootDir = fileURLToPath(new URL(".", import.meta.url));
 export default defineConfig(({ mode }) => ({
   base: "./",
   plugins: [react()],
+  // Profiling is an explicit local acceptance build, never a shipping default.
+  resolve: process.env.TRAINER_WEBVIEW_PROFILE === '1' ? {
+    alias: { 'react-dom/client': 'react-dom/profiling' },
+  } : undefined,
   build: {
     outDir: process.env.TRAINER_WEBVIEW_OUT_DIR ?? "dist",
     sourcemap: false,

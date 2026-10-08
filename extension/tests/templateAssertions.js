@@ -15,15 +15,58 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 function load(file) {
   if (cache.has(file)) return cache.get(file);
   const filename = path.join(root, file);
-  const { outputFiles } = buildSync({ entryPoints: [filename], bundle: true, platform: 'node', format: 'cjs', write: false, external: ['react', 'react-dom', 'react/jsx-runtime'] });
+  const { outputFiles } = buildSync({ entryPoints: [filename], bundle: true, platform: 'node', format: 'cjs', write: false, external: ['react', 'react-dom', 'react/jsx-runtime', '*?worker&inline'] });
   const mod = new Module(filename, module);
   mod.filename = filename;
   mod.paths = Module._nodeModulePaths(path.dirname(filename));
+  const requireModule = mod.require.bind(mod);
+  // Vite owns worker asset compilation. Static HTML checks must never execute
+  // attachment processing; the browser attachment tests exercise the real worker.
+  mod.require = (id) => id.endsWith('?worker&inline')
+    ? class BrowserWorkerOnly { constructor() { throw new Error('Image staging requires its real browser worker'); } }
+    : requireModule(id);
   mod._compile(outputFiles[0].text, filename);
   cache.set(file, mod.exports);
   return mod.exports;
 }
 const render = (file, symbol, props) => renderToStaticMarkup(React.createElement(load(file)[symbol], props));
+function learningFacts(overrides = {}) {
+  return { scope: { workspaceId: 'workspace', sessionId: 'session', generation: 'g1' }, language: 'en-US',
+    workspace: { ready: true }, provider: { ready: true, canGeneratePlan: true }, freshness: 'current', connection: 'ready',
+    plan: { state: 'active', id: 'plan', revision: 3, currentStep: 'Write boundary tests' },
+    evidence: { pending: [] }, ...overrides };
+}
+function learningAction(overrides = {}) {
+  return load('lib/learningActionResolver.ts').resolveLearningPrimaryAction(learningFacts(overrides));
+}
+function learningPlan(action, extra = {}) {
+  const previousWindow = globalThis.window;
+  globalThis.window ??= { acquireVsCodeApi: undefined, location: { search: '', hash: '', origin: 'http://localhost' },
+    localStorage: { getItem() { return null; }, setItem() {} } };
+  try {
+    const key = 'resolved-learning-plan';
+    if (!cache.has(key)) {
+      const filename = path.join(root, 'learning-plan-render-test.tsx');
+      const { outputFiles } = buildSync({ stdin: { resolveDir: root, contents:
+        'export { CoachPlanView } from "./components/plan/CoachPlanView"; export { I18nContext } from "./lib/i18n/context";', loader: 'tsx' },
+        bundle: true, platform: 'node', format: 'cjs', write: false, external: ['react','react-dom','react/jsx-runtime'] });
+      const mod = new Module(filename, module); mod.filename = filename;
+      mod.paths = Module._nodeModulePaths(root); mod._compile(outputFiles[0].text, filename);
+      cache.set(key, mod.exports);
+    }
+    const { CoachPlanView, I18nContext } = cache.get(key);
+    return renderToStaticMarkup(React.createElement(I18nContext.Provider, {
+      value: { language: extra.language ?? 'en-US', direction: 'ltr' },
+    }, React.createElement(CoachPlanView, {
+    plan: { id: 'plan', title: 'Boundary rules', frozen: false, stages: [], currentStep: 'Write boundary tests' },
+    primaryAction: { label: 'Next', title: action.title, detail: action.detail,
+      action: { ...action, id: action.intent, onClick() {} } },
+    primaryEvidenceId: action.target.evidenceId, compactPrimary: true, ...extra,
+  }))); } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+}
 function navigation() {
   const mapping = load('lib/workbenchDestinations.ts');
   assert.deepEqual(mapping.PRIMARY_DESTINATIONS, ['coach', 'plan', 'resources']);
@@ -92,4 +135,4 @@ function palette() {
   assert.ok(app.includes('skillSharing={renderSkillSharing()}'));
   assert.ok(app.includes('setActiveView("settings")'));
 }
-module.exports={read,render,navigation,practice,learning,reply,settings,palette};
+module.exports={load,read,render,learningFacts,learningAction,learningPlan,navigation,practice,learning,reply,settings,palette};

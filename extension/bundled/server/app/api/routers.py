@@ -16892,6 +16892,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             independent_selection = workspace_memory.get("live_training_selection")
             independent_card_is_live = (
                 isinstance(independent_selection, dict)
+                and isinstance(workspace_id, str)
                 and independent_selection.get("workspace_id") == workspace_id
                 and bool(independent_selection.get("selected_at"))
                 and bool(independent_selection.get("card_id"))

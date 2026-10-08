@@ -25,6 +25,12 @@ export interface RuntimeMetricsSnapshot {
   webviewSyncPatches: number;
   webviewSyncFullPatches: number;
   webviewSyncBytes: number;
+  webviewSyncReceived: number;
+  webviewSyncApplied: number;
+  webviewSyncDeliveryFailures: number;
+  webviewSyncRetries: number;
+  webviewSyncRecoveries: number;
+  webviewSyncApplyLastMs: number;
   /** §三十六: send → first visible stream chunk, last sample (ms). */
   sendFirstTokenLastMs: number;
   sendFirstTokenSamples: number;
@@ -46,6 +52,12 @@ const counters: RuntimeMetricsSnapshot = {
   webviewSyncPatches: 0,
   webviewSyncFullPatches: 0,
   webviewSyncBytes: 0,
+  webviewSyncReceived: 0,
+  webviewSyncApplied: 0,
+  webviewSyncDeliveryFailures: 0,
+  webviewSyncRetries: 0,
+  webviewSyncRecoveries: 0,
+  webviewSyncApplyLastMs: 0,
   sendFirstTokenLastMs: 0,
   sendFirstTokenSamples: 0,
   sidecarReadyLastMs: 0,
@@ -103,6 +115,19 @@ export function recordWebviewSync(options: { full: boolean; bytes: number }): vo
   emit();
 }
 
+export function recordWebviewSyncReceipt(): void { counters.webviewSyncReceived += 1; emit(); }
+export function recordWebviewSyncApplied(elapsedMs: number): void {
+  counters.webviewSyncApplied += 1;
+  counters.webviewSyncApplyLastMs = Math.max(0, Math.round(elapsedMs));
+  emit();
+}
+export function recordWebviewSyncFailure(): void { counters.webviewSyncDeliveryFailures += 1; emit(); }
+export function recordWebviewSyncAttempt(attempt: number, recovery: boolean): void {
+  if (attempt > 1) counters.webviewSyncRetries += 1;
+  if (attempt === 1 && recovery) counters.webviewSyncRecoveries += 1;
+  emit();
+}
+
 export function recordSendFirstTokenMs(durationMs: number): void {
   counters.sendFirstTokenLastMs = Math.max(0, Math.round(durationMs));
   counters.sendFirstTokenSamples += 1;
@@ -143,6 +168,9 @@ export function formatRuntimeMetrics(snapshot: RuntimeMetricsSnapshot): string {
     `rehydrations=${snapshot.runtimeRehydrations} shows=${snapshot.webviewVisibilityShows} ` +
     `patches=${snapshot.webviewSyncPatches} fullPatches=${snapshot.webviewSyncFullPatches} ` +
     `syncBytes=${snapshot.webviewSyncBytes} ` +
+    `received=${snapshot.webviewSyncReceived} applied=${snapshot.webviewSyncApplied} ` +
+    `syncRetries=${snapshot.webviewSyncRetries} syncRecoveries=${snapshot.webviewSyncRecoveries} ` +
+    `syncFailures=${snapshot.webviewSyncDeliveryFailures} applyMs=${snapshot.webviewSyncApplyLastMs} ` +
     `firstTokenMs=${snapshot.sendFirstTokenLastMs}(n=${snapshot.sendFirstTokenSamples}) ` +
     `sidecarReadyMs=${snapshot.sidecarReadyLastMs} restoreMs=${snapshot.providerRestoreLastMs}`
   );

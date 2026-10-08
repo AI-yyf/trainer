@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import type { ComposerLanguage, MessageAttachment } from "../lib/types";
-import { readImageAttachments } from "../lib/imageAttachments";
+import { useImageAttachmentStaging } from "../lib/useImageAttachmentStaging";
 import { SystemState } from "./SystemState";
 
 const COPY: Record<ComposerLanguage, { image: string; remove: string; error: string }> = {
@@ -25,6 +25,7 @@ export interface PracticeResponseProps {
   onChange: (value: string) => void;
   onSubmit: (value: string) => void;
   attachments?: MessageAttachment[];
+  attachmentScope?: string;
   onAttachmentsChange?: (attachments: MessageAttachment[]) => void;
   attachmentsAvailable?: boolean;
   attachmentError?: string;
@@ -33,19 +34,15 @@ export interface PracticeResponseProps {
 
 /** Activity-owned answer/reflection, with no chat modes, model menu or history. */
 export function PracticeResponse({ language, label, prompt, value, submitLabel, busy, disabled,
-  onChange, onSubmit, attachments = [], onAttachmentsChange, attachmentsAvailable, attachmentError, children }: PracticeResponseProps) {
-  const [error, setError] = useState<string>();
+  onChange, onSubmit, attachments = [], attachmentScope = "practice-response", onAttachmentsChange, attachmentsAvailable, attachmentError, children }: PracticeResponseProps) {
+  const imageStaging = useImageAttachmentStaging({ scope: attachmentScope, language, attachments, onChange: onAttachmentsChange });
   const copy = COPY[language];
   const stageImages = async (files: FileList | File[]) => {
-    if (!attachmentsAvailable || !onAttachmentsChange) { setError(attachmentError); return; }
-    try {
-      onAttachmentsChange([...attachments, ...await readImageAttachments(files)].slice(0, 4));
-      setError(undefined);
-    } catch { setError(copy.error); }
+    if (attachmentsAvailable && onAttachmentsChange) await imageStaging.stage(files);
   };
   const hasContent = Boolean(value.trim() || attachments.length);
   return (
-    <form className="template-practice-response" data-template="PracticeResponse" onSubmit={(event) => { event.preventDefault(); if (hasContent && !busy && !disabled) onSubmit(value); }}
+    <form className="template-practice-response" data-template="PracticeResponse" onSubmit={(event) => { event.preventDefault(); if (hasContent && !busy && !imageStaging.busy && !disabled) onSubmit(value); }}
       onDragOver={(event) => { if (attachmentsAvailable) event.preventDefault(); }}
       onDrop={(event) => { event.preventDefault(); if (!busy && !disabled) void stageImages(event.dataTransfer.files); }}>
       <label htmlFor="training-response">{label}</label>
@@ -55,8 +52,8 @@ export function PracticeResponse({ language, label, prompt, value, submitLabel, 
         onPaste={(event) => { if (event.clipboardData.files.length && !busy && !disabled) { event.preventDefault(); void stageImages(event.clipboardData.files); } }} />
       {attachmentsAvailable ? <label className="template-attachment-input">{copy.image}<input type="file" accept="image/*" multiple disabled={disabled || busy} onChange={(event) => { if (event.target.files) void stageImages(event.target.files); event.target.value = ""; }} /></label> : null}
       {attachments.map((attachment) => <div className="template-attachment" key={attachment.id}><span>{attachment.name}</span><button type="button" className="template-back" disabled={disabled || busy} onClick={() => onAttachmentsChange?.(attachments.filter((item) => item.id !== attachment.id))}>{copy.remove}</button></div>)}
-      {error ? <SystemState kind="recoverable-error" title={error} /> : null}
-      <button type="submit" className="button button--accent" data-primary-action="true" disabled={disabled || busy || !hasContent || (attachments.length > 0 && !attachmentsAvailable)} aria-busy={busy || undefined}>{submitLabel}</button>
+      {imageStaging.error || attachmentError ? <SystemState kind="recoverable-error" title={imageStaging.error ?? attachmentError ?? copy.error} /> : null}
+      <button type="submit" className="button button--accent" data-primary-action="true" disabled={disabled || busy || imageStaging.busy || !hasContent || (attachments.length > 0 && !attachmentsAvailable)} aria-busy={busy || undefined}>{submitLabel}</button>
     </form>
   );
 }

@@ -12,7 +12,7 @@
 
 [English](README.md) · [简体中文](README_zh-CN.md) · Español · [Français](README_fr-FR.md) · [Deutsch](README_de-DE.md) · [日本語](README_ja-JP.md) · [한국어](README_ko-KR.md) · [Português](README_pt-BR.md)
 
-[![Versión](https://img.shields.io/badge/release-v1.0.3-1f6feb)](https://github.com/AI-yyf/trainer/releases/tag/v1.0.3)
+[![Versión](https://img.shields.io/badge/source-v1.3.4-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![Licencia](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![Plataformas](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-8b949e)](#instalación)
 [![Tests](https://img.shields.io/badge/tests-3%2C328%20cases-F59E0B)](#compuertas-de-calidad)
@@ -72,7 +72,7 @@ No es una carcasa de chat — es un coach con memoria, un temario y una polític
 
 **Desde VSIX (precompilado, tres plataformas):**
 
-Descarga el `.vsix` para tu plataforma (`darwin-arm64` / `linux-x64` / `win32-x64`) desde la [versión v1.0.3](https://github.com/AI-yyf/trainer/releases/tag/v1.0.3).
+Descarga el `.vsix` para tu plataforma (`darwin-arm64` / `linux-x64` / `win32-x64`) desde la [última versión publicada](https://github.com/AI-yyf/trainer/releases/latest).
 
 Panel de extensiones de VS Code → `···` → *Install from VSIX* → recarga la ventana.
 
@@ -586,7 +586,7 @@ Si Trainer mejoró tu flujo de trabajo, siéntete libre de citarlo en tu blog / 
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.0.3}
+  note   = {v1.3.4}
 }
 ```
 
@@ -596,6 +596,6 @@ Si Trainer mejoró tu flujo de trabajo, siéntete libre de citarlo en tu blog / 
 
 **// Entrena a tu IA · Crece con tu IA**
 
-`v1.0.3` · Hecho con café, FSRS, 24 funciones puras, 3.328 tests y un corazón que se niega a escribir código por ti.
+`v1.3.4` · Hecho con café, FSRS, 24 funciones puras, 3.328 tests y un corazón que se niega a escribir código por ti.
 
 </div>

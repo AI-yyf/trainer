@@ -160,37 +160,29 @@ test('an empty Plan starts in discussion mode and only an explicit action select
   assert.match(source, /openPlanComposerMode\("generate"\);/);
 });
 
-test('recovered runtime makes orientation the primary Plan action and folds generate', () => {
+test('Learning resolves one governed primary action before rendering', () => {
   const source = fs.readFileSync(appPath, 'utf8');
   const start = source.indexOf('  const renderPlanView = () => (');
   const end = source.indexOf('  const renderSettingsView = () => (', start);
   assert.ok(start >= 0 && end > start, 'expected the Plan view block');
   const planView = source.slice(start, end);
 
-  assert.match(
-    source,
-    /const recoveredPlanPrimary =\s*recoveredRuntime &&\s*\(planOrientation\.primaryAction === "clear_blocker" \|\|\s*planOrientation\.primaryAction === "continue_step" \|\|\s*planOrientation\.primaryAction === "unfreeze_plan" \|\|\s*planOrientation\.primaryAction === "adopt_evidence" \|\|\s*planOrientation\.primaryAction === "wait"\)\s*\?\s*planOrientation\.primaryAction\s*:\s*null;/,
-  );
-  assert.doesNotMatch(planView, /showAction=\{recoveredAdoptPrimary \|\| !recoveredPlanPrimary\}/);
-  assert.match(source, /const recoveredAdoptPrimary = recoveredPlanPrimary === "adopt_evidence";/);
-  assert.match(planView, /recoveredPlanPrimary && !recoveredAdoptPrimary/);
-  assert.match(planView, /!recoveredAdoptPrimary && \(!hasFormalPlan \|\| !livePlanFrozen\)/);
-  assert.match(planView, /recoveredAdoptPrimary/);
-  assert.match(
-    planView,
-    /id:\s*recoveredPlanPrimary === "clear_blocker"\s*\?\s*"plan-clear-blocker"\s*:\s*recoveredPlanPrimary === "unfreeze_plan"\s*\?\s*"resume-plan"\s*:\s*"plan-continue-step"/,
-  );
-  // The wait primary renders as its own needs-evidence entry beside it.
-  assert.match(planView, /id: "plan-needs-evidence",/);
-  assert.match(planView, /label: planOrientation\.primaryActionLabel/);
-  assert.match(planView, /tone: "accent" as const/);
-  assert.match(planView, /onClick: \(\) => handlePlanOrientationAction\(recoveredPlanPrimary\)/);
-  assert.match(source, /firstLookRecommendedNext: liveFirstLookSummary\?\.recommendedNextStep/);
-  assert.match(source, /firstLookWhy: liveFirstLookSummary\?\.whyThisGuess/);
-  assert.match(source, /const firstLookContinuePrimary = planOrientation\.primaryAction === "continue_without_plan"/);
-  assert.match(planView, /id: "plan-continue-without-plan"/);
-  assert.match(planView, /tone:\s*recoveredPlanPrimary \|\| firstLookContinuePrimary/);
-  assert.match(planView, /firstLookContinuePrimary\s*\?\s*planOrientation\.nextStep/);
+  const { learningAction, learningPlan } = require('./templateAssertions');
+  const pending = { pending: [{ id: 'pending-live', summary: 'Check the test result' }] };
+  const continuing = learningAction({ evidence: pending });
+  assert.equal(continuing.intent, 'continue_step', 'optional evidence must not replace the current step');
+  const gated = learningAction({ evidence: { ...pending, blockingId: 'pending-live' } });
+  assert.equal(gated.intent, 'adopt_evidence');
+  const html = learningPlan(continuing);
+  assert.equal((html.match(/data-primary-action="true"/g) || []).length, 1);
+  assert.ok(html.includes('Write boundary tests'));
+  assert.ok(html.includes('Continue current step'));
+  assert.match(source, /resolveLearningPrimaryAction\(learningFacts\)/);
+  assert.match(source, /executeLearningPrimaryAction\(/);
+  assert.match(planView, /primaryAction=\{\{/);
+  assert.match(planView, /label: learningPrimaryAction\.label/);
+  assert.match(planView, /disabled: learningPrimaryAction\.disabled/);
+  assert.match(planView, /onClick: runLearningPrimaryAction/);
   const bundledPlanOrientation = fs.readFileSync(
     path.resolve(__dirname, '..', 'bundled', 'server', 'app', 'pedagogy', 'plan_orientation.py'),
     'utf8',
@@ -275,15 +267,13 @@ test('recovered runtime makes orientation the primary Plan action and folds gene
   assert.match(source, /summary: livePlanSummary/);
   assert.match(source, /cadence: livePlanCadence/);
   assert.match(source, /stages: livePlanStages/);
-  assert.match(source, /formalPlanLive && !recoveredAdoptPrimary && !workspaceSessionBlocked/);
+  assert.match(source, /formalPlanLive && !livePlanFrozen && !workspaceSessionBlocked/);
   assert.match(
     planView,
     /recoveredRuntime \? null : liveCoachTaskChrome\.scopeBoundary/,
   );
-  assert.match(
-    planView,
-    /recoveredDisplayFacts\.currentStep \|\|\s*liveCoachTaskChrome\.currentStep \|\|\s*resolvedCoachNextStep \|\|\s*latestArtifactTeaser/,
-  );
+  assert.match(planView, /learningFacts\.plan\.currentStep \|\| learningFacts\.firstLookStep/);
+  assert.match(source, /currentStep: verifyPlanAdvanceNext \|\| recoveredDisplayFacts\.currentStep/);
   const resumeStart = source.indexOf('sendRecoveredPlanResumeRef.current = (action) => {');
   const resumeEnd = source.indexOf('const sendTrainingFeedback', resumeStart);
   assert.ok(resumeStart >= 0 && resumeEnd > resumeStart, 'expected recovered plan resume send');
@@ -365,88 +355,38 @@ test('recovered runtime makes orientation the primary Plan action and folds gene
   );
 });
 
-test('a frozen plan does not offer the replacement generation action', () => {
+test('a frozen plan resumes existing work without replacement generation', () => {
+  const { learningAction, learningPlan } = require('./templateAssertions');
+  const action = learningAction({ plan: { state: 'frozen', id: 'plan', revision: 3, currentStep: 'Write tests' } });
+  assert.equal(action.intent, 'resume_plan');
+  assert.deepEqual(action.target, { planId: 'plan', revision: 3 });
+  const html = learningPlan(action);
+  assert.ok(html.includes('Resume plan'));
+  assert.ok(!html.includes('Create learning plan'));
   const source = fs.readFileSync(appPath, 'utf8');
-  const start = source.indexOf('  const renderPlanView = () => (');
-  const end = source.indexOf('  const renderSettingsView = () => (', start);
-
-  assert.ok(start >= 0 && end > start, 'expected the Plan view block');
-  const planView = source.slice(start, end);
-
-  assert.match(planView, /!hasFormalPlan \|\| !livePlanFrozen/);
-  assert.match(
-    planView,
-    /!hasFormalPlan \|\| !livePlanFrozen[\s\S]*?id: "refresh-plan",[\s\S]*?handlePlanOrientationAction\("generate_plan"\)/,
-  );
   assert.match(source, /const planIsFrozen = hasFormalPlan && livePlanFrozen;/);
   assert.match(source, /planIsFrozen \? modes\.filter\(\(mode\) => mode\.id !== "generate"\) : modes/);
-  assert.doesNotMatch(
-    planView,
-    /hasFormalPlan && formalPlanLive[\s\S]{0,120}id: "refresh-plan"/,
-  );
-  assert.match(
-    planView,
-    /!recoveredAdoptPrimary && hasFormalPlan && formalPlanLive[\s\S]*?id: "plan-next-task"/,
-  );
-  assert.match(
-    source,
-    /hasFormalPlan && formalPlanLive && !recoveredAdoptPrimary && !workspaceSessionBlocked[\s\S]*?id: livePlanFrozen \? "resume-plan" : "freeze-plan"/,
-  );
+  assert.match(source, /resumePlan: \(\) => handlePlanOrientationAction\("unfreeze_plan"\)/);
 });
 
-test('waiting live pending keeps adopt primary and exposes reject/defer beside it', () => {
+test('bound pending evidence exposes approval and quiet reject/defer beside it', () => {
+  const { learningAction, learningPlan } = require('./templateAssertions');
+  const action = learningAction({ evidence: { pending: [{ id: 'e1', summary: 'Tests passed' }], blockingId: 'e1' } });
+  const html = learningPlan(action, {
+    evidenceQueue: { pending: [{ id: 'e1', summary: 'Tests passed', outcome: 'passed', timestamp: '2026-10-08T08:00:00Z' }], adopted: [], deferred: [], rejected: [], totalCount: 1 },
+    evidenceActions: { onAdoptEvidence() {}, onDeferEvidence() {}, onRejectEvidence() {} },
+  });
+  assert.equal(action.intent, 'adopt_evidence');
+  assert.ok(html.includes('Approve this evidence'));
+  assert.ok(html.includes('Tests passed'));
+  assert.equal((html.match(/data-primary-action="true"/g) || []).length, 1);
+  assert.ok(html.includes('data-plan-evidence-decision="defer"'));
+  assert.ok(html.includes('data-plan-evidence-decision="reject"'));
+  assert.ok(html.indexOf('data-plan-evidence-decisions="true"') < html.indexOf('data-learning-section="evidence"'));
   const source = fs.readFileSync(appPath, 'utf8');
-  const coachPlanSource = fs.readFileSync(coachPlanPath, 'utf8');
-  const compactPrimaryStart = coachPlanSource.indexOf('const compactPrimaryAction = compactPrimary');
-  const compactPrimaryEnd = coachPlanSource.indexOf('const compactSecondaryActions', compactPrimaryStart);
-  assert.ok(compactPrimaryStart >= 0 && compactPrimaryEnd > compactPrimaryStart);
-  const compactPrimary = coachPlanSource.slice(compactPrimaryStart, compactPrimaryEnd);
-  assert.match(compactPrimary, /pickPlanPrimaryAction\(actions\)/);
-  const pickerStart = coachPlanSource.indexOf('function pickPlanPrimaryAction');
-  const pickerEnd = coachPlanSource.indexOf('function LiveEvidenceDecisionRow', pickerStart);
-  assert.ok(pickerStart >= 0 && pickerEnd > pickerStart, 'expected pickPlanPrimaryAction');
-  const picker = coachPlanSource.slice(pickerStart, pickerEnd);
-  assert.match(picker, /RECOVERED_PLAN_ACTION_IDS\.has\(action\.id\)/);
-  assert.ok(
-    picker.indexOf('RECOVERED_PLAN_ACTION_IDS') < picker.indexOf('plan-next-task'),
-    'recovered adopt/continue must beat next-task as the compact primary',
-  );
-  assert.match(coachPlanSource, /const reviewEvidenceAction = \(actions \?\? \[\]\)\.find\(\(action\) => action\.id === "plan-review-evidence"\)/);
-  assert.match(coachPlanSource, /data-plan-evidence-decisions="true"/);
-  assert.match(coachPlanSource, /data-plan-evidence-decision="defer"/);
-  assert.match(coachPlanSource, /data-plan-evidence-decision="reject"/);
-  assert.match(
-    coachPlanSource,
-    /nextAction\?\.id === "plan-review-evidence" \? liveEvidenceDecisionRow : undefined/,
-  );
-  assert.match(
-    coachPlanSource,
-    /!\(showLiveEvidenceDecisions && !item\.deferredAt\)/,
-  );
-  const decisionRowStart = coachPlanSource.indexOf('function LiveEvidenceDecisionRow');
-  const decisionRowEnd = coachPlanSource.indexOf('function resolvePlanDecisionStrip', decisionRowStart);
-  assert.ok(decisionRowStart >= 0 && decisionRowEnd > decisionRowStart);
-  const decisionRow = coachPlanSource.slice(decisionRowStart, decisionRowEnd);
-  assert.match(decisionRow, /button--quiet/);
-  assert.doesNotMatch(decisionRow, /tone="accent"/);
-  assert.doesNotMatch(decisionRow, /ActionButton/);
-  const evidenceDetailsStart = coachPlanSource.indexOf(
-    'evidence={hasEvidenceDetails',
-  );
-  assert.ok(
-    coachPlanSource.indexOf('data-plan-evidence-decisions="true"') < evidenceDetailsStart,
-    'reject/defer must sit next to adopt, not only inside the buried evidence dump',
-  );
-  assert.match(
-    source,
-    /id:\s*recoveredPlanPrimary === "clear_blocker"\s*\?\s*"plan-clear-blocker"\s*:\s*recoveredPlanPrimary === "unfreeze_plan"\s*\?\s*"resume-plan"\s*:\s*"plan-continue-step"/,
-  );
   assert.match(source, /commandId: trainerCommands\.evidenceDefer/);
   assert.match(source, /commandId: trainerCommands\.evidenceReject/);
-  assert.doesNotMatch(
-    source,
-    /if \(action === "adopt_evidence"\) \{[\s\S]{0,800}resumeState:\s*["']in_progress["']/,
-  );
+  assert.match(source, /adoptEvidence: \(evidenceId\) => postMessage/);
 });
 
 test('Plan moves next-task replies to Coach and protects an unsent composer draft', () => {
@@ -467,7 +407,7 @@ test('Plan moves next-task replies to Coach and protects an unsent composer draf
     planView,
     /id: "plan-next-task",[\s\S]{0,600}?sendTurn\(/,
   );
-  assert.match(appSource, /!recoveredAdoptPrimary && hasFormalPlan && formalPlanLive/);
+  assert.match(appSource, /hasFormalPlan && formalPlanLive && !livePlanFrozen/);
   assert.doesNotMatch(
     planView,
     /!recoveredAdoptPrimary && hasFormalPlan\s*\?\s*\[/,
@@ -510,20 +450,14 @@ test('Plan first screen keeps one primary action and leftover-not-live honesty',
   const resourcesSource = fs.readFileSync(resourcesPath, 'utf8');
   const trainingSource = fs.readFileSync(trainingPath, 'utf8');
 
-  assert.match(coachPlanSource, /function pickPlanPrimaryAction\(/);
-  assert.match(coachPlanSource, /enabled\("open-settings"\)/);
-  assert.match(coachPlanSource, /enabled\("refresh-plan"\)/);
-  assert.match(coachPlanSource, /const emptyPrimaryAction = reviewEvidenceAction \?\? pickPlanPrimaryAction\(emptyPlanActions\)/);
-  assert.match(coachPlanSource, /leftoverNote\?: string/);
-  assert.match(coachPlanSource, /data-plan-leftover-not-live=/);
-  assert.match(coachPlanSource, /data-plan-leftover-note="true"/);
-  assert.match(coachPlanSource, /detail=\{leftoverNote \? <p[\s\S]*?emptyState/);
-  assert.match(coachPlanSource, /<SystemState kind="empty"/);
-  assert.match(coachPlanSource, /data-plan-leftover-note="true"/);
-  assert.match(
-    coachPlanSource,
-    /data-plan-leftover-note="true"\s*[\s\S]*?role="status"\s*[\s\S]*?aria-live="polite"/,
-  );
+  const { learningAction, learningPlan } = require('./templateAssertions');
+  const setup = learningAction({ workspace: { ready: false }, evidence: { pending: [{ id: 'e1', summary: 'Old result' }] } });
+  const html = learningPlan(setup, { plan: null, leftoverNote: 'Stored plan is not the current step.' });
+  assert.equal((html.match(/data-primary-action="true"/g) || []).length, 1);
+  assert.ok(html.includes('Choose workspace'));
+  assert.ok(html.includes('data-plan-leftover-note="true" role="status" aria-live="polite"'));
+  assert.ok(!html.includes('Approve this evidence'));
+  assert.doesNotMatch(coachPlanSource, /pickPlanPrimaryAction|compactPrimaryAction|stepStartLabel/);
   assert.match(coachPlanSource, /leftoverNotLive: "This is stored leftover on this workspace, not the live plan."/);
   assert.match(appSource, /const leftoverPlanNotLive = Boolean\(recoveredRuntime\) && !formalPlanLive/);
   assert.match(appSource, /leftoverNote=\{leftoverPlanNotLive \? t\.leftoverNotLive : undefined\}/);

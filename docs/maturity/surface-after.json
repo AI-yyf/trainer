@@ -1,0 +1,72 @@
+{
+  "source": "profiling-preview-real-react-synthetic-stream",
+  "cases": [
+    {
+      "setup": "coach-only",
+      "metrics": {
+        "coach": {
+          "renders": 300,
+          "hiddenRenders": 0,
+          "commits": 301,
+          "hiddenCommits": 0,
+          "actualDurationMs": 988.3000003248453,
+          "baseDurationMs": 47.50000008940697
+        }
+      },
+      "streamingRendered": true,
+      "longtasks": [],
+      "durationMs": 2540.7000000029802
+    },
+    {
+      "setup": "all-six",
+      "metrics": {
+        "coach": {
+          "renders": 300,
+          "hiddenRenders": 0,
+          "commits": 301,
+          "hiddenCommits": 0,
+          "actualDurationMs": 1100.2000002563,
+          "baseDurationMs": 69.60000005364418
+        },
+        "training": {
+          "renders": 0,
+          "hiddenRenders": 0,
+          "commits": 1,
+          "hiddenCommits": 1,
+          "actualDurationMs": 0.30000001192092896,
+          "baseDurationMs": 1.2000000178813934
+        }
+      },
+      "streamingRendered": true,
+      "longtasks": [],
+      "durationMs": 2793
+    },
+    {
+      "setup": "dirty-settings-large-reader",
+      "metrics": {
+        "coach": {
+          "renders": 300,
+          "hiddenRenders": 0,
+          "commits": 301,
+          "hiddenCommits": 0,
+          "actualDurationMs": 1015.0999999940395,
+          "baseDurationMs": 51.70000001788139
+        },
+        "training": {
+          "renders": 0,
+          "hiddenRenders": 0,
+          "commits": 1,
+          "hiddenCommits": 1,
+          "actualDurationMs": 0.19999998807907104,
+          "baseDurationMs": 0.8999999910593033
+        }
+      },
+      "streamingRendered": true,
+      "longtasks": [],
+      "durationMs": 2640.2999999970198
+    }
+  ],
+  "limitations": [
+    "Synthetic 300 chunks, not provider latency. Profiling bundle differs from shipping normal bundle. One-machine timing deltas are not quality proof."
+  ]
+}

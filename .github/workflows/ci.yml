@@ -22,15 +22,16 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
-      - name: Create python environment
+      - name: Set up locked Python tooling
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.10"
+
+      - name: Create python environment from the lock
         working-directory: server
-        run: |
-          python -m venv .venv
-          . .venv/bin/activate
-          python -m pip install -U pip
-          pip install -e ".[dev]"
+        run: uv sync --frozen --extra dev --extra build --python 3.12
 
       - name: Install node dependencies
         run: npm ci
@@ -43,6 +44,13 @@ jobs:
 
       - name: TypeScript (webview + extension)
         run: npm run check
+
+      - name: Product version gate
+        run: npm run verify:version
+
+      - name: Pyright (server)
+        working-directory: server
+        run: .venv/bin/python -m pyright app
 
       - name: Build
         run: npm run build
