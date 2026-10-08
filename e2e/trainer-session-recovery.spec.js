@@ -600,3 +600,45 @@ async function loadHostFixture(page, view, run) {
   await page.evaluate(() => window.postMessage({ type: 'bootstrap', payload: window.__TRAINER_BOOTSTRAP__ }, window.location.origin));
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
 }
+
+for (const language of ['zh-CN', 'en-US']) {
+  test(`restored ${language} training preserves its English technical focus and exact card identity`, async ({ page }) => {
+    await page.goto(`/vscode-preview.html?view=training&lang=${language}&connection=connected&run=technical-focus-${language}`);
+    await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
+    await page.evaluate(({ language }) => {
+      const current = window.__TRAINER_BOOTSTRAP__;
+      const workspaceId = 'workspace-technical-focus';
+      const card = { cardId: `restored-technical-focus-${language}`, type: 'practice',
+        title: language === 'zh-CN' ? '工作区边界练习' : 'Workspace boundary practice',
+        status: 'active', learningPhase: 'try', focusArea: 'workspace_id isolation',
+        targetSkill: 'workspace_id boundary', problemStatement: language === 'zh-CN' ? '验证返回值的工作区边界。' : 'Verify the workspace boundary of a returned result.',
+        deliverable: 'One boundary assertion', verificationRecipe: ['python lesson.py'], answerMode: 'text' };
+      window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: {
+        ...current, sessionHistoryRestored: true, plan: null,
+        task: { ...current.task, title: 'OLD_FORMAL_TASK_TITLE' },
+        coachFocus: { ...current.coachFocus, currentFocus: 'OLD_COACH_FOCUS' },
+        teachingDecision: { ...current.teachingDecision, focusArea: 'OLD_TEACHING_FOCUS' },
+        learnerState: { ...current.learnerState, activeFocus: 'OLD_LEARNER_FOCUS' },
+        planRuntimeStatus: { recovered: true, currentStep: '', reviewPoints: [] },
+        memory: { ...current.memory, currentFocus: 'OLD_MEMORY_FOCUS', workspace: { ...current.memory.workspace,
+          workspaceId, liveTrainingSelection: { workspaceId, cardId: card.cardId, selectedAt: '2026-10-09T00:00:00Z' },
+          latestTrainingHandoff: undefined, latestTrainingNextHop: undefined } },
+        workspaceTrainingState: { workspaceId, selectedCardId: card.cardId, selectedCardType: card.type,
+          selectedCardTitle: card.title, selectedCardStatus: card.status, trainingCardCandidates: [card],
+          activeTrainingCardRouting: { selectedCardId: card.cardId, selectedCard: card, selectionScore: 100 } },
+      } });
+    }, { language });
+    const card = page.locator('[data-training-card-id]');
+    await expect(card).toHaveAttribute('data-training-card-id', `restored-technical-focus-${language}`);
+    const details = page.locator('[data-training-card-details=true]');
+    await details.locator(':scope > summary').click();
+    await expect(details.locator('[data-training-card-fact=focus]')).toHaveText('workspace_id isolation');
+    await expect(details).not.toContainText('OLD_');
+    await page.getByTestId('trainer-view-nav-resources').click();
+    await page.getByTestId('trainer-view-nav-plan').click();
+    await page.locator('[data-surface=plan] [data-template=NextAction] button').click();
+    await expect(card).toHaveAttribute('data-training-card-id', `restored-technical-focus-${language}`);
+    await expect(details.locator('[data-training-card-fact=focus]')).toHaveText('workspace_id isolation');
+    await expect(details).not.toContainText('OLD_');
+  });
+}

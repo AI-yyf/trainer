@@ -151,3 +151,28 @@ test('backend recovery preserves its actual settings action and never restarts f
   assert.equal(execute(action, input, { configureProvider: () => called.push('settings') }), true);
   assert.deepEqual(called, ['settings']);
 });
+
+test('only a typed verified training return gets a localized result title while keeping adoption identity', () => {
+  const original = { id: 'verified-result', summary: 'Execution stdout /tmp/private-path/check.py exit 0',
+    source: 'training_handoff_return', sourceCardId: 'same-card', verified: true,
+    verificationSource: 'test_runner', outcome: 'pass' };
+  const titles = new Set();
+  for (const language of ['zh-CN','en-US','es-ES','fr-FR','de-DE','ja-JP','ko-KR','pt-BR']) {
+    const input = facts({ language, plan: { state: 'absent' }, evidence: { pending: [original] } });
+    const action = resolve(input);
+    titles.add(action.title);
+    assert.equal(action.intent, 'adopt_evidence');
+    assert.notEqual(action.title, original.summary);
+    assert.equal(action.title.includes('/tmp/'), false);
+    const calls = [];
+    assert.equal(execute(action, input, { adoptEvidence: id => calls.push(id) }), true);
+    assert.deepEqual(calls, [original.id]);
+    assert.equal(input.evidence.pending[0].summary, original.summary, 'raw evidence remains available');
+    for (const change of [{ source: 'evaluation' }, { verified: false },
+      { verificationSource: 'self_reported' }, { outcome: 'fail' }, { sourceCardId: '' }]) {
+      const unverified = facts({ ...input, evidence: { pending: [{ ...original, ...change }] } });
+      assert.equal(resolve(unverified).title, original.summary, 'no summary keyword guessing or global replacement');
+    }
+  }
+  assert.equal(titles.size, 8);
+});

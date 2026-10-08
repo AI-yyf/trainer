@@ -1493,6 +1493,8 @@ class EvidenceItem(BaseModel):
     confidence: float = 0.0
     verified: bool = False
     verification_source: str = ""
+    # The trusted remote attestation boundary validates this observation.
+    verification_artifact: dict[str, str] | None = None
     timestamp: str = ""
     target_plan_stage_id: str = ""
     target_plan_id: str = ""

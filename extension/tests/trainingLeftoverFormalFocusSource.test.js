@@ -9,7 +9,7 @@ const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx'
 
 test('Training currentFocus does not use leftover formal title or coach focus', () => {
   const source = fs.readFileSync(appPath, 'utf8');
-  const focusStart = source.indexOf('const localizedCurrentFocus = hasRenderableTrainingCard');
+  const focusStart = source.indexOf('const localizedCurrentFocus =');
   const focusEnd = source.indexOf('return (', focusStart);
 
   assert.ok(focusStart >= 0 && focusEnd > focusStart, 'expected Training currentFocus picker');

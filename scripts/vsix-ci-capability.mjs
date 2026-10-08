@@ -3,11 +3,12 @@ import fs from "node:fs";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-function commandResult(command, args, { env = process.env } = {}) {
+function commandResult(command, args, { env = process.env, windowsVerbatimArguments = false } = {}) {
   return spawnSync(command, args, {
     encoding: "utf8",
     env,
     timeout: 10000,
+    windowsVerbatimArguments,
   });
 }
 
@@ -20,6 +21,7 @@ function canRunCodeCli(command, { platform, env, runCommand }) {
     platform === "win32" && command.toLowerCase().endsWith(".cmd")
       ? runCommand(env.ComSpec ?? "cmd.exe", ["/d", "/c", `call ${quoteWindowsCommand(command)} --version`], {
           env,
+          windowsVerbatimArguments: true,
         })
       : runCommand(command, ["--version"], { env });
   return !result.error && result.status === 0;

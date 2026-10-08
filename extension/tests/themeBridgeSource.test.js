@@ -41,6 +41,9 @@ function createThemeFixture() {
     setProperty(name, value) {
       this.values[name] = value;
     },
+    removeProperty(name) {
+      delete this.values[name];
+    },
   });
   const createElement = () => ({
     attributes: {},
@@ -177,7 +180,7 @@ test('startup installs host theme observation for VS Code family theme changes',
   assert.match(themeSource, /function resolveHostThemeName/);
   assert.match(themeSource, /vscode-high-contrast-light/);
   assert.match(themeSource, /data-vscode-theme-kind/);
-  assert.match(themeSource, /const resolvedTheme = resolveHostThemeName\(activeFallbackTheme\)/);
+  assert.match(themeSource, /followHostTheme\s*\? resolveHostThemeName\(activeFallbackTheme\)\s*: activeFallbackTheme/);
   assert.match(themeSource, /applyFallbackTheme\(resolvedTheme\)/);
   assert.match(themeSource, /root\.dataset\.theme = resolvedTheme/);
   assert.match(mainSource, /installWorkbenchHostThemeBridge\(\)/);
@@ -212,4 +215,31 @@ test('selected fallback remains in effect when no host theme category is present
   assert.equal(root.style.values['--trainer-fallback-bg-0'], 'light-bg0');
   assert.equal(root.dataset.theme, 'light');
   assert.equal(root.style.colorScheme, 'light');
+});
+
+test('explicit themes override semantic tokens on root and body without changing host variables', () => {
+  for (const [selected, host] of [['light', 'vscode-dark'], ['dark', 'vscode-light']]) {
+    const { body, observers, root, theme } = createThemeFixture();
+    body.attributes.class = host;
+    body.style.setProperty('--vscode-sideBar-background', 'host-background');
+    theme.applyWorkbenchTheme(selected, false);
+    theme.installWorkbenchHostThemeBridge();
+    for (const element of [root, body]) {
+      assert.equal(element.style.values['--bg-0'], `${selected}-bg0`);
+      assert.equal(element.style.values['--fg-0'], `${selected}-fg0`);
+    }
+    body.attributes.class = host === 'vscode-dark' ? 'vscode-light' : 'vscode-dark';
+    observers.at(-1).callback();
+    assert.equal(root.dataset.theme, selected, 'host changes must not undo an explicit choice');
+    assert.equal(body.style.values['--vscode-sideBar-background'], 'host-background');
+    theme.applyWorkbenchTheme(selected, true);
+    for (const element of [root, body]) {
+      assert.equal(element.style.values['--bg-0'], undefined);
+      assert.equal(element.style.values['--fg-0'], undefined);
+    }
+    assert.equal(root.dataset.theme, selected, 'auto resolves the current host family');
+    body.attributes.class = host;
+    observers.at(-1).callback();
+    assert.equal(root.dataset.theme, selected === 'light' ? 'dark' : 'light');
+  }
 });

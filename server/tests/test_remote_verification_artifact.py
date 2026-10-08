@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -72,6 +74,40 @@ def test_remote_artifact_survives_replay_restart_reflect_and_return(tmp_path: Pa
         assert resubmission.status_code == 200, resubmission.text
         assert resubmission.json()["workspace"]["latest_training_handoff"] == handoff_before
         assert [item.model_dump() for item in service.evidence_queue(provision["context_id"]).pending] == evidence_before
+    for _ in range(2):
+        with _client(tmp_path) as after_return_restart:
+            service = after_return_restart.app.state.runtime.memory_service
+            restored_evidence = [
+                item.model_dump()
+                for item in service.evidence_queue(provision["context_id"]).pending
+            ]
+            assert restored_evidence == evidence_before
+            repeated_return = after_return_restart.post("/training/return", json={
+                "workspace_id": provision["context_id"], "card_id": "owned-card",
+            })
+            assert repeated_return.status_code == 200, repeated_return.text
+            repeated_handoff = repeated_return.json()["workspace"]["latest_training_handoff"]
+            for key in ("handoff_id", "card_id", "returned_at", "verification_state", "evidence", "verification_artifact"):
+                assert repeated_handoff[key] == handoff_before[key]
+            repeated_self_report = after_return_restart.post("/training/practice-return", json={
+                "workspace_id": provision["context_id"], "card_id": "owned-card",
+                "passed": True, "summary": "Repeated self-report after restart",
+                "evidence_source": "self_reported", "focus_area": "reliability",
+            })
+            assert repeated_self_report.status_code == 200, repeated_self_report.text
+            assert repeated_self_report.json()["workspace"]["latest_training_handoff"] == repeated_handoff
+            assert [
+                item.model_dump()
+                for item in service.evidence_queue(provision["context_id"]).pending
+            ] == evidence_before
+            with sqlite3.connect(tmp_path / "trainer-provisioning-test.db") as connection:
+                row = connection.execute(
+                    "SELECT payload FROM structured_memory WHERE workspace_id = ?",
+                    (provision["context_id"],),
+                ).fetchone()
+            persisted = json.loads(row[0])
+            assert persisted["evidence_items"] == evidence_before
+            assert persisted["workspace"]["latest_training_handoff"] == repeated_handoff
 
 
 @pytest.mark.parametrize("failure", ["missing", "hash", "session", "authority", "project", "traversal", "local"])

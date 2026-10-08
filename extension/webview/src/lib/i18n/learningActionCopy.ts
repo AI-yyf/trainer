@@ -7,7 +7,7 @@ interface LearningActionCopy {
   staleTitle: string; staleLabel: string; staleDetail: string;
   frozenTitle: string; frozenLabel: string; frozenDetail: string;
   blockerTitle: string; blockerLabel: string;
-  evidenceTitle: string; evidenceLabel: string; evidenceDetail: string;
+  evidenceTitle: string; verifiedEvidenceTitle: string; evidenceLabel: string; evidenceDetail: string;
   continueLabel: string; continueDetail: string;
   practiceLabel: string; practiceDetail: string;
   returnLabel: string; returnDetail: string;
@@ -28,7 +28,7 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     staleTitle: "需要刷新学习状态", staleLabel: "刷新状态", staleDetail: "当前状态尚未确认，刷新后再继续。",
     frozenTitle: "计划已暂停", frozenLabel: "恢复计划", frozenDetail: "恢复后继续当前步骤，不会创建新的计划。",
     blockerTitle: "先解决当前阻塞", blockerLabel: "与教练解决阻塞",
-    evidenceTitle: "确认当前步骤的证据", evidenceLabel: "确认采用这条证据", evidenceDetail: "确认前先核对结果；采用证据不会自动认定你已掌握。",
+    evidenceTitle: "确认当前步骤的证据", verifiedEvidenceTitle: "确认这次验证结果", evidenceLabel: "确认采用这条证据", evidenceDetail: "确认前先核对结果；采用证据不会自动认定你已掌握。",
     continueLabel: "继续当前步骤", continueDetail: "完成当前步骤，再带真实结果回来核对。",
     practiceLabel: "继续练习", practiceDetail: "继续同一张卡和当前尝试。",
     returnLabel: "完成练习回流", returnDetail: "先完成当前练习的复盘与回流，再开始下一项。",
@@ -45,7 +45,7 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     staleTitle: "Refresh learning state", staleLabel: "Refresh state", staleDetail: "The current state is unconfirmed. Refresh before continuing.",
     frozenTitle: "The plan is paused", frozenLabel: "Resume plan", frozenDetail: "Resume the current step without creating a new plan.",
     blockerTitle: "Resolve the current blocker", blockerLabel: "Resolve with coach",
-    evidenceTitle: "Confirm this step’s evidence", evidenceLabel: "Approve this evidence", evidenceDetail: "Check the result first. Approving evidence does not establish mastery.",
+    evidenceTitle: "Confirm this step’s evidence", verifiedEvidenceTitle: "Confirm this verification result", evidenceLabel: "Approve this evidence", evidenceDetail: "Check the result first. Approving evidence does not establish mastery.",
     continueLabel: "Continue current step", continueDetail: "Complete this step, then bring back the actual result.",
     practiceLabel: "Continue practice", practiceDetail: "Resume the same card and current attempt.",
     returnLabel: "Finish practice handoff", returnDetail: "Finish reflection and return before starting another activity.",
@@ -62,7 +62,7 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     staleTitle: "Actualiza el estado de aprendizaje", staleLabel: "Actualizar estado", staleDetail: "El estado actual no está confirmado. Actualízalo antes de continuar.",
     frozenTitle: "El plan está pausado", frozenLabel: "Reanudar plan", frozenDetail: "Retoma el paso actual sin crear otro plan.",
     blockerTitle: "Resuelve el bloqueo actual", blockerLabel: "Resolver con el tutor",
-    evidenceTitle: "Confirma la evidencia de este paso", evidenceLabel: "Aprobar esta evidencia", evidenceDetail: "Comprueba primero el resultado. Aprobar evidencia no demuestra dominio.",
+    evidenceTitle: "Confirma la evidencia de este paso", verifiedEvidenceTitle: "Confirma este resultado de verificación", evidenceLabel: "Aprobar esta evidencia", evidenceDetail: "Comprueba primero el resultado. Aprobar evidencia no demuestra dominio.",
     continueLabel: "Continuar el paso actual", continueDetail: "Completa este paso y vuelve con el resultado real.",
     practiceLabel: "Continuar práctica", practiceDetail: "Retoma la misma tarjeta y el intento actual.",
     returnLabel: "Completar el retorno", returnDetail: "Termina la reflexión y el retorno antes de iniciar otra actividad.",
@@ -79,7 +79,7 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     staleTitle: "Actualiser l’état d’apprentissage", staleLabel: "Actualiser l’état", staleDetail: "L’état actuel n’est pas confirmé. Actualisez-le avant de continuer.",
     frozenTitle: "Le plan est en pause", frozenLabel: "Reprendre le plan", frozenDetail: "Reprenez l’étape actuelle sans créer un nouveau plan.",
     blockerTitle: "Résoudre le blocage actuel", blockerLabel: "Résoudre avec le coach",
-    evidenceTitle: "Confirmer la preuve de cette étape", evidenceLabel: "Approuver cette preuve", evidenceDetail: "Vérifiez d’abord le résultat. Approuver une preuve ne signifie pas maîtriser.",
+    evidenceTitle: "Confirmer la preuve de cette étape", verifiedEvidenceTitle: "Confirmez ce résultat de vérification", evidenceLabel: "Approuver cette preuve", evidenceDetail: "Vérifiez d’abord le résultat. Approuver une preuve ne signifie pas maîtriser.",
     continueLabel: "Continuer l’étape actuelle", continueDetail: "Terminez cette étape, puis revenez avec le résultat réel.",
     practiceLabel: "Continuer l’exercice", practiceDetail: "Reprenez la même fiche et la tentative actuelle.",
     returnLabel: "Terminer le retour d’exercice", returnDetail: "Terminez la réflexion et le retour avant une autre activité.",
@@ -96,7 +96,7 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     staleTitle: "Lernstand aktualisieren", staleLabel: "Status aktualisieren", staleDetail: "Der aktuelle Stand ist unbestätigt. Aktualisiere ihn vor dem Fortfahren.",
     frozenTitle: "Der Plan ist pausiert", frozenLabel: "Plan fortsetzen", frozenDetail: "Setze den aktuellen Schritt fort, ohne einen neuen Plan anzulegen.",
     blockerTitle: "Aktuelle Blockade lösen", blockerLabel: "Mit dem Coach lösen",
-    evidenceTitle: "Nachweis für diesen Schritt bestätigen", evidenceLabel: "Diesen Nachweis bestätigen", evidenceDetail: "Prüfe zuerst das Ergebnis. Ein bestätigter Nachweis belegt noch keine Beherrschung.",
+    evidenceTitle: "Nachweis für diesen Schritt bestätigen", verifiedEvidenceTitle: "Dieses Prüfergebnis bestätigen", evidenceLabel: "Diesen Nachweis bestätigen", evidenceDetail: "Prüfe zuerst das Ergebnis. Ein bestätigter Nachweis belegt noch keine Beherrschung.",
     continueLabel: "Aktuellen Schritt fortsetzen", continueDetail: "Schließe diesen Schritt ab und bringe das tatsächliche Ergebnis zurück.",
     practiceLabel: "Übung fortsetzen", practiceDetail: "Setze dieselbe Karte und den aktuellen Versuch fort.",
     returnLabel: "Übungsrückkehr abschließen", returnDetail: "Beende Reflexion und Rückkehr vor einer weiteren Aktivität.",
@@ -113,7 +113,7 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     staleTitle: "学習状態の更新が必要です", staleLabel: "状態を更新", staleDetail: "現在の状態が未確認です。更新してから続けます。",
     frozenTitle: "計画は一時停止中です", frozenLabel: "計画を再開", frozenDetail: "新しい計画を作らず、現在の手順を再開します。",
     blockerTitle: "現在の問題を先に解消", blockerLabel: "コーチと問題を解消",
-    evidenceTitle: "この手順の証拠を確認", evidenceLabel: "この証拠を採用", evidenceDetail: "先に結果を確認してください。証拠の採用だけで習得済みとは判断しません。",
+    evidenceTitle: "この手順の証拠を確認", verifiedEvidenceTitle: "今回の検証結果を確認", evidenceLabel: "この証拠を採用", evidenceDetail: "先に結果を確認してください。証拠の採用だけで習得済みとは判断しません。",
     continueLabel: "現在の手順を続ける", continueDetail: "この手順を完了し、実際の結果を持ち帰ります。",
     practiceLabel: "練習を続ける", practiceDetail: "同じカードと現在の試行を再開します。",
     returnLabel: "練習の振り返りと復帰を完了", returnDetail: "次の活動を始める前に、振り返りと復帰を完了します。",
@@ -130,7 +130,7 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     staleTitle: "학습 상태를 새로 고쳐야 합니다", staleLabel: "상태 새로 고침", staleDetail: "현재 상태가 확인되지 않았습니다. 새로 고친 뒤 계속하세요.",
     frozenTitle: "계획이 일시 중지되었습니다", frozenLabel: "계획 재개", frozenDetail: "새 계획을 만들지 않고 현재 단계를 재개합니다.",
     blockerTitle: "현재 문제부터 해결", blockerLabel: "코치와 문제 해결",
-    evidenceTitle: "현재 단계의 증거 확인", evidenceLabel: "이 증거 승인", evidenceDetail: "결과를 먼저 확인하세요. 증거 승인만으로 숙달했다고 판단하지 않습니다.",
+    evidenceTitle: "현재 단계의 증거 확인", verifiedEvidenceTitle: "이번 검증 결과 확인", evidenceLabel: "이 증거 승인", evidenceDetail: "결과를 먼저 확인하세요. 증거 승인만으로 숙달했다고 판단하지 않습니다.",
     continueLabel: "현재 단계 계속", continueDetail: "이 단계를 마친 뒤 실제 결과를 가져오세요.",
     practiceLabel: "연습 계속", practiceDetail: "같은 카드와 현재 시도를 이어갑니다.",
     returnLabel: "연습 복귀 완료", returnDetail: "다른 활동 전에 회고와 복귀를 마칩니다.",
@@ -147,7 +147,7 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     staleTitle: "Atualize o estado de aprendizagem", staleLabel: "Atualizar estado", staleDetail: "O estado atual não foi confirmado. Atualize antes de continuar.",
     frozenTitle: "O plano está pausado", frozenLabel: "Retomar plano", frozenDetail: "Retome a etapa atual sem criar outro plano.",
     blockerTitle: "Resolva o bloqueio atual", blockerLabel: "Resolver com o tutor",
-    evidenceTitle: "Confirme a evidência desta etapa", evidenceLabel: "Aprovar esta evidência", evidenceDetail: "Confira o resultado primeiro. Aprovar uma evidência não comprova domínio.",
+    evidenceTitle: "Confirme a evidência desta etapa", verifiedEvidenceTitle: "Confirme este resultado de verificação", evidenceLabel: "Aprovar esta evidência", evidenceDetail: "Confira o resultado primeiro. Aprovar uma evidência não comprova domínio.",
     continueLabel: "Continuar a etapa atual", continueDetail: "Conclua esta etapa e volte com o resultado real.",
     practiceLabel: "Continuar prática", practiceDetail: "Retome a mesma ficha e a tentativa atual.",
     returnLabel: "Concluir o retorno da prática", returnDetail: "Termine a reflexão e o retorno antes de iniciar outra atividade.",

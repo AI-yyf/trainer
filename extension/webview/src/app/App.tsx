@@ -5554,8 +5554,8 @@ export function App() {
   }, [layout.composerLanguage, operationMessage, settingsActionState]);
 
   useEffect(() => {
-    applyWorkbenchTheme(resolvedTheme);
-  }, [resolvedTheme]);
+    applyWorkbenchTheme(resolvedTheme, layout.themePreference === "system");
+  }, [resolvedTheme, layout.themePreference]);
 
   // The host-message dispatch changes identity whenever layout values or
   // settings action state change. Keep the subscription and the one-shot
@@ -12920,7 +12920,7 @@ export function App() {
           liveTrainingSource,
         )
       : undefined;
-    const localizedCurrentFocus = hasRenderableTrainingCard
+    const localizedCurrentFocus = hasTrainingCard
       ? pickLanguageAlignedTrainingText(
           layout.composerLanguage,
           leftoverTrainingFocusChromeNotLive ? undefined : liveTrainingFocusChrome.latestLearningFocusArea,
@@ -12932,6 +12932,15 @@ export function App() {
             ? undefined
             : liveTrainingFocusChrome.learnerStateActiveFocus,
           liveTrainingCurrentFocus,
+          liveTrainingFocus,
+        ) ?? pickFirstText(
+          liveTrainingCurrentFocus,
+          // The selected card's technical focus is a task fact even when its
+          // language differs from the interface or no handoff chrome exists.
+          selectedTrainingCardCandidate && selectedTrainingCardCandidate.cardId === activeTrainingCardId
+            ? selectedTrainingCardCandidate.focusArea : undefined,
+          selectedTrainingRouteCard && selectedTrainingRouteCard.cardId === activeTrainingCardId
+            ? selectedTrainingRouteCard.focusArea : undefined,
           liveTrainingFocus,
         )
       : undefined;
@@ -13190,7 +13199,11 @@ export function App() {
       completion: planVerifyItems,
     },
     evidence: {
-      pending: liveEvidenceQueue.pending.map(item => ({ id: item.id, summary: item.summary })),
+      pending: liveEvidenceQueue.pending.map(item => ({
+        id: item.id, summary: item.summary, source: item.source,
+        sourceCardId: item.sourceCardId, verified: item.verified,
+        verificationSource: item.verificationSource, outcome: item.outcome,
+      })),
       blockingId: planRuntimeStatus?.resumeState === "waiting"
         ? liveEvidenceBinding({ binding: data.memory.workspace?.latestPlanRuntime?.evidenceBinding,
             pendingIds: liveEvidenceQueue.pending.map(item => item.id), recovered: recoveredRuntime,

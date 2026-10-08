@@ -36,6 +36,7 @@ const fallbackVariableEntries = [
 ] as const satisfies ReadonlyArray<readonly [string, keyof WorkbenchThemeTokens]>;
 
 let activeFallbackTheme: WorkbenchThemeName = "dark";
+let followHostTheme = true;
 
 function setStyleProperty(
   style: CSSStyleDeclaration | Record<string, unknown> | undefined,
@@ -97,19 +98,40 @@ function applyFallbackTheme(themeName: WorkbenchThemeName): void {
   }
 }
 
+function applySemanticTheme(themeName: WorkbenchThemeName): void {
+  const tokens = workbenchTokens.themes[themeName];
+  // Both elements declare semantic variables in CSS. Override only Trainer's
+  // variables for an explicit choice; auto keeps VS Code's live indirection.
+  for (const element of [document.documentElement, document.body]) {
+    if (!element) continue;
+    for (const [fallbackName, tokenName] of fallbackVariableEntries) {
+      const name = fallbackName.replace("--trainer-fallback-", "--");
+      if (followHostTheme) {
+        element.style.removeProperty(name);
+      } else {
+        setStyleProperty(element.style, name, tokens[tokenName]);
+      }
+    }
+  }
+}
+
 function syncHostTheme(): void {
-  const resolvedTheme = resolveHostThemeName(activeFallbackTheme);
+  const resolvedTheme = followHostTheme
+    ? resolveHostThemeName(activeFallbackTheme)
+    : activeFallbackTheme;
   const root = document.documentElement;
 
   root.dataset.theme = resolvedTheme;
   root.style.colorScheme = resolvedTheme;
   applyFallbackTheme(resolvedTheme);
+  applySemanticTheme(resolvedTheme);
 }
 
-export function applyWorkbenchTheme(themeName: WorkbenchThemeName): void {
+export function applyWorkbenchTheme(themeName: WorkbenchThemeName, followHost = true): void {
   const root = document.documentElement;
 
   activeFallbackTheme = themeName;
+  followHostTheme = followHost;
   for (const [name, value] of rootVariableEntries) {
     setStyleProperty(root.style, name, value);
   }

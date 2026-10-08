@@ -3,6 +3,7 @@ import { NextAction, type NextActionProps } from "../../templates/NextAction";
 import { SystemState } from "../../templates/SystemState";
 import { templateCopy } from "../../templates/templateCopy";
 import { trainingViewLabel } from "../../lib/viewLabels";
+import { isVerifiedTrainingReturn } from "../../lib/learningActionResolver";
 import {
   isValidElement,
   useEffect,
@@ -1441,11 +1442,24 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   ) : null;
   const leftoverNote = props.leftoverNote?.trim() || "";
   if (!plan) {
+    const verifiedReturns = [...new Map([...pendingEvidenceItems, ...settledEvidenceItems]
+      .filter(isVerifiedTrainingReturn).map(item => [item.id, item])).values()];
     return (
       <section className="template-learning-home" data-template="LearningHome" data-plan-leftover-not-live={leftoverNote ? "true" : undefined}>
         <NextAction {...props.primaryAction} />
         {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
         {liveEvidenceDecisionRow}
+        {verifiedReturns.length ? (
+          <details className="template-disclosure" data-learning-section="evidence">
+            <summary>{planViewText.practiceRecordsLabel} ({verifiedReturns.length})</summary>
+            <div>{verifiedReturns.map(item => (
+              <article key={item.id} data-plan-evidence-id={item.id}>
+                <p>{item.summary}</p>
+                <p className="template-metadata">{formatEvidenceOutcome(item.outcome, t)}</p>
+              </article>
+            ))}</div>
+          </details>
+        ) : null}
         {renderComposerDraftReplacement("stage")}
         {actions?.length ? <details className="template-disclosure"><summary>{resolvedActionsLabel}</summary><div>{actions.map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} disabled={action.disabled} onClick={action.onClick} />)}</div></details> : null}
         {globalPlanContext}

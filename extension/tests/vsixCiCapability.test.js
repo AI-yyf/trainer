@@ -1,7 +1,9 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const childProcess = require('node:child_process');
 const fs = require('node:fs');
+const { syncBuiltinESMExports } = require('node:module');
 const path = require('node:path');
 const test = require('node:test');
 const { pathToFileURL } = require('node:url');
@@ -68,6 +70,40 @@ test('VSIX CI capability leaves missing host support visible instead of treating
   assert.equal(result.hostE2EAvailable, false);
   assert.match(formatVsixCiGate(result, 'install'), /not run/);
   assert.match(formatVsixCiGate(result, 'host'), /manual release gate/);
+});
+
+test('Windows capability probe preserves CMD quoting through the actual spawn dispatcher', async () => {
+  const originalSpawnSync = childProcess.spawnSync;
+  const codeCli = 'C:\\Program Files\\Microsoft VS Code\\bin\\code.cmd';
+  const env = { CODE_CLI_PATH: codeCli, ComSpec: 'C:\\Windows\\System32\\cmd.exe' };
+  const calls = [];
+  childProcess.spawnSync = (command, args, options) => {
+    calls.push({ command, args, options });
+    // CMD must receive the quoted command unchanged. Node's default argument
+    // escaping alters those embedded quotes and makes a usable CLI fail.
+    return { status: options.windowsVerbatimArguments === true ? 0 : 1 };
+  };
+  syncBuiltinESMExports();
+  try {
+    const { detectVsixCiCapability } = await loadCapabilityModule();
+    const result = detectVsixCiCapability({
+      platform: 'win32',
+      env,
+      existsSync: (candidate) => candidate === codeCli,
+    });
+    assert.equal(result.codeCli, codeCli);
+    assert.equal(result.installAvailable, true);
+    assert.equal(result.hostE2EAvailable, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].command, env.ComSpec);
+    assert.deepEqual(calls[0].args, ['/d', '/c', `call "${codeCli}" --version`]);
+    assert.equal(calls[0].options.windowsVerbatimArguments, true);
+    assert.equal(calls[0].options.env, env);
+    assert.equal(calls[0].options.timeout, 10000);
+  } finally {
+    childProcess.spawnSync = originalSpawnSync;
+    syncBuiltinESMExports();
+  }
 });
 
 test('cross-platform workflow keeps all experience layers and an explicit VSIX host gate', () => {

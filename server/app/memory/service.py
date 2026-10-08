@@ -86,6 +86,7 @@ from .models import (
     MemorySnapshot as LaneMemorySnapshot,
 )
 from .onboarding_extraction import OnboardingExtractionMixin, _contains_chinese
+from .remote_artifact_recovery import restore_return_artifact
 from .review_queue import visible_review_queue_items
 from .review_scheduler import ReviewRating, ReviewScheduler
 from .semantic import HashingEmbedder, SemanticMemory
@@ -985,6 +986,7 @@ class StructuredMemoryService:
             EvidenceItem,
             key_field="id",
         )
+        service._evidence_items = restore_return_artifact(service._workspace, service._evidence_items)
         service._dependency_skill_maps = cls._restore_index(
             payload.get("dependency_skill_maps"),
             DependencySkillMapSnapshot,

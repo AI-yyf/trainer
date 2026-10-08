@@ -25,7 +25,10 @@ export interface LearningFacts {
     completion?: readonly string[];
   };
   evidence: {
-    pending: readonly { id: string; summary: string }[];
+    pending: readonly {
+      id: string; summary: string; source?: string; sourceCardId?: string;
+      verified?: boolean; verificationSource?: string; outcome?: string;
+    }[];
     /** An authoritative runtime gate, never inferred from pending.length. */
     blockingId?: string;
   };
@@ -58,6 +61,12 @@ export interface ActionDescriptor {
 }
 
 const text = (value?: string) => value?.trim() ?? "";
+
+export function isVerifiedTrainingReturn(evidence: LearningFacts["evidence"]["pending"][number]): boolean {
+  return evidence.source === "training_handoff_return" && evidence.verified === true &&
+    evidence.verificationSource === "test_runner" && evidence.outcome === "pass" &&
+    Boolean(text(evidence.sourceCardId));
+}
 
 /**
  * One priority authority for Learning. Existing work comes before new work;
@@ -114,7 +123,8 @@ export function resolveLearningPrimaryAction(facts: LearningFacts): ActionDescri
   const gatedEvidence = facts.evidence.pending.find(item => item.id === facts.evidence.blockingId);
   const evidence = gatedEvidence ?? (!step ? facts.evidence.pending[0] : undefined);
   if (evidence) {
-    return make("adopt_evidence", text(evidence.summary) || copy.evidenceTitle, copy.evidenceLabel,
+    return make("adopt_evidence", isVerifiedTrainingReturn(evidence)
+      ? copy.verifiedEvidenceTitle : text(evidence.summary) || copy.evidenceTitle, copy.evidenceLabel,
       copy.evidenceDetail, { ...planTarget, evidenceId: evidence.id });
   }
   if (step) {

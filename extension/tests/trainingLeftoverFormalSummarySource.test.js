@@ -9,10 +9,10 @@ const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx'
 
 test('Training why and source do not use leftover formal plan.summary', () => {
   const source = fs.readFileSync(appPath, 'utf8');
-  const whyStart = source.indexOf('const localizedWhyNow = hasRenderableTrainingCard');
-  const whyEnd = source.indexOf('const localizedSourceSummary = hasRenderableTrainingCard', whyStart);
-  const sourceStart = source.indexOf('const localizedSourceSummary = hasRenderableTrainingCard');
-  const sourceEnd = source.indexOf('const localizedCurrentFocus = hasRenderableTrainingCard', sourceStart);
+  const whyStart = source.indexOf('const localizedWhyNow =');
+  const whyEnd = source.indexOf('const localizedSourceSummary =', whyStart);
+  const sourceStart = source.indexOf('const localizedSourceSummary =');
+  const sourceEnd = source.indexOf('const localizedCurrentFocus =', sourceStart);
 
   assert.ok(whyStart >= 0 && whyEnd > whyStart, 'expected Training why picker');
   assert.ok(sourceStart >= 0 && sourceEnd > sourceStart, 'expected Training source picker');

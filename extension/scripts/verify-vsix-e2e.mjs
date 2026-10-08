@@ -12,6 +12,7 @@ import {
   resolveVsixE2EProviderRuntime,
   withVsixE2EFixtureLoopbackBypass,
 } from "./vsix-e2e-provider-runtime.mjs";
+import { captureVsixHostFailureDiagnostics, redactHostDiagnosticText } from "./vsix-host-diagnostics.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,7 +32,8 @@ const workspaceDir = path.join(tempRoot, "workspace");
 const trainerWorkspaceDir = path.join(tempRoot, "trainer-workspace");
 const driverDir = path.join(tempRoot, "smoke-driver");
 const reportPath = path.join(tempRoot, "trainer-e2e-report.json");
-const exportedReportPath = (process.env.TRAINER_E2E_EXPORT_REPORT_PATH || "").trim();
+const requestedReportPath = (process.env.TRAINER_E2E_EXPORT_REPORT_PATH || "").trim();
+const exportedReportPath = requestedReportPath ? path.resolve(requestedReportPath) : "";
 const exportedArtifactsDir = exportedReportPath
   ? path.join(path.dirname(exportedReportPath), "vsix-installed-state")
   : path.join(repoRoot, "output", "playwright", "sidebar-audit", "vsix-installed-state");
@@ -48,6 +50,7 @@ let finalResult = null;
 let finalError = null;
 let providerRuntime = null;
 let fixtureProviderStats = null;
+const codeLaunchAttempts = [];
 
 try {
   providerRuntime = await resolveVsixE2EProviderRuntime({
@@ -174,6 +177,18 @@ try {
     report: readJsonIfExists(reportPath) ?? error?.report ?? null,
   };
 } finally {
+  if (finalError) {
+    try {
+      finalResult.diagnostics = captureVsixHostFailureDiagnostics({
+        tempRoot, userDataDir, driverDir, extensionsDir,
+        outputDir: exportedArtifactsDir, attempts: codeLaunchAttempts,
+        secrets: [providerRuntime?.apiKey],
+      });
+    } catch (error) {
+      // Preserve the host failure even if diagnostics themselves cannot be saved.
+      console.warn(`Trainer VSIX E2E diagnostics could not be saved: ${redactHostDiagnosticText(error, [providerRuntime?.apiKey])}`);
+    }
+  }
   if (exportedReportPath && finalResult) {
     fs.mkdirSync(path.dirname(exportedReportPath), { recursive: true });
     fs.writeFileSync(exportedReportPath, JSON.stringify(finalResult, null, 2) + "\n", "utf8");
@@ -460,6 +475,25 @@ const smokeWorkspaceDir = process.env.TRAINER_E2E_WORKSPACE_DIR || "";
 const smokeTrainerWorkspaceDir = process.env.TRAINER_E2E_TRAINER_WORKSPACE_DIR || "";
 const providerSavePayloadTemplate = ${JSON.stringify(providerSavePayloadTemplate)};
 const steps = [];
+const writeProgress = () => {
+  if (!artifactsDir) return;
+  try {
+    fs.mkdirSync(artifactsDir, { recursive: true });
+    fs.writeFileSync(path.join(artifactsDir, "host-progress.json"), JSON.stringify({
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      steps: steps.slice(-100).map((step) => ({
+        name: step.name,
+        state: step.finishedAt ? (step.ok ? "passed" : "failed") : "running",
+        startedAt: step.startedAt,
+        finishedAt: step.finishedAt || null,
+      })),
+    }, null, 2) + "\n", "utf8");
+  } catch (error) {
+    console.warn("Trainer host progress could not be saved: " + (error && error.code || "unknown"));
+  }
+};
+writeProgress();
 
   const currentSidecarPort = () => {
     const trainerExtension = vscode.extensions.getExtension(extensionId);
@@ -475,6 +509,7 @@ const steps = [];
   const record = async (name, fn, options = {}) => {
     const step = { name, ok: false, startedAt: new Date().toISOString() };
     steps.push(step);
+    writeProgress();
     try {
       const data = await fn();
       step.ok = options.ok === undefined ? true : Boolean(options.ok(data));
@@ -489,6 +524,7 @@ const steps = [];
     } finally {
       step.finishedAt = new Date().toISOString();
       step.durationMs = Date.now() - Date.parse(step.startedAt);
+      writeProgress();
     }
   };
 
@@ -3100,6 +3136,7 @@ module.exports = { activate, deactivate };
 }
 
 function runCode(args, options = {}) {
+  const startedAt = new Date().toISOString();
   const result =
     process.platform === "win32" && codeCli.toLowerCase().endsWith(".cmd")
       ? spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/c", buildWindowsCmd(codeCli, args)], {
@@ -3115,16 +3152,24 @@ function runCode(args, options = {}) {
           env: options.env ?? process.env,
           timeout: options.timeout,
         });
+  codeLaunchAttempts.push({
+    command: codeCli, args, cwd: extensionDir, startedAt,
+    finishedAt: new Date().toISOString(), timeoutMs: options.timeout ?? null,
+    status: result.status, signal: result.signal,
+    error: result.error ? { name: result.error.name, code: result.error.code, message: result.error.message } : null,
+    stdout: result.stdout ?? "", stderr: result.stderr ?? "",
+    display: options.env?.DISPLAY ?? process.env.DISPLAY ?? null,
+  });
   if (result.status !== 0) {
     fail(
-      [
+      redactHostDiagnosticText([
         `VS Code CLI failed: ${codeCli} ${args.join(" ")}`,
         result.error ? `${result.error.name}: ${result.error.message}` : "",
         (result.stdout ?? "").trim(),
         (result.stderr ?? "").trim(),
       ]
         .filter(Boolean)
-        .join("\n"),
+        .join("\n"), [providerRuntime?.apiKey]),
     );
   }
   return result;
