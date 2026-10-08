@@ -542,13 +542,16 @@ writeProgress();
   };
 
   const record = async (name, fn, options = {}) => {
-    const step = { name, ok: false, startedAt: new Date().toISOString() };
+    const step = {
+      name, ok: false, startedAt: new Date().toISOString(),
+      evidenceScope: classifyNativeEvidenceStep(name), visualTargetAsserted: false,
+    };
     steps.push(step);
     writeProgress();
     try {
       const data = await fn();
       step.ok = options.ok === undefined ? true : Boolean(options.ok(data));
-      step.data = sanitize(data);
+      step.data = scopeNativeEvidenceReceipt(name, sanitize(data));
       if (!step.ok) {
         step.error = options.errorMessage ? options.errorMessage(data) : "Step returned a non-OK result.";
       }
@@ -1130,7 +1133,7 @@ writeProgress();
         "Installed-state review queue seed mismatch: " + JSON.stringify(data),
     });
 
-    await record("assert-training-review-queue-visible-truth", async () => {
+    await record("assert-training-review-queue-host-state", async () => {
       const expectedReviewArtifactId = reviewQueueSeed && reviewQueueSeed.reviewArtifactId;
       const trainerExtension = vscode.extensions.getExtension(extensionId);
       const exported = trainerExtension && trainerExtension.isActive ? trainerExtension.exports : undefined;
@@ -1165,9 +1168,9 @@ writeProgress();
           "Installed-state review queue host-state mismatch: " + JSON.stringify(data),
       });
 
-      await record("capture-training-review-queue-installed-screenshot", async () => {
+      await record("capture-owned-workbench-after-review-queue-command", async () => {
         const captured = captureVsCodeWindowArtifacts({
-          label: "training-review-queue",
+          label: "after-review-queue-command",
           artifactsDir,
           sideBarRatio: 0.36,
           userDataDir: smokeUserDataDir,
@@ -1186,7 +1189,7 @@ writeProgress();
           "Installed-state training screenshot capture failed: " + JSON.stringify(data),
       });
 
-      await record("assert-training-theory-drill-visible-truth", async () => {
+      await record("assert-training-theory-drill-host-state", async () => {
         const port = currentSidecarPort();
 
         const started = await postJson(port, "/session/start", {
@@ -1444,9 +1447,9 @@ writeProgress();
           "Installed-state theory drill host-state mismatch: " + JSON.stringify(data),
       });
 
-      await record("capture-training-theory-drill-installed-screenshot", async () => {
+      await record("capture-owned-workbench-after-theory-drill-command", async () => {
         const captured = captureVsCodeWindowArtifacts({
-          label: "training-theory-drill",
+          label: "after-theory-drill-command",
           artifactsDir,
           sideBarRatio: 0.36,
           userDataDir: smokeUserDataDir,
@@ -1465,7 +1468,7 @@ writeProgress();
           "Installed-state theory drill screenshot capture failed: " + JSON.stringify(data),
       });
 
-      await record("assert-training-scenario-lab-visible-truth", async () => {
+      await record("assert-training-scenario-lab-webview-debug-state", async () => {
         const port = currentSidecarPort();
 
         const started = await postJson(port, "/session/start", {
@@ -1641,9 +1644,9 @@ writeProgress();
           "Installed-state scenario lab handoff truth mismatch: " + JSON.stringify(data),
       });
 
-      await record("capture-training-scenario-lab-installed-screenshot", async () => {
+      await record("capture-owned-workbench-after-scenario-restore", async () => {
         const captured = captureVsCodeWindowArtifacts({
-          label: "training-scenario-lab",
+          label: "after-scenario-restore",
           artifactsDir,
           sideBarRatio: 0.36,
           userDataDir: smokeUserDataDir,
@@ -1663,7 +1666,7 @@ writeProgress();
       });
 
       if (hasProviderEnv) {
-      await record("assert-training-next-hop-visible-truth", async () => {
+      await record("assert-training-next-hop-webview-debug-state", async () => {
         const port = currentSidecarPort();
 
         const started = await postProviderBoundJson(port, "/session/start", {
@@ -1960,12 +1963,12 @@ writeProgress();
               data.secondaryPanelsCollapsedByDefault === true
           ),
         errorMessage: (data) =>
-          "Installed-state next-hop visible truth mismatch: " + JSON.stringify(data),
+          "Installed-state next-hop webview debug-state mismatch: " + JSON.stringify(data),
       });
 
-      await record("capture-training-next-hop-installed-screenshot", async () => {
+      await record("capture-owned-workbench-after-next-hop-restore", async () => {
         const captured = captureVsCodeWindowArtifacts({
-          label: "training-next-hop",
+          label: "after-next-hop-restore",
           artifactsDir,
           sideBarRatio: 0.36,
           userDataDir: smokeUserDataDir,
@@ -1984,7 +1987,7 @@ writeProgress();
           "Installed-state next-hop screenshot capture failed: " + JSON.stringify(data),
       });
 
-      await record("assert-resources-resource-detail-visible-truth", async () => {
+      await record("assert-resources-resource-detail-webview-debug-state", async () => {
         const uploadResult = await vscode.commands.executeCommand("trainer.resource.upload", {
           mode: "files",
           uploads: [
@@ -2062,12 +2065,12 @@ writeProgress();
               data.previewPaneVisible === false
           ),
         errorMessage: (data) =>
-          "Installed-state resource detail visible truth mismatch: " + JSON.stringify(data),
+          "Installed-state resource detail webview debug-state mismatch: " + JSON.stringify(data),
       });
 
-      await record("capture-resources-detail-installed-screenshot", async () => {
+      await record("capture-owned-workbench-after-resource-detail-restore", async () => {
         const captured = captureVsCodeWindowArtifacts({
-          label: "resources-detail",
+          label: "after-resource-detail-restore",
           artifactsDir,
           sideBarRatio: 0.36,
           userDataDir: smokeUserDataDir,
@@ -2086,7 +2089,7 @@ writeProgress();
           "Installed-state resource detail screenshot capture failed: " + JSON.stringify(data),
       });
 
-      const sandboxNativeOpenTruth = await record("assert-resources-sandbox-preview-truth", async () => {
+      const sandboxNativeOpenTruth = await record("assert-resources-embedded-preview-webview-debug-state", async () => {
         const uploadResult = await vscode.commands.executeCommand("trainer.resource.upload", {
           mode: "files",
           uploads: [
@@ -2134,7 +2137,10 @@ writeProgress();
                 facts.activeSurface === "sandbox" &&
                 facts.selectedSandboxPath === sandboxPath &&
                 facts.singleWorkbenchSurface === true &&
-                facts.sandboxPaneVisible === true &&
+                facts.sandboxPreviewVisible === true &&
+                facts.sandboxPreviewEmbedded === true &&
+                facts.sandboxPreviewPath === sandboxPath &&
+                facts.sandboxPaneVisible === false &&
                 // The detail pane opens whenever a resource is selected
                 // (ResourcesWorkbenchView: detailPaneVisible = Boolean(selectedResource)).
                 facts.detailPaneVisible === true &&
@@ -2146,13 +2152,16 @@ writeProgress();
           // The product contract for trainer.sandbox.preview is a governed
           // in-workbench preview (optionally with a canNativeOpen capability
           // flag) — it does not open a text editor, so assert the preview
-          // result plus the visible sandbox truth below.
+          // result plus the reported embedded reader preview state below.
           previewSucceeded: previewResult?.ok === true,
           previewCanNativeOpen: previewResult?.data?.canNativeOpen === true,
           restoreSucceeded: restoreResult.ok === true,
           hasVisibleFacts: Boolean(visible),
           activeSurface: visible ? visible.activeSurface || null : null,
           selectedSandboxPath: visible ? visible.selectedSandboxPath || null : null,
+          sandboxPreviewVisible: visible ? visible.sandboxPreviewVisible === true : false,
+          sandboxPreviewEmbedded: visible ? visible.sandboxPreviewEmbedded === true : false,
+          sandboxPreviewPath: visible ? visible.sandboxPreviewPath || null : null,
           singleWorkbenchSurface: visible ? visible.singleWorkbenchSurface === true : false,
           detailPaneVisible: visible ? visible.detailPaneVisible === true : false,
           sandboxPaneVisible: visible ? visible.sandboxPaneVisible === true : false,
@@ -2167,18 +2176,21 @@ writeProgress();
               data.hasVisibleFacts === true &&
               data.activeSurface === "sandbox" &&
               data.selectedSandboxPath === data.sandboxPath &&
+              data.sandboxPreviewVisible === true &&
+              data.sandboxPreviewEmbedded === true &&
+              data.sandboxPreviewPath === data.sandboxPath &&
               data.singleWorkbenchSurface === true &&
               data.detailPaneVisible === true &&
-              data.sandboxPaneVisible === true &&
+              data.sandboxPaneVisible === false &&
               data.previewPaneVisible === false
           ),
         errorMessage: (data) =>
-          "Installed-state sandbox preview truth mismatch: " + JSON.stringify(data),
+          "Installed-state embedded preview webview debug-state mismatch: " + JSON.stringify(data),
       });
 
-      await record("capture-resources-sandbox-preview-installed-screenshot", async () => {
+      await record("capture-owned-workbench-after-embedded-preview-restore", async () => {
         const captured = captureVsCodeWindowArtifacts({
-          label: "resources-sandbox-preview",
+          label: "after-embedded-preview-restore",
           artifactsDir,
           sideBarRatio: 0.36,
           userDataDir: smokeUserDataDir,
@@ -2197,10 +2209,10 @@ writeProgress();
           "Installed-state sandbox preview screenshot capture failed: " + JSON.stringify(data),
       });
 
-      await record("assert-resources-sandbox-capability-visible-truth", async () => {
+      await record("assert-resources-sandbox-restore-webview-debug-state", async () => {
         const sandboxPath = sandboxNativeOpenTruth && sandboxNativeOpenTruth.sandboxPath;
         if (typeof sandboxPath !== "string" || !sandboxPath) {
-          throw new Error("Sandbox capability check is missing the native-open sandbox path.");
+          throw new Error("Sandbox restore check is missing the governed preview path.");
         }
         const restoreResult = await vscode.commands.executeCommand("trainer.debug.restoreView", {
           workspaceId: managedContextId,
@@ -2209,11 +2221,11 @@ writeProgress();
           sandboxPath,
           previewPath: sandboxPath,
           workspaceLabel: "trainer-vsix-e2e",
-          resumeReason: "Show the governed sandbox capability facts.",
+          resumeReason: "Restore the governed sandbox reader context.",
           focusArea: "resource sandbox",
         });
         if (!restoreResult || restoreResult.ok !== true) {
-          throw new Error("Sandbox capability restore command did not succeed: " + JSON.stringify(restoreResult));
+          throw new Error("Sandbox reader restore command did not succeed: " + JSON.stringify(restoreResult));
         }
         const visible = await waitForVisibleFacts(
           "resources",
@@ -2225,7 +2237,7 @@ writeProgress();
                 facts.activeSurface === "sandbox" &&
                 facts.selectedSandboxPath === sandboxPath &&
                 facts.singleWorkbenchSurface === true &&
-                facts.sandboxPaneVisible === true &&
+                facts.sandboxPaneVisible === false &&
                 facts.detailPaneVisible === true &&
                 facts.previewPaneVisible === false,
             ),
@@ -2259,16 +2271,16 @@ writeProgress();
               data.selectedSandboxPath === data.sandboxPath &&
               data.singleWorkbenchSurface === true &&
               data.detailPaneVisible === true &&
-              data.sandboxPaneVisible === true &&
+              data.sandboxPaneVisible === false &&
               data.previewPaneVisible === false
           ),
         errorMessage: (data) =>
-          "Installed-state resources sandbox capability visible truth mismatch: " + JSON.stringify(data),
+          "Installed-state resources sandbox restore debug-state mismatch: " + JSON.stringify(data),
       });
 
-      await record("capture-resources-sandbox-installed-screenshot", async () => {
+      await record("capture-owned-workbench-after-sandbox-restore", async () => {
         const captured = captureVsCodeWindowArtifacts({
-          label: "resources-sandbox-capability",
+          label: "after-sandbox-restore",
           artifactsDir,
           sideBarRatio: 0.36,
           userDataDir: smokeUserDataDir,
@@ -2287,7 +2299,7 @@ writeProgress();
           "Installed-state resources screenshot capture failed: " + JSON.stringify(data),
       });
 
-      await record("assert-top-title-and-theme-typography-truth", async () => {
+      await record("assert-title-configuration-and-theme-state", async () => {
         const trainerExtension = vscode.extensions.getExtension(extensionId);
         const extensionPackage =
           trainerExtension && trainerExtension.packageJSON ? trainerExtension.packageJSON : null;
@@ -2342,7 +2354,7 @@ writeProgress();
           const applied = await applyThemeScenario(scenario);
           await sleep(400);
           const captured = captureVsCodeWindowArtifacts({
-            label: "header-font-" + scenario.id,
+            label: "header-theme-" + scenario.id,
             artifactsDir,
             sideBarRatio: 0.36,
             userDataDir: smokeUserDataDir,
@@ -2352,6 +2364,9 @@ writeProgress();
           themeRuns.push({
             ...applied,
             screenshot: {
+              evidenceScope: "native-capture-artifact",
+              visualTargetAsserted: false,
+              targetSurfaceConfirmed: null,
               skipped: captured.skipped === true,
               captureRequired: captured.captureRequired !== false,
               capturePlatform: captured.capturePlatform || process.platform,
@@ -2429,7 +2444,7 @@ writeProgress();
               )
           ),
         errorMessage: (data) =>
-          "Installed-state title/theme typography regression mismatch: " + JSON.stringify(data),
+          "Installed-state title configuration/theme-state mismatch: " + JSON.stringify(data),
       });
 
       await record("assert-cross-workspace-reopen-history-truth", async () => {
@@ -2698,6 +2713,7 @@ writeProgress();
       trainerExtension,
       durationMs: Date.now() - startedAt,
       steps,
+      evidenceSummary: summarizeNativeEvidence(steps),
     };
   } catch (error) {
     finalReport = {
@@ -2705,6 +2721,7 @@ writeProgress();
       extensionId,
       durationMs: Date.now() - startedAt,
       steps,
+      evidenceSummary: summarizeNativeEvidence(steps),
       error: error && error.stack ? error.stack : String(error),
     };
   } finally {
@@ -2739,17 +2756,26 @@ function sameLocalPath(left, right) {
   const normalize = (value) => path.resolve(value).replace(/[\\/]+$/, "");
   const normalizedLeft = normalize(left);
   const normalizedRight = normalize(right);
-  const lexicalMatch = process.platform === "win32"
-    ? normalizedLeft.toLocaleLowerCase("en-US") === normalizedRight.toLocaleLowerCase("en-US")
-    : normalizedLeft === normalizedRight;
-  if (lexicalMatch) {
-    return true;
+  if (process.platform === "win32") {
+    try {
+      const canonical = (value) => {
+        const unextended = value.slice(0, 8).toLocaleUpperCase("en-US") === "\\\\?\\UNC\\"
+          ? "\\\\" + value.slice(8)
+          : value.startsWith("\\\\?\\") ? value.slice(4) : value;
+        return normalize(unextended).toLocaleLowerCase("en-US");
+      };
+      // Windows short names, drive case and extended prefixes can name the
+      // same root. Resolve both actual directories, including lexical matches;
+      // unavailable native identity never falls back to a textual assertion.
+      return canonical(fs.realpathSync.native(path.resolve(left))) ===
+        canonical(fs.realpathSync.native(path.resolve(right)));
+    } catch {
+      return false;
+    }
   }
+  if (normalizedLeft === normalizedRight) return true;
   // POSIX symlink aliases (/var vs /private/var) name the same directory;
   // compare resolved forms before failing the workspace-root assertion.
-  if (process.platform === "win32") {
-    return false;
-  }
   try {
     return fs.realpathSync.native(normalizedLeft) === fs.realpathSync.native(normalizedRight);
   } catch {
@@ -2771,6 +2797,54 @@ function sanitize(value) {
     }
     return nested;
   }));
+}
+
+// These checks observe host state or webview-reported props, not the native DOM.
+// A captured PNG is an artifact for review, never an automatic surface verdict.
+function classifyNativeEvidenceStep(name) {
+  if (name.startsWith("capture-owned-workbench-after-")) return "native-capture-artifact";
+  if (name.endsWith("-webview-debug-state")) return "webview-debug-state";
+  if (name === "assert-title-configuration-and-theme-state") return "title-configuration-and-theme-state";
+  if (name.endsWith("-host-state") || name.startsWith("assert-")) return "host-state";
+  return "host-command-state";
+}
+
+function scopeNativeEvidenceReceipt(name, data) {
+  const evidenceScope = classifyNativeEvidenceStep(name);
+  return {
+    ...(data && typeof data === "object" && !Array.isArray(data) ? data : { result: data }),
+    evidenceScope,
+    visualTargetAsserted: false,
+    targetSurfaceConfirmed: null,
+  };
+}
+
+function summarizeNativeEvidence(steps) {
+  const summary = {
+    evidenceScope: "installed-host-checks",
+    visualTargetAsserted: false,
+    visualChecksPerformed: 0,
+    stepCountsByEvidenceScope: {},
+    captureStepPassCount: 0, captureStepSkipCount: 0, captureStepFailCount: 0,
+    themeCapturePairPassCount: 0, themeCapturePairSkipCount: 0, themeCapturePairFailCount: 0,
+  };
+  for (const step of steps) {
+    const scope = classifyNativeEvidenceStep(step.name);
+    summary.stepCountsByEvidenceScope[scope] = (summary.stepCountsByEvidenceScope[scope] || 0) + 1;
+    if (scope === "native-capture-artifact") {
+      if (step.ok && step.data?.skipped === true && isWindowCaptureVerified(step.data)) summary.captureStepSkipCount += 1;
+      else if (step.ok && isWindowCaptureVerified(step.data)) summary.captureStepPassCount += 1;
+      else summary.captureStepFailCount += 1;
+    }
+    if (scope === "title-configuration-and-theme-state") {
+      for (const run of step.data?.themeRuns || []) {
+        if (run.screenshot?.skipped === true && isWindowCaptureVerified(run.screenshot)) summary.themeCapturePairSkipCount += 1;
+        else if (isWindowCaptureVerified(run.screenshot)) summary.themeCapturePairPassCount += 1;
+        else summary.themeCapturePairFailCount += 1;
+      }
+    }
+  }
+  return summary;
 }
 
 function isWindowCaptureVerified(data) {

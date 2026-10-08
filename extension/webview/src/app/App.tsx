@@ -4,6 +4,7 @@ import {
   resolveLearningPrimaryAction,
   type LearningFacts,
 } from "../lib/learningActionResolver";
+import { resolveBoundTrainingCardFacts } from "../lib/boundTrainingCardFacts";
 import { CommandPalette } from "../templates/CommandPalette";
 import {
   Suspense,
@@ -7973,6 +7974,14 @@ export function App() {
   const hasRenderableTrainingCard = leftoverTrainingHandoffChromeNotLive
     ? false
     : hasTrainingCard || Boolean(trainingState?.latestTrainingNextHop);
+  const boundTrainingCardFacts = useMemo(() => resolveBoundTrainingCardFacts({
+    eligible: hasTrainingCard && syncStatus === "current" &&
+      !reviewArtifactForeground && trainingCardType !== "flash",
+    activeCardId: activeTrainingCardId,
+    candidate: selectedTrainingCardCandidate,
+    routeCard: selectedTrainingRouteCard,
+  }), [hasTrainingCard, syncStatus, reviewArtifactForeground, trainingCardType,
+    activeTrainingCardId, selectedTrainingCardCandidate, selectedTrainingRouteCard]);
   useEffect(() => {
     if (activeView !== "training") {
       return;
@@ -12857,7 +12866,7 @@ export function App() {
 
   const renderTrainingView = () => {
     const title = hasRenderableTrainingCard
-      ? pickLanguageAlignedTrainingText(
+      ? boundTrainingCardFacts?.text.title ?? pickLanguageAlignedTrainingText(
           layout.composerLanguage,
           visibleTrainingCardTitle,
           leftoverTrainingHandoffChromeNotLive
@@ -12877,7 +12886,9 @@ export function App() {
         ) ?? trainingViewLabel(layout.composerLanguage)
       : trainingViewLabel(layout.composerLanguage);
     const currentStep = hasRenderableTrainingCard
-      ? pickLanguageAlignedTrainingText(
+      ? boundTrainingCardFacts?.text.problemStatement ??
+        boundTrainingCardFacts?.text.suggestedWorkspaceAction ??
+        boundTrainingCardFacts?.text.deliverable ?? pickLanguageAlignedTrainingText(
           layout.composerLanguage,
           trainingProblemStatement,
           trainingSuggestedWorkspaceAction,
@@ -12887,20 +12898,20 @@ export function App() {
         ) ?? ""
       : "";
     const localizedSuggestedWorkspaceAction = hasRenderableTrainingCard
-      ? pickLanguageAlignedTrainingText(
+      ? boundTrainingCardFacts?.text.suggestedWorkspaceAction ?? pickLanguageAlignedTrainingText(
           layout.composerLanguage,
           trainingSuggestedWorkspaceAction,
         )
       : undefined;
     const localizedScenario = hasRenderableTrainingCard
-      ? pickLanguageAlignedTrainingText(
+      ? boundTrainingCardFacts?.text.scenario ?? boundTrainingCardFacts?.text.scenarioPack ?? pickLanguageAlignedTrainingText(
           layout.composerLanguage,
           trainingScenario,
           trainingScenarioPackLabel,
         )
       : undefined;
     const localizedWhyNow = hasRenderableTrainingCard
-      ? pickLanguageAlignedTrainingText(layout.composerLanguage, liveTrainingWhy)
+      ? boundTrainingCardFacts?.text.whyNow ?? pickLanguageAlignedTrainingText(layout.composerLanguage, liveTrainingWhy)
       : undefined;
     const localizedSourceSummary = hasRenderableTrainingCard
       ? pickLanguageAlignedTrainingText(
@@ -12964,7 +12975,7 @@ export function App() {
             <PracticeResponse
               attachmentScope={`${attachmentScope}\u0000${activeTrainingCardId ?? ""}\u0000${trainingComposerPhase}`}
               label={localizedTrainingComposerAccessibilityLabel}
-              prompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : trainingComposerReflectMode ? trainingReflectionPrompt : undefined}
+              prompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : trainingComposerReflectMode ? boundTrainingCardFacts?.text.reflectionPrompt ?? trainingReflectionPrompt : undefined}
               value={activityDraft}
               language={layout.composerLanguage}
               attachments={activityAttachments}
@@ -12993,8 +13004,8 @@ export function App() {
           learningFamily={trainingLearningFamily}
           learningSubtype={trainingLearningSubtype}
           whyThisCard={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : localizedWhyNow}
-          targetSkill={liveTrainingSkill}
-          problemStatement={trainingProblemStatement}
+          targetSkill={boundTrainingCardFacts?.text.targetSkill ?? liveTrainingSkill}
+          problemStatement={boundTrainingCardFacts?.text.problemStatement ?? trainingProblemStatement}
           suggestedWorkspaceAction={localizedSuggestedWorkspaceAction}
           scenario={localizedScenario}
           whyNow={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : localizedWhyNow}
@@ -13015,23 +13026,23 @@ export function App() {
                 )
               : undefined
           }
-          apiHints={!reviewArtifactForeground && hasTrainingCard ? trainingApiHints : []}
-          constraints={!reviewArtifactForeground && hasTrainingCard ? trainingConstraints : []}
-          selfCheck={!reviewArtifactForeground && hasTrainingCard ? trainingSelfCheck : []}
-          deliverable={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : hasTrainingCard ? trainingDeliverable : undefined}
-          deliverables={reviewArtifactForeground ? selectedTrainingCardCandidate?.learnerDeliverables ?? [] : hasTrainingCard ? trainingDeliverables : []}
-          validationMethod={!reviewArtifactForeground && hasTrainingCard ? trainingValidationMethod : undefined}
-          verificationMethod={!reviewArtifactForeground && hasTrainingCard ? trainingVerificationMethod : undefined}
-          verifyItems={reviewArtifactForeground ? selectedTrainingCardCandidate?.verificationSteps ?? [] : hasTrainingCard ? authoritativeVerifyItems : []}
-          successSignal={reviewArtifactForeground ? trainingState?.reviewArtifact?.verifiedResult : hasTrainingCard ? trainingSuccessSignal : undefined}
-          returnWith={reviewArtifactForeground ? trainingState?.reviewArtifact?.nextSelfImplementationRule : hasTrainingCard ? trainingReturnWithText : undefined}
-          nextAfterCompletion={!reviewArtifactForeground && hasTrainingCard ? trainingNextAfterCompletionText : undefined}
+          apiHints={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.lists.apiHints ?? trainingApiHints : []}
+          constraints={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.lists.constraints ?? trainingConstraints : []}
+          selfCheck={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.lists.selfCheck ?? trainingSelfCheck : []}
+          deliverable={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : hasTrainingCard ? boundTrainingCardFacts?.text.deliverable ?? trainingDeliverable : undefined}
+          deliverables={reviewArtifactForeground ? selectedTrainingCardCandidate?.learnerDeliverables ?? [] : hasTrainingCard ? boundTrainingCardFacts?.lists.learnerDeliverables ?? trainingDeliverables : []}
+          validationMethod={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.text.validationMethod ?? trainingValidationMethod : undefined}
+          verificationMethod={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.text.verificationMethod ?? trainingVerificationMethod : undefined}
+          verifyItems={reviewArtifactForeground ? selectedTrainingCardCandidate?.verificationSteps ?? [] : hasTrainingCard ? boundTrainingCardFacts?.lists.verificationSteps ?? boundTrainingCardFacts?.lists.acceptanceCriteria ?? authoritativeVerifyItems : []}
+          successSignal={reviewArtifactForeground ? trainingState?.reviewArtifact?.verifiedResult : hasTrainingCard ? boundTrainingCardFacts?.text.successSignal ?? trainingSuccessSignal : undefined}
+          returnWith={reviewArtifactForeground ? trainingState?.reviewArtifact?.nextSelfImplementationRule : hasTrainingCard ? boundTrainingCardFacts?.text.returnWith ?? trainingReturnWithText : undefined}
+          nextAfterCompletion={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.text.nextAfterCompletion ?? trainingNextAfterCompletionText : undefined}
           fallbackAction={!reviewArtifactForeground && hasTrainingCard ? trainingFallbackActionText : undefined}
-          filesToTouch={!reviewArtifactForeground && hasTrainingCard ? trainingFilesToTouch : []}
-          hintLadder={!reviewArtifactForeground && hasTrainingCard && !trainingComposerReturnMode ? trainingHintLadder : []}
-          commonMistakes={!reviewArtifactForeground && hasTrainingCard ? trainingCommonMistakes : []}
-          stuckRecovery={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : hasTrainingCard ? trainingStuckRecovery : undefined}
-          reflectionPrompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : hasTrainingCard ? trainingReflectionPrompt : undefined}
+          filesToTouch={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.lists.filesToTouch ?? trainingFilesToTouch : []}
+          hintLadder={!reviewArtifactForeground && hasTrainingCard && !trainingComposerReturnMode ? boundTrainingCardFacts?.lists.hintLadder ?? trainingHintLadder : []}
+          commonMistakes={!reviewArtifactForeground && hasTrainingCard ? boundTrainingCardFacts?.lists.commonMistakes ?? trainingCommonMistakes : []}
+          stuckRecovery={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : hasTrainingCard ? boundTrainingCardFacts?.text.stuckRecovery ?? trainingStuckRecovery : undefined}
+          reflectionPrompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : hasTrainingCard ? boundTrainingCardFacts?.text.reflectionPrompt ?? trainingReflectionPrompt : undefined}
           outcome={!reviewArtifactForeground && hasTrainingCard ? trainingOutcomeCard : undefined}
           nextHop={
             hasRenderableTrainingCard && !trainingRestoreForeground && !reviewArtifactForeground
@@ -13044,7 +13055,7 @@ export function App() {
                 pickLanguageAlignedTrainingText(layout.composerLanguage, liveTrainingCoachChrome)
               : undefined
           }
-          scenarioPackLabel={hasTrainingCard ? trainingScenarioPackLabel : undefined}
+          scenarioPackLabel={hasTrainingCard ? boundTrainingCardFacts?.text.scenarioPack ?? trainingScenarioPackLabel : undefined}
           currentFocus={localizedCurrentFocus}
           latestTrainingHandoffStatus={
             reviewArtifactForeground || trainingRestoreReplacesSelectedCard
@@ -13158,7 +13169,7 @@ export function App() {
           onNextCard={handleGenerateTrainingCard}
           onRefreshDeck={handleRefreshTrainingDeck}
           flashPrompt={trainingFlashPrompt}
-          expectedSymbols={trainingCardType === "practice" ? practiceExpectedSymbols : []}
+          expectedSymbols={trainingCardType === "practice" ? boundTrainingCardFacts?.lists.expectedSymbols ?? practiceExpectedSymbols : []}
           />
 
         </Suspense>
@@ -13216,7 +13227,7 @@ export function App() {
       ? {
           workspaceId: trainingState?.workspaceId ?? data.memory.workspace?.workspaceId ?? "",
           cardId: activeTrainingCardId,
-          title: visibleTrainingCardTitle ?? selectedTrainingCardCandidate?.title ?? "",
+          title: boundTrainingCardFacts?.text.title ?? visibleTrainingCardTitle ?? selectedTrainingCardCandidate?.title ?? "",
           status: normalizedTrainingNextHopStatus === "continued_in_chat" || resolvedReviewArtifact
             ? "completed" : trainingHandoffReturnRequired || trainingComposerReturnMode
               ? "return_pending" : "active",

@@ -82,9 +82,9 @@ test('training cards preserve their explicit deliverable and verification contra
   assert.match(appSource, /const trainingVerificationMethod = pickLanguageAlignedTrainingText/);
   assert.match(appSource, /trainingDeliverable,[\s\S]*?learnerDeliverables/);
   assert.match(appSource, /trainingValidationMethod,[\s\S]*?trainingVerificationMethod,[\s\S]*?verificationSteps/);
-  assert.match(appSource, /hasTrainingCard \? trainingDeliverable : undefined/);
-  assert.match(appSource, /hasTrainingCard \? trainingValidationMethod : undefined/);
-  assert.match(appSource, /hasTrainingCard \? trainingVerificationMethod : undefined/);
+  assert.match(appSource, /hasTrainingCard \? boundTrainingCardFacts\?\.text\.deliverable \?\? trainingDeliverable : undefined/);
+  assert.match(appSource, /hasTrainingCard \? boundTrainingCardFacts\?\.text\.validationMethod \?\? trainingValidationMethod : undefined/);
+  assert.match(appSource, /hasTrainingCard \? boundTrainingCardFacts\?\.text\.verificationMethod \?\? trainingVerificationMethod : undefined/);
 
   assert.match(source, /deliverable\?: string;/);
   assert.match(source, /validationMethod\?: string;/);

@@ -33,6 +33,8 @@ const providerWebviewCommandsModulePath = path.resolve(
   'commands',
   'providerWebviewCommands.js',
 );
+const { TRAINER_OPERATION_COMPLETED_MARKER } = require('../dist/shared/src/protocol');
+const { toOperationStatus } = require('../dist/extension/src/core/workbenchData');
 
 async function flushDetachedProviderSaveVerification() {
   const { settleProviderSaveVerificationForTests } = require(providerWebviewCommandsModulePath);
@@ -1464,6 +1466,83 @@ test('saveCoachSettingsCommand normalizes legacy resource search modes before pe
   assert.equal(context.__synced.length, 1);
 });
 
+test('saveCoachSettingsCommand preserves persisted settings and uses the canonical completion fallback', async () => {
+  const { saveCoachSettingsCommand } = loadWithVscodeMock(sessionCommandsModulePath, {});
+  const languages = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
+
+  for (const responseLanguage of languages) {
+    const settings = {
+      responseLanguage,
+      answerMode: 'balanced',
+      resourceSearchMode: 'lexical',
+      teachingStyle: 'hands-on',
+      coachDefaults: {
+        memoryScope: 'personal',
+        workingSetMode: 'focused',
+        reviewCadence: 'light',
+        reviewReminderMode: 'ahead',
+        customSkills: [],
+        workspaceMemoryToggles: { decisions: true, patterns: true, resources: true },
+      },
+      followCurrentFile: false,
+      contextDetail: 'full',
+      includeCurrentFile: false,
+      includeSelection: true,
+      includeDiagnostics: false,
+      includeRelatedFiles: true,
+    };
+    const originalSettings = structuredClone(settings);
+    const response = {
+      memory: { workspace: { response_language: responseLanguage } },
+      authored_note: 'Coach settings saved. Keep this authored sentence unchanged.',
+    };
+    const originalResponse = structuredClone(response);
+    const context = createContext({
+      initialSessionId: 'session-settings',
+      trainerWorkspaceAdmission: { status: 'managed' },
+      sidecarClient: {
+        async postJson(port, requestPath, body) {
+          context.__postCalls.push([port, requestPath, body]);
+          return response;
+        },
+      },
+    });
+
+    const result = await saveCoachSettingsCommand(context, settings);
+
+    assert.equal(result.ok, true, responseLanguage);
+    assert.equal(result.message, undefined, responseLanguage);
+    assert.equal(result.data, response, responseLanguage);
+    assert.deepEqual(response, originalResponse, responseLanguage);
+    assert.deepEqual(settings, originalSettings, responseLanguage);
+    assert.deepEqual(context.__postCalls, [[34891, '/memory/settings', {
+      session_id: 'session-settings',
+      workspace_id: 'F:\\trainer-a',
+      response_language: responseLanguage,
+      answer_mode: 'balanced',
+      resource_search_mode: 'lexical',
+      teaching_style: 'hands-on',
+      coach_defaults: settings.coachDefaults,
+      follow_current_file: false,
+      context_detail: 'full',
+      include_current_file: false,
+      include_selection: true,
+      include_diagnostics: false,
+      include_related_files: true,
+    }]], responseLanguage);
+    assert.equal(context.__patches.length, 1, responseLanguage);
+    assert.equal(context.__synced.length, 1, responseLanguage);
+    assert.deepEqual(
+      toOperationStatus(result.ok, result.message ?? TRAINER_OPERATION_COMPLETED_MARKER),
+      {
+        type: 'operation/status',
+        payload: { tone: 'success', message: TRAINER_OPERATION_COMPLETED_MARKER },
+      },
+      responseLanguage,
+    );
+  }
+});
+
 test('saveCoachSettingsCommand keeps settings local until the project is admitted', async () => {
   const vscodeMock = {};
   const { saveCoachSettingsCommand } = loadWithVscodeMock(sessionCommandsModulePath, vscodeMock);
@@ -1533,6 +1612,16 @@ test('saveCoachSettingsCommand keeps settings local until the project is admitte
 
     assert.equal(result.ok, true, status);
     assert.match(result.message, /stay local/i, status);
+    assert.notEqual(
+      result.message ?? TRAINER_OPERATION_COMPLETED_MARKER,
+      TRAINER_OPERATION_COMPLETED_MARKER,
+      status,
+    );
+    assert.equal(
+      toOperationStatus(result.ok, result.message ?? TRAINER_OPERATION_COMPLETED_MARKER).payload.message,
+      result.message,
+      status,
+    );
     assert.equal(sidecarStarts, 0, status);
     assert.equal(writes, 0, status);
     assert.equal(context.__patches.length, 1, status);

@@ -3275,7 +3275,6 @@ export async function saveCoachSettingsCommand(
 
   return {
     ok: true,
-    message: 'Coach settings saved.',
     data: response,
   };
 }

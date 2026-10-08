@@ -2648,13 +2648,16 @@ export function ResourcesWorkbenchView({
       selectedResourceId: selectedResource?.id,
       sandboxPreviewEmbedded: Boolean(sandboxPreview || standaloneSandboxPreview),
       sandboxPreviewVisible: Boolean(sandboxPreview || standaloneSandboxPreview),
+      sandboxPreviewPath: (sandboxPreview ?? standaloneSandboxPreview)?.path,
       selectedSandboxPath: restoreContext?.sandboxPath ?? sandboxRoot,
       previewPath: restoreContext?.previewPath,
       singleWorkbenchSurface: true,
       compactMode: true,
       modebarHiddenInCompact: true,
       detailPaneVisible: Boolean(selectedResource || standaloneSandboxPreview),
-      sandboxPaneVisible: activeSurface === "sandbox",
+      // Sandbox restore is a logical scope; its content uses ResourceReader.
+      // No separate sandbox pane is rendered by this template.
+      sandboxPaneVisible: false,
       previewPaneVisible: false,
     });
   }, [language, onDebugVisibleFacts, orientation, restoreContext, sandboxRoot, selectedResource, sandboxPreview, standaloneSandboxPreview]);

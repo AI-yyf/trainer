@@ -41,7 +41,7 @@ const previewHarnessPath = path.resolve(
   'browserPreviewHarness.ts',
 );
 
-test('training card content has a stricter language boundary than ambient coach UI', () => {
+test('training contextual chrome and unmatched fallbacks retain their language boundary', () => {
   const source = fs.readFileSync(appPath, 'utf8');
 
   assert.match(source, /function pickLanguageAlignedTrainingText\([\s\S]*?isLanguageAlignedUiText\(language, resolved\)/);

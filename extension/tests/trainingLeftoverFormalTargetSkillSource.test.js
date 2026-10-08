@@ -21,7 +21,7 @@ test('Training targetSkill does not backfill leftover formal title or focus', ()
   const viewSource = fs.readFileSync(trainingViewPath, 'utf8');
 
   assert.match(appSource, /liveTrainingTargetSkill\(/);
-  assert.match(appSource, /targetSkill=\{liveTrainingSkill\}/);
+  assert.match(appSource, /targetSkill=\{boundTrainingCardFacts\?\.text\.targetSkill \?\? liveTrainingSkill\}/);
   assert.doesNotMatch(appSource, /targetSkill=\{trainingTargetSkill\}/);
   assert.match(viewSource, /const resolvedTargetSkill = firstText\(targetSkill\?\.trim\(\)\);/);
   assert.doesNotMatch(

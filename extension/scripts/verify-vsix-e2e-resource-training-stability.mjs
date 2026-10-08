@@ -108,16 +108,17 @@ for (let index = 1; index <= roundsRequested; index += 1) {
     !result.signal &&
     (!requireProvider || !providerSkipped);
 
-  const detailStep = findStep(steps, "assert-resources-resource-detail-visible-truth");
-  const previewStep = findStep(steps, "assert-resources-sandbox-preview-truth");
-  const capabilityStep = findStep(steps, "assert-resources-sandbox-capability-visible-truth");
+  const detailStep = findStep(steps, "assert-resources-resource-detail-webview-debug-state");
+  const previewStep = findStep(steps, "assert-resources-embedded-preview-webview-debug-state");
+  const capabilityStep = findStep(steps, "assert-resources-sandbox-restore-webview-debug-state");
+  const capabilityHostStep = findStep(steps, "assert-sandbox-capability-truth");
   const crossStep = findStep(steps, "assert-cross-workspace-reopen-history-truth");
-  const nextHopStep = findStep(steps, "assert-training-next-hop-visible-truth");
+  const nextHopStep = findStep(steps, "assert-training-next-hop-webview-debug-state");
   const faultStep = findStep(steps, "inject-sidecar-restart-fault");
 
   const detailStepOk = Boolean(detailStep?.ok);
   const previewStepOk = Boolean(previewStep?.ok);
-  const capabilityStepOk = Boolean(capabilityStep?.ok);
+  const capabilityStepOk = Boolean(capabilityStep?.ok && capabilityHostStep?.ok);
   const crossStepOk = Boolean(crossStep?.ok);
   const nextHopStepOk = Boolean(nextHopStep?.ok);
   const faultStepOk = faultProfile ? Boolean(faultStep?.ok) : true;
@@ -125,13 +126,14 @@ for (let index = 1; index <= roundsRequested; index += 1) {
   const detailData = asRecord(detailStep?.data);
   const previewData = asRecord(previewStep?.data);
   const capabilityData = asRecord(capabilityStep?.data);
+  const capabilityHostData = asRecord(capabilityHostStep?.data);
   const crossData = asRecord(crossStep?.data);
   const nextHopData = asRecord(nextHopStep?.data);
   const faultData = asRecord(faultStep?.data);
 
   const detailEvidenceOk = hasResourceDetailEvidence(detailData);
   const previewEvidenceOk = hasSandboxPreviewEvidence(previewData);
-  const capabilityEvidenceOk = hasSandboxCapabilityEvidence(capabilityData);
+  const capabilityEvidenceOk = hasSandboxCapabilityEvidence(capabilityData, capabilityHostData);
   const crossLeakDetected = detectCrossWorkspaceLeak(crossData);
   const resourceBridgeMissing = !hasResourceBridgeEvidence(crossData);
   const nextHopMissingMaterializedEvent = !hasMaterializedEventEvidence(nextHopData);
@@ -219,6 +221,8 @@ for (let index = 1; index <= roundsRequested; index += 1) {
   }
 
   rounds.push({
+    evidenceScope: "host-state-and-webview-debug-state",
+    visualTargetAsserted: false,
     index,
     ok: roundOk,
     durationMs,
@@ -231,6 +235,7 @@ for (let index = 1; index <= roundsRequested; index += 1) {
     resourcesSandboxPreview: summarizeSandboxPreviewRound(previewData, previewStepOk, previewEvidenceOk),
     resourcesSandboxCapability: summarizeSandboxCapabilityRound(
       capabilityData,
+      capabilityHostData,
       capabilityStepOk,
       capabilityEvidenceOk,
     ),
@@ -264,6 +269,8 @@ const nextHopMaterializedEventMissingRounds = rounds.filter(
 const faultRecoveryMissRounds = rounds.filter((round) => round.sidecarFaultRecovery.missed).length;
 
 const summary = {
+  evidenceScope: "installed-host-state-stability",
+  visualTargetAsserted: false,
   ok:
     passRate >= minPassRate &&
     leakRounds <= maxLeakRounds &&
@@ -413,12 +420,18 @@ function hasSandboxPreviewEvidence(previewData) {
     previewData.previewSucceeded === true &&
       typeof previewData.sandboxPath === "string" &&
       previewData.sandboxPath.length > 0 &&
-      previewData.selectedSandboxPath === previewData.sandboxPath,
+      previewData.selectedSandboxPath === previewData.sandboxPath &&
+      previewData.sandboxPreviewVisible === true &&
+      previewData.sandboxPreviewEmbedded === true &&
+      previewData.sandboxPreviewPath === previewData.sandboxPath &&
+      previewData.detailPaneVisible === true &&
+      previewData.sandboxPaneVisible === false &&
+      previewData.previewPaneVisible === false,
   );
 }
 
-function hasSandboxCapabilityEvidence(capabilityData) {
-  if (!capabilityData) {
+function hasSandboxCapabilityEvidence(capabilityData, capabilityHostData) {
+  if (!capabilityData || !capabilityHostData) {
     return false;
   }
   return Boolean(
@@ -426,13 +439,17 @@ function hasSandboxCapabilityEvidence(capabilityData) {
       capabilityData.surface === "resources" &&
       capabilityData.activeView === "resources" &&
       capabilityData.activeSurface === "sandbox" &&
-      capabilityData.permissionState === "coach_only" &&
-      capabilityData.networkExecutionStatus === "degraded" &&
-      typeof capabilityData.networkReasonCode === "string" &&
-      capabilityData.networkReasonCode.length > 0 &&
+      capabilityHostData.hasCapabilitySummary === true &&
+      capabilityHostData.permissionState === "coach_only" &&
+      capabilityHostData.networkExecutionStatus === "degraded" &&
+      typeof capabilityHostData.networkReasonCode === "string" &&
+      capabilityHostData.networkReasonCode.length > 0 &&
       capabilityData.singleWorkbenchSurface === true &&
       capabilityData.compactMode === true &&
-      capabilityData.modebarHiddenInCompact === true,
+      capabilityData.modebarHiddenInCompact === true &&
+      capabilityData.detailPaneVisible === true &&
+      capabilityData.sandboxPaneVisible === false &&
+      capabilityData.previewPaneVisible === false,
   );
 }
 
@@ -463,6 +480,8 @@ function summarizeNextHopRound(nextHopData, stepOk, materializedEventMissing) {
 
 function summarizeResourceDetailRound(detailData, stepOk, evidenceOk) {
   return {
+    evidenceScope: "webview-debug-state",
+    visualTargetAsserted: false,
     stepOk,
     evidenceOk,
     activeSurface: detailData?.activeSurface ?? null,
@@ -474,22 +493,27 @@ function summarizeResourceDetailRound(detailData, stepOk, evidenceOk) {
 
 function summarizeSandboxPreviewRound(previewData, stepOk, evidenceOk) {
   return {
+    evidenceScope: "webview-debug-state",
+    visualTargetAsserted: false,
     stepOk,
     evidenceOk,
     sandboxPath: previewData?.sandboxPath ?? null,
     previewSucceeded: previewData?.previewSucceeded === true,
     selectedSandboxPathMatches: previewData?.selectedSandboxPath === previewData?.sandboxPath,
+    renderedPreviewPathMatches: previewData?.sandboxPreviewPath === previewData?.sandboxPath,
   };
 }
 
-function summarizeSandboxCapabilityRound(capabilityData, stepOk, evidenceOk) {
+function summarizeSandboxCapabilityRound(capabilityData, capabilityHostData, stepOk, evidenceOk) {
   return {
+    evidenceScope: "host-state-and-webview-debug-state",
+    visualTargetAsserted: false,
     stepOk,
     evidenceOk,
     activeSurface: capabilityData?.activeSurface ?? null,
-    permissionState: capabilityData?.permissionState ?? null,
-    networkExecutionStatus: capabilityData?.networkExecutionStatus ?? null,
-    networkReasonCode: capabilityData?.networkReasonCode ?? null,
+    permissionState: capabilityHostData?.permissionState ?? null,
+    networkExecutionStatus: capabilityHostData?.networkExecutionStatus ?? null,
+    networkReasonCode: capabilityHostData?.networkReasonCode ?? null,
   };
 }
 

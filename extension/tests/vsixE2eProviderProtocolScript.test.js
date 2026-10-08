@@ -109,11 +109,11 @@ test('VSIX E2E keeps direct provider-bound smoke calls within the bounded provid
   );
   assert.match(
     source,
-    /assert-training-next-hop-visible-truth[\s\S]*?postProviderBoundJson\(port, "\/session\/start"/,
+    /assert-training-next-hop-webview-debug-state[\s\S]*?postProviderBoundJson\(port, "\/session\/start"/,
   );
   assert.match(
     source,
-    /assert-training-next-hop-visible-truth[\s\S]*?postProviderBoundJson\(port, "\/turn"/,
+    /assert-training-next-hop-webview-debug-state[\s\S]*?postProviderBoundJson\(port, "\/turn"/,
   );
   assert.match(
     source,
@@ -133,9 +133,9 @@ test('VSIX E2E resolves the live sidecar port before each direct smoke flow', ()
   );
   for (const flow of [
     'probe-sidecar-health',
-    'assert-training-theory-drill-visible-truth',
-    'assert-training-scenario-lab-visible-truth',
-    'assert-training-next-hop-visible-truth',
+    'assert-training-theory-drill-host-state',
+    'assert-training-scenario-lab-webview-debug-state',
+    'assert-training-next-hop-webview-debug-state',
     'assert-cross-workspace-reopen-history-truth',
   ]) {
     assert.match(
@@ -280,7 +280,7 @@ test('VSIX E2E seeds theory training through the managed context ID', () => {
   assert.match(source, /Managed Trainer Workspace did not return a contextId/);
   assert.match(
     source,
-    /assert-training-theory-drill-visible-truth[\s\S]*?workspace_id: managedContextId/,
+    /assert-training-theory-drill-host-state[\s\S]*?workspace_id: managedContextId/,
   );
   assert.match(
     source,
@@ -290,9 +290,9 @@ test('VSIX E2E seeds theory training through the managed context ID', () => {
 
 test('VSIX E2E keeps host-visible scenario and next-hop flows in the managed context', () => {
   const source = fs.readFileSync(e2eScriptPath, 'utf8');
-  const scenarioStart = source.indexOf('await record("assert-training-scenario-lab-visible-truth"');
-  const nextHopStart = source.indexOf('await record("assert-training-next-hop-visible-truth"');
-  const nextHopEnd = source.indexOf('await record("capture-training-next-hop-installed-screenshot"');
+  const scenarioStart = source.indexOf('await record("assert-training-scenario-lab-webview-debug-state"');
+  const nextHopStart = source.indexOf('await record("assert-training-next-hop-webview-debug-state"');
+  const nextHopEnd = source.indexOf('await record("capture-owned-workbench-after-next-hop-restore"');
 
   assert.ok(scenarioStart >= 0, 'the scenario-lab flow must exist');
   assert.ok(nextHopStart > scenarioStart, 'the next-hop flow must follow the scenario-lab flow');
@@ -337,8 +337,8 @@ test('VSIX E2E uses readable coach prompts', () => {
 
 test('VSIX E2E records next-hop truth through the public practice-return route', () => {
   const source = fs.readFileSync(e2eScriptPath, 'utf8');
-  const flowStart = source.indexOf('await record("assert-training-next-hop-visible-truth"');
-  const flowEnd = source.indexOf('await record("capture-training-next-hop-installed-screenshot"', flowStart);
+  const flowStart = source.indexOf('await record("assert-training-next-hop-webview-debug-state"');
+  const flowEnd = source.indexOf('await record("capture-owned-workbench-after-next-hop-restore"', flowStart);
   const flowSource = source.slice(flowStart, flowEnd);
 
   assert.ok(flowStart >= 0 && flowEnd > flowStart, 'the next-hop flow must exist');
@@ -385,10 +385,10 @@ test('VSIX E2E checks the public sandbox skill capability contract instead of an
   assert.match(source, /trainer\.resource_sandbox\.skill_runtime\.v1/);
 });
 
-test('VSIX E2E asserts the governed sandbox preview truth and the visible resource state', () => {
+test('VSIX E2E checks the governed preview and reported reader state without claiming a separate pane', () => {
   const source = fs.readFileSync(e2eScriptPath, 'utf8');
-  const sandboxStart = source.indexOf('await record("assert-resources-sandbox-preview-truth"');
-  const sandboxEnd = source.indexOf('await record("capture-resources-sandbox-installed-screenshot"', sandboxStart);
+  const sandboxStart = source.indexOf('await record("assert-resources-embedded-preview-webview-debug-state"');
+  const sandboxEnd = source.indexOf('await record("capture-owned-workbench-after-sandbox-restore"', sandboxStart);
   const sandboxSource = source.slice(sandboxStart, sandboxEnd);
 
   assert.ok(sandboxStart >= 0 && sandboxEnd > sandboxStart, 'the sandbox truth flow must exist');
@@ -410,7 +410,10 @@ test('VSIX E2E asserts the governed sandbox preview truth and the visible resour
   // The detail pane opens whenever a resource is selected
   // (ResourcesWorkbenchView: detailPaneVisible = Boolean(selectedResource)).
   assert.match(sandboxSource, /data\.detailPaneVisible === true/);
-  assert.match(sandboxSource, /data\.sandboxPaneVisible === true/);
+  assert.match(sandboxSource, /data\.sandboxPaneVisible === false/);
+  assert.match(sandboxSource, /data\.sandboxPreviewVisible === true/);
+  assert.match(sandboxSource, /data\.sandboxPreviewEmbedded === true/);
+  assert.match(sandboxSource, /data\.sandboxPreviewPath === data\.sandboxPath/);
   assert.match(sandboxSource, /data\.previewPaneVisible === false/);
   assert.doesNotMatch(sandboxSource, /data\.activeSurface === "detail"/);
   assert.doesNotMatch(sandboxSource, /data\.permissionState === "coach_only"/);
