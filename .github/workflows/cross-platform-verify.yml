@@ -51,8 +51,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: server/uv.lock
 
       - name: Set up locked Python tooling
         uses: astral-sh/setup-uv@v7
@@ -205,8 +203,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: server/uv.lock
 
       - name: Set up locked Python tooling
         uses: astral-sh/setup-uv@v7
@@ -239,13 +235,30 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Provision checksum-verified Microsoft VS Code for requested host acceptance
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true }}
+        run: node ./scripts/provision-vscode.mjs
+
+      - name: Prepare the Linux native host display
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && runner.os == 'Linux' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y xvfb libgtk-3-0 libgbm1 libnss3 libasound2t64
+
       - name: Detect native VSIX install and host-E2E capability
         id: vsix-capability
         run: node ./scripts/vsix-ci-capability.mjs
 
       - name: Verify native VSIX installation in VS Code
         if: ${{ steps.vsix-capability.outputs.install_available == 'true' }}
-        run: node extension/scripts/verify-vsix-install.mjs
+        shell: bash
+        env:
+          TRAINER_VSIX_OUTPUT_PATH: ${{ steps.package-vsix.outputs.vsix_path }}
+          TRAINER_SKIP_VSIX_REBUILD: "1"
+        run: |
+          mkdir -p output/maturity/ci-installed
+          set -o pipefail
+          node extension/scripts/verify-vsix-install.mjs 2>&1 | tee output/maturity/ci-installed/install.log
 
       - name: Record the native VSIX install manual gate
         if: ${{ steps.vsix-capability.outputs.install_available != 'true' }}
@@ -258,15 +271,38 @@ jobs:
 
       - name: Run installed VSIX host E2E (Linux display)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && steps.vsix-capability.outputs.host_e2e_available == 'true' && steps.vsix-capability.outputs.linux_use_xvfb != 'true' && runner.os == 'Linux' }}
+        env:
+          TRAINER_VSIX_OUTPUT_PATH: ${{ steps.package-vsix.outputs.vsix_path }}
+          TRAINER_SKIP_VSIX_REBUILD: "1"
+          TRAINER_E2E_EXPORT_REPORT_PATH: output/maturity/ci-installed/host-report.json
+          TRAINER_E2E_NO_SANDBOX: "1"
         run: npm run test:vsix-e2e
 
       - name: Run installed VSIX host E2E (Linux Xvfb)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && steps.vsix-capability.outputs.linux_use_xvfb == 'true' && runner.os == 'Linux' }}
+        env:
+          TRAINER_VSIX_OUTPUT_PATH: ${{ steps.package-vsix.outputs.vsix_path }}
+          TRAINER_SKIP_VSIX_REBUILD: "1"
+          TRAINER_E2E_EXPORT_REPORT_PATH: output/maturity/ci-installed/host-report.json
+          TRAINER_E2E_NO_SANDBOX: "1"
         run: xvfb-run --auto-servernum npm run test:vsix-e2e
 
       - name: Run installed VSIX host E2E (macOS and Windows)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && steps.vsix-capability.outputs.host_e2e_available == 'true' && runner.os != 'Linux' }}
+        env:
+          TRAINER_VSIX_OUTPUT_PATH: ${{ steps.package-vsix.outputs.vsix_path }}
+          TRAINER_SKIP_VSIX_REBUILD: "1"
+          TRAINER_E2E_EXPORT_REPORT_PATH: output/maturity/ci-installed/host-report.json
         run: npm run test:vsix-e2e
+
+      - name: Archive native install and host acceptance evidence
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: trainer-installed-host-${{ matrix.os }}
+          path: output/maturity/ci-installed/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Record the installed VSIX host E2E manual gate
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true) }}

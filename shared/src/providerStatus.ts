@@ -91,6 +91,7 @@ export interface ProviderImageInputState {
 }
 
 const hardBlockingCategories = new Set([
+  'quota_exhausted',
   'invalid_key_or_permission',
   'invalid_api_key',
   'authentication_failed',
@@ -106,6 +107,7 @@ const hardBlockingCategories = new Set([
 ]);
 
 const recentTestBlockingCategories = new Set([
+  'quota_exhausted',
   'invalid_key_or_permission',
   'invalid_api_key',
   'authentication_failed',
@@ -137,6 +139,7 @@ const recentTestConnectivityFailureCategories = new Set([
 ]);
 
 type ProviderStatusPhraseKey =
+  | 'quota_exhausted'
   | 'invalid_key_or_permission'
   | 'rate_limit'
   | 'upstream_unavailable'
@@ -166,6 +169,7 @@ const providerStatusPhraseTable: Record<
   Record<ProviderStatusPhraseKey, string>
 > = {
   'zh-CN': {
+    quota_exhausted: '服务商账户额度已用完。补充额度或在“设置”换一个连接后再试。',
     invalid_key_or_permission: '这组连接暂时不能用。到“设置”检查密钥和权限后再试。',
     rate_limit: '服务正忙，请稍等再试。',
     upstream_unavailable: '服务商已收到请求，但它的上游暂时出错。稍等重试即可，不用改配置。',
@@ -191,6 +195,7 @@ const providerStatusPhraseTable: Record<
     image_ready_detail: '图片输入已就绪。下一次教练对话会把暂存图片一并发给模型。',
   },
   'en-US': {
+    quota_exhausted: 'The provider account has no quota left. Restore its quota or choose another connection in Settings, then try again.',
     invalid_key_or_permission: 'This connection cannot be used right now. Open Settings to check the key and access.',
     rate_limit: 'The service is busy right now. Wait a moment and try again.',
     upstream_unavailable: 'The provider answered, but its upstream failed. Retry in a moment — no setting needs changing.',
@@ -216,6 +221,7 @@ const providerStatusPhraseTable: Record<
     image_ready_detail: 'Image input is ready. Staged pictures will be sent with the next coach turn.',
   },
   'es-ES': {
+    quota_exhausted: 'La cuenta del proveedor no tiene cuota disponible. Añade cuota o elige otra conexión en Ajustes y vuelve a intentarlo.',
     invalid_key_or_permission: 'La clave API no es válida o no tiene acceso a este modelo o proyecto.',
     rate_limit: 'El proveedor está limitando solicitudes ahora mismo. Espera un momento y vuelve a intentarlo.',
     upstream_unavailable: 'El proveedor respondió, pero su upstream falló. Reintenta en un momento: no hay que cambiar la configuración.',
@@ -241,6 +247,7 @@ const providerStatusPhraseTable: Record<
     image_ready_detail: 'La entrada de imágenes está lista. Las imágenes preparadas se enviarán con el siguiente turno del coach.',
   },
   'fr-FR': {
+    quota_exhausted: 'Le quota du fournisseur est épuisé. Rétablissez-le ou choisissez une autre connexion dans les paramètres, puis réessayez.',
     invalid_key_or_permission: "La clé API est invalide ou n'a pas accès à ce modèle ou projet.",
     rate_limit: 'Le fournisseur limite actuellement les requêtes. Attendez un moment puis réessayez.',
     upstream_unavailable: 'Le fournisseur a répondu, mais son amont a échoué. Réessayez dans un instant : rien à changer dans la configuration.',
@@ -266,6 +273,7 @@ const providerStatusPhraseTable: Record<
     image_ready_detail: "L'entrée image est prête. Les images préparées seront envoyées avec le prochain tour du coach.",
   },
   'de-DE': {
+    quota_exhausted: 'Das Anbieterkontingent ist aufgebraucht. Füllen Sie es auf oder wählen Sie in den Einstellungen eine andere Verbindung und versuchen Sie es erneut.',
     invalid_key_or_permission: 'Der API-Schlüssel ist ungültig oder hat keinen Zugriff auf dieses Modell oder Projekt.',
     rate_limit: 'Der Anbieter begrenzt Anfragen gerade. Warten Sie kurz und versuchen Sie es erneut.',
     upstream_unavailable: 'Der Anbieter hat geantwortet, aber sein Upstream ist fehlgeschlagen. Gleich erneut versuchen – die Einstellung muss nicht geändert werden.',
@@ -291,6 +299,7 @@ const providerStatusPhraseTable: Record<
     image_ready_detail: 'Die Bildeingabe ist bereit. Vorbereitete Bilder werden mit der nächsten Coach-Nachricht gesendet.',
   },
   'ja-JP': {
+    quota_exhausted: '提供元の利用枠がなくなりました。利用枠を補充するか、設定で別の接続を選んでから再試行してください。',
     invalid_key_or_permission: 'API キーが無効か、このモデルまたはプロジェクトへの権限がありません。',
     rate_limit: '現在プロバイダー側でレート制限中です。少し待ってからもう一度試してください。',
     upstream_unavailable: 'プロバイダーは応答しましたが、上流側で一時的なエラーが発生しました。設定は変更せず、少し待って再試行してください。',
@@ -316,6 +325,7 @@ const providerStatusPhraseTable: Record<
     image_ready_detail: '画像入力の準備ができました。準備済みの画像は次の coach ターンで送信されます。',
   },
   'ko-KR': {
+    quota_exhausted: '제공업체의 사용 한도가 소진되었습니다. 한도를 충전하거나 설정에서 다른 연결을 선택한 후 다시 시도하세요.',
     invalid_key_or_permission: 'API 키가 올바르지 않거나 이 모델 또는 프로젝트에 접근 권한이 없습니다.',
     rate_limit: '현재 제공자가 속도를 제한하고 있습니다. 잠시 후 다시 시도하세요.',
     upstream_unavailable: '제공자가 응답했지만 업스트림에서 오류가 발생했습니다. 설정은 그대로 두고 잠시 후 다시 시도하세요.',
@@ -341,6 +351,7 @@ const providerStatusPhraseTable: Record<
     image_ready_detail: '이미지 입력이 준비되었습니다. 준비된 이미지는 다음 coach 턴과 함께 전송됩니다.',
   },
   'pt-BR': {
+    quota_exhausted: 'A conta do provedor está sem cota. Reponha a cota ou escolha outra conexão nas configurações e tente novamente.',
     invalid_key_or_permission: 'A chave de API é inválida ou não tem acesso a este modelo ou projeto.',
     rate_limit: 'O provedor está limitando requisições agora. Espere um momento e tente novamente.',
     upstream_unavailable: 'O provedor respondeu, mas o upstream falhou. Tente de novo em instantes — nenhuma configuração precisa mudar.',
@@ -451,6 +462,7 @@ function staleVerificationWarning(language: ProviderSurfaceLanguage): string {
 }
 
 const providerErrorCategoryKeyMap: Partial<Record<string, ProviderStatusPhraseKey>> = {
+  quota_exhausted: 'quota_exhausted',
   invalid_key_or_permission: 'invalid_key_or_permission',
   invalid_api_key: 'invalid_key_or_permission',
   authentication_failed: 'invalid_key_or_permission',
@@ -476,6 +488,10 @@ function providerStatusPhrase(
   key: ProviderStatusPhraseKey,
 ): string {
   return providerStatusPhraseTable[language]?.[key] ?? providerStatusPhraseTable['en-US'][key];
+}
+
+export function providerQuotaRecovery(language: ProviderSurfaceLanguage): string {
+  return providerStatusPhrase(language, 'quota_exhausted');
 }
 
 export function countSavedProviderProfiles(

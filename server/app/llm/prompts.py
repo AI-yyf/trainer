@@ -2535,41 +2535,6 @@ def infer_coaching_scenario(
     def _has_any(*tokens: str) -> bool:
         return any(token in lowered for token in tokens)
 
-    code_anchor_present = bool(
-        is_code_like_current_file(current_file)
-        and _first_str(
-            _nested_get(current_file, "selection_text"),
-            _nested_get(current_file, "content_excerpt"),
-            _nested_get(current_file, "content"),
-            _nested_get(current_file, "path"),
-        )
-    )
-    if code_anchor_present and _has_any(
-        "function",
-        "method",
-        "function contract",
-        "contract",
-        "parameter",
-        "return",
-        "signature help",
-        "hover",
-        "go to definition",
-        "definition",
-        "call site",
-        "typescript",
-        "ts function",
-        "api call",
-        "函数",
-        "契约",
-        "参数",
-        "返回",
-        "签名",
-        "定义",
-        "调用点",
-        "悬停",
-    ):
-        return "function_guidance"
-
     rejects_broad_plan = _has_any(
         "not a whole study plan",
         "not a full study plan",
@@ -2761,8 +2726,6 @@ def infer_coaching_scenario(
         "悬停",
         "查看定义",
         "跳转定义",
-        "定义",
-        "引用",
         "调用点",
         "看懂函数",
         "函数作用",
@@ -2792,17 +2755,12 @@ def infer_coaching_scenario(
         "read this function",
         "what this function expects",
         "contract",
-        "parameter",
-        "argument",
         "改之前",
         "编辑之前",
         "修改之前",
         "先看懂",
         "看懂",
         "契约",
-        "参数",
-        "实参",
-        "形参",
     )
     if function_subject and function_guidance_clue:
         return "function_guidance"

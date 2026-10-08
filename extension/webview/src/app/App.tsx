@@ -197,10 +197,12 @@ import { ownsCoachComposer } from "../lib/workbenchDestinations";
 import {
   attestationUndeliveredMessage,
   detectAttestationUndelivered,
+  detectOperationScopeChanged,
   detectPlanRevisionConflict,
   livePlanTaskGateFailureMessage,
   parseLivePlanTaskGateMarker,
   planRevisionConflictMessage,
+  operationScopeChangedMessage,
   providerRecoveryMessage,
   recoverableFailureMessage,
   resolveOperationMessageSurface,
@@ -613,7 +615,9 @@ function sanitizeHostFailureMessage(
     ...message,
     payload: {
       ...message.payload,
-      message: detectAttestationUndelivered(message.payload.message)
+      message: detectOperationScopeChanged(message.payload.message)
+        ? operationScopeChangedMessage(language)
+        : detectAttestationUndelivered(message.payload.message)
         ? attestationUndeliveredMessage(language)
         : revisionConflict
         ? planRevisionConflictMessage(revisionConflict.revision, language)
@@ -3705,6 +3709,18 @@ export function App() {
     useState<ComposerModelActionDensity>("default");
   const [settingsActionState, updateSettingsActionState] = useState<SettingsActionState>();
   const [settingsFeedbackState, setSettingsFeedbackState] = useState<SettingsFeedbackState>({});
+  const settingsScopeKey = `${syncCursor.generation}\0${syncCursor.workspaceId}\0${syncCursor.sessionId}`;
+  const settingsScopeRef = useRef(settingsScopeKey);
+  const settingsActionScopeRef = useRef(settingsScopeKey);
+  useEffect(() => {
+    if (settingsScopeRef.current !== settingsScopeKey) {
+      // An old request cannot finish a new conversation's local busy state.
+      // Keep the connection draft so the learner can retry after the handshake.
+      updateSettingsActionState(undefined);
+      setSettingsFeedbackState({});
+      settingsScopeRef.current = settingsScopeKey;
+    }
+  }, [settingsScopeKey]);
   const [providerApiKeyFocusRequest, setProviderApiKeyFocusRequest] = useState(0);
   const [trainingComposerFlashMode, setTrainingComposerFlashMode] =
     useState<FlashVerificationMode>("short");
@@ -3859,12 +3875,13 @@ export function App() {
     // Clear the previous outcome when starting, rather than treating identical
     // text as an outstanding operation forever.
     if (next) {
+      settingsActionScopeRef.current = settingsScopeKey;
       setOperationMessage(undefined);
       updateSettingsActionState({ ...next, baselineMessageKey: undefined });
     } else {
       updateSettingsActionState(undefined);
     }
-  }, [setOperationMessage]);
+  }, [setOperationMessage, settingsScopeKey]);
   const handleResourceSelectionChange = useCallback(
     (resourceIds: string[], reason?: "selection" | "unmount") => {
       setSelectedResourceContextIds(resourceIds);
@@ -5035,8 +5052,9 @@ export function App() {
 
     const shouldKeepUnsavedProviderDraft =
       providerDraftIsDirtyRef.current &&
-      settingsActionState?.kind !== "save-provider" &&
-      settingsActionState?.kind !== "clear-provider";
+      (settingsActionScopeRef.current !== settingsScopeKey ||
+        (settingsActionState?.kind !== "save-provider" &&
+          settingsActionState?.kind !== "clear-provider"));
     if (shouldKeepUnsavedProviderDraft) {
       return;
     }
@@ -5061,7 +5079,7 @@ export function App() {
       apiKey: "",
     });
     providerDraftIsDirtyRef.current = false;
-  }, [providerDraftSource, providerDraftSourceKey, settingsActionState?.kind]);
+  }, [providerDraftSource, providerDraftSourceKey, settingsActionState?.kind, settingsScopeKey]);
 
   const providerDraftHasUnsavedApiKey = providerDraft.apiKey.trim().length > 0;
   const providerDraftHasChanges = useMemo(

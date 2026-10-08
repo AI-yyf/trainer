@@ -213,7 +213,8 @@ def _infer_guided_coaching_domain(
         "悬停",
         "查看定义",
         "转到定义",
-        "引用",
+        "查找引用",
+        "所有引用",
         "补全",
     )
     if any(token in blob for token in function_tokens):

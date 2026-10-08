@@ -65,6 +65,24 @@ function loadGovernance() {
 
 const governance = loadGovernance();
 
+test('rejected scope changes explain that the action did not run in all eight languages', () => {
+  const languages = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
+  const copies = new Set();
+  for (const language of languages) {
+    const result = governance.sanitizeOperationFailureMessage({
+      tone: 'error', message: '[[trainer-operation-scope-changed]] hidden host detail',
+    }, language);
+    assert.equal(result.message, governance.operationScopeChangedMessage(language));
+    assert.ok(result.message.length > 20);
+    assert.ok(!result.message.includes('[['));
+    assert.ok(!result.message.includes('hidden host detail'));
+    assert.equal(governance.resolveOperationMessageSurface(result.message), 'global');
+    copies.add(result.message);
+  }
+  assert.equal(copies.size, 8);
+  assert.equal(governance.detectOperationScopeChanged('an ordinary provider failure'), false);
+});
+
 test('surface attribution: explicit surface wins over plan markers', () => {
   assert.equal(
     governance.resolveOperationMessageSurface('[[trainer-plan-revision-conflict:7]] ', 'resources'),

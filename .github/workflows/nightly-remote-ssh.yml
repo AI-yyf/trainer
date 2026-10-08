@@ -55,8 +55,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: server/uv.lock
 
       - name: Set up locked Python tooling
         uses: astral-sh/setup-uv@v7
@@ -160,8 +158,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: server/uv.lock
 
       - name: Set up locked Python tooling
         uses: astral-sh/setup-uv@v7

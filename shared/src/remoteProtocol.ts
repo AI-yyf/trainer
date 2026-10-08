@@ -379,6 +379,8 @@ export type RemoteDiagnostic = {
 export type RemoteEnvironment = {
   remote_name?: string;
   workspace_uri?: string;
+  /** Canonical filesystem root observed by the workspace host, never the UI host. */
+  canonical_workspace_uri?: string;
   os: string;
   arch: string;
   node_version: string;

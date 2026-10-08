@@ -91,6 +91,57 @@ async function createTemporaryDirectory(t) {
   return directory;
 }
 
+test('remote managed admission keeps its URI identity and all data lanes local across reload and root switches', async (t) => {
+  const temporary = await createTemporaryDirectory(t);
+  const rootA = path.join(temporary, 'brain-a');
+  const rootB = path.join(temporary, 'brain-b');
+  const globalState = createGlobalState();
+  let service = createService(globalState);
+  await service.selectRoot(rootA);
+  const uri = 'vscode-remote://ssh-remote+owned/tmp/project';
+  const identity = { ...managedIdentity(temporary, 'remote-a'), canonicalRootPath: rootA,
+    canonicalProjectPath: uri };
+  const state = await service.setProjectAdoption(uri, 'managed', identity);
+  assert.equal(state.contextId, identity.contextId);
+  assert.equal(state.identityStatus, 'verified');
+  assert.equal(state.canonicalProjectPath, uri);
+  assert.ok(state.projectLanePath.startsWith(path.join(rootA, 'Projects') + path.sep));
+  const lane = JSON.parse(await fs.readFile(path.join(state.projectLanePath, 'project.json'), 'utf8'));
+  assert.equal(lane.canonicalProjectPath, uri);
+  service = createService(globalState);
+  assert.equal((await service.getProjectState(uri)).contextId, identity.contextId);
+  await service.selectRoot(rootB);
+  assert.equal(await service.getProjectState(uri), undefined);
+  const identityB = { ...identity, rootId: 'root-b', projectId: 'project-b', contextId: 'context-b', canonicalRootPath: rootB };
+  await service.setProjectAdoption(uri, 'managed', identityB);
+  await service.selectRoot(rootA);
+  assert.equal((await service.getProjectState(uri)).contextId, identity.contextId);
+  await assert.rejects(service.setProjectAdoption(uri, 'browse'), /already managed/);
+});
+
+test('remote admission requires actual canonical identity and rolls the manifest back on registry failure', async (t) => {
+  const temporary = await createTemporaryDirectory(t);
+  const root = path.join(temporary, 'brain');
+  const globalState = createGlobalState();
+  const service = createService(globalState);
+  await service.selectRoot(root);
+  const observed = 'vscode-remote://ssh-remote+owned/tmp/alias';
+  const canonical = 'vscode-remote://ssh-remote+owned/tmp/project';
+  const identity = { ...managedIdentity(temporary, 'canonical'), canonicalRootPath: root, canonicalProjectPath: canonical };
+  await assert.rejects(service.setProjectAdoption(observed, 'managed', identity), /does not match/);
+  const before = await service.readWorkspaceManifest();
+  const update = globalState.update;
+  globalState.update = async (key, value) => {
+    if (key === TRAINER_WORKSPACE_PROJECTS_STORAGE_KEY) throw new Error('owned registry failure');
+    return update(key, value);
+  };
+  await assert.rejects(service.setProjectAdoption(observed, 'managed', identity, canonical), /owned registry failure/);
+  assert.deepEqual(await service.readWorkspaceManifest(), before);
+  assert.equal(await service.getProjectState(observed), undefined);
+  globalState.update = update;
+  assert.equal((await service.setProjectAdoption(observed, 'managed', identity, canonical)).canonicalProjectPath, canonical);
+});
+
 test('saveWorkspaceRoot creates the constitution workspace scaffold', async (t) => {
   const temporaryDirectory = await createTemporaryDirectory(t);
   const rootPath = path.join(temporaryDirectory, 'TrainerWorkspace');

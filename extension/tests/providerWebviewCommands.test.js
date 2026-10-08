@@ -3612,61 +3612,67 @@ test('saveProviderFromWebviewCommand never sends a newly saved key from an untru
   );
 });
 
-test('saveProviderFromWebviewCommand adopts a live model when the save names none (CC-Switch flow)', async () => {
-  const { saveProviderFromWebviewCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
-  const context = createContext();
-  const savedConfigs = [];
-  let storedConfig = context.providerStore.getConfig();
-  context.providerStore.saveConfig = async (config) => {
-    savedConfigs.push(config);
-    storedConfig = config;
-  };
-  context.providerStore.getConfig = () => storedConfig;
-  context.providerStore.getModelCache = () => undefined;
-  context.providerStore.isModelCacheFresh = () => false;
-  context.providerStore.isModelCacheCompatible = () => false;
-  context.providerStore.saveModelCache = async (_config, cache) => ({
-    ...cache,
-    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-  });
-  context.providerStore.saveLastTestResult = async () => {};
-  context.providerStore.getLastTestResult = () => undefined;
-  context.trustGuard = { async ensureTrusted() { return true; } };
-  context.providerStore.clearLastTestResult = async () => {};
-  context.sidecarClient.postJson = async (_port, path) => {
-    if (path === '/provider/models') {
-      return {
-        ok: true,
-        available_models: ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3'],
-        resolved_model: null,
-        model_token_limits: {},
-        source: 'live',
-        fetched_at: new Date().toISOString(),
-      };
-    }
-    if (path === '/provider/test') {
-      return { ok: true, status: 'connected', success: true };
-    }
-    throw new Error(`Unexpected sidecar call: ${path}`);
-  };
+for (const modelDraft of [undefined, '', '   ']) {
+  test(`saveProviderFromWebviewCommand discovers and tests a model for quick setup draft ${JSON.stringify(modelDraft)}`, async () => {
+    const { saveProviderFromWebviewCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
+    const context = createContext();
+    const savedConfigs = [];
+    let storedConfig;
+    const testedModels = [];
+    context.providerStore.saveConfig = async (config) => {
+      savedConfigs.push(config);
+      storedConfig = config;
+    };
+    context.providerStore.getConfig = () => storedConfig;
+    context.providerStore.getModelCache = () => undefined;
+    context.providerStore.isModelCacheFresh = () => false;
+    context.providerStore.isModelCacheCompatible = () => false;
+    context.providerStore.saveModelCache = async (_config, cache) => ({
+      ...cache,
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    });
+    context.providerStore.saveLastTestResult = async () => {};
+    context.providerStore.getLastTestResult = () => undefined;
+    context.trustGuard = { async ensureTrusted() { return true; } };
+    context.providerStore.clearLastTestResult = async () => {};
+    context.sidecarClient.postJson = async (_port, path, body) => {
+      if (path === '/provider/models') {
+        return {
+          ok: true,
+          available_models: ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3'],
+          resolved_model: null,
+          model_token_limits: {},
+          source: 'live',
+          fetched_at: new Date().toISOString(),
+        };
+      }
+      if (path === '/provider/test') {
+        testedModels.push(body.provider.model);
+        return { ok: true, status: 'connected', success: true };
+      }
+      throw new Error(`Unexpected sidecar call: ${path}`);
+    };
 
-  // No `model` in the payload: the fresh relay paste flow.
-  const postedStatuses = captureSaveStatuses(context);
-  const result = await saveProviderFromWebviewCommand(context, {
-    name: 'Relay',
-    baseUrl: 'http://minimax.relay.example.test',
-    protocol: 'openai_chat_completions_compatible',
-  });
-  await flushDetachedSaveVerification();
+    // The real Quick Setup form supplies an empty string; legacy callers omit it.
+    const postedStatuses = captureSaveStatuses(context);
+    const result = await saveProviderFromWebviewCommand(context, {
+      name: 'Relay',
+      baseUrl: 'http://minimax.relay.example.test',
+      protocol: 'openai_chat_completions_compatible',
+      ...(modelDraft === undefined ? {} : { model: modelDraft }),
+    });
+    await flushDetachedSaveVerification();
 
-  assert.equal(result.ok, true);
-  const lastSaved = savedConfigs[savedConfigs.length - 1];
-  assert.equal(lastSaved.model, 'MiniMax-M2.7-highspeed');
-  assert.match(
-    lastSaveOperationStatus(postedStatuses)?.payload.message ?? '',
-    /MiniMax-M2\.7-highspeed/,
-  );
-});
+    assert.equal(result.ok, true);
+    const lastSaved = savedConfigs[savedConfigs.length - 1];
+    assert.equal(lastSaved.model, 'MiniMax-M2.7-highspeed');
+    assert.deepEqual(testedModels, ['MiniMax-M2.7-highspeed']);
+    assert.match(
+      lastSaveOperationStatus(postedStatuses)?.payload.message ?? '',
+      /MiniMax-M2\.7-highspeed/,
+    );
+  });
+}
 
 function createThinkingTestContext(existingConfig) {
   const patches = [];

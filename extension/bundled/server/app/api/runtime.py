@@ -41,6 +41,7 @@ from ..specs.service import SpecService
 from ..workspace.adoption_index import ProjectAdoptionIndexService, ProjectAdoptionJobRecord
 from ..workspace.authority import PermissionLevel, WorkspaceAuthority
 from ..workspace.provisioning import ProjectProvisioningService
+from ..workspace.remote_identity import RemoteProjectIdentity
 
 if TYPE_CHECKING:
     from ..db.research_repository import ResearchRepository
@@ -871,6 +872,7 @@ class TrainerRuntime:
         context_id: str | None = None,
         root_id: str | None = None,
         root_path: str | None = None,
+        remote_project: RemoteProjectIdentity | None = None,
     ) -> ProjectProvisioning:
         """Create or restore the durable project lane behind an explicit adoption."""
         if self.project_provisioning_service is None:
@@ -882,6 +884,7 @@ class TrainerRuntime:
             root_path=root_path,
             project_path=project_path,
             project_name=project_name,
+            remote_project=remote_project,
         )
         self.register_workspace_path(provisioning.context_id, provisioning.project_path)
         state = self.ensure_session(

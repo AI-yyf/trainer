@@ -76,6 +76,10 @@ def test_incomplete_or_unrelated_feedback_cannot_bypass_verification(tmp_path, c
 @pytest.mark.parametrize("message", ["为什么元组内部的列表可以修改？", "Explain the current function.", "给我一个概念例子。"])
 def test_plain_questions_do_not_always_request_execution(message):
     assert not _practice_verification_requested_or_claimed(message=message, content="先区分容器和它引用的对象。")
+    assert not _practice_verification_requested_or_claimed(
+        message=message,
+        content="下一步，你可以做一个最小实验来验证这个原因。",
+    )
 
 
 @pytest.mark.parametrize("message", ["请核验我的训练提交。", "重新验证这张卡。", "Verify my practice."])

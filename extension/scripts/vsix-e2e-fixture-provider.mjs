@@ -127,6 +127,12 @@ function fixtureReplyFor(payload) {
   const userText = latestUserText(payload);
   const systemText = allSystemText(payload);
 
+  // This is a deterministic transport fixture, never model-quality evidence.
+  // Native card journeys still pass the real Sidecar's card validator.
+  if (/^Generate the training card now\./.test(userText) && /You are generating one .*grounded (?:training|flash) card for Trainer\./.test(systemText)) {
+    return JSON.stringify(fixtureTrainingCard(systemText));
+  }
+
   if (/Return exactly the requested text/i.test(systemText)) {
     const exactMatch = userText.match(/Repeat exactly:\s*([\s\S]+)/i);
     if (exactMatch?.[1]?.trim()) {
@@ -141,6 +147,68 @@ function fixtureReplyFor(payload) {
     return "先把目标缩小为一个可验证的练习：选出当前项目中的一个入口文件，写下它的输入、输出和一个不确定点。完成后把这三项发给我，我再带你走下一步。";
   }
   return "Start with one small, verifiable step: identify one entry point, its input, its output, and one uncertainty. Share those three facts before moving on.";
+}
+
+function fixtureTrainingCard(systemText) {
+  const focus = systemText.match(/^- focus_area:\s*(.+)$/m)?.[1]?.trim() || "workspace boundary";
+  const target = systemText.match(/^- target_skill:\s*(.+)$/m)?.[1]?.trim() || focus;
+  const flash = systemText.includes("grounded flash card for Trainer");
+  const chinese = /Respond in zh-CN/.test(systemText);
+  const choose = (english, zh) => chinese ? zh : english;
+  const question = choose(
+    `Why must one request retain its original workspace_id while practicing ${focus}?`,
+    `练习${focus}时，为什么一次请求必须保留原来的 workspace_id？`,
+  );
+  const deliverable = choose(
+    "Explain the original workspace_id, the received workspace_id, and how to reject a mismatch.",
+    "说明原始 workspace_id、收到的 workspace_id，以及不匹配时如何拒绝结果。",
+  );
+  const verify = choose(
+    "Compare `workspace_id` before applying the result; a mismatch must remain rejected.",
+    "应用结果前比较 `workspace_id`；不匹配的结果必须保持拒绝。",
+  );
+  const base = {
+    title: choose(`Fixture ${flash ? "recall" : "practice"}: ${focus}`, `Fixture ${flash ? "闪记" : "练习"}：${focus}`),
+    why_now: choose("This fixture checks one request boundary without claiming learner mastery.", "这个 fixture 检查一次请求边界，不声明学习者已经掌握。"),
+    focus_area: focus,
+    target_skill: target,
+    scenario: choose("An asynchronous result returns after the selected workspace changes.", "异步结果返回时，所选工作区已经改变。"),
+    problem_statement: question,
+    suggested_workspace_action: choose("Describe one request and its original workspace_id.", "描述一次请求及其原始 workspace_id。"),
+    deliverable,
+    learner_deliverables: [deliverable],
+    verification_steps: [verify],
+    success_signal: choose("The learner names the mismatch and rejects the unrelated result.", "学习者指出不匹配并拒绝无关结果。"),
+    stuck_recovery: choose("Compare only the two workspace_id values first.", "先只比较两个 workspace_id。"),
+    reflection_prompt: choose("Which boundary prevents a late result from changing another workspace?", "哪个边界能阻止迟到结果改变另一个工作区？"),
+    return_with: choose("Return the explanation and any unresolved mismatch to Coach.", "把说明和未解决的不匹配带回教练。"),
+    next_after_completion: choose("Discuss the same boundary before widening the task.", "扩大任务前，先讨论同一个边界。"),
+    acceptance_criteria: [
+      choose("Use `workspace_id` to name the original scope.", "使用 `workspace_id` 指出原始范围。"),
+      choose("Use `workspace_id` to compare the returned scope.", "使用 `workspace_id` 比较返回范围。"),
+      choose("Via `workspace_id` reject a mismatched result.", "通过 `workspace_id` 拒绝不匹配的结果。"),
+    ],
+  };
+  return flash ? {
+    ...base,
+    knowledge_type: "concept",
+    question,
+    context: base.scenario,
+    answer_mode: "text",
+    expected_answer: choose("The original workspace_id owns the request; applying a different scope would change unrelated state.", "原来的 workspace_id 拥有这次请求；应用另一个范围的结果会改变无关状态。"),
+    hint_ladder: [verify],
+    common_mistakes: [choose("Using the newly selected workspace as the original request scope.", "把新选择的工作区当作原始请求范围。")],
+    feedback: { correct: verify, incorrect: base.stuck_recovery },
+  } : {
+    ...base,
+    api_hints: ["workspace_id"],
+    constraints: [choose("Use fixture data only; do not modify another workspace.", "只使用 fixture 数据，不修改另一个工作区。")],
+    self_check: [verify],
+    validation_method: verify,
+    grading_rubric: base.acceptance_criteria,
+    expected_symbols: ["workspace_id"],
+    files_to_touch: [],
+  };
 }
 
 function latestUserText(payload) {

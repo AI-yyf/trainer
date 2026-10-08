@@ -4,7 +4,12 @@ const assert = require('node:assert/strict');
 const { WebviewStateTransport } = require('../dist/extension/src/core/webviewStateTransport');
 const { decideWebviewSync, emptyWebviewSyncCursor, appliedWebviewSyncCursor } = require('../dist/shared/src/webviewSync');
 
-const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+const flushTimers = async (t, ms) => {
+  t.mock.timers.tick(ms);
+  // Delivery promises settle before the next retry timer is registered.
+  await Promise.resolve();
+  await Promise.resolve();
+};
 function fixture(send) {
   const messages = [], statuses = [], acknowledged = [];
   const transport = new WebviewStateTransport({
@@ -59,13 +64,15 @@ test('removing a value uses a replacing snapshot so JSON omission cannot retain 
   } finally { f.transport.dispose(); }
 });
 
-test('lost delivery and lost ACK retry the identical identity, then recover from a fresh full snapshot', async () => {
+test('lost delivery and lost ACK retry the identical identity, then recover from a fresh full snapshot', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const f = fixture(() => false);
   try {
     await f.transport.publish(snapshot('one'));
     await f.transport.publish(snapshot('latest'));
-    await pause(24);
+    await flushTimers(t, 8);
     assert.equal(f.messages[0].sync.messageId, f.messages[1].sync.messageId);
+    await flushTimers(t, 8);
     assert.equal(f.messages[2].type, 'bootstrap');
     assert.equal(f.messages[2].sync.baseRevision, 0);
     assert.equal(f.messages[2].payload.task.title, 'latest');
@@ -75,17 +82,18 @@ test('lost delivery and lost ACK retry the identical identity, then recover from
   } finally { f.transport.dispose(); }
 });
 
-test('unresponsive webview exhausts bounded retries, unchanged navigation does not restart it', async () => {
+test('unresponsive webview exhausts bounded retries, unchanged navigation does not restart it', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const f = fixture(() => { throw new Error('disposed'); });
   const state = snapshot('one');
   try {
     await f.transport.publish(state);
-    await pause(60);
+    for (let attempt = 0; attempt < 4; attempt += 1) await flushTimers(t, 8);
     assert.equal(f.messages.length, 4);
     assert.equal(f.transport.debug.status, 'stale');
     assert.equal(await f.transport.whenApplied(), false);
     await f.transport.publish(state);
-    await pause(20);
+    await flushTimers(t, 32);
     assert.equal(f.messages.length, 4);
     await f.transport.publish(state, true);
     assert.equal(f.messages.length, 5);

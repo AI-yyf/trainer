@@ -69,6 +69,7 @@ from .harness import (
     RECENT_TOOL_KEEP as HARNESS_RECENT_TOOL_KEEP,
 )
 from .provider_service import redact_provider_error
+from .reply_continuity import visible_next_step
 from .tools import ToolContext, ToolRegistry
 
 logger = logging.getLogger("trainer.llm.agent_loop")
@@ -230,6 +231,10 @@ class AgentProvider:
     protocol: str
     call: ProviderHookCall
     call_stream: ProviderHookStream | None = None
+    # The loop awaits provider calls in child tasks. Keep safe transport facts
+    # on this per-turn provider, because ContextVar writes do not return to the
+    # caller across that task boundary.
+    last_failure: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1463,7 +1468,7 @@ def _build_completion_continuity(
             else "这一轮已经自然收口，可以继续同一条主线。"
         )
 
-    next_step = first_text(
+    next_step = visible_next_step(content) or first_text(
         "thread_next_step",
         "resume_hint",
         "next_step_hint",

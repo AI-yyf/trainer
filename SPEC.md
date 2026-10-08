@@ -1,7 +1,7 @@
 # Trainer 规格说明书
 
 版本：v1.1
-最后更新：2026-09-29
+最后更新：2026-10-08
 项目路径：本仓库根目录（`trainer/`）
 状态：P1 Release Candidate
 
@@ -31,14 +31,15 @@ Trainer = **AI Programming Coach / AI 通用技术教练**
 
 ### 情境入口
 
-- **Training**（训练）：活动驱动，有活跃训练卡或用户说"练一下"时出现
+- **Training**（训练）：学习内部的单卡练习表面，由当前训练卡、复习入口或教练推荐进入；不增加一级导航项
 - **Progress**（成长）：学习视图的证据下钻表面，非独立一级
 - **History**（历史）：Header 抽屉，ChatGPT 式时间线
 - **Settings**（设置）：Header 齿轮，Utility Surface
 
 > Route ≠ Primary Navigation
 > 内部 route（coach/plan/resources/training/progress/settings）继续存在
-> 但一级导航只显示三个日常 tab + 活动驱动的 Training + Settings 齿轮
+> 一级导航始终只有对话、学习、资料三个目的地。Training 与 Progress 在学习内部进入；History 与 Settings 是永久 Header 工具入口。
+> `lib/workbenchDestinations.ts` 负责六个内部 route 到这三个目的地的映射，保留命令、深链接与恢复入口。
 
 ## 3. 五层技术架构
 
@@ -82,12 +83,13 @@ Trainer = **AI Programming Coach / AI 通用技术教练**
 **核心**：
 - Composer (Ask Trainer / context chips / + 附件 / Send)
 - 消息流（用户 + AI，cards + actions + artifacts）
-- Skill Projection Strip（当前能力状态一览）
 - Coach streaming dots + streaming cancellation
 - History drawer（Header 入口）
 - 训练触发入口（教练推荐 → 情境进入 Training）
 
 **交互**：页面主角永远是消息流，禁止变成完整工作台
+
+Skill Projection 的能力状态与可信证据继续存在，通过学习中的成长入口查看；Coach 首屏不展示独立能力条。
 
 ### 4.2 学习视图 (Learning)
 
@@ -130,8 +132,14 @@ Trainer = **AI Programming Coach / AI 通用技术教练**
 
 **定位**：系统控制面，Header 齿轮进入
 
-**六分类**（§四十：键盘导航覆盖全部六项）：
-connection / workspace / teaching / skills / preferences / advanced
+**四个索引入口**（原生 VSIX 窗口验收，2026-10-08）：
+
+- 连接：模型服务、密钥与连接测试
+- 教练：教学偏好与 Skills
+- 工作区：项目、数据与远程支持
+- 偏好：语言、主题与高级配置
+
+原有 connection / workspace / teaching / skills / preferences / advanced 配置能力仍保留，由这四个入口进入详情和 disclosure；它们不再是六个并列展示入口。
 
 **Remote Support**（§四十一）：安装状态机（8 态）+ 八语言 +
 Remote-SSH E2E nightly + 远程验证面板（流式 + 停止 + 诚实中断态）

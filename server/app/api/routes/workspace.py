@@ -24,6 +24,7 @@ from ...workspace.provisioning import (
     ProjectProvisioningConflictError,
     ProjectProvisioningIntegrityError,
 )
+from ...workspace.remote_identity import validate_remote_project_identity
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 
@@ -155,6 +156,37 @@ def build_workspace_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         elif discovery is not None:
             payload["project_discovery"] = discovery.to_payload()
         return payload
+
+    @router.post("/workspace/remote/adopt", response_model=None)
+    def adopt_remote_project(payload: dict) -> dict[str, object]:
+        """Explicit host admission stores remote identity in a local project lane.
+
+        The local UI host observes the directory through its Companion. This
+        route provisions identity/memory only and performs no remote execution
+        or local filesystem access to the remote project's path.
+        """
+        if payload.get("workspace_trusted") is not True:
+            raise HTTPException(status_code=403, detail="Workspace trust is required for remote adoption.")
+        try:
+            remote_project = validate_remote_project_identity(payload.get("remote_project"))
+            owner = workspace_discovery_owner_id(payload)
+            selected = trainer_root_selection_from_payload(payload, owner)
+            if not selected.root_id or not selected.root_path:
+                raise ValueError("Select a registered local Trainer data root before remote adoption.")
+            provisioning = runtime.provision_project_adoption(
+                workspace_id=owner, project_path=remote_project.uri,
+                project_name=str(payload.get("project_name") or "").strip(),
+                root_id=selected.root_id, root_path=selected.root_path,
+                remote_project=remote_project,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        runtime.workspace_authority(provisioning.context_id)
+        identity = runtime.project_identity_payload(provisioning, idempotency="reused")
+        return {
+            "project_identity": identity,
+            "project_provisioning": provisioning.model_dump(mode="json"),
+        }
 
     @router.post("/workspace/classify", response_model=None)
     async def workspace_classify(payload: dict) -> dict[str, object]:

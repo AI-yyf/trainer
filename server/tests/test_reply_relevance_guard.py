@@ -73,3 +73,48 @@ def test_chinese_agent_finalize_reanchors_generic_summary_and_next_step() -> Non
     assert "renderCard" in str(final_event["summary"])
     assert "renderCard" in str(final_event["next_step"])
     assert "sources、knowledge、cards" not in str(final_event["next_step"])
+
+
+def test_traceback_question_preserves_an_explanation_grounded_in_current_code_symbols() -> None:
+    service = ProviderService(api_key="sk-test-key")
+    model_reply = (
+        "`append_item` 的默认参数在函数定义时创建一次，后续调用共享同一个列表。"
+        "在调试时打印每次调用前后的 items，可以观察对象是否被复用。\n\n"
+        "下一步：比较两次调用前后列表的内容和对象身份。"
+    )
+    reply = service.finalize_coaching_reply(
+        model_reply,
+        profile=_profile(),
+        message="lesson.py 报 AssertionError，请解释原因，然后给我一个最小实验。",
+        current_file={
+            "path": "lesson.py", "language_id": "python",
+            "content": "def append_item(value, items=[]):\n    items.append(value)\n    return items\n",
+        },
+        response_language="zh-CN",
+        coach_context={"active_view": "coach", "current_focus": "整理旧资料库"},
+    )
+    assert "默认参数在函数定义时创建一次" in reply
+    assert "观察对象是否被复用" in reply
+    assert "我先回到你刚才问的" not in reply
+
+
+def test_common_code_vocabulary_does_not_prove_an_unrequested_workflow() -> None:
+    from app.llm.coaching_replies import _reply_needs_current_request_reanchor
+
+    assert _reply_needs_current_request_reanchor(
+        "默认参数在函数定义时创建，调试时可以比较两次调用使用的对象身份。",
+        message="lesson.py 报 AssertionError，为什么列表被共享？",
+        current_file={"path": "lesson.py", "content": ""},
+        coach_context={"active_view": "coach"},
+    ) is False
+
+
+def test_explicit_foreign_workflow_still_reanchors_without_a_current_code_symbol() -> None:
+    from app.llm.coaching_replies import _reply_needs_current_request_reanchor
+
+    assert _reply_needs_current_request_reanchor(
+        "First keep the remote workspace boundary stable and inspect credential mode.",
+        message="lesson.py 报 AssertionError，为什么列表被共享？",
+        current_file={"path": "lesson.py", "content": "def append_item(value): return value"},
+        coach_context={"active_view": "coach"},
+    ) is True

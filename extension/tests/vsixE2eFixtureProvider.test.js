@@ -88,6 +88,40 @@ test('VSIX E2E fixture provider verifies the forced tool-call contract without a
   }
 });
 
+test('native fixture card requests return explicit fixture JSON over both completion and streaming transports', async () => {
+  const { startVsixE2EFixtureProvider } = await loadFixtureHelpers();
+  const apiKey = `test-${randomUUID()}`;
+  const fixture = await startVsixE2EFixtureProvider({ apiKey });
+  try {
+    for (const [kind, stream] of [['flash', false], ['practice', true]]) {
+      const payload = {
+        messages: [
+          { role: 'system', content: `You are generating one ${kind === 'flash' ? 'grounded flash' : 'learn-first grounded training'} card for Trainer.\n- focus_area: scope ownership\n- target_skill: reject mismatches\nOutput valid JSON only.` },
+          { role: 'user', content: 'Generate the training card now.' },
+        ],
+        stream,
+      };
+      const response = await fetch(new URL('chat/completions', `${fixture.baseUrl}/`), {
+        method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, body: JSON.stringify(payload),
+      });
+      assert.equal(response.status, 200);
+      const raw = await response.text();
+      const content = stream
+        ? raw.split('\n').filter(line => line.startsWith('data: {')).map(line => JSON.parse(line.slice(6)).choices[0].delta.content || '').join('')
+        : JSON.parse(raw).choices[0].message.content;
+      const card = JSON.parse(content);
+      assert.match(card.title, /^Fixture /);
+      assert.equal(card.focus_area, 'scope ownership');
+      assert.equal(card.target_skill, 'reject mismatches');
+      assert.equal(card.acceptance_criteria.length, 3);
+      assert.ok(card.acceptance_criteria.every(item => item.includes('`workspace_id`')));
+      assert.ok(card.learner_deliverables.length && card.verification_steps.length && card.return_with);
+      if (kind === 'flash') assert.ok(card.question && card.expected_answer && card.feedback.incorrect);
+      else assert.ok(card.validation_method && card.grading_rubric.length);
+    }
+  } finally { await fixture.stop(); }
+});
+
 test('VSIX E2E uses an external provider only when its complete override is present', async () => {
   const { resolveVsixE2EProviderRuntime } = await loadRuntimeHelpers();
   let fixtureStarted = false;

@@ -2,6 +2,9 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import type { RemoteProcessSpec } from '../../../shared/src/remoteProtocol';
+import type { RemoteVerificationArtifact } from '../../../shared/src/trainingVerification';
+import { assertRemoteVerificationFileScope, captureRemoteVerificationArtifact, finishRemoteVerificationArtifact,
+  type CapturedRemoteArtifact } from '../testing/remoteVerificationArtifact';
 import { deriveCompanionInstallState } from '../../../shared/src/companionInstallState';
 import type { ComposerLanguage } from '../../../shared/src/types';
 import { resolveProviderHostLanguage } from './providerHostCopy';
@@ -60,6 +63,8 @@ export interface RemoteVerificationCommandPayload {
   cwd?: string;
   timeoutMs?: number;
   cardId?: string;
+  /** Explicit file whose stable bytes bind this verification to its project. */
+  artifactUri?: string;
 }
 
 function parseSpec(record: Record<string, unknown>): RemoteProcessSpec | undefined {
@@ -135,6 +140,14 @@ export async function remoteVerifyCommand(
   // Companion-side session id: the stable run identity behind the attestation
   // idempotency key, so a delivery retry can never double-record evidence.
   let companionRunId = '';
+  let captured: CapturedRemoteArtifact | undefined;
+  let artifact: RemoteVerificationArtifact | undefined;
+  if (scope.cardId) {
+    try { captured = await captureRemoteVerificationArtifact(context,
+      typeof record.artifactUri === 'string' ? record.artifactUri : vscode.window?.activeTextEditor?.document.uri); }
+    catch { context.outputChannel.appendLine('[remote] verification artifact could not be bound; evidence will not be recorded.'); }
+  }
+  if (!verificationScopeIsCurrent(context, scope)) return { ok: false, message: 'Workspace, session or card changed before remote verification started.' };
   try {
     const verification = await context.workspaceGateway.runVerification(spec, {
       onStart: (session) => {
@@ -165,6 +178,10 @@ export async function remoteVerifyCommand(
     }
     exitCode = verification.exit_code ?? null;
     passed = verification.result === 'passed' && exitCode === 0;
+    if (verificationScopeIsCurrent(context, scope)) {
+      try { artifact = await finishRemoteVerificationArtifact(context, captured, companionRunId, verification); }
+      catch { context.outputChannel.appendLine('[remote] verification artifact changed or became unavailable; no evidence was recorded.'); }
+    }
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     context.outputChannel.appendLine(`[remote] verification did not complete: ${detail}`);
@@ -181,15 +198,17 @@ export async function remoteVerifyCommand(
   }
 
   const cardId = scope.cardId;
-  let attestation: 'delivered' | 'undelivered' | 'not_requested' | 'stale_scope' = 'not_requested';
+  let attestation: 'delivered' | 'undelivered' | 'not_requested' | 'stale_scope' | 'artifact_unavailable' = 'not_requested';
   if (!verificationScopeIsCurrent(context, scope)) attestation = 'stale_scope';
-  else if (cardId) {
+  else if (cardId && !artifact) attestation = 'artifact_unavailable';
+  else if (cardId && artifact) {
     const body = buildTestRunAttestationBody({
       card: { cardId }, passed,
       summary: `Remote verify ${passed ? 'passed' : 'failed'}: ${described} (exit ${exitCode})`,
       testsOutput: truncateTestsOutput(`${stdout}\n${stderr}`.trim()),
       sessionId: scope.sessionId, workspaceId: scope.workspaceId,
       idempotencyKey: attestationIdempotencyKey({ cardId, runId: companionRunId }),
+      verificationArtifact: artifact,
     });
     attestation = await dispatchTestRunAttestation(attestationRuntimeWithUndeliveredNotice(context, scope), body);
   }
@@ -199,6 +218,7 @@ export async function remoteVerifyCommand(
       ? `Remote verification ${passed ? 'passed' : 'failed'} (exit ${exitCode}); the result was attested to the trainer.`
       : attestation === 'undelivered' ? ATTESTATION_UNDELIVERED_MARKER
       : attestation === 'stale_scope' ? 'Remote verification completed in an earlier workspace, session or card; no evidence was recorded.'
+      : attestation === 'artifact_unavailable' ? 'Remote verification completed, but the selected artifact identity or stable hash could not be confirmed; no evidence was recorded.'
       : `Remote verification ${passed ? 'passed' : 'failed'} (exit ${exitCode}); no live practice card, so nothing was attested.`,
     data: { spec, exit_code: exitCode, passed, stdout, stderr, attestation },
   };
@@ -223,13 +243,14 @@ const PYTESTABLE_EXTENSIONS = new Set(['.py']);
  * The host posts them before the webview can localize, so they ship in the
  * workspace response language (same resolution rule as provider host copy).
  */
-type RemoteVerificationSummaryKind = 'passed' | 'failed' | 'timed_out' | 'cancelled' | 'interrupted';
+type RemoteVerificationSummaryKind = 'passed' | 'failed' | 'timed_out' | 'cancelled' | 'interrupted' | 'artifact_unavailable';
 
 const REMOTE_VERIFICATION_SUMMARY_COPY: Record<
   ComposerLanguage,
   Record<RemoteVerificationSummaryKind, string>
 > = {
   'zh-CN': {
+    artifact_unavailable: '运行已完成，但文件或哈希未确认；没有记录验证证据。',
     passed: '已验证通过 (exit {exit})',
     failed: '已验证未通过 (exit {exit})',
     timed_out: '远程验证超时,执行结果未知。',
@@ -237,6 +258,7 @@ const REMOTE_VERIFICATION_SUMMARY_COPY: Record<
     interrupted: '远程验证已中断,执行结果未知。',
   },
   'en-US': {
+    artifact_unavailable: 'The run completed, but the artifact or hash could not be confirmed; no verification evidence was recorded.',
     passed: 'Verification passed (exit {exit})',
     failed: 'Verification failed (exit {exit})',
     timed_out: 'The remote verification timed out; its outcome is unknown.',
@@ -244,6 +266,7 @@ const REMOTE_VERIFICATION_SUMMARY_COPY: Record<
     interrupted: 'The remote verification was interrupted; its outcome is unknown.',
   },
   'es-ES': {
+    artifact_unavailable: 'La ejecución terminó, pero no se pudo confirmar el archivo o su hash; no se registró evidencia de verificación.',
     passed: 'Verificado como superado (exit {exit})',
     failed: 'Verificado como fallido (exit {exit})',
     timed_out: 'La verificación remota agotó el tiempo; su resultado es desconocido.',
@@ -251,6 +274,7 @@ const REMOTE_VERIFICATION_SUMMARY_COPY: Record<
     interrupted: 'La verificación remota se interrumpió; su resultado es desconocido.',
   },
   'fr-FR': {
+    artifact_unavailable: 'L’exécution est terminée, mais le fichier ou son empreinte n’a pas pu être confirmé ; aucune preuve de vérification n’a été enregistrée.',
     passed: 'Vérifié : réussi (exit {exit})',
     failed: 'Vérifié : échoué (exit {exit})',
     timed_out: 'La vérification distante a expiré ; son résultat est inconnu.',
@@ -258,6 +282,7 @@ const REMOTE_VERIFICATION_SUMMARY_COPY: Record<
     interrupted: 'La vérification distante a été interrompue ; son résultat est inconnu.',
   },
   'de-DE': {
+    artifact_unavailable: 'Der Lauf ist beendet, aber Datei oder Hash konnten nicht bestätigt werden; es wurde kein Verifizierungsnachweis gespeichert.',
     passed: 'Verifiziert: bestanden (exit {exit})',
     failed: 'Verifiziert: fehlgeschlagen (exit {exit})',
     timed_out: 'Die Remote-Verifizierung hat Zeitüberschreitung; das Ergebnis ist unbekannt.',
@@ -265,6 +290,7 @@ const REMOTE_VERIFICATION_SUMMARY_COPY: Record<
     interrupted: 'Die Remote-Verifizierung wurde unterbrochen; das Ergebnis ist unbekannt.',
   },
   'ja-JP': {
+    artifact_unavailable: '実行は完了しましたが、ファイルまたはハッシュを確認できず、検証証拠は記録されませんでした。',
     passed: '検証をパスしました (exit {exit})',
     failed: '検証はパスしませんでした (exit {exit})',
     timed_out: 'リモート検証がタイムアウトし、結果は不明です。',
@@ -272,6 +298,7 @@ const REMOTE_VERIFICATION_SUMMARY_COPY: Record<
     interrupted: 'リモート検証は中断され、結果は不明です。',
   },
   'ko-KR': {
+    artifact_unavailable: '실행은 완료되었지만 파일 또는 해시를 확인하지 못해 검증 증거가 기록되지 않았습니다.',
     passed: '검증 통과 (exit {exit})',
     failed: '검증 실패 (exit {exit})',
     timed_out: '원격 검증이 시간 초과되어 결과를 알 수 없습니다.',
@@ -279,6 +306,7 @@ const REMOTE_VERIFICATION_SUMMARY_COPY: Record<
     interrupted: '원격 검증이 중단되어 결과를 알 수 없습니다.',
   },
   'pt-BR': {
+    artifact_unavailable: 'A execução terminou, mas o arquivo ou hash não pôde ser confirmado; nenhuma evidência de verificação foi registrada.',
     passed: 'Verificado como aprovado (exit {exit})',
     failed: 'Verificado como reprovado (exit {exit})',
     timed_out: 'A verificação remota excedeu o tempo; o resultado é desconhecido.',
@@ -347,6 +375,23 @@ export async function remoteVerifyActiveFileCommand(context: CommandContext): Pr
     if (activeRemoteVerification === run) activeRemoteVerification = undefined;
     return { ok: false, message: 'Remote Workspace Companion is not available in this workspace. Reconnect before verifying.' };
   }
+  try { await assertRemoteVerificationFileScope(context, editor.document.uri); }
+  catch {
+    if (activeRemoteVerification === run) activeRemoteVerification = undefined;
+    return { ok: false, message: 'The practice file could not be confirmed inside the current remote project; no verification was started.' };
+  }
+  let captured: CapturedRemoteArtifact | undefined;
+  try {
+    const environment = await context.workspaceGateway.environment();
+    spec.executable = environment.os === 'win32' ? 'python' : 'python3';
+    if (scope.cardId) captured = await captureRemoteVerificationArtifact(context, editor.document.uri);
+  } catch {
+    context.outputChannel.appendLine('[remote] remote environment or artifact unavailable; trusted evidence requires a stable hash.');
+  }
+  if (!verificationScopeIsCurrent(context, scope) || run.signal.aborted) {
+    if (activeRemoteVerification === run) activeRemoteVerification = undefined;
+    return { ok: false, message: 'Remote verification scope changed or was cancelled before starting.' };
+  }
   const post = (message: unknown) => {
     if (verificationScopeIsCurrent(context, scope)) void context.workbench.postMessage(message);
   };
@@ -367,16 +412,22 @@ export async function remoteVerifyActiveFileCommand(context: CommandContext): Pr
     const passed = completed && verification.result === 'passed' && exitCode === 0;
     let delivery: 'delivered' | 'undelivered' | 'not_requested' = 'not_requested';
     if (scope.cardId && completed && verificationScopeIsCurrent(context, scope)) {
+      let artifact: RemoteVerificationArtifact | undefined;
+      try { artifact = await finishRemoteVerificationArtifact(context, captured, run.sessionId ?? '', verification); }
+      catch { context.outputChannel.appendLine('[remote] remote artifact hash unavailable after verification; no evidence was recorded.'); }
+      if (artifact && verificationScopeIsCurrent(context, scope)) {
       const body = buildTestRunAttestationBody({ card: { cardId: scope.cardId }, passed,
         summary: `Remote verify ${passed ? 'passed' : 'failed'} on ${workspace.remoteName ?? 'remote'}: ${path.basename(spec.args[spec.args.length - 1] ?? '')} (exit ${exitCode})`,
         testsOutput: truncateTestsOutput(`${verification.stdout}\n${verification.stderr}`.trim()),
         sessionId: scope.sessionId, workspaceId: scope.workspaceId,
         idempotencyKey: attestationIdempotencyKey({ cardId: scope.cardId, runId: run.sessionId ?? '' }),
+        verificationArtifact: artifact,
       });
       delivery = await dispatchTestRunAttestation(attestationRuntimeWithUndeliveredNotice(context, scope), body);
+      }
     }
     const state = verification.state === 'completed' && !completed ? 'connection_lost' : verification.state;
-    const summary = completed ? remoteVerificationSummary(passed ? 'passed' : 'failed', language, exitCode)
+    const summary = completed ? remoteVerificationSummary(scope.cardId && delivery === 'not_requested' ? 'artifact_unavailable' : passed ? 'passed' : 'failed', language, exitCode)
       : remoteVerificationSummary(state === 'timed_out' ? 'timed_out' : state === 'cancelled' ? 'cancelled' : 'interrupted', language);
     post({ type: 'remoteVerification/finished', payload: { sessionId: run.sessionId ?? '', state,
       exitCode, ...(completed ? { passed } : {}), summary, attestation: delivery } });

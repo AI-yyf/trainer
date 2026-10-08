@@ -6,6 +6,7 @@ import type { SidecarHttpClient } from '../core/httpClient';
 import type { SidecarProcessManager } from '../core/sidecarProcessManager';
 import type { TrainerHostState } from '../core/types';
 import { getRuntimeWorkspaceContext } from '../commands/workspaceContext';
+import type { RemoteVerificationArtifact } from '../../../shared/src/trainingVerification';
 
 /** Sidecar endpoint that records a trusted host-side training verification. */
 export const TRAINING_ATTESTATION_PATH = '/training/verification/attest';
@@ -79,6 +80,7 @@ export interface TrainingVerificationAttestationBody {
    * a transport-loss resend or a manual retry never double-records evidence.
    */
   idempotency_key?: string;
+  verification_artifact?: RemoteVerificationArtifact;
 }
 
 /**
@@ -179,6 +181,7 @@ export function buildTestRunAttestationBody(input: {
   workspaceId?: string;
   /** Stable per-run key for replay-safe delivery retries. */
   idempotencyKey?: string;
+  verificationArtifact?: RemoteVerificationArtifact;
 }): TrainingVerificationAttestationBody {
   return {
     card_id: input.card.cardId,
@@ -191,6 +194,7 @@ export function buildTestRunAttestationBody(input: {
     ...(input.sessionId ? { session_id: input.sessionId } : {}),
     ...(input.workspaceId ? { workspace_id: input.workspaceId } : {}),
     ...(input.idempotencyKey ? { idempotency_key: input.idempotencyKey } : {}),
+    ...(input.verificationArtifact ? { verification_artifact: input.verificationArtifact } : {}),
   };
 }
 

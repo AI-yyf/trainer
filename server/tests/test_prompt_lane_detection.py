@@ -1,4 +1,29 @@
+import pytest
+
 from app.llm.prompts import infer_coaching_scenario, infer_learner_signal
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("这个函数连续调用会带入上一次的结果，为什么？先解释再给最小实验。", "principle"),
+        ("Why does this function reuse a mutable default argument? Explain directly.", "principle"),
+        ("Why is this function parameter evaluated at definition time?", "principle"),
+        ("这个函数默认参数在定义时求值，为什么？", "principle"),
+        ("Diagnose the wrong return value of this TypeScript function.", "review"),
+        ("Help me debug this method with one breakpoint.", "debug_loop"),
+        ("Explain this function's boundary in a remote SSH workspace.", "remote_workspace"),
+    ],
+)
+def test_code_vocabulary_does_not_replace_the_requested_teaching_lane(
+    message: str, expected: str
+) -> None:
+    current_file = {
+        "path": "lesson.py",
+        "language_id": "python",
+        "content": "def append_item(value, items=[]):\n    items.append(value)\n    return items\n",
+    }
+    assert infer_coaching_scenario(message, current_file, default="general") == expected
 
 
 def test_infer_coaching_scenario_prefers_debug_loop_over_bug_substring() -> None:

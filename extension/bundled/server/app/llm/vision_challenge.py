@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import secrets
 import struct
 import zlib
 from dataclasses import dataclass
 
-VISION_PROBE_VERSION = "random-grid-v1"
+VISION_PROBE_VERSION = "random-grid-v2"
 
 _DIGITS = (
     ("11111", "10001", "10001", "10001", "10001", "10001", "11111"),
@@ -38,8 +39,14 @@ class VisionChallenge:
     prompt: str = _PROMPT
 
     def matches(self, text: str) -> bool:
+        normalized = text.strip()
+        # A single JSON code block preserves the same image-dependent answer.
+        # Accept that harmless formatting; never extract numbers from prose.
+        fenced = re.fullmatch(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", normalized, re.S | re.I)
+        if fenced is not None:
+            normalized = fenced.group(1).strip()
         try:
-            result = json.loads(text.strip())
+            result = json.loads(normalized)
         except (ValueError, TypeError):
             return False
         if not isinstance(result, dict) or set(result) != {"left", "middle", "right"}:

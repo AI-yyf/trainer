@@ -715,7 +715,9 @@ export async function saveProviderFromWebviewCommand(
   );
   const hasExplicitModel =
     hasOwn(input, 'model') && typeof input.model === 'string' && input.model.trim().length > 0;
-  const model = (input.model ?? existing?.model ?? 'gpt-4.1-mini').trim();
+  // Quick setup sends an empty model until live discovery selects one. Treat
+  // whitespace just like an omitted model, preserving the background lookup.
+  const model = input.model?.trim() || existing?.model?.trim() || 'gpt-4.1-mini';
 
   if (!baseUrl || !model) {
     return {

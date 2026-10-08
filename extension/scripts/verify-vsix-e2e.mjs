@@ -75,6 +75,7 @@ try {
   ]);
 
   const launchArgs = [
+    ...(process.env.TRAINER_E2E_NO_SANDBOX === "1" ? ["--no-sandbox"] : []),
     "--user-data-dir",
     userDataDir,
     "--extensions-dir",

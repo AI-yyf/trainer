@@ -11,6 +11,7 @@ from ...core.models import (
     ProviderModelsResponse,
     ProviderTestResponse,
 )
+from ...llm.provider.quota_copy import provider_quota_reply
 from ...llm.provider_gateway import NEWAPI_CONNECTION_TYPE
 from ...llm.provider_protocols import provider_protocol_family
 from ...llm.skill_draft import generate_skill_draft
@@ -234,7 +235,7 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         raw_detail: str | None,
         error_category: str | None = None,
     ) -> str:
-        if error_category == "invalid_key_or_permission":
+        if error_category in {"invalid_key_or_permission", "quota_exhausted"}:
             return base_detail
         upstream_excerpt = _provider_test_upstream_excerpt(raw_detail)
         if not upstream_excerpt:
@@ -248,6 +249,8 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         provider: ProviderConfig,
         response_language: str | None,
     ) -> str:
+        if error_category == "quota_exhausted":
+            return provider_quota_reply(response_language)
         if error_category == "invalid_key_or_permission":
             return localized_text(
                 "Provider rejected the API key or permissions. Check the key, scope, and model access.",

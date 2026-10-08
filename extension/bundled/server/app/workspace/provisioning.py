@@ -19,6 +19,7 @@ from ..core.models import (
 from ..db.repository import TrainerRepository
 from ..memory.service import MemoryService, StructuredMemoryService
 from ..planner.service import PlannerService
+from .remote_identity import RemoteProjectIdentity, canonical_remote_project_uri
 
 
 class ProjectProvisioningConflictError(ValueError):
@@ -40,6 +41,8 @@ def _canonical_path(value: str, label: str) -> str:
 
 
 def _path_key(value: str) -> str:
+    if value.startswith("vscode-remote://"):
+        return canonical_remote_project_uri(value)
     return normcase(normpath(value))
 
 
@@ -97,6 +100,7 @@ class ProjectProvisioningService:
         context_id: str | None = None,
         root_id: str | None = None,
         root_path: str | None = None,
+        remote_project: RemoteProjectIdentity | None = None,
     ) -> ProjectProvisioning:
         """Create or recover one context without deriving identity from a path.
 
@@ -105,8 +109,15 @@ class ProjectProvisioningService:
         share project memory, plans, training state, or agent sessions.
         """
 
-        normalized_project_path = _canonical_path(project_path, "project")
-        _require_directory(normalized_project_path, "project")
+        if remote_project is not None:
+            normalized_project_path = canonical_remote_project_uri(project_path)
+            if normalized_project_path != remote_project.uri or not root_path:
+                raise ProjectProvisioningConflictError("Remote adoption must keep its observed project and local data root.")
+        else:
+            if "://" in project_path:
+                raise ProjectProvisioningConflictError("Remote project adoption requires host-observed identity.")
+            normalized_project_path = _canonical_path(project_path, "project")
+            _require_directory(normalized_project_path, "project")
         normalized_project_name = project_name.strip() or Path(normalized_project_path).name
         if not normalized_project_name:
             raise ProjectProvisioningConflictError("A project name is required for provisioning.")
@@ -177,6 +188,14 @@ class ProjectProvisioningService:
         )
         profile = self._project_profile(context.context_id, project.project_path, project.project_name)
         structured_memory = self._project_structured_memory(profile, provisioning)
+        if remote_project is not None:
+            # Persist the observed remote boundary in the same transaction as
+            # the identity bundle; never create a temporarily local authority.
+            structured_memory["workspace"].update(
+                remote_name=remote_project.remote_name,
+                workspace_trusted=True,
+                remote_workspace_uri=remote_project.uri,
+            )
         session_payload = self._project_session_payload(profile, None, provisioning)
         persisted = self.repository.create_project_context_bundle(
             root=root,

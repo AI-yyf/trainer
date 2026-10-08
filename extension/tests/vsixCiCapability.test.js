@@ -100,3 +100,14 @@ test('installed VSIX smoke starts the extracted native sidecar', () => {
   assert.match(source, /verifyBundledSidecarRuntime/);
   assert.match(source, /await verifyBundledSidecarRuntime\(\{ extensionDir: installedRoot \}\)/);
 });
+
+test('locked uv workflow jobs do not register an unused pip post-job cache', () => {
+  const workflowDir = path.dirname(workflowPath);
+  for (const name of fs.readdirSync(workflowDir).filter((name) => name.endsWith('.yml'))) {
+    const source = fs.readFileSync(path.join(workflowDir, name), 'utf8');
+    if (!source.includes('uses: astral-sh/setup-uv@')) continue;
+    assert.doesNotMatch(source, /^\s+cache: pip\s*$/m,
+      `${name}: uv does not populate the pip cache; setup-python post-job would fail`);
+    assert.match(source, /uv sync [^\n]*--frozen/, `${name}: Python installation must use the lock`);
+  }
+});

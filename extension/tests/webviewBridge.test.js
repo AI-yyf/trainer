@@ -693,7 +693,19 @@ test('operation identity deduplicates execution and prevents a late result resto
   assert.equal(harness.postedMessages.some(item => item.type === 'operation/status'), false);
   assert.equal(harness.postedMessages.some(item => item.type === 'ui/restoreView'), false);
   await harness.dispatchMessage({ ...message, operation: { ...message.operation, requestId: 'another-old-request' } });
+  await flushAsyncBridgeWork();
   assert.equal(calls, 1, 'stale origin scope cannot execute a new command');
+  const rejection = harness.postedMessages.find(item => item.type === 'operation/status');
+  assert.equal(rejection.payload.message, '[[trainer-operation-scope-changed]]');
+  assert.equal(rejection.payload.tone, 'error');
+  assert.equal(rejection.operation.requestId, 'another-old-request');
+  assert.equal(rejection.operation.sessionId, message.operation.sessionId);
+  assert.equal(rejection.scope.sessionId, message.operation.sessionId,
+    'a stale rejection must only settle the UI that originated that request');
+  assert.equal(harness.postedMessages.find(item => item.type === 'operation/lifecycle' &&
+    item.payload.identity.requestId === 'another-old-request').payload.phase, 'interrupted');
+  assert.equal(harness.postedMessages.some(item => item.type === 'bootstrap' && item.sync.sessionId === 'new-session'), true,
+    'a rejected stale command must force recovery to the real current host scope');
   controller.dispose();
 });
 

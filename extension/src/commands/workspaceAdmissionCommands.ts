@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import fs from 'node:fs';
 import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
 import { SidecarHttpError, type SidecarErrorPathState } from '../core/httpClient';
+import { provisionRemoteProject } from './remoteProjectAdmission';
 
 import type { CommandContext } from '../core/commandContext';
 import { maybePromptCarryOverOnProjectSwitch } from './memoryCommands';
@@ -1054,6 +1055,7 @@ async function setCurrentWorkspaceProjectAdmission(
     projectPath,
     adoptionMode,
     managedIdentity,
+    projectPath.includes('://') ? managedIdentity?.canonicalProjectPath : undefined,
   );
   if (adoptionMode === 'managed') {
     await includeAdoptedProjectInTransferPromotion(context, managedIdentity, projectPath);
@@ -1240,6 +1242,13 @@ async function provisionManagedProject(
         !pathsEqual(classification.root_identity.rootPath, selectedRoot.canonicalRootPath)) {
       throw new Error('Trainer workspace changed while this project was being added.');
     }
+  }
+  if (projectPath.startsWith('vscode-remote://')) {
+    const admissionPort = status.port;
+    const identity = await provisionRemoteProject(context, projectPath, selectedRoot,
+      (requestPath, body) => postUserInitiatedProjectAdmission(context, admissionPort, requestPath, body));
+    await context.setSessionId(identity.agentSessionId);
+    return { kind: 'managed', identity };
   }
   const started = await postUserInitiatedProjectAdmission<{ session_id?: string }>(
     context,

@@ -7874,6 +7874,7 @@ class MemoryService(
         revision: int = 0,
         timeout_ms: int = 30_000,
         cancel: bool = False,
+        verification_artifact: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         def work() -> dict[str, Any]:
             return self._record_training_practice_evaluation_result_body(
@@ -7888,6 +7889,7 @@ class MemoryService(
                 missing_requirements=missing_requirements,
                 evidence_source=evidence_source,
                 verified_by_evaluator=verified_by_evaluator,
+                verification_artifact=verification_artifact,
             )
 
         return self.run_training_reliability(
@@ -7917,6 +7919,7 @@ class MemoryService(
         missing_requirements: list[str] | None = None,
         evidence_source: str = "ide_current_file",
         verified_by_evaluator: bool = False,
+        verification_artifact: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         resolved_workspace_id = self._resolve_workspace_for_write(workspace_id)
         structured = self._structured_for(resolved_workspace_id)
@@ -7957,6 +7960,10 @@ class MemoryService(
                     live_open_handoff = candidate_handoff
 
         handoff_generator = self._training_handoff_generator(resolved_workspace_id)
+        if recovered_handoff is not None and passed and not verified_by_evaluator:
+            # A returned card already owns its trusted evidence identity.
+            # A later self-report is a replay of that result, never a new verifier.
+            return dict(structured._workspace)
         if recovered_handoff is not None and passed:
             handoff_record = recovered_handoff
         elif live_open_handoff is not None and passed and verified_by_evaluator:
@@ -8203,6 +8210,8 @@ class MemoryService(
         }
         handoff.update(handoff_payload)
         handoff["card_title"] = title
+        if verification_artifact is not None:
+            handoff["verification_artifact"] = dict(verification_artifact)
         next_hop = {
             "candidate_id": selected_card_id,
             "candidate_type": "practice_candidate",
@@ -8262,7 +8271,7 @@ class MemoryService(
                     outcome="pass",
                     confidence=0.9,
                     target_plan_stage_id=updated_card.plan_links[0] if updated_card.plan_links else "",
-                ),
+                ).model_copy(update={"verification_artifact": verification_artifact} if verification_artifact is not None else {}),
                 verified=True,
                 verification_source=cleaned_evidence_source,
             )
@@ -8306,6 +8315,10 @@ class MemoryService(
             selected_card_type="practice",
             selected_card_title=title,
             selected_card_status=status,
+            **({"latest_training_verification": {
+                "card_id": selected_card_id, "passed": passed,
+                "verification_artifact": dict(verification_artifact),
+            }} if verification_artifact is not None else {}),
         )
         self._record_training_event(
             structured,
@@ -8319,6 +8332,7 @@ class MemoryService(
                 "return_mode": return_mode,
                 "return_summary": cleaned_summary or blocked_by,
                 "source_chain": ["training", cleaned_evidence_source, evidence_origin],
+                **({"verification_artifact": dict(verification_artifact)} if verification_artifact is not None else {}),
             },
         )
         self._persist_structured(resolved_workspace_id)

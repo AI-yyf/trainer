@@ -24,6 +24,7 @@ import type {
   UserProfile,
 } from "./models";
 import type { ComposerLanguage } from "./types";
+import { providerQuotaRecovery } from "./providerStatus";
 import {
   normalizeOperationReliabilityOutcome,
   normalizeOperationReliabilityPhase,
@@ -921,6 +922,7 @@ export function describeTrainerStopReason(
     timeout: { en: "Took too long", zh: "超时" },
     provider_error: { en: "Model error", zh: "模型错误" },
     invalid_key_or_permission: { en: "API key blocked", zh: "API key 被拒绝" },
+    quota_exhausted: { en: "Provider quota exhausted", zh: "服务商额度已用完" },
     model_unsupported: { en: "Model unsupported", zh: "模型不可用" },
     model_not_found: { en: "Model unavailable", zh: "模型无通道" },
     malformed_response: { en: "Protocol mismatch", zh: "protocol 不匹配" },
@@ -1051,6 +1053,9 @@ export function buildTrainerStreamingErrorMessage(
 ): string {
   const normalizedError = error.trim();
   const normalizedCategory = category?.trim().toLowerCase();
+  if (normalizedCategory === "quota_exhausted") {
+    return providerQuotaRecovery(language);
+  }
   const invalidProviderError =
     category === "invalid_key_or_permission" ||
     /401|403|invalid[_\s-]?api[_\s-]?key|incorrect api key|invalid_key_or_permission|unauthorized|forbidden/i.test(

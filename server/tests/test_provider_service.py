@@ -1750,13 +1750,19 @@ def test_thinking_policy_never_uses_a_top_level_kwarg() -> None:
         assert "thinking" not in payload
         assert payload["extra_body"]["thinking"] == {"type": policy}
 
-    client = OpenAI(api_key="test-only", base_url="http://gateway.invalid/v1")
-    with pytest.raises(TypeError):
-        client.chat.completions.create(
-            model="m",
-            messages=[{"role": "user", "content": "x"}],
-            **{"thinking": {"type": "enabled"}},  # type: ignore[arg-type]
+    # Native transport tests may first import the SDK while its global HTTP
+    # client constructor is mocked. Supply this test's own real, offline client
+    # so it verifies SDK argument validation independently of import order.
+    with httpx.Client() as http_client:
+        client = OpenAI(
+            api_key="test-only", base_url="http://gateway.invalid/v1", http_client=http_client
         )
+        with pytest.raises(TypeError):
+            client.chat.completions.create(
+                model="m",
+                messages=[{"role": "user", "content": "x"}],
+                **{"thinking": {"type": "enabled"}},  # type: ignore[arg-type]
+            )
 
 
 @pytest.mark.asyncio

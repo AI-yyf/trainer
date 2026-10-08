@@ -50,6 +50,10 @@ def _resolve_first_turn_guided_lane(
     guided_lane = _first_turn_guided_lane(scenario, learner_message)
     if guided_lane in {"remote_workspace", "debug_loop", "function_guidance", "project_adaptation"}:
         return guided_lane
+    # A concrete request already owns its scenario. The answer's vocabulary
+    # must not move a code review or concept explanation into an editor tour.
+    if str(scenario or "").strip().lower() not in {"", "general", "idea_implementation"}:
+        return guided_lane
     inferred_from_reply = _infer_guided_coaching_domain(
         f"{learner_message}\n{reply}".strip(),
         current_file=None,

@@ -388,6 +388,7 @@ function normalizeManagedProjectIdentity(
   value: unknown,
   expectedProjectPath: string,
   expectedRootPath?: string,
+  canonicalRemoteProjectUri?: string,
 ): TrainerManagedProjectIdentity {
   if (!isRecord(value)) {
     throw new Error('Trainer backend did not return a project identity.');
@@ -398,10 +399,13 @@ function normalizeManagedProjectIdentity(
   if (!isSafeIdentity(value.rootId) || !isSafeIdentity(value.projectId) || !isSafeIdentity(value.contextId)) {
     throw new Error('Trainer backend returned an invalid stable project identity.');
   }
-  const canonicalProjectPath = normalizeRequiredDirectoryPath(
-    typeof value.canonicalProjectPath === 'string' ? value.canonicalProjectPath : '',
-  );
-  if (!pathsEqual(canonicalProjectPath, expectedProjectPath)) {
+  const remote = isRemoteWorkspaceIdentity(expectedProjectPath);
+  const rawProjectPath = typeof value.canonicalProjectPath === 'string' ? value.canonicalProjectPath : '';
+  const canonicalProjectPath = remote ? normalizeRemoteWorkspaceIdentity(rawProjectPath)
+    : normalizeRequiredDirectoryPath(rawProjectPath);
+  const matches = remote ? canonicalProjectPath === normalizeRemoteWorkspaceIdentity(canonicalRemoteProjectUri ?? expectedProjectPath)
+    : pathsEqual(canonicalProjectPath, expectedProjectPath);
+  if (!matches) {
     throw new Error('Trainer backend project identity does not match the current project path.');
   }
   const canonicalRootPath = normalizeOptionalDirectoryPath(value.canonicalRootPath);
@@ -439,7 +443,7 @@ function isRemoteWorkspaceIdentity(value: string | undefined): boolean {
   return Boolean(value?.trim().includes('://'));
 }
 
-function normalizeRemoteWorkspaceIdentity(value: string): string {
+export function normalizeRemoteWorkspaceIdentity(value: string): string {
   const trimmed = value.trim();
   if (!trimmed || !trimmed.includes('://')) {
     throw new Error('A remote workspace URI is required.');
@@ -449,6 +453,7 @@ function normalizeRemoteWorkspaceIdentity(value: string): string {
     if (!parsed.protocol || !parsed.hostname) {
       throw new Error('The remote workspace URI must include a scheme and authority.');
     }
+    parsed.hostname = decodeURIComponent(parsed.hostname);
     parsed.hash = '';
     return parsed.toString();
   } catch (error) {
@@ -729,8 +734,13 @@ export class TrainerWorkspaceService {
         return undefined;
       }
       const fingerprint = fingerprintTrainerProjectPath(projectPath);
-      const state = this.readProjectRegistry()[fingerprint];
-      return state && state.projectPath === normalizeRemoteWorkspaceIdentity(projectPath)
+      const manifestState = (await this.readWorkspaceManifest())?.projects[fingerprint];
+      const registryState = this.readProjectRegistry()[fingerprint];
+      const inRoot = (state: TrainerWorkspaceProjectState | undefined) =>
+        state && pathsEqual(state.workspaceRoot, rootPath) ? state : undefined;
+      const state = chooseNewestProjectState(inRoot(manifestState), inRoot(registryState));
+      return state && state.projectPath === normalizeRemoteWorkspaceIdentity(projectPath) &&
+        pathsEqual(state.workspaceRoot, this.getWorkspaceRoot() ?? '')
         ? { ...state }
         : undefined;
     }
@@ -766,11 +776,12 @@ export class TrainerWorkspaceService {
     projectPath: string,
     adoptionMode: TrainerProjectAdoptionMode,
     managedIdentity?: TrainerManagedProjectIdentity,
+    canonicalRemoteProjectUri?: string,
   ): Promise<TrainerWorkspaceProjectState> {
+    if (!isAdoptionMode(adoptionMode)) {
+      throw new Error(`Unsupported Trainer project adoption mode: ${String(adoptionMode)}.`);
+    }
     if (isRemoteWorkspaceIdentity(projectPath)) {
-      if (adoptionMode === 'managed') {
-        throw new Error('Managed adoption requires a local Trainer companion workspace for remote projects.');
-      }
       const normalizedProjectUri = normalizeRemoteWorkspaceIdentity(projectPath);
       const rootPath = this.getWorkspaceRoot();
       if (!rootPath) {
@@ -778,22 +789,40 @@ export class TrainerWorkspaceService {
       }
       const registry = this.readProjectRegistry();
       const fingerprint = fingerprintTrainerProjectPath(normalizedProjectUri);
-      const existing = registry[fingerprint];
-      if (existing?.adoptionMode === 'managed') {
+      const existing = await this.getProjectState(normalizedProjectUri);
+      if (adoptionMode !== 'managed' && existing?.adoptionMode === 'managed') {
         throw new Error(
           'This project is already managed by Trainer and cannot be changed to browse or ignored locally.',
         );
       }
-      const state = {
+      const manifest = await this.readManifestAt(rootPath);
+      if (!manifest) throw new Error('The configured Trainer workspace does not have a workspace manifest.');
+      const identity = adoptionMode === 'managed'
+        ? normalizeManagedProjectIdentity(managedIdentity, normalizedProjectUri, rootPath, canonicalRemoteProjectUri)
+        : undefined;
+      if (identity) this.assertManagedIdentityCompatible(manifest, existing, identity);
+      const state: TrainerWorkspaceProjectState = {
         ...(existing ?? remoteWorkspaceProjectState(normalizedProjectUri, adoptionMode)),
         projectPath: normalizedProjectUri,
         workspaceRoot: rootPath,
         adoptionMode,
-        canonicalProjectPath: normalizedProjectUri,
+        canonicalProjectPath: identity?.canonicalProjectPath ?? normalizedProjectUri,
+        rootId: identity?.rootId ?? existing?.rootId,
+        projectId: identity?.projectId ?? existing?.projectId,
+        contextId: identity?.contextId ?? existing?.contextId,
+        identityStatus: identity ? 'verified' : existing?.identityStatus ?? 'pending',
+        manifestRevision: (existing?.manifestRevision ?? 0) + 1,
+        serverRevisions: identity?.revisions ?? existing?.serverRevisions,
         updatedAt: new Date().toISOString(),
       };
+      if (identity) state.projectLanePath = await this.createManagedProjectLane(rootPath, state);
       registry[fingerprint] = state;
-      await this.extensionContext.globalState.update(TRAINER_WORKSPACE_PROJECTS_STORAGE_KEY, registry);
+      const nextManifest = { ...manifest, rootId: identity?.rootId ?? manifest.rootId,
+        manifestRevision: manifest.manifestRevision + 1, updatedAt: state.updatedAt,
+        projects: { ...manifest.projects, [fingerprint]: state } };
+      await this.writeManifestAt(rootPath, nextManifest);
+      try { await this.extensionContext.globalState.update(TRAINER_WORKSPACE_PROJECTS_STORAGE_KEY, registry); }
+      catch (error) { await this.writeManifestAt(rootPath, manifest); throw error; }
       return { ...state };
     }
     if (!isAdoptionMode(adoptionMode)) {
@@ -923,8 +952,9 @@ export class TrainerWorkspaceService {
     projectPath: string,
     adoptionMode: TrainerProjectAdoptionMode,
     managedIdentity?: TrainerManagedProjectIdentity,
+    canonicalRemoteProjectUri?: string,
   ): Promise<TrainerWorkspaceProjectState> {
-    return this.setProjectAdoption(projectPath, adoptionMode, managedIdentity);
+    return this.setProjectAdoption(projectPath, adoptionMode, managedIdentity, canonicalRemoteProjectUri);
   }
 
   async deleteManagedProject(projectPath: string): Promise<TrainerWorkspaceProjectState> {
@@ -1068,8 +1098,9 @@ export class TrainerWorkspaceService {
         : undefined;
       const currentProject = projectPath ? await this.getProjectState(projectPath) : undefined;
       return {
-        workspaceReady: Boolean(this.getWorkspaceRoot()),
+        workspaceReady: Boolean(this.getWorkspaceRoot() && await this.hasWorkspaceScaffold()),
         rootPath: this.getWorkspaceRoot(),
+        manifest: await this.readWorkspaceManifest() ?? undefined,
         currentProject,
       };
     }

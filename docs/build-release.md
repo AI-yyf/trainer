@@ -90,5 +90,32 @@ and Local Brain + Remote Hands acceptance must be recorded separately; a skipped
 check is never a pass. See `docs/remote-ssh-acceptance.md` and the current maturity
 acceptance record for those results.
 
+The cross-platform workflow runs build, test, and native packaging on pushes and
+pull requests. To require installed VS Code acceptance on all three hosted
+platforms, dispatch it on the intended source ref with `run_vsix_host_e2e=true`:
+
+```sh
+gh workflow run cross-platform-verify.yml --ref main -f run_vsix_host_e2e=true
+```
+
+This mode provisions Microsoft VS Code 1.127.0 into an isolated runner temporary
+directory. Its official update metadata must contain the pinned version, source
+commit, and SHA-256; archive bytes are verified before extraction, and the CLI's
+version/commit must match. Linux uses Xvfb when no display is present. Both the
+isolated installation/runtime smoke and installed host journeys reuse the exact
+VSIX already built and uploaded by that job. `trainer-installed-host-<runner>`
+artifacts retain Code provenance, install output, the host report, and available
+screenshots even when a host journey fails. Native window capture currently runs
+on Windows; macOS/Linux report explicit capture skips while behavior checks run.
+The host harness exercises activation and basic
+flows through the installed extension and native Sidecar with a deterministic
+local provider; it does not establish live-model teaching quality.
+
+Ordinary push/PR jobs still record an explicit manual host gate. A dispatch that
+requests host acceptance fails when provisioning or host capability is absent;
+it does not convert missing support into a successful skipped check. Python
+dependencies are cached by uv only, since frozen installation never populates
+pip's cache.
+
 Generating or downloading an artifact does not authorize publishing. No formal
 Release should be created while a required gate remains unresolved.

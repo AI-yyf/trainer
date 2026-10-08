@@ -48,6 +48,17 @@ def test_replayed_visual_answer_does_not_verify_a_new_challenge() -> None:
     assert first.image_url != second.image_url
 
 
+@pytest.mark.parametrize("fence", ["json", "JSON", ""])
+def test_single_json_code_block_verifies_the_same_visible_content(fence: str) -> None:
+    with patch("app.llm.vision_challenge.secrets.randbelow", side_effect=[31, 16, 69]):
+        challenge = build_vision_challenge()
+    answer = '{"left":"41","middle":"26","right":"79"}'
+    assert challenge.matches(f"```{fence}\n{answer}\n```")
+    assert not challenge.matches(f"```{fence}\n{answer}\n```\nI guessed.")
+    assert not challenge.matches(f"I guessed.\n```{fence}\n{answer}\n```")
+    assert not challenge.matches(f"```{fence}\n{answer.replace('79', '78')}\n```")
+
+
 def test_live_probe_path_rejects_an_echoed_marker() -> None:
     service = ProviderService()
     provider = ProviderConfig(

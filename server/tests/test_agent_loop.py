@@ -870,6 +870,26 @@ async def test_loop_completion_continuity_prefers_thread_summary_and_resume_hint
     assert result.next_step == "Patch the smallest failing branch first."
 
 
+async def test_loop_and_stream_use_the_current_visible_action_before_old_context() -> None:
+    reply = "Default lists are shared.\n\n### 下一步\n连续调用两次并比较列表身份。"
+    context = _context()
+    context.extra = {"thread_next_step": "Inspect a generic function contract."}
+    result = await run_with_scripted_responses(
+        registry=_toy_registry(), context=context,
+        scripted_responses=[{"content": reply, "tool_calls": []}],
+        initial_messages=[{"role": "user", "content": "Explain the mutable default."}],
+    )
+    assert result.next_step == "连续调用两次并比较列表身份。"
+    assert result.final_content == reply
+    provider = await _scripted_stream_provider([{"content": reply, "tool_calls": []}])
+    loop = CoachAgentLoop(provider=provider, registry=_toy_registry(), context=context)
+    events = [event async for event in loop.run_stream([
+        {"role": "user", "content": "Explain the mutable default."}
+    ])]
+    final = next(event for event in events if event["type"] == "final")
+    assert final["next_step"] == result.next_step
+
+
 async def test_loop_stops_on_repeated_tool_calls_without_progress() -> None:
     registry = _toy_registry()
     scripted = [

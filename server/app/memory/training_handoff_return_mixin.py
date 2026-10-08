@@ -21,6 +21,7 @@ from ..training.handoff import (
     TrainingPhase,
 )
 from ..training.plan_binding import binding_matches_plan
+from ..workspace.remote_identity import validate_remote_verification_artifact
 from .models import utc_now
 from .workspace_recovery import (
     formal_plan_is_live_runtime_identity,
@@ -214,6 +215,15 @@ class TrainingHandoffReturnMixin:
         summary: str,
         verification_source: str,
     ) -> EvidenceItem:
+        workspace = self._structured_for(workspace_id)._workspace
+        latest = workspace.get("latest_training_verification")
+        artifact = None
+        if workspace.get("remote_name") or str(workspace.get("canonical_project_path") or "").startswith("vscode-remote://"):
+            if not isinstance(latest, dict) or latest.get("card_id") != card.card_id or latest.get("passed") is not True:
+                raise ValueError("Remote Return requires verified bytes for this card.")
+            artifact = validate_remote_verification_artifact(
+                latest.get("verification_artifact"), str(workspace.get("canonical_project_path") or ""),
+            )
         existing = self._training_return_evidence_for_card(workspace_id, card.card_id)
         if existing is not None and existing.verified:
             self._bind_training_return_evidence_to_plan_runtime(
@@ -248,7 +258,7 @@ class TrainingHandoffReturnMixin:
                     card.plan_links[0] if card.plan_links else ""
                 ),
                 target_plan_id=binding.plan_id if binding else "",
-            ),
+            ).model_copy(update={"verification_artifact": artifact} if artifact is not None else {}),
             verified=True,
             verification_source=verification_source,
             auto_bind_current_plan=binding is None,
@@ -371,6 +381,9 @@ class TrainingHandoffReturnMixin:
         )
         live_card_title = persist_chrome["selected_card_title"]
         handoff_payload = TrainingHandoffGenerator._handoff_payload(handoff)
+        latest = structured._workspace.get("latest_training_verification")
+        if isinstance(latest, dict) and latest.get("card_id") == card.card_id:
+            handoff_payload["verification_artifact"] = latest.get("verification_artifact")
         handoff_state = {
             "candidate_id": card.card_id,
             "candidate_type": "practice_candidate",

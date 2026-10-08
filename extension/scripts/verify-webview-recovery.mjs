@@ -3,6 +3,7 @@ import net from "node:net";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { planOnlyFixture } from "../../e2e/learning-fixtures.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -574,7 +575,10 @@ async function verifyRestoreTrainingView(page, previewUrl) {
     },
   });
   await page.waitForSelector(".training-pane", { timeout: waitTimeoutMs });
+  await page.locator('[data-surface="training"] [data-training-card-details="true"] > summary').click();
   const surface = await readTrainingRestoreSurface(page);
+  assertEqual(surface.activeRoute, "training", "Restoring training must activate its internal route.");
+  assertEqual(surface.cardId, "card-provider-truth", "Restoring a next hop must retain its exact card identity.");
   assertEqual(
     surface.heading,
     "Return to provider truth",
@@ -657,6 +661,8 @@ async function verifyPlanFirstViewport(page, previewUrl) {
     for (const width of widths) {
       await page.setViewportSize({ width, height: 800 });
       await resetPreviewPage(page, planPreviewUrl);
+      const source = await page.evaluate(() => window.__TRAINER_BOOTSTRAP__);
+      await injectPreviewHostMessage(page, { type: "bootstrap", payload: planOnlyFixture(source) });
       await page.waitForSelector('[data-plan-primary="true"]', { timeout: waitTimeoutMs });
       const surface = await readPlanFirstViewport(page);
       const visibleFactIds = surface.facts.filter((fact) => fact.visible && !fact.insideDetails).map((fact) => fact.id);
@@ -681,6 +687,8 @@ async function verifyPlanFirstViewport(page, previewUrl) {
         false,
         `Plan first viewport at ${width}px must keep the primary action executable.`,
       );
+      assertEqual(surface.primaryActionCount, 1,
+        `Plan first viewport at ${width}px must have exactly one primary action.`);
       assertEqual(
         surface.compactVerificationIsClipped,
         false,
@@ -762,17 +770,16 @@ async function readTrainingRestoreSurface(page) {
   return await page.evaluate(() => {
     const normalize = (value) => value?.replace(/\s+/g, " ").trim() ?? null;
     const pane = document.querySelector(".training-pane");
-    const currentCard = pane?.querySelector(".training-current__card-stack");
-    const nextHop = pane?.querySelector('[data-training-next-hop="true"]');
-    const restoredCardDetail =
-      currentCard?.querySelector('p[data-view-why]')?.textContent?.trim() ??
-      currentCard?.querySelector('[data-training-card-fact="current"] p')?.textContent?.trim() ??
-      null;
+    const currentCard = pane?.querySelector('[data-template="FocusedPractice"]');
+    const phase = currentCard?.querySelector('.template-focused-practice__phase');
+    const focus = currentCard?.querySelector('[data-training-card-fact="focus"]');
     return {
+      activeRoute: document.querySelector('.template-surface:not([hidden])')?.getAttribute('data-surface') ?? null,
+      cardId: pane?.getAttribute('data-training-card-id') ?? null,
       heading: normalize(pane?.querySelector(".training-current h2")?.textContent),
       cardTitle: normalize(currentCard?.querySelector("h2")?.textContent),
-      cardDetail: normalize(nextHop?.querySelector("strong")?.textContent ?? restoredCardDetail),
-      cardMeta: normalize(nextHop?.textContent ?? currentCard?.querySelector("h2")?.textContent),
+      cardDetail: normalize(phase?.querySelector('.message-markdown')?.textContent),
+      cardMeta: focus?.getBoundingClientRect().height ? normalize(focus.textContent) : null,
     };
   });
 }
@@ -806,9 +813,9 @@ async function readPlanFirstViewport(page) {
         text: element?.textContent?.replace(/\s+/g, " ").trim() ?? null,
       };
     });
-    const compactVerification = primary?.querySelector('.coach-plan-view__now-done');
+    const compactVerification = primary?.querySelector('.template-next-action__detail');
     const compactPrimaryAction = primary?.querySelector(
-      '.coach-plan-view__compact-primary-action button',
+      '[data-primary-action="true"]',
     );
 
     return {
@@ -828,6 +835,10 @@ async function readPlanFirstViewport(page) {
           })(),
       ),
       compactPrimaryActionDisabled: compactPrimaryAction?.hasAttribute('disabled') ?? null,
+      primaryActionCount: Array.from(document.querySelectorAll('[data-surface="plan"] [data-primary-action="true"]')).filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
+      }).length,
       compactVerificationIsClipped: Boolean(
         compactVerification && compactVerification.scrollHeight > compactVerification.clientHeight + 1,
       ),

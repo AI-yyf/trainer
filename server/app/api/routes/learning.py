@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 
 from ...core.models import TeachingKnowledgeAsset
 from ...pedagogy.stage_material_state import stage_material_payload, stage_material_state
+from ...workspace.remote_identity import validate_remote_verification_artifact
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 
@@ -183,6 +184,18 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         # training-reliability ledger instead of double-recording.
         idempotency_key = str(payload.get("idempotency_key") or payload.get("idempotencyKey") or "").strip()
         resolved_workspace_id = current_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
+        verification_artifact = payload.get("verification_artifact")
+        provisioning = runtime.get_project_provisioning(resolved_workspace_id)
+        project_path = provisioning.project_path if provisioning is not None else runtime.resolve_workspace_path(resolved_workspace_id) or ""
+        workspace = runtime.memory_service.snapshot(resolved_workspace_id).workspace
+        remote = project_path.startswith("vscode-remote://") or bool(workspace.get("remote_name"))
+        if remote or verification_artifact is not None:
+            try:
+                if provisioning is None:
+                    raise ValueError("Remote evidence requires a provisioned project context.")
+                verification_artifact = validate_remote_verification_artifact(verification_artifact, provisioning.project_path)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
         updated = runtime.memory_service.record_training_practice_evaluation_result(
             workspace_id=resolved_workspace_id,
             card_id=card_id,
@@ -194,6 +207,7 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
             evidence_source=evidence_source,
             verified_by_evaluator=passed,
             idempotency_key=idempotency_key,
+            verification_artifact=verification_artifact,
         )
         return {"ok": True, "workspace": updated}
     return router

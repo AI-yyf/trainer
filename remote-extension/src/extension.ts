@@ -1,4 +1,5 @@
 import * as crypto from 'node:crypto';
+import * as fs from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
@@ -147,7 +148,7 @@ async function handleRequest(value: unknown): Promise<RemoteCompanionResponse> {
       case 'hash_artifact':
         return { ok: true, artifact_hash: await hashArtifact(value.uri) };
       case 'diagnostics':
-        return { ok: true, diagnostics: diagnostics(value.uri) };
+        return { ok: true, diagnostics: await diagnostics(value.uri) };
       case 'environment':
         return { ok: true, environment: await environment() };
       case 'verify_start':
@@ -178,6 +179,8 @@ async function handleRequest(value: unknown): Promise<RemoteCompanionResponse> {
   }
 }
 
+class WorkspaceScopeError extends Error {}
+
 async function resolveUri(value: unknown): Promise<vscode.Uri> {
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error('A workspace URI is required.');
@@ -188,11 +191,24 @@ async function resolveUri(value: unknown): Promise<vscode.Uri> {
     throw new Error('No workspace folder is open.');
   }
   if (uri.scheme !== folder.uri.scheme || uri.authority !== folder.uri.authority) {
-    throw new Error('Remote request URI belongs to a different workspace authority.');
+    throw new WorkspaceScopeError('Remote request URI belongs to a different workspace authority.');
   }
   const relative = path.posix.relative(folder.uri.path, uri.path);
   if (relative.startsWith('../') || relative === '..' || path.posix.isAbsolute(relative)) {
-    throw new Error('Remote request URI is outside the active workspace.');
+    throw new WorkspaceScopeError('Remote request URI is outside the active workspace.');
+  }
+  if (uri.scheme === 'file') {
+    // The workspace root itself may be a legitimate alias (for example
+    // /tmp on macOS). Compare both real paths rather than rejecting aliases
+    // or trusting a lexically contained symlink that points outside.
+    const [rootPath, filePath] = await Promise.all([
+      fs.realpath(folder.uri.fsPath), fs.realpath(uri.fsPath),
+    ]);
+    const canonicalRelative = path.relative(rootPath, filePath);
+    if (canonicalRelative === '..' || canonicalRelative.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(canonicalRelative)) {
+      throw new WorkspaceScopeError('Remote request URI is outside the canonical active workspace.');
+    }
   }
   return uri;
 }
@@ -224,7 +240,16 @@ async function findFiles(value: unknown): Promise<string[]> {
   const exclude = typeof query.exclude === 'string' ? query.exclude : '{**/node_modules/**,**/.git/**,**/dist/**}';
   const maxResults = boundedInteger(query.max_results, 1, MAX_SEARCH_RESULTS, 100);
   const files = await vscode.workspace.findFiles(pattern, exclude, maxResults);
-  return files.map((uri) => uri.toString());
+  const scoped: string[] = [];
+  for (const uri of files) {
+    try {
+      await resolveUri(uri.toString());
+      scoped.push(uri.toString());
+    } catch (error) {
+      if (!(error instanceof WorkspaceScopeError)) throw error;
+    }
+  }
+  return scoped;
 }
 
 async function searchText(value: unknown): Promise<RemoteSearchMatch[]> {
@@ -240,7 +265,7 @@ async function searchText(value: unknown): Promise<RemoteSearchMatch[]> {
     const uri = vscode.Uri.parse(serializedUri, true);
     let bytes: Uint8Array;
     try {
-      bytes = await vscode.workspace.fs.readFile(uri);
+      bytes = await readFile(uri.toString());
     } catch {
       continue;
     }
@@ -261,18 +286,21 @@ async function hashArtifact(value: unknown): Promise<string> {
   return crypto.createHash('sha256').update(bytes).digest('hex');
 }
 
-function diagnostics(value: unknown): RemoteDiagnostic[] {
-  const uri = typeof value === 'string' && value.trim() ? vscode.Uri.parse(value, true) : undefined;
+async function diagnostics(value: unknown): Promise<RemoteDiagnostic[]> {
+  const uri = typeof value === 'string' && value.trim() ? await resolveUri(value) : undefined;
   const records: Array<[vscode.Uri, vscode.Diagnostic[]]> = uri
     ? [[uri, vscode.languages.getDiagnostics(uri)]]
     : vscode.languages.getDiagnostics();
-  return records.flatMap(([itemUri, items]) => items.map((item) => ({
-    uri: itemUri.toString(),
-    severity: item.severity,
-    message: item.message,
-    line: item.range.start.line + 1,
-    character: item.range.start.character + 1,
-  })));
+  const scoped: RemoteDiagnostic[] = [];
+  for (const [itemUri, items] of records) {
+    try { await resolveUri(itemUri.toString()); }
+    catch (error) { if (error instanceof WorkspaceScopeError) continue; throw error; }
+    scoped.push(...items.map((item) => ({
+      uri: itemUri.toString(), severity: item.severity, message: item.message,
+      line: item.range.start.line + 1, character: item.range.start.character + 1,
+    })));
+  }
+  return scoped;
 }
 
 async function environment(): Promise<RemoteEnvironment> {
@@ -280,6 +308,9 @@ async function environment(): Promise<RemoteEnvironment> {
   return {
     remote_name: vscode.env.remoteName || undefined,
     workspace_uri: folder?.uri.toString(),
+    ...(folder?.uri.scheme === 'file' ? {
+      canonical_workspace_uri: vscode.Uri.file(await fs.realpath(folder.uri.fsPath)).toString(),
+    } : {}),
     os: process.platform,
     arch: process.arch,
     node_version: process.version,

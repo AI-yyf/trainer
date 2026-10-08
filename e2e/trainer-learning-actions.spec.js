@@ -1,4 +1,5 @@
 const { test, expect } = require('playwright/test');
+const { openSettingsCategory } = require('./template-navigation');
 
 // Preview proves action semantics and state wiring, never real learning evidence.
 async function openLearning(page, language = 'en-US') {
@@ -157,4 +158,36 @@ test('an earlier notice exit cannot dismiss the new notice; delivery uncertainty
     if (!node.isConnected) throw new Error('A prior dismissal removed the current notice');
   });
   await expect(notice).toBeVisible();
+});
+
+test('a new host scope clears an unfinished Settings action and retains the connection draft', async ({ page }) => {
+  const { payload } = await openLearning(page);
+  payload.workspace = { ...payload.workspace, trusted: true };
+  await apply(page, payload);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await openSettingsCategory(page, 'connection');
+  const detail = page.locator('[data-settings-detail="connection"]');
+  await detail.getByRole('button', { name: 'Edit configuration', exact: true }).click();
+  await detail.getByLabel('Service root').fill('https://draft.invalid/v1');
+  await detail.getByLabel('API Key', { exact: true }).fill('scope-draft-key');
+  await detail.getByRole('textbox', { name: /^Model / }).fill('draft-model');
+  await detail.getByRole('button', { name: 'Save and use this connection', exact: true }).click();
+  await expect(detail.getByRole('button', { name: 'Save and use this connection', exact: true })).toBeDisabled();
+  await expect.poll(() => page.evaluate(() => window.__ACTION_TEST_HOST_ACTIONS__
+    .some(message => message.payload?.commandId === 'trainer.provider.save'))).toBe(true);
+  const next = { ...payload, sessionLabel: 'actions-new-session',
+    providerConfig: { ...payload.providerConfig, name: 'New conversation provider metadata' } };
+  await page.evaluate(next => window.postMessage({ type: 'bootstrap', sync: {
+    generation: 2, revision: 3, baseRevision: 0, messageId: 'settings-new-scope',
+    workspaceId: 'workspace-actions', sessionId: 'actions-new-session',
+  }, payload: next }, location.origin), next);
+  await expect(detail.getByRole('button', { name: 'Save and use this connection', exact: true })).toBeEnabled();
+  await expect(detail.getByLabel('Service root')).toHaveValue('https://draft.invalid/v1');
+  await expect(detail.getByLabel('API Key', { exact: true })).toHaveValue('scope-draft-key');
+  await expect(detail.getByRole('textbox', { name: /^Model / })).toHaveValue('draft-model');
+  await page.evaluate(() => window.postMessage({ type: 'operation/status', payload: {
+    tone: 'error', message: '[[trainer-operation-scope-changed]] hidden implementation detail',
+  } }, location.origin));
+  await expect(page.locator('.template-global-state')).toContainText('This action was not run');
+  await expect(page.locator('.template-global-state')).not.toContainText('hidden implementation detail');
 });

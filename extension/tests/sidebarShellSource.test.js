@@ -99,8 +99,9 @@ test('Trainer uses one small-size-safe monochrome mark across extension surfaces
   const webviewMark = fs.readFileSync(webviewMarkPath, 'utf8');
 
   assert.equal(activityBarMark, webviewMark);
-  assert.match(activityBarMark, /viewBox="0 0 16 16"/);
+  assert.match(activityBarMark, /width="24" height="24" viewBox="0 0 24 24"/);
   assert.match(activityBarMark, /fill="currentColor"/);
+  assert.doesNotMatch(activityBarMark, /<image\b|data:image/);
   assert.equal(fs.existsSync(marketplaceIconPath), true);
 });
 

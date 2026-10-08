@@ -179,10 +179,19 @@ export class RemoteWorkspaceGateway implements WorkspaceGateway {
     let stderrOffset = 0;
     let stdout = '';
     let stderr = '';
+    let lastStatus: RemoteVerificationStatus | undefined;
     for (;;) {
       if (hooks.signal?.aborted) {
-        const cancelled = await this.verifyCancel(session.session_id);
-        return this.composeResult(cancelled.session_id, cancelled.state, spec, stdout, stderr);
+        let cancelled: RemoteVerificationSessionRef;
+        try { cancelled = await this.verifyCancel(session.session_id); }
+        catch { return this.composeResult('connection_lost', spec, stdout, stderr, lastStatus); }
+        try { lastStatus = await this.verifyStatus(session.session_id, stdoutOffset, stderrOffset); }
+        catch {
+          // Cancellation was acknowledged; an unavailable terminal poll must
+          // preserve that state and only the remote facts already observed.
+          return this.composeResult(cancelled.state, spec, stdout, stderr, lastStatus);
+        }
+        return this.composeResult(cancelled.state, spec, stdout, stderr, lastStatus);
       }
       let status: RemoteVerificationStatus;
       try {
@@ -190,13 +199,14 @@ export class RemoteWorkspaceGateway implements WorkspaceGateway {
       } catch (error) {
         // Bridge hiccup: report unknown outcome instead of inventing a result.
         return this.composeResult(
-          session.session_id,
           'connection_lost' satisfies RemoteProcessState,
           spec,
           stdout,
           stderr,
+          lastStatus,
         );
       }
+      lastStatus = status;
       if (status.stdout_chunk) {
         hooks.onChunk?.({ stream: 'stdout', text: status.stdout_chunk });
         stdoutOffset += status.stdout_chunk.length;
@@ -231,27 +241,25 @@ export class RemoteWorkspaceGateway implements WorkspaceGateway {
   }
 
   private composeResult(
-    sessionId: string,
     state: RemoteProcessState,
     spec: RemoteProcessSpec,
     stdout: string,
     stderr: string,
+    lastStatus?: RemoteVerificationStatus,
   ): RemoteVerificationResult {
-    void sessionId;
     // No `result` field: an interrupted run has no outcome evidence.
     return {
       spec,
       state,
       execution_location: this.executionLocation(),
-      started_at: new Date().toISOString(),
-      finished_at: new Date().toISOString(),
+      started_at: lastStatus?.started_at ?? new Date().toISOString(),
+      finished_at: lastStatus?.finished_at ?? new Date().toISOString(),
       exit_code: null,
       stdout,
       stderr,
-      environment: {
-        os: process.platform,
-        arch: process.arch,
-        node_version: process.version,
+      environment: lastStatus?.environment ?? {
+        remote_name: this.remoteName || vscode.env.remoteName,
+        os: 'unknown', arch: 'unknown', node_version: 'unknown',
       },
     };
   }

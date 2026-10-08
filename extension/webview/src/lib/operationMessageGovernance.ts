@@ -89,6 +89,27 @@ export const LIVE_PLAN_TASK_GATE_MARKER =
 // records uncertainty; it does not invent a verdict or promise replay success.
 export const ATTESTATION_UNDELIVERED_MARKER = "[[trainer-attestation-undelivered]]";
 
+/** The host rejected this request before dispatch because its scope changed. */
+export const OPERATION_SCOPE_CHANGED_MARKER = "[[trainer-operation-scope-changed]]";
+
+export function detectOperationScopeChanged(message: string): boolean {
+  return message.includes(OPERATION_SCOPE_CHANGED_MARKER);
+}
+
+export function operationScopeChangedMessage(language: ComposerLanguage): string {
+  const copy: Record<ComposerLanguage, string> = {
+    "zh-CN": "工作区或会话已切换。这次操作没有执行；请在当前会话重试。",
+    "en-US": "The workspace or conversation changed. This action was not run; try again in the current conversation.",
+    "es-ES": "El espacio de trabajo o la conversación cambió. Esta acción no se ejecutó; inténtalo de nuevo en la conversación actual.",
+    "fr-FR": "L’espace de travail ou la conversation a changé. Cette action n’a pas été exécutée ; réessayez dans la conversation actuelle.",
+    "de-DE": "Der Arbeitsbereich oder das Gespräch hat sich geändert. Die Aktion wurde nicht ausgeführt; versuche es im aktuellen Gespräch erneut.",
+    "ja-JP": "ワークスペースまたは会話が切り替わりました。この操作は実行されていません。現在の会話でもう一度試してください。",
+    "ko-KR": "작업 공간이나 대화가 바뀌었습니다. 이 작업은 실행되지 않았습니다. 현재 대화에서 다시 시도하세요.",
+    "pt-BR": "O espaço de trabalho ou a conversa mudou. Esta ação não foi executada; tente novamente na conversa atual.",
+  };
+  return copy[language];
+}
+
 export function detectAttestationUndelivered(message: string): boolean {
   return message.includes(ATTESTATION_UNDELIVERED_MARKER);
 }
@@ -250,7 +271,9 @@ export function sanitizeOperationFailureMessage(
   return {
     ...message,
     tone: "error",
-    message: detectAttestationUndelivered(message.message)
+    message: detectOperationScopeChanged(message.message)
+      ? operationScopeChangedMessage(language)
+      : detectAttestationUndelivered(message.message)
       ? attestationUndeliveredMessage(language)
       : revisionConflict2
       ? planRevisionConflictMessage(revisionConflict2.revision, language)

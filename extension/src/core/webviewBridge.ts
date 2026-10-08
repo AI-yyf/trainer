@@ -443,10 +443,20 @@ export class WorkbenchSidebarController
     const identity = message.operation && command ? { ...message.operation, commandId: command.commandId } : undefined;
     if (!identity) { await this.handleScopedMessage(message); return; }
     const scope = this.currentScope();
-    if (!/^[a-z0-9-]{1,128}$/i.test(identity.requestId) || identity.generation !== scope.generation ||
+    if (!/^[a-z0-9-]{1,128}$/i.test(identity.requestId)) return;
+    if (identity.generation !== scope.generation ||
         identity.workspaceId !== scope.workspaceId || identity.sessionId !== scope.sessionId ||
         identity.revision > scope.revision) {
       this.outputChannel.appendLine('[webview] ignored command from an outdated UI scope');
+      // Rejecting before execution still needs a terminal response for the
+      // originating UI. Keep its old identity so a newer session cannot
+      // mistake this rejection for one of its own operation outcomes.
+      await this.postOperationPhase(identity, 'interrupted');
+      await this.deliverMessage({ type: 'operation/status', operation: identity,
+        scope: { ...identity, messageId: '' },
+        payload: { tone: 'error', message: '[[trainer-operation-scope-changed]]' },
+      });
+      await this.syncState({ forceFull: true });
       return;
     }
     if (this.operationRequests.has(identity.requestId)) return;

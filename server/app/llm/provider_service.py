@@ -128,7 +128,13 @@ from .provider.capability import (
     _should_fingerprint_gateway,
     _visible_probe_max_tokens,
 )
-from .provider.errors import ContextBudgetExhaustedError, ProviderRuntimeResponseError
+from .provider.errors import (
+    ContextBudgetExhaustedError,
+    ProviderRuntimeResponseError,
+    provider_error_quota_exhausted,
+    provider_http_failure,
+)
+from .provider.quota_copy import provider_quota_copy, provider_quota_reply
 from .provider.redaction import _compact_text, redact_provider_error
 from .provider.streaming import (
     _await_provider_stream_with_cancellation,
@@ -767,6 +773,8 @@ class ProviderService:
 
 
     def provider_failure_summary(self, category: str, response_language: str | None) -> str:
+        if category == "quota_exhausted":
+            return provider_quota_copy(response_language)[0]
         summary_map: dict[str, tuple[str, str]] = {
             "invalid_key_or_permission": (
                 "The provider rejected this turn's API key or permissions.",
@@ -819,6 +827,8 @@ class ProviderService:
         return _localized_text(english, chinese, response_language)
 
     def provider_failure_next_step(self, category: str, response_language: str | None) -> str:
+        if category == "quota_exhausted":
+            return provider_quota_copy(response_language)[1]
         next_step_map: dict[str, tuple[str, str]] = {
             "invalid_key_or_permission": (
                 "Check the API key or provider permissions, retest the connection, and resend this exact turn.",
@@ -876,6 +886,8 @@ class ProviderService:
         detail: str | None,
         response_language: str | None,
     ) -> str:
+        if category == "quota_exhausted":
+            return provider_quota_reply(response_language)
         detail_text = _compact_text(
             redact_provider_error({"upstream_body": detail}, api_key=self._api_key)
         )
@@ -1856,6 +1868,8 @@ class ProviderService:
         lowered = message.lower()
         status_code = self._extract_status_code(error)
 
+        if status_code == 402 or provider_error_quota_exhausted(error):
+            return ("quota_exhausted", False, status_code, True, None)
         if self._is_model_not_found_error(error):
             return ("model_not_found", False, status_code or 503, True, False)
         if self._is_model_not_supported_error(error):
@@ -1905,6 +1919,8 @@ class ProviderService:
         error: Exception | None = None,
         response_language: str | None = None,
     ) -> str:
+        if category == "quota_exhausted":
+            return provider_quota_reply(response_language)
         error_message = (
             error.safe_detail
             if isinstance(error, ProviderRuntimeResponseError)
@@ -2069,8 +2085,9 @@ class ProviderService:
                         fallback=f"Anthropic Models list failed (HTTP {response.status_code})",
                     ),
                 )
-            raise RuntimeError(
-                redact_provider_error(
+            raise provider_http_failure(
+                response,
+                detail=redact_provider_error(
                     {"upstream_body": response.text},
                     api_key=api_key,
                     fallback=f"Anthropic Models list failed (HTTP {response.status_code})",
@@ -2185,8 +2202,9 @@ class ProviderService:
                         fallback=f"Gemini Models list failed (HTTP {response.status_code})",
                     ),
                 )
-            raise RuntimeError(
-                redact_provider_error(
+            raise provider_http_failure(
+                response,
+                detail=redact_provider_error(
                     {"upstream_body": response.text},
                     api_key=api_key,
                     fallback=f"Gemini Models list failed (HTTP {response.status_code})",
@@ -3248,8 +3266,9 @@ class ProviderService:
                     },
                 )
             if response.status_code >= 400:
-                raise RuntimeError(
-                    redact_provider_error(
+                raise provider_http_failure(
+                    response,
+                    detail=redact_provider_error(
                         {"upstream_body": response.text},
                         api_key=api_key,
                         fallback=f"Anthropic Messages probe failed (HTTP {response.status_code})",
@@ -3286,8 +3305,9 @@ class ProviderService:
                     },
                 )
             if response.status_code >= 400:
-                raise RuntimeError(
-                    redact_provider_error(
+                raise provider_http_failure(
+                    response,
+                    detail=redact_provider_error(
                         {"upstream_body": response.text},
                         api_key=api_key,
                         fallback=f"Gemini GenerateContent probe failed (HTTP {response.status_code})",
@@ -3762,8 +3782,9 @@ class ProviderService:
                         },
                     )
                     if response.status_code >= 400:
-                        raise RuntimeError(
-                            redact_provider_error(
+                        raise provider_http_failure(
+                            response,
+                            detail=redact_provider_error(
                                 {"upstream_body": response.text},
                                 api_key=api_key,
                                 fallback=f"Anthropic Messages probe failed (HTTP {response.status_code})",
@@ -3858,8 +3879,9 @@ class ProviderService:
                         },
                     )
                     if response.status_code >= 400:
-                        raise RuntimeError(
-                            redact_provider_error(
+                        raise provider_http_failure(
+                            response,
+                            detail=redact_provider_error(
                                 {"upstream_body": response.text},
                                 api_key=api_key,
                                 fallback=f"Gemini GenerateContent probe failed (HTTP {response.status_code})",
@@ -6477,6 +6499,16 @@ class ProviderService:
         context_budget_state: dict[str, ContextBudgetExhaustedError | None] = {"error": None}
         self._agent_context_budget_states[id(provider_obj)] = context_budget_state
 
+        def record_transport_failure(error: Exception) -> None:
+            category, retryable, status, reachable, supported = self._classify_error(error)
+            provider_obj.last_failure = {
+                "error_category": category,
+                "retryable": retryable,
+                "status_code": status,
+                "provider_reachable": reachable,
+                "model_supported": supported,
+            }
+
         async def guarded_call(
             call_messages: list[dict[str, Any]],
             tools: list[dict[str, Any]] | None,
@@ -6493,7 +6525,11 @@ class ProviderService:
             previous_max_tokens = binding._max_tokens  # noqa: SLF001 - binding owns protocol payloads
             binding._max_tokens = call_max_tokens  # noqa: SLF001 - binding owns protocol payloads
             try:
+                provider_obj.last_failure = None
                 return await original_call(prepared_messages, tools)
+            except Exception as exc:
+                record_transport_failure(exc)
+                raise
             finally:
                 binding._max_tokens = previous_max_tokens  # noqa: SLF001 - restore this binding for callers
 
@@ -6521,6 +6557,7 @@ class ProviderService:
                 previous_max_tokens = binding._max_tokens  # noqa: SLF001 - binding owns protocol payloads
                 binding._max_tokens = call_max_tokens  # noqa: SLF001 - binding owns protocol payloads
                 try:
+                    provider_obj.last_failure = None
                     async for event in original_call_stream(prepared_messages, tools):
                         # AgentLoop only forwards tool-capable text deltas when
                         # the binding has explicitly identified them as
@@ -6531,6 +6568,9 @@ class ProviderService:
                             yield {**event, "safe_to_stream": True}
                         else:
                             yield event
+                except Exception as exc:
+                    record_transport_failure(exc)
+                    raise
                 finally:
                     binding._max_tokens = previous_max_tokens  # noqa: SLF001 - restore this binding
 
@@ -6538,6 +6578,44 @@ class ProviderService:
 
         provider_obj.call = guarded_call
         return provider_obj, binding
+
+    def _agent_provider_failure_result(
+        self,
+        provider: object,
+        *,
+        response_language: str | None,
+        attachment_delivery: dict[str, Any],
+        steps: list[dict[str, Any]],
+        tool_events: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        failure = getattr(provider, "last_failure", None)
+        if not isinstance(failure, dict):
+            return None
+        category = str(failure.get("error_category") or "").strip()
+        if not category:
+            return None
+        summary = self.provider_failure_summary(category, response_language)
+        next_step = self.provider_failure_next_step(category, response_language)
+        content = self.provider_failure_reply(category, summary, response_language)
+        # Restore only classified, safe facts in the request owner's task.
+        # Never let the local teaching scaffold conceal an upstream failure.
+        self._last_reply_failure.set({**failure, "detail": content, "error": summary})
+        return {
+            "content": content,
+            "summary": summary,
+            "next_step": next_step,
+            "resume_thread": _agentic_resume_thread_text(
+                summary, next_step, response_language=response_language,
+            ),
+            "stop_reason": category,
+            "steps": steps,
+            "tool_events": tool_events,
+            "evidence": [],
+            "fell_back": True,
+            "retryable": bool(failure.get("retryable")),
+            "recoverable": True,
+            **attachment_delivery,
+        }
 
     def _build_agent_provider_with_budget(
         self,
@@ -6736,6 +6814,16 @@ class ProviderService:
                 response_language=response_language,
                 attachment_delivery=attachment_delivery,
             )
+        if result.stop_reason == "provider_error":
+            transport_failure = self._agent_provider_failure_result(
+                provider_obj,
+                response_language=response_language,
+                attachment_delivery=attachment_delivery,
+                steps=[self._step_to_dict(step) for step in result.steps],
+                tool_events=_agent_tool_events(result),
+            )
+            if transport_failure is not None:
+                return transport_failure
         fell_back = False
         recovered_stop_reason: str | None = None
         tool_events = _agent_tool_events(result)
@@ -7111,6 +7199,7 @@ class ProviderService:
         Text is held until the final response has passed the same integrity
         checks as a non-streaming reply. Tool progress remains live.
         """
+        self.clear_last_reply_state()
         attachment_delivery = self.describe_attachment_delivery(
             attachments=attachments,
             protocol=protocol,
@@ -7337,6 +7426,17 @@ class ProviderService:
                         }
                     continue
                 if event_type == "final":
+                    if event.get("stop_reason") == "provider_error":
+                        transport_failure = self._agent_provider_failure_result(
+                            provider_obj,
+                            response_language=response_language,
+                            attachment_delivery=attachment_delivery,
+                            steps=[],
+                            tool_events=tool_events,
+                        )
+                        if transport_failure is not None:
+                            yield {"type": "final", **transport_failure}
+                            return
                     if not str(event.get("content") or "").strip():
                         event = {**event, "content": buffered_text}
                     event = await self._recover_agentic_stream_final_event(
@@ -7382,6 +7482,23 @@ class ProviderService:
                         "terminal": event.get("terminal", False),
                         "degraded": event.get("degraded", True),
                     }
+                    transport_failure = self._agent_provider_failure_result(
+                        provider_obj,
+                        response_language=response_language,
+                        attachment_delivery=attachment_delivery,
+                        steps=[],
+                        tool_events=tool_events,
+                    )
+                    if transport_failure is not None:
+                        event = {
+                            "type": "error",
+                            "detail": transport_failure["content"],
+                            "category": transport_failure["stop_reason"],
+                            "retryable": transport_failure["retryable"],
+                            "recoverable": True,
+                            "terminal": False,
+                            "degraded": True,
+                        }
                 yield event
         except ContextBudgetExhaustedError:
             yield {

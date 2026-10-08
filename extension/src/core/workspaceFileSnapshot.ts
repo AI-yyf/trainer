@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import * as path from 'node:path';
+import { RemoteWorkspaceGateway } from '../workspace/remoteWorkspaceGateway';
+import type { WorkspaceGateway } from '../workspace/workspaceGateway';
 
 export type WorkspaceFileSnapshot = {
   is_remote: boolean;
@@ -104,10 +107,24 @@ export async function buildWorkspaceFileSnapshot(
   const isRemote =
     Boolean(vscode.env?.remoteName?.trim()) || folder.uri.scheme === 'vscode-remote';
   const listLimit = isRemote ? LIST_LIMIT_REMOTE : LIST_LIMIT_LOCAL;
-  const listed = await vscode.workspace.findFiles(INCLUDE_GLOB, EXCLUDE_GLOB, listLimit);
+  const gateway = isRemote ? remoteSnapshotGateway(owner) : undefined;
+  let listed: vscode.Uri[];
+  if (gateway) {
+    try {
+      const caps = await gateway.capabilities();
+      if (!caps.companionAvailable || caps.protocolVersion !== 2) {
+        throw new Error('Remote Companion is unavailable.');
+      }
+      listed = await gateway.findFiles({ pattern: INCLUDE_GLOB, exclude: EXCLUDE_GLOB, max_results: listLimit });
+    } catch (error) {
+      reportRemoteSnapshotFailure('find', error);
+      return { is_remote: true, root_uri: folder.uri.toString(), files: [], contents: {} };
+    }
+  } else listed = await vscode.workspace.findFiles(INCLUDE_GLOB, EXCLUDE_GLOB, listLimit);
   const files: Array<{ path: string; size?: number }> = [];
   const seen = new Set<string>();
   for (const uri of listed) {
+    if (isRemote && !remoteUriWithinRoot(uri, folder.uri)) continue;
     const relative = vscode.workspace.asRelativePath(uri, false);
     if (!relative || relative === uri.fsPath) {
       continue;
@@ -115,16 +132,23 @@ export async function buildWorkspaceFileSnapshot(
     const normalized = relative.replace(/\\/g, '/');
     let size: number | undefined;
     try {
-      size = Number((await vscode.workspace.fs.stat(uri)).size);
-    } catch {
+      size = Number((await (gateway ? gateway.stat(uri) : vscode.workspace.fs.stat(uri))).size);
+    } catch (error) {
+      if (gateway) { reportRemoteSnapshotFailure('stat', error); continue; }
       size = undefined;
     }
     files.push({ path: normalized, size });
     seen.add(normalized);
   }
   for (const extra of extraPaths) {
+    if (isRemote && (!extra || extra.split('/').some(part => part === '..' || part === '.') || extra.startsWith('/'))) continue;
     if (!seen.has(extra)) {
-      files.push({ path: extra });
+      let size: number | undefined;
+      if (gateway) {
+        try { size = (await gateway.stat(vscode.Uri.joinPath(folder.uri, ...extra.split('/')))).size; }
+        catch (error) { reportRemoteSnapshotFailure('stat', error); continue; }
+      }
+      files.push({ path: extra, ...(size !== undefined ? { size } : {}) });
       seen.add(extra);
     }
   }
@@ -159,11 +183,12 @@ export async function buildWorkspaceFileSnapshot(
     if (usedChars >= contentCharLimit) {
       break;
     }
+    if (isRemote && !remoteUriWithinRoot(uri, folder.uri)) continue;
     const relative = vscode.workspace.asRelativePath(uri, false).replace(/\\/g, '/');
     if (!relative || contents[relative]) {
       continue;
     }
-    const text = await readWorkspaceText(uri, PER_FILE_CHAR_LIMIT);
+    const text = await readWorkspaceText(uri, PER_FILE_CHAR_LIMIT, gateway);
     if (text === undefined) {
       continue;
     }
@@ -198,9 +223,29 @@ function contentPriority(relativePath: string): number {
   return 40 + depth;
 }
 
-async function readWorkspaceText(uri: vscode.Uri, maxChars: number): Promise<string | undefined> {
+function remoteUriWithinRoot(uri: vscode.Uri, root: vscode.Uri): boolean {
+  const relative = path.posix.relative(root.path, uri.path);
+  return uri.scheme === root.scheme && uri.authority === root.authority && !uri.query && !uri.fragment &&
+    Boolean(relative && relative !== '..' && !relative.startsWith('../') && !path.posix.isAbsolute(relative));
+}
+
+function remoteSnapshotGateway(owner?: object): WorkspaceGateway {
+  const candidate = owner && 'workspaceGateway' in owner ? owner.workspaceGateway : undefined;
+  if (candidate && typeof candidate === 'object' &&
+      'capabilities' in candidate && typeof candidate.capabilities === 'function' &&
+      'findFiles' in candidate && typeof candidate.findFiles === 'function' &&
+      'stat' in candidate && typeof candidate.stat === 'function' &&
+      'readFile' in candidate && typeof candidate.readFile === 'function') return candidate as WorkspaceGateway;
+  return new RemoteWorkspaceGateway(vscode.env.remoteName);
+}
+
+function reportRemoteSnapshotFailure(operation: string, error: unknown): void {
+  console.warn(`[workspace-snapshot] remote ${operation} unavailable (${error instanceof Error ? error.name : 'Request failed'})`);
+}
+
+async function readWorkspaceText(uri: vscode.Uri, maxChars: number, gateway?: WorkspaceGateway): Promise<string | undefined> {
   try {
-    const bytes = await vscode.workspace.fs.readFile(uri);
+    const bytes = await (gateway ? gateway.readFile(uri) : vscode.workspace.fs.readFile(uri));
     if (bytes.includes(0)) {
       return undefined;
     }
@@ -209,7 +254,8 @@ async function readWorkspaceText(uri: vscode.Uri, maxChars: number): Promise<str
       return undefined;
     }
     return text.length > maxChars ? text.slice(0, maxChars) : text;
-  } catch {
+  } catch (error) {
+    if (gateway) reportRemoteSnapshotFailure('read', error);
     return undefined;
   }
 }

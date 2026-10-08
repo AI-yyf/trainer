@@ -138,11 +138,13 @@ async def _maybe_auto_verify_practice_current_file(
 
 
 def _practice_verification_requested_or_claimed(*, message: str, content: str) -> bool:
-    combined = f"{message}\n{content}".lower()
     if _claims_verified_practice_completion(content):
         return True
+    # A reply proposing a future experiment is not a request to verify the
+    # learner's current file. Only the learner's request triggers that path.
+    lowered = message.lower()
     return any(
-        phrase in combined
+        phrase in lowered
         for phrase in (
             "can i mark",
             "mark it",

@@ -2683,6 +2683,7 @@ export function TrainingWorkbenchView({
     <details className="template-disclosure" data-training-card-details="true">
       <summary>{trainingWorkbenchText(language, "taskDetails")}</summary>
       <div>
+        {currentFocus?.trim() ? <p className="template-metadata" data-training-card-fact="focus">{currentFocus}</p> : null}
         {resolvedWhyNow ? <div data-training-card-fact="why-now" title={cardOnlyWhyNowSummary}><MessageRichContent body={resolvedWhyNow} language={language} /></div> : null}
         {sourceDetail ? <MessageRichContent body={sourceDetail} language={language} /> : null}
         {currentStep && normalizeCardText(currentStep) !== normalizeCardText(cardOnlyTask) ? <MessageRichContent body={currentStep} language={language} /> : null}
@@ -2702,6 +2703,7 @@ export function TrainingWorkbenchView({
   return (
     <section
       className={`workbench-pane training-pane training-pane--single-card${cardOnly ? " training-pane--card-only" : ""}`}
+      data-training-card-id={cardId}
       data-training-leftover-not-live={leftoverStoredNote ? "true" : undefined}
     >
       {mismatchRecovery && onCardStatusTransition ? (

@@ -27,8 +27,10 @@ from .coaching_recovery import (
     _trim_sentence,
 )
 from .prompts import extract_coaching_context
+from .provider.quota_copy import provider_quota_copy, provider_quota_reply
 from .provider.redaction import _compact_text, redact_provider_error
 from .provider.text import _contains_cjk, _visible_model_text
+from .reply_continuity import visible_next_step
 
 _INTERNAL_COACH_META_MARKERS = (
     "current coaching focus:",
@@ -600,7 +602,7 @@ def _agentic_completion_continuity(
             else "\u8fd9\u4e00\u8f6e\u5df2\u7ecf\u6536\u675f\uff0c\u4fdd\u6301\u540c\u4e00\u6761\u6559\u7ec3\u7ebf\u7a0b\u7ee7\u7eed\u5f80\u524d\u8d70\u3002"
         )
 
-    next_step = _prefer_structured_next_step(
+    next_step = visible_next_step(content) or _prefer_structured_next_step(
         scenario=str(context.get("scenario") or "general").strip(),
         next_step_hint=_extract_next_step_hint_text(
             context.get("thread_next_step") or context.get("resume_hint") or context.get("next_step_hint")
@@ -722,6 +724,9 @@ def _extract_next_step_hint_text(value: object | None) -> str:
 
 
 def _fresh_lane_marker_map(*, chinese: bool) -> dict[str, tuple[str, ...]]:
+    # Ordinary code words (function, container, debugging, migration) are not
+    # enough to establish a foreign workflow. Only specific lane signals may
+    # remove model content or replace its continuity.
     lane_markers: dict[str, tuple[str, ...]] = {
         "remote_workspace": (
             "remote lane",
@@ -731,7 +736,6 @@ def _fresh_lane_marker_map(*, chinese: bool) -> dict[str, tuple[str, ...]]:
             "tunnels",
             "devcontainer",
             "dev container",
-            "container",
             "wsl",
             "credential mode",
         ),
@@ -747,7 +751,6 @@ def _fresh_lane_marker_map(*, chinese: bool) -> dict[str, tuple[str, ...]]:
             "function-guidance lane",
             "function contract",
             "live call site",
-            "call site",
             "signature help",
             "go to definition",
         ),
@@ -764,32 +767,23 @@ def _fresh_lane_marker_map(*, chinese: bool) -> dict[str, tuple[str, ...]]:
             "\u8fdc\u7a0b\u5de5\u4f5c\u533a",
             "\u8fdc\u7a0b\u8fb9\u754c",
             "\u8fdc\u7a0b ssh",
-            "\u5bb9\u5668",
             "\u5f00\u53d1\u5bb9\u5668",
             "\u96a7\u9053",
             "\u51ed\u636e\u6a21\u5f0f",
         )
         lane_markers["debug_loop"] += (
-            "\u8c03\u8bd5",
             "\u8c03\u8bd5\u95ed\u73af",
-            "\u65ad\u70b9",
             "\u8c03\u7528\u6808",
             "\u5355\u6b65",
-            "\u53d8\u91cf\u503c",
         )
         lane_markers["function_guidance"] += (
-            "\u51fd\u6570",
             "\u51fd\u6570\u5951\u7ea6",
             "\u8c03\u7528\u70b9",
             "\u8c03\u7528\u4f4d\u7f6e",
             "\u7b7e\u540d\u63d0\u793a",
             "\u67e5\u770b\u5b9a\u4e49",
         )
-        lane_markers["project_adaptation"] += (
-            "\u6539\u9020",
-            "\u8fc1\u79fb",
-            "\u9002\u914d",
-        )
+        lane_markers["project_adaptation"] += ("\u73b0\u6709\u9879\u76ee\u6539\u9020", "\u9879\u76ee\u8fc1\u79fb")
     return lane_markers
 
 
@@ -1493,9 +1487,24 @@ def _reply_mentions_current_request_anchor(
     normalized_reply = _normalize_search_text(reply)
     if not normalized_reply:
         return False
-    return any(
+    if any(
         (normalized_term := _normalize_search_text(term)) and normalized_term in normalized_reply
         for term in _request_relevance_anchor_terms(message, current_file=current_file)
+    ):
+        return True
+    # A traceback often gives only a filename and exception type. A useful
+    # explanation can instead name a symbol from the supplied code. Do not
+    # demand that it repeat those incidental traceback labels.
+    content = str((current_file or {}).get("content") or "")[:64_000]
+    declarations = re.finditer(
+        r"\b(?:def|class|function|const|let|var)\s+([A-Za-z_$][\w$]*)"
+        r"|(?m:^[ \t]*([A-Za-z_]\w*)[ \t]*=(?!=))",
+        content,
+    )
+    return any(
+        re.search(r"(?<![\w$])" + re.escape(match.group(1) or match.group(2)) + r"(?![\w$])", reply)
+        is not None
+        for match in declarations
     )
 
 
@@ -1527,7 +1536,7 @@ def _reply_needs_current_request_reanchor(
     resolved_guided_scenario = _resolve_first_turn_guided_lane(
         scenario=str((coach_context or {}).get("scenario") or "").strip(),
         learner_message=str(message or ""),
-        reply=reply,
+        reply="",
     )
     if resolved_guided_scenario in _GUIDED_DOMAIN_SCENARIOS:
         return False
@@ -1679,6 +1688,8 @@ def _clean_provider_failure_summary(
     category: str,
     response_language: str | None,
 ) -> str:
+    if category == "quota_exhausted":
+        return provider_quota_copy(response_language)[0]
     if category == "streaming_unavailable":
         return _localized_text(
             "The configured provider has no verified native streaming path for this turn.",
@@ -1747,6 +1758,8 @@ def _clean_provider_failure_next_step(
     category: str,
     response_language: str | None,
 ) -> str:
+    if category == "quota_exhausted":
+        return provider_quota_copy(response_language)[1]
     if category == "streaming_unavailable":
         return _localized_text(
             "Choose a provider and model with verified native streaming in Settings, retest it, and resend this exact turn.",
@@ -1816,6 +1829,8 @@ def _clean_provider_failure_reply(
     detail: str | None,
     response_language: str | None,
 ) -> str:
+    if category == "quota_exhausted":
+        return provider_quota_reply(response_language)
     detail_text = _compact_text(
         redact_provider_error({"upstream_body": detail}, api_key=self._api_key)
     )

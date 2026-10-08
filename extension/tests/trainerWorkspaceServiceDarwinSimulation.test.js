@@ -53,47 +53,39 @@ _Mod._load = function (request, parent, isMain) {
 // fixture below; after the fix the rebase flow completes.
 // ---------------------------------------------------------------------------
 
-// Base the simulation tree on the host temp directory: this fixture creates
-// real files and directories, and a hardcoded /tmp/... root is not a writable
-// location on every platform (Windows resolves it against the current drive).
-// The darwin realpath simulation below deliberately stays, because the
-// /var -> /private/var canonicalization it mimics applies to os.tmpdir()
-// output on macOS too.
-const SIM_ROOT = hostPath.join(
-  os.tmpdir(),
-  `trainer-darwin-sim-${process.pid}-${Date.now().toString(36)}`,
-);
-const WINDOWS_DRIVE_ABSOLUTE = /^[a-zA-Z]:[\\/]/;
+// The service sees only Darwin paths. Real IO is mapped into an owned host
+// temp directory, so a Windows drive never reaches POSIX path.resolve.
+const POSIX_PATH = require('node:path/posix');
+const physicalRoot = hostPath.join(os.tmpdir(), `trainer-darwin-sim-${process.pid}-${Date.now().toString(36)}`);
+const SIM_ROOT = `/var/trainer-darwin-sim-${process.pid}`;
 const realPlatform = process.platform;
-const realRealpath = fs.realpath.bind(fs);
 
-function toDarwinCanonicalForm(resultPath) {
-  if (WINDOWS_DRIVE_ABSOLUTE.test(resultPath)) {
-    // On a Windows host the physical realpath is drive-absolute; render it as
-    // a '/private'-prefixed posix path to mimic macOS /var -> /private/var.
-    return `/private/${resultPath.replace(WINDOWS_DRIVE_ABSOLUTE, '').split('\\').join('/')}`;
-  }
-  // On a real POSIX host the operating system already supplies the truth:
-  // macOS returns /private/tmp/... for /tmp/... and Linux returns /tmp/....
-  return resultPath;
+function physicalPath(value) {
+  if (typeof value !== 'string') return value;
+  const lexical = value.startsWith('/private/') ? value.slice('/private'.length) : value;
+  assert.ok(lexical === SIM_ROOT || lexical.startsWith(`${SIM_ROOT}/`), `IO escaped the owned Darwin fixture: ${value}`);
+  return hostPath.join(physicalRoot, ...POSIX_PATH.relative(SIM_ROOT, lexical).split('/'));
 }
 
-fs.realpath = async function darwinSimulatedRealpath(candidatePath) {
-  const resolved = await realRealpath(candidatePath);
-  if (
-    typeof candidatePath === 'string' &&
-    (candidatePath === SIM_ROOT || candidatePath.startsWith(`${SIM_ROOT}/`))
-  ) {
-    // SIM_ROOT itself must canonicalize too: on macOS the parent of the
-    // external data root (/tmp/...) resolves to /private/tmp/... exactly
-    // like its children, and the canonical-containment check compares the
-    // realpaths of both sides.
-    return toDarwinCanonicalForm(resolved);
-  }
-  return resolved;
-};
+function logicalPath(value) {
+  return POSIX_PATH.join(SIM_ROOT, ...hostPath.relative(physicalRoot, value).split(hostPath.sep));
+}
 
-const POSIX_PATH = require('node:path/posix');
+const simulationFs = { ...fs };
+for (const name of ['mkdir', 'readFile', 'writeFile', 'lstat', 'stat', 'readdir', 'rm', 'rmdir']) {
+  simulationFs[name] = (value, ...args) => fs[name](physicalPath(value), ...args);
+}
+for (const name of ['cp', 'rename']) {
+  simulationFs[name] = (source, target, ...args) => fs[name](physicalPath(source), physicalPath(target), ...args);
+}
+simulationFs.mkdtemp = async prefix => logicalPath(await fs.mkdtemp(physicalPath(prefix)));
+simulationFs.realpath = async value => {
+  const actual = await fs.realpath(physicalPath(value));
+  const canonicalRoot = await fs.realpath(physicalRoot);
+  const relative = hostPath.relative(canonicalRoot, actual);
+  assert.ok(relative !== '..' && !relative.startsWith(`..${hostPath.sep}`), 'realpath escaped the owned physical fixture');
+  return POSIX_PATH.join('/private', SIM_ROOT, ...relative.split(hostPath.sep));
+};
 
 Object.defineProperty(process, 'platform', { value: 'darwin' });
 
@@ -119,8 +111,11 @@ function loadTrainerWorkspaceService(modulePath) {
     if (request === 'node:path') {
       return POSIX_PATH;
     }
+    if (request === './workspaceRoots') {
+      return loadTrainerWorkspaceService(hostPath.resolve(__dirname, '..', 'dist', 'extension', 'src', 'core', 'workspaceRoots.js'));
+    }
     if (request === 'node:fs/promises') {
-      return fs;
+      return simulationFs;
     }
     return require(request);
   };
@@ -169,13 +164,13 @@ function simulationDirectory(label) {
 }
 
 async function removeSimulationTree() {
-  await fs.rm(hostPath.resolve(SIM_ROOT), { recursive: true, force: true });
+  await fs.rm(physicalRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 }
 
 async function createExternalDataRoot(label, fileName) {
   const externalDataRoot = simulationDirectory(label);
-  await fs.mkdir(externalDataRoot, { recursive: true });
-  await fs.writeFile(POSIX_PATH.join(externalDataRoot, fileName), `${label}-state\n`, 'utf8');
+  await simulationFs.mkdir(externalDataRoot, { recursive: true });
+  await simulationFs.writeFile(POSIX_PATH.join(externalDataRoot, fileName), `${label}-state\n`, 'utf8');
   return externalDataRoot;
 }
 
@@ -187,6 +182,7 @@ test('darwin simulation: workspace migration rebases an external sidecar data fo
   const service = new TrainerWorkspaceService({ globalState: createGlobalState() });
 
   await service.selectRoot(sourceRoot);
+  assert.notEqual(await simulationFs.realpath(externalDataRoot), externalDataRoot);
 
   // Before the per-host fix this call rejected the valid external data root
   // with "must not resolve through a symbolic link or junction" because the
@@ -198,11 +194,11 @@ test('darwin simulation: workspace migration rebases an external sidecar data fo
   assert.equal(migration.targetRoot, POSIX_PATH.resolve(targetRoot));
   assert.equal(migration.managedDataRoot, POSIX_PATH.join(targetRoot, '.trainer', 'runtime'));
   assert.equal(
-    await fs.readFile(POSIX_PATH.join(migration.managedDataRoot, 'research.db'), 'utf8'),
+    await simulationFs.readFile(POSIX_PATH.join(migration.managedDataRoot, 'research.db'), 'utf8'),
     'sidecar-data-state\n',
   );
   assert.equal(
-    await fs.readFile(POSIX_PATH.join(externalDataRoot, 'research.db'), 'utf8'),
+    await simulationFs.readFile(POSIX_PATH.join(externalDataRoot, 'research.db'), 'utf8'),
     'sidecar-data-state\n',
   );
 });
@@ -220,7 +216,7 @@ test('darwin simulation: workspace backup captures the same canonicalized extern
 
   assert.equal(backup.managedDataRoot, POSIX_PATH.join(backupRoot, '.trainer', 'runtime'));
   assert.equal(
-    await fs.readFile(POSIX_PATH.join(backup.managedDataRoot, 'trainer.db'), 'utf8'),
+    await simulationFs.readFile(POSIX_PATH.join(backup.managedDataRoot, 'trainer.db'), 'utf8'),
     'backup-sidecar-data-state\n',
   );
 });
@@ -235,8 +231,8 @@ test('darwin simulation: a symlinked external data directory is still rejected',
 
   await service.selectRoot(sourceRoot);
   await fs.symlink(
-    hostPath.resolve(externalDataRoot),
-    linkedDataRoot,
+    physicalPath(externalDataRoot),
+    physicalPath(linkedDataRoot),
     realPlatform === 'win32' ? 'junction' : 'dir',
   );
 
@@ -245,3 +241,5 @@ test('darwin simulation: a symlinked external data directory is still rejected',
     /symbolic link|junction/,
   );
 });
+
+test.after(() => { Object.defineProperty(process, 'platform', { value: realPlatform }); _Mod._load = _origLoad; });

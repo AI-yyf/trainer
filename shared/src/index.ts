@@ -15,6 +15,7 @@ export * from "./sidebarCommands";
 export * from "./trainingCardCopy";
 export * from "./trainingExecutionGovernance";
 export * from "./trainingReliabilityGovernance";
+export * from "./trainingVerification";
 export * from "./operationReliabilityGovernance";
 export * from "./coachOrientationGovernance";
 export * from "./planOrientationGovernance";
