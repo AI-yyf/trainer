@@ -203,6 +203,7 @@ import {
   parseLivePlanTaskGateMarker,
   planRevisionConflictMessage,
   operationScopeChangedMessage,
+  operationStatusMessageText,
   providerRecoveryMessage,
   recoverableFailureMessage,
   resolveOperationMessageSurface,
@@ -14166,7 +14167,7 @@ export function App() {
       {operationMessage && operationMessageVisible ? (
         <div className="template-global-state">
           <SystemState kind={operationMessage.tone === "error" ? "recoverable-error" : operationMessage.tone === "success" ? "success" : "information"}
-            title={sanitizeErrorSurfaceText(operationMessage.message, layout.composerLanguage)}>
+            title={sanitizeErrorSurfaceText(operationStatusMessageText(operationMessage, layout.composerLanguage), layout.composerLanguage)}>
             {operationMessage.tone === "error" ? <button type="button" className="template-back" aria-label={appUiCopy(layout.composerLanguage, "关闭提示")} onClick={dismissOperationMessage}>×</button> : null}
           </SystemState>
         </div>

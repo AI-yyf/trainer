@@ -306,15 +306,17 @@ function pathsEqual(left: string, right: string): boolean {
   // directory look like a different workspace root, so fall back to
   // resolved-path comparison before rejecting.
   try {
-    const leftReal = fsSync.realpathSync(left);
-    const rightReal = fsSync.realpathSync(right);
     if (process.platform === 'win32') {
+      // The native API expands Windows short names; the JS path walker can
+      // preserve an ordinary 8.3 segment even when it names the same directory.
+      const leftReal = fsSync.realpathSync.native(left);
+      const rightReal = fsSync.realpathSync.native(right);
       return (
-        stripWindowsExtendedPathPrefix(leftReal) ===
-        stripWindowsExtendedPathPrefix(rightReal)
+        canonicalPathForComparison(stripWindowsExtendedPathPrefix(leftReal)) ===
+        canonicalPathForComparison(stripWindowsExtendedPathPrefix(rightReal))
       );
     }
-    return leftReal === rightReal;
+    return fsSync.realpathSync(left) === fsSync.realpathSync(right);
   } catch {
     return false;
   }

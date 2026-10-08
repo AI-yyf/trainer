@@ -1,4 +1,4 @@
-import type { TrainerOperationMessage } from "../../../../shared/src/protocol";
+import { TRAINER_OPERATION_COMPLETED_MARKER, type TrainerOperationMessage } from "../../../../shared/src/protocol";
 import type { ComposerLanguage } from "./types";
 
 // Pure operation-message governance: message parsing markers, localized
@@ -10,6 +10,24 @@ import type { ComposerLanguage } from "./types";
 // on every view; every other scope renders only while its own view is active.
 
 export type OperationMessage = TrainerOperationMessage;
+
+/** Render the generic acknowledgement in the current locale, keeping facts intact. */
+export function operationStatusMessageText(message: OperationMessage, language: ComposerLanguage): string {
+  if (message.tone !== "success" || message.message !== TRAINER_OPERATION_COMPLETED_MARKER) {
+    return message.message;
+  }
+  const copy: Record<ComposerLanguage, string> = {
+    "zh-CN": "操作已完成。",
+    "en-US": "Action completed.",
+    "es-ES": "Acción completada.",
+    "fr-FR": "Action terminée.",
+    "de-DE": "Aktion abgeschlossen.",
+    "ja-JP": "操作が完了しました。",
+    "ko-KR": "작업이 완료되었습니다.",
+    "pt-BR": "Ação concluída.",
+  };
+  return copy[language];
+}
 
 export type OperationMessageSurface = "global" | "training" | "plan" | "resources";
 

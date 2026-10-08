@@ -65,6 +65,24 @@ function loadGovernance() {
 
 const governance = loadGovernance();
 
+test('generic completion notices localize without changing errors or specific operation facts', () => {
+  const marker = '[[trainer-operation-completed]]';
+  const languages = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
+  const completion = { tone: 'success', message: marker, providerTest: { ok: false } };
+  const original = structuredClone(completion);
+  const copies = languages.map(language => governance.operationStatusMessageText(completion, language));
+  assert.equal(new Set(copies).size, 8);
+  assert.equal(copies[0], '操作已完成。');
+  assert.equal(copies[1], 'Action completed.');
+  for (const copy of copies) assert.doesNotMatch(copy, /\[\[|Trainer action completed/);
+  assert.deepEqual(completion, original);
+  for (const language of languages) {
+    assert.equal(governance.operationStatusMessageText({ tone: 'error', message: marker }, language), marker);
+    assert.equal(governance.operationStatusMessageText({ tone: 'success', message: 'Saved, but connection verification failed.' }, language), 'Saved, but connection verification failed.');
+    assert.equal(governance.operationStatusMessageText({ tone: 'info', message: marker }, language), marker);
+  }
+});
+
 test('rejected scope changes explain that the action did not run in all eight languages', () => {
   const languages = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
   const copies = new Set();

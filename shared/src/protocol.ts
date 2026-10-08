@@ -587,6 +587,9 @@ export type TrainerStreamingState = {
   reliabilityOutcome?: "success" | "failure" | "cancelled" | "timeout" | "";
 };
 
+/** Generic successful acknowledgements are localized by the receiving UI. */
+export const TRAINER_OPERATION_COMPLETED_MARKER = "[[trainer-operation-completed]]";
+
 export type TrainerOperationMessage = {
   tone: "info" | "success" | "error";
   message: string;

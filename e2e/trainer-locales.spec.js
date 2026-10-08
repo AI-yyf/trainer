@@ -32,6 +32,31 @@ const VIEW_LABELS = {
   "pt-BR": ["Chat", "Plano", "Recursos", "Treinamento", "Configura\u00e7\u00f5es"],
 };
 
+const COMPLETION_COPY = {
+  'zh-CN': '操作已完成。',
+  'en-US': 'Action completed.',
+  'es-ES': 'Acción completada.',
+  'fr-FR': 'Action terminée.',
+  'de-DE': 'Aktion abgeschlossen.',
+  'ja-JP': '操作が完了しました。',
+  'ko-KR': '작업이 완료되었습니다.',
+  'pt-BR': 'Ação concluída.',
+};
+
+for (const [language, expected] of Object.entries(COMPLETION_COPY)) {
+  test(`generic host completion stays localized in ${language}`, async ({ page }) => {
+    await page.goto(`${PREVIEW_PATH}?view=coach&lang=${language}&connection=connected&run=completion-${language}`);
+    await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
+    await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
+      type: 'operation/status', payload: { tone: 'success', message: '[[trainer-operation-completed]]' },
+    }));
+    const notice = page.locator('.template-global-state [data-template=SystemState]');
+    await expect(notice).toContainText(expected);
+    await expect(notice).not.toContainText('[[trainer-operation-completed]]');
+    await expect(notice).not.toContainText('Trainer action completed.');
+  });
+}
+
 function buildPreviewUrl(language) {
   const params = new URLSearchParams({
     view: "training",

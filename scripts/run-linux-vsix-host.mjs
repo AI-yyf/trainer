@@ -42,7 +42,8 @@ export function createLinuxKeyringScope({ env = process.env, baseDir = os.tmpdir
   for (const key of ["DBUS_SESSION_BUS_ADDRESS", "DBUS_SESSION_BUS_PID", "DBUS_STARTER_ADDRESS",
     "DBUS_STARTER_BUS_TYPE", "GNOME_KEYRING_PID", "TRAINER_E2E_LINUX_KEYRING_READY", "TRAINER_E2E_LINUX_KEYRING_PID"])
     delete scoped[key];
-  return { root, env: scoped };
+  const stat = fs.lstatSync(root);
+  return { root, env: scoped, rootIdentity: Object.freeze({ dev: stat.dev, ino: stat.ino, uid: stat.uid }) };
 }
 
 export function privateUnixPermissions(mode, { directory = false, platform = process.platform } = {}) {
@@ -51,12 +52,21 @@ export function privateUnixPermissions(mode, { directory = false, platform = pro
   return platform === "win32" || (directory ? (mode & 0o777) === 0o700 : (mode & 0o077) === 0);
 }
 
-export function assertLinuxKeyringScope(env, { uid = process.getuid?.() } = {}) {
-  const supplied = env.TRAINER_E2E_LINUX_KEYRING_ROOT;
+export function assertLinuxKeyringRoot(supplied, { uid = process.getuid?.(), identity } = {}) {
   if (typeof supplied !== "string" || !path.isAbsolute(supplied)) throw new Error("Missing owned Linux keyring scope.");
   const root = fs.realpathSync(supplied);
   if (root !== supplied || !path.basename(root).startsWith("trainer-ci-keyring-"))
     throw new Error("Linux keyring root is not the canonical owned temporary directory.");
+  const stat = fs.lstatSync(root);
+  if (!stat.isDirectory() || stat.isSymbolicLink() || !privateUnixPermissions(stat.mode, { directory: true }) ||
+      (uid !== undefined && stat.uid !== uid) ||
+      (identity && (identity.dev !== stat.dev || identity.ino !== stat.ino || identity.uid !== stat.uid)))
+    throw new Error("Linux keyring root no longer matches its original private owned directory.");
+  return root;
+}
+
+export function assertLinuxKeyringScope(env, { uid = process.getuid?.() } = {}) {
+  const root = assertLinuxKeyringRoot(env.TRAINER_E2E_LINUX_KEYRING_ROOT, { uid });
   for (const directory of [root, ...Object.entries(paths).map(([key, relative]) => {
     const expected = path.join(root, relative);
     if (env[key] !== expected) throw new Error("Linux keyring XDG directory is outside its owned scope.");
@@ -68,6 +78,16 @@ export function assertLinuxKeyringScope(env, { uid = process.getuid?.() } = {}) 
       throw new Error("Linux keyring scope must contain only private directories owned by this user.");
   }
   return root;
+}
+
+export function removeLinuxKeyringScope(scope) {
+  if (!scope.rootIdentity) throw new Error("The original owned Linux keyring root identity is missing.");
+  const root = assertLinuxKeyringRoot(scope.root, { identity: scope.rootIdentity });
+  // GNOME removes its control directory on exit. Cleanup owns the original
+  // root, not the lifetime of each XDG child; recursive rm never follows links.
+  fs.rmSync(root, { recursive: true, force: true });
+  if (fs.existsSync(root)) throw new Error("The owned Linux keyring root was not removed.");
+  return { originalOwnedRootVerified: true, rootRemoved: true };
 }
 
 export function ownedKeyringProcess(pid, env) {
@@ -331,13 +351,37 @@ export async function runPreparedLinuxHost({ env = process.env, spawnProcess = s
 export async function runLinuxHostInOwnedSession({ env = process.env, platform = process.platform, runSession = runBounded } = {}) {
   if (platform !== "linux" || env.CI !== "true") throw new Error("This secure keyring launcher is restricted to the disposable Linux CI runner.");
   const scope = createLinuxKeyringScope({ env });
+  let sessionExitCode;
+  let sessionFailure;
   try {
     // Preparation/CLI install/cleanup have their own bounds. The actual Code
     // launch retains verify-vsix-e2e's original ten-minute timeout unchanged.
-    return await runSession(tools.bus, ["--", tools.display, "--auto-servernum", process.execPath, scriptPath, "--session"], { env: scope.env, timeoutMs: 720000 });
+    sessionExitCode = await runSession(tools.bus, ["--", tools.display, "--auto-servernum", process.execPath, scriptPath, "--session"], { env: scope.env, timeoutMs: 720000 });
+    return sessionExitCode;
+  } catch (error) {
+    sessionFailure = error;
+    throw error;
   } finally {
-    assertLinuxKeyringScope(scope.env);
-    fs.rmSync(scope.root, { recursive: true, force: true });
+    let cleanupFailure;
+    let cleanup = { originalOwnedRootVerified: false, rootRemoved: false };
+    try { cleanup = removeLinuxKeyringScope(scope); }
+    catch (error) { cleanupFailure = error; }
+    const receiptPath = path.resolve(path.dirname(env.TRAINER_E2E_EXPORT_REPORT_PATH || "output/maturity/ci-installed/host-report.json"), "linux-keyring-cleanup.json");
+    try {
+      fs.mkdirSync(path.dirname(receiptPath), { recursive: true });
+      fs.writeFileSync(receiptPath, JSON.stringify({ ...cleanup, ok: !cleanupFailure,
+        sessionExitCode: Number.isInteger(sessionExitCode) ? sessionExitCode : null,
+        sessionFailed: Boolean(sessionFailure) || (Number.isInteger(sessionExitCode) && sessionExitCode !== 0),
+        cleanupFailed: Boolean(cleanupFailure) }) + "\n");
+    } catch (receiptFailure) {
+      cleanupFailure = cleanupFailure ? new AggregateError([cleanupFailure, receiptFailure],
+        "Owned Linux keyring cleanup and its receipt could not complete.") : receiptFailure;
+    }
+    if (cleanupFailure) {
+      if (sessionFailure) throw new AggregateError([sessionFailure, cleanupFailure],
+        "The Linux host session failed and owned keyring cleanup also failed; native facts remain in the host report.");
+      throw new Error("Owned Linux keyring cleanup failed; the native session result remains in the host report.", { cause: cleanupFailure });
+    }
   }
 }
 

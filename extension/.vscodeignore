@@ -20,3 +20,6 @@ tsconfig.json
 !scripts/bundle-sidecar-binary.mjs
 !bundled/**
 !bundled/remote/**
+**/.claude/**
+**/test-results/**
+**/playwright-report/**

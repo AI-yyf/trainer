@@ -320,3 +320,109 @@ test('owned root removal does not follow an external directory link or remove an
     assert.equal(fs.readFileSync(sentinel, 'utf8'), 'outside-unchanged');
   } finally { fs.rmSync(external, { recursive: true, force: true }); }
 });
+
+test('actual daemon-style control-directory removal preserves strict startup checks and allows exact root cleanup', async () => {
+  const { runLinuxHostInOwnedSession, assertLinuxKeyringScope } = await load();
+  const external = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-keyring-cleanup-evidence-')));
+  const sentinel = path.join(external, 'sentinel.txt');
+  const reportPath = path.join(external, 'host-report.json');
+  fs.writeFileSync(sentinel, 'external-unchanged');
+  let root;
+  try {
+    assert.equal(await runLinuxHostInOwnedSession({ platform: 'linux',
+      env: { CI: 'true', HOME: '/original/home', TRAINER_E2E_EXPORT_REPORT_PATH: reportPath },
+      runSession: async (_command, _args, { env }) => {
+        root = assertLinuxKeyringScope(env);
+        fs.symlinkSync(external, path.join(root, 'cache/external'), process.platform === 'win32' ? 'junction' : 'dir');
+        fs.rmSync(env.GNOME_KEYRING_CONTROL, { recursive: true });
+        assert.throws(() => assertLinuxKeyringScope(env), { code: 'ENOENT' }, 'startup still requires its control directory');
+        fs.writeFileSync(reportPath, JSON.stringify({ ok: true, nativeFixture: true }));
+        return 0;
+      } }), 0);
+    assert.equal(fs.existsSync(root), false);
+    assert.equal(fs.readFileSync(sentinel, 'utf8'), 'external-unchanged');
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(external, 'linux-keyring-cleanup.json'), 'utf8')),
+      { originalOwnedRootVerified: true, rootRemoved: true, ok: true, sessionExitCode: 0, sessionFailed: false, cleanupFailed: false });
+    assert.deepEqual(JSON.parse(fs.readFileSync(reportPath, 'utf8')), { ok: true, nativeFixture: true });
+  } finally { fs.rmSync(external, { recursive: true, force: true }); }
+});
+
+test('replacement root is never removed and cleanup failure preserves a completed native result', async () => {
+  const { runLinuxHostInOwnedSession } = await load();
+  const output = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-keyring-root-evidence-')));
+  const reportPath = path.join(output, 'host-report.json');
+  let root;
+  let original;
+  try {
+    await assert.rejects(runLinuxHostInOwnedSession({ platform: 'linux',
+      env: { CI: 'true', TRAINER_E2E_EXPORT_REPORT_PATH: reportPath },
+      runSession: async (_command, _args, { env }) => {
+        root = env.TRAINER_E2E_LINUX_KEYRING_ROOT;
+        original = root + '-original';
+        fs.renameSync(root, original);
+        fs.mkdirSync(root, { mode: 0o700 });
+        fs.writeFileSync(path.join(root, 'replacement-sentinel.txt'), 'not-the-original-directory');
+        fs.writeFileSync(reportPath, JSON.stringify({ ok: true, nativeFixture: true }));
+        return 0;
+      } }), error => /cleanup failed/.test(error.message) && /original private owned/.test(error.cause.message));
+    assert.equal(fs.readFileSync(path.join(root, 'replacement-sentinel.txt'), 'utf8'), 'not-the-original-directory');
+    const receipt = JSON.parse(fs.readFileSync(path.join(output, 'linux-keyring-cleanup.json'), 'utf8'));
+    assert.equal(receipt.ok, false); assert.equal(receipt.rootRemoved, false);
+    assert.equal(receipt.sessionExitCode, 0); assert.equal(receipt.sessionFailed, false); assert.equal(receipt.cleanupFailed, true);
+    assert.deepEqual(JSON.parse(fs.readFileSync(reportPath, 'utf8')), { ok: true, nativeFixture: true });
+  } finally {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+    if (original) fs.rmSync(original, { recursive: true, force: true });
+    fs.rmSync(output, { recursive: true, force: true });
+  }
+});
+
+test('session and root-cleanup dual failure retains the primary error and independent cleanup receipt', async () => {
+  const { runLinuxHostInOwnedSession } = await load();
+  const output = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-keyring-dual-evidence-')));
+  const nativeFailure = new Error('fixture-native-session-failure');
+  let root;
+  let original;
+  try {
+    await assert.rejects(runLinuxHostInOwnedSession({ platform: 'linux',
+      env: { CI: 'true', TRAINER_E2E_EXPORT_REPORT_PATH: path.join(output, 'host-report.json') },
+      runSession: async (_command, _args, { env }) => {
+        root = env.TRAINER_E2E_LINUX_KEYRING_ROOT;
+        original = root + '-original';
+        fs.renameSync(root, original);
+        fs.symlinkSync(output, root, process.platform === 'win32' ? 'junction' : 'dir');
+        throw nativeFailure;
+      } }), error => {
+        assert.ok(error instanceof AggregateError);
+        assert.equal(error.errors[0], nativeFailure);
+        assert.match(error.errors[1].message, /canonical owned/);
+        return true;
+      });
+    const receipt = JSON.parse(fs.readFileSync(path.join(output, 'linux-keyring-cleanup.json'), 'utf8'));
+    assert.equal(receipt.sessionExitCode, null); assert.equal(receipt.sessionFailed, true); assert.equal(receipt.cleanupFailed, true);
+    assert.ok(fs.existsSync(original)); assert.ok(fs.existsSync(output));
+  } finally {
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+    if (original) fs.rmSync(original, { recursive: true, force: true });
+    fs.rmSync(output, { recursive: true, force: true });
+  }
+});
+
+test('successful root cleanup preserves a nonzero native exit code and records the native failure independently', async () => {
+  const { runLinuxHostInOwnedSession } = await load();
+  const output = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-keyring-exit-evidence-')));
+  let root;
+  try {
+    const exitCode = await runLinuxHostInOwnedSession({ platform: 'linux',
+      env: { CI: 'true', TRAINER_E2E_EXPORT_REPORT_PATH: path.join(output, 'host-report.json') },
+      runSession: async (_command, _args, { env }) => {
+        root = env.TRAINER_E2E_LINUX_KEYRING_ROOT;
+        fs.rmSync(env.GNOME_KEYRING_CONTROL, { recursive: true });
+        return 3;
+      } });
+    assert.equal(exitCode, 3); assert.equal(fs.existsSync(root), false);
+    const receipt = JSON.parse(fs.readFileSync(path.join(output, 'linux-keyring-cleanup.json'), 'utf8'));
+    assert.equal(receipt.ok, true); assert.equal(receipt.cleanupFailed, false);
+    assert.equal(receipt.sessionExitCode, 3); assert.equal(receipt.sessionFailed, true);
+  } finally { fs.rmSync(output, { recursive: true, force: true }); }
+});

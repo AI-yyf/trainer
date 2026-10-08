@@ -52,7 +52,7 @@ test('Settings and Training display host errors through the sanitizer', () => {
     state.slice(state.indexOf('message.type === "operation/status"')),
     /sanitizeErrorSurfaceText\(/,
   );
-  assert.match(app, /sanitizeErrorSurfaceText\(operationMessage\.message/);
+  assert.match(app, /sanitizeErrorSurfaceText\(operationStatusMessageText\(operationMessage, layout\.composerLanguage\), layout\.composerLanguage\)/);
   assert.match(app, /waitingComposerEnqueueFailureText\(error, layout\.composerLanguage\)/);
 });
 

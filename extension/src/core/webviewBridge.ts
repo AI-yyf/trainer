@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { WebviewOperationIdentity, WebviewOperationPhase, WebviewSyncCursor } from '../../../shared/src/webviewSync';
+import { TRAINER_OPERATION_COMPLETED_MARKER } from '../../../shared/src/protocol';
 
 import { COMMAND_IDS, TRAINER_SIDEBAR_VIEW_ID } from './constants';
 import { buildWorkbenchHtml } from './webviewContent';
@@ -596,7 +597,7 @@ export class WorkbenchSidebarController
                 resourceOperationStatusMessage(
                   command.commandId,
                   command.payload,
-                  result.message ?? 'Trainer action completed.',
+                  result.message ?? TRAINER_OPERATION_COMPLETED_MARKER,
                 ),
                 result.providerTest,
               ),
@@ -617,7 +618,7 @@ export class WorkbenchSidebarController
                 resourceOperationStatusMessage(
                   command.commandId,
                   command.payload,
-                  result.message ?? 'Trainer action completed.',
+                  result.message ?? TRAINER_OPERATION_COMPLETED_MARKER,
                 ),
                 result.providerTest,
               ),
@@ -632,7 +633,7 @@ export class WorkbenchSidebarController
               resourceOperationStatusMessage(
                 command.commandId,
                 command.payload,
-                result.message ?? 'Trainer action completed.',
+                result.message ?? TRAINER_OPERATION_COMPLETED_MARKER,
               ),
               result.providerTest,
             ),
