@@ -176,3 +176,36 @@ test('only a typed verified training return gets a localized result title while 
   }
   assert.equal(titles.size, 8);
 });
+
+test('an untitled restored practice keeps in-flight copy and the same card action in every language', () => {
+  const activeTitles = new Set();
+  const returnTitles = new Set();
+  for (const language of ['zh-CN','en-US','es-ES','fr-FR','de-DE','ja-JP','ko-KR','pt-BR']) {
+    const training = { workspaceId: 'ws', cardId: 'restored-same-card', title: '', status: 'completed' };
+    const completed = resolve(facts({ language, plan: { state: 'absent' }, training }));
+    for (const status of ['active', 'return_pending']) {
+      for (const title of ['', '   ']) {
+        const input = facts({ language, plan: { state: 'absent' }, training: { ...training, status, title } });
+        const before = structuredClone(input);
+        const action = resolve(input);
+        assert.equal(action.intent, status === 'active' ? 'resume_training' : 'finish_training');
+        assert.notEqual(action.title, completed.title, 'unfinished practice must never claim completion');
+        assert.ok(action.title && action.detail && action.label);
+        (status === 'active' ? activeTitles : returnTitles).add(action.title);
+        if (language === 'en-US' && status === 'active') assert.equal(action.title, 'Current practice is in progress');
+        if (language === 'zh-CN' && status === 'active') assert.equal(action.title, '当前练习进行中');
+        const calls = [];
+        assert.equal(execute(action, input, { openTraining: id => calls.push(id) }), true);
+        assert.deepEqual(calls, ['restored-same-card']);
+        assert.deepEqual(input, before, 'copy resolution and navigation must not change phase or evidence');
+        assert.equal(learningActionIsCurrent(action, { ...input,
+          training: { ...input.training, status: 'completed' } }), false);
+        const named = resolve({ ...input, training: { ...input.training, title: 'Actual card task' } });
+        assert.equal(named.title, 'Actual card task', 'a present card title remains authoritative');
+      }
+    }
+  }
+  assert.equal(activeTitles.size, 8);
+  assert.equal(returnTitles.size, 8);
+  assert.equal([...activeTitles].some(title => returnTitles.has(title)), false);
+});

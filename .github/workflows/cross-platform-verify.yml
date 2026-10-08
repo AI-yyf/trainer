@@ -10,18 +10,29 @@ on:
         required: false
         default: false
         type: boolean
+      diagnostic_package_platform:
+        description: Partial diagnostic only (not full acceptance); requires installed host E2E. none keeps all nine jobs.
+        required: false
+        default: none
+        type: choice
+        options:
+          - none
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
 
 permissions:
   contents: read
 
 concurrency:
-  group: cross-platform-verify-${{ github.ref }}
+  group: cross-platform-verify-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.diagnostic_package_platform != 'none' && inputs.diagnostic_package_platform || 'full' }}
   cancel-in-progress: true
 
 jobs:
   # Job A — Core / Server: the Slow Slice lives here alone so a slow or
   # hung platform-specific server test cannot starve UI and package signal.
   server:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.diagnostic_package_platform == 'none' }}
     name: Server (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     # Windows is the known long pole: 2951 tests measured at 57m42s serial;
@@ -100,6 +111,7 @@ jobs:
   # Job B — UI / Experience: webview build, unit guards, the 200-scenario
   # preview matrix and browser recovery.
   ui:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.diagnostic_package_platform == 'none' }}
     name: UI (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
@@ -170,16 +182,13 @@ jobs:
   # Job C — Package / Delivery: native sidecar, remote companion, VSIX,
   # package verification and the portable smoke.
   package:
-    name: Package (${{ matrix.os }})
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnostic_package_platform != 'none' && 'Diagnostic package' || 'Package' }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
+        os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.diagnostic_package_platform != 'none' && format('["{0}"]', inputs.diagnostic_package_platform) || '["ubuntu-latest","macos-latest","windows-latest"]') }}
     env:
       OPENAI_API_KEY: ""
       TRAINER_PROVIDER_SMOKE_API_KEY: ${{ secrets.TRAINER_PROVIDER_SMOKE_API_KEY }}
@@ -189,6 +198,14 @@ jobs:
       TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_API_KEY: ""
     steps:
       - uses: actions/checkout@v4
+
+      - name: Require actual host acceptance for the partial diagnostic scope
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnostic_package_platform != 'none' && inputs.run_vsix_host_e2e != true }}
+        run: node -e "throw new Error('Partial diagnostic scope requires run_vsix_host_e2e=true; it cannot establish full acceptance.')"
+
+      - name: Identify the partial diagnostic scope
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnostic_package_platform != 'none' }}
+        run: node -e "console.log('Partial diagnostic runs only the selected platform Package and actual Host checks; it does not establish full acceptance or release readiness.')"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -276,6 +293,7 @@ jobs:
           TRAINER_SKIP_VSIX_REBUILD: "1"
           TRAINER_E2E_EXPORT_REPORT_PATH: output/maturity/ci-installed/host-report.json
           TRAINER_E2E_NO_SANDBOX: "1"
+          TRAINER_E2E_LINUX_SECRET_DIAGNOSTICS: "1"
         run: npm run test:vsix-e2e
 
       - name: Run installed VSIX host E2E (Linux Xvfb)
@@ -285,6 +303,7 @@ jobs:
           TRAINER_SKIP_VSIX_REBUILD: "1"
           TRAINER_E2E_EXPORT_REPORT_PATH: output/maturity/ci-installed/host-report.json
           TRAINER_E2E_NO_SANDBOX: "1"
+          TRAINER_E2E_LINUX_SECRET_DIAGNOSTICS: "1"
         run: xvfb-run --auto-servernum npm run test:vsix-e2e
 
       - name: Run installed VSIX host E2E (macOS and Windows)

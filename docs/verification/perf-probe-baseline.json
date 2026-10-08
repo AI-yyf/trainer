@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-10-08T17:12:18.199Z",
+  "generatedAt": "2026-10-08T17:55:20.666Z",
   "config": {
-    "baseUrl": "http://127.0.0.1:4201",
+    "baseUrl": "http://127.0.0.1:4213",
     "conversationSize": 300,
     "streamChunks": 300,
     "streamChunkChars": 100,
@@ -10,37 +10,37 @@
   },
   "longSessionNav": {
     "coldFirstVisitMs": {
-      "plan": 104,
-      "resources": 33,
-      "settings": 52,
-      "training": 12
+      "plan": 65,
+      "resources": 35,
+      "settings": 40,
+      "training": 13
     },
     "warmMs": {
       "plan": {
         "n": 3,
-        "min": 34,
-        "p50": 35,
-        "p90": 37,
-        "max": 37
+        "min": 36,
+        "p50": 38,
+        "p90": 38,
+        "max": 38
       },
       "resources": {
         "n": 3,
         "min": 34,
         "p50": 35,
-        "p90": 36,
-        "max": 36
+        "p90": 35,
+        "max": 35
       },
       "training": {
         "n": 3,
-        "min": 8,
-        "p50": 9,
-        "p90": 9,
-        "max": 9
+        "min": 11,
+        "p50": 11,
+        "p90": 12,
+        "max": 12
       },
       "settings": {
         "n": 3,
-        "min": 34,
-        "p50": 35,
+        "min": 36,
+        "p50": 36,
         "p90": 36,
         "max": 36
       }
@@ -48,7 +48,7 @@
   },
   "streamingOverhead": {
     "coachOnlyVisited": {
-      "streamWallMs": 1517,
+      "streamWallMs": 1501,
       "longtaskCount": 0,
       "longtaskTotalMs": 0,
       "longtaskMaxMs": 0,
@@ -56,11 +56,11 @@
       "streamingRendered": true
     },
     "allVisited": {
-      "streamWallMs": 1623,
+      "streamWallMs": 1631,
       "longtaskCount": 0,
       "longtaskTotalMs": 0,
       "longtaskMaxMs": 0,
-      "navDuringStreamMs": 8,
+      "navDuringStreamMs": 6,
       "streamingRendered": true
     },
     "hiddenSurfaceDelta": {
@@ -76,7 +76,7 @@
     },
     "warmNavP90Ms": {
       "budget": 100,
-      "observed": 37,
+      "observed": 38,
       "pass": true
     }
   },

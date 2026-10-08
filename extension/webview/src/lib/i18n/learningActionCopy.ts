@@ -9,8 +9,8 @@ interface LearningActionCopy {
   blockerTitle: string; blockerLabel: string;
   evidenceTitle: string; verifiedEvidenceTitle: string; evidenceLabel: string; evidenceDetail: string;
   continueLabel: string; continueDetail: string;
-  practiceLabel: string; practiceDetail: string;
-  returnLabel: string; returnDetail: string;
+  practiceTitle: string; practiceLabel: string; practiceDetail: string;
+  returnTitle: string; returnLabel: string; returnDetail: string;
   reviewTitle: string; reviewLabel: string; reviewDetail: string;
   completedTitle: string; completedLabel: string; completedDetail: string;
   generateTitle: string; generateLabel: string; generateDetail: string;
@@ -30,8 +30,8 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     blockerTitle: "先解决当前阻塞", blockerLabel: "与教练解决阻塞",
     evidenceTitle: "确认当前步骤的证据", verifiedEvidenceTitle: "确认这次验证结果", evidenceLabel: "确认采用这条证据", evidenceDetail: "确认前先核对结果；采用证据不会自动认定你已掌握。",
     continueLabel: "继续当前步骤", continueDetail: "完成当前步骤，再带真实结果回来核对。",
-    practiceLabel: "继续练习", practiceDetail: "继续同一张卡和当前尝试。",
-    returnLabel: "完成练习回流", returnDetail: "先完成当前练习的复盘与回流，再开始下一项。",
+    practiceTitle: "当前练习进行中", practiceLabel: "继续练习", practiceDetail: "继续同一张卡和当前尝试。",
+    returnTitle: "完成练习复盘与回流", returnLabel: "完成练习回流", returnDetail: "先完成当前练习的复盘与回流，再开始下一项。",
     reviewTitle: "复习已到期", reviewLabel: "开始复习", reviewDetail: "回顾已学内容，检查现在能否独立完成。",
     completedTitle: "当前练习已完成", completedLabel: "回到教练", completedDetail: "带着本次结果继续对话，再决定下一步。",
     generateTitle: "确定你的学习目标", generateLabel: "制定学习计划", generateDetail: "先告诉教练你想学什么，再确认正式计划。",
@@ -47,8 +47,8 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     blockerTitle: "Resolve the current blocker", blockerLabel: "Resolve with coach",
     evidenceTitle: "Confirm this step’s evidence", verifiedEvidenceTitle: "Confirm this verification result", evidenceLabel: "Approve this evidence", evidenceDetail: "Check the result first. Approving evidence does not establish mastery.",
     continueLabel: "Continue current step", continueDetail: "Complete this step, then bring back the actual result.",
-    practiceLabel: "Continue practice", practiceDetail: "Resume the same card and current attempt.",
-    returnLabel: "Finish practice handoff", returnDetail: "Finish reflection and return before starting another activity.",
+    practiceTitle: "Current practice is in progress", practiceLabel: "Continue practice", practiceDetail: "Resume the same card and current attempt.",
+    returnTitle: "Finish reflection and return", returnLabel: "Finish practice handoff", returnDetail: "Finish reflection and return before starting another activity.",
     reviewTitle: "Review is due", reviewLabel: "Start review", reviewDetail: "Revisit what you learned and check whether you can do it independently.",
     completedTitle: "Current practice is complete", completedLabel: "Return to coach", completedDetail: "Continue the conversation with this result before deciding the next step.",
     generateTitle: "Choose your learning goal", generateLabel: "Create learning plan", generateDetail: "Tell the coach what you want to learn, then confirm a formal plan.",
@@ -64,8 +64,8 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     blockerTitle: "Resuelve el bloqueo actual", blockerLabel: "Resolver con el tutor",
     evidenceTitle: "Confirma la evidencia de este paso", verifiedEvidenceTitle: "Confirma este resultado de verificación", evidenceLabel: "Aprobar esta evidencia", evidenceDetail: "Comprueba primero el resultado. Aprobar evidencia no demuestra dominio.",
     continueLabel: "Continuar el paso actual", continueDetail: "Completa este paso y vuelve con el resultado real.",
-    practiceLabel: "Continuar práctica", practiceDetail: "Retoma la misma tarjeta y el intento actual.",
-    returnLabel: "Completar el retorno", returnDetail: "Termina la reflexión y el retorno antes de iniciar otra actividad.",
+    practiceTitle: "La práctica está en curso", practiceLabel: "Continuar práctica", practiceDetail: "Retoma la misma tarjeta y el intento actual.",
+    returnTitle: "Completa la reflexión y el retorno", returnLabel: "Completar el retorno", returnDetail: "Termina la reflexión y el retorno antes de iniciar otra actividad.",
     reviewTitle: "Hay un repaso pendiente", reviewLabel: "Iniciar repaso", reviewDetail: "Revisa lo aprendido y comprueba si puedes hacerlo sin ayuda.",
     completedTitle: "La práctica actual ha terminado", completedLabel: "Volver al tutor", completedDetail: "Continúa la conversación con este resultado antes de decidir el siguiente paso.",
     generateTitle: "Elige tu objetivo de aprendizaje", generateLabel: "Crear plan de aprendizaje", generateDetail: "Explica al tutor qué quieres aprender y confirma un plan formal.",
@@ -81,8 +81,8 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     blockerTitle: "Résoudre le blocage actuel", blockerLabel: "Résoudre avec le coach",
     evidenceTitle: "Confirmer la preuve de cette étape", verifiedEvidenceTitle: "Confirmez ce résultat de vérification", evidenceLabel: "Approuver cette preuve", evidenceDetail: "Vérifiez d’abord le résultat. Approuver une preuve ne signifie pas maîtriser.",
     continueLabel: "Continuer l’étape actuelle", continueDetail: "Terminez cette étape, puis revenez avec le résultat réel.",
-    practiceLabel: "Continuer l’exercice", practiceDetail: "Reprenez la même fiche et la tentative actuelle.",
-    returnLabel: "Terminer le retour d’exercice", returnDetail: "Terminez la réflexion et le retour avant une autre activité.",
+    practiceTitle: "L’exercice actuel est en cours", practiceLabel: "Continuer l’exercice", practiceDetail: "Reprenez la même fiche et la tentative actuelle.",
+    returnTitle: "Terminer la réflexion et le retour", returnLabel: "Terminer le retour d’exercice", returnDetail: "Terminez la réflexion et le retour avant une autre activité.",
     reviewTitle: "Une révision est due", reviewLabel: "Commencer la révision", reviewDetail: "Revoyez vos acquis et vérifiez votre autonomie.",
     completedTitle: "L’exercice actuel est terminé", completedLabel: "Revenir au coach", completedDetail: "Poursuivez la conversation avec ce résultat avant de choisir la suite.",
     generateTitle: "Choisir votre objectif", generateLabel: "Créer un plan d’apprentissage", generateDetail: "Expliquez au coach ce que vous voulez apprendre, puis confirmez un plan.",
@@ -98,8 +98,8 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     blockerTitle: "Aktuelle Blockade lösen", blockerLabel: "Mit dem Coach lösen",
     evidenceTitle: "Nachweis für diesen Schritt bestätigen", verifiedEvidenceTitle: "Dieses Prüfergebnis bestätigen", evidenceLabel: "Diesen Nachweis bestätigen", evidenceDetail: "Prüfe zuerst das Ergebnis. Ein bestätigter Nachweis belegt noch keine Beherrschung.",
     continueLabel: "Aktuellen Schritt fortsetzen", continueDetail: "Schließe diesen Schritt ab und bringe das tatsächliche Ergebnis zurück.",
-    practiceLabel: "Übung fortsetzen", practiceDetail: "Setze dieselbe Karte und den aktuellen Versuch fort.",
-    returnLabel: "Übungsrückkehr abschließen", returnDetail: "Beende Reflexion und Rückkehr vor einer weiteren Aktivität.",
+    practiceTitle: "Die aktuelle Übung läuft", practiceLabel: "Übung fortsetzen", practiceDetail: "Setze dieselbe Karte und den aktuellen Versuch fort.",
+    returnTitle: "Reflexion und Rückkehr abschließen", returnLabel: "Übungsrückkehr abschließen", returnDetail: "Beende Reflexion und Rückkehr vor einer weiteren Aktivität.",
     reviewTitle: "Wiederholung ist fällig", reviewLabel: "Wiederholung starten", reviewDetail: "Prüfe, ob du das Gelernte selbstständig anwenden kannst.",
     completedTitle: "Die aktuelle Übung ist abgeschlossen", completedLabel: "Zum Coach zurück", completedDetail: "Besprich dieses Ergebnis, bevor du den nächsten Schritt auswählst.",
     generateTitle: "Dein Lernziel wählen", generateLabel: "Lernplan erstellen", generateDetail: "Beschreibe dem Coach dein Lernziel und bestätige dann den Plan.",
@@ -115,8 +115,8 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     blockerTitle: "現在の問題を先に解消", blockerLabel: "コーチと問題を解消",
     evidenceTitle: "この手順の証拠を確認", verifiedEvidenceTitle: "今回の検証結果を確認", evidenceLabel: "この証拠を採用", evidenceDetail: "先に結果を確認してください。証拠の採用だけで習得済みとは判断しません。",
     continueLabel: "現在の手順を続ける", continueDetail: "この手順を完了し、実際の結果を持ち帰ります。",
-    practiceLabel: "練習を続ける", practiceDetail: "同じカードと現在の試行を再開します。",
-    returnLabel: "練習の振り返りと復帰を完了", returnDetail: "次の活動を始める前に、振り返りと復帰を完了します。",
+    practiceTitle: "現在の練習は進行中です", practiceLabel: "練習を続ける", practiceDetail: "同じカードと現在の試行を再開します。",
+    returnTitle: "振り返りと復帰を完了する", returnLabel: "練習の振り返りと復帰を完了", returnDetail: "次の活動を始める前に、振り返りと復帰を完了します。",
     reviewTitle: "復習の時期です", reviewLabel: "復習を開始", reviewDetail: "学んだ内容を振り返り、自力でできるか確認します。",
     completedTitle: "現在の練習は完了しました", completedLabel: "コーチに戻る", completedDetail: "この結果をもとに会話を続け、次の手順を決めます。",
     generateTitle: "学習目標を決める", generateLabel: "学習計画を作成", generateDetail: "学びたい内容をコーチに伝え、正式な計画を確認します。",
@@ -132,8 +132,8 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     blockerTitle: "현재 문제부터 해결", blockerLabel: "코치와 문제 해결",
     evidenceTitle: "현재 단계의 증거 확인", verifiedEvidenceTitle: "이번 검증 결과 확인", evidenceLabel: "이 증거 승인", evidenceDetail: "결과를 먼저 확인하세요. 증거 승인만으로 숙달했다고 판단하지 않습니다.",
     continueLabel: "현재 단계 계속", continueDetail: "이 단계를 마친 뒤 실제 결과를 가져오세요.",
-    practiceLabel: "연습 계속", practiceDetail: "같은 카드와 현재 시도를 이어갑니다.",
-    returnLabel: "연습 복귀 완료", returnDetail: "다른 활동 전에 회고와 복귀를 마칩니다.",
+    practiceTitle: "현재 연습 진행 중", practiceLabel: "연습 계속", practiceDetail: "같은 카드와 현재 시도를 이어갑니다.",
+    returnTitle: "회고와 복귀 마무리", returnLabel: "연습 복귀 완료", returnDetail: "다른 활동 전에 회고와 복귀를 마칩니다.",
     reviewTitle: "복습할 때입니다", reviewLabel: "복습 시작", reviewDetail: "배운 내용을 돌아보고 혼자 수행할 수 있는지 확인합니다.",
     completedTitle: "현재 연습을 마쳤습니다", completedLabel: "코치로 돌아가기", completedDetail: "이번 결과로 대화를 이어가고 다음 단계를 결정하세요.",
     generateTitle: "학습 목표 정하기", generateLabel: "학습 계획 만들기", generateDetail: "배우고 싶은 내용을 코치에게 말한 뒤 정식 계획을 확인하세요.",
@@ -149,8 +149,8 @@ const copies: Record<ComposerLanguage, LearningActionCopy> = {
     blockerTitle: "Resolva o bloqueio atual", blockerLabel: "Resolver com o tutor",
     evidenceTitle: "Confirme a evidência desta etapa", verifiedEvidenceTitle: "Confirme este resultado de verificação", evidenceLabel: "Aprovar esta evidência", evidenceDetail: "Confira o resultado primeiro. Aprovar uma evidência não comprova domínio.",
     continueLabel: "Continuar a etapa atual", continueDetail: "Conclua esta etapa e volte com o resultado real.",
-    practiceLabel: "Continuar prática", practiceDetail: "Retome a mesma ficha e a tentativa atual.",
-    returnLabel: "Concluir o retorno da prática", returnDetail: "Termine a reflexão e o retorno antes de iniciar outra atividade.",
+    practiceTitle: "A prática está em andamento", practiceLabel: "Continuar prática", practiceDetail: "Retome a mesma ficha e a tentativa atual.",
+    returnTitle: "Concluir a reflexão e o retorno", returnLabel: "Concluir o retorno da prática", returnDetail: "Termine a reflexão e o retorno antes de iniciar outra atividade.",
     reviewTitle: "A revisão está pendente", reviewLabel: "Iniciar revisão", reviewDetail: "Revise o que aprendeu e confira se consegue fazer sozinho.",
     completedTitle: "A prática atual foi concluída", completedLabel: "Voltar ao tutor", completedDetail: "Continue a conversa com este resultado antes de decidir a próxima etapa.",
     generateTitle: "Escolha seu objetivo", generateLabel: "Criar plano de aprendizagem", generateDetail: "Diga ao tutor o que deseja aprender e confirme um plano formal.",

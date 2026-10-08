@@ -12,7 +12,18 @@ import {
   resolveVsixE2EProviderRuntime,
   withVsixE2EFixtureLoopbackBypass,
 } from "./vsix-e2e-provider-runtime.mjs";
-import { captureVsixHostFailureDiagnostics, redactHostDiagnosticText } from "./vsix-host-diagnostics.mjs";
+import {
+  captureVsixHostFailureDiagnostics,
+  captureInstalledSidecarClient,
+  driverSecretDiagnosticRedactions,
+  inspectLinuxSecretService,
+  linuxSecretDiagnosticLaunchArgs,
+  observeOwnedSidecarSpawn,
+  probeDriverSecretStorage,
+  redactHostDiagnosticText,
+  resolveOwnedSidecarPackage,
+  validateOwnedWindowsSidecar,
+} from "./vsix-host-diagnostics.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,6 +50,7 @@ const exportedArtifactsDir = exportedReportPath
   : path.join(repoRoot, "output", "playwright", "sidebar-audit", "vsix-installed-state");
 const keepArtifacts = process.env.TRAINER_KEEP_VSIX_E2E === "1";
 const keepArtifactsOnFailure = process.env.TRAINER_KEEP_VSIX_E2E_ON_FAILURE === "1";
+const linuxSecretDiagnostics = process.platform === "linux" && process.env.TRAINER_E2E_LINUX_SECRET_DIAGNOSTICS === "1";
 
 fs.mkdirSync(path.join(userDataDir, "User"), { recursive: true });
 fs.mkdirSync(extensionsDir, { recursive: true });
@@ -66,6 +78,10 @@ try {
   writeWorkspace();
   provisionTemporaryTrainerWorkspace();
   writeDriverExtension(providerConfiguration);
+  if (linuxSecretDiagnostics) {
+    fs.writeFileSync(path.join(exportedArtifactsDir, "linux-secret-service.json"),
+      JSON.stringify(inspectLinuxSecretService({ env: launchEnvironment }), null, 2) + "\n", "utf8");
+  }
 
   runCode([
     "--user-data-dir",
@@ -79,6 +95,7 @@ try {
 
   const launchArgs = [
     ...(process.env.TRAINER_E2E_NO_SANDBOX === "1" ? ["--no-sandbox"] : []),
+    ...linuxSecretDiagnosticLaunchArgs(process.platform, linuxSecretDiagnostics),
     "--user-data-dir",
     userDataDir,
     "--extensions-dir",
@@ -103,6 +120,7 @@ try {
       TRAINER_E2E_PROVIDER_SOURCE: providerRuntime.source,
       TRAINER_E2E_ARTIFACTS_DIR: exportedArtifactsDir,
       TRAINER_E2E_USER_DATA_DIR: userDataDir,
+      TRAINER_E2E_EXTENSIONS_DIR: extensionsDir,
       // 文件存储必须随实例隔离:否则 E2E 会读写开发者真实的 ~/.trainer,
       // 既污染用户环境,又让"干净实例"测试不再干净。
       TRAINER_FILE_STORE_ROOT: path.join(tempRoot, "trainer-file-store"),
@@ -112,19 +130,6 @@ try {
     timeout: Number.parseInt(process.env.TRAINER_E2E_TIMEOUT_MS ?? "600000", 10),
   };
   const launchResult = runSmokeDriverWithRetry(launchArgs, launchOptions, reportPath, userDataDir);
-
-  if (providerRuntime.source === "fixture") {
-    fixtureProviderStats = await providerRuntime.readFixtureStats();
-    if (
-      !fixtureProviderStats ||
-      fixtureProviderStats.modelsRequests < 1 ||
-      fixtureProviderStats.chatCompletionRequests < 1
-    ) {
-      throw new Error(
-        "VSIX E2E fixture provider did not receive both model-list and coach-message traffic.",
-      );
-    }
-  }
 
   if (!fs.existsSync(reportPath)) {
     throw new Error(
@@ -141,6 +146,19 @@ try {
     const error = new Error(`VSIX E2E smoke reported failure.\n${JSON.stringify(report, null, 2)}`);
     error.report = report;
     throw error;
+  }
+
+  if (providerRuntime.source === "fixture") {
+    fixtureProviderStats = await providerRuntime.readFixtureStats();
+    if (
+      !fixtureProviderStats ||
+      fixtureProviderStats.modelsRequests < 1 ||
+      fixtureProviderStats.chatCompletionRequests < 1
+    ) {
+      throw new Error(
+        "VSIX E2E fixture provider did not receive both model-list and coach-message traffic.",
+      );
+    }
   }
 
   finalResult = {
@@ -182,11 +200,11 @@ try {
       finalResult.diagnostics = captureVsixHostFailureDiagnostics({
         tempRoot, userDataDir, driverDir, extensionsDir,
         outputDir: exportedArtifactsDir, attempts: codeLaunchAttempts,
-        secrets: [providerRuntime?.apiKey],
+        secrets: [providerRuntime?.apiKey, ...driverSecretDiagnosticRedactions],
       });
     } catch (error) {
       // Preserve the host failure even if diagnostics themselves cannot be saved.
-      console.warn(`Trainer VSIX E2E diagnostics could not be saved: ${redactHostDiagnosticText(error, [providerRuntime?.apiKey])}`);
+      console.warn(`Trainer VSIX E2E diagnostics could not be saved: ${redactHostDiagnosticText(error, [providerRuntime?.apiKey, ...driverSecretDiagnosticRedactions])}`);
     }
   }
   if (exportedReportPath && finalResult) {
@@ -459,13 +477,26 @@ const fs = require("node:fs");
 const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+const childProcess = require("node:child_process");
+const { execFileSync } = childProcess;
 const vscode = require("vscode");
 let sidecarInstanceToken;
 let sidecarInstancePid;
+const driverSecretDiagnosticRedactions = ${JSON.stringify(driverSecretDiagnosticRedactions)};
+const probeDriverSecretStorage = ${probeDriverSecretStorage.toString()};
+const resolveOwnedSidecarPackage = ${resolveOwnedSidecarPackage.toString()};
+const validateOwnedWindowsSidecar = ${validateOwnedWindowsSidecar.toString()};
+const captureInstalledSidecarClient = ${captureInstalledSidecarClient.toString()};
+const observeOwnedSidecarSpawn = ${observeOwnedSidecarSpawn.toString()};
+const expectedInstalledIdentity = ${JSON.stringify({ publisher: packageJson.publisher, name: packageJson.name, version: packageJson.version })};
+let windowsSidecarCapture;
+let windowsSidecarScope;
+let windowsSidecarCaptureStartedAt;
+let restoreSidecarSpawnObserver;
+const windowsOwnedLaunches = new Map();
 
 
-async function activate() {
+async function activate(context) {
   const startedAt = Date.now();
 const reportPath = process.env.TRAINER_E2E_REPORT_PATH;
 const extensionId = process.env.TRAINER_E2E_TARGET_EXTENSION_ID || "local.trainer-extension";
@@ -592,12 +623,44 @@ writeProgress();
 
     const sidecarResult = await record("restart-sidecar", async () => {
       sidecarInstanceToken = undefined;
+      if (process.platform === "win32") {
+        const installed = vscode.extensions.getExtension(extensionId);
+        windowsSidecarScope = resolveOwnedSidecarPackage({
+          profileDir: smokeUserDataDir,
+          extensionsDir: process.env.TRAINER_E2E_EXTENSIONS_DIR,
+          extensionPath: installed.extensionPath,
+          target: "win32-" + process.arch,
+          expectedIdentity: expectedInstalledIdentity,
+        });
+        const facts = { health: [], launches: [] };
+        const saveFacts = () => {
+          fs.writeFileSync(path.join(artifactsDir, "host-sidecar-startup.json"), JSON.stringify(facts, null, 2) + "\n");
+        };
+        windowsSidecarCaptureStartedAt = Date.now();
+        const Client = require(windowsSidecarScope.moduleFile).SidecarHttpClient;
+        windowsSidecarCapture = captureInstalledSidecarClient(Client, { onHealthResult: (fact) => {
+          facts.health.push(fact); facts.health = facts.health.slice(-100); saveFacts();
+        } });
+        restoreSidecarSpawnObserver = observeOwnedSidecarSpawn(childProcess, {
+          executable: windowsSidecarScope.executable,
+          profileRoot: fs.realpathSync(smokeUserDataDir),
+          invocationRoot: fs.realpathSync(path.dirname(smokeUserDataDir)),
+          onFact: (fact) => {
+            if (fact.event === "spawn") windowsOwnedLaunches.set(fact.pid, fact);
+            else if (fact.event === "exit") windowsOwnedLaunches.delete(fact.pid);
+            facts.launches.push(fact); facts.launches = facts.launches.slice(-20); saveFacts();
+          },
+        });
+      }
       const result = await vscode.commands.executeCommand("trainer.sidecar.restart");
       return result;
     }, {
       ok: (data) => data && data.ok === true && data.data && data.data.lifecycle === "ready" && Number.isFinite(data.data.port),
       errorMessage: (data) => "Sidecar did not reach ready state: " + JSON.stringify(data),
     });
+    if (!sidecarResult || sidecarResult.ok !== true || sidecarResult.data?.lifecycle !== "ready") {
+      throw new Error("The public Trainer sidecar restart did not reach ready state; see the restart step and owned startup diagnostics.");
+    }
 
     await record("probe-sidecar-health", async () => {
       const port = currentSidecarPort();
@@ -930,6 +993,9 @@ writeProgress();
           "Failed to persist zh-CN before provider verification: " + JSON.stringify(data),
       });
 
+      if (process.platform === "linux" && process.env.TRAINER_E2E_LINUX_SECRET_DIAGNOSTICS === "1") {
+        await probeDriverSecretStorage(context && context.secrets, record);
+      }
       await record("save-provider", async () => {
         return await vscode.commands.executeCommand("trainer.provider.save", {
           ...providerSavePayloadTemplate,
@@ -2611,6 +2677,9 @@ writeProgress();
       steps,
       error: error && error.stack ? error.stack : String(error),
     };
+  } finally {
+    windowsSidecarCapture && windowsSidecarCapture.restore();
+    restoreSidecarSpawnObserver && restoreSidecarSpawnObserver();
   }
 
   if (reportPath) {
@@ -3055,7 +3124,50 @@ function sidecarAuthHeaders() {
   return { "x-trainer-token": sidecarInstanceToken };
 }
 
+function requestThroughOwnedWindowsClient(method, port, requestPath, body, timeoutMs) {
+  const extension = vscode.extensions.getExtension(process.env.TRAINER_E2E_TARGET_EXTENSION_ID || "local.trainer-extension");
+  const state = extension && extension.exports.getDebugState();
+  const sidecar = state && state.sidecar;
+  if (!windowsSidecarCapture || !sidecar || sidecar.lifecycle !== "ready" || sidecar.host !== "127.0.0.1" ||
+      !Number.isInteger(sidecar.pid) || sidecar.pid <= 0 || sidecar.port !== port) {
+    throw new Error("The Windows diagnostic client has no ready owned sidecar launch.");
+  }
+  let metadata;
+  try {
+    const observed = windowsOwnedLaunches.get(sidecar.pid);
+    if (!observed || !observed.argumentShapeValid || observed.dataDirInsideOwnedInvocation !== true ||
+        Number(observed.args[3]) !== port || fs.realpathSync(observed.cwd) !== path.dirname(windowsSidecarScope.executable)) {
+      throw new Error("The owned launch observer did not establish this process's isolated scope.");
+    }
+    const script = '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ' +
+      '$p = Get-CimInstance Win32_Process -Filter ("ProcessId = " + [int]$env:TRAINER_E2E_OWNED_PID) -ErrorAction Stop; ' +
+      'if ($null -eq $p) { throw "Owned sidecar process is unavailable" }; ' +
+      '[pscustomobject]@{pid=[int]$p.ProcessId;parentPid=[int]$p.ParentProcessId;executable=[string]$p.ExecutablePath;' +
+      'commandLine=[string]$p.CommandLine;createdAt=$p.CreationDate.ToUniversalTime().ToString("o")} | ConvertTo-Json -Compress';
+    const powershell = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+    metadata = JSON.parse(execFileSync(powershell, ["-NoProfile", "-NonInteractive", "-Command", script], {
+      encoding: "utf8", timeout: 10000, maxBuffer: 16384,
+      env: { ...process.env, TRAINER_E2E_OWNED_PID: String(sidecar.pid) },
+    }).trim().replace(/^\uFEFF/, ""));
+    metadata.canonicalExecutable = fs.realpathSync(metadata.executable);
+    const command = /^\s*(?:"([^"]+)"|(\S+))/.exec(metadata.commandLine);
+    metadata.canonicalCommandExecutable = fs.realpathSync(command && (command[1] || command[2]));
+  } catch {
+    throw new Error("The Windows diagnostic client could not verify the exact owned process identity.");
+  }
+  const launch = validateOwnedWindowsSidecar(metadata, {
+    pid: sidecar.pid, parentPid: process.pid, port, executable: windowsSidecarScope.executable,
+    startedAt: windowsSidecarCaptureStartedAt,
+  });
+  const latest = extension.exports.getDebugState().sidecar;
+  if (latest.lifecycle !== "ready" || latest.pid !== launch.pid || latest.port !== launch.port) {
+    throw new Error("The owned Windows sidecar changed while its identity was being verified.");
+  }
+  return windowsSidecarCapture.request(method, launch, requestPath, body, timeoutMs);
+}
+
 function getJson(port, requestPath, timeoutMs = 15000) {
+  if (process.platform === "win32") return requestThroughOwnedWindowsClient("GET", port, requestPath, undefined, timeoutMs);
   return new Promise((resolve, reject) => {
     const request = http.request(
       {
@@ -3090,6 +3202,7 @@ function getJson(port, requestPath, timeoutMs = 15000) {
 }
 
 function postJson(port, requestPath, body, timeoutMs = 15000) {
+  if (process.platform === "win32") return requestThroughOwnedWindowsClient("POST", port, requestPath, body, timeoutMs);
   return new Promise((resolve, reject) => {
     const payload = Buffer.from(JSON.stringify(body || {}), "utf8");
     const request = http.request(
@@ -3169,7 +3282,7 @@ function runCode(args, options = {}) {
         (result.stderr ?? "").trim(),
       ]
         .filter(Boolean)
-        .join("\n"), [providerRuntime?.apiKey]),
+        .join("\n"), [providerRuntime?.apiKey, ...driverSecretDiagnosticRedactions]),
     );
   }
   return result;

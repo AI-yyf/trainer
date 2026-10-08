@@ -147,3 +147,42 @@ test('locked uv workflow jobs do not register an unused pip post-job cache', () 
     assert.match(source, /uv sync [^\n]*--frozen/, `${name}: Python installation must use the lock`);
   }
 });
+
+test('workflow dispatch diagnostic scope selects one actual-host package without changing full matrices or their concurrency', () => {
+  const source = fs.readFileSync(workflowPath, 'utf8');
+  assert.match(source, /diagnostic_package_platform:\n[\s\S]*?default: none\n[\s\S]*?type: choice/);
+  const job = (name) => source.split(new RegExp(`^  ${name}:\\n`, 'm'))[1].split(/^  [a-z]+:\n/m)[0];
+  const expression = (value, github, inputs) => Function('github', 'inputs', 'fromJSON', 'format',
+    `return (${value.match(/\$\{\{\s*([\s\S]*?)\s*\}\}/)[1]});`)(github, inputs, JSON.parse,
+      (template, value) => template.replace('{0}', value));
+  const group = (github, inputs) => source.match(/^  group: (.*)$/m)[1].replace(/\$\{\{.*?\}\}/g, (value) => expression(value, github, inputs));
+  const cases = [
+    ['push', 'none', 9], ['pull_request', 'none', 9], ['workflow_dispatch', 'none', 9],
+    ['push', 'ubuntu-latest', 9], ['pull_request', 'windows-latest', 9],
+    ...['ubuntu-latest', 'macos-latest', 'windows-latest'].map((runner) => ['workflow_dispatch', runner, 1]),
+  ];
+  for (const [event, diagnostic, expectedCount] of cases) {
+    const github = { event_name: event, ref: 'refs/heads/main' };
+    const inputs = { diagnostic_package_platform: diagnostic, run_vsix_host_e2e: true };
+    let count = 0;
+    for (const name of ['server', 'ui']) {
+      const block = job(name);
+      if (expression(block.match(/^    if: (.*)$/m)[1], github, inputs)) {
+        assert.deepEqual([...block.matchAll(/^          - (.*)$/gm)].map((match) => match[1]), ['ubuntu-latest', 'macos-latest', 'windows-latest']);
+        count += 3;
+      }
+    }
+    const block = job('package');
+    const runners = expression(block.match(/^        os: (.*)$/m)[1], github, inputs);
+    assert.deepEqual(runners, expectedCount === 1 ? [diagnostic] : ['ubuntu-latest', 'macos-latest', 'windows-latest']);
+    count += runners.length;
+    assert.equal(count, expectedCount, `${event}/${diagnostic}`);
+    const requireHost = block.split('- name: Require actual host acceptance')[1].match(/^        if: (.*)$/m)[1];
+    assert.equal(expression(requireHost, github, { ...inputs, run_vsix_host_e2e: false }), expectedCount === 1);
+    assert.match(block, /partial diagnostic scope[\s\S]*cannot establish full acceptance/i);
+  }
+  const github = { event_name: 'workflow_dispatch', ref: 'refs/heads/main' };
+  assert.notEqual(group(github, { diagnostic_package_platform: 'none' }), group(github, { diagnostic_package_platform: 'ubuntu-latest' }));
+  assert.equal(group({ ...github, event_name: 'push' }, {}), group(github, { diagnostic_package_platform: 'none' }));
+  assert.match(job('package'), /Diagnostic package/);
+});

@@ -3,9 +3,12 @@
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
+const http = require('node:http');
+const { EventEmitter } = require('node:events');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const vm = require('node:vm');
 const { pathToFileURL } = require('node:url');
 
 const root = path.resolve(__dirname, '../..');
@@ -14,6 +17,102 @@ const write = (file, text) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);
 };
+
+test('Linux secret diagnostics use official encryption logging and bounded presence without credentials or service activation', async () => {
+  const { inspectLinuxSecretService, linuxSecretDiagnosticLaunchArgs } = await load();
+  assert.deepEqual(linuxSecretDiagnosticLaunchArgs('linux', true), ['--verbose', '--vmodule=*/components/os_crypt/*=1']);
+  for (const platform of ['darwin', 'win32']) assert.deepEqual(linuxSecretDiagnosticLaunchArgs(platform, true), []);
+  assert.deepEqual(linuxSecretDiagnosticLaunchArgs('linux', false), []);
+  const env = { DISPLAY: ':99', DBUS_SESSION_BUS_ADDRESS: 'private-address', API_KEY: 'private-provider-key' };
+  const calls = [];
+  const runCommand = (command, args, options) => {
+    calls.push({ command, args, options });
+    return { status: 0, stdout: '(false,)\n', stderr: 'private-provider-key' };
+  };
+  const result = inspectLinuxSecretService({ platform: 'linux', env, runCommand });
+  assert.equal(result.probeCompleted, true);
+  assert.equal(result.secretServiceOwned, false);
+  assert.equal(result.sessionBusAddressPresent, true);
+  assert.equal(result.displayPresent, true);
+  assert.deepEqual(calls[0].args, ['call', '--session', '--dest', 'org.freedesktop.DBus',
+    '--object-path', '/org/freedesktop/DBus', '--method', 'org.freedesktop.DBus.NameHasOwner', 'org.freedesktop.secrets']);
+  assert.equal(calls[0].options.timeout, 5000);
+  assert.equal(calls[0].options.env, env);
+  assert.doesNotMatch(JSON.stringify(result), /private-address|private-provider-key/);
+  const timedOut = inspectLinuxSecretService({ platform: 'linux', env, runCommand: () => ({
+    status: null, error: { code: 'ETIMEDOUT', message: 'private-address' }, stdout: '(true,)',
+  }) });
+  assert.equal(timedOut.secretServiceOwned, null);
+  assert.equal(timedOut.probeCompleted, false);
+  assert.equal(timedOut.errorCode, 'ETIMEDOUT');
+  assert.equal(inspectLinuxSecretService({ platform: 'win32', runCommand: () => assert.fail('non-Linux must not probe') }), null);
+});
+
+function diagnosticRecorder(steps) {
+  return async (name, operation) => {
+    const step = { name, state: 'running' };
+    steps.push(step);
+    try { step.data = await operation(); step.state = 'passed'; return step.data; }
+    catch (error) { step.state = 'failed'; step.error = error.message; throw error; }
+  };
+}
+
+test('driver SecretStorage probe verifies actual round-trip and deletion while reporting booleans only', async () => {
+  const { probeDriverSecretStorage, driverSecretDiagnosticRedactions, redactHostDiagnosticText } = await load();
+  const items = new Map();
+  const calls = [];
+  const storage = {
+    store: async (key, value) => { calls.push(['store', key, value]); items.set(key, value); },
+    get: async (key) => { calls.push(['get', key]); return items.get(key); },
+    delete: async (key) => { calls.push(['delete', key]); items.delete(key); },
+  };
+  const steps = [];
+  assert.deepEqual(await probeDriverSecretStorage(storage, diagnosticRecorder(steps)), { roundTrip: true });
+  assert.deepEqual(calls.map((call) => call[0]), ['store', 'get', 'delete', 'get']);
+  assert.deepEqual(steps.map((step) => step.data), [{ stored: true }, { matched: true }, { deleted: true }, { absent: true }]);
+  assert.ok(steps.every((step) => step.state === 'passed'));
+  assert.equal(items.size, 0);
+  for (const value of calls[0].slice(1)) assert.equal(JSON.stringify(steps).includes(value), false);
+  assert.deepEqual(calls[0].slice(1), [...driverSecretDiagnosticRedactions]);
+  assert.equal(redactHostDiagnosticText(calls[0].slice(1).join(' '), driverSecretDiagnosticRedactions), '[redacted] [redacted]');
+});
+
+test('driver SecretStorage diagnostic times out at the actual pending stage and never continues after failure', async (t) => {
+  const { probeDriverSecretStorage } = await load();
+  for (const stage of ['store', 'get', 'delete']) await t.test(stage, async () => {
+    let storedValue;
+    const calls = [];
+    const storage = {
+      store: async (_, value) => { calls.push('store'); storedValue = value; if (stage === 'store') await new Promise(() => {}); },
+      get: async () => { calls.push('get'); if (stage === 'get') await new Promise(() => {}); return storedValue; },
+      delete: async () => { calls.push('delete'); if (stage === 'delete') await new Promise(() => {}); storedValue = undefined; },
+    };
+    const steps = [];
+    await assert.rejects(probeDriverSecretStorage(storage, diagnosticRecorder(steps), { timeoutMs: 15 }), new RegExp(stage + ' timed out'));
+    assert.equal(steps.at(-1).name, 'diagnostic-secret-' + stage);
+    assert.equal(steps.at(-1).state, 'failed');
+    assert.deepEqual(calls, ['store', 'get', 'delete'].slice(0, ['store', 'get', 'delete'].indexOf(stage) + 1));
+    assert.equal(JSON.stringify(steps).includes(storedValue ?? 'isolated-driver-secret-storage-probe'), false);
+  });
+});
+
+test('driver SecretStorage probe rejects mismatched and rejected operations without leaking their payloads', async () => {
+  const { probeDriverSecretStorage } = await load();
+  const steps = [];
+  await assert.rejects(probeDriverSecretStorage({ store: async () => {}, get: async () => 'other-secret', delete: async () => assert.fail('must not continue') }, diagnosticRecorder(steps)), /did not round-trip/);
+  assert.equal(steps.at(-1).state, 'failed');
+  const rejected = [];
+  await assert.rejects(probeDriverSecretStorage({ store: async () => { throw new Error('private-provider-value'); } }, diagnosticRecorder(rejected)), /store rejected/);
+  assert.doesNotMatch(JSON.stringify(steps) + JSON.stringify(rejected), /other-secret|private-provider-value/);
+  let value;
+  const retained = [];
+  await assert.rejects(probeDriverSecretStorage({
+    store: async (_, stored) => { value = stored; }, get: async () => value, delete: async () => {},
+  }, diagnosticRecorder(retained)), /delete did not remove/);
+  assert.equal(retained.at(-1).name, 'diagnostic-secret-confirm-deleted');
+  assert.equal(retained.at(-1).state, 'failed');
+  assert.equal(JSON.stringify(retained).includes(value), false);
+});
 
 test('failure diagnostics copy bounded isolated Code logs and redact credentials without reading other profiles', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-host-diag-'));
@@ -26,6 +125,9 @@ test('failure diagnostics copy bounded isolated Code logs and redact credentials
   try {
     write(path.join(userDataDir, 'logs/session/main.log'), `startup\nBearer abc-private\nTRAINER_SIDECAR_TOKEN=private-session\n${secret}\n`);
     write(path.join(userDataDir, 'logs/session/exthost.log'), 'x'.repeat(500) + '\nactivation failed');
+    write(path.join(userDataDir, 'logs/session/window1/exthost/output_logging_now/1-Trainer.log'), `sidecar starting\nTRAINER_SIDECAR_TOKEN=private-instance\n${secret}`);
+    write(path.join(userDataDir, 'logs/session/window1/exthost/output_logging_now/2-Other.log'), 'other channel is private');
+    write(path.join(userDataDir, 'logs/session/output_logging_now/3-Trainer.log'), 'spoofed outside exthost must not be copied');
     write(path.join(userDataDir, 'User/state.vscdb'), 'private database must not be copied');
     write(path.join(directory, 'private-profile/main.log'), 'outside profile must not be read');
     write(path.join(driverDir, 'package.json'), JSON.stringify({ main: './extension.js', activationEvents: ['onStartupFinished'], privateField: secret }));
@@ -38,7 +140,7 @@ test('failure diagnostics copy bounded isolated Code logs and redact credentials
       attempts: [{ error: { code: 'ETIMEDOUT' }, stderr: `api_key=${secret}`, status: null }],
       env: { DISPLAY: ':99', TRAINER_E2E_PROVIDER_API_KEY: secret, OTHER_PRIVATE_ENV: secret },
     });
-    assert.equal(result.logCount, 2);
+    assert.equal(result.logCount, 3);
     const summaryText = fs.readFileSync(path.join(result.directory, 'diagnostics.json'), 'utf8');
     const summary = JSON.parse(summaryText);
     assert.deepEqual(summary.environment, { DISPLAY: ':99' });
@@ -51,9 +153,199 @@ test('failure diagnostics copy bounded isolated Code logs and redact credentials
     for (const text of [main, summaryText]) assert.doesNotMatch(text, /private-session|abc-private|synthetic-private-provider-value/);
     assert.equal(fs.existsSync(path.join(result.directory, 'logs/other-profile')), false);
     assert.equal(fs.existsSync(path.join(result.directory, 'User')), false);
+    const trainer = fs.readFileSync(path.join(result.directory, 'logs/session/window1/exthost/output_logging_now/1-Trainer.log'), 'utf8');
+    assert.match(trainer, /sidecar starting/);
+    assert.doesNotMatch(trainer, /private-instance|synthetic-private-provider-value/);
+    assert.equal(fs.existsSync(path.join(result.directory, 'logs/session/window1/exthost/output_logging_now/2-Other.log')), false);
+    assert.equal(fs.existsSync(path.join(result.directory, 'logs/session/output_logging_now')), false);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('installed package scope requires canonical owned profile, manifest identity, and in-package executable/module', async () => {
+  const { resolveOwnedSidecarPackage } = await load();
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-vsix-e2e-owned-'));
+  const profileDir = path.join(directory, 'user-data');
+  const extensionsDir = path.join(directory, 'extensions');
+  const extensionPath = path.join(extensionsDir, 'local.trainer-extension');
+  const moduleFile = path.join(extensionPath, 'dist/extension/src/core/httpClient.js');
+  const executable = path.join(extensionPath, 'bundled/bin/win32-x64/trainer-sidecar.exe');
+  const expectedIdentity = { publisher: 'local', name: 'trainer-extension', version: '1.3.4' };
+  const input = { profileDir, extensionsDir, extensionPath, target: 'win32-x64', expectedIdentity };
+  try {
+    fs.mkdirSync(profileDir);
+    write(moduleFile, 'fixture module'); write(executable, 'fixture executable');
+    write(path.join(extensionPath, 'package.json'), JSON.stringify(expectedIdentity));
+    assert.deepEqual(resolveOwnedSidecarPackage(input), { moduleFile: fs.realpathSync(moduleFile), executable: fs.realpathSync(executable) });
+    assert.throws(() => resolveOwnedSidecarPackage({ ...input, expectedIdentity: { ...expectedIdentity, version: 'other' } }), /identity/);
+    const outside = path.join(directory, 'outside-package');
+    fs.mkdirSync(outside);
+    assert.throws(() => resolveOwnedSidecarPackage({ ...input, extensionPath: outside }), /outside/);
+    const external = path.join(directory, 'outside-module'); write(path.join(external, 'httpClient.js'), 'must not be loaded');
+    fs.rmSync(path.dirname(moduleFile), { recursive: true });
+    fs.symlinkSync(external, path.dirname(moduleFile), process.platform === 'win32' ? 'junction' : 'dir');
+    assert.throws(() => resolveOwnedSidecarPackage(input), /escapes/);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('Windows exact process gate rejects unrelated PID/parent/image/command/port and earlier launch', async () => {
+  const { validateOwnedWindowsSidecar } = await load();
+  const executable = 'C:\\owned\\extensions\\local.trainer\\bundled\\bin\\win32-x64\\trainer-sidecar.exe';
+  const metadata = { pid: 123, parentPid: 55, canonicalExecutable: executable, canonicalCommandExecutable: executable,
+    commandLine: `"${executable}" --host 127.0.0.1 --port 34900`, createdAt: new Date(2000).toISOString() };
+  const expected = { pid: 123, parentPid: 55, port: 34900, executable, startedAt: 1000 };
+  assert.deepEqual(validateOwnedWindowsSidecar(metadata, expected), { pid: 123, port: 34900, createdAt: 2000 });
+  for (const mutation of [
+    { pid: 124 }, { parentPid: 56 }, { canonicalExecutable: 'C:\\other\\trainer-sidecar.exe' },
+    { canonicalCommandExecutable: 'C:\\other\\trainer-sidecar.exe' },
+    { commandLine: `"${executable}" --host 0.0.0.0 --port 34900` },
+    { commandLine: `"${executable}" --host 127.0.0.1 --port 34901` },
+    { commandLine: `"${executable}" --host 127.0.0.1 --port 34900 --unexpected` },
+    { createdAt: new Date(500).toISOString() }, { createdAt: 'invalid' },
+  ]) assert.throws(() => validateOwnedWindowsSidecar({ ...metadata, ...mutation }, expected), /owned launch identity/);
+});
+
+test('actual Windows driver requires fresh exact CIM identity, owned spawn scope, and unchanged public ready PID before its real client', async () => {
+  const { validateOwnedWindowsSidecar } = await load();
+  const source = fs.readFileSync(path.join(root, 'extension/scripts/verify-vsix-e2e.mjs'), 'utf8');
+  const actualFunction = source.match(/function requestThroughOwnedWindowsClient\([^)]*\) \{[\s\S]*?\n\}/)[0];
+  const executable = 'C:\\owned\\trainer-vsix-e2e-one\\extensions\\local.trainer\\bundled\\bin\\win32-x64\\trainer-sidecar.exe';
+  const ready = { lifecycle: 'ready', host: '127.0.0.1', pid: 123, port: 34900 };
+  let metadata = { pid: 123, parentPid: 55, executable, commandLine: `"${executable}" --host 127.0.0.1 --port 34900`, createdAt: new Date(2000).toISOString() };
+  let latest = ready;
+  let lookups = 0;
+  const requests = [];
+  const queries = [];
+  const scope = { argumentShapeValid: true, dataDirInsideOwnedInvocation: true, args: ['--host', '127.0.0.1', '--port', '34900'], cwd: path.win32.dirname(executable) };
+  const context = {
+    process: { pid: 55, env: { SystemRoot: 'C:\\Windows' } }, path: path.win32,
+    fs: { realpathSync: (value) => value },
+    vscode: { extensions: { getExtension: () => ({ exports: { getDebugState: () => ({ sidecar: ++lookups === 1 ? ready : latest }) } }) } },
+    windowsSidecarCapture: { request: (...args) => { requests.push(args); return { verifiedClient: true }; } },
+    windowsSidecarScope: { executable }, windowsSidecarCaptureStartedAt: 1000,
+    windowsOwnedLaunches: new Map([[123, scope]]), validateOwnedWindowsSidecar,
+    execFileSync: (command, args, options) => { queries.push({ command, args, options }); return JSON.stringify(metadata); },
+  };
+  const invoke = () => { lookups = 0; return vm.runInNewContext(actualFunction + '; requestThroughOwnedWindowsClient("POST",34900,"/fixture",{fixture:true},500)', context); };
+  assert.deepEqual(invoke(), { verifiedClient: true });
+  assert.equal(queries[0].command, 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+  assert.match(queries[0].args[3], /Get-CimInstance Win32_Process -Filter/);
+  assert.equal(queries[0].options.env.TRAINER_E2E_OWNED_PID, '123');
+  assert.equal(queries[0].options.timeout, 10000);
+  assert.equal(requests[0][0], 'POST'); assert.equal(requests[0][1].pid, 123);
+  assert.equal(requests[0][2], '/fixture'); assert.equal(requests[0][4], 500);
+  invoke(); assert.equal(queries.length, 2, 'CIM identity must be fresh for each request');
+  for (const mutation of [{ parentPid: 56 }, { pid: 124 }, { executable: 'C:\\other.exe' }]) {
+    const original = metadata; metadata = { ...metadata, ...mutation };
+    assert.throws(invoke, /owned launch identity/); metadata = original;
+  }
+  latest = { ...ready, pid: 124 }; assert.throws(invoke, /changed while/); latest = ready;
+  context.windowsOwnedLaunches.clear(); assert.throws(invoke, /verify the exact owned/);
+  assert.equal(requests.length, 2, 'failed identity never reaches the authenticated client');
+});
+
+test('real installed client keeps per-instance authentication, rejects stale launches, and observes real health failures without secrets', async () => {
+  const { captureInstalledSidecarClient } = await load();
+  const { SidecarHttpClient } = require('../dist/extension/src/core/httpClient.js');
+  let token = 'synthetic-first-instance';
+  let forbidden = false;
+  let requests = 0;
+  const health = [];
+  const server = http.createServer((request, response) => {
+    requests += 1;
+    assert.equal(request.headers['x-trainer-token'], token);
+    response.writeHead(forbidden ? 401 : 200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(forbidden ? { detail: 'private-payload-must-not-be-recorded' } : { ok: true }));
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  let now = 100;
+  const originalSetter = SidecarHttpClient.prototype.setInstanceToken;
+  const capture = captureInstalledSidecarClient(SidecarHttpClient, { clock: () => now, onHealthResult: (fact) => health.push(fact) });
+  try {
+    const first = new SidecarHttpClient();
+    first.setInstanceToken(token);
+    const launch = { pid: 123, port, createdAt: 200 };
+    assert.deepEqual(await capture.request('GET', launch, '/health', undefined, 500), { ok: true });
+    assert.deepEqual(await capture.request('POST', launch, '/memory', { fixture: true }, 500), { ok: true });
+    assert.equal(health.length, 1, 'only actual GET /health is observed');
+    assert.equal(health[0].responseResolved, true);
+    assert.equal(health[0].statusCode, null, 'resolved JSON carries no real response status');
+    assert.throws(() => capture.request('GET', { ...launch, pid: 124 }, '/health', undefined, 500), /current authenticated|different sidecar/);
+    assert.equal(requests, 2);
+    now = 300;
+    token = 'synthetic-second-instance';
+    const second = new SidecarHttpClient();
+    second.setInstanceToken(token);
+    assert.throws(() => capture.request('GET', launch, '/health', undefined, 500), /current authenticated/);
+    assert.deepEqual(await capture.request('GET', { pid: 124, port, createdAt: 400 }, '/health', undefined, 500), { ok: true });
+    forbidden = true;
+    assert.equal(await second.probeHealth(port), false, 'original production probe still catches the real HTTP rejection');
+    assert.equal(health.at(-1).statusCode, 401);
+    assert.equal(health.at(-1).errorName, 'SidecarHttpError');
+    assert.doesNotMatch(JSON.stringify(health), /synthetic-first-instance|synthetic-second-instance|private-payload/);
+    capture.restore();
+    assert.equal(SidecarHttpClient.prototype.setInstanceToken, originalSetter);
+    assert.equal(Object.hasOwn(second, 'requestJson'), false);
+    assert.throws(() => capture.request('GET', { pid: 124, port, createdAt: 400 }, '/health', undefined, 500), /current authenticated/);
+  } finally { capture.restore(); await new Promise((resolve) => server.close(resolve)); }
+});
+
+test('client wrapper preserves receiver/arguments/return and immediate health execution with original failure identity', async () => {
+  const { captureInstalledSidecarClient } = await load();
+  const marker = {};
+  const calls = [];
+  const failure = Object.assign(new Error('private-error-message'), { statusCode: 503 });
+  class Client {
+    setInstanceToken(...args) { calls.push({ receiver: this, args }); return marker; }
+    requestJson(...args) { calls.push({ started: true, args }); return Promise.reject(failure); }
+    getJson(port, route, options) { return this.requestJson('GET', port, route, undefined, options); }
+  }
+  const facts = [];
+  const capture = captureInstalledSidecarClient(Client, { clock: () => 100, onHealthResult: (fact) => facts.push(fact) });
+  const client = new Client();
+  try {
+    assert.equal(client.setInstanceToken('private-token'), marker);
+    assert.equal(calls[0].receiver, client);
+    assert.deepEqual(calls[0].args, ['private-token']);
+    const pending = capture.request('GET', { pid: 1, port: 123, createdAt: 200 }, '/health', undefined, 500);
+    assert.equal(calls[1].started, true, 'request starts synchronously before returning its promise');
+    await assert.rejects(pending, (error) => error === failure);
+    assert.equal(facts[0].statusCode, 503);
+    assert.doesNotMatch(JSON.stringify(facts), /private-token|private-error-message/);
+  } finally { capture.restore(); }
+});
+
+test('spawn observer records only exact packaged child and boolean isolated environment facts and restores ownership', async () => {
+  const { observeOwnedSidecarSpawn } = await load();
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-vsix-e2e-spawn-'));
+  const executable = path.join(directory, 'trainer-sidecar.exe');
+  const profileRoot = path.join(directory, 'profile');
+  const data = path.join(directory, 'trainer-workspace/.trainer');
+  write(executable, 'fixture executable'); write(path.join(data, 'marker'), 'fixture'); fs.mkdirSync(profileRoot);
+  const calls = [];
+  const child = Object.assign(new EventEmitter(), { pid: 321 });
+  const original = function(...args) { calls.push({ receiver: this, args }); return child; };
+  const childProcess = { spawn: original };
+  const facts = [];
+  const restore = observeOwnedSidecarSpawn(childProcess, { executable: fs.realpathSync(executable), profileRoot,
+    invocationRoot: fs.realpathSync(directory), onFact: (fact) => facts.push(fact) });
+  const options = { cwd: directory, env: { TRAINER_SIDECAR_TOKEN: 'private-instance-token', TRAINER_DATA_DIR: data, OTHER_PRIVATE: 'private-env' } };
+  try {
+    assert.equal(childProcess.spawn(executable, ['--host', '127.0.0.1', '--port', '34900'], options), child);
+    assert.equal(calls[0].receiver, childProcess);
+    assert.equal(calls[0].args[2], options);
+    assert.equal(facts[0].dataDirInsideOwnedProfile, false);
+    assert.equal(facts[0].dataDirInsideOwnedInvocation, true);
+    assert.equal(facts[0].environmentPresence.TRAINER_SIDECAR_TOKEN, true);
+    child.emit('exit', 3, null);
+    assert.equal(facts.at(-1).exitCode, 3);
+    childProcess.spawn(path.join(directory, 'not-owned.exe'), [], {});
+    assert.equal(facts.length, 2);
+    assert.doesNotMatch(JSON.stringify(facts), /private-instance-token|private-env|OTHER_PRIVATE/);
+    restore(); assert.equal(childProcess.spawn, original);
+  } finally { restore(); fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
 test('actual host harness preserves launch failure and exports Code diagnostics before removing its temporary profile', () => {

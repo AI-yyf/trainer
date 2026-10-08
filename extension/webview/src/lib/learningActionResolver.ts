@@ -99,9 +99,9 @@ export function resolveLearningPrimaryAction(facts: LearningFacts): ActionDescri
     ? facts.training : undefined;
   if (training && training.status !== "completed") {
     return training.status === "return_pending"
-      ? make("finish_training", text(training.title) || copy.completedTitle, copy.returnLabel,
+      ? make("finish_training", text(training.title) || copy.returnTitle, copy.returnLabel,
         copy.returnDetail, { cardId: training.cardId })
-      : make("resume_training", text(training.title) || copy.completedTitle, copy.practiceLabel,
+      : make("resume_training", text(training.title) || copy.practiceTitle, copy.practiceLabel,
         copy.practiceDetail, { cardId: training.cardId });
   }
 
