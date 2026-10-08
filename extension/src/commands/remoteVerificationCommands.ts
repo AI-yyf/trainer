@@ -372,6 +372,7 @@ export async function remoteVerifyActiveFileCommand(context: CommandContext, pay
   if (!editor) return { ok: false, message: 'Open the practice file before verifying it.' };
   const spec = buildActiveFileVerificationSpec({ fsPath: editor.document.uri.fsPath });
   if (!spec) return { ok: false, message: 'Remote file verification currently supports Python practice files (pytest).' };
+  const verificationFileName = path.basename(editor.document.uri.fsPath);
 
   // Reserve before any further await; onStart can arrive much later than the user's second click.
   const run: ActiveRemoteVerification = { signal: { aborted: false } };
@@ -431,7 +432,7 @@ export async function remoteVerifyActiveFileCommand(context: CommandContext, pay
       catch { context.outputChannel.appendLine('[remote] remote artifact hash unavailable after verification; no evidence was recorded.'); }
       if (artifact && verificationScopeIsCurrent(context, scope)) {
       const body = buildTestRunAttestationBody({ card: { cardId: scope.cardId }, passed,
-        summary: `Remote verify ${passed ? 'passed' : 'failed'} on ${workspace.remoteName ?? 'remote'}: ${path.basename(spec.args[spec.args.length - 1] ?? '')} (exit ${exitCode})`,
+        summary: `Remote verify ${passed ? 'passed' : 'failed'} on ${workspace.remoteName ?? 'remote'}: ${verificationFileName} (exit ${exitCode})`,
         testsOutput: truncateTestsOutput(`${verification.stdout}\n${verification.stderr}`.trim()),
         sessionId: scope.sessionId, workspaceId: scope.workspaceId,
         idempotencyKey: attestationIdempotencyKey({ cardId: scope.cardId, runId: run.sessionId ?? '' }),

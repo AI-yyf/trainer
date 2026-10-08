@@ -462,6 +462,31 @@ test('matching UI assertion and no-argument palette both keep host-owned event a
   }
 });
 
+test('active-file evidence names the launched file after the active editor changes', async () => {
+  const originalUri = 'vscode-remote://ssh-remote+owned/workspace/original-practice.py';
+  const window = { activeTextEditor: { document: { uri: uri(originalUri) } } };
+  const { remoteVerifyActiveFileCommand } = loadWithVscodeMock(remoteVerificationModulePath, { window });
+  let finish, launchedSpec;
+  const { context, posts, messages } = createCommandContext({
+    sessionId: 'session-owned', workspace: { isRemoteWorkspace: true, remoteName: 'ssh-remote' },
+    trainingState: { selectedCardId: 'live-card', selectedCardType: 'practice', selectedCardStatus: 'active' },
+    gateway: { async runVerification(spec, options) {
+      launchedSpec = spec;
+      options.onStart({ session_id: 'original-file-run' });
+      return new Promise(resolve => { finish = resolve; });
+    } },
+  });
+  assert.equal((await remoteVerifyActiveFileCommand(context, { expectedCardId: 'live-card' })).ok, true);
+  window.activeTextEditor = { document: { uri: uri('vscode-remote://ssh-remote+owned/workspace/later-file.py') } };
+  finish({ state: 'completed', result: 'passed', exit_code: 0,
+    execution_location: 'remote:ssh-remote', stdout: '3 passed', stderr: '' });
+  await waitForRemoteTerminal(messages);
+  assert.deepEqual(launchedSpec.args, ['-m', 'pytest', '/workspace/original-practice.py', '-q', '--no-header']);
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0][2].summary, 'Remote verify passed on ssh-remote: original-practice.py (exit 0)');
+  assert.equal(posts[0][2].verification_artifact.artifact_uri, originalUri);
+});
+
 test('registered active-file command forwards the UI assertion instead of silently becoming a palette command', async () => {
   const configPath = path.resolve(__dirname, '../dist/extension/src/commands/registry.config.js');
   const { buildCommandRegistrations } = loadWithVscodeMock(configPath, {});
