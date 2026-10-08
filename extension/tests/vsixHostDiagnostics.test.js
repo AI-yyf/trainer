@@ -163,6 +163,43 @@ test('failure diagnostics copy bounded isolated Code logs and redact credentials
   }
 });
 
+test('structured failure archive redacts escaped log strings and credential values while preserving JSON fields and types', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-host-diag-json-'));
+  const userDataDir = path.join(directory, 'user-data');
+  const driverDir = path.join(directory, 'driver');
+  const extensionsDir = path.join(directory, 'extensions');
+  const secret = 'synthetic-private-value';
+  const attempts = [{
+    status: null, timeoutMs: 15000, ok: false,
+    error: { code: 'ETIMEDOUT', message: 'secret: "{\\"encrypted\\":\\"opaque-fixture\\"}"\nactual pending store' },
+    stdout: 'OSCrypt secret: "{\\"encrypted\\":\\"opaque-fixture\\"}"\nnext line',
+    stderr: 'private=' + secret + '\nBearer escaped-token\\\\value\npath="C:\\owned\\profile"',
+    nested: [{ API_KEY: 'unlisted-private-key', password: 'unlisted-private-password', secret: secret,
+      name: 'diagnostic-secret-store', timeout: true, count: 7, value: null }],
+  }];
+  try {
+    for (const owned of [userDataDir, driverDir, extensionsDir]) fs.mkdirSync(owned);
+    write(path.join(driverDir, 'package.json'), JSON.stringify({ main: './extension.js', activationEvents: ['onStartupFinished'] }));
+    write(path.join(driverDir, 'extension.js'), 'module.exports = {};');
+    const { captureVsixHostFailureDiagnostics } = await load();
+    const result = captureVsixHostFailureDiagnostics({ tempRoot: directory, userDataDir, driverDir,
+      extensionsDir, outputDir: path.join(directory, 'evidence'), attempts, secrets: [secret], env: {} });
+    const text = fs.readFileSync(path.join(result.directory, 'diagnostics.json'), 'utf8');
+    const summary = JSON.parse(text);
+    const attempt = summary.attempts[0];
+    assert.deepEqual(Object.keys(attempt), Object.keys(attempts[0]));
+    assert.deepEqual(Object.keys(attempt.nested[0]), Object.keys(attempts[0].nested[0]));
+    assert.equal(attempt.status, null); assert.equal(attempt.timeoutMs, 15000); assert.equal(attempt.ok, false);
+    assert.equal(attempt.error.code, 'ETIMEDOUT');
+    assert.equal(attempt.nested[0].name, 'diagnostic-secret-store');
+    assert.equal(attempt.nested[0].timeout, true); assert.equal(attempt.nested[0].count, 7); assert.equal(attempt.nested[0].value, null);
+    assert.equal(attempt.nested[0].API_KEY, '[redacted]'); assert.equal(attempt.nested[0].password, '[redacted]');
+    assert.match(attempt.stderr, /path="C:\\owned\\profile"/);
+    assert.doesNotMatch(text, /synthetic-private-value|unlisted-private-key|unlisted-private-password|escaped-token/);
+    assert.equal(attempts[0].nested[0].API_KEY, 'unlisted-private-key', 'sanitizing the archive must not mutate caller data');
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
 test('installed package scope requires canonical owned profile, manifest identity, and in-package executable/module', async () => {
   const { resolveOwnedSidecarPackage } = await load();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-vsix-e2e-owned-'));
@@ -217,6 +254,9 @@ test('actual Windows driver requires fresh exact CIM identity, owned spawn scope
   let lookups = 0;
   const requests = [];
   const queries = [];
+  const facts = [];
+  let queryFailure;
+  let rawOverride;
   const scope = { argumentShapeValid: true, dataDirInsideOwnedInvocation: true, args: ['--host', '127.0.0.1', '--port', '34900'], cwd: path.win32.dirname(executable) };
   const context = {
     process: { pid: 55, env: { SystemRoot: 'C:\\Windows' } }, path: path.win32,
@@ -225,7 +265,8 @@ test('actual Windows driver requires fresh exact CIM identity, owned spawn scope
     windowsSidecarCapture: { request: (...args) => { requests.push(args); return { verifiedClient: true }; } },
     windowsSidecarScope: { executable }, windowsSidecarCaptureStartedAt: 1000,
     windowsOwnedLaunches: new Map([[123, scope]]), validateOwnedWindowsSidecar,
-    execFileSync: (command, args, options) => { queries.push({ command, args, options }); return JSON.stringify(metadata); },
+    recordWindowsSidecarIdentity: (stage, state, code) => facts.push({ stage, state, code }),
+    execFileSync: (command, args, options) => { queries.push({ command, args, options }); if (queryFailure) throw queryFailure; return rawOverride ?? JSON.stringify(metadata); },
   };
   const invoke = () => { lookups = 0; return vm.runInNewContext(actualFunction + '; requestThroughOwnedWindowsClient("POST",34900,"/fixture",{fixture:true},500)', context); };
   assert.deepEqual(invoke(), { verifiedClient: true });
@@ -235,14 +276,70 @@ test('actual Windows driver requires fresh exact CIM identity, owned spawn scope
   assert.equal(queries[0].options.timeout, 10000);
   assert.equal(requests[0][0], 'POST'); assert.equal(requests[0][1].pid, 123);
   assert.equal(requests[0][2], '/fixture'); assert.equal(requests[0][4], 500);
-  invoke(); assert.equal(queries.length, 2, 'CIM identity must be fresh for each request');
+  const canonicalCwd = scope.cwd;
+  scope.cwd = canonicalCwd.replace(/^C:/, 'c:');
+  assert.deepEqual(invoke(), { verifiedClient: true }, 'canonical Windows paths differing only in drive case retain the exact owned directory');
+  scope.cwd = canonicalCwd;
+  invoke(); assert.equal(queries.length, 3, 'CIM identity must be fresh for each request');
+  assert.deepEqual(facts.slice(-10).map((fact) => fact.stage), ['ready-state', 'observed-launch', 'canonical-cwd',
+    'cim-query', 'cim-json', 'cim-executable', 'cim-command', 'identity-fields', 'latest-state', 'authenticated-client-call']);
+  assert.ok(facts.every((fact) => fact.state === 'passed' && fact.code === null));
   for (const mutation of [{ parentPid: 56 }, { pid: 124 }, { executable: 'C:\\other.exe' }]) {
     const original = metadata; metadata = { ...metadata, ...mutation };
-    assert.throws(invoke, /owned launch identity/); metadata = original;
+    assert.throws(invoke, (error) => error.stage === 'identity-fields' && error.code === 'REJECTED'); metadata = original;
   }
-  latest = { ...ready, pid: 124 }; assert.throws(invoke, /changed while/); latest = ready;
-  context.windowsOwnedLaunches.clear(); assert.throws(invoke, /verify the exact owned/);
-  assert.equal(requests.length, 2, 'failed identity never reaches the authenticated client');
+  latest = { ...ready, pid: 124 }; assert.throws(invoke, (error) => error.stage === 'latest-state'); latest = ready;
+  scope.cwd = 'C:\\other'; assert.throws(invoke, (error) => error.stage === 'canonical-cwd'); scope.cwd = canonicalCwd;
+  const beforeQueryFailure = queries.length;
+  queryFailure = Object.assign(new Error('private-process-output'), { code: 'ETIMEDOUT' });
+  assert.throws(invoke, (error) => error.stage === 'cim-query' && error.code === 'ETIMEDOUT' && !error.message.includes('private-process-output'));
+  queryFailure = undefined; rawOverride = 'private-invalid-process-json';
+  assert.throws(invoke, (error) => error.stage === 'cim-json' && error.code === 'REJECTED'); rawOverride = undefined;
+  assert.equal(queries.length, beforeQueryFailure + 2);
+  context.windowsOwnedLaunches.clear(); assert.throws(invoke, (error) => error.stage === 'observed-launch');
+  assert.doesNotMatch(JSON.stringify(facts), /private-process-output|private-invalid-process-json/);
+  assert.equal(requests.length, 3, 'failed identity never reaches the authenticated client');
+});
+
+test('Windows driver selects only a unique loaded canonical cached installed client without loading a copy', () => {
+  const source = fs.readFileSync(path.join(root, 'extension/scripts/verify-vsix-e2e.mjs'), 'utf8');
+  const actualFunction = source.match(/function resolveOwnedCachedSidecarClient\([^)]*\) \{[\s\S]*?\n\}/)[0];
+  const expected = 'C:\\owned\\extensions\\local.trainer\\dist\\extension\\src\\core\\httpClient.js';
+  class Client {}
+  let cache = { [expected.toLowerCase()]: { filename: expected.toLowerCase(), loaded: true, exports: { SidecarHttpClient: Client } } };
+  const resolve = () => vm.runInNewContext(actualFunction + '; resolveOwnedCachedSidecarClient(cache, expected)',
+    { fs: { realpathSync: (filename) => filename }, path: path.win32, cache, expected });
+  assert.equal(resolve(), Client, 'case-varied cache key uses the existing activated class');
+  cache[expected] = { filename: expected, loaded: true, exports: { SidecarHttpClient: Client } };
+  assert.throws(resolve, (error) => error.code === 'CACHE_AMBIGUOUS');
+  delete cache[expected]; cache[expected.toLowerCase()].loaded = false;
+  assert.throws(resolve, (error) => error.code === 'CACHE_EXPORT_INVALID');
+  cache[expected.toLowerCase()].loaded = true; cache[expected.toLowerCase()].filename = 'C:\\outside\\httpClient.js';
+  assert.throws(resolve, (error) => error.code === 'CACHE_MISSING');
+  cache = {}; assert.throws(resolve, (error) => error.code === 'CACHE_MISSING');
+  const actualPath = require.resolve('../dist/extension/src/core/httpClient.js');
+  const { SidecarHttpClient } = require(actualPath);
+  assert.equal(vm.runInNewContext(actualFunction + '; resolveOwnedCachedSidecarClient(cache, expected)',
+    { fs, path, cache: require.cache, expected: fs.realpathSync(actualPath) }), SidecarHttpClient);
+});
+
+test('Windows harness setter-count observer delegates unchanged and restores after authenticated capture', async () => {
+  const source = fs.readFileSync(path.join(root, 'extension/scripts/verify-vsix-e2e.mjs'), 'utf8');
+  const actualBlock = source.match(/        const originalSetter = Client\.prototype\.setInstanceToken;[\s\S]*?        restoreSidecarSetterObserver = \(\) => \{[\s\S]*?\n        \};/)[0];
+  const { captureInstalledSidecarClient } = await load();
+  const marker = {}; const calls = []; const facts = { authSetterObservationCount: 0 };
+  class Client { setInstanceToken(...args) { calls.push({ receiver: this, args }); return marker; } }
+  const original = Client.prototype.setInstanceToken;
+  const context = { Client, facts, saveFacts: () => {}, restoreSidecarSetterObserver: undefined };
+  vm.runInNewContext(actualBlock, context);
+  const capture = captureInstalledSidecarClient(Client);
+  const client = new Client();
+  assert.equal(client.setInstanceToken('synthetic-private-token'), marker);
+  assert.equal(calls[0].receiver, client); assert.deepEqual(calls[0].args, ['synthetic-private-token']);
+  assert.equal(facts.authSetterObservationCount, 1);
+  assert.doesNotMatch(JSON.stringify(facts), /synthetic-private-token/);
+  capture.restore(); context.restoreSidecarSetterObserver();
+  assert.equal(Client.prototype.setInstanceToken, original);
 });
 
 test('real installed client keeps per-instance authentication, rejects stale launches, and observes real health failures without secrets', async () => {

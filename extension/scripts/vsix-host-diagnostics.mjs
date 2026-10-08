@@ -261,6 +261,20 @@ export function redactHostDiagnosticText(value, secrets = []) {
     .replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi, "$1[redacted]@");
 }
 
+// Sanitize values before serialization so log quotes/escapes cannot alter the
+// archive's JSON syntax. Keep field names and non-string diagnostic facts.
+export function redactHostDiagnosticValue(value, secrets = []) {
+  if (typeof value === "string") return redactHostDiagnosticText(value, secrets);
+  if (Array.isArray(value)) return value.map((item) => redactHostDiagnosticValue(item, secrets));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
+      typeof item === "string" && /^(?:api[_-]?key|authorization|[\w-]*token|secret|password)$/i.test(key)
+        ? "[redacted]" : redactHostDiagnosticValue(item, secrets),
+    ]));
+  }
+  return value;
+}
+
 // Only the fresh profile owned by this invocation is eligible. Never copy its
 // databases, credentials, full environment, or a symlink to another profile.
 export function captureVsixHostFailureDiagnostics({
@@ -322,6 +336,6 @@ export function captureVsixHostFailureDiagnostics({
     }
   }
   fs.writeFileSync(path.join(destination, "diagnostics.json"),
-    redactHostDiagnosticText(JSON.stringify(summary, null, 2), secrets) + "\n");
+    JSON.stringify(redactHostDiagnosticValue(summary, secrets), null, 2) + "\n");
   return { directory: destination, logCount: summary.logs.length };
 }

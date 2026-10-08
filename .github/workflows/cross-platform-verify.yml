@@ -256,11 +256,11 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true }}
         run: node ./scripts/provision-vscode.mjs
 
-      - name: Prepare the Linux native host display
+      - name: Prepare the Linux native host display and secure keyring prerequisites
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && runner.os == 'Linux' }}
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y xvfb libgtk-3-0 libgbm1 libnss3 libasound2t64
+          sudo apt-get install --no-install-recommends -y xvfb xauth dbus dbus-x11 gnome-keyring libsecret-1-0 libsecret-tools libglib2.0-bin libgtk-3-0 libgbm1 libnss3 libasound2t64
 
       - name: Detect native VSIX install and host-E2E capability
         id: vsix-capability
@@ -286,25 +286,15 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && steps.vsix-capability.outputs.host_e2e_available != 'true' }}
         run: node ./scripts/vsix-ci-capability.mjs --require-host-e2e
 
-      - name: Run installed VSIX host E2E (Linux display)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && steps.vsix-capability.outputs.host_e2e_available == 'true' && steps.vsix-capability.outputs.linux_use_xvfb != 'true' && runner.os == 'Linux' }}
+      - name: Run installed VSIX host E2E (isolated Linux display and secure keyring)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && steps.vsix-capability.outputs.host_e2e_available == 'true' && runner.os == 'Linux' }}
         env:
           TRAINER_VSIX_OUTPUT_PATH: ${{ steps.package-vsix.outputs.vsix_path }}
           TRAINER_SKIP_VSIX_REBUILD: "1"
           TRAINER_E2E_EXPORT_REPORT_PATH: output/maturity/ci-installed/host-report.json
           TRAINER_E2E_NO_SANDBOX: "1"
           TRAINER_E2E_LINUX_SECRET_DIAGNOSTICS: "1"
-        run: npm run test:vsix-e2e
-
-      - name: Run installed VSIX host E2E (Linux Xvfb)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && steps.vsix-capability.outputs.linux_use_xvfb == 'true' && runner.os == 'Linux' }}
-        env:
-          TRAINER_VSIX_OUTPUT_PATH: ${{ steps.package-vsix.outputs.vsix_path }}
-          TRAINER_SKIP_VSIX_REBUILD: "1"
-          TRAINER_E2E_EXPORT_REPORT_PATH: output/maturity/ci-installed/host-report.json
-          TRAINER_E2E_NO_SANDBOX: "1"
-          TRAINER_E2E_LINUX_SECRET_DIAGNOSTICS: "1"
-        run: xvfb-run --auto-servernum npm run test:vsix-e2e
+        run: node scripts/run-linux-vsix-host.mjs
 
       - name: Run installed VSIX host E2E (macOS and Windows)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && steps.vsix-capability.outputs.host_e2e_available == 'true' && runner.os != 'Linux' }}

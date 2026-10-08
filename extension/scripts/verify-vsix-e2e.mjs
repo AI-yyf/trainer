@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
+import { linuxSecureKeyringLaunchArgs } from "../../scripts/run-linux-vsix-host.mjs";
 import { ensureCurrentVsix } from "./prepare-current-vsix.mjs";
 import {
   buildVsixE2EProviderSavePayloadTemplate,
@@ -95,6 +96,7 @@ try {
 
   const launchArgs = [
     ...(process.env.TRAINER_E2E_NO_SANDBOX === "1" ? ["--no-sandbox"] : []),
+    ...linuxSecureKeyringLaunchArgs(process.platform, launchEnvironment),
     ...linuxSecretDiagnosticLaunchArgs(process.platform, linuxSecretDiagnostics),
     "--user-data-dir",
     userDataDir,
@@ -493,6 +495,8 @@ let windowsSidecarCapture;
 let windowsSidecarScope;
 let windowsSidecarCaptureStartedAt;
 let restoreSidecarSpawnObserver;
+let restoreSidecarSetterObserver;
+let recordWindowsSidecarIdentity;
 const windowsOwnedLaunches = new Map();
 
 
@@ -632,12 +636,38 @@ writeProgress();
           target: "win32-" + process.arch,
           expectedIdentity: expectedInstalledIdentity,
         });
-        const facts = { health: [], launches: [] };
+        const facts = { health: [], launches: [], identity: [], foundUniqueCachedClient: false, authSetterObservationCount: 0 };
         const saveFacts = () => {
           fs.writeFileSync(path.join(artifactsDir, "host-sidecar-startup.json"), JSON.stringify(facts, null, 2) + "\n");
         };
+        recordWindowsSidecarIdentity = (stage, state, code) => {
+          facts.identity.push({ stage, state, code, at: new Date().toISOString() });
+          facts.identity = facts.identity.slice(-100);
+          try { saveFacts(); } catch { console.warn("The isolated Windows identity diagnostic could not be recorded."); }
+        };
         windowsSidecarCaptureStartedAt = Date.now();
-        const Client = require(windowsSidecarScope.moduleFile).SidecarHttpClient;
+        let Client;
+        try {
+          Client = resolveOwnedCachedSidecarClient(require.cache, windowsSidecarScope.moduleFile);
+          facts.foundUniqueCachedClient = true;
+          recordWindowsSidecarIdentity("client-cache", "passed", null);
+        } catch (error) {
+          recordWindowsSidecarIdentity("client-cache", "failed", error.code);
+          throw error;
+        }
+        const originalSetter = Client.prototype.setInstanceToken;
+        const observedSetter = function(...args) {
+          const result = Reflect.apply(originalSetter, this, args);
+          if (this instanceof Client) {
+            facts.authSetterObservationCount += 1;
+            try { saveFacts(); } catch { console.warn("The isolated Windows setter diagnostic could not be recorded."); }
+          }
+          return result;
+        };
+        Client.prototype.setInstanceToken = observedSetter;
+        restoreSidecarSetterObserver = () => {
+          if (Client.prototype.setInstanceToken === observedSetter) Client.prototype.setInstanceToken = originalSetter;
+        };
         windowsSidecarCapture = captureInstalledSidecarClient(Client, { onHealthResult: (fact) => {
           facts.health.push(fact); facts.health = facts.health.slice(-100); saveFacts();
         } });
@@ -2679,6 +2709,7 @@ writeProgress();
     };
   } finally {
     windowsSidecarCapture && windowsSidecarCapture.restore();
+    restoreSidecarSetterObserver && restoreSidecarSetterObserver();
     restoreSidecarSpawnObserver && restoreSidecarSpawnObserver();
   }
 
@@ -3124,46 +3155,84 @@ function sidecarAuthHeaders() {
   return { "x-trainer-token": sidecarInstanceToken };
 }
 
-function requestThroughOwnedWindowsClient(method, port, requestPath, body, timeoutMs) {
-  const extension = vscode.extensions.getExtension(process.env.TRAINER_E2E_TARGET_EXTENSION_ID || "local.trainer-extension");
-  const state = extension && extension.exports.getDebugState();
-  const sidecar = state && state.sidecar;
-  if (!windowsSidecarCapture || !sidecar || sidecar.lifecycle !== "ready" || sidecar.host !== "127.0.0.1" ||
-      !Number.isInteger(sidecar.pid) || sidecar.pid <= 0 || sidecar.port !== port) {
-    throw new Error("The Windows diagnostic client has no ready owned sidecar launch.");
+function resolveOwnedCachedSidecarClient(cache, moduleFile) {
+  const canonical = (filename) => fs.realpathSync(filename).replaceAll("\\", "/").toLowerCase();
+  const expected = canonical(moduleFile);
+  const matches = Object.entries(cache).filter(([filename, entry]) => {
+    if (path.basename(filename).toLowerCase() !== "httpclient.js") return false;
+    try { return canonical(filename) === expected && canonical(entry.filename) === expected; }
+    catch { return false; }
+  });
+  const code = matches.length !== 1 ? (matches.length ? "CACHE_AMBIGUOUS" : "CACHE_MISSING") :
+    matches[0][1].loaded !== true || typeof matches[0][1].exports?.SidecarHttpClient !== "function" ? "CACHE_EXPORT_INVALID" : null;
+  if (code) {
+    const error = new Error("The owned installed Sidecar client must have exactly one loaded canonical module (" + code + ").");
+    error.code = code;
+    throw error;
   }
-  let metadata;
-  try {
-    const observed = windowsOwnedLaunches.get(sidecar.pid);
-    if (!observed || !observed.argumentShapeValid || observed.dataDirInsideOwnedInvocation !== true ||
-        Number(observed.args[3]) !== port || fs.realpathSync(observed.cwd) !== path.dirname(windowsSidecarScope.executable)) {
-      throw new Error("The owned launch observer did not establish this process's isolated scope.");
+  return matches[0][1].exports.SidecarHttpClient;
+}
+
+function requestThroughOwnedWindowsClient(method, port, requestPath, body, timeoutMs) {
+  const stage = (name, operation) => {
+    try {
+      const result = operation();
+      recordWindowsSidecarIdentity?.(name, "passed", null);
+      return result;
+    } catch (error) {
+      const codes = ["ENOENT", "EACCES", "EPERM", "ETIMEDOUT", "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"];
+      const code = codes.includes(error?.code) ? error.code : "REJECTED";
+      recordWindowsSidecarIdentity?.(name, "failed", code);
+      const failure = new Error("The Windows diagnostic client could not verify the exact owned process identity (stage=" + name + "; code=" + code + ").");
+      failure.stage = name; failure.code = code;
+      throw failure;
     }
+  };
+  const extension = vscode.extensions.getExtension(process.env.TRAINER_E2E_TARGET_EXTENSION_ID || "local.trainer-extension");
+  const sidecar = stage("ready-state", () => {
+    const current = extension?.exports?.getDebugState?.().sidecar;
+    if (!windowsSidecarCapture || !current || current.lifecycle !== "ready" || current.host !== "127.0.0.1" ||
+        !Number.isInteger(current.pid) || current.pid <= 0 || current.port !== port) throw new Error("No ready owned launch.");
+    return current;
+  });
+  const observed = stage("observed-launch", () => {
+    const current = windowsOwnedLaunches.get(sidecar.pid);
+    if (!current || !current.argumentShapeValid || current.dataDirInsideOwnedInvocation !== true ||
+        Number(current.args?.[3]) !== port) throw new Error("No isolated owned spawn scope.");
+    return current;
+  });
+  stage("canonical-cwd", () => {
+    const cwd = fs.realpathSync(observed.cwd).replaceAll("\\", "/").toLowerCase();
+    const expected = fs.realpathSync(path.dirname(windowsSidecarScope.executable)).replaceAll("\\", "/").toLowerCase();
+    if (cwd !== expected) throw new Error("Owned spawn directory differs from its installed binary directory.");
+  });
+  const rawMetadata = stage("cim-query", () => {
     const script = '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ' +
       '$p = Get-CimInstance Win32_Process -Filter ("ProcessId = " + [int]$env:TRAINER_E2E_OWNED_PID) -ErrorAction Stop; ' +
       'if ($null -eq $p) { throw "Owned sidecar process is unavailable" }; ' +
       '[pscustomobject]@{pid=[int]$p.ProcessId;parentPid=[int]$p.ParentProcessId;executable=[string]$p.ExecutablePath;' +
       'commandLine=[string]$p.CommandLine;createdAt=$p.CreationDate.ToUniversalTime().ToString("o")} | ConvertTo-Json -Compress';
     const powershell = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-    metadata = JSON.parse(execFileSync(powershell, ["-NoProfile", "-NonInteractive", "-Command", script], {
+    return execFileSync(powershell, ["-NoProfile", "-NonInteractive", "-Command", script], {
       encoding: "utf8", timeout: 10000, maxBuffer: 16384,
       env: { ...process.env, TRAINER_E2E_OWNED_PID: String(sidecar.pid) },
-    }).trim().replace(/^\uFEFF/, ""));
-    metadata.canonicalExecutable = fs.realpathSync(metadata.executable);
+    });
+  });
+  const metadata = stage("cim-json", () => JSON.parse(rawMetadata.trim().replace(/^\uFEFF/, "")));
+  metadata.canonicalExecutable = stage("cim-executable", () => fs.realpathSync(metadata.executable));
+  metadata.canonicalCommandExecutable = stage("cim-command", () => {
     const command = /^\s*(?:"([^"]+)"|(\S+))/.exec(metadata.commandLine);
-    metadata.canonicalCommandExecutable = fs.realpathSync(command && (command[1] || command[2]));
-  } catch {
-    throw new Error("The Windows diagnostic client could not verify the exact owned process identity.");
-  }
-  const launch = validateOwnedWindowsSidecar(metadata, {
+    return fs.realpathSync(command && (command[1] || command[2]));
+  });
+  const launch = stage("identity-fields", () => validateOwnedWindowsSidecar(metadata, {
     pid: sidecar.pid, parentPid: process.pid, port, executable: windowsSidecarScope.executable,
     startedAt: windowsSidecarCaptureStartedAt,
+  }));
+  stage("latest-state", () => {
+    const latest = extension.exports.getDebugState().sidecar;
+    if (latest.lifecycle !== "ready" || latest.pid !== launch.pid || latest.port !== launch.port) throw new Error("Owned sidecar changed during identity check.");
   });
-  const latest = extension.exports.getDebugState().sidecar;
-  if (latest.lifecycle !== "ready" || latest.pid !== launch.pid || latest.port !== launch.port) {
-    throw new Error("The owned Windows sidecar changed while its identity was being verified.");
-  }
-  return windowsSidecarCapture.request(method, launch, requestPath, body, timeoutMs);
+  return stage("authenticated-client-call", () => windowsSidecarCapture.request(method, launch, requestPath, body, timeoutMs));
 }
 
 function getJson(port, requestPath, timeoutMs = 15000) {

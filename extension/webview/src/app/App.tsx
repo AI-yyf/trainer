@@ -12921,7 +12921,14 @@ export function App() {
         )
       : undefined;
     const localizedCurrentFocus = hasTrainingCard
-      ? pickLanguageAlignedTrainingText(
+      // A matching card's technical focus remains authoritative across locale
+      // changes, including a settings refresh that clears the recovered flag.
+      ? pickFirstText(
+          selectedTrainingCardCandidate && selectedTrainingCardCandidate.cardId === activeTrainingCardId
+            ? selectedTrainingCardCandidate.focusArea : undefined,
+          selectedTrainingRouteCard && selectedTrainingRouteCard.cardId === activeTrainingCardId
+            ? selectedTrainingRouteCard.focusArea : undefined,
+        ) ?? pickLanguageAlignedTrainingText(
           layout.composerLanguage,
           leftoverTrainingFocusChromeNotLive ? undefined : liveTrainingFocusChrome.latestLearningFocusArea,
           leftoverTrainingFocusChromeNotLive ? undefined : liveTrainingFocusChrome.cardFocusArea,
@@ -12935,12 +12942,6 @@ export function App() {
           liveTrainingFocus,
         ) ?? pickFirstText(
           liveTrainingCurrentFocus,
-          // The selected card's technical focus is a task fact even when its
-          // language differs from the interface or no handoff chrome exists.
-          selectedTrainingCardCandidate && selectedTrainingCardCandidate.cardId === activeTrainingCardId
-            ? selectedTrainingCardCandidate.focusArea : undefined,
-          selectedTrainingRouteCard && selectedTrainingRouteCard.cardId === activeTrainingCardId
-            ? selectedTrainingRouteCard.focusArea : undefined,
           liveTrainingFocus,
         )
       : undefined;
