@@ -48,6 +48,7 @@ from ..core.models import (
     WorkspaceUnderstandingSnapshot,
 )
 from ..db.repository import TrainerRepository
+from ..llm.turn_grounding import sanitize_memory_anchor
 from ..pedagogy.evidence_controls import (
     analyze_learning_evidence,
     resolve_pedagogy_controls,
@@ -6868,6 +6869,9 @@ class MemoryService(
         cleaned_confidence = str(confidence or "").strip()
         cleaned_evidence = _normalize_text_items(evidence, limit=4)
         cleaned_user_message = str(user_message or "").strip()
+        # Anchor anti-drift (2026-10-08 real-teaching review): the persisted
+        # focus must never be a verbatim prefix of the learner message.
+        cleaned_focus = sanitize_memory_anchor(cleaned_focus, cleaned_user_message)
 
         recovery = {
             "scenario": scenario,
@@ -6958,6 +6962,10 @@ class MemoryService(
         normalized_teaching_note = (teaching_note or "").strip()
         normalized_confidence = (confidence or "").strip()
         normalized_evidence = _normalize_text_items(evidence, limit=4)
+        # Anchor anti-drift (2026-10-08 real-teaching review): coach_anchor /
+        # current_focus inherit this focus, so a verbatim message prefix must
+        # never be persisted as focus_area.
+        cleaned_focus = sanitize_memory_anchor(cleaned_focus, normalized_user_message)
         if answer_mode:
             structured.remember_preference("answer_mode", answer_mode, source="coach-turn")
         if response_language:
@@ -7452,6 +7460,7 @@ class MemoryService(
         teaching_note: str | None = None,
         confidence: str | None = None,
         evidence: list[str] | None = None,
+        user_message: str | None = None,
     ) -> None:
         cleaned_summary = summary.strip()
         cleaned_next_step = next_step.strip()
@@ -7460,6 +7469,12 @@ class MemoryService(
         cleaned_teaching_note = (teaching_note or "").strip()
         cleaned_confidence = (confidence or "").strip()
         cleaned_evidence = _normalize_text_items(evidence, limit=4)
+        # Anchor anti-drift (2026-10-08 real-teaching review): latest_coach_focus_area
+        # feeds memory.coach_anchor, so a verbatim message prefix is dropped here.
+        cleaned_focus = sanitize_memory_anchor(
+            str(focus_area or "").strip(),
+            user_message,
+        )
         reflection_parts = [
             cleaned_summary,
             cleaned_next_step,
@@ -7472,7 +7487,7 @@ class MemoryService(
         if not reflection_summary:
             return
 
-        task_id = focus_area or scenario or "coach-turn"
+        task_id = cleaned_focus or scenario or "coach-turn"
         action_items = [cleaned_next_step] if cleaned_next_step else []
         if cleaned_decision:
             action_items.append(cleaned_decision)
@@ -7491,7 +7506,7 @@ class MemoryService(
             "latest_coach_summary": cleaned_summary,
             "latest_coach_next_step": cleaned_next_step,
             "latest_coach_review_note": cleaned_review_note,
-            "latest_coach_focus_area": focus_area or "",
+            "latest_coach_focus_area": cleaned_focus,
             "latest_coach_reflection": reflection_summary,
             "latest_coach_teaching_signal": cleaned_teaching_note or cleaned_decision or cleaned_review_note or cleaned_next_step or cleaned_summary,
             "latest_coach_decision": cleaned_decision,
@@ -7502,7 +7517,7 @@ class MemoryService(
                 {
                     "summary": cleaned_summary,
                     "next_step": cleaned_next_step,
-                    "focus_area": focus_area or "",
+                    "focus_area": cleaned_focus,
                     "teaching_goal": cleaned_teaching_note,
                 },
                 workspace_id,
@@ -7516,7 +7531,7 @@ class MemoryService(
         if latest_session:
             structured.update_session_thread(
                 latest_session.session_id,
-                focus_area=(focus_area or "").strip(),
+                focus_area=cleaned_focus,
                 scenario=scenario,
                 blocker=cleaned_review_note,
                 teaching_signal=cleaned_teaching_note or cleaned_decision or cleaned_review_note or cleaned_next_step or cleaned_summary,
@@ -7526,7 +7541,7 @@ class MemoryService(
                 evidence=cleaned_evidence,
             )
 
-        normalized_focus = self._normalize_focus_area(focus_area)
+        normalized_focus = self._normalize_focus_area(cleaned_focus)
 
         if normalized_focus:
             structured.update_mastery(

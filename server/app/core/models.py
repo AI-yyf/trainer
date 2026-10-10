@@ -2708,6 +2708,11 @@ class CoachTurnSummary(BaseModel):
     artifact_kinds: list[CoachArtifactKind] = Field(default_factory=list)
     suggested_action_types: list[CoachActionType] = Field(default_factory=list)
     background_mode: Literal["embedded"] = "embedded"
+    # Teaching-turn grounding downgrade: True when next_step referenced code
+    # symbols that appear nowhere in the reply/code facts (see
+    # app/llm/turn_grounding.py). The UI renders such a next step as a
+    # suggestion needing confirmation instead of a plan-ready instruction.
+    requires_confirmation: bool = False
 
 
 class AgentMeta(BaseModel):

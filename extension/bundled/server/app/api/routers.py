@@ -113,6 +113,11 @@ from ..llm.provider_service import (
 )
 from ..llm.stream_agent_metadata import merge_stream_agent_metadata
 from ..llm.training_review_context import active_training_review, apply_training_review_context
+from ..llm.turn_grounding import (
+    evaluate_next_step_grounding,
+    grounding_correction_instruction,
+    sanitize_memory_anchor,
+)
 from ..memory.models import utc_now
 from ..memory.note_request import message_requests_explicit_learning_note
 from ..memory.workspace_recovery import (
@@ -1989,7 +1994,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             return False
         return True
 
-    def extract_focus_hint_from_message(message: str | None) -> str | None:
+    def extract_focus_hint_from_message(
+        message: str | None,
+        *,
+        allow_message_prefix: bool = True,
+    ) -> str | None:
         normalized_message = re.sub(r"\s+", " ", str(message or "")).strip()
         if not normalized_message:
             return None
@@ -2019,6 +2028,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if is_specific_focus_candidate(candidate):
                 return candidate
 
+        if not allow_message_prefix:
+            # Memory-anchor path: the raw opening clause of the learner message
+            # is not a technical concept. Returning nothing lets the anchor
+            # fall back to the previous anchor instead of drifting onto the
+            # message prefix (2026-10-08 real-teaching review, cases 01-03).
+            return None
         first_clause = re.split(r"[，。！？；,.!?\n]", normalized_message, maxsplit=1)[0]
         first_clause = re.sub(
             r"^(?:please|can you|could you|help me|guide me|show me|tell me|请|现在|先帮我)\s+",
@@ -2319,11 +2334,15 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         user_message: str | None,
         candidates: list[object],
         fallback_current_file: str | None = None,
+        allow_message_prefix: bool = True,
     ) -> str | None:
         for candidate in candidates:
             if is_specific_focus_candidate(candidate):
                 return normalize_focus_candidate(candidate)
-        extracted = extract_focus_hint_from_message(user_message)
+        extracted = extract_focus_hint_from_message(
+            user_message,
+            allow_message_prefix=allow_message_prefix,
+        )
         if extracted:
             return extracted
         if fallback_current_file:
@@ -10527,6 +10546,123 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             response_language,
         )
 
+    def turn_grounding_code_text(request: TurnRequest | SessionMessageRequest) -> str:
+        """Code facts a next step may cite: current file content + learner message."""
+        parts: list[str] = []
+        current_file_payload = normalize_current_file_payload(
+            getattr(request, "current_file", None)
+        )
+        if isinstance(current_file_payload, dict):
+            for key in ("path", "Path", "content", "Content"):
+                value = str(current_file_payload.get(key) or "").strip()
+                if value:
+                    parts.append(value)
+        message_text = str(getattr(request, "message", "") or "").strip()
+        if message_text:
+            parts.append(message_text)
+        return "\n".join(parts)
+
+    def turn_history_text(snapshot: object) -> str:
+        """Prior conversation facts (user + assistant) the next step may cite.
+
+        A next step may legitimately keep referencing a symbol or file that an
+        earlier turn introduced (tool call result, earlier reply), so the
+        running conversation joins the grounding corpus.
+        """
+        parts: list[str] = []
+        for message in getattr(snapshot, "messages", None) or []:
+            role = str(getattr(message, "role", "") or "").strip().lower()
+            if role not in {"user", "assistant"}:
+                continue
+            content = str(getattr(message, "content", "") or "").strip()
+            if content:
+                parts.append(content)
+        return "\n".join(parts[-12:])
+
+    def apply_next_step_grounding_policy(
+        *,
+        coach_turn: CoachTurnSummary,
+        reply_content: str,
+        request: TurnRequest | SessionMessageRequest,
+        agent_meta: dict[str, object] | None,
+        coach_turn_data: dict[str, object] | None = None,
+        history_text: str = "",
+    ) -> CoachTurnSummary:
+        """Teaching-turn grounding gate (TeachingTurn fact object, slice 1).
+
+        When the structured next_step references code symbols that appear
+        nowhere in the visible reply or the learner's code facts (current file
+        content, prior user message), the turn is downgraded instead of
+        shipping a fabricated requirement: ``coach_turn.requires_confirmation``
+        is set, with a mirrored ``next_step_requires_confirmation`` stamp on
+        agent_meta and the coach turn payload dict, so the UI can render the
+        step as a suggestion needing confirmation rather than a plan-ready
+        instruction.
+
+        The corrective retry (regenerate once with
+        ``grounding_correction_instruction(...)`` appended) needs a live
+        provider call inside the agent loop / finalize path, so no retry
+        callback is wired at this assembly point yet;
+        ``app.llm.turn_grounding.evaluate_next_step_grounding`` already
+        implements the retry-once-then-downgrade contract for callers that can
+        regenerate, and the downgrade below is its terminal behavior.
+        """
+        next_step_text = str(coach_turn.next_step or "").strip()
+        if not next_step_text or coach_turn.requires_confirmation:
+            return coach_turn
+        decision = evaluate_next_step_grounding(
+            next_step_text,
+            reply_content,
+            turn_grounding_code_text(request),
+            extra_context=history_text,
+        )
+        if decision.grounded:
+            return coach_turn
+        logger.warning(
+            "coach turn next_step downgraded to requires_confirmation; "
+            "ungrounded symbols: %s; correction: %s",
+            ", ".join(decision.referenced_symbols) or "-",
+            grounding_correction_instruction(request.response_language),
+        )
+        # Only attach the diagnostic stamp to EXISTING agent chrome: a clean
+        # reply must keep agent_meta absent/empty (sanitization contract).
+        # coach_turn.requires_confirmation is the canonical user-facing signal.
+        if isinstance(agent_meta, dict) and agent_meta:
+            agent_meta["next_step_requires_confirmation"] = True
+        if isinstance(coach_turn_data, dict):
+            coach_turn_data["requires_confirmation"] = True
+        return coach_turn.model_copy(update={"requires_confirmation": True})
+
+    def ground_coach_turn_payload_before_persistence(
+        *,
+        coach_turn_payload: dict[str, object] | None,
+        reply_content: str,
+        request: TurnRequest | SessionMessageRequest,
+        agent_meta: dict[str, object] | None,
+        history_text: str = "",
+    ) -> None:
+        """Run the next-step grounding gate before turn memory is persisted.
+
+        ``persist_turn_reflection`` runs before ``build_session_response`` in
+        the non-stream and streaming turn flows, so the gate must also run at
+        the persistence site; otherwise a downgraded next step would still
+        reach the thread memory and review hints. Mutates the payload dict in
+        place (``coach_turn`` summary + top-level ``requires_confirmation``).
+        """
+        if not isinstance(coach_turn_payload, dict):
+            return
+        turn_summary = coach_turn_payload.get("coach_turn")
+        if not isinstance(turn_summary, CoachTurnSummary):
+            return
+        coach_turn_payload["coach_turn"] = apply_next_step_grounding_policy(
+            coach_turn=turn_summary,
+            reply_content=reply_content,
+            request=request,
+            agent_meta=agent_meta,
+            coach_turn_data=coach_turn_payload,
+            history_text=history_text,
+        )
+
     def build_session_response(
         *,
         state,
@@ -11150,6 +11286,14 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         response_suggested_actions = [
             SuggestedAction.model_validate(action) for action in suggested_actions
         ]
+        response_coach_turn = apply_next_step_grounding_policy(
+            coach_turn=response_coach_turn,
+            reply_content=reply_content,
+            request=request,
+            agent_meta=agent_meta,
+            coach_turn_data=coach_turn_data,
+            history_text=turn_history_text(snapshot_for_response),
+        )
         response_agent_meta = AgentMeta.model_validate(agent_meta) if isinstance(agent_meta, dict) else None
         return SessionMessageResponse(
             session_id=state.session_id,
@@ -11368,11 +11512,16 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     blocker = str(active_thread.get("blocker") or "").strip()
                     if not (recovered_provider_thread and blocker == existing_provider_blocker):
                         review_note = blocker or review_note
+        # Memory-anchor anti-drift: the persisted focus may reuse thread/task
+        # anchors and extracted technical concepts, but never the raw opening
+        # clause of the learner message (2026-10-08 real-teaching review).
         focus_area = resolve_focus_hint(
             user_message=user_message,
             candidates=focus_candidates,
             fallback_current_file=current_file_name,
+            allow_message_prefix=False,
         )
+        focus_area = sanitize_memory_anchor(focus_area, user_message) or None
         if preserve_existing_thread and existing_active_thread_snapshot is not None:
             focus_area = existing_active_thread_snapshot.focus_area.strip() or focus_area
         if not provider_recovery_blocked and scenario in GUIDED_LANE_SCENARIOS:
@@ -11424,7 +11573,14 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if repaired_thread_next_step:
                 thread_next_step = repaired_thread_next_step
 
-        reflection_next_step = turn_summary.next_step
+        # Grounding downgrade: an ungrounded next step is a suggestion pending
+        # confirmation, not a plan-ready instruction — it must not become the
+        # remembered thread next step or review-task hint (2026-10-08 review,
+        # case 03 leak into memory.current_focus / review hints).
+        ungrounded_next_step = bool(turn_summary.requires_confirmation)
+        if ungrounded_next_step:
+            thread_next_step = ""
+        reflection_next_step = "" if ungrounded_next_step else turn_summary.next_step
         if teaching_note and teaching_note not in reflection_next_step:
             reflection_next_step = f"{reflection_next_step} {teaching_note}".strip()
         if thread_next_step and thread_next_step not in reflection_next_step:
@@ -11476,6 +11632,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             teaching_note=teaching_note or turn_teaching_note,
             confidence=turn_confidence,
             evidence=turn_evidence,
+            user_message=user_message,
         )
         runtime.memory_service.record_turn_memory(
             workspace_id=workspace_id,
@@ -20254,6 +20411,13 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         "evidence": list(turn_summary.evidence or []),
                     }
         response_snapshot = state.snapshot.model_copy(deep=True)
+        ground_coach_turn_payload_before_persistence(
+            coach_turn_payload=coach_turn_payload,
+            reply_content=assistant_content,
+            request=request,
+            agent_meta=agent_meta if isinstance(agent_meta, dict) else None,
+            history_text=turn_history_text(state.snapshot),
+        )
         persist_turn_reflection(
             workspace_id=workspace_id,
             session_id=state.session_id,
@@ -21288,6 +21452,13 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             agent_meta = apply_auto_resource_agent_evidence(agent_meta, auto_resource_events)
         if not use_agent_loop and agent_meta:
             agent_meta["agentic"] = False
+        ground_coach_turn_payload_before_persistence(
+            coach_turn_payload=coach_turn,
+            reply_content=assistant_content,
+            request=request,
+            agent_meta=agent_meta if isinstance(agent_meta, dict) else None,
+            history_text=turn_history_text(state.snapshot),
+        )
         persist_turn_reflection(
             workspace_id=workspace_id,
             session_id=state.session_id,
@@ -22519,6 +22690,13 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     async for _abort_frame in _abort_for_cancellation():
                         yield _abort_frame
                     return
+                ground_coach_turn_payload_before_persistence(
+                    coach_turn_payload=coach_turn,
+                    reply_content=full_content,
+                    request=request,
+                    agent_meta=final_agent_meta if isinstance(final_agent_meta, dict) else None,
+                    history_text=turn_history_text(state.snapshot),
+                )
                 persist_turn_reflection(
                     workspace_id=workspace_id,
                     session_id=state.session_id,
@@ -23840,6 +24018,13 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     async for _abort_frame in _abort_for_cancellation():
                         yield _abort_frame
                     return
+                ground_coach_turn_payload_before_persistence(
+                    coach_turn_payload=coach_turn,
+                    reply_content=full_content,
+                    request=request,
+                    agent_meta=final_agent_meta if isinstance(final_agent_meta, dict) else None,
+                    history_text=turn_history_text(state.snapshot),
+                )
                 persist_turn_reflection(
                     workspace_id=workspace_id,
                     session_id=state.session_id,

@@ -571,6 +571,8 @@ export interface CoachTurnSummaryView {
   artifactKinds?: ConversationArtifactKind[];
   suggestedActionTypes?: SuggestedAction["action"][];
   backgroundMode?: "embedded";
+  /** Teaching-turn grounding downgrade: next_step references symbols absent from reply+code. */
+  requiresConfirmation?: boolean;
 }
 
 export interface CoachOrientationView {
