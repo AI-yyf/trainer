@@ -68,6 +68,37 @@ _FILE_SUFFIX_SYMBOLS = frozenset(
 # anchors such as a file name that legitimately opens the message stay valid.
 _MESSAGE_PREFIX_MIN_LENGTH = 10
 
+# First-clause narration signals: the clause reports an event ("我的脚本
+# assert 失败了", "我亲自写了下面的修改", "我只改了 grid[0][0]") instead of
+# naming a topic. These override the Latin-token exemption — an English word
+# inside a narration clause ("assert", "None") does not make it a technical
+# anchor — and they gate the first-clause focus-hint fallback.
+_NARRATION_OPENING_PATTERN = re.compile(
+    r"(?:亲自|失败|报错|报了|改了|写了|通过了|消失了|断言|断言失败|下面的修改"
+    r"|越界|崩溃|跑不通|对吗|这样写|error|exception|traceback|assert)",
+    re.IGNORECASE,
+)
+# Bracket/brace characters mark a copied code fragment ("find([1], 2)"), not
+# a concept label.
+_NARRATION_FRAGMENT_CHARS = "[](){}（）、【】「」『》"
+
+
+def looks_like_narration_opening(text: object) -> bool:
+    """True when the text reads as an event report or code fragment.
+
+    Used on message-derived focus/anchor candidates: a narration opening or a
+    truncated code fragment is the learner's phrasing, never a technical
+    topic label.
+    """
+    cleaned = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not cleaned:
+        return False
+    if any(character in cleaned for character in _NARRATION_FRAGMENT_CHARS):
+        return True
+    if cleaned.endswith(("了", "呢", "吧", "吗")):
+        return True
+    return _NARRATION_OPENING_PATTERN.search(cleaned) is not None
+
 
 def normalize_code_symbol(value: object) -> str:
     """Normalize a candidate symbol literal; empty string when not symbol-like."""
@@ -220,17 +251,17 @@ def is_verbatim_message_prefix(candidate: object, message_text: object) -> bool:
     The 2026-10-08 review flagged anchors drifting onto the message prefix
     ("我亲自写了下面的修改…"). A candidate counts as a message prefix when the
     normalized message starts with the normalized candidate and the candidate is
-    long enough not to be a trivial keyword overlap. Two exemptions keep
+    long enough not to be a trivial keyword overlap. Three exemptions keep
     technical facts and deliberate lane labels usable as anchors:
 
     - identifier-like anchors (``lesson.py``, ``mutable_default``), and
-    - anchors that carry a Latin-letter token (``我有一个 AI idea``). Short
-      mixed-script openings are the lane/topic label the coach thread is
-      deliberately re-anchored on (see the lane-switch rebuild in routers);
-      rejecting them wipes the new lane's focus, the thread falls back to the
-      previous lane's stale focus, and cross-lane content leaks. Pure-CJK
-      narration openings ("我亲自写了下面的修改") stay rejected — that is the
-      drift this rule exists for.
+    - anchors that carry a Latin-letter token but are NOT narration-shaped
+      (``我有一个 AI idea``): short mixed-script openings are the lane/topic
+      label the coach thread is deliberately re-anchored on. Narration-shaped
+      openings ("我的脚本 assert 失败了", "我亲自写了下面的修改（用 None 哨兵")
+      are event reports about the learner's edit — the exact drift recorded by
+      the real-model maturity runs — so the narration check runs FIRST and an
+      embedded English word ("assert", "None") does not rescue them.
     """
     anchor = normalize_anchor_text(candidate)
     message = normalize_anchor_text(message_text)
@@ -240,6 +271,8 @@ def is_verbatim_message_prefix(candidate: object, message_text: object) -> bool:
         return False
     if _is_identifier_like(anchor.replace(" ", "_")):
         return False
+    if looks_like_narration_opening(anchor):
+        return True
     if re.search(r"[A-Za-z]", anchor):
         return False
     return message.startswith(anchor)

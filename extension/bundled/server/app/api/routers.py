@@ -116,6 +116,7 @@ from ..llm.training_review_context import active_training_review, apply_training
 from ..llm.turn_grounding import (
     evaluate_next_step_grounding,
     grounding_correction_instruction,
+    looks_like_narration_opening,
     sanitize_memory_anchor,
 )
 from ..memory.models import utc_now
@@ -2336,8 +2337,21 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         fallback_current_file: str | None = None,
         allow_message_prefix: bool = True,
     ) -> str | None:
+        def anchor_admissible(value: object) -> bool:
+            cleaned = normalize_focus_candidate(value)
+            if not cleaned:
+                return False
+            if allow_message_prefix:
+                return True
+            # Memory-anchor path (2026-10-08 + real-model maturity runs): a
+            # narration opening ("我的脚本 assert 失败了", "我亲自写了下面的
+            # 修改（用 None 哨兵") is the learner's phrasing — coach_context
+            # may still carry it as focus chrome, but it must never win the
+            # persisted anchor over the grounded current-file/task focus.
+            return not looks_like_narration_opening(cleaned)
+
         for candidate in candidates:
-            if is_specific_focus_candidate(candidate):
+            if is_specific_focus_candidate(candidate) and anchor_admissible(candidate):
                 return normalize_focus_candidate(candidate)
         extracted = extract_focus_hint_from_message(
             user_message,
@@ -2350,9 +2364,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if file_focus:
                 return file_focus
         for candidate in candidates:
-            cleaned = normalize_focus_candidate(candidate)
-            if cleaned:
-                return cleaned
+            if anchor_admissible(candidate):
+                return normalize_focus_candidate(candidate)
         return None
 
     def resolve_turn_focus_hint(
@@ -2369,7 +2382,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     return cleaned
         extracted = extract_focus_hint_from_message(user_message)
         if extracted:
-            return extracted
+            # Memory-anchor anti-drift (real-model maturity runs): a narration
+            # first clause ("我的脚本 assert 失败了", "我亲自写了下面的修改")
+            # is the learner's phrasing, not a topic label — fall through to
+            # the grounded current-file/task/stage focus instead.
+            if not looks_like_narration_opening(extracted):
+                return extracted
         for candidate in (current_file_name, task_focus, stage_focus):
             cleaned = normalize_focus_candidate(candidate)
             if cleaned:

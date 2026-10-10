@@ -32,6 +32,10 @@ from app.llm.turn_grounding import (
     next_step_is_grounded,
     sanitize_memory_anchor,
 )
+from app.memory.models import (
+    MemorySnapshot as LaneMemorySnapshot,
+)
+from app.memory.models import ProgressRecord, SessionSummary
 from app.memory.service import MemoryService
 from tests.test_api import build_client
 
@@ -295,6 +299,58 @@ def test_record_turn_memory_keeps_identifier_anchor_opening_the_message(
     assert snapshot.workspace.get("latest_turn_focus_area") == "lesson.py"
 
 
+def test_derive_coach_anchor_filters_narration_scenario_and_fragment_junk(
+    tmp_path: Path,
+) -> None:
+    """Derivation-time belt-and-braces: whatever landed in lane workspace
+    state, the snapshot never surfaces a narration opening, a bare scenario
+    name, or a code fragment as coach_anchor (real-model MiniMax runs
+    observed exactly these three drift shapes)."""
+    service = MemoryService(TrainerRepository(tmp_path / "anchor-derive.db"))
+    lane = LaneMemorySnapshot(
+        workspace={
+            "latest_coach_focus_area": "我的脚本 assert 失败了",
+            "latest_turn_focus_area": "我亲自写了下面的修改（用 None 哨兵",
+        },
+        session=SessionSummary(
+            session_id="session-anchor-derive",
+            recent_messages=[
+                "user: 我的脚本 assert 失败了，第二个 assert 报 items 是 [1, 2]。",
+                "assistant: 我们一起看第一个栈帧。",
+            ],
+        ),
+    )
+
+    anchor = service._derive_coach_anchor(None, lane)
+    assert "我的脚本 assert 失败了" not in anchor
+    assert "我亲自写了下面的修改" not in anchor
+    assert anchor == "implementation"
+
+    # Bare scenario lanes are not concepts.
+    scenario_lane = LaneMemorySnapshot(
+        progress=[
+            ProgressRecord(
+                lane="general",
+                focus_area="",
+                summary="Reviewed the failure report.",
+                next_step="Read one stack frame together.",
+            )
+        ],
+    )
+    assert service._derive_coach_anchor(None, scenario_lane) == "implementation"
+
+    # Grounded technical labels survive derivation.
+    grounded_lane = LaneMemorySnapshot(
+        workspace={"latest_coach_focus_area": "mutable-default.py"},
+    )
+    assert service._derive_coach_anchor(None, grounded_lane) == "mutable-default.py"
+
+    # current_focus never re-anchors on the narration prefix either.
+    focus = service._derive_current_focus(None, "", lane)
+    assert "我的脚本 assert 失败了" not in focus
+    assert "我亲自写了下面的修改" not in focus
+
+
 # ---------------------------------------------------------------------------
 # Assembly path: scripted provider double as the coach_finalize author
 # ---------------------------------------------------------------------------
@@ -398,6 +454,9 @@ def _run_scripted_turn(
     monkeypatch: pytest.MonkeyPatch,
     workspace_id: str,
     next_step: str,
+    *,
+    learner_message: str = "为什么修改 `grid[0]` 之后 `grid[1]` 也变了？",
+    current_file: dict[str, object] | None = None,
 ) -> dict[str, Any]:
     scripted = _ScriptedFinalizeProvider(next_step)
 
@@ -413,14 +472,10 @@ def _run_scripted_turn(
             "test-only-key",
         )
         session_id = _start_session(client, workspace_id, tmp_path)
-        response = client.post(
-            "/turn",
-            json=_turn_payload(
-                session_id,
-                workspace_id,
-                "为什么修改 `grid[0]` 之后 `grid[1]` 也变了？",
-            ),
-        )
+        payload = _turn_payload(session_id, workspace_id, learner_message)
+        if current_file is not None:
+            payload["current_file"] = current_file
+        response = client.post("/turn", json=payload)
         assert response.status_code == 200, response.text
         return dict(response.json())
 
@@ -465,3 +520,51 @@ def test_turn_keeps_grounded_next_step_untouched(
     assert coach_turn.get("next_step") == grounded_step
     agent_meta = body.get("agent_meta") or {}
     assert not agent_meta.get("next_step_requires_confirmation")
+
+
+def test_turn_narration_message_never_becomes_coach_anchor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Real-harness leak: a /turn whose first clause is narration ("我的脚本
+    assert 失败了") must not persist the message prefix as memory.coach_anchor
+    — the anchor falls back to the grounded current-file topic label."""
+    narration_message = "我的脚本 assert 失败了，第二个 assert 报 items 是 [1, 2]。为什么会这样？"
+    grounded_step = "再运行一次 `python mutable-default.py`，确认两个 assert 都通过。"
+    body = _run_scripted_turn(
+        tmp_path,
+        monkeypatch,
+        "workspace-narration-anchor",
+        grounded_step,
+        learner_message=narration_message,
+        current_file={
+            "path": "mutable-default.py",
+            "language_id": "python",
+            "content": (
+                "def add_item(item, items=[]):\n"
+                "    items.append(item)\n"
+                "    return items\n\n"
+                "assert add_item(1) == [1]\n"
+                "assert add_item(2) == [2]\n"
+            ),
+        },
+    )
+
+    memory = body.get("snapshot", {}).get("memory", {}) or {}
+    anchor = str(memory.get("coach_anchor") or "")
+    focus = str(memory.get("current_focus") or "")
+    workspace = memory.get("workspace") if isinstance(memory.get("workspace"), dict) else {}
+    focus_area = str(
+        workspace.get("latest_coach_focus_area")
+        or workspace.get("latest_turn_focus_area")
+        or ""
+    )
+    thread = memory.get("active_thread") or {}
+
+    assert "我的脚本 assert 失败了" not in anchor
+    assert "我的脚本 assert 失败了" not in focus
+    assert "我的脚本 assert 失败了" not in focus_area
+    assert "我的脚本 assert 失败了" not in str(thread.get("focus_area") or "")
+    # The anchor falls back to the grounded file/topic label, not empty.
+    assert anchor.strip()
+    assert "mutable-default" in anchor

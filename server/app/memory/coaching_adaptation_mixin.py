@@ -25,6 +25,10 @@ from ..core.models import (
     UserProfile,
     WorkspaceUnderstandingSnapshot,
 )
+from ..llm.turn_grounding import (
+    is_verbatim_message_prefix,
+    looks_like_narration_opening,
+)
 from ..pedagogy.context_pressure import derive_context_pressure
 from ..pedagogy.evidence_controls import (
     analyze_learning_evidence,
@@ -100,6 +104,80 @@ def _focus_looks_like_request_sentence(value: str) -> bool:
     ):
         return True
     return len(cleaned.split()) >= 7 and cleaned.endswith((".", "?", "。", "？"))
+
+
+# Bare scenario/lane names are not concepts: an anchor of "general" carries no
+# technical topic (real-model maturity runs observed exactly this drift).
+_BARE_SCENARIO_ANCHORS = frozenset(
+    {
+        "general",
+        "review",
+        "plan",
+        "task",
+        "next_task",
+        "onboarding",
+        "principle",
+        "project_idea",
+        "idea_implementation",
+        "project_adaptation",
+        "project_sourcing",
+        "remote_workspace",
+        "debug_loop",
+        "function_guidance",
+        "coach-turn",
+    }
+)
+
+
+def _latest_user_message_text(lane_snapshot: "LaneMemorySnapshot | None") -> str:
+    """Most recent learner message stored for the lane ("user: …" entries)."""
+    session = getattr(lane_snapshot, "session", None)
+    for entry in reversed(getattr(session, "recent_messages", None) or []):
+        text = str(entry or "").strip()
+        if text[:5].lower() == "user:":
+            return text[5:].strip()
+    return ""
+
+
+def _strip_user_message_echo(text: object) -> str:
+    """Drop raw learner-message lines from a rolling summary signal.
+
+    ``current_focus`` is a topic label for the next coaching loop; echoing the
+    learner's own sentences back ("user: 我的脚本 assert 失败了…") is the
+    message-prefix drift the 2026-10-08 review recorded, not a focus.
+    """
+    cleaned_lines: list[str] = []
+    for line in str(text or "").splitlines():
+        if line.strip()[:5].lower() == "user:":
+            continue
+        cleaned_lines.append(line)
+    return "\n".join(cleaned_lines).strip()
+
+
+def _admissible_anchor_value(
+    lane_snapshot: "LaneMemorySnapshot | None",
+    candidate: object,
+) -> str:
+    """Derivation-time anchor filter (2026-10-08 + real-model maturity runs).
+
+    Whatever landed in ``lane_snapshot.workspace`` (persisted before any
+    sanitization existed, or by a path without the message at hand), the
+    snapshot derivation must never surface:
+
+    - empty or bare scenario names (``general``),
+    - narration openings / code fragments ("我的脚本 assert 失败了",
+      "我亲自写了下面的修改（用 None 哨兵", "find([1…"),
+    - a verbatim prefix of the most recent learner message.
+    """
+    cleaned = re.sub(r"\s+", " ", str(candidate or "")).strip()
+    if not cleaned or cleaned.lower() in _BARE_SCENARIO_ANCHORS:
+        return ""
+    if looks_like_narration_opening(cleaned):
+        return ""
+    message = _latest_user_message_text(lane_snapshot)
+    if message and is_verbatim_message_prefix(cleaned, message):
+        return ""
+    return cleaned
 
 
 def _guided_lane_focus_label(scenario: str, context: str = "") -> str:
@@ -621,13 +699,17 @@ class CoachingAdaptationMixin:
         *,
         language_context: str | None = None,
     ) -> str:
+        recent_summary = _strip_user_message_echo(recent_summary)
         language_context = language_context or _memory_language_context(
             lane_snapshot.workspace if lane_snapshot else {},
             recent_summary,
         )
         active_thread = lane_snapshot.workspace.get("active_thread") if lane_snapshot else None
         if isinstance(active_thread, dict):
-            thread_focus = str(active_thread.get("focus_area") or "").strip()
+            thread_focus = _admissible_anchor_value(
+                lane_snapshot,
+                str(active_thread.get("focus_area") or "").strip(),
+            )
             thread_scenario = str(active_thread.get("scenario") or "").strip()
             thread_next_step = _strip_visible_next_step_prefix(active_thread.get("next_step") or "")
             thread_blocker = str(active_thread.get("blocker") or "").strip()
@@ -693,6 +775,7 @@ class CoachingAdaptationMixin:
             existing=recovered,
             candidate=latest_focus_area,
         )
+        latest_focus_area = _admissible_anchor_value(lane_snapshot, latest_focus_area)
         latest_next_step = (
             _strip_visible_next_step_prefix(self._workspace_value(lane_snapshot, "next_step"))
             if lane_snapshot
@@ -700,6 +783,14 @@ class CoachingAdaptationMixin:
         )
         latest_summary = self._workspace_value(lane_snapshot, "summary") if lane_snapshot else ""
         latest_progress = lane_snapshot.progress[0] if lane_snapshot and lane_snapshot.progress else None
+        progress_anchor = (
+            _admissible_anchor_value(
+                lane_snapshot,
+                latest_progress.focus_area or latest_progress.lane,
+            )
+            if latest_progress
+            else ""
+        )
         if latest_focus_area:
             visible_latest_focus = _display_focus_label(
                 latest_focus_area,
@@ -717,12 +808,11 @@ class CoachingAdaptationMixin:
                 f"当前聚焦：继续围绕「{visible_latest_focus}」推进，先落下一个明确可验证的小结果。",
                 language_context or visible_latest_focus,
             )
-        if latest_progress:
+        if latest_progress and progress_anchor:
             detail = latest_progress.next_step or latest_progress.summary
-            anchor = latest_progress.focus_area or latest_progress.lane
             visible_anchor = _display_focus_label(
-                anchor,
-                language_context or anchor or detail,
+                progress_anchor,
+                language_context or progress_anchor or detail,
             )
             return _localized_memory_text(
                 f"Current coaching focus: continue the tracked {latest_progress.lane} lane around "
@@ -827,6 +917,7 @@ class CoachingAdaptationMixin:
             existing=recovered,
             candidate=self._workspace_value(lane_snapshot, "focus_area"),
         )
+        latest_focus_area = _admissible_anchor_value(lane_snapshot, latest_focus_area)
         if latest_focus_area:
             return latest_focus_area
         if lane_snapshot.progress:
@@ -837,12 +928,27 @@ class CoachingAdaptationMixin:
                 existing=recovered,
                 candidate=latest_progress.focus_area.strip() or latest_progress.lane.strip(),
             )
+            progress_focus = _admissible_anchor_value(lane_snapshot, progress_focus)
             if progress_focus:
                 return progress_focus
-        if persist_chrome["focus"] or persist_chrome["stage_title"]:
-            return persist_chrome["focus"] or persist_chrome["stage_title"]
+        persist_chrome_anchor = _admissible_anchor_value(
+            lane_snapshot,
+            persist_chrome["focus"] or persist_chrome["stage_title"],
+        )
+        if persist_chrome_anchor:
+            return persist_chrome_anchor
+        mastery_anchor = ""
         if lane_snapshot.mastery:
-            return sorted(lane_snapshot.mastery, key=lambda item: item.score)[0].concept
+            ranked_mastery = sorted(lane_snapshot.mastery, key=lambda item: item.score)
+            for mastery_item in ranked_mastery:
+                mastery_anchor = _admissible_anchor_value(
+                    lane_snapshot,
+                    mastery_item.concept,
+                )
+                if mastery_anchor:
+                    break
+        if mastery_anchor:
+            return mastery_anchor
         return "implementation"
 
     def _derive_lowest_mastery_concepts(self, lane_snapshot: LaneMemorySnapshot) -> list[str]:
