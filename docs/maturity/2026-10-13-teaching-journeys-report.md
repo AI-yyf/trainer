@@ -2,15 +2,14 @@
 
 - harness：`scripts/maturity/real_teaching_journeys_minimax.py`（28 组双回合，7 类 × 4）
 - 矩阵规格：`docs/maturity/teaching-case-matrix.md`；台账与对账规则见该文件 §2（M1–M5）
-- 运行模式：`skipped_no_credentials`
+- 运行模式：`real`
 - 夹具校验（本地执行，无模型）：28/28 通过（pre-fix exit≠0 且 post-fix exit=0）
-- 回合分类统计：{'skipped_no_credentials': 56}
+- 回合分类统计：{'passed': 28, 'local_fallback': 3, 'failed': 25}
 
 ## 诚实声明
 
-本环境未设置 `TRAINER_MATURITY_API_KEY` / `TRAINER_MATURITY_PROVIDER_BASE_URL`，
-**56 个模型回合全部标记 `skipped_no_credentials`：未向任何 provider 发起调用，
-本报告不构成、也不得被引用为「真实模型通过」**。夹具骨架为本地真实执行。
+分类逐回合记录；`local_fallback` / `provider_error` 回合不计入模型教学质量；
+内容质量栏由独立评审 agent 填写并标注「待 owner 确认」，不记为人工审阅。
 
 > 分类字段说明：`passed`=M1 脊柱（HTTP + body/disk 校验）+M2 教学接地通过（grounded/corrected 且无 requires_confirmation）
 > +M5 同源对账一致且无记忆漂移；`failed`=任一客观判据失败（含 downgraded，降级回合永不算 pass）；
@@ -20,34 +19,34 @@
 
 | 案例 | 类别 | 夹具 pre/post exit | 回合分类 | 对账 | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| 01-mutable-default | A | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| 02-late-binding | A | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| 03-nested-alias | A | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| A4-dict-mutation | A | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| 04-binary-search-boundary | B | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| B2-import-env-stale | B | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| B3-async-ordering | B | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| B4-sqlite-null | B | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| C1-shared-default-object | C | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| C2-falsy-vs-null | C | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| C3-var-capture | C | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| C4-resource-cleanup | C | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| D1-default-eval-time | D | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| D2-closure-experiment | D | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| D3-copy-semantics | D | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| D4-hash-contract | D | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| E1-argparse-entry | E | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| E2-async-call-site | E | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| E3-unit-test-contract | E | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| E4-package-layout | E | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| F1-semaphore-limit | F | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| F2-this-binding | F | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| F3-quadratic-scan | F | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| F4-injectable-clock | F | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| G1-cross-session-topic | G | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| G2-review-interval | G | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| G3-provider-recovery | G | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
-| G4-return-after-days | G | 1 / 0 | skipped_no_credentials / skipped_no_credentials | - / - |  |
+| 01-mutable-default | A | 1 / 0 | passed / passed | ok / ok |  |
+| 02-late-binding | A | 1 / 0 | passed / passed | ok / ok |  |
+| 03-nested-alias | A | 1 / 0 | passed / passed | ok / ok |  |
+| A4-dict-mutation | A | 1 / 0 | passed / passed | ok / ok |  |
+| 04-binary-search-boundary | B | 1 / 0 | passed / passed | ok / ok |  |
+| B2-import-env-stale | B | 1 / 0 | passed / local_fallback | ok / - |  |
+| B3-async-ordering | B | 1 / 0 | failed / failed | ok / ok |  |
+| B4-sqlite-null | B | 1 / 0 | passed / failed | ok / ok |  |
+| C1-shared-default-object | C | 1 / 0 | failed / passed | ok / ok |  |
+| C2-falsy-vs-null | C | 1 / 0 | failed / passed | ok / ok |  |
+| C3-var-capture | C | 1 / 0 | failed / passed | ok / ok |  |
+| C4-resource-cleanup | C | 1 / 0 | passed / failed | ok / ok |  |
+| D1-default-eval-time | D | 1 / 0 | passed / failed | ok / server sent no grounding stamp for an ungrounded step |  |
+| D2-closure-experiment | D | 1 / 0 | passed / passed | ok / ok |  |
+| D3-copy-semantics | D | 1 / 0 | failed / local_fallback | ok / - |  |
+| D4-hash-contract | D | 1 / 0 | failed / passed | ok / ok |  |
+| E1-argparse-entry | E | 1 / 0 | failed / failed | ok / ok |  |
+| E2-async-call-site | E | 1 / 0 | failed / failed | ok / server sent no grounding stamp for an ungrounded step |  |
+| E3-unit-test-contract | E | 1 / 0 | failed / passed | server sent no grounding stamp for an ungrounded step / ok |  |
+| E4-package-layout | E | 1 / 0 | failed / passed | ok / ok |  |
+| F1-semaphore-limit | F | 1 / 0 | failed / failed | ok / server sent no grounding stamp for an ungrounded step |  |
+| F2-this-binding | F | 1 / 0 | passed / passed | ok / ok |  |
+| F3-quadratic-scan | F | 1 / 0 | passed / failed | ok / ok |  |
+| F4-injectable-clock | F | 1 / 0 | failed / passed | ok / ok |  |
+| G1-cross-session-topic | G | 1 / 0 | failed / failed | ok / ok |  |
+| G2-review-interval | G | 1 / 0 | failed / passed | server sent no grounding stamp for an ungrounded step / ok |  |
+| G3-provider-recovery | G | 1 / 0 | passed / failed | ok / server sent no grounding stamp for an ungrounded step |  |
+| G4-return-after-days | G | 1 / 0 | failed / local_fallback | ok / - |  |
 
 ## 复现
 
