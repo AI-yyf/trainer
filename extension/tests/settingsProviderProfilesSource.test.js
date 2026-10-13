@@ -15,6 +15,16 @@ const settingsViewPath = path.resolve(
   'settings',
   'CoachSettingsView.tsx',
 );
+const settingsInlineTextPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'segments',
+  'settingsInlineText.ts',
+);
 
 function extractProviderProfilesPanel(source) {
   const start = source.indexOf('const providerDirectory =');
@@ -72,15 +82,19 @@ test('settings provider profile actions are wired through App and rendered in Se
 
 test('provider details keep connection status labels localized in every supported language', () => {
   const settingsSource = fs.readFileSync(settingsViewPath, 'utf8');
+  // The provider connection-truth and detail-label copy tables moved verbatim
+  // into the i18n segment file; the table-content assertions slice there
+  // while the call-site assertions keep reading the view.
+  const segmentSource = fs.readFileSync(settingsInlineTextPath, 'utf8');
   const truthCopy = sourceBetween(
-    settingsSource,
-    'function providerConnectionTruthCopy(',
+    segmentSource,
+    'const providerConnectionTruthCopyTable',
     'type ProviderDetailLabelKey =',
   );
   const detailLabels = sourceBetween(
-    settingsSource,
-    'function providerDetailLabel(',
-    'function providerBaseUrlGuidance(',
+    segmentSource,
+    'const providerDetailLabelTable',
+    'export type ProviderModelDiscoveryCopy =',
   );
 
   for (const language of ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR']) {
@@ -105,7 +119,11 @@ test('settings provider copy is valid UTF-8 and keeps readable localized text', 
     'Settings source must remain valid UTF-8.',
   );
   assert.doesNotMatch(settingsSource, /\uFFFD/u);
-  assert.doesNotMatch(settingsSource, /(?:涓嬩竴|銉|銆|妫€|鞐瓣|氇|靹滊)/u);
+  assert.doesNotMatch(settingsSource, /(?:涓嬩竴|銉|銆|妫€|鞐瓣|氇|靹滊)/u);
+
+  // The provider connection-truth table moved verbatim into the i18n segment
+  // file; the localized-text assertions slice there.
+  const segmentSource = fs.readFileSync(settingsInlineTextPath, 'utf8');
 
   for (const text of [
     '连接检查',
@@ -116,6 +134,6 @@ test('settings provider copy is valid UTF-8 and keeps readable localized text', 
     '연결 확인',
     'Verificação da conexão',
   ]) {
-    assert.match(settingsSource, new RegExp(text));
+    assert.match(segmentSource, new RegExp(text));
   }
 });

@@ -14,6 +14,16 @@ const settingsSourcePath = path.resolve(
   'settings',
   'CoachSettingsView.tsx',
 );
+const settingsInlineTextPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'segments',
+  'settingsInlineText.ts',
+);
 
 test('Settings keeps model selection compact, searchable, and recoverable with a full name', () => {
   const source = fs.readFileSync(settingsSourcePath, 'utf8');
@@ -123,12 +133,14 @@ test('Settings does not let manual per-model limits bypass the connection model 
 });
 
 test('Settings localizes model picker actions in every supported language', () => {
-  const source = fs.readFileSync(settingsSourcePath, 'utf8');
-  const start = source.indexOf('function providerModelPickerCopy(');
-  const end = source.indexOf('\nfunction ', start + 10);
+  // The provider model picker copy table moved verbatim into the i18n segment
+  // file; the locale-content assertions slice there.
+  const inlineCopy = fs.readFileSync(settingsInlineTextPath, 'utf8');
+  const start = inlineCopy.indexOf('const providerModelPickerCopyTable');
+  const end = inlineCopy.indexOf('\nexport ', start + 10);
 
   assert.ok(start >= 0 && end > start, 'expected model picker locale copy');
-  const pickerCopy = source.slice(start, end);
+  const pickerCopy = inlineCopy.slice(start, end);
   for (const language of ["zh-CN", "en-US", "es-ES", "fr-FR", "de-DE", "ja-JP", "ko-KR", "pt-BR"]) {
     assert.match(pickerCopy, new RegExp(`"${language}": \\{`));
   }

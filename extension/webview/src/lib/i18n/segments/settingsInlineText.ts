@@ -8,6 +8,7 @@
 
 import type { ComposerLanguage } from "../../types";
 import type { CoachSettingsLabels } from "../../../components/settings/CoachSettingsView";
+import type { ProviderTemplateGroup } from "../../../../../../shared/src/providerTemplateCatalog";
 
 /**
  * §十五: settings labels the shared workbench copy does not cover, in eight
@@ -1487,4 +1488,868 @@ export const localizedCatalogSavedModelsLabel: Record<ComposerLanguage, string> 
   "ja-JP": "保存済みモデル",
   "ko-KR": "저장된 모델",
   "pt-BR": "Modelos salvos",
+};
+
+/**
+ * §十五 (provider tables): provider connection-truth, template-group,
+ * detail-label, model-discovery, model-picker and tools/streaming
+ * verification copy tables, moved verbatim from
+ * components/settings/CoachSettingsView.tsx — strings, languages, keys
+ * and constant names unchanged. The view keeps the lookup functions and
+ * builds them from these tables; source-text guard tests slice the
+ * tables here.
+ */
+
+export type ProviderConnectionTruthCopy = {
+  protocol: string;
+  capabilities: string;
+  diagnostics: string;
+  profiles: string;
+  modelHints: string;
+  diagnosticNotes: string;
+  warnings: string;
+  blockedModels: string;
+  blockedTaskBindings: string;
+  saveFirst: string;
+  draftNotTested: string;
+  saveFirstStatus: string;
+  needsLiveTest: string;
+  protocolDraftDetail: (
+    draftProtocol: string,
+    draftEndpoint: string,
+    liveProtocol: string,
+    liveEndpoint: string,
+  ) => string;
+  diagnosticsDraftDetail: string;
+  diagnosticsNeedsTest: string;
+  capabilityDraftDetail: (protocol: string) => string;
+  capabilityLiveDetail: (modelCount: number) => string;
+  capabilityNeverTested: string;
+  capabilityTestFailed: string;
+  capabilityUnknownProtocol: string;
+  profileDetail: (profileCount: number) => string;
+};
+
+export const providerConnectionTruthCopyTable: Record<ComposerLanguage, ProviderConnectionTruthCopy> = {
+  "zh-CN": {
+    protocol: "连接方式",
+    capabilities: "可用能力",
+    diagnostics: "连接检查",
+    profiles: "已保存连接",
+    modelHints: "模型能力提示",
+    diagnosticNotes: "最近检查结果",
+    warnings: "注意事项",
+    blockedModels: "不可用模型",
+    blockedTaskBindings: "不可用任务设置",
+    saveFirst: "先保存连接，才能查看当前连接的检查结果。",
+    draftNotTested: "草稿待测试",
+    saveFirstStatus: "先保存",
+    needsLiveTest: "需要测试",
+    protocolDraftDetail: (draftProtocol, draftEndpoint, liveProtocol, liveEndpoint) =>
+      `保存后会改用 ${draftProtocol} · ${draftEndpoint}。当前连接仍在使用 ${liveProtocol} · ${liveEndpoint}。`,
+    diagnosticsDraftDetail: "这张检查卡仍在描述当前连接。先保存改动，再重新测试。",
+    diagnosticsNeedsTest: "连接已保存，但还没有最近一次测试结果。",
+    capabilityDraftDetail: (protocol) =>
+      `先保存 ${protocol} 连接，再做一次现场测试。能力只来自那次测试。`,
+    capabilityLiveDetail: (modelCount) =>
+      modelCount > 0
+        ? `已找到 ${modelCount} 个可选模型。能力芯片只显示最近一次测试观察到的结果。`
+        : "能力芯片只显示最近一次测试观察到的结果。",
+    capabilityNeverTested: "还没有现场测试。这里不显示协议默认能力。",
+    capabilityTestFailed: "最近一次测试失败。已清除上次的能力芯片。",
+    capabilityUnknownProtocol: "未知连接方式。在测试确认之前，不会假设任何能力。",
+    profileDetail: (profileCount) =>
+      profileCount > 0 ? `已保存 ${profileCount} 组连接，可随时切换。` : "还没有保存过连接。",
+  },
+  "en-US": {
+    protocol: "Protocol",
+    capabilities: "Capabilities",
+    diagnostics: "Connection check",
+    profiles: "Saved connections",
+    modelHints: "Model capability hints",
+    diagnosticNotes: "Recent checks",
+    warnings: "Warnings",
+    blockedModels: "Unavailable models",
+    blockedTaskBindings: "Unavailable task settings",
+    saveFirst: "Save the connection before relying on its check results.",
+    draftNotTested: "Draft not tested",
+    saveFirstStatus: "Save first",
+    needsLiveTest: "Needs test",
+    protocolDraftDetail: (draftProtocol, draftEndpoint, liveProtocol, liveEndpoint) =>
+      `After saving, this connection will use ${draftProtocol} · ${draftEndpoint}. It currently uses ${liveProtocol} · ${liveEndpoint}.`,
+    diagnosticsDraftDetail: "This check still describes the current connection. Save the changes, then test again.",
+    diagnosticsNeedsTest: "The connection is saved, but it has not been tested recently.",
+    capabilityDraftDetail: (protocol) =>
+      `Save the ${protocol} connection, then run a live test. Chips come only from that test.`,
+    capabilityLiveDetail: (modelCount) =>
+      modelCount > 0
+        ? `${modelCount} models are available. Capability chips show only the latest live observation.`
+        : "Capability chips show only the latest live observation.",
+    capabilityNeverTested: "No live test yet. Protocol defaults are not shown as capabilities.",
+    capabilityTestFailed: "The latest test failed. Previous capability chips were cleared.",
+    capabilityUnknownProtocol: "Unknown connection type. No capabilities are assumed until a live test.",
+    profileDetail: (profileCount) =>
+      profileCount > 0
+        ? `${profileCount} saved connections are available to switch between.`
+        : "No connections have been saved yet.",
+  },
+  "es-ES": {
+    protocol: "Protocolo",
+    capabilities: "Capacidades",
+    diagnostics: "Comprobación de conexión",
+    profiles: "Conexiones guardadas",
+    modelHints: "Notas sobre capacidades del modelo",
+    diagnosticNotes: "Comprobaciones recientes",
+    warnings: "Avisos",
+    blockedModels: "Modelos no disponibles",
+    blockedTaskBindings: "Ajustes de tarea no disponibles",
+    saveFirst: "Guarda la conexión antes de confiar en sus resultados de comprobación.",
+    draftNotTested: "Borrador sin probar",
+    saveFirstStatus: "Guardar primero",
+    needsLiveTest: "Necesita prueba",
+    protocolDraftDetail: (draftProtocol, draftEndpoint, liveProtocol, liveEndpoint) =>
+      `Al guardar, esta conexión usará ${draftProtocol} · ${draftEndpoint}. Ahora usa ${liveProtocol} · ${liveEndpoint}.`,
+    diagnosticsDraftDetail: "Esta comprobación todavía describe la conexión actual. Guarda los cambios y vuelve a probar.",
+    diagnosticsNeedsTest: "La conexión está guardada, pero no se ha probado recientemente.",
+    capabilityDraftDetail: (protocol) =>
+      `Guarda la conexión ${protocol} y haz una prueba en vivo. Los chips solo salen de esa prueba.`,
+    capabilityLiveDetail: (modelCount) =>
+      modelCount > 0
+        ? `Hay ${modelCount} modelos. Los chips muestran solo la última observación en vivo.`
+        : "Los chips muestran solo la última observación en vivo.",
+    capabilityNeverTested: "Aún no hay prueba en vivo. No se muestran capacidades por defecto del protocolo.",
+    capabilityTestFailed: "La última prueba falló. Se quitaron los chips anteriores.",
+    capabilityUnknownProtocol: "Tipo de conexión desconocido. No se asumen capacidades hasta una prueba en vivo.",
+    profileDetail: (profileCount) =>
+      profileCount > 0
+        ? `Hay ${profileCount} conexiones guardadas para cambiar entre ellas.`
+        : "Aún no hay conexiones guardadas.",
+  },
+  "fr-FR": {
+    protocol: "Protocole",
+    capabilities: "Fonctionnalités",
+    diagnostics: "Vérification de connexion",
+    profiles: "Connexions enregistrées",
+    modelHints: "Repères sur les capacités du modèle",
+    diagnosticNotes: "Vérifications récentes",
+    warnings: "Avertissements",
+    blockedModels: "Modèles indisponibles",
+    blockedTaskBindings: "Réglages de tâche indisponibles",
+    saveFirst: "Enregistrez la connexion avant de vous fier à ses résultats de vérification.",
+    draftNotTested: "Brouillon non testé",
+    saveFirstStatus: "Enregistrer d'abord",
+    needsLiveTest: "Test requis",
+    protocolDraftDetail: (draftProtocol, draftEndpoint, liveProtocol, liveEndpoint) =>
+      `Après enregistrement, cette connexion utilisera ${draftProtocol} · ${draftEndpoint}. Elle utilise actuellement ${liveProtocol} · ${liveEndpoint}.`,
+    diagnosticsDraftDetail: "Cette vérification décrit encore la connexion actuelle. Enregistrez les modifications, puis testez à nouveau.",
+    diagnosticsNeedsTest: "La connexion est enregistrée, mais elle n'a pas été testée récemment.",
+    capabilityDraftDetail: (protocol) =>
+      `Enregistrez la connexion ${protocol}, puis lancez un test réel. Les pastilles viennent uniquement de ce test.`,
+    capabilityLiveDetail: (modelCount) =>
+      modelCount > 0
+        ? `${modelCount} modèles sont disponibles. Les pastilles montrent seulement la dernière observation réelle.`
+        : "Les pastilles montrent seulement la dernière observation réelle.",
+    capabilityNeverTested: "Pas encore de test réel. Les capacités par défaut du protocole ne sont pas affichées.",
+    capabilityTestFailed: "Le dernier test a échoué. Les pastilles précédentes ont été effacées.",
+    capabilityUnknownProtocol: "Type de connexion inconnu. Aucune capacité n'est supposée avant un test réel.",
+    profileDetail: (profileCount) =>
+      profileCount > 0
+        ? `${profileCount} connexions enregistrées sont disponibles.`
+        : "Aucune connexion n'est encore enregistrée.",
+  },
+  "de-DE": {
+    protocol: "Protokoll",
+    capabilities: "Funktionen",
+    diagnostics: "Verbindungsprüfung",
+    profiles: "Gespeicherte Verbindungen",
+    modelHints: "Hinweise zu Modellfunktionen",
+    diagnosticNotes: "Letzte Prüfungen",
+    warnings: "Hinweise",
+    blockedModels: "Nicht verfügbare Modelle",
+    blockedTaskBindings: "Nicht verfügbare Aufgaben-Einstellungen",
+    saveFirst: "Speichern Sie die Verbindung, bevor Sie sich auf Prüfergebnisse verlassen.",
+    draftNotTested: "Entwurf nicht getestet",
+    saveFirstStatus: "Zuerst speichern",
+    needsLiveTest: "Test erforderlich",
+    protocolDraftDetail: (draftProtocol, draftEndpoint, liveProtocol, liveEndpoint) =>
+      `Nach dem Speichern verwendet diese Verbindung ${draftProtocol} · ${draftEndpoint}. Aktuell verwendet sie ${liveProtocol} · ${liveEndpoint}.`,
+    diagnosticsDraftDetail: "Diese Prüfung beschreibt noch die aktuelle Verbindung. Änderungen speichern und erneut testen.",
+    diagnosticsNeedsTest: "Die Verbindung ist gespeichert, wurde aber noch nicht kürzlich getestet.",
+    capabilityDraftDetail: (protocol) =>
+      `Speichern Sie die ${protocol}-Verbindung und führen Sie einen Live-Test aus. Chips kommen nur aus diesem Test.`,
+    capabilityLiveDetail: (modelCount) =>
+      modelCount > 0
+        ? `${modelCount} Modelle sind verfügbar. Chips zeigen nur die letzte Live-Beobachtung.`
+        : "Chips zeigen nur die letzte Live-Beobachtung.",
+    capabilityNeverTested: "Noch kein Live-Test. Protokoll-Standardfähigkeiten werden nicht angezeigt.",
+    capabilityTestFailed: "Der letzte Test ist fehlgeschlagen. Vorherige Chips wurden entfernt.",
+    capabilityUnknownProtocol: "Unbekannter Verbindungstyp. Vor einem Live-Test werden keine Fähigkeiten angenommen.",
+    profileDetail: (profileCount) =>
+      profileCount > 0
+        ? `${profileCount} gespeicherte Verbindungen stehen zum Wechseln bereit.`
+        : "Es wurden noch keine Verbindungen gespeichert.",
+  },
+  "ja-JP": {
+    protocol: "プロトコル",
+    capabilities: "利用できる機能",
+    diagnostics: "接続チェック",
+    profiles: "保存済みの接続",
+    modelHints: "モデル機能のメモ",
+    diagnosticNotes: "最近の確認結果",
+    warnings: "注意事項",
+    blockedModels: "使えないモデル",
+    blockedTaskBindings: "使えないタスク設定",
+    saveFirst: "接続の確認結果を見る前に、まず保存してください。",
+    draftNotTested: "下書きは未テスト",
+    saveFirstStatus: "先に保存",
+    needsLiveTest: "テストが必要",
+    protocolDraftDetail: (draftProtocol, draftEndpoint, liveProtocol, liveEndpoint) =>
+      `保存すると ${draftProtocol} · ${draftEndpoint} に切り替わります。現在は ${liveProtocol} · ${liveEndpoint} を使用しています。`,
+    diagnosticsDraftDetail: "この確認結果は現在の接続についてのものです。変更を保存してから、もう一度テストしてください。",
+    diagnosticsNeedsTest: "接続は保存されていますが、最近のテスト結果がありません。",
+    capabilityDraftDetail: (protocol) =>
+      `${protocol} の接続を保存してからライブテストしてください。チップはそのテストだけから出ます。`,
+    capabilityLiveDetail: (modelCount) =>
+      modelCount > 0
+        ? `この接続で ${modelCount} 個のモデルを選べます。チップは最新のライブ観測だけを示します。`
+        : "チップは最新のライブ観測だけを示します。",
+    capabilityNeverTested: "まだライブテストがありません。プロトコルの既定機能は表示しません。",
+    capabilityTestFailed: "最新のテストは失敗しました。以前のチップは消しました。",
+    capabilityUnknownProtocol: "未知の接続方式です。ライブテストまで能力は仮定しません。",
+    profileDetail: (profileCount) =>
+      profileCount > 0
+        ? `${profileCount} 件の保存済み接続を切り替えられます。`
+        : "保存済みの接続はまだありません。",
+  },
+  "ko-KR": {
+    protocol: "프로토콜",
+    capabilities: "사용 가능한 기능",
+    diagnostics: "연결 확인",
+    profiles: "저장된 연결",
+    modelHints: "모델 기능 참고",
+    diagnosticNotes: "최근 확인 결과",
+    warnings: "주의 사항",
+    blockedModels: "사용할 수 없는 모델",
+    blockedTaskBindings: "사용할 수 없는 작업 설정",
+    saveFirst: "확인 결과를 보기 전에 먼저 연결을 저장하세요.",
+    draftNotTested: "초안 미테스트",
+    saveFirstStatus: "먼저 저장",
+    needsLiveTest: "테스트 필요",
+    protocolDraftDetail: (draftProtocol, draftEndpoint, liveProtocol, liveEndpoint) =>
+      `저장하면 ${draftProtocol} · ${draftEndpoint}로 바뀝니다. 현재는 ${liveProtocol} · ${liveEndpoint}를 사용합니다.`,
+    diagnosticsDraftDetail: "이 확인 결과는 현재 연결에 대한 것입니다. 변경 사항을 저장한 뒤 다시 테스트하세요.",
+    diagnosticsNeedsTest: "연결은 저장되어 있지만 최근 테스트 결과가 없습니다.",
+    capabilityDraftDetail: (protocol) =>
+      `${protocol} 연결을 저장한 뒤 실제 테스트를 하세요. 칩은 그 테스트에서만 나옵니다.`,
+    capabilityLiveDetail: (modelCount) =>
+      modelCount > 0
+        ? `이 연결에서 ${modelCount}개의 모델을 선택할 수 있습니다. 칩은 최근 실제 관찰만 보여 줍니다.`
+        : "칩은 최근 실제 관찰만 보여 줍니다.",
+    capabilityNeverTested: "아직 실제 테스트가 없습니다. 프로토콜 기본 기능은 표시하지 않습니다.",
+    capabilityTestFailed: "최근 테스트가 실패했습니다. 이전 칩을 지웠습니다.",
+    capabilityUnknownProtocol: "알 수 없는 연결 유형입니다. 실제 테스트 전까지 기능을 가정하지 않습니다.",
+    profileDetail: (profileCount) =>
+      profileCount > 0
+        ? `${profileCount}개의 저장된 연결을 전환할 수 있습니다.`
+        : "저장된 연결이 아직 없습니다.",
+  },
+  "pt-BR": {
+    protocol: "Protocolo",
+    capabilities: "Recursos disponíveis",
+    diagnostics: "Verificação da conexão",
+    profiles: "Conexões salvas",
+    modelHints: "Notas sobre recursos do modelo",
+    diagnosticNotes: "Verificações recentes",
+    warnings: "Avisos",
+    blockedModels: "Modelos indisponíveis",
+    blockedTaskBindings: "Configurações de tarefa indisponíveis",
+    saveFirst: "Salve a conexão antes de confiar nos resultados da verificação.",
+    draftNotTested: "Rascunho não testado",
+    saveFirstStatus: "Salvar primeiro",
+    needsLiveTest: "Teste necessário",
+    protocolDraftDetail: (draftProtocol, draftEndpoint, liveProtocol, liveEndpoint) =>
+      `Depois de salvar, esta conexão usará ${draftProtocol} · ${draftEndpoint}. Agora ela usa ${liveProtocol} · ${liveEndpoint}.`,
+    diagnosticsDraftDetail: "Esta verificação ainda descreve a conexão atual. Salve as alterações e teste novamente.",
+    diagnosticsNeedsTest: "A conexão está salva, mas não foi testada recentemente.",
+    capabilityDraftDetail: (protocol) =>
+      `Salve a conexão ${protocol} e faça um teste ao vivo. Os chips vêm só desse teste.`,
+    capabilityLiveDetail: (modelCount) =>
+      modelCount > 0
+        ? `${modelCount} modelos estão disponíveis. Os chips mostram só a última observação ao vivo.`
+        : "Os chips mostram só a última observação ao vivo.",
+    capabilityNeverTested: "Ainda não há teste ao vivo. Os recursos padrão do protocolo não são mostrados.",
+    capabilityTestFailed: "O último teste falhou. Os chips anteriores foram removidos.",
+    capabilityUnknownProtocol: "Tipo de conexão desconhecido. Nenhuma capacidade é assumida até um teste ao vivo.",
+    profileDetail: (profileCount) =>
+      profileCount > 0
+        ? `${profileCount} conexões salvas estão disponíveis para alternar.`
+        : "Ainda não há conexões salvas.",
+  },
+};
+export type ProviderDetailLabelKey =
+  | "baseUrl"
+  | "savedProfiles"
+  | "savedProfilesAvailable"
+  | "savedProfilesEmpty"
+  | "refreshProfiles"
+  | "reloadProfiles"
+  | "saveProfile"
+  | "saveProfileDetail"
+  | "perModelLimits"
+  | "modelCatalog";
+
+export const providerTemplateGroupLabelTable: Record<ComposerLanguage, Record<ProviderTemplateGroup, string>> = {
+  "zh-CN": {
+    major: "主流厂商",
+    china: "中国厂商",
+    aggregator: "聚合与云推理",
+    subscription: "订阅服务",
+    local: "本地运行",
+    custom: "自定义与网关",
+  },
+  "en-US": {
+    major: "Major providers",
+    china: "China providers",
+    aggregator: "Aggregators & cloud",
+    subscription: "Subscriptions",
+    local: "Local",
+    custom: "Custom & gateways",
+  },
+  "es-ES": {
+    major: "Proveedores principales",
+    china: "Proveedores de China",
+    aggregator: "Agregadores y nube",
+    subscription: "Suscripciones",
+    local: "Local",
+    custom: "Personalizados y puertas de enlace",
+  },
+  "fr-FR": {
+    major: "Fournisseurs majeurs",
+    china: "Fournisseurs chinois",
+    aggregator: "Agrégateurs et cloud",
+    subscription: "Abonnements",
+    local: "Local",
+    custom: "Personnalisés et passerelles",
+  },
+  "de-DE": {
+    major: "Große Anbieter",
+    china: "Anbieter aus China",
+    aggregator: "Aggregatoren & Cloud",
+    subscription: "Abonnements",
+    local: "Lokal",
+    custom: "Benutzerdefiniert & Gateways",
+  },
+  "ja-JP": {
+    major: "主要プロバイダー",
+    china: "中国系プロバイダー",
+    aggregator: "アグリゲーター/クラウド",
+    subscription: "サブスクリプション",
+    local: "ローカル",
+    custom: "カスタム/ゲートウェイ",
+  },
+  "ko-KR": {
+    major: "주요 공급자",
+    china: "중국 공급자",
+    aggregator: "애그리게이터·클라우드",
+    subscription: "구독 서비스",
+    local: "로컬",
+    custom: "사용자 지정·게이트웨이",
+  },
+  "pt-BR": {
+    major: "Provedores principais",
+    china: "Provedores da China",
+    aggregator: "Agregadores e nuvem",
+    subscription: "Assinaturas",
+    local: "Local",
+    custom: "Personalizados e gateways",
+  },
+};
+
+export const providerDetailLabelTable: Record<ComposerLanguage, Record<ProviderDetailLabelKey, string>> = {
+  "zh-CN": {
+    baseUrl: "服务根地址",
+    savedProfiles: "已保存连接",
+    savedProfilesAvailable: "下方可以直接启用已保存的连接。",
+    savedProfilesEmpty: "先保存一组连接。",
+    refreshProfiles: "刷新已保存连接",
+    reloadProfiles: "重新加载连接列表",
+    saveProfile: "另存为连接",
+    saveProfileDetail: "把当前填写内容保存成可切换的连接",
+    perModelLimits: "每个模型的限制",
+    modelCatalog: "模型目录",
+  },
+  "en-US": {
+    baseUrl: "Service root",
+    savedProfiles: "Saved connections",
+    savedProfilesAvailable: "Saved connections are available below.",
+    savedProfilesEmpty: "Save a connection first.",
+    refreshProfiles: "Refresh saved connections",
+    reloadProfiles: "Reload connection list",
+    saveProfile: "Save as connection",
+    saveProfileDetail: "Save the current entries as a reusable connection",
+    perModelLimits: "Limits by model",
+    modelCatalog: "Model catalog",
+  },
+  "es-ES": {
+    baseUrl: "Raíz del servicio",
+    savedProfiles: "Conexiones guardadas",
+    savedProfilesAvailable: "Las conexiones guardadas están disponibles abajo.",
+    savedProfilesEmpty: "Guarda primero una conexión.",
+    refreshProfiles: "Actualizar conexiones guardadas",
+    reloadProfiles: "Recargar lista de conexiones",
+    saveProfile: "Guardar como conexión",
+    saveProfileDetail: "Guardar los datos actuales como una conexión reutilizable",
+    perModelLimits: "Límites por modelo",
+    modelCatalog: "Catálogo de modelos",
+  },
+  "fr-FR": {
+    baseUrl: "Racine du service",
+    savedProfiles: "Connexions enregistrées",
+    savedProfilesAvailable: "Les connexions enregistrées sont disponibles ci-dessous.",
+    savedProfilesEmpty: "Enregistrez d'abord une connexion.",
+    refreshProfiles: "Actualiser les connexions enregistrées",
+    reloadProfiles: "Recharger la liste des connexions",
+    saveProfile: "Enregistrer comme connexion",
+    saveProfileDetail: "Enregistrer les valeurs actuelles comme connexion réutilisable",
+    perModelLimits: "Limites par modèle",
+    modelCatalog: "Catalogue de modèles",
+  },
+  "de-DE": {
+    baseUrl: "Service-Stammadresse",
+    savedProfiles: "Gespeicherte Verbindungen",
+    savedProfilesAvailable: "Gespeicherte Verbindungen stehen unten bereit.",
+    savedProfilesEmpty: "Speichern Sie zuerst eine Verbindung.",
+    refreshProfiles: "Gespeicherte Verbindungen aktualisieren",
+    reloadProfiles: "Verbindungsliste neu laden",
+    saveProfile: "Als Verbindung speichern",
+    saveProfileDetail: "Aktuelle Eingaben als wiederverwendbare Verbindung speichern",
+    perModelLimits: "Grenzen je Modell",
+    modelCatalog: "Modellkatalog",
+  },
+  "ja-JP": {
+    baseUrl: "サービスのルート URL",
+    savedProfiles: "保存済みの接続",
+    savedProfilesAvailable: "保存済みの接続は下で使えます。",
+    savedProfilesEmpty: "先に接続を保存してください。",
+    refreshProfiles: "保存済みの接続を更新",
+    reloadProfiles: "接続一覧を再読み込み",
+    saveProfile: "接続として保存",
+    saveProfileDetail: "現在の入力を切り替え用の接続として保存",
+    perModelLimits: "モデルごとの上限",
+    modelCatalog: "モデル一覧",
+  },
+  "ko-KR": {
+    baseUrl: "서비스 루트 주소",
+    savedProfiles: "저장된 연결",
+    savedProfilesAvailable: "저장된 연결을 아래에서 사용할 수 있습니다.",
+    savedProfilesEmpty: "먼저 연결을 저장하세요.",
+    refreshProfiles: "저장된 연결 새로 고침",
+    reloadProfiles: "연결 목록 다시 불러오기",
+    saveProfile: "연결로 저장",
+    saveProfileDetail: "현재 입력을 전환할 수 있는 연결로 저장",
+    perModelLimits: "모델별 한도",
+    modelCatalog: "모델 목록",
+  },
+  "pt-BR": {
+    baseUrl: "Raiz do serviço",
+    savedProfiles: "Conexões salvas",
+    savedProfilesAvailable: "As conexões salvas estão disponíveis abaixo.",
+    savedProfilesEmpty: "Salve uma conexão primeiro.",
+    refreshProfiles: "Atualizar conexões salvas",
+    reloadProfiles: "Recarregar lista de conexões",
+    saveProfile: "Salvar como conexão",
+    saveProfileDetail: "Salvar os dados atuais como uma conexão reutilizável",
+    perModelLimits: "Limites por modelo",
+    modelCatalog: "Catálogo de modelos",
+  },
+};
+
+export type ProviderModelDiscoveryCopy = {
+  findModels: string;
+  findModelsDetail: string;
+  missingBaseUrl: string;
+  missingApiKey: string;
+  modelOptional: string;
+  manualFallback: string;
+};
+
+export const providerModelDiscoveryCopyTable: Record<ComposerLanguage, ProviderModelDiscoveryCopy> = {
+  "zh-CN": {
+    findModels: "\u67e5\u627e\u6a21\u578b",
+    findModelsDetail: "\u4f7f\u7528\u5f53\u524d\u5730\u5740\u548c\u5bc6\u94a5",
+    missingBaseUrl: "\u5148\u586b\u5199\u670d\u52a1\u6839\u5730\u5740\uff0c\u518d\u67e5\u627e\u6a21\u578b\u3002",
+    missingApiKey: "\u5148\u586b\u5199 API key\uff0c\u518d\u67e5\u627e\u6a21\u578b\u3002",
+    modelOptional: "\u4e0d\u77e5\u9053\u6a21\u578b\u540d\u6ca1\u5173\u7cfb\uff0c\u5148\u67e5\u627e\u3002",
+    manualFallback: "\u6ca1\u6709\u627e\u5230\u6a21\u578b\u65f6\uff0c\u518d\u624b\u52a8\u586b\u5199\u540d\u79f0\u3002",
+  },
+  "en-US": {
+    findModels: "Find models",
+    findModelsDetail: "Use the current address and key",
+    missingBaseUrl: "Add the service root before finding models.",
+    missingApiKey: "Add an API key before finding models.",
+    modelOptional: "Do not know the model name? Find it first.",
+    manualFallback: "Only enter a model name manually if no models are found.",
+  },
+  "es-ES": {
+    findModels: "Buscar modelos",
+    findModelsDetail: "Usa la dirección y la clave actuales",
+    missingBaseUrl: "Añade la dirección del servicio antes de buscar modelos.",
+    missingApiKey: "Añade una clave API antes de buscar modelos.",
+    modelOptional: "¿No sabes el nombre del modelo? Búscalo primero.",
+    manualFallback: "Escribe el nombre manualmente solo si no se encuentra ningún modelo.",
+  },
+  "fr-FR": {
+    findModels: "Rechercher des modèles",
+    findModelsDetail: "Utilisez l’adresse et la clé actuelles",
+    missingBaseUrl: "Ajoutez l’adresse du service avant de rechercher des modèles.",
+    missingApiKey: "Ajoutez une clé API avant de rechercher des modèles.",
+    modelOptional: "Vous ne connaissez pas le nom du modèle ? Recherchez-le d’abord.",
+    manualFallback: "Saisissez le nom manuellement seulement si aucun modele n'est trouve.",
+  },
+  "de-DE": {
+    findModels: "Modelle suchen",
+    findModelsDetail: "Aktuelle Adresse und Schlüssel verwenden",
+    missingBaseUrl: "Füge erst die Dienstadresse hinzu und suche dann Modelle.",
+    missingApiKey: "Füge erst einen API-Schlüssel hinzu und suche dann Modelle.",
+    modelOptional: "Modellname unbekannt? Suche ihn zuerst.",
+    manualFallback: "Gib den Modellnamen nur manuell ein, wenn keine Modelle gefunden werden.",
+  },
+  "ja-JP": {
+    findModels: "モデルを探す",
+    findModelsDetail: "現在のアドレスとキーを使います",
+    missingBaseUrl: "先にサービスのアドレスを入力してからモデルを探してください。",
+    missingApiKey: "先に API キーを入力してからモデルを探してください。",
+    modelOptional: "モデル名が分からない場合は、先に探してください。",
+    manualFallback: "モデルが見つからない場合だけ、名前を手入力してください。",
+  },
+  "ko-KR": {
+    findModels: "모델 찾기",
+    findModelsDetail: "현재 주소와 키를 사용합니다",
+    missingBaseUrl: "서비스 주소를 입력한 뒤 모델을 찾으세요.",
+    missingApiKey: "API 키를 입력한 뒤 모델을 찾으세요.",
+    modelOptional: "모델 이름을 모르면 먼저 찾아보세요.",
+    manualFallback: "모델을 찾지 못한 경우에만 이름을 직접 입력하세요.",
+  },
+  "pt-BR": {
+    findModels: "Encontrar modelos",
+    findModelsDetail: "Use o endereço e a chave atuais",
+    missingBaseUrl: "Adicione o endereço do serviço antes de procurar modelos.",
+    missingApiKey: "Adicione uma chave de API antes de procurar modelos.",
+    modelOptional: "Não sabe o nome do modelo? Procure primeiro.",
+    manualFallback: "Digite o nome manualmente somente se nenhum modelo for encontrado.",
+  },
+};
+
+export type ProviderModelPickerCopy = {
+  filterPlaceholder: string;
+  filterLabel: string;
+  noMatches: string;
+  refreshListDetail: string;
+  enterModelName: string;
+  useTypedModel: (model: string) => string;
+  moreMatchesHint: (count: number) => string;
+  saveAndUseConnection: string;
+  directModelPlaceholder: string;
+  directModelHint: string;
+  modelRequiredNote: string;
+};
+
+export const providerModelPickerCopyTable: Record<ComposerLanguage, ProviderModelPickerCopy> = {
+  "zh-CN": {
+    filterPlaceholder: "输入模型名称筛选",
+    directModelPlaceholder: "例如 kimi-k3",
+    directModelHint: "直接输入服务商支持的完整模型名；也可以点“查找模型”自动获取列表。",
+    modelRequiredNote: "请输入完整模型名（例如 kimi-k3），然后点“测试连接”。",
+    filterLabel: "筛选模型",
+    noMatches: "没有匹配的模型",
+    refreshListDetail: "更新列表",
+    enterModelName: "输入完整模型名",
+    useTypedModel: (model) => `使用 ${model}`,
+    moreMatchesHint: (count) => `还有 ${count} 个匹配项，请继续输入。`,
+    saveAndUseConnection: "保存并使用此连接",
+  },
+  "en-US": {
+    filterPlaceholder: "Filter by model name",
+    directModelPlaceholder: "For example kimi-k3",
+    directModelHint: "Type the full model name your provider supports, or run Find models to fetch the list.",
+    modelRequiredNote: "Type the full model name (for example kimi-k3), then run Test Connection.",
+    filterLabel: "Filter models",
+    noMatches: "No matching models",
+    refreshListDetail: "Refresh list",
+    enterModelName: "Enter a full model name",
+    useTypedModel: (model) => `Use ${model}`,
+    moreMatchesHint: (count) => `${count} more matches. Keep typing to narrow them down.`,
+    saveAndUseConnection: "Save and use this connection",
+  },
+  "es-ES": {
+    filterPlaceholder: "Filtrar por nombre de modelo",
+    directModelPlaceholder: "Por ejemplo kimi-k3",
+    directModelHint: "Escribe el nombre completo del modelo, o ejecuta Buscar modelos para obtener la lista.",
+    modelRequiredNote: "Escribe el nombre completo del modelo (por ejemplo kimi-k3) y ejecuta Probar.",
+    filterLabel: "Filtrar modelos",
+    noMatches: "No hay modelos coincidentes",
+    refreshListDetail: "Actualizar lista",
+    enterModelName: "Escribir el nombre completo del modelo",
+    useTypedModel: (model) => `Usar ${model}`,
+    moreMatchesHint: (count) => `${count} coincidencias mas. Sigue escribiendo para acotar.`,
+    saveAndUseConnection: "Guardar y usar esta conexión",
+  },
+  "fr-FR": {
+    filterPlaceholder: "Filtrer par nom de modele",
+    directModelPlaceholder: "Par exemple kimi-k3",
+    directModelHint: "Saisis le nom complet du modele, ou lance Rechercher des modeles pour recuperer la liste.",
+    modelRequiredNote: "Saisis le nom complet du modele (par exemple kimi-k3), puis lance Tester la connexion.",
+    filterLabel: "Filtrer les modeles",
+    noMatches: "Aucun modele correspondant",
+    refreshListDetail: "Actualiser la liste",
+    enterModelName: "Saisir le nom complet du modele",
+    useTypedModel: (model) => `Utiliser ${model}`,
+    moreMatchesHint: (count) => `${count} resultats supplementaires. Continuez a saisir le nom.`,
+    saveAndUseConnection: "Enregistrer et utiliser cette connexion",
+  },
+  "de-DE": {
+    filterPlaceholder: "Nach Modellnamen filtern",
+    directModelPlaceholder: "Zum Beispiel kimi-k3",
+    directModelHint: "Gib den vollstandigen Modellnamen ein, oder starte Modelle suchen, um die Liste zu laden.",
+    modelRequiredNote: "Gib den vollstandigen Modellnamen ein (zum Beispiel kimi-k3) und starte dann Verbindung testen.",
+    filterLabel: "Modelle filtern",
+    noMatches: "Keine passenden Modelle",
+    refreshListDetail: "Liste aktualisieren",
+    enterModelName: "Vollstandigen Modellnamen eingeben",
+    useTypedModel: (model) => `${model} verwenden`,
+    moreMatchesHint: (count) => `${count} weitere Treffer. Tippe weiter zum Eingrenzen.`,
+    saveAndUseConnection: "Verbindung speichern und verwenden",
+  },
+  "ja-JP": {
+    filterPlaceholder: "モデル名で絞り込む",
+    directModelPlaceholder: "例: kimi-k3",
+    directModelHint: "プロバイダが対応する完全なモデル名を入力するか、「モデル名を直接入力」で一覧を取得できます。",
+    modelRequiredNote: "完全なモデル名（例: kimi-k3）を入力してから「接続テスト」を実行してください。",
+    filterLabel: "モデルを絞り込む",
+    noMatches: "一致するモデルはありません",
+    refreshListDetail: "一覧を更新",
+    enterModelName: "モデル名を直接入力",
+    useTypedModel: (model) => `${model} を使用`,
+    moreMatchesHint: (count) => `他に ${count} 件あります。さらに入力して絞り込んでください。`,
+    saveAndUseConnection: "この接続を保存して使用",
+  },
+  "ko-KR": {
+    filterPlaceholder: "모델 이름으로 검색",
+    directModelPlaceholder: "예: kimi-k3",
+    directModelHint: "프로바이더가 지원하는 전체 모델 이름을 입력하거나, 모델 찾기로 목록을 가져오세요.",
+    modelRequiredNote: "전체 모델 이름(예: kimi-k3)을 입력한 뒤 연결 테스트를 실행하세요.",
+    filterLabel: "모델 검색",
+    noMatches: "일치하는 모델이 없습니다",
+    refreshListDetail: "목록 새로 고침",
+    enterModelName: "전체 모델 이름 입력",
+    useTypedModel: (model) => `${model} 사용`,
+    moreMatchesHint: (count) => `${count}개 결과가 더 있습니다. 더 입력해 좁혀 보세요.`,
+    saveAndUseConnection: "이 연결 저장 후 사용",
+  },
+  "pt-BR": {
+    filterPlaceholder: "Filtrar por nome do modelo",
+    directModelPlaceholder: "Por exemplo kimi-k3",
+    directModelHint: "Digite o nome completo do modelo, ou execute Buscar modelos para obter a lista.",
+    modelRequiredNote: "Digite o nome completo do modelo (por exemplo kimi-k3) e execute Testar conexão.",
+    filterLabel: "Filtrar modelos",
+    noMatches: "Nenhum modelo encontrado",
+    refreshListDetail: "Atualizar lista",
+    enterModelName: "Digite o nome completo do modelo",
+    useTypedModel: (model) => `Usar ${model}`,
+    moreMatchesHint: (count) => `Ha mais ${count} resultados. Continue digitando para filtrar.`,
+    saveAndUseConnection: "Salvar e usar esta conexão",
+  },
+};
+export type ToolsVerificationCopy = {
+  label: string;
+  declaredCapabilities: string;
+  verified: string;
+  notVerified: string;
+  notSupported: string;
+  needsVerification: string;
+  verifiedDetail: string;
+  unsupportedDetail: string;
+  disabledDetail: string;
+};
+
+export const toolsVerificationCopyTable: Record<ComposerLanguage, ToolsVerificationCopy> = {
+  "zh-CN": {
+    label: "\u5de5\u5177",
+    declaredCapabilities: "\u5df2\u58f0\u660e",
+    verified: "\u5df2\u9a8c\u8bc1",
+    notVerified: "\u672a\u9a8c\u8bc1",
+    notSupported: "\u4e0d\u652f\u6301",
+    needsVerification: "\u4fdd\u5b58\u6216\u91cd\u65b0\u6d4b\u8bd5\u5f53\u524d\u8fde\u63a5\uff0c\u624d\u80fd\u9a8c\u8bc1\u5de5\u5177\u8c03\u7528\u3002",
+    verifiedDetail: "\u6700\u8fd1\u6d4b\u8bd5\u5df2\u89c2\u5bdf\u5230\u7ed3\u6784\u5316\u5de5\u5177\u8c03\u7528\u3002",
+    unsupportedDetail: "\u6700\u8fd1\u6d4b\u8bd5\u89c2\u5bdf\u5230\u975e\u7ed3\u6784\u5316\u5907\u9009\u8f93\u51fa\u3002",
+    disabledDetail: "\u5f53\u524d\u8fde\u63a5\u5df2\u7981\u7528\u5de5\u5177\u3002",
+  },
+  "en-US": {
+    label: "Tools",
+    declaredCapabilities: "Declared",
+    verified: "Verified",
+    notVerified: "Not verified",
+    notSupported: "Not supported",
+    needsVerification: "Save or retest this connection to verify tool use.",
+    verifiedDetail: "The latest test observed a structured tool call.",
+    unsupportedDetail: "The latest test observed a non-structured fallback instead.",
+    disabledDetail: "Tool use is disabled for this connection.",
+  },
+  "es-ES": {
+    label: "Herramientas",
+    declaredCapabilities: "Declaradas",
+    verified: "Verificado",
+    notVerified: "Sin verificar",
+    notSupported: "No compatible",
+    needsVerification: "Guarda o vuelve a probar esta conexion para verificar el uso de herramientas.",
+    verifiedDetail: "La ultima prueba observo una llamada de herramienta estructurada.",
+    unsupportedDetail: "La ultima prueba observo una alternativa no estructurada.",
+    disabledDetail: "El uso de herramientas esta desactivado en esta conexion.",
+  },
+  "fr-FR": {
+    label: "Outils",
+    declaredCapabilities: "Declarees",
+    verified: "Verifie",
+    notVerified: "Non verifie",
+    notSupported: "Non pris en charge",
+    needsVerification: "Enregistrez ou retestez cette connexion pour verifier les outils.",
+    verifiedDetail: "Le dernier test a observe un appel d'outil structure.",
+    unsupportedDetail: "Le dernier test a observe une reponse de secours non structuree.",
+    disabledDetail: "Les outils sont desactives pour cette connexion.",
+  },
+  "de-DE": {
+    label: "Werkzeuge",
+    declaredCapabilities: "Deklariert",
+    verified: "Verifiziert",
+    notVerified: "Nicht verifiziert",
+    notSupported: "Nicht unterstuetzt",
+    needsVerification: "Speichere oder teste diese Verbindung erneut, um Werkzeuge zu verifizieren.",
+    verifiedDetail: "Der letzte Test hat einen strukturierten Werkzeugaufruf beobachtet.",
+    unsupportedDetail: "Der letzte Test hat stattdessen eine unstrukturierte Ausweichantwort beobachtet.",
+    disabledDetail: "Werkzeugnutzung ist fuer diese Verbindung deaktiviert.",
+  },
+  "ja-JP": {
+    label: "ツール",
+    declaredCapabilities: "宣言済み",
+    verified: "検証済み",
+    notVerified: "未検証",
+    notSupported: "非対応",
+    needsVerification: "この接続を保存または再テストして、ツール使用を検証してください。",
+    verifiedDetail: "最新のテストで構造化ツール呼び出しを観測しました。",
+    unsupportedDetail: "最新のテストでは構造化されていない代替応答が観測されました。",
+    disabledDetail: "この接続ではツール使用が無効です。",
+  },
+  "ko-KR": {
+    label: "도구",
+    declaredCapabilities: "선언됨",
+    verified: "검증됨",
+    notVerified: "검증되지 않음",
+    notSupported: "지원되지 않음",
+    needsVerification: "이 연결을 저장하거나 다시 테스트해 도구 사용을 검증하세요.",
+    verifiedDetail: "최근 테스트에서 구조화된 도구 호출을 관찰했습니다.",
+    unsupportedDetail: "최근 테스트에서 구조화되지 않은 대체 응답을 관찰했습니다.",
+    disabledDetail: "이 연결에서는 도구 사용이 비활성화되어 있습니다.",
+  },
+  "pt-BR": {
+    label: "Ferramentas",
+    declaredCapabilities: "Declaradas",
+    verified: "Verificado",
+    notVerified: "Nao verificado",
+    notSupported: "Nao compativel",
+    needsVerification: "Salve ou teste esta conexao novamente para verificar o uso de ferramentas.",
+    verifiedDetail: "O ultimo teste observou uma chamada de ferramenta estruturada.",
+    unsupportedDetail: "O ultimo teste observou uma alternativa nao estruturada.",
+    disabledDetail: "O uso de ferramentas esta desativado nesta conexao.",
+  },
+};
+
+export const streamingVerificationCopyTable: Record<ComposerLanguage, ToolsVerificationCopy> = {
+  "zh-CN": {
+    label: "\u6d41\u5f0f",
+    declaredCapabilities: "\u5df2\u58f0\u660e",
+    verified: "\u5df2\u9a8c\u8bc1",
+    notVerified: "\u672a\u9a8c\u8bc1",
+    notSupported: "\u4e0d\u652f\u6301",
+    needsVerification: "\u4fdd\u5b58\u6216\u91cd\u65b0\u6d4b\u8bd5\u5f53\u524d\u8fde\u63a5\uff0c\u624d\u80fd\u9a8c\u8bc1\u6d41\u5f0f\u8f93\u51fa\u3002",
+    verifiedDetail: "\u6700\u8fd1\u6d4b\u8bd5\u5df2\u89c2\u5bdf\u5230\u53ef\u89c1\u7684\u589e\u91cf\u6d41\u5f0f\u7247\u6bb5\u3002",
+    unsupportedDetail: "\u6700\u8fd1\u6d4b\u8bd5\u672a\u89c2\u5bdf\u5230\u53ef\u7528\u7684\u6d41\u5f0f\u7247\u6bb5\u3002",
+    disabledDetail: "\u5f53\u524d\u8fde\u63a5\u5df2\u7981\u7528\u6d41\u5f0f\u8f93\u51fa\u3002",
+  },
+  "en-US": {
+    label: "Streaming",
+    declaredCapabilities: "Declared",
+    verified: "Verified",
+    notVerified: "Not verified",
+    notSupported: "Not supported",
+    needsVerification: "Save or retest this connection to verify incremental output.",
+    verifiedDetail: "The latest test observed a visible incremental provider chunk.",
+    unsupportedDetail: "The latest test did not observe usable incremental output.",
+    disabledDetail: "Streaming output is disabled for this connection.",
+  },
+  "es-ES": {
+    label: "Streaming",
+    declaredCapabilities: "Declaradas",
+    verified: "Verificado",
+    notVerified: "Sin verificar",
+    notSupported: "No compatible",
+    needsVerification: "Guarda o vuelve a probar esta conexion para verificar la salida incremental.",
+    verifiedDetail: "La ultima prueba observo un fragmento incremental visible.",
+    unsupportedDetail: "La ultima prueba no observo una salida incremental utilizable.",
+    disabledDetail: "La salida incremental esta desactivada para esta conexion.",
+  },
+  "fr-FR": {
+    label: "Streaming",
+    declaredCapabilities: "Declarees",
+    verified: "Verifie",
+    notVerified: "Non verifie",
+    notSupported: "Non pris en charge",
+    needsVerification: "Enregistrez ou retestez cette connexion pour verifier la sortie incrementale.",
+    verifiedDetail: "Le dernier test a observe un fragment incremental visible.",
+    unsupportedDetail: "Le dernier test n'a pas observe de sortie incrementale utilisable.",
+    disabledDetail: "La sortie incrementale est desactivee pour cette connexion.",
+  },
+  "de-DE": {
+    label: "Streaming",
+    declaredCapabilities: "Deklariert",
+    verified: "Verifiziert",
+    notVerified: "Nicht verifiziert",
+    notSupported: "Nicht unterstuetzt",
+    needsVerification: "Speichere oder teste diese Verbindung erneut, um inkrementelle Ausgabe zu verifizieren.",
+    verifiedDetail: "Der letzte Test hat einen sichtbaren inkrementellen Abschnitt beobachtet.",
+    unsupportedDetail: "Der letzte Test hat keine nutzbare inkrementelle Ausgabe beobachtet.",
+    disabledDetail: "Inkrementelle Ausgabe ist fuer diese Verbindung deaktiviert.",
+  },
+  "ja-JP": {
+    label: "\u30b9\u30c8\u30ea\u30fc\u30df\u30f3\u30b0",
+    declaredCapabilities: "\u5ba3\u8a00\u6e08\u307f",
+    verified: "\u78ba\u8a8d\u6e08\u307f",
+    notVerified: "\u672a\u78ba\u8a8d",
+    notSupported: "\u975e\u5bfe\u5fdc",
+    needsVerification: "\u3053\u306e\u63a5\u7d9a\u3092\u4fdd\u5b58\u307e\u305f\u306f\u518d\u30c6\u30b9\u30c8\u3057\u3001\u5897\u5206\u51fa\u529b\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    verifiedDetail: "\u6700\u65b0\u30c6\u30b9\u30c8\u3067\u53ef\u8996\u306e\u5897\u5206\u30c1\u30e3\u30f3\u30af\u3092\u78ba\u8a8d\u3057\u307e\u3057\u305f\u3002",
+    unsupportedDetail: "\u6700\u65b0\u30c6\u30b9\u30c8\u3067\u5229\u7528\u53ef\u80fd\u306a\u5897\u5206\u51fa\u529b\u3092\u78ba\u8a8d\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f\u3002",
+    disabledDetail: "\u3053\u306e\u63a5\u7d9a\u3067\u306f\u30b9\u30c8\u30ea\u30fc\u30df\u30f3\u30b0\u304c\u7121\u52b9\u3067\u3059\u3002",
+  },
+  "ko-KR": {
+    label: "\uc2a4\ud2b8\ub9ac\ubc0d",
+    declaredCapabilities: "\uc120\uc5b8\ub428",
+    verified: "\uac80\uc99d\ub428",
+    notVerified: "\ubbf8\uac80\uc99d",
+    notSupported: "\uc9c0\uc6d0\ub418\uc9c0 \uc54a\uc74c",
+    needsVerification: "\uc774 \uc5f0\uacb0\uc744 \uc800\uc7a5\ud558\uac70\ub098 \ub2e4\uc2dc \ud14c\uc2a4\ud2b8\ud574 \uc99d\ubd84 \ucd9c\ub825\uc744 \uac80\uc99d\ud558\uc138\uc694.",
+    verifiedDetail: "\ucd5c\uc2e0 \ud14c\uc2a4\ud2b8\uc5d0\uc11c \ud45c\uc2dc\ub418\ub294 \uc99d\ubd84 \ucc38\uc870\ub97c \uad00\ucc30\ud588\uc2b5\ub2c8\ub2e4.",
+    unsupportedDetail: "\ucd5c\uc2e0 \ud14c\uc2a4\ud2b8\uc5d0\uc11c \uc0ac\uc6a9 \uac00\ub2a5\ud55c \uc99d\ubd84 \ucd9c\ub825\uc744 \uad00\ucc30\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4.",
+    disabledDetail: "\uc774 \uc5f0\uacb0\uc5d0\uc11c \uc2a4\ud2b8\ub9ac\ubc0d \ucd9c\ub825\uc774 \ube44\ud65c\uc131\ud654\ub418\uc5c8\uc2b5\ub2c8\ub2e4.",
+  },
+  "pt-BR": {
+    label: "Streaming",
+    declaredCapabilities: "Declaradas",
+    verified: "Verificado",
+    notVerified: "Nao verificado",
+    notSupported: "Nao compativel",
+    needsVerification: "Salve ou teste esta conexao novamente para verificar a saida incremental.",
+    verifiedDetail: "O ultimo teste observou um fragmento incremental visivel.",
+    unsupportedDetail: "O ultimo teste nao observou uma saida incremental utilizavel.",
+    disabledDetail: "A saida incremental esta desativada nesta conexao.",
+  },
 };
