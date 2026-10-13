@@ -1395,7 +1395,13 @@ def is_verbatim_message_prefix(candidate: object, message_text: object) -> bool:
     if len(anchor) < _MESSAGE_PREFIX_MIN_LENGTH:
         return False
     if _is_identifier_like(anchor.replace(" ", "_")):
-        return False
+        # Identifier-like anchors are exempt only when they are SPECIFIC —
+        # a dotted path or snake_case name ("lesson.py", "mutable_default"),
+        # or a long symbol. Bare language keywords ("dict") prefixing the
+        # message are the F3 real-model drift: weak as a thread anchor and
+        # still an echo of the learner's opening.
+        if "." in anchor or "_" in anchor or len(anchor) >= 8:
+            return False
     if looks_like_narration_opening(anchor):
         return True
     lowered = anchor.lower()
