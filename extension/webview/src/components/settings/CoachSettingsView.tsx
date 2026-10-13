@@ -100,6 +100,7 @@ import { trainerCommands } from "../../../../../shared/src/commands";
 import { remoteSupportStateView, REMOTE_SUPPORT_COPY } from "../../lib/i18n/segments/remoteSupportCopy";
 import { settingsText } from "./settingsText";
 import { languageIntegrityText } from "./languageIntegrityCopy";
+import { useCoachSettingsViewState } from "./useCoachSettingsViewState";
 import { postMessage as postWebviewMessage } from "../../lib/vscode";
 import {
   trainerSkillCatalog,
@@ -126,16 +127,10 @@ import {
 import type {
   CapabilityFlags,
   CoachAnswerMode,
-  CoachDefaults,
   ComposerLanguage,
-  LearningSurfaceAlignment,
-  ManagedDataFolder,
-  MemoryShareGrant,
   ProviderConfigView,
   ProviderProbeUsage,
   TeachingStyle,
-  ThemePreference,
-  TrainerWorkspaceAdmission,
   WorkspaceMemoryToggles,
   WorkspaceAuthority,
 } from "../../lib/types";
@@ -1427,84 +1422,47 @@ export interface CoachSettingsLabels {
   lastTestNeedsSetup: string;
 }
 
+/**
+ * §props-debt: store-resident facts (provider, connection, workspace/memory,
+ * layout knobs, leftover-gated profile fields) and pure `command/execute`
+ * relays are selected inside `useCoachSettingsViewState`; only values App
+ * itself owns stay props here (provider draft controller state, per-section
+ * action status, capability verdict, coach chrome, and the callbacks closing
+ * over App-local state such as the preview session and settings actions).
+ */
 export interface CoachSettingsViewProps {
-  provider: ProviderConfigView;
-  backendConnectionState?: "starting" | "connected" | "offline";
   workspaceId?: string;
   capabilityVerdict: TrainerCapabilityVerdict;
   providerImageInputState?: ProviderImageInputState;
   providerDraft: ProviderDraft;
   coachStateSummary?: ReactNode;
   coachSignal?: string;
-  learnerName?: string;
-  targetProject?: string;
-  preferredRhythm?: string;
-  preferredLearningMode?: string;
-  onboardingRequest?: string;
-  projectContext?: string;
   reviewRhythmSummary?: string;
   nextReviewDue?: string;
-  longTermMemoryStateLabel?: string;
-  memoryShareGrants?: MemoryShareGrant[];
   workspaceAuthority?: WorkspaceAuthority | null;
   /** Live host/sidecar trust; leftover-not-live must pass undefined → unknown, never invent Ready. */
   workspaceTrustState?: WorkspaceTrustState | string | null;
-  resourceSandbox?: ManagedDataFolder | null;
-  trainerWorkspace?: TrainerWorkspaceAdmission;
-  themePreference: ThemePreference;
-  learningSurfaceAlignment: LearningSurfaceAlignment;
-  language: ComposerLanguage;
-  answerMode: AnswerMode;
-  teachingStyle: TeachingStyle;
-  coachDefaults: CoachDefaults;
-  followCurrentFile: boolean;
-  contextDetail?: "focused" | "balanced" | "full";
-  includeCurrentFile?: boolean;
-  includeSelection?: boolean;
-  includeDiagnostics?: boolean;
-  includeRelatedFiles?: boolean;
   className?: string;
   labels?: Partial<CoachSettingsLabels>;
   onProviderDraftChange: (patch: Partial<ProviderDraft>) => void;
   providerStatus?: SettingsSectionStatus;
   coachDefaultsStatus?: SettingsSectionStatus;
   workspaceControlStatus?: SettingsSectionStatus;
-  /** §15: remote workspace identity for the Remote Support block. */
-  remoteWorkspaceName?: string;
   companionInstallState?: import("../../../../../shared/src/companionInstallState").CompanionInstallState;
-  remoteWorkspaceActive?: boolean;
   providerApiKeyFocusRequest?: number;
   sectionRequest?: { category: SettingsSectionId; requestId: number; skillTrigger?: string };
   skillSharing?: ReactNode;
-  onThemePreferenceChange?: (value: ThemePreference) => void;
-  onLearningSurfaceAlignmentChange?: (value: LearningSurfaceAlignment) => void;
-  onLanguageChange?: (value: ComposerLanguage) => void;
-  onAnswerModeChange?: (value: AnswerMode) => void;
-  onTeachingStyleChange?: (value: TeachingStyle) => void;
-  onFollowCurrentFileChange?: (value: boolean) => void;
-  onCoachDefaultsChange?: (value: Partial<CoachDefaults>) => void;
-  onGenerateSkillDraft?: (
-    description: string,
-  ) => Promise<
-    | { trigger: string; title: string; detail: string; prompt: string; source: "model" | "template" }
-    | undefined
-  >;
-  onContextDetailChange?: (value: "focused" | "balanced" | "full") => void;
-  onIncludeCurrentFileChange?: (value: boolean) => void;
-  onIncludeSelectionChange?: (value: boolean) => void;
-  onIncludeDiagnosticsChange?: (value: boolean) => void;
-  onIncludeRelatedFilesChange?: (value: boolean) => void;
+  /**
+   * App-owned debounced persist trigger for the layout knobs the view flips
+   * through useCoachSettingsViewState (the old `autosaving(...)` wrappers).
+   */
+  onCoachSettingsMutated?: () => void;
   onSaveCoachSettings?: () => void;
-  onGrantMemoryShare?: () => void;
-  onRevokeMemoryShare?: (sourceWorkspaceId: string) => void;
-  personalAccountTrusted?: boolean;
-  onSetPersonalAccountTrust?: (enabled: boolean) => void;
   onSaveProvider?: () => void;
   onSaveProviderProfile?: () => void;
   providerSpeedTestResults?: ProviderEndpointSpeedTestResult[];
   providerSpeedTestPending?: boolean;
   providerSaveBusy?: boolean;
-  onTrustWindow?: () => void;
   onSpeedTestEndpoints?: (urls: string[]) => void;
   onUseProviderTemplateLabel?: (templateLabel: string) => void;
   onRefreshProviderProfiles?: () => void;
@@ -1514,17 +1472,7 @@ export interface CoachSettingsViewProps {
   onRestartSidecar?: () => void;
   onClearProvider?: () => void;
   onOpenConfig?: () => void;
-  onRefreshWorkspaceAuthority?: () => void;
-  onChooseTrainerWorkspaceRoot?: () => void;
-  onMigrateTrainerWorkspaceRoot?: () => void;
-  onBackupTrainerWorkspace?: () => void;
-  onRestoreTrainerWorkspaceBackup?: () => void;
-  onChooseManagedDataFolder?: () => void;
-  onResetManagedDataFolder?: () => void;
-  onRefreshMemory?: () => void;
   onResetDefaults?: () => void;
-  onNavigateToView?: (view: "resources" | "training") => void;
-  onShareSession?: () => void;
 }
 
 function localizedSettingsLabels(language: ComposerLanguage): Partial<CoachSettingsLabels> {
@@ -2773,76 +2721,33 @@ function describeLanguageIntegrityFact(input: {
 }
 
 export function CoachSettingsView({
-  provider,
-  backendConnectionState,
   workspaceId,
   capabilityVerdict,
   providerImageInputState,
   providerDraft,
   coachStateSummary,
   coachSignal,
-  learnerName,
-  targetProject,
-  preferredRhythm,
-  preferredLearningMode,
-  onboardingRequest,
-  projectContext,
   reviewRhythmSummary,
   nextReviewDue,
-  longTermMemoryStateLabel,
-  memoryShareGrants = [],
   workspaceAuthority,
   workspaceTrustState,
-  resourceSandbox,
-  trainerWorkspace,
-  themePreference,
-  learningSurfaceAlignment,
-  language,
-  answerMode,
-  teachingStyle,
-  coachDefaults,
-  followCurrentFile,
-  contextDetail = "balanced",
-  includeCurrentFile = true,
-  includeSelection = true,
-  includeDiagnostics = true,
-  includeRelatedFiles = true,
   className,
   labels,
+  onProviderDraftChange,
   providerStatus,
   coachDefaultsStatus,
   workspaceControlStatus,
-  remoteWorkspaceName,
   companionInstallState,
-  remoteWorkspaceActive,
   providerApiKeyFocusRequest,
   sectionRequest,
   skillSharing,
-  onProviderDraftChange,
-  onThemePreferenceChange,
-  onLearningSurfaceAlignmentChange,
-  onLanguageChange,
-  onAnswerModeChange,
-  onTeachingStyleChange,
-  onFollowCurrentFileChange,
-  onCoachDefaultsChange,
-  onGenerateSkillDraft,
-  onContextDetailChange,
-  onIncludeCurrentFileChange,
-  onIncludeSelectionChange,
-  onIncludeDiagnosticsChange,
-  onIncludeRelatedFilesChange,
+  onCoachSettingsMutated,
   onSaveCoachSettings,
-  onGrantMemoryShare,
-  onRevokeMemoryShare,
-  personalAccountTrusted,
-  onSetPersonalAccountTrust,
   onSaveProvider,
   onSaveProviderProfile,
   providerSpeedTestResults = [],
   providerSpeedTestPending = false,
   providerSaveBusy = false,
-  onTrustWindow,
   onSpeedTestEndpoints,
   onUseProviderTemplateLabel,
   onRefreshProviderProfiles,
@@ -2852,18 +2757,67 @@ export function CoachSettingsView({
   onRestartSidecar,
   onClearProvider,
   onOpenConfig,
-  onRefreshWorkspaceAuthority,
-  onChooseTrainerWorkspaceRoot,
-  onMigrateTrainerWorkspaceRoot,
-  onBackupTrainerWorkspace,
-  onRestoreTrainerWorkspaceBackup,
-  onChooseManagedDataFolder,
-  onResetManagedDataFolder,
-  onRefreshMemory,
   onResetDefaults,
-  onNavigateToView,
-  onShareSession,
 }: CoachSettingsViewProps) {
+  // §props-debt: store-resident facts, layout knobs, leftover-gated profile
+  // fields and pure command relays resolve through the selector hook instead
+  // of props; the identifiers below keep their historical names so the rest
+  // of this view is untouched.
+  const {
+    provider,
+    backendConnectionState,
+    memoryShareGrants,
+    resourceSandbox,
+    trainerWorkspace,
+    remoteWorkspaceName,
+    personalAccountTrusted,
+    themePreference,
+    learningSurfaceAlignment,
+    language,
+    answerMode,
+    teachingStyle,
+    coachDefaults,
+    followCurrentFile,
+    contextDetail,
+    includeCurrentFile,
+    includeSelection,
+    includeDiagnostics,
+    includeRelatedFiles,
+    learnerName,
+    targetProject,
+    preferredRhythm,
+    preferredLearningMode,
+    onboardingRequest,
+    projectContext,
+    longTermMemoryStateLabel,
+    onThemePreferenceChange,
+    onLearningSurfaceAlignmentChange,
+    onLanguageChange,
+    onAnswerModeChange,
+    onTeachingStyleChange,
+    onFollowCurrentFileChange,
+    onCoachDefaultsChange,
+    onContextDetailChange,
+    onIncludeCurrentFileChange,
+    onIncludeSelectionChange,
+    onIncludeDiagnosticsChange,
+    onIncludeRelatedFilesChange,
+    onNavigateToView,
+    onGenerateSkillDraft,
+    onGrantMemoryShare,
+    onRevokeMemoryShare,
+    onSetPersonalAccountTrust,
+    onTrustWindow,
+    onRefreshWorkspaceAuthority,
+    onChooseTrainerWorkspaceRoot,
+    onMigrateTrainerWorkspaceRoot,
+    onBackupTrainerWorkspace,
+    onRestoreTrainerWorkspaceBackup,
+    onChooseManagedDataFolder,
+    onResetManagedDataFolder,
+    onRefreshMemory,
+    onShareSession,
+  } = useCoachSettingsViewState({ onCoachSettingsMutated });
   // §十五: user-visible labels for all eight languages resolve through
   // localizedSettingsLabels (shared workbench copy + extraLocalizedSettingsLabels).
   // This base only guarantees full label coverage per language; it never
@@ -6103,9 +6057,7 @@ export function CoachSettingsView({
                   aria-hidden="true"
                 />
                 {issue.id === "trust"
-                  ? onTrustWindow
-                    ? settingsText(language, "信任此窗口", "Trust this window")
-                    : resolveWorkbenchCopy(language).workspaceRootControl
+                  ? settingsText(language, "信任此窗口", "Trust this window")
                   : issue.id === "key" || issue.id === "unsaved"
                     ? settingsPhrase(language, "editConfiguration")
                     : settingsGlobalCopy.settingsSectionConnection}
@@ -7296,9 +7248,7 @@ export function CoachSettingsView({
                 >
                   {customSkillGenerating
                     ? settingsText(language, "生成中…", "Drafting…")
-                    : onGenerateSkillDraft
-                      ? settingsText(language, "✨ 智能生成", "✨ Draft with AI")
-                      : settingsText(language, "生成草稿", "Draft")}
+                    : settingsText(language, "✨ 智能生成", "✨ Draft with AI")}
                 </button>
                 {customSkillSource ? (
                   <p className="settings-sheet__note settings-sheet__note--compact">

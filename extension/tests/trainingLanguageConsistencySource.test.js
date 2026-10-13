@@ -64,17 +64,19 @@ test('training contextual chrome and unmatched fallbacks retain their language b
   assert.match(source, /const trainingReturnWithText = leftoverTrainingHandoffChromeNotLive[\s\S]*?:\s*pickLanguageAlignedTrainingText/);
   assert.match(source, /const trainingSuccessSignal = leftoverTrainingHandoffChromeNotLive[\s\S]*?:\s*pickLanguageAlignedTrainingText/);
 
-  assert.match(source, /whyThisCard=\{reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail : localizedWhyNow\}/);
+  assert.match(source, /whyThisCard: reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail : localizedWhyNow,/);
   assert.match(
     source,
-    /latestVerifiedResult=\{\s*reviewArtifactForeground\s*\? undefined\s*:\s*trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText/,
+    /latestVerifiedResult:\s*reviewArtifactForeground\s*\? undefined\s*:\s*trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText/,
   );
-  assert.match(source, /verificationNotice=\{trainingVerifyNotice\}/);
+  assert.match(source, /verificationNotice: trainingVerifyNotice,/);
   assert.match(
     source,
-    /latestLearningBlocker=\{\s*\(reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.blockedReason : undefined\) \?\?\s*\(leftoverTrainingHandoffChromeNotLive \|\| reviewArtifactForeground \|\| trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText/,
+    /latestLearningBlocker:\s*\(reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.blockedReason : undefined\) \?\?\s*\(leftoverTrainingHandoffChromeNotLive \|\| reviewArtifactForeground \|\| trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText/,
   );
-  assert.match(source, /recentWins=\{pickLanguageAlignedTrainingList/);
+  // recentWins / weakSpots were dead card-face threading (the focused view
+  // never rendered them); the localized list helper stays owned by Growth.
+  assert.doesNotMatch(source, /recentWins=\{pickLanguageAlignedTrainingList/);
   assert.doesNotMatch(source, /whyThisCard=\{trainingWhyThisCard\}/);
 });
 

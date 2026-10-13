@@ -29,11 +29,14 @@ test('the current card identity and focus remain available in one collapsed task
   try {
     for (const currentFocus of [undefined, 'Keep the original workspace scope']) {
       const html = render('components/training/TrainingWorkbenchView.tsx', 'TrainingWorkbenchView', {
-        language: 'en-US', cardId: 'restored-card-exact', title: 'Restored card',
-        cardOnly: true, cardType: 'practice', selectedCardStatus: 'active', latestTrainingLearningPhase: 'try',
-        currentStep: 'Try one boundary', currentFocus, whyNow: 'One late result',
-        deliverable: 'A scoped result', verifyItems: ['Run the boundary check'],
-        returnWith: 'Bring the current result back', nextAfterCompletion: 'Inspect the same boundary',
+        language: 'en-US', cardId: 'restored-card-exact',
+        cardOnly: true, cardType: 'practice', selectedCardStatus: 'active',
+        card: {
+          title: 'Restored card', currentStep: 'Try one boundary', currentFocus, whyNow: 'One late result',
+          deliverable: 'A scoped result', verifyItems: ['Run the boundary check'],
+          returnWith: 'Bring the current result back', nextAfterCompletion: 'Inspect the same boundary',
+        },
+        handoff: { latestTrainingLearningPhase: 'try' },
         reviewItems: [],
       });
       assert.match(html, /data-training-card-id="restored-card-exact"/);

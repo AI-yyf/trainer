@@ -141,7 +141,7 @@ test('training restore targets become the current card and publish the visible s
   assert.match(source, /const trainingRestoreReplacesSelectedCard = Boolean\(/);
   assert.match(
     source,
-    /nextHop=\{\s*hasRenderableTrainingCard && !trainingRestoreForeground && !reviewArtifactForeground\s*\? trainingNextHopCard\s*:\s*undefined\s*\}/,
+    /nextHop:\s*hasRenderableTrainingCard && !trainingRestoreForeground && !reviewArtifactForeground\s*\? trainingNextHopCard\s*:\s*undefined\s*,/,
   );
   assert.match(source, /scenarioLabVisible,/);
   assert.match(source, /nextHopVisible,/);
@@ -163,13 +163,13 @@ test('training restore targets become the current card and publish the visible s
 
 test('reliability facts passed into the focused card require its exact current identity', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
-  const start = source.indexOf('          latestTrainingReliability={');
-  const end = source.indexOf('          reliabilityInFlight=', start);
+  const start = source.indexOf('            latestTrainingReliability:');
+  const end = source.indexOf('            reliabilityInFlight:', start);
   assert.ok(start >= 0 && end > start);
   const binding = source.slice(start, end);
   assert.match(binding, /activeTrainingCardId && trainingState\?\.latestTrainingReliability\?\.cardId === activeTrainingCardId/);
   assert.match(binding, /\? trainingState\.latestTrainingReliability\s*:\s*undefined/);
   assert.doesNotMatch(binding, /!reviewArtifactForeground\s*\|\|/);
   // The existing command/persistence guard continues to own in-flight state.
-  assert.match(source.slice(end, end + 120), /reliabilityInFlight=\{trainingPersistencePending\}/);
+  assert.match(source.slice(end, end + 120), /reliabilityInFlight: trainingPersistencePending,/);
 });

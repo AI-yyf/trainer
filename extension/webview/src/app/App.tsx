@@ -7091,10 +7091,6 @@ export function App() {
     ...(selectedTrainingCardCandidate?.apiHints ?? []),
     ...(selectedTrainingRouteCard?.apiHints ?? []),
   ]);
-  const trainingConstraints = pickLanguageAlignedTrainingList(layout.composerLanguage, [
-    ...(selectedTrainingCardCandidate?.constraints ?? []),
-    ...(selectedTrainingRouteCard?.constraints ?? []),
-  ]);
   const trainingSelfCheck = pickLanguageAlignedTrainingList(layout.composerLanguage, [
     ...(selectedTrainingCardCandidate?.selfCheck ?? []),
     ...(selectedTrainingRouteCard?.selfCheck ?? []),
@@ -8953,36 +8949,6 @@ export function App() {
     }, COACH_SETTINGS_AUTOSAVE_DELAY_MS);
   }, []);
 
-  const handleShareSession = useCallback(async () => {
-    const lines = data.conversation
-      .filter((message) => message.body?.trim())
-      .map((message) => {
-        const role =
-          message.role === "user" ? (appUiCopy(layout.composerLanguage, "我")) : appUiCopy(layout.composerLanguage, "教练");
-        return `**${role}**: ${message.body.trim()}`;
-      });
-    if (!lines.length) {
-      setOperationMessage({
-        tone: "info",
-        message: appUiCopy(layout.composerLanguage, "还没有会话内容可以分享。"),
-      });
-      return;
-    }
-    const title = appUiCopy(layout.composerLanguage, "Trainer 会话");
-    const text = `# ${title}\n\n${lines.join("\n\n")}`;
-    try {
-      await navigator.clipboard.writeText(text);
-      setOperationMessage({
-        tone: "success",
-        message: appUiCopy(layout.composerLanguage, "会话摘要已复制到剪贴板。"),
-      });
-    } catch {
-      setOperationMessage({
-        tone: "error",
-        message: appUiCopy(layout.composerLanguage, "复制失败，请重试。"),
-      });
-    }
-  }, [data.conversation, layout.composerLanguage, setOperationMessage]);
   useEffect(
     () => () => {
       if (coachSettingsAutosaveTimerRef.current !== null) {
@@ -8990,14 +8956,6 @@ export function App() {
       }
     },
     [],
-  );
-  const autosaving = useCallback(
-    <T,>(apply: (value: T) => void) =>
-      (value: T) => {
-        apply(value);
-        queueCoachSettingsSave();
-      },
-    [queueCoachSettingsSave],
   );
 
   const handleSuggestedAction = (
@@ -12720,7 +12678,6 @@ export function App() {
           cardType={trainingCardType}
           trainingSubmode={effectiveTrainingSubmode}
           cardOnly={true}
-          onBackToLearning={() => setActiveView("plan")}
           response={resolvedReviewArtifact ? (
             <SystemState kind="success" title={templateCopy[layout.composerLanguage].reviewRecorded}
               detail={trainingState?.reviewArtifact?.verifiedResult ?? trainingState?.reviewArtifact?.summary}
@@ -12750,142 +12707,126 @@ export function App() {
           onCardStatusTransition={leftoverTrainingHandoffChromeNotLive ? undefined : handleTrainingCardStatusTransition}
           onVerifyCurrentFile={reviewArtifactForeground ? undefined : handleVerifyCurrentFileFromCard}
           remoteVerification={remoteVerification}
-          remoteName={data.workspace?.remoteName}
           onStopRemoteVerification={handleStopRemoteVerification}
           onHintReveal={handleHintReveal}
-          title={title}
-          currentStep={currentStep}
-          learningFamily={trainingLearningFamily}
-          learningSubtype={trainingLearningSubtype}
-          whyThisCard={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : localizedWhyNow}
-          targetSkill={readTrainingCardText(boundTrainingCardFacts, "targetSkill", () => liveTrainingSkill)}
-          problemStatement={readTrainingCardText(boundTrainingCardFacts, "problemStatement", () => trainingProblemStatement)}
-          suggestedWorkspaceAction={localizedSuggestedWorkspaceAction}
-          scenario={localizedScenario}
-          whyNow={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : localizedWhyNow}
-          sourceSummary={localizedSourceSummary}
-          sourceDetail={
-            hasRenderableTrainingCard
-              ? pickLanguageAlignedTrainingText(
-                  layout.composerLanguage,
-                  leftoverTrainingHandoffChromeNotLive
-                    ? undefined
-                    : liveTrainingHandoffChrome.handoffSummary,
-                  leftoverTrainingHandoffChromeNotLive
-                    ? undefined
-                    : trainingState?.latestTrainingHandoff?.handoffSummary,
-                  leftoverTrainingHandoffChromeNotLive
-                    ? undefined
-                    : liveTrainingHandoffChrome.nextHopHandoffSummary,
-                )
-              : undefined
-          }
-          apiHints={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "apiHints", () => trainingApiHints) : []}
-          constraints={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "constraints", () => trainingConstraints) : []}
-          selfCheck={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "selfCheck", () => trainingSelfCheck) : []}
-          deliverable={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "deliverable", () => trainingDeliverable) : undefined}
-          deliverables={reviewArtifactForeground ? selectedTrainingCardCandidate?.learnerDeliverables ?? [] : hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "learnerDeliverables", () => trainingDeliverables) : []}
-          validationMethod={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "validationMethod", () => trainingValidationMethod) : undefined}
-          verificationMethod={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "verificationMethod", () => trainingVerificationMethod) : undefined}
-          verifyItems={reviewArtifactForeground ? selectedTrainingCardCandidate?.verificationSteps ?? [] : hasTrainingCard ? boundTrainingCardFacts ? boundTrainingCardFacts.lists.verificationSteps ?? boundTrainingCardFacts.lists.acceptanceCriteria ?? [] : authoritativeVerifyItems : []}
-          successSignal={reviewArtifactForeground ? trainingState?.reviewArtifact?.verifiedResult : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "successSignal", () => trainingSuccessSignal) : undefined}
-          returnWith={reviewArtifactForeground ? trainingState?.reviewArtifact?.nextSelfImplementationRule : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "returnWith", () => trainingReturnWithText) : undefined}
-          nextAfterCompletion={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "nextAfterCompletion", () => trainingNextAfterCompletionText) : undefined}
-          fallbackAction={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "fallbackAction", () => trainingFallbackActionText) : undefined}
-          filesToTouch={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "filesToTouch", () => trainingFilesToTouch) : []}
-          hintLadder={!reviewArtifactForeground && hasTrainingCard && !trainingComposerReturnMode ? readTrainingCardList(boundTrainingCardFacts, "hintLadder", () => trainingHintLadder) : []}
-          commonMistakes={!reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "commonMistakes", () => trainingCommonMistakes) : []}
-          stuckRecovery={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "stuckRecovery", () => trainingStuckRecovery) : undefined}
-          reflectionPrompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "reflectionPrompt", () => trainingReflectionPrompt) : undefined}
-          outcome={!reviewArtifactForeground && hasTrainingCard ? trainingOutcomeCard : undefined}
-          nextHop={
-            hasRenderableTrainingCard && !trainingRestoreForeground && !reviewArtifactForeground
-              ? trainingNextHopCard
-              : undefined
-          }
-          coachSummary={
-            hasTrainingCard
-              ? trainingStatusMeta ??
-                pickLanguageAlignedTrainingText(layout.composerLanguage, liveTrainingCoachChrome)
-              : undefined
-          }
-          scenarioPackLabel={hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "scenarioPack", () => trainingScenarioPackLabel) : undefined}
-          currentFocus={localizedCurrentFocus}
-          latestTrainingHandoffStatus={
-            reviewArtifactForeground || trainingRestoreReplacesSelectedCard
-              ? undefined
-              : trainingState?.latestTrainingHandoff?.handoffStatus
-          }
-          latestTrainingLearningPhase={
-            reviewArtifactForeground || trainingRestoreReplacesSelectedCard
-              ? selectedTrainingCardCandidate?.learningPhase
-              : (trainingState?.latestTrainingHandoff?.learningPhase ??
-                selectedTrainingCardCandidate?.learningPhase)
-          }
-          latestTrainingReliability={
-            activeTrainingCardId && trainingState?.latestTrainingReliability?.cardId === activeTrainingCardId
-              ? trainingState.latestTrainingReliability
-              : undefined
-          }
-          reliabilityInFlight={trainingPersistencePending}
-          latestTrainingNextHopStatus={
-            reviewArtifactForeground || trainingRestoreReplacesSelectedCard
-              ? undefined
-              : trainingState?.latestTrainingNextHop?.status
-          }
-          latestTrainingNextHopReason={
-            !reviewArtifactForeground &&
-            !trainingRestoreReplacesSelectedCard &&
-            trainingState?.latestTrainingNextHop?.status === "blocked"
-              ? trainingState.latestTrainingNextHop.statusReason
-              : undefined
-          }
-          latestTrainingBlockedBy={
-            leftoverTrainingHandoffChromeNotLive ||
-            reviewArtifactForeground ||
-            trainingRestoreReplacesSelectedCard
-              ? undefined
-              : liveTrainingHandoffChrome.blocker ??
-                trainingState?.latestTrainingHandoff?.blockedBy
-          }
-          latestVerifiedResult={
-            reviewArtifactForeground
-              ? undefined
-              : trainingRestoreReplacesSelectedCard
-              ? undefined
-              : pickLanguageAlignedTrainingText(
-                  layout.composerLanguage,
-                  trainingState?.latestLearningVerifiedResult,
-                ) ?? trainingState?.latestLearningVerifiedResult
-          }
-          latestLearningBlocker={
-            (reviewArtifactForeground ? trainingState?.reviewArtifact?.blockedReason : undefined) ??
-            (leftoverTrainingHandoffChromeNotLive || reviewArtifactForeground || trainingRestoreReplacesSelectedCard
-              ? undefined
-              : pickLanguageAlignedTrainingText(
-                  layout.composerLanguage,
-                  liveTrainingHandoffChrome.blocker,
-                  trainingState?.latestLearningBlocker,
-                ) || liveTrainingHandoffChrome.blocker || trainingState?.latestLearningBlocker || (
-                  activeTrainingCardId && trainingState?.latestTrainingNextHop?.candidateId === activeTrainingCardId &&
-                  trainingState?.latestTrainingNextHop?.status === "verification_required"
-                    ? trainingState?.latestTrainingNextHop?.statusReason || trainingState?.latestTrainingNextHop?.summary
-                    : undefined
-                ))
-          }
-          verificationNotice={trainingVerifyNotice}
-          latestLearningFollowup={
-            leftoverTrainingHandoffChromeNotLive || reviewArtifactForeground || trainingRestoreReplacesSelectedCard
-              ? undefined
-              : pickLanguageAlignedTrainingText(
-                  layout.composerLanguage,
-                  liveTrainingHandoffChrome.followup,
-                  trainingState?.latestLearningFollowup,
-                )
-          }
-          skillProjection={data.workspaceTrainingState?.skillProjection}
+          card={{
+            title,
+            currentStep,
+            learningFamily: trainingLearningFamily,
+            learningSubtype: trainingLearningSubtype,
+            whyThisCard: reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : localizedWhyNow,
+            targetSkill: readTrainingCardText(boundTrainingCardFacts, "targetSkill", () => liveTrainingSkill),
+            problemStatement: readTrainingCardText(boundTrainingCardFacts, "problemStatement", () => trainingProblemStatement),
+            suggestedWorkspaceAction: localizedSuggestedWorkspaceAction,
+            scenario: localizedScenario,
+            whyNow: reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : localizedWhyNow,
+            sourceSummary: localizedSourceSummary,
+            sourceDetail:
+              hasRenderableTrainingCard
+                ? pickLanguageAlignedTrainingText(
+                    layout.composerLanguage,
+                    leftoverTrainingHandoffChromeNotLive
+                      ? undefined
+                      : liveTrainingHandoffChrome.handoffSummary,
+                    leftoverTrainingHandoffChromeNotLive
+                      ? undefined
+                      : trainingState?.latestTrainingHandoff?.handoffSummary,
+                    leftoverTrainingHandoffChromeNotLive
+                      ? undefined
+                      : liveTrainingHandoffChrome.nextHopHandoffSummary,
+                  )
+                : undefined,
+            apiHints: !reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "apiHints", () => trainingApiHints) : [],
+            selfCheck: !reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "selfCheck", () => trainingSelfCheck) : [],
+            deliverable: reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "deliverable", () => trainingDeliverable) : undefined,
+            deliverables: reviewArtifactForeground ? selectedTrainingCardCandidate?.learnerDeliverables ?? [] : hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "learnerDeliverables", () => trainingDeliverables) : [],
+            validationMethod: !reviewArtifactForeground && hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "validationMethod", () => trainingValidationMethod) : undefined,
+            verificationMethod: !reviewArtifactForeground && hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "verificationMethod", () => trainingVerificationMethod) : undefined,
+            verifyItems: reviewArtifactForeground ? selectedTrainingCardCandidate?.verificationSteps ?? [] : hasTrainingCard ? boundTrainingCardFacts ? boundTrainingCardFacts.lists.verificationSteps ?? boundTrainingCardFacts.lists.acceptanceCriteria ?? [] : authoritativeVerifyItems : [],
+            successSignal: reviewArtifactForeground ? trainingState?.reviewArtifact?.verifiedResult : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "successSignal", () => trainingSuccessSignal) : undefined,
+            returnWith: reviewArtifactForeground ? trainingState?.reviewArtifact?.nextSelfImplementationRule : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "returnWith", () => trainingReturnWithText) : undefined,
+            nextAfterCompletion: !reviewArtifactForeground && hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "nextAfterCompletion", () => trainingNextAfterCompletionText) : undefined,
+            fallbackAction: !reviewArtifactForeground && hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "fallbackAction", () => trainingFallbackActionText) : undefined,
+            filesToTouch: !reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "filesToTouch", () => trainingFilesToTouch) : [],
+            hintLadder: !reviewArtifactForeground && hasTrainingCard && !trainingComposerReturnMode ? readTrainingCardList(boundTrainingCardFacts, "hintLadder", () => trainingHintLadder) : [],
+            commonMistakes: !reviewArtifactForeground && hasTrainingCard ? readTrainingCardList(boundTrainingCardFacts, "commonMistakes", () => trainingCommonMistakes) : [],
+            stuckRecovery: reviewArtifactForeground ? trainingState?.reviewArtifact?.guardrail : hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "stuckRecovery", () => trainingStuckRecovery) : undefined,
+            outcome: !reviewArtifactForeground && hasTrainingCard ? trainingOutcomeCard : undefined,
+            nextHop:
+              hasRenderableTrainingCard && !trainingRestoreForeground && !reviewArtifactForeground
+                ? trainingNextHopCard
+                : undefined,
+            flashPrompt: trainingFlashPrompt,
+            expectedSymbols: trainingCardType === "practice" ? readTrainingCardList(boundTrainingCardFacts, "expectedSymbols", () => practiceExpectedSymbols) : [],
+            scenarioPackLabel: hasTrainingCard ? readTrainingCardText(boundTrainingCardFacts, "scenarioPack", () => trainingScenarioPackLabel) : undefined,
+            currentFocus: localizedCurrentFocus,
+          }}
+          handoff={{
+            latestTrainingHandoffStatus:
+              reviewArtifactForeground || trainingRestoreReplacesSelectedCard
+                ? undefined
+                : trainingState?.latestTrainingHandoff?.handoffStatus,
+            latestTrainingLearningPhase:
+              reviewArtifactForeground || trainingRestoreReplacesSelectedCard
+                ? selectedTrainingCardCandidate?.learningPhase
+                : (trainingState?.latestTrainingHandoff?.learningPhase ??
+                  selectedTrainingCardCandidate?.learningPhase),
+            latestTrainingReliability:
+              activeTrainingCardId && trainingState?.latestTrainingReliability?.cardId === activeTrainingCardId
+                ? trainingState.latestTrainingReliability
+                : undefined,
+            reliabilityInFlight: trainingPersistencePending,
+            latestTrainingNextHopStatus:
+              reviewArtifactForeground || trainingRestoreReplacesSelectedCard
+                ? undefined
+                : trainingState?.latestTrainingNextHop?.status,
+            latestTrainingNextHopReason:
+              !reviewArtifactForeground &&
+              !trainingRestoreReplacesSelectedCard &&
+              trainingState?.latestTrainingNextHop?.status === "blocked"
+                ? trainingState.latestTrainingNextHop.statusReason
+                : undefined,
+            latestTrainingBlockedBy:
+              leftoverTrainingHandoffChromeNotLive ||
+              reviewArtifactForeground ||
+              trainingRestoreReplacesSelectedCard
+                ? undefined
+                : liveTrainingHandoffChrome.blocker ??
+                  trainingState?.latestTrainingHandoff?.blockedBy,
+            latestVerifiedResult:
+              reviewArtifactForeground
+                ? undefined
+                : trainingRestoreReplacesSelectedCard
+                ? undefined
+                : pickLanguageAlignedTrainingText(
+                    layout.composerLanguage,
+                    trainingState?.latestLearningVerifiedResult,
+                  ) ?? trainingState?.latestLearningVerifiedResult,
+            latestLearningBlocker:
+              (reviewArtifactForeground ? trainingState?.reviewArtifact?.blockedReason : undefined) ??
+              (leftoverTrainingHandoffChromeNotLive || reviewArtifactForeground || trainingRestoreReplacesSelectedCard
+                ? undefined
+                : pickLanguageAlignedTrainingText(
+                    layout.composerLanguage,
+                    liveTrainingHandoffChrome.blocker,
+                    trainingState?.latestLearningBlocker,
+                  ) || liveTrainingHandoffChrome.blocker || trainingState?.latestLearningBlocker || (
+                    activeTrainingCardId && trainingState?.latestTrainingNextHop?.candidateId === activeTrainingCardId &&
+                    trainingState?.latestTrainingNextHop?.status === "verification_required"
+                      ? trainingState?.latestTrainingNextHop?.statusReason || trainingState?.latestTrainingNextHop?.summary
+                      : undefined
+                  )),
+            verificationNotice: trainingVerifyNotice,
+            latestLearningFollowup:
+              leftoverTrainingHandoffChromeNotLive || reviewArtifactForeground || trainingRestoreReplacesSelectedCard
+                ? undefined
+                : pickLanguageAlignedTrainingText(
+                    layout.composerLanguage,
+                    liveTrainingHandoffChrome.followup,
+                    trainingState?.latestLearningFollowup,
+                  ),
+          }}
           reviewItems={trainingReviewItems}
-          reviewQueueOpenRequest={trainingReviewQueueRequested}
           onReviewQueueAction={(payload) => {
             if (payload.action === "accept") beginTrainingReview();
             handleReviewQueueAction(payload);
@@ -12895,8 +12836,6 @@ export function App() {
             formattedNextReviewDue,
             data.memory.reviewSummary,
           )}
-          recentWins={pickLanguageAlignedTrainingList(layout.composerLanguage, data.memory.recentWins)}
-          weakSpots={pickLanguageAlignedTrainingList(layout.composerLanguage, data.memory.weakSpots)}
           primaryAction={
             leftoverTrainingHandoffChromeNotLive ? (
               <button
@@ -12921,9 +12860,6 @@ export function App() {
             )
           }
           onNextCard={handleGenerateTrainingCard}
-          onRefreshDeck={handleRefreshTrainingDeck}
-          flashPrompt={trainingFlashPrompt}
-          expectedSymbols={trainingCardType === "practice" ? readTrainingCardList(boundTrainingCardFacts, "expectedSymbols", () => practiceExpectedSymbols) : []}
           />
 
         </Suspense>
@@ -13347,9 +13283,6 @@ export function App() {
           skillSharing={renderSkillSharing()}
         className="settings-pane"
         companionInstallState={companionInstallState}
-        remoteWorkspaceName={data.workspace?.isRemoteWorkspace ? data.workspace.remoteName : undefined}
-        provider={data.providerConfig}
-        backendConnectionState={data.connection.state}
         workspaceId={settingsWorkspaceId}
 
         capabilityVerdict={capabilityVerdict}
@@ -13365,39 +13298,8 @@ export function App() {
         }
         workspaceAuthority={liveSandboxState?.authority}
         workspaceTrustState={effectiveWorkspaceTrustState}
-        resourceSandbox={data.memory.workspace?.resourceSandbox ?? null}
-        trainerWorkspace={trainerWorkspaceAdmission}
-        learnerName={
-          leftoverSettingsLearnerProjectOnboardingNotLive ? undefined : data.profile.learnerName
-        }
-        targetProject={
-          leftoverSettingsLearnerProjectOnboardingNotLive ? undefined : data.profile.targetProject
-        }
-        preferredRhythm={
-          leftoverSettingsProfileRhythmNotLive ? undefined : data.profile.preferredRhythm
-        }
-        preferredLearningMode={
-          leftoverSettingsProfileRhythmNotLive ? undefined : data.profile.preferredLearningMode
-        }
-        onboardingRequest={
-          leftoverSettingsLearnerProjectOnboardingNotLive ? undefined : data.profile.onboardingRequest
-        }
-        projectContext={
-          leftoverSettingsLearnerProjectOnboardingNotLive ? undefined : data.profile.projectContext
-        }
         reviewRhythmSummary={resolvedCoachReview}
         nextReviewDue={formattedNextReviewDue}
-        longTermMemoryStateLabel={appUiCopy(layout.composerLanguage, "已启用")}
-        themePreference={layout.themePreference}
-        memoryShareGrants={data.memory.memoryShareGrants ?? []}
-        learningSurfaceAlignment={layout.learningSurfaceAlignment}
-        language={layout.composerLanguage}
-        answerMode={layout.composerAnswerMode}
-        teachingStyle={layout.teachingStyle}
-        coachDefaults={
-          leftoverSettingsProfileRhythmNotLive ? defaultCoachDefaults : layout.coachDefaults
-        }
-        followCurrentFile={layout.followCurrentFile}
         onProviderDraftChange={(patch) => {
           setProviderDraft((current) => {
             const hasProtocol = Object.prototype.hasOwnProperty.call(patch, "protocol");
@@ -13461,54 +13363,8 @@ export function App() {
             };
           });
         }}
-        onThemePreferenceChange={setThemePreference}
-        onLearningSurfaceAlignmentChange={setLearningSurfaceAlignment}
-        onLanguageChange={autosaving(setComposerLanguage)}
-        onAnswerModeChange={autosaving(setComposerAnswerMode)}
-        onTeachingStyleChange={autosaving(setTeachingStyle)}
-        onFollowCurrentFileChange={autosaving(setFollowCurrentFile)}
-        onGenerateSkillDraft={onGenerateSkillDraft}
-        onCoachDefaultsChange={autosaving(setCoachDefaults)}
-        onContextDetailChange={autosaving(setContextDetail)}
-        onIncludeCurrentFileChange={autosaving(setIncludeCurrentFile)}
-        onIncludeSelectionChange={autosaving(setIncludeSelection)}
-        onIncludeDiagnosticsChange={autosaving(setIncludeDiagnostics)}
-        onIncludeRelatedFilesChange={autosaving(setIncludeRelatedFiles)}
+        onCoachSettingsMutated={queueCoachSettingsSave}
         onSaveCoachSettings={() => persistCoachSettings()}
-        onGrantMemoryShare={
-          isBrowserPreview
-            ? undefined
-            : () =>
-                postMessage({
-                  type: "command/execute",
-                  payload: { commandId: trainerCommands.grantMemoryShare },
-                })
-        }
-        onRevokeMemoryShare={
-          isBrowserPreview
-            ? undefined
-            : (sourceWorkspaceId) =>
-                postMessage({
-                  type: "command/execute",
-                  payload: {
-                    commandId: trainerCommands.revokeMemoryShare,
-                    payload: { sourceWorkspaceId },
-                  },
-                })
-        }
-        personalAccountTrusted={data.memory.workspace?.personalAccountTrusted === true}
-        onSetPersonalAccountTrust={
-          isBrowserPreview
-            ? undefined
-            : (enabled) =>
-                postMessage({
-                  type: "command/execute",
-                  payload: {
-                    commandId: trainerCommands.setPersonalAccountTrust,
-                    payload: { enabled },
-                  },
-                })
-        }
         onSaveProvider={saveProviderDraft}
         onSaveProviderProfile={() => {
           setSettingsActionState({
@@ -13613,12 +13469,6 @@ export function App() {
         providerSpeedTestPending={providerSpeedTestPending}
         providerSaveBusy={settingsActionState?.kind === "save-provider"}
         onSpeedTestEndpoints={runProviderSpeedTest}
-        onTrustWindow={() =>
-          postMessage({
-            type: "command/execute",
-            payload: { commandId: trainerCommands.trustWorkspaceWindow },
-          })
-        }
         onRefreshProviderModels={() => {
           const shouldUseDraft = providerDraftHasChanges || !data.providerConfig.configured;
           setSettingsActionState({
@@ -13751,66 +13601,6 @@ export function App() {
             payload: { commandId: "trainer.config.openWorkspace" },
           });
         }}
-        onRefreshWorkspaceAuthority={() => {
-          if (isBrowserPreview) {
-            setOperationMessage({
-              tone: "info",
-              message:
-                appUiCopy(layout.composerLanguage, "浏览器预览只显示预置的工作区边界状态。重新读取真实边界请回到 VS Code 侧栏。"),
-            });
-            return;
-          }
-          postMessage({
-            type: "command/execute",
-            payload: { commandId: trainerCommands.refreshWorkspaceAuthority },
-          });
-        }}
-        onChooseTrainerWorkspaceRoot={() =>
-          runWorkspaceAdmissionCommand(trainerCommands.chooseTrainerWorkspaceRoot)
-        }
-        onMigrateTrainerWorkspaceRoot={() =>
-          runWorkspaceAdmissionCommand(trainerCommands.migrateTrainerWorkspaceRoot)
-        }
-        onBackupTrainerWorkspace={() =>
-          runWorkspaceAdmissionCommand(trainerCommands.backupTrainerWorkspace)
-        }
-        onRestoreTrainerWorkspaceBackup={() =>
-          runWorkspaceAdmissionCommand(trainerCommands.restoreTrainerWorkspaceBackup)
-        }
-        onChooseManagedDataFolder={() => {
-          if (isBrowserPreview) {
-            setOperationMessage({
-              tone: "info",
-              message:
-                appUiCopy(layout.composerLanguage, "浏览器预览不能修改 managed data folder。请在 VS Code 侧栏里选择真实路径。"),
-            });
-            return;
-          }
-          postMessage({
-            type: "command/execute",
-            payload: { commandId: trainerCommands.chooseManagedDataFolder },
-          });
-        }}
-        onResetManagedDataFolder={() => {
-          if (isBrowserPreview) {
-            setOperationMessage({
-              tone: "info",
-              message:
-                appUiCopy(layout.composerLanguage, "浏览器预览不能重置 managed data folder。请在 VS Code 侧栏里使用推荐路径。"),
-            });
-            return;
-          }
-          postMessage({
-            type: "command/execute",
-            payload: { commandId: trainerCommands.resetManagedDataFolder },
-          });
-        }}
-        onRefreshMemory={() =>
-          postMessage({
-            type: "command/execute",
-            payload: { commandId: "trainer.memory.refresh" },
-          })
-        }
         onResetDefaults={() => {
           const defaultLanguage =
             typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("zh")
@@ -13851,8 +13641,6 @@ export function App() {
               appUiCopy(defaultLanguage, "已恢复教练默认设置。"),
           });
         }}
-        onNavigateToView={setActiveView}
-        onShareSession={handleShareSession}
         />
       </Suspense>
       {renderContextualResultRail("settings")}

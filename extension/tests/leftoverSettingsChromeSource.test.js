@@ -137,18 +137,25 @@ test('leftover Settings profile/rhythm is not live Settings identity when recove
   assert.match(appSource, /leftoverStreamingCheckpointIsNotLive\(/);
   assert.match(appSource, /leftoverTransferSkillIsNotLive\(/);
   assert.match(appSource, /preferRecoveredTransferSkill\(/);
-  assert.match(
-    appSource,
-    /leftoverSettingsProfileRhythmNotLive \? undefined : data\.profile\.preferredRhythm/,
+  // §props-debt redirect: the leftover-gated profile facts moved into the
+  // settings selector hook (same governance flags, store-driven); App keeps
+  // the flag itself for the section-status memos.
+  const settingsViewState = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'settings', 'useCoachSettingsViewState.ts'),
+    'utf8',
   );
   assert.match(
-    appSource,
-    /leftoverSettingsProfileRhythmNotLive \? undefined : data\.profile\.preferredLearningMode/,
+    settingsViewState,
+    /leftoverSettingsProfileRhythmNotLive \? undefined : profile\.preferredRhythm/,
+  );
+  assert.match(
+    settingsViewState,
+    /leftoverSettingsProfileRhythmNotLive\s*\?\s*undefined\s*:\s*profile\.preferredLearningMode/,
   );
   assert.match(appSource, /leftoverSettingsProfileRhythmNotLive\s*\?\s*"empty"/);
   assert.match(
-    appSource,
-    /leftoverSettingsProfileRhythmNotLive \? defaultCoachDefaults : layout\.coachDefaults/,
+    settingsViewState,
+    /leftoverSettingsProfileRhythmNotLive\s*\?\s*DEFAULT_COACH_DEFAULTS\s*:\s*layoutCoachDefaults/,
   );
   assert.match(appSource, /workspaceAuthority=\{liveSandboxState\?\.authority\}/);
   assert.match(appSource, /readWorkspaceTrustStateFromCapabilitySummary\(/);
@@ -201,25 +208,29 @@ test('leftover Settings profile/rhythm is not live Settings identity when recove
     appSource,
     /liveConversation\.map\(\(message\) => localizeConversationMessage/,
   );
+  // §props-debt redirect: the leftover-gated learner/project/onboarding
+  // profile facts moved into the settings selector hook (same flag,
+  // store-driven); the `? null :` variants below stay in App for the
+  // recovery patch paths.
+  assert.match(
+    settingsViewState,
+    /leftoverSettingsLearnerProjectOnboardingNotLive\s*\?\s*undefined\s*:\s*profile\.learnerName/,
+  );
+  assert.match(
+    settingsViewState,
+    /leftoverSettingsLearnerProjectOnboardingNotLive\s*\?\s*undefined\s*:\s*profile\.targetProject/,
+  );
+  assert.match(
+    settingsViewState,
+    /leftoverSettingsLearnerProjectOnboardingNotLive\s*\?\s*undefined\s*:\s*profile\.onboardingRequest/,
+  );
+  assert.match(
+    settingsViewState,
+    /leftoverSettingsLearnerProjectOnboardingNotLive\s*\?\s*undefined\s*:\s*profile\.projectContext/,
+  );
   assert.match(
     appSource,
     /leftoverSettingsProfileRhythmNotLive\s*\?\s*null\s*:\s*data\.profile\.preferredRhythm/,
-  );
-  assert.match(
-    appSource,
-    /leftoverSettingsLearnerProjectOnboardingNotLive \? undefined : data\.profile\.learnerName/,
-  );
-  assert.match(
-    appSource,
-    /leftoverSettingsLearnerProjectOnboardingNotLive \? undefined : data\.profile\.targetProject/,
-  );
-  assert.match(
-    appSource,
-    /leftoverSettingsLearnerProjectOnboardingNotLive \? undefined : data\.profile\.onboardingRequest/,
-  );
-  assert.match(
-    appSource,
-    /leftoverSettingsLearnerProjectOnboardingNotLive \? undefined : data\.profile\.projectContext/,
   );
   assert.match(
     appSource,

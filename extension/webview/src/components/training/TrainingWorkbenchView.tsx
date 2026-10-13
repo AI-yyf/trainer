@@ -13,9 +13,10 @@ import {
   describeTrainingReliability,
   type TrainingReliabilityRecord,
 } from "../../../../../shared/src/trainingReliabilityGovernance";
-import type { TrainingReliability, TrainingSkillProjection } from "../../lib/types";
+import type { TrainingReliability } from "../../lib/types";
 import { RemoteVerificationPanel } from "./RemoteVerificationPanel";
 import { remoteVerifyCopy } from "./remoteVerificationCopy";
+import { useTrainingWorkbenchViewState } from "./useTrainingWorkbenchViewState";
 import { MessageRichContent } from "../coach/MessageRichContent";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type { ComposerLanguage, TrainingCardType } from "../../lib/types";
@@ -76,17 +77,13 @@ export interface FlashAnswerPayload {
   prompt?: string;
 }
 
-export interface TrainingWorkbenchViewProps {
-  response?: ReactNode;
-  onBackToLearning?: () => void;
-  language: ComposerLanguage;
-  cardType?: TrainingCardType;
-  trainingSubmode?: string;
-  cardOnly?: boolean;
-  cardId?: string;
-  selectedCardStatus?: string;
-  /** Fail-closed: skip/grade must use hooked persistence path, not a bare command. */
-  onCardStatusTransition?: (cardId: string, newStatus: TrainingCardStatus, reason?: string) => void;
+/**
+ * Governed facts of the currently rendered card, derived in App under source
+ * guards (boundTrainingCardFacts reads, language-aligned fallbacks, restore /
+ * review-foreground / leftover gating) and wired as one descriptor — the same
+ * bundling `LearningFacts.training` and the card parts registry already use.
+ */
+export interface TrainingCardFacts {
   title: string;
   currentStep: string;
   learningFamily?: "code" | "theory";
@@ -100,7 +97,6 @@ export interface TrainingWorkbenchViewProps {
   sourceSummary?: string;
   sourceDetail?: string;
   apiHints?: string[];
-  constraints?: string[];
   selfCheck?: string[];
   deliverable?: string;
   deliverables?: string[];
@@ -115,13 +111,20 @@ export interface TrainingWorkbenchViewProps {
   hintLadder?: string[];
   commonMistakes?: string[];
   stuckRecovery?: string;
-  reflectionPrompt?: string;
-  restoredFocus?: TrainingSummaryCard;
+  flashPrompt?: string;
+  expectedSymbols?: string[];
+  scenarioPackLabel?: string;
+  currentFocus?: string;
   outcome?: TrainingSummaryCard;
   nextHop?: TrainingSummaryCard;
-  coachSummary?: string;
-  currentFocus?: string;
-  scenarioPackLabel?: string;
+}
+
+/**
+ * Live training handoff / verification status facts for the active attempt,
+ * derived in App from the workspace training snapshot under the same gating as
+ * `TrainingCardFacts`.
+ */
+export interface TrainingHandoffFacts {
   latestTrainingHandoffStatus?: string;
   latestTrainingLearningPhase?: string;
   latestTrainingReliability?: TrainingReliability;
@@ -133,20 +136,22 @@ export interface TrainingWorkbenchViewProps {
   latestLearningBlocker?: string;
   verificationNotice?: string;
   latestLearningFollowup?: string;
-  /** Phase-D: evidence-derived skill states for the active attempt. */
-  skillProjection?: TrainingSkillProjection;
-  reviewItems?: TrainingReviewItem[];
-  reviewQueueOpenRequest?: boolean;
-  reviewSummary?: string;
-  onReviewQueueAction?: (payload: {
-    concept: string;
-    action: TrainingReviewAction;
-    focusArea: string;
-    taskHint: string;
-  }) => void;
-  recentWins?: string[];
-  weakSpots?: string[];
-  primaryAction?: ReactNode;
+}
+
+export interface TrainingWorkbenchViewProps {
+  /** Governed facts of the card on the card face (see `TrainingCardFacts`). */
+  card: TrainingCardFacts;
+  /** Live handoff / verification status of the active attempt (see `TrainingHandoffFacts`). */
+  handoff: TrainingHandoffFacts;
+  language: ComposerLanguage;
+  cardType?: TrainingCardType;
+  trainingSubmode?: string;
+  cardOnly?: boolean;
+  cardId?: string;
+  selectedCardStatus?: string;
+  /** Fail-closed: skip/grade must use hooked persistence path, not a bare command. */
+  onCardStatusTransition?: (cardId: string, newStatus: TrainingCardStatus, reason?: string) => void;
+  response?: ReactNode;
   /** Card-owned verification affordance (preview/workspace verify flow). */
   onVerifyCurrentFile?: () => void;
   /** §八: remote identity + streaming verification panel state. */
@@ -157,18 +162,22 @@ export interface TrainingWorkbenchViewProps {
     finishedState?: "completed" | "cancelled" | "timed_out" | "spawn_failed" | "connection_lost";
     passed?: boolean;
   };
-  remoteName?: string;
   onStopRemoteVerification?: () => void;
   /** §五: record honest assistance usage when the learner reveals a hint. */
   onHintReveal?: (hintLevel: number) => void;
+  onNextCard?: () => void;
   leftoverNote?: string;
+  primaryAction?: ReactNode;
   actions?: ReactNode;
   emptyState?: ReactNode;
-  onPreviousCard?: () => void;
-  onNextCard?: () => void;
-  onRefreshDeck?: () => void;
-  flashPrompt?: string;
-  expectedSymbols?: string[];
+  reviewItems?: TrainingReviewItem[];
+  onReviewQueueAction?: (payload: {
+    concept: string;
+    action: TrainingReviewAction;
+    focusArea: string;
+    taskHint: string;
+  }) => void;
+  reviewSummary?: string;
 }
 
 /** Governance failures that mean "you acted on a card that does not own the live handoff". */
@@ -605,8 +614,8 @@ function resolveVerificationReturnState(input: {
 }
 
 export function TrainingWorkbenchView({
-  response,
-  onBackToLearning,
+  card,
+  handoff,
   language,
   cardType = "practice",
   trainingSubmode,
@@ -614,74 +623,69 @@ export function TrainingWorkbenchView({
   cardId,
   selectedCardStatus,
   onCardStatusTransition,
-  title,
-  currentStep,
-  learningFamily,
-  learningSubtype,
-  whyThisCard,
-  targetSkill,
-  problemStatement,
-  suggestedWorkspaceAction,
-  scenario,
-  whyNow,
-  sourceSummary,
-  sourceDetail,
-  apiHints = [],
-  constraints = [],
-  selfCheck = [],
-  deliverable,
-  deliverables = [],
-  validationMethod,
-  verificationMethod,
-  verifyItems,
-  successSignal,
-  returnWith,
-  nextAfterCompletion,
-  fallbackAction,
-  filesToTouch = [],
-  hintLadder = [],
-  commonMistakes = [],
-  stuckRecovery,
-  reflectionPrompt,
-  restoredFocus,
-  outcome,
-  nextHop,
-  coachSummary,
-  currentFocus,
-  scenarioPackLabel,
-  latestTrainingHandoffStatus,
-  latestTrainingLearningPhase,
-  latestTrainingReliability,
-  reliabilityInFlight = false,
-  latestTrainingNextHopStatus,
-  latestTrainingNextHopReason,
-  latestTrainingBlockedBy,
-  latestVerifiedResult,
-  latestLearningBlocker,
-  verificationNotice,
-  latestLearningFollowup,
-  skillProjection,
-  reviewItems = [],
-  reviewQueueOpenRequest = false,
-  reviewSummary,
-  onReviewQueueAction,
-  recentWins = [],
-  weakSpots = [],
-  primaryAction,
+  response,
   onVerifyCurrentFile,
   remoteVerification,
-  remoteName,
   onStopRemoteVerification,
   onHintReveal,
+  onNextCard,
   leftoverNote,
+  primaryAction,
   actions,
   emptyState,
-  onPreviousCard,
-  onNextCard,
-  onRefreshDeck,
-  flashPrompt,
-  expectedSymbols = [],
+  reviewItems = [],
+  onReviewQueueAction,
+  reviewSummary,
 }: TrainingWorkbenchViewProps) {
+  const { onBackToLearning, remoteName, reviewQueueOpenRequest } = useTrainingWorkbenchViewState();
+  const {
+    title,
+    currentStep,
+    learningFamily,
+    learningSubtype,
+    whyThisCard,
+    targetSkill,
+    problemStatement,
+    suggestedWorkspaceAction,
+    scenario,
+    whyNow,
+    sourceSummary,
+    sourceDetail,
+    apiHints = [],
+    selfCheck = [],
+    deliverable,
+    deliverables = [],
+    validationMethod,
+    verificationMethod,
+    verifyItems,
+    successSignal,
+    returnWith,
+    nextAfterCompletion,
+    fallbackAction,
+    filesToTouch = [],
+    hintLadder = [],
+    commonMistakes = [],
+    stuckRecovery,
+    flashPrompt,
+    expectedSymbols = [],
+    scenarioPackLabel,
+    currentFocus,
+    outcome,
+    nextHop,
+  } = card;
+  const {
+    latestTrainingHandoffStatus,
+    latestTrainingLearningPhase,
+    latestTrainingReliability,
+    reliabilityInFlight = false,
+    latestTrainingNextHopStatus,
+    latestTrainingNextHopReason,
+    latestTrainingBlockedBy,
+    latestVerifiedResult,
+    latestLearningBlocker,
+    verificationNotice,
+    latestLearningFollowup,
+  } = handoff;
   const leftoverStoredNote = leftoverNote?.trim() || "";
   // Batch 6: default to focus-area groups so the review queue reads as a few
   // coherent topics instead of a flat list of one-off decisions.

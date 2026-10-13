@@ -154,7 +154,15 @@ test('settings navigation has four categories with matching keyboard order and s
   for (const id of ['connection', 'workspace', 'teaching', 'skills', 'preferences', 'advanced']) {
     assert.match(source, new RegExp(`data-settings-section="${id}"`));
   }
-  // Every choice-type setting persists as soon as it changes.
+  // Every choice-type setting persists as soon as it changes. The setter
+  // wrappers moved into the selector hook (apply now, then queue App's
+  // debounced persist), so App passes the trigger once and the hook composes
+  // every knob with it.
+  assert.match(app, /onCoachSettingsMutated=\{queueCoachSettingsSave\}/);
+  const viewState = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'settings', 'useCoachSettingsViewState.ts'),
+    'utf8',
+  );
   for (const cb of [
     'onLanguageChange',
     'onAnswerModeChange',
@@ -167,7 +175,11 @@ test('settings navigation has four categories with matching keyboard order and s
     'onIncludeDiagnosticsChange',
     'onIncludeRelatedFilesChange',
   ]) {
-    assert.match(app, new RegExp(`${cb}=\\{autosaving\\(`), `${cb} must autosave`);
+    assert.match(
+      viewState,
+      new RegExp(`${cb}: \\(value\\) => \\{\\s*set\\w+\\(value\\);\\s*mutateCoachSettings\\(\\);`),
+      `${cb} must autosave`,
+    );
   }
   assert.match(app, /const COACH_SETTINGS_AUTOSAVE_DELAY_MS = \d+;/);
   assert.match(app, /persistCoachSettingsRef\.current\(\);/);
