@@ -1,5 +1,5 @@
 import type { ComposerLanguage } from "./types";
-import { trainingFeedbackPromptCopy } from "./universalLearningPromptCopy";
+import { trainingFeedbackPromptCopy } from "./i18n/segments/universalLearningPromptCopy";
 
 type ScratchPaperPromptInput = {
   cardTitle?: string;

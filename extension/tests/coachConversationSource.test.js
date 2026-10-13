@@ -29,7 +29,7 @@ const coachConversationControllerPath = path.resolve(
   'app',
   'useCoachConversationController.ts',
 );
-const appUiCopyPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'appUiCopy.ts');
+const appUiCopyPath = path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'appUiCopy.ts');
 const stylesPath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css');
 const agentActivityPath = path.resolve(
   __dirname,

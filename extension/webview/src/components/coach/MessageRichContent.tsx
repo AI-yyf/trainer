@@ -2,7 +2,7 @@ import { memo, Suspense, createContext, lazy, useContext, useEffect, useId, useM
 import type { Element } from "hast";
 
 import type { ComposerLanguage } from "../../lib/types";
-import { messageRichContentCopy } from "./messageRichContentCopy";
+import { messageRichContentCopy } from "../../lib/i18n/segments/messageRichContentCopy";
 import { MermaidBlock } from "./MermaidBlock";
 import { RichCodeBlock } from "./RichCodeBlock";
 import { resolveCodeBlockCopy } from "./codeBlockCopy";

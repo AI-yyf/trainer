@@ -14,6 +14,16 @@ const trainingWorkbenchViewSourcePath = path.resolve(
   'training',
   'TrainingWorkbenchView.tsx',
 );
+const trainingInlineTextSourcePath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'segments',
+  'trainingInlineText.ts',
+);
 const guidedPacksSourcePath = path.resolve(
   __dirname,
   '..',
@@ -33,10 +43,13 @@ const sharedExecutionGovernanceSourcePath = path.resolve(
 
 test('training scenario packs stay localized and learn-first across training surfaces', () => {
   const trainingWorkbenchViewSource = fs.readFileSync(trainingWorkbenchViewSourcePath, 'utf8');
+  // The workbench text copy table (including the scenario-pack label) moved
+  // verbatim into the i18n segment file; the label assertion slices there.
+  const trainingInlineTextSource = fs.readFileSync(trainingInlineTextSourcePath, 'utf8');
   const guidedPacksSource = fs.readFileSync(guidedPacksSourcePath, 'utf8');
 
   assert.match(trainingWorkbenchViewSource, /scenarioPackLabel\?: string;/);
-  assert.match(trainingWorkbenchViewSource, /Scenario pack/);
+  assert.match(trainingInlineTextSource, /Scenario pack/);
   assert.match(trainingWorkbenchViewSource, /const needsPrimerState = trainingExecutionState\.needsPrimer;/);
   assert.match(
     trainingWorkbenchViewSource,

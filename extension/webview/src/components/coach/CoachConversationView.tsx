@@ -8,6 +8,7 @@ import { useWorkbenchState } from "../../app/useWorkbenchState";
 import type { CoachArtifactBlockData } from "./CoachArtifactBlock";
 import { AgentActivityStrip } from "./AgentActivityStripSmart";
 import { CoachMessageBubble, type CoachMessageAction } from "./CoachMessageBubble";
+import { COACH_TYPING_LABELS } from "../../lib/i18n/segments/coachInlineText";
 
 export interface StreamingMessageState {
   body: string;
@@ -17,18 +18,6 @@ export interface StreamingMessageState {
   roleLabel?: string;
   note?: string;
 }
-
-/** In-message typing label: text carries the state, the dots only decorate it. */
-const COACH_TYPING_LABELS: Record<ComposerLanguage, string> = {
-  "zh-CN": "教练正在输入…",
-  "en-US": "Coach is typing…",
-  "es-ES": "El entrenador está escribiendo…",
-  "fr-FR": "Le coach écrit…",
-  "de-DE": "Coach schreibt…",
-  "ja-JP": "コーチが入力中…",
-  "ko-KR": "코치가 입력 중…",
-  "pt-BR": "O coach está digitando…",
-};
 
 export interface CoachConversationViewProps {
   messages: ConversationMessage[];

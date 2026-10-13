@@ -10,7 +10,7 @@ export {
   interpretTrainingComposerCardCommand,
   type TrainingCardGrade,
   type TrainingComposerCardCommand,
-} from "./trainingCardActions";
+} from "../../lib/i18n/segments/trainingCardActions";
 export type {
   TrainingReviewAction,
   TrainingReviewItem,

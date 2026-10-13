@@ -29,7 +29,7 @@ test('Settings offers a direct sidecar restart and avoids duplicate model discov
 
   assert.match(source, /onRestartSidecar\?: \(\) => void;/);
   assert.match(
-    fs.readFileSync(path.resolve(__dirname, '..', 'webview', 'src', 'components', 'settings', 'providerSettingsCopy.ts'), 'utf8'),
+    fs.readFileSync(path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'segments', 'providerSettingsCopy.ts'), 'utf8'),
     /function sidecarRestartCopy\(/,
   );
   assert.match(

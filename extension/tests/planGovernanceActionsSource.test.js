@@ -472,7 +472,13 @@ test('Plan first screen keeps one primary action and leftover-not-live honesty',
   assert.ok(html.includes('data-plan-leftover-note="true" role="status" aria-live="polite"'));
   assert.ok(!html.includes('Approve this evidence'));
   assert.doesNotMatch(coachPlanSource, /pickPlanPrimaryAction|compactPrimaryAction|stepStartLabel/);
-  assert.match(coachPlanSource, /leftoverNotLive: "This is stored leftover on this workspace, not the live plan."/);
+  // PLAN_COPY migrated to the i18n home (2026-10-14); the table value is
+  // asserted against the segment, the component hygiene check above stays.
+  const planTableSource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'segments', 'planInlineText.ts'),
+    'utf8',
+  );
+  assert.match(planTableSource, /leftoverNotLive: "This is stored leftover on this workspace, not the live plan."/);
   assert.match(appSource, /const leftoverPlanNotLive = Boolean\(recoveredRuntime\) && !formalPlanLive/);
   assert.match(appSource, /leftoverNote=\{leftoverPlanNotLive\s*\? learningPracticeReadyToContinue\s*\? templateCopy\[layout\.composerLanguage\]\.practiceReadyToContinue\s*: t\.leftoverNotLive\s*: undefined\}/);
   assert.match(appSource, /hasFormalPlan: hasFormalPlan && formalPlanLive/);

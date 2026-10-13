@@ -1,6 +1,7 @@
 /** §十五: coach message bubble chrome copy in eight languages (no zh/en binary). */
 
-import type { ComposerLanguage } from "../../lib/types";
+import type { ComposerLanguage } from "../../types";
+import type { CoachMessageAction } from "../../../components/coach/CoachMessageBubble";
 
 /**
  * Chrome copy on a message bubble: the running line, the support-attachment
@@ -60,3 +61,17 @@ export const COACH_MESSAGE_BUBBLE_TEXT: Record<string, Record<string, string>> =
 export function coachMessageBubbleCopy(language: ComposerLanguage, key: string): string {
   return COACH_MESSAGE_BUBBLE_TEXT[key]?.[language] ?? key;
 }
+
+export const COACH_MESSAGE_ACTION_LABELS: Record<
+  ComposerLanguage,
+  Record<CoachMessageAction, string>
+> = {
+  "zh-CN": { copy: "复制", share: "分享", "save-resource": "加入资料库", "training-card": "加入训练卡片", retry: "重新生成" },
+  "en-US": { copy: "Copy", share: "Share", "save-resource": "Save to Resources", "training-card": "Create training card", retry: "Regenerate" },
+  "es-ES": { copy: "Copiar", share: "Compartir", "save-resource": "Guardar en Recursos", "training-card": "Crear tarjeta", retry: "Regenerar" },
+  "fr-FR": { copy: "Copier", share: "Partager", "save-resource": "Ajouter aux Ressources", "training-card": "Créer une carte", retry: "Régénérer" },
+  "de-DE": { copy: "Kopieren", share: "Teilen", "save-resource": "In Bibliothek speichern", "training-card": "Karte erstellen", retry: "Neu generieren" },
+  "ja-JP": { copy: "コピー", share: "共有", "save-resource": "ライブラリに保存", "training-card": "カードを作成", retry: "再生成" },
+  "ko-KR": { copy: "복사", share: "공유", "save-resource": "라이브러리에 저장", "training-card": "카드 만들기", retry: "다시 생성" },
+  "pt-BR": { copy: "Copiar", share: "Compartilhar", "save-resource": "Salvar na Biblioteca", "training-card": "Criar cartão", retry: "Regenerar" },
+};

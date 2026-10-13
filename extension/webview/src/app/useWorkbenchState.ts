@@ -41,7 +41,7 @@ import {
   setPersistedState,
 } from "../lib/vscode";
 import { normalizeSidebarView } from "../lib/types";
-import { appUiCopy } from "./appUiCopy";
+import { appUiCopy } from "../lib/i18n/appUiCopy";
 import type {
   ActiveWorkbenchView,
   BootstrapData,

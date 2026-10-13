@@ -6,7 +6,7 @@
  * zh-CN string is the record key itself.
  */
 
-import type { ComposerLanguage } from "./types";
+import type { ComposerLanguage } from "../../types";
 
 export const TRAINING_FEEDBACK_PROMPT_TEXT: Record<string, Record<string, string>> = {
   "作答": {

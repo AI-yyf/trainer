@@ -14,6 +14,16 @@ const resourcesPath = path.resolve(
   'resources',
   'ResourcesWorkbenchView.tsx',
 );
+const resourcesInlineTextPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'segments',
+  'resourcesInlineText.ts',
+);
 
 test('Resources puts searchable knowledge records in a resource-only navigation tree before guarded sandbox state', () => {
   const source = fs.readFileSync(resourcesPath, 'utf8');
@@ -42,8 +52,12 @@ test('Resources puts searchable knowledge records in a resource-only navigation 
 
 test('the sandbox copy keeps the project-workspace boundary explicit', () => {
   const source = fs.readFileSync(resourcesPath, 'utf8');
+  // §十五: the sandboxBoundary copy key moved verbatim into the i18n segment
+  // file; the copy assertion slices there, the sandbox-structure assertions
+  // keep reading the view.
+  const inlineCopy = fs.readFileSync(resourcesInlineTextPath, 'utf8');
 
-  assert.match(source, /sandboxBoundary/);
+  assert.match(inlineCopy, /sandboxBoundary/);
   assert.match(source, /sandboxRootPath \?\? sandboxState\?\.rootPath/);
   assert.match(source, /linkedResourceCount/);
   assert.match(source, /totalFiles/);

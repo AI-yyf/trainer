@@ -9,7 +9,12 @@ const path = require('node:path');
 const settingsRoot = path.resolve(
   __dirname, '..', 'webview', 'src', 'components', 'settings',
 );
-const copyPath = path.join(settingsRoot, 'remoteSupportCopy.ts');
+// §十五: the remote-support copy table moved verbatim into the i18n segment
+// file; table-content assertions read there while view assertions keep
+// reading the component.
+const copyPath = path.join(
+  settingsRoot, '..', '..', 'lib', 'i18n', 'segments', 'remoteSupportCopy.ts',
+);
 const viewPath = path.join(settingsRoot, 'CoachSettingsView.tsx');
 
 test('remote-support settings panel is record-driven with eight-language copy (§十五)', () => {

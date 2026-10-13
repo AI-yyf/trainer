@@ -14,9 +14,23 @@ const settingsSourcePath = path.resolve(
   'settings',
   'CoachSettingsView.tsx',
 );
+const settingsInlineTextPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'segments',
+  'settingsInlineText.ts',
+);
 
 test('settings provider catalog keeps manually saved models in the per-model panel', () => {
   const source = fs.readFileSync(settingsSourcePath, 'utf8');
+  // §十五: the saved-models label record moved verbatim into the i18n segment
+  // file; its content assertions slice there while the usage assertions keep
+  // reading the view.
+  const inlineCopy = fs.readFileSync(settingsInlineTextPath, 'utf8');
 
   assert.match(
     source,
@@ -34,7 +48,7 @@ test('settings provider catalog keeps manually saved models in the per-model pan
   );
   assert.match(source, /catalogModels: mergeDraftStringList\(draftCatalogModels, modelName\)/);
   assert.match(source, /catalogModels: draftCatalogModels\.filter\(/);
-  assert.match(source, /const localizedCatalogSavedModelsLabel: Record<ComposerLanguage, string> = \{/);
+  assert.match(inlineCopy, /const localizedCatalogSavedModelsLabel: Record<ComposerLanguage, string> = \{/);
   const localizedSavedModelsLabels = {
     "zh-CN": "\u5df2\u4fdd\u5b58\u6a21\u578b",
     "en-US": "Saved models",
@@ -46,7 +60,7 @@ test('settings provider catalog keeps manually saved models in the per-model pan
     "pt-BR": "Modelos salvos",
   };
   for (const [language, label] of Object.entries(localizedSavedModelsLabels)) {
-    assert.match(source, new RegExp(`"${language}": "${label}"`));
+    assert.match(inlineCopy, new RegExp(`"${language}": "${label}"`));
   }
   assert.match(
     source,
@@ -56,9 +70,10 @@ test('settings provider catalog keeps manually saved models in the per-model pan
     source,
     /catalogModelsSummary\s*\?\s*\{\s*label: localizedCatalogSavedModelsLabel\[language\],\s*value: shortenSummary\(catalogModelsSummary, 80\),\s*\}\s*:\s*null/,
   );
-  // providerModelCardCopy moved into providerSettingsCopy.ts (batch 7).
+  // providerModelCardCopy moved into providerSettingsCopy.ts (batch 7), now
+  // under lib/i18n/segments; the content assertion slices the table file.
   assert.match(
-    fs.readFileSync(path.resolve(__dirname, "..", "webview", "src", "components", "settings", "providerSettingsCopy.ts"), "utf8"),
+    fs.readFileSync(path.resolve(__dirname, "..", "webview", "src", "lib", "i18n", "segments", "providerSettingsCopy.ts"), "utf8"),
     /Remove model/,
   );
 });

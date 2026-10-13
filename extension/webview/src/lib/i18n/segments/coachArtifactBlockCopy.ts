@@ -1,6 +1,6 @@
 /** §十五: coach artifact block copy in eight languages (no zh/en binary). */
 
-import type { ComposerLanguage } from "../../lib/types";
+import type { ComposerLanguage } from "../../types";
 
 /**
  * Labels and sentences on artifact cards. The zh-CN source string is the

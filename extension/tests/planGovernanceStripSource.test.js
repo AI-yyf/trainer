@@ -24,6 +24,16 @@ const planViewCopyPath = path.resolve(
   'i18n',
   'planViewCopy.ts',
 );
+const planInlineTextPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'segments',
+  'planInlineText.ts',
+);
 
 function sourceBetween(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker);
@@ -56,11 +66,14 @@ test('Plan keeps formal truth, evidence, and blockers distinct without silent mu
 
 test('Plan localizes its own honest empty, blocked, frozen, and stage fallback states', () => {
   const source = fs.readFileSync(planViewPath, 'utf8');
-  const copyStart = source.indexOf('const PLAN_COPY:');
-  const copyEnd = source.indexOf('function planCopy(', copyStart);
+  // §十五: the PLAN_COPY table moved verbatim into the i18n segment file;
+  // table-content assertions slice there while the planCopy call-site
+  // assertions keep reading the view.
+  const inlineCopy = fs.readFileSync(planInlineTextPath, 'utf8');
+  const copyStart = inlineCopy.indexOf('const PLAN_COPY:');
 
-  assert.ok(copyStart >= 0 && copyEnd > copyStart, 'expected Plan locale copy');
-  const planCopy = source.slice(copyStart, copyEnd);
+  assert.ok(copyStart >= 0, 'expected Plan locale copy in planInlineText.ts');
+  const planCopy = inlineCopy.slice(copyStart);
   for (const language of ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR']) {
     const start = planCopy.indexOf(`  "${language}": {`);
     const end = planCopy.indexOf('\n  },', start);

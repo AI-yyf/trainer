@@ -3,7 +3,7 @@
  * batch 7). Pure locale tables — no component state.
  */
 
-import type { ComposerLanguage } from "../../../../../shared/src/types";
+import type { ComposerLanguage } from "../../../../../../shared/src/types";
 
 function providerConnectionNameLabel(language: ComposerLanguage): string {
   switch (language) {

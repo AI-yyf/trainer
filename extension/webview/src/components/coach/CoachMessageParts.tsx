@@ -12,7 +12,7 @@ import type { ComposerLanguage } from "../../lib/types";
 import { resolveCopy } from "../../lib/i18n/copy";
 
 import { MermaidBlock } from "./MermaidBlock";
-import { coachMessagePartsCopy } from "./coachMessagePartsCopy";
+import { coachMessagePartsCopy } from "../../lib/i18n/segments/coachMessagePartsCopy";
 import { MessageRichContent } from "./MessageRichContent";
 import { RichCodeBlock } from "./RichCodeBlock";
 import { hasCoachToolResultFailure, resolveCoachToolResultCopy } from "./coachToolResultCopy";

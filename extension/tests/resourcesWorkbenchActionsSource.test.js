@@ -29,12 +29,25 @@ const resourcesWorkbenchPath = path.resolve(
   'resources',
   'ResourcesWorkbenchView.tsx',
 );
+const resourcesInlineTextPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'segments',
+  'resourcesInlineText.ts',
+);
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const stylesPath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css');
 const typesPath = path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'types.ts');
 
 test('Resources uses real knowledge records and opens them through the existing native VS Code action', () => {
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  // §十五: the zh/en base resource copy record moved verbatim into the i18n
+  // segment file; its content assertions slice there.
+  const inlineCopy = fs.readFileSync(resourcesInlineTextPath, 'utf8');
   const appSource = fs.readFileSync(appPath, 'utf8');
   const typesSource = fs.readFileSync(typesPath, 'utf8');
 
@@ -44,7 +57,7 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(viewSource, /onImportUrl\?: \(\) => void;/);
   assert.match(viewSource, /onOpenResource\?: \(resourceId: string\) => void;/);
   assert.match(viewSource, /onRefreshResources\?: \(\) => void \| Promise<void>;/);
-  assert.match(viewSource, /pendingIndex: \{ zh: "\\u5f85\\u7d22\\u5f15", en: "Waiting to be indexed" \}/);
+  assert.match(inlineCopy, /pendingIndex: \{ zh: "\\u5f85\\u7d22\\u5f15", en: "Waiting to be indexed" \}/);
   assert.match(viewSource, /resource\.indexState === "pending"/);
   assert.match(viewSource, /tone: "pending"/);
   assert.match(viewSource, /DeletedResource,/);
@@ -104,7 +117,7 @@ test('Resources uses real knowledge records and opens them through the existing 
     /deleteUnavailableReason=\{\s*isBrowserPreview\s*\?\s*appUiCopy\(layout\.composerLanguage, "[^"]*"\)\s*:\s*undefined\s*\}/,
   );
   const appUiCopySource = fs.readFileSync(
-    path.resolve(__dirname, '..', 'webview', 'src', 'app', 'appUiCopy.ts'),
+    path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'appUiCopy.ts'),
     'utf8',
   );
   assert.match(appUiCopySource, /"en-US": "Browser preview cannot delete real resources\. Use the VS Code sidebar\."/);
@@ -146,6 +159,7 @@ test('Resources does not expose a project file manager or destructive sandbox co
 
 test('Resources collapses imports into one named, keyboard-accessible menu while refresh stays secondary', () => {
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const inlineCopy = fs.readFileSync(resourcesInlineTextPath, 'utf8');
   const stylesSource = readStylesSource();
 
   assert.match(viewSource, /const \[isImportMenuOpen, setIsImportMenuOpen\] = useState\(false\);/);
@@ -169,7 +183,7 @@ test('Resources collapses imports into one named, keyboard-accessible menu while
   assert.match(viewSource, /selectedResourceTrainingReadiness\?\.canRefresh \? \(/);
   assert.match(viewSource, /onClick=\{refreshResources\}/);
   assert.match(viewSource, /localize\(language, "addResource"\)/);
-  assert.match(viewSource, /addResource: \{ zh: "\\u6dfb\\u52a0\\u8d44\\u6599", en: "Add resource" \}/);
+  assert.match(inlineCopy, /addResource: \{ zh: "\\u6dfb\\u52a0\\u8d44\\u6599", en: "Add resource" \}/);
   assert.match(stylesSource, /\.resources-knowledge__import-menu-wrap/);
   assert.match(stylesSource, /\.resources-knowledge__import-menu \{/);
   assert.match(stylesSource, /@media \(max-width: 460px\)/);
@@ -198,6 +212,7 @@ test('Resources keeps the first screen focused and folds secondary governance ac
 
 test('Resources makes library writes visibly unavailable without blocking search or opening', () => {
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const inlineCopy = fs.readFileSync(resourcesInlineTextPath, 'utf8');
   const appSource = fs.readFileSync(appPath, 'utf8');
 
   assert.match(viewSource, /export interface ResourceWriteAccess \{[\s\S]*?allowed: boolean;/);
@@ -205,7 +220,7 @@ test('Resources makes library writes visibly unavailable without blocking search
   assert.match(viewSource, /onChooseWorkspaceRoot\?: \(\) => void;/);
   assert.match(viewSource, /const canWriteResources = resourceWriteAccess\?\.allowed !== false;/);
   assert.match(viewSource, /function resourceReadOnlyNotice\(/);
-  assert.match(viewSource, /This project is read-only\. You can search and open resources\./);
+  assert.match(inlineCopy, /This project is read-only\. You can search and open resources\./);
   assert.match(viewSource, /setIsImportMenuOpen\(false\);[\s\S]*?setDeleteConfirmationResourceIds\(null\);/);
   assert.match(viewSource, /disabled=\{!canWriteResources\}/);
   assert.match(viewSource, /const indexActionDisabled = !canWriteResources \|\| !onRefreshResources \|\| isIndexRefreshing;/);
@@ -431,6 +446,9 @@ test('Resources preserves an explicit selection across views and records unmount
 test('Resources starts a review card only from fresh, trusted, indexed material in a managed workspace', () => {
   const appSource = fs.readFileSync(appPath, 'utf8');
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  // §十五: the review-card handoff copy record moved verbatim into the i18n
+  // segment file; its content assertion slices there.
+  const inlineCopy = fs.readFileSync(resourcesInlineTextPath, 'utf8');
 
   assert.match(viewSource, /onStartTrainingFromResource\?: \(resourceId: string\) => Promise<ResourceTrainingHandoffResult>;/);
   assert.match(viewSource, /function resourceCanStartTraining\(resource: ResourceRecord\): boolean/);
@@ -448,7 +466,7 @@ test('Resources starts a review card only from fresh, trusted, indexed material 
   assert.match(viewSource, /"fetch_failed"/);
   assert.match(viewSource, /resourceWriteAccess\?\.allowed === true/);
   assert.match(viewSource, /selectedResourceCanStartTraining/);
-  assert.match(viewSource, /createReviewCard: \{ zh: "\\u751f\\u6210\\u590d\\u4e60\\u5361", en: "Create review card" \}/);
+  assert.match(inlineCopy, /createReviewCard: \{ zh: "\\u751f\\u6210\\u590d\\u4e60\\u5361", en: "Create review card" \}/);
   assert.match(viewSource, /return localize\(language, "createReviewCard"\);/);
   assert.match(
     viewSource,

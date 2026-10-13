@@ -50,7 +50,7 @@ test('TrainingWorkbenchView skip uses hooked onCardStatusTransition persistence 
   const workbenchPath = path.join(webviewRoot, 'components', 'training', 'TrainingWorkbenchView.tsx');
   const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
   const actionsSource = fs.readFileSync(
-    path.join(webviewRoot, 'components', 'training', 'trainingCardActions.ts'),
+    path.join(webviewRoot, 'lib', 'i18n', 'segments', 'trainingCardActions.ts'),
     'utf8',
   );
   const appSource = fs.readFileSync(appPath, 'utf8');
@@ -69,7 +69,8 @@ test('TrainingWorkbenchView skip uses hooked onCardStatusTransition persistence 
   assert.doesNotMatch(appSource, /<CoachPracticeView[\s\S]*?onCardStatusTransition=/);
 
   assert.match(workbenchSource, /onCardStatusTransition\?: \(cardId: string, newStatus: TrainingCardStatus/);
-  // §十四: the helpers moved to trainingCardActions.ts; the view re-exports them.
+  // §十四: the helpers moved to trainingCardActions.ts (now under
+  // lib/i18n/segments); the view re-exports them.
   assert.match(actionsSource, /onCardStatusTransition\(\s*normalizedCardId,\s*"skipped"/);
   assert.match(actionsSource, /onCardStatusTransition\(normalizedCardId, "reviewed", reason\)/);
   assert.match(actionsSource, /export function applyTrainingCardSkip/);
@@ -130,7 +131,7 @@ test('live reflect and return persist; leftover cannot fire them', () => {
   const workbenchPath = path.join(webviewRoot, 'components', 'training', 'TrainingWorkbenchView.tsx');
   const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
   const actionsSource = fs.readFileSync(
-    path.join(webviewRoot, 'components', 'training', 'trainingCardActions.ts'),
+    path.join(webviewRoot, 'lib', 'i18n', 'segments', 'trainingCardActions.ts'),
     'utf8',
   );
 
@@ -182,7 +183,7 @@ test('live App training tree has no scenario skip or grade surface', () => {
   const workbenchPath = path.join(webviewRoot, 'components', 'training', 'TrainingWorkbenchView.tsx');
   const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
   const actionsSource = fs.readFileSync(
-    path.join(webviewRoot, 'components', 'training', 'trainingCardActions.ts'),
+    path.join(webviewRoot, 'lib', 'i18n', 'segments', 'trainingCardActions.ts'),
     'utf8',
   );
 
@@ -205,7 +206,7 @@ test('leftover-not-live context rail does not paint leftover dump as live activi
   const workbenchPath = path.join(webviewRoot, 'components', 'training', 'TrainingWorkbenchView.tsx');
   const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
   const actionsSource = fs.readFileSync(
-    path.join(webviewRoot, 'components', 'training', 'trainingCardActions.ts'),
+    path.join(webviewRoot, 'lib', 'i18n', 'segments', 'trainingCardActions.ts'),
     'utf8',
   );
   const railStart = appSource.indexOf('const renderContextualResultRail');

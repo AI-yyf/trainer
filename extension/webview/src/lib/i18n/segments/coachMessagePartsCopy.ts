@@ -1,6 +1,6 @@
 /** §十五: legacy coach message-part copy in eight languages (no zh/en binary). */
 
-import type { ComposerLanguage } from "../../lib/types";
+import type { ComposerLanguage } from "../../types";
 
 /**
  * Copy for the legacy part switch renderer (CoachMessageParts.tsx). The

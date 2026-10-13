@@ -86,14 +86,20 @@ test('coach composer accepts the full product language set and keeps drag attach
   assert.match(source, /compactMode \? "composer--compact" : ""/);
   assert.match(source, /language\?: ComposerLanguage;/);
   assert.ok(source.includes('const dropPromptText = attachmentsInteractive'));
-  assert.ok(source.includes('Drop to attach image'));
-  assert.ok(source.includes('Image input is unavailable for this connection'));
   assert.match(source, /attachmentsUnavailableReason\?\.trim\(\) \|\|/);
-  assert.match(source, /removeAttachment: "移除附件"/);
-  assert.match(source, /removeAttachment: "Remove attachment"/);
   assert.match(source, /aria-label=\{localizedCopy\.removeAttachment\}/);
-  assert.match(source, /clear: "清空"/);
-  assert.match(source, /clear: "Clear"/);
+  // composerLocaleCopy migrated to the i18n home (2026-10-14): its entry
+  // values are asserted against the segment file, the call sites stay here.
+  const composerTableSource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'segments', 'coachInlineText.ts'),
+    'utf8',
+  );
+  assert.ok(composerTableSource.includes('Drop to attach image'));
+  assert.ok(composerTableSource.includes('Image input is unavailable for this connection'));
+  assert.match(composerTableSource, /removeAttachment: "移除附件"/);
+  assert.match(composerTableSource, /removeAttachment: "Remove attachment"/);
+  assert.match(composerTableSource, /clear: "清空"/);
+  assert.match(composerTableSource, /clear: "Clear"/);
   assert.match(source, /title=\{localizedCopy\.clear\}/);
   assert.doesNotMatch(source, /type="file"/);
   assert.doesNotMatch(source, /composer__attach-btn/);

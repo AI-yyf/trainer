@@ -32,6 +32,16 @@ const trainingViewPath = path.resolve(
   'training',
   'TrainingWorkbenchView.tsx',
 );
+const trainingInlineTextPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'segments',
+  'trainingInlineText.ts',
+);
 const previewHarnessPath = path.resolve(
   __dirname,
   '..',
@@ -151,17 +161,21 @@ test('guided training preview reuses localized card copy for cross-card and prog
 
 test('training card-only fallback copy stays complete across every supported language', () => {
   const source = fs.readFileSync(trainingViewPath, 'utf8');
-  const surfaceStart = source.indexOf('const trainingCardOnlySurfaceCopy');
-  const surfaceEnd = source.indexOf('function trainingCardOnlySurfaceText', surfaceStart);
-  const manualStart = source.indexOf('const manualPracticeFallbackCopy');
-  const manualEnd = source.indexOf('function resolvePracticeVerificationMode', manualStart);
+  // The card-only surface table and the manual-practice fallback/subtype
+  // tables moved verbatim into the i18n segment file; the copy-content
+  // assertions slice there while call-site assertions keep reading the view.
+  const segmentSource = fs.readFileSync(trainingInlineTextPath, 'utf8');
+  const surfaceStart = segmentSource.indexOf('const trainingCardOnlySurfaceCopy');
+  const surfaceEnd = segmentSource.indexOf('\n};', surfaceStart);
+  const manualStart = segmentSource.indexOf('const manualPracticeFallbackCopy');
+  const manualEnd = segmentSource.indexOf('const manualPracticeSubtypeCopy', manualStart);
   const languages = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
 
   assert.ok(surfaceStart >= 0 && surfaceEnd > surfaceStart, 'expected card-only fallback copy');
   assert.ok(manualStart >= 0 && manualEnd > manualStart, 'expected manual practice fallback copy');
 
-  const surfaceCopy = source.slice(surfaceStart, surfaceEnd);
-  const manualCopy = source.slice(manualStart, manualEnd);
+  const surfaceCopy = segmentSource.slice(surfaceStart, surfaceEnd);
+  const manualCopy = segmentSource.slice(manualStart, manualEnd);
   for (const language of languages) {
     assert.match(
       surfaceCopy,

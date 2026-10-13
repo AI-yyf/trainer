@@ -14,13 +14,24 @@ const settingsViewPath = path.resolve(
   'settings',
   'CoachSettingsView.tsx',
 );
+const settingsInlineTextPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'segments',
+  'settingsInlineText.ts',
+);
 const providerSettingsCopyPath = path.resolve(
   __dirname,
   '..',
   'webview',
   'src',
-  'components',
-  'settings',
+  'lib',
+  'i18n',
+  'segments',
   'providerSettingsCopy.ts',
 );
 const workspaceAuthoritySummaryPath = path.resolve(
@@ -38,6 +49,13 @@ const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx'
 
 function readSettingsSource() {
   return fs.readFileSync(settingsViewPath, 'utf8');
+}
+
+function readSettingsInlineTextSource() {
+  // §十五: the settings label/phrase tables moved verbatim into the i18n
+  // segment file; copy-content assertions slice there while call-site
+  // assertions keep reading the view.
+  return fs.readFileSync(settingsInlineTextPath, 'utf8');
 }
 
 function readProviderSettingsCopySource() {
@@ -77,13 +95,14 @@ function availabilityStripSource(source) {
 
 test('settings receives and renders the final capability verdict without replacing probe facts', () => {
   const settings = readSettingsSource();
+  const settingsInlineCopy = readSettingsInlineTextSource();
   const app = readAppSource();
 
   assert.match(app, /const capabilityVerdict = useMemo\(/);
   assert.match(app, /<CoachSettingsView[\s\S]*capabilityVerdict=\{capabilityVerdict\}/);
   assert.match(settings, /capabilityVerdict: TrainerCapabilityVerdict;/);
   assert.match(settings, /settingsPhrase\(language, "finalCapabilities"\)/);
-  assert.match(settings, /finalCapabilities: "Final capabilities"/);
+  assert.match(settingsInlineCopy, /finalCapabilities: "Final capabilities"/);
   assert.match(settings, /data-capability-verdict=\{name\}/);
   assert.match(settings, /data-capability-verdict-status=/);
   assert.match(settings, /capabilityChipsAllowed \? \(/);
@@ -114,9 +133,10 @@ test('settings receives and renders the final capability verdict without replaci
 
 test('settings language selector routes shared labels through every supported locale', () => {
   const source = readSettingsSource();
+  const inlineCopy = readSettingsInlineTextSource();
 
-  assert.match(source, /const defaultLabels: Partial<CoachSettingsLabels> =/);
-  assert.match(source, /const englishLabels: Partial<CoachSettingsLabels> =/);
+  assert.match(inlineCopy, /const defaultLabels: Partial<CoachSettingsLabels> =/);
+  assert.match(inlineCopy, /const englishLabels: Partial<CoachSettingsLabels> =/);
   assert.match(source, /import \{ resolveCopy as resolveWorkbenchCopy \} from "\.\.\/\.\.\/lib\/i18n\/copy";/);
   assert.match(source, /function localizedSettingsLabels\(language: ComposerLanguage\)/);
   assert.match(source, /\.\.\.localizedSettingsLabels\(language\)/);
@@ -550,6 +570,7 @@ test('settings derives readiness from the shared provider test truth source', ()
 
 test('settings uses plain-language localized recovery copy for unavailable connections', () => {
   const source = readSettingsSource();
+  const inlineCopy = readSettingsInlineTextSource();
   const strip = availabilityStripSource(source);
 
   assert.match(strip, /title=\{displayAvailabilityHeadline\}/);
@@ -565,10 +586,10 @@ test('settings uses plain-language localized recovery copy for unavailable conne
     source,
     /const availabilityStripReduced =\s*!settingsIndexOpen &&\s*!backendRecovery &&\s*settingsStatusIssues\.some\(\(issue\) => issue\.target === "connection"\);/,
   );
-  assert.match(source, /setupModelAccess: "设置模型连接"/);
-  assert.match(source, /fillProviderFields: "填写连接信息和 API key 后即可测试。"/);
+  assert.match(inlineCopy, /setupModelAccess: "设置模型连接"/);
+  assert.match(inlineCopy, /fillProviderFields: "填写连接信息和 API key 后即可测试。"/);
   assert.match(source, /\{providerDetailRequirementNote\}/);
-  assert.doesNotMatch(source, /setupModelAccess: "先连上模型"/);
+  assert.doesNotMatch(inlineCopy, /setupModelAccess: "先连上模型"/);
 });
 
 test('settings capability chips appear only from a verified live last-test', () => {
@@ -596,22 +617,25 @@ test('settings capability chips appear only from a verified live last-test', () 
 
 test('settings final-capability Ready/Unavailable use 8-lang status phrases when chips allowed', () => {
   const source = readSettingsSource();
+  // §十五: the status phrase table moved verbatim into the i18n segment file;
+  // the phrase-content assertions slice there.
+  const inlineCopy = readSettingsInlineTextSource();
 
   assert.match(source, /capabilityChipsAllowed \? \(/);
   assert.match(
     source,
     /enabled\s*\?\s*settingsStatusPhrase\(language, "ready"\)\s*:\s*settingsStatusPhrase\(language, "unavailable"\)/,
   );
-  assert.match(source, /unavailable: "不可用"/);
-  assert.match(source, /unavailable: "Unavailable"/);
-  assert.match(source, /unavailable: "No disponible"/);
-  assert.match(source, /unavailable: "Indisponible"/);
-  assert.match(source, /unavailable: "Nicht verfügbar"/);
-  assert.match(source, /unavailable: "利用不可"/);
-  assert.match(source, /unavailable: "사용 불가"/);
-  assert.match(source, /unavailable: "Indisponível"/);
+  assert.match(inlineCopy, /unavailable: "不可用"/);
+  assert.match(inlineCopy, /unavailable: "Unavailable"/);
+  assert.match(inlineCopy, /unavailable: "No disponible"/);
+  assert.match(inlineCopy, /unavailable: "Indisponible"/);
+  assert.match(inlineCopy, /unavailable: "Nicht verfügbar"/);
+  assert.match(inlineCopy, /unavailable: "利用不可"/);
+  assert.match(inlineCopy, /unavailable: "사용 불가"/);
+  assert.match(inlineCopy, /unavailable: "Indisponível"/);
   assert.doesNotMatch(
-    source,
+    inlineCopy,
     /enabled \? \(language === "zh-CN" \? "可用" : "Ready"\) : language === "zh-CN" \? "不可用" : "Unavailable"/,
   );
 });

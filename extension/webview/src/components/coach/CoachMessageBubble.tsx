@@ -11,7 +11,7 @@ import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurface
 import type { ComposerLanguage, ConversationMessage } from "../../lib/types";
 import { nextStepRequiresConfirmationFromArtifacts } from "../../lib/nextStepConfirmation";
 import { CoachArtifactBlock, type CoachArtifactBlockData } from "./CoachArtifactBlock";
-import { coachMessageBubbleCopy } from "./coachMessageBubbleCopy";
+import { coachMessageBubbleCopy, COACH_MESSAGE_ACTION_LABELS } from "../../lib/i18n/segments/coachMessageBubbleCopy";
 import { CoachMessageParts } from "./CoachMessageParts";
 import { MessageRichContent } from "./MessageRichContent";
 
@@ -48,20 +48,6 @@ export interface CoachMessageBubbleProps {
    */
   nextStepRequiresConfirmation?: boolean;
 }
-
-const COACH_MESSAGE_ACTION_LABELS: Record<
-  ComposerLanguage,
-  Record<CoachMessageAction, string>
-> = {
-  "zh-CN": { copy: "复制", share: "分享", "save-resource": "加入资料库", "training-card": "加入训练卡片", retry: "重新生成" },
-  "en-US": { copy: "Copy", share: "Share", "save-resource": "Save to Resources", "training-card": "Create training card", retry: "Regenerate" },
-  "es-ES": { copy: "Copiar", share: "Compartir", "save-resource": "Guardar en Recursos", "training-card": "Crear tarjeta", retry: "Regenerar" },
-  "fr-FR": { copy: "Copier", share: "Partager", "save-resource": "Ajouter aux Ressources", "training-card": "Créer une carte", retry: "Régénérer" },
-  "de-DE": { copy: "Kopieren", share: "Teilen", "save-resource": "In Bibliothek speichern", "training-card": "Karte erstellen", retry: "Neu generieren" },
-  "ja-JP": { copy: "コピー", share: "共有", "save-resource": "ライブラリに保存", "training-card": "カードを作成", retry: "再生成" },
-  "ko-KR": { copy: "복사", share: "공유", "save-resource": "라이브러리에 저장", "training-card": "카드 만들기", retry: "다시 생성" },
-  "pt-BR": { copy: "Copiar", share: "Compartilhar", "save-resource": "Salvar na Biblioteca", "training-card": "Criar cartão", retry: "Regenerar" },
-};
 
 function fallbackRoleLabel(message: ConversationMessage): string {
   if (message.role === "user") {

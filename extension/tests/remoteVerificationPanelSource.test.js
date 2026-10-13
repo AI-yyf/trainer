@@ -10,11 +10,15 @@ const webviewRoot = path.resolve(__dirname, '..', 'webview', 'src');
 const viewPath = path.join(webviewRoot, 'components', 'training', 'TrainingWorkbenchView.tsx');
 const panelPath = path.join(webviewRoot, 'components', 'training', 'RemoteVerificationPanel.tsx');
 const copyPath = path.join(webviewRoot, 'components', 'training', 'remoteVerificationCopy.ts');
+const panelCopyPath = path.join(webviewRoot, 'lib', 'i18n', 'segments', 'trainingInlineText.ts');
 
 test('the streaming remote verification panel ships with eight-language copy (§八/§十五)', () => {
   const view = fs.readFileSync(viewPath, 'utf8');
   const panel = fs.readFileSync(panelPath, 'utf8');
   const copy = fs.readFileSync(copyPath, 'utf8');
+  // §十五: the panel's own COPY record moved verbatim into the i18n segment
+  // file; the eight-language coverage and no-zh-branch assertions slice there.
+  const panelCopy = fs.readFileSync(panelCopyPath, 'utf8');
 
   // §十六 regression guard: this block was silently lost once — pin it.
   assert.match(view, /<RemoteVerificationPanel/);
@@ -29,8 +33,8 @@ test('the streaming remote verification panel ships with eight-language copy (§
   // §十五: the copy records cover all eight languages and never branch on zh.
   for (const language of ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR']) {
     assert.match(copy, new RegExp(`"${language}": \{`));
-    assert.match(panel, new RegExp(`"${language}": \{`));
+    assert.match(panelCopy, new RegExp(`"${language}": \{`));
   }
   assert.doesNotMatch(copy, /=== "zh-CN"/);
-  assert.doesNotMatch(panel, /=== "zh-CN"/);
+  assert.doesNotMatch(panelCopy, /=== "zh-CN"/);
 });

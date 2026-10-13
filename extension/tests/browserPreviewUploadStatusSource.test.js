@@ -11,7 +11,8 @@ const appUiCopySourcePath = path.resolve(
   '..',
   'webview',
   'src',
-  'app',
+  'lib',
+  'i18n',
   'appUiCopy.ts',
 );
 

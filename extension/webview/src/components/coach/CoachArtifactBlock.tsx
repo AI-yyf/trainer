@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import type { ComposerLanguage } from "../../lib/types";
 import { nextStepRequiresConfirmationFromMetadata } from "../../lib/nextStepConfirmation";
 import { resolveCopy } from "../../lib/i18n/copy";
-import { artifactBlockCopy, artifactInlineLeadCopy } from "./coachArtifactBlockCopy";
+import { artifactBlockCopy, artifactInlineLeadCopy } from "../../lib/i18n/segments/coachArtifactBlockCopy";
 import { reviewConceptLabel } from "../../lib/reviewLabel";
 import { MessageRichContent } from "./MessageRichContent";
 

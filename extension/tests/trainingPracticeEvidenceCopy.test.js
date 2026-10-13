@@ -26,7 +26,8 @@ const appUiCopySourcePath = path.resolve(
   '..',
   'webview',
   'src',
-  'app',
+  'lib',
+  'i18n',
   'appUiCopy.ts',
 );
 const trainingViewSourcePath = path.resolve(
@@ -37,6 +38,16 @@ const trainingViewSourcePath = path.resolve(
   'components',
   'training',
   'TrainingWorkbenchView.tsx',
+);
+const trainingInlineTextSourcePath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'segments',
+  'trainingInlineText.ts',
 );
 const stylesSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css');
 const composerSourcePath = path.resolve(
@@ -112,6 +123,9 @@ test('training single-card keeps the knowledge card separate from composer verif
 test('training structured guidance is wired from App into a collapsed single-card helper layer', () => {
   const appSource = fs.readFileSync(appSourcePath, 'utf8');
   const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
+  // The workbench text copy table moved verbatim into the i18n segment file;
+  // the copy-content assertions slice there, the wiring assertions read the view.
+  const trainingInlineTextSource = fs.readFileSync(trainingInlineTextSourcePath, 'utf8');
   const stylesSource = readStylesSource();
 
   assert.match(appSource, /suggestedWorkspaceAction=\{localizedSuggestedWorkspaceAction\}/);
@@ -137,9 +151,9 @@ test('training structured guidance is wired from App into a collapsed single-car
     /scenarioPackLabel\s*\?\s*`\$\{trainingWorkbenchText\(language, "scenarioPack"\)\}: \$\{scenarioPackLabel\}`/,
   );
   assert.match(trainingViewSource, /hintLadder\.length && cardType === "practice" \? <HintLadderReveal/);
-  assert.match(trainingViewSource, /Hints and guardrails/);
-  assert.match(trainingViewSource, /Files to touch/);
-  assert.match(trainingViewSource, /API hints/);
+  assert.match(trainingInlineTextSource, /Hints and guardrails/);
+  assert.match(trainingInlineTextSource, /Files to touch/);
+  assert.match(trainingInlineTextSource, /API hints/);
   assert.match(trainingViewSource, /stuckRecovery\?\.trim\(\)/);
 
   assert.match(stylesSource, /\.training-code-list\s*\{/);
@@ -148,6 +162,9 @@ test('training structured guidance is wired from App into a collapsed single-car
 test('training verification-return strip is driven by snapshot status, not summary guessing', () => {
   const appSource = fs.readFileSync(appSourcePath, 'utf8');
   const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
+  // The verification-return copy table moved verbatim into the i18n segment
+  // file; its English phrase assertions slice there.
+  const trainingInlineTextSource = fs.readFileSync(trainingInlineTextSourcePath, 'utf8');
   const stylesSource = readStylesSource();
 
   assert.match(appSource, /selectedCardStatus=\{effectiveSelectedTrainingCardStatus\}/);
@@ -203,17 +220,17 @@ test('training verification-return strip is driven by snapshot status, not summa
   assert.doesNotMatch(appSource, /latestTrainingNextHop\?\.status === "accepted"/);
   assert.match(trainingViewSource, /manualPracticeCopy\?\.verifyNote/);
   assert.match(trainingViewSource, /manualPracticeCopy\?\.fallbackHint/);
-  assert.match(trainingViewSource, /Real pass\/fail still comes from Verify current file\./);
-  assert.match(trainingViewSource, /This explanation or example is grounded enough to continue\./);
-  assert.match(trainingViewSource, /Pass\/fail comes from the current file and diagnostics\./);
-  assert.match(trainingViewSource, /Read current IDE file/);
-  assert.match(trainingViewSource, /Practice verification/);
+  assert.match(trainingInlineTextSource, /Real pass\/fail still comes from Verify current file\./);
+  assert.match(trainingInlineTextSource, /This explanation or example is grounded enough to continue\./);
+  assert.match(trainingInlineTextSource, /Pass\/fail comes from the current file and diagnostics\./);
+  assert.match(trainingInlineTextSource, /Read current IDE file/);
+  assert.match(trainingInlineTextSource, /Practice verification/);
 
   assert.match(stylesSource, /\.training-verification-return\.is-verified/);
   assert.match(stylesSource, /\.training-verification-return\.is-needs-review/);
   assert.match(stylesSource, /\.training-verification-return\.is-blocked/);
   assert.match(trainingViewSource, /pendingPlanConfirmationLike/);
-  assert.match(trainingViewSource, /formal plan is not complete/);
+  assert.match(trainingInlineTextSource, /formal plan is not complete/);
   assert.match(appSource, /pendingPlanConfirmation/);
 });
 
@@ -287,6 +304,9 @@ test('training return is an empty-draft command and handoff composer copy is loc
 test('training practice verification sends expected symbols while flash stays local-answer based', () => {
   const appSource = fs.readFileSync(appSourcePath, 'utf8');
   const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
+  // The surface label table moved verbatim into the i18n segment file; the
+  // code-symbols label assertion slices there.
+  const trainingInlineTextSource = fs.readFileSync(trainingInlineTextSourcePath, 'utf8');
   const stylesSource = readStylesSource();
 
   assert.match(appSource, /function trainingExpectedSymbols/);
@@ -305,7 +325,7 @@ test('training practice verification sends expected symbols while flash stays lo
 
   assert.match(trainingViewSource, /expectedSymbols\?: string\[\]/);
   assert.match(trainingViewSource, /visibleExpectedSymbols/);
-  assert.match(trainingViewSource, /Code symbols to check/);
+  assert.match(trainingInlineTextSource, /Code symbols to check/);
   assert.match(stylesSource, /\.training-proof-card__symbols/);
 });
 

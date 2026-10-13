@@ -1,6 +1,6 @@
 /** §十五: rich message content chrome copy in eight languages (no zh/en binary). */
 
-import type { ComposerLanguage } from "../../lib/types";
+import type { ComposerLanguage } from "../../types";
 
 /**
  * Labels around markdown rendering (tables, diagrams, fallback notices).

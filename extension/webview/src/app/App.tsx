@@ -232,7 +232,7 @@ import {
   applyTrainingCardGrade,
   applyTrainingCardSkip,
   interpretTrainingComposerCardCommand,
-} from "../components/training/trainingCardActions";
+} from "../lib/i18n/segments/trainingCardActions";
 import type {
   TrainingReviewItem,
   TrainingSummaryCard,
@@ -320,7 +320,7 @@ import {
   SCENARIO_TEXT,
   TRAINING_CARD_STATUS_TEXT,
   TRAINING_HANDOFF_STATUS_TEXT,
-} from "./appUiCopy";
+} from "../lib/i18n/appUiCopy";
 import { isBrowserPreviewFixtureMode } from "../lib/browserSidecar";
 import { useTrainingCommands, useTrainingAttemptLifecycle } from "./useTrainingCommands";
 import { type TrainingRestoreContext, useWorkbenchState } from "./useWorkbenchState";

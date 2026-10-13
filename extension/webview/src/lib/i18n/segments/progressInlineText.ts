@@ -1,0 +1,279 @@
+/**
+ * §十二/§十五: Growth Evidence copy tables for ProgressView, in eight languages
+ * (no zh/en binary). Moved verbatim from components/progress/ProgressView.tsx —
+ * strings, languages, keys and constant names unchanged.
+ */
+
+import type { ComposerLanguage, TrainingSkillDimensionState } from "../../types";
+
+export type DimensionKey = "comprehension" | "implementation" | "debugging" | "transfer";
+
+export const DIMENSION_LABELS: Record<ComposerLanguage, Record<DimensionKey, string>> = {
+  "zh-CN": { comprehension: "理解", implementation: "实现", debugging: "调试", transfer: "迁移" },
+  "en-US": {
+    comprehension: "Comprehension",
+    implementation: "Implementation",
+    debugging: "Debugging",
+    transfer: "Transfer",
+  },
+  "es-ES": {
+    comprehension: "Comprensión",
+    implementation: "Implementación",
+    debugging: "Depuración",
+    transfer: "Transferencia",
+  },
+  "fr-FR": {
+    comprehension: "Compréhension",
+    implementation: "Implémentation",
+    debugging: "Débogage",
+    transfer: "Transfert",
+  },
+  "de-DE": {
+    comprehension: "Verständnis",
+    implementation: "Implementierung",
+    debugging: "Fehlersuche",
+    transfer: "Transfer",
+  },
+  "ja-JP": {
+    comprehension: "理解",
+    implementation: "実装",
+    debugging: "デバッグ",
+    transfer: "転用",
+  },
+  "ko-KR": {
+    comprehension: "이해",
+    implementation: "구현",
+    debugging: "디버깅",
+    transfer: "전이",
+  },
+  "pt-BR": {
+    comprehension: "Compreensão",
+    implementation: "Implementação",
+    debugging: "Depuração",
+    transfer: "Transferência",
+  },
+};
+
+export const STATE_LABELS: Record<ComposerLanguage, Record<TrainingSkillDimensionState["state"], string>> = {
+  "zh-CN": {
+    not_verified: "还未验证",
+    assisted: "有辅助完成",
+    independent: "独立完成",
+    repeat_verified: "反复验证",
+    needs_review: "需要回顾",
+  },
+  "en-US": {
+    not_verified: "Not verified yet",
+    assisted: "Completed with hints",
+    independent: "Independent",
+    repeat_verified: "Repeatedly verified",
+    needs_review: "Needs review",
+  },
+  "es-ES": {
+    not_verified: "Aún sin verificar",
+    assisted: "Completado con ayudas",
+    independent: "Independiente",
+    repeat_verified: "Verificado repetidamente",
+    needs_review: "Necesita repaso",
+  },
+  "fr-FR": {
+    not_verified: "Pas encore vérifié",
+    assisted: "Terminé avec aides",
+    independent: "Indépendant",
+    repeat_verified: "Vérifié à plusieurs reprises",
+    needs_review: "À revoir",
+  },
+  "de-DE": {
+    not_verified: "Noch nicht überprüft",
+    assisted: "Mit Hinweisen abgeschlossen",
+    independent: "Selbstständig",
+    repeat_verified: "Mehrfach überprüft",
+    needs_review: "Braucht Wiederholung",
+  },
+  "ja-JP": {
+    not_verified: "まだ検証なし",
+    assisted: "ヒント付きで完了",
+    independent: "自力で完了",
+    repeat_verified: "繰り返し検証済み",
+    needs_review: "要復習",
+  },
+  "ko-KR": {
+    not_verified: "아직 검증 안 됨",
+    assisted: "힌트로 완료",
+    independent: "독립 완료",
+    repeat_verified: "반복 검증됨",
+    needs_review: "복습 필요",
+  },
+  "pt-BR": {
+    not_verified: "Ainda não verificado",
+    assisted: "Concluído com dicas",
+    independent: "Independente",
+    repeat_verified: "Verificado repetidamente",
+    needs_review: "Precisa de revisão",
+  },
+};
+
+export const COPY: Record<
+  ComposerLanguage,
+  {
+    ariaLabel: string;
+    title: string;
+    updated: (label: string) => string;
+    evidenceCount: (count: number) => string;
+    noEvidence: string;
+    notVerified: string;
+    transferAction: string;
+    empty: string;
+    startPracticing: string;
+    localeTag: string;
+    drilldownWhy: string;
+    drilldownEmpty: string;
+    drilldownNoScenario: string;
+    drilldownAssisted: string;
+    drilldownIndependent: string;
+  }
+> = {
+  "zh-CN": {
+    ariaLabel: "你的成长",
+    title: "你的成长",
+    updated: (label) => `更新于 ${label}`,
+    evidenceCount: (count) => `${count} 次验证通过`,
+    noEvidence: "还没有验证记录",
+    notVerified: "还未验证",
+        transferAction: "验证迁移：做一道陌生练习",
+    empty: "完成一次练习的验证后，这里会显示你在理解、实现、调试和迁移上的真实成长。",
+    startPracticing: "去练习",
+    localeTag: "zh-CN",
+    drilldownWhy: "为什么 Trainer 这样判断：",
+    drilldownEmpty: "还没有可展示的证据明细。",
+    drilldownNoScenario: "无场景标记",
+    drilldownAssisted: "有辅助",
+    drilldownIndependent: "独立完成",
+  },
+  "en-US": {
+    ariaLabel: "Your progress",
+    title: "Your progress",
+    updated: (label) => `Updated ${label}`,
+    evidenceCount: (count) => `${count} verification${count === 1 ? "" : "s"} passed`,
+    noEvidence: "No verifications yet",
+    notVerified: "Not verified yet",
+        transferAction: "Verify transfer: try an unfamiliar exercise",
+    empty:
+      "Once you verify a practice card, your real growth in comprehension, implementation, debugging, and transfer shows up here.",
+    startPracticing: "Start practicing",
+    localeTag: "en-US",
+    drilldownWhy: "Why Trainer judges it this way:",
+    drilldownEmpty: "No evidence detail to show yet.",
+    drilldownNoScenario: "No scenario tag",
+    drilldownAssisted: "With help",
+    drilldownIndependent: "Independent",
+  },
+  "es-ES": {
+    ariaLabel: "Tu progreso",
+    title: "Tu progreso",
+    updated: (label) => `Actualizado ${label}`,
+    evidenceCount: (count) => `${count} verificación${count === 1 ? "" : "es"} superada${count === 1 ? "" : "s"}`,
+    noEvidence: "Aún no hay verificaciones",
+    notVerified: "Aún sin verificar",
+        transferAction: "Verificar la transferencia: prueba un ejercicio poco familiar",
+    empty:
+      "Cuando verifiques una tarjeta de práctica, tu crecimiento real en comprensión, implementación, depuración y transferencia aparecerá aquí.",
+    startPracticing: "Empezar a practicar",
+    localeTag: "es-ES",
+    drilldownWhy: "Por qué Trainer lo evalúa así:",
+    drilldownEmpty: "Aún no hay detalle de evidencia.",
+    drilldownNoScenario: "Sin escenario",
+    drilldownAssisted: "Con ayuda",
+    drilldownIndependent: "Independiente",
+  },
+  "fr-FR": {
+    ariaLabel: "Votre progression",
+    title: "Votre progression",
+    updated: (label) => `Mis à jour ${label}`,
+    evidenceCount: (count) => `${count} vérification${count === 1 ? "" : "s"} réussie${count === 1 ? "" : "s"}`,
+    noEvidence: "Pas encore de vérifications",
+    notVerified: "Pas encore vérifié",
+        transferAction: "Vérifier le transfert : essayez un exercice inhabituel",
+    empty:
+      "Après la vérification d'une carte d'exercice, votre progression réelle en compréhension, implémentation, débogage et transfert apparaît ici.",
+    startPracticing: "Commencer à pratiquer",
+    localeTag: "fr-FR",
+    drilldownWhy: "Pourquoi Trainer juge ainsi :",
+    drilldownEmpty: "Pas encore de détail de preuve.",
+    drilldownNoScenario: "Sans scénario",
+    drilldownAssisted: "Avec aide",
+    drilldownIndependent: "Indépendant",
+  },
+  "de-DE": {
+    ariaLabel: "Dein Fortschritt",
+    title: "Dein Fortschritt",
+    updated: (label) => `Aktualisiert ${label}`,
+    evidenceCount: (count) => `${count} bestandene Überprüfung${count === 1 ? "" : "en"}`,
+    noEvidence: "Noch keine Überprüfungen",
+    notVerified: "Noch nicht überprüft",
+        transferAction: "Transfer überprüfen: eine ungewohnte Aufgabe versuchen",
+    empty:
+      "Sobald du eine Übungskarte überprüfst, erscheint hier dein echtes Wachstum in Verständnis, Implementierung, Fehlersuche und Transfer.",
+    startPracticing: "Jetzt üben",
+    localeTag: "de-DE",
+    drilldownWhy: "Warum Trainer so urteilt:",
+    drilldownEmpty: "Noch keine Belegdetails.",
+    drilldownNoScenario: "Ohne Szenario",
+    drilldownAssisted: "Mit Hilfe",
+    drilldownIndependent: "Selbstständig",
+  },
+  "ja-JP": {
+    ariaLabel: "あなたの成長",
+    title: "あなたの成長",
+    updated: (label) => `${label} 更新`,
+    evidenceCount: (count) => `${count} 回の検証に合格`,
+    noEvidence: "検証記録はまだありません",
+    notVerified: "まだ検証なし",
+        transferAction: "転用を検証する：見慣れない練習をひとつ",
+    empty:
+      "練習カードを検証すると、理解・実装・デバッグ・転用の本当の成長がここに表示されます。",
+    startPracticing: "練習を始める",
+    localeTag: "ja-JP",
+    drilldownWhy: "Trainer がこう判断した理由:",
+    drilldownEmpty: "表示できるエビデンスはまだありません。",
+    drilldownNoScenario: "シナリオ記録なし",
+    drilldownAssisted: "ヒント付き",
+    drilldownIndependent: "自力で完了",
+  },
+  "ko-KR": {
+    ariaLabel: "당신의 성장",
+    title: "당신의 성장",
+    updated: (label) => `${label} 업데이트`,
+    evidenceCount: (count) => `${count}회 검증 통과`,
+    noEvidence: "아직 검증 기록이 없습니다",
+    notVerified: "아직 검증 안 됨",
+        transferAction: "전이 검증: 익숙하지 않은 연습 하나 하기",
+    empty:
+      "연습 카드를 검증하면 이해·구현·디버깅·전이에 대한 실제 성장이 여기에 표시됩니다.",
+    startPracticing: "연습 시작",
+    localeTag: "ko-KR",
+    drilldownWhy: "Trainer가 이렇게 판단한 이유:",
+    drilldownEmpty: "아직 표시할 증거가 없습니다.",
+    drilldownNoScenario: "시나리오 기록 없음",
+    drilldownAssisted: "도움 받음",
+    drilldownIndependent: "독립 완료",
+  },
+  "pt-BR": {
+    ariaLabel: "Seu progresso",
+    title: "Seu progresso",
+    updated: (label) => `Atualizado ${label}`,
+    evidenceCount: (count) => `${count} verificação${count === 1 ? "" : "es"} aprovada${count === 1 ? "" : "s"}`,
+    noEvidence: "Nenhuma verificação ainda",
+    notVerified: "Ainda não verificado",
+        transferAction: "Verificar transferência: tente um exercício pouco familiar",
+    empty:
+      "Depois de verificar um cartão de prática, seu crescimento real em compreensão, implementação, depuração e transferência aparece aqui.",
+    startPracticing: "Começar a praticar",
+    localeTag: "pt-BR",
+    drilldownWhy: "Por que o Trainer julga assim:",
+    drilldownEmpty: "Ainda sem detalhes de evidência.",
+    drilldownNoScenario: "Sem cenário",
+    drilldownAssisted: "Com ajuda",
+    drilldownIndependent: "Independente",
+  },
+};

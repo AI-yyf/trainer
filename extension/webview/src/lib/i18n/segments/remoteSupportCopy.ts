@@ -2,8 +2,8 @@
  * Remote-support settings panel copy (§十五: eight languages, no zh/en
  * binaries in the Remote/SSH surface).
  */
-import type { ComposerLanguage } from "../../lib/types";
-import type { CompanionInstallState } from "../../../../../shared/src/companionInstallState";
+import type { ComposerLanguage } from "../../types";
+import type { CompanionInstallState } from "../../../../../../shared/src/companionInstallState";
 
 export type RemoteSupportCopy = {
   sectionTitle: string;

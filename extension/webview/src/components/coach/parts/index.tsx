@@ -33,7 +33,7 @@ import type {
 } from "../../../lib/types";
 import { StatusPill } from "../../StatusPill";
 import { CollapsibleBlock } from "../CollapsibleBlock";
-import { coachPartsCopy } from "../coachPartsCopy";
+import { coachPartsCopy } from "../../../lib/i18n/segments/coachPartsCopy";
 import {
   hasCoachToolResultFailure,
   resolveCoachToolResultCopy,

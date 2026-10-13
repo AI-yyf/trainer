@@ -9,6 +9,18 @@ const ts = require(require.resolve('typescript', {
 }));
 const vm = require('node:vm');
 
+// The composerLocaleCopy table migrated to the i18n home (2026-10-14); its
+// call sites stay in the component and are asserted against the component.
+const composerTableSourcePath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'segments',
+  'coachInlineText.ts',
+);
 const composerSourcePath = path.resolve(
   __dirname,
   '..',
@@ -93,7 +105,7 @@ function loadCopyModule() {
 
 test('Composer fallback labels are complete for every supported language', () => {
   const { source, sourceFile, objectLiteral } = findObjectLiteral(
-    composerSourcePath,
+    composerTableSourcePath,
     'composerLocaleCopy',
     ts.ScriptKind.TSX,
   );
@@ -120,8 +132,9 @@ test('Composer fallback labels are complete for every supported language', () =>
   }
 
   assert.doesNotMatch(source, /language === "zh-CN"/);
-  assert.match(source, /const emptySubmitLabel = emptySubmitAriaLabel\?\.trim\(\) \|\| localizedCopy\.emptySubmitLabel/);
-  assert.match(source, /aria-label=\{localizedCopy\.removeAttachment\}/);
+  const composerSource = fs.readFileSync(composerSourcePath, 'utf8');
+  assert.match(composerSource, /const emptySubmitLabel = emptySubmitAriaLabel\?\.trim\(\) \|\| localizedCopy\.emptySubmitLabel/);
+  assert.match(composerSource, /aria-label=\{localizedCopy\.removeAttachment\}/);
 });
 
 test('central Composer field labels resolve in every supported language', () => {

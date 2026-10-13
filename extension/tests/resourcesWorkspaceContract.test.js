@@ -29,6 +29,16 @@ const resourcesWorkbenchPath = path.resolve(
   'resources',
   'ResourcesWorkbenchView.tsx',
 );
+const resourcesInlineTextPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'segments',
+  'resourcesInlineText.ts',
+);
 const stylesPath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css');
 const browserHarnessPath = path.resolve(
   __dirname,
@@ -75,6 +85,9 @@ test('Resources toolbar stays reading-first: search plus one import entry, no ba
 
 test('Resources deletion confirms per resource and preserves recovery through the trash', () => {
   const source = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  // §十五: the deletion-confirmation copy moved verbatim into the i18n
+  // segment file; its content assertion slices there.
+  const inlineCopy = fs.readFileSync(resourcesInlineTextPath, 'utf8');
   const requestDeleteSource = sourceBlock(
     source,
     'const requestResourceDelete =',
@@ -88,7 +101,7 @@ test('Resources deletion confirms per resource and preserves recovery through th
 
   // One resource per request; the shared confirm flow still guards the write.
   assert.match(requestDeleteSource, /setDeleteConfirmationResourceIds\(\[resourceId\]\);/);
-  assert.match(source, /Move this resource to Trash/);
+  assert.match(inlineCopy, /Move this resource to Trash/);
   assert.match(confirmDeleteSource, /const resourceIds = deleteConfirmationResourceIds \?\? \[\];/);
   assert.match(confirmDeleteSource, /setPendingDeletedResourceIds\(resourceIds\);/);
   assert.match(confirmDeleteSource, /onDeleteResources\(resourceIds\)/);

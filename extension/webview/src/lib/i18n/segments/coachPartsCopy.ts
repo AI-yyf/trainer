@@ -1,6 +1,6 @@
 /** §十五: coach typed-part renderer copy in eight languages (no zh/en binary). */
 
-import type { ComposerLanguage } from "../../lib/types";
+import type { ComposerLanguage } from "../../types";
 
 /**
  * Copy used by the typed message-part renderers (parts/index.tsx). The zh-CN

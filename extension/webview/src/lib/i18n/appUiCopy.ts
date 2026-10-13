@@ -7,7 +7,7 @@
  * sentences stay English-identical across locales (speedTestCopy precedent).
  */
 
-import type { ComposerLanguage } from "../lib/types";
+import type { ComposerLanguage } from "../types";
 
 export const APP_UI_TEXT: Record<string, Record<string, string>> = {
   "↓ 还有 {n} 条": {

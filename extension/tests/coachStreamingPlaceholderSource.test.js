@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
-const appUiCopyPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'appUiCopy.ts');
+const appUiCopyPath = path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'appUiCopy.ts');
 // Round 3: the in-flight body moved into the conversation view's own store
 // subscription; App keeps the placeholder copy and the preview fallbacks.
 const conversationViewPath = path.resolve(

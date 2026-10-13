@@ -5,8 +5,8 @@
  * statically without pinning the whole TrainingWorkbenchView into the first
  * bundle — the view itself is lazy (§十四).
  */
-import type { ComposerLanguage } from "../../lib/types";
-import type { TrainingCardStatus } from "../../../../../shared/src/trainingCardRouting";
+import type { ComposerLanguage } from "../../types";
+import type { TrainingCardStatus } from "../../../../../../shared/src/trainingCardRouting";
 
 export type TrainingCardGrade = "again" | "hard" | "good" | "easy";
 
