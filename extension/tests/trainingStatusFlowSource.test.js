@@ -221,11 +221,11 @@ test('leftover-not-live context rail does not paint leftover dump as live activi
   );
   assert.match(
     railSource,
-    /leftoverTrainingActivityNotLive\s*\?\s*undefined\s*:\s*pickLanguageAlignedTrainingText\([\s\S]*?latestLearningBlocker/,
+    /leftoverTrainingActivityNotLive\s*\?\s*undefined\s*:\s*pickLanguageAlignedEvidenceText\([\s\S]*?latestLearningBlocker/,
   );
   assert.match(
     railSource,
-    /leftoverTrainingActivityNotLive\s*\?\s*undefined\s*:\s*pickLanguageAlignedTrainingText\([\s\S]*?latestLearningVerifiedResult/,
+    /leftoverTrainingActivityNotLive\s*\?\s*undefined\s*:\s*pickLanguageAlignedEvidenceText\([\s\S]*?latestLearningVerifiedResult/,
   );
   assert.doesNotMatch(railSource, /id: "current"/);
   assert.doesNotMatch(railSource, /Generate a training card/);

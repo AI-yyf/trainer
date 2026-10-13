@@ -54,25 +54,33 @@ const previewHarnessPath = path.resolve(
 test('training contextual chrome and unmatched fallbacks retain their language boundary', () => {
   const source = fs.readFileSync(appPath, 'utf8');
 
-  assert.match(source, /function pickLanguageAlignedTrainingText\([\s\S]*?isLanguageAlignedUiText\(language, resolved\)/);
+  // Localization ownership lives with the host sidecar: the old webview
+  // rewrite layer (localizeKnownCoachUiText + the global language-aligned
+  // training picker) is gone. Card/memory text is used directly via
+  // pickFirstText; only host sources that still emit English templates
+  // (evaluator summaries, handoff templates, card-router defaults) keep the
+  // narrow evidence picker.
+  assert.doesNotMatch(source, /function localizeKnownCoachUiText/);
+  assert.doesNotMatch(source, /function pickLanguageAlignedTrainingText/);
+  assert.match(source, /function pickLanguageAlignedEvidenceText\([\s\S]*?isLanguageAlignedUiText\(language, normalized\)/);
   assert.match(source, /function pickLanguageAlignedTrainingList\([\s\S]*?filter\(\(value\) => isLanguageAlignedUiText\(language, value\)\)/);
 
   assert.match(source, /const trainingDeliverables = pickLanguageAlignedTrainingList/);
   assert.match(source, /const cardScopedVerifyItems = pickLanguageAlignedTrainingList/);
   assert.match(source, /trainingWhyThisCard = leftoverTrainingHandoffChromeNotLive/);
-  assert.match(source, /const trainingProblemStatement = pickLanguageAlignedTrainingText/);
-  assert.match(source, /const trainingReturnWithText = leftoverTrainingHandoffChromeNotLive[\s\S]*?:\s*pickLanguageAlignedTrainingText/);
-  assert.match(source, /const trainingSuccessSignal = leftoverTrainingHandoffChromeNotLive[\s\S]*?:\s*pickLanguageAlignedTrainingText/);
+  assert.match(source, /const trainingProblemStatement = pickFirstText/);
+  assert.match(source, /const trainingReturnWithText = leftoverTrainingHandoffChromeNotLive[\s\S]*?:\s*pickLanguageAlignedEvidenceText/);
+  assert.match(source, /const trainingSuccessSignal = leftoverTrainingHandoffChromeNotLive[\s\S]*?:\s*pickLanguageAlignedEvidenceText/);
 
   assert.match(source, /whyThisCard: reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail : localizedWhyNow,/);
   assert.match(
     source,
-    /latestVerifiedResult:\s*reviewArtifactForeground\s*\? undefined\s*:\s*trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText/,
+    /latestVerifiedResult:\s*reviewArtifactForeground\s*\? undefined\s*:\s*trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*trainingState\?\.latestLearningVerifiedResult,/,
   );
   assert.match(source, /verificationNotice: trainingVerifyNotice,/);
   assert.match(
     source,
-    /latestLearningBlocker:\s*\(reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.blockedReason : undefined\) \?\?\s*\(leftoverTrainingHandoffChromeNotLive \|\| reviewArtifactForeground \|\| trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText/,
+    /latestLearningBlocker:\s*\(reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.blockedReason : undefined\) \?\?\s*\(leftoverTrainingHandoffChromeNotLive \|\| reviewArtifactForeground \|\| trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedEvidenceText/,
   );
   // recentWins / weakSpots were dead card-face threading (the focused view
   // never rendered them); the localized list helper stays owned by Growth.

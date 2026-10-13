@@ -24,7 +24,7 @@ test('Training source and coach chrome do not backfill leftover formal title', (
   assert.ok(sourceSummaryStart >= 0, 'expected the localized source-summary chain');
   assert.match(
     appSource.slice(sourceSummaryStart, sourceSummaryStart + 900),
-    /pickLanguageAlignedTrainingText\(\s*layout\.composerLanguage,\s*leftoverTrainingHandoffChromeNotLive\s*\?\s*undefined\s*:[\s\S]*?liveTrainingCoachChrome,/,
+    /pickLanguageAlignedEvidenceText\(\s*layout\.composerLanguage,\s*leftoverTrainingHandoffChromeNotLive\s*\?\s*undefined\s*:[\s\S]*?liveTrainingCoachChrome,/,
   );
   assert.doesNotMatch(
     appSource,

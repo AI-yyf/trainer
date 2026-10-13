@@ -1231,19 +1231,6 @@ const SHORT_ZH_TECHNICAL_ENGLISH_TOKENS = new Set([
   "kimi",
 ]);
 
-const KNOWN_COACH_UI_ZH_REPLACEMENTS: Array<[string, string]> = [
-  ["function contract and call-site reading", "函数契约与 call site 判断"],
-  ["the smallest trustworthy debug loop", "最小可信的 debug loop"],
-  ["remote workspace boundary", "远程工作区边界"],
-  ["VS Code remote workflow", "VS Code 远程工作流"],
-  ["Code remote workflow", "远程工作流"],
-  ["VS Code remote workspace", "VS Code 远程工作区"],
-  ["VS Code function guidance", "VS Code 函数提示"],
-  ["function contract recovery", "恢复函数契约"],
-  ["function contract reading", "函数契约判断"],
-  ["VS Code debug loop", "VS Code 调试闭环"],
-];
-
 function tokenizeAsciiWords(value: string): string[] {
   return value.toLowerCase().match(/[a-z]+(?:[/-][a-z0-9]+)*/g) ?? [];
 }
@@ -1313,41 +1300,6 @@ function isLanguageAlignedUiText(language: ComposerLanguage, value: string | und
     !containsJapaneseText(normalized) &&
     !containsKoreanText(normalized)
   );
-}
-
-function localizeKnownCoachUiText(
-  value: string | undefined,
-  language: ComposerLanguage,
-): string | undefined {
-  if (!value) {
-    return value;
-  }
-  if (language !== "zh-CN") {
-    return value;
-  }
-
-  let cleaned = value;
-  const laneMatch = cleaned.match(
-    /^Continue\s+['"](?<focus>.+?)['"]\s+and do not open a new lane before this next move lands:\s*(?<rest>.+)$/i,
-  );
-  if (laneMatch?.groups) {
-    const localizedFocus =
-      localizeKnownCoachUiText(laneMatch.groups.focus, language)?.trim() || laneMatch.groups.focus;
-    const localizedRest =
-      localizeKnownCoachUiText(laneMatch.groups.rest, language)?.trim() || laneMatch.groups.rest;
-    cleaned = `继续沿着「${localizedFocus}」这条主线，先别开新线。${localizedRest}`;
-  }
-
-  for (const [source, target] of KNOWN_COACH_UI_ZH_REPLACEMENTS) {
-    cleaned = cleaned.replace(new RegExp(source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), target);
-  }
-
-  const exactFocusMap: Record<string, string> = {
-    "debug loop": "调试闭环",
-    "function contract": "函数契约判断",
-    "call-site reading": "call site 判断",
-  };
-  return localizeUiViewReferences(exactFocusMap[cleaned.trim().toLowerCase()] ?? cleaned, language);
 }
 
 function skillSectionTargetView(section: TrainerSkillSection): ActiveWorkbenchView {
@@ -1714,63 +1666,45 @@ function pickFirstText(...values: Array<string | undefined | null>): string | un
   return values.find((value) => Boolean(value?.trim()))?.trim();
 }
 
-function pickLanguageAlignedUiText(
+/**
+ * Narrow language-alignment guard for training evidence text whose host
+ * sources still emit English templates regardless of response language:
+ * evaluator verification summaries, training-handoff templates, and
+ * card-router routing defaults. Card content, review hints, and coach memory
+ * surfaces are localized by the sidecar and must be used directly (via
+ * pickFirstText); this picker only keeps the view's localized fallback copy in
+ * place when every remaining candidate is a foreign-language template. Each
+ * call site here is recorded debt: move it to direct host text once its server
+ * source is localized.
+ */
+function pickLanguageAlignedEvidenceText(
   language: ComposerLanguage,
-  fallback: string | undefined,
   ...values: Array<string | undefined | null>
 ): string | undefined {
   for (const value of values) {
-    const normalized = localizeKnownCoachUiText(value?.trim() ?? undefined, language)?.trim();
+    const normalized = value?.trim();
     if (normalized && isLanguageAlignedUiText(language, normalized)) {
       return normalized;
     }
   }
-  return localizeKnownCoachUiText(fallback ?? pickFirstText(...values) ?? undefined, language);
-}
-
-function pickLanguageAlignedUiList(
-  language: ComposerLanguage,
-  values: Array<string | undefined | null>,
-): string[] {
-  const localized = values
-    .map((value) => localizeKnownCoachUiText(value?.trim() ?? undefined, language)?.trim())
-    .filter((value): value is string => Boolean(value));
-
-  const aligned = localized.filter((value) => isLanguageAlignedUiText(language, value));
-  if (aligned.length > 0) {
-    return Array.from(new Set(aligned));
-  }
-
-  if (language === "zh-CN") {
-    return Array.from(new Set(localized.filter((value) => !looksLikeChineseMojibake(value))));
-  }
-
-  return [];
-}
-
-/**
- * Training cards are learner-facing assessment material, not ambient UI. When
- * the current language is Chinese, an unlocalized sentence must not leak into
- * the card just because it is the only available upstream value. The card has
- * its own localized fallback copy for omitted optional fields.
- */
-function pickLanguageAlignedTrainingText(
-  language: ComposerLanguage,
-  ...values: Array<string | undefined | null>
-): string | undefined {
-  const resolved = pickLanguageAlignedUiText(language, undefined, ...values);
-  return resolved && isLanguageAlignedUiText(language, resolved) ? resolved : undefined;
+  return undefined;
 }
 
 function pickLanguageAlignedTrainingList(
   language: ComposerLanguage,
   values: Array<string | undefined | null>,
 ): string[] {
-  const resolved = values
-    .map((value) => localizeKnownCoachUiText(value?.trim() ?? undefined, language)?.trim())
-    .filter((value): value is string => Boolean(value))
-    .filter((value) => isLanguageAlignedUiText(language, value));
-  return Array.from(new Set(resolved));
+  const normalized = values
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+  const aligned = normalized.filter((value) => isLanguageAlignedUiText(language, value));
+  if (aligned.length > 0) {
+    return Array.from(new Set(aligned));
+  }
+  if (language === "zh-CN") {
+    return Array.from(new Set(normalized.filter((value) => !looksLikeChineseMojibake(value))));
+  }
+  return [];
 }
 
 function joinInlineMeta(values: Array<string | undefined | null>): string | undefined {
@@ -2716,7 +2650,7 @@ function localizeContextNote(value: string | undefined, language: ComposerLangua
     return "参考了 Python 文件上下文";
   }
 
-  return localizeKnownCoachUiText(value, language);
+  return value;
 }
 
 function localizeConversationMessage(
@@ -2726,7 +2660,7 @@ function localizeConversationMessage(
 ): ConversationMessage {
   return {
     ...message,
-    body: localizeKnownCoachUiText(message.body, language) ?? message.body,
+    body: message.body,
     author:
       message.role === "user" && message.author.trim().toLowerCase() === "you"
         ? t.you
@@ -6958,8 +6892,7 @@ export function App() {
     recovered: formalPlanIdentity.recovered && !independentTrainingSelectionLive,
     planTitle: data.plan.title,
     taskTitle: data.task.title,
-    cardTitle: pickLanguageAlignedTrainingText(
-      layout.composerLanguage,
+    cardTitle: pickFirstText(
       trainingRestoreForeground ? selectedTrainingCardCandidate?.title : undefined,
       leftoverTrainingHandoffChromeNotLive ? undefined : trainingState?.selectedCardTitle,
       leftoverTrainingHandoffChromeNotLive ? undefined : selectedTrainingRouteCard?.title,
@@ -6982,19 +6915,17 @@ export function App() {
     cardType: trainingCardType,
     learningFamily: trainingLearningFamily,
   });
-  const trainingScenarioPackLabel = pickLanguageAlignedTrainingText(
-    layout.composerLanguage,
+  const trainingScenarioPackLabel = pickFirstText(
     selectedTrainingCardCandidate?.scenarioPack,
     selectedTrainingRouteCard?.scenarioPack,
     trainingState?.latestTrainingHandoff?.scenarioPack,
     trainingState?.latestTrainingNextHop?.scenarioPack,
   );
-  const trainingSuggestedWorkspaceAction = pickLanguageAlignedTrainingText(
-    layout.composerLanguage,
+  const trainingSuggestedWorkspaceAction = pickFirstText(
     selectedTrainingCardCandidate?.suggestedWorkspaceAction,
     selectedTrainingRouteCard?.suggestedWorkspaceAction,
   );
-  const trainingScenario = pickLanguageAlignedTrainingText(
+  const trainingScenario = pickLanguageAlignedEvidenceText(
     layout.composerLanguage,
     selectedTrainingCardCandidate?.scenario,
     selectedTrainingRouteCard?.scenario,
@@ -7062,35 +6993,30 @@ export function App() {
     ...(selectedTrainingCardCandidate?.commonMistakes ?? []),
     ...(selectedTrainingRouteCard?.commonMistakes ?? []),
   ]);
-  const trainingStuckRecovery = pickLanguageAlignedTrainingText(
-    layout.composerLanguage,
+  const trainingStuckRecovery = pickFirstText(
     selectedTrainingCardCandidate?.stuckRecovery,
     selectedTrainingRouteCard?.stuckRecovery,
   );
-  const trainingReflectionPrompt = pickLanguageAlignedTrainingText(
-    layout.composerLanguage,
+  const trainingReflectionPrompt = pickFirstText(
     selectedTrainingCardCandidate?.reflectionPrompt,
     selectedTrainingRouteCard?.reflectionPrompt,
   );
   const trainingWhyThisCard = leftoverTrainingHandoffChromeNotLive
     ? undefined
-    : pickLanguageAlignedTrainingText(
+    : pickLanguageAlignedEvidenceText(
         layout.composerLanguage,
         trainingState?.activeTrainingCardRouting?.whyThisCard,
         trainingLedgerEntry?.whyThisCard,
       );
-  const trainingDeliverable = pickLanguageAlignedTrainingText(
-    layout.composerLanguage,
+  const trainingDeliverable = pickFirstText(
     selectedTrainingCardCandidate?.deliverable,
     selectedTrainingRouteCard?.deliverable,
   );
-  const trainingValidationMethod = pickLanguageAlignedTrainingText(
-    layout.composerLanguage,
+  const trainingValidationMethod = pickFirstText(
     selectedTrainingCardCandidate?.validationMethod,
     selectedTrainingRouteCard?.validationMethod,
   );
-  const trainingVerificationMethod = pickLanguageAlignedTrainingText(
-    layout.composerLanguage,
+  const trainingVerificationMethod = pickFirstText(
     selectedTrainingCardCandidate?.verificationMethod,
     selectedTrainingRouteCard?.verificationMethod,
   );
@@ -7117,12 +7043,12 @@ export function App() {
   const authoritativeVerifyItems =
     cardScopedVerifyItems.length > 0 ? cardScopedVerifyItems : contextualTrainingVerifyItems;
   const trainingCardWhy = leftoverTrainingHandoffChromeNotLive
-    ? pickLanguageAlignedTrainingText(
+    ? pickLanguageAlignedEvidenceText(
         layout.composerLanguage,
         runtimeWhyNow,
         recoveredRuntime ? recoveredDisplayFacts.whyNow : undefined,
       )
-    : pickLanguageAlignedTrainingText(
+    : pickLanguageAlignedEvidenceText(
         layout.composerLanguage,
         trainingWhyThisCard,
         selectedTrainingCardCandidate?.whyNow,
@@ -7193,7 +7119,7 @@ export function App() {
   });
   const trainingReturnWithText = leftoverTrainingHandoffChromeNotLive
     ? undefined
-    : pickLanguageAlignedTrainingText(
+    : pickLanguageAlignedEvidenceText(
         layout.composerLanguage,
         liveTrainingHandoffChrome.returnWith,
         selectedTrainingCardCandidate?.returnWith,
@@ -7202,7 +7128,7 @@ export function App() {
       );
   const trainingNextAfterCompletionText = leftoverTrainingHandoffChromeNotLive
     ? undefined
-    : pickLanguageAlignedTrainingText(
+    : pickLanguageAlignedEvidenceText(
         layout.composerLanguage,
         liveTrainingHandoffChrome.nextAfterCompletion,
         liveTrainingHandoffChrome.nextHopNextAfterCompletion,
@@ -7215,7 +7141,7 @@ export function App() {
       );
   const trainingFallbackActionText = leftoverTrainingHandoffChromeNotLive
     ? undefined
-    : pickLanguageAlignedTrainingText(
+    : pickLanguageAlignedEvidenceText(
         layout.composerLanguage,
         liveTrainingHandoffChrome.fallbackAction,
         liveTrainingHandoffChrome.nextHopFallbackAction,
@@ -7228,7 +7154,7 @@ export function App() {
       );
   const trainingSuccessSignal = leftoverTrainingHandoffChromeNotLive
     ? undefined
-    : pickLanguageAlignedTrainingText(
+    : pickLanguageAlignedEvidenceText(
         layout.composerLanguage,
         liveTrainingHandoffChrome.successSignal,
         trainingState?.latestTrainingHandoff?.successSignal,
@@ -7240,7 +7166,7 @@ export function App() {
     trainingState?.dueReviews?.length ? trainingState.dueReviews : data.memory.dueReviews;
   const primaryDueReview = authoritativeDueReviews[0];
   const primaryDueReviewTitle = primaryDueReview
-    ? pickLanguageAlignedTrainingText(layout.composerLanguage, reviewConceptLabel(primaryDueReview.concept)) ??
+    ? pickLanguageAlignedEvidenceText(layout.composerLanguage, reviewConceptLabel(primaryDueReview.concept)) ??
       t.reviewQueue
     : undefined;
   const trainingReviewItems = useMemo<TrainingReviewItem[]>(
@@ -7248,14 +7174,14 @@ export function App() {
       authoritativeDueReviews.slice(0, 4).map((item, index) => ({
         id: `training-review-${index}-${item.concept}`,
         title:
-          pickLanguageAlignedTrainingText(layout.composerLanguage, reviewConceptLabel(item.concept)) ??
+          pickLanguageAlignedEvidenceText(layout.composerLanguage, reviewConceptLabel(item.concept)) ??
           t.reviewQueue,
         concept: item.concept,
-        focusArea: pickLanguageAlignedTrainingText(layout.composerLanguage, item.focusArea) ?? item.focusArea ?? item.concept,
-        taskHint: pickLanguageAlignedTrainingText(layout.composerLanguage, item.taskHint, item.reason) ?? item.reason,
+        focusArea: pickLanguageAlignedEvidenceText(layout.composerLanguage, item.focusArea) ?? item.focusArea ?? item.concept,
+        taskHint: pickLanguageAlignedEvidenceText(layout.composerLanguage, item.taskHint, item.reason) ?? item.reason,
         due: item.dueAt,
         fsrs: { intervalDays: item.intervalDays, masteryScore: item.masteryScore },
-        detail: pickLanguageAlignedTrainingText(layout.composerLanguage, item.taskHint, item.reason),
+        detail: pickLanguageAlignedEvidenceText(layout.composerLanguage, item.taskHint, item.reason),
         meta: joinInlineMeta(
           pickLanguageAlignedTrainingList(layout.composerLanguage, [item.focusArea, item.severity, item.dueAt]),
         ),
@@ -7345,7 +7271,7 @@ export function App() {
   const trainingOutcomeCard: TrainingSummaryCard | undefined = trainingRestoreReplacesSelectedCard
     ? undefined
     : (() => {
-    const verifiedResult = pickLanguageAlignedTrainingText(
+    const verifiedResult = pickLanguageAlignedEvidenceText(
       layout.composerLanguage,
       trainingState?.latestLearningVerifiedResult,
       activeTrainingReviewArtifact?.verifiedResult,
@@ -7362,7 +7288,7 @@ export function App() {
       };
     }
 
-    const blocker = pickLanguageAlignedTrainingText(
+    const blocker = pickLanguageAlignedEvidenceText(
       layout.composerLanguage,
       trainingState?.latestLearningBlocker,
       trainingState?.latestTrainingHandoff?.blockedBy,
@@ -7378,7 +7304,7 @@ export function App() {
       };
     }
 
-    const partialProgress = pickLanguageAlignedTrainingText(
+    const partialProgress = pickLanguageAlignedEvidenceText(
       layout.composerLanguage,
       trainingState?.latestLearningPartialProgress,
       activeTrainingReviewArtifact?.partialProgress,
@@ -7400,7 +7326,7 @@ export function App() {
       ? undefined
       : {
           title:
-            pickLanguageAlignedTrainingText(
+            pickLanguageAlignedEvidenceText(
               layout.composerLanguage,
               liveTrainingHandoffChrome.nextHopTitle,
               liveTrainingHandoffChrome.nextHopCardTitle,
@@ -7409,7 +7335,7 @@ export function App() {
             ) ??
             localizeTrainingNextHopLabel(layout.composerLanguage, "target_kind", "next_hop") ??
             localizeTrainingNextHopLabel(layout.composerLanguage, "fallback_title"),
-          detail: pickLanguageAlignedTrainingText(
+          detail: pickLanguageAlignedEvidenceText(
             layout.composerLanguage,
             liveTrainingHandoffChrome.nextHopSummary,
             liveTrainingHandoffChrome.nextHopWhyNow,
@@ -7625,14 +7551,13 @@ export function App() {
       ? trainingState.theoryDrill
       : undefined;
   const flashQuestion = activeTheoryDrill?.questions?.[0];
-  const trainingFlashPrompt = pickLanguageAlignedTrainingText(
-    layout.composerLanguage,
+  const trainingFlashPrompt = pickFirstText(
     selectedTrainingFlashCard?.question,
     flashQuestion?.prompt,
     selectedTrainingFlashCard?.problemStatement,
     selectedTrainingFlashCard?.scenario,
   );
-  const trainingTargetSkill = pickLanguageAlignedTrainingText(
+  const trainingTargetSkill = pickLanguageAlignedEvidenceText(
     layout.composerLanguage,
     selectedTrainingCardCandidate?.targetSkill,
     selectedTrainingRouteCard?.targetSkill,
@@ -7645,8 +7570,7 @@ export function App() {
     cardSkill: trainingTargetSkill,
     liveFocus: liveTrainingFocus,
   });
-  const trainingProblemStatement = pickLanguageAlignedTrainingText(
-    layout.composerLanguage,
+  const trainingProblemStatement = pickFirstText(
     trainingCardType === "flash" ? trainingFlashPrompt : undefined,
     selectedTrainingCardCandidate?.problemStatement,
     selectedTrainingRouteCard?.problemStatement,
@@ -9043,13 +8967,8 @@ export function App() {
       const targetView = skillSectionTargetView(submittedSkill.section);
       const followupText = normalizedDraft.slice(submittedSkillTrigger.length).trim();
       const skillPrompt =
-        localizeKnownCoachUiText(
-          resolveTrainerSkillText(submittedSkill.prompt, layout.composerLanguage) ||
-            resolveTrainerSkillText(submittedSkill.detail, layout.composerLanguage) ||
-            resolveTrainerSkillText(submittedSkill.title, layout.composerLanguage),
-          layout.composerLanguage,
-        ) ??
-        resolveTrainerSkillText(submittedSkill.detail, layout.composerLanguage) ??
+        resolveTrainerSkillText(submittedSkill.prompt, layout.composerLanguage) ||
+        resolveTrainerSkillText(submittedSkill.detail, layout.composerLanguage) ||
         resolveTrainerSkillText(submittedSkill.title, layout.composerLanguage);
       const formalPlanSkill = submittedSkill.commandId === trainerCommands.generatePlan;
 
@@ -11701,7 +11620,7 @@ export function App() {
     const blockerValue = isTraining
       ? leftoverTrainingActivityNotLive
         ? undefined
-        : pickLanguageAlignedTrainingText(
+        : pickLanguageAlignedEvidenceText(
           layout.composerLanguage,
           trainingState?.latestLearningBlocker,
           trainingState?.latestTrainingHandoff?.blockedBy,
@@ -11717,7 +11636,7 @@ export function App() {
     const resultValue = isTraining
       ? leftoverTrainingActivityNotLive
         ? undefined
-        : pickLanguageAlignedTrainingText(
+        : pickLanguageAlignedEvidenceText(
           layout.composerLanguage,
           trainingState?.latestLearningVerifiedResult,
           activeTrainingReviewArtifact?.verifiedResult,
@@ -12531,7 +12450,7 @@ export function App() {
 
   const renderTrainingView = () => {
     const title = hasRenderableTrainingCard
-      ? readTrainingCardText(boundTrainingCardFacts, "title", () => pickLanguageAlignedTrainingText(
+      ? readTrainingCardText(boundTrainingCardFacts, "title", () => pickLanguageAlignedEvidenceText(
           layout.composerLanguage,
           visibleTrainingCardTitle,
           leftoverTrainingHandoffChromeNotLive
@@ -12555,8 +12474,7 @@ export function App() {
         ? boundTrainingCardFacts.text.problemStatement ??
           boundTrainingCardFacts.text.suggestedWorkspaceAction ??
           boundTrainingCardFacts.text.deliverable ?? ""
-        : pickLanguageAlignedTrainingText(
-          layout.composerLanguage,
+        : pickFirstText(
           trainingProblemStatement,
           trainingSuggestedWorkspaceAction,
           trainingDeliverables[0],
@@ -12565,25 +12483,21 @@ export function App() {
         ) ?? ""
       : "";
     const localizedSuggestedWorkspaceAction = hasRenderableTrainingCard
-      ? readTrainingCardText(boundTrainingCardFacts, "suggestedWorkspaceAction", () => pickLanguageAlignedTrainingText(
-          layout.composerLanguage,
-          trainingSuggestedWorkspaceAction,
-        ))
+      ? readTrainingCardText(boundTrainingCardFacts, "suggestedWorkspaceAction", () => trainingSuggestedWorkspaceAction)
       : undefined;
     const localizedScenario = hasRenderableTrainingCard
       ? boundTrainingCardFacts
         ? boundTrainingCardFacts.text.scenario ?? boundTrainingCardFacts.text.scenarioPack
-        : pickLanguageAlignedTrainingText(
-          layout.composerLanguage,
+        : pickFirstText(
           trainingScenario,
           trainingScenarioPackLabel,
         )
       : undefined;
     const localizedWhyNow = hasRenderableTrainingCard
-      ? readTrainingCardText(boundTrainingCardFacts, "whyNow", () => pickLanguageAlignedTrainingText(layout.composerLanguage, liveTrainingWhy))
+      ? readTrainingCardText(boundTrainingCardFacts, "whyNow", () => liveTrainingWhy)
       : undefined;
     const localizedSourceSummary = hasRenderableTrainingCard
-      ? pickLanguageAlignedTrainingText(
+      ? pickLanguageAlignedEvidenceText(
           layout.composerLanguage,
           leftoverTrainingHandoffChromeNotLive
             ? undefined
@@ -12609,7 +12523,7 @@ export function App() {
             ? selectedTrainingCardCandidate.focusArea : undefined,
           selectedTrainingRouteCard && selectedTrainingRouteCard.cardId === activeTrainingCardId
             ? selectedTrainingRouteCard.focusArea : undefined,
-        ) ?? pickLanguageAlignedTrainingText(
+        ) ?? pickLanguageAlignedEvidenceText(
           layout.composerLanguage,
           leftoverTrainingFocusChromeNotLive ? undefined : liveTrainingFocusChrome.latestLearningFocusArea,
           leftoverTrainingFocusChromeNotLive ? undefined : liveTrainingFocusChrome.cardFocusArea,
@@ -12680,7 +12594,7 @@ export function App() {
             sourceSummary: localizedSourceSummary,
             sourceDetail:
               hasRenderableTrainingCard
-                ? pickLanguageAlignedTrainingText(
+                ? pickLanguageAlignedEvidenceText(
                     layout.composerLanguage,
                     leftoverTrainingHandoffChromeNotLive
                       ? undefined
@@ -12755,15 +12669,12 @@ export function App() {
                 ? undefined
                 : trainingRestoreReplacesSelectedCard
                 ? undefined
-                : pickLanguageAlignedTrainingText(
-                    layout.composerLanguage,
-                    trainingState?.latestLearningVerifiedResult,
-                  ) ?? trainingState?.latestLearningVerifiedResult,
+                : trainingState?.latestLearningVerifiedResult,
             latestLearningBlocker:
               (reviewArtifactForeground ? trainingState?.reviewArtifact?.blockedReason : undefined) ??
               (leftoverTrainingHandoffChromeNotLive || reviewArtifactForeground || trainingRestoreReplacesSelectedCard
                 ? undefined
-                : pickLanguageAlignedTrainingText(
+                : pickLanguageAlignedEvidenceText(
                     layout.composerLanguage,
                     liveTrainingHandoffChrome.blocker,
                     trainingState?.latestLearningBlocker,
@@ -12777,7 +12688,7 @@ export function App() {
             latestLearningFollowup:
               leftoverTrainingHandoffChromeNotLive || reviewArtifactForeground || trainingRestoreReplacesSelectedCard
                 ? undefined
-                : pickLanguageAlignedTrainingText(
+                : pickLanguageAlignedEvidenceText(
                     layout.composerLanguage,
                     liveTrainingHandoffChrome.followup,
                     trainingState?.latestLearningFollowup,
@@ -12788,8 +12699,7 @@ export function App() {
             if (payload.action === "accept") beginTrainingReview();
             handleReviewQueueAction(payload);
           }}
-          reviewSummary={pickLanguageAlignedTrainingText(
-            layout.composerLanguage,
+          reviewSummary={pickFirstText(
             formattedNextReviewDue,
             data.memory.reviewSummary,
           )}

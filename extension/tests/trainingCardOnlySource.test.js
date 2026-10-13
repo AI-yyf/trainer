@@ -77,9 +77,9 @@ test('training cards preserve their explicit deliverable and verification contra
   const source = fs.readFileSync(trainingViewSourcePath, 'utf8');
   const appSource = fs.readFileSync(appSourcePath, 'utf8');
 
-  assert.match(appSource, /const trainingDeliverable = pickLanguageAlignedTrainingText/);
-  assert.match(appSource, /const trainingValidationMethod = pickLanguageAlignedTrainingText/);
-  assert.match(appSource, /const trainingVerificationMethod = pickLanguageAlignedTrainingText/);
+  assert.match(appSource, /const trainingDeliverable = pickFirstText/);
+  assert.match(appSource, /const trainingValidationMethod = pickFirstText/);
+  assert.match(appSource, /const trainingVerificationMethod = pickFirstText/);
   assert.match(appSource, /trainingDeliverable,[\s\S]*?learnerDeliverables/);
   assert.match(appSource, /trainingValidationMethod,[\s\S]*?trainingVerificationMethod,[\s\S]*?verificationSteps/);
   assert.match(appSource, /hasTrainingCard \? readTrainingCardText\(boundTrainingCardFacts, "deliverable", \(\) => trainingDeliverable\) : undefined/);

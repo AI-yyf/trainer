@@ -1146,6 +1146,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         ("VS Code remote workspace", "VS Code 远程工作区"),
         ("VS Code function guidance", "VS Code 函数提示"),
         ("function contract recovery", "\u6062\u590d\u51fd\u6570\u5951\u7ea6"),
+        ("function contract reading", "\u51fd\u6570\u5951\u7ea6\u5224\u65ad"),
         ("VS Code debug loop", "VS Code 调试闭环"),
     )
 

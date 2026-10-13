@@ -182,12 +182,12 @@ test('training verification-return strip is driven by snapshot status, not summa
   );
   assert.match(
     appSource,
-    /latestVerifiedResult:\s*reviewArtifactForeground\s*\? undefined\s*:\s*trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*pickLanguageAlignedTrainingText\(/,
+    /latestVerifiedResult:\s*reviewArtifactForeground\s*\? undefined\s*:\s*trainingRestoreReplacesSelectedCard\s*\? undefined\s*:\s*trainingState\?\.latestLearningVerifiedResult,/,
   );
   assert.match(appSource, /verificationNotice: trainingVerifyNotice,/);
   assert.match(
     appSource,
-    /latestLearningBlocker:\s*\(reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.blockedReason : undefined\) \?\?[\s\S]*?trainingRestoreReplacesSelectedCard[\s\S]*?pickLanguageAlignedTrainingText\(/,
+    /latestLearningBlocker:\s*\(reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.blockedReason : undefined\) \?\?[\s\S]*?trainingRestoreReplacesSelectedCard[\s\S]*?pickLanguageAlignedEvidenceText\(/,
   );
   assert.match(appSource, /const trainingComposerManualPracticeMode =/);
   assert.match(appSource, /const trainingComposerFilePracticeMode =/);
@@ -339,7 +339,7 @@ test('training app prefers practice when selection is ambiguous and passes real 
   assert.match(appSource, /function firstTrainingCardOfType/);
   assert.match(appSource, /routeSelectedCardId/);
   assert.match(appSource, /selectedTrainingCardCandidate\?\.type \?\? "practice"/);
-  assert.match(appSource, /const trainingScenarioPackLabel = pickLanguageAlignedTrainingText\(/);
+  assert.match(appSource, /const trainingScenarioPackLabel = pickFirstText\(/);
   assert.match(appSource, /const selectedTrainingFlashCard =/);
   assert.match(appSource, /selectedTrainingFlashCard\?\.question/);
   assert.match(appSource, /selectedTrainingFlashCard\?\.choices\?\.length/);
