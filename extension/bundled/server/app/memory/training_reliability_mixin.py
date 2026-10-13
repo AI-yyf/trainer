@@ -13,18 +13,23 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable
 
 from ..training.reliability import (
+    TRAINING_RELIABILITY_DEDUPE_KEY,
     WORKSPACE_RELIABILITY_KEY,
     WORKSPACE_SNAPSHOT_REVISION_KEY,
     as_workspace_record,
     begin_record,
+    dedupe_entry_for,
     expire_if_needed,
+    is_in_flight,
     mark_executing,
     mark_failed,
     mark_succeeded,
+    record_dedupe_entry,
     recover_record,
     request_cancel,
     should_coalesce,
     should_replay,
+    training_dedupe_key,
 )
 
 if TYPE_CHECKING:
@@ -39,24 +44,33 @@ class TrainingReliabilityMixin:
         def _resolve_workspace_for_write(self, workspace_id: str | None) -> str: ...
         def _structured_for(self, workspace_id: str) -> StructuredMemoryService: ...
         def _persist_structured(self, workspace_id: str) -> None: ...
+        def _iter_structured_workspaces(self) -> list[tuple[str, StructuredMemoryService]]: ...
 
     def _load_training_reliability(self, structured: StructuredMemoryService) -> dict[str, Any] | None:
         payload = structured._workspace.get(WORKSPACE_RELIABILITY_KEY)
         return dict(payload) if isinstance(payload, dict) else None
+
+    def _load_training_dedupe(self, structured: StructuredMemoryService) -> dict[str, Any]:
+        payload = structured._workspace.get(TRAINING_RELIABILITY_DEDUPE_KEY)
+        return dict(payload) if isinstance(payload, dict) else {}
 
     def _save_training_reliability(
         self,
         workspace_id: str,
         structured: StructuredMemoryService,
         record: dict[str, Any],
+        dedupe: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         snapshot_revision = int(record.get("snapshot_revision") or 0)
+        fields: dict[str, Any] = {
+            WORKSPACE_RELIABILITY_KEY: as_workspace_record(record),
+            WORKSPACE_SNAPSHOT_REVISION_KEY: snapshot_revision or None,
+        }
+        if dedupe is not None:
+            fields[TRAINING_RELIABILITY_DEDUPE_KEY] = dedupe
         workspace = structured.update_workspace(
             workspace_id=workspace_id,
-            **{
-                WORKSPACE_RELIABILITY_KEY: as_workspace_record(record),
-                WORKSPACE_SNAPSHOT_REVISION_KEY: snapshot_revision or None,
-            },
+            **fields,
         )
         self._persist_structured(workspace_id)
         return dict(workspace)
@@ -145,6 +159,38 @@ class TrainingReliabilityMixin:
             raise LookupError("No training reliability request is available to expire.")
         return self._save_training_reliability(resolved, structured, record)
 
+    def expire_in_flight_training_reliability_at_startup(self) -> list[str]:
+        """Expire in-flight training saves orphaned by a previous process.
+
+        A sidecar restart orphans every intent/pending/executing record: the
+        process that could complete — or honestly fail — that work is gone.
+        Left alone, the stale ``executing`` record lingers on the workspace
+        until its timeout elapses (the recorded "延迟可见" defect), so the
+        startup sweep transitions it immediately to an honest failed/
+        recoverable state. Only in-flight phases are touched: a succeeded or
+        acked record is never rewritten, and nothing here fabricates success —
+        a retry re-runs the body under its idempotency key, which the
+        body-level dedupe ledger keeps from double-recording.
+        """
+        expired: list[str] = []
+        for workspace_id, structured in list(self._iter_structured_workspaces()):
+            record = self._load_training_reliability(structured)
+            if record is None or not is_in_flight(str(record.get("phase") or "")):
+                continue
+            # _iter_structured_workspaces yields detached instances for
+            # repository-loaded workspaces; writing through such a copy would
+            # be discarded when _persist_structured re-loads the cached
+            # instance. Discover here, mutate through the live instance.
+            live_structured = self._structured_for(workspace_id)
+            live_record = self._load_training_reliability(live_structured) or record
+            failed = mark_failed(
+                live_record,
+                "Training persistence was interrupted by a sidecar restart.",
+            )
+            self._save_training_reliability(workspace_id, live_structured, failed)
+            expired.append(workspace_id)
+        return expired
+
     def run_training_reliability(
         self,
         workspace_id: str | None,
@@ -182,6 +228,20 @@ class TrainingReliabilityMixin:
             command_id=command_id,
             card_id=card_id,
         ):
+            return dict(structured._workspace)
+
+        # Body-level idempotency (2026-10-14): the single-slot replay window
+        # ends when a neighbouring training save replaces the slot, and a
+        # resent key whose in-flight record timed out falls into the recover
+        # path — both used to re-execute a body that had already persisted
+        # durably (the recorded duplicate host-evidence defect). A ledgered
+        # SUCCESS is final: replay the current workspace, never re-run. A
+        # ledgered FAILURE keeps the recover path open for a genuine retry.
+        dedupe_key = training_dedupe_key(request_id, idempotency_key)
+        executed = dedupe_entry_for(
+            self._load_training_dedupe(structured), dedupe_key
+        )
+        if executed is not None and str(executed.get("outcome") or "") == "success":
             return dict(structured._workspace)
 
         if existing is not None and str(existing.get("phase") or "") in {"failed", "cancelled"}:
@@ -226,7 +286,12 @@ class TrainingReliabilityMixin:
         except Exception as exc:
             structured = self._structured_for(resolved)
             failed = mark_failed(record, str(exc))
-            self._save_training_reliability(resolved, structured, failed)
+            failed_dedupe = record_dedupe_entry(
+                self._load_training_dedupe(structured),
+                dedupe_key,
+                outcome="failure",
+            )
+            self._save_training_reliability(resolved, structured, failed, dedupe=failed_dedupe)
             raise
 
         structured = self._structured_for(resolved)
@@ -241,10 +306,17 @@ class TrainingReliabilityMixin:
             learning_phase=persisted_phase,
             cancel_after=self._cancel_raced_work(record, structured),
         )
-        workspace = self._save_training_reliability(resolved, structured, finished)
+        success_dedupe = record_dedupe_entry(
+            self._load_training_dedupe(structured),
+            dedupe_key,
+            outcome="success",
+            snapshot_revision=next_snapshot,
+        )
+        workspace = self._save_training_reliability(resolved, structured, finished, dedupe=success_dedupe)
         if isinstance(result, dict):
             merged = dict(result)
             merged[WORKSPACE_RELIABILITY_KEY] = workspace.get(WORKSPACE_RELIABILITY_KEY)
             merged[WORKSPACE_SNAPSHOT_REVISION_KEY] = workspace.get(WORKSPACE_SNAPSHOT_REVISION_KEY)
+            merged[TRAINING_RELIABILITY_DEDUPE_KEY] = workspace.get(TRAINING_RELIABILITY_DEDUPE_KEY)
             return merged
         return workspace

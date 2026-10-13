@@ -109,6 +109,10 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        # A restart orphans the previous process's in-flight training saves;
+        # expire them honestly (failed/recoverable) at startup instead of
+        # letting stale `executing` records linger until their timeout.
+        runtime.memory_service.expire_in_flight_training_reliability_at_startup()
         yield
         runtime.resource_service.close()
 

@@ -49,6 +49,13 @@ RECOVERABLE_PHASES: frozenset[str] = frozenset({"failed", "cancelled"})
 DEFAULT_TIMEOUT_MS = 30_000
 WORKSPACE_RELIABILITY_KEY = "latest_training_reliability"
 WORKSPACE_SNAPSHOT_REVISION_KEY = "training_snapshot_revision"
+# Body-level idempotency history (2026-10-14): the single-slot replay window
+# ends the moment a neighbouring training save replaces the slot, so a resend
+# of an already-executed idempotency key used to re-run the body (the recorded
+# duplicate host-evidence defect). This bounded per-workspace ledger remembers
+# which keys already ran and with which outcome.
+TRAINING_RELIABILITY_DEDUPE_KEY = "training_reliability_dedupe"
+TRAINING_RELIABILITY_DEDUPE_LIMIT = 32
 
 
 def utc_now() -> datetime:
@@ -348,6 +355,48 @@ def mark_failed(
 def mark_acked(record: dict[str, Any], now: datetime | None = None) -> dict[str, Any]:
     current = now or utc_now()
     return transition(record, "acked", now=current, acked_at=current.isoformat())
+
+
+def training_dedupe_key(request_id: str, idempotency_key: str) -> str:
+    """Body-level idempotency identity: ONLY an explicit idempotency key.
+
+    The R1 contract is "same key = same work, never re-run". Per-attempt
+    request ids must NOT dedupe — recovery flows legitimately re-run a save
+    under a reused request id, and doing so never double-records.
+    """
+    return idempotency_key.strip()
+
+
+def dedupe_entry_for(ledger: dict[str, Any] | None, key: str) -> dict[str, Any] | None:
+    entry = (ledger or {}).get(key)
+    return dict(entry) if isinstance(entry, dict) else None
+
+
+def record_dedupe_entry(
+    ledger: dict[str, Any] | None,
+    key: str,
+    *,
+    outcome: str,
+    snapshot_revision: int = 0,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Record one executed body in the bounded per-workspace ledger."""
+    updated = dict(ledger or {})
+    if not key:
+        return updated
+    updated[key] = {
+        "outcome": outcome,
+        "snapshot_revision": max(0, int(snapshot_revision or 0)),
+        "recorded_at": (now or utc_now()).isoformat(),
+    }
+    if len(updated) > TRAINING_RELIABILITY_DEDUPE_LIMIT:
+        ranked = sorted(
+            updated.items(),
+            key=lambda item: str((item[1] or {}).get("recorded_at") or ""),
+            reverse=True,
+        )
+        updated = dict(ranked[:TRAINING_RELIABILITY_DEDUPE_LIMIT])
+    return updated
 
 
 def as_workspace_record(record: dict[str, Any]) -> dict[str, Any]:
