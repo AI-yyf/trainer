@@ -187,7 +187,7 @@ test('training verification-return strip is driven by snapshot status, not summa
   assert.match(appSource, /verificationNotice: trainingVerifyNotice,/);
   assert.match(
     appSource,
-    /latestLearningBlocker:\s*\(reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.blockedReason : undefined\) \?\?[\s\S]*?trainingRestoreReplacesSelectedCard[\s\S]*?pickLanguageAlignedEvidenceText\(/,
+    /latestLearningBlocker:\s*\(reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.blockedReason : undefined\) \?\?[\s\S]*?trainingRestoreReplacesSelectedCard[\s\S]*?pickFirstText\(/,
   );
   assert.match(appSource, /const trainingComposerManualPracticeMode =/);
   assert.match(appSource, /const trainingComposerFilePracticeMode =/);

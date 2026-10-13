@@ -13032,22 +13032,54 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     def select_active_training_card(workspace_id: str) -> ActiveCardSelectionResult:
         cards = runtime.memory_service.get_cards(workspace_id)
         live_id = runtime.memory_service.live_selected_training_card_id(workspace_id)
+        response_language = workspace_response_language(workspace_id)
+        zh = prefers_chinese(response_language)
+        no_live_why = (
+            "No live training card is selected yet."
+            if not zh
+            else "尚未选择有效的训练卡片。"
+        )
+        no_live_fallback = (
+            "Generate a training card explicitly before continuing."
+            if not zh
+            else "请先显式生成一张训练卡片，再继续。"
+        )
+        no_live_next = (
+            "Generate the next truthful training card."
+            if not zh
+            else "先生成下一张如实的训练卡片。"
+        )
+        current_card_why = (
+            "This is the current training card."
+            if not zh
+            else "这是当前的训练卡片。"
+        )
+        blocker_fallback = (
+            "Return to coach with the exact blocker and verification output."
+            if not zh
+            else "带着确切的阻塞点和验证输出回到 Coach。"
+        )
+        evidence_next = (
+            "Update evidence and route the next training step."
+            if not zh
+            else "更新证据，然后路由下一个训练步骤。"
+        )
         # Leftover stored cards / title / current_step must not invent selectedCardId.
         # Live only when recovered runtime still carries a matching card id.
         if not live_id:
             return ActiveCardSelectionResult(
-                why_this_card="No live training card is selected yet.",
-                fallback_action="Generate a training card explicitly before continuing.",
-                next_after_completion="Generate the next truthful training card.",
+                why_this_card=no_live_why,
+                fallback_action=no_live_fallback,
+                next_after_completion=no_live_next,
                 candidate_count=len(cards),
                 eligible_count=0,
             )
         live_card = next((card for card in cards if card.card_id == live_id), None)
         if live_card is None:
             return ActiveCardSelectionResult(
-                why_this_card="No live training card is selected yet.",
-                fallback_action="Generate a training card explicitly before continuing.",
-                next_after_completion="Generate the next truthful training card.",
+                why_this_card=no_live_why,
+                fallback_action=no_live_fallback,
+                next_after_completion=no_live_next,
                 candidate_count=len(cards),
                 eligible_count=0,
             )
@@ -13066,9 +13098,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     why_now=live_card.why_now,
                     kind="current",
                 )
-                or "This is the current training card.",
-                fallback_action="Return to coach with the exact blocker and verification output.",
-                next_after_completion="Update evidence and route the next training step.",
+                or current_card_why,
+                fallback_action=blocker_fallback,
+                next_after_completion=evidence_next,
                 candidate_count=len(cards),
                 eligible_count=1,
             )
@@ -13076,6 +13108,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             cards,
             routing_learner_state(workspace_id),
             routing_plan_state(workspace_id),
+            response_language=response_language,
         )
         # Router may prefer another leftover; keep live identity fail-closed.
         if selection.selected_card_id != live_id:
@@ -13092,11 +13125,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     why_now=live_card.why_now,
                     kind="current",
                 )
-                or "This is the current training card.",
-                fallback_action=selection.fallback_action
-                or "Return to coach with the exact blocker and verification output.",
-                next_after_completion=selection.next_after_completion
-                or "Update evidence and route the next training step.",
+                or current_card_why,
+                fallback_action=selection.fallback_action or blocker_fallback,
+                next_after_completion=selection.next_after_completion or evidence_next,
                 candidate_count=len(cards),
                 eligible_count=1,
             )
@@ -19067,11 +19098,23 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             deduped_missing.append(item)
         return failed_checks, learning_checks, deduped_missing
 
-    def training_practice_blocked_report(request: EvaluateSnippetRequest) -> EvaluationReport:
-        blocked_next_step = "Use Verify current file so Trainer can read the active IDE file and diagnostics."
+    def training_practice_blocked_report(
+        request: EvaluateSnippetRequest,
+        response_language: str | None = None,
+    ) -> EvaluationReport:
+        zh = prefers_chinese(response_language)
+        blocked_next_step = (
+            "Use Verify current file so Trainer can read the active IDE file and diagnostics."
+            if not zh
+            else "请使用“验证当前文件”，让 Trainer 读取活动 IDE 文件和诊断信息。"
+        )
         return EvaluationReport(
             task_spec_id=request.task_spec_id,
-            summary="Training practice verification needs current IDE file evidence before the card can complete.",
+            summary=(
+                "Training practice verification needs current IDE file evidence before the card can complete."
+                if not zh
+                else "训练练习验证需要当前 IDE 文件证据，卡片才能完成。"
+            ),
             static_checks=[
                 EvaluationCheck(
                     id="current-file-required",
@@ -19080,13 +19123,22 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     detail=(
                         "Training practice verification requires the active IDE file and diagnostics. "
                         "Snippet-only verification cannot complete this practice card."
+                    )
+                    if not zh
+                    else (
+                        "训练练习验证需要活动 IDE 文件和诊断信息。"
+                        "仅凭代码片段验证无法完成这张练习卡。"
                     ),
                 )
             ],
             dynamic_checks=[],
             semantic_checks=[],
             next_step=blocked_next_step,
-            reflection="Snippet-only practice verification cannot complete a training practice card.",
+            reflection=(
+                "Snippet-only practice verification cannot complete a training practice card."
+                if not zh
+                else "仅凭代码片段的练习验证无法完成训练练习卡。"
+            ),
             passed=False,
         )
 
@@ -19154,6 +19206,16 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             evidence_source=evidence_source,
         )
 
+    def workspace_response_language(workspace_id: str) -> str | None:
+        """Learner language stored with the workspace (settings gear is canonical)."""
+        try:
+            memory = runtime.memory_service.snapshot(workspace_id)
+        except Exception:
+            return None
+        workspace = memory.workspace if isinstance(memory.workspace, dict) else {}
+        saved = str(workspace.get("response_language") or "").strip()
+        return saved or None
+
     def evaluation_failure_family(
         *,
         focus_area: str,
@@ -19178,6 +19240,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         summary_text = " ".join(
             part for part in [str(report.summary or ""), str(report.next_step or "")] if part
         ).lower()
+        # Bilingual on purpose: the evaluator now localizes these sentences for
+        # zh learners, and the honesty rule (no dynamic verifier ran) must hold
+        # in every language.
         if any(
             phrase in summary_text
             for phrase in (
@@ -19186,6 +19251,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 "verify current file",
                 "current ide file evidence",
                 "current-file evidence",
+                "仍需验证",
+                "动态验证器",
+                "验证当前文件",
+                "当前 ide 文件证据",
+                "当前文件证据",
             )
         ):
             return True
@@ -20584,6 +20654,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     leftover_plan=leftover.get("leftover_plan"),
                     leftover_runtime=leftover_runtime if isinstance(leftover_runtime, dict) else {},
                     leftover_task_title=str(leftover.get("leftover_task_title") or ""),
+                    response_language=(
+                        supported_response_language(request.response_language)
+                        or workspace_response_language(workspace_id)
+                    ),
                 ),
                 workspace_id,
             )
@@ -24742,6 +24816,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 leftover_plan=leftover.get("leftover_plan"),
                 leftover_runtime=leftover_runtime if isinstance(leftover_runtime, dict) else {},
                 leftover_task_title=str(leftover.get("leftover_task_title") or ""),
+                response_language=workspace_response_language(workspace_id),
             ),
             workspace_id,
         )
@@ -24780,7 +24855,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 workspace_id, str(request.training_card_id or "")
             )
             report = stamp_produced_workspace_record(
-                training_practice_blocked_report(request),
+                training_practice_blocked_report(
+                    request,
+                    response_language=workspace_response_language(workspace_id),
+                ),
                 workspace_id,
             )
             state.snapshot.evaluation = report
@@ -24815,6 +24893,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 leftover_plan=leftover.get("leftover_plan"),
                 leftover_runtime=leftover_runtime if isinstance(leftover_runtime, dict) else {},
                 leftover_task_title=str(leftover.get("leftover_task_title") or ""),
+                response_language=workspace_response_language(workspace_id),
             ),
             workspace_id,
         )

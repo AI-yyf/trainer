@@ -55,6 +55,16 @@ from ..core.models import (
 
 logger = logging.getLogger("trainer.llm.tools")
 
+
+def _prefers_chinese(language: str | None) -> bool:
+    return bool((language or "").strip().lower().startswith("zh"))
+
+
+def _localized_text(english: str, chinese: str, language: str | None) -> str:
+    """Learner-facing tool-output template pick (zh catalog; others fall back)."""
+    return chinese if _prefers_chinese(language) else english
+
+
 # Learning OS fail-closed: coach agent must never silently write user business code.
 # These names stay unregistered and are always denied even if hallucinated or re-added.
 PROJECT_WRITE_TOOL_NAMES: frozenset[str] = frozenset(
@@ -4386,9 +4396,21 @@ async def _handle_generate_training_card(context: ToolContext, args: dict[str, A
             why_now=stored_card.why_now,
             kind="current",
         )
-        or "This is the current training card.",
-        fallback_action="Return to coach with the exact blocker and verification output.",
-        next_after_completion="Update evidence, then route the next card.",
+        or _localized_text(
+            "This is the current training card.",
+            "这是当前的训练卡片。",
+            context.response_language,
+        ),
+        fallback_action=_localized_text(
+            "Return to coach with the exact blocker and verification output.",
+            "带着确切的阻塞点和验证输出回到 Coach。",
+            context.response_language,
+        ),
+        next_after_completion=_localized_text(
+            "Update evidence, then route the next card.",
+            "更新证据，然后路由下一张卡片。",
+            context.response_language,
+        ),
         candidate_count=1,
         eligible_count=1,
     )
@@ -4398,6 +4420,7 @@ async def _handle_generate_training_card(context: ToolContext, args: dict[str, A
             memory_service.get_cards(context.workspace_id),
             _tool_learner_state(),
             _tool_plan_state(),
+            response_language=context.response_language,
         )
         selection = memory_service.persist_active_card_selection(context.workspace_id, routed)
     else:

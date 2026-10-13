@@ -265,8 +265,30 @@ def test_agent_card_current_file_recovery_reflect_and_return_are_continuous(
         assert skipped_evaluation.status_code == 200, skipped_evaluation.text
         skipped_payload = skipped_evaluation.json()
         assert skipped_payload["passed"] is False
+        # Default (no workspace language) stays English.
         assert "Verification is still required" in skipped_payload["summary"]
         assert "Run at least one dynamic verifier" in skipped_payload["next_step"]
+
+        # Language dispatch: a zh workspace must get the zh honesty summary —
+        # same evidence semantics, never an English fragment for zh learners.
+        zh_settings = client.post(
+            "/memory/settings",
+            json={"workspace_id": workspace_id, "response_language": "zh-CN"},
+        )
+        assert zh_settings.status_code == 200, zh_settings.text
+        zh_evaluation = client.post("/evaluate/current-file", json=evaluation_request)
+        assert zh_evaluation.status_code == 200, zh_evaluation.text
+        zh_payload = zh_evaluation.json()
+        assert zh_payload["passed"] is False
+        assert "仍需验证" in zh_payload["summary"]
+        assert "动态验证器" in zh_payload["next_step"]
+        assert "Verification is still required" not in zh_payload["summary"]
+        assert "Run at least one dynamic verifier" not in zh_payload["next_step"]
+        zh_reset = client.post(
+            "/memory/settings",
+            json={"workspace_id": workspace_id, "response_language": "en-US"},
+        )
+        assert zh_reset.status_code == 200, zh_reset.text
 
         before_restart = client.get("/memory/summary", params={"session_id": session_id})
         assert before_restart.status_code == 200, before_restart.text

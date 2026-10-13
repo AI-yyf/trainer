@@ -49,6 +49,15 @@ def normalize_material_recommendation(value: Any) -> MaterialLane:
     return "current"
 
 
+def _prefers_chinese(language: str | None) -> bool:
+    return bool((language or "").strip().lower().startswith("zh"))
+
+
+def _localized_text(english: str, chinese: str, language: str | None) -> str:
+    """Learner-facing routing-reason pick (zh catalog; other locales fall back)."""
+    return chinese if _prefers_chinese(language) else english
+
+
 def resolve_material_routing(
     recommendation: Any = None,
     *,
@@ -57,6 +66,7 @@ def resolve_material_routing(
     time_budget: str = "",
     task_urgency: str = "",
     project_complexity: str = "",
+    response_language: str | None = None,
 ) -> MaterialRoutingDecision:
     requested = normalize_material_recommendation(recommendation)
     allow_transfer = _can_recommend_transfer(
@@ -80,14 +90,30 @@ def resolve_material_routing(
             preferred_difficulties=("easy", "medium") if compressed else ("medium",),
             preferred_asset_scopes=("project", "personal"),
             rank_reason=(
-                "Transfer sources stay closed until a second evidenced scene exists."
+                _localized_text(
+                    "Transfer sources stay closed until a second evidenced scene exists.",
+                    "在存在第二个有证据的场景之前，迁移资源保持关闭。",
+                    response_language,
+                )
                 if blocked
-                else "A tight budget or high urgency stays on current-project sources."
+                else _localized_text(
+                    "A tight budget or high urgency stays on current-project sources.",
+                    "紧张的时间预算或高紧急度仍使用当前项目资源。",
+                    response_language,
+                )
             ),
             next_step=(
-                "Stay with this project's sources. One scene is not transferable mastery."
+                _localized_text(
+                    "Stay with this project's sources. One scene is not transferable mastery.",
+                    "继续使用本项目的资源。一个场景不等于可迁移的掌握。",
+                    response_language,
+                )
                 if blocked
-                else "Keep the next slice short. Stay with this project's sources."
+                else _localized_text(
+                    "Keep the next slice short. Stay with this project's sources.",
+                    "保持下一小步简短。继续使用本项目的资源。",
+                    response_language,
+                )
             ),
             orientation_key="transfer_blocked" if blocked else "current",
             transfer_scene_count=transfer_scene_count,
@@ -103,14 +129,30 @@ def resolve_material_routing(
             preferred_difficulties=("easy",) if requested == "simpler" else ("easy", "medium"),
             preferred_asset_scopes=("project",) if requested == "simpler" else ("project", "personal"),
             rank_reason=(
-                "Recent misses prefer easier recovery sources in the current project."
+                _localized_text(
+                    "Recent misses prefer easier recovery sources in the current project.",
+                    "最近的失手更倾向于当前项目中更容易的恢复资源。",
+                    response_language,
+                )
                 if requested == "simpler"
-                else "A tight budget or high urgency prefers a shorter current-project card."
+                else _localized_text(
+                    "A tight budget or high urgency prefers a shorter current-project card.",
+                    "紧张的时间预算或高紧急度更倾向于更短的当前项目卡片。",
+                    response_language,
+                )
             ),
             next_step=(
-                "Use a simpler recovery source in this project, not a transfer set."
+                _localized_text(
+                    "Use a simpler recovery source in this project, not a transfer set.",
+                    "在本项目中使用更简单的恢复资源，而不是迁移资源集。",
+                    response_language,
+                )
                 if requested == "simpler"
-                else "Keep the next slice short. Stay with this project's sources."
+                else _localized_text(
+                    "Keep the next slice short. Stay with this project's sources.",
+                    "保持下一小步简短。继续使用本项目的资源。",
+                    response_language,
+                )
             ),
             orientation_key="simpler" if requested == "simpler" else "current",
             transfer_scene_count=transfer_scene_count,
@@ -125,8 +167,16 @@ def resolve_material_routing(
             preferred_card_sources=TRANSFER_SOURCES,
             preferred_difficulties=("medium", "hard"),
             preferred_asset_scopes=("general", "personal", "project"),
-            rank_reason="A second evidenced scene allows transfer sources.",
-            next_step="A second scene is evidenced, so transfer sources are eligible.",
+            rank_reason=_localized_text(
+                "A second evidenced scene allows transfer sources.",
+                "第二个有证据的场景允许使用迁移资源。",
+                response_language,
+            ),
+            next_step=_localized_text(
+                "A second scene is evidenced, so transfer sources are eligible.",
+                "第二个场景已有证据，迁移资源可用。",
+                response_language,
+            ),
             orientation_key="transfer",
             transfer_scene_count=transfer_scene_count,
         )
@@ -141,21 +191,40 @@ def resolve_material_routing(
         preferred_difficulties=("easy", "medium") if complex_project else ("medium",),
         preferred_asset_scopes=("project", "personal"),
         rank_reason=(
-            "High project complexity stays on a smaller current-project slice."
+            _localized_text(
+                "High project complexity stays on a smaller current-project slice.",
+                "高项目复杂度仍使用更小的当前项目切片。",
+                response_language,
+            )
             if complex_project
-            else "Stay with current project and scene sources."
+            else _localized_text(
+                "Stay with current project and scene sources.",
+                "继续使用当前项目与场景资源。",
+                response_language,
+            )
         ),
         next_step=(
-            "Keep the next slice small. One scene is not transferable mastery."
+            _localized_text(
+                "Keep the next slice small. One scene is not transferable mastery.",
+                "保持下一小步很小。一个场景不等于可迁移的掌握。",
+                response_language,
+            )
             if complex_project
-            else "Stay with this project's sources."
+            else _localized_text(
+                "Stay with this project's sources.",
+                "继续使用本项目的资源。",
+                response_language,
+            )
         ),
         orientation_key="current",
         transfer_scene_count=transfer_scene_count,
     )
 
 
-def routing_from_learner_state(learner_state: dict[str, Any] | None) -> MaterialRoutingDecision:
+def routing_from_learner_state(
+    learner_state: dict[str, Any] | None,
+    response_language: str | None = None,
+) -> MaterialRoutingDecision:
     state = learner_state or {}
     scene_raw = state.get("transfer_scene_count", state.get("transferSceneCount", 0))
     try:
@@ -168,7 +237,10 @@ def routing_from_learner_state(learner_state: dict[str, Any] | None) -> Material
         transfer_state=str(state.get("transfer_state") or state.get("transferState") or ""),
         time_budget=str(state.get("time_budget") or state.get("timeBudget") or ""),
         task_urgency=str(state.get("task_urgency") or state.get("taskUrgency") or ""),
-        project_complexity=str(state.get("project_complexity") or state.get("projectComplexity") or ""),
+        project_complexity=str(
+            state.get("project_complexity") or state.get("projectComplexity") or ""
+        ),
+        response_language=response_language,
     )
 
 

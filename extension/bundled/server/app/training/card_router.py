@@ -57,7 +57,28 @@ FACTOR_LABELS: dict[str, str] = {
     "recovery_priority": "recovery priority",
 }
 
+FACTOR_LABELS_ZH: dict[str, str] = {
+    "plan_relevance": "计划相关性",
+    "blocking_power": "阻塞力度",
+    "evidence_gap": "证据缺口",
+    "recency_need": "复习时机",
+    "resource_trust": "资源可信度",
+    "difficulty_fit": "难度匹配",
+    "project_fit": "项目匹配",
+    "transfer_value": "迁移价值",
+    "recovery_priority": "恢复优先级",
+}
+
 PRACTICE_FIRST_FLASH_PENALTY = 1.2
+
+
+def _prefers_chinese(language: str | None) -> bool:
+    return bool((language or "").strip().lower().startswith("zh"))
+
+
+def _localized_text(english: str, chinese: str, language: str | None) -> str:
+    """Learner-facing routing template pick (zh catalog; others fall back)."""
+    return chinese if _prefers_chinese(language) else english
 
 
 # ---------------------------------------------------------------------------
@@ -431,13 +452,19 @@ def _weighted_score(factors: TrainingCardScoreFactors) -> float:
     return round(total * 100, 1)
 
 
-def _top_factor_labels(factors: TrainingCardScoreFactors, limit: int = 3) -> list[str]:
+def _top_factor_labels(
+    factors: TrainingCardScoreFactors,
+    limit: int = 3,
+    response_language: str | None = None,
+) -> list[str]:
     """Return labels for the strongest scoring factors."""
     factor_values = {
         key: getattr(factors, key, 0.0)
         for key in FACTOR_WEIGHTS
     }
     sorted_keys = sorted(factor_values, key=lambda k: factor_values[k], reverse=True)
+    if _prefers_chinese(response_language):
+        return [FACTOR_LABELS_ZH.get(k, FACTOR_LABELS.get(k, k)) for k in sorted_keys[:limit]]
     return [FACTOR_LABELS.get(k, k) for k in sorted_keys[:limit]]
 
 
@@ -467,6 +494,7 @@ class CardRouterService:
         pure_conversation_mode: bool = False,
         fallback_action: str = "",
         next_after_completion: str = "",
+        response_language: str | None = None,
     ) -> ActiveCardSelectionResult:
         """Select the best active card from *candidates*.
 
@@ -486,6 +514,9 @@ class CardRouterService:
             Override for the fallback action message.
         next_after_completion:
             Override for the next-after-completion message.
+        response_language:
+            Learner language for the routing default templates (zh gets the zh
+            catalog; other locales fall back to English).
 
         Returns
         -------
@@ -500,6 +531,7 @@ class CardRouterService:
                 pure_conversation_mode=True,
                 fallback_action=fallback_action,
                 next_after_completion=next_after_completion,
+                response_language=response_language,
             )
 
         # Step 2: Identify blocked candidates
@@ -561,6 +593,7 @@ class CardRouterService:
                 fallback_action=fallback_action,
                 next_after_completion=next_after_completion,
                 blocked_details=blocked_details,
+                response_language=response_language,
             )
 
         # Step 5: Select the top candidate
@@ -571,14 +604,18 @@ class CardRouterService:
         ordered_eligible = [selected, *[entry for entry in eligible if entry is not selected]]
 
         # Build why_this_card
-        top_labels = _top_factor_labels(selected_factors)
-        routing = routing_from_learner_state(learner_state)
+        top_labels = _top_factor_labels(selected_factors, response_language=response_language)
+        routing = routing_from_learner_state(learner_state, response_language)
         live_title = _live_routed_card_title(plan_state, selected_card.title or "")
         gated_why_now = _live_routed_why_now(plan_state, selected_card.why_now or "")
         why_this_card = (
             gated_why_now
-            or f"{live_title or 'Selected card'} is active because "
-            f"{', '.join(top_labels)} are the strongest signals."
+            or _localized_text(
+                f"{live_title or 'Selected card'} is active because "
+                f"{', '.join(top_labels)} are the strongest signals.",
+                f"{live_title or '当前卡片'}成为当前卡片，因为{'、'.join(top_labels)}是最强的信号。",
+                response_language,
+            )
         )
         if not gated_why_now and routing.rank_reason and routing.rank_reason not in why_this_card:
             why_this_card = f"{why_this_card} {routing.rank_reason}".strip()
@@ -588,26 +625,38 @@ class CardRouterService:
         for entry in ordered_eligible[1:4]:
             gap = round(selected_score - entry["score"], 1)
             other_title = _live_routed_card_title(plan_state, entry["card"].title or "") or "(untitled)"
-            other_strongest = _top_factor_labels(entry["factors"], 1)
+            other_strongest = _top_factor_labels(entry["factors"], 1, response_language)
             strong_label = other_strongest[0] if other_strongest else "score"
             why_not_others.append(
-                f"{other_title} scored {gap} point(s) lower; "
-                f"strongest signal was {strong_label}."
+                _localized_text(
+                    f"{other_title} scored {gap} point(s) lower; "
+                    f"strongest signal was {strong_label}.",
+                    f"{other_title} 低 {gap} 分；最强信号是{strong_label}。",
+                    response_language,
+                )
             )
         for blocked in blocked_details[:4]:
             reason = blocked.reasons[0] if blocked.reasons else "blocked"
             blocked_title = _live_routed_card_title(plan_state, blocked.title) or "(untitled)"
             why_not_others.append(
-                f"{blocked_title} was blocked: {reason}."
+                _localized_text(
+                    f"{blocked_title} was blocked: {reason}.",
+                    f"{blocked_title} 被阻塞：{reason}。",
+                    response_language,
+                )
             )
 
-        default_fallback = (
+        default_fallback = _localized_text(
             "If this card stalls, return to coach chat with the exact "
-            "blocker and verification output."
+            "blocker and verification output.",
+            "如果这张卡卡住了，请带着确切的阻塞点和验证输出回到 Coach 对话。",
+            response_language,
         )
-        default_next = (
+        default_next = _localized_text(
             "Record the attempt, update evidence, then route the next "
-            "practice or flash card."
+            "practice or flash card.",
+            "记录这次尝试，更新证据，然后路由下一张练习卡或闪卡。",
+            response_language,
         )
         selected_next_after_completion = (
             selected_card.next_after_completion.strip()
@@ -667,16 +716,29 @@ class CardRouterService:
         fallback_action: str = "",
         next_after_completion: str = "",
         blocked_details: list[BlockedCandidateDetail] | None = None,
+        response_language: str | None = None,
     ) -> ActiveCardSelectionResult:
         """Build an empty result when no eligible card can be selected."""
         blocked = blocked_details or []
         why = (
-            "Training is paused because the user is in pure conversation mode."
+            _localized_text(
+                "Training is paused because the user is in pure conversation mode.",
+                "训练已暂停，因为用户处于纯对话模式。",
+                response_language,
+            )
             if pure_conversation_mode
-            else "No eligible training card can be activated yet."
+            else _localized_text(
+                "No eligible training card can be activated yet.",
+                "尚无可激活的有效训练卡片。",
+                response_language,
+            )
         )
         why_not = [
-            f"{_live_routed_card_title(plan_state, b.title) or '(untitled)'}: {b.reasons[0]}"
+            _localized_text(
+                f"{_live_routed_card_title(plan_state, b.title) or '(untitled)'}: {b.reasons[0]}",
+                f"{_live_routed_card_title(plan_state, b.title) or '(untitled)'}：{b.reasons[0]}",
+                response_language,
+            )
             for b in blocked
         ]
         return ActiveCardSelectionResult(
@@ -685,11 +747,15 @@ class CardRouterService:
             why_this_card=why,
             why_not_others=why_not,
             blocked_candidates=blocked,
-            fallback_action=fallback_action or (
-                "Stay in coach chat and clarify the next training card."
+            fallback_action=fallback_action or _localized_text(
+                "Stay in coach chat and clarify the next training card.",
+                "留在 Coach 对话中，明确下一张训练卡片。",
+                response_language,
             ),
-            next_after_completion=next_after_completion or (
-                "Create an eligible practice or flash card before advancing mastery."
+            next_after_completion=next_after_completion or _localized_text(
+                "Create an eligible practice or flash card before advancing mastery.",
+                "先创建一张有效的练习卡或闪卡，再推进掌握度。",
+                response_language,
             ),
             candidate_count=len(candidates),
             eligible_count=0,

@@ -25,6 +25,21 @@ from .models import CheckCommand, CheckResult, CheckStatus, EvaluationRequest, S
 from .models import EvaluationReport as LaneEvaluationReport
 
 
+def _prefers_chinese(language: str | None) -> bool:
+    return bool((language or "").strip().lower().startswith("zh"))
+
+
+def _localized_text(english: str, chinese: str, language: str | None) -> str:
+    """Learner-facing summary/next-step template pick.
+
+    Same convention as ``training.card_generator._localized_text``: zh requests
+    get the zh catalog entry, every other (or unknown) locale falls back to the
+    English template. The evidence semantics of each sentence stay identical in
+    both languages.
+    """
+    return chinese if _prefers_chinese(language) else english
+
+
 class CommandRunner(Protocol):
     def run(self, command: CheckCommand) -> CheckResult: ...
 
@@ -424,6 +439,7 @@ class EvaluatorService:
         leftover_plan: Any | None = None,
         leftover_runtime: dict[str, Any] | None = None,
         leftover_task_title: str = "",
+        response_language: str | None = None,
     ) -> EvaluationReport:
         if spec is not None and request.task_spec_id != spec.id:
             spec = None
@@ -481,6 +497,7 @@ class EvaluatorService:
             requires_dynamic_verification=(
                 _requires_code_evidence(request.language_id)
             ),
+            response_language=response_language,
         )
 
     def evaluate_snippet(
@@ -491,6 +508,7 @@ class EvaluatorService:
         leftover_plan: Any | None = None,
         leftover_runtime: dict[str, Any] | None = None,
         leftover_task_title: str = "",
+        response_language: str | None = None,
     ) -> EvaluationReport:
         if spec is not None and request.task_spec_id != spec.id:
             spec = None
@@ -545,6 +563,7 @@ class EvaluatorService:
             requires_dynamic_verification=(
                 _requires_code_evidence(request.language_id)
             ),
+            response_language=response_language,
         )
 
     def _to_api_report(
@@ -556,6 +575,7 @@ class EvaluatorService:
         vscode_diagnostics: list[str] | None = None,
         training_acceptance_check: EvaluationCheck | None = None,
         requires_dynamic_verification: bool = False,
+        response_language: str | None = None,
     ) -> EvaluationReport:
         diagnostics = [item.strip() for item in (vscode_diagnostics or []) if item and item.strip()]
         has_error_diagnostics = any(item.lower().startswith("[error]") for item in diagnostics)
@@ -608,70 +628,144 @@ class EvaluatorService:
         )
         if passed:
             passed_tools = [check.name for check in report.checks if check.status == CheckStatus.PASSED]
-            summary = f"Executable checks passed: {', '.join(passed_tools)}." if passed_tools else (
-                "The implementation passed the current evaluation loop."
+            summary = (
+                _localized_text(
+                    f"Executable checks passed: {', '.join(passed_tools)}.",
+                    f"可执行检查通过：{'、'.join(passed_tools)}。",
+                    response_language,
+                )
+                if passed_tools
+                else _localized_text(
+                    "The implementation passed the current evaluation loop.",
+                    "实现通过了当前评估循环。",
+                    response_language,
+                )
             )
             if training_acceptance_check is not None:
-                summary += " Training acceptance signals matched."
+                summary += _localized_text(
+                    " Training acceptance signals matched.",
+                    " 训练验收信号已匹配。",
+                    response_language,
+                )
             if report.semantic_review.status == CheckStatus.PASSED and report.semantic_review.summary:
                 summary += f" {report.semantic_review.summary}"
         elif failed_tool_labels:
-            summary = f"Evaluation failed on: {', '.join(failed_tool_labels)}."
+            summary = _localized_text(
+                f"Evaluation failed on: {', '.join(failed_tool_labels)}.",
+                f"评估未通过项：{'、'.join(failed_tool_labels)}。",
+                response_language,
+            )
         elif training_acceptance_blocks:
             acceptance_progress = _acceptance_progress_from_detail(
                 training_acceptance_check.detail if training_acceptance_check else ""
             )
             if acceptance_progress is not None:
                 matched_count, total_count, missing_preview = acceptance_progress
-                summary = (
-                    f"Training acceptance: {matched_count}/{total_count} acceptance signals matched."
+                summary = _localized_text(
+                    f"Training acceptance: {matched_count}/{total_count} acceptance signals matched.",
+                    f"训练验收：{matched_count}/{total_count} 个验收信号已匹配。",
+                    response_language,
                 )
                 if missing_preview:
-                    summary = f"{summary} Still missing: {missing_preview}."
+                    summary = _localized_text(
+                        f"{summary} Still missing: {missing_preview}.",
+                        f"{summary} 仍缺少：{missing_preview}。",
+                        response_language,
+                    )
                 if verification_required:
-                    summary += " Verification is still required because no dynamic verifier actually ran."
+                    summary += _localized_text(
+                        " Verification is still required because no dynamic verifier actually ran.",
+                        " 仍需验证：尚无动态验证器实际运行。",
+                        response_language,
+                    )
             else:
-                summary = "Training practice verification needs current-file evidence for the card acceptance signals."
+                summary = _localized_text(
+                    "Training practice verification needs current-file evidence for the card acceptance signals.",
+                    "训练练习验证需要当前文件证据来核对该卡片的验收信号。",
+                    response_language,
+                )
         elif verification_required:
-            summary = "Verification is still required because no dynamic verifier actually ran."
+            summary = _localized_text(
+                "Verification is still required because no dynamic verifier actually ran.",
+                "仍需验证：尚无动态验证器实际运行。",
+                response_language,
+            )
         elif report.missing_requirements:
-            summary = "Evaluation found requirement gaps that still need to be implemented."
+            summary = _localized_text(
+                "Evaluation found requirement gaps that still need to be implemented.",
+                "评估发现仍有需求缺口需要实现。",
+                response_language,
+            )
         else:
-            summary = report.semantic_review.summary or "Evaluation found a blocking issue."
+            summary = report.semantic_review.summary or _localized_text(
+                "Evaluation found a blocking issue.",
+                "评估发现一个阻塞问题。",
+                response_language,
+            )
         if passed:
-            next_step = "Record a reflection on the verified result, then bring it back to Coach."
+            next_step = _localized_text(
+                "Record a reflection on the verified result, then bring it back to Coach.",
+                "记录一条针对已验证结果的反思，然后带回 Coach。",
+                response_language,
+            )
         elif report.recommendations:
             next_step = report.recommendations[0]
         elif has_error_diagnostics:
-            next_step = (
-                "Fix the VS Code diagnostics attached to the current file, then re-run evaluation."
+            next_step = _localized_text(
+                "Fix the VS Code diagnostics attached to the current file, then re-run evaluation.",
+                "先修复当前文件附带的 VS Code 诊断问题，再重新运行评估。",
+                response_language,
             )
         elif (
             training_acceptance_check is not None
             and "No training acceptance criteria" in training_acceptance_check.detail
         ):
-            next_step = "Provide concrete acceptance criteria or expected symbols for this practice card, then re-run verification."
+            next_step = _localized_text(
+                "Provide concrete acceptance criteria or expected symbols for this practice card, then re-run verification.",
+                "为这张练习卡提供具体的验收标准或期望符号，然后重新运行验证。",
+                response_language,
+            )
         elif verification_required:
-            next_step = "Run at least one dynamic verifier, then re-run verification."
+            next_step = _localized_text(
+                "Run at least one dynamic verifier, then re-run verification.",
+                "先运行至少一个动态验证器，再重新运行验证。",
+                response_language,
+            )
         elif training_acceptance_blocks:
             acceptance_progress = _acceptance_progress_from_detail(
                 training_acceptance_check.detail if training_acceptance_check else ""
             )
             if acceptance_progress is not None and acceptance_progress[2]:
                 first_missing = acceptance_progress[2].split(";")[0].strip()
-                next_step = (
+                next_step = _localized_text(
                     "Implement the missing practice acceptance signals in the current file "
-                    f'(starting with "{first_missing}"), then re-run verification.'
+                    f'(starting with "{first_missing}"), then re-run verification.',
+                    f"在当前文件中实现缺失的练习验收信号（从“{first_missing}”开始），然后重新运行验证。",
+                    response_language,
                 )
             else:
-                next_step = "Implement the missing practice acceptance signals in the current file, then re-run verification."
+                next_step = _localized_text(
+                    "Implement the missing practice acceptance signals in the current file, then re-run verification.",
+                    "在当前文件中实现缺失的练习验收信号，然后重新运行验证。",
+                    response_language,
+                )
         elif failed_tool_labels:
-            next_step = "Fix failed checks first, then re-run evaluation."
+            next_step = _localized_text(
+                "Fix failed checks first, then re-run evaluation.",
+                "先修复未通过的检查，再重新运行评估。",
+                response_language,
+            )
         elif report.missing_requirements:
-            next_step = "Implement the missing requirement signals, then re-run evaluation."
+            next_step = _localized_text(
+                "Implement the missing requirement signals, then re-run evaluation.",
+                "先实现缺失的需求信号，再重新运行评估。",
+                response_language,
+            )
         else:
-            next_step = (
-                "Tighten the implementation around the first blocker, then re-run evaluation."
+            next_step = _localized_text(
+                "Tighten the implementation around the first blocker, then re-run evaluation.",
+                "围绕第一个阻塞点收紧实现，再重新运行评估。",
+                response_language,
             )
         semantic_checks = [
             EvaluationCheck(

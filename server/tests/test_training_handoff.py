@@ -293,6 +293,25 @@ class TestTrainingHandoffGenerator:
         assert "server-side verification" in handoff.handoff_content.completion_claim
         assert any("learner self-report is not sufficient" in item for item in handoff.handoff_content.verification_checklist)
 
+        # Language dispatch: zh request gets the zh honesty copy with identical
+        # semantics — still no mastery claim, still server-side verification.
+        zh_handoff = TrainingHandoffGenerator().build_handoff_record(
+            card,
+            {
+                "correct": True,
+                "mastery_delta": 0.9,
+                "evidence": ["I ran the route test locally."],
+                "evidence_source": "learner_return",
+            },
+            mastery_delta=0.9,
+            response_language="zh-CN",
+        )
+        assert zh_handoff.verification_state == "verification_required"
+        assert "服务端验证" in zh_handoff.handoff_content.completion_claim
+        assert "掌握" not in zh_handoff.handoff_content.success_signal
+        assert "server-side verification" not in zh_handoff.handoff_content.completion_claim
+        assert any("自我报告并不足够" in item for item in zh_handoff.handoff_content.verification_checklist)
+
     def test_trusted_verification_supports_card_result_without_claiming_durable_mastery(self):
         """Verifier-attested evidence can support one card result, not broad mastery."""
         from app.core.models import TrainingCardCandidateSnapshot
@@ -320,6 +339,24 @@ class TestTrainingHandoffGenerator:
         assert handoff.evidence[0].verification_source == "test_runner"
         assert "supports one result" in handoff.handoff_content.success_signal
         assert "not a claim of durable mastery" in handoff.handoff_content.completion_claim
+
+        # Language dispatch: zh request keeps the same honesty semantics.
+        zh_handoff = TrainingHandoffGenerator().build_handoff_record(
+            card,
+            {
+                "correct": True,
+                "evidence": ["pytest tests/test_parser.py -k malformed_branch: 1 passed"],
+                "evidence_source": "test_runner",
+                "verified_by_evaluator": True,
+            },
+            response_language="zh-CN",
+        )
+        assert zh_handoff.verification_state == "verified"
+        assert zh_handoff.return_state == "return_to_coach"
+        assert "一次结果" in zh_handoff.handoff_content.success_signal
+        assert "持久掌握" in zh_handoff.handoff_content.completion_claim
+        assert "不是对持久掌握的断言" in zh_handoff.handoff_content.completion_claim
+        assert "supports one result" not in zh_handoff.handoff_content.success_signal
 
     def test_current_ide_file_verification_alias_remains_trusted_after_restart(self):
         """Older agent evidence must resolve to the canonical IDE verifier source."""

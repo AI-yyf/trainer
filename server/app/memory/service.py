@@ -8142,7 +8142,11 @@ class MemoryService(
                 ],
             )
         else:
-            handoff = generator.build_handoff_record(card, {})
+            handoff = generator.build_handoff_record(
+                card,
+                {},
+                response_language=_workspace_language(structured._workspace),
+            )
         handoff_payload = TrainingHandoffGenerator._handoff_payload(handoff)
         # Rebind is an explicit live-selection bind: mirror
         # persist_active_card_selection so the leftover guard treats the
@@ -8315,13 +8319,22 @@ class MemoryService(
                     "evidence_source": cleaned_evidence_source,
                     "verified_by_evaluator": verified_by_evaluator,
                 },
+                response_language=_workspace_language(structured._workspace),
             )
         pending_verification_markers = (
+            # Bilingual on purpose: the evaluator localizes these sentences for
+            # zh learners and the "no dynamic verifier ran" honesty rule must
+            # hold in every language.
             "verification is still required",
             "run at least one dynamic verifier",
             "verify current file",
             "current ide file evidence",
             "current-file evidence",
+            "仍需验证",
+            "动态验证器",
+            "验证当前文件",
+            "当前 ide 文件证据",
+            "当前文件证据",
         )
         summary_next_step_text = " ".join([cleaned_summary, cleaned_next_step]).lower()
         if (

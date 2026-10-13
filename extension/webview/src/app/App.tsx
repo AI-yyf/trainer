@@ -1666,29 +1666,10 @@ function pickFirstText(...values: Array<string | undefined | null>): string | un
   return values.find((value) => Boolean(value?.trim()))?.trim();
 }
 
-/**
- * Narrow language-alignment guard for training evidence text whose host
- * sources still emit English templates regardless of response language:
- * evaluator verification summaries, training-handoff templates, and
- * card-router routing defaults. Card content, review hints, and coach memory
- * surfaces are localized by the sidecar and must be used directly (via
- * pickFirstText); this picker only keeps the view's localized fallback copy in
- * place when every remaining candidate is a foreign-language template. Each
- * call site here is recorded debt: move it to direct host text once its server
- * source is localized.
- */
-function pickLanguageAlignedEvidenceText(
-  language: ComposerLanguage,
-  ...values: Array<string | undefined | null>
-): string | undefined {
-  for (const value of values) {
-    const normalized = value?.trim();
-    if (normalized && isLanguageAlignedUiText(language, normalized)) {
-      return normalized;
-    }
-  }
-  return undefined;
-}
+// Training evidence text (evaluator summaries, handoff templates, card-router
+// routing defaults) is localized by the sidecar per the workspace response
+// language, so the view uses host text directly via pickFirstText — no
+// language-alignment re-picking layer.
 
 function pickLanguageAlignedTrainingList(
   language: ComposerLanguage,
@@ -6925,8 +6906,7 @@ export function App() {
     selectedTrainingCardCandidate?.suggestedWorkspaceAction,
     selectedTrainingRouteCard?.suggestedWorkspaceAction,
   );
-  const trainingScenario = pickLanguageAlignedEvidenceText(
-    layout.composerLanguage,
+  const trainingScenario = pickFirstText(
     selectedTrainingCardCandidate?.scenario,
     selectedTrainingRouteCard?.scenario,
     leftoverTrainingHandoffChromeNotLive
@@ -7003,8 +6983,7 @@ export function App() {
   );
   const trainingWhyThisCard = leftoverTrainingHandoffChromeNotLive
     ? undefined
-    : pickLanguageAlignedEvidenceText(
-        layout.composerLanguage,
+    : pickFirstText(
         trainingState?.activeTrainingCardRouting?.whyThisCard,
         trainingLedgerEntry?.whyThisCard,
       );
@@ -7043,13 +7022,11 @@ export function App() {
   const authoritativeVerifyItems =
     cardScopedVerifyItems.length > 0 ? cardScopedVerifyItems : contextualTrainingVerifyItems;
   const trainingCardWhy = leftoverTrainingHandoffChromeNotLive
-    ? pickLanguageAlignedEvidenceText(
-        layout.composerLanguage,
+    ? pickFirstText(
         runtimeWhyNow,
         recoveredRuntime ? recoveredDisplayFacts.whyNow : undefined,
       )
-    : pickLanguageAlignedEvidenceText(
-        layout.composerLanguage,
+    : pickFirstText(
         trainingWhyThisCard,
         selectedTrainingCardCandidate?.whyNow,
         trainingState?.latestTrainingNextHop?.whyNow,
@@ -7119,8 +7096,7 @@ export function App() {
   });
   const trainingReturnWithText = leftoverTrainingHandoffChromeNotLive
     ? undefined
-    : pickLanguageAlignedEvidenceText(
-        layout.composerLanguage,
+    : pickFirstText(
         liveTrainingHandoffChrome.returnWith,
         selectedTrainingCardCandidate?.returnWith,
         selectedTrainingRouteCard?.returnWith,
@@ -7128,8 +7104,7 @@ export function App() {
       );
   const trainingNextAfterCompletionText = leftoverTrainingHandoffChromeNotLive
     ? undefined
-    : pickLanguageAlignedEvidenceText(
-        layout.composerLanguage,
+    : pickFirstText(
         liveTrainingHandoffChrome.nextAfterCompletion,
         liveTrainingHandoffChrome.nextHopNextAfterCompletion,
         liveTrainingHandoffChrome.routingNextAfterCompletion,
@@ -7141,8 +7116,7 @@ export function App() {
       );
   const trainingFallbackActionText = leftoverTrainingHandoffChromeNotLive
     ? undefined
-    : pickLanguageAlignedEvidenceText(
-        layout.composerLanguage,
+    : pickFirstText(
         liveTrainingHandoffChrome.fallbackAction,
         liveTrainingHandoffChrome.nextHopFallbackAction,
         liveTrainingHandoffChrome.routingFallbackAction,
@@ -7154,8 +7128,7 @@ export function App() {
       );
   const trainingSuccessSignal = leftoverTrainingHandoffChromeNotLive
     ? undefined
-    : pickLanguageAlignedEvidenceText(
-        layout.composerLanguage,
+    : pickFirstText(
         liveTrainingHandoffChrome.successSignal,
         trainingState?.latestTrainingHandoff?.successSignal,
         selectedTrainingCardCandidate?.successSignal,
@@ -7166,22 +7139,19 @@ export function App() {
     trainingState?.dueReviews?.length ? trainingState.dueReviews : data.memory.dueReviews;
   const primaryDueReview = authoritativeDueReviews[0];
   const primaryDueReviewTitle = primaryDueReview
-    ? pickLanguageAlignedEvidenceText(layout.composerLanguage, reviewConceptLabel(primaryDueReview.concept)) ??
-      t.reviewQueue
+    ? reviewConceptLabel(primaryDueReview.concept) ?? t.reviewQueue
     : undefined;
   const trainingReviewItems = useMemo<TrainingReviewItem[]>(
     () =>
       authoritativeDueReviews.slice(0, 4).map((item, index) => ({
         id: `training-review-${index}-${item.concept}`,
-        title:
-          pickLanguageAlignedEvidenceText(layout.composerLanguage, reviewConceptLabel(item.concept)) ??
-          t.reviewQueue,
+        title: reviewConceptLabel(item.concept) ?? t.reviewQueue,
         concept: item.concept,
-        focusArea: pickLanguageAlignedEvidenceText(layout.composerLanguage, item.focusArea) ?? item.focusArea ?? item.concept,
-        taskHint: pickLanguageAlignedEvidenceText(layout.composerLanguage, item.taskHint, item.reason) ?? item.reason,
+        focusArea: item.focusArea ?? item.concept,
+        taskHint: pickFirstText(item.taskHint, item.reason) ?? item.reason,
         due: item.dueAt,
         fsrs: { intervalDays: item.intervalDays, masteryScore: item.masteryScore },
-        detail: pickLanguageAlignedEvidenceText(layout.composerLanguage, item.taskHint, item.reason),
+        detail: pickFirstText(item.taskHint, item.reason),
         meta: joinInlineMeta(
           pickLanguageAlignedTrainingList(layout.composerLanguage, [item.focusArea, item.severity, item.dueAt]),
         ),
@@ -7271,8 +7241,7 @@ export function App() {
   const trainingOutcomeCard: TrainingSummaryCard | undefined = trainingRestoreReplacesSelectedCard
     ? undefined
     : (() => {
-    const verifiedResult = pickLanguageAlignedEvidenceText(
-      layout.composerLanguage,
+    const verifiedResult = pickFirstText(
       trainingState?.latestLearningVerifiedResult,
       activeTrainingReviewArtifact?.verifiedResult,
       activeTrainingCardId && trainingState?.scenarioLab?.id === activeTrainingCardId
@@ -7288,8 +7257,7 @@ export function App() {
       };
     }
 
-    const blocker = pickLanguageAlignedEvidenceText(
-      layout.composerLanguage,
+    const blocker = pickFirstText(
       trainingState?.latestLearningBlocker,
       trainingState?.latestTrainingHandoff?.blockedBy,
       trainingState?.latestTrainingNextHop?.statusReason,
@@ -7304,8 +7272,7 @@ export function App() {
       };
     }
 
-    const partialProgress = pickLanguageAlignedEvidenceText(
-      layout.composerLanguage,
+    const partialProgress = pickFirstText(
       trainingState?.latestLearningPartialProgress,
       activeTrainingReviewArtifact?.partialProgress,
     );
@@ -7326,8 +7293,7 @@ export function App() {
       ? undefined
       : {
           title:
-            pickLanguageAlignedEvidenceText(
-              layout.composerLanguage,
+            pickFirstText(
               liveTrainingHandoffChrome.nextHopTitle,
               liveTrainingHandoffChrome.nextHopCardTitle,
               trainingState.latestTrainingNextHop.title,
@@ -7335,8 +7301,7 @@ export function App() {
             ) ??
             localizeTrainingNextHopLabel(layout.composerLanguage, "target_kind", "next_hop") ??
             localizeTrainingNextHopLabel(layout.composerLanguage, "fallback_title"),
-          detail: pickLanguageAlignedEvidenceText(
-            layout.composerLanguage,
+          detail: pickFirstText(
             liveTrainingHandoffChrome.nextHopSummary,
             liveTrainingHandoffChrome.nextHopWhyNow,
             liveTrainingHandoffChrome.nextHopReturnSummary,
@@ -7557,8 +7522,7 @@ export function App() {
     selectedTrainingFlashCard?.problemStatement,
     selectedTrainingFlashCard?.scenario,
   );
-  const trainingTargetSkill = pickLanguageAlignedEvidenceText(
-    layout.composerLanguage,
+  const trainingTargetSkill = pickFirstText(
     selectedTrainingCardCandidate?.targetSkill,
     selectedTrainingRouteCard?.targetSkill,
     trainingState?.activeTrainingCardRouting?.selectedCard?.targetSkill,
@@ -11620,8 +11584,7 @@ export function App() {
     const blockerValue = isTraining
       ? leftoverTrainingActivityNotLive
         ? undefined
-        : pickLanguageAlignedEvidenceText(
-          layout.composerLanguage,
+        : pickFirstText(
           trainingState?.latestLearningBlocker,
           trainingState?.latestTrainingHandoff?.blockedBy,
           activeTrainingReviewArtifact?.blockedReason,
@@ -11636,8 +11599,7 @@ export function App() {
     const resultValue = isTraining
       ? leftoverTrainingActivityNotLive
         ? undefined
-        : pickLanguageAlignedEvidenceText(
-          layout.composerLanguage,
+        : pickFirstText(
           trainingState?.latestLearningVerifiedResult,
           activeTrainingReviewArtifact?.verifiedResult,
           trainingState?.latestLearningPartialProgress,
@@ -12450,8 +12412,7 @@ export function App() {
 
   const renderTrainingView = () => {
     const title = hasRenderableTrainingCard
-      ? readTrainingCardText(boundTrainingCardFacts, "title", () => pickLanguageAlignedEvidenceText(
-          layout.composerLanguage,
+      ? readTrainingCardText(boundTrainingCardFacts, "title", () => pickFirstText(
           visibleTrainingCardTitle,
           leftoverTrainingHandoffChromeNotLive
             ? undefined
@@ -12497,9 +12458,7 @@ export function App() {
       ? readTrainingCardText(boundTrainingCardFacts, "whyNow", () => liveTrainingWhy)
       : undefined;
     const localizedSourceSummary = hasRenderableTrainingCard
-      ? pickLanguageAlignedEvidenceText(
-          layout.composerLanguage,
-          leftoverTrainingHandoffChromeNotLive
+      ? pickFirstText(leftoverTrainingHandoffChromeNotLive
             ? undefined
             : liveTrainingHandoffChrome.handoffSummary,
           leftoverTrainingHandoffChromeNotLive
@@ -12523,8 +12482,7 @@ export function App() {
             ? selectedTrainingCardCandidate.focusArea : undefined,
           selectedTrainingRouteCard && selectedTrainingRouteCard.cardId === activeTrainingCardId
             ? selectedTrainingRouteCard.focusArea : undefined,
-        ) ?? pickLanguageAlignedEvidenceText(
-          layout.composerLanguage,
+        ) ?? pickFirstText(
           leftoverTrainingFocusChromeNotLive ? undefined : liveTrainingFocusChrome.latestLearningFocusArea,
           leftoverTrainingFocusChromeNotLive ? undefined : liveTrainingFocusChrome.cardFocusArea,
           leftoverTrainingFocusChromeNotLive
@@ -12594,9 +12552,7 @@ export function App() {
             sourceSummary: localizedSourceSummary,
             sourceDetail:
               hasRenderableTrainingCard
-                ? pickLanguageAlignedEvidenceText(
-                    layout.composerLanguage,
-                    leftoverTrainingHandoffChromeNotLive
+                ? pickFirstText(leftoverTrainingHandoffChromeNotLive
                       ? undefined
                       : liveTrainingHandoffChrome.handoffSummary,
                     leftoverTrainingHandoffChromeNotLive
@@ -12674,8 +12630,7 @@ export function App() {
               (reviewArtifactForeground ? trainingState?.reviewArtifact?.blockedReason : undefined) ??
               (leftoverTrainingHandoffChromeNotLive || reviewArtifactForeground || trainingRestoreReplacesSelectedCard
                 ? undefined
-                : pickLanguageAlignedEvidenceText(
-                    layout.composerLanguage,
+                : pickFirstText(
                     liveTrainingHandoffChrome.blocker,
                     trainingState?.latestLearningBlocker,
                   ) || liveTrainingHandoffChrome.blocker || trainingState?.latestLearningBlocker || (
@@ -12688,8 +12643,7 @@ export function App() {
             latestLearningFollowup:
               leftoverTrainingHandoffChromeNotLive || reviewArtifactForeground || trainingRestoreReplacesSelectedCard
                 ? undefined
-                : pickLanguageAlignedEvidenceText(
-                    layout.composerLanguage,
+                : pickFirstText(
                     liveTrainingHandoffChrome.followup,
                     trainingState?.latestLearningFollowup,
                   ),

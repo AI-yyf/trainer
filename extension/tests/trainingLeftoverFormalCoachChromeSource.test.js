@@ -18,13 +18,13 @@ test('Training source and coach chrome do not backfill leftover formal title', (
   );
   assert.match(appSource, /liveTrainingCoachChrome,\s*liveTrainingSource,/);
   // The dead coachSummary card prop is gone; the coach chrome still reaches
-  // the learner only through the language-aligned picker in the leftover-gated
-  // source-summary chain.
+  // the learner only through the host-text source-summary chain (the sidecar
+  // localizes these templates per the workspace response language).
   const sourceSummaryStart = appSource.indexOf('const localizedSourceSummary');
   assert.ok(sourceSummaryStart >= 0, 'expected the localized source-summary chain');
   assert.match(
     appSource.slice(sourceSummaryStart, sourceSummaryStart + 900),
-    /pickLanguageAlignedEvidenceText\(\s*layout\.composerLanguage,\s*leftoverTrainingHandoffChromeNotLive\s*\?\s*undefined\s*:[\s\S]*?liveTrainingCoachChrome,/,
+    /pickFirstText\(\s*leftoverTrainingHandoffChromeNotLive\s*\?\s*undefined\s*:[\s\S]*?liveTrainingCoachChrome,/,
   );
   assert.doesNotMatch(
     appSource,

@@ -29,6 +29,20 @@ FILE_REFERENCE_PATTERN = re.compile(
 )
 
 
+def _prefers_chinese(language: str | None) -> bool:
+    return bool((language or "").strip().lower().startswith("zh"))
+
+
+def _localized_text(english: str, chinese: str, language: str | None) -> str:
+    """Learner-facing handoff template pick.
+
+    Same convention as ``training.card_generator._localized_text``: zh requests
+    get the zh sentence, every other (or unknown) locale falls back to English.
+    The evidence-honesty semantics of each sentence are identical in both.
+    """
+    return chinese if _prefers_chinese(language) else english
+
+
 class HandoffStatus(Enum):
     PENDING = "pending"
     GENERATED = "generated"
@@ -372,20 +386,35 @@ class TrainingHandoffGenerator:
         except ValueError:
             return None
 
-    def _completion_claim(self, concept: str, verification_state: str) -> str:
+    def _completion_claim(
+        self, concept: str, verification_state: str, response_language: str | None = None
+    ) -> str:
         if verification_state == "verified":
-            return (
+            return _localized_text(
                 f"Verified evidence supports this card result for {concept}. "
-                "It is not a claim of durable mastery; schedule later recall or transfer."
+                "It is not a claim of durable mastery; schedule later recall or transfer.",
+                f"已验证的证据支持 {concept} 的这一次卡片结果。"
+                "它不是对持久掌握的断言；请安排后续回忆或迁移来检验。",
+                response_language,
             )
         if verification_state == "blocked":
-            return f"This card is not complete for {concept}; return with the first blocker and retry evidence."
-        if verification_state == "verification_required":
-            return (
-                f"A learner result for {concept} was received, but it needs server-side verification "
-                "before it can count as card completion."
+            return _localized_text(
+                f"This card is not complete for {concept}; return with the first blocker and retry evidence.",
+                f"{concept} 的这张卡片尚未完成；请带着第一个阻塞点和重试证据回来。",
+                response_language,
             )
-        return f"No verifiable evidence was returned for {concept}; the card remains in progress."
+        if verification_state == "verification_required":
+            return _localized_text(
+                f"A learner result for {concept} was received, but it needs server-side verification "
+                "before it can count as card completion.",
+                f"已收到 {concept} 的学习者结果，但在计入卡片完成之前需要服务端验证。",
+                response_language,
+            )
+        return _localized_text(
+            f"No verifiable evidence was returned for {concept}; the card remains in progress.",
+            f"未收到 {concept} 的可验证证据；卡片保持进行中。",
+            response_language,
+        )
 
     @staticmethod
     def _return_state(verification_state: str) -> str:
@@ -401,6 +430,7 @@ class TrainingHandoffGenerator:
         card: TrainingCardCandidateSnapshot,
         learner_result: dict[str, Any],
         mastery_delta: float = 0.0,
+        response_language: str | None = None,
     ) -> TrainingHandoffContent:
         """Generate handoff content from a completed training card.
 
@@ -408,6 +438,8 @@ class TrainingHandoffGenerator:
             card: The training card that was completed
             learner_result: The learner's answer/result
             mastery_delta: How much mastery improved
+            response_language: Learner language for learner-facing templates
+                (zh gets the zh catalog; other locales fall back to English)
 
         Returns:
             Structured handoff content ready to write to project
@@ -430,7 +462,9 @@ class TrainingHandoffGenerator:
         files_to_touch = self._extract_files_to_touch(card)
 
         # Generate verification checklist
-        verification = self._generate_verification_checklist(card, learner_result)
+        verification = self._generate_verification_checklist(
+            card, learner_result, response_language=response_language
+        )
 
         # Determine success signal
         success_signal = self._generate_success_signal(
@@ -438,6 +472,7 @@ class TrainingHandoffGenerator:
             learner_result,
             mastery_delta,
             verification_state=verification_state,
+            response_language=response_language,
         )
 
         # Determine project scope
@@ -467,13 +502,23 @@ class TrainingHandoffGenerator:
             evidence_location=evidence_location,
             status=HandoffStatus.GENERATED,
             verification_state=verification_state,
-            completion_claim=self._completion_claim(concept, verification_state),
+            completion_claim=self._completion_claim(
+                concept, verification_state, response_language
+            ),
             reflection_prompt=getattr(card, "reflection_prompt", "") or "",
             return_with=getattr(card, "return_with", "") or "",
             resume_action=(
-                "Return with the verifier output and one reflection on what changed."
+                _localized_text(
+                    "Return with the verifier output and one reflection on what changed.",
+                    "带着验证器输出和一条关于变化的反思回来。",
+                    response_language,
+                )
                 if verification_state == "verified"
-                else "Resume this card from the first unfinished verification step."
+                else _localized_text(
+                    "Resume this card from the first unfinished verification step.",
+                    "从第一个未完成的验证步骤恢复这张卡片。",
+                    response_language,
+                )
             ),
         )
 
@@ -535,13 +580,17 @@ class TrainingHandoffGenerator:
         self,
         card: TrainingCardCandidateSnapshot,
         learner_result: dict[str, Any],
+        *,
+        response_language: str | None = None,
     ) -> list[str]:
         """Generate verification checklist for handoff."""
         checklist = []
 
         validation = getattr(card, "validation_method", "")
         if validation:
-            checklist.append(f"Verify: {validation}")
+            checklist.append(_localized_text(
+                f"Verify: {validation}", f"验证：{validation}", response_language
+            ))
 
         evidence = self._clean_evidence_values(
             learner_result.get("verified_evidence")
@@ -549,25 +598,49 @@ class TrainingHandoffGenerator:
             or learner_result.get("evidence")
         )
         if evidence:
-            checklist.append("Inspect the submitted evidence against the declared validation method")
+            checklist.append(_localized_text(
+                "Inspect the submitted evidence against the declared validation method",
+                "对照声明的验证方法检查所提交的证据",
+                response_language,
+            ))
         else:
-            checklist.append("Submit one inspectable result before crediting the card")
+            checklist.append(_localized_text(
+                "Submit one inspectable result before crediting the card",
+                "在计入卡片之前先提交一份可检查的结果",
+                response_language,
+            ))
 
         if not self._has_trusted_verification(learner_result):
-            checklist.append("Obtain server-side or evaluator verification; learner self-report is not sufficient")
+            checklist.append(_localized_text(
+                "Obtain server-side or evaluator verification; learner self-report is not sufficient",
+                "获取服务端或评估器验证；学习者自我报告并不足够",
+                response_language,
+            ))
 
         # Add concept-specific checks
         concept = getattr(card, "concept", "") or getattr(card, "target_skill", "")
         if concept:
-            checklist.append(f"Can explain: {concept}")
-            checklist.append(f"Can apply: {concept}")
+            checklist.append(_localized_text(
+                f"Can explain: {concept}", f"能解释：{concept}", response_language
+            ))
+            checklist.append(_localized_text(
+                f"Can apply: {concept}", f"能应用：{concept}", response_language
+            ))
 
         # Default checklist if nothing specific
         if not checklist:
             checklist.extend([
-                "Submit one inspectable result",
-                "Run the declared validation",
-                "Record a reflection before selecting the next card",
+                _localized_text(
+                    "Submit one inspectable result", "提交一份可检查的结果", response_language
+                ),
+                _localized_text(
+                    "Run the declared validation", "运行声明的验证", response_language
+                ),
+                _localized_text(
+                    "Record a reflection before selecting the next card",
+                    "在选择下一张卡片之前记录一条反思",
+                    response_language,
+                ),
             ])
 
         return checklist[:6]
@@ -579,20 +652,36 @@ class TrainingHandoffGenerator:
         mastery_delta: float,
         *,
         verification_state: str,
+        response_language: str | None = None,
     ) -> str:
         """Describe evidence state without promoting a self-report into mastery."""
         concept = getattr(card, "concept", "") or getattr(card, "target_skill", "") or "the concept"
 
         if verification_state == "verified":
-            return (
+            return _localized_text(
                 f"Verified evidence supports one result for {concept}. "
-                "Use later recall or transfer to assess durable mastery."
+                "Use later recall or transfer to assess durable mastery.",
+                f"已验证的证据支持 {concept} 的一次结果。"
+                "请用后续回忆或迁移来评估持久掌握。",
+                response_language,
             )
         if verification_state == "verification_required":
-            return f"A result for {concept} is awaiting server-side verification."
+            return _localized_text(
+                f"A result for {concept} is awaiting server-side verification.",
+                f"{concept} 的结果正在等待服务端验证。",
+                response_language,
+            )
         if verification_state == "blocked":
-            return f"Retry {concept} from the first reported blocker."
-        return f"Return one inspectable result for {concept} before this card can be credited."
+            return _localized_text(
+                f"Retry {concept} from the first reported blocker.",
+                f"请从第一个报告的阻塞点重试 {concept}。",
+                response_language,
+            )
+        return _localized_text(
+            f"Return one inspectable result for {concept} before this card can be credited.",
+            f"在这张卡片可以被计入之前，请先提交一份 {concept} 的可检查结果。",
+            response_language,
+        )
 
     def _generate_evidence_location(self, card: TrainingCardCandidateSnapshot, project_scope: str) -> str:
         """Generate the workspace path for evidence storage."""
@@ -609,9 +698,12 @@ class TrainingHandoffGenerator:
         card: TrainingCardCandidateSnapshot,
         learner_result: dict[str, Any],
         mastery_delta: float = 0.0,
+        response_language: str | None = None,
     ) -> ProjectHandoff:
         """Build a complete handoff record from card completion."""
-        content = self.generate_handoff(card, learner_result, mastery_delta)
+        content = self.generate_handoff(
+            card, learner_result, mastery_delta, response_language=response_language
+        )
 
         evidence: list[EvidenceRecord] = []
         created_at = datetime.now(timezone.utc)
