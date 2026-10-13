@@ -847,6 +847,7 @@ type StreamAgentCompletionMeta = {
   nextStep?: string;
   stopReason?: string;
   toolCount?: number;
+  nextStepRequiresConfirmation?: boolean;
 };
 
 type CoachCheckpointScope = {
@@ -2751,6 +2752,7 @@ export async function sendStreamMessageCommand(
         nextStep: completionMeta.nextStep,
         stopReason: completionMeta.stopReason,
         toolCount: completionMeta.toolCount,
+        nextStepRequiresConfirmation: completionMeta.nextStepRequiresConfirmation,
         reliabilityPhase: reliability.phase,
         reliabilityOutcome: reliability.outcome,
       },
@@ -4579,14 +4581,31 @@ function extractStreamAgentCompletion(response: unknown): StreamAgentCompletionM
   }
 
   const responseRecord = response as Record<string, unknown>;
+  const coachTurn =
+    typeof responseRecord.coach_turn === 'object' && responseRecord.coach_turn
+      ? (responseRecord.coach_turn as Record<string, unknown>)
+      : undefined;
+  // Grounding downgrade carrier for the terminal frame (§2.5⑤): the turn is
+  // marked when agent_meta says so, or when the delivered coach turn itself is
+  // flagged (a clean agent_meta must not hide a downgraded next step).
+  const nextStepRequiresConfirmation =
+    responseRecord.next_step_requires_confirmation === true ||
+    coachTurn?.requires_confirmation === true ||
+    coachTurn?.requiresConfirmation === true;
   const agent =
     typeof responseRecord.agent === 'object' && responseRecord.agent
       ? (responseRecord.agent as Record<string, unknown>)
       : typeof responseRecord.agent_meta === 'object' && responseRecord.agent_meta
         ? (responseRecord.agent_meta as Record<string, unknown>)
         : undefined;
+  const agentFlag =
+    agent?.next_step_requires_confirmation === true ||
+    agent?.nextStepRequiresConfirmation === true;
   if (!agent) {
-    return { agentic: false };
+    return {
+      agentic: false,
+      nextStepRequiresConfirmation: nextStepRequiresConfirmation || agentFlag || undefined,
+    };
   }
 
   const rawToolEvents = Array.isArray(agent.tool_events) ? agent.tool_events : [];
@@ -4616,6 +4635,11 @@ function extractStreamAgentCompletion(response: unknown): StreamAgentCompletionM
     nextStep,
     stopReason,
     toolCount: toolCount > 0 ? toolCount : undefined,
+    nextStepRequiresConfirmation:
+      nextStepRequiresConfirmation ||
+      agent.next_step_requires_confirmation === true ||
+      agent.nextStepRequiresConfirmation === true ||
+      undefined,
   };
 }
 

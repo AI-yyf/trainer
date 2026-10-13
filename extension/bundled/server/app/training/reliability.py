@@ -6,6 +6,12 @@ and advance it through:
     intent → pending → executing → succeeded|failed → acked
                                           ↘ cancelled
     failed|cancelled → pending (recover)
+
+Honesty rule: once ``work()`` has persisted, the outcome is success. A cancel
+request or a passed ``timeout_at`` that raced the completed work must never
+rewrite it as failed/cancelled (that would lure the client into re-running the
+same work); the race is annotated truthfully as ``cancel_after`` /
+``timeout_after`` on the succeeded record instead.
 """
 
 from __future__ import annotations
@@ -167,6 +173,8 @@ def begin_record(
         "acked_at": "",
         "timeout_at": (current + timedelta(milliseconds=bounded_timeout)).isoformat(),
         "cancel_requested": False,
+        "cancel_after": False,
+        "timeout_after": False,
         "outcome": "",
         "error": "",
         "recoverable": False,
@@ -278,12 +286,23 @@ def mark_succeeded(
     snapshot_revision: int,
     learning_phase: str = "",
     now: datetime | None = None,
+    cancel_after: bool | None = None,
+    timeout_after: bool | None = None,
 ) -> dict[str, Any]:
-    if record.get("cancel_requested") and not is_authoritative_success(str(record.get("phase") or "")):
-        return request_cancel(record, now=now)
-    if is_expired(record, now):
-        expired = expire_if_needed(record, now)
-        return expired or record
+    """Record persisted work as succeeded, annotating any cancel/timeout race.
+
+    Called only after ``work()`` returned successfully, so the persisted state
+    is the truth: a cancel request or an elapsed ``timeout_at`` recorded the
+    race, it did not undo the write. Annotating beats rewriting the outcome as
+    failed/cancelled, which would invite a retry that runs the work twice.
+    ``cancel_after`` / ``timeout_after`` default to the race evidence carried
+    by the record itself; the caller may pass the persisted evidence instead
+    (a cancel can be persisted after this record snapshot was taken).
+    """
+    resolved_cancel_after = (
+        bool(record.get("cancel_requested")) if cancel_after is None else bool(cancel_after)
+    )
+    resolved_timeout_after = is_expired(record, now) if timeout_after is None else bool(timeout_after)
     succeeded = transition(
         record,
         "succeeded",
@@ -294,6 +313,8 @@ def mark_succeeded(
         recovery_action="",
         snapshot_revision=snapshot_revision,
         learning_phase=learning_phase or record.get("learning_phase") or "",
+        cancel_after=resolved_cancel_after,
+        timeout_after=resolved_timeout_after,
     )
     return mark_acked(succeeded, now=now)
 
@@ -344,6 +365,8 @@ def as_workspace_record(record: dict[str, Any]) -> dict[str, Any]:
         "acked_at": str(record.get("acked_at") or ""),
         "timeout_at": str(record.get("timeout_at") or ""),
         "cancel_requested": bool(record.get("cancel_requested")),
+        "cancel_after": bool(record.get("cancel_after")),
+        "timeout_after": bool(record.get("timeout_after")),
         "outcome": str(record.get("outcome") or ""),
         "error": str(record.get("error") or ""),
         "recoverable": bool(record.get("recoverable")),

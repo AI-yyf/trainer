@@ -4,8 +4,9 @@ import inspect
 import re
 import time
 from collections import Counter
+from collections.abc import Mapping
 from copy import deepcopy
-from dataclasses import asdict, fields, is_dataclass, replace
+from dataclasses import asdict, dataclass, fields, is_dataclass, replace
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Callable, Literal, cast
@@ -48,7 +49,19 @@ from ..core.models import (
     WorkspaceUnderstandingSnapshot,
 )
 from ..db.repository import TrainerRepository
-from ..llm.turn_grounding import sanitize_memory_anchor
+from ..llm.turn_grounding import (
+    FACT_PROVENANCES,
+    MEMORY_PROVENANCE_CONFLICTED_CLAIMS,
+    MEMORY_PROVENANCE_FIELDS,
+    MEMORY_PROVENANCE_GROUNDING_OUTCOME,
+    OUTCOME_CORRECTED,
+    OUTCOME_GROUNDED,
+    PROVENANCE_LEARNER_PROVIDED,
+    PROVENANCE_LOCAL_FALLBACK,
+    PROVENANCE_MODEL_CLAIM,
+    PROVENANCE_TOOL_VERIFIED,
+    sanitize_memory_anchor,
+)
 from ..pedagogy.evidence_controls import (
     analyze_learning_evidence,
     resolve_pedagogy_controls,
@@ -1134,6 +1147,121 @@ class StructuredMemoryService:
                 continue
             restored[str(key)] = item
         return restored
+
+
+_BACKED_PROVENANCES = frozenset({PROVENANCE_TOOL_VERIFIED, PROVENANCE_LEARNER_PROVIDED})
+
+
+@dataclass(frozen=True)
+class _MemoryProvenanceAdmission:
+    """Resolved DESIGN.md §2.7 admission for one ``record_turn_reflection``."""
+
+    requested: bool
+    outcome: str
+    provenance: dict[str, str]
+    conflicted_claims: tuple[str, ...]
+
+    def next_step_admitted(self) -> bool:
+        if not self.requested:
+            return True
+        if self.outcome:
+            return self.outcome in {OUTCOME_GROUNDED, OUTCOME_CORRECTED}
+        return (
+            self.provenance.get("next_step", PROVENANCE_MODEL_CLAIM)
+            != PROVENANCE_LOCAL_FALLBACK
+        )
+
+    def focus_backing(self) -> str | None:
+        if not self.requested:
+            return None  # legacy callers keep the ungated behaviour
+        return self.provenance.get("focus", PROVENANCE_MODEL_CLAIM)
+
+    def summary_verification_trusted(self) -> bool:
+        if not self.requested:
+            return True
+        return self.provenance.get("summary", PROVENANCE_MODEL_CLAIM) in _BACKED_PROVENANCES
+
+
+def _resolve_memory_provenance_admission(
+    raw: Mapping[str, str] | None,
+) -> _MemoryProvenanceAdmission:
+    """Normalize the mapping built by ``memory_provenance_summary`` (§2.6)."""
+    if raw is None:
+        return _MemoryProvenanceAdmission(False, "", {}, ())
+    provenance: dict[str, str] = {}
+    outcome = ""
+    conflicted: list[str] = []
+    for key, value in raw.items():
+        text = str(value or "").strip()
+        if key == MEMORY_PROVENANCE_GROUNDING_OUTCOME:
+            outcome = text
+        elif key == MEMORY_PROVENANCE_CONFLICTED_CLAIMS:
+            conflicted = [part.strip() for part in text.splitlines() if part.strip()]
+        elif key in MEMORY_PROVENANCE_FIELDS:
+            provenance[key] = text if text in FACT_PROVENANCES else PROVENANCE_MODEL_CLAIM
+    return _MemoryProvenanceAdmission(True, outcome, provenance, tuple(conflicted))
+
+
+def _strip_conflicted_claim_texts(text: str | None, claims: tuple[str, ...]) -> str:
+    """Remove exact conflicting claim texts (field+claim level, §2.7)."""
+    cleaned = str(text or "")
+    for claim in claims:
+        if claim:
+            cleaned = cleaned.replace(claim, "")
+    return cleaned.strip()
+
+
+@dataclass(frozen=True)
+class _AdmittedReflectionFields:
+    """One reflection's field values after the §2.7 admission."""
+
+    focus_area: str | None
+    summary: str
+    next_step: str
+    review_note: str | None
+    decision: str | None
+    teaching_note: str | None
+    evidence: list[str] | None
+
+
+def _admit_reflection_fields(
+    admission: _MemoryProvenanceAdmission,
+    *,
+    focus_area: str | None,
+    summary: str,
+    next_step: str,
+    review_note: str | None,
+    decision: str | None,
+    teaching_note: str | None,
+    evidence: list[str] | None,
+) -> _AdmittedReflectionFields:
+    """Apply the DESIGN.md §2.7 admission to one reflection's fields.
+
+    Single implementation shared by ``record_coaching_reflection`` and
+    ``record_turn_memory`` (both accept ``memory_provenance``); a ``None``
+    admission keeps every value untouched (legacy callers).
+    """
+    claims = admission.conflicted_claims
+    admitted_focus = focus_area
+    if admission.requested and admission.focus_backing() == PROVENANCE_LOCAL_FALLBACK:
+        # local_fallback turns never write focus/anchor (DESIGN §2.1).
+        admitted_focus = None
+    admitted_evidence: list[str] | None = None
+    if evidence is not None:
+        admitted_evidence = [
+            stripped
+            for item in evidence
+            if (stripped := _strip_conflicted_claim_texts(item, claims))
+        ]
+    return _AdmittedReflectionFields(
+        focus_area=admitted_focus,
+        summary=_strip_conflicted_claim_texts(summary, claims),
+        next_step=next_step if admission.next_step_admitted() else "",
+        review_note=_strip_conflicted_claim_texts(review_note, claims) or None,
+        decision=_strip_conflicted_claim_texts(decision, claims) or None,
+        teaching_note=_strip_conflicted_claim_texts(teaching_note, claims) or None,
+        evidence=admitted_evidence,
+    )
 
 
 class MemoryService(
@@ -6948,9 +7076,29 @@ class MemoryService(
         teaching_note: str | None = None,
         confidence: str | None = None,
         evidence: list[str] | None = None,
+        memory_provenance: Mapping[str, str] | None = None,
     ) -> None:
         resolved_workspace_id = self._resolve_workspace_for_write(workspace_id)
         structured = self._structured_for(resolved_workspace_id)
+        admission = _resolve_memory_provenance_admission(memory_provenance)
+        admitted = _admit_reflection_fields(
+            admission,
+            focus_area=focus_area,
+            summary=summary,
+            next_step=next_step,
+            review_note=review_note,
+            decision=decision,
+            teaching_note=teaching_note,
+            evidence=evidence,
+        )
+        focus_area = admitted.focus_area
+        summary = admitted.summary
+        next_step = admitted.next_step
+        review_note = admitted.review_note
+        decision = admitted.decision
+        teaching_note = admitted.teaching_note
+        evidence = admitted.evidence
+        summary_verification_trusted = admission.summary_verification_trusted()
         cleaned_summary = summary.strip()
         cleaned_next_step = next_step.strip()
         cleaned_focus = (focus_area or "").strip()
@@ -7025,7 +7173,15 @@ class MemoryService(
             else ""
         )
         verified_result = ""
-        if cleaned_summary and ("verified" in cleaned_summary.lower() or "通过" in cleaned_summary or "完成" in cleaned_summary):
+        if cleaned_summary and summary_verification_trusted and (
+            "verified" in cleaned_summary.lower()
+            or "通过" in cleaned_summary
+            or "完成" in cleaned_summary
+        ):
+            # DESIGN.md §2.7: a model-authored summary is never a verified-
+            # mastery basis; only tool_verified / learner_provided summaries
+            # may raise the recorded verified result (a previous verified
+            # result still carries forward below).
             verified_result = cleaned_summary
         elif existing_verified_result and cleaned_focus:
             existing_focus = str(existing_active_thread.get("focus_area") or "").strip() if isinstance(existing_active_thread, dict) else ""
@@ -7143,7 +7299,22 @@ class MemoryService(
                 normalized_response_language,
                 source="coach-turn",
             )
+        self._stamp_coach_provenance(resolved_workspace_id, structured, admission)
         self._persist_structured(resolved_workspace_id)
+
+    def _stamp_coach_provenance(
+        self,
+        workspace_id: str,
+        structured: StructuredMemoryService,
+        admission: _MemoryProvenanceAdmission,
+    ) -> None:
+        """Stamp the turn's provenance map when the caller supplied one."""
+        if not admission.requested:
+            return
+        structured.update_workspace(
+            latest_coach_provenance=dict(admission.provenance),
+            latest_coach_grounding_outcome=admission.outcome,
+        )
 
     def _remember_onboarding_signals(
         self,
@@ -7461,7 +7632,26 @@ class MemoryService(
         confidence: str | None = None,
         evidence: list[str] | None = None,
         user_message: str | None = None,
+        memory_provenance: Mapping[str, str] | None = None,
     ) -> None:
+        admission = _resolve_memory_provenance_admission(memory_provenance)
+        admitted = _admit_reflection_fields(
+            admission,
+            focus_area=focus_area,
+            summary=summary,
+            next_step=next_step,
+            review_note=review_note,
+            decision=decision,
+            teaching_note=teaching_note,
+            evidence=evidence,
+        )
+        focus_area = admitted.focus_area
+        summary = admitted.summary
+        next_step = admitted.next_step
+        review_note = admitted.review_note
+        decision = admitted.decision
+        teaching_note = admitted.teaching_note
+        evidence = admitted.evidence
         cleaned_summary = summary.strip()
         cleaned_next_step = next_step.strip()
         cleaned_review_note = review_note.strip() if review_note else ""
@@ -7485,6 +7675,14 @@ class MemoryService(
             reflection_parts.append(cleaned_review_note)
         reflection_summary = " ".join(part for part in reflection_parts if part).strip()
         if not reflection_summary:
+            if workspace_id:
+                resolved_workspace_id = self._resolve_workspace_for_write(workspace_id)
+                self._stamp_coach_provenance(
+                    resolved_workspace_id,
+                    self._structured_for(resolved_workspace_id),
+                    admission,
+                )
+                self._persist_structured(resolved_workspace_id)
             return
 
         task_id = cleaned_focus or scenario or "coach-turn"
@@ -7542,8 +7740,14 @@ class MemoryService(
             )
 
         normalized_focus = self._normalize_focus_area(cleaned_focus)
+        # DESIGN.md §2.7: mastery advances only on tool_verified /
+        # learner_provided backing. ``admission.focus_backing()`` is ``None``
+        # for legacy callers (ungated) and the turn's focus provenance when
+        # ``memory_provenance`` was supplied by the assembly.
+        focus_backing = admission.focus_backing()
+        mastery_allowed = focus_backing is None or focus_backing in _BACKED_PROVENANCES
 
-        if normalized_focus:
+        if normalized_focus and mastery_allowed:
             structured.update_mastery(
                 normalized_focus,
                 delta=0.05,
@@ -7551,7 +7755,7 @@ class MemoryService(
                 review_after_days=2,
             )
 
-        if cleaned_next_step and normalized_focus:
+        if cleaned_next_step and normalized_focus and mastery_allowed:
             structured.update_mastery(
                 f"{normalized_focus.lower().replace(' ', '-')}:next-step",
                 delta=0.08,
@@ -7591,7 +7795,96 @@ class MemoryService(
             next_step=cleaned_next_step,
             review_note=cleaned_review_note or None,
         )
+        self._stamp_coach_provenance(workspace_id, structured, admission)
         self._persist_structured(workspace_id)
+
+    def record_turn_reflection(
+        self,
+        *,
+        workspace_id: str | None = None,
+        session_id: str | None = None,
+        user_message: str | None = None,
+        scenario: str,
+        focus_area: str | None,
+        summary: str,
+        next_step: str,
+        review_note: str | None = None,
+        decision: str | None = None,
+        teaching_note: str | None = None,
+        confidence: str | None = None,
+        evidence: list[str] | None = None,
+        answer_mode: str | None = None,
+        response_language: str | None = None,
+        coach_defaults: CoachDefaults | None = None,
+        teaching_goal: str | None = None,
+        exercise_prompt: dict[str, Any] | None = None,
+        memory_provenance: Mapping[str, str] | None = None,
+    ) -> None:
+        """Persist one coach turn under the DESIGN.md §2.7 field-level admission.
+
+        ``memory_provenance`` is the mapping built by
+        ``app.llm.turn_grounding.memory_provenance_summary``: per-field
+        provenance values (``tool_verified`` / ``learner_provided`` /
+        ``model_claim`` / ``local_fallback``) plus the reserved
+        ``grounding_outcome`` and ``conflicted_claims`` keys. Without it the
+        call keeps the legacy ungated behaviour (direct callers, tests).
+
+        With it:
+
+        - ``next_step`` is admitted only for ``grounded`` / ``corrected``
+          outcomes — a downgraded step never reaches thread memory, action
+          items or review hints;
+        - a ``local_fallback`` turn writes no focus / anchor and no mastery
+          bumps (§2.1);
+        - mastery bumps require ``tool_verified`` / ``learner_provided`` focus
+          backing (§2.7) — a pure ``model_claim`` turn does not advance
+          mastery;
+        - the summary may only raise the verified result when its provenance
+          is fact-backed (§2.7);
+        - conflicted claim texts are stripped from the admitted text fields
+          (field + claim granularity, no paragraph-level NLP);
+        - the normalized provenance map is stamped on the workspace
+          (``latest_coach_provenance`` / ``latest_coach_grounding_outcome``).
+
+        The admission itself lives in ``_admit_reflection_fields`` and runs
+        inside the two writers (both accept ``memory_provenance``), so this
+        entry point and the assembly's direct writer calls share one
+        implementation.
+        """
+        self.record_coaching_reflection(
+            workspace_id=workspace_id,
+            scenario=scenario,
+            focus_area=focus_area,
+            summary=summary,
+            next_step=next_step,
+            review_note=review_note,
+            decision=decision,
+            teaching_note=teaching_note,
+            confidence=confidence,
+            evidence=evidence,
+            user_message=user_message,
+            memory_provenance=memory_provenance,
+        )
+        self.record_turn_memory(
+            workspace_id=workspace_id,
+            session_id=session_id,
+            user_message=user_message,
+            scenario=scenario,
+            focus_area=focus_area,
+            summary=summary,
+            next_step=next_step,
+            answer_mode=answer_mode,
+            response_language=response_language,
+            review_note=review_note,
+            coach_defaults=coach_defaults,
+            teaching_goal=teaching_goal,
+            exercise_prompt=exercise_prompt,
+            decision=decision,
+            teaching_note=teaching_note,
+            confidence=confidence,
+            evidence=evidence,
+            memory_provenance=memory_provenance,
+        )
 
     def record_evaluation_feedback(
         self,

@@ -53,6 +53,17 @@ from ..training.plan_revision import PlanRevisionStore
 
 DEFAULT_WORKSPACE_ID = "workspace-default"
 DEFAULT_WORKSPACE_NAME = "Trainer"
+
+
+class WorkspaceBindingError(ValueError):
+    """A trust-sensitive write could not be bound to a workspace truthfully."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        super().__init__(detail)
+        self.code = code
+        self.detail = detail
+
+
 AGENT_CHECKPOINT_ID_PATTERN = re.compile(r"agent-turn-[0-9a-f]{32}")
 _CHECKPOINT_REDACTED_VALUE = "[redacted]"
 _CHECKPOINT_SECRET_KEY_PARTS = ("api_key", "apikey", "authorization", "password", "secret", "token")
@@ -810,6 +821,50 @@ class TrainerRuntime:
         if latest:
             return latest.workspace_id
         return DEFAULT_WORKSPACE_ID
+
+    def resolve_workspace_id_for_write(
+        self, session_id: str | None = None, workspace_id: str | None = None
+    ) -> str:
+        """Resolve the workspace for a trust-sensitive write — no silent fallback.
+
+        Unlike :meth:`resolve_workspace_id`, this never lands the write in the
+        latest session's workspace or ``DEFAULT_WORKSPACE_ID``: when the binding
+        cannot be established truthfully the caller must refuse the write
+        instead of risking evidence mis-attribution. An explicit
+        ``workspace_id`` must also agree with the session's workspace when that
+        session is known.
+        """
+        explicit_workspace_id = (workspace_id or "").strip()
+        session_workspace: str | None = None
+        requested_session_id = (session_id or "").strip()
+        if requested_session_id:
+            state = self.get_session(requested_session_id)
+            if state is None:
+                restored_payload = self.repository.load_session(requested_session_id)
+                if restored_payload:
+                    restored = self._restore_session(restored_payload)
+                    if restored is not None:
+                        self.sessions[requested_session_id] = restored
+                        state = restored
+            if state is not None:
+                session_workspace = state.workspace_id
+        if explicit_workspace_id:
+            resolved_explicit = (
+                self.repository.resolve_context_id(explicit_workspace_id) or explicit_workspace_id
+            )
+            if session_workspace is not None and session_workspace != resolved_explicit:
+                raise WorkspaceBindingError(
+                    "workspace_session_mismatch",
+                    "The explicit workspace_id does not match the session's workspace binding.",
+                )
+            return resolved_explicit
+        if session_workspace is not None:
+            return session_workspace
+        raise WorkspaceBindingError(
+            "workspace_binding_unavailable",
+            "A trust-sensitive write requires a known session or an explicit workspace_id; "
+            "refusing the silent fallback workspace.",
+        )
 
     def restore_latest_session_for_workspace(self, workspace_id: str) -> SessionState | None:
         workspace_id = self.repository.resolve_context_id(workspace_id) or workspace_id

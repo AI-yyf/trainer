@@ -5128,6 +5128,8 @@ test('sendStreamMessageCommand forwards agent completion metadata to the webview
       nextStep: 'Patch the smallest async iterator call site.',
       stopReason: 'coach_finalize',
       toolCount: 1,
+      // Terminal-frame grounding marker (unflagged turn → forwarded as undefined).
+      nextStepRequiresConfirmation: undefined,
       reliabilityPhase: 'acked',
       reliabilityOutcome: 'success',
     },

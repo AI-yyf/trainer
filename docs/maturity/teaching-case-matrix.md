@@ -2,7 +2,7 @@
 
 - 日期：2026-10-13（R1 teaching 交付；R2 按本规格实现 harness 并执行）
 - 依据：`docs/maturity/DESIGN.md` §6 R2 teaching ③；`docs/maturity/2026-10-08-real-teaching-quality.md`（28 个教学旅程未验收通过：4 个有效案例 0 判 pass，24 个未执行）
-- 资产基线：`scripts/maturity/real-teaching-journeys-minimax.py:50-147` 内 4 个既有案例（01 mutable-default / 02 late-binding / 03 nested-alias / 04 binary-search-boundary）；R2 执行脚本由该 harness 演进，保留这 4 个案例的 id、消息与 topic_tokens
+- 资产基线：`scripts/maturity/real_teaching_journeys_minimax.py`（R2 交付版，28 案例）内 4 个既有案例（01 mutable-default / 02 late-binding / 03 nested-alias / 04 binary-search-boundary）保留原 id、消息与 topic_tokens
 - 状态：规格（本文件）。任何「通过」结论只能由 R2 的真实运行记录得出；本文件不代表任何案例已通过。
 
 ## 0. 红线（对本矩阵的每次执行生效）
@@ -31,12 +31,12 @@
 - **M2 grounding**：服务端 `agent_meta.grounding_outcome ∈ {grounded, corrected}` 且 `next_step_requires_confirmation=false` 才算教学 pass；`downgraded` 仅算机制暴露（记录为 grounding fail 证据），不得算教学通过。
 - **M3 记忆**：`coach_anchor`/`current_focus` 非空或诚实为空；不得等于消息前缀；两回合之间主题 token（案例 `topic_tokens`）至少保留一个；恢复回合不得把 `local_fallback` 内容写成 verified mastery。
 - **M4 反模式**：正文与结构化 next_step 同域不冲突；不得重复索要 turn1 已给出的事实（报错文本/代码/文件）；不得要求对话与代码中不存在的函数名/call site/文件（由 `server/app/llm/turn_grounding.py` 规则层判定）。
-- **M5 对账**：服务端 agent_meta 戳（`grounding_outcome` / `grounding_ungrounded_symbols` / `grounding_retry_used` / `next_step_requires_confirmation`）与 harness 本地复算（`evaluate_next_step_grounding`）逐回合比对，不一致判该回合失败。
+- **M5 对账**：服务端 agent_meta 戳与 harness 本地复算（`evaluate_next_step_grounding`，本地无 provider 重试）逐回合比对：`grounding_outcome` 与 `grounding_ungrounded_symbols` 必须一致（downgraded 时两侧未锚定符号集合相等）；`corrected` 时改为本地复评 `corrected_next_step` 文本且必须 grounded；`grounding_retry_used` 是服务端专有字段（本地无法复现 provider 重试），不参与逐项比较，但必须与 outcome 自洽（corrected ⇒ retry_used 为真）。不一致判该回合失败。
 - **内容质量（独立评审栏）**：事实准确、难度适配、direct/guided 尊重、篇幅——由独立评审 agent 读最终回复后填写，标注「待 owner 确认」；不计入 M1–M5 的自动判定。
 
 ## 3. 逐案例规格
 
-> 既有 A1–A3、B1 的完整代码/消息/修复见 `scripts/maturity/real-teaching-journeys-minimax.py:50-147`，此处只列判据重点；新增案例给出预置坏代码要点与脚本化修复要点，R2 实现时补全为可运行文件。
+> 4 个既有案例与 24 个新增案例的完整代码/消息/修复均已落在 `scripts/maturity/real_teaching_journeys_minimax.py`（`CASES` 表）；下表列出各类别与判据重点。
 
 ### A 真实代码错误（Python）
 
@@ -80,7 +80,7 @@
 |---|---|---|---|---|---|---|
 | E1 | CLI 脚本 | 裸 `sys.argv` 解析，`--input` 报错 | 「想加参数入口」 | argparse（或等价） | 「子命令怎么组织」 | 步骤引用项目真实文件；`python app.py --input x` exit=0 |
 | E2 | 双文件客户端 | 同步阻塞函数签名被调用方依赖，改 async 后调用点未更新 | 「怎样把 IO 改异步还不破调用点」 | 同时更新定义与调用点 | 「还有哪些调用点要顺带改」 | 两文件符号都须锚定；不得虚构调用点 |
-| E3 | 既有模块 | 模块无测试；新增测试文件断言真实函数 | 「给这个模块补最小测试」 | 引用真实函数名写 pytest | 「边界用例怎么挑」 | 测试引用真实符号；`pytest` exit=0 |
+| E3 | 既有模块 | 模块无测试；新增测试文件断言真实函数 | 「给这个模块补最小测试」 | 引用真实函数名写 pytest | 「边界用例怎么挑」 | 测试引用真实符号；测试 runner exit=0（harness 用 `python -m unittest test_calc`） |
 | E4 | 一次性脚本 | 平铺脚本要变包结构 | 「怎么组织成可安装的包」 | src layout + `__init__` | 「入口点怎么暴露」 | `python -m pkg.cli` exit=0；不得虚构模块名 |
 
 ### F 进阶用户（answer_mode=direct；不得强推入门/训练卡）
@@ -103,7 +103,7 @@
 
 ## 4. 执行规程（R2）
 
-1. 脚本：`scripts/maturity/real-teaching-journeys-minimax.py` 演进为 28 案例版；每案例独立隔离项目目录；凭证 env-only + HTTPS；分类逐回合记录（§0.3）。
+1. 脚本：`scripts/maturity/real_teaching_journeys_minimax.py`（28 案例；每案例独立隔离项目目录；凭证 env-only + 非明文传输；分类逐回合记录，§0.3）。夹具骨架（pre-fix exit≠0 / post-fix exit=0）无需凭证、每次运行都在本地真实执行。
 2. 时序：单并发、回合间隔 12s；28×2=56 回合；预计 30–45 分钟（模型延迟叠加）。中断即停，不拼接未完成结果为整体通过。
 3. 对账与判定：按 §2 M1–M5；服务端戳 vs 本地复算不一致即判该回合 failed（harness 本地复算仅用于对账，不是第二权威——判定以 `server/app/llm/turn_grounding.py` 规则层为准）。
 4. 报告：逐案例 `passed/failed` + 分类分布 + 失败证据（回合、symbols、exit code）写 `docs/maturity/`；内容质量栏由独立评审 agent 填「待 owner 确认」。

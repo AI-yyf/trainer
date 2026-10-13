@@ -11289,9 +11289,9 @@ def test_turn_grounding_decides_once_and_stamps_downgrade(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The turn is decided exactly once (cached), the legacy gate never re-runs,
-    and the downgrade is stamped for the host/UI instead of shipping a
-    fabricated requirement."""
+    """One cached decision per turn (initial verdict + the bounded retry
+    re-check), the legacy gate never re-runs, and the downgrade is stamped for
+    the host/UI instead of shipping a fabricated requirement."""
     body, retry_attempts, evaluate_calls, legacy_calls = _run_grounding_wired_turn(
         tmp_path,
         monkeypatch,
@@ -11302,9 +11302,10 @@ def test_turn_grounding_decides_once_and_stamps_downgrade(
 
     # Bounded retry: exactly one provider attempt, and it failed to ground.
     assert len(retry_attempts) == 1
-    # One decision for the whole turn; the response builder consumed the cache
-    # and must not re-evaluate (neither the new nor the legacy gate).
-    assert len(evaluate_calls) == 1
+    # The retry route always goes through the rules layer (one semantics for
+    # both layers, 2026-10-13 review): initial verdict + re-check of the
+    # regenerated text; the response builder consumes the cached decision.
+    assert len(evaluate_calls) == 2
     assert legacy_calls == []
 
     coach_turn = body.get("coach_turn")
@@ -11313,11 +11314,27 @@ def test_turn_grounding_decides_once_and_stamps_downgrade(
     agent_meta = body.get("agent_meta") or {}
     assert agent_meta.get("grounding_outcome") == "downgraded"
     assert agent_meta.get("grounding_ungrounded_symbols")
-    assert agent_meta.get("grounding_retry_used") is False
+    # `retry_used` records that a regeneration was attempted (an empty
+    # regeneration is still an attempt).
+    assert agent_meta.get("grounding_retry_used") is True
     assert agent_meta.get("next_step_requires_confirmation") is True
 
     memory_text = json.dumps(body.get("snapshot", {}).get("memory", {}), ensure_ascii=False)
     assert "parse_header" not in memory_text
+
+    # Transport carrier (§2.5⑤): the next-step artifact metadata also carries
+    # the downgrade flag, so the webview can render "confirm before acting".
+    reply_metadata = (body.get("reply") or {}).get("metadata") or {}
+    artifact_entries = reply_metadata.get("artifacts") or []
+    next_step_artifacts = [
+        entry
+        for entry in artifact_entries
+        if isinstance(entry, dict) and entry.get("kind") == "next_step"
+    ]
+    assert next_step_artifacts, artifact_entries
+    assert (
+        next_step_artifacts[0].get("metadata") or {}
+    ).get("next_step_requires_confirmation") is True
 
 
 def test_turn_grounding_retry_corrects_next_step_once(
@@ -11352,3 +11369,116 @@ def test_turn_grounding_retry_corrects_next_step_once(
     memory_text = json.dumps(body.get("snapshot", {}).get("memory", {}), ensure_ascii=False)
     assert GROUNDING_GROUNDED_STEP in memory_text
     assert "parse_header" not in memory_text
+
+
+def test_turn_persistence_passes_grounding_memory_provenance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The resolve step's facts-derived provenance (§2.7) reaches the memory
+    writer's ``memory_provenance`` argument (teaching consumes it there)."""
+    from app.memory.service import MemoryService
+
+    captured: list[dict[str, object]] = []
+    original = MemoryService.record_coaching_reflection
+
+    def capturing(self: object, **kwargs: object) -> None:
+        captured.append(dict(kwargs))
+        original(self, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(MemoryService, "record_coaching_reflection", capturing)
+    _run_grounding_wired_turn(
+        tmp_path,
+        monkeypatch,
+        "workspace-grounding-provenance",
+        GROUNDING_UNGROUNDED_STEP,
+        retry_text="",
+    )
+
+    assert captured, "the grounding-wired turn did not persist a reflection"
+    provenance = captured[-1].get("memory_provenance")
+    assert isinstance(provenance, dict)
+    assert provenance.get("grounding_outcome") == "downgraded"
+    assert provenance.get("next_step") == "model_claim"
+
+
+# ---------------------------------------------------------------------------
+# Trust-sensitive write bindings (runtime R2): an explicit workspace id must
+# agree with the session/attempt binding, and an unresolvable binding is
+# refused instead of silently landing in the fallback workspace.
+# ---------------------------------------------------------------------------
+
+
+def test_attest_rejects_workspace_session_mismatch(tmp_path: Path) -> None:
+    with build_client(tmp_path) as client:
+        started = client.post(
+            "/session/start",
+            json={"workspace_id": "workspace-attest-a", "workspace_name": "Attest A"},
+        )
+        assert started.status_code == 200, started.text
+        session_id = started.json()["session_id"]
+
+        response = client.post(
+            "/training/verification/attest",
+            json={
+                "session_id": session_id,
+                "workspace_id": "workspace-attest-b",
+                "card_id": "card-1",
+                "evidence_source": "test_runner",
+                "passed": True,
+                "tests_output": "1 passed",
+            },
+        )
+        assert response.status_code == 409, response.text
+        assert response.json()["detail"]["code"] == "workspace_session_mismatch"
+
+
+def test_attest_refuses_unresolvable_workspace_binding(tmp_path: Path) -> None:
+    """No session and no explicit workspace: refuse instead of the silent
+    latest-session/default fallback (evidence must not be mis-attributed)."""
+    with build_client(tmp_path) as client:
+        response = client.post(
+            "/training/verification/attest",
+            json={
+                "card_id": "card-1",
+                "evidence_source": "test_runner",
+                "passed": True,
+                "tests_output": "1 passed",
+            },
+        )
+        assert response.status_code == 409, response.text
+        assert response.json()["detail"]["code"] == "workspace_binding_unavailable"
+
+
+def test_attempt_evidence_rejects_workspace_mismatch(tmp_path: Path) -> None:
+    with build_client(tmp_path) as client:
+        started = client.post(
+            "/training/attempt/start",
+            json={"workspace_id": "workspace-attempt-a", "card_id": "card-1"},
+        )
+        assert started.status_code == 200, started.text
+        attempt_id = started.json()["attempt"]["attempt_id"]
+
+        mismatch = client.post(
+            "/training/attempt/evidence",
+            json={
+                "attempt_id": attempt_id,
+                "workspace_id": "workspace-attempt-b",
+                "artifact_hash": "hash-attempt-1",
+                "result": "passed",
+            },
+        )
+        assert mismatch.status_code == 409, mismatch.text
+        assert mismatch.json()["detail"]["code"] == "workspace_attempt_mismatch"
+
+        matched = client.post(
+            "/training/attempt/evidence",
+            json={
+                "attempt_id": attempt_id,
+                "workspace_id": "workspace-attempt-a",
+                "artifact_hash": "hash-attempt-1",
+                "result": "passed",
+            },
+        )
+        assert matched.status_code == 200, matched.text
+        assert matched.json()["evidence"]["trust_level"] == "self_reported"

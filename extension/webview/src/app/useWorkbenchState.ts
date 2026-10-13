@@ -24,6 +24,10 @@ import {
 } from "../../../../shared/src/operationReliabilityGovernance";
 import { createNeutralBootstrapData } from "../lib/neutralBootstrap";
 import {
+  resolveOperationMessageSurface,
+  type OperationMessageSurface,
+} from "../lib/operationMessageGovernance";
+import {
   sanitizeVisibleData,
   sanitizeVisibleText,
   splitSafeVisibleStreamText,
@@ -46,6 +50,8 @@ import type {
   LearningSurfaceAlignment,
   HostMessage,
   PersistedWorkbenchState,
+  ProviderConfigView,
+  ProviderSummary,
   StageMaterialItem,
   TeachingStyle,
   ThemePreference,
@@ -119,13 +125,23 @@ function buildNeutralBootstrapData(): WorkbenchBootstrapState {
   };
 }
 
+/** The connection summary is a projection of the single ProviderFacts record. */
+function providerSummaryFromFacts(facts: ProviderConfigView): ProviderSummary {
+  return {
+    name: facts.name,
+    model: facts.model,
+    capabilities: facts.capabilities,
+    protocol: facts.protocol,
+    protocolFamily: facts.protocolFamily,
+  };
+}
+
 function normalizeBootstrapData(
   value: WorkbenchBootstrapInput | undefined,
   fallbackState: WorkbenchBootstrapState = buildNeutralBootstrapData(),
 ): WorkbenchBootstrapState {
   const fallback = fallbackState;
-  const source = sanitizeVisibleData(value ?? {}) as WorkbenchBootstrapInput;
-  const workspaceSettings = source.memory?.workspace;
+  const source = sanitizeVisibleData(value ?? {}) as WorkbenchBootstrapInput;  const workspaceSettings = source.memory?.workspace;
   const fallbackWorkspaceSettings = fallback.memory.workspace;
   const fallbackMemoryEvidence =
     "memoryEvidence" in fallback.memory && Array.isArray(fallback.memory.memoryEvidence)
@@ -143,6 +159,18 @@ function normalizeBootstrapData(
           ? source.hasFormalPlan
           : fallback.hasFormalPlan;
 
+  // Single ProviderFacts owner: `providerConfig` is the one record; the
+  // connection summary below is a projection of it, never merged beside it, so
+  // the two copies cannot drift apart field by field.
+  const mergedProviderConfig = {
+    ...fallback.providerConfig,
+    ...(source.providerConfig ?? {}),
+    capabilities: {
+      ...fallback.providerConfig.capabilities,
+      ...(source.providerConfig?.capabilities ?? {}),
+    },
+  };
+
   return {
     ...fallback,
     ...source,
@@ -157,31 +185,9 @@ function normalizeBootstrapData(
         source.connection?.state === "offline"
           ? source.connection.state
           : fallback.connection.state,
-      provider: {
-        ...fallback.connection.provider,
-        ...(source.connection?.provider ?? {}),
-        protocol:
-          source.connection?.provider?.protocol ??
-          source.providerConfig?.protocol ??
-          fallback.connection.provider.protocol,
-        protocolFamily:
-          source.connection?.provider?.protocolFamily ??
-          source.providerConfig?.protocolFamily ??
-          fallback.connection.provider.protocolFamily,
-        capabilities: {
-          ...fallback.connection.provider.capabilities,
-          ...(source.connection?.provider?.capabilities ?? {}),
-        },
-      },
+      provider: providerSummaryFromFacts(mergedProviderConfig),
     },
-    providerConfig: {
-      ...fallback.providerConfig,
-      ...(source.providerConfig ?? {}),
-      capabilities: {
-        ...fallback.providerConfig.capabilities,
-        ...(source.providerConfig?.capabilities ?? {}),
-      },
-    },
+    providerConfig: mergedProviderConfig,
     liveContext: {
       ...fallback.liveContext,
       ...(source.liveContext ?? {}),
@@ -312,6 +318,12 @@ export interface WorkbenchStore {
   /** Local language intent remains visible until the host echoes the same value. */
   pendingComposerLanguage?: ComposerLanguage;
   operationMessage?: OperationMessage;
+  /**
+   * §四十四: the surface owns every operation message. Message and surface are
+   * written together (single channel), so a domain-scoped message can never
+   * inherit another domain's scope and a later global message resets it.
+   */
+  operationMessageSurface: OperationMessageSurface;
   streaming: StreamingState;
   resourceOrganizationPending?: { pending: true; operationCount?: number };
   resourceRestoreContext?: ResourceRestoreContext;
@@ -344,9 +356,17 @@ export interface WorkbenchStore {
   selectComposerDraftScope: (scope: string) => void;
   rememberSurfaceScroll: (key: string, position: number) => void;
   setActivityDraft: (key: string, draft: string) => void;
-  setOperationMessage: (message?: OperationMessage) => void;
+  setOperationMessage: (message?: OperationMessage, surface?: OperationMessageSurface) => void;
   patchData: (patch: WorkbenchBootstrapInput) => void;
-  applyHostMessage: (message: HostMessage) => void;
+  /**
+   * Applies a host message. `options.operationSurface` carries the surface the
+   * caller derived from the RAW message (before sanitization rewrites the
+   * markers), so a scoped status keeps its owning view.
+   */
+  applyHostMessage: (
+    message: HostMessage,
+    options?: { operationSurface?: OperationMessageSurface },
+  ) => void;
   requestStageMaterialGeneration: (planId: string, stageId: string) => void;
   applyStageMaterials: (stageId: string, materials: StageMaterialItem[]) => void;
   setStageMaterialGenerating: (stageId: string, busy: boolean) => void;
@@ -406,6 +426,22 @@ function sameOperationMessage(left?: OperationMessage, right?: OperationMessage)
     return left === right;
   }
   return left.tone === right.tone && left.message === right.message;
+}
+
+/**
+ * §四十四 single-channel write: the operation banner and its surface travel
+ * together. An explicit surface wins; otherwise the message text decides
+ * (trainer markers auto-scope to their owning view). A message without a
+ * surface is never written, so a stale scope cannot leak onto the next notice.
+ */
+function operationBannerState(
+  operationMessage: OperationMessage | undefined,
+  surface?: OperationMessageSurface,
+): { operationMessage: OperationMessage | undefined; operationMessageSurface: OperationMessageSurface } {
+  return {
+    operationMessage,
+    operationMessageSurface: resolveOperationMessageSurface(operationMessage?.message, surface),
+  };
 }
 
 function deriveRecoveredStreamingOperationMessage(
@@ -686,6 +722,11 @@ function syncLayoutFromBootstrap(
   return persistLayout(nextLayout);
 }
 
+const initialStreamingState = normalizeTrainerStreamingState(initialData.streamingState);
+const initialOperationBanner = operationBannerState(
+  deriveRecoveredStreamingOperationMessage(initialUi.composerLanguage, initialStreamingState),
+);
+
 export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   trainingReviewQueueRequested: false,
   openTrainingReviewQueue: () => set((state) => ({
@@ -703,11 +744,8 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   data: initialData,
   layout: initialUi,
   pendingComposerLanguage: undefined,
-  operationMessage: deriveRecoveredStreamingOperationMessage(
-    initialUi.composerLanguage,
-    normalizeTrainerStreamingState(initialData.streamingState),
-  ),
-  streaming: normalizeTrainerStreamingState(initialData.streamingState),
+  ...initialOperationBanner,
+  streaming: initialStreamingState,
   resourceOrganizationPending: undefined,
   resourceRestoreContext: undefined,
   trainingRestoreContext: undefined,
@@ -715,7 +753,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   operations: {},
   syncCursor: emptyWebviewSyncCursor(),
   syncStatus: inVsCodeWebview() ? "recovering" : "current",
-  clearOperationMessage: (expected) => set(state => state.operationMessage === expected ? { operationMessage: undefined } : {}),
+  clearOperationMessage: (expected) => set(state => state.operationMessage === expected ? { operationMessage: undefined, operationMessageSurface: "global" as const } : {}),
   hasReceivedHostState: !inVsCodeWebview(),
   stageMaterials: initialData.stageMaterials ?? {},
   stageMaterialGenerating: {},
@@ -853,7 +891,8 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         activityDrafts: { ...state.layout.activityDrafts, [key]: draft },
       }),
     })),
-  setOperationMessage: (operationMessage) => set({ operationMessage }),
+  setOperationMessage: (operationMessage, surface) =>
+    set(operationBannerState(operationMessage, surface)),
   patchData: (patch) =>
     set((state) => {
       const nextData = normalizeBootstrapData(mergeBootstrapPatch(state.data, patch));
@@ -864,18 +903,19 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       return {
         data: nextData,
         streaming: nextStreaming,
-        operationMessage:
-          patch.streamingState !== undefined
-            ? adoptRecoveredStreamingOperationMessage(
+        ...(patch.streamingState !== undefined
+          ? operationBannerState(
+              adoptRecoveredStreamingOperationMessage(
                 state.layout.composerLanguage,
                 nextStreaming,
                 state.operationMessage,
                 state.streaming,
-              )
-            : state.operationMessage,
+              ),
+            )
+          : {}),
       };
     }),
-  applyHostMessage: (message) => {
+  applyHostMessage: (message, options) => {
     const versionedState = (message.type === "bootstrap" || message.type === "state/patch") ? message.sync : undefined;
     const current = get();
     if (message.scope && current.syncCursor.generation > 0 &&
@@ -991,12 +1031,16 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           resourceRestoreContext: runtimeDataChanged ? undefined : state.resourceRestoreContext,
           trainingRestoreContext: runtimeDataChanged ? undefined : state.trainingRestoreContext,
           trainingReviewQueueRequested: runtimeDataChanged ? false : state.trainingReviewQueueRequested,
-          operationMessage: runtimeDataChanged ? undefined : adoptRecoveredStreamingOperationMessage(
-            nextLayout.composerLanguage,
-            nextStreaming,
-            state.operationMessage,
-            state.streaming,
-          ),
+          ...(runtimeDataChanged
+            ? operationBannerState(undefined)
+            : operationBannerState(
+                adoptRecoveredStreamingOperationMessage(
+                  nextLayout.composerLanguage,
+                  nextStreaming,
+                  state.operationMessage,
+                  state.streaming,
+                ),
+              )),
           latestOperationRequests: versionedState && versionedState.generation !== state.syncCursor.generation ? {} : state.latestOperationRequests,
           operations: versionedState && versionedState.generation !== state.syncCursor.generation ? {} : state.operations,
           syncCursor: versionedState ? appliedWebviewSyncCursor(versionedState) : state.syncCursor,
@@ -1076,7 +1120,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             streamMessageId: message.payload.messageId,
             reliabilityPhase: "pending",
           },
-          operationMessage: undefined,
+          ...operationBannerState(undefined),
         };
       }
 
@@ -1097,12 +1141,9 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             ...safeContent,
             streamError: recoveryMessage ?? state.streaming.streamError,
           },
-          operationMessage: recoveryMessage
-            ? {
-                tone: "error",
-                message: recoveryMessage,
-              }
-            : state.operationMessage,
+          ...(recoveryMessage
+            ? operationBannerState({ tone: "error", message: recoveryMessage })
+            : { operationMessage: state.operationMessage, operationMessageSurface: state.operationMessageSurface }),
         };
       }
 
@@ -1230,14 +1271,16 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         };
         return {
           streaming: nextStreaming,
-          operationMessage: hadEncodingIssue
-            ? {
-                tone: "error",
-                message: streamEncodingRecoveryText(language),
-              }
-            : deriveTrainerStreamingOperationMessage(language, nextStreaming, {
-                completionTokens: message.payload.tokens,
-              }),
+          ...operationBannerState(
+            hadEncodingIssue
+              ? {
+                  tone: "error",
+                  message: streamEncodingRecoveryText(language),
+                }
+              : deriveTrainerStreamingOperationMessage(language, nextStreaming, {
+                  completionTokens: message.payload.tokens,
+                }),
+          ),
         };
       }
 
@@ -1261,9 +1304,11 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         };
         return {
           streaming: nextStreaming,
-          operationMessage: deriveTrainerStreamingOperationMessage(language, nextStreaming, {
-            errorCategory: message.payload.category,
-          }),
+          ...operationBannerState(
+            deriveTrainerStreamingOperationMessage(language, nextStreaming, {
+              errorCategory: message.payload.category,
+            }),
+          ),
         };
       }
 
@@ -1286,10 +1331,10 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             reliabilityPhase: "acked",
             reliabilityOutcome: "failure",
           },
-          operationMessage: {
+          ...operationBannerState({
             tone: "info",
             message: cancelledMessage,
-          },
+          }),
         };
       }
 
@@ -1309,7 +1354,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
                       : state.streaming.reliabilityOutcome,
               }
             : state.streaming,
-          operationMessage:
+          ...operationBannerState(
             streamScopedStatus && message.payload.tone !== "error"
               ? undefined
               : {
@@ -1322,6 +1367,10 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
                     state.layout.composerLanguage,
                   ),
                 },
+            // The caller derived the scope from the RAW message (sanitization
+            // rewrites markers); fall back to marker detection on the text.
+            options?.operationSurface,
+          ),
         };
       }
 
@@ -1477,7 +1526,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         streamMessageId: messageId,
         reliabilityPhase: "pending",
       },
-      operationMessage: undefined,
+      ...operationBannerState(undefined),
     }),
   appendChunk: (chunk) =>
     set((state) => {

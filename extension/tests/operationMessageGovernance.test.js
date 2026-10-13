@@ -37,6 +37,16 @@ const governancePath = path.resolve(
   'operationMessageGovernance.ts',
 );
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+// Round 2: the banner's interaction layer (atomic setter, dismissal rules,
+// visibility) moved from App.tsx into the operation-status controller.
+const operationStatusControllerPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'app',
+  'useOperationStatusController.ts',
+);
 
 function loadGovernance() {
   const previousLoader = Module._extensions['.ts'];
@@ -193,25 +203,25 @@ test('failure sanitization keeps known local recovery copy verbatim and collapse
   );
 });
 
-test('App keeps the 5-second self-dismiss for non-error banners (error stays until closed)', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+test('the operation-status controller keeps the 5-second self-dismiss for non-error banners (error stays until closed)', () => {
+  const source = fs.readFileSync(operationStatusControllerPath, 'utf8');
   assert.match(
     source,
     /if \(!operationMessage \|\| operationMessage\.tone === "error"\) \{\s*return;\s*\}\s*const timer = window\.setTimeout\(\(\) => dismissOperationMessage\(\), 5000\);/,
   );
 });
 
-test('App delegates surface attribution and sanitization to the governance module', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+test('the operation-status controller delegates surface attribution and sanitization to the governance module', () => {
+  const source = fs.readFileSync(operationStatusControllerPath, 'utf8');
   assert.match(
     source,
-    /setOperationMessageSurface\(\s*resolveOperationMessageSurface\(message\?\.message, surface\),\s*\)/,
+    /const resolvedSurface = resolveOperationMessageSurface\(message\?\.message, surface\);/,
   );
   assert.match(
     source,
-    /setRawOperationMessage\(\s*message \? sanitizeOperationFailureMessage\(message, layout\.composerLanguage\) : undefined,\s*\)/,
+    /useWorkbenchState\.getState\(\)\.setOperationMessage\(\s*message \? sanitizeOperationFailureMessage\(message, composerLanguage\) : undefined,\s*resolvedSurface,/,
   );
-  // The union type now lives in the governance module; App imports it.
+  // The union type now lives in the governance module; the controller imports it.
   const moduleSource = fs.readFileSync(governancePath, 'utf8');
   assert.match(
     moduleSource,

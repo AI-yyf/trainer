@@ -79,6 +79,13 @@ const verifyWorkspaceScriptPath = path.resolve(
   'scripts',
   'verify-workspace.mjs',
 );
+const runServerPyrightScriptPath = path.resolve(
+  __dirname,
+  '..',
+  '..',
+  'scripts',
+  'run-server-pyright.mjs',
+);
 const lifecycleScriptPath = path.resolve(__dirname, '..', '..', 'scripts', 'lifecycle.mjs');
 const extensionPackageJsonPath = path.resolve(__dirname, '..', 'package.json');
 const webviewPackageJsonPath = path.resolve(__dirname, '..', 'webview', 'package.json');
@@ -290,7 +297,12 @@ test('root package.json exposes portable test and full verification entrypoints'
   assert.match(source, /runNpm\(\["run", "check"\]/);
   assert.match(source, /runNpm\(\["run", "test:extension"\]/);
   assert.match(source, /\["-m", "ruff", "check", "app", "tests"\]/);
-  assert.match(source, /\["-m", "pyright", "app"\]/);
+  // The pyright gate runs through the portable wrapper (scripts/run-server-pyright.mjs),
+  // which resolves the server venv interpreter; the wrapper owns the invocation.
+  assert.match(source, /runNpm\(\["run", "verify:server-pyright"\]/);
+  assert.equal(packageJson.scripts['verify:server-pyright'], 'node ./scripts/run-server-pyright.mjs');
+  const pyrightSource = fs.readFileSync(runServerPyrightScriptPath, 'utf8');
+  assert.match(pyrightSource, /\["-m", "pyright", "app"\]/);
 });
 
 test('root package.json exposes portable lifecycle entrypoints', async () => {

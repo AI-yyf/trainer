@@ -8,9 +8,19 @@ const ts = require('typescript');
 const vm = require('node:vm');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+// Round 2: the editable draft, its facts projection and the hydration effect
+// moved into the provider-connection controller (DESIGN.md §3).
+const controllerSourcePath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'app',
+  'useProviderConnectionController.ts',
+);
 
 function providerHydrationEffect(source) {
-  const sourceFile = ts.createSourceFile(appSourcePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const sourceFile = ts.createSourceFile(controllerSourcePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const matches = [];
   function visit(node) {
     if (ts.isCallExpression(node) && node.expression.getText(sourceFile) === 'useEffect') {
@@ -27,7 +37,7 @@ function providerHydrationEffect(source) {
   const dependencies = effect.arguments[1];
   assert.ok(dependencies && ts.isArrayLiteralExpression(dependencies), 'hydration has explicit dependencies');
   assert.deepEqual(dependencies.elements.map((node) => node.getText(sourceFile)), [
-    'providerDraftSource', 'providerDraftSourceKey', 'settingsActionState?.kind', 'settingsScopeKey',
+    'providerDraftSource', 'providerDraftSourceKey', 'settingsActionKind', 'settingsScopeKey', 'settingsActionScopeRef',
   ]);
   return ts.transpileModule(`(${effect.arguments[0].getText(sourceFile)})();`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
@@ -35,28 +45,37 @@ function providerHydrationEffect(source) {
 }
 
 test('provider draft sync only follows stable provider transport fields', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = fs.readFileSync(controllerSourcePath, 'utf8');
 
+  // One field table owns projection, comparison and reset — a new fact field
+  // cannot be projected in one place and forgotten in another.
+  assert.match(source, /const DRAFT_FIELDS: readonly DraftFieldDescriptor\[\] = \[/);
+  const fieldKeys = [...source.matchAll(/^\s{2,4}key: "([a-zA-Z]+)",/gm)].map((match) => match[1]);
+  assert.deepEqual(fieldKeys, [
+    'name', 'protocol', 'baseUrl', 'model', 'contextWindowTokens', 'maxOutputTokens',
+    'modelTokenLimits', 'credentialMode', 'catalogModels', 'allowedModels', 'deniedModels',
+    'embeddingModel', 'catalogSource', 'cacheTtlSeconds', 'requestDefaults', 'thinkingConfig',
+  ]);
+  // The host's display fallback must never land in the editable draft.
+  assert.match(source, /fromFacts: \(facts\) => \(facts\.configured \? facts\.name : ""\)/);
+  assert.match(source, /fromFacts: \(facts\) => facts\.protocol \?\? "openai_chat_completions_compatible"/);
   assert.match(
     source,
-    /const providerDraftSource = useMemo\(\s*\(\) => \(\{[\s\S]*?configured: data\.providerConfig\.configured,[\s\S]*?profileId: data\.providerConfig\.profileId \?\? "",[\s\S]*?name: data\.providerConfig\.configured \? data\.providerConfig\.name : "",[\s\S]*?protocol: data\.providerConfig\.protocol \?\? "openai_chat_completions_compatible",[\s\S]*?baseUrl: data\.providerConfig\.baseUrl,[\s\S]*?model: data\.providerConfig\.model,[\s\S]*?modelTokenLimits: data\.providerConfig\.modelTokenLimits,[\s\S]*?credentialMode: data\.providerConfig\.credentialMode \?\? "ui_proxy",[\s\S]*?catalogModels: data\.providerConfig\.catalogModels \?\? \[\],[\s\S]*?allowedModels: data\.providerConfig\.allowedModels \?\? \[\],[\s\S]*?deniedModels: data\.providerConfig\.deniedModels \?\? \[\],[\s\S]*?embeddingModel: data\.providerConfig\.embeddingModel \?\? "",[\s\S]*?catalogSource: data\.providerConfig\.catalogSource \?\? "provider_live",[\s\S]*?cacheTtlSeconds: data\.providerConfig\.cacheTtlSeconds,[\s\S]*?requestDefaults: data\.providerConfig\.requestDefaults \?\? \{\},[\s\S]*?\}\),[\s\S]*?data\.providerConfig\.configured,[\s\S]*?data\.providerConfig\.profileId,[\s\S]*?data\.providerConfig\.name,[\s\S]*?data\.providerConfig\.protocol,[\s\S]*?data\.providerConfig\.baseUrl,[\s\S]*?data\.providerConfig\.model,[\s\S]*?data\.providerConfig\.modelTokenLimits,[\s\S]*?data\.providerConfig\.credentialMode,[\s\S]*?data\.providerConfig\.catalogModels,[\s\S]*?data\.providerConfig\.allowedModels,[\s\S]*?data\.providerConfig\.deniedModels,[\s\S]*?data\.providerConfig\.embeddingModel,[\s\S]*?data\.providerConfig\.catalogSource,[\s\S]*?data\.providerConfig\.cacheTtlSeconds,[\s\S]*?data\.providerConfig\.requestDefaults,[\s\S]*?\);/,
+    /useEffect\(\(\) => \{[\s\S]*?providerDraftSourceKeyRef\.current === providerDraftSourceKey[\s\S]*?setDraftState\(providerDraftSource\);[\s\S]*?providerDraftIsDirtyRef\.current = false;[\s\S]*?\}, \[[\s\S]*?providerDraftSource,[\s\S]*?providerDraftSourceKey,[\s\S]*?settingsActionKind,[\s\S]*?settingsScopeKey,[\s\S]*?settingsActionScopeRef,[\s\S]*?\]\);/,
   );
   assert.match(
     source,
-    /useEffect\(\(\) => \{[\s\S]*?providerDraftSourceKeyRef\.current === providerDraftSourceKey[\s\S]*?setProviderDraft\(\{[\s\S]*?name: providerDraftSource\.name,[\s\S]*?protocol: providerDraftSource\.protocol,[\s\S]*?baseUrl: providerDraftSource\.baseUrl,[\s\S]*?model: providerDraftSource\.model,[\s\S]*?modelTokenLimits: providerDraftSource\.modelTokenLimits,[\s\S]*?credentialMode: providerDraftSource\.credentialMode,[\s\S]*?catalogModels: providerDraftSource\.catalogModels,[\s\S]*?allowedModels: providerDraftSource\.allowedModels,[\s\S]*?deniedModels: providerDraftSource\.deniedModels,[\s\S]*?embeddingModel: providerDraftSource\.embeddingModel,[\s\S]*?catalogSource: providerDraftSource\.catalogSource,[\s\S]*?cacheTtlSeconds: providerDraftSource\.cacheTtlSeconds,[\s\S]*?requestDefaults: providerDraftSource\.requestDefaults,[\s\S]*?apiKey: "",[\s\S]*?\}\);[\s\S]*?\}, \[providerDraftSource, providerDraftSourceKey, settingsActionState\?\.kind, settingsScopeKey\]\);/,
+    /const providerSavePayload = useMemo\(\(\) => \{[\s\S]*?catalogModels: providerDraft\.catalogModels \?\? \[\],[\s\S]*?requestDefaults: providerDraft\.requestDefaults \?\? \{\},[\s\S]*?capabilities: facts\.capabilities,[\s\S]*?\}, \[facts\.capabilities, providerDraft\]\);/,
   );
-  assert.match(
-    source,
-    /const providerSavePayload = useMemo\(\(\) => \{[\s\S]*?catalogModels: providerDraft\.catalogModels \?\? \[\],[\s\S]*?requestDefaults: providerDraft\.requestDefaults \?\? \{\},[\s\S]*?capabilities: data\.providerConfig\.capabilities,[\s\S]*?\}, \[data\.providerConfig\.capabilities, providerDraft\]\);/,
-  );
+  // No second hydration path may reset the draft on raw fact changes.
   assert.doesNotMatch(
     source,
-    /useEffect\(\(\) => \{[\s\S]*?setProviderDraft\(\{[\s\S]*?apiKey: "",[\s\S]*?\}\);[\s\S]*?\}, \[data\.providerConfig\]\);/,
+    /useEffect\(\(\) => \{[\s\S]*?setDraftState\([\s\S]*?\}, \[facts\]\);/,
   );
 });
 
 test('provider hydration preserves dirty drafts across discovery and scope changes, allowing current save/clear', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = fs.readFileSync(controllerSourcePath, 'utf8');
   const effect = providerHydrationEffect(source);
   const incoming = {
     name: 'Saved provider', protocol: 'openai_chat_completions_compatible',
@@ -64,7 +83,7 @@ test('provider hydration preserves dirty drafts across discovery and scope chang
     maxOutputTokens: 20, modelTokenLimits: { 'saved-model': { contextWindowTokens: 100 } },
     credentialMode: 'ui_proxy', catalogModels: ['saved-model'], allowedModels: ['saved-model'],
     deniedModels: [], embeddingModel: '', catalogSource: 'provider_live', cacheTtlSeconds: 60,
-    requestDefaults: { temperature: 0.2 }, thinkingConfig: { enabled: true },
+    requestDefaults: { temperature: 0.2 }, thinkingConfig: { enabled: true }, apiKey: '',
   };
 
   for (const dirty of [false, true]) {
@@ -75,29 +94,35 @@ test('provider hydration preserves dirty drafts across discovery and scope chang
         const context = {
           providerDraftSourceKeyRef: { current: 'previous' }, providerDraftSourceKey: 'incoming',
           providerDraftIsDirtyRef: { current: dirty }, settingsActionScopeRef: { current: sameScope ? 'current' : 'old' },
-          settingsScopeKey: 'current', settingsActionState: kind ? { kind } : undefined,
-          providerDraftSource: incoming, setProviderDraft(next) { calls.push(next); },
+          settingsScopeKey: 'current', settingsActionKind: kind,
+          providerDraftSource: incoming, setDraftState(next) { calls.push(next); },
         };
-        vm.runInNewContext(effect, context, { filename: appSourcePath });
+        vm.runInNewContext(effect, context, { filename: controllerSourcePath });
         const shouldHydrate = !dirty || (sameScope && ['save-provider', 'clear-provider'].includes(kind));
         const label = `dirty=${dirty}, sameScope=${sameScope}, action=${kind ?? 'idle'}`;
         assert.equal(calls.length, shouldHydrate ? 1 : 0, label);
         assert.equal(context.providerDraftSourceKeyRef.current, 'incoming', label);
         assert.equal(context.providerDraftIsDirtyRef.current, shouldHydrate ? false : dirty, label);
-        assert.deepEqual(calls.length ? { ...calls[0] } : draft, shouldHydrate ? { ...incoming, apiKey: '' } : draft, label);
+        assert.deepEqual(calls.length ? { ...calls[0] } : draft, shouldHydrate ? { ...incoming } : draft, label);
       }
     }
   }
 
-  assert.match(source, /const providerDraftIsDirtyRef = useRef\(false\);/);
-  assert.match(source, /if \(next\) \{\s*settingsActionScopeRef\.current = settingsScopeKey;/);
+  // The public setter marks the draft dirty (every learner edit, including the
+  // settings panel's) so a host refresh cannot overwrite it.
   assert.match(
     source,
-    /onProviderDraftChange=\{\(patch\) => \{\s*providerDraftIsDirtyRef\.current = true;/,
+    /const setProviderDraft = useCallback\(\s*\(update[\s\S]*?\) => \{\s*providerDraftIsDirtyRef\.current = true;\s*setDraftState\(update\);\s*\},\s*\[\],\s*\);/,
   );
   assert.match(
     source,
-    /settingsActionState\.kind === "save-provider"[\s\S]*?operationMessage\.tone === "success"[\s\S]*?setProviderDraft\(\(current\) => \(current\.apiKey \? \{ \.\.\.current, apiKey: "" \} : current\)\);/,
+    /const markProviderDraftSaved = useCallback\(\(\) => \{\s*providerDraftIsDirtyRef\.current = false;\s*setDraftState\(\(current\) => \(current\.apiKey \? \{ \.\.\.current, apiKey: "" \} : current\)\);\s*\}, \[\]\);/,
+  );
+  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  assert.match(appSource, /if \(next\) \{\s*settingsActionScopeRef\.current = settingsScopeKey;/);
+  assert.match(
+    appSource,
+    /settingsActionState\.kind === "save-provider"[\s\S]*?operationMessage\.tone === "success"[\s\S]*?markProviderDraftSaved\(\);/,
   );
 });
 

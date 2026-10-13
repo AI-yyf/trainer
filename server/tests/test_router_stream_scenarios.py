@@ -923,3 +923,93 @@ def test_training_card_stream_falls_back_without_a_second_provider_call(tmp_path
     runtime_cards = tmp_path / "sandboxes"
     if runtime_cards.exists():
         assert not list(runtime_cards.rglob("cards/**/*.md"))
+
+
+def test_turn_stream_second_pass_regrounds_the_delivered_next_step(tmp_path: Path) -> None:
+    """A non-coach stream runs the turn twice: the preparation pass persists a
+    locally-composed decision, then the streaming pass delivers a different
+    (fabricated-symbol) next step. The delivered text must be decided for
+    itself — the stale preparation decision must never license an unevaluated
+    requirement."""
+    grounded_step = "先确认这一段的行为。"
+    fabricated_step = "请贴出 `parse_header` 的定义和它的 call site。"
+    calls: list[str] = []
+
+    async def fake_agent_stream(*_args: object, **_kwargs: object):
+        # Streaming pass: the delivered step contains a fabricated symbol.
+        calls.append("stream")
+        yield {
+            "type": "text",
+            "delta": grounded_step,
+            "safe_to_stream": True,
+        }
+        yield {
+            "type": "final",
+            "content": grounded_step,
+            "summary": "确认当前边界上的行为。",
+            "next_step": fabricated_step,
+            "stop_reason": "completed",
+        }
+
+    with build_client(tmp_path) as client:
+        runtime = client.app.state.runtime
+        provider = ProviderConfig(
+            name="test-second-pass-grounding",
+            base_url="http://127.0.0.1:9/v1",
+            api_key_ref="trainer.default",
+            model="gpt-4o-mini",
+            capabilities={"chat": True, "tools": True, "streaming": True},
+        )
+        runtime.provider_config = provider
+        runtime.provider_service = ProviderService(config=provider, api_key="sk-test")
+        runtime.provider_service_cache.clear()
+        mark_provider_capabilities_verified(runtime, provider, "sk-test", tools=True)
+
+        with patch.object(
+            ProviderService,
+            "coaching_reply_agentic_stream",
+            new=fake_agent_stream,
+        ):
+            start = client.post(
+                "/session/start",
+                json={
+                    "workspace_id": "workspace-turn-stream-second-pass",
+                    "workspace_name": "Second pass grounding",
+                },
+            )
+            assert start.status_code == 200, start.text
+            session_id = start.json()["session_id"]
+            # A live plan keeps the task intent from being remapped to coach, so
+            # the request actually takes the non-coach preparation branch.
+            plan = client.post(
+                "/plan/generate",
+                json={
+                    "session_id": session_id,
+                    "workspace_id": "workspace-turn-stream-second-pass",
+                    "objectives": ["Break this into a task"],
+                },
+            )
+            assert plan.status_code == 200, plan.text
+            response = client.post(
+                "/turn/stream",
+                json={
+                    "session_id": session_id,
+                    "workspace_id": "workspace-turn-stream-second-pass",
+                    "intent": "task",
+                    "message": "Break this into a task.",
+                    "response_language": "zh-CN",
+                    "use_agent_loop": True,
+                },
+            )
+
+    assert response.status_code == 200, response.text
+    assert calls == ["stream"]
+    complete = completed_stream_response(response.text)
+    coach_turn = complete["coach_turn"]
+    assert isinstance(coach_turn, dict)
+    assert coach_turn["next_step"] == fabricated_step
+    assert coach_turn["requires_confirmation"] is True
+    agent = complete["agent"]
+    assert isinstance(agent, dict)
+    assert agent["grounding_outcome"] == "downgraded"
+    assert agent["next_step_requires_confirmation"] is True

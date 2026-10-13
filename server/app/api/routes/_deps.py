@@ -10,6 +10,7 @@ class RouterDeps:
     """Closure helpers owned by ``build_router`` and shared with extracted routers."""
 
     current_workspace_id: Callable[..., str]
+    trusted_write_workspace_id: Callable[..., str]
     current_snapshot: Callable[..., Any]
     refresh_workspace_sessions: Callable[[str], None]
     hydrate_snapshot: Callable[..., Any]

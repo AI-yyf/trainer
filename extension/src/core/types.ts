@@ -360,6 +360,8 @@ export interface NextStepHintView {
     | 'review';
   continueIn?: 'coach' | 'plan' | 'training';
   verification?: string[];
+  /** Grounding downgrade marker for this next step (see nextStepConfirmation). */
+  requiresConfirmation?: boolean;
 }
 
 export interface LearnerStateView {
@@ -736,6 +738,8 @@ export interface CoachTurnSummaryView {
   artifactKinds?: ConversationArtifactView['kind'][];
   suggestedActionTypes?: CoachActionView[];
   backgroundMode?: 'embedded';
+  /** Teaching-turn grounding downgrade: next step needs learner confirmation. */
+  requiresConfirmation?: boolean;
 }
 
 export interface CoachOrientationView {
@@ -1814,6 +1818,8 @@ export interface StreamCompletePayload {
   nextStep?: string;
   stopReason?: string;
   toolCount?: number;
+  /** Grounding downgrade marker for the streamed next step (§2.5⑤). */
+  nextStepRequiresConfirmation?: boolean;
   reliabilityPhase?: string;
   reliabilityOutcome?: string;
 }

@@ -56,7 +56,20 @@ test('app recovery and common copy receive the active language with a defined fa
     fs.readFileSync(path.resolve(__dirname, "..", "webview", "src", "app", "providerRecoveryCopy.ts"), "utf8"),
     /function blockedComposerPresenceMessage\([\s\S]*?language: ComposerLanguage,/,
   );
-  assert.match(source, /sanitizeOperationFailureMessage\(message, layout\.composerLanguage\)/);
+  // moved into useOperationStatusController.ts (round 2): the controller reads the
+  // live composer language and sanitizes every operation failure with it.
+  const operationStatusControllerSource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'app', 'useOperationStatusController.ts'),
+    'utf8',
+  );
+  assert.match(
+    operationStatusControllerSource,
+    /const composerLanguage = useWorkbenchState\(\(state\) => state\.layout\.composerLanguage\);/,
+  );
+  assert.match(
+    operationStatusControllerSource,
+    /sanitizeOperationFailureMessage\(message, composerLanguage\)/,
+  );
   assert.match(source, /providerSetupSummary\(data\.providerConfig, layout\.composerLanguage, data\.connection\.state\)/);
   assert.match(source, /blockedComposerPresenceMessage\([\s\S]*?layout\.composerLanguage,[\s\S]*?data\.connection\.state,/s);
   assert.match(source, /<CoachComposer[\s\S]*?language=\{layout\.composerLanguage\}/s);

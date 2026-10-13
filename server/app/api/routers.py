@@ -122,6 +122,7 @@ from ..llm.turn_grounding import (
     grounding_correction_instruction,
     grounding_outcome,
     looks_like_narration_opening,
+    memory_provenance_summary,
     sanitize_memory_anchor,
 )
 from ..memory.models import utc_now
@@ -237,7 +238,7 @@ from .routes.provider import build_provider_router
 from .routes.resources import build_resources_router
 from .routes.sandbox import build_sandbox_router
 from .routes.workspace import build_workspace_router
-from .runtime import SessionState, TrainerRuntime
+from .runtime import SessionState, TrainerRuntime, WorkspaceBindingError
 from .training_card_identity import (
     prepare_training_file_evaluation,
 )
@@ -864,6 +865,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         # §2.3: "缓存于 payload 私有键"; applied exactly once per turn).
         requires_confirmation: NotRequired[bool]
         _grounding_decision: NotRequired[GroundingDecision]
+        _grounding_memory_provenance: NotRequired[dict[str, str]]
+        _grounding_evaluated_next_step: NotRequired[str]
 
     def extract_coach_turn_payload(value: object) -> CoachTurnPayload:
         """Restore the stable coach-turn contract after legacy recovery helpers."""
@@ -10063,6 +10066,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
 
     def build_agent_finalize_artifact(
         agent_meta: dict[str, object] | None,
+        *,
+        requires_confirmation: bool = False,
     ) -> dict[str, object] | None:
         if not isinstance(agent_meta, dict):
             return None
@@ -10109,6 +10114,18 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         if evidence_items:
             metadata["evidence"] = evidence_items
             artifact_entry["verification"] = evidence_items
+        # Grounding downgrade carrier (§2.5⑤): the webview renders the next-step
+        # card as "confirm before acting" from this metadata; the turn's
+        # downgraded flag and the agent_meta stamp both light it up.
+        require_confirmation = bool(requires_confirmation) or bool(
+            agent_meta.get("next_step_requires_confirmation")
+            or agent_meta.get("nextStepRequiresConfirmation")
+        )
+        if require_confirmation:
+            metadata["next_step_requires_confirmation"] = True
+        grounding_outcome_text = str(agent_meta.get("grounding_outcome") or "").strip()
+        if grounding_outcome_text:
+            metadata["grounding_outcome"] = grounding_outcome_text
         if metadata:
             artifact_entry["metadata"] = metadata
         return artifact_entry
@@ -10325,7 +10342,16 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 if isinstance(artifact.get("metadata"), dict):
                     artifact_entry["metadata"] = artifact["metadata"]
                 artifact_entries.append(artifact_entry)
-        agent_finalize_artifact = build_agent_finalize_artifact(agent_meta)
+        finalize_coach_turn_summary = (
+            coach_turn.get("coach_turn") if isinstance(coach_turn, dict) else None
+        )
+        agent_finalize_artifact = build_agent_finalize_artifact(
+            agent_meta,
+            requires_confirmation=bool(
+                isinstance(finalize_coach_turn_summary, CoachTurnSummary)
+                and finalize_coach_turn_summary.requires_confirmation
+            ),
+        )
         if agent_finalize_artifact and not any(
             isinstance(entry, dict)
             and entry.get("kind") == "next_step"
@@ -10653,13 +10679,35 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     # Grounding assembly (DESIGN.md §2.3/§2.5): one decision per turn, cached on
     # the payload; the four persistence points call resolve → apply in order.
     GROUNDING_DECISION_CACHE_KEY = "_grounding_decision"
+    GROUNDING_MEMORY_PROVENANCE_CACHE_KEY = "_grounding_memory_provenance"
+    GROUNDING_EVALUATED_NEXT_STEP_CACHE_KEY = "_grounding_evaluated_next_step"
+
+    def grounding_next_step_text(coach_turn_data: object) -> str:
+        """The next step currently carried by a coach-turn payload."""
+        if not isinstance(coach_turn_data, dict):
+            return ""
+        turn_summary = coach_turn_data.get("coach_turn")
+        if not isinstance(turn_summary, CoachTurnSummary):
+            return ""
+        return str(turn_summary.next_step or "").strip()
 
     def grounding_decision_from_payload(coach_turn_data: object) -> GroundingDecision | None:
-        """Read the turn's cached decision (None when no resolve step ran)."""
+        """Read the turn's cached decision — only while it still fits the text.
+
+        The decision is keyed to the next-step text it was made for: a second
+        execution pass (e.g. ``/turn/stream`` re-running the streamed turn)
+        that delivers a different next step invalidates the cache instead of
+        shipping the earlier "grounded" conclusion with an unevaluated step.
+        """
         if not isinstance(coach_turn_data, dict):
             return None
         cached = coach_turn_data.get(GROUNDING_DECISION_CACHE_KEY)
-        return cached if isinstance(cached, GroundingDecision) else None
+        if not isinstance(cached, GroundingDecision):
+            return None
+        evaluated_text = coach_turn_data.get(GROUNDING_EVALUATED_NEXT_STEP_CACHE_KEY)
+        if evaluated_text != grounding_next_step_text(coach_turn_data):
+            return None
+        return cached
 
     def turn_grounding_turn_id(request: TurnRequest | SessionMessageRequest) -> str:
         explicit = str(getattr(request, "request_id", None) or "").strip()
@@ -10725,23 +10773,37 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         decision: GroundingDecision,
         agent_meta: dict[str, object] | None = None,
     ) -> None:
-        """Cache one decision on the payload and apply it (idempotent).
+        """Cache one decision on the payload and apply it (per evaluated text).
 
-        Writes the corrected next step back (``model_copy``), mirrors the
-        downgrade flag, stamps the fixed agent_meta keys, and caches the
-        decision so ``build_session_response`` never re-evaluates the turn.
+        Idempotent for the same next-step text; when a later execution pass
+        replaced the text, the previous decision no longer fits and the new one
+        is applied, its flag state replacing the stale one. Writes the
+        corrected next step back (``model_copy``), mirrors the downgrade flag,
+        stamps the fixed agent_meta keys, and keys the cache to the delivered
+        text so ``build_session_response`` never re-evaluates a decided turn.
         """
         if not isinstance(coach_turn_payload, dict):
             return
-        if coach_turn_payload.get(GROUNDING_DECISION_CACHE_KEY) is not None:
-            return
+        previous_decision = coach_turn_payload.get(GROUNDING_DECISION_CACHE_KEY)
+        re_applying = isinstance(previous_decision, GroundingDecision)
+        if re_applying:
+            evaluated_text = coach_turn_payload.get(GROUNDING_EVALUATED_NEXT_STEP_CACHE_KEY)
+            if evaluated_text == grounding_next_step_text(coach_turn_payload):
+                return
         coach_turn_payload[GROUNDING_DECISION_CACHE_KEY] = decision
         turn_summary = coach_turn_payload.get("coach_turn")
         if isinstance(turn_summary, CoachTurnSummary):
-            coach_turn_payload["coach_turn"] = grounding_response_coach_turn(
+            updated_summary = grounding_response_coach_turn(
                 coach_turn=turn_summary,
                 decision=decision,
             )
+            if re_applying and not decision.requires_confirmation:
+                # The new text is grounded: a stale downgrade flag from the
+                # replaced text must not survive its re-evaluation.
+                updated_summary = updated_summary.model_copy(
+                    update={"requires_confirmation": False}
+                )
+            coach_turn_payload["coach_turn"] = updated_summary
             coach_context = coach_turn_payload.get("coach_context")
             if (
                 isinstance(coach_context, dict)
@@ -10756,6 +10818,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     active_thread["next_step"] = decision.corrected_next_step
         if decision.requires_confirmation:
             coach_turn_payload["requires_confirmation"] = True
+        elif re_applying and "requires_confirmation" in coach_turn_payload:
+            coach_turn_payload["requires_confirmation"] = False
+        # Key the cache to the text actually delivered (post write-back).
+        coach_turn_payload[GROUNDING_EVALUATED_NEXT_STEP_CACHE_KEY] = grounding_next_step_text(
+            coach_turn_payload
+        )
         # Only attach stamps to EXISTING agent chrome: a clean reply must keep
         # agent_meta absent/empty (sanitization contract).
         if isinstance(agent_meta, dict) and agent_meta:
@@ -10893,26 +10961,31 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             next_step_text=next_step_text,
         )
         decision = evaluate_turn_grounding(facts)
-        if decision.grounded:
-            return decision
-        if not turn_grounding_retry_eligible(
-            agent_meta=agent_meta,
-            coaching_service=coaching_service,
+        if (
+            not decision.grounded
+            and coaching_service is not None
+            and turn_grounding_retry_eligible(
+                agent_meta=agent_meta,
+                coaching_service=coaching_service,
+            )
         ):
-            return decision
-        if coaching_service is None:
-            return decision
-        regenerated = await request_grounding_regeneration(
-            coaching_service=coaching_service,
-            request=request,
-            reply_content=str(reply_content or ""),
-            next_step_text=next_step_text,
+            regenerated = await request_grounding_regeneration(
+                coaching_service=coaching_service,
+                request=request,
+                reply_content=str(reply_content or ""),
+                next_step_text=next_step_text,
+            )
+            # `retry_used` means "a retry was attempted" in the rules layer; an
+            # empty regeneration is still an attempt, so the re-check runs with
+            # the (possibly empty) regenerated text and both layers agree.
+            decision = evaluate_turn_grounding(facts, retry_generate=lambda: regenerated)
+        # Field-level memory admission mapping (§2.6/§2.7) travels with the
+        # decision so persistence can pass it to the memory writer.
+        coach_turn_payload[GROUNDING_MEMORY_PROVENANCE_CACHE_KEY] = memory_provenance_summary(
+            facts,
+            decision,
         )
-        if not regenerated:
-            return decision
-        # At most one regeneration; the re-check uses the pre-fetched text and
-        # the final decision is the one cached on the payload.
-        return evaluate_turn_grounding(facts, retry_generate=lambda: regenerated)
+        return decision
 
     def build_session_response(
         *,
@@ -11654,6 +11727,18 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         if not isinstance(turn_summary, CoachTurnSummary):
             return
 
+        # Field-level memory admission (§2.7): the resolve step cached the
+        # facts-derived provenance mapping on the payload; pass it through.
+        # None keeps the memory-side defaults when no resolve step ran.
+        memory_provenance: dict[str, str] | None = None
+        cached_provenance = coach_turn_data.get(GROUNDING_MEMORY_PROVENANCE_CACHE_KEY)
+        if isinstance(cached_provenance, dict):
+            memory_provenance = {
+                str(key): str(value)
+                for key, value in cached_provenance.items()
+                if value is not None
+            }
+
         focus_area: str | None = None
         review_note: str | None = None
         teaching_note: str | None = None
@@ -11900,6 +11985,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             confidence=turn_confidence,
             evidence=turn_evidence,
             user_message=user_message,
+            memory_provenance=memory_provenance,
         )
         runtime.memory_service.record_turn_memory(
             workspace_id=workspace_id,
@@ -11919,6 +12005,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             teaching_note=teaching_note or turn_teaching_note,
             confidence=turn_confidence,
             evidence=turn_evidence,
+            memory_provenance=memory_provenance,
         )
 
     def persist_response_reflection(
@@ -11949,6 +12036,27 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
 
     def current_workspace_id(session_id: str | None = None, workspace_id: str | None = None) -> str:
         return runtime.resolve_workspace_id(session_id=session_id, workspace_id=workspace_id)
+
+    def trusted_write_workspace_id(
+        session_id: str | None = None, workspace_id: str | None = None
+    ) -> str:
+        """Strict workspace binding for trust-sensitive writes (409, no fallback).
+
+        A stale or mismatched caller must not land evidence/asset writes in an
+        unrelated workspace: an explicit workspace_id has to agree with the
+        session binding, and an unresolvable binding is refused instead of
+        falling back to the latest session or the default workspace.
+        """
+        try:
+            return runtime.resolve_workspace_id_for_write(
+                session_id=session_id,
+                workspace_id=workspace_id,
+            )
+        except WorkspaceBindingError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": exc.code, "message": exc.detail},
+            ) from exc
 
     def apply_host_workspace_trust_attestation(workspace_id: str, payload: dict) -> None:
         """Apply host-attested workspace_trusted + remote_name before authority/capability."""
@@ -23771,6 +23879,25 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                             state.snapshot.plan = persisted_plan
                     response_snapshot = state.snapshot
 
+                    # This streaming pass may have replaced the next step the
+                    # preparation pass was decided on; the delivered text must
+                    # be decided for itself (Fingerprint mismatch invalidates
+                    # the cached decision) before the response consumes it.
+                    if grounding_decision_from_payload(coach_turn_data) is None:
+                        streaming_grounding_decision = await resolve_turn_grounding_async(
+                            coach_turn_payload=coach_turn_data,
+                            reply_content=full_content,
+                            request=request,
+                            agent_meta=final_agent_meta or None,
+                            history_text=turn_history_text(state.snapshot),
+                            coaching_service=coaching_service,
+                        )
+                        apply_grounding_decision(
+                            coach_turn_payload=coach_turn_data,
+                            decision=streaming_grounding_decision,
+                            agent_meta=final_agent_meta or None,
+                        )
+
                     response_data = json_response_payload(
                         build_session_response(
                             state=state,
@@ -25565,6 +25692,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
 
     deps = RouterDeps(
         current_workspace_id=current_workspace_id,
+        trusted_write_workspace_id=trusted_write_workspace_id,
         current_snapshot=current_snapshot,
         refresh_workspace_sessions=refresh_workspace_sessions,
         hydrate_snapshot=hydrate_snapshot,

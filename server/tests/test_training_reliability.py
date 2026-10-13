@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -273,3 +274,95 @@ def test_memory_service_return_replays_same_request_id_without_second_credit(tmp
     unchanged = service.get_card(workspace_id, card.card_id)
     assert unchanged is not None
     assert unchanged.status == credited.status
+
+
+def test_mark_succeeded_annotates_cancel_and_timeout_races() -> None:
+    """Persisted work stays success; a raced cancel/timeout is annotated, never
+    rewritten as failure (and a same-identity retry replays)."""
+    cancel_flagged = mark_executing(
+        begin_record(request_id="req-race-cancel", command_id="x", card_id="c")
+    )
+    cancel_flagged["cancel_requested"] = True
+    acked = mark_succeeded(cancel_flagged, snapshot_revision=1)
+    assert acked["phase"] == "acked"
+    assert acked["outcome"] == "success"
+    assert acked["error"] == ""
+    assert acked["cancel_after"] is True
+    assert acked["timeout_after"] is False
+
+    past = datetime.now(timezone.utc) - timedelta(seconds=5)
+    expired_executing = mark_executing(
+        begin_record(
+            request_id="req-race-timeout",
+            command_id="x",
+            card_id="c",
+            timeout_ms=1_000,
+            now=past,
+        )
+    )
+    acked_timeout = mark_succeeded(expired_executing, snapshot_revision=1)
+    assert acked_timeout["phase"] == "acked"
+    assert acked_timeout["outcome"] == "success"
+    assert acked_timeout["timeout_after"] is True
+    assert should_replay(acked_timeout, "req-race-timeout", "req-race-timeout")
+
+
+def test_memory_service_cancel_race_keeps_work_as_succeeded_and_replays(tmp_path) -> None:
+    """A cancel landing while work() runs must not rewrite the persisted work
+    as cancelled, and the same-identity retry must replay without a second run."""
+    service = MemoryService(TrainerRepository(tmp_path / "reliability-cancel-race.db"))
+    workspace_id = "workspace-reliability-cancel-race"
+    calls: list[str] = []
+
+    def racing_work() -> dict[str, object]:
+        # The cancel mutating the same slot while work() is still executing.
+        service.cancel_training_reliability(workspace_id, request_id="req-cancel-race")
+        calls.append("ran")
+        return {"ok": True}
+
+    first = service.run_training_reliability(
+        workspace_id,
+        request_id="req-cancel-race",
+        command_id="trainer.training.practiceReturn",
+        card_id="race-card",
+        work=racing_work,
+    )
+    record = first["latest_training_reliability"]
+    assert record["phase"] == "acked"
+    assert record["outcome"] == "success"
+    assert record["cancel_after"] is True
+    assert calls == ["ran"]
+
+    replayed = service.run_training_reliability(
+        workspace_id,
+        request_id="req-cancel-race",
+        command_id="trainer.training.practiceReturn",
+        card_id="race-card",
+        work=lambda: calls.append("rerun") or {"ok": True},
+    )
+    assert replayed["latest_training_reliability"]["phase"] == "acked"
+    assert calls == ["ran"]
+
+
+def test_memory_service_timeout_race_keeps_work_as_succeeded(tmp_path) -> None:
+    """Work that outlives timeout_at still records success (timeout_after=True),
+    so the client is never told a persisted save failed."""
+    service = MemoryService(TrainerRepository(tmp_path / "reliability-timeout-race.db"))
+    workspace_id = "workspace-reliability-timeout-race"
+
+    def slow_work() -> dict[str, object]:
+        time.sleep(1.2)  # outlives the 1s bounded timeout below
+        return {"ok": True}
+
+    finished = service.run_training_reliability(
+        workspace_id,
+        request_id="req-timeout-race",
+        command_id="trainer.training.practiceReturn",
+        card_id="timeout-card",
+        timeout_ms=1_000,
+        work=slow_work,
+    )
+    record = finished["latest_training_reliability"]
+    assert record["phase"] == "acked"
+    assert record["outcome"] == "success"
+    assert record["timeout_after"] is True

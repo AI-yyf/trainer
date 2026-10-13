@@ -26,3 +26,12 @@ export function providerDraftStringArrayKey(values: string[] | undefined): strin
     ),
   );
 }
+
+/** Stable comparison key for the provider request-defaults record. */
+export function providerRequestDefaultsKey(value: Record<string, unknown> | undefined): string {
+  try {
+    return JSON.stringify(value ?? {});
+  } catch {
+    return "{}";
+  }
+}

@@ -178,9 +178,11 @@ import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
 import { useComposerModelQuery } from "./useComposerModelQuery";
 import { useComposerHistoryNavigation } from "./useComposerHistoryNavigation";
+import { useOperationStatusController } from "./useOperationStatusController";
+import { useProviderConnectionController } from "./useProviderConnectionController";
 import { useTrainingCardController } from "./useTrainingCardController";
 import { coachReplyTitle, coachReplyMarkdown } from "../lib/shareUtils";
-import { formatTokenCount, providerDraftStringArrayKey } from "../lib/formatUtils";
+import { formatTokenCount } from "../lib/formatUtils";
 import {
   planRuntimeStatusFromRecovery,
   selectStreamingCheckpointForScope,
@@ -211,7 +213,6 @@ import {
   providerRecoveryMessage,
   recoverableFailureMessage,
   resolveOperationMessageSurface,
-  sanitizeOperationFailureMessage,
   type OperationMessageSurface,
 } from "../lib/operationMessageGovernance";
 import { resolveTurnNextStepRequiresConfirmation } from "../lib/nextStepConfirmation";
@@ -284,7 +285,6 @@ import type {
   TrainingCardCandidate,
   TrainingLearningFamily,
   WorkspaceTrainingState,
-  ProviderEndpointSpeedTestResult,
 } from "../lib/types";
 import {
   normalizeSidebarView,
@@ -320,7 +320,6 @@ import { useTrainingCommands, useTrainingAttemptLifecycle } from "./useTrainingC
 import { type TrainingRestoreContext, useWorkbenchState } from "./useWorkbenchState";
 import type { PlanReviewItem } from "../components/plan/CoachPlanView";
 import type {
-  ProviderDraft,
   SettingsActionFeedback,
   SettingsSectionStatus,
 } from "../components/settings/CoachSettingsView";
@@ -1150,14 +1149,6 @@ function localizeUiViewReferences(
 
 
 
-
-function providerRequestDefaultsKey(value: Record<string, unknown> | undefined): string {
-  try {
-    return JSON.stringify(value ?? {});
-  } catch {
-    return "{}";
-  }
-}
 
 function containsChineseText(value: string | undefined): boolean {
   return /[\u4e00-\u9fff]/u.test(value ?? "");
@@ -3629,7 +3620,6 @@ export function App() {
   const {
     data,
     layout,
-    operationMessage,
     streaming,
     resourceOrganizationPending,
     resourceRestoreContext,
@@ -3652,12 +3642,20 @@ export function App() {
     setIncludeRelatedFiles,
     setFollowCurrentFile,
     setCoachDefaults,
-    setOperationMessage: setRawOperationMessage,
     setThemePreference,
     setLearningSurfaceAlignment,
     applyHostMessage: applyRawHostMessage,
   } = useWorkbenchState();
   const syncIdentity = syncCursor.generation > 0 ? syncCursor : undefined;
+
+  // §三/§四十四: the operation-status controller owns the single banner channel
+  // (message + surface), its visibility and its dismiss lifecycle.
+  const {
+    operationMessage,
+    operationMessageVisible,
+    setOperationMessage,
+    dismissOperationMessage,
+  } = useOperationStatusController();
 
   // Training-card controller pilot (DESIGN.md §3): the training domain owns its
   // interaction state and host interception; App only routes and assembles.
@@ -3703,45 +3701,6 @@ export function App() {
   >(() => undefined);
   const [previewSessionId, setPreviewSessionId] = useState<string>();
   const [composerAttachments, setComposerAttachments] = useState<MessageAttachment[]>([]);
-  const [providerDraft, setProviderDraft] = useState<ProviderDraft>({
-    name: "",
-    protocol: "openai_chat_completions_compatible",
-    baseUrl: "",
-    model: "",
-    contextWindowTokens: undefined,
-    maxOutputTokens: undefined,
-    modelTokenLimits: undefined,
-    credentialMode: "ui_proxy",
-    catalogModels: [],
-    allowedModels: [],
-    deniedModels: [],
-    embeddingModel: "",
-    catalogSource: "provider_live",
-    cacheTtlSeconds: undefined,
-    requestDefaults: {},
-    apiKey: "",
-  });
-  const providerDraftIsDirtyRef = useRef(false);
-  const providerDraftSourceKeyRef = useRef<string>();
-  const [operationMessageLeaving, setOperationMessageLeaving] = useState(false);
-  const operationMessageDismissTimerRef = useRef<number>();
-  const [providerSpeedTestResults, setProviderSpeedTestResults] = useState<
-    ProviderEndpointSpeedTestResult[]
-  >([]);
-  const [providerSpeedTestPending, setProviderSpeedTestPending] = useState(false);
-  const runProviderSpeedTest = useCallback((urls: string[]) => {
-    if (urls.length === 0) {
-      return;
-    }
-    setProviderSpeedTestPending(true);
-    postMessage({
-      type: "command/execute",
-      payload: {
-        commandId: trainerCommands.providerSpeedTest,
-        payload: { urls },
-      },
-    });
-  }, []);
   const [composerModelActionDensity, setComposerModelActionDensity] =
     useState<ComposerModelActionDensity>("default");
   const [settingsActionState, updateSettingsActionState] = useState<SettingsActionState>();
@@ -3758,7 +3717,28 @@ export function App() {
       settingsScopeRef.current = settingsScopeKey;
     }
   }, [settingsScopeKey]);
-  const [providerApiKeyFocusRequest, setProviderApiKeyFocusRequest] = useState(0);
+  // §三: the provider-connection controller owns the editable draft (derived
+  // from the single ProviderFacts record), its save payload, the endpoint
+  // speed test and the API-key focus request.
+  const {
+    providerDraft,
+    setProviderDraft,
+    providerDraftHasChanges,
+    providerDraftHasUnsavedApiKey,
+    providerSavePayload,
+    markProviderDraftSaved,
+    providerSpeedTestResults,
+    providerSpeedTestPending,
+    runProviderSpeedTest,
+    handleProviderSpeedTestMessage,
+    providerApiKeyFocusRequest,
+    requestProviderApiKeyFocus,
+  } = useProviderConnectionController({
+    facts: data.providerConfig,
+    settingsActionKind: settingsActionState?.kind,
+    settingsScopeKey,
+    settingsActionScopeRef,
+  });
   const [coachPlanContext, setCoachPlanContext] = useState<PlanComposerMode>();
   const [planComposerMode, setPlanComposerMode] = useState<PlanComposerMode>("explain");
   // §十一: companion install state for the Settings remote-support panel.
@@ -3766,7 +3746,6 @@ export function App() {
     import("../../../../shared/src/companionInstallState").CompanionInstallState
   >("not_installed");
   const companionStateQueriedRef = useRef(false);
-  const [operationMessageSurface, setOperationMessageSurface] = useState<OperationMessageSurface>("global");
   const [pendingPlanComposerDraftReplacement, setPendingPlanComposerDraftReplacement] =
     useState<PlanComposerDraftReplacement>();
   const [resourcesComposerMode, setResourcesComposerMode] =
@@ -3853,10 +3832,6 @@ export function App() {
   const resolvedTheme = useMemo(() => resolveTheme(layout.themePreference), [layout.themePreference]);
   const isBrowserPreview = inBrowserPreviewEnvironment();
   const activeView = normalizeSidebarView(layout.activeView);
-  // §四十四: a surface-scoped operation message only renders on its own view;
-  // "global" stays visible everywhere.
-  const operationMessageVisible =
-    operationMessageSurface === "global" || operationMessageSurface === activeView;
   const browserPreviewFixture = isBrowserPreviewFixtureMode();
   const t = resolveWorkbenchCopy(layout.composerLanguage);
   const openProviderSetup = useCallback(() => {
@@ -3865,28 +3840,11 @@ export function App() {
     useWorkbenchState.getState().requestSettingsCategory("connection");
     setActiveView("settings");
     if (!data.providerConfig.apiKeyConfigured) {
-      setProviderApiKeyFocusRequest((request) => request + 1);
+      requestProviderApiKeyFocus();
     }
-  }, [data.providerConfig.apiKeyConfigured, setActiveView]);
+  }, [data.providerConfig.apiKeyConfigured, requestProviderApiKeyFocus, setActiveView]);
   const localizedResourceOperationFallback = t.stageDone;
   const planText = resolvePlanViewCopy(layout.composerLanguage);
-  // §四十四: one atomic helper for the operation banner. `surface` localizes a
-  // message to its owning view ("global" renders everywhere); every call sets
-  // message + surface together, so a domain-scoped message never inherits a
-  // previous domain's scope and a later global message resets the scope. If a
-  // generic caller relays a plan-state failure (revision conflict, live-plan
-  // gate markers), it auto-scopes to Learning, where plan state is owned.
-  const setOperationMessage = useCallback(
-    (message?: OperationMessage, surface?: OperationMessageSurface) => {
-      setOperationMessageSurface(
-        resolveOperationMessageSurface(message?.message, surface),
-      );
-      setRawOperationMessage(
-        message ? sanitizeOperationFailureMessage(message, layout.composerLanguage) : undefined,
-      );
-    },
-    [layout.composerLanguage, setRawOperationMessage],
-  );
   const setSettingsActionState = useCallback((next?: SettingsActionState) => {
     // A repeated connection test can return the same text as the previous one.
     // Clear the previous outcome when starting, rather than treating identical
@@ -4386,9 +4344,7 @@ export function App() {
         resolveTrainingPersistenceAck(message);
         return;
       }
-      if (message.type === "provider/speedTest") {
-        setProviderSpeedTestResults(message.payload.results);
-        setProviderSpeedTestPending(false);
+      if (handleProviderSpeedTestMessage(message)) {
         return;
       }
       if (message.type === "session/list") {
@@ -4413,8 +4369,9 @@ export function App() {
         resolvedMessage.type === "ui/restoreView" &&
         resolvedMessage.payload.focusProviderApiKey
       ) {
-        setProviderApiKeyFocusRequest((request) => request + 1);
+        requestProviderApiKeyFocus();
       }
+      let hostOperationSurface: OperationMessageSurface | undefined;
       if (message.type === "operation/status") {
         // §三: the training-card controller settles a failed remote-verification
         // request; a failure that belongs to another card aborts the message.
@@ -4427,15 +4384,16 @@ export function App() {
         // and plan-state failures (revision conflict, live-plan gate) render
         // only in Learning. Stream-scoped non-errors clear the banner instead
         // of setting one, so they never claim a scope.
+        //
+        // The scope is derived from the RAW text (sanitization rewrites the
+        // markers) and travels into the store write below, atomically with the
+        // message — no separate surface state to go stale.
         const hostSurfaceScope = resolveOperationMessageSurface({ message: message.payload.message,
           planStateFailure: Boolean(detectPlanRevisionConflict(message.payload.message) || parseLivePlanTaskGateMarker(message.payload.message)),
           resourceOperation: Boolean(resourceOperationStatus && resourceOperationStatus.kind !== "search"),
         });
-        if (
-          hostSurfaceScope &&
-          !(message.payload.surface === "stream" && message.payload.tone !== "error")
-        ) {
-          setOperationMessageSurface(hostSurfaceScope);
+        if (!(message.payload.surface === "stream" && message.payload.tone !== "error")) {
+          hostOperationSurface = hostSurfaceScope;
         }
       }
       if (resourceOperationStatus?.kind !== "search") {
@@ -4446,6 +4404,7 @@ export function App() {
             Boolean(isProviderActionOverride || settingsActionState?.targets.includes("provider")),
             resourceOperationStatus?.kind,
           ),
+          { operationSurface: hostOperationSurface },
         );
       }
       if (resolvedMessage.type === "ui/coachPrompt" && typeof window !== "undefined") {
@@ -4454,11 +4413,13 @@ export function App() {
     },
     [
       applyRawHostMessage,
+      handleProviderSpeedTestMessage,
       handleRemoteVerificationCommandFailure,
       handleRemoteVerificationHostMessage,
       layout.composerLanguage,
       localizedResourceOperationFallback,
       requestCoachComposerFocus,
+      requestProviderApiKeyFocus,
       resolveTrainingPersistenceAck,
       resolveResourceOperationStatus,
       settingsActionState,
@@ -4893,187 +4854,6 @@ export function App() {
       appUiCopy(layout.composerLanguage, "已连接到扩展宿主。"),
     [layout.composerLanguage],
   );
-  const providerSavePayload = useMemo(() => {
-    const trimmedApiKey = providerDraft.apiKey.trim();
-    return {
-      name: providerDraft.name,
-      protocol: providerDraft.protocol,
-      baseUrl: providerDraft.baseUrl,
-      model: providerDraft.model,
-      contextWindowTokens: providerDraft.contextWindowTokens ?? null,
-      maxOutputTokens: providerDraft.maxOutputTokens ?? null,
-      modelTokenLimits: providerDraft.modelTokenLimits,
-      credentialMode: providerDraft.credentialMode,
-      catalogModels: providerDraft.catalogModels ?? [],
-      allowedModels: providerDraft.allowedModels ?? [],
-      deniedModels: providerDraft.deniedModels ?? [],
-      embeddingModel: providerDraft.embeddingModel?.trim() || "",
-      catalogSource: providerDraft.catalogSource,
-      cacheTtlSeconds: providerDraft.cacheTtlSeconds ?? null,
-      requestDefaults: providerDraft.requestDefaults ?? {},
-      ...(providerDraft.thinkingConfig ? { thinkingConfig: providerDraft.thinkingConfig } : {}),
-      ...(trimmedApiKey ? { apiKey: trimmedApiKey, replaceApiKey: true } : {}),
-      capabilities: data.providerConfig.capabilities,
-    };
-  }, [data.providerConfig.capabilities, providerDraft]);
-
-  const providerDraftSource = useMemo(
-    () => ({
-      configured: data.providerConfig.configured,
-      profileId: data.providerConfig.profileId ?? "",
-      // The host's display fallback ("未配置模型服务") must never land in the
-      // editable draft: a user who saves without noticing would persist it as
-      // the real connection name. Keep the draft name empty until configured.
-      name: data.providerConfig.configured ? data.providerConfig.name : "",
-      protocol: data.providerConfig.protocol ?? "openai_chat_completions_compatible",
-      baseUrl: data.providerConfig.baseUrl,
-      model: data.providerConfig.model,
-      contextWindowTokens: data.providerConfig.contextWindowTokens,
-      maxOutputTokens: data.providerConfig.maxOutputTokens,
-      modelTokenLimits: data.providerConfig.modelTokenLimits,
-      credentialMode: data.providerConfig.credentialMode ?? "ui_proxy",
-      catalogModels: data.providerConfig.catalogModels ?? [],
-      allowedModels: data.providerConfig.allowedModels ?? [],
-      deniedModels: data.providerConfig.deniedModels ?? [],
-      embeddingModel: data.providerConfig.embeddingModel ?? "",
-      catalogSource: data.providerConfig.catalogSource ?? "provider_live",
-      cacheTtlSeconds: data.providerConfig.cacheTtlSeconds,
-      requestDefaults: data.providerConfig.requestDefaults ?? {},
-      thinkingConfig: data.providerConfig.thinkingConfig,
-    }),
-    [
-      data.providerConfig.configured,
-      data.providerConfig.profileId,
-      data.providerConfig.name,
-      data.providerConfig.protocol,
-      data.providerConfig.baseUrl,
-      data.providerConfig.model,
-      data.providerConfig.contextWindowTokens,
-      data.providerConfig.maxOutputTokens,
-      data.providerConfig.modelTokenLimits,
-      data.providerConfig.credentialMode,
-      data.providerConfig.catalogModels,
-      data.providerConfig.allowedModels,
-      data.providerConfig.deniedModels,
-      data.providerConfig.embeddingModel,
-      data.providerConfig.catalogSource,
-      data.providerConfig.cacheTtlSeconds,
-      data.providerConfig.requestDefaults,
-      data.providerConfig.thinkingConfig,
-    ],
-  );
-  // R3③: full-object JSON.stringify ran in the render body on every App
-  // render (every stream chunk); providerDraftSource is already memoized on
-  // its fields, so the key only needs to recompute when that memo recomputes.
-  const providerDraftSourceKey = useMemo(
-    () => JSON.stringify(providerDraftSource),
-    [providerDraftSource],
-  );
-
-  useEffect(() => {
-    if (providerDraftSourceKeyRef.current === providerDraftSourceKey) {
-      return;
-    }
-    providerDraftSourceKeyRef.current = providerDraftSourceKey;
-
-    const shouldKeepUnsavedProviderDraft =
-      providerDraftIsDirtyRef.current &&
-      (settingsActionScopeRef.current !== settingsScopeKey ||
-        (settingsActionState?.kind !== "save-provider" &&
-          settingsActionState?.kind !== "clear-provider"));
-    if (shouldKeepUnsavedProviderDraft) {
-      return;
-    }
-
-    setProviderDraft({
-      name: providerDraftSource.name,
-      protocol: providerDraftSource.protocol,
-      baseUrl: providerDraftSource.baseUrl,
-      model: providerDraftSource.model,
-      contextWindowTokens: providerDraftSource.contextWindowTokens,
-      maxOutputTokens: providerDraftSource.maxOutputTokens,
-      modelTokenLimits: providerDraftSource.modelTokenLimits,
-      credentialMode: providerDraftSource.credentialMode,
-      catalogModels: providerDraftSource.catalogModels,
-      allowedModels: providerDraftSource.allowedModels,
-      deniedModels: providerDraftSource.deniedModels,
-      embeddingModel: providerDraftSource.embeddingModel,
-      catalogSource: providerDraftSource.catalogSource,
-      cacheTtlSeconds: providerDraftSource.cacheTtlSeconds,
-      requestDefaults: providerDraftSource.requestDefaults,
-      thinkingConfig: providerDraftSource.thinkingConfig,
-      apiKey: "",
-    });
-    providerDraftIsDirtyRef.current = false;
-  }, [providerDraftSource, providerDraftSourceKey, settingsActionState?.kind, settingsScopeKey]);
-
-  const providerDraftHasUnsavedApiKey = providerDraft.apiKey.trim().length > 0;
-  const providerDraftHasChanges = useMemo(
-    () =>
-      providerDraft.name !== (data.providerConfig.configured ? data.providerConfig.name : "") ||
-      normalizeProviderProtocol(providerDraft.protocol) !==
-        normalizeProviderProtocol(data.providerConfig.protocol) ||
-      providerDraft.baseUrl !== data.providerConfig.baseUrl ||
-      providerDraft.model !== data.providerConfig.model ||
-      providerDraft.contextWindowTokens !== data.providerConfig.contextWindowTokens ||
-      providerDraft.maxOutputTokens !== data.providerConfig.maxOutputTokens ||
-      providerModelTokenLimitsKey(providerDraft.modelTokenLimits) !==
-        providerModelTokenLimitsKey(data.providerConfig.modelTokenLimits) ||
-      providerDraft.credentialMode !== (data.providerConfig.credentialMode ?? "ui_proxy") ||
-      providerDraftStringArrayKey(providerDraft.catalogModels) !==
-        providerDraftStringArrayKey(data.providerConfig.catalogModels) ||
-      providerDraftStringArrayKey(providerDraft.allowedModels) !==
-        providerDraftStringArrayKey(data.providerConfig.allowedModels) ||
-      providerDraftStringArrayKey(providerDraft.deniedModels) !==
-        providerDraftStringArrayKey(data.providerConfig.deniedModels) ||
-      (providerDraft.embeddingModel ?? "") !== (data.providerConfig.embeddingModel ?? "") ||
-      providerDraft.catalogSource !== (data.providerConfig.catalogSource ?? "provider_live") ||
-      providerDraft.cacheTtlSeconds !== data.providerConfig.cacheTtlSeconds ||
-      providerRequestDefaultsKey(providerDraft.requestDefaults) !==
-        providerRequestDefaultsKey(data.providerConfig.requestDefaults) ||
-      // thinkingConfig is durable intent: a mode change can leave the wire
-      // defaults untouched (no capability evidence), so it must count on its own.
-      JSON.stringify(providerDraft.thinkingConfig ?? null) !==
-        JSON.stringify(data.providerConfig.thinkingConfig ?? null) ||
-      providerDraftHasUnsavedApiKey,
-    [
-      data.providerConfig.configured,
-      data.providerConfig.baseUrl,
-      data.providerConfig.cacheTtlSeconds,
-      data.providerConfig.catalogSource,
-      data.providerConfig.credentialMode,
-      data.providerConfig.catalogModels,
-      data.providerConfig.deniedModels,
-      data.providerConfig.embeddingModel,
-      data.providerConfig.model,
-      data.providerConfig.modelTokenLimits,
-      data.providerConfig.name,
-      data.providerConfig.protocol,
-      data.providerConfig.allowedModels,
-      data.providerConfig.requestDefaults,
-      providerDraft.baseUrl,
-      providerDraft.cacheTtlSeconds,
-      providerDraft.catalogSource,
-      providerDraft.contextWindowTokens,
-      providerDraft.credentialMode,
-      providerDraft.deniedModels,
-      providerDraft.embeddingModel,
-      providerDraft.model,
-      providerDraft.modelTokenLimits,
-      providerDraft.maxOutputTokens,
-      providerDraft.name,
-      providerDraft.protocol,
-      providerDraft.catalogModels,
-      providerDraft.allowedModels,
-      providerDraft.requestDefaults,
-      providerDraft.thinkingConfig,
-      data.providerConfig.thinkingConfig,
-      data.providerConfig.contextWindowTokens,
-      data.providerConfig.maxOutputTokens,
-      providerDraftHasUnsavedApiKey,
-    ],
-  );
-
   const composerHasSavedProfiles = useMemo(
     () => hasSavedProviderProfiles(data.providerConfig),
     [data.providerConfig.profileCount, data.providerConfig.providerProfiles],
@@ -5473,11 +5253,10 @@ export function App() {
       settingsActionState.targets.includes("provider") &&
       operationMessage.tone === "success"
     ) {
-      providerDraftIsDirtyRef.current = false;
-      setProviderDraft((current) => (current.apiKey ? { ...current, apiKey: "" } : current));
+      markProviderDraftSaved();
     }
     setSettingsActionState(undefined);
-  }, [layout.composerLanguage, operationMessage, settingsActionState]);
+  }, [layout.composerLanguage, markProviderDraftSaved, operationMessage, settingsActionState]);
 
   useEffect(() => {
     applyWorkbenchTheme(resolvedTheme, layout.themePreference === "system");
@@ -5639,36 +5418,6 @@ export function App() {
   useEffect(() => {
     setOpenMenu(undefined);
   }, [layout.activeView]);
-
-  // Success/info notices self-dismiss; errors stay until explicitly closed.
-  // Both paths play the exit animation before the message is removed.
-  const dismissOperationMessage = useCallback(() => {
-    const expected = useWorkbenchState.getState().operationMessage;
-    if (!expected) return;
-    window.clearTimeout(operationMessageDismissTimerRef.current);
-    setOperationMessageLeaving(true);
-    operationMessageDismissTimerRef.current = window.setTimeout(() => {
-      operationMessageDismissTimerRef.current = undefined;
-      useWorkbenchState.getState().clearOperationMessage(expected);
-      setOperationMessageLeaving(false);
-    }, 180);
-  }, []);
-
-  useEffect(() => {
-    // A later notice owns its animation; an earlier exit cannot remove it.
-    window.clearTimeout(operationMessageDismissTimerRef.current);
-    operationMessageDismissTimerRef.current = undefined;
-    setOperationMessageLeaving(false);
-    return () => window.clearTimeout(operationMessageDismissTimerRef.current);
-  }, [operationMessage]);
-
-  useEffect(() => {
-    if (!operationMessage || operationMessage.tone === "error") {
-      return;
-    }
-    const timer = window.setTimeout(() => dismissOperationMessage(), 5000);
-    return () => window.clearTimeout(timer);
-  }, [operationMessage, dismissOperationMessage]);
 
   // Restart the view entrance animation on every view change without
   // remounting the container (remounting would drop child state).
@@ -10061,8 +9810,9 @@ export function App() {
   const handleVerifyTrainingFromIde = useCallback(() => {
     const boundaryNotice = checkRemoteRunnerBoundary();
     if (boundaryNotice) {
+      // The card owns this notice; the surface is no longer pre-set — the
+      // following verify failure carries the training marker and scopes itself.
       setTrainingVerifyNotice(boundaryNotice);
-      setOperationMessageSurface("training");
       return;
     }
     if (isBrowserPreview || leftoverTrainingHandoffChromeNotLive || !activeTrainingCardId) {
@@ -10072,7 +9822,6 @@ export function App() {
           ? appUiCopy(layout.composerLanguage, "没有可验证的当前文件。")
           : appUiCopy(layout.composerLanguage, "预览不能验真实工作区文件。请回 VS Code 打开文件后再验证。");
       setTrainingVerifyNotice(notice);
-      setOperationMessageSurface("training");
       return;
     }
     postMessage({
@@ -13584,7 +13333,6 @@ export function App() {
         }
         followCurrentFile={layout.followCurrentFile}
         onProviderDraftChange={(patch) => {
-          providerDraftIsDirtyRef.current = true;
           setProviderDraft((current) => {
             const hasProtocol = Object.prototype.hasOwnProperty.call(patch, "protocol");
             const hasBaseUrl = Object.prototype.hasOwnProperty.call(patch, "baseUrl");

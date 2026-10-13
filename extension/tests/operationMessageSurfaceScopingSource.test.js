@@ -21,23 +21,36 @@ const governancePath = path.resolve(
   'lib',
   'operationMessageGovernance.ts',
 );
+// Round 2: the surface moved into the store's single banner channel and the
+// banner interaction layer into the operation-status controller.
+const storePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'useWorkbenchState.ts');
+const statusControllerPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'app',
+  'useOperationStatusController.ts',
+);
 
 test('operation message surface union and banner gate localize scoped messages to their own view', () => {
   const source = fs.readFileSync(appPath, 'utf8');
-  const governance = fs.readFileSync(governancePath, 'utf8');
+  const store = fs.readFileSync(storePath, 'utf8');
+  const controller = fs.readFileSync(statusControllerPath, 'utf8');
 
-  // The union and the pure surface rules moved to the governance module.
+  // The union lives in the governance module; the store carries message and
+  // surface together, and the controller owns the gate rule.
   assert.match(
     source,
     /type OperationMessageSurface,/,
   );
   assert.match(
-    source,
-    /const \[operationMessageSurface, setOperationMessageSurface\] = useState<OperationMessageSurface>\("global"\);/,
+    store,
+    /operationMessageSurface: OperationMessageSurface;/,
   );
   assert.match(
-    source,
-    /const operationMessageVisible =\s*operationMessageSurface === "global" \|\| operationMessageSurface === activeView;/,
+    controller,
+    /operationMessageSurface === "global" \|\| operationMessageSurface === activeView/,
   );
   // The global banner renders only when the message is visible on the active view.
   assert.match(source, /\{operationMessage && operationMessageVisible \? \(/);
@@ -48,31 +61,40 @@ test('operation message surface union and banner gate localize scoped messages t
 });
 
 test('setOperationMessage writes message and surface atomically through the governance module', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const controller = fs.readFileSync(statusControllerPath, 'utf8');
+  const store = fs.readFileSync(storePath, 'utf8');
 
   // One atomic entry point: surface attribution and failure sanitization both
-  // come from the pure module; App only performs the two state writes.
+  // come from the pure module; the controller then writes message + surface
+  // through the store's single channel.
+  assert.match(controller, /resolveOperationMessageSurface\(message\?\.message, surface\)/);
   assert.match(
-    source,
-    /const setOperationMessage = useCallback\(\s*\(message\?: OperationMessage, surface\?: OperationMessageSurface\) => \{\s*setOperationMessageSurface\(\s*resolveOperationMessageSurface\(message\?\.message, surface\),\s*\);\s*setRawOperationMessage\(/,
+    store,
+    /setOperationMessage: \(operationMessage, surface\) =>\s*set\(operationBannerState\(operationMessage, surface\)\)/,
   );
+  assert.match(store, /operationMessageSurface: resolveOperationMessageSurface\(operationMessage\?\.message, surface\)/);
   const { load } = require('./templateAssertions');
   const { resolveOperationMessageSurface } = load('lib/operationMessageGovernance.ts');
   assert.equal(resolveOperationMessageSurface({ message: 'Formal plan revision changed', planStateFailure: true }), 'plan');
   assert.equal(resolveOperationMessageSurface({ message: 'Later ordinary notice' }), 'global');
   assert.equal(resolveOperationMessageSurface({ message: 'Verify failure', explicitSurface: 'training' }), 'training');
-  assert.match(source, /resolveOperationMessageSurface\(message\?\.message, surface\)/);
 });
 
 test('host resource and plan statuses are intercepted before the store banner write', () => {
   const source = fs.readFileSync(appPath, 'utf8');
+  const store = fs.readFileSync(storePath, 'utf8');
 
   assert.match(source, /const hostSurfaceScope = resolveOperationMessageSurface\(/);
   assert.match(source, /resourceOperation: Boolean\(resourceOperationStatus && resourceOperationStatus\.kind !== "search"\)/);
+  // The scope derived from the RAW message travels into the store write
+  // atomically with the message; stream-scoped non-errors keep the banner's
+  // previous scope (no explicit surface).
   assert.match(
     source,
-    /hostSurfaceScope &&\s*!\(message\.payload\.surface === "stream" && message\.payload\.tone !== "error"\)\s*\) \{\s*setOperationMessageSurface\(hostSurfaceScope\);/,
+    /if \(!\(message\.payload\.surface === "stream" && message\.payload\.tone !== "error"\)\) \{\s*hostOperationSurface = hostSurfaceScope;\s*\}/,
   );
+  assert.match(source, /\{ operationSurface: hostOperationSurface \}/);
+  assert.match(store, /options\?\.operationSurface/);
 });
 
 test('resource operation feedback is scoped to the Library surface', () => {
@@ -106,11 +128,17 @@ test('plan freeze and plan composer feedback is scoped to the Learning surface',
   );
 });
 
-test('training verify pre-positioning keeps its existing surface behavior', () => {
+test('training verify notices stay card-owned; the following failure scopes itself by its own marker', () => {
   const source = fs.readFileSync(appPath, 'utf8');
 
-  assert.equal(
-    (source.match(/setOperationMessageSurface\("training"\);/g) ?? []).length,
-    2,
+  // Round 2: the atomic channel has no surface pre-positioning — a notice must
+  // carry its own surface with the message. The boundary notices are card
+  // content, and the remote-verify failure that follows carries the training
+  // marker, so it scopes itself to Training at host-message time.
+  assert.match(source, /setTrainingVerifyNotice\(boundaryNotice\);/);
+  assert.doesNotMatch(source, /setOperationMessageSurface\("training"\)/);
+  assert.match(
+    source,
+    /planStateFailure: Boolean\(detectPlanRevisionConflict\(message\.payload\.message\) \|\| parseLivePlanTaskGateMarker\(message\.payload\.message\)\)/,
   );
 });

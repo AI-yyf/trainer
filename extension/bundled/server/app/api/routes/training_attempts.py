@@ -34,6 +34,9 @@ class AttemptUpdateRequest(BaseModel):
 
 class AttemptEvidenceRequest(BaseModel):
     attempt_id: str
+    # The host injects its current workspace id; when present it must match the
+    # attempt's own workspace binding (409) instead of being silently dropped.
+    workspace_id: str | None = None
     artifact_hash: str
     result: str
     runner_version: str = "trainer-sidecar"
@@ -133,6 +136,17 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
         if attempt is None:
             raise HTTPException(status_code=404, detail="Training attempt not found.")
         workspace_id = str(attempt.get("workspace_id") or "")
+        # The host-declared workspace must agree with the attempt's own binding:
+        # a stale webview must be refused, never silently recorded elsewhere.
+        requested_workspace_id = str(request.workspace_id or "").strip()
+        if requested_workspace_id and requested_workspace_id != workspace_id:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "workspace_attempt_mismatch",
+                    "message": "The explicit workspace_id does not match the training attempt's workspace.",
+                },
+            )
         resource_fields: dict[str, Any] = {}
         requested_resource_id = str(request.resource_id or "").strip()
         if requested_resource_id:

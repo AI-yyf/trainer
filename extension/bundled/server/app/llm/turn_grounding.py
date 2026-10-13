@@ -31,6 +31,27 @@ narration / message-prefix rules) and the legacy ``next_step_is_grounded`` /
 ``evaluate_next_step_grounding`` entry points, which now route through the
 strict per-claim core.
 
+R2 additions (2026-10-13):
+
+- ``reply_claims`` verdicts (anchored in the learner's turn facts or not;
+  diagnostic only — they never downgrade a turn, explicit false-positive
+  budget) plus ``domain_backing`` implementing the
+  ``workspace_verified > learner_provided > model_claim`` ranking.
+- ``conflicts``: same-domain reply/next-step pairs that no workspace/learner
+  fact backs and that the next step *demands* (the reply's own introduction of
+  a new symbol — ``enumerate`` — is never a conflict).
+- demand guard: a next step request targeting a fact the learner already
+  provided (repeat-asking) or targeting something with no backing at all
+  (fabrication demand) is ungrounded; ``visible_next_step`` participates in
+  this comparison.
+- file pointers in a creation context ("创建/新建/create ...") stay
+  ``unverifiable`` instead of tripping the existence checker.
+- ``retry_used`` means "a regeneration was attempted for this decision"
+  (including empty/unusable regenerations) — both the rules layer and the
+  assembly derive it from this one implementation;
+  ``memory_provenance_summary`` builds the field-level mapping consumed by
+  ``MemoryService.record_turn_reflection``.
+
 Symbol extraction mirrors the acceptance-criteria signal rule in
 ``app/training/card_generator.py`` (``_criterion_code_signals``): a backticked
 literal or a bare snake_case/camelCase identifier counts as a code symbol;
@@ -42,6 +63,8 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+
+from .reply_continuity import visible_next_step
 
 # Identifier-shaped token: ASCII letters/digits/underscore, optionally dotted
 # (``asyncio.gather``). CJK and other scripts never form code identifiers, but
@@ -186,11 +209,19 @@ MEMORY_PROVENANCE_FIELDS = (
     "evidence",
     "focus",
 )
+# Reserved keys of the mapping ``record_turn_reflection`` consumes (§2.6/§2.7).
+MEMORY_PROVENANCE_GROUNDING_OUTCOME = "grounding_outcome"
+MEMORY_PROVENANCE_CONFLICTED_CLAIMS = "conflicted_claims"
+
+# Domain backing ranks (DESIGN.md §2.5③): the ranking that decides which side
+# of a same-domain pair wins; "" means no workspace/learner fact backs it.
+BACKING_WORKSPACE_VERIFIED = "workspace_verified"
+BACKING_LEARNER_PROVIDED = "learner_provided"
 
 # Bounds keep the pure layer predictable on pathological texts.
 _MAX_NEXT_STEP_CLAIMS = 24
 _MAX_REPLY_CLAIMS = 48
-_MAX_LEARNER_FACTS = 64
+_MAX_LEARNER_FACTS = 96
 _MAX_WORKSPACE_FACTS = 64
 
 # Claim boundaries: sentence enders and line breaks. Commas are deliberately
@@ -200,6 +231,25 @@ _CLAIM_BOUNDARY = re.compile(r"[\n。！？!?；;]+")
 _LEADING_LIST_MARKER = re.compile(r"^\s*(?:[-*•]|\d+[.)、])\s*")
 _ERROR_TOKEN = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*(?:Error|Exception|Warning|Fault)\b")
 _FILE_TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_./-]*\.[A-Za-z0-9]+")
+
+# Creation/forward-looking instructions: the named file does not exist yet by
+# design ("创建/新建/create ..."), so a missing-file checker answer must not be
+# read as a fabrication (DESIGN.md §2.5⑥).
+_CREATION_VERB_PATTERN = re.compile(
+    r"(?:创建|新建|新增|建立|生成|写一个|写个|建一个|建个|补充一个|加一个新|"
+    r"create|new file|add a new|scaffold|generate|write a|make a)",
+    re.IGNORECASE,
+)
+# Info-transfer request markers (DESIGN.md §2.5③): asking the learner to
+# hand over a fact they already provided (repeat-asking), or to hand over a
+# fact with no workspace/learner backing at all (fabrication demand). Pure
+# explanation asks ("给我讲讲", "告诉我为什么") are deliberately not markers.
+_REQUEST_FACT_PATTERN = re.compile(
+    r"(?:请提供|提供一下|贴出来|贴出|贴一下|贴给我|贴回来|贴回|粘贴|发我|发一下|发给|"
+    r"分享|给我看|给我(?!讲|说|解释|分析|演示)|"
+    r"please\s+share|please\s+provide|share|paste|provide|send me|upload)",
+    re.IGNORECASE,
+)
 
 
 def looks_like_narration_opening(text: object) -> bool:
@@ -376,6 +426,8 @@ class TeachingTurnFacts:
     code_text: str = ""
     history_text: str = ""
     user_message: str = ""
+    next_step_text: str = ""
+    visible_next_step: str = ""
     learner_provided: list[TeachingFact] = field(default_factory=list)
     workspace_verified: list[TeachingFact] = field(default_factory=list)
     next_step_claims: list[TeachingFact] = field(default_factory=list)
@@ -711,6 +763,18 @@ def _learner_provided_facts(
             )
         ):
             return facts
+    # Current-file symbols count as learner-provided facts too (§2.2): the
+    # repeat-asking guard must see that the coach already has the learner's
+    # code in hand ("给我 `find` 的函数名" when `find` sits in the file).
+    for fact in extract_claim_facts(
+        code_text,
+        source=SOURCE_CURRENT_FILE,
+        turn_id=turn_id,
+        provenance=PROVENANCE_LEARNER_PROVIDED,
+        limit=_MAX_LEARNER_FACTS,
+    ):
+        if _add(fact):
+            return facts
     return facts
 
 
@@ -764,6 +828,8 @@ def build_teaching_turn_facts(
         code_text=code_source,
         history_text=str(history_text or ""),
         user_message=user_source,
+        next_step_text=resolved_next_step,
+        visible_next_step=visible_next_step(reply_source),
         learner_provided=_learner_provided_facts(user_source, code_source, turn_id=turn_id),
         workspace_verified=workspace_facts,
         next_step_claims=extract_claim_facts(
@@ -785,10 +851,55 @@ def build_teaching_turn_facts(
     )
 
 
-def _anchoring_corpora(facts: TeachingTurnFacts) -> list[str]:
-    """reply ∪ current code ∪ history ∪ workspace_verified ∪ learner_provided."""
+def domain_backing(facts: TeachingTurnFacts, domain: str) -> str:
+    """Best fact backing for one claim domain (DESIGN.md §2.5③ ranking).
+
+    Returns ``"workspace_verified"`` when a workspace fact shares the domain,
+    ``"learner_provided"`` when a learner fact does, and ``""`` when only the
+    model's own text carries it (the model-claim rank loses to both facts).
+    """
+    if not domain:
+        return ""
+    for fact in facts.workspace_verified:
+        if claim_domain(fact) == domain:
+            return BACKING_WORKSPACE_VERIFIED
+    for fact in facts.learner_provided:
+        if claim_domain(fact) == domain:
+            return BACKING_LEARNER_PROVIDED
+    return ""
+
+
+def memory_provenance_summary(
+    facts: TeachingTurnFacts,
+    decision: GroundingDecision | None = None,
+) -> dict[str, str]:
+    """Build the field→provenance mapping ``record_turn_reflection`` consumes.
+
+    Adds the reserved ``grounding_outcome`` key (from the decision) and the
+    reserved ``conflicted_claims`` key (newline-joined argument domains of the
+    turn's recorded conflicts, if any) on top of the per-field provenance.
+    """
+    summary = dict(facts.memory_provenance)
+    if decision is not None:
+        summary[MEMORY_PROVENANCE_GROUNDING_OUTCOME] = grounding_outcome(decision)
+    conflicted = [conflict.domain for conflict in facts.conflicts if conflict.domain]
+    if conflicted:
+        summary[MEMORY_PROVENANCE_CONFLICTED_CLAIMS] = "\n".join(dict.fromkeys(conflicted))
+    return summary
+
+
+def _anchoring_corpora(facts: TeachingTurnFacts, *, include_reply: bool = True) -> list[str]:
+    """reply ∪ current code ∪ history ∪ workspace_verified ∪ learner_provided.
+
+    ``include_reply=False`` is the reply-claim view: a claim inside the reply
+    must not be anchored by the reply text itself (that would be trivially
+    true and useless as a diagnostic).
+    """
     corpora: list[str] = []
-    for text in (facts.reply_text, facts.code_text, facts.history_text, facts.user_message):
+    texts: list[str] = [facts.code_text, facts.history_text, facts.user_message]
+    if include_reply:
+        texts.insert(0, facts.reply_text)
+    for text in texts:
         if str(text or "").strip():
             corpora.append(str(text))
     for fact in (*facts.learner_provided, *facts.workspace_verified):
@@ -797,16 +908,47 @@ def _anchoring_corpora(facts: TeachingTurnFacts) -> list[str]:
     return corpora
 
 
+def _claim_segments_for(facts: TeachingTurnFacts, value: str) -> list[str]:
+    """Next-step segments that mention ``value`` (claim-level context)."""
+    if not value or not facts.next_step_text.strip():
+        return []
+    return [
+        segment
+        for segment in _claim_segments(facts.next_step_text)
+        if symbol_in_text(value, segment)
+    ]
+
+
+def _claim_context(facts: TeachingTurnFacts, value: str) -> tuple[bool, bool]:
+    """(creation_context, demand_context) of the segments claiming ``value``.
+
+    Creation context: the instruction creates the artifact ("创建/新建/create
+    ..."), so a missing file proves nothing. Demand context: an info-transfer
+    request ("贴出来 / share / paste") that is not itself a creation
+    instruction.
+    """
+    segments = _claim_segments_for(facts, value)
+    creation = any(_CREATION_VERB_PATTERN.search(segment) for segment in segments)
+    demand = any(
+        _REQUEST_FACT_PATTERN.search(segment) and not _CREATION_VERB_PATTERN.search(segment)
+        for segment in segments
+    )
+    return creation, demand
+
+
 def _file_claim_verdict(
     value: str,
     corpora: list[str],
     *,
     file_exists: Callable[[str], bool | None] | None,
+    creation_context: bool = False,
 ) -> str:
     for corpus in corpora:
         if symbol_in_text(value, corpus):
             return VERDICT_GROUNDED
-    if file_exists is None:
+    if creation_context or file_exists is None:
+        # A file the instruction asks to create does not exist yet by design
+        # (DESIGN.md §2.5⑥): neither "verified" nor a downgrade reason.
         return VERDICT_UNVERIFIABLE
     try:
         exists = file_exists(value)
@@ -821,9 +963,20 @@ def _file_claim_verdict(
     return VERDICT_UNVERIFIABLE
 
 
-def _claim_verdict(fact: TeachingFact, corpora: list[str], *, file_exists: Callable[[str], bool | None] | None) -> str:
+def _claim_verdict(
+    fact: TeachingFact,
+    corpora: list[str],
+    *,
+    file_exists: Callable[[str], bool | None] | None,
+    creation_context: bool = False,
+) -> str:
     if fact.kind == FACT_KIND_FILE_PATH:
-        return _file_claim_verdict(fact.value, corpora, file_exists=file_exists)
+        return _file_claim_verdict(
+            fact.value,
+            corpora,
+            file_exists=file_exists,
+            creation_context=creation_context,
+        )
     if any(symbol_in_text(fact.value, corpus) for corpus in corpora):
         return VERDICT_GROUNDED
     return VERDICT_UNGROUNDED
@@ -832,16 +985,88 @@ def _claim_verdict(fact: TeachingFact, corpora: list[str], *, file_exists: Calla
 def _evaluate_claims(
     claims: list[TeachingFact],
     facts: TeachingTurnFacts,
+    *,
+    include_reply: bool = True,
+    apply_demand_guard: bool = False,
 ) -> tuple[dict[str, str], list[str]]:
-    corpora = _anchoring_corpora(facts)
+    corpora = _anchoring_corpora(facts, include_reply=include_reply)
     verdicts: dict[str, str] = {}
     ungrounded: list[str] = []
     for fact in claims:
-        verdict = _claim_verdict(fact, corpora, file_exists=facts.file_exists)
+        creation_context, demand_context = _claim_context(facts, fact.value)
+        verdict = _claim_verdict(
+            fact,
+            corpora,
+            file_exists=facts.file_exists,
+            creation_context=creation_context,
+        )
+        if verdict == VERDICT_GROUNDED and apply_demand_guard and demand_context:
+            backing = domain_backing(facts, claim_domain(fact))
+            if backing in ("", BACKING_LEARNER_PROVIDED):
+                # Repeat-asking a fact the learner already provided, or
+                # demanding a fact no workspace/learner fact backs at all
+                # (DESIGN.md §2.5③) — the reply merely claiming it does not
+                # count as evidence.
+                verdict = VERDICT_UNGROUNDED
         verdicts[claim_key(fact.kind, fact.value)] = verdict
         if verdict == VERDICT_UNGROUNDED and fact.value not in ungrounded:
             ungrounded.append(fact.value)
     return verdicts, ungrounded
+
+
+def _collect_conflicts(
+    facts: TeachingTurnFacts,
+    claims: list[TeachingFact],
+) -> list[GroundingConflict]:
+    """Record the actionable same-domain conflicts (DESIGN.md §2.5②③).
+
+    Only a *demand* on a domain that the model merely claims (no
+    workspace/learner backing) is recorded — a reply introducing a new symbol
+    (``enumerate``) and the next step suggesting it stays clean (explicit
+    false-positive budget).
+    """
+    if not facts.reply_claims:
+        return []
+    reply_by_domain: dict[str, TeachingFact] = {}
+    for fact in facts.reply_claims:
+        reply_by_domain.setdefault(claim_domain(fact), fact)
+    conflicts: list[GroundingConflict] = []
+    seen: set[str] = set()
+    for fact in claims:
+        domain = claim_domain(fact)
+        if not domain or domain in seen:
+            continue
+        reply_claim = reply_by_domain.get(domain)
+        if reply_claim is None:
+            continue
+        _creation, demand = _claim_context(facts, fact.value)
+        if not demand:
+            continue
+        seen.add(domain)
+        conflicts.append(
+            GroundingConflict(
+                domain=domain,
+                reply_claim=reply_claim,
+                next_step_claim=fact,
+                winner=domain_backing(facts, domain) or PROVENANCE_MODEL_CLAIM,
+            )
+        )
+    return conflicts
+
+
+def _evaluate_all(
+    facts: TeachingTurnFacts,
+    next_step_claims: list[TeachingFact],
+) -> tuple[dict[str, str], list[str], list[GroundingConflict]]:
+    reply_verdicts, _ = _evaluate_claims(facts.reply_claims, facts, include_reply=False)
+    next_verdicts, ungrounded = _evaluate_claims(
+        next_step_claims,
+        facts,
+        include_reply=True,
+        apply_demand_guard=True,
+    )
+    verdicts = {**reply_verdicts, **next_verdicts}
+    return verdicts, ungrounded, _collect_conflicts(facts, next_step_claims)
 
 
 def _apply_facts_outcome(
@@ -849,15 +1074,18 @@ def _apply_facts_outcome(
     *,
     verdicts: dict[str, str],
     gate_outcome: str,
+    conflicts: list[GroundingConflict],
 ) -> None:
     """Record the decision on the facts object (single designated writer).
 
     ``TeachingTurnFacts`` is frozen against rebinding; the grounding decision
-    function is the one writer of ``verdicts`` / ``gate_outcome`` for its own
-    turn, and it writes at most once per evaluation.
+    function is the one writer of ``verdicts`` / ``conflicts`` /
+    ``gate_outcome`` for its own turn, and it writes at most once per
+    evaluation.
     """
     facts.verdicts.clear()
     facts.verdicts.update(verdicts)
+    facts.conflicts[:] = conflicts
     object.__setattr__(facts, "gate_outcome", gate_outcome)
 
 
@@ -890,19 +1118,31 @@ def evaluate_turn_grounding(
     Every symbol of every next-step claim must anchor in the turn corpora
     (reply ∪ code ∪ history ∪ workspace_verified ∪ learner_provided); file
     pointers use the injected existence checker with the ``unverifiable``
-    escape. When ``retry_generate`` is provided it is called at most once; a
-    grounded regeneration travels back in ``corrected_next_step`` (the caller
-    writes it back via ``model_copy``), an ungrounded or empty regeneration
-    downgrades to ``requires_confirmation``.
+    escape (creation instructions skip the checker); a demand/request for a
+    learner-provided fact (repeat-asking) or for a fact with no backing at all
+    (fabrication demand) is ungrounded. When ``retry_generate`` is provided it
+    is called at most once; a grounded regeneration travels back in
+    ``corrected_next_step`` (the caller writes it back via ``model_copy``) with
+    ``retry_used=True``, an ungrounded or empty regeneration downgrades to
+    ``requires_confirmation``. ``retry_used`` means "a regeneration was
+    attempted for this decision" (an empty regeneration is still an attempt) —
+    the assembly always routes its attempt through this implementation so both
+    layers agree (2026-10-13 review); the corrected outcome stays detectable
+    through ``corrected_next_step``.
 
     The decision is computed once per turn by its caller (the assembly layer
     caches it on the payload); this function is pure and deterministic, and
     performs its single facts write through ``_apply_facts_outcome``.
     """
     claims = list(facts.next_step_claims)
-    verdicts, ungrounded = _evaluate_claims(claims, facts)
+    verdicts, ungrounded, conflicts = _evaluate_all(facts, claims)
     if not ungrounded:
-        _apply_facts_outcome(facts, verdicts=verdicts, gate_outcome=OUTCOME_GROUNDED)
+        _apply_facts_outcome(
+            facts,
+            verdicts=verdicts,
+            gate_outcome=OUTCOME_GROUNDED,
+            conflicts=conflicts,
+        )
         return GroundingDecision(
             grounded=True,
             referenced_symbols=[],
@@ -920,13 +1160,16 @@ def evaluate_turn_grounding(
                 provenance=facts.memory_provenance.get("next_step", PROVENANCE_MODEL_CLAIM),
                 limit=_MAX_NEXT_STEP_CLAIMS,
             )
-            retried_verdicts, retried_ungrounded = _evaluate_claims(retried_claims, facts)
+            retried_verdicts, retried_ungrounded, retried_conflicts = _evaluate_all(
+                facts, retried_claims
+            )
             if not retried_ungrounded:
                 facts.next_step_claims[:] = retried_claims
                 _apply_facts_outcome(
                     facts,
                     verdicts=retried_verdicts,
                     gate_outcome=OUTCOME_CORRECTED,
+                    conflicts=retried_conflicts,
                 )
                 return GroundingDecision(
                     grounded=True,
@@ -935,7 +1178,12 @@ def evaluate_turn_grounding(
                     requires_confirmation=False,
                     corrected_next_step=retried_text,
                 )
-        _apply_facts_outcome(facts, verdicts=verdicts, gate_outcome=OUTCOME_DOWNGRADED)
+        _apply_facts_outcome(
+            facts,
+            verdicts=verdicts,
+            gate_outcome=OUTCOME_DOWNGRADED,
+            conflicts=conflicts,
+        )
         return GroundingDecision(
             grounded=False,
             referenced_symbols=ungrounded,
@@ -943,7 +1191,12 @@ def evaluate_turn_grounding(
             requires_confirmation=True,
             corrected_next_step=None,
         )
-    _apply_facts_outcome(facts, verdicts=verdicts, gate_outcome=OUTCOME_DOWNGRADED)
+    _apply_facts_outcome(
+        facts,
+        verdicts=verdicts,
+        gate_outcome=OUTCOME_DOWNGRADED,
+        conflicts=conflicts,
+    )
     return GroundingDecision(
         grounded=False,
         referenced_symbols=ungrounded,
@@ -954,7 +1207,11 @@ def evaluate_turn_grounding(
 
 
 def grounding_outcome(decision: GroundingDecision) -> str:
-    """Assembly-facing outcome vocabulary: grounded | corrected | downgraded."""
+    """Assembly-facing outcome vocabulary: grounded | corrected | downgraded.
+
+    ``retry_used`` records that a regeneration was attempted; ``corrected``
+    requires both the attempt and a usable corrected step.
+    """
     if decision.requires_confirmation:
         return OUTCOME_DOWNGRADED
     if decision.retry_used and decision.corrected_next_step:

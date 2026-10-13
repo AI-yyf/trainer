@@ -61,6 +61,31 @@ class TrainingReliabilityMixin:
         self._persist_structured(workspace_id)
         return dict(workspace)
 
+    def _cancel_raced_work(
+        self,
+        record: dict[str, Any],
+        structured: StructuredMemoryService,
+    ) -> bool:
+        """Did a cancel for this same work land on the slot while work ran?
+
+        The local record snapshot cannot see a cancel that was persisted while
+        ``work()`` was executing, so the finish line checks the slot — but only
+        when the slot still belongs to the same work identity (request id or
+        idempotency key), never a neighbouring request's record.
+        """
+        persisted = self._load_training_reliability(structured)
+        if not isinstance(persisted, dict):
+            return False
+        same_request = str(persisted.get("request_id") or "") == str(record.get("request_id") or "")
+        same_key = str(persisted.get("idempotency_key") or "") == str(
+            record.get("idempotency_key") or ""
+        )
+        if not (same_request or same_key):
+            return False
+        if bool(persisted.get("cancel_requested")):
+            return True
+        return str(persisted.get("phase") or "") == "cancelled"
+
     def latest_training_reliability(self, workspace_id: str) -> dict[str, Any] | None:
         structured = self._structured_for(self._resolve_workspace_for_write(workspace_id))
         record = expire_if_needed(self._load_training_reliability(structured))
@@ -214,6 +239,7 @@ class TrainingReliabilityMixin:
             record,
             snapshot_revision=next_snapshot,
             learning_phase=persisted_phase,
+            cancel_after=self._cancel_raced_work(record, structured),
         )
         workspace = self._save_training_reliability(resolved, structured, finished)
         if isinstance(result, dict):

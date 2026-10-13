@@ -38,6 +38,7 @@ from app.llm.turn_grounding import (
     build_teaching_turn_facts,
     claim_domain,
     claim_key,
+    domain_backing,
     evaluate_next_step_grounding,
     evaluate_turn_grounding,
     extract_claim_facts,
@@ -45,6 +46,7 @@ from app.llm.turn_grounding import (
     grounding_correction_instruction,
     grounding_outcome,
     is_verbatim_message_prefix,
+    memory_provenance_summary,
     next_step_is_grounded,
     sanitize_memory_anchor,
 )
@@ -146,6 +148,10 @@ def test_retry_once_with_corrective_instruction_downgrades_still_ungrounded() ->
 
     assert attempts == ["called"], "retry must run at most once"
     assert decision.grounded is False
+    # Unified retry_used semantics (2026-10-13 review): the flag means "a
+    # regeneration was attempted for this decision" — it stays True even when
+    # the regeneration was unusable; the corrected outcome is carried by
+    # corrected_next_step instead.
     assert decision.retry_used is True
     assert decision.requires_confirmation is True
     assert decision.downgraded is True
@@ -482,6 +488,7 @@ def test_empty_regeneration_is_not_a_pass() -> None:
     decision = evaluate_turn_grounding(facts, retry_generate=lambda: "")
 
     assert decision.grounded is False
+    # An empty regeneration is still an attempt (unified semantics).
     assert decision.retry_used is True
     assert decision.requires_confirmation is True
     assert decision.corrected_next_step is None
@@ -712,6 +719,355 @@ def test_grounding_outcome_vocabulary() -> None:
         grounding_outcome(GroundingDecision(grounded=False, requires_confirmation=True))
         == "downgraded"
     )
+
+
+# ---------------------------------------------------------------------------
+# R2: reply claims, domain consistency, repeat-asking, creation instructions
+# ---------------------------------------------------------------------------
+
+
+def test_creation_instruction_never_trips_the_file_checker() -> None:
+    def _all_missing(path: str) -> bool:
+        return False
+
+    facts = build_teaching_turn_facts(
+        turn_id="turn-60",
+        reply_text="",
+        code_text="",
+        history_text="",
+        user_message="",
+        next_step_text="新建 `debug_demo.py` 写一个最小复现。",
+        workspace_evidence=WorkspaceEvidence(file_exists=_all_missing),
+    )
+
+    decision = evaluate_turn_grounding(facts)
+
+    assert decision.grounded is True
+    assert facts.verdicts == {"file_path:debug_demo.py": "unverifiable"}
+
+    # A plain "look at this file" on a missing file still downgrades.
+    facts = build_teaching_turn_facts(
+        turn_id="turn-60",
+        reply_text="",
+        code_text="",
+        history_text="",
+        user_message="",
+        next_step_text="查看 `legacy_report.py` 的第 10 行。",
+        workspace_evidence=WorkspaceEvidence(file_exists=_all_missing),
+    )
+    assert evaluate_turn_grounding(facts).grounded is False
+
+
+def test_repeat_asking_learner_provided_fact_is_ungrounded() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-61",
+        reply_text="我们来定位。",
+        code_text="def add_item(item, items=[]):\n    items.append(item)\n",
+        history_text="",
+        user_message="我把失败贴一下：AssertionError，函数叫 add_item。",
+        next_step_text="把 `add_item` 的完整实现贴出来，我逐行看。",
+    )
+
+    decision = evaluate_turn_grounding(facts)
+
+    assert decision.grounded is False
+    assert decision.referenced_symbols == ["add_item"]
+    assert decision.requires_confirmation is True
+
+
+def test_demand_on_a_model_only_symbol_conflicts_and_downgrades() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-62",
+        reply_text="你的 `parse_header` 函数里需要检查边界。\n\n下一步：把 `parse_header` 发我。",
+        code_text="grid = [[0], [0]]\n",
+        history_text="",
+        user_message="",
+        next_step_text="给我 `parse_header()` 的函数名和 call site。",
+    )
+
+    decision = evaluate_turn_grounding(facts)
+
+    assert decision.grounded is False
+    assert decision.referenced_symbols == ["parse_header"]
+    assert [conflict.domain for conflict in facts.conflicts] == ["parse_header"]
+    assert facts.conflicts[0].winner == "model_claim"
+    assert facts.visible_next_step
+
+
+def test_new_symbol_introduction_is_never_a_conflict() -> None:
+    """Explicit false-positive budget: teaching a new symbol stays grounded."""
+    facts = build_teaching_turn_facts(
+        turn_id="turn-63",
+        reply_text="可以用 `enumerate` 直接在循环里拿到索引。",
+        code_text="xs = [1, 2]\n",
+        history_text="",
+        user_message="",
+        next_step_text="用 `enumerate` 打印每个索引。",
+    )
+
+    decision = evaluate_turn_grounding(facts)
+
+    assert decision.grounded is True
+    assert facts.conflicts == []
+
+
+def test_explanation_request_is_not_a_demand() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-64",
+        reply_text="我们看 `find` 的边界。",
+        code_text="def find(xs, target):\n    pass\n",
+        history_text="",
+        user_message="",
+        next_step_text="给我讲讲 `find` 的边界思路。",
+    )
+
+    assert evaluate_turn_grounding(facts).grounded is True
+
+
+def test_domain_backing_ranking() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-65",
+        reply_text="",
+        code_text="def add_item(item, items=[]):\n    pass\n",
+        history_text="",
+        user_message="",
+        next_step_text="",
+        workspace_evidence={"verified_facts": [{"kind": "symbol", "value": "load_dataset"}]},
+    )
+
+    assert domain_backing(facts, "add_item") == "learner_provided"
+    assert domain_backing(facts, "load_dataset") == "workspace_verified"
+    assert domain_backing(facts, "ghost_function") == ""
+
+
+def test_reply_claim_verdicts_are_diagnostic_only() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-66",
+        reply_text="把 `grid` 的行分开看，用 `independent_row` 创建。",
+        code_text="grid = [[0], [0]]\n",
+        history_text="",
+        user_message="",
+        next_step_text="再对 `grid` 做一次实验。",
+    )
+
+    decision = evaluate_turn_grounding(facts)
+
+    assert decision.grounded is True
+    assert facts.verdicts["symbol:grid"] == "grounded"
+    assert facts.verdicts["symbol:independent_row"] == "ungrounded"
+
+
+def test_memory_provenance_summary_carries_outcome_and_conflicts() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-67",
+        reply_text="你的 `parse_header` 函数里……",
+        code_text="grid = 1\n",
+        history_text="",
+        user_message="",
+        next_step_text="给我 `parse_header()` 的函数名。",
+    )
+    decision = evaluate_turn_grounding(facts)
+
+    summary = memory_provenance_summary(facts, decision)
+
+    assert summary["grounding_outcome"] == "downgraded"
+    assert summary["conflicted_claims"] == "parse_header"
+    assert summary["summary"] == "model_claim"
+
+
+# ---------------------------------------------------------------------------
+# R2: field-level memory admission (MemoryService.record_turn_reflection)
+# ---------------------------------------------------------------------------
+
+
+def _memory_service(tmp_path: Path) -> MemoryService:
+    return MemoryService(TrainerRepository(tmp_path / "admission.db"))
+
+
+def _mastery_scores(service: MemoryService, workspace_id: str) -> dict[str, float]:
+    return {
+        key: record.score
+        for key, record in service._structured_for(workspace_id)._mastery.items()
+    }
+
+
+def test_record_turn_reflection_downgrade_never_writes_the_step(tmp_path: Path) -> None:
+    service = _memory_service(tmp_path)
+
+    service.record_turn_reflection(
+        workspace_id="workspace-admission-downgrade",
+        session_id="session-admission",
+        user_message="看报错",
+        scenario="debug_loop",
+        focus_area="binary-search",
+        summary="我们定位了边界问题。",
+        next_step="给我 `parse_header()` 的函数名。",
+        memory_provenance={
+            "grounding_outcome": "downgraded",
+            "conflicted_claims": "parse_header",
+            "summary": "model_claim",
+            "next_step": "model_claim",
+            "focus": "model_claim",
+        },
+    )
+
+    snapshot = service.snapshot("workspace-admission-downgrade")
+    workspace = snapshot.workspace
+    assert workspace.get("latest_coach_next_step") == ""
+    assert workspace.get("latest_turn_next_step") == ""
+    assert (workspace.get("active_thread") or {}).get("next_step") == ""
+    assert workspace.get("latest_coach_grounding_outcome") == "downgraded"
+    assert workspace.get("latest_coach_provenance") == {
+        "summary": "model_claim",
+        "next_step": "model_claim",
+        "focus": "model_claim",
+    }
+    assert _mastery_scores(service, "workspace-admission-downgrade") == {}
+
+
+def test_record_turn_reflection_mastery_requires_fact_backing(tmp_path: Path) -> None:
+    service = _memory_service(tmp_path)
+
+    service.record_turn_reflection(
+        workspace_id="workspace-admission-mastery",
+        session_id="session-admission",
+        user_message="看报错",
+        scenario="debug_loop",
+        focus_area="binary-search",
+        summary="定位了边界问题。",
+        next_step="再对 `grid` 做一次实验。",
+        memory_provenance={
+            "grounding_outcome": "grounded",
+            "summary": "model_claim",
+            "next_step": "model_claim",
+            "focus": "learner_provided",
+        },
+    )
+    mastery = _mastery_scores(service, "workspace-admission-mastery")
+    assert mastery["binary-search"] > 0
+    assert mastery["binary-search:next-step"] > 0
+
+    service.record_turn_reflection(
+        workspace_id="workspace-admission-model-claim",
+        session_id="session-admission",
+        user_message="看报错",
+        scenario="debug_loop",
+        focus_area="binary-search",
+        summary="定位了边界问题。",
+        next_step="再对 `grid` 做一次实验。",
+        memory_provenance={
+            "grounding_outcome": "grounded",
+            "summary": "model_claim",
+            "next_step": "model_claim",
+            "focus": "model_claim",
+        },
+    )
+    # DESIGN.md §2.7: a pure model-claim focus never advances mastery.
+    assert _mastery_scores(service, "workspace-admission-model-claim") == {}
+
+
+def test_record_turn_reflection_local_fallback_writes_no_focus(tmp_path: Path) -> None:
+    service = _memory_service(tmp_path)
+
+    service.record_turn_reflection(
+        workspace_id="workspace-admission-fallback",
+        session_id="session-admission",
+        user_message="看报错",
+        scenario="debug_loop",
+        focus_area="binary-search",
+        summary="s",
+        next_step="n",
+        memory_provenance={
+            "grounding_outcome": "recovery_override",
+            "summary": "local_fallback",
+            "next_step": "local_fallback",
+            "focus": "local_fallback",
+        },
+    )
+
+    snapshot = service.snapshot("workspace-admission-fallback")
+    assert snapshot.workspace.get("latest_coach_focus_area") == ""
+    assert snapshot.workspace.get("latest_turn_focus_area") == ""
+    assert _mastery_scores(service, "workspace-admission-fallback") == {}
+
+
+def test_record_turn_reflection_strips_conflicted_claims(tmp_path: Path) -> None:
+    service = _memory_service(tmp_path)
+
+    service.record_turn_reflection(
+        workspace_id="workspace-admission-strip",
+        session_id="session-admission",
+        user_message="看报错",
+        scenario="debug_loop",
+        focus_area="lesson",
+        summary="你定义了 parse_header 并完成了检查。",
+        next_step="打开 lesson.py。",
+        memory_provenance={
+            "grounding_outcome": "downgraded",
+            "conflicted_claims": "parse_header",
+            "summary": "model_claim",
+            "next_step": "model_claim",
+            "focus": "learner_provided",
+        },
+    )
+
+    snapshot = service.snapshot("workspace-admission-strip")
+    summary = str(snapshot.workspace.get("latest_coach_summary") or "")
+    assert "parse_header" not in summary
+    assert "你定义了" in summary
+    # A model-claim summary never raises the verified result (§2.7).
+    assert snapshot.workspace.get("latest_turn_verified_result") == ""
+
+
+def test_record_turn_reflection_without_provenance_keeps_legacy_behaviour(
+    tmp_path: Path,
+) -> None:
+    service = _memory_service(tmp_path)
+
+    service.record_turn_reflection(
+        workspace_id="workspace-admission-legacy",
+        session_id="session-admission",
+        user_message="看报错",
+        scenario="debug_loop",
+        focus_area="legacy-focus",
+        summary="这次通过了。",
+        next_step="下一步继续。",
+    )
+
+    snapshot = service.snapshot("workspace-admission-legacy")
+    assert snapshot.workspace.get("latest_coach_next_step") == "下一步继续。"
+    assert snapshot.workspace.get("latest_turn_verified_result") == "这次通过了。"
+    assert _mastery_scores(service, "workspace-admission-legacy")["legacy-focus"] > 0
+
+
+def test_memory_provenance_summary_feeds_record_turn_reflection(tmp_path: Path) -> None:
+    """The two halves of the §2.6 interface compose end to end."""
+    facts = build_teaching_turn_facts(
+        turn_id="turn-68",
+        reply_text="你的 `parse_header` 函数里……",
+        code_text="grid = 1\n",
+        history_text="",
+        user_message="看报错",
+        next_step_text="给我 `parse_header()` 的函数名。",
+    )
+    decision = evaluate_turn_grounding(facts)
+    service = _memory_service(tmp_path)
+
+    service.record_turn_reflection(
+        workspace_id="workspace-admission-interface",
+        session_id="session-admission",
+        user_message="看报错",
+        scenario="debug_loop",
+        focus_area="parse_header",
+        summary="我们核对 parse_header。",
+        next_step=str(facts.next_step_text),
+        memory_provenance=memory_provenance_summary(facts, decision),
+    )
+
+    snapshot = service.snapshot("workspace-admission-interface")
+    assert snapshot.workspace.get("latest_coach_next_step") == ""
+    assert snapshot.workspace.get("latest_coach_grounding_outcome") == "downgraded"
+    assert "parse_header" not in str(snapshot.workspace.get("latest_coach_summary") or "")
 
 
 # ---------------------------------------------------------------------------

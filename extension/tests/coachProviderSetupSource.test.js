@@ -7,6 +7,15 @@ const path = require('node:path');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const recoveryCopySourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'providerRecoveryCopy.ts');
+// Round 2: the provider draft/focus state moved into the connection controller.
+const providerControllerSourcePath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'app',
+  'useProviderConnectionController.ts',
+);
 
 function providerRecoveryLocaleSection(source, language) {
   const copyStart = source.indexOf('const providerRecoveryCopy');
@@ -101,7 +110,7 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
   assert.match(source, /label: providerSetupState\.actionLabel,/);
   assert.match(
     source,
-    /const openProviderSetup = useCallback\(\(\) => \{[\s\S]{0,200}?useWorkbenchState\.getState\(\)\.requestSettingsCategory\("connection"\);\s*setActiveView\("settings"\);\s*if \(!data\.providerConfig\.apiKeyConfigured\) \{\s*setProviderApiKeyFocusRequest\(\(request\) => request \+ 1\);/,
+    /const openProviderSetup = useCallback\(\(\) => \{[\s\S]{0,200}?useWorkbenchState\.getState\(\)\.requestSettingsCategory\("connection"\);\s*setActiveView\("settings"\);\s*if \(!data\.providerConfig\.apiKeyConfigured\) \{\s*requestProviderApiKeyFocus\(\);/,
   );
   assert.doesNotMatch(source, /coach-empty-state__truth-rail/);
   assert.doesNotMatch(source, /moreContent=\{/);
@@ -235,11 +244,13 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
 
 test('provider test action sends an unsaved draft to the isolated test path', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
+  const controller = fs.readFileSync(providerControllerSourcePath, 'utf8');
 
-  assert.match(source, /import \{ normalizeProviderProtocol \} from "\.\.\/\.\.\/\.\.\/\.\.\/shared\/src\/providerProtocols";/);
-  assert.match(source, /const providerDraftHasUnsavedApiKey = providerDraft\.apiKey\.trim\(\)\.length > 0;/);
-  assert.match(source, /const providerDraftHasChanges = useMemo\(/);
-  assert.match(source, /normalizeProviderProtocol\(providerDraft\.protocol\) !==/);
+  // The draft comparison lives in the controller now; App keeps the relay that
+  // sends the unsaved draft to the isolated test path.
+  assert.match(controller, /normalizeProviderProtocol\(value as ProviderDraft\["protocol"\]\) !==/);
+  assert.match(controller, /const providerDraftHasUnsavedApiKey = providerDraft\.apiKey\.trim\(\)\.length > 0;/);
+  assert.match(controller, /const providerDraftHasChanges = useMemo\(/);
   assert.match(
     source,
     /browserPreview\.testBrowserPreviewProvider\(\s*providerDraftHasChanges \? providerSavePayload : undefined,\s*previewSessionId,\s*\)/,

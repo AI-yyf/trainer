@@ -46,7 +46,12 @@ test('coach message paths keep the selected language all the way to code rendere
 
   assert.doesNotMatch(bubbleSource, /narrowLanguage/);
   assert.match(bubbleSource, /<MessageRichContent[\s\S]*?language=\{language\}/);
-  assert.match(bubbleSource, /<CoachMessageParts parts=\{visibleParts \?\? \[\]\} language=\{language\}/);
+  // The confirmation marker prop sits between parts and language; the language
+  // itself must still reach CoachMessageParts for the code renderers.
+  assert.match(
+    bubbleSource,
+    /<CoachMessageParts[\s\S]*?parts=\{visibleParts \?\? \[\]\}[\s\S]*?language=\{language\}/,
+  );
   assert.match(bubbleSource, /<CoachArtifactBlock[\s\S]*?language=\{language\}/);
   assert.match(partsSource, /language\?: ComposerLanguage;/);
   assert.match(artifactSource, /language\?: ComposerLanguage;/);

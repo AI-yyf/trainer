@@ -620,6 +620,7 @@ export function mergeSessionMessage(
       current.nextStepHint,
       incomingWorkspaceId,
       currentWorkspaceId,
+      turnRequiresConfirmationFrom(record, snapshot),
     ),
     ...mapReviewQueueChrome(
       snapshot?.review_queue_summary ?? snapshot?.reviewQueueSummary,
@@ -702,6 +703,7 @@ export function mergePlanResult(
       current.nextStepHint,
       incomingWorkspaceId,
       currentWorkspaceId,
+      turnRequiresConfirmationFrom(record, snapshot),
     ),
     suggestedActions: mapSuggestedActions(
       firstPresentRecordValue(record, ['suggested_actions', 'suggestedActions']) ??
@@ -1111,6 +1113,7 @@ export function mergeMemorySummary(
       current.nextStepHint,
       incomingWorkspaceId,
       currentWorkspaceId,
+      turnRequiresConfirmationFrom(asRecord(payload), snapshot),
     ),
     ...mapReviewQueueChrome(
       snapshot?.review_queue_summary ?? snapshot?.reviewQueueSummary,
@@ -3068,6 +3071,7 @@ function mapNextStepHint(
   fallback: BootstrapData['nextStepHint'],
   incomingWorkspaceId?: string,
   previousWorkspaceId?: string,
+  turnRequiresConfirmation?: boolean,
 ): BootstrapData['nextStepHint'] {
   const workspaceChanged = workspaceIdsChanged(incomingWorkspaceId, previousWorkspaceId);
   if (workspaceChanged) {
@@ -3101,7 +3105,32 @@ function mapNextStepHint(
     source: normalized.source ?? (useFallback ? fallback?.source : undefined),
     continueIn: normalized.continueIn ?? (useFallback ? fallback?.continueIn : undefined),
     verification: normalized.verification ?? (useFallback ? fallback?.verification : undefined),
+    requiresConfirmation:
+      turnRequiresConfirmation ?? (useFallback ? fallback?.requiresConfirmation : undefined),
   } satisfies NextStepHintView;
+}
+
+/**
+ * Turn-level grounding downgrade marker, read from the payload's coach turn or
+ * the agent_meta stamp (§2.5⑤). Shared by the next-step-hint carriers so a
+ * downgraded turn shows the marker however the hint is populated.
+ */
+function turnRequiresConfirmationFrom(
+  record: UnknownRecord | undefined,
+  snapshot: UnknownRecord | undefined,
+): boolean | undefined {
+  const coachTurnRecord =
+    asRecord(record?.coach_turn) ??
+    asRecord(record?.coachTurn) ??
+    asRecord(snapshot?.coach_turn) ??
+    asRecord(snapshot?.coachTurn);
+  const agentMeta = asRecord(record?.agent_meta ?? record?.agentMeta ?? record?.agent);
+  return (
+    asBoolean(coachTurnRecord?.requires_confirmation) ??
+    asBoolean(coachTurnRecord?.requiresConfirmation) ??
+    asBoolean(agentMeta?.next_step_requires_confirmation) ??
+    asBoolean(agentMeta?.nextStepRequiresConfirmation)
+  );
 }
 
 function deriveCurrentStageFromSnapshot(snapshot: UnknownRecord | undefined) {
@@ -6250,6 +6279,10 @@ function mapCoachTurn(
         : useFallback
           ? fallback?.backgroundMode
           : undefined,
+    requiresConfirmation:
+      asBoolean(record.requires_confirmation) ??
+      asBoolean(record.requiresConfirmation) ??
+      (useFallback ? fallback?.requiresConfirmation : undefined),
   };
 }
 

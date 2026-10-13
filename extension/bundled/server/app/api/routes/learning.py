@@ -17,6 +17,7 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
     router = APIRouter(tags=["learning"])
 
     current_workspace_id = deps.current_workspace_id
+    trusted_write_workspace_id = deps.trusted_write_workspace_id
     current_snapshot = deps.current_snapshot
     provider_config_from_payload = deps.provider_config_from_payload
     provider_api_key_from_payload = deps.provider_api_key_from_payload
@@ -58,7 +59,7 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         payload: dict | None = None,
     ) -> dict[str, object]:
         payload = payload or {}
-        resolved_workspace_id = current_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
+        resolved_workspace_id = trusted_write_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
         plan, stage = _resolve_stage(resolved_workspace_id, plan_id, stage_id)
         stage_exercises = list(getattr(stage, "exercises", None) or [])
         if not stage_exercises:
@@ -129,7 +130,7 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         principle = str(payload.get("principle") or "").strip()
         if not principle:
             raise HTTPException(status_code=422, detail="principle is required.")
-        resolved_workspace_id = current_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
+        resolved_workspace_id = trusted_write_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
         from ...pedagogy.stage_material_composer import compose_principle_explainer_asset
 
         asset = compose_principle_explainer_asset(
@@ -147,7 +148,7 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         card_id = str(payload.get("card_id") or payload.get("cardId") or "").strip()
         if not card_id:
             raise HTTPException(status_code=422, detail="card_id is required.")
-        resolved_workspace_id = current_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
+        resolved_workspace_id = trusted_write_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
         try:
             result = runtime.memory_service.rebind_training_handoff(resolved_workspace_id, card_id)
         except LookupError as exc:
@@ -183,7 +184,7 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         # A stable per-run key lets an authorized resend replay through the
         # training-reliability ledger instead of double-recording.
         idempotency_key = str(payload.get("idempotency_key") or payload.get("idempotencyKey") or "").strip()
-        resolved_workspace_id = current_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
+        resolved_workspace_id = trusted_write_workspace_id(session_id=payload.get("session_id"), workspace_id=payload.get("workspace_id"))
         verification_artifact = payload.get("verification_artifact")
         provisioning = runtime.get_project_provisioning(resolved_workspace_id)
         project_path = provisioning.project_path if provisioning is not None else runtime.resolve_workspace_path(resolved_workspace_id) or ""
