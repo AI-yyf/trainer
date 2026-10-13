@@ -1,8 +1,14 @@
 import { useMemo } from "react";
 import {
+  leftoverResourceSandboxStateIsNotLive,
   leftoverSettingsLearnerProjectOnboardingIsNotLive,
   leftoverSettingsProfileRhythmIsNotLive,
 } from "../../../../../shared/src/planOrientationGovernance";
+import { resolveEffectiveTrustState } from "../../../../../shared/src/onboarding";
+import {
+  readWorkspaceTrustStateFromCapabilitySummary,
+  type WorkspaceTrustState,
+} from "../../../../../shared/src/workspaceTrustState";
 import { planRuntimeStatusFromRecovery } from "../../../../../shared/src/workspaceRecoveryGovernance";
 import type { TrainerOperationMessage } from "../../../../../shared/src/protocol";
 import { trainerCommands } from "../../../../../shared/src/commands";
@@ -473,5 +479,142 @@ export function useCoachSettingsViewState({
         payload: { commandId: "trainer.memory.refresh" },
       }),
     onShareSession,
+  };
+}
+
+/**
+ * Pure coach-chrome label formatters (verbatim from App's module scope,
+ * props-debt round: the Settings boundary derives its summary strings from the
+ * store with the exact same helpers App uses, so both surfaces can never
+ * drift). No copy changed — only the home of the two helpers.
+ */
+export function learnerSignalLabel(
+  value: NonNullable<ReturnType<typeof useWorkbenchState.getState>["data"]["coachingState"]>["learnerSignal"] | undefined,
+  language: ComposerLanguage,
+): string {
+  if (value === "blocked") {
+    return appUiCopy(language, "卡住");
+  }
+  if (value === "uncertain") {
+    return appUiCopy(language, "不确定");
+  }
+  if (value === "curious") {
+    return appUiCopy(language, "好奇");
+  }
+  return appUiCopy(language, "稳定");
+}
+
+export function formatReviewDueLabel(value: string | undefined, language: ComposerLanguage): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return language === "zh-CN"
+    ? date.toLocaleString("zh-CN", {
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : date.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+}
+
+/**
+ * Host-owned facts the Settings shell used to receive as props, now derived
+ * from the store with App's exact expressions (props-debt round: settings
+ * boundary). Every value is a pure function of store data plus the shared
+ * leftover governance helpers, so the derivation is behavior-identical to
+ * App's inline computation — and App keeps its own copies for the surfaces it
+ * still owns (send gating, onboarding wizard, plan rail).
+ */
+export interface CoachSettingsHostFacts {
+  /** Session-scoped settings identity (App parity: `settingsWorkspaceId`). */
+  settingsWorkspaceId: string | undefined;
+  /** Leftover-gated sandbox state (App parity: `liveSandboxState`). */
+  liveSandboxState:
+    | import("../../lib/types").SandboxState
+    | undefined;
+  /** Live host/sidecar trust; leftover-not-live passes undefined → unknown. */
+  effectiveWorkspaceTrustState: WorkspaceTrustState | string | null | undefined;
+  /** Localized learner signal (App parity: `coachSignal`). */
+  coachSignal: string | undefined;
+  /** Localized next review due (App parity: `nextReviewDue`). */
+  nextReviewDue: string | undefined;
+}
+
+export function useCoachSettingsHostFacts(): CoachSettingsHostFacts {
+  const memoryWorkspace = useWorkbenchState((state) => state.data.memory.workspace);
+  const sandboxState = useWorkbenchState((state) => state.data.memory.sandboxState);
+  const workspaceTrainingState = useWorkbenchState(
+    (state) => state.data.workspaceTrainingState,
+  );
+  const sessionHistoryRestored = useWorkbenchState(
+    (state) => state.data.sessionHistoryRestored,
+  );
+  const plan = useWorkbenchState((state) => state.data.plan);
+  const planRuntimeStatus = useWorkbenchState((state) => state.data.planRuntimeStatus);
+  const providerConfig = useWorkbenchState((state) => state.data.providerConfig);
+  const coachTurnSignal = useWorkbenchState((state) => state.data.coachTurn?.learnerSignal);
+  const coachingStateSignal = useWorkbenchState(
+    (state) => state.data.coachingState?.learnerSignal,
+  );
+  const nextReviewDueRaw = useWorkbenchState((state) => state.data.nextReviewDue);
+  const language = useWorkbenchState((state) => state.layout.composerLanguage);
+
+  // App parity: the leftover chrome identity decides whether the sandbox state
+  // is live or must stay undefined (fail-closed, never invented).
+  const recoveredRuntime =
+    planRuntimeStatus?.recovered === true ||
+    Boolean(
+      planRuntimeStatusFromRecovery(
+        memoryWorkspace?.latestPlanRuntime,
+        memoryWorkspace?.workspaceId ?? workspaceTrainingState?.workspaceId ?? "",
+      ),
+    );
+  const runtimeCurrentThread = planRuntimeStatus?.currentMainThread;
+  const leftoverChromeIdentity = {
+    recovered: recoveredRuntime,
+    runtimeCurrentStep: planRuntimeStatus?.currentStep ?? runtimeCurrentThread?.currentStep,
+    runtimePlanId: memoryWorkspace?.latestPlanRuntime?.planId,
+    planId: plan.id,
+    planCurrentStep: plan.currentStep,
+  };
+  const leftoverResourceSandboxStateNotLive = leftoverResourceSandboxStateIsNotLive(
+    leftoverChromeIdentity,
+  );
+  const liveSandboxState = leftoverResourceSandboxStateNotLive ? undefined : sandboxState;
+  // App parity: first runs have no capability summary yet; the host window
+  // trust verdict fills the gap so a trusted window is never asked to trust
+  // itself again.
+  const effectiveWorkspaceTrustState = resolveEffectiveTrustState(
+    readWorkspaceTrustStateFromCapabilitySummary(
+      liveSandboxState?.capabilitySummary as Record<string, unknown> | undefined,
+    ),
+    memoryWorkspace?.windowTrusted === true,
+  );
+  const settingsWorkspaceId =
+    memoryWorkspace?.workspaceId ??
+    workspaceTrainingState?.workspaceId ??
+    providerConfig.lastTestResult?.workspaceId;
+  const resolvedCoachSignal = coachTurnSignal ?? coachingStateSignal;
+
+  return {
+    settingsWorkspaceId,
+    liveSandboxState,
+    effectiveWorkspaceTrustState,
+    coachSignal: resolvedCoachSignal
+      ? learnerSignalLabel(resolvedCoachSignal, language)
+      : undefined,
+    nextReviewDue: formatReviewDueLabel(nextReviewDueRaw, language),
   };
 }

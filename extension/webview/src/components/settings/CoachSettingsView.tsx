@@ -37,6 +37,7 @@ import {
 import {
   providerModelTokenLimitsKey,
   readProviderModelTokenLimit,
+  resolveProviderModelTokenState,
   withProviderModelTokenLimit,
 } from "../../../../../shared/src/providerModelTokenLimits";
 import {
@@ -100,7 +101,8 @@ import { trainerCommands } from "../../../../../shared/src/commands";
 import { remoteSupportStateView, REMOTE_SUPPORT_COPY } from "../../lib/i18n/segments/remoteSupportCopy";
 import { settingsText } from "./settingsText";
 import { languageIntegrityText } from "./languageIntegrityCopy";
-import { useCoachSettingsViewState } from "./useCoachSettingsViewState";
+import { useCoachSettingsViewState, useCoachSettingsHostFacts } from "./useCoachSettingsViewState";
+import { useProviderConnection } from "../../app/providerConnectionContext";
 import { postMessage as postWebviewMessage } from "../../lib/vscode";
 import {
   trainerSkillCatalog,
@@ -1423,14 +1425,66 @@ export interface CoachSettingsLabels {
 }
 
 /**
- * §props-debt: store-resident facts (provider, connection, workspace/memory,
- * layout knobs, leftover-gated profile fields) and pure `command/execute`
- * relays are selected inside `useCoachSettingsViewState`; only values App
- * itself owns stay props here (provider draft controller state, per-section
- * action status, capability verdict, coach chrome, and the callbacks closing
- * over App-local state such as the preview session and settings actions).
+ * App-facing Settings boundary (props-debt round: settings shell).
+ *
+ * App keeps only what it genuinely owns at this boundary: the session chrome
+ * it renders itself (`skillSharing`, `sectionRequest`), the capability verdict
+ * and image-input state scoped to App's provider-test clock, the per-section
+ * action status derived from App's settings action state, and the callbacks
+ * closing over App-local state (preview session, settings actions, the
+ * debounced coach-settings persist).
+ *
+ * Everything else this view used to receive as props is now derived inside the
+ * shell below: workspace/session facts (`workspaceId`, `workspaceAuthority`,
+ * `workspaceTrustState`) through `useCoachSettingsHostFacts` — the same pure
+ * expressions App applies — the coach-chrome summary strings through the same
+ * shared label helpers, and the connection draft/speed-test/focus state through
+ * the App-published provider-connection context (one controller instance, so
+ * the unsaved draft survives Settings unmounts exactly as before).
  */
 export interface CoachSettingsViewProps {
+  /** Deep-linked section request (App-owned settings state). */
+  sectionRequest?: { category: SettingsSectionId; requestId: number; skillTrigger?: string };
+  /** App-rendered skill-sharing chrome (App JSX, guard-pinned). */
+  skillSharing?: ReactNode;
+  /** Capability verdict scoped to App's provider-test clock (App-shared). */
+  capabilityVerdict: TrainerCapabilityVerdict;
+  providerImageInputState?: ProviderImageInputState;
+  /** App-derived coach state summary (shared with App's own rail). */
+  coachStateSummary?: ReactNode;
+  /** App-derived review rhythm summary (shared with App's plan rail). */
+  reviewRhythmSummary?: string;
+  /** Per-section action status derived from App's settings action state. */
+  providerStatus?: SettingsSectionStatus;
+  coachDefaultsStatus?: SettingsSectionStatus;
+  workspaceControlStatus?: SettingsSectionStatus;
+  providerSaveBusy?: boolean;
+  companionInstallState?: import("../../../../../shared/src/companionInstallState").CompanionInstallState;
+  /**
+   * App-owned debounced persist trigger for the layout knobs the view flips
+   * through useCoachSettingsViewState (the old `autosaving(...)` wrappers).
+   */
+  onCoachSettingsMutated?: () => void;
+  onSaveCoachSettings?: () => void;
+  onSaveProvider?: () => void;
+  onSaveProviderProfile?: () => void;
+  onUseProviderTemplateLabel?: (templateLabel: string) => void;
+  onRefreshProviderProfiles?: () => void;
+  onSwitchProviderProfile?: (profileId: string) => void;
+  onRefreshProviderModels?: () => void;
+  onTestProvider?: () => void;
+  onRestartSidecar?: () => void;
+  onClearProvider?: () => void;
+  onOpenConfig?: () => void;
+  onResetDefaults?: () => void;
+}
+
+/**
+ * Full sheet contract (renamed from the former single `CoachSettingsViewProps`):
+ * the shell below resolves the sunk values and hands the sheet the exact same
+ * fields as before, so the sheet body is untouched.
+ */
+interface CoachSettingsViewSheetProps {
   workspaceId?: string;
   capabilityVerdict: TrainerCapabilityVerdict;
   providerImageInputState?: ProviderImageInputState;
@@ -2720,7 +2774,160 @@ function describeLanguageIntegrityFact(input: {
   };
 }
 
+/**
+ * Settings shell (the exported, lazily loaded view). Derives the sunk values
+ * from the store and App's published connection instance, then renders the
+ * sheet with the exact same fields it always received.
+ */
 export function CoachSettingsView({
+  sectionRequest,
+  skillSharing,
+  capabilityVerdict,
+  providerImageInputState,
+  coachStateSummary,
+  reviewRhythmSummary,
+  providerStatus,
+  coachDefaultsStatus,
+  workspaceControlStatus,
+  providerSaveBusy,
+  companionInstallState,
+  onCoachSettingsMutated,
+  onSaveCoachSettings,
+  onSaveProvider,
+  onSaveProviderProfile,
+  onUseProviderTemplateLabel,
+  onRefreshProviderProfiles,
+  onSwitchProviderProfile,
+  onRefreshProviderModels,
+  onTestProvider,
+  onRestartSidecar,
+  onClearProvider,
+  onOpenConfig,
+  onResetDefaults,
+}: CoachSettingsViewProps) {
+  // App's single provider-connection controller instance (draft, speed test,
+  // API-key focus): the same instance App's composer and deep links use.
+  const {
+    providerDraft,
+    setProviderDraft,
+    providerApiKeyFocusRequest,
+    providerSpeedTestResults,
+    providerSpeedTestPending,
+    runProviderSpeedTest,
+  } = useProviderConnection();
+  // Host-owned workspace/session facts, derived with App's exact expressions.
+  const {
+    settingsWorkspaceId,
+    liveSandboxState,
+    effectiveWorkspaceTrustState,
+    coachSignal,
+    nextReviewDue,
+  } = useCoachSettingsHostFacts();
+  return (
+    <CoachSettingsViewSheet
+      sectionRequest={sectionRequest}
+      skillSharing={skillSharing}
+      capabilityVerdict={capabilityVerdict}
+      providerImageInputState={providerImageInputState}
+      coachStateSummary={coachStateSummary}
+      reviewRhythmSummary={reviewRhythmSummary}
+      providerStatus={providerStatus}
+      coachDefaultsStatus={coachDefaultsStatus}
+      workspaceControlStatus={workspaceControlStatus}
+      providerSaveBusy={providerSaveBusy}
+      companionInstallState={companionInstallState}
+      onCoachSettingsMutated={onCoachSettingsMutated}
+      onSaveCoachSettings={onSaveCoachSettings}
+      onSaveProvider={onSaveProvider}
+      onSaveProviderProfile={onSaveProviderProfile}
+      onUseProviderTemplateLabel={onUseProviderTemplateLabel}
+      onRefreshProviderProfiles={onRefreshProviderProfiles}
+      onSwitchProviderProfile={onSwitchProviderProfile}
+      onRefreshProviderModels={onRefreshProviderModels}
+      onTestProvider={onTestProvider}
+      onRestartSidecar={onRestartSidecar}
+      onClearProvider={onClearProvider}
+      onOpenConfig={onOpenConfig}
+      onResetDefaults={onResetDefaults}
+      workspaceId={settingsWorkspaceId}
+      workspaceAuthority={liveSandboxState?.authority}
+      workspaceTrustState={effectiveWorkspaceTrustState}
+      className="settings-pane"
+      coachSignal={coachSignal}
+      nextReviewDue={nextReviewDue}
+      providerDraft={providerDraft}
+      providerApiKeyFocusRequest={providerApiKeyFocusRequest}
+      providerSpeedTestResults={providerSpeedTestResults}
+      providerSpeedTestPending={providerSpeedTestPending}
+      onSpeedTestEndpoints={runProviderSpeedTest}
+      onProviderDraftChange={(patch) => {
+        setProviderDraft((current) => {
+          const hasProtocol = Object.prototype.hasOwnProperty.call(patch, "protocol");
+          const hasBaseUrl = Object.prototype.hasOwnProperty.call(patch, "baseUrl");
+          const hasModel = Object.prototype.hasOwnProperty.call(patch, "model");
+          const hasModelTokenLimits = Object.prototype.hasOwnProperty.call(patch, "modelTokenLimits");
+          const hasContextWindowTokens = Object.prototype.hasOwnProperty.call(
+            patch,
+            "contextWindowTokens",
+          );
+          const hasMaxOutputTokens = Object.prototype.hasOwnProperty.call(patch, "maxOutputTokens");
+          const nextProtocol = hasProtocol
+            ? normalizeProviderProtocol(patch.protocol) ?? current.protocol
+            : current.protocol;
+          const nextBaseUrl =
+            hasBaseUrl && typeof patch.baseUrl === "string" ? patch.baseUrl : current.baseUrl;
+          const normalizedCurrentBaseUrl = current.baseUrl.trim().replace(/\/+$/, "");
+          const normalizedNextBaseUrl = nextBaseUrl.trim().replace(/\/+$/, "");
+          const transportChanged =
+            (hasProtocol && normalizeProviderProtocol(current.protocol) !== nextProtocol) ||
+            (hasBaseUrl && normalizedCurrentBaseUrl !== normalizedNextBaseUrl);
+
+          if (transportChanged) {
+            return {
+              ...current,
+              ...patch,
+              protocol: nextProtocol,
+              model: "",
+              contextWindowTokens: undefined,
+              maxOutputTokens: undefined,
+              modelTokenLimits: undefined,
+              catalogModels: [],
+            };
+          }
+
+          if (!hasModel && !hasModelTokenLimits && !hasContextWindowTokens && !hasMaxOutputTokens) {
+            return {
+              ...current,
+              ...patch,
+            };
+          }
+
+          const nextModel =
+            hasModel && typeof patch.model === "string" ? patch.model : current.model;
+          const tokenState = resolveProviderModelTokenState(current, nextModel, {
+            modelTokenLimits: hasModelTokenLimits ? patch.modelTokenLimits : current.modelTokenLimits,
+            hasModelTokenLimits,
+            contextWindowTokens: patch.contextWindowTokens,
+            maxOutputTokens: patch.maxOutputTokens,
+            hasContextWindowTokens,
+            hasMaxOutputTokens,
+          });
+
+          return {
+            ...current,
+            ...patch,
+            model: nextModel,
+            contextWindowTokens: tokenState.contextWindowTokens,
+            maxOutputTokens: tokenState.maxOutputTokens,
+            modelTokenLimits: tokenState.modelTokenLimits,
+          };
+        });
+      }}
+    />
+  );
+}
+
+function CoachSettingsViewSheet({
   workspaceId,
   capabilityVerdict,
   providerImageInputState,
@@ -2758,7 +2965,7 @@ export function CoachSettingsView({
   onClearProvider,
   onOpenConfig,
   onResetDefaults,
-}: CoachSettingsViewProps) {
+}: CoachSettingsViewSheetProps) {
   // §props-debt: store-resident facts, layout knobs, leftover-gated profile
   // fields and pure command relays resolve through the selector hook instead
   // of props; the identifiers below keep their historical names so the rest

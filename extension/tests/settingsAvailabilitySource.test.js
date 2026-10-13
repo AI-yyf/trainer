@@ -120,7 +120,10 @@ test('settings receives and renders the final capability verdict without replaci
   assert.match(settings, /data-settings-capability-chip="thinking"/);
   assert.match(settings, /data-settings-capability-chip="vision"/);
   assert.match(app, /scopedSettingsCapabilityTruth/);
-  assert.match(app, /workspaceId=\{settingsWorkspaceId\}/);
+  // §props-debt redirect: `workspaceId={settingsWorkspaceId}` moved from App's
+  // settings JSX into the settings shell (same App expression, store-driven in
+  // useCoachSettingsHostFacts); the regex below is preserved verbatim.
+  assert.match(settings, /workspaceId=\{settingsWorkspaceId\}/);
   assert.match(app, /authority: workspaceAuthority/);
   assert.match(app, /const resourceWriteAccess = trainerWorkspaceAdmission/);
   assert.match(

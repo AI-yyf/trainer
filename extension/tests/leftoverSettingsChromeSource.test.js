@@ -157,7 +157,16 @@ test('leftover Settings profile/rhythm is not live Settings identity when recove
     settingsViewState,
     /leftoverSettingsProfileRhythmNotLive\s*\?\s*DEFAULT_COACH_DEFAULTS\s*:\s*layoutCoachDefaults/,
   );
-  assert.match(appSource, /workspaceAuthority=\{liveSandboxState\?\.authority\}/);
+  // §props-debt redirect: `workspaceAuthority={liveSandboxState?.authority}`
+  // moved from App's settings JSX into the settings shell (same App
+  // expression, store-driven in useCoachSettingsHostFacts); the regex below
+  // is preserved verbatim. App keeps its own liveSandboxState for the
+  // surfaces it still owns (Resources view, capability verdict).
+  const settingsShellSource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'settings', 'CoachSettingsView.tsx'),
+    'utf8',
+  );
+  assert.match(settingsShellSource, /workspaceAuthority=\{liveSandboxState\?\.authority\}/);
   assert.match(appSource, /readWorkspaceTrustStateFromCapabilitySummary\(/);
   assert.match(
     appSource,

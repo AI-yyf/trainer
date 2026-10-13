@@ -299,9 +299,12 @@ test('Settings first screen paints live trust sentence, not leftover sandbox chr
   assert.doesNotMatch(settings, /data-workspace-trust-state=\{"trusted"\}/);
 
   assert.match(app, /readWorkspaceTrustStateFromCapabilitySummary\(/);
-  assert.match(app, /workspaceAuthority=\{liveSandboxState\?\.authority\}/);
+  // §props-debt redirect: the two JSX hand-offs moved from App's settings JSX
+  // into the settings shell (same App expressions, store-driven in
+  // useCoachSettingsHostFacts); the regexes below are preserved verbatim.
+  assert.match(settings, /workspaceAuthority=\{liveSandboxState\?\.authority\}/);
   assert.match(
-    app,
+    settings,
     /workspaceTrustState=\{effectiveWorkspaceTrustState/,
   );
   // First runs have no capability summary; the host window-trust verdict

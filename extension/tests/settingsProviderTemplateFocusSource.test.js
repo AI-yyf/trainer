@@ -38,7 +38,11 @@ test('template setup carries a host focus request into the Settings API key fiel
   );
   assert.match(app, /requestProviderApiKeyFocus\(\);/);
   assert.match(controller, /setProviderApiKeyFocusRequest\(\(request\) => request \+ 1\);/);
-  assert.match(app, /providerApiKeyFocusRequest=\{providerApiKeyFocusRequest\}/);
+  // §props-debt redirect: the focus counter still lives in App's controller
+  // instance, but the settings boundary now receives it through the
+  // App-published provider-connection context, so the JSX hand-off lives in
+  // the settings shell. Regex preserved verbatim.
+  assert.match(settings, /providerApiKeyFocusRequest=\{providerApiKeyFocusRequest\}/);
   assert.match(settings, /providerApiKeyFocusRequest\?: number;/);
   assert.match(
     settings,

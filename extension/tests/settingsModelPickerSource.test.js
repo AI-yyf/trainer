@@ -250,8 +250,20 @@ test('Settings keeps the long model list searchable and defers inner save or tes
 });
 
 test('Settings clears stale model state when the provider transport changes', () => {
-  const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  // §props-debt redirect: the draft-patch reducer moved from App's settings
+  // JSX into the settings shell (verbatim, writing App's controller draft
+  // through the provider-connection context). The regexes below are preserved
+  // verbatim against the reducer's new home.
+  const shellSourcePath = path.resolve(
+    __dirname,
+    '..',
+    'webview',
+    'src',
+    'components',
+    'settings',
+    'CoachSettingsView.tsx',
+  );
+  const source = fs.readFileSync(shellSourcePath, 'utf8');
 
   assert.match(
     source,

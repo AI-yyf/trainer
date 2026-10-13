@@ -60,14 +60,10 @@ import {
   sameCoachDefaults,
 } from "../../../../shared/src/coachDefaults";
 import {
-  resolveProviderModelTokenState,
-} from "../../../../shared/src/providerModelTokenLimits";
-import {
   evaluateProviderModelPolicy,
   filterProviderModelOptions,
   type ProviderModelPolicyReason,
 } from "../../../../shared/src/providerModelPolicy";
-import { normalizeProviderProtocol } from "../../../../shared/src/providerProtocols";
 import {
   buildTrainingCoachBridge,
   composeTrainingCoachBridgeDraft,
@@ -324,6 +320,8 @@ import {
 import { isBrowserPreviewFixtureMode } from "../lib/browserSidecar";
 import { useTrainingCommands, useTrainingAttemptLifecycle } from "./useTrainingCommands";
 import { type TrainingRestoreContext, useWorkbenchState } from "./useWorkbenchState";
+import { formatReviewDueLabel, learnerSignalLabel } from "../components/settings/useCoachSettingsViewState";
+import { ProviderConnectionContext } from "./providerConnectionContext";
 import type { PlanReviewItem } from "../components/plan/CoachPlanView";
 import type {
   SettingsActionFeedback,
@@ -2747,22 +2745,6 @@ function localizeConversationMessage(
   };
 }
 
-function learnerSignalLabel(
-  value: NonNullable<ReturnType<typeof useWorkbenchState.getState>["data"]["coachingState"]>["learnerSignal"] | undefined,
-  language: ComposerLanguage,
-): string {
-  if (value === "blocked") {
-    return appUiCopy(language, "卡住");
-  }
-  if (value === "uncertain") {
-    return appUiCopy(language, "不确定");
-  }
-  if (value === "curious") {
-    return appUiCopy(language, "好奇");
-  }
-  return appUiCopy(language, "稳定");
-}
-
 function coachingScenarioLabel(
   value: NonNullable<ReturnType<typeof useWorkbenchState.getState>["data"]["coachingState"]>["scenario"] | undefined,
   language: ComposerLanguage,
@@ -2977,31 +2959,6 @@ function sendContextPillItems(
   return items.filter((item) => item.active);
 }
 
-
-function formatReviewDueLabel(value: string | undefined, language: ComposerLanguage): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return language === "zh-CN"
-    ? date.toLocaleString("zh-CN", {
-        month: "numeric",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : date.toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-}
 
 function activeStageObjectiveText(stage: PlanStage | undefined, fallback: string): string {
   return stage?.objective?.trim() || stage?.title?.trim() || fallback;
@@ -3793,7 +3750,16 @@ export function App() {
   }, [settingsScopeKey]);
   // §三: the provider-connection controller owns the editable draft (derived
   // from the single ProviderFacts record), its save payload, the endpoint
-  // speed test and the API-key focus request.
+  // speed test and the API-key focus request. The instance is published to the
+  // tree through ProviderConnectionContext, so Settings reads the same draft
+  // and focus/speed-test state without loose props (an unmounted Settings
+  // still cannot lose an unsaved draft — the state lives here in App).
+  const providerConnection = useProviderConnectionController({
+    facts: data.providerConfig,
+    settingsActionKind: settingsActionState?.kind,
+    settingsScopeKey,
+    settingsActionScopeRef,
+  });
   const {
     providerDraft,
     setProviderDraft,
@@ -3801,18 +3767,9 @@ export function App() {
     providerDraftHasUnsavedApiKey,
     providerSavePayload,
     markProviderDraftSaved,
-    providerSpeedTestResults,
-    providerSpeedTestPending,
-    runProviderSpeedTest,
     handleProviderSpeedTestMessage,
-    providerApiKeyFocusRequest,
     requestProviderApiKeyFocus,
-  } = useProviderConnectionController({
-    facts: data.providerConfig,
-    settingsActionKind: settingsActionState?.kind,
-    settingsScopeKey,
-    settingsActionScopeRef,
-  });
+  } = providerConnection;
   // §十一: companion install state for the Settings remote-support panel.
   const [companionInstallState, setCompanionInstallState] = useState<
     import("../../../../shared/src/companionInstallState").CompanionInstallState
@@ -13281,88 +13238,15 @@ export function App() {
         <CoachSettingsView
           sectionRequest={settingsSectionRequest}
           skillSharing={renderSkillSharing()}
-        className="settings-pane"
         companionInstallState={companionInstallState}
-        workspaceId={settingsWorkspaceId}
 
         capabilityVerdict={capabilityVerdict}
         providerImageInputState={providerImageInputState}
-        providerDraft={providerDraft}
         providerStatus={providerStatus}
         coachDefaultsStatus={coachDefaultsStatus}
         workspaceControlStatus={workspaceControlStatus}
-        providerApiKeyFocusRequest={providerApiKeyFocusRequest}
         coachStateSummary={resolvedCoachStateSummary}
-        coachSignal={
-          resolvedCoachSignal ? learnerSignalLabel(resolvedCoachSignal, layout.composerLanguage) : undefined
-        }
-        workspaceAuthority={liveSandboxState?.authority}
-        workspaceTrustState={effectiveWorkspaceTrustState}
         reviewRhythmSummary={resolvedCoachReview}
-        nextReviewDue={formattedNextReviewDue}
-        onProviderDraftChange={(patch) => {
-          setProviderDraft((current) => {
-            const hasProtocol = Object.prototype.hasOwnProperty.call(patch, "protocol");
-            const hasBaseUrl = Object.prototype.hasOwnProperty.call(patch, "baseUrl");
-            const hasModel = Object.prototype.hasOwnProperty.call(patch, "model");
-            const hasModelTokenLimits = Object.prototype.hasOwnProperty.call(patch, "modelTokenLimits");
-            const hasContextWindowTokens = Object.prototype.hasOwnProperty.call(
-              patch,
-              "contextWindowTokens",
-            );
-            const hasMaxOutputTokens = Object.prototype.hasOwnProperty.call(patch, "maxOutputTokens");
-            const nextProtocol = hasProtocol
-              ? normalizeProviderProtocol(patch.protocol) ?? current.protocol
-              : current.protocol;
-            const nextBaseUrl =
-              hasBaseUrl && typeof patch.baseUrl === "string" ? patch.baseUrl : current.baseUrl;
-            const normalizedCurrentBaseUrl = current.baseUrl.trim().replace(/\/+$/, "");
-            const normalizedNextBaseUrl = nextBaseUrl.trim().replace(/\/+$/, "");
-            const transportChanged =
-              (hasProtocol && normalizeProviderProtocol(current.protocol) !== nextProtocol) ||
-              (hasBaseUrl && normalizedCurrentBaseUrl !== normalizedNextBaseUrl);
-
-            if (transportChanged) {
-              return {
-                ...current,
-                ...patch,
-                protocol: nextProtocol,
-                model: "",
-                contextWindowTokens: undefined,
-                maxOutputTokens: undefined,
-                modelTokenLimits: undefined,
-                catalogModels: [],
-              };
-            }
-
-            if (!hasModel && !hasModelTokenLimits && !hasContextWindowTokens && !hasMaxOutputTokens) {
-              return {
-                ...current,
-                ...patch,
-              };
-            }
-
-            const nextModel =
-              hasModel && typeof patch.model === "string" ? patch.model : current.model;
-            const tokenState = resolveProviderModelTokenState(current, nextModel, {
-              modelTokenLimits: hasModelTokenLimits ? patch.modelTokenLimits : current.modelTokenLimits,
-              hasModelTokenLimits,
-              contextWindowTokens: patch.contextWindowTokens,
-              maxOutputTokens: patch.maxOutputTokens,
-              hasContextWindowTokens,
-              hasMaxOutputTokens,
-            });
-
-            return {
-              ...current,
-              ...patch,
-              model: nextModel,
-              contextWindowTokens: tokenState.contextWindowTokens,
-              maxOutputTokens: tokenState.maxOutputTokens,
-              modelTokenLimits: tokenState.modelTokenLimits,
-            };
-          });
-        }}
         onCoachSettingsMutated={queueCoachSettingsSave}
         onSaveCoachSettings={() => persistCoachSettings()}
         onSaveProvider={saveProviderDraft}
@@ -13465,10 +13349,7 @@ export function App() {
             },
           });
         }}
-        providerSpeedTestResults={providerSpeedTestResults}
-        providerSpeedTestPending={providerSpeedTestPending}
         providerSaveBusy={settingsActionState?.kind === "save-provider"}
-        onSpeedTestEndpoints={runProviderSpeedTest}
         onRefreshProviderModels={() => {
           const shouldUseDraft = providerDraftHasChanges || !data.providerConfig.configured;
           setSettingsActionState({
@@ -14137,17 +14018,19 @@ export function App() {
 
   return (
     <I18nProvider language={layout.composerLanguage} direction={uiDirection}>
-      {isBrowserPreview ? (
-        <div className="trainer-preview-workbench" data-preview-frame="sidebar">
-          <div className="trainer-preview-sidebar">{workbenchShell}</div>
-          <div className="trainer-preview-editor" aria-hidden="true">
-            <div className="trainer-preview-editor__chrome" />
-            <div className="trainer-preview-editor__canvas" />
+      <ProviderConnectionContext.Provider value={providerConnection}>
+        {isBrowserPreview ? (
+          <div className="trainer-preview-workbench" data-preview-frame="sidebar">
+            <div className="trainer-preview-sidebar">{workbenchShell}</div>
+            <div className="trainer-preview-editor" aria-hidden="true">
+              <div className="trainer-preview-editor__chrome" />
+              <div className="trainer-preview-editor__canvas" />
+            </div>
           </div>
-        </div>
-      ) : (
-        workbenchShell
-      )}
+        ) : (
+          workbenchShell
+        )}
+      </ProviderConnectionContext.Provider>
     </I18nProvider>
   );
 }
