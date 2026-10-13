@@ -49,18 +49,24 @@ test('Codex-quiet motion tokens and required transitions live in styles.css', ()
   assert.doesNotMatch(chromeChunks, /transition:\s*all\b/);
 });
 
-test('composer action glyphs go through IconBase stroke family', () => {
-  const iconBase = read('components/icons/IconBase.tsx');
+test('composer action glyphs go through the unified TrainerIconBase stroke family', () => {
+  // Icon grammar converged (2026-10-14): the legacy 16-box/1.55 IconBase is
+  // gone; CoachIcons renders its historical 16-grid drawings on the single
+  // TrainerIconBase grammar (1.4 currentColor stroke, optical size 16).
+  const trainerBase = read('components/icons/TrainerIconBase.tsx');
+  const coachIcons = read('components/icons/CoachIcons.tsx');
   const composer = read('components/composer/CoachComposer.tsx');
-  const icons = read('components/icons/CoachIcons.tsx');
   const training = read('components/training/TrainingWorkbenchView.tsx');
 
-  assert.match(iconBase, /viewBox = "0 0 16 16"/);
-  assert.match(iconBase, /strokeWidth=\{1\.55\}/);
-  assert.match(iconBase, /stroke="currentColor"/);
-  assert.match(iconBase, /strokeLinecap="round"/);
+  assert.match(trainerBase, /viewBox = "0 0 20 20"/);
+  assert.match(trainerBase, /strokeWidth=\{1\.4\}/);
+  assert.match(trainerBase, /stroke="currentColor"/);
+  assert.match(trainerBase, /strokeLinecap="round"/);
+  assert.match(coachIcons, /from "\.\/TrainerIconBase"/);
+  assert.match(coachIcons, /viewBox="0 0 16 16"/);
+  assert.doesNotMatch(coachIcons, /strokeWidth=\{1\.55\}/);
   assert.match(composer, /from ["']\.\.\/icons["']/);
-  assert.match(icons, /export function SparklesIcon/);
+  assert.match(coachIcons, /export function SparklesIcon/);
   const cardFace = training.slice(
     training.indexOf("training-current__sentence"),
     training.indexOf("{!cardOnly ? ("),
