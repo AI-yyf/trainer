@@ -51,6 +51,11 @@ export interface CoachConversationViewProps {
   onArtifactOpen?: (artifact: CoachArtifactBlockData, message: ConversationMessage) => void;
   onMessageAction?: (action: CoachMessageAction, message: ConversationMessage) => void;
   pendingMessageAction?: string | null;
+  /**
+   * Turn-level grounding downgrade for the message being rendered (the latest
+   * assistant reply / the streaming slot). Applied only to that item.
+   */
+  turnNextStepRequiresConfirmation?: boolean;
 }
 
 interface CoachConversationItem {
@@ -81,6 +86,7 @@ function CoachConversationViewImpl({
   onArtifactOpen,
   onMessageAction,
   pendingMessageAction,
+  turnNextStepRequiresConfirmation = false,
 }: CoachConversationViewProps) {
   const classes = [
     surfaceTone === "thread" ? "section-block" : "coach-conversation-view--open",
@@ -173,6 +179,11 @@ function CoachConversationViewImpl({
                 onArtifactOpen={onArtifactOpen}
                 onMessageAction={onMessageAction}
                 pendingMessageAction={pendingMessageAction}
+                nextStepRequiresConfirmation={
+                  item.isLatestAssistant || item.streaming
+                    ? turnNextStepRequiresConfirmation
+                    : false
+                }
                 headNote={
                   item.streaming && streamingStripVisible ? (
                     <AgentActivityStrip

@@ -11128,3 +11128,227 @@ def test_user_feedback_persists_and_adapts_only_its_workspace(tmp_path: Path) ->
         assert isolated_memory["userFeedback"][0]["kind"] == "too_simple"
         assert isolated_memory["coaching_adaptation"]["challenge_level"] == "raise"
         assert isolated_memory["workspace"]["latest_user_feedback"] == "This exercise was too simple."
+
+
+# ---------------------------------------------------------------------------
+# Grounding assembly wiring (runtime R1): one cached decision per turn,
+# bounded provider retry, corrected next step travelling back to the response
+# and to memory, and agent_meta stamps.
+# ---------------------------------------------------------------------------
+
+GROUNDING_SCRIPTED_PROVIDER_PAYLOAD = {
+    "name": "scripted-grounding",
+    "base_url": "https://provider.invalid/v1",
+    "api_key_ref": "test-only",
+    "model": "scripted-model",
+    "protocol": "openai_chat_completions",
+    "capabilities": {"tools": True, "streaming": False},
+}
+
+GROUNDING_GRID_FILE = {
+    "path": "lesson.py",
+    "language_id": "python",
+    "content": "grid = [[0], [0]]\ngrid[0].append(1)\nprint(grid)\n",
+}
+
+GROUNDING_UNGROUNDED_STEP = "给我 `parse_header()` 的函数名和 call site，我帮你逐行看。"
+GROUNDING_GROUNDED_STEP = "再对 `grid` 做一次独立行实验，确认两行打印互不影响。"
+
+
+class _ScriptedGroundingFinalizeProvider:
+    """One coach_finalize call whose next_step is configurable."""
+
+    protocol = "openai_chat_completions"
+
+    def __init__(self, next_step: str) -> None:
+        self.next_step = next_step
+        self.attachments_will_be_sent = lambda: False
+
+    async def call(
+        self,
+        _messages: list[dict[str, object]],
+        _tools: list[dict[str, object]] | None,
+    ) -> dict[str, object]:
+        return {
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "finalize-grounding",
+                    "name": "coach_finalize",
+                    "arguments": {
+                        "summary": "两行共享同一个内层列表引用，`grid[0] is grid[1]` 为 True。",
+                        "next_step": self.next_step,
+                    },
+                }
+            ],
+        }
+
+    async def call_stream(
+        self,
+        messages: list[dict[str, object]],
+        tools: list[dict[str, object]] | None,
+    ):  # type: ignore[no-untyped-def]
+        response = await self.call(messages, tools)
+        yield {
+            "type": "final",
+            "content": response["content"],
+            "tool_calls": response["tool_calls"],
+            "stop_reason": "tool_calls" if response["tool_calls"] else "stop",
+        }
+
+
+def _run_grounding_wired_turn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    workspace_id: str,
+    next_step: str,
+    *,
+    retry_text: str,
+) -> tuple[dict, list[dict], list[object], list[object]]:
+    """Run one /turn and capture grounding retry attempts and evaluation counts."""
+    import app.api.routers as routers_module
+
+    scripted = _ScriptedGroundingFinalizeProvider(next_step)
+    retry_attempts: list[dict] = []
+    evaluate_calls: list[object] = []
+    legacy_calls: list[object] = []
+
+    def build_agent_provider(_self: ProviderService, **_kwargs: object):
+        return scripted, scripted
+
+    async def scripted_retry_completion(
+        _self: ProviderService,
+        messages: list[dict[str, str]],
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> str:
+        del model, temperature, max_tokens
+        joined = "\n".join(
+            str(message.get("content") or "") for message in messages if isinstance(message, dict)
+        )
+        if "Rewrite ONLY the next step" not in joined:
+            return ""
+        retry_attempts.append({"messages": messages})
+        return retry_text
+
+    original_evaluate = routers_module.evaluate_turn_grounding
+
+    def counting_evaluate(facts, *, retry_generate=None):  # type: ignore[no-untyped-def]
+        evaluate_calls.append(facts)
+        return original_evaluate(facts, retry_generate=retry_generate)
+
+    original_legacy = routers_module.evaluate_next_step_grounding
+
+    def counting_legacy(*args: object, **kwargs: object):
+        legacy_calls.append(args)
+        return original_legacy(*args, **kwargs)
+
+    monkeypatch.setattr(ProviderService, "build_agent_provider", build_agent_provider)
+    monkeypatch.setattr(ProviderService, "chat_completion", scripted_retry_completion)
+    monkeypatch.setattr(routers_module, "evaluate_turn_grounding", counting_evaluate)
+    monkeypatch.setattr(routers_module, "evaluate_next_step_grounding", counting_legacy)
+
+    with build_client(tmp_path / "sidecar", configure_provider=False) as client:
+        runtime = client.app.state.runtime
+        seed_verified_capabilities(
+            runtime,
+            ProviderConfig.model_validate(GROUNDING_SCRIPTED_PROVIDER_PAYLOAD),
+            "test-only-key",
+        )
+        started = client.post(
+            "/session/start",
+            json={
+                "workspace_id": workspace_id,
+                "workspace_name": "Grounding wiring",
+                "workspace_path": str(tmp_path / "learner-project"),
+            },
+        )
+        assert started.status_code == 200, started.text
+        session_id = str(started.json()["session_id"])
+        response = client.post(
+            "/turn",
+            json={
+                "session_id": session_id,
+                "workspace_id": workspace_id,
+                "intent": "coach",
+                "message": "为什么修改 `grid[0]` 之后 `grid[1]` 也变了？",
+                "response_language": "zh-CN",
+                "answer_mode": "guided",
+                "use_agent_loop": True,
+                "provider": GROUNDING_SCRIPTED_PROVIDER_PAYLOAD,
+                "api_key": "test-only-key",
+                "current_file": GROUNDING_GRID_FILE,
+            },
+        )
+        assert response.status_code == 200, response.text
+        return response.json(), retry_attempts, evaluate_calls, legacy_calls
+
+
+def test_turn_grounding_decides_once_and_stamps_downgrade(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The turn is decided exactly once (cached), the legacy gate never re-runs,
+    and the downgrade is stamped for the host/UI instead of shipping a
+    fabricated requirement."""
+    body, retry_attempts, evaluate_calls, legacy_calls = _run_grounding_wired_turn(
+        tmp_path,
+        monkeypatch,
+        "workspace-grounding-wired-downgrade",
+        GROUNDING_UNGROUNDED_STEP,
+        retry_text="",
+    )
+
+    # Bounded retry: exactly one provider attempt, and it failed to ground.
+    assert len(retry_attempts) == 1
+    # One decision for the whole turn; the response builder consumed the cache
+    # and must not re-evaluate (neither the new nor the legacy gate).
+    assert len(evaluate_calls) == 1
+    assert legacy_calls == []
+
+    coach_turn = body.get("coach_turn")
+    assert isinstance(coach_turn, dict)
+    assert coach_turn.get("requires_confirmation") is True
+    agent_meta = body.get("agent_meta") or {}
+    assert agent_meta.get("grounding_outcome") == "downgraded"
+    assert agent_meta.get("grounding_ungrounded_symbols")
+    assert agent_meta.get("grounding_retry_used") is False
+    assert agent_meta.get("next_step_requires_confirmation") is True
+
+    memory_text = json.dumps(body.get("snapshot", {}).get("memory", {}), ensure_ascii=False)
+    assert "parse_header" not in memory_text
+
+
+def test_turn_grounding_retry_corrects_next_step_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A grounded regeneration travels back as the response next_step, is
+    stamped as corrected, and replaces the fabricated step in memory."""
+    body, retry_attempts, evaluate_calls, legacy_calls = _run_grounding_wired_turn(
+        tmp_path,
+        monkeypatch,
+        "workspace-grounding-wired-corrected",
+        GROUNDING_UNGROUNDED_STEP,
+        retry_text=GROUNDING_GROUNDED_STEP,
+    )
+
+    assert len(retry_attempts) == 1
+    # One initial verdict plus the retry re-check of the pre-fetched text; the
+    # final decision is cached and the response builder never re-evaluates.
+    assert len(evaluate_calls) == 2
+    assert legacy_calls == []
+
+    coach_turn = body.get("coach_turn")
+    assert isinstance(coach_turn, dict)
+    assert coach_turn.get("requires_confirmation") is False
+    assert coach_turn.get("next_step") == GROUNDING_GROUNDED_STEP
+    agent_meta = body.get("agent_meta") or {}
+    assert agent_meta.get("grounding_outcome") == "corrected"
+    assert agent_meta.get("grounding_retry_used") is True
+    assert not agent_meta.get("grounding_ungrounded_symbols")
+
+    memory_text = json.dumps(body.get("snapshot", {}).get("memory", {}), ensure_ascii=False)
+    assert GROUNDING_GROUNDED_STEP in memory_text
+    assert "parse_header" not in memory_text

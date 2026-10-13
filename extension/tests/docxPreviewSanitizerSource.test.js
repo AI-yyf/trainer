@@ -89,7 +89,13 @@ test('conversation file_preview paints via CoachMessageParts only (registry is H
 
   // Live conversation paint path
   assert.match(bubble, /import \{ CoachMessageParts \} from ["']\.\/CoachMessageParts["']/);
-  assert.match(bubble, /<CoachMessageParts parts=\{visibleParts \?\? \[\]\} language=\{language\} \/>/);
+  // The parts tag may carry the grounding-downgrade marker prop
+  // (nextStepRequiresConfirmation) and be formatted across lines; the paint
+  // path (parts + language through CoachMessageParts) is unchanged.
+  assert.match(
+    bubble,
+    /<CoachMessageParts[\s\S]{0,400}?parts=\{visibleParts \?\? \[\]\}[\s\S]{0,200}?language=\{language\}[\s\S]{0,300}?\/>/,
+  );
   assert.match(conversation, /import \{ CoachMessageBubble[, \w:]+\} from ["']\.\/CoachMessageBubble["']/);
   assert.match(conversation, /<CoachMessageBubble[\s\S]*message=\{item\.message\}/);
   assert.match(app, /<CoachConversationView/);

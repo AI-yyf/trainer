@@ -2,6 +2,8 @@ import { NextAction } from "../../templates/NextAction";
 import type { ReactNode } from "react";
 
 import type { ComposerLanguage } from "../../lib/types";
+import { nextStepRequiresConfirmationFromMetadata } from "../../lib/nextStepConfirmation";
+import { resolveCopy } from "../../lib/i18n/copy";
 import { artifactBlockCopy, artifactInlineLeadCopy } from "./coachArtifactBlockCopy";
 import { reviewConceptLabel } from "../../lib/reviewLabel";
 import { MessageRichContent } from "./MessageRichContent";
@@ -164,6 +166,11 @@ export function CoachArtifactBlock({
     ? actionButtonLabel(artifact.recommendedAction, language)
     : openLabel;
   const metadata = artifactMetadataRecord(artifact);
+  // Grounding downgrade (DESIGN.md §2.5): the server stamps the artifact
+  // metadata when the next step was not fully anchored; the card must keep
+  // that fact visible instead of presenting the step as verified guidance.
+  const requiresConfirmation = nextStepRequiresConfirmationFromMetadata(metadata);
+  const confirmCopy = requiresConfirmation ? resolveCopy(language) : undefined;
   const isRecallReview = artifact.kind === "review" &&
     metadata?.evidence_scope === "self_reported_recall";
   const displayFocus = isRecallReview && artifact.focusArea
@@ -177,7 +184,7 @@ export function CoachArtifactBlock({
       <NextAction
         label={artifactBlockCopy(language, "下一步")}
         title={displayTitle}
-        detail={artifact.verification?.[0]}
+        detail={artifact.verification?.[0] ?? (requiresConfirmation ? confirmCopy?.nextStepConfirmBadge : undefined)}
         action={{ label: actionLabel, onClick: () => onOpen(artifact) }}
       />
     );
@@ -212,6 +219,12 @@ export function CoachArtifactBlock({
         </div>
       ) : null}
       {showTeaser && teaser ? <p className="artifact-card__teaser">{teaser}</p> : null}
+      {requiresConfirmation && confirmCopy ? (
+        <p className="artifact-card__confirm-note" data-next-step-requires-confirmation="true">
+          <span className="artifact-card__confirm-mark">{confirmCopy.nextStepConfirmBadge}</span>
+          {confirmCopy.nextStepConfirmNote}
+        </p>
+      ) : null}
       {artifact.bullets?.length ? (
         <ul>
           {artifact.bullets

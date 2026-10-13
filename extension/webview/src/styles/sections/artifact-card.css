@@ -55,6 +55,33 @@
   margin-top: 4px;
 }
 
+/* Grounding downgrade note on a next-step card (DESIGN.md §2.5): keep the
+   fact visible on the card itself, warning-toned, above the action. */
+.artifact-card__confirm-note {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warning) 8%, var(--bg-1));
+  border: 1px solid color-mix(in srgb, var(--warning) 34%, var(--line));
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-1);
+}
+
+.artifact-card__confirm-mark {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--warning) 14%, var(--bg-1));
+  color: var(--warning);
+  font-size: var(--trainer-font-3xs);
+  white-space: nowrap;
+}
+
 .artifact-card__next-action {
   margin-top: 8px;
   padding-top: 8px;

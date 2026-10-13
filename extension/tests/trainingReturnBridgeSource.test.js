@@ -6,6 +6,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+// The durable training-persistence ack channel moved into the training-card
+// controller (DESIGN.md §3, `useTrainingCardController.ts`); the App source
+// keeps the call sites, the controller owns the resolve path.
+const trainingCardControllerPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'app',
+  'useTrainingCardController.ts',
+);
 
 test('formal training handoff draft persists without forcing navigation to Coach', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
@@ -44,8 +55,9 @@ test('formal training handoff draft persists without forcing navigation to Coach
 
 test('practice return evidence uses the authoritative response status for both outcomes', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
+  const controllerSource = fs.readFileSync(trainingCardControllerPath, 'utf8');
 
-  assert.match(source, /pending\.resolve\(message\.payload\.data\)/);
+  assert.match(controllerSource, /pending\.resolve\(message\.payload\.data\)/);
   assert.match(source, /const response = await requestTrainingPersistence\(trainerCommands\.trainingPracticeReturn/);
   assert.match(source, /selected_card_status/);
   assert.match(source, /authoritativePracticeStatus === "blocked"/);

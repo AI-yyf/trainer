@@ -178,6 +178,7 @@ import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
 import { useComposerModelQuery } from "./useComposerModelQuery";
 import { useComposerHistoryNavigation } from "./useComposerHistoryNavigation";
+import { useTrainingCardController } from "./useTrainingCardController";
 import { coachReplyTitle, coachReplyMarkdown } from "../lib/shareUtils";
 import { formatTokenCount, providerDraftStringArrayKey } from "../lib/formatUtils";
 import {
@@ -213,8 +214,7 @@ import {
   sanitizeOperationFailureMessage,
   type OperationMessageSurface,
 } from "../lib/operationMessageGovernance";
-import { remoteVerificationEventMatchesDisplayedCard } from "../lib/remoteVerificationIdentity";
-import { operationMatchesWebviewScope } from "../../../../shared/src/webviewSync";
+import { resolveTurnNextStepRequiresConfirmation } from "../lib/nextStepConfirmation";
 import { CoachComposer, ComposerIconButton } from "../components/composer";
 import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
 import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
@@ -227,7 +227,6 @@ import {
   interpretTrainingComposerCardCommand,
 } from "../components/training/trainingCardActions";
 import type {
-  FlashVerificationMode,
   TrainingReviewItem,
   TrainingSummaryCard,
 } from "../components/training/TrainingWorkbenchView";
@@ -328,8 +327,6 @@ import type {
 
 // ContextMenu type imported from useMenuState
 type ComposerModelActionDensity = "default" | "compact";
-type TrainingPracticeReturnMode = "result" | "blocked";
-type TrainingComposerRoute = "card" | "coach";
 type PlanComposerMode = "explain" | "generate" | "evidence" | "blocker";
 type PlanComposerDraftReplacement = {
   source: "stage" | "project-subplan";
@@ -357,12 +354,6 @@ type PendingResourceOperation = {
 type PendingResourceTrainingHandoff = {
   resourceId: string;
   resolve: (result: ResourceTrainingHandoffResult) => void;
-  timeoutId: number;
-};
-type PendingTrainingPersistence = {
-  commandId: string;
-  resolve: (data?: unknown) => void;
-  reject: (reason?: unknown) => void;
   timeoutId: number;
 };
 type ResourceOperationStatus = {
@@ -409,9 +400,12 @@ const coachFirstComposerPlaceholder: Record<ComposerLanguage, string> = {
 
 const RESOURCE_OPERATION_STATUS_PATTERN =
   /^\[\[trainer-resource-operation:(delete|restore|search|index|upload):([a-z0-9-]{1,96})\]\]\s*/i;
+// Learning-feedback completion is a protocol acknowledgement, not a text
+// match: the host echoes the request id the UI generated inside a marker.
+const LEARNING_FEEDBACK_STATUS_PATTERN =
+  /^\[\[trainer-learning-feedback:([a-z0-9-]{1,96})\]\]\s*/i;
 const RESOURCE_OPERATION_TIMEOUT_MS = 45_000;
 const RESOURCE_TRAINING_HANDOFF_TIMEOUT_MS = 45_000;
-const TRAINING_PERSISTENCE_TIMEOUT_MS = 45_000;
 
 function parseResourceOperationStatus(
   message: HostMessage,
@@ -443,6 +437,16 @@ function parseResourceOperationStatus(
     requestId,
     message: message.payload.message.slice(marker[0].length).trim() || fallbackMessage,
   };
+}
+
+function parseLearningFeedbackStatus(
+  message: HostMessage,
+): { requestId: string } | undefined {
+  if (message.type !== "operation/status") {
+    return undefined;
+  }
+  const requestId = LEARNING_FEEDBACK_STATUS_PATTERN.exec(message.payload.message)?.[1];
+  return requestId ? { requestId } : undefined;
 }
 
 function livePlanTaskMintPendingMessage(language: ComposerLanguage): string {
@@ -3655,6 +3659,31 @@ export function App() {
   } = useWorkbenchState();
   const syncIdentity = syncCursor.generation > 0 ? syncCursor : undefined;
 
+  // Training-card controller pilot (DESIGN.md §3): the training domain owns its
+  // interaction state and host interception; App only routes and assembles.
+  const {
+    trainingComposerFlashMode,
+    setTrainingComposerFlashMode,
+    trainingComposerVerifyIndex,
+    setTrainingComposerVerifyIndex,
+    trainingComposerPracticeReturnMode,
+    setTrainingComposerPracticeReturnMode,
+    trainingComposerRoute,
+    setTrainingComposerRoute,
+    trainingVerifyNotice,
+    setTrainingVerifyNotice,
+    remoteVerification,
+    displayedTrainingCardIdRef,
+    beginRemoteVerification,
+    stopRemoteVerification,
+    resetRemoteVerification,
+    handleRemoteVerificationHostMessage,
+    handleRemoteVerificationCommandFailure,
+    trainingPersistencePending,
+    requestTrainingPersistence,
+    resolveTrainingPersistenceAck,
+  } = useTrainingCardController();
+
   const { openMenu, setOpenMenu } = useMenuState();
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [dismissedComposerDeck, setDismissedComposerDeck] = useState<ComposerDeckKind>();
@@ -3730,39 +3759,13 @@ export function App() {
     }
   }, [settingsScopeKey]);
   const [providerApiKeyFocusRequest, setProviderApiKeyFocusRequest] = useState(0);
-  const [trainingComposerFlashMode, setTrainingComposerFlashMode] =
-    useState<FlashVerificationMode>("short");
-  const [trainingComposerVerifyIndex, setTrainingComposerVerifyIndex] = useState(0);
-  const [trainingComposerPracticeReturnMode, setTrainingComposerPracticeReturnMode] =
-    useState<TrainingPracticeReturnMode>("result");
-  const [trainingComposerRoute, setTrainingComposerRoute] =
-    useState<TrainingComposerRoute>("card");
-  const trainingRouteDraftsRef = useRef<Record<TrainingComposerRoute, string>>({
-    card: "",
-    coach: "",
-  });
   const [coachPlanContext, setCoachPlanContext] = useState<PlanComposerMode>();
   const [planComposerMode, setPlanComposerMode] = useState<PlanComposerMode>("explain");
-  const [trainingVerifyNotice, setTrainingVerifyNotice] = useState<string | undefined>();
   // §十一: companion install state for the Settings remote-support panel.
   const [companionInstallState, setCompanionInstallState] = useState<
     import("../../../../shared/src/companionInstallState").CompanionInstallState
   >("not_installed");
   const companionStateQueriedRef = useRef(false);
-  // §八: streaming remote verification panel (protocol v2 lifecycle).
-  const [remoteVerification, setRemoteVerification] = useState<{
-    sessionId?: string;
-    running: boolean;
-    output: string;
-    summary?: string;
-    finishedState?: "completed" | "cancelled" | "timed_out" | "spawn_failed" | "connection_lost";
-    passed?: boolean;
-  }>({ running: false, output: "" });
-  const displayedTrainingCardIdRef = useRef<string | undefined>();
-  const remoteVerificationRequestRef = useRef<{
-    cardId: string;
-    operation: ReturnType<typeof postMessage>;
-  }>();
   const [operationMessageSurface, setOperationMessageSurface] = useState<OperationMessageSurface>("global");
   const [pendingPlanComposerDraftReplacement, setPendingPlanComposerDraftReplacement] =
     useState<PlanComposerDraftReplacement>();
@@ -3790,9 +3793,6 @@ export function App() {
     new Map<string, PendingResourceTrainingHandoff>(),
   );
   const resourceTrainingHandoffSequenceRef = useRef(0);
-  const trainingPersistenceResolversRef = useRef(new Map<string, PendingTrainingPersistence>());
-  const trainingPersistenceSequenceRef = useRef(0);
-  const [trainingPersistencePending, setTrainingPersistencePending] = useState(false);
   const [pendingMessageAction, setPendingMessageAction] = useState<string | null>(null);
   const pendingMessageActionRef = useRef<string | null>(null);
   const pendingMessageActionTimeoutRef = useRef<number | undefined>(undefined);
@@ -3824,6 +3824,10 @@ export function App() {
     error?: string;
   }>({ busy: false });
   const userFeedbackPendingKindRef = useRef<UserFeedbackKind>();
+  // Protocol marker scope: the ack for a feedback submission carries the
+  // request id the UI generated, so completion no longer depends on the
+  // host's English status text.
+  const userFeedbackRequestIdRef = useRef<string | undefined>(undefined);
   const injectedPreviewBootstrapHydratedRef = useRef(false);
   const browserPreviewLocationOverridesAppliedRef = useRef(false);
   const pendingTrainingHandoffSubmissionRef = useRef<
@@ -4301,6 +4305,8 @@ export function App() {
     (kind: UserFeedbackKind) => {
       if (userFeedbackState.busy || userFeedbackState.submittedKind || isBrowserPreview) return;
       userFeedbackPendingKindRef.current = kind;
+      const requestId = `learning-feedback-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      userFeedbackRequestIdRef.current = requestId;
       setUserFeedbackState({ busy: true });
       postMessage({
         type: "command/execute",
@@ -4313,6 +4319,7 @@ export function App() {
             focusArea: data.memory.workspace?.latestLearningFocusArea,
             trainingCardId: undefined,
             planId: data.plan?.id,
+            requestId,
           },
         },
       });
@@ -4323,89 +4330,6 @@ export function App() {
     [activeView, data.memory.workspace, data.plan?.id, isBrowserPreview, layout.composerLanguage, postMessage, userFeedbackState.busy, userFeedbackState.submittedKind],
   );
 
-  const resolveTrainingPersistenceAck = useCallback((message: HostMessage) => {
-    if (message.type !== "training/persistenceAck") {
-      return;
-    }
-    const pending = trainingPersistenceResolversRef.current.get(message.payload.requestId);
-    if (!pending || pending.commandId !== message.payload.commandId) {
-      return;
-    }
-    trainingPersistenceResolversRef.current.delete(message.payload.requestId);
-    window.clearTimeout(pending.timeoutId);
-    if (trainingPersistenceResolversRef.current.size === 0) {
-      setTrainingPersistencePending(false);
-    }
-    if (message.payload.ok) {
-      pending.resolve(message.payload.data);
-    } else {
-      const failureMessage =
-        typeof message.payload.message === "string" && message.payload.message.trim()
-          ? message.payload.message
-          : "Training persistence was not acknowledged.";
-      pending.reject(new Error(failureMessage));
-    }
-  }, []);
-  const requestTrainingPersistence = useCallback(
-    (commandId: string, payload: Record<string, unknown>): Promise<unknown> => {
-      const requestId = `training-persistence-${Date.now().toString(36)}-${++trainingPersistenceSequenceRef.current}`;
-      return new Promise<unknown>((resolve, reject) => {
-        const timeoutId = window.setTimeout(() => {
-          const pending = trainingPersistenceResolversRef.current.get(requestId);
-          if (!pending) {
-            return;
-          }
-          trainingPersistenceResolversRef.current.delete(requestId);
-          if (trainingPersistenceResolversRef.current.size === 0) {
-            setTrainingPersistencePending(false);
-          }
-          pending.reject(new Error("Training persistence timed out."));
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId: trainerCommands.trainingReliabilityControl,
-              payload: {
-                requestId,
-                action: "cancel",
-              },
-            },
-          });
-        }, TRAINING_PERSISTENCE_TIMEOUT_MS);
-        trainingPersistenceResolversRef.current.set(requestId, {
-          commandId,
-          resolve,
-          reject,
-          timeoutId,
-        });
-        setTrainingPersistencePending(true);
-        try {
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId,
-              payload: {
-                ...payload,
-                __trainerTrainingPersistenceId: requestId,
-              },
-            },
-          });
-        } catch (error) {
-          const pending = trainingPersistenceResolversRef.current.get(requestId);
-          trainingPersistenceResolversRef.current.delete(requestId);
-          if (trainingPersistenceResolversRef.current.size === 0) {
-            setTrainingPersistencePending(false);
-          }
-          if (pending) {
-            window.clearTimeout(pending.timeoutId);
-            pending.reject(error);
-          } else {
-            reject(error);
-          }
-        }
-      });
-    },
-    [],
-  );
   useEffect(() => {
     return () => {
       for (const operation of resourceOperationResolversRef.current.values()) {
@@ -4422,11 +4346,6 @@ export function App() {
         });
       }
       resourceTrainingHandoffResolversRef.current.clear();
-      for (const pending of trainingPersistenceResolversRef.current.values()) {
-        window.clearTimeout(pending.timeoutId);
-        pending.reject(new Error("Training persistence was interrupted."));
-      }
-      trainingPersistenceResolversRef.current.clear();
     };
   }, []);
   const applyHostMessage = useCallback(
@@ -4449,40 +4368,9 @@ export function App() {
         );
         return;
       }
-      if (
-        message.type === "remoteVerification/started" ||
-        message.type === "remoteVerification/stream" ||
-        message.type === "remoteVerification/finished"
-      ) {
-        const cursor = useWorkbenchState.getState().syncCursor;
-        const pending = remoteVerificationRequestRef.current;
-        if (!remoteVerificationEventMatchesDisplayedCard(message.payload.cardId, displayedTrainingCardIdRef.current) ||
-            (message.scope && cursor.generation > 0 &&
-              (message.scope.generation !== cursor.generation || message.scope.workspaceId !== cursor.workspaceId ||
-                message.scope.sessionId !== cursor.sessionId)) ||
-            (message.operation && (!pending?.operation ||
-              pending.cardId !== displayedTrainingCardIdRef.current ||
-              message.operation.requestId !== pending.operation.requestId ||
-              message.operation.commandId !== pending.operation.commandId ||
-              !operationMatchesWebviewScope(message.operation, cursor)))) {
-          return;
-        }
-        if (message.type === "remoteVerification/started") {
-          setRemoteVerification({ sessionId: message.payload.sessionId, running: true, output: "" });
-        } else if (message.type === "remoteVerification/stream") {
-          setRemoteVerification((current) => ({
-            ...current,
-            output: (current.output + message.payload.text).slice(-20_000),
-          }));
-        } else {
-          setRemoteVerification((current) => ({
-            ...current,
-            running: false,
-            finishedState: message.payload.state,
-            passed: message.payload.passed,
-            summary: message.payload.summary,
-          }));
-        }
+      // §三: the training-card controller owns remote-verification state and
+      // its request identity; it consumes every remoteVerification/* message.
+      if (handleRemoteVerificationHostMessage(message)) {
         return;
       }
       if (message.type === "training/resourceHandoff") {
@@ -4507,7 +4395,12 @@ export function App() {
         applySessionList(message.payload);
         return;
       }
-      if (message.type === "operation/status" && message.payload.message.includes("Learning feedback recorded")) {
+      const learningFeedbackStatus = parseLearningFeedbackStatus(message);
+      if (
+        learningFeedbackStatus &&
+        userFeedbackRequestIdRef.current === learningFeedbackStatus.requestId
+      ) {
+        userFeedbackRequestIdRef.current = undefined;
         setUserFeedbackState((current) => current.busy ? { busy: false, submittedKind: userFeedbackPendingKindRef.current } : current);
         return;
       }
@@ -4523,22 +4416,10 @@ export function App() {
         setProviderApiKeyFocusRequest((request) => request + 1);
       }
       if (message.type === "operation/status") {
-        const pending = remoteVerificationRequestRef.current;
-        const remoteCommandFailure = message.payload.tone === "error" &&
-          (message.operation?.commandId === trainerCommands.remoteVerifyActiveFile ||
-            detectTrainingVerificationTargetMismatch(message.payload.message));
-        if (remoteCommandFailure) {
-          const cursor = useWorkbenchState.getState().syncCursor;
-          const matchesPending = pending?.cardId === displayedTrainingCardIdRef.current &&
-            (message.operation
-              ? pending?.operation?.requestId === message.operation.requestId &&
-                message.operation.commandId === trainerCommands.remoteVerifyActiveFile &&
-                operationMatchesWebviewScope(message.operation, cursor)
-              : !pending?.operation && detectTrainingVerificationTargetMismatch(message.payload.message));
-          if (!matchesPending) return;
-          remoteVerificationRequestRef.current = undefined;
-          setRemoteVerification({ running: false, output: "" });
-          setTrainingVerifyNotice(undefined);
+        // §三: the training-card controller settles a failed remote-verification
+        // request; a failure that belongs to another card aborts the message.
+        if (handleRemoteVerificationCommandFailure(message) === "abort") {
+          return;
         }
         // §四十四: a store-written banner inherits its host domain. Resource
         // operation results (upload/index/delete/restore acks) render only in
@@ -4573,6 +4454,8 @@ export function App() {
     },
     [
       applyRawHostMessage,
+      handleRemoteVerificationCommandFailure,
+      handleRemoteVerificationHostMessage,
       layout.composerLanguage,
       localizedResourceOperationFallback,
       requestCoachComposerFocus,
@@ -6104,6 +5987,15 @@ export function App() {
 
     return undefined;
   }, [data.conversation]);
+  // Grounding downgrade (DESIGN.md §2.5): union of the webview-visible
+  // carriers for the latest turn — host-mapped coach turn / next-step hint and
+  // the streaming terminal frame. Message-level artifact metadata is read by
+  // the bubble itself.
+  const coachTurnNextStepRequiresConfirmation = resolveTurnNextStepRequiresConfirmation({
+    coachTurnRequiresConfirmation: data.coachTurn?.requiresConfirmation,
+    nextStepHintRequiresConfirmation: data.nextStepHint?.requiresConfirmation,
+    streamingCompletionRequiresConfirmation: streaming.completionNextStepRequiresConfirmation,
+  });
   const liveCoachTurnChrome = preferRecoveredCoachTurnChrome({
     recovered: recoveredRuntime,
     runtimeCurrentStep: planRuntimeStatus?.currentStep ?? runtimeCurrentThread?.currentStep,
@@ -7245,10 +7137,11 @@ export function App() {
         ? selectedTrainingRouteCard.cardId
         : undefined));
   displayedTrainingCardIdRef.current = activeTrainingCardId;
+  // §三: a card or scope change invalidates the in-flight remote verification
+  // panel; the controller owns that state and clears it here.
   useEffect(() => {
-    remoteVerificationRequestRef.current = undefined;
-    setRemoteVerification({ running: false, output: "" });
-  }, [activeTrainingCardId, syncCursor.generation, syncCursor.workspaceId, syncCursor.sessionId]);
+    resetRemoteVerification();
+  }, [activeTrainingCardId, syncCursor.generation, syncCursor.workspaceId, syncCursor.sessionId, resetRemoteVerification]);
   const activityDraftKey = `${composerSessionKey}\u0000${activeTrainingCardId ?? "unselected"}`;
   const activityDraft = layout.activityDrafts?.[activityDraftKey] ?? "";
   const [activityAttachmentBank, setActivityAttachmentBank] = useState<Record<string, MessageAttachment[]>>({});
@@ -10126,9 +10019,13 @@ export function App() {
   // an attempt; the Try draft is throttled into attempt updates; hints bump
   // the assistance level; return closes the lifecycle. Identity fields are
   // derived server-side from the persisted attempt.
-  const currentWorkspaceIdForAttempt =
-    data.memory.workspace?.workspaceId ?? data.workspaceTrainingState?.workspaceId ?? "";
-  const attemptLifecycle = useMemo(() => useTrainingAttemptLifecycle(), []);
+  // Rules of Hooks: call the hook at top level. It returns a stable identity
+  // (internal useMemo), so the dependent effects below do not re-fire per render.
+  const attemptLifecycle = useTrainingAttemptLifecycle();
+  // The start/recover effect reads the active file as a snapshot only; keeping
+  // it in a ref avoids making a file switch restart the attempt.
+  const attemptStartFilePathRef = useRef<string | undefined>(data.liveContext?.activeFile);
+  attemptStartFilePathRef.current = data.liveContext?.activeFile;
 
   // When a formal training card becomes active, start or resume its attempt.
   useEffect(() => {
@@ -10136,9 +10033,8 @@ export function App() {
       return;
     }
     attemptLifecycle.startOrRecover(activeTrainingCardId, {
-      filePath: data.liveContext?.activeFile ?? undefined,
+      filePath: attemptStartFilePathRef.current ?? undefined,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView, activeTrainingCardId, attemptLifecycle, isBrowserPreview, trainingComposerReturnMode, reviewArtifactForeground]);
 
   const handleHintReveal = useCallback(
@@ -12018,6 +11914,7 @@ export function App() {
       onArtifactOpen={stableHandleCoachArtifactOpen}
       onMessageAction={handleCoachMessageAction}
       pendingMessageAction={pendingMessageAction}
+      turnNextStepRequiresConfirmation={coachTurnNextStepRequiresConfirmation}
     />
   );
 
@@ -12652,17 +12549,8 @@ export function App() {
   // verification requests through the handler below.
   const handleVerifyCurrentFileFromCard = () => {
     if (data.workspace?.isRemoteWorkspace && !isBrowserPreview) {
-      if (remoteVerification.running) {
-        return;
-      }
-      setRemoteVerification({ running: true, output: "" });
-      setTrainingVerifyNotice(undefined);
-      const operation = postMessage({
-        type: "command/execute",
-        payload: { commandId: trainerCommands.remoteVerifyActiveFile,
-          payload: { expectedCardId: activeTrainingCardId ?? "" } },
-      });
-      remoteVerificationRequestRef.current = { cardId: activeTrainingCardId ?? "", operation };
+      // The controller owns the running guard, panel state and request identity.
+      beginRemoteVerification(activeTrainingCardId ?? "");
       return;
     }
     if (isBrowserPreview) {
@@ -12684,13 +12572,7 @@ export function App() {
     });
   }, [activeView, isBrowserPreview]);
   const handleStopRemoteVerification = () => {
-    if (!remoteVerification.running) {
-      return;
-    }
-    postMessage({
-      type: "command/execute",
-      payload: { commandId: trainerCommands.remoteVerifyCancel },
-    });
+    stopRemoteVerification();
   };
   const trainingVerifyFileVisible =
     hasTrainingCard && trainingCardType === "practice" && effectiveTrainingSubmode !== "learn-primer";

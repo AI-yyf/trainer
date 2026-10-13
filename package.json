@@ -29,7 +29,9 @@
     "verify:delivery": "npm run verify && npm run test:experience-matrix && npm run package:vsix",
     "test:remote-ssh-e2e": "node ./scripts/run-remote-ssh-e2e.mjs",
     "perf:probe": "node ./scripts/perf-probe.mjs",
-    "verify:version": "node ./scripts/verify-version.mjs"
+    "verify:version": "node ./scripts/verify-version.mjs",
+    "verify:credentials": "node ./scripts/verify-no-plaintext-credentials.mjs",
+    "verify:server-pyright": "node ./scripts/run-server-pyright.mjs"
   },
   "repository": {
     "type": "git",

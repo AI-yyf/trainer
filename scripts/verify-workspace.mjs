@@ -69,6 +69,7 @@ function runNpm(args, label) {
 }
 
 export function verifyWorkspace() {
+  runNpm(["run", "verify:credentials"], "Plaintext credential gate");
   runNpm(["run", "build"], "Root build");
   runNpm(["run", "check"], "Root typecheck");
   runNpm(["run", "test:extension"], "Extension tests");
@@ -77,11 +78,7 @@ export function verifyWorkspace() {
     args: ["-m", "ruff", "check", "app", "tests"],
     label: "Server Ruff check",
   });
-  runServerCommand({
-    serverRoot,
-    args: ["-m", "pyright", "app"],
-    label: "Server Pyright check",
-  });
+  runNpm(["run", "verify:server-pyright"], "Server Pyright gate");
   return runServerTests({ serverRoot });
 }
 

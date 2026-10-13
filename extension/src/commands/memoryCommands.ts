@@ -86,6 +86,12 @@ type UserFeedbackPayload = {
   scenario?: string;
   trainingCardId?: string;
   planId?: string;
+  /**
+   * Webview-generated request id. When present it is echoed back inside the
+   * `[[trainer-learning-feedback:<id>]]` status marker so the composer no
+   * longer recognizes completion by matching the English status text.
+   */
+  requestId?: string;
 };
 
 const USER_FEEDBACK_KINDS = new Set([
@@ -127,7 +133,14 @@ export async function recordUserFeedbackCommand(
     });
     await patchFromSummary(context, snapshot);
     await context.workbench.syncState();
-    return { ok: true, message: 'Learning feedback recorded.', data: snapshot };
+    const requestId = input.requestId?.trim() ?? '';
+    return {
+      ok: true,
+      message: /^[a-z0-9-]{1,96}$/i.test(requestId)
+        ? `[[trainer-learning-feedback:${requestId}]] Learning feedback recorded.`
+        : 'Learning feedback recorded.',
+      data: snapshot,
+    };
   } catch (error) {
     context.outputChannel.appendLine(`[memory] user feedback error: ${error}`);
     return { ok: false, message: String(error) };

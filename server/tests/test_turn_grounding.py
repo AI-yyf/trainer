@@ -1,11 +1,16 @@
-"""Teaching-turn fact grounding (TeachingTurn fact object, first slice).
+"""Teaching-turn fact grounding (TeachingTurnFacts contract).
 
-Covers the 2026-10-08 real-teaching-quality failures:
+Covers the 2026-10-08 real-teaching-quality failures and the slice-2 contract:
 
 - a structured ``coach_turn.next_step`` that demands code symbols appearing
   nowhere in the reply/code must be detected and downgraded to
   ``requires_confirmation`` (case 03: "给我函数名/call site" for a file with no
   function);
+- slice 2: every symbol of every next-step claim must anchor (a fabricated
+  symbol must not hide behind an anchored one), the corrective retry travels
+  back as ``corrected_next_step``, file pointers use the injected existence
+  checker with an ``unverifiable`` escape, and ``TeachingTurnFacts`` carries
+  the claim/provenance fields the assembly flows share;
 - memory anchors must never drift onto a verbatim message prefix
   (cases 01-03: ``coach_anchor``/``current_focus`` became the message prefix).
 """
@@ -25,9 +30,20 @@ from app.core.models import ProviderConfig
 from app.db.repository import TrainerRepository
 from app.llm.provider_service import ProviderService
 from app.llm.turn_grounding import (
+    FACT_KINDS,
+    FACT_PROVENANCES,
+    GroundingDecision,
+    TeachingFact,
+    WorkspaceEvidence,
+    build_teaching_turn_facts,
+    claim_domain,
+    claim_key,
     evaluate_next_step_grounding,
+    evaluate_turn_grounding,
+    extract_claim_facts,
     extract_code_symbols,
     grounding_correction_instruction,
+    grounding_outcome,
     is_verbatim_message_prefix,
     next_step_is_grounded,
     sanitize_memory_anchor,
@@ -149,6 +165,7 @@ def test_retry_once_with_grounded_regeneration_clears_the_flag() -> None:
     assert decision.grounded is True
     assert decision.retry_used is True
     assert decision.requires_confirmation is False
+    assert decision.corrected_next_step == "Run one more experiment on `grid` and keep both outputs."
 
 
 def test_no_retry_hook_downgrades_immediately() -> None:
@@ -349,6 +366,352 @@ def test_derive_coach_anchor_filters_narration_scenario_and_fragment_junk(
     focus = service._derive_current_focus(None, "", lane)
     assert "我的脚本 assert 失败了" not in focus
     assert "我亲自写了下面的修改" not in focus
+
+
+# ---------------------------------------------------------------------------
+# Slice 2: TeachingTurnFacts contract
+# (per-claim anchoring, file checks, corrected-next-step carrier, provenance)
+# ---------------------------------------------------------------------------
+
+
+def test_every_symbol_of_a_claim_must_anchor() -> None:
+    """A fabricated symbol must not hide behind an anchored one."""
+    next_step = "在 `find` 里补一个 `debug_trace()` 调用，再跑一次断言。"
+    reply = "边界用闭区间时循环才能覆盖最后一个元素。"
+    code = "def find(xs, target):\n    lo, hi = 0, len(xs) - 1\n"
+
+    assert next_step_is_grounded(next_step, reply, code) is False
+    decision = evaluate_next_step_grounding(next_step, reply, code)
+    assert decision.grounded is False
+    assert decision.referenced_symbols == ["debug_trace"]
+    assert decision.requires_confirmation is True
+
+
+def test_whitelist_drops_project_nouns_but_keeps_builtins() -> None:
+    assert next_step_is_grounded("把 `log` 输出补上后再跑。", "", "") is False
+    assert next_step_is_grounded("清掉 `todo` 注释。", "", "") is False
+    assert next_step_is_grounded("补一个 `fixme` 标记。", "", "") is False
+    assert next_step_is_grounded("先用 `print` 看一眼输出。", "", "") is True
+    assert next_step_is_grounded("运行 `pytest` 看结果。", "", "") is True
+
+
+def test_build_teaching_turn_facts_populates_claims_and_verdicts() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-42",
+        reply_text="内层列表是同一个引用，`grid[0] is grid[1]` 为 True。",
+        code_text="grid = [[0], [0]]\ngrid[0].append(1)\n",
+        history_text="user: 为什么 grid 两行联动",
+        user_message="我的脚本 assert 失败了，IndexError 指向第二行。",
+        next_step_text="再对 `grid` 做一次独立行实验。",
+    )
+
+    assert facts.turn_id == "turn-42"
+    assert [fact.value for fact in facts.next_step_claims] == ["grid"]
+    assert any(
+        fact.kind == "error_text" and fact.value == "IndexError"
+        for fact in facts.learner_provided
+    )
+    assert facts.memory_provenance["next_step"] == "model_claim"
+    assert facts.memory_provenance["summary"] == "model_claim"
+
+    decision = evaluate_turn_grounding(facts)
+    assert decision.grounded is True
+    assert facts.gate_outcome == "grounded"
+    assert facts.verdicts == {"symbol:grid": "grounded"}
+
+
+def test_corrected_next_step_carrier_and_corrected_outcome() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-43",
+        reply_text="两行共享同一个内层引用。",
+        code_text="grid = [[0], [0]]\n",
+        history_text="",
+        user_message="",
+        next_step_text="给我 `parse_header()` 的函数名和 call site。",
+    )
+
+    decision = evaluate_turn_grounding(
+        facts,
+        retry_generate=lambda: "再对 `grid` 做一次独立行实验。",
+    )
+
+    assert decision.grounded is True
+    assert decision.retry_used is True
+    assert decision.corrected_next_step == "再对 `grid` 做一次独立行实验。"
+    assert facts.gate_outcome == "corrected"
+    assert grounding_outcome(decision) == "corrected"
+    assert [fact.value for fact in facts.next_step_claims] == ["grid"]
+    assert facts.verdicts == {"symbol:grid": "grounded"}
+
+
+def test_failed_retry_downgrades_and_reports_ungrounded_symbols() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-44",
+        reply_text="",
+        code_text="grid = [[0], [0]]\n",
+        history_text="",
+        user_message="",
+        next_step_text="补上 `format_rows()` 的定义位置。",
+    )
+
+    decision = evaluate_turn_grounding(
+        facts,
+        retry_generate=lambda: "再补一个 `parse_header()` 的 call site。",
+    )
+
+    assert decision.grounded is False
+    assert decision.retry_used is True
+    assert decision.requires_confirmation is True
+    assert decision.corrected_next_step is None
+    assert decision.referenced_symbols == ["format_rows"]
+    assert facts.gate_outcome == "downgraded"
+    assert facts.verdicts == {"symbol:format_rows": "ungrounded"}
+    assert grounding_outcome(decision) == "downgraded"
+
+
+def test_empty_regeneration_is_not_a_pass() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-45",
+        reply_text="",
+        code_text="",
+        history_text="",
+        user_message="",
+        next_step_text="给我 `parse_header()` 的函数名。",
+    )
+
+    decision = evaluate_turn_grounding(facts, retry_generate=lambda: "")
+
+    assert decision.grounded is False
+    assert decision.retry_used is True
+    assert decision.requires_confirmation is True
+    assert decision.corrected_next_step is None
+
+
+def test_file_pointer_checker_semantics_and_unverifiable_escape() -> None:
+    step = "查看 `legacy_report.py` 的第 10 行。"
+
+    facts = build_teaching_turn_facts(
+        turn_id="turn-46",
+        reply_text="",
+        code_text="",
+        history_text="",
+        user_message="",
+        next_step_text=step,
+        workspace_evidence=WorkspaceEvidence(
+            file_exists=lambda path: path != "legacy_report.py",
+        ),
+    )
+    decision = evaluate_turn_grounding(facts)
+    assert decision.grounded is False
+    assert decision.requires_confirmation is True
+    assert facts.verdicts == {"file_path:legacy_report.py": "ungrounded"}
+
+    facts = build_teaching_turn_facts(
+        turn_id="turn-46",
+        reply_text="",
+        code_text="",
+        history_text="",
+        user_message="",
+        next_step_text=step,
+        workspace_evidence={"file_exists": lambda path: True},
+    )
+    assert evaluate_turn_grounding(facts).grounded is True
+    assert facts.verdicts == {"file_path:legacy_report.py": "grounded"}
+
+    # Remote / URI workspace: the checker cannot answer -> unverifiable, never
+    # a fabricated downgrade.
+    facts = build_teaching_turn_facts(
+        turn_id="turn-46",
+        reply_text="",
+        code_text="",
+        history_text="",
+        user_message="",
+        next_step_text=step,
+        workspace_evidence=WorkspaceEvidence(file_exists=lambda path: None),
+    )
+    assert evaluate_turn_grounding(facts).grounded is True
+    assert facts.verdicts == {"file_path:legacy_report.py": "unverifiable"}
+
+    # No evidence at all keeps the same escape.
+    facts = build_teaching_turn_facts(
+        turn_id="turn-46",
+        reply_text="",
+        code_text="",
+        history_text="",
+        user_message="",
+        next_step_text=step,
+    )
+    assert evaluate_turn_grounding(facts).grounded is True
+    assert facts.verdicts == {"file_path:legacy_report.py": "unverifiable"}
+
+
+def test_unverifiable_flag_overrides_a_checker() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-46b",
+        reply_text="",
+        code_text="",
+        history_text="",
+        user_message="",
+        next_step_text="查看 `legacy_report.py` 的第 10 行。",
+        workspace_evidence=WorkspaceEvidence(
+            file_exists=lambda path: False,
+            unverifiable=True,
+        ),
+    )
+
+    assert evaluate_turn_grounding(facts).grounded is True
+    assert facts.verdicts == {"file_path:legacy_report.py": "unverifiable"}
+
+
+def test_workspace_verified_fact_anchors_a_symbol() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-47",
+        reply_text="先把它接进现有流程。",
+        code_text="",
+        history_text="",
+        user_message="",
+        next_step_text="调用 `load_dataset()` 载入样本。",
+        workspace_evidence={
+            "verified_facts": [{"kind": "symbol", "value": "load_dataset"}],
+        },
+    )
+
+    decision = evaluate_turn_grounding(facts)
+
+    assert decision.grounded is True
+    assert facts.verdicts == {"symbol:load_dataset": "grounded"}
+    assert facts.workspace_verified[0].provenance == "tool_verified"
+
+
+def test_learner_message_anchors_and_error_text_is_recorded() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-48",
+        reply_text="",
+        code_text="",
+        history_text="",
+        user_message="我贴一下报错：ValueError: need more than 1 value；函数叫 parse_pairs。",
+        next_step_text="回到 `parse_pairs` 里补一个解包检查。",
+    )
+
+    assert any(
+        fact.kind == "error_text" and fact.value == "ValueError"
+        for fact in facts.learner_provided
+    )
+    assert any(fact.value == "parse_pairs" for fact in facts.learner_provided)
+    assert evaluate_turn_grounding(facts).grounded is True
+
+
+def test_claim_key_and_domain_normalization() -> None:
+    assert claim_key("symbol", "`parse_header()`") == "symbol:parse_header"
+    assert claim_key("file_path", "stuck.py") == "file_path:stuck.py"
+    assert (
+        claim_domain(TeachingFact(kind="file_path", value="./src/utils.py"))
+        == "src/utils.py"
+    )
+    assert claim_domain(TeachingFact(kind="symbol", value="`parse_header`")) == "parse_header"
+    assert (
+        claim_domain(TeachingFact(kind="code_fragment", value="Grid[0]  IS  Grid[1]"))
+        == "Grid[0] IS Grid[1]"
+    )
+
+
+def test_claim_extraction_kinds() -> None:
+    facts = extract_claim_facts(
+        "打开 `notes.md`，调用 `load_rows()`，观察 `grid[0]` 和 os.path.join 行为。",
+        source="next_step",
+    )
+    kinds = {fact.value: fact.kind for fact in facts}
+
+    assert kinds == {
+        "notes.md": "file_path",
+        "load_rows": "symbol",
+        "grid[0]": "code_fragment",
+        "os.path.join": "symbol",
+    }
+    assert {"file_path", "symbol", "code_fragment"} <= FACT_KINDS
+    assert "tool_verified" in FACT_PROVENANCES
+
+
+def test_hyphenated_file_reference_is_one_claim() -> None:
+    facts = extract_claim_facts(
+        "再运行一次 `python mutable-default.py`。",
+        source="next_step",
+    )
+
+    assert [(fact.kind, fact.value) for fact in facts] == [
+        ("file_path", "mutable-default.py"),
+    ]
+
+
+def test_multi_token_code_literal_keeps_significant_sub_tokens() -> None:
+    """Variables / call paths survive; language keywords never become claims."""
+    facts = extract_claim_facts("把 `hi = len(xs) - 1` 写进循环。", source="next_step")
+
+    assert [(fact.kind, fact.value) for fact in facts] == [("symbol", "hi")]
+
+    facts = extract_claim_facts(
+        "用 `subprocess.run(cmd, check=True)` 执行，输出写到 `build-output.txt`。",
+        source="next_step",
+    )
+
+    assert [(fact.kind, fact.value) for fact in facts] == [
+        ("file_path", "build-output.txt"),
+        ("symbol", "subprocess.run"),
+    ]
+
+    assert extract_claim_facts(
+        "用 `for i, x in enumerate(xs)` 打印每个索引。",
+        source="next_step",
+    ) == []
+
+
+def test_agent_evidence_carries_next_step_and_fallback_provenance() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-49",
+        reply_text="",
+        code_text="",
+        history_text="",
+        user_message="",
+        agent_evidence={
+            "next_step": "给我 `parse_header()` 的函数名。",
+            "fell_back": True,
+            "request_id": "req-7",
+        },
+    )
+
+    assert [fact.value for fact in facts.next_step_claims] == ["parse_header"]
+    assert facts.request_id == "req-7"
+    assert facts.memory_provenance["next_step"] == "local_fallback"
+    assert facts.next_step_claims[0].provenance == "local_fallback"
+
+
+def test_reply_claims_are_recorded_but_never_downgrade() -> None:
+    facts = build_teaching_turn_facts(
+        turn_id="turn-50",
+        reply_text="可以用 `enumerate` 直接在循环里拿到索引。",
+        code_text="xs = [1, 2]\n",
+        history_text="",
+        user_message="",
+        next_step_text="把观察到的输出贴回来。",
+    )
+
+    assert any(fact.value == "enumerate" for fact in facts.reply_claims)
+    decision = evaluate_turn_grounding(facts)
+    assert decision.grounded is True
+
+
+def test_grounding_outcome_vocabulary() -> None:
+    assert grounding_outcome(GroundingDecision(grounded=True)) == "grounded"
+    assert (
+        grounding_outcome(
+            GroundingDecision(grounded=True, retry_used=True, corrected_next_step="x")
+        )
+        == "corrected"
+    )
+    assert (
+        grounding_outcome(GroundingDecision(grounded=False, requires_confirmation=True))
+        == "downgraded"
+    )
 
 
 # ---------------------------------------------------------------------------

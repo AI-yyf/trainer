@@ -266,6 +266,15 @@ export type AgentToolActivity = TrainerToolActivity;
 export type StreamingState = ReturnType<typeof normalizeTrainerStreamingState> & {
   pendingVisibleContent?: string;
   hasRejectedVisibleContent?: boolean;
+  /**
+   * Grounding downgrade marker from the streaming terminal frame
+   * (`stream/complete.nextStepRequiresConfirmation`). Captured per turn so the
+   * assistant turn that just finished renders its next step as
+   * "confirm before acting". A recovered streaming snapshot does not carry it
+   * yet (host-side persistence is a runtime hop), where the confirmed message
+   * artifacts carry the same marker instead.
+   */
+  completionNextStepRequiresConfirmation?: boolean;
 };
 type OperationMessage = TrainerOperationMessage;
 
@@ -1205,6 +1214,8 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           isStreaming: false,
           completionSummary: summary,
           completionNextStep: nextStep,
+          completionNextStepRequiresConfirmation:
+            message.payload.nextStepRequiresConfirmation === true ? true : undefined,
           completionStopReason: stopReason,
           toolCount,
           agentic: message.payload.agentic,

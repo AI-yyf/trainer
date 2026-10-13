@@ -284,6 +284,8 @@ export interface NextStepHint {
     | "review";
   continueIn?: "coach" | "plan" | "training";
   verification?: string[];
+  /** Grounding downgrade marker for this next step (see CoachTurnSummaryView). */
+  requiresConfirmation?: boolean;
 }
 
 export interface PlanRuntimeStatus {
@@ -1679,6 +1681,12 @@ export interface StreamCompleteEvent {
   nextStep?: string;
   stopReason?: string;
   toolCount?: number;
+  /**
+   * Grounding downgrade on the streaming terminal frame (DESIGN.md §2.5):
+   * the turn's next step is not fully anchored in reply/code, so the UI must
+   * render it as "confirm before acting" instead of presenting it as verified.
+   */
+  nextStepRequiresConfirmation?: boolean;
   reliabilityPhase?: string;
   reliabilityOutcome?: string;
 }

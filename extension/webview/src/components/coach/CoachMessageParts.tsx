@@ -9,6 +9,7 @@ import {
   type TrainerMessagePart,
 } from "../../../../../shared/src/protocol";
 import type { ComposerLanguage } from "../../lib/types";
+import { resolveCopy } from "../../lib/i18n/copy";
 
 import { MermaidBlock } from "./MermaidBlock";
 import { coachMessagePartsCopy } from "./coachMessagePartsCopy";
@@ -21,6 +22,12 @@ import { DocxPreview } from "../preview/DocxPreview";
 export interface CoachMessagePartsProps {
   parts: TrainerMessagePart[];
   language?: ComposerLanguage;
+  /**
+   * Turn-level grounding downgrade (DESIGN.md §2.5): this turn's next step is
+   * not anchored in the reply/code, so the visible-status next-step line gets
+   * a "confirm before acting" marker instead of reading as verified guidance.
+   */
+  nextStepRequiresConfirmation?: boolean;
 }
 
 function copy(
@@ -135,6 +142,7 @@ function renderPart(
   part: TrainerMessagePart,
   language: ComposerLanguage,
   index: number,
+  options?: { nextStepRequiresConfirmation?: boolean },
 ) {
   switch (part.type) {
     case "markdown":
@@ -278,6 +286,15 @@ function renderPart(
             <p className="message-part__meta">
               {copy(language, "下一步：")}
               {part.nextStep}
+              {options?.nextStepRequiresConfirmation ? (
+                <span
+                  className="message-part__confirm-mark"
+                  data-next-step-requires-confirmation="true"
+                  title={resolveCopy(language).nextStepConfirmNote}
+                >
+                  {resolveCopy(language).nextStepConfirmBadge}
+                </span>
+              ) : null}
             </p>
           ) : null}
           {part.resumeThread ? (
@@ -454,10 +471,13 @@ function renderPart(
 export function CoachMessageParts({
   parts,
   language = "en-US",
+  nextStepRequiresConfirmation = false,
 }: CoachMessagePartsProps) {
   return (
     <div className="message-bubble__parts">
-      {parts.map((part, index) => renderPart(part, language, index))}
+      {parts.map((part, index) =>
+        renderPart(part, language, index, { nextStepRequiresConfirmation }),
+      )}
     </div>
   );
 }

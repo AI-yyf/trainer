@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { trainerCommands } from "../../../../shared/src/commands";
 import { postMessage } from "../lib/vscode";
 import type { ActiveWorkbenchView } from "../lib/types";
@@ -54,36 +54,42 @@ export interface TrainingAttemptLifecycle {
 }
 
 export function useTrainingAttemptLifecycle(): TrainingAttemptLifecycle {
-  return {
-    startOrRecover: (cardId, options) => {
-      sendTrainingCommand(trainerCommands.trainingAttemptStart, {
-        cardId,
-        ...(options ?? {}),
-      });
-    },
-    updateDraft: (attemptId, answerDraft) => {
-      sendTrainingCommand(trainerCommands.trainingAttemptUpdate, {
-        attemptId,
-        answerDraft,
-      });
-    },
-    updateAssistance: (cardId, assistanceLevel) => {
-      sendTrainingCommand(trainerCommands.trainingAttemptUpdate, {
-        cardId,
-        assistanceLevel,
-      });
-    },
-    submitEvidence: (attemptId, evidence) => {
-      sendTrainingCommand(trainerCommands.trainingAttemptEvidence, {
-        attemptId,
-        ...evidence,
-      });
-    },
-    keepSameAttempt: () => undefined,
-    close: (attemptId) => {
-      sendTrainingCommand(trainerCommands.trainingAttemptClose, { attemptId });
-    },
-  };
+  // Stable identity across renders: callers keep this in effect dependency
+  // arrays, so a fresh object literal per render would re-fire those effects.
+  // All members are module-level dispatchers, so an empty dep list is exact.
+  return useMemo<TrainingAttemptLifecycle>(
+    () => ({
+      startOrRecover: (cardId, options) => {
+        sendTrainingCommand(trainerCommands.trainingAttemptStart, {
+          cardId,
+          ...(options ?? {}),
+        });
+      },
+      updateDraft: (attemptId, answerDraft) => {
+        sendTrainingCommand(trainerCommands.trainingAttemptUpdate, {
+          attemptId,
+          answerDraft,
+        });
+      },
+      updateAssistance: (cardId, assistanceLevel) => {
+        sendTrainingCommand(trainerCommands.trainingAttemptUpdate, {
+          cardId,
+          assistanceLevel,
+        });
+      },
+      submitEvidence: (attemptId, evidence) => {
+        sendTrainingCommand(trainerCommands.trainingAttemptEvidence, {
+          attemptId,
+          ...evidence,
+        });
+      },
+      keepSameAttempt: () => undefined,
+      close: (attemptId) => {
+        sendTrainingCommand(trainerCommands.trainingAttemptClose, { attemptId });
+      },
+    }),
+    [],
+  );
 }
 
 type TrainingCoachBridgeInput = {

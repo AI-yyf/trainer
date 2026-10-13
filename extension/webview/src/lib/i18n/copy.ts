@@ -26,6 +26,10 @@ export type CopyKey =
   | "viewContextBlocker"
   | "viewContextLatest"
   | "viewContextCoach"
+  // Grounding downgrade: a next step whose symbols are not anchored in the
+  // reply/code must read as "confirm before acting" (DESIGN.md §2.5).
+  | "nextStepConfirmBadge"
+  | "nextStepConfirmNote"
   | "backgroundCoachWork"
   | "workspaceAdmissionRootMissing"
   | "workspaceAdmissionRootMissingDetail"
@@ -858,6 +862,8 @@ export const copyTable = {
     evidenceFilterDeferred: "\u5df2\u5ef6\u671f",
     evidenceFilterAdopted: "\u5df2\u63a5\u7eb3",
     evidenceFilterRejected: "\u5df2\u9a73\u56de",
+    nextStepConfirmBadge: "\u5efa\u8bae\u5148\u786e\u8ba4",
+    nextStepConfirmNote: "\u8fd9\u4e00\u6b65\u8fd8\u6ca1\u5728\u521a\u624d\u7684\u56de\u590d\u6216\u4ee3\u7801\u91cc\u5f97\u5230\u5370\u8bc1\uff0c\u5148\u786e\u8ba4\u518d\u52a8\u624b\u3002",
     evidenceAdopt: "\u63a5\u7eb3",
     evidenceDefer: "\u5ef6\u671f",
     feedbackTooHard: "\u592a\u96be",
@@ -1336,6 +1342,8 @@ export const copyTable = {
     evidenceFilterDeferred: "Deferred",
     evidenceFilterAdopted: "Adopted",
     evidenceFilterRejected: "Rejected",
+    nextStepConfirmBadge: "Confirm first",
+    nextStepConfirmNote: "This next step is not backed by the reply or your code yet \u2014 confirm it before acting.",
     evidenceAdopt: "Adopt",
     evidenceDefer: "Defer",
     feedbackTooHard: "Too hard",
@@ -1855,6 +1863,8 @@ export const copyTable = {
     evidenceFilterDeferred: "Pospuesto",
     evidenceFilterAdopted: "Adoptado",
     evidenceFilterRejected: "Rechazado",
+    nextStepConfirmBadge: "Confirma primero",
+    nextStepConfirmNote: "Este paso a\u00fan no est\u00e1 respaldado por la respuesta o tu c\u00f3digo; conf\u00edrmalo antes de actuar.",
     evidenceAdopt: "Adoptar",
     evidenceDefer: "Posponer",
   },
@@ -2149,6 +2159,8 @@ export const copyTable = {
     evidenceFilterDeferred: "Diff\u00e9r\u00e9",
     evidenceFilterAdopted: "Adopt\u00e9",
     evidenceFilterRejected: "Rejet\u00e9",
+    nextStepConfirmBadge: "\u00c0 confirmer",
+    nextStepConfirmNote: "Cette \u00e9tape n\u2019est pas encore \u00e9tay\u00e9e par la r\u00e9ponse ou votre code \u2014 confirmez avant d\u2019agir.",
     evidenceAdopt: "Adopter",
     evidenceDefer: "Reporter",
   },
@@ -2443,6 +2455,8 @@ export const copyTable = {
     evidenceFilterDeferred: "Zur\u00fcckgestellt",
     evidenceFilterAdopted: "\u00dcbernommen",
     evidenceFilterRejected: "Abgelehnt",
+    nextStepConfirmBadge: "Erst best\u00e4tigen",
+    nextStepConfirmNote: "Dieser Schritt ist noch nicht durch die Antwort oder deinen Code belegt \u2014 vor der Ausf\u00fchrung best\u00e4tigen.",
     evidenceAdopt: "\u00dcbernehmen",
     evidenceDefer: "Verschieben",
   },
@@ -2737,6 +2751,8 @@ export const copyTable = {
     evidenceFilterDeferred: "\u5ef6\u671f",
     evidenceFilterAdopted: "\u63a1\u7528\u6e08\u307f",
     evidenceFilterRejected: "\u5374\u4e0b\u6e08\u307f",
+    nextStepConfirmBadge: "\u5148\u306b\u78ba\u8a8d",
+    nextStepConfirmNote: "\u3053\u306e\u6b21\u306e\u4e00\u6b69\u306f\u307e\u3060\u8fd4\u4fe1\u3084\u30b3\u30fc\u30c9\u3067\u88cf\u3065\u3051\u3089\u308c\u3066\u3044\u307e\u305b\u3093\u3002\u5b9f\u884c\u524d\u306b\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     evidenceAdopt: "\u63a1\u7528",
     evidenceDefer: "\u5ef6\u671f",
   },
@@ -3031,6 +3047,8 @@ export const copyTable = {
     evidenceFilterDeferred: "\ubcf4\ub958\ub428",
     evidenceFilterAdopted: "\ucc44\ud0dd\ub428",
     evidenceFilterRejected: "\uac70\ubd80\ub428",
+    nextStepConfirmBadge: "\uba3c\uc800 \ud655\uc778",
+    nextStepConfirmNote: "\uc774 \ub2e4\uc74c \ub2e8\uacc4\ub294 \uc544\uc9c1 \ub2f5\ubcc0\uc774\ub098 \ucf54\ub4dc\ub85c \ub4b7\ubc1b\uce68\ub418\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4. \uc2e4\ud589 \uc804\uc5d0 \ud655\uc778\ud558\uc138\uc694.",
     evidenceAdopt: "\ucc44\ud0dd",
     evidenceDefer: "\ubcf4\ub958",
   },
@@ -3325,6 +3343,8 @@ export const copyTable = {
     evidenceFilterDeferred: "Adiado",
     evidenceFilterAdopted: "Adotado",
     evidenceFilterRejected: "Rejeitado",
+    nextStepConfirmBadge: "Confirme primeiro",
+    nextStepConfirmNote: "Este passo ainda n\u00e3o \u00e9 respaldado pela resposta ou pelo seu c\u00f3digo \u2014 confirme antes de agir.",
     evidenceAdopt: "Adotar",
     evidenceDefer: "Adiar",
   },

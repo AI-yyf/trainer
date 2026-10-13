@@ -194,6 +194,22 @@
   font-size: var(--trainer-font-3xs);
 }
 
+/* Grounding downgrade marker: a next step not anchored in the reply/code
+   reads as "confirm before acting" (DESIGN.md §2.5) — warning-toned, inline,
+   never hidden. */
+.message-part__confirm-mark {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: 6px;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--warning) 12%, var(--bg-1));
+  border: 1px solid color-mix(in srgb, var(--warning) 42%, var(--line));
+  color: var(--warning);
+  font-size: var(--trainer-font-3xs);
+  white-space: nowrap;
+}
+
 .message-part__details,
 .message-bubble__parts details {
   border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);

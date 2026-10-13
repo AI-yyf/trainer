@@ -4,12 +4,13 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
 // The sidecar layer needs the project's pinned test environment; a bare
 // `python3` (system/anaconda) usually lacks pytest plugins and cannot even
 // collect the suite. Same resolution order as the extension's sidecar bundler.
 // Candidates resolve against the repo root so the matrix works from any cwd.
 function resolveServerPython() {
-  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const candidates = [
     path.join(repoRoot, "server", ".venv", "bin", "python"),
     path.join(repoRoot, "server", ".venv-mac", "bin", "python"),
@@ -20,6 +21,22 @@ function resolveServerPython() {
 }
 
 const layers = [
+  {
+    id: "credentials",
+    label: "Plaintext credential scan",
+    command: process.execPath,
+    args: ["scripts/verify-no-plaintext-credentials.mjs"],
+    cwd: repoRoot,
+    external: false,
+  },
+  {
+    id: "server-pyright",
+    label: "Server pyright (CI-equivalent)",
+    command: process.execPath,
+    args: ["scripts/run-server-pyright.mjs"],
+    cwd: repoRoot,
+    external: false,
+  },
   {
     id: "preview",
     label: "200 experience scenarios / Preview",

@@ -9,6 +9,7 @@ import {
 } from "../../../../../shared/src/protocol";
 import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
 import type { ComposerLanguage, ConversationMessage } from "../../lib/types";
+import { nextStepRequiresConfirmationFromArtifacts } from "../../lib/nextStepConfirmation";
 import { CoachArtifactBlock, type CoachArtifactBlockData } from "./CoachArtifactBlock";
 import { coachMessageBubbleCopy } from "./coachMessageBubbleCopy";
 import { CoachMessageParts } from "./CoachMessageParts";
@@ -40,6 +41,12 @@ export interface CoachMessageBubbleProps {
   onMessageAction?: (action: CoachMessageAction, message: ConversationMessage) => void;
   /** In-flight action key, formatted `${message.id}:${action}`; matching buttons disable. */
   pendingMessageAction?: string | null;
+  /**
+   * Grounding downgrade for this turn (DESIGN.md §2.5): when set, the visible
+   * status next-step line renders a "confirm before acting" marker. The bubble
+   * also derives the flag from its own next_step artifacts' metadata.
+   */
+  nextStepRequiresConfirmation?: boolean;
 }
 
 const COACH_MESSAGE_ACTION_LABELS: Record<
@@ -186,6 +193,7 @@ function CoachMessageBubbleImpl({
   onArtifactOpen,
   onMessageAction,
   pendingMessageAction,
+  nextStepRequiresConfirmation = false,
 }: CoachMessageBubbleProps) {
   const resolvedRoleLabel =
     roleLabel ??
@@ -348,7 +356,16 @@ function CoachMessageBubbleImpl({
             streaming={streaming}
           />
         ) : null}
-        {hasParts ? <CoachMessageParts parts={visibleParts ?? []} language={language} /> : null}
+        {hasParts ? (
+          <CoachMessageParts
+            parts={visibleParts ?? []}
+            language={language}
+            nextStepRequiresConfirmation={
+              nextStepRequiresConfirmation ||
+              nextStepRequiresConfirmationFromArtifacts(message.artifacts)
+            }
+          />
+        ) : null}
         {children}
         {streaming ? (
           hasBody || hasParts ? (

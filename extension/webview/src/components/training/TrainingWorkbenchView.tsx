@@ -920,6 +920,7 @@ type TrainingWorkbenchTextKey =
   | "bringBackAfterCompletion"
   | "filesToTouchLabel"
   | "hintLadderLabel"
+  | "selfCheckLabel"
   | "commonMistakesLabel"
   | "stuckRecoveryLabel"
   | "sourceAndReason"
@@ -1000,6 +1001,7 @@ const trainingWorkbenchTextCopy: Record<
     bringBackAfterCompletion: "完成后带回",
     filesToTouchLabel: "优先文件",
     hintLadderLabel: "提示阶梯",
+    selfCheckLabel: "自检清单",
     commonMistakesLabel: "常见错误",
     stuckRecoveryLabel: "卡住时怎么恢复",
     sourceAndReason: "来源与原因",
@@ -1076,6 +1078,7 @@ const trainingWorkbenchTextCopy: Record<
     bringBackAfterCompletion: "Bring back after completion",
     filesToTouchLabel: "Files to touch",
     hintLadderLabel: "Hint ladder",
+    selfCheckLabel: "Self-check",
     commonMistakesLabel: "Common mistakes",
     stuckRecoveryLabel: "If you get stuck",
     sourceAndReason: "Source and reason",
@@ -1152,6 +1155,7 @@ const trainingWorkbenchTextCopy: Record<
     bringBackAfterCompletion: "Traer de vuelta al terminar",
     filesToTouchLabel: "Archivos prioritarios",
     hintLadderLabel: "Escalera de pistas",
+    selfCheckLabel: "Autocomprobación",
     commonMistakesLabel: "Errores comunes",
     stuckRecoveryLabel: "Cómo recuperarte si te bloqueas",
     sourceAndReason: "Fuente y motivo",
@@ -1228,6 +1232,7 @@ const trainingWorkbenchTextCopy: Record<
     bringBackAfterCompletion: "À rapporter après l'achèvement",
     filesToTouchLabel: "Fichiers prioritaires",
     hintLadderLabel: "Échelle d'indices",
+    selfCheckLabel: "Auto-vérification",
     commonMistakesLabel: "Erreurs fréquentes",
     stuckRecoveryLabel: "Comment vous débloquer",
     sourceAndReason: "Source et raison",
@@ -1304,6 +1309,7 @@ const trainingWorkbenchTextCopy: Record<
     bringBackAfterCompletion: "Nach Abschluss zurückbringen",
     filesToTouchLabel: "Vorrangige Dateien",
     hintLadderLabel: "Hinweisleiter",
+    selfCheckLabel: "Selbstprüfung",
     commonMistakesLabel: "Häufige Fehler",
     stuckRecoveryLabel: "Wenn du feststeckst",
     sourceAndReason: "Quelle und Grund",
@@ -1380,6 +1386,7 @@ const trainingWorkbenchTextCopy: Record<
     bringBackAfterCompletion: "完了後に持ち帰るもの",
     filesToTouchLabel: "優先ファイル",
     hintLadderLabel: "ヒントラダー",
+    selfCheckLabel: "セルフチェック",
     commonMistakesLabel: "よくある間違い",
     stuckRecoveryLabel: "詰まったときの復旧",
     sourceAndReason: "出典と理由",
@@ -1456,6 +1463,7 @@ const trainingWorkbenchTextCopy: Record<
     bringBackAfterCompletion: "완료 후 가져올 것",
     filesToTouchLabel: "우선 파일",
     hintLadderLabel: "힌트 사다리",
+    selfCheckLabel: "자가 점검",
     commonMistakesLabel: "흔한 실수",
     stuckRecoveryLabel: "막혔을 때 복구",
     sourceAndReason: "출처와 이유",
@@ -1532,6 +1540,7 @@ const trainingWorkbenchTextCopy: Record<
     bringBackAfterCompletion: "Trazer de volta ao concluir",
     filesToTouchLabel: "Arquivos prioritários",
     hintLadderLabel: "Escada de dicas",
+    selfCheckLabel: "Autoverificação",
     commonMistakesLabel: "Erros comuns",
     stuckRecoveryLabel: "Se você travar",
     sourceAndReason: "Fonte e motivo",
@@ -2549,6 +2558,12 @@ export function TrainingWorkbenchView({
     verificationMethod,
     ...verifyItems,
   ]);
+  // Card facts that previously reached the view but never rendered (dead
+  // props): the self-check list, common mistakes, and the stuck-recovery
+  // path are part of the card's guidance contract, so they stay in the task
+  // details disclosure instead of being dropped.
+  const resolvedSelfCheck = uniqueTrainingCardItems(selfCheck);
+  const resolvedCommonMistakes = uniqueTrainingCardItems(commonMistakes);
   const resolvedTargetSkill = firstText(targetSkill?.trim());
   const visibleNextAfterCompletion =
     resolvedNextAfterCompletion &&
@@ -2690,6 +2705,32 @@ export function TrainingWorkbenchView({
         <div data-training-card-fact="deliverable">{deliverablesListNode ?? <MessageRichContent body={cardOnlyDeliverable ?? ""} language={language} />}</div>
         <div data-training-card-fact="verify"><span className="template-metadata">{trainingWorkbenchText(language, "verifyNow")}</span><MessageRichContent body={cardOnlyVerification ?? ""} language={language} /></div>
         <div data-training-card-fact="return"><MessageRichContent body={resolvedReturnWith || defaultReturnPath} language={language} /></div>
+        {resolvedSelfCheck.length > 0 ? (
+          <div data-training-card-fact="self-check">
+            <span className="template-metadata">{trainingWorkbenchText(language, "selfCheckLabel")}</span>
+            <ul className="training-card-list" data-training-self-check="true">
+              {resolvedSelfCheck.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {resolvedCommonMistakes.length > 0 ? (
+          <div data-training-card-fact="common-mistakes">
+            <span className="template-metadata">{trainingWorkbenchText(language, "commonMistakesLabel")}</span>
+            <ul className="training-card-list" data-training-common-mistakes="true">
+              {resolvedCommonMistakes.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {resolvedFallbackAction ? (
+          <div data-training-card-fact="recovery">
+            <span className="template-metadata">{trainingWorkbenchText(language, "stuckRecoveryLabel")}</span>
+            <MessageRichContent body={resolvedFallbackAction} language={language} />
+          </div>
+        ) : null}
         {visibleNextAfterCompletion ? (
           <div data-training-card-fact="after-this">
             <span className="template-metadata">{trainingCardOnlySurfaceText(language, "afterThis")}</span>

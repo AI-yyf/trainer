@@ -10,41 +10,100 @@ Methodology per docs/maturity/2026-10-08-real-teaching-quality.md:
   message prefix and must be non-empty or honestly empty.
 - Content quality (factual accuracy, pacing) is recorded for human review and
   is NOT automated — same separation as the original report.
+
+Credentials and endpoints are environment-only (never committed):
+- TRAINER_MATURITY_API_KEY          provider API key (required).
+- TRAINER_MATURITY_PROVIDER_BASE_URL  provider base URL (required; must be
+  https:// — loopback http:// is allowed only for a local gateway). The script
+  refuses to send the credential over plaintext HTTP to any non-loopback host.
+- TRAINER_MATURITY_MODEL            model id (default: MiniMax-M2.7).
+- TRAINER_MATURITY_HOST / _PORT     sidecar bind address (default 127.0.0.1:34900).
+- TRAINER_MATURITY_WORKSPACE        scratch dir (default: <repo>/tmp/maturity-ws).
+- TRAINER_MATURITY_PACING_SECONDS   pacing between turns (default: 12).
+
+Run with the server virtualenv interpreter so the sidecar dependencies resolve:
+  server/.venv/bin/python scripts/maturity/real-teaching-journeys-minimax.py
 """
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 
-sys.path.insert(0, "G:/trainer/server")
-from app.llm.turn_grounding import evaluate_next_step_grounding  # noqa: E402
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SERVER_DIR = REPO_ROOT / "server"
 
-BASE = "http://127.0.0.1:34900"
-API_KEY = "sk-K5DO7XzgBun6jFTLJZLF9UJE0W3bHRvcBugjUtpocmorrXMS"
-PROVIDER = {
-    "name": "minimax-maturity",
-    "baseUrl": "http://minimax.redfast.top",
-    "apiKeyRef": "trainer.default",
-    "model": "MiniMax-M2.7",
-    "protocol": "openai_chat_completions_compatible",
-    "connectionType": "newapi_channel_conn",
-}
-WORKSPACE = Path("G:/trainer/tmp/maturity-ws")
-PACING_SECONDS = 12
+if str(SERVER_DIR) not in sys.path:
+    sys.path.insert(0, str(SERVER_DIR))
+
+SIDECAR_HOST = os.environ.get("TRAINER_MATURITY_HOST", "127.0.0.1").strip() or "127.0.0.1"
+SIDECAR_PORT = int(os.environ.get("TRAINER_MATURITY_PORT", "34900"))
+BASE = f"http://{SIDECAR_HOST}:{SIDECAR_PORT}"
+WORKSPACE = Path(
+    os.environ.get("TRAINER_MATURITY_WORKSPACE", str(REPO_ROOT / "tmp" / "maturity-ws"))
+)
+PACING_SECONDS = float(os.environ.get("TRAINER_MATURITY_PACING_SECONDS", "12"))
+
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+def require_env(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise RuntimeError(
+            f"Missing required environment variable: {name}. "
+            "Credentials live in the environment or an untracked local config only."
+        )
+    return value
+
+
+def secure_provider_base_url() -> str:
+    """Return the provider endpoint, refusing plaintext transport to the network.
+
+    Plaintext HTTP carries the API key on the wire, so it is only accepted for
+    loopback hosts (a local gateway). Any other non-TLS endpoint means we stop
+    sending credentials instead of downgrading the transport.
+    """
+    endpoint = require_env("TRAINER_MATURITY_PROVIDER_BASE_URL")
+    parsed = urlparse(endpoint)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme == "https":
+        return endpoint
+    if parsed.scheme == "http" and host in _LOOPBACK_HOSTS:
+        print(f"[warn] provider endpoint {host!r} is loopback http; credential stays on this machine.")
+        return endpoint
+    raise RuntimeError(
+        "Refusing to send provider credentials over plaintext HTTP: "
+        "TRAINER_MATURITY_PROVIDER_BASE_URL must be https:// (plain http:// is "
+        "allowed only for 127.0.0.1/localhost). If the relay does not support "
+        "TLS, do not send credentials to it."
+    )
 
 
 def run_py(path: Path) -> tuple[int, str]:
     proc = subprocess.run(
-        [sys.executable, str(path)], capture_output=True, text=True, timeout=60
+        [sys.executable, str(path)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
     )
     return proc.returncode, (proc.stderr or proc.stdout).strip().splitlines()[-1] if (
         proc.stderr or proc.stdout
     ).strip() else ""
+
+
+def local_grounding_evaluation(next_step: str, reply: str, code_text: str):
+    """Local recheck for reconciliation only (never the authority)."""
+    from app.llm.turn_grounding import evaluate_next_step_grounding
+
+    return evaluate_next_step_grounding(next_step, reply, code_text)
 
 
 CASES = [
@@ -147,13 +206,26 @@ CASES = [
 ]
 
 
-def turn_payload(sid: str, message: str, code: str, filename: str) -> dict:
+def build_provider() -> dict:
+    return {
+        "name": "minimax-maturity",
+        "baseUrl": secure_provider_base_url(),
+        "apiKeyRef": "trainer.default",
+        "model": os.environ.get("TRAINER_MATURITY_MODEL", "MiniMax-M2.7").strip() or "MiniMax-M2.7",
+        "protocol": "openai_chat_completions_compatible",
+        "connectionType": "newapi_channel_conn",
+    }
+
+
+def turn_payload(
+    sid: str, message: str, code: str, filename: str, provider: dict, api_key: str
+) -> dict:
     return {
         "session_id": sid,
         "message": message,
         "responseLanguage": "zh-CN",
-        "provider": PROVIDER,
-        "apiKey": API_KEY,
+        "provider": provider,
+        "apiKey": api_key,
         "current_file": {
             "path": filename,
             "language_id": "python",
@@ -170,7 +242,7 @@ def judge_turn(case: dict, turn_no: int, payload: dict, code_text: str) -> dict:
         coach_turn.get("requires_confirmation")
         or (payload.get("agent_meta") or {}).get("next_step_requires_confirmation")
     )
-    decision = evaluate_next_step_grounding(next_step, reply, code_text)
+    decision = local_grounding_evaluation(next_step, reply, code_text)
     memory = payload.get("snapshot", {}).get("memory") or {}
     anchor = str(memory.get("coach_anchor") or "")
     focus = str(memory.get("current_focus") or "")
@@ -194,7 +266,10 @@ def judge_turn(case: dict, turn_no: int, payload: dict, code_text: str) -> dict:
 
 def main() -> None:
     import shutil
-    import os
+
+    api_key = require_env("TRAINER_MATURITY_API_KEY")
+    provider = build_provider()
+    WORKSPACE.mkdir(parents=True, exist_ok=True)
 
     data_dir = WORKSPACE / ".trainer-data"
     shutil.rmtree(data_dir, ignore_errors=True)
@@ -203,85 +278,91 @@ def main() -> None:
     proj.mkdir(parents=True, exist_ok=True)
 
     env = {**os.environ, "TRAINER_DATA_DIR": str(data_dir)}
-    sidecar = subprocess.Popen(
-        [
-            "G:/trainer/server/.venv/Scripts/python.exe",
-            "run_sidecar.py",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            "34900",
-        ],
-        cwd="G:/trainer/server",
-        env=env,
-        stdout=open("G:/trainer/tmp/maturity_sidecar.log", "w"),
-        stderr=subprocess.STDOUT,
-    )
-    reports = []
-    try:
-        c = httpx.Client(timeout=300, trust_env=False)  # never proxy localhost
-        for _ in range(30):
+    log_path = WORKSPACE / "maturity_sidecar.log"
+    with open(log_path, "w", encoding="utf-8") as sidecar_log:
+        sidecar = subprocess.Popen(
+            [
+                sys.executable,
+                "run_sidecar.py",
+                "--host",
+                SIDECAR_HOST,
+                "--port",
+                str(SIDECAR_PORT),
+            ],
+            cwd=str(SERVER_DIR),
+            env=env,
+            stdout=sidecar_log,
+            stderr=subprocess.STDOUT,
+        )
+        reports = []
+        try:
+            c = httpx.Client(timeout=300, trust_env=False)  # never proxy localhost
+            for _ in range(30):
+                try:
+                    if c.get(f"{BASE}/health").status_code == 200:
+                        break
+                except httpx.HTTPError:
+                    time.sleep(2)
+            sid = ""
+            r = c.post(
+                f"{BASE}/session/start",
+                json={"workspace_id": WORKSPACE.as_posix(), "workspace_name": "maturity"},
+            )
+            sid = (r.json() or {}).get("session_id") or ""
+
+            for case in CASES:
+                filename = case["id"].split("-", 1)[1] + ".py"
+                path = proj / filename
+                path.write_text(case["code"], encoding="utf-8")
+                rc, err = run_py(path)
+                print(f"[{case['id']}] pre-fix exit={rc} last={err[-80:]!r}")
+
+                r = c.post(
+                    f"{BASE}/turn",
+                    json=turn_payload(sid, case["turn1"], case["code"], filename, provider, api_key),
+                )
+                t1 = judge_turn(case, 1, r.json(), case["code"])
+                reports.append(t1)
+                print(f"  turn1: grounded={t1['next_step_grounded']} flagged={t1['next_step_flagged']} anchor={t1['anchor'][:40]!r}")
+
+                path.write_text(case["fix"], encoding="utf-8")
+                rc, err = run_py(path)
+                print(f"[{case['id']}] post-fix exit={rc}")
+
+                time.sleep(PACING_SECONDS)
+                r = c.post(
+                    f"{BASE}/turn",
+                    json=turn_payload(sid, case["turn2"], case["fix"], filename, provider, api_key),
+                )
+                t2 = judge_turn(case, 2, r.json(), case["fix"])
+                t2["post_fix_exit0"] = rc == 0
+                reports.append(t2)
+                print(f"  turn2: grounded={t2['next_step_grounded']} flagged={t2['next_step_flagged']} anchor={t2['anchor'][:40]!r}")
+
+                time.sleep(PACING_SECONDS)
+
+            (WORKSPACE / "report.json").write_text(
+                json.dumps(reports, ensure_ascii=False, indent=1), encoding="utf-8"
+            )
+            mech_ok = all(
+                (r["next_step_grounded"] or r["next_step_flagged"]) for r in reports
+            )
+            drift = [
+                r
+                for r in reports
+                if r["model_completed"] and not r["anchor"] and not r["current_focus"]
+            ]
+            print(
+                f"\n=== 机制验收: {'PASS' if mech_ok and not drift else 'FAIL'} "
+                f"(ungrounded-unflagged={sum(1 for r in reports if not (r['next_step_grounded'] or r['next_step_flagged']))}, "
+                f"prefix-drift-anchor-empty-after-model={len(drift)}) ==="
+            )
+        finally:
+            sidecar.terminate()
             try:
-                if c.get(f"{BASE}/health").status_code == 200:
-                    break
-            except Exception:
-                time.sleep(2)
-        sid = ""
-        r = c.post(
-            f"{BASE}/session/start",
-            json={"workspace_id": WORKSPACE.as_posix(), "workspace_name": "maturity"},
-        )
-        sid = (r.json() or {}).get("session_id") or ""
-
-        for case in CASES:
-            filename = case["id"].split("-", 1)[1] + ".py"
-            path = proj / filename
-            path.write_text(case["code"], encoding="utf-8")
-            rc, err = run_py(path)
-            print(f"[{case['id']}] pre-fix exit={rc} last={err[-80:]!r}")
-
-            r = c.post(
-                f"{BASE}/turn",
-                json=turn_payload(sid, case["turn1"], case["code"], filename),
-            )
-            t1 = judge_turn(case, 1, r.json(), case["code"])
-            reports.append(t1)
-            print(f"  turn1: grounded={t1['next_step_grounded']} flagged={t1['next_step_flagged']} anchor={t1['anchor'][:40]!r}")
-
-            path.write_text(case["fix"], encoding="utf-8")
-            rc, err = run_py(path)
-            print(f"[{case['id']}] post-fix exit={rc}")
-
-            time.sleep(PACING_SECONDS)
-            r = c.post(
-                f"{BASE}/turn",
-                json=turn_payload(sid, case["turn2"], case["fix"], filename),
-            )
-            t2 = judge_turn(case, 2, r.json(), case["fix"])
-            t2["post_fix_exit0"] = rc == 0
-            reports.append(t2)
-            print(f"  turn2: grounded={t2['next_step_grounded']} flagged={t2['next_step_flagged']} anchor={t2['anchor'][:40]!r}")
-
-            time.sleep(PACING_SECONDS)
-
-        (WORKSPACE / "report.json").write_text(
-            json.dumps(reports, ensure_ascii=False, indent=1), encoding="utf-8"
-        )
-        mech_ok = all(
-            (r["next_step_grounded"] or r["next_step_flagged"]) for r in reports
-        )
-        drift = [
-            r
-            for r in reports
-            if r["model_completed"] and not r["anchor"] and not r["current_focus"]
-        ]
-        print(
-            f"\n=== 机制验收: {'PASS' if mech_ok and not drift else 'FAIL'} "
-            f"(ungrounded-unflagged={sum(1 for r in reports if not (r['next_step_grounded'] or r['next_step_flagged']))}, "
-            f"prefix-drift-anchor-empty-after-model={len(drift)}) ==="
-        )
-    finally:
-        sidecar.terminate()
+                sidecar.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                sidecar.kill()
 
 
 if __name__ == "__main__":
