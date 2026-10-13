@@ -6,7 +6,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   background: var(--bg-2);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   border: 1px solid var(--line);
@@ -16,7 +16,7 @@
 .artifact-card__header-main {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .artifact-card__icon {
@@ -36,7 +36,7 @@
 }
 
 .artifact-card__summary {
-  padding: 12px;
+  padding: var(--space-3);
   background: var(--bg-1);
   border: 1px solid var(--line);
   border-top: none;
@@ -46,13 +46,13 @@
 .artifact-card__teaser {
   font-size: var(--trainer-font-xs);
   color: var(--fg-1);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .artifact-card__detail-note {
   font-size: var(--trainer-font-3xs);
   color: var(--fg-muted);
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 /* Grounding downgrade note on a next-step card (DESIGN.md §2.5): keep the
@@ -62,8 +62,8 @@
   align-items: baseline;
   gap: 6px;
   flex-wrap: wrap;
-  margin: 8px 0 0;
-  padding: 6px 8px;
+  margin: var(--space-2) 0 0;
+  padding: 6px var(--space-2);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--warning) 8%, var(--bg-1));
   border: 1px solid color-mix(in srgb, var(--warning) 34%, var(--line));
@@ -74,7 +74,7 @@
 .artifact-card__confirm-mark {
   display: inline-flex;
   align-items: center;
-  padding: 1px 8px;
+  padding: 1px var(--space-2);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--warning) 14%, var(--bg-1));
   color: var(--warning);
@@ -83,8 +83,8 @@
 }
 
 .artifact-card__next-action {
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
   border-top: 1px solid var(--line);
 }
 
@@ -94,5 +94,5 @@
 }
 
 .artifact-card__action {
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }

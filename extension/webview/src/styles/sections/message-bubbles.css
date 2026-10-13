@@ -6,7 +6,7 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   min-width: 0;
   padding: 10px 11px;
@@ -18,7 +18,7 @@
 }
 
 .message-bubble--assistant {
-  padding: 2px 0 4px;
+  padding: 2px 0 var(--space-1);
   border-color: transparent;
   background: transparent;
 }
@@ -83,7 +83,7 @@
 .message-bubble__meta-main {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
   width: 100%;
 }
@@ -130,7 +130,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: var(--space-2);
   width: 100%;
   min-width: 0;
 }
@@ -147,7 +147,7 @@
 .structured-table {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
   padding: 11px;
   border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
@@ -161,7 +161,7 @@
 .file-preview-renderer__header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
@@ -186,7 +186,7 @@
 .structured-preview__meta span {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: 2px var(--space-2);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--bg-2) 70%, transparent);
   border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
@@ -201,7 +201,7 @@
   display: inline-flex;
   align-items: center;
   margin-inline-start: 6px;
-  padding: 1px 8px;
+  padding: 1px var(--space-2);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--warning) 12%, var(--bg-1));
   border: 1px solid color-mix(in srgb, var(--warning) 42%, var(--line));
@@ -222,7 +222,7 @@
 .message-bubble__parts details summary {
   cursor: pointer;
   list-style: none;
-  padding: 8px 10px;
+  padding: var(--space-2) 10px;
   font-size: var(--trainer-font-2xs);
   font-weight: 400;
 }
@@ -235,7 +235,7 @@
 .message-part__details-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 0 10px 10px;
 }
 
@@ -254,7 +254,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-left: 16px;
+  padding-left: var(--space-4);
 }
 
 .message-part__checklist li,
@@ -327,7 +327,7 @@
   display: inline-flex;
   align-items: center;
   margin-left: auto;
-  padding: 2px 8px;
+  padding: 2px var(--space-2);
   border-radius: var(--radius-full);
   border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
   font-size: var(--trainer-font-3xs);
@@ -380,8 +380,8 @@
 .diff-renderer__line {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr);
-  gap: 8px;
-  padding: 4px 8px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: var(--trainer-font-2xs);
@@ -491,16 +491,16 @@
 .message-bubble__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 8px;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
   width: 100%;
 }
 
 .message-bubble__action {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
   border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
   border-radius: var(--radius-sm);
   background: transparent;
@@ -567,8 +567,8 @@
 .message-bubble__agent-status {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin: 0 0 4px;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-1);
   padding: 0;
   border: 0;
   background: transparent;
@@ -623,8 +623,8 @@
 .message-bubble__agent-status-disclosure .collapsible-block__body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 6px 0 8px 14px;
+  gap: var(--space-2);
+  padding: 6px 0 var(--space-2) 14px;
   background: transparent;
   border: 0;
   border-radius: 0;

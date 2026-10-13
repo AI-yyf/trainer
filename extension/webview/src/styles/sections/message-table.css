@@ -3,7 +3,7 @@
    ========================================================================== */
 
 .message-render-block {
-  margin: 8px 0;
+  margin: var(--space-2) 0;
   width: 100%;
 }
 
@@ -29,7 +29,7 @@
 
 .message-table-wrap th,
 .message-table-wrap td {
-  padding: 6px 8px;
+  padding: 6px var(--space-2);
   border-right: 1px solid color-mix(in srgb, var(--line) 64%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
   text-align: left;

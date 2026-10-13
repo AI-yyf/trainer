@@ -8,7 +8,7 @@
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--line) 52%, transparent);
   background: var(--vscode-editor-background, color-mix(in srgb, var(--bg-0) 88%, var(--bg-1)));
-  margin: 8px 0 6px;
+  margin: var(--space-2) 0 6px;
 }
 
 .code-block-header {

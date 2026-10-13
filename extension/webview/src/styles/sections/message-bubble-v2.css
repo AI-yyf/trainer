@@ -4,8 +4,8 @@
 
 .message-bubble-v2 {
   display: flex;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) 10px;
   animation: messageFadeIn var(--motion-in) var(--motion-ease);
 }
 
@@ -21,7 +21,7 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 2px 8px;
+  padding: 2px var(--space-2);
   border-radius: var(--radius-lg);
   font-size: var(--trainer-font-3xs);
   background: color-mix(in srgb, var(--bg-2) 52%, transparent);

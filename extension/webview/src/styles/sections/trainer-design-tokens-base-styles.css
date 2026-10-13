@@ -37,6 +37,18 @@
   --trainer-space-5: 20px;
   --trainer-space-6: 24px;
 
+  /* Spacing scale — mirrors shared/src/tokens.ts `workbenchTokens.space`
+     (1:4px 2:8px 3:12px 4:16px 5:24px 6:32px), also injected at runtime by
+     lib/theme.ts. Declared statically so sections resolve --space-* without
+     depending on theme bootstrap. Distinct from the legacy --trainer-space-*
+     scale above (5=20px, 6=24px). */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;

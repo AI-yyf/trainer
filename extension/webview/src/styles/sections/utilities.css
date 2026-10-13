@@ -42,7 +42,7 @@
 .trainer-startup-shell__eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: var(--trainer-font-3xs);
   font-weight: 400;
   letter-spacing: 0;
@@ -55,9 +55,9 @@
   border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   border-radius: var(--radius-xl);
   background: color-mix(in srgb, var(--bg-1) 92%, transparent);
-  padding: 12px;
+  padding: var(--space-3);
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .trainer-startup-error__heading,

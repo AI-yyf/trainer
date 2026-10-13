@@ -8,7 +8,7 @@
 }
 
 .settings-grid--compact {
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .settings-grid--tight {
@@ -18,7 +18,7 @@
 .settings-grid--form {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .settings-field {
@@ -37,7 +37,7 @@
 .settings-field select,
 .settings-field textarea {
   min-height: 26px;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   background: color-mix(in srgb, var(--bg-0) 76%, var(--bg-1));
@@ -70,8 +70,8 @@
   min-height: 26px;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 4px 8px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--bg-0) 76%, var(--bg-1));
@@ -118,13 +118,13 @@
 
 .settings-model-picker > select {
   width: 100%;
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 .settings-model-picker__filter {
   display: grid;
   gap: 3px;
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 .settings-model-picker__filter + select {

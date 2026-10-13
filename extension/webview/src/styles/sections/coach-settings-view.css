@@ -4,10 +4,10 @@
 
 .coach-settings-view__provider-detail {
   gap: 6px;
-  padding: 8px 0 0;
+  padding: var(--space-2) 0 0;
   background: transparent;
   border-radius: 0;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 /* The details summary carries three facts (title, workspace pill, connection
@@ -16,7 +16,7 @@
 .coach-settings-view__provider-detail .collapse-section__header,
 .coach-settings-view__provider-detail .collapse-section__header-row {
   flex-wrap: wrap;
-  row-gap: 4px;
+  row-gap: var(--space-1);
 }
 
 .coach-settings-view__provider-detail .collapse-section__header .collapse-section__title {

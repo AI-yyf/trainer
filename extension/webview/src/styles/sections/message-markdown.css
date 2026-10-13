@@ -14,7 +14,7 @@
 }
 
 .message-markdown p {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .message-markdown p:last-child {
@@ -34,7 +34,7 @@
 .trainer-shell .message-markdown h4,
 .trainer-shell .message-markdown h5,
 .trainer-shell .message-markdown h6 {
-  margin-top: 12px;
+  margin-top: var(--space-3);
   margin-bottom: 6px;
   color: var(--fg-0);
   letter-spacing: 0;
@@ -86,7 +86,7 @@
 
 .message-markdown ul,
 .message-markdown ol {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
   padding-left: 20px;
 }
 
@@ -114,8 +114,8 @@
 
 .message-markdown blockquote {
   border-left: 3px solid var(--accent);
-  padding-left: 12px;
-  margin: 8px 0;
+  padding-left: var(--space-3);
+  margin: var(--space-2) 0;
   color: var(--fg-1);
 }
 
@@ -136,7 +136,7 @@
 .message-markdown__code-block {
   background: color-mix(in srgb, var(--bg-1) 96%, var(--bg-0));
   border-radius: 0;
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   overflow: auto;
   font-family: var(--font-mono);
   font-size: var(--trainer-font-2xs);
@@ -174,7 +174,7 @@
 }
 
 .message-markdown .katex-display {
-  margin: 8px 0;
+  margin: var(--space-2) 0;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 2px 0;
@@ -187,6 +187,6 @@
 }
 
 .message-markdown--plain p {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 

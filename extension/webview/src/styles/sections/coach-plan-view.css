@@ -22,8 +22,8 @@
   display: grid;
   grid-template-columns: 3px minmax(0, 1fr);
   gap: 7px;
-  margin-top: 8px;
-  padding: 0 0 0 8px;
+  margin-top: var(--space-2);
+  padding: 0 0 0 var(--space-2);
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -120,7 +120,7 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 0;
-  margin-top: 8px;
+  margin-top: var(--space-2);
   border-top: 1px solid color-mix(in srgb, var(--line) 38%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--line) 34%, transparent);
 }
@@ -167,8 +167,8 @@
   grid-template-columns: minmax(54px, auto) minmax(0, 1fr);
   align-items: start;
   gap: 3px 10px;
-  margin-top: 8px;
-  padding: 0 0 0 8px;
+  margin-top: var(--space-2);
+  padding: 0 0 0 var(--space-2);
   border: 0;
   border-left: 2px solid color-mix(in srgb, var(--accent) 52%, var(--line));
   border-radius: 0;
@@ -235,7 +235,7 @@
 }
 
 .coach-leftover-note {
-  padding: 4px 0 8px;
+  padding: var(--space-1) 0 var(--space-2);
 }
 
 .coach-plan-view__empty-more {
@@ -337,7 +337,7 @@
 @media (max-width: 320px) {
 
   .coach-plan-view__read-rail-item {
-    padding-left: 4px;
+    padding-left: var(--space-1);
   }
 
   .coach-plan-view__read-rail-item em {
@@ -350,15 +350,15 @@
 .coach-plan-view__empty {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .coach-plan-view__empty-outline {
   display: flex;
   flex-direction: column;
   gap: 0;
-  margin-left: 8px;
-  padding: 2px 0 0 8px;
+  margin-left: var(--space-2);
+  padding: 2px 0 0 var(--space-2);
   border-left: 1px solid color-mix(in srgb, var(--line) 54%, transparent);
 }
 
@@ -367,7 +367,7 @@
   flex-direction: column;
   gap: 2px;
   position: relative;
-  padding: 8px 0 8px 10px;
+  padding: var(--space-2) 0 var(--space-2) 10px;
   border-radius: 0;
   border: 0;
   border-top: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
@@ -418,7 +418,7 @@
 .coach-plan-view__blocked-copy {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .coach-plan-view__blocked-copy > strong {
@@ -444,7 +444,7 @@
 .coach-plan-view__status {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   padding: 2px 7px;
   border-radius: var(--radius-sm);
   font-size: var(--trainer-font-3xs);
@@ -459,7 +459,7 @@
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr);
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   min-width: 0;
   padding: 7px 0;
@@ -495,7 +495,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .coach-plan-view__stage-topline strong {
@@ -507,7 +507,7 @@
 
 .coach-plan-view__details {
   margin-top: 10px;
-  padding: 8px 0 0;
+  padding: var(--space-2) 0 0;
   border: 0;
   border-top: 1px solid color-mix(in srgb, var(--line) 34%, transparent);
   border-radius: 0;
@@ -528,7 +528,7 @@
 
 .coach-plan-view__global-plan-copy {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .coach-plan-view__global-plan-copy > span {
@@ -552,8 +552,8 @@
 }
 
 .coach-plan-view__details-group {
-  margin-bottom: 8px;
-  padding-top: 8px;
+  margin-bottom: var(--space-2);
+  padding-top: var(--space-2);
   border-top: 1px solid color-mix(in srgb, var(--line) 28%, transparent);
 }
 
@@ -587,7 +587,7 @@
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .coach-plan-view__evidence-row-head > div {
@@ -611,14 +611,14 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: 12px;
+  margin-top: var(--space-3);
 }
 
 .coach-plan-view__support-feed-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) 10px;
   border-radius: 0;
   background: transparent;
   font-size: var(--trainer-font-xs);
@@ -628,7 +628,7 @@
 .coach-plan-view__lane-note {
   font-size: var(--trainer-font-2xs);
   color: var(--fg-muted);
-  padding: 4px 0;
+  padding: var(--space-1) 0;
 }
 
 .coach-plan-view__lane-note--quiet {
@@ -639,7 +639,7 @@
   font-size: var(--trainer-font-xs);
   font-weight: 400;
   color: var(--fg-1);
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 
 .coach-plan-view__goal-title p {
@@ -648,7 +648,7 @@
 
 .coach-plan-view__actions-stack {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .coach-plan-view__action-button {

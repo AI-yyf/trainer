@@ -9,7 +9,7 @@
   padding: 7px 0;
   color: var(--fg-muted, var(--trainer-fallback-fg-muted));
 }
-.user-feedback-disclosure__body { padding: 0 0 8px; }
+.user-feedback-disclosure__body { padding: 0 0 var(--space-2); }
 .user-feedback-disclosure__body p { margin: 0 0 7px; }
 .user-feedback-disclosure__actions { display: flex; flex-wrap: wrap; gap: 5px; }
 .user-feedback-disclosure__action { padding: 3px 7px; font-size: var(--trainer-font-2xs); }

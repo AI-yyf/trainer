@@ -7,10 +7,10 @@
 .progress-view__nudge {
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .progress-view__nudge-action {
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 

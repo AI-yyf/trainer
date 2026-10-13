@@ -18,7 +18,7 @@
   gap: 7px;
   width: 100%;
   min-width: 0;
-  padding: 11px 4px 9px;
+  padding: 11px var(--space-1) 9px;
 }
 
 .coach-conversation-view__item + .coach-conversation-view__item--assistant {
@@ -51,12 +51,12 @@
 }
 
 .coach-conversation-view--quiet-surface .coach-conversation-view__item {
-  padding: 2px 4px;
+  padding: 2px var(--space-1);
 }
 
 .coach-conversation-view--quiet-surface .coach-conversation-view__item--assistant,
 .coach-conversation-view--quiet-surface .coach-conversation-view__footer {
-  padding: 2px 4px;
+  padding: 2px var(--space-1);
   border-top: 0;
   background: transparent;
 }
@@ -66,7 +66,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .coach-conversation-view--quiet-surface .message-bubble--assistant,
@@ -134,26 +134,26 @@
 }
 
 .coach-conversation-view--quiet-surface .message-bubble__body {
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .coach-conversation-view__heading {
   font-size: var(--trainer-font-xs);
   font-weight: 400;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 
 .coach-conversation-view__subtitle {
   font-size: var(--trainer-font-xs);
   color: var(--fg-muted);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .coach-conversation-view__summary {
   display: flex;
   min-width: 0;
-  margin: 2px 4px 0;
-  padding: 3px 0 3px 8px;
+  margin: 2px var(--space-1) 0;
+  padding: 3px 0 3px var(--space-2);
   background: transparent;
   border-top: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
   border-left: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
@@ -163,14 +163,14 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 3px 8px;
+  gap: 3px var(--space-2);
   min-width: 0;
 }
 
 .coach-thread-strip--orientation {
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .coach-conversation-view__summary-strip {
@@ -187,7 +187,7 @@
 .coach-conversation-view__summary-pill {
   display: inline-flex;
   align-items: baseline;
-  gap: 4px;
+  gap: var(--space-1);
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
@@ -250,14 +250,14 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: 4px 0 6px;
+  padding: var(--space-1) 0 6px;
 }
 
 .coach-conversation-view__list--empty {
   flex: 1 1 auto;
   min-height: 0;
   justify-content: center;
-  padding-bottom: 4px;
+  padding-bottom: var(--space-1);
 }
 
 /* Conversations read top-down. The previous `::before { flex: 1 0 0 }` spacer
@@ -302,7 +302,7 @@
 }
 
 .coach-conversation-view__footer {
-  padding: 5px 4px;
+  padding: 5px var(--space-1);
   border-top: 1px solid color-mix(in srgb, var(--line) 44%, transparent);
   background: transparent;
 }
@@ -327,7 +327,7 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding: 0 0 0 8px;
+  padding: 0 0 0 var(--space-2);
   border-left: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
 }
 

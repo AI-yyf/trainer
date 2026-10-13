@@ -17,7 +17,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .command-deck__hint {
@@ -45,7 +45,7 @@
 .command-deck__list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .command-deck__item {
@@ -53,9 +53,9 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
-  padding: 6px 8px;
+  padding: 6px var(--space-2);
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   background: transparent;

@@ -8,10 +8,10 @@
 }
 
 .settings-memory-sharing__empty {
-  padding: 12px 8px;
+  padding: var(--space-3) var(--space-2);
 }
 
 .settings-sheet__authority-empty {
-  padding: 12px 8px;
+  padding: var(--space-3) var(--space-2);
 }
 

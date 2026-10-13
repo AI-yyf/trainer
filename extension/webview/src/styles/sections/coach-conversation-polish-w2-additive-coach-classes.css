@@ -51,9 +51,9 @@
 .coach-msg-pending {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
-  padding: 4px 0;
+  padding: var(--space-1) 0;
 }
 
 .coach-msg-pending__line {

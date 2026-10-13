@@ -17,7 +17,7 @@
   border: 0;
   border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
   border-radius: 0;
-  padding: 8px 0 0;
+  padding: var(--space-2) 0 0;
   box-shadow: none;
 }
 
@@ -33,7 +33,7 @@
   border: 0;
   border-top: 0;
   border-radius: 0;
-  padding: 4px 0 0;
+  padding: var(--space-1) 0 0;
   box-shadow: none;
 }
 
@@ -41,7 +41,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 4px 0 2px;
+  padding: var(--space-1) 0 2px;
   border-top: 1px solid color-mix(in srgb, var(--line) 34%, transparent);
 }
 
@@ -49,7 +49,7 @@
   display: grid;
   grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
   align-items: baseline;
-  gap: 2px 8px;
+  gap: 2px var(--space-2);
   padding: 5px 0;
   border-top-color: color-mix(in srgb, var(--line) 28%, transparent);
 }

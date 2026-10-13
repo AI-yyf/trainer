@@ -76,7 +76,7 @@
 }
 
 .stage-material-empty {
-  padding: 10px 4px;
+  padding: 10px var(--space-1);
 }
 
 @media (prefers-reduced-motion: reduce) {

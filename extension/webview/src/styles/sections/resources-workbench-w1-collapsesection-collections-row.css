@@ -6,7 +6,7 @@
    motion/surface tokens; no private colors or durations.
    ============================================================ */
 .resources-library-tree__item > .collapse-section {
-  margin-block-end: 4px;
+  margin-block-end: var(--space-1);
 }
 
 .resources-library-tree__item > .collapse-section:last-child {
@@ -30,8 +30,8 @@
 
 .resources-knowledge__tree .collapse-section__header {
   min-height: 28px;
-  padding: 4px var(--trainer-space-2);
-  gap: 4px;
+  padding: var(--space-1) var(--trainer-space-2);
+  gap: var(--space-1);
   border-left: 1px solid transparent;
 }
 
@@ -111,14 +111,14 @@
 }
 
 .resources-empty {
-  padding: 16px 10px;
+  padding: var(--space-4) 10px;
   color: var(--fg-3);
   font-size: var(--trainer-font-2xs);
   line-height: 1.5;
 }
 
 .resources-empty--compact {
-  padding: 4px 2px;
+  padding: var(--space-1) 2px;
 }
 
 .resources-empty p {

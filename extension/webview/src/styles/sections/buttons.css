@@ -8,7 +8,7 @@
   justify-content: center;
   gap: 5px;
   min-height: 26px;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   font-size: var(--trainer-font-xs);
   font-weight: 400;
@@ -111,7 +111,7 @@
   align-items: center;
   justify-content: center;
   min-height: 24px;
-  padding: 2px 8px;
+  padding: 2px var(--space-2);
   border-radius: var(--radius-md);
   border: 1px solid color-mix(in srgb, var(--line) 54%, transparent);
   background: var(--chip-surface);
@@ -165,7 +165,7 @@
 }
 
 .practice-card__section {
-  padding-top: 8px;
+  padding-top: var(--space-2);
   border-top: 1px solid color-mix(in srgb, var(--line) 38%, transparent);
 }
 
@@ -186,7 +186,7 @@
 .quick-actions-panel__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .quick-action-btn {
@@ -195,7 +195,7 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   border-radius: var(--radius-lg);
   border: 1px solid color-mix(in srgb, var(--line) 52%, transparent);
   background: var(--bg-1);

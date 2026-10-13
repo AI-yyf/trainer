@@ -6,7 +6,7 @@
 .coach-empty-state .button--accent {
   width: auto;
   min-height: 30px;
-  padding: 5px 12px;
+  padding: 5px var(--space-3);
   justify-content: flex-start;
 }
 
@@ -14,7 +14,7 @@
 .coach-plan-view__details > summary {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-height: 28px;
   padding: 2px 0;
   font-size: var(--trainer-font-2xs);
@@ -128,7 +128,7 @@ details[open] > :not(summary) {
 
 .settings-section--summary {
   border-top: 0;
-  padding-top: 4px;
+  padding-top: var(--space-1);
 }
 
 .settings-sheet__body--hierarchical > .workspace-root-recovery,
@@ -140,7 +140,7 @@ details[open] > :not(summary) {
 
 .settings-section--summary > .collapsible-block > summary {
   min-height: 28px;
-  padding: 4px 0;
+  padding: var(--space-1) 0;
   color: var(--fg-muted);
   font-size: var(--trainer-font-3xs);
 }
@@ -156,7 +156,7 @@ details[open] > :not(summary) {
 }
 
 .coach-empty-state--welcome {
-  padding: 0 4px 8px;
+  padding: 0 var(--space-1) var(--space-2);
 }
 
 .coach-empty-state--welcome p {
@@ -217,7 +217,7 @@ details[open] > :not(summary) {
 
 .trainer-preview-editor__canvas {
   flex: 1 1 auto;
-  margin: 16px 18px;
+  margin: var(--space-4) 18px;
   opacity: 0.28;
   background: repeating-linear-gradient(
     to bottom,
@@ -273,7 +273,7 @@ details[open] > :not(summary) {
   z-index: 8;
   min-width: 168px;
   inline-size: min(240px, calc(100vw - 32px));
-  padding: 4px;
+  padding: var(--space-1);
   border-radius: var(--radius-lg);
   border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
   background: var(--bg-1);
@@ -284,10 +284,10 @@ details[open] > :not(summary) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   min-height: 28px;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;

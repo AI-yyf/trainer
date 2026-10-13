@@ -28,9 +28,9 @@
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
-  padding: 8px 10px;
+  padding: var(--space-2) 10px;
   border: none;
   background: transparent;
   color: inherit;
@@ -90,7 +90,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
 }
 
 .collapse-section__body-wrap {
@@ -110,7 +110,7 @@
 }
 
 .collapse-section.is-open > .collapse-section__body-wrap > .collapse-section__body {
-  padding: 4px 10px 10px;
+  padding: var(--space-1) 10px 10px;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -40,7 +40,7 @@
   background: color-mix(in srgb, var(--bg-0) 78%, var(--bg-2));
   border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   border-radius: var(--radius-md);
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   overflow-x: auto;
   font-size: var(--trainer-font-2xs);
   line-height: 1.55;
@@ -88,7 +88,7 @@
 
 .coach-streaming-dots__dots {
   display: inline-flex;
-  gap: 4px;
+  gap: var(--space-1);
   align-items: center;
 }
 
@@ -147,7 +147,7 @@
 .onboarding-wizard__steps {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -166,7 +166,7 @@
 .coach-onboarding {
   display: flex;
   flex-direction: column;
-  padding: 0 0 8px;
+  padding: 0 0 var(--space-2);
 }
 
 /* ---- Learning home overview (plan view) ---- */
@@ -183,7 +183,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 10px;
+  padding: var(--space-2) 10px;
   border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
   border-radius: var(--radius-md);
   background: var(--bg-1);
@@ -192,7 +192,7 @@
 .acceptance-progress__head {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
   color: var(--fg-1);
   font-size: var(--trainer-font-2xs);
 }
@@ -220,7 +220,7 @@
 .acceptance-progress__items {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  gap: var(--space-1) var(--space-2);
 }
 
 .acceptance-progress__item {
@@ -229,7 +229,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--trainer-font-3xs);
-  padding: 1px 8px;
+  padding: 1px var(--space-2);
   border-radius: var(--radius-full);
   border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
   color: var(--fg-1);
@@ -257,7 +257,7 @@
   justify-content: space-between;
   gap: 10px;
   width: 100%;
-  padding: 8px 10px;
+  padding: var(--space-2) 10px;
   border-radius: var(--radius-md);
   border: 1px solid var(--vscode-panel-border, var(--trainer-fallback-border, var(--border, transparent)));
   background: var(--bg-1);
@@ -329,8 +329,8 @@
 .training-review-row__more-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding-block-start: 4px;
+  gap: var(--space-1);
+  padding-block-start: var(--space-1);
 }
 
 /* Quiet post-run tool trail: one muted line under a finished assistant
@@ -344,7 +344,7 @@
 .message-bubble__tool-trail summary {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   cursor: default;
   list-style: none;
   opacity: 0.75;
@@ -366,7 +366,7 @@
 }
 
 .message-bubble__tool-trail .agent-activity-strip {
-  margin-top: 4px;
+  margin-top: var(--space-1);
   border-left-color: var(--line);
 }
 
@@ -386,12 +386,12 @@
 .skill-projection {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin: 4px 0;
+  gap: var(--space-1);
+  margin: var(--space-1) 0;
 }
 
 .skill-projection[data-variant="full"] {
-  padding: 8px;
+  padding: var(--space-2);
   border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--bg-1) 70%, transparent);
@@ -402,7 +402,7 @@
   display: grid;
   gap: 10px;
   inline-size: min(420px, 100%);
-  padding: 16px;
+  padding: var(--space-4);
   border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
   border-radius: var(--radius-md);
 }
@@ -427,8 +427,8 @@
 .onboarding-setup__row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: var(--space-2);
+  padding: 6px var(--space-2);
   border-radius: var(--radius-sm, 4px);
   background: color-mix(in srgb, var(--fg, var(--accent)) 3%, transparent);
 }
@@ -453,7 +453,7 @@
 
 .onboarding-setup__panel {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 10px;
   border: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
   border-radius: var(--radius-sm, 4px);
@@ -466,7 +466,7 @@
 
 .onboarding-setup__field {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .onboarding-setup__field > span {

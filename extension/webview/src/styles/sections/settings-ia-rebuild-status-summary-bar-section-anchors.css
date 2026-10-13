@@ -7,7 +7,7 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   border: 1px dashed color-mix(in srgb, var(--line) 70%, transparent);
   border-radius: var(--radius-md);
   background: transparent;
@@ -110,8 +110,8 @@
 .settings-subsection {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 8px;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
   border-top: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
 }
 
@@ -150,7 +150,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 10px;
-  padding: 4px 0 2px;
+  padding: var(--space-1) 0 2px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
 }
 
@@ -162,13 +162,13 @@
 .settings-answer-style {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .settings-answer-style__options {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .settings-answer-style__option.is-active {
@@ -198,14 +198,14 @@
 
 .settings-endpoint-speed__rows {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .settings-endpoint-speed__row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
+  gap: var(--space-2);
+  padding: 5px var(--space-2);
   border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
   border-radius: var(--radius-sm);
   background: transparent;
@@ -254,7 +254,7 @@
 .settings-endpoint-speed__actions input {
   flex: 1 1 auto;
   min-height: 26px;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--bg-0) 76%, var(--bg-1));
@@ -317,7 +317,7 @@
 /* CC Switch-style quick setup card (Settings → provider form top) */
 .settings-quick-setup {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 10px;
   border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
   border-radius: var(--radius-md);
@@ -328,7 +328,7 @@
   grid-auto-flow: column;
   grid-auto-columns: auto 1fr auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   border-color: color-mix(in srgb, var(--vscode-testing-iconPassed, var(--accent)) 42%, var(--line));
 }
 

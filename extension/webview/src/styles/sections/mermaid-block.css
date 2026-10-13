@@ -5,12 +5,12 @@
 .message-mermaid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   background: color-mix(in srgb, var(--bg-1) 96%, var(--bg-0));
   border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
   border-radius: var(--radius-md);
   padding: 10px;
-  margin: 8px 0;
+  margin: var(--space-2) 0;
   overflow: hidden;
 }
 
@@ -44,7 +44,7 @@
 @media (max-width: 340px) {
   .code-block-header {
     min-height: 24px;
-    padding: 4px 8px;
+    padding: var(--space-1) var(--space-2);
   }
 
   .message-table-wrap table {
@@ -57,13 +57,13 @@
   }
 
   .message-mermaid {
-    padding: 8px;
+    padding: var(--space-2);
   }
 }
 
 .message-mermaid--error pre {
   margin: 0;
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--bg-1) 88%, var(--bg-0));
   overflow: auto;
