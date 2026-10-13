@@ -21,6 +21,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+const coachConversationControllerPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'app',
+  'useCoachConversationController.ts',
+);
 const appUiCopyPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'appUiCopy.ts');
 const stylesPath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css');
 const coachMessageBubblePath = path.resolve(
@@ -138,15 +146,23 @@ test('share action copies the selected reply to the clipboard', () => {
 
 test('reply uploads wait for their own acknowledgement while other actions clear on status', () => {
   const source = fs.readFileSync(appPath, 'utf8');
+  const controllerSource = fs.readFileSync(coachConversationControllerPath, 'utf8');
   const dispatchStart = source.indexOf('const applyHostMessage = useCallback(');
   assert.ok(dispatchStart > -1, 'expected applyHostMessage');
-  const dispatch = source.slice(dispatchStart, dispatchStart + 1400);
+  const dispatch = source.slice(dispatchStart, dispatchStart + 1600);
 
   assert.match(dispatch, /message\.type === "operation\/status" \|\| message\.type === "stream\/start"/);
-  assert.match(dispatch, /setPendingMessageAction\(null\)/);
-  assert.match(source, /pendingMessageActionRef\.current = `\$\{message\.id\}:\$\{action\}`/);
-  assert.match(dispatch, /!pendingMessageActionRef\.current\?\.endsWith\(":save-resource"\)/);
-  assert.match(source, /pendingMessageActionTimeoutRef/);
+  // The dispatch delegates to the controller helper; the save-to-resource
+  // upload is exempt so it can wait for its own request-id acknowledgement.
+  assert.match(dispatch, /clearPendingMessageActionUnless\(":save-resource"\);/);
+  assert.match(controllerSource, /const \[pendingMessageAction, setPendingMessageAction\] = useState<string \| null>\(null\);/);
+  assert.match(
+    controllerSource,
+    /const clearPendingMessageActionUnless = useCallback\(\(keepSuffix: string\) => \{[\s\S]*?if \(pendingMessageActionRef\.current\?\.endsWith\(keepSuffix\)\) \{\s*return;\s*\}[\s\S]*?setPendingMessageAction\(null\);/,
+  );
+  assert.match(source, /beginPendingMessageAction\(`\$\{message\.id\}:\$\{action\}`\)/);
+  assert.match(controllerSource, /pendingMessageActionRef\.current = key;/);
+  assert.match(controllerSource, /pendingMessageActionTimeoutRef/);
 });
 
 test('quick actions are wired into the coach conversation pane and docked reply', () => {

@@ -60,7 +60,6 @@ import {
   sameCoachDefaults,
 } from "../../../../shared/src/coachDefaults";
 import {
-  providerModelTokenLimitsKey,
   resolveProviderModelTokenState,
 } from "../../../../shared/src/providerModelTokenLimits";
 import {
@@ -178,9 +177,16 @@ import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
 import { useComposerModelQuery } from "./useComposerModelQuery";
 import { useComposerHistoryNavigation } from "./useComposerHistoryNavigation";
+import { useCoachConversationController } from "./useCoachConversationController";
+import {
+  useLearningPlanController,
+  type PlanComposerDraftReplacement,
+  type PlanComposerMode,
+} from "./useLearningPlanController";
 import { useOperationStatusController } from "./useOperationStatusController";
 import { useProviderConnectionController } from "./useProviderConnectionController";
 import { useTrainingCardController } from "./useTrainingCardController";
+import { useShallow } from "zustand/react/shallow";
 import { coachReplyTitle, coachReplyMarkdown } from "../lib/shareUtils";
 import { formatTokenCount } from "../lib/formatUtils";
 import {
@@ -326,11 +332,6 @@ import type {
 
 // ContextMenu type imported from useMenuState
 type ComposerModelActionDensity = "default" | "compact";
-type PlanComposerMode = "explain" | "generate" | "evidence" | "blocker";
-type PlanComposerDraftReplacement = {
-  source: "stage" | "project-subplan";
-  targetTitle: string;
-};
 type ResourcesComposerMode = "locate" | "download" | "organize" | "cards";
 const COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT = 6;
 const COACH_SETTINGS_AUTOSAVE_DELAY_MS = 250;
@@ -3617,10 +3618,13 @@ function browserUploadLooksLikeFolder(files: File[]): boolean {
 }
 
 export function App() {
+  // §三 R3: App subscribes to a shallow summary of the store. Per-chunk
+  // streaming content is deliberately NOT selected — CoachConversationView
+  // subscribes to it itself — so a streaming reply no longer re-renders the
+  // whole workbench on every chunk.
   const {
     data,
     layout,
-    streaming,
     resourceOrganizationPending,
     resourceRestoreContext,
     trainingRestoreContext,
@@ -3645,7 +3649,79 @@ export function App() {
     setThemePreference,
     setLearningSurfaceAlignment,
     applyHostMessage: applyRawHostMessage,
-  } = useWorkbenchState();
+    streamingIsStreaming,
+    streamingStreamMessageId,
+    streamingStreamError,
+    streamingCompletionStopReason,
+    streamingReliabilityPhase,
+    streamingReliabilityOutcome,
+    streamingCompletionNextStepRequiresConfirmation,
+    streamingHasAgentActivity,
+    streamingContentBucket,
+  } = useWorkbenchState(
+    useShallow((state) => ({
+      data: state.data,
+      layout: state.layout,
+      resourceOrganizationPending: state.resourceOrganizationPending,
+      resourceRestoreContext: state.resourceRestoreContext,
+      trainingRestoreContext: state.trainingRestoreContext,
+      trainingReviewQueueRequested: state.trainingReviewQueueRequested,
+      beginTrainingReview: state.beginTrainingReview,
+      hasReceivedHostState: state.hasReceivedHostState,
+      syncStatus: state.syncStatus,
+      syncCursor: state.syncCursor,
+      setActiveView: state.setActiveView,
+      setResourceRestoreContext: state.setResourceRestoreContext,
+      setComposerDraft: state.setComposerDraft,
+      setComposerLanguage: state.setComposerLanguage,
+      setComposerAnswerMode: state.setComposerAnswerMode,
+      setTeachingStyle: state.setTeachingStyle,
+      setContextDetail: state.setContextDetail,
+      setIncludeCurrentFile: state.setIncludeCurrentFile,
+      setIncludeSelection: state.setIncludeSelection,
+      setIncludeDiagnostics: state.setIncludeDiagnostics,
+      setIncludeRelatedFiles: state.setIncludeRelatedFiles,
+      setFollowCurrentFile: state.setFollowCurrentFile,
+      setCoachDefaults: state.setCoachDefaults,
+      setThemePreference: state.setThemePreference,
+      setLearningSurfaceAlignment: state.setLearningSurfaceAlignment,
+      applyHostMessage: state.applyHostMessage,
+      streamingIsStreaming: state.streaming.isStreaming,
+      streamingStreamMessageId: state.streaming.streamMessageId,
+      streamingStreamError: state.streaming.streamError,
+      streamingCompletionStopReason: state.streaming.completionStopReason,
+      streamingReliabilityPhase: state.streaming.reliabilityPhase,
+      streamingReliabilityOutcome: state.streaming.reliabilityOutcome,
+      streamingCompletionNextStepRequiresConfirmation:
+        state.streaming.completionNextStepRequiresConfirmation === true,
+      // Activity presence is a per-tool-event boolean, not per-chunk content.
+      streamingHasAgentActivity: state.streaming.agentActivity.length > 0,
+      // Coarse progress for the preview surfaces (context ring, view rail,
+      // per-view reply banner). The full text subscribes in the conversation.
+      streamingContentBucket: Math.floor((state.streaming.streamedContent?.length ?? 0) / 256),
+    })),
+  );
+  // App only needs the streaming fields it acts on; content stays out.
+  const streaming = useMemo(
+    () => ({
+      isStreaming: streamingIsStreaming,
+      streamMessageId: streamingStreamMessageId,
+      streamError: streamingStreamError,
+      completionStopReason: streamingCompletionStopReason,
+      reliabilityPhase: streamingReliabilityPhase,
+      reliabilityOutcome: streamingReliabilityOutcome,
+      completionNextStepRequiresConfirmation: streamingCompletionNextStepRequiresConfirmation,
+    }),
+    [
+      streamingCompletionNextStepRequiresConfirmation,
+      streamingCompletionStopReason,
+      streamingIsStreaming,
+      streamingReliabilityOutcome,
+      streamingReliabilityPhase,
+      streamingStreamError,
+      streamingStreamMessageId,
+    ],
+  );
   const syncIdentity = syncCursor.generation > 0 ? syncCursor : undefined;
 
   // §三/§四十四: the operation-status controller owns the single banner channel
@@ -3666,7 +3742,6 @@ export function App() {
     setTrainingComposerVerifyIndex,
     trainingComposerPracticeReturnMode,
     setTrainingComposerPracticeReturnMode,
-    trainingComposerRoute,
     setTrainingComposerRoute,
     trainingVerifyNotice,
     setTrainingVerifyNotice,
@@ -3699,7 +3774,6 @@ export function App() {
   const sendRecoveredPlanResumeRef = useRef<
     (action: "continue_step" | "clear_blocker") => void
   >(() => undefined);
-  const [previewSessionId, setPreviewSessionId] = useState<string>();
   const [composerAttachments, setComposerAttachments] = useState<MessageAttachment[]>([]);
   const [composerModelActionDensity, setComposerModelActionDensity] =
     useState<ComposerModelActionDensity>("default");
@@ -3739,24 +3813,16 @@ export function App() {
     settingsScopeKey,
     settingsActionScopeRef,
   });
-  const [coachPlanContext, setCoachPlanContext] = useState<PlanComposerMode>();
-  const [planComposerMode, setPlanComposerMode] = useState<PlanComposerMode>("explain");
   // §十一: companion install state for the Settings remote-support panel.
   const [companionInstallState, setCompanionInstallState] = useState<
     import("../../../../shared/src/companionInstallState").CompanionInstallState
   >("not_installed");
   const companionStateQueriedRef = useRef(false);
-  const [pendingPlanComposerDraftReplacement, setPendingPlanComposerDraftReplacement] =
-    useState<PlanComposerDraftReplacement>();
   const [resourcesComposerMode, setResourcesComposerMode] =
     useState<ResourcesComposerMode>("locate");
   const [selectedResourceContextIds, setSelectedResourceContextIds] = useState<string[]>([]);
   const [resourceConversationContextIds, setResourceConversationContextIds] = useState<string[]>([]);
   const [resourcesViewSearchQuery, setResourcesViewSearchQuery] = useState("");
-  const [lastTurnView, setLastTurnView] = useState<ActiveWorkbenchView>();
-  const [coachContextTransition, setCoachContextTransition] = useState<
-    { signature: string; conversationLength: number } | undefined
-  >();
   const composerShellRef = useRef<HTMLDivElement | null>(null);
   const composerModelAutoRefreshKeyRef = useRef("");
   const settingsModelAutoPrimeKeyRef = useRef("");
@@ -3772,31 +3838,38 @@ export function App() {
     new Map<string, PendingResourceTrainingHandoff>(),
   );
   const resourceTrainingHandoffSequenceRef = useRef(0);
-  const [pendingMessageAction, setPendingMessageAction] = useState<string | null>(null);
-  const pendingMessageActionRef = useRef<string | null>(null);
-  const pendingMessageActionTimeoutRef = useRef<number | undefined>(undefined);
   const coachAutoScrollPinnedRef = useRef(true);
-  // Locally echoed user turns: shown the moment sendTurn fires, replaced
-  // in place by the server-confirmed message at the same list position.
-  const [optimisticTurns, setOptimisticTurns] = useState<
-    Array<{ id: string; body: string; baseLength: number; createdAt: number }>
-  >([]);
-  const appendOptimisticTurn = useCallback((body: string) => {
-    const trimmed = body.trim();
-    if (!trimmed) {
-      return;
-    }
-    setOptimisticTurns((current) => [
-      ...current,
-      {
-        id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        body: trimmed,
-        baseLength: useWorkbenchState.getState().data.conversation.length,
-        createdAt: Date.now(),
-      },
-    ]);
+  const pinCoachScrollToBottom = useCallback(() => {
     coachAutoScrollPinnedRef.current = true;
   }, []);
+  // §三: the conversation domain owns its local interaction state (echoes,
+  // pending reply action, preview session id, last-turn view, transition).
+  const {
+    optimisticTurns,
+    appendOptimisticTurn,
+    pendingMessageAction,
+    beginPendingMessageAction,
+    finishPendingMessageAction,
+    clearPendingMessageActionUnless,
+    previewSessionId,
+    setPreviewSessionId,
+    lastTurnView,
+    setLastTurnView,
+    coachContextTransition,
+    setCoachContextTransition,
+  } = useCoachConversationController({
+    conversation: data.conversation,
+    onOptimisticTurnAppended: pinCoachScrollToBottom,
+  });
+  // §三: the plan-composer domain owns its composer mode/context/draft state.
+  const {
+    planComposerMode,
+    setPlanComposerMode,
+    coachPlanContext,
+    setCoachPlanContext,
+    pendingPlanComposerDraftReplacement,
+    setPendingPlanComposerDraftReplacement,
+  } = useLearningPlanController();
   const [userFeedbackState, setUserFeedbackState] = useState<{
     busy: boolean;
     submittedKind?: UserFeedbackKind;
@@ -4066,19 +4139,7 @@ export function App() {
         }
         return;
       }
-      if (pendingMessageActionRef.current) return;
-      pendingMessageActionRef.current = `${message.id}:${action}`;
-      setPendingMessageAction(pendingMessageActionRef.current);
-      if (pendingMessageActionTimeoutRef.current !== undefined) {
-        window.clearTimeout(pendingMessageActionTimeoutRef.current);
-      }
-      if (action !== "save-resource") {
-        pendingMessageActionTimeoutRef.current = window.setTimeout(() => {
-          pendingMessageActionRef.current = null;
-          setPendingMessageAction(null);
-          pendingMessageActionTimeoutRef.current = undefined;
-        }, 30_000);
-      }
+      if (!beginPendingMessageAction(`${message.id}:${action}`)) return;
       if (action === "save-resource") {
         try {
           if (isBrowserPreview) {
@@ -4118,12 +4179,7 @@ export function App() {
             message: `${appUiCopy(layout.composerLanguage, "这条回复没有存进资料库,请重试。")} ${sanitizeErrorSurfaceText(error instanceof Error ? error.message : String(error), layout.composerLanguage)}`,
           });
         } finally {
-          if (pendingMessageActionTimeoutRef.current !== undefined) {
-            window.clearTimeout(pendingMessageActionTimeoutRef.current);
-            pendingMessageActionTimeoutRef.current = undefined;
-          }
-          pendingMessageActionRef.current = null;
-          setPendingMessageAction(null);
+          finishPendingMessageAction();
         }
         return;
       }
@@ -4311,14 +4367,8 @@ export function App() {
       hostMessageSequenceRef.current += 1;
       // Reply uploads settle through their request-id acknowledgement. An
       // unrelated status (for example Trash refresh) must not enable duplicates.
-      if ((message.type === "operation/status" || message.type === "stream/start") &&
-          !pendingMessageActionRef.current?.endsWith(":save-resource")) {
-        if (pendingMessageActionTimeoutRef.current !== undefined) {
-          window.clearTimeout(pendingMessageActionTimeoutRef.current);
-          pendingMessageActionTimeoutRef.current = undefined;
-        }
-        pendingMessageActionRef.current = null;
-        setPendingMessageAction(null);
+      if (message.type === "operation/status" || message.type === "stream/start") {
+        clearPendingMessageActionUnless(":save-resource");
       }
       if (message.type === "remoteCompanion/state") {
         setCompanionInstallState(
@@ -5106,7 +5156,10 @@ export function App() {
     }
     let cjk = cache.conversationCjk;
     let other = cache.conversationOther;
-    const streamed = streaming.streamedContent ?? "";
+    // The streaming text is read from the store when this memo re-runs (the
+    // coarse bucket below schedules that; the final value lands on the
+    // stream-end flip), so App itself never subscribes per chunk.
+    const streamed = useWorkbenchState.getState().streaming.streamedContent ?? "";
     const streamReset =
       streaming.streamMessageId !== cache.streamMessageId ||
       streamed.length < cache.streamConsumedChars;
@@ -5129,7 +5182,13 @@ export function App() {
     const used = Math.ceil(cjk + other / 4) + systemOverhead;
     const ratio = limit && limit > 0 ? Math.min(1, used / limit) : undefined;
     return { used, limit, ratio };
-  }, [data.conversation, data.providerConfig, streaming.streamMessageId, streaming.streamedContent]);
+  }, [
+    data.conversation,
+    data.providerConfig,
+    streaming.streamMessageId,
+    streamingContentBucket,
+    streaming.isStreaming,
+  ]);
 
   const composerContextUsageTone = composerContextUsage.ratio === undefined
     ? "unknown"
@@ -5479,6 +5538,11 @@ export function App() {
 
   useSurfaceScroll(viewContentRef, activeView, composerSessionKey);
 
+  // The imperative streaming subscription below reads the active view without
+  // re-subscribing; keep the latest value in a ref.
+  const activeViewRef = useRef(activeView);
+  activeViewRef.current = activeView;
+
   useEffect(() => {
     if (activeView !== "coach") {
       return;
@@ -5510,14 +5574,33 @@ export function App() {
       window.cancelAnimationFrame(handle);
       container.removeEventListener("scroll", handleScroll);
     };
-  }, [activeView, data.conversation.length, streaming.isStreaming, streaming.streamedContent]);
+  }, [activeView, data.conversation.length, streaming.isStreaming]);
+
+  // Per-chunk content is not part of App's subscription; the stick-to-bottom
+  // pin follows the store directly so every chunk re-sticks without a render.
+  useEffect(() => {
+    return useWorkbenchState.subscribe((state, previous) => {
+      if (state.streaming.streamedContent === previous.streaming.streamedContent) {
+        return;
+      }
+      if (activeViewRef.current !== "coach" || !coachAutoScrollPinnedRef.current) {
+        return;
+      }
+      const container =
+        viewContentRef.current && getSurfaceScrollElement(viewContentRef.current, "coach");
+      if (!container) {
+        return;
+      }
+      container.scrollTop = container.scrollHeight;
+    });
+  }, []);
 
   const streamingPlaceholderBody = useMemo(() => {
-    if (streaming.agentActivity.length > 0) {
+    if (streamingHasAgentActivity) {
       return appUiCopy(layout.composerLanguage, "正在整理当前步骤，然后给出第一段可见回复。");
     }
     return appUiCopy(layout.composerLanguage, "正在梳理你的问题，然后给出第一段可见回复。");
-  }, [layout.composerLanguage, streaming.agentActivity.length]);
+  }, [layout.composerLanguage, streamingHasAgentActivity]);
   const hasFormalPlan = data.hasFormalPlan;
   const activePlanStage = hasFormalPlan
     ? (data.plan.currentStageId
@@ -5636,27 +5719,6 @@ export function App() {
   } else {
     streamBaseLengthRef.current = null;
   }
-  useEffect(() => {
-    setOptimisticTurns((current) => {
-      if (current.length === 0) {
-        return current;
-      }
-      const now = Date.now();
-      const next = current.filter((entry) => {
-        if (now - entry.createdAt > 120_000) {
-          return false;
-        }
-        if (entry.baseLength >= data.conversation.length) {
-          return true;
-        }
-        const tail = data.conversation.slice(entry.baseLength);
-        return !tail.some(
-          (item) => item.role === "user" && item.body.trim() === entry.body.trim(),
-        );
-      });
-      return next.length === current.length ? current : next;
-    });
-  }, [data.conversation]);
   const coachRenderConversation = useMemo(() => {
     let list = localizedConversation;
     if (
@@ -8926,9 +8988,6 @@ export function App() {
       if (coachSettingsAutosaveTimerRef.current !== null) {
         window.clearTimeout(coachSettingsAutosaveTimerRef.current);
       }
-      if (pendingMessageActionTimeoutRef.current !== undefined) {
-        window.clearTimeout(pendingMessageActionTimeoutRef.current);
-      }
     },
     [],
   );
@@ -11649,8 +11708,9 @@ export function App() {
       streamingMessage={
         streaming.isStreaming
           ? {
-              body: streaming.streamMessageId?.startsWith("training_")
-                ? streamingPlaceholderBody : streaming.streamedContent || streamingPlaceholderBody,
+              // R3: the in-flight body comes from the view's own store
+              // subscription; App never selects per-chunk content.
+              body: "",
               author: t.trainer,
               timestamp: t.streaming,
               role: "assistant",
@@ -11658,8 +11718,8 @@ export function App() {
             }
           : null
       }
-      agentActivity={streaming.agentActivity}
-      agentStep={streaming.agentStep}
+      liveContentFromStore
+      streamingPlaceholder={streamingPlaceholderBody}
       onArtifactOpen={stableHandleCoachArtifactOpen}
       onMessageAction={handleCoachMessageAction}
       pendingMessageAction={pendingMessageAction}
@@ -11758,9 +11818,12 @@ export function App() {
     // started. Keep the live reply visible when the learner switches views
     // while the agent is still working; the completed-result guard below still
     // prevents stale Coach results from cluttering the Resources surface.
+    // The preview truncates from the start, so reading the latest content here
+    // (scheduled by the coarse bucket) is exact for what this line shows.
     const liveValue = streaming.isStreaming
       ? truncateInlineText(streaming.streamMessageId?.startsWith("training_")
-          ? streamingPlaceholderBody : streaming.streamedContent || streamingPlaceholderBody, textLimit)
+          ? streamingPlaceholderBody
+          : useWorkbenchState.getState().streaming.streamedContent || streamingPlaceholderBody, textLimit)
       : undefined;
     const activitySource = liveValue ?? blockerValue ?? resultValue;
     const activityValue =
@@ -11856,8 +11919,11 @@ export function App() {
           id: `streaming-${view}`,
           role: "assistant" as const,
           author: t.trainer,
+          // Same coarse-bucket read as the view rail: the banner summary
+          // truncates from the start, so the latest content is exact here.
           body: streaming.streamMessageId?.startsWith("training_")
-            ? streamingPlaceholderBody : streaming.streamedContent || streamingPlaceholderBody,
+            ? streamingPlaceholderBody
+            : useWorkbenchState.getState().streaming.streamedContent || streamingPlaceholderBody,
           timestamp: t.streaming,
         }
       : latestReply;

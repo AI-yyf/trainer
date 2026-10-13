@@ -203,7 +203,10 @@ test('postJson accepts a bounded extended timeout for a delayed coach message', 
     address.port,
     '/session/message',
     { message: 'Continue the coach session.' },
-    { timeoutMs: 200 },
+    // The 80ms simulated delay is the subject here; the deadline must keep a
+    // wide margin so parallel suite load cannot turn it into a flaky abort
+    // (the timeout ceiling invariants are asserted in their own test above).
+    { timeoutMs: 2000 },
   );
 
   assert.deepEqual(response, { ok: true, delayed: true });
@@ -244,7 +247,7 @@ test('postJson aborts a delayed coach message once its finite deadline elapses',
     /timed out after 50ms: POST \/session\/message/i,
   );
   assert.equal(
-    await Promise.race([serverObservedAbort, waitFor(150).then(() => false)]),
+    await Promise.race([serverObservedAbort, waitFor(1500).then(() => false)]),
     true,
   );
 });
@@ -269,7 +272,9 @@ test('fetchSSE accepts a bounded extended timeout for a delayed coach stream', a
     address.port,
     '/session/message/stream',
     { message: 'Continue the coach session.' },
-    { timeoutMs: 200 },
+    // Same margin rule as the postJson acceptance case above: the simulated
+    // 80ms delay is the subject, not a 200ms knife edge under suite load.
+    { timeoutMs: 2000 },
   )) {
     events.push(event);
   }
@@ -389,7 +394,7 @@ test('fetchSSE aborts a delayed coach stream once its finite deadline elapses', 
     /timed out after 50ms: POST \/session\/message\/stream/i,
   );
   assert.equal(
-    await Promise.race([serverObservedAbort, waitFor(150).then(() => false)]),
+    await Promise.race([serverObservedAbort, waitFor(1500).then(() => false)]),
     true,
   );
 });

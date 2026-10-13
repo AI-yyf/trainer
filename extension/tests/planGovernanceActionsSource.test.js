@@ -21,6 +21,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+const learningPlanControllerPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'app',
+  'useLearningPlanController.ts',
+);
 const coachPlanPath = path.resolve(
   __dirname,
   '..',
@@ -412,7 +420,13 @@ test('Plan moves next-task replies to Coach and protects an unsent composer draf
     planView,
     /!recoveredAdoptPrimary && hasFormalPlan\s*\?\s*\[/,
   );
-  assert.match(appSource, /const \[pendingPlanComposerDraftReplacement, setPendingPlanComposerDraftReplacement\] =/);
+  // The draft-replacement state lives in the Learning plan controller after
+  // the R3 split; App keeps the replacement/confirm/cancel flow.
+  const learningPlanControllerSource = fs.readFileSync(learningPlanControllerPath, 'utf8');
+  assert.match(
+    learningPlanControllerSource,
+    /const \[pendingPlanComposerDraftReplacement, setPendingPlanComposerDraftReplacement\] =\s*\n?\s*useState<PlanComposerDraftReplacement>\(\);/,
+  );
   assert.match(
     appSource,
     /if \(normalizedDraft\) \{\s*setPendingPlanComposerDraftReplacement\(\{ source, targetTitle: normalizedTargetTitle \}\);/,

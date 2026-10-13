@@ -141,7 +141,8 @@ function normalizeBootstrapData(
   fallbackState: WorkbenchBootstrapState = buildNeutralBootstrapData(),
 ): WorkbenchBootstrapState {
   const fallback = fallbackState;
-  const source = sanitizeVisibleData(value ?? {}) as WorkbenchBootstrapInput;  const workspaceSettings = source.memory?.workspace;
+  const source = sanitizeVisibleData(value ?? {}) as WorkbenchBootstrapInput;
+  const workspaceSettings = source.memory?.workspace;
   const fallbackWorkspaceSettings = fallback.memory.workspace;
   const fallbackMemoryEvidence =
     "memoryEvidence" in fallback.memory && Array.isArray(fallback.memory.memoryEvidence)
@@ -1084,11 +1085,15 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           stageMaterials: stageScopeChanged ? patchedStageMaterials ?? {}
             : patchedStageMaterials ?? state.stageMaterials,
           stageMaterialGenerating: stageScopeChanged ? {} : state.stageMaterialGenerating,
-          operationMessage: adoptRecoveredStreamingOperationMessage(
-            nextLayout.composerLanguage,
-            nextStreaming,
-            state.operationMessage,
-            state.streaming,
+          // §四十四: the recovered streaming notice goes through the same atomic
+          // channel as every other banner write (message + surface together).
+          ...operationBannerState(
+            adoptRecoveredStreamingOperationMessage(
+              nextLayout.composerLanguage,
+              nextStreaming,
+              state.operationMessage,
+              state.streaming,
+            ),
           ),
           latestOperationRequests: versionedState && versionedState.generation !== state.syncCursor.generation ? {} : state.latestOperationRequests,
           operations: versionedState && versionedState.generation !== state.syncCursor.generation ? {} : state.operations,

@@ -9,7 +9,7 @@
 
 1. 每组案例 = **双回合**：预置坏代码（`python file.py` exit≠0）→ turn1 → 脚本化修复（exit=0）→ turn2。回合间隔 12 秒单并发。
 2. **不得以「模型答了」为 pass**。教学 pass 以客观判据为准（§2）；内容质量由独立评审 agent 填写并标注「待 owner 确认」，**不记为人工审阅**。
-3. 诚实分类：每个回合必须落入 `passed / failed / provider_error / local_fallback / mock / skipped_no_credentials` 之一；`fell_back=true` 的回合不得计入模型教学质量。无凭证时全部 `skipped_no_credentials` 并如实说明，绝不宣称真实模型通过。
+3. 诚实分类：每个回合必须落入 `passed / failed / provider_error / local_fallback / skipped_no_credentials` 之一；`fell_back=true` 的回合不得计入模型教学质量。无凭证时全部 `skipped_no_credentials` 并如实说明，绝不宣称真实模型通过。（本 harness 无 mock 通路：mock 类若要产出必须由显式声明的 mock harness 完成，不再是本矩阵的默认枚举。）
 4. 凭证合规：harness 只从环境变量/本地未跟踪配置读取凭证，且不经明文 HTTP 传输（沿用 `scripts/live-protocol-probe.py:44-47,68-71` 模式；R1 runtime 已移除旧脚本中的硬编码凭证）。
 5. 单次运行产出的原始报告（逐回合 reply/agent_meta/exit code）落盘 `docs/maturity/`，与判定结论一并保留。
 
@@ -28,10 +28,10 @@
 ## 2. 客观判据（每个回合都记录；教学 pass 需 M1–M5 全过）
 
 - **M1 机制**：预置代码 `exit≠0`；脚本化修复后 `exit=0`；同一 session；回合 HTTP 200；同一工作区 body/disk 源码一致（不一致判 harness-invalid）。
-- **M2 grounding**：服务端 `agent_meta.grounding_outcome ∈ {grounded, corrected}` 且 `next_step_requires_confirmation=false` 才算教学 pass；`downgraded` 仅算机制暴露（记录为 grounding fail 证据），不得算教学通过。
+- **M2 grounding**：服务端 `agent_meta.grounding_outcome ∈ {grounded, corrected}` 且 `next_step_requires_confirmation=false` 才算教学 pass；`downgraded` 仅算机制暴露（记录为 grounding fail 证据），不得算教学通过。该规则已在 harness 分类器锁死（downgraded → `grounding_pass=False`）并有回归测试（`server/tests/test_maturity_harness_classification.py`）。
 - **M3 记忆**：`coach_anchor`/`current_focus` 非空或诚实为空；不得等于消息前缀；两回合之间主题 token（案例 `topic_tokens`）至少保留一个；恢复回合不得把 `local_fallback` 内容写成 verified mastery。
 - **M4 反模式**：正文与结构化 next_step 同域不冲突；不得重复索要 turn1 已给出的事实（报错文本/代码/文件）；不得要求对话与代码中不存在的函数名/call site/文件（由 `server/app/llm/turn_grounding.py` 规则层判定）。
-- **M5 对账**：服务端 agent_meta 戳与 harness 本地复算（`evaluate_next_step_grounding`，本地无 provider 重试）逐回合比对：`grounding_outcome` 与 `grounding_ungrounded_symbols` 必须一致（downgraded 时两侧未锚定符号集合相等）；`corrected` 时改为本地复评 `corrected_next_step` 文本且必须 grounded；`grounding_retry_used` 是服务端专有字段（本地无法复现 provider 重试），不参与逐项比较，但必须与 outcome 自洽（corrected ⇒ retry_used 为真）。不一致判该回合失败。
+- **M5 对账**：服务端 agent_meta 戳与 harness 本地复算逐回合比对；本地复算使用与服务端同源的输入（累积会话历史、本回合学习者消息、workspace 根的文件存在性核验器；本地无 provider 重试）：`grounding_outcome` 与 `grounding_ungrounded_symbols` 必须一致（downgraded 时两侧未锚定符号集合相等）；`corrected` 时改为本地复评 `corrected_next_step` 文本且必须 grounded；`grounding_retry_used` 是服务端专有字段（本地无法复现 provider 重试），不参与逐项比较，但必须与 outcome 自洽（corrected ⇒ retry_used 为真）。不一致判该回合失败。
 - **内容质量（独立评审栏）**：事实准确、难度适配、direct/guided 尊重、篇幅——由独立评审 agent 读最终回复后填写，标注「待 owner 确认」；不计入 M1–M5 的自动判定。
 
 ## 3. 逐案例规格

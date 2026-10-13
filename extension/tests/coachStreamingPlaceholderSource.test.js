@@ -7,9 +7,21 @@ const path = require('node:path');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const appUiCopyPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'appUiCopy.ts');
+// Round 3: the in-flight body moved into the conversation view's own store
+// subscription; App keeps the placeholder copy and the preview fallbacks.
+const conversationViewPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'components',
+  'coach',
+  'CoachConversationView.tsx',
+);
 
 test('coach streaming placeholder stays descriptive before the first chunk arrives', () => {
   const source = fs.readFileSync(appPath, 'utf8');
+  const conversationView = fs.readFileSync(conversationViewPath, 'utf8');
   const appUiCopySource = fs.readFileSync(appUiCopyPath, 'utf8');
 
   assert.match(source, /const streamingPlaceholderBody = useMemo\(\(\) => \{/);
@@ -29,8 +41,18 @@ test('coach streaming placeholder stays descriptive before the first chunk arriv
     appUiCopySource,
     /"en-US": "Thinking through your prompt, then writing the first visible reply\."/,
   );
-  assert.match(source, /: streaming\.streamedContent \|\| streamingPlaceholderBody,/);
+  assert.match(
+    source,
+    /: useWorkbenchState\.getState\(\)\.streaming\.streamedContent \|\| streamingPlaceholderBody,/,
+  );
+  // The live bubble itself falls back to the same placeholder, never to a
+  // fake "..." body.
+  assert.match(
+    conversationView,
+    /: storeStreamedContent \|\| streamingPlaceholder \|\| ""/,
+  );
   assert.doesNotMatch(source, /body: streaming\.streamedContent \|\| "\.\.\.",/);
+  assert.doesNotMatch(conversationView, /body: .*"\.\.\."/);
 });
 
 test('every direct composer turn keeps streaming, even when intent analysis finds a task-shaped request', () => {

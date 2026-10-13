@@ -876,6 +876,85 @@ def test_memory_provenance_summary_carries_outcome_and_conflicts() -> None:
 
 
 # ---------------------------------------------------------------------------
+# R3: demand targeting, retry context, visible-next-step comparison
+# ---------------------------------------------------------------------------
+
+
+def test_run_and_paste_output_is_not_a_demand() -> None:
+    """Running the learner's function and pasting its OUTPUT is normal
+    debugging guidance; only a request that directly governs the symbol itself
+    is repeat-asking (2026-10-13 review)."""
+    code = "def find(xs, target):\n    return -1\n"
+
+    assert next_step_is_grounded("运行 `find`，把输出贴回来。", "我们看看 find。", code) is True
+    assert next_step_is_grounded("Run `find` and paste the output.", "Let's inspect find.", code) is True
+    # The contrast case stays ungrounded: asking for the symbol's own content.
+    assert next_step_is_grounded("把 `find` 的完整实现贴出来。", "我们看看。", code) is False
+    assert (
+        next_step_is_grounded("给我 `parse_header()` 的函数名和 call site。", "我们看看。", code)
+        is False
+    )
+
+
+def test_retry_context_follows_the_regenerated_text() -> None:
+    """A creation instruction offered as the correction keeps the §2.5⑥
+    exemption (its context comes from the retried text, not the rejected one)."""
+    facts = build_teaching_turn_facts(
+        turn_id="turn-70",
+        reply_text="",
+        code_text="",
+        history_text="",
+        user_message="",
+        next_step_text="给我 `parse_header()` 的函数名。",
+        workspace_evidence=WorkspaceEvidence(file_exists=lambda path: False),
+    )
+
+    decision = evaluate_turn_grounding(
+        facts,
+        retry_generate=lambda: "新建 `debug_demo.py` 写一个最小复现。",
+    )
+
+    assert decision.grounded is True
+    assert decision.retry_used is True
+    assert decision.corrected_next_step == "新建 `debug_demo.py` 写一个最小复现。"
+    assert decision.requires_confirmation is False
+    assert facts.gate_outcome == "corrected"
+    assert facts.next_step_text == "新建 `debug_demo.py` 写一个最小复现。"
+
+
+def test_visible_next_step_corroboration_recorded_in_conflicts() -> None:
+    """``visible_next_step`` participates: the conflict record says whether the
+    reply's own stated next step mentioned the demanded domain."""
+    corroborated = build_teaching_turn_facts(
+        turn_id="turn-71",
+        reply_text="你的 `parse_header` 函数里需要检查边界。\n\n下一步：把 `parse_header` 发我。",
+        code_text="grid = 1\n",
+        history_text="",
+        user_message="",
+        next_step_text="给我 `parse_header()` 的函数名。",
+    )
+    evaluate_turn_grounding(corroborated)
+    assert [
+        (conflict.domain, conflict.reply_step_corroborated)
+        for conflict in corroborated.conflicts
+    ] == [("parse_header", True)]
+
+    body_only = build_teaching_turn_facts(
+        turn_id="turn-72",
+        reply_text="你的 `parse_header` 函数里需要检查边界。",
+        code_text="grid = 1\n",
+        history_text="",
+        user_message="",
+        next_step_text="给我 `parse_header()` 的函数名。",
+    )
+    evaluate_turn_grounding(body_only)
+    assert [
+        (conflict.domain, conflict.reply_step_corroborated)
+        for conflict in body_only.conflicts
+    ] == [("parse_header", False)]
+
+
+# ---------------------------------------------------------------------------
 # R2: field-level memory admission (MemoryService.record_turn_reflection)
 # ---------------------------------------------------------------------------
 

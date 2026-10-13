@@ -4,6 +4,7 @@ import { memo } from "react";
 import type { ConversationMessage } from "../../lib/types";
 import type { ComposerLanguage } from "../../lib/types";
 import type { AgentToolActivity } from "../../app/useWorkbenchState";
+import { useWorkbenchState } from "../../app/useWorkbenchState";
 import type { CoachArtifactBlockData } from "./CoachArtifactBlock";
 import { AgentActivityStrip } from "./AgentActivityStripSmart";
 import { CoachMessageBubble, type CoachMessageAction } from "./CoachMessageBubble";
@@ -56,6 +57,14 @@ export interface CoachConversationViewProps {
    * assistant reply / the streaming slot). Applied only to that item.
    */
   turnNextStepRequiresConfirmation?: boolean;
+  /**
+   * When true the in-flight reply body, agent activity and step come from the
+   * store subscription below instead of App props: per-chunk streaming content
+   * re-renders this view only, never the whole workbench (DESIGN.md §3 R3).
+   */
+  liveContentFromStore?: boolean;
+  /** Copy shown until the first visible chunk arrives (language-owned). */
+  streamingPlaceholder?: string;
 }
 
 interface CoachConversationItem {
@@ -87,7 +96,26 @@ function CoachConversationViewImpl({
   onMessageAction,
   pendingMessageAction,
   turnNextStepRequiresConfirmation = false,
+  liveContentFromStore = false,
+  streamingPlaceholder,
 }: CoachConversationViewProps) {
+  // Per-chunk streaming content lives here, not in App: the workbench shell
+  // stays put while the in-flight reply grows (DESIGN.md §3 R3).
+  const storeStreamedContent = useWorkbenchState((state) => state.streaming.streamedContent);
+  const storeStreamMessageId = useWorkbenchState((state) => state.streaming.streamMessageId);
+  const storeAgentActivity = useWorkbenchState((state) => state.streaming.agentActivity);
+  const storeAgentStep = useWorkbenchState((state) => state.streaming.agentStep);
+  const resolvedAgentActivity = liveContentFromStore ? storeAgentActivity : agentActivity;
+  const resolvedAgentStep = liveContentFromStore ? storeAgentStep : agentStep;
+  const resolvedStreamingBody = streamingMessage
+    ? liveContentFromStore
+      ? streamingMessage.body?.trim()
+        ? streamingMessage.body
+        : storeStreamMessageId?.startsWith("training_")
+          ? streamingPlaceholder ?? ""
+          : storeStreamedContent || streamingPlaceholder || ""
+      : streamingMessage.body
+    : undefined;
   const classes = [
     surfaceTone === "thread" ? "section-block" : "coach-conversation-view--open",
     "coach-conversation-view",
@@ -129,13 +157,15 @@ function CoachConversationViewImpl({
         id: "streaming",
         role: streamingMessage.role ?? "assistant",
         author: streamingMessage.author ?? "Trainer",
-        body: streamingMessage.body,
+        body: resolvedStreamingBody ?? streamingMessage.body,
         timestamp: streamingMessage.timestamp ?? "Streaming...",
         contextNote: streamingMessage.note,
       },
     });
   }
-  const streamingStripVisible = Boolean(streamingMessage && agentActivity && agentActivity.length > 0);
+  const streamingStripVisible = Boolean(
+    streamingMessage && resolvedAgentActivity && resolvedAgentActivity.length > 0,
+  );
 
   return (
     <Conversation className={classes} label={title}>
@@ -187,8 +217,8 @@ function CoachConversationViewImpl({
                 headNote={
                   item.streaming && streamingStripVisible ? (
                     <AgentActivityStrip
-                      activities={agentActivity ?? []}
-                      step={agentStep}
+                      activities={resolvedAgentActivity ?? []}
+                      step={resolvedAgentStep}
                       language={language}
                     />
                   ) : undefined

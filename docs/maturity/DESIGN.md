@@ -99,7 +99,7 @@ TeachingTurnFacts:
 
 1. **next_step 逐断言、全量锚定**：next_step 中每条含符号断言**所有**符号都必须能在 reply ∪ 当前代码 ∪ 历史 ∪ `workspace_verified` ∪ `learner_provided` 中找到锚点（现状是「任一符号命中即整条放行」）。白名单收窄为**语言内置/工具动词**（保留 `print`/`console` 等语言内置与命令词；移除 `log/todo/fixme` 等项目名词，`:46-48`）；文件指针在装配点做一次存在性核验。
 2. **正文断言不参与降级（显式误报预算）**：正文已下发、不可改写；`reply_claims` 若参与降级，会把教学正常引入新符号（如 `enumerate`）的回复大面积误降。它们只用于：①与 next_step 同域冲突 → 判 **next_step 断言** ungrounded；②记忆准入过滤与诊断。
-3. **一致性（域级）**：同一 domain（归一化符号/文件路径）内以 `workspace_verified > learner_provided > model_claim` 裁决，败方 next_step 断言 ungrounded；`visible_next_step`（reply_continuity.py:16-44）纳入比较；`learner_provided` 中的事实被再次索要（多语言「请提供/贴出来/please share/paste」且目标 ∈ learner_provided）→ ungrounded。**R2 实现定案（已核代码）**：域级冲突 = 同一 domain 同时被 reply 与 next_step 声称、且无 workspace/learner 事实佐证、且 next_step 段为「信息索取」语境（多语言索取标记，创建指令排除）——仅此形态判该 next_step 断言 ungrounded 并记入 `conflicts`；正文正常引入新符号（如 `enumerate`）永不成为冲突（显式误报预算）。索取无任何事实佐证的符号 = 虚构索取 → ungrounded。
+3. **一致性（域级）**：同一 domain（归一化符号/文件路径）内以 `workspace_verified > learner_provided > model_claim` 裁决，败方 next_step 断言 ungrounded；`visible_next_step`（reply_continuity.py:16-44）纳入比较；`learner_provided` 中的事实被再次索要（多语言「请提供/贴出来/please share/paste」且目标 ∈ learner_provided）→ ungrounded。**R2/R3 实现定案（已核代码）**：域级冲突 = 同一 domain 同时被 reply 与 next_step 声称、且无 workspace/learner 事实佐证、且 next_step 段为「信息索取」语境——仅此形态判该 next_step 断言 ungrounded 并记入 `conflicts`；正文正常引入新符号（如 `enumerate`）永不成为冲突（显式误报预算）。索取标记必须**直接管辖**该断言（「把 X 的…贴出来」「给我 X」「paste X」）；「运行 X，把输出贴回来」是对运行结果的请求、不算索取 X（R3 收窄，回归测试在 `test_turn_grounding.py`）。`visible_next_step` 参与冲突归因：冲突记录标注 `reply_step_corroborated`（正文自述下一步是否提及该 domain）。索取无任何事实佐证的符号 = 虚构索取 → ungrounded。重试复评使用**重试文本**作为语境（创建豁免/索取判定不被旧文本污染）。
 4. **有界纠错与一次性**：见 2.3；评估层支持 `retry_generate`（`:340-387`），装配层提供 await 位置与缓存。
 5. **诚实降级 + 可核对通道**：`requires_confirmation`（`core/models.py:2713` 语义）+ 响应 `agent_meta` 固定键 `{grounding_outcome: grounded|corrected|downgraded, grounding_ungrounded_symbols: list[str], grounding_retry_used: bool, next_step_requires_confirmation: bool}`；只对既有非空 agent_meta 追加戳（保持干净回复 agent_meta 缺省契约，`:10645-10649`）。前端 R1 渲染消费端；harness 从响应读取（不新增持久化，尊重 nonGoals）。
 6. **unverifiable 语义**：无法做存在性核验时（远程/URI 工作区，`tools.py:482-502` 返回 None），文件指针既不算核验通过、也不构成降级理由；不得伪造「已核验」。**创建类指令豁免（R2 定案）**：next_step 明确要求创建/新建文件（`_CREATION_VERB_PATTERN`）时，文件不存在是预期状态，核验结论为 unverifiable、绝不降级；仅「查看/打开/修改」类文件引用才会因文件缺失判 ungrounded。
@@ -187,7 +187,7 @@ def persist_turn_reflection(..., grounding_decision: GroundingDecision | None = 
 2. host 可信证据仅 `/training/verification/attest` 白名单来源（`routes/learning.py:159-179`，审计）；资源引用服务端解析，版本不符 409（`training_attempts.py:151-162`，已核）。
 3. plan 乐观锁：正式保存推进 `_plan_revision`，冲突 409 `plan_revision_conflict`，不静默覆盖。
 4. `connection_lost ≠ task_failed`：attestation 递送 `not_arrived` 可重发一次、`ambiguous` 绝不自动重发、未确认递送面 `[[trainer-attestation-undelivered]]`（`trainingAttestation.ts:253-284`，审计）。
-5. **验证成功但持久化失败不得显示为可信掌握**：attest 未确认递送前不渲染 verified；中断/取消/超时 fail-closed 不落证据。
+5. **验证成功但持久化失败不得显示为可信掌握**：attest 未确认递送前不渲染 verified；中断/取消/超时 fail-closed 不落证据——此处「未落证据」限定为 `work()` 未完成持久化的运行；取消/超时与「已完成持久化」竞态时保留已写入的证据，账本记 `outcome=success` 并以 `cancel_after`/`timeout_after` 标注（R2 定案，`server/app/training/reliability.py` `mark_succeeded`），绝不改判 failed/cancelled 诱导重试。
 6. `agent_meta.fell_back` 诚实标记；本地兜底不得冒充模型完成；journey 分类显式区分。
 7. 四条流程「先 gate 后 persist」顺序保持（`:20432/20439、:21473/21480、:22711/22718、:24039/24046`，已核）；每回合 grounding 决策唯一并被缓存（R2 定案：纠错路径允许「初判 + 重试复评」共至多两次 evaluate 调用，缓存以被评测的 next_step 文本为键，文本被后续执行遍替换即重评），纠错至多一次。
 8. **降级必须有消费端**：R1 起 `requires_confirmation` 在前端渲染；未经渲染的降级视为未完成。

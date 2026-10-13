@@ -4186,6 +4186,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             )
             next_step = lines[1] if len(lines) > 1 else ""
         next_step = strip_visible_next_step_prefix(next_step or (lines[1] if len(lines) > 1 else ""))
+        if next_step[:1].isascii() and next_step[:1].islower():
+            # Stripping a "Next step:" label leaves a mid-sentence remainder;
+            # the structured next step is a standalone sentence, so restore the
+            # sentence-initial capital (same rule as normalize_visible_coach_text).
+            next_step = f"{next_step[:1].upper()}{next_step[1:]}"
         teaching_note = localized_text(
             "When visible coach text drifts across guided lanes, rebuild the answer from the active lane before persisting it.",
             "当可见教练回复串到别的 guided lane 时，先按当前主线重建回答，再把结果持久化。",

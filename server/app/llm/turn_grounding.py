@@ -39,11 +39,12 @@ R2 additions (2026-10-13):
   ``workspace_verified > learner_provided > model_claim`` ranking.
 - ``conflicts``: same-domain reply/next-step pairs that no workspace/learner
   fact backs and that the next step *demands* (the reply's own introduction of
-  a new symbol — ``enumerate`` — is never a conflict).
-- demand guard: a next step request targeting a fact the learner already
-  provided (repeat-asking) or targeting something with no backing at all
-  (fabrication demand) is ungrounded; ``visible_next_step`` participates in
-  this comparison.
+  a new symbol — ``enumerate`` — is never a conflict); the record prefers the
+  reply's visible next step and flags whether it corroborated the demand.
+- demand guard: a next step request whose marker *directly governs* a fact the
+  learner already provided (repeat-asking) or a symbol with no backing at all
+  (fabrication demand) is ungrounded. Running a function and pasting its output
+  (「运行 X，把输出贴回来」) is not a demand on X (2026-10-13 review).
 - file pointers in a creation context ("创建/新建/create ...") stay
   ``unverifiable`` instead of tripping the existence checker.
 - ``retry_used`` means "a regeneration was attempted for this decision"
@@ -242,13 +243,30 @@ _CREATION_VERB_PATTERN = re.compile(
 )
 # Info-transfer request markers (DESIGN.md §2.5③): asking the learner to
 # hand over a fact they already provided (repeat-asking), or to hand over a
-# fact with no workspace/learner backing at all (fabrication demand). Pure
-# explanation asks ("给我讲讲", "告诉我为什么") are deliberately not markers.
-_REQUEST_FACT_PATTERN = re.compile(
-    r"(?:请提供|提供一下|贴出来|贴出|贴一下|贴给我|贴回来|贴回|粘贴|发我|发一下|发给|"
-    r"分享|给我看|给我(?!讲|说|解释|分析|演示)|"
-    r"please\s+share|please\s+provide|share|paste|provide|send me|upload)",
-    re.IGNORECASE,
+# fact with no workspace/learner backing at all (fabrication demand). A marker
+# only fires when it *directly governs* the claimed symbol (see
+# ``_DEMAND_TARGET_PATTERNS``) — "运行 X，把输出贴回来" asks for the run's
+# output, not for X's source, and must stay grounded (2026-10-13 review).
+# Direct-object forms: the captured ``target`` span is what the request asks
+# the learner to hand over. Only a claim whose value appears inside a target
+# span is "demanded".
+_DEMAND_TARGET_PATTERNS = (
+    # 把 X（的实现/定义/代码/报错…）贴出来 / 发我 / …
+    re.compile(
+        r"把\s*(?:你的|你写的|那个|这个|刚才的)?\s*(?P<target>[^，。；;,\n]{1,60}?)"
+        r"\s*(?:贴出来|贴一下|贴给我|贴回来|贴回|发我|发一下|发给|粘贴|分享|给我看|给我)",
+    ),
+    # 给我 X / 请提供 X / 贴出 X（marker 直接后接对象）
+    re.compile(
+        r"(?:请提供|提供一下|贴出|发我|发一下|分享|给我)\s*(?:你的|你写的|那个|这个|一下)?\s*"
+        r"(?P<target>[^\s，。；;,]{1,60})",
+    ),
+    # English: paste/share/provide/send me/give me/show me + direct object
+    re.compile(
+        r"(?:please\s+)?(?:paste|share|provide|send\s+me|upload|give\s+me|show\s+me)"
+        r"\s+(?:me\s+)?(?:the\s+|your\s+)?(?P<target>[A-Za-z0-9_.`()\[\]{}<>/=:+-]{1,60})",
+        re.IGNORECASE,
+    ),
 )
 
 
@@ -398,15 +416,17 @@ class TeachingFact:
 class GroundingConflict:
     """A same-domain conflict between a reply claim and a next-step claim.
 
-    The element type is part of the frozen ``TeachingTurnFacts`` structure.
-    Population and winner arbitration land with the R2 consistency rules
-    (DESIGN.md §2.5③); R1 only carries the contract.
+    ``reply_step_corroborated`` records that the reply's own visible next step
+    (``visible_next_step``) mentioned the domain — i.e. the visible step and
+    the structured step were compared, and this demand was (not) promised by
+    the reply itself.
     """
 
     domain: str
     reply_claim: TeachingFact
     next_step_claim: TeachingFact
     winner: str = ""
+    reply_step_corroborated: bool = False
 
 
 @dataclass(frozen=True)
@@ -908,29 +928,60 @@ def _anchoring_corpora(facts: TeachingTurnFacts, *, include_reply: bool = True) 
     return corpora
 
 
-def _claim_segments_for(facts: TeachingTurnFacts, value: str) -> list[str]:
-    """Next-step segments that mention ``value`` (claim-level context)."""
-    if not value or not facts.next_step_text.strip():
+def _claim_segments_for(
+    facts: TeachingTurnFacts,
+    value: str,
+    *,
+    context_text: str | None = None,
+) -> list[str]:
+    """Claim segments that mention ``value`` (claim-level context).
+
+    ``context_text`` defaults to ``facts.next_step_text``; the retry re-check
+    passes the regenerated text so creation/demand context follows the text
+    actually being evaluated (2026-10-13 review).
+    """
+    source = facts.next_step_text if context_text is None else context_text
+    if not value or not str(source or "").strip():
         return []
     return [
         segment
-        for segment in _claim_segments(facts.next_step_text)
+        for segment in _claim_segments(str(source))
         if symbol_in_text(value, segment)
     ]
 
 
-def _claim_context(facts: TeachingTurnFacts, value: str) -> tuple[bool, bool]:
+def _is_demanded_target(segment: str, value: str) -> bool:
+    """True when an info-transfer request in ``segment`` governs ``value``.
+
+    The marker must *directly govern* the symbol (「把 X 的实现贴出来」、
+    「给我 X」、``paste X``); "运行 X，把输出贴回来" asks for X's runtime
+    output, not for X itself (2026-10-13 review), so it is not a demand.
+    """
+    for pattern in _DEMAND_TARGET_PATTERNS:
+        for match in pattern.finditer(segment):
+            target = match.group("target") or ""
+            if target and symbol_in_text(value, target):
+                return True
+    return False
+
+
+def _claim_context(
+    facts: TeachingTurnFacts,
+    value: str,
+    *,
+    context_text: str | None = None,
+) -> tuple[bool, bool]:
     """(creation_context, demand_context) of the segments claiming ``value``.
 
     Creation context: the instruction creates the artifact ("创建/新建/create
-    ..."), so a missing file proves nothing. Demand context: an info-transfer
-    request ("贴出来 / share / paste") that is not itself a creation
-    instruction.
+    ..."), so a missing file proves nothing. Demand context: a direct-object
+    info-transfer request (「把 X 贴出来」/"paste X") that is not itself a
+    creation instruction.
     """
-    segments = _claim_segments_for(facts, value)
+    segments = _claim_segments_for(facts, value, context_text=context_text)
     creation = any(_CREATION_VERB_PATTERN.search(segment) for segment in segments)
     demand = any(
-        _REQUEST_FACT_PATTERN.search(segment) and not _CREATION_VERB_PATTERN.search(segment)
+        not _CREATION_VERB_PATTERN.search(segment) and _is_demanded_target(segment, value)
         for segment in segments
     )
     return creation, demand
@@ -988,12 +1039,17 @@ def _evaluate_claims(
     *,
     include_reply: bool = True,
     apply_demand_guard: bool = False,
+    context_text: str | None = None,
 ) -> tuple[dict[str, str], list[str]]:
     corpora = _anchoring_corpora(facts, include_reply=include_reply)
     verdicts: dict[str, str] = {}
     ungrounded: list[str] = []
     for fact in claims:
-        creation_context, demand_context = _claim_context(facts, fact.value)
+        creation_context, demand_context = _claim_context(
+            facts,
+            fact.value,
+            context_text=context_text,
+        )
         verdict = _claim_verdict(
             fact,
             corpora,
@@ -1017,29 +1073,43 @@ def _evaluate_claims(
 def _collect_conflicts(
     facts: TeachingTurnFacts,
     claims: list[TeachingFact],
+    *,
+    context_text: str | None = None,
 ) -> list[GroundingConflict]:
     """Record the actionable same-domain conflicts (DESIGN.md §2.5②③).
 
-    Only a *demand* on a domain that the model merely claims (no
+    Only a *direct-object demand* on a domain that the model merely claims (no
     workspace/learner backing) is recorded — a reply introducing a new symbol
     (``enumerate``) and the next step suggesting it stays clean (explicit
-    false-positive budget).
+    false-positive budget). The reply side prefers the reply's own visible next
+    step so ``reply_step_corroborated`` records whether the reply *itself*
+    promised the demanded domain (``visible_next_step`` participation).
     """
     if not facts.reply_claims:
         return []
     reply_by_domain: dict[str, TeachingFact] = {}
     for fact in facts.reply_claims:
         reply_by_domain.setdefault(claim_domain(fact), fact)
+    visible_by_domain: dict[str, TeachingFact] = {}
+    if facts.visible_next_step.strip():
+        for fact in extract_claim_facts(
+            facts.visible_next_step,
+            source=SOURCE_REPLY_BODY,
+            turn_id=facts.turn_id,
+            provenance=PROVENANCE_MODEL_CLAIM,
+            limit=_MAX_REPLY_CLAIMS,
+        ):
+            visible_by_domain.setdefault(claim_domain(fact), fact)
     conflicts: list[GroundingConflict] = []
     seen: set[str] = set()
     for fact in claims:
         domain = claim_domain(fact)
         if not domain or domain in seen:
             continue
-        reply_claim = reply_by_domain.get(domain)
+        reply_claim = visible_by_domain.get(domain) or reply_by_domain.get(domain)
         if reply_claim is None:
             continue
-        _creation, demand = _claim_context(facts, fact.value)
+        _creation, demand = _claim_context(facts, fact.value, context_text=context_text)
         if not demand:
             continue
         seen.add(domain)
@@ -1049,6 +1119,7 @@ def _collect_conflicts(
                 reply_claim=reply_claim,
                 next_step_claim=fact,
                 winner=domain_backing(facts, domain) or PROVENANCE_MODEL_CLAIM,
+                reply_step_corroborated=domain in visible_by_domain,
             )
         )
     return conflicts
@@ -1057,6 +1128,8 @@ def _collect_conflicts(
 def _evaluate_all(
     facts: TeachingTurnFacts,
     next_step_claims: list[TeachingFact],
+    *,
+    context_text: str | None = None,
 ) -> tuple[dict[str, str], list[str], list[GroundingConflict]]:
     reply_verdicts, _ = _evaluate_claims(facts.reply_claims, facts, include_reply=False)
     next_verdicts, ungrounded = _evaluate_claims(
@@ -1064,9 +1137,14 @@ def _evaluate_all(
         facts,
         include_reply=True,
         apply_demand_guard=True,
+        context_text=context_text,
     )
     verdicts = {**reply_verdicts, **next_verdicts}
-    return verdicts, ungrounded, _collect_conflicts(facts, next_step_claims)
+    return (
+        verdicts,
+        ungrounded,
+        _collect_conflicts(facts, next_step_claims, context_text=context_text),
+    )
 
 
 def _apply_facts_outcome(
@@ -1161,10 +1239,16 @@ def evaluate_turn_grounding(
                 limit=_MAX_NEXT_STEP_CLAIMS,
             )
             retried_verdicts, retried_ungrounded, retried_conflicts = _evaluate_all(
-                facts, retried_claims
+                facts,
+                retried_claims,
+                context_text=retried_text,
             )
             if not retried_ungrounded:
                 facts.next_step_claims[:] = retried_claims
+                # The decision now ships the regenerated step: keep the facts
+                # text in sync so later context reads (claims/conflicts) see
+                # the text that was actually evaluated (same single writer).
+                object.__setattr__(facts, "next_step_text", retried_text)
                 _apply_facts_outcome(
                     facts,
                     verdicts=retried_verdicts,

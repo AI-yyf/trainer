@@ -12,6 +12,10 @@
 **56 个模型回合全部标记 `skipped_no_credentials`：未向任何 provider 发起调用，
 本报告不构成、也不得被引用为「真实模型通过」**。夹具骨架为本地真实执行。
 
+> 分类字段说明：`passed`=M1 脊柱（HTTP + body/disk 校验）+M2 教学接地通过（grounded/corrected 且无 requires_confirmation）
+> +M5 同源对账一致且无记忆漂移；`failed`=任一客观判据失败（含 downgraded，降级回合永不算 pass）；
+> `provider_error`=请求失败；`local_fallback`=本地兜底（fell_back）；`skipped_no_credentials`=无凭证未执行。本 harness 无 mock 通路。
+
 ## 逐案例
 
 | 案例 | 类别 | 夹具 pre/post exit | 回合分类 | 对账 | 备注 |

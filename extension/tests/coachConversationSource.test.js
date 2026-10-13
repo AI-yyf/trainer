@@ -21,6 +21,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+const coachConversationControllerPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'app',
+  'useCoachConversationController.ts',
+);
 const appUiCopyPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'appUiCopy.ts');
 const stylesPath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css');
 const agentActivityPath = path.resolve(
@@ -87,8 +95,29 @@ test('coach streaming lane exposes trainer agent activity', () => {
   const props = source.slice(renderStart, renderEnd);
 
   assert.match(props, /streamingMessage=\{/);
-  assert.match(props, /agentActivity=\{streaming\.agentActivity\}/);
-  assert.match(props, /agentStep=\{streaming\.agentStep\}/);
+  // R3: the in-flight body (agent activity, agent step, streamed content) comes
+  // from the view's own store subscription; App only flips the flag on.
+  assert.match(props, /liveContentFromStore/);
+  const conversationViewSource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'coach', 'CoachConversationView.tsx'),
+    'utf8',
+  );
+  assert.match(
+    conversationViewSource,
+    /const storeAgentActivity = useWorkbenchState\(\(state\) => state\.streaming\.agentActivity\);/,
+  );
+  assert.match(
+    conversationViewSource,
+    /const storeAgentStep = useWorkbenchState\(\(state\) => state\.streaming\.agentStep\);/,
+  );
+  assert.match(
+    conversationViewSource,
+    /const resolvedAgentActivity = liveContentFromStore \? storeAgentActivity : agentActivity;/,
+  );
+  assert.match(
+    conversationViewSource,
+    /const resolvedAgentStep = liveContentFromStore \? storeAgentStep : agentStep;/,
+  );
 });
 
 test('coach summary stays a compact horizontal context rail', () => {
@@ -301,7 +330,16 @@ test('docked views retain a compact Coach context rail without docking the full 
   assert.match(source, /data-view-context-rail-open-coach/);
   assert.doesNotMatch(source, /renderContextualResultRail\("plan"\)/);
   assert.doesNotMatch(source, /renderContextualResultRail\("resources"\)/);
-  assert.match(source, /const \[lastTurnView, setLastTurnView\] = useState<ActiveWorkbenchView>\(\);/);
+  // The view-memory state lives in the Coach conversation controller after the
+  // R3 split; App still consumes the pair and records every turn-active view.
+  const coachConversationControllerSource = fs.readFileSync(
+    coachConversationControllerPath,
+    'utf8',
+  );
+  assert.match(
+    coachConversationControllerSource,
+    /const \[lastTurnView, setLastTurnView\] = useState<ActiveWorkbenchView>\(\);/,
+  );
   assert.match(source, /setLastTurnView\(turnActiveView\);/);
   assert.match(
     source,

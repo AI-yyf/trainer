@@ -10,10 +10,17 @@ case matrix in ``docs/maturity/teaching-case-matrix.md``:
   credentials are present. Without credentials every turn is recorded as
   ``skipped_no_credentials`` and the run never claims a real-model result.
 - Per-turn classification: ``passed / failed / provider_error /
-  local_fallback / mock / skipped_no_credentials``.
-- Reconciliation (M5): the server's ``agent_meta`` grounding stamps are
-  compared with a local recompute (``evaluate_next_step_grounding``); a
-  mismatch fails the turn. ``grounding_retry_used`` is server-only.
+  local_fallback / skipped_no_credentials`` (this harness has no mock path:
+  a mocked run belongs to a different harness and must declare itself).
+  ``passed`` requires ALL of: the M1 spine (HTTP ok plus an explicit body/disk
+  source check), an M2 teaching grounding pass (server outcome ∈ {grounded,
+  corrected} with no ``requires_confirmation`` — a *downgraded* server turn is
+  a grounding failure and can never be ``passed``), M5 reconciliation against
+  the same inputs the server used (accumulated history, the learner message, a
+  workspace-root file checker), and no memory anchor drift. M3's topic-token
+  presence is recorded, not gated; M4 is enforced through the local
+  recompute's demand/anchoring rules (M5). ``grounding_retry_used`` is
+  server-only.
 - Content quality stays with the independent review column («待 owner 确认»),
   never automated here.
 
@@ -30,6 +37,8 @@ Credentials and endpoints are environment-only (never committed):
   must be https:// unless the host is loopback.
 - ``TRAINER_MATURITY_WORKSPACE``          scratch dir (default <repo>/tmp/maturity-ws).
 - ``TRAINER_MATURITY_PACING_SECONDS``     pacing between turns (default 12).
+- ``TRAINER_MATURITY_CASE_IDS``           optional comma-separated subset for a
+  smoke run (e.g. ``01-mutable-default,A4-dict-mutation``); default = all 28.
 
 Run with the server virtualenv interpreter so the sidecar dependencies resolve:
 
@@ -55,7 +64,10 @@ if str(SERVER_DIR) not in sys.path:
 
 import httpx  # noqa: E402
 
-from app.llm.turn_grounding import evaluate_next_step_grounding  # noqa: E402
+from app.llm.turn_grounding import (  # noqa: E402
+    build_teaching_turn_facts,
+    evaluate_turn_grounding,
+)
 
 SIDECAR_HOST = os.environ.get("TRAINER_MATURITY_HOST", "127.0.0.1").strip() or "127.0.0.1"
 SIDECAR_PORT = int(os.environ.get("TRAINER_MATURITY_PORT", "34900"))
@@ -72,7 +84,6 @@ TURN_CLASSIFICATIONS = (
     "failed",
     "provider_error",
     "local_fallback",
-    "mock",
     "skipped_no_credentials",
 )
 
@@ -1296,6 +1307,23 @@ CASES: list[dict] = [
 ]
 
 
+def selected_cases() -> list[dict]:
+    """All 28 cases, or the ``TRAINER_MATURITY_CASE_IDS`` smoke subset."""
+    raw = os.environ.get("TRAINER_MATURITY_CASE_IDS", "").strip()
+    if not raw:
+        return CASES
+    wanted = [part.strip() for part in raw.split(",") if part.strip()]
+    known = {case["id"] for case in CASES}
+    unknown = [case_id for case_id in wanted if case_id not in known]
+    if unknown:
+        raise RuntimeError(
+            f"Unknown TRAINER_MATURITY_CASE_IDS: {', '.join(unknown)}. "
+            f"Known ids: {', '.join(sorted(known))}"
+        )
+    wanted_set = set(wanted)
+    return [case for case in CASES if case["id"] in wanted_set]
+
+
 def _case_body(case: dict, *, fixed: bool) -> dict[str, str]:
     return case["fixed_files"] if fixed else case["files"]
 
@@ -1358,7 +1386,14 @@ def build_provider() -> dict:
 
 
 def turn_payload(
-    sid: str, case: dict, message: str, code: str, *, provider: dict, api_key: str
+    sid: str,
+    case: dict,
+    message: str,
+    code: str,
+    *,
+    file_path: str,
+    provider: dict,
+    api_key: str,
 ) -> dict:
     language = "javascript" if case["runtime"] == "node" else "python"
     return {
@@ -1369,7 +1404,7 @@ def turn_payload(
         "provider": provider,
         "apiKey": api_key,
         "current_file": {
-            "path": case["primary_file"],
+            "path": file_path,
             "language_id": language,
             "content": code,
         },
@@ -1386,6 +1421,58 @@ def _memory_strings(payload: dict) -> dict[str, str]:
     }
 
 
+def _workspace_file_checker(workspace_root: Path):
+    """Mirror the server's workspace-scoped file checker for M5 parity."""
+
+    def _check(candidate: str) -> bool | None:
+        raw = str(candidate or "").strip().strip("`").strip("\"'")
+        if not raw or "\x00" in raw or "://" in raw:
+            return None
+        try:
+            root = workspace_root.resolve()
+            target = Path(raw)
+            resolved = target.resolve() if target.is_absolute() else (root / target).resolve()
+            resolved.relative_to(root)
+            return resolved.exists()
+        except (OSError, ValueError):
+            return None
+
+    return _check
+
+
+def local_recompute_decision(
+    *,
+    next_step: str,
+    reply: str,
+    code_text: str,
+    message: str,
+    history_text: str,
+    workspace_root: Path | None,
+):
+    """Local re-evaluation with the SAME inputs the server used (M5 parity).
+
+    A bare ``(next_step, reply, code)`` recompute disagreed with the server
+    whenever history/workspace facts anchored a symbol or the file checker
+    decided a pointer — correct turns then failed reconciliation
+    (2026-10-13 review). History, the learner message and a mirrored
+    workspace-root file checker are passed instead.
+    """
+    facts = build_teaching_turn_facts(
+        turn_id="harness-local-recompute",
+        reply_text=reply,
+        code_text=code_text,
+        history_text=history_text,
+        user_message=message,
+        next_step_text=next_step,
+        workspace_evidence=(
+            {"file_exists": _workspace_file_checker(workspace_root)}
+            if workspace_root is not None
+            else None
+        ),
+    )
+    return evaluate_turn_grounding(facts)
+
+
 def classify_and_check_turn(
     case: dict,
     turn_no: int,
@@ -1394,9 +1481,18 @@ def classify_and_check_turn(
     *,
     code_text: str,
     message: str,
+    history_text: str = "",
+    workspace_root: Path | None = None,
+    body_disk_consistent: bool = True,
 ) -> dict:
     """One turn's honest classification + M1/M2/M5 checks (no credits needed
-    to be correct here; skipped turns never reach this function)."""
+    to be correct here; skipped turns never reach this function).
+
+    ``passed`` requires the M1 spine (``body_disk_consistent`` and no request
+    error), an M2 teaching grounding pass — a server ``downgraded`` outcome is
+    a grounding failure, never a pass — and M5 reconciliation against the same
+    inputs the server used.
+    """
     if request_error is not None:
         return {"classification": "provider_error", "detail": request_error}
     assert payload is not None
@@ -1412,18 +1508,32 @@ def classify_and_check_turn(
             "reply_head": reply[:160],
             "memory": memory,
         }
-    local_decision = evaluate_next_step_grounding(next_step, reply, code_text)
+    local_decision = local_recompute_decision(
+        next_step=next_step,
+        reply=reply,
+        code_text=code_text,
+        message=message,
+        history_text=history_text,
+        workspace_root=workspace_root,
+    )
     server_outcome = str(agent_meta.get("grounding_outcome") or "")
     server_ungrounded = [str(item) for item in (agent_meta.get("grounding_ungrounded_symbols") or [])]
     server_retry_used = bool(agent_meta.get("grounding_retry_used"))
     flagged = bool(coach_turn.get("requires_confirmation") or agent_meta.get("next_step_requires_confirmation"))
+    grounding_pass = False
     reconciliation = "ok"
     if server_outcome == "corrected":
+        grounding_pass = True
         if not local_decision.grounded:
             reconciliation = "corrected text is not grounded locally"
         elif not server_retry_used:
             reconciliation = "corrected outcome without retry_used"
+        elif flagged:
+            reconciliation = "corrected outcome with requires_confirmation"
     elif server_outcome == "downgraded":
+        # M2: a downgraded server turn is a grounding failure — the local
+        # recompute may agree (M5 ok) and it still never counts as passed.
+        grounding_pass = False
         if local_decision.grounded:
             reconciliation = "server downgraded but local recompute is grounded"
         elif sorted(server_ungrounded) != sorted(local_decision.referenced_symbols):
@@ -1431,20 +1541,34 @@ def classify_and_check_turn(
                 f"ungrounded symbol mismatch: server={sorted(server_ungrounded)} "
                 f"local={sorted(local_decision.referenced_symbols)}"
             )
+    elif server_outcome == "grounded":
+        grounding_pass = local_decision.grounded and not flagged
+        if not local_decision.grounded:
+            reconciliation = "server grounded but local recompute is ungrounded"
+        elif flagged:
+            reconciliation = "grounded outcome with requires_confirmation"
+    elif server_outcome == "recovery_override":
+        # The assembly deliberately skipped grounding for a recovery turn.
+        grounding_pass = False
+        reconciliation = "recovery override (grounding skipped)"
     elif server_outcome == "":
         # No stamp: the clean-reply contract keeps agent_meta empty only when
         # the step is grounded.
+        grounding_pass = local_decision.grounded and not flagged
         if not local_decision.grounded:
             reconciliation = "server sent no grounding stamp for an ungrounded step"
+        elif flagged:
+            reconciliation = "requires_confirmation without a grounding stamp"
     else:
-        if not local_decision.grounded:
-            reconciliation = f"server outcome {server_outcome} but local recompute is ungrounded"
+        grounding_pass = False
+        reconciliation = f"unknown grounding outcome: {server_outcome}"
     drift = ""
     if memory["anchor"] and message.startswith(memory["anchor"]):
         drift = "anchor repeats the learner message prefix"
     checks = {
-        "grounded_ok": reconciliation == "ok",
+        "grounding_pass": grounding_pass,
         "flagged": flagged,
+        "body_disk_consistent": body_disk_consistent,
         "anchor": memory["anchor"][:80],
         "focus": memory["focus"][:80],
         "focus_area": memory["focus_area"][:80],
@@ -1455,11 +1579,15 @@ def classify_and_check_turn(
         "next_step": next_step[:200],
         "reply_head": reply[:160],
     }
-    classification = "passed" if reconciliation == "ok" and not drift else "failed"
+    classification = (
+        "passed"
+        if grounding_pass and reconciliation == "ok" and not drift and body_disk_consistent
+        else "failed"
+    )
     return {"classification": classification, **checks}
 
 
-def run_real_journeys(provider: dict, api_key: str) -> dict:
+def run_real_journeys(provider: dict, api_key: str, cases: list[dict]) -> dict:
     """Real sidecar + real provider; every case double-turn with pacing."""
     import shutil as _shutil
 
@@ -1490,7 +1618,8 @@ def run_real_journeys(provider: dict, api_key: str) -> dict:
                 except httpx.HTTPError:
                     time.sleep(2)
             session_id = ""
-            for case in CASES:
+            session_messages: list[str] = []
+            for case in cases:
                 case_root = project_root / case["id"]
                 case_root.mkdir(parents=True, exist_ok=True)
                 if not session_id or case["new_session"]:
@@ -1502,19 +1631,35 @@ def run_real_journeys(provider: dict, api_key: str) -> dict:
                         },
                     )
                     session_id = str((started.json() or {}).get("session_id") or "")
+                    session_messages = []
                 _write_case_files(case, case_root, fixed=False)
+                # The server resolves file pointers under the workspace root,
+                # so case files are addressed relative to it (M5 parity).
+                file_path = f"projects/{case['id']}/{case['primary_file']}"
                 turns = []
                 for turn_no, message in ((1, case["turn1"]), (2, case["turn2"])):
                     if turn_no == 2:
                         _write_case_files(case, case_root, fixed=True)
                     code_text = (case["fixed_files"] if turn_no == 2 else case["files"])[case["primary_file"]]
+                    # M1: the request body and the on-disk source must match.
+                    body_disk_consistent = (
+                        (case_root / case["primary_file"]).read_text(encoding="utf-8")
+                        == code_text
+                    )
+                    history_text = "\n".join((session_messages + [message])[-12:])
                     payload: dict | None = None
                     error: str | None = None
                     try:
                         response = client.post(
                             f"{base}/turn",
                             json=turn_payload(
-                                session_id, case, message, code_text, provider=provider, api_key=api_key
+                                session_id,
+                                case,
+                                message,
+                                code_text,
+                                file_path=file_path,
+                                provider=provider,
+                                api_key=api_key,
                             ),
                         )
                         if response.status_code != 200:
@@ -1523,11 +1668,23 @@ def run_real_journeys(provider: dict, api_key: str) -> dict:
                             payload = response.json()
                     except httpx.HTTPError as exc:
                         error = f"{type(exc).__name__}: {exc}"
+                    reply_text = ""
+                    if payload is not None:
+                        reply_text = str((payload.get("reply") or {}).get("content") or "")
                     turns.append(
                         classify_and_check_turn(
-                            case, turn_no, payload, error, code_text=code_text, message=message
+                            case,
+                            turn_no,
+                            payload,
+                            error,
+                            code_text=code_text,
+                            message=message,
+                            history_text=history_text,
+                            workspace_root=WORKSPACE,
+                            body_disk_consistent=body_disk_consistent,
                         )
                     )
+                    session_messages.extend([message, reply_text])
                     time.sleep(PACING_SECONDS)
                 fixture = check_case_fixture(case, case_root)
                 case_reports.append({"case": case["id"], "fixture": fixture, "turns": turns})
@@ -1540,10 +1697,10 @@ def run_real_journeys(provider: dict, api_key: str) -> dict:
     return {"mode": "real", "cases": case_reports}
 
 
-def skipped_run(fixtures: dict[str, dict]) -> dict:
+def skipped_run(fixtures: dict[str, dict], selected: list[dict]) -> dict:
     """No credentials: fixtures still validated locally, every turn skipped."""
     cases = []
-    for case in CASES:
+    for case in selected:
         cases.append(
             {
                 "case": case["id"],
@@ -1575,7 +1732,7 @@ def write_report(result: dict) -> None:
         "- harness：`scripts/maturity/real_teaching_journeys_minimax.py`（28 组双回合，7 类 × 4）",
         "- 矩阵规格：`docs/maturity/teaching-case-matrix.md`；台账与对账规则见该文件 §2（M1–M5）",
         f"- 运行模式：`{result['mode']}`",
-        f"- 夹具校验（本地执行，无模型）：{fixtures_ok}/28 通过（pre-fix exit≠0 且 post-fix exit=0）",
+        f"- 夹具校验（本地执行，无模型）：{fixtures_ok}/{len(result['cases'])} 通过（pre-fix exit≠0 且 post-fix exit=0）",
         f"- 回合分类统计：{counts}",
         "",
     ]
@@ -1597,6 +1754,10 @@ def write_report(result: dict) -> None:
             "",
         ]
     lines += [
+        "> 分类字段说明：`passed`=M1 脊柱（HTTP + body/disk 校验）+M2 教学接地通过（grounded/corrected 且无 requires_confirmation）",
+        "> +M5 同源对账一致且无记忆漂移；`failed`=任一客观判据失败（含 downgraded，降级回合永不算 pass）；",
+        "> `provider_error`=请求失败；`local_fallback`=本地兜底（fell_back）；`skipped_no_credentials`=无凭证未执行。本 harness 无 mock 通路。",
+        "",
         "## 逐案例",
         "",
         "| 案例 | 类别 | 夹具 pre/post exit | 回合分类 | 对账 | 备注 |",
@@ -1632,10 +1793,13 @@ def write_report(result: dict) -> None:
 
 def main() -> int:
     print("=== Trainer 教学旅程 28 案例 harness ===")
+    cases = selected_cases()
+    if len(cases) != len(CASES):
+        print(f"[filter] TRAINER_MATURITY_CASE_IDS 冒烟子集：{len(cases)}/{len(CASES)} 案例")
     WORKSPACE.mkdir(parents=True, exist_ok=True)
     fixture_root = WORKSPACE / "fixtures"
     fixtures: dict[str, dict] = {}
-    for case in CASES:
+    for case in cases:
         fixture = check_case_fixture(case, fixture_root / case["id"])
         fixtures[case["id"]] = fixture
         status = "ok" if fixture["fixture_ok"] else "FIXTURE-FAIL"
@@ -1647,14 +1811,14 @@ def main() -> int:
     api_key = os.environ.get("TRAINER_MATURITY_API_KEY", "").strip()
     provider_url = os.environ.get("TRAINER_MATURITY_PROVIDER_BASE_URL", "").strip()
     if not api_key or not provider_url:
-        result = skipped_run(fixtures)
+        result = skipped_run(fixtures, cases)
         print(
             "\n[skip] TRAINER_MATURITY_API_KEY / TRAINER_MATURITY_PROVIDER_BASE_URL 未设置："
             "56 个模型回合全部 skipped_no_credentials，未执行真实调用。"
         )
     else:
         provider = build_provider()
-        result = run_real_journeys(provider, api_key)
+        result = run_real_journeys(provider, api_key, cases)
 
     fixture_ok = sum(1 for case in result["cases"] if case["fixture"]["fixture_ok"])
     counts = _classification_counts(result)
@@ -1662,9 +1826,9 @@ def main() -> int:
         json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8"
     )
     write_report(result)
-    print(f"\n夹具：{fixture_ok}/28 通过；回合分类：{counts}")
+    print(f"\n夹具：{fixture_ok}/{len(cases)} 通过；回合分类：{counts}")
     print(f"报告：{REPORT_PATH}")
-    return 0 if fixture_ok == len(CASES) else 1
+    return 0 if fixture_ok == len(cases) else 1
 
 
 if __name__ == "__main__":
