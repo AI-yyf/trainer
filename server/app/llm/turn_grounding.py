@@ -120,7 +120,11 @@ _FILE_SUFFIX_SYMBOLS = frozenset(
 
 # A candidate shorter than this is never treated as a "message prefix": short
 # anchors such as a file name that legitimately opens the message stay valid.
-_MESSAGE_PREFIX_MIN_LENGTH = 10
+_MESSAGE_PREFIX_MIN_LENGTH = 6
+# The idea lane deliberately re-anchors on the learner's stated idea
+# ("我有一个 AI idea") — a topic declaration, not an event report — so a
+# message-opening anchor carrying a topic marker survives the drift check.
+_IDEA_LANE_ANCHOR_MARKERS = ("idea", "点子")
 
 # First-clause narration signals: the clause reports an event ("我的脚本
 # assert 失败了", "我亲自写了下面的修改", "我只改了 grid[0][0]") instead of
@@ -1369,19 +1373,20 @@ def is_verbatim_message_prefix(candidate: object, message_text: object) -> bool:
     """True when the candidate repeats the opening of the learner message.
 
     The 2026-10-08 review flagged anchors drifting onto the message prefix
-    ("我亲自写了下面的修改…"). A candidate counts as a message prefix when the
-    normalized message starts with the normalized candidate and the candidate is
-    long enough not to be a trivial keyword overlap. Three exemptions keep
-    technical facts and deliberate lane labels usable as anchors:
+    ("我亲自写了下面的修改…"), and the 2026-10-13 real-model maturity runs
+    recorded the dominant drift form: technical fragments lifted from the
+    learner's opening ("items 打印出来是空的", "我加了 or 0") — anchors whose
+    embedded identifier ("items", "task", "await", "or", "JS") used to exempt
+    them via a blanket Latin-letter carve-out. That carve-out is narrowed to
+    the idea lane's topic declaration (``_IDEA_LANE_ANCHOR_MARKERS``); every
+    other fragment of the learner's opening is drift whatever script it
+    mixes, because the memory anchor must describe the teaching state, not
+    echo the learner. Remaining exemptions keep technical anchors usable:
 
-    - identifier-like anchors (``lesson.py``, ``mutable_default``), and
-    - anchors that carry a Latin-letter token but are NOT narration-shaped
-      (``我有一个 AI idea``): short mixed-script openings are the lane/topic
-      label the coach thread is deliberately re-anchored on. Narration-shaped
-      openings ("我的脚本 assert 失败了", "我亲自写了下面的修改（用 None 哨兵")
-      are event reports about the learner's edit — the exact drift recorded by
-      the real-model maturity runs — so the narration check runs FIRST and an
-      embedded English word ("assert", "None") does not rescue them.
+    - identifier-like anchors (``lesson.py``, ``mutable_default``) — filenames
+      and symbols stay valid even when the message opens with them;
+    - anchors shorter than ``_MESSAGE_PREFIX_MIN_LENGTH`` — trivial keyword
+      overlap, not an echo of the message.
     """
     anchor = normalize_anchor_text(candidate)
     message = normalize_anchor_text(message_text)
@@ -1393,7 +1398,8 @@ def is_verbatim_message_prefix(candidate: object, message_text: object) -> bool:
         return False
     if looks_like_narration_opening(anchor):
         return True
-    if re.search(r"[A-Za-z]", anchor):
+    lowered = anchor.lower()
+    if any(marker in lowered for marker in _IDEA_LANE_ANCHOR_MARKERS):
         return False
     return message.startswith(anchor)
 

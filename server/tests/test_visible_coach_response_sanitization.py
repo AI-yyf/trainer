@@ -1917,7 +1917,16 @@ def test_turn_keeps_clean_chinese_remote_reply_for_english_request(
     assert payload["coach_turn"]["scenario"] == "remote_workspace"
     assert payload["reply"]["content"] == clean_reply
     assert payload["coach_turn"]["summary"] != RECOVERED_ZH_SUMMARY
-    assert payload.get("agent_meta") in (None, {})
+    # Honesty surfacing (2026-10-13 maturity runs): a non-clean grounding
+    # decision (this guided ask carries requires_confirmation) surfaces a
+    # minimal chrome that must never fabricate an agent loop; a clean reply
+    # keeps agent_meta absent entirely.
+    surfaced_meta = payload.get("agent_meta") or {}
+    assert surfaced_meta.get("agentic") is not True
+    assert surfaced_meta.get("grounding_outcome") in (None, "grounded", "corrected", "downgraded")
+    if surfaced_meta:
+        assert surfaced_meta["grounding_outcome"] == "downgraded"
+        assert payload["coach_turn"].get("requires_confirmation") is True
     assert "coach_visible_status" not in payload["reply"]["metadata"]
     focus = str(payload["reply"]["metadata"].get("coach_focus", {}).get("current_focus") or "")
     memory_focus = str(payload["snapshot"]["memory"].get("current_focus") or "")

@@ -208,6 +208,22 @@ def test_message_prefix_is_never_a_valid_anchor() -> None:
     assert is_verbatim_message_prefix("", MESSAGE_PREFIX) is False
 
 
+def test_maturity_drift_fragments_are_rejected_as_message_prefix() -> None:
+    """2026-10-13 real-model maturity runs: 19/56 turns anchored on fragments
+    of the learner's opening ("items 打印出来是空的", "我加了 or 0") because
+    their identifier tokens exempted them. The anchor must describe the
+    teaching state, never echo the learner's message opening.
+    """
+    for anchor, message in (
+        ("items 打印出来是空的", "items 打印出来是空的，怎么回事？"),
+        ("我加了 or 0", "我加了 or 0 之后 items 打印出来是空的"),
+        ("我保存了 task 并 await 它", "我保存了 task 并 await 它但没有效果"),
+        ("同一份逻辑搬到 JS 后", "同一份逻辑搬到 JS 后行为不一样"),
+    ):
+        assert is_verbatim_message_prefix(anchor, message) is True
+        assert sanitize_memory_anchor(anchor, message) == ""
+
+
 def test_latin_token_lane_anchor_is_not_treated_as_drift() -> None:
     """Mixed-script lane labels (``我有一个 AI idea``) survive sanitization.
 

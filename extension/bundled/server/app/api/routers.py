@@ -10777,7 +10777,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         coach_turn_payload: CoachTurnPayload | dict[str, object] | None,
         decision: GroundingDecision,
         agent_meta: dict[str, object] | None = None,
-    ) -> None:
+    ) -> dict[str, object] | None:
         """Cache one decision on the payload and apply it (per evaluated text).
 
         Idempotent for the same next-step text; when a later execution pass
@@ -10788,13 +10788,13 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         text so ``build_session_response`` never re-evaluates a decided turn.
         """
         if not isinstance(coach_turn_payload, dict):
-            return
+            return None
         previous_decision = coach_turn_payload.get(GROUNDING_DECISION_CACHE_KEY)
         re_applying = isinstance(previous_decision, GroundingDecision)
         if re_applying:
             evaluated_text = coach_turn_payload.get(GROUNDING_EVALUATED_NEXT_STEP_CACHE_KEY)
             if evaluated_text == grounding_next_step_text(coach_turn_payload):
-                return
+                return None
         coach_turn_payload[GROUNDING_DECISION_CACHE_KEY] = decision
         turn_summary = coach_turn_payload.get("coach_turn")
         if isinstance(turn_summary, CoachTurnSummary):
@@ -10829,13 +10829,27 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         coach_turn_payload[GROUNDING_EVALUATED_NEXT_STEP_CACHE_KEY] = grounding_next_step_text(
             coach_turn_payload
         )
-        # Only attach stamps to EXISTING agent chrome: a clean reply must keep
-        # agent_meta absent/empty (sanitization contract).
+        # Attach stamps to existing agent chrome. A clean grounded reply keeps
+        # agent_meta absent/empty (sanitization contract). A non-clean decision
+        # (corrected next step or requires-confirmation downgrade) is surfaced
+        # even on guided-lane turns that have no agent chrome — the learner and
+        # the maturity harness must be able to see the server verdict — via a
+        # minimal honest chrome that stays ``agentic: False``. Returns the
+        # agent chrome carrying the stamps (or None) so response builders can
+        # adopt it when the caller had none.
+        outcome = grounding_outcome(decision)
+        clean_pass = outcome == "grounded" and not decision.requires_confirmation
         if isinstance(agent_meta, dict) and agent_meta:
-            agent_meta["grounding_outcome"] = grounding_outcome(decision)
-            agent_meta["grounding_ungrounded_symbols"] = list(decision.referenced_symbols)
-            agent_meta["grounding_retry_used"] = bool(decision.retry_used)
-            agent_meta["next_step_requires_confirmation"] = bool(decision.requires_confirmation)
+            stamped = agent_meta
+        elif clean_pass:
+            return None
+        else:
+            stamped: dict[str, object] = {"agentic": False}
+        stamped["grounding_outcome"] = outcome
+        stamped["grounding_ungrounded_symbols"] = list(decision.referenced_symbols)
+        stamped["grounding_retry_used"] = bool(decision.retry_used)
+        stamped["next_step_requires_confirmation"] = bool(decision.requires_confirmation)
+        return stamped
 
     def turn_grounding_retry_eligible(
         *,
@@ -20799,11 +20813,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             history_text=turn_history_text(state.snapshot),
             coaching_service=coaching_service,
         )
-        apply_grounding_decision(
+        agent_meta = apply_grounding_decision(
             coach_turn_payload=coach_turn_payload,
             decision=grounding_decision,
             agent_meta=agent_meta if isinstance(agent_meta, dict) else None,
-        )
+        ) or agent_meta
         persist_turn_reflection(
             workspace_id=workspace_id,
             session_id=state.session_id,
@@ -21847,11 +21861,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             history_text=turn_history_text(state.snapshot),
             coaching_service=coaching_service,
         )
-        apply_grounding_decision(
+        agent_meta = apply_grounding_decision(
             coach_turn_payload=coach_turn,
             decision=grounding_decision,
             agent_meta=agent_meta if isinstance(agent_meta, dict) else None,
-        )
+        ) or agent_meta
         persist_turn_reflection(
             workspace_id=workspace_id,
             session_id=state.session_id,
@@ -23092,11 +23106,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     history_text=turn_history_text(state.snapshot),
                     coaching_service=coaching_service,
                 )
-                apply_grounding_decision(
+                final_agent_meta = apply_grounding_decision(
                     coach_turn_payload=coach_turn,
                     decision=grounding_decision,
                     agent_meta=final_agent_meta if isinstance(final_agent_meta, dict) else None,
-                )
+                ) or final_agent_meta
                 persist_turn_reflection(
                     workspace_id=workspace_id,
                     session_id=state.session_id,
@@ -23897,11 +23911,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                             history_text=turn_history_text(state.snapshot),
                             coaching_service=coaching_service,
                         )
-                        apply_grounding_decision(
+                        final_agent_meta = apply_grounding_decision(
                             coach_turn_payload=coach_turn_data,
                             decision=streaming_grounding_decision,
                             agent_meta=final_agent_meta or None,
-                        )
+                        ) or final_agent_meta
 
                     response_data = json_response_payload(
                         build_session_response(
@@ -24446,11 +24460,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     history_text=turn_history_text(state.snapshot),
                     coaching_service=coaching_service,
                 )
-                apply_grounding_decision(
+                final_agent_meta = apply_grounding_decision(
                     coach_turn_payload=coach_turn,
                     decision=grounding_decision,
                     agent_meta=final_agent_meta if isinstance(final_agent_meta, dict) else None,
-                )
+                ) or final_agent_meta
                 persist_turn_reflection(
                     workspace_id=workspace_id,
                     session_id=state.session_id,
