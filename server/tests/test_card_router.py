@@ -184,9 +184,22 @@ class TestBlockingConditions(unittest.TestCase):
         )
         self.assertIsNone(result.selected_card_id)
         self.assertEqual(len(result.blocked_candidates), 1)
+        # Default (no language) falls back to the English blocker catalog.
         self.assertIn(
             "flash reference answer is missing",
             result.blocked_candidates[0].reasons,
+        )
+        zh_result = svc.select_active_card(
+            candidates=[flash_card],
+            learner_state=_learner(),
+            plan_state=_plan(),
+            response_language="zh-CN",
+        )
+        self.assertEqual(len(zh_result.blocked_candidates), 1)
+        # A zh request gets the zh blocker catalog.
+        self.assertIn(
+            "闪卡缺少参考答案",
+            zh_result.blocked_candidates[0].reasons,
         )
 
     def test_flash_missing_hint_ladder_blocked(self) -> None:
@@ -203,9 +216,22 @@ class TestBlockingConditions(unittest.TestCase):
             plan_state=_plan(),
         )
         self.assertIsNone(result.selected_card_id)
+        # Default (no language) falls back to the English blocker catalog.
         self.assertIn(
             "flash hint_ladder is missing",
             result.blocked_candidates[0].reasons,
+        )
+        zh_result = svc.select_active_card(
+            candidates=[flash_card],
+            learner_state=_learner(),
+            plan_state=_plan(),
+            response_language="zh-CN",
+        )
+        self.assertIsNone(zh_result.selected_card_id)
+        # A zh request gets the zh blocker catalog.
+        self.assertIn(
+            "闪卡缺少 hint_ladder",
+            zh_result.blocked_candidates[0].reasons,
         )
 
     def test_untrusted_source_blocked(self) -> None:

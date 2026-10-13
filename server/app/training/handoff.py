@@ -147,6 +147,14 @@ class TrainingHandoffGenerator:
         "drill": "Drill attempt for: {concept}. Keep the result provisional until the verification checklist is satisfied.",
         "transfer": "Transfer attempt for: {concept}. Return with inspectable evidence before crediting the result.",
     }
+    # zh catalog for key_takeaway (learner-facing); keys mirror TAKEAWAY_TEMPLATES
+    # and every non-zh (or unknown) locale falls back to the English catalog.
+    TAKEAWAY_TEMPLATES_ZH = {
+        "recall": "这张卡片的关键回忆：{concept}",
+        "practice": "练习尝试：{concept}。在计入完成之前仍需验证。",
+        "drill": "训练尝试：{concept}。在验证清单满足之前，结果保持临时状态。",
+        "transfer": "迁移尝试：{concept}。请带着可检查的证据回来，再计入结果。",
+    }
 
     _TRUSTED_VERIFICATION_SOURCES = frozenset(
         {
@@ -450,13 +458,17 @@ class TrainingHandoffGenerator:
 
         # Determine key takeaway based on card type
         template_key = card_type if card_type in self.TAKEAWAY_TEMPLATES else "practice"
-        takeaway = self.TAKEAWAY_TEMPLATES[template_key].format(
+        takeaway = _localized_text(
+            self.TAKEAWAY_TEMPLATES[template_key],
+            self.TAKEAWAY_TEMPLATES_ZH[template_key],
+            response_language,
+        ).format(
             concept=concept,
             verification=getattr(card, "validation_method", ""),
         )
 
         # Extract next steps from card
-        next_steps = self._extract_next_steps(card)
+        next_steps = self._extract_next_steps(card, response_language)
 
         # Identify files to touch
         files_to_touch = self._extract_files_to_touch(card)
@@ -528,8 +540,17 @@ class TrainingHandoffGenerator:
         )
         return content
 
-    def _extract_next_steps(self, card: TrainingCardCandidateSnapshot) -> list[str]:
-        """Extract next steps from card metadata."""
+    def _extract_next_steps(
+        self,
+        card: TrainingCardCandidateSnapshot,
+        response_language: str | None = None,
+    ) -> list[str]:
+        """Extract next steps from card metadata.
+
+        Card-authored steps pass through unchanged; the synthesized fallback
+        steps are learner-facing, so they follow the zh-catalog /
+        English-fallback convention.
+        """
         steps = []
 
         # Priority: explicit next_steps field > deliverable > validation_method
@@ -541,21 +562,37 @@ class TrainingHandoffGenerator:
 
         deliverable = getattr(card, "deliverable", None)
         if deliverable and not steps:
-            steps.append(f"Deliver: {deliverable}")
+            steps.append(_localized_text(
+                f"Deliver: {deliverable}", f"交付：{deliverable}", response_language
+            ))
 
         validation = getattr(card, "validation_method", None)
         if validation and not steps:
-            steps.append(f"Verify by: {validation}")
+            steps.append(_localized_text(
+                f"Verify by: {validation}", f"验证方式：{validation}", response_language
+            ))
 
         # Fallback steps based on card type
         if not steps:
             card_type = getattr(card, "card_type", "flash") or "flash"
             if card_type == "practice":
-                steps.append("Apply concept to current project")
+                steps.append(_localized_text(
+                    "Apply concept to current project",
+                    "把概念应用到当前项目",
+                    response_language,
+                ))
             elif card_type == "drill":
-                steps.append("Repeat drill with variation")
+                steps.append(_localized_text(
+                    "Repeat drill with variation",
+                    "用变化重复训练",
+                    response_language,
+                ))
             elif card_type == "transfer":
-                steps.append("Transfer to project task")
+                steps.append(_localized_text(
+                    "Transfer to project task",
+                    "迁移到项目任务",
+                    response_language,
+                ))
 
         return steps[:5]  # Limit to 5 steps
 

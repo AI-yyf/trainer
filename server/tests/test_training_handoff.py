@@ -52,6 +52,39 @@ class TestTrainingHandoffGenerator:
         assert result.status == HandoffStatus.GENERATED
         assert len(result.next_steps) > 0
 
+    def test_generate_handoff_language_dispatch(self):
+        """zh requests get the zh takeaway/next-step catalog; others fall back to English."""
+        from app.core.models import TrainingCardCandidateSnapshot
+
+        card = TrainingCardCandidateSnapshot(
+            card_id="card-lang",
+            title="Understanding Python decorators",
+            card_type="practice",
+            concept="python-decorators",
+            validation_method="Explain when to use @property vs @staticmethod",
+            status="candidate",
+        )
+
+        generator = TrainingHandoffGenerator()
+        default_result = generator.generate_handoff(card, {"correct": True})
+        assert default_result.key_takeaway == (
+            "Practice attempt for: python-decorators. "
+            "Verification is still required before crediting completion."
+        )
+        assert default_result.next_steps == [
+            "Verify by: Explain when to use @property vs @staticmethod"
+        ]
+
+        zh_result = generator.generate_handoff(
+            card, {"correct": True}, response_language="zh-CN"
+        )
+        assert zh_result.key_takeaway == (
+            "练习尝试：python-decorators。在计入完成之前仍需验证。"
+        )
+        assert zh_result.next_steps == [
+            "验证方式：Explain when to use @property vs @staticmethod"
+        ]
+
     def test_generate_handoff_with_files(self):
         """Test handoff generation with file references."""
         from app.core.models import TrainingCardCandidateSnapshot

@@ -328,6 +328,35 @@ def _answer_policy_instruction(value: str | None) -> str:
     )
 
 
+def _guided_mode_requirements(response_language: str | None) -> str:
+    """Guided-lane craft rules appended after the Answer Policy Bias section.
+
+    Added after maturity-harness acceptance showed guided turns losing the
+    ``explains_reasoning`` dimension (reasoning connectives sitting far from
+    the code they explain) and shipping fenced blocks large enough to read as
+    a written-out solution (see ``app/llm/explanation_quality.py``). zh
+    requests get the zh rules; every other (or unknown) locale falls back to
+    English.
+    """
+    if str(response_language or "").strip().lower().startswith("zh"):
+        return (
+            "- 解释“为什么这样做”时，把推理句紧跟在它所解释的代码或命令旁边，用“因为…所以…”"
+            "（或“这意味着…”）的句式，让推理标记出现在对应代码引用的近旁，而不是集中堆在回复末尾。"
+            "每一处代码引用至少有一句紧邻的“为什么”。\n"
+            "- 引导模式下不要输出完整解决方案代码块：单个代码块不超过约 10 行，"
+            "只给学习者当前这一步需要的片段，其余部分留给学习者自己写。"
+        )
+    return (
+        "- When you explain why a move works, put the reasoning sentence immediately beside the code or command it "
+        "explains, in a \"because ... so ...\" (or \"this means ...\") form, so a reasoning marker sits right next to "
+        "its code reference instead of being collected at the end of the reply. Every code citation gets at least one "
+        "adjacent why.\n"
+        "- In guided mode, never hand over the complete solution as one code block: keep any single fenced block to "
+        "roughly 10 lines or fewer and give only the fragment the learner needs for the current step; leave the rest "
+        "for the learner to write."
+    )
+
+
 def _function_guidance_prompt_inputs(
     message: str | None,
     current_file: dict[str, object] | None,
@@ -782,6 +811,8 @@ def build_coaching_system_prompt(
         f"- Active policy: {answer_policy}\n"
         f"- {_answer_policy_instruction(raw_answer_policy)}"
     )
+    if answer_policy == "guided":
+        system_prompt += f"\n{_guided_mode_requirements(response_language)}"
 
     system_prompt += (
         "\n\n## Request Priority\n"

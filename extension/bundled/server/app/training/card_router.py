@@ -233,38 +233,79 @@ def _live_routed_why_now(plan_state: dict[str, Any] | None, why_now: str) -> str
 # Blocking conditions
 # ---------------------------------------------------------------------------
 
-def _infer_blockers(card: TrainingCardCandidateSnapshot) -> list[str]:
-    """Return reasons a card should be blocked from selection."""
+def _infer_blockers(
+    card: TrainingCardCandidateSnapshot,
+    response_language: str | None = None,
+) -> list[str]:
+    """Return reasons a card should be blocked from selection.
+
+    Reasons are learner-facing (they flow into ``blocked_candidates`` and
+    ``why_not_others``), so zh requests get the zh catalog and every other
+    (or unknown) locale falls back to English — same convention as
+    ``_localized_text``.
+    """
     reasons: list[str] = []
 
     # Untrusted/stale source without explicit acknowledgment
     if card.trust_state in ("untrusted", "stale") and not card.trust_acknowledged:
-        reasons.append("resource is not trusted or fresh enough")
+        reasons.append(_localized_text(
+            "resource is not trusted or fresh enough",
+            "资源不可信或新鲜度不足",
+            response_language,
+        ))
 
     # Practice cards require problem_statement, deliverable, validation_method
     if card.card_type == "practice":
         if not _has_content(card.problem_statement):
-            reasons.append("practice problem_statement is missing")
+            reasons.append(_localized_text(
+                "practice problem_statement is missing",
+                "练习卡缺少 problem_statement",
+                response_language,
+            ))
         if not _has_content(card.deliverable):
-            reasons.append("practice deliverable is missing")
+            reasons.append(_localized_text(
+                "practice deliverable is missing",
+                "练习卡缺少 deliverable",
+                response_language,
+            ))
         if not _has_content(card.validation_method):
-            reasons.append("practice validation_method is missing")
+            reasons.append(_localized_text(
+                "practice validation_method is missing",
+                "练习卡缺少 validation_method",
+                response_language,
+            ))
 
     # Flash cards require expected_answer (standard_answer) and hint_ladder
     if card.card_type == "flash":
         if not _has_content(card.expected_answer):
-            reasons.append("flash reference answer is missing")
+            reasons.append(_localized_text(
+                "flash reference answer is missing",
+                "闪卡缺少参考答案",
+                response_language,
+            ))
         if not _has_list_content(card.hint_ladder):
-            reasons.append("flash hint_ladder is missing")
+            reasons.append(_localized_text(
+                "flash hint_ladder is missing",
+                "闪卡缺少 hint_ladder",
+                response_language,
+            ))
 
     # Uncertain project context blocks project-specific practice cards
     if card.requires_project_context and not card.project_context_ready:
         if card.card_type == "practice":
-            reasons.append("project context is not ready for practice card")
+            reasons.append(_localized_text(
+                "project context is not ready for practice card",
+                "练习卡的项目上下文尚未就绪",
+                response_language,
+            ))
 
     # No title at all — card is malformed
     if not _has_content(card.title):
-        reasons.append("card title is missing")
+        reasons.append(_localized_text(
+            "card title is missing",
+            "卡片缺少标题",
+            response_language,
+        ))
 
     return reasons
 
@@ -540,7 +581,7 @@ class CardRouterService:
 
         for card in candidates:
             card_id = card.card_id or ""
-            reasons = _infer_blockers(card)
+            reasons = _infer_blockers(card, response_language)
             if reasons:
                 blocked_ids.add(card_id)
                 blocked_details.append(BlockedCandidateDetail(
