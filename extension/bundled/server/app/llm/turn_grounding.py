@@ -120,7 +120,7 @@ _FILE_SUFFIX_SYMBOLS = frozenset(
 
 # A candidate shorter than this is never treated as a "message prefix": short
 # anchors such as a file name that legitimately opens the message stay valid.
-_MESSAGE_PREFIX_MIN_LENGTH = 6
+_MESSAGE_PREFIX_MIN_LENGTH = 4
 # The idea lane deliberately re-anchors on the learner's stated idea
 # ("我有一个 AI idea") — a topic declaration, not an event report — so a
 # message-opening anchor carrying a topic marker survives the drift check.

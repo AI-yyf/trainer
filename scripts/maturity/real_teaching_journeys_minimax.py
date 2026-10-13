@@ -1680,7 +1680,13 @@ def run_real_journeys(provider: dict, api_key: str, cases: list[dict]) -> dict:
                             code_text=code_text,
                             message=message,
                             history_text=history_text,
-                            workspace_root=WORKSPACE,
+                            # M5 parity: case files live in the case directory
+                            # (and the next step references them by bare name),
+                            # so the local file checker mirrors that root —
+                            # not the workspace root, where bare names never
+                            # exist and every current-file step would read as
+                            # ungrounded.
+                            workspace_root=case_root,
                             body_disk_consistent=body_disk_consistent,
                         )
                     )
