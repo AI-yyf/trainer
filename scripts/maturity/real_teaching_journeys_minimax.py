@@ -23,6 +23,11 @@ case matrix in ``docs/maturity/teaching-case-matrix.md``:
   server-only.
 - Content quality stays with the independent review column («待 owner 确认»),
   never automated here.
+- Explanation quality (2026-10-13) is recorded as a NON-GATING reporting
+  column: ``evaluate_explanation_quality`` (``app/llm/explanation_quality.py``)
+  scores the reply body on five deterministic dimensions per turn and the
+  verdicts travel in the checks dict under ``explanation_quality``. They never
+  feed the classification above, and the report aggregates them as counts.
 
 Credentials and endpoints are environment-only (never committed):
 - ``TRAINER_MATURITY_API_KEY``            provider API key (required for real runs).
@@ -64,6 +69,10 @@ if str(SERVER_DIR) not in sys.path:
 
 import httpx  # noqa: E402
 
+from app.llm.explanation_quality import (  # noqa: E402
+    EXPLANATION_DIMENSIONS,
+    evaluate_explanation_quality,
+)
 from app.llm.turn_grounding import (  # noqa: E402
     build_teaching_turn_facts,
     evaluate_turn_grounding,
@@ -1440,6 +1449,33 @@ def _workspace_file_checker(workspace_root: Path):
     return _check
 
 
+def build_local_recompute_facts(
+    *,
+    next_step: str,
+    reply: str,
+    code_text: str,
+    message: str,
+    history_text: str,
+    workspace_root: Path | None,
+):
+    """The turn facts shared by the local grounding recompute (M5 parity) and
+    the non-gating explanation-quality evaluation — one extraction, one set
+    of inputs, so both reports describe the same turn."""
+    return build_teaching_turn_facts(
+        turn_id="harness-local-recompute",
+        reply_text=reply,
+        code_text=code_text,
+        history_text=history_text,
+        user_message=message,
+        next_step_text=next_step,
+        workspace_evidence=(
+            {"file_exists": _workspace_file_checker(workspace_root)}
+            if workspace_root is not None
+            else None
+        ),
+    )
+
+
 def local_recompute_decision(
     *,
     next_step: str,
@@ -1457,18 +1493,13 @@ def local_recompute_decision(
     (2026-10-13 review). History, the learner message and a mirrored
     workspace-root file checker are passed instead.
     """
-    facts = build_teaching_turn_facts(
-        turn_id="harness-local-recompute",
-        reply_text=reply,
+    facts = build_local_recompute_facts(
+        next_step=next_step,
+        reply=reply,
         code_text=code_text,
+        message=message,
         history_text=history_text,
-        user_message=message,
-        next_step_text=next_step,
-        workspace_evidence=(
-            {"file_exists": _workspace_file_checker(workspace_root)}
-            if workspace_root is not None
-            else None
-        ),
+        workspace_root=workspace_root,
     )
     return evaluate_turn_grounding(facts)
 
@@ -1508,13 +1539,21 @@ def classify_and_check_turn(
             "reply_head": reply[:160],
             "memory": memory,
         }
-    local_decision = local_recompute_decision(
+    local_facts = build_local_recompute_facts(
         next_step=next_step,
         reply=reply,
         code_text=code_text,
         message=message,
         history_text=history_text,
         workspace_root=workspace_root,
+    )
+    local_decision = evaluate_turn_grounding(local_facts)
+    # Explanation quality is a REPORTING dimension only (see
+    # app/llm/explanation_quality.py): its verdicts are recorded below but
+    # never feed the classification at the end of this function.
+    explanation_quality = evaluate_explanation_quality(
+        local_facts,
+        answer_mode=str(case.get("answer_mode") or "guided"),
     )
     server_outcome = str(agent_meta.get("grounding_outcome") or "")
     server_ungrounded = [str(item) for item in (agent_meta.get("grounding_ungrounded_symbols") or [])]
@@ -1578,6 +1617,10 @@ def classify_and_check_turn(
         "server_outcome": server_outcome,
         "next_step": next_step[:200],
         "reply_head": reply[:160],
+        "explanation_quality": {
+            "dimensions": dict(explanation_quality.dimensions),
+            "solution_dump_suspected": explanation_quality.solution_dump_suspected,
+        },
     }
     classification = (
         "passed"
@@ -1729,6 +1772,71 @@ def _classification_counts(result: dict) -> dict[str, int]:
     return counts
 
 
+def explanation_quality_summary(result: dict) -> dict:
+    """Aggregate the non-gating explanation-quality dimensions over turns.
+
+    Only turns that carry an ``explanation_quality`` record count:
+    ``provider_error`` / ``local_fallback`` / ``skipped_no_credentials`` turns
+    never reach the evaluation and are not judged.
+    """
+    dimension_counts: dict[str, dict[str, int]] = {
+        dim: {"ok": 0, "weak": 0, "unclear": 0} for dim in EXPLANATION_DIMENSIONS
+    }
+    evaluated = 0
+    dump_suspected = 0
+    for case in result["cases"]:
+        for turn in case["turns"]:
+            quality = turn.get("explanation_quality")
+            if not isinstance(quality, dict):
+                continue
+            evaluated += 1
+            dimensions = quality.get("dimensions")
+            if isinstance(dimensions, dict):
+                for dim, verdict in dimensions.items():
+                    bucket = dimension_counts.setdefault(
+                        str(dim), {"ok": 0, "weak": 0, "unclear": 0}
+                    )
+                    verdict_key = str(verdict)
+                    if verdict_key in bucket:
+                        bucket[verdict_key] += 1
+            if bool(quality.get("solution_dump_suspected")):
+                dump_suspected += 1
+    return {
+        "dimensions": dimension_counts,
+        "evaluated_turns": evaluated,
+        "solution_dump_suspected_turns": dump_suspected,
+    }
+
+
+def explanation_quality_markdown(summary: dict) -> list[str]:
+    """Markdown section for ``write_report``: per-dimension counts + the
+    solution-dump suspicion count, labelled as observational (non-gating)."""
+    evaluated = summary["evaluated_turns"]
+    lines = [
+        "",
+        "## 解释质量汇总（非门控观察维度）",
+        "",
+        (
+            f"- 已评估回合：{evaluated}"
+            "（provider_error / local_fallback / skipped_no_credentials 回合不产出解释质量）"
+        ),
+        f"- solution_dump_suspected 回合：{summary['solution_dump_suspected_turns']}/{evaluated}",
+        "",
+        "| 维度 | ok | weak | unclear |",
+        "| --- | --- | --- | --- |",
+    ]
+    for dim, counts in summary["dimensions"].items():
+        lines.append(f"| {dim} | {counts['ok']} | {counts['weak']} | {counts['unclear']} |")
+    lines += [
+        "",
+        (
+            "> 解释质量是结构化上报维度（`app/llm/explanation_quality.py`），"
+            "不参与 classification 判定；`unclear` 表示该回合输入不足以判定。"
+        ),
+    ]
+    return lines
+
+
 def write_report(result: dict) -> None:
     fixtures_ok = sum(1 for case in result["cases"] if case["fixture"]["fixture_ok"])
     counts = _classification_counts(result)
@@ -1782,6 +1890,7 @@ def write_report(result: dict) -> None:
             f"| {case_id} | {category} | {fixture['pre_fix_exit']} / {fixture['post_fix_exit']} | "
             f"{classifications} | {reconciliations} | {note} |"
         )
+    lines += explanation_quality_markdown(explanation_quality_summary(result))
     lines += [
         "",
         "## 复现",
@@ -1828,11 +1937,17 @@ def main() -> int:
 
     fixture_ok = sum(1 for case in result["cases"] if case["fixture"]["fixture_ok"])
     counts = _classification_counts(result)
+    explanation_summary = explanation_quality_summary(result)
+    report_payload = {**result, "explanation_quality_summary": explanation_summary}
     (WORKSPACE / "report.json").write_text(
-        json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8"
+        json.dumps(report_payload, ensure_ascii=False, indent=1), encoding="utf-8"
     )
     write_report(result)
     print(f"\n夹具：{fixture_ok}/{len(cases)} 通过；回合分类：{counts}")
+    print(
+        f"解释质量（非门控）：已评估 {explanation_summary['evaluated_turns']} 回合，"
+        f"solution_dump_suspected {explanation_summary['solution_dump_suspected_turns']} 回合"
+    )
     print(f"报告：{REPORT_PATH}")
     return 0 if fixture_ok == len(cases) else 1
 
