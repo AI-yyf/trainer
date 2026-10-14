@@ -396,7 +396,6 @@ function CoachMessageBubbleImpl({
                 className="message-bubble__icon-action"
                 data-message-quick-action="copy"
                 aria-label={messageActionLabels.copy}
-                title={messageActionLabels.copy}
                 disabled={Boolean(pendingAssistantAction)}
                 onClick={() => onMessageAction?.("copy", message)}
               >
@@ -407,7 +406,6 @@ function CoachMessageBubbleImpl({
                 className="message-bubble__icon-action"
                 data-message-quick-action="share"
                 aria-label={messageActionLabels.share}
-                title={messageActionLabels.share}
                 disabled={Boolean(pendingAssistantAction)}
                 onClick={() => onMessageAction?.("share", message)}
               >
@@ -418,7 +416,6 @@ function CoachMessageBubbleImpl({
                 className="message-bubble__icon-action"
                 data-message-quick-action="save-resource"
                 aria-label={messageActionLabels["save-resource"]}
-                title={messageActionLabels["save-resource"]}
                 disabled={Boolean(pendingAssistantAction)}
                 onClick={() => onMessageAction?.("save-resource", message)}
               >
@@ -429,7 +426,6 @@ function CoachMessageBubbleImpl({
                 className="message-bubble__icon-action"
                 data-message-quick-action="training-card"
                 aria-label={messageActionLabels["training-card"]}
-                title={messageActionLabels["training-card"]}
                 disabled={Boolean(pendingAssistantAction)}
                 onClick={() => onMessageAction?.("training-card", message)}
               >
@@ -441,8 +437,7 @@ function CoachMessageBubbleImpl({
                   className="message-bubble__icon-action"
                   data-message-quick-action="retry"
                   aria-label={messageActionLabels.retry}
-                  title={messageActionLabels.retry}
-                  disabled={Boolean(pendingAssistantAction)}
+                    disabled={Boolean(pendingAssistantAction)}
                   onClick={() => onMessageAction?.("retry", message)}
                 >
                   <RefreshIcon size={14} />
