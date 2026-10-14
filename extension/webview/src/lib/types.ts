@@ -636,6 +636,8 @@ export interface ActiveThreadView {
 }
 
 export interface ResourceRecord {
+  /** Real folders (workspace-relative) this resource physically lives in. */
+  library_paths?: string[];
   id: string;
   title: string;
   kind: "pdf" | "image" | "markdown" | "text" | "code" | "url" | "video";
@@ -2129,6 +2131,29 @@ type HostMessageBody =
   | {
       type: "ui/coachPrompt";
       payload: { draft: string; source?: "commandPalette" | "recovery" };
+    }
+  /**
+   * Deep link (`vscode://local.trainer-extension/library/<id>`) landed by the
+   * host: open the Library and focus that resource. Flat by contract with
+   * `extension/src/browserCapture/deepLink.ts`.
+   */
+  | { type: "ui/openResource"; resourceId: string }
+  /**
+   * Browser-captured coach draft forwarded by the host draft poller: prefill
+   * the Coach composer without sending. Flat by contract with
+   * `extension/src/browserCapture/draftPoller.ts`.
+   */
+  | { type: "ui/coachDraftPrefill"; text: string }
+  /**
+   * Answer to one real-folder request (`/library/groups` list/create/rename/
+   * delete) that the webview posted as a host command. Correlated by the
+   * command payload's `operationId`, the same pattern as
+   * `training/resourceHandoff`. `folders` stays `unknown` on purpose: the
+   * payload is normalized by `lib/libraryFolders.parseLibraryFolderTree`.
+   */
+  | {
+      type: "library/folders";
+      payload: { operationId?: string; ok: boolean; folders?: unknown; message?: string };
     }
   // Streaming messages
   | { type: "stream/start"; payload: { messageId: string } }

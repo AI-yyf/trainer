@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { trainerCommands } from '../../../shared/src/commands';
 
 export const EXTENSION_ID = 'trainer';
@@ -51,6 +53,10 @@ export const COMMAND_IDS = {
   taskSpecify: trainerCommands.taskSpecify,
   nextTask: trainerCommands.nextTask,
   uploadResource: trainerCommands.uploadResource,
+  libraryFoldersList: trainerCommands.libraryFoldersList,
+  libraryFoldersCreate: trainerCommands.libraryFoldersCreate,
+  libraryFoldersRename: trainerCommands.libraryFoldersRename,
+  libraryFoldersDelete: trainerCommands.libraryFoldersDelete,
   indexResources: trainerCommands.indexResources,
   searchResources: trainerCommands.searchResources,
   deleteResource: trainerCommands.deleteResource,
@@ -129,6 +135,10 @@ export const COMMAND_IDS = {
   theoryDrillSubmitAnswer: trainerCommands.theoryDrillSubmitAnswer,
   reviewQueueAction: trainerCommands.reviewQueueAction,
   scenarioLabAction: trainerCommands.scenarioLabAction,
+  // Browser capture lane (install bundle, pairing, revoke)
+  browserCaptureInstall: 'trainer.browserCapture.install',
+  browserCapturePairingCode: 'trainer.browserCapture.pairingCode',
+  browserCaptureRevokePairing: 'trainer.browserCapture.revokePairing',
   // Research commands kept for internal compatibility
   createResearch: trainerCommands.createResearch,
   addResearchTheme: trainerCommands.addResearchTheme,
@@ -160,6 +170,24 @@ export const STORAGE_KEYS = {
 
 export const SECRET_KEYS = {
   providerApiKeyPrefix: 'trainer.provider.apiKey',
+} as const;
+
+export const BROWSER_CAPTURE = {
+  /** Directory inside the VSIX/extension bundle that carries the unpacked capture extension. */
+  bundleDirName: 'browser-capture',
+  /** Marker file written by the packaging step and copied into the installed directory. */
+  versionFileName: 'trainer-browser-capture.json',
+  /** Managed install location (relative to the user's home directory). */
+  installedRelativeDir: path.join('.trainer', 'browser-capture'),
+  /** Pairing codes are displayed on an information bar; 10 minutes is the whole window. */
+  pairingCodeTtlMs: 10 * 60 * 1_000,
+  /** Draft forwarding cadence while a workbench surface is visible. */
+  draftPollIntervalMs: 3_000,
+  /** Sidecar contract paths (see the pair_api_contract in the delivery notes). */
+  pairCodePath: '/browser/pair-code',
+  pairPath: '/browser/pair',
+  pendingDraftsPath: '/browser/pending-drafts',
+  pendingDraftsAckPath: '/browser/pending-drafts/ack',
 } as const;
 
 export const SIDECAR_DEFAULTS = {

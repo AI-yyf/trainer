@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { registerCommands } from './commands';
+import { createBrowserCaptureRuntime } from './browserCapture/runtime';
 import { evaluatePublishedFileCommand } from './commands/evaluationCommands';
 import { primeProviderModelsState } from './commands/providerWebviewCommands';
 import { invalidateActiveTrainerStreams } from './commands/sessionCommands';
@@ -277,6 +278,9 @@ export async function activate(
     resolveWebviewUriForPath: (filePath) => workbench.resolveWebviewUriForPath(filePath),
     openInEditor: (view) => editorPanel.open(view),
     collapseToSidebar: () => editorPanel.collapseToSidebar(),
+    // Either surface being visible drives the browser-capture draft poll;
+    // "open but hidden behind another tab" must not keep polling.
+    isVisible: () => workbench.isVisible() || editorPanel.isVisible(),
   };
 
   const commandContext: CommandContext = {
@@ -308,6 +312,33 @@ export async function activate(
     },
   };
   registry.setContext(commandContext);
+
+  // Browser capture lane: one runtime owns the pairing ledger, the
+  // visibility-gated pending-draft poller, and the deep-link entry
+  // (vscode://local.trainer-extension/library/<resourceId>).
+  const browserCapture = createBrowserCaptureRuntime({
+    sidecarClient,
+    getSidecarStatus: () => {
+      const status = sidecarManager.getStatus();
+      return { lifecycle: status.lifecycle, port: status.port };
+    },
+    ensureSidecarPort: async () => {
+      const status = await sidecarManager.ensureRunning();
+      if (status.lifecycle !== 'ready' || !status.port) {
+        throw new Error(status.detail ?? 'Sidecar is unavailable.');
+      }
+      return status.port;
+    },
+    workbench: workbenchHost,
+    outputChannel,
+  });
+  commandContext.browserCapture = browserCapture;
+  browserCapture.drafts.start();
+  extensionContext.subscriptions.push(
+    browserCapture,
+    vscode.window.registerUriHandler(browserCapture.uriHandler),
+  );
+
   tests.setVerificationRuntime({
     evaluateFile: uri => evaluatePublishedFileCommand(commandContext, uri),
     outputChannel,

@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "Capture Trainer",
+    "description": "Nom de l’extension dans l’interface du navigateur (barre d’outils, liste des extensions, boutique)."
+  },
+  "appDescription": {
+    "message": "Ajoutez la page actuelle, un PDF ou un dépôt GitHub à la bibliothèque Trainer en un clic, ou téléchargez-le dans le dossier du projet : association sans configuration, file d’attente hors ligne et questions au coach sur la sélection. Canal de données uniquement, réservé au sidecar Trainer local.",
+    "description": "Description affichée par le navigateur."
+  }
+}

@@ -3,17 +3,24 @@ from __future__ import annotations
 import logging
 import re
 from typing import cast
+from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse
 
+from ...browser_bridge import BrowserBridgeService, BrowserCredential
 from ...core.models import (
     LibraryAsset,
     LibraryAssetLifecycleRequest,
     LibraryAssetLinkRequest,
     LibraryAssetUpsertRequest,
+    LibraryGroupNode,
+    LibraryGroupsResponse,
     ResourceCaptureRequest,
+    ResourceCaptureResponse,
     ResourceDeleteRequest,
     ResourceIndexRequest,
+    ResourceOrganizeRequest,
     ResourceRecord,
     ResourceRestoreRequest,
     ResourceSearchRequest,
@@ -25,12 +32,33 @@ from ...resources.asset_library import (
     AssetLibraryError,
     AssetLibraryService,
 )
-from ...resources.capture import CaptureError, capture_source
+from ...resources.capture import (
+    CapturedSource,
+    CaptureError,
+    capture_source,
+    capture_url_key,
+)
+from ...resources.library import (
+    LibraryDownload,
+    LibraryError,
+    LibraryService,
+)
+from ...resources.library_copy import library_message
+from ...resources.library_downloads import ArtifactNote
 from ...workspace.authority import PermissionLevel, WorkspaceAuthority
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 
 logger = logging.getLogger(__name__)
+
+# The deep link the capture lane hands back to the browser extension. The host
+# registers this URI handler (extension/src/browserCapture/deepLink.ts) and
+# focuses the resource in the workbench.
+DEEP_LINK_PREFIX = "vscode://local.trainer-extension/library/"
+
+
+def capture_deep_link(resource_id: str) -> str:
+    return f"{DEEP_LINK_PREFIX}{quote(str(resource_id or '').strip(), safe='')}"
 
 
 def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
@@ -39,8 +67,28 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
     current_workspace_id = deps.current_workspace_id
     refresh_workspace_sessions = deps.refresh_workspace_sessions
     routing_learner_state = deps.routing_learner_state
+    effective_response_language = deps.effective_response_language
 
     asset_library = AssetLibraryService(runtime.repository)
+
+    library = LibraryService(
+        runtime.repository,
+        workspace_authority_resolver=runtime.workspace_authority,
+    )
+
+    def library_language(workspace_id: str, text: str | None = None) -> str | None:
+        """The workspace's effective response language for library copy."""
+
+        language = effective_response_language(workspace_id, None, text)
+        return str(language) if language else None
+
+    def library_detail(exc: LibraryError, language: str | None) -> dict[str, str]:
+        return exc.as_detail(language)
+
+    def download_warning(note: ArtifactNote, language: str | None) -> str:
+        """Stable ``download:<code>`` marker plus the localized explanation."""
+
+        return f"download:{note.code}: {library_message(note.code, language, **note.params)}"
 
     def require_asset_context_authority(context_id: str | None) -> str | None:
         """Resolve only registered project contexts before mutating asset metadata."""
@@ -366,32 +414,345 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return indexed
 
-    @router.post("/resources/capture", response_model=ResourceRecord)
-    def resource_capture(request: ResourceCaptureRequest) -> ResourceRecord:
-        """Browser-capture intake for the Trainer Capture extension.
+    def browser_bridge_service() -> BrowserBridgeService | None:
+        service = getattr(runtime, "browser_bridge", None)
+        return service if isinstance(service, BrowserBridgeService) else None
 
-        The extension is a pure data channel: it sends one URL, a capture kind
-        and an optional title. The sidecar performs the controlled fetch and
-        extraction (trafilatura for web pages, bounded download for PDFs, the
-        default-branch README for GitHub repos) and lands the result through
-        the same upload/index chain as any other resource, so evidence,
-        sandbox sync and teaching assets stay uniform.
+    def browser_credential_from_request(http_request: Request) -> BrowserCredential | None:
+        """Resolve the optional Bearer credential (pairing lane) for a request.
+
+        A present-but-invalid credential is a 401 — it must never silently fall
+        back to the session workspace, because the browser extension would then
+        write into whatever workspace the host last opened. A missing header
+        keeps the existing session-based path (webview/host callers).
         """
 
-        workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
+        header = str(http_request.headers.get("authorization") or "").strip()
+        if not header:
+            return None
+        scheme, _, token = header.partition(" ")
+        if scheme.lower() != "bearer" or not token.strip():
+            raise HTTPException(
+                status_code=401,
+                detail={"code": "invalid_credential", "message": "Authorization must be 'Bearer <credential>'."},
+            )
+        bridge = browser_bridge_service()
+        credential = bridge.credential_for_token(token) if bridge is not None else None
+        if credential is None:
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "code": "invalid_credential",
+                    "message": "This browser credential is invalid or was revoked; pair again.",
+                },
+            )
+        return credential
+
+    def find_captured_resource(
+        workspace_id: str,
+        *,
+        url_key: str,
+        content_hash: str = "",
+    ) -> ResourceRecord | None:
+        """Locate an earlier capture of the same URL or identical content.
+
+        URL identity rides the ``capture-key:`` tag (normalized, tracking-free);
+        content identity reuses the Library's SHA-256 content-hash mechanism, so
+        the same page captured from a different URL still dedupes.
+        """
+
+        wanted_hash = str(content_hash or "").strip()
+        try:
+            resources = runtime.repository.list_resources(workspace_id)
+        except Exception:
+            logger.warning("Capture dedup scan failed for workspace %s.", workspace_id, exc_info=True)
+            return None
+        for resource in resources:
+            if url_key and url_key in resource.tags:
+                return resource
+        if wanted_hash:
+            for resource in resources:
+                if str(resource.content_hash or "").strip() == wanted_hash:
+                    return resource
+        return None
+
+    def bind_capture_to_learning_focus(
+        workspace_id: str,
+        resource_id: str,
+        focus_id: str,
+    ) -> str:
+        """Bind a captured resource to a plan stage (best-effort).
+
+        Returns ``bound`` | ``already_bound`` | ``focus_not_found`` | ``no_plan``
+        | ``write_failed``. An unknown focus never fails the capture itself —
+        the extension only needs to know that the binding did not happen.
+        """
+
+        plan = runtime.repository.get_latest_plan(workspace_id)
+        if plan is None:
+            return "no_plan"
+        stage = next((item for item in plan.stages if item.id == focus_id), None)
+        if stage is None:
+            return "focus_not_found"
+        if resource_id in stage.resources:
+            return "already_bound"
+        stage.resources = [*stage.resources, resource_id]
+        try:
+            from ...training.plan_revision import save_plan_advancing_revision
+
+            save_plan_advancing_revision(runtime.repository, workspace_id, plan)
+        except Exception:
+            logger.warning(
+                "Capture focus binding failed for resource %s in workspace %s.",
+                resource_id,
+                workspace_id,
+                exc_info=True,
+            )
+            return "write_failed"
+        refresh_workspace_sessions(workspace_id)
+        return "bound"
+
+    def _capture_response(
+        resource: ResourceRecord,
+        *,
+        deduped: bool,
+        warnings: list[str] | None = None,
+        focus_binding: str = "",
+        saved_path: str | None = None,
+    ) -> ResourceCaptureResponse:
+        payload = resource.model_dump()
+        if warnings:
+            payload["warnings"] = list(
+                dict.fromkeys([*list(resource.warnings or []), *warnings])
+            )
+        response = ResourceCaptureResponse.model_validate(payload)
+        response.resource_id = resource.id
+        response.deduped = deduped
+        response.deep_link = capture_deep_link(resource.id)
+        recorded_paths = [str(item) for item in (resource.library_paths or [])]
+        response.saved_path = saved_path or (recorded_paths[-1] if recorded_paths else None)
+        if focus_binding:
+            response.warnings = list(
+                dict.fromkeys([*response.warnings, f"focus_binding:{focus_binding}"])
+            )
+        return response
+
+    def _replayed_capture(
+        workspace_id: str,
+        replay: dict[str, object],
+    ) -> ResourceCaptureResponse | None:
+        resource_id = str(replay.get("resource_id") or "").strip()
+        if not resource_id:
+            return None
+        resource = runtime.repository.get_resource(workspace_id, resource_id)
+        if resource is None:
+            # The recorded resource was deleted since; the idempotency record
+            # cannot answer for it, so the capture runs again.
+            return None
+        replayed_path = str(replay.get("saved_path") or "").strip() or None
+        return _capture_response(resource, deduped=True, saved_path=replayed_path)
+
+    @router.post("/resources/capture", response_model=ResourceCaptureResponse)
+    def resource_capture(
+        request: ResourceCaptureRequest,
+        http_request: Request,
+    ) -> ResourceCaptureResponse:
+        """Browser-capture intake: URL → Trainer-owned, indexed library material.
+
+        Pipeline: controlled fetch → cleaned body (trafilatura) → durable
+        Markdown snapshot → metadata tags → FTS index via the regular upload/
+        index chain. Duplicate captures answer with ``deduped=true`` and the
+        existing resource id; ``client_capture_id`` makes retries idempotent.
+        With ``download=true`` the original artifact (PDF bytes or the whole
+        GitHub repository) is written into a real workspace folder first (see
+        ``app.resources.library``).
+        """
+
+        credential = browser_credential_from_request(http_request)
+        if credential is not None:
+            workspace_id = credential.workspace_id
+            requested_workspace = str(request.workspace_id or "").strip()
+            if requested_workspace and requested_workspace != workspace_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "code": "workspace_mismatch",
+                        "message": "This credential is paired to a different workspace.",
+                    },
+                )
+        else:
+            workspace_id = current_workspace_id(
+                session_id=request.session_id,
+                workspace_id=request.workspace_id,
+            )
+        language = library_language(
+            workspace_id,
+            request.selection or request.title or request.url,
+        )
+        if request.download and request.kind not in {"pdf", "github_repo"}:
+            # Refuse before any fetch: only artifact kinds can be downloaded.
+            raise HTTPException(
+                status_code=422,
+                detail=LibraryError("download_kind_unsupported", status_code=422).as_detail(language),
+            )
         network_enabled = bool(getattr(runtime.resource_service, "enable_network_fetch", False))
+
+        bridge = browser_bridge_service()
+        client_capture_id = str(request.client_capture_id or "").strip()
+        if bridge is not None and client_capture_id:
+            replay = _replayed_capture(workspace_id, bridge.capture_replay(client_capture_id) or {})
+            if replay is not None:
+                return replay
+
+        def download_capture_artifact(
+            *,
+            kind: str,
+            title: str,
+            language: str | None,
+            captured: CapturedSource | None,
+            existing: ResourceRecord | None,
+        ) -> tuple[LibraryDownload | None, list[str]]:
+            """Save the captured source into a real library folder (task two).
+
+            The download runs before the library write so a failed download leaves
+            nothing half-registered behind; a deduped capture re-downloads from the
+            owned snapshot instead of fetching the source twice.
+            """
+
+            if not request.download:
+                return None, []
+            try:
+                download = library.save_download(
+                    workspace_id,
+                    kind=kind,
+                    url=request.url,
+                    title=title,
+                    target_dir=request.target_dir,
+                    network_enabled=network_enabled,
+                    content_base64=(
+                        captured.content
+                        if captured is not None and kind == "pdf"
+                        else None
+                    ),
+                    existing_resource=existing,
+                )
+            except LibraryError as exc:
+                raise HTTPException(
+                    status_code=exc.status_code,
+                    detail=library_detail(exc, language),
+                ) from exc
+            warnings = [download_warning(note, language) for note in download.notes]
+            return download, warnings
+
+        # Fast path: the requested URL is already captured in this library.
+        requested_key = capture_url_key(request.url)
+        if requested_key:
+            existing = find_captured_resource(workspace_id, url_key=requested_key)
+            if existing is not None:
+                download, download_warnings = download_capture_artifact(
+                    kind=request.kind,
+                    title=existing.name,
+                    language=language,
+                    captured=None,
+                    existing=existing,
+                )
+                existing = library.remember_download(workspace_id, existing, download) or existing
+                if bridge is not None and client_capture_id:
+                    bridge.remember_capture(
+                        client_capture_id,
+                        {
+                            "resource_id": existing.id,
+                            "recorded_at": existing.fetched_at or "",
+                            "saved_path": download.relative_path if download else "",
+                        },
+                    )
+                return _capture_response(
+                    existing,
+                    deduped=True,
+                    warnings=download_warnings,
+                    saved_path=download.relative_path if download else None,
+                )
+
         try:
             captured = capture_source(
                 request.kind,
                 request.url,
                 network_enabled=network_enabled,
                 declared_title=request.title,
+                selection=request.selection,
+                include_docs=request.include_docs,
             )
         except CaptureError as exc:
             raise HTTPException(
                 status_code=exc.status_code,
                 detail={"code": exc.code, "message": exc.detail},
             ) from exc
+
+        # Content identity: same bytes as an earlier capture → reuse it.
+        canonical_key = capture_url_key(captured.capture_url or captured.source_url)
+        duplicate = find_captured_resource(
+            workspace_id,
+            url_key=canonical_key,
+            content_hash=captured.content_hash,
+        )
+        if duplicate is not None:
+            download, download_warnings = download_capture_artifact(
+                kind=request.kind,
+                title=duplicate.name,
+                language=language,
+                captured=captured,
+                existing=duplicate,
+            )
+            duplicate = library.remember_download(workspace_id, duplicate, download) or duplicate
+            if bridge is not None and client_capture_id:
+                bridge.remember_capture(
+                    client_capture_id,
+                    {
+                        "resource_id": duplicate.id,
+                        "recorded_at": duplicate.fetched_at or "",
+                        "saved_path": download.relative_path if download else "",
+                    },
+                )
+            return _capture_response(
+                duplicate,
+                deduped=True,
+                warnings=[*list(captured.warnings), *download_warnings],
+                saved_path=download.relative_path if download else None,
+            )
+
+        download, download_warnings = download_capture_artifact(
+            kind=request.kind,
+            title=captured.title,
+            language=language,
+            captured=captured,
+            existing=None,
+        )
+
+        def rollback_download() -> None:
+            """A capture that fails to register must not leave a stray artifact."""
+
+            if download is None or not download.created:
+                return
+            try:
+                target = library.resolve_workspace_path(workspace_id, download.relative_path)
+            except LibraryError:
+                return
+            if target is None:
+                return
+            try:
+                if target.is_dir():
+                    import shutil
+
+                    shutil.rmtree(target, ignore_errors=True)
+                else:
+                    target.unlink(missing_ok=True)
+            except OSError:
+                logger.warning(
+                    "Downloaded artifact rollback failed for %s in workspace %s.",
+                    target,
+                    workspace_id,
+                    exc_info=True,
+                )
 
         try:
             record = runtime.resource_service.upload(
@@ -402,11 +763,13 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 ),
             )
         except PermissionError as exc:
+            rollback_download()
             raise HTTPException(
                 status_code=403,
                 detail="Resource source is outside an authorized workspace or collection.",
             ) from exc
         except (FileNotFoundError, IsADirectoryError, ValueError) as exc:
+            rollback_download()
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         try:
@@ -444,11 +807,201 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                     workspace_id,
                     exc_info=True,
                 )
+            rollback_download()
             raise HTTPException(
                 status_code=409,
                 detail={"code": "index_failed", "message": f"Captured resource could not be indexed: {exc}"},
             ) from exc
-        return indexed
+        indexed = library.remember_download(workspace_id, indexed, download) or indexed
+
+        focus_binding = ""
+        focus_id = str(request.bind_focus_id or "").strip()
+        if focus_id:
+            focus_binding = bind_capture_to_learning_focus(workspace_id, indexed.id, focus_id)
+
+        if bridge is not None and client_capture_id:
+            bridge.remember_capture(
+                client_capture_id,
+                {
+                    "resource_id": indexed.id,
+                    "recorded_at": indexed.fetched_at or "",
+                    "saved_path": download.relative_path if download else "",
+                },
+            )
+        refresh_workspace_sessions(workspace_id)
+        return _capture_response(
+            indexed,
+            deduped=False,
+            warnings=[*list(captured.warnings), *download_warnings],
+            focus_binding=focus_binding,
+            saved_path=download.relative_path if download else None,
+        )
+
+    @router.get("/library/groups", response_model=LibraryGroupsResponse)
+    def library_groups(
+        session_id: str | None = None,
+        workspace_id: str | None = None,
+    ) -> LibraryGroupsResponse:
+        """Real folders under the library root, with per-group resource counts."""
+
+        resolved_workspace_id = current_workspace_id(
+            session_id=session_id,
+            workspace_id=workspace_id,
+        )
+        language = library_language(resolved_workspace_id)
+        try:
+            snapshot = library.list_groups(resolved_workspace_id)
+        except LibraryError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail=library_detail(exc, language),
+            ) from exc
+        return LibraryGroupsResponse(
+            workspace_id=resolved_workspace_id,
+            managed_root=snapshot.managed_root,
+            exists=snapshot.exists,
+            trash_root=snapshot.trash_root,
+            total_resource_count=snapshot.total_resource_count,
+            groups=[
+                LibraryGroupNode.model_validate(node) for node in snapshot.groups
+            ],
+        )
+
+    @router.post("/library/groups")
+    def library_create_group(payload: dict) -> dict[str, object]:
+        """Create one library folder for real (``mkdir``, ``REORGANIZE`` level)."""
+
+        body = payload if isinstance(payload, dict) else {}
+        resolved_workspace_id = current_workspace_id(
+            session_id=str(body.get("session_id") or body.get("sessionId") or "").strip()
+            or None,
+            workspace_id=str(body.get("workspace_id") or body.get("workspaceId") or "").strip()
+            or None,
+        )
+        language = library_language(resolved_workspace_id)
+        try:
+            return library.create_group(
+                resolved_workspace_id,
+                str(body.get("path") or ""),
+            )
+        except LibraryError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail=library_detail(exc, language),
+            ) from exc
+
+    @router.post("/library/groups/rename")
+    def library_rename_group(payload: dict) -> dict[str, object]:
+        """Rename (move) one library folder for real (``rename``, ``REORGANIZE``)."""
+
+        body = payload if isinstance(payload, dict) else {}
+        resolved_workspace_id = current_workspace_id(
+            session_id=str(body.get("session_id") or body.get("sessionId") or "").strip()
+            or None,
+            workspace_id=str(body.get("workspace_id") or body.get("workspaceId") or "").strip()
+            or None,
+        )
+        language = library_language(resolved_workspace_id)
+        try:
+            return library.rename_group(
+                resolved_workspace_id,
+                # ``from``/``to`` is the documented pair; ``path``/``new_path`` is
+                # the workbench folder editor's spelling of the same move.
+                str(body.get("from") or body.get("from_path") or body.get("fromPath") or body.get("path") or ""),
+                str(
+                    body.get("to")
+                    or body.get("to_path")
+                    or body.get("toPath")
+                    or body.get("new_path")
+                    or body.get("newPath")
+                    or ""
+                ),
+            )
+        except LibraryError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail=library_detail(exc, language),
+            ) from exc
+
+    @router.delete("/library/groups")
+    def library_trash_group(payload: dict) -> dict[str, object]:
+        """Move a library folder into the library recycle bin (never a hard delete)."""
+
+        body = payload if isinstance(payload, dict) else {}
+        resolved_workspace_id = current_workspace_id(
+            session_id=str(body.get("session_id") or body.get("sessionId") or "").strip()
+            or None,
+            workspace_id=str(body.get("workspace_id") or body.get("workspaceId") or "").strip()
+            or None,
+        )
+        language = library_language(resolved_workspace_id)
+        try:
+            return library.trash_group(
+                resolved_workspace_id,
+                str(body.get("path") or ""),
+            )
+        except LibraryError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail=library_detail(exc, language),
+            ) from exc
+
+    @router.post("/resource/organize", response_model=ResourceRecord)
+    def resource_organize(request: ResourceOrganizeRequest) -> ResourceRecord:
+        """User-driven library organization: rename, retag, regroup.
+
+        Reuses the existing resource record structure and the managed-storage
+        boundaries; sandbox/project artifacts keep belonging to the Coach
+        organize flow.
+        """
+
+        workspace_id = current_workspace_id(
+            session_id=request.session_id,
+            workspace_id=request.workspace_id,
+        )
+        try:
+            organized = runtime.resource_service.organize_resource(workspace_id, request)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Resource not found.") from exc
+        except PermissionError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "resource_move_blocked", "message": str(exc)},
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        refresh_workspace_sessions(workspace_id)
+        return organized
+
+    @router.get("/resource/export")
+    def resource_export(
+        resource_id: str,
+        session_id: str | None = None,
+        workspace_id: str | None = None,
+    ) -> FileResponse:
+        """Download one resource's owned snapshot to the local machine."""
+
+        resolved_workspace_id = current_workspace_id(
+            session_id=session_id,
+            workspace_id=workspace_id,
+        )
+        try:
+            export = runtime.resource_service.export_resource(
+                resolved_workspace_id,
+                resource_id.strip(),
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Resource not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "no_local_snapshot", "message": str(exc)},
+            ) from exc
+        return FileResponse(
+            export["path"],
+            media_type=str(export["media_type"]),
+            filename=str(export["filename"]),
+        )
 
     @router.post("/resource/search")
     def resource_search(request: ResourceSearchRequest) -> dict[str, object]:

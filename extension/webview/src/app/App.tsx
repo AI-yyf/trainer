@@ -223,8 +223,17 @@ import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/com
 import { WorkbenchSurfaceButton } from "../components/common/WorkbenchSurfaceButton";
 import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
 import type {
+  ResourceCaptureInput,
+  ResourceCaptureFocusOption,
+  ResourceMutationOutcome,
+  ResourceOrganizeInput,
   ResourceSearchRequest,
 } from "../components/resources/ResourcesWorkbenchView";
+import {
+  parseLibraryFolderTree,
+  type LibraryFolderHostAnswer,
+  type LibraryFolderListResult,
+} from "../lib/libraryFolders";
 import {
   applyTrainingCardGrade,
   applyTrainingCardSkip,
@@ -2984,6 +2993,25 @@ function focusComposerInput() {
   element.setSelectionRange(caret, caret);
 }
 
+/**
+ * True while the user is typing into a field other than the coach composer.
+ * A host-prefilled draft still lands in the composer (it is visible the moment
+ * the user returns to Coach), but it does not pull focus out of the field the
+ * user is working in.
+ */
+function isEditingAnotherField(): boolean {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || active.id === "coach-composer") {
+    return false;
+  }
+  return (
+    active.isContentEditable ||
+    active instanceof HTMLInputElement ||
+    active instanceof HTMLTextAreaElement ||
+    active instanceof HTMLSelectElement
+  );
+}
+
 function defaultPromptText(
   intent: "coach" | "next_task" | "review" | "plan" | "task",
   language: ComposerLanguage,
@@ -3286,6 +3314,221 @@ const DirectoryInput = forwardRef<HTMLInputElement, DirectoryInputProps>(functio
 ) {
   return <input ref={ref} {...props} />;
 });
+
+/** Which capture kind the URL implies; the sidecar still validates for real. */
+function captureTargetKind(url: string): "pdf" | "github_repo" | "web" {
+  const trimmed = url.trim();
+  if (/^https?:\/\/(?:www\.)?github\.com\/[^/]+\/[^/]+/i.test(trimmed)) {
+    return "github_repo";
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (/\.pdf$/i.test(parsed.pathname)) {
+      return "pdf";
+    }
+  } catch {
+    // Invalid URLs fall through to `web`; the sidecar performs the real check.
+  }
+  return "web";
+}
+
+/** Pull the display-safe message out of a sidecar error payload. */
+function describeSidecarFailure(body: unknown): string {
+  if (!body || typeof body !== "object") {
+    return "";
+  }
+  const detail = (body as { detail?: unknown }).detail;
+  if (typeof detail === "string") {
+    return detail.trim();
+  }
+  if (detail && typeof detail === "object") {
+    const message = (detail as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message.trim();
+    }
+  }
+  const message = (body as { message?: unknown }).message;
+  return typeof message === "string" ? message.trim() : "";
+}
+
+/** Read the attachment filename a sidecar export response chose. */
+function exportDownloadName(headers: Headers): string | undefined {
+  const disposition = headers.get("content-disposition") ?? "";
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim());
+    } catch {
+      return utf8Match[1].trim();
+    }
+  }
+  const plainMatch = /filename="?([^";]+)"?/i.exec(disposition);
+  return plainMatch?.[1]?.trim() || undefined;
+}
+
+/** Save an exported blob through the browser's own download path. */
+function triggerLocalDownload(blob: Blob, filename: string): void {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return;
+  }
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename || "resource";
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+/** Poll cadence while waiting for a host-side library write to land. */
+const HOST_WRITE_POLL_MS = 500;
+/** A deep link can land before the capture reaches this webview's snapshot. */
+const OPEN_RESOURCE_SYNC_TIMEOUT_MS = 4_000;
+/** A capture fetches, cleans and indexes: keep its bounded window generous. */
+const CAPTURE_CONFIRMATION_TIMEOUT_MS = 30_000;
+/** Rename/tag/group writes are a single sidecar call. */
+const ORGANIZE_CONFIRMATION_TIMEOUT_MS = 15_000;
+/** Folder list/create/rename/delete answers ride one host round-trip. */
+const LIBRARY_FOLDER_OPERATION_TIMEOUT_MS = 8_000;
+
+function delayHostWritePoll(): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, HOST_WRITE_POLL_MS);
+  });
+}
+
+/**
+ * Bounded wait for a resource to appear in the synced workbench snapshot.
+ * A `vscode://.../library/<id>` deep link can reach the webview before the
+ * capture that minted the id has been synced; the landing point opens the
+ * reader once it arrives, and reports honestly only after the wait expires.
+ */
+async function waitForResourceInSnapshot(
+  resourceId: string,
+  timeoutMs: number,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (useWorkbenchState.getState().data.resources.some((resource) => resource.id === resourceId)) {
+      return true;
+    }
+    if (Date.now() >= deadline) {
+      return false;
+    }
+    await delayHostWritePoll();
+  }
+}
+
+/**
+ * Wait (bounded) for the host-driven capture to appear in the library snapshot.
+ *
+ * Inside VS Code the webview cannot reach the sidecar itself, so a posted
+ * capture command is only confirmed by the refreshed snapshot. Matching rides
+ * the same identity the sidecar records (`captured-from:<url>` tag), so a
+ * capture that never lands is reported as unconfirmed instead of a false
+ * "added to the library".
+ */
+async function waitForCapturedResource(
+  url: string,
+  beforeIds: ReadonlySet<string>,
+): Promise<
+  | { deduped: boolean; title: string; resourceId: string; savedPath?: string }
+  | undefined
+> {
+  const tag = `captured-from:${url}`;
+  const deadline = Date.now() + CAPTURE_CONFIRMATION_TIMEOUT_MS;
+  for (;;) {
+    const resources = useWorkbenchState.getState().data.resources;
+    const match = resources.find(
+      (resource) =>
+        (resource.tags ?? []).includes(tag) ||
+        (!beforeIds.has(resource.id) &&
+          (resource.source === url || resource.canonicalSource === url)),
+    );
+    if (match) {
+      return {
+        deduped: beforeIds.has(match.id),
+        title: match.title?.trim() || match.id,
+        resourceId: match.id,
+        savedPath: resourceSavedPath(match),
+      };
+    }
+    if (Date.now() >= deadline) {
+      return undefined;
+    }
+    await delayHostWritePoll();
+  }
+}
+
+/**
+ * Read the download landing path a captured record may carry once the sidecar
+ * has written the original bytes into the library's folder space. Tolerant by
+ * design: the field is optional in the snapshot contract, so an absent path is
+ * reported as "not confirmed" rather than guessed at.
+ */
+function resourceSavedPath(resource: WorkbenchDataSnapshot["resources"][number]): string | undefined {
+  const record = resource as unknown as Record<string, unknown>;
+  for (const key of ["saved_path", "savedPath", "downloaded_path", "download_path"]) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+/** True when the refreshed record already reflects the requested organize action. */
+function organizeOutcomeMatches(
+  resource: WorkbenchDataSnapshot["resources"][number],
+  request: ResourceOrganizeInput,
+  beforeCollectionPath: string,
+): boolean {
+  if (request.action === "rename") {
+    return resource.title.trim() === (request.title ?? "").trim();
+  }
+  if (request.action === "set_tags") {
+    const normalize = (values: string[] | undefined) =>
+      new Set(
+        (values ?? [])
+          .map((value) => value.trim().slice(0, 40).toLowerCase())
+          .filter(Boolean),
+      );
+    const wanted = normalize(request.tags);
+    const current = normalize(resource.tags);
+    return (
+      wanted.size === current.size && [...wanted].every((tag) => current.has(tag))
+    );
+  }
+  const group = (request.group ?? "").trim();
+  const currentPath = (resource.collectionPath ?? "").trim();
+  if (!group) {
+    return currentPath === "";
+  }
+  return currentPath !== "" && currentPath !== beforeCollectionPath;
+}
+
+/** Wait (bounded) for the host-driven organize write to show in the snapshot. */
+async function waitForOrganizedResource(
+  resourceId: string,
+  request: ResourceOrganizeInput,
+  beforeCollectionPath: string,
+): Promise<boolean> {
+  const deadline = Date.now() + ORGANIZE_CONFIRMATION_TIMEOUT_MS;
+  for (;;) {
+    const resource = useWorkbenchState
+      .getState()
+      .data.resources.find((item) => item.id === resourceId);
+    if (resource && organizeOutcomeMatches(resource, request, beforeCollectionPath)) {
+      return true;
+    }
+    if (Date.now() >= deadline) {
+      return false;
+    }
+    await delayHostWritePoll();
+  }
+}
 
 function triggerResourceUpload({
   browserPreview,
@@ -4249,6 +4492,44 @@ export function App() {
       resourceTrainingHandoffResolversRef.current.clear();
     };
   }, []);
+  // ---------------------------------------------------------- library folders
+  // The host answers a folder request (list / create / rename / delete) with a
+  // `library/folders` message carrying the request's operationId — the same
+  // correlation pattern as `training/resourceHandoff`. A request that never
+  // gets an answer inside its bounded window resolves as unconfirmed, so the
+  // view never invents a folder write.
+  const libraryFolderResolversRef = useRef<
+    Map<string, { timeoutId: number; resolve: (answer: LibraryFolderHostAnswer) => void }>
+  >(new Map());
+  const resolveLibraryFolderOperation = useCallback(
+    (payload: { operationId?: string; ok: boolean; folders?: unknown; message?: string }) => {
+      const operationId = String(payload.operationId ?? "").trim();
+      if (!operationId) {
+        return;
+      }
+      const pending = libraryFolderResolversRef.current.get(operationId);
+      if (!pending) {
+        return;
+      }
+      libraryFolderResolversRef.current.delete(operationId);
+      window.clearTimeout(pending.timeoutId);
+      pending.resolve({
+        ok: payload.ok,
+        message: typeof payload.message === "string" ? payload.message.trim() : "",
+        folders: payload.folders,
+      });
+    },
+    [],
+  );
+  useEffect(() => {
+    return () => {
+      for (const pending of libraryFolderResolversRef.current.values()) {
+        window.clearTimeout(pending.timeoutId);
+        pending.resolve({ ok: false, message: "", unconfirmed: true });
+      }
+      libraryFolderResolversRef.current.clear();
+    };
+  }, []);
   const applyHostMessage = useCallback(
     (message: HostMessage, isProviderActionOverride = false) => {
       hostMessageSequenceRef.current += 1;
@@ -4275,6 +4556,11 @@ export function App() {
           window.clearTimeout(handoff.timeoutId);
           handoff.resolve(message.payload);
         }
+        return;
+      }
+      // Folder space answers (list/create/rename/delete) settle their request.
+      if (message.type === "library/folders") {
+        resolveLibraryFolderOperation(message.payload);
         return;
       }
       if (message.type === "training/persistenceAck") {
@@ -4333,6 +4619,27 @@ export function App() {
           hostOperationSurface = hostSurfaceScope;
         }
       }
+      // A library deep link may beat the refreshed snapshot into this webview:
+      // ask for a fresh bootstrap, give the resource a bounded moment to
+      // arrive, and only then let the landing report it as missing.
+      if (resolvedMessage.type === "ui/openResource") {
+        const deepLinkResourceId = String(resolvedMessage.resourceId ?? "").trim();
+        const alreadySynced = deepLinkResourceId
+          ? useWorkbenchState
+              .getState()
+              .data.resources.some((resource) => resource.id === deepLinkResourceId)
+          : false;
+        if (deepLinkResourceId && !alreadySynced) {
+          postMessage({ type: "request/bootstrap" });
+          void waitForResourceInSnapshot(
+            deepLinkResourceId,
+            OPEN_RESOURCE_SYNC_TIMEOUT_MS,
+          ).then(() => {
+            applyRawHostMessage(resolvedMessage);
+          });
+          return;
+        }
+      }
       if (resourceOperationStatus?.kind !== "search") {
         applyRawHostMessage(
           sanitizeHostFailureMessage(
@@ -4347,6 +4654,15 @@ export function App() {
       if (resolvedMessage.type === "ui/coachPrompt" && typeof window !== "undefined") {
         requestCoachComposerFocus();
       }
+      // Browser-captured drafts land in the same composer (prefilled, not sent).
+      // Focus follows only when the user is not typing somewhere else.
+      if (
+        resolvedMessage.type === "ui/coachDraftPrefill" &&
+        typeof window !== "undefined" &&
+        !isEditingAnotherField()
+      ) {
+        requestCoachComposerFocus();
+      }
     },
     [
       applyRawHostMessage,
@@ -4357,6 +4673,7 @@ export function App() {
       localizedResourceOperationFallback,
       requestCoachComposerFocus,
       requestProviderApiKeyFocus,
+      resolveLibraryFolderOperation,
       resolveTrainingPersistenceAck,
       resolveResourceOperationStatus,
       settingsActionState,
@@ -8680,6 +8997,475 @@ export function App() {
     }
   };
 
+  // ------------------------------------------------------------------ capture
+  // In-library "add by URL" rides the same capture pipeline as the browser
+  // extension: in a live browser preview the webview can call the sidecar
+  // directly; inside VS Code it posts the capture command on the existing
+  // webview → host → sidecar message chain.
+  const resourceCaptureFocusOptions = useMemo<ResourceCaptureFocusOption[]>(
+    () =>
+      (data.plan?.stages ?? [])
+        .filter((stage) => stage.id.trim() && stage.title.trim())
+        .map((stage) => ({ id: stage.id, label: stage.title })),
+    [data.plan?.stages],
+  );
+
+  const refreshPreviewResources = useCallback(async () => {
+    const browserPreview = await loadBrowserPreviewModule();
+    const { sessionId, message } = await browserPreview.fetchBrowserPreviewBootstrap(
+      previewSessionId,
+      true,
+    );
+    setPreviewSessionId(sessionId);
+    applyHostMessage(message);
+  }, [applyHostMessage, previewSessionId]);
+
+  const captureResourceIntoLibrary = useCallback(
+    async (input: ResourceCaptureInput): Promise<ResourceMutationOutcome> => {
+      const url = input.url.trim();
+      const title = input.title?.trim() || undefined;
+      const download = input.download === true;
+      const targetDir = download ? input.targetDir?.trim() || undefined : undefined;
+      const clientCaptureId = `library-capture-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+      if (isBrowserPreview && !browserPreviewFixture) {
+        try {
+          const browserPreview = await loadBrowserPreviewModule();
+          const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
+          const response = await fetch(`${baseUrl}/resources/capture`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url,
+              kind: captureTargetKind(url),
+              ...(title ? { title } : {}),
+              ...(input.focusId ? { bind_focus_id: input.focusId } : {}),
+              ...(download ? { download: true } : {}),
+              ...(targetDir ? { target_dir: targetDir } : {}),
+              client_capture_id: clientCaptureId,
+              session_id: previewSessionId,
+            }),
+          });
+          if (!response.ok) {
+            const detail = await response
+              .json()
+              .then((body: unknown) => describeSidecarFailure(body))
+              .catch(() => "");
+            return { ok: false, message: detail || `HTTP ${response.status}` };
+          }
+          const payload = (await response.json()) as {
+            name?: unknown;
+            resource_id?: unknown;
+            deduped?: unknown;
+            saved_path?: unknown;
+          };
+          const name = typeof payload.name === "string" && payload.name.trim()
+            ? payload.name.trim()
+            : url;
+          await refreshPreviewResources().catch(() => undefined);
+          return {
+            ok: true,
+            message: name,
+            deduped: payload.deduped === true,
+            resourceId: typeof payload.resource_id === "string" ? payload.resource_id : undefined,
+            // The capture contract's `saved_path` is only reported when the
+            // pipeline actually downloaded the original bytes.
+            savedPath:
+              typeof payload.saved_path === "string" && payload.saved_path.trim()
+                ? payload.saved_path.trim()
+                : undefined,
+          };
+        } catch (error) {
+          return {
+            ok: false,
+            message: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }
+
+      // Inside VS Code the host owns sidecar access: post the capture command
+      // and wait (bounded) for the refreshed library snapshot to carry the
+      // captured resource. A host that cannot run the capture command, or a
+      // capture that never lands, is reported as unconfirmed — never as a
+      // silent "added to the library".
+      const beforeIds = new Set(
+        useWorkbenchState.getState().data.resources.map((resource) => resource.id),
+      );
+      postMessage({
+        type: "command/execute",
+        payload: {
+          commandId: "trainer.resource.capture",
+          payload: {
+            url,
+            kind: captureTargetKind(url),
+            ...(title ? { title } : {}),
+            ...(input.focusId ? { bind_focus_id: input.focusId } : {}),
+            ...(download ? { download: true } : {}),
+            ...(targetDir ? { target_dir: targetDir } : {}),
+            client_capture_id: clientCaptureId,
+            workspace_id: data.memory.workspace?.workspaceId || undefined,
+          },
+        },
+      });
+      const landed = await waitForCapturedResource(url, beforeIds);
+      if (!landed) {
+        return { ok: false, unconfirmed: true, message: "" };
+      }
+      return {
+        ok: true,
+        message: landed.title,
+        deduped: landed.deduped,
+        resourceId: landed.resourceId,
+        savedPath: landed.savedPath,
+      };
+    },
+    [
+      browserPreviewFixture,
+      isBrowserPreview,
+      postMessage,
+      previewSessionId,
+      refreshPreviewResources,
+    ],
+  );
+
+  // ------------------------------------------------------------ library folders
+  // One gateway for the folder space: the live preview lane calls the sidecar
+  // directly, the VS Code lane posts the command on the existing
+  // webview → host → sidecar chain and waits for the correlated
+  // `library/folders` answer.
+  const requestLibraryFolderOperation = useCallback(
+    (commandId: string, payload: Record<string, unknown>): Promise<LibraryFolderHostAnswer> => {
+      const operationId = `library-folders-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+      return new Promise((resolve) => {
+        const timeoutId = window.setTimeout(() => {
+          const pending = libraryFolderResolversRef.current.get(operationId);
+          if (!pending) {
+            return;
+          }
+          libraryFolderResolversRef.current.delete(operationId);
+          resolve({ ok: false, message: "", unconfirmed: true });
+        }, LIBRARY_FOLDER_OPERATION_TIMEOUT_MS);
+        libraryFolderResolversRef.current.set(operationId, { timeoutId, resolve });
+        try {
+          postMessage({
+            type: "command/execute",
+            payload: { commandId, payload: { ...payload, operationId } },
+          });
+        } catch {
+          libraryFolderResolversRef.current.delete(operationId);
+          window.clearTimeout(timeoutId);
+          resolve({ ok: false, message: "", unconfirmed: true });
+        }
+      });
+    },
+    [postMessage],
+  );
+
+  const mutatePreviewLibraryFolder = useCallback(
+    async (
+      method: "POST" | "DELETE",
+      endpoint: string,
+      body: Record<string, unknown>,
+    ): Promise<ResourceMutationOutcome> => {
+      try {
+        const browserPreview = await loadBrowserPreviewModule();
+        const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
+        const response = await fetch(`${baseUrl}${endpoint}`, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...body, session_id: previewSessionId }),
+        });
+        if (!response.ok) {
+          const detail = await response
+            .json()
+            .then((payload: unknown) => describeSidecarFailure(payload))
+            .catch(() => "");
+          return { ok: false, message: detail || `HTTP ${response.status}` };
+        }
+        return { ok: true, message: "" };
+      } catch (error) {
+        return {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+    [previewSessionId],
+  );
+
+  const listLibraryFolders = useCallback(async (): Promise<LibraryFolderListResult> => {
+    if (isBrowserPreview && !browserPreviewFixture) {
+      try {
+        const browserPreview = await loadBrowserPreviewModule();
+        const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
+        const response = await fetch(
+          `${baseUrl}/library/groups?session_id=${encodeURIComponent(previewSessionId ?? "")}`,
+        );
+        if (!response.ok) {
+          const detail = await response
+            .json()
+            .then((payload: unknown) => describeSidecarFailure(payload))
+            .catch(() => "");
+          return { ok: false, folders: [], message: detail || `HTTP ${response.status}` };
+        }
+        const payload = await response.json().catch(() => undefined);
+        return { ok: true, folders: parseLibraryFolderTree(payload), message: "" };
+      } catch (error) {
+        return {
+          ok: false,
+          folders: [],
+          message: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+    const answer = await requestLibraryFolderOperation("trainer.library.folders.list", {
+      workspace_id: data.memory.workspace?.workspaceId || undefined,
+    });
+    if (answer.unconfirmed) {
+      return { ok: false, folders: [], message: "" };
+    }
+    return {
+      ok: answer.ok,
+      folders: parseLibraryFolderTree(answer.folders),
+      message: answer.message,
+    };
+  }, [
+    browserPreviewFixture,
+    data.memory.workspace?.workspaceId,
+    isBrowserPreview,
+    previewSessionId,
+    requestLibraryFolderOperation,
+  ]);
+
+  const createLibraryFolder = useCallback(
+    async (path: string): Promise<ResourceMutationOutcome> => {
+      const folderPath = path.trim();
+      if (isBrowserPreview && !browserPreviewFixture) {
+        return mutatePreviewLibraryFolder("POST", "/library/groups", { path: folderPath });
+      }
+      const answer = await requestLibraryFolderOperation("trainer.library.folders.create", {
+        path: folderPath,
+        workspace_id: data.memory.workspace?.workspaceId || undefined,
+      });
+      return {
+        ok: answer.ok,
+        message: answer.message,
+        ...(answer.unconfirmed ? { unconfirmed: true } : {}),
+      };
+    },
+    [
+      browserPreviewFixture,
+      data.memory.workspace?.workspaceId,
+      isBrowserPreview,
+      mutatePreviewLibraryFolder,
+      requestLibraryFolderOperation,
+    ],
+  );
+
+  const renameLibraryFolder = useCallback(
+    async (path: string, nextPath: string): Promise<ResourceMutationOutcome> => {
+      const folderPath = path.trim();
+      const nextFolderPath = nextPath.trim();
+      if (isBrowserPreview && !browserPreviewFixture) {
+        return mutatePreviewLibraryFolder("POST", "/library/groups/rename", {
+          path: folderPath,
+          new_path: nextFolderPath,
+        });
+      }
+      const answer = await requestLibraryFolderOperation("trainer.library.folders.rename", {
+        path: folderPath,
+        new_path: nextFolderPath,
+        workspace_id: data.memory.workspace?.workspaceId || undefined,
+      });
+      return {
+        ok: answer.ok,
+        message: answer.message,
+        ...(answer.unconfirmed ? { unconfirmed: true } : {}),
+      };
+    },
+    [
+      browserPreviewFixture,
+      data.memory.workspace?.workspaceId,
+      isBrowserPreview,
+      mutatePreviewLibraryFolder,
+      requestLibraryFolderOperation,
+    ],
+  );
+
+  const deleteLibraryFolder = useCallback(
+    async (path: string): Promise<ResourceMutationOutcome> => {
+      const folderPath = path.trim();
+      if (isBrowserPreview && !browserPreviewFixture) {
+        return mutatePreviewLibraryFolder("DELETE", "/library/groups", { path: folderPath });
+      }
+      const answer = await requestLibraryFolderOperation("trainer.library.folders.delete", {
+        path: folderPath,
+        workspace_id: data.memory.workspace?.workspaceId || undefined,
+      });
+      return {
+        ok: answer.ok,
+        message: answer.message,
+        ...(answer.unconfirmed ? { unconfirmed: true } : {}),
+      };
+    },
+    [
+      browserPreviewFixture,
+      data.memory.workspace?.workspaceId,
+      isBrowserPreview,
+      mutatePreviewLibraryFolder,
+      requestLibraryFolderOperation,
+    ],
+  );
+
+  const revealLibraryPath = useCallback(
+    (path: string) => {
+      // The host's existing reveal action opens any path in the system file
+      // manager; no second reveal channel is introduced for downloads.
+      postMessage({
+        type: "command/execute",
+        payload: { commandId: trainerCommands.revealSandboxPath, payload: { path } },
+      });
+    },
+    [postMessage],
+  );
+
+  const organizeLibraryResource = useCallback(
+    async (
+      resourceId: string,
+      request: ResourceOrganizeInput,
+    ): Promise<ResourceMutationOutcome> => {
+      if (isBrowserPreview && !browserPreviewFixture) {
+        try {
+          const browserPreview = await loadBrowserPreviewModule();
+          const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
+          const response = await fetch(`${baseUrl}/resource/organize`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              session_id: previewSessionId,
+              resource_id: resourceId,
+              action: request.action,
+              ...(request.title !== undefined ? { title: request.title } : {}),
+              ...(request.tags !== undefined ? { tags: request.tags } : {}),
+              ...(request.group !== undefined ? { group: request.group } : {}),
+            }),
+          });
+          if (!response.ok) {
+            const detail = await response
+              .json()
+              .then((body: unknown) => describeSidecarFailure(body))
+              .catch(() => "");
+            return { ok: false, message: detail || `HTTP ${response.status}` };
+          }
+          await refreshPreviewResources().catch(() => undefined);
+          return {
+            ok: true,
+            // The view owns the localized "updated" copy; this lane only
+            // reports that the write really happened.
+            message: "",
+            resourceId,
+          };
+        } catch (error) {
+          return {
+            ok: false,
+            message: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }
+
+      const before = useWorkbenchState
+        .getState()
+        .data.resources.find((item) => item.id === resourceId);
+      const beforeCollectionPath = (before?.collectionPath ?? "").trim();
+      postMessage({
+        type: "command/execute",
+        payload: {
+          commandId: "trainer.resource.organize",
+          payload: {
+            resource_id: resourceId,
+            action: request.action,
+            ...(request.title !== undefined ? { title: request.title } : {}),
+            ...(request.tags !== undefined ? { tags: request.tags } : {}),
+            ...(request.group !== undefined ? { group: request.group } : {}),
+            workspace_id: data.memory.workspace?.workspaceId || undefined,
+          },
+        },
+      });
+      const confirmed = await waitForOrganizedResource(
+        resourceId,
+        request,
+        beforeCollectionPath,
+      );
+      if (!confirmed) {
+        return { ok: false, unconfirmed: true, message: "" };
+      }
+      return { ok: true, message: "", resourceId };
+    },
+    [
+      browserPreviewFixture,
+      isBrowserPreview,
+      postMessage,
+      previewSessionId,
+      refreshPreviewResources,
+    ],
+  );
+
+  const exportLibraryResource = useCallback(
+    async (resourceId: string): Promise<ResourceMutationOutcome> => {
+      const resource = data.resources.find((item) => item.id === resourceId);
+      const name = resource?.title?.trim() || resourceId;
+      if (isBrowserPreview && !browserPreviewFixture) {
+        try {
+          const browserPreview = await loadBrowserPreviewModule();
+          const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
+          const response = await fetch(
+            `${baseUrl}/resource/export?session_id=${encodeURIComponent(
+              previewSessionId ?? "",
+            )}&resource_id=${encodeURIComponent(resourceId)}`,
+          );
+          if (!response.ok) {
+            const detail = await response
+              .json()
+              .then((body: unknown) => describeSidecarFailure(body))
+              .catch(() => "");
+            return { ok: false, message: detail || `HTTP ${response.status}` };
+          }
+          const blob = await response.blob();
+          const downloadName = exportDownloadName(response.headers) ?? name;
+          triggerLocalDownload(blob, downloadName);
+          return { ok: true, message: downloadName, resourceId };
+        } catch (error) {
+          return {
+            ok: false,
+            message: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }
+
+      // Inside VS Code the host owns file writes (an OS save flow). The
+      // workbench states the request; the host reports the write itself, so
+      // the view shows "export requested" — never a completed export.
+      postMessage({
+        type: "command/execute",
+        payload: {
+          commandId: "trainer.resource.export",
+          payload: { resource_id: resourceId, workspace_id: data.memory.workspace?.workspaceId || undefined },
+        },
+      });
+      return { ok: true, requested: true, message: "", resourceId };
+    },
+    [
+      browserPreviewFixture,
+      data.resources,
+      isBrowserPreview,
+      postMessage,
+      previewSessionId,
+    ],
+  );
+
   const persistCoachSettings = useCallback(
     (overrides?: Partial<{
       responseLanguage: ComposerLanguage;
@@ -12261,6 +13047,29 @@ export function App() {
               folderInputRef: uploadFolderInputRef,
             })
           }
+          onCaptureResource={
+            isBrowserPreview && browserPreviewFixture ? undefined : captureResourceIntoLibrary
+          }
+          captureFocusOptions={resourceCaptureFocusOptions}
+          onOrganizeResource={
+            isBrowserPreview && browserPreviewFixture ? undefined : organizeLibraryResource
+          }
+          onExportResource={
+            isBrowserPreview && browserPreviewFixture ? undefined : exportLibraryResource
+          }
+          onListLibraryFolders={
+            isBrowserPreview && browserPreviewFixture ? undefined : listLibraryFolders
+          }
+          onCreateLibraryFolder={
+            isBrowserPreview && browserPreviewFixture ? undefined : createLibraryFolder
+          }
+          onRenameLibraryFolder={
+            isBrowserPreview && browserPreviewFixture ? undefined : renameLibraryFolder
+          }
+          onDeleteLibraryFolder={
+            isBrowserPreview && browserPreviewFixture ? undefined : deleteLibraryFolder
+          }
+          onRevealSavedPath={isBrowserPreview && browserPreviewFixture ? undefined : revealLibraryPath}
           isLiveBrowserPreview={isBrowserPreview && !browserPreviewFixture}
           onExpandToEditor={canOpenInEditor ? () => openViewInEditor("resources") : undefined}
           expandToEditorLabel={expandToEditorLabel}

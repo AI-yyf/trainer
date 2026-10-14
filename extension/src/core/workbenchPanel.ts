@@ -78,6 +78,11 @@ export class WorkbenchEditorPanel implements vscode.Disposable {
     return Boolean(this.panel);
   }
 
+  /** True while the editor panel is actually visible (not merely open). */
+  isVisible(): boolean {
+    return Boolean(this.panel?.visible);
+  }
+
   get visibleView(): WorkbenchPanelView | undefined {
     return this.isOpen ? this.focusedView : undefined;
   }

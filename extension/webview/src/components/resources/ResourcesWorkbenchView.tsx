@@ -30,6 +30,7 @@ import {
   FolderIcon,
   LinkIcon,
   PageIcon,
+  PlusIcon,
   RefreshIcon,
   SearchIcon,
   TrashIcon,
@@ -38,6 +39,20 @@ import {
 import { CollapseSection } from "../common/CollapseSection";
 import { WorkbenchSurfaceButton } from "../common/WorkbenchSurfaceButton";
 import { MessageRichContent } from "../coach/MessageRichContent";
+import {
+  addLibraryFolderPath,
+  flattenLibraryFolders,
+  libraryFolderName,
+  libraryFolderParentPath,
+  libraryFolderTreeFromResources,
+  mergeLibraryFolderTrees,
+  normalizeLibraryFolderPath,
+  removeLibraryFolderPath,
+  renameLibraryFolderPath,
+  type LibraryFolderFlatEntry,
+  type LibraryFolderListResult,
+  type LibraryFolderNode,
+} from "../../lib/libraryFolders";
 
 import {
   compactResourceSearchPlaceholder,
@@ -69,6 +84,36 @@ export interface ResourcesWorkbenchViewProps {
   onImportFiles?: () => void;
   onImportFolder?: () => void;
   onImportUrl?: () => void;
+  /**
+   * In-library "add by URL": paste a link and file it through the capture
+   * pipeline (fetch → clean → Markdown snapshot → index). When provided, the
+   * add menu opens this form instead of the plain URL import prompt.
+   */
+  onCaptureResource?: (input: ResourceCaptureInput) => Promise<ResourceMutationOutcome>;
+  /** Learning-focus options (plan stages) offered as the optional binding. */
+  captureFocusOptions?: ResourceCaptureFocusOption[];
+  /** User-driven organization of one library resource (rename/tags/group). */
+  onOrganizeResource?: (
+    resourceId: string,
+    request: ResourceOrganizeInput,
+  ) => Promise<ResourceMutationOutcome>;
+  /** Byte-for-byte export of the resource's owned snapshot to this machine. */
+  onExportResource?: (resourceId: string) => Promise<ResourceMutationOutcome>;
+  /**
+   * Real library folders (`GET /library/groups`): the tree the Library's
+   * folder section renders and the pickers offer as a target. Absent means
+   * the folders section falls back to the folders the resources already
+   * describe.
+   */
+  onListLibraryFolders?: () => Promise<LibraryFolderListResult>;
+  /** Create one real folder (`POST /library/groups`). */
+  onCreateLibraryFolder?: (path: string) => Promise<ResourceMutationOutcome>;
+  /** Rename/move one real folder (`POST /library/groups/rename`). */
+  onRenameLibraryFolder?: (path: string, nextPath: string) => Promise<ResourceMutationOutcome>;
+  /** Move one real folder to Trash (`DELETE /library/groups`). */
+  onDeleteLibraryFolder?: (path: string) => Promise<ResourceMutationOutcome>;
+  /** Reveal a downloaded file path through the host's existing file-manager action. */
+  onRevealSavedPath?: (path: string) => void;
   onOpenResource?: (resourceId: string) => void;
   onPreviewResource?: (resourceId: string) => void;
   onStartTrainingFromResource?: (resourceId: string) => Promise<ResourceTrainingHandoffResult>;
@@ -118,6 +163,55 @@ export interface ResourceRestoreContext {
   sandboxPath?: string;
   previewPath?: string;
   summary?: string;
+}
+
+export interface ResourceCaptureInput {
+  url: string;
+  title?: string;
+  focusId?: string;
+  /**
+   * Also download the original bytes into the library's folder space
+   * (`download` + `target_dir` in the capture contract): a PDF lands as the
+   * original `.pdf`, a GitHub link lands as the repository directory.
+   */
+  download?: boolean;
+  /** Target folder path inside the library ("" = library root). */
+  targetDir?: string;
+}
+
+export interface ResourceCaptureFocusOption {
+  id: string;
+  label: string;
+}
+
+export interface ResourceOrganizeInput {
+  action: "rename" | "set_tags" | "set_group";
+  title?: string;
+  tags?: string[];
+  group?: string;
+}
+
+export interface ResourceMutationOutcome {
+  ok: boolean;
+  message: string;
+  resourceId?: string;
+  deduped?: boolean;
+  /**
+   * Path the requested download landed on (`saved_path` in the capture
+   * contract); only set when the pipeline reported one.
+   */
+  savedPath?: string;
+  /**
+   * The request was handed to the host, but the workbench could not confirm
+   * the result inside its bounded window — reported honestly, never as a
+   * silent success.
+   */
+  unconfirmed?: boolean;
+  /**
+   * The host owns the remaining interaction (an OS save flow): the message
+   * states the request, not a completed write.
+   */
+  requested?: boolean;
 }
 
 export type ResourceSearchRequest = {
@@ -187,6 +281,16 @@ function localizeCount(language: ComposerLanguage, key: ResourceTextKey, count: 
       ? englishSingularResourceMutationText[key] ?? localize(language, key)
       : localize(language, key);
   return text.replace("{count}", String(count));
+}
+
+/** Fill the `{v}` slot used by the URL/organize/export feedback copy. */
+function localizeValue(language: ComposerLanguage, key: ResourceTextKey, value: string): string {
+  return localize(language, key).replace("{v}", value);
+}
+
+/** Display-safe reason from a thrown value (library write feedback only). */
+function thrownReasonText(value: unknown): string {
+  return value instanceof Error ? value.message : String(value);
 }
 
 const collapseStoragePrefix = "trainer.collapse.";
@@ -1278,7 +1382,16 @@ export function ResourcesWorkbenchView({
   onSearchQueryChange,
   onImportFiles,
   onImportFolder,
-  onImportUrl,
+  onImportUrl: onImportUrlAction,
+  onCaptureResource,
+  captureFocusOptions,
+  onOrganizeResource,
+  onExportResource,
+  onListLibraryFolders,
+  onCreateLibraryFolder,
+  onRenameLibraryFolder,
+  onDeleteLibraryFolder,
+  onRevealSavedPath,
   onOpenResource,
   onPreviewResource,
   onStartTrainingFromResource,
@@ -1312,6 +1425,61 @@ export function ResourcesWorkbenchView({
   const [query, setQuery] = useState("");
   useEffect(() => { onSearchQueryChange?.(query); }, [onSearchQueryChange, query]);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
+  const [urlImportOpen, setUrlImportOpen] = useState(false);
+  const [urlImportValue, setUrlImportValue] = useState("");
+  const [urlImportFocusId, setUrlImportFocusId] = useState("");
+  const [urlImportDownload, setUrlImportDownload] = useState(false);
+  const [urlImportTargetDir, setUrlImportTargetDir] = useState("");
+  const [urlImportState, setUrlImportState] = useState<
+    {
+      phase: "idle" | "busy" | "ok" | "failed";
+      message?: string;
+      /** Capture succeeded but the download target could not be confirmed. */
+      downloadUnconfirmed?: boolean;
+      /** A concrete `saved_path` the pipeline reported. */
+      savedPath?: string;
+      /** Resource the capture landed on, for "open file". */
+      resourceId?: string;
+    } | undefined
+  >(undefined);
+  const [organizeState, setOrganizeState] = useState<
+    { phase: "busy" | "ok" | "failed"; message: string } | undefined
+  >(undefined);
+  const [organizeRenameValue, setOrganizeRenameValue] = useState("");
+  const [organizeTagsValue, setOrganizeTagsValue] = useState("");
+  const [organizeGroupValue, setOrganizeGroupValue] = useState("");
+  const [exportState, setExportState] = useState<
+    { phase: "busy" | "ok" | "failed"; message: string } | undefined
+  >(undefined);
+  const [libraryFolders, setLibraryFolders] = useState<LibraryFolderNode[] | undefined>(undefined);
+  const [libraryFoldersState, setLibraryFoldersState] = useState<
+    { phase: "idle" | "loading" | "ready" | "failed"; message?: string }
+  >({ phase: "idle" });
+  const [libraryFoldersOpen, setLibraryFoldersOpen] = useState(false);
+  const [expandedFolderPaths, setExpandedFolderPaths] = useState<string[]>([]);
+  const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(null);
+  const [folderPrompt, setFolderPrompt] = useState<
+    | {
+        mode: "create" | "subfolder" | "rename";
+        parentPath: string;
+        path?: string;
+        value: string;
+        /** When set, a successful create also moves this resource into the new folder. */
+        moveResourceId?: string;
+        /** When set, a successful create becomes the pending capture's target folder. */
+        assignCaptureTarget?: boolean;
+      }
+    | undefined
+  >(undefined);
+  const [folderPromptState, setFolderPromptState] = useState<
+    { phase: "busy" | "failed"; message: string } | undefined
+  >(undefined);
+  const [folderDeletePath, setFolderDeletePath] = useState<string | null>(null);
+  const [folderDeleteBusy, setFolderDeleteBusy] = useState(false);
+  const [folderMutationState, setFolderMutationState] = useState<
+    { phase: "ok" | "failed"; message: string } | undefined
+  >(undefined);
+  const folderListInFlightRef = useRef(false);
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(
     () => restoreContext?.surface === "detail" ? restoreContext.resourceId ?? null : null,
   );
@@ -1895,6 +2063,478 @@ export function ResourcesWorkbenchView({
     action?.();
   };
 
+  const openUrlImportForm = () => {
+    if (!canWriteResources) {
+      return;
+    }
+    setUrlImportState(undefined);
+    setUrlImportOpen(true);
+  };
+
+  /**
+   * The menu's URL action: with a capture lane it opens the paste-and-file form
+   * (fetch → clean → Markdown snapshot → index); without one (a fixture
+   * preview) it keeps the legacy host prompt. Shadowing the prop keeps the
+   * menu's single URL entry point intact for keyboard/name guards.
+   */
+  const onImportUrl = onCaptureResource ? openUrlImportForm : onImportUrlAction;
+
+  const closeUrlImportForm = () => {
+    setUrlImportOpen(false);
+    setUrlImportState(undefined);
+    setUrlImportValue("");
+    setUrlImportFocusId("");
+    setUrlImportDownload(false);
+    setUrlImportTargetDir("");
+  };
+
+  const submitUrlImport = () => {
+    if (!onCaptureResource || urlImportState?.phase === "busy") {
+      return;
+    }
+    const url = urlImportValue.trim();
+    if (!/^https?:\/\/\S+$/i.test(url)) {
+      setUrlImportState({ phase: "failed", message: localize(language, "addUrlInvalid") });
+      return;
+    }
+    const download = urlImportDownload;
+    const targetDir = download ? normalizeLibraryFolderPath(urlImportTargetDir) : "";
+    setUrlImportState({
+      phase: "busy",
+      message: localize(language, download ? "addUrlDownloadBusy" : "addUrlBusy"),
+    });
+    void Promise.resolve()
+      .then(() =>
+        onCaptureResource({
+          url,
+          focusId: urlImportFocusId || undefined,
+          download,
+          targetDir: download ? targetDir : undefined,
+        }),
+      )
+      .then((outcome) => {
+        if (outcome.ok) {
+          const captured = outcome.deduped
+            ? localizeValue(language, "addUrlDeduped", outcome.message)
+            : localizeValue(language, "addUrlSucceeded", outcome.message);
+          const savedPath = outcome.savedPath?.trim() || "";
+          setUrlImportState({
+            phase: "ok",
+            message: savedPath
+              ? `${captured} ${localizeValue(language, "addUrlSavedPath", savedPath)}`
+              : captured,
+            // A requested download with no reported path is stated honestly
+            // instead of claiming the file landed somewhere.
+            downloadUnconfirmed: download && !savedPath,
+            savedPath: savedPath || undefined,
+            resourceId: outcome.resourceId,
+          });
+          setUrlImportValue("");
+          setUrlImportFocusId("");
+          return;
+        }
+        setUrlImportState({
+          phase: "failed",
+          message: outcome.unconfirmed
+            ? download
+              ? localize(language, "addUrlUnconfirmedDownload")
+              : localize(language, "addUrlUnconfirmed")
+            : localizeValue(language, "addUrlFailed", outcome.message),
+        });
+      })
+      .catch((error: unknown) => {
+        setUrlImportState({
+          phase: "failed",
+          message: localizeValue(
+            language,
+            "addUrlFailed",
+            thrownReasonText(error),
+          ),
+        });
+      });
+  };
+
+  // ------------------------------------------------------ real library folders
+  // The folder section is the Library's organizational space: it lists the
+  // real folders (`/library/groups`), merged with the folders the current
+  // resources already describe, so a folder is visible with a count even
+  // before a listing answers, and an empty new folder appears the moment it
+  // is created.
+  const derivedLibraryFolders = useMemo(
+    () => libraryFolderTreeFromResources(resources),
+    [resources],
+  );
+  const libraryFolderTree = useMemo(
+    () => mergeLibraryFolderTrees(libraryFolders ?? [], derivedLibraryFolders),
+    [derivedLibraryFolders, libraryFolders],
+  );
+  const libraryFolderEntries = useMemo(
+    () => flattenLibraryFolders(libraryFolderTree),
+    [libraryFolderTree],
+  );
+  const selectedFolderEntry = useMemo(
+    () => libraryFolderEntries.find((entry) => entry.path === selectedFolderPath) ?? null,
+    [libraryFolderEntries, selectedFolderPath],
+  );
+  // A row is visible when every ancestor folder is expanded.
+  const visibleFolderEntries = useMemo(
+    () =>
+      libraryFolderEntries.filter((entry) => {
+        const segments = entry.path.split("/");
+        for (let index = 1; index < segments.length; index += 1) {
+          if (!expandedFolderPaths.includes(segments.slice(0, index).join("/"))) {
+            return false;
+          }
+        }
+        return true;
+      }),
+    [expandedFolderPaths, libraryFolderEntries],
+  );
+  const folderPathsWithChildren = useMemo(() => {
+    const withChildren = new Set<string>();
+    for (const entry of libraryFolderEntries) {
+      const parentPath = libraryFolderParentPath(entry.path);
+      if (parentPath) {
+        withChildren.add(parentPath);
+      }
+    }
+    return withChildren;
+  }, [libraryFolderEntries]);
+
+  const loadLibraryFolders = (options?: { quiet?: boolean }) => {
+    if (!onListLibraryFolders || folderListInFlightRef.current) {
+      return;
+    }
+    const quiet = options?.quiet === true;
+    folderListInFlightRef.current = true;
+    if (!quiet) {
+      setLibraryFoldersState({ phase: "loading" });
+    }
+    void Promise.resolve()
+      .then(() => onListLibraryFolders())
+      .then((result) => {
+        if (result.ok) {
+          setLibraryFolders(result.folders);
+          setLibraryFoldersState({ phase: "ready" });
+          return;
+        }
+        // The resources' own folders stay visible; the listing is reported
+        // as unavailable rather than as an empty library.
+        if (quiet) {
+          // A background confirmation never downgrades a readable state.
+          setLibraryFoldersState((current) =>
+            current.phase === "ready"
+              ? current
+              : { phase: result.folders.length > 0 ? "ready" : "failed", message: result.message },
+          );
+          return;
+        }
+        setLibraryFoldersState({
+          phase: result.folders.length > 0 ? "ready" : "failed",
+          message: result.message,
+        });
+      })
+      .catch((error: unknown) => {
+        if (quiet) {
+          return;
+        }
+        setLibraryFoldersState({ phase: "failed", message: thrownReasonText(error) });
+      })
+      .finally(() => {
+        folderListInFlightRef.current = false;
+      });
+  };
+
+  useEffect(() => {
+    if (libraryFoldersOpen && libraryFoldersState.phase === "idle") {
+      loadLibraryFolders();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one load per open
+  }, [libraryFoldersOpen]);
+
+  const openFolderCreatePrompt = (
+    parentPath = "",
+    moveResourceId?: string,
+    assignCaptureTarget = false,
+  ) => {
+    if (!canWriteResources || !onCreateLibraryFolder) {
+      return;
+    }
+    setFolderPromptState(undefined);
+    setFolderPrompt({
+      mode: parentPath ? "subfolder" : "create",
+      parentPath: normalizeLibraryFolderPath(parentPath),
+      value: "",
+      moveResourceId,
+      assignCaptureTarget,
+    });
+  };
+
+  const submitFolderPrompt = () => {
+    const prompt = folderPrompt;
+    if (!prompt || folderPromptState?.phase === "busy") {
+      return;
+    }
+    const name = prompt.value.trim().replace(/^\/+|\/+$/g, "");
+    if (!name || name.includes("..")) {
+      setFolderPromptState({ phase: "failed", message: localize(language, "folderPromptInvalid") });
+      return;
+    }
+    const normalizedParent = normalizeLibraryFolderPath(prompt.parentPath);
+    const targetPath =
+      prompt.mode === "rename"
+        ? normalizeLibraryFolderPath(`${libraryFolderParentPath(prompt.path ?? "")}/${name}`)
+        : normalizeLibraryFolderPath(`${normalizedParent}/${name}`);
+    if (!targetPath) {
+      setFolderPromptState({ phase: "failed", message: localize(language, "folderPromptInvalid") });
+      return;
+    }
+    const rename = prompt.mode === "rename";
+    if (rename ? !onRenameLibraryFolder : !onCreateLibraryFolder) {
+      setFolderPromptState({
+        phase: "failed",
+        message: localizeValue(
+          language,
+          "folderFailed",
+          localize(language, "foldersUnavailable"),
+        ),
+      });
+      return;
+    }
+    setFolderPromptState({ phase: "busy", message: localize(language, rename ? "folderRenameBusy" : "folderCreateBusy") });
+    const previousFolders = libraryFolders;
+    const rollback = () => setLibraryFolders(previousFolders);
+    const runFolderWrite = (): Promise<ResourceMutationOutcome> => {
+      if (rename) {
+        return onRenameLibraryFolder
+          ? onRenameLibraryFolder(prompt.path ?? "", targetPath)
+          : Promise.resolve({ ok: false, message: "" });
+      }
+      return onCreateLibraryFolder
+        ? onCreateLibraryFolder(targetPath)
+        : Promise.resolve({ ok: false, message: "" });
+    };
+    void Promise.resolve()
+      .then(() => runFolderWrite())
+      .then((outcome) => {
+        if (!outcome.ok) {
+          rollback();
+          setFolderPromptState({
+            phase: "failed",
+            message: outcome.unconfirmed
+              ? localize(language, "folderUnconfirmed")
+              : localizeValue(language, "folderFailed", outcome.message),
+          });
+          return;
+        }
+        // Immediate, local application: the folder is in the tree before any
+        // refresh — a refresh only confirms the same fact.
+        setLibraryFolders((current) =>
+          prompt.mode === "rename"
+            ? renameLibraryFolderPath(current ?? libraryFolderTree, prompt.path ?? "", targetPath)
+            : addLibraryFolderPath(current ?? libraryFolderTree, targetPath),
+        );
+        if (prompt.mode === "rename") {
+          setSelectedFolderPath(targetPath);
+          setExpandedFolderPaths((current) =>
+            current.map((path) =>
+              path === prompt.path || path.startsWith(`${prompt.path}/`)
+                ? `${targetPath}${path.slice((prompt.path ?? "").length)}`
+                : path,
+            ),
+          );
+        } else {
+          setSelectedFolderPath(targetPath);
+          if (normalizedParent) {
+            setExpandedFolderPaths((current) =>
+              current.includes(normalizedParent) ? current : [...current, normalizedParent],
+            );
+          }
+        }
+        setFolderMutationState({
+          phase: "ok",
+          message: localizeValue(
+            language,
+            prompt.mode === "rename" ? "folderRenamed" : "folderCreated",
+            targetPath,
+          ),
+        });
+        setFolderPrompt(undefined);
+        setFolderPromptState(undefined);
+        if (prompt.mode === "rename") {
+          // A rename moves the resources inside the folder: refresh through the
+          // Library's existing index action so their paths follow, and confirm
+          // the folder listing in the background.
+          refreshResources();
+          loadLibraryFolders({ quiet: true });
+        }
+        if (prompt.assignCaptureTarget) {
+          setUrlImportDownload(true);
+          setUrlImportTargetDir(targetPath);
+        }
+        if (prompt.moveResourceId) {
+          runOrganizeAction({ action: "set_group", group: targetPath }, prompt.moveResourceId);
+        }
+      })
+      .catch((error: unknown) => {
+        rollback();
+        setFolderPromptState({
+          phase: "failed",
+          message: localizeValue(language, "folderFailed", thrownReasonText(error)),
+        });
+      });
+  };
+
+  const toggleFolderPath = (path: string) => {
+    setSelectedFolderPath(path);
+    setExpandedFolderPaths((current) =>
+      current.includes(path) ? current.filter((entry) => entry !== path) : [...current, path],
+    );
+  };
+
+  const requestFolderDelete = (path: string) => {
+    if (!canWriteResources || !onDeleteLibraryFolder) {
+      return;
+    }
+    setFolderDeletePath(path);
+  };
+
+  const confirmFolderDelete = () => {
+    const path = folderDeletePath;
+    if (!path || !onDeleteLibraryFolder || folderDeleteBusy) {
+      return;
+    }
+    setFolderDeleteBusy(true);
+    const previousFolders = libraryFolders;
+    void Promise.resolve()
+      .then(() => onDeleteLibraryFolder(path))
+      .then((outcome) => {
+        if (!outcome.ok) {
+          setFolderMutationState({
+            phase: "failed",
+            message: outcome.unconfirmed
+              ? localize(language, "folderUnconfirmed")
+              : localizeValue(language, "folderFailed", outcome.message),
+          });
+          return;
+        }
+        // Trash semantics: the folder (and the resources inside it) left the
+        // library; the local tree drops the subtree immediately and the
+        // existing index refresh brings the moved records into the snapshot.
+        setLibraryFolders((current) => removeLibraryFolderPath(current ?? libraryFolderTree, path));
+        setSelectedFolderPath((current) => (current === path ? null : current));
+        setExpandedFolderPaths((current) => current.filter((entry) => entry !== path));
+        setFolderMutationState({
+          phase: "ok",
+          message: localizeValue(language, "folderDeleted", path),
+        });
+        setFolderDeletePath(null);
+        onRefreshDeletedResources?.();
+        loadLibraryFolders({ quiet: true });
+      })
+      .catch((error: unknown) => {
+        setFolderMutationState({
+          phase: "failed",
+          message: localizeValue(language, "folderFailed", thrownReasonText(error)),
+        });
+      })
+      .finally(() => {
+        setFolderDeleteBusy(false);
+      });
+  };
+
+  const renderLibraryFolderRow = (entry: LibraryFolderFlatEntry, hasChildren: boolean) => {
+    const isExpanded = expandedFolderPaths.includes(entry.path);
+    const isSelected = selectedFolderPath === entry.path;
+    return (
+      <li key={entry.path} className="resources-knowledge__folder-row">
+        <button
+          className={`resources-knowledge__folder-toggle${isSelected ? " is-selected" : ""}`}
+          type="button"
+          style={{ paddingLeft: `${4 + entry.depth * 12}px` }}
+          aria-expanded={hasChildren ? isExpanded : undefined}
+          aria-current={isSelected ? "true" : undefined}
+          aria-label={`${entry.name} (${entry.resourceCount})`}
+          title={entry.path}
+          onClick={() => toggleFolderPath(entry.path)}
+        >
+          <span className="resources-knowledge__folder-chevron" aria-hidden="true">
+            {hasChildren ? <ChevronDownIcon size={11} /> : <span className="resources-knowledge__folder-dot" />}
+          </span>
+          <FolderIcon size={13} aria-hidden="true" />
+          <span className="resources-knowledge__folder-name">{entry.name}</span>
+          <span className="resources-knowledge__folder-count">{entry.resourceCount}</span>
+        </button>
+      </li>
+    );
+  };
+
+  const runOrganizeAction = (
+    action: ResourceOrganizeInput,
+    resourceId = selectedResourceId,
+  ) => {
+    if (!onOrganizeResource || !resourceId) {
+      return;
+    }
+    setOrganizeState({ phase: "busy", message: localize(language, "organizeTitle") });
+    void Promise.resolve()
+      .then(() => onOrganizeResource(resourceId, action))
+      .then((outcome) => {
+        setOrganizeState({
+          phase: outcome.ok ? "ok" : "failed",
+          message: outcome.ok
+            ? outcome.message || localize(language, "organizeSucceeded")
+            : outcome.unconfirmed
+              ? localize(language, "organizeUnconfirmed")
+              : localizeValue(language, "organizeFailed", outcome.message),
+        });
+      })
+      .catch((error: unknown) => {
+        setOrganizeState({
+          phase: "failed",
+          message: localizeValue(
+            language,
+            "organizeFailed",
+            thrownReasonText(error),
+          ),
+        });
+      });
+  };
+
+  const exportSelectedResource = (resourceId: string) => {
+    if (!onExportResource || exportState?.phase === "busy") {
+      return;
+    }
+    setExportState({ phase: "busy", message: localize(language, "exportBusy") });
+    void Promise.resolve()
+      .then(() => onExportResource(resourceId))
+      .then((outcome) => {
+        setExportState({
+          phase: outcome.ok ? "ok" : "failed",
+          message: outcome.ok
+            ? outcome.requested
+              ? outcome.message ||
+                localizeValue(
+                  language,
+                  "exportRequested",
+                  selectedResource?.title ?? resourceId,
+                )
+              : localizeValue(language, "exportSucceeded", outcome.message)
+            : localizeValue(language, "exportFailed", outcome.message),
+        });
+      })
+      .catch((error: unknown) => {
+        setExportState({
+          phase: "failed",
+          message: localizeValue(
+            language,
+            "exportFailed",
+            thrownReasonText(error),
+          ),
+        });
+      });
+  };
+
   const refreshResources = () => {
     if (!canWriteResources || !onRefreshResources || indexRefreshInFlightRef.current) {
       return;
@@ -1909,6 +2549,18 @@ export function ResourcesWorkbenchView({
         setIsIndexRefreshing(false);
       });
   };
+
+  useEffect(() => {
+    // Organize inputs follow the selected resource (title + tags are its
+    // current values); the group field starts empty because the current
+    // collection is shown as a path, not as an editable name.
+    setOrganizeRenameValue(selectedResource?.title ?? "");
+    setOrganizeTagsValue((selectedResource?.tags ?? []).join(", "));
+    setOrganizeGroupValue("");
+    setOrganizeState(undefined);
+    setExportState(undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- identity change is the trigger
+  }, [selectedResource?.id, selectedResource?.title]);
 
   const toggleCollection = (id: string) => {
     if (hasSearchQuery) {
@@ -2056,6 +2708,9 @@ export function ResourcesWorkbenchView({
   const leftoverStoredNote = leftoverNote?.trim() || "";
   const omitLeftoverLibrary = Boolean(leftoverStoredNote) && resources.length === 0
     && resourceWriteAccess?.allowed !== true;
+  // The folder section is part of the live Library, so a leftover-only
+  // placeholder does not render it.
+  const showLibraryFolders = !omitLeftoverLibrary;
   const orientationTone = orientation ? coachOrientationTone(orientation.state) : undefined;
   const orientationState = leftoverStoredNote
     ? undefined
@@ -2246,6 +2901,165 @@ export function ResourcesWorkbenchView({
         </div>
       ) : null}
 
+      {urlImportOpen && onCaptureResource && canWriteResources ? (
+        <form
+          className="resources-knowledge__url-import"
+          role="group"
+          aria-label={localize(language, "addUrlTitle")}
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitUrlImport();
+          }}
+        >
+          <label className="resources-knowledge__url-import-field">
+            <span>{localize(language, "addUrlTitle")}</span>
+            <input
+              type="url"
+              inputMode="url"
+              autoFocus
+              value={urlImportValue}
+              onChange={(event) => setUrlImportValue(event.target.value)}
+              placeholder={localize(language, "addUrlPlaceholder")}
+              aria-label={localize(language, "addUrlPlaceholder")}
+              disabled={urlImportState?.phase === "busy"}
+            />
+          </label>
+          {captureFocusOptions && captureFocusOptions.length > 0 ? (
+            <label className="resources-knowledge__url-import-field">
+              <span>{localize(language, "addUrlFocusLabel")}</span>
+              <select
+                value={urlImportFocusId}
+                onChange={(event) => setUrlImportFocusId(event.target.value)}
+                aria-label={localize(language, "addUrlFocusLabel")}
+                disabled={urlImportState?.phase === "busy"}
+              >
+                <option value="">{localize(language, "addUrlFocusNone")}</option>
+                {captureFocusOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <div className="resources-knowledge__url-import-check">
+            <button
+              className="button button--ghost button--compact"
+              type="button"
+              role="switch"
+              aria-checked={urlImportDownload}
+              onClick={() => setUrlImportDownload((current) => !current)}
+              disabled={urlImportState?.phase === "busy"}
+            >
+              <span>{localize(language, "addUrlDownloadLabel")}</span>
+            </button>
+          </div>
+          {urlImportDownload ? (
+            libraryFolderEntries.length > 0 ? (
+              <label className="resources-knowledge__url-import-field">
+                <span>{localize(language, "addUrlTargetFolderLabel")}</span>
+                <select
+                  value={urlImportTargetDir}
+                  onChange={(event) => {
+                    if (event.target.value === "__new-library-folder__") {
+                      openFolderCreatePrompt("", undefined, true);
+                      return;
+                    }
+                    setUrlImportTargetDir(event.target.value);
+                  }}
+                  aria-label={localize(language, "addUrlTargetFolderLabel")}
+                  disabled={urlImportState?.phase === "busy"}
+                >
+                  <option value="">{localize(language, "addUrlTargetFolderRoot")}</option>
+                  {libraryFolderEntries.map((entry) => (
+                    <option key={entry.path} value={entry.path}>
+                      {`${"  ".repeat(entry.depth + 1)}${entry.name} (${entry.resourceCount})`}
+                    </option>
+                  ))}
+                  <option value="__new-library-folder__">
+                    {localize(language, "addUrlTargetFolderNew")}
+                  </option>
+                </select>
+              </label>
+            ) : (
+              <label className="resources-knowledge__url-import-field">
+                <span>{localize(language, "addUrlTargetFolderLabel")}</span>
+                <input
+                  type="text"
+                  value={urlImportTargetDir}
+                  onChange={(event) => setUrlImportTargetDir(event.target.value)}
+                  placeholder={localize(language, "addUrlTargetFolderPlaceholder")}
+                  aria-label={localize(language, "addUrlTargetFolderLabel")}
+                  disabled={urlImportState?.phase === "busy"}
+                />
+              </label>
+            )
+          ) : null}
+          <div className="resources-knowledge__url-import-actions">
+            <button
+              className="button button--accent button--compact"
+              type="submit"
+              disabled={urlImportState?.phase === "busy" || !urlImportValue.trim()}
+              aria-busy={urlImportState?.phase === "busy"}
+            >
+              {localize(language, "addUrlSubmit")}
+            </button>
+            <button
+              className="button button--ghost button--compact"
+              type="button"
+              onClick={closeUrlImportForm}
+              disabled={urlImportState?.phase === "busy"}
+            >
+              {t("cancel")}
+            </button>
+            {urlImportState?.message ? (
+              <span
+                className="resources-knowledge__url-import-status"
+                data-url-import-phase={urlImportState.phase}
+                role="status"
+                aria-live="polite"
+              >
+                {urlImportState.phase === "busy" ? (
+                  <span className="trainer-spinner" aria-hidden="true" />
+                ) : null}
+                {urlImportState.message}
+                {/* A requested download with no reported path states that
+                    honestly instead of pointing at a guess. */}
+                {urlImportState.downloadUnconfirmed ? (
+                  <em className="resources-knowledge__url-import-note">
+                    {localize(language, "addUrlDownloadPending")}
+                  </em>
+                ) : null}
+              </span>
+            ) : null}
+            {/* A confirmed download offers the host's existing open/reveal
+                actions outside the live region, so the status stays text. */}
+            {urlImportState?.savedPath ? (
+              <>
+                {urlImportState.resourceId && onOpenResource ? (
+                  <button
+                    className="button button--ghost button--compact"
+                    type="button"
+                    onClick={() => onOpenResource(urlImportState.resourceId!)}
+                  >
+                    {localize(language, "addUrlOpenFile")}
+                  </button>
+                ) : null}
+                {onRevealSavedPath ? (
+                  <button
+                    className="button button--ghost button--compact"
+                    type="button"
+                    onClick={() => onRevealSavedPath(urlImportState.savedPath!)}
+                  >
+                    {localize(language, "addUrlRevealFile")}
+                  </button>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </form>
+      ) : null}
+
       {null}
 
       {omitLeftoverLibrary ? null : restoreContext?.surface === "sandbox" ? (
@@ -2357,6 +3171,141 @@ export function ResourcesWorkbenchView({
             ) : null}
           </>
         )}
+
+      {showLibraryFolders ? (
+        <details
+          className="resources-knowledge__folders"
+          data-library-folders="true"
+          open={libraryFoldersOpen}
+          onToggle={(event) => setLibraryFoldersOpen(event.currentTarget.open)}
+          aria-busy={libraryFoldersState.phase === "loading"}
+        >
+          <summary>
+            <span>
+              <FolderIcon size={13} aria-hidden="true" />
+              <strong>
+                {localize(language, "foldersTitle")}
+                {libraryFolderEntries.length > 0 ? ` (${libraryFolderEntries.length})` : ""}
+              </strong>
+            </span>
+          </summary>
+          <div className="resources-knowledge__folders-body">
+            <div className="resources-knowledge__folders-actions">
+              {canWriteResources && onCreateLibraryFolder ? (
+                <button
+                  className="button button--ghost button--compact"
+                  type="button"
+                  onClick={() => openFolderCreatePrompt()}
+                >
+                  <PlusIcon size={12} aria-hidden="true" />
+                  <span>{localize(language, "foldersNew")}</span>
+                </button>
+              ) : null}
+              {onListLibraryFolders ? (
+                <button
+                  className="button button--ghost button--compact"
+                  type="button"
+                  onClick={() => loadLibraryFolders()}
+                  disabled={libraryFoldersState.phase === "loading"}
+                  aria-busy={libraryFoldersState.phase === "loading"}
+                >
+                  <RefreshIcon size={12} aria-hidden="true" />
+                  <span>{localize(language, "foldersRefresh")}</span>
+                </button>
+              ) : null}
+            </div>
+            {libraryFoldersState.phase === "loading" ? (
+              <p className="resources-knowledge__folders-status" role="status" aria-live="polite">
+                <span className="trainer-spinner" aria-hidden="true" />
+                {localize(language, "foldersLoading")}
+              </p>
+            ) : null}
+            {libraryFoldersState.phase === "failed" ? (
+              <p
+                className="resources-knowledge__folders-status"
+                role="status"
+                aria-live="polite"
+                data-folders-phase="failed"
+              >
+                {libraryFoldersState.message
+                  ? localizeValue(language, "foldersFailed", libraryFoldersState.message)
+                  : localize(language, "foldersUnavailable")}
+              </p>
+            ) : null}
+            {libraryFolderEntries.length === 0 ? (
+              <p className="resources-empty resources-empty--compact">
+                {localize(
+                  language,
+                  canWriteResources ? "foldersEmpty" : "foldersEmptyReadOnly",
+                )}
+              </p>
+            ) : (
+              <ul className="resources-knowledge__folders-tree">
+                {visibleFolderEntries.map((entry) =>
+                  renderLibraryFolderRow(entry, folderPathsWithChildren.has(entry.path)),
+                )}
+              </ul>
+            )}
+            {selectedFolderEntry ? (
+              <div
+                className="resources-knowledge__folder-actions"
+                role="group"
+                aria-label={selectedFolderEntry.path}
+              >
+                <span className="resources-knowledge__folder-actions-path" title={selectedFolderEntry.path}>
+                  {selectedFolderEntry.path}
+                </span>
+                {canWriteResources && onRenameLibraryFolder ? (
+                  <button
+                    className="button button--ghost button--compact"
+                    type="button"
+                    onClick={() => {
+                      setFolderPromptState(undefined);
+                      setFolderPrompt({
+                        mode: "rename",
+                        parentPath: libraryFolderParentPath(selectedFolderEntry.path),
+                        path: selectedFolderEntry.path,
+                        value: libraryFolderName(selectedFolderEntry.path),
+                      });
+                    }}
+                  >
+                    {localize(language, "folderRenameAction")}
+                  </button>
+                ) : null}
+                {canWriteResources && onCreateLibraryFolder ? (
+                  <button
+                    className="button button--ghost button--compact"
+                    type="button"
+                    onClick={() => openFolderCreatePrompt(selectedFolderEntry.path)}
+                  >
+                    {localize(language, "folderSubfolderAction")}
+                  </button>
+                ) : null}
+                {canWriteResources && onDeleteLibraryFolder ? (
+                  <button
+                    className="button button--ghost button--compact resources-knowledge__folder-delete-action"
+                    type="button"
+                    onClick={() => requestFolderDelete(selectedFolderEntry.path)}
+                  >
+                    <TrashIcon size={12} aria-hidden="true" />
+                    <span>{localize(language, "folderDeleteAction")}</span>
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+            {folderMutationState?.message ? (
+              <p
+                className="resources-knowledge__folders-status"
+                role="status"
+                aria-live="polite"
+                data-folder-mutation-phase={folderMutationState.phase}
+              >
+                {folderMutationState.message}
+              </p>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
 
       {omitLeftoverLibrary || trashedResources.length === 0 ? null : (
       <details
@@ -2476,6 +3425,131 @@ export function ResourcesWorkbenchView({
               className="button button--compact resources-knowledge__confirm-delete-action"
               type="button"
               onClick={confirmDeleteSelectedResources}
+            >
+              <TrashIcon size={13} />
+              <span>{t("confirm")}</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Folder name prompt and folder deletion confirmation live at the root
+          for the same reason as the resource delete confirmation: the Library
+          container can be hidden behind the reader. */}
+      {folderPrompt ? (
+        <div
+          className="resources-knowledge__folder-prompt"
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby="resources-folder-prompt-title"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setFolderPrompt(undefined);
+              setFolderPromptState(undefined);
+            }
+          }}
+        >
+          <form
+            className="resources-knowledge__folder-prompt-body"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitFolderPrompt();
+            }}
+          >
+            <label className="resources-knowledge__folder-prompt-field">
+              <span id="resources-folder-prompt-title">
+                {folderPrompt.mode === "rename"
+                  ? localize(language, "folderPromptRenameTitle")
+                  : folderPrompt.mode === "subfolder"
+                    ? localizeValue(language, "folderPromptSubfolderTitle", folderPrompt.parentPath)
+                    : localize(language, "folderPromptCreateTitle")}
+              </span>
+              <input
+                type="text"
+                autoFocus
+                value={folderPrompt.value}
+                onChange={(event) =>
+                  setFolderPrompt((current) =>
+                    current ? { ...current, value: event.target.value } : current,
+                  )
+                }
+                placeholder={localize(language, "folderNamePlaceholder")}
+                aria-label={localize(language, "folderNamePlaceholder")}
+                disabled={folderPromptState?.phase === "busy"}
+              />
+            </label>
+            {folderPromptState?.message ? (
+              <p
+                className="resources-knowledge__folders-status"
+                role="status"
+                aria-live="polite"
+                data-folder-prompt-phase={folderPromptState.phase}
+              >
+                {folderPromptState.message}
+              </p>
+            ) : null}
+            <div className="resources-knowledge__folder-prompt-actions">
+              <button
+                className="button button--compact"
+                type="button"
+                onClick={() => {
+                  setFolderPrompt(undefined);
+                  setFolderPromptState(undefined);
+                }}
+                disabled={folderPromptState?.phase === "busy"}
+              >
+                <span>{t("cancel")}</span>
+              </button>
+              <button
+                className="button button--primary button--compact"
+                type="submit"
+                disabled={folderPromptState?.phase === "busy" || !folderPrompt.value.trim()}
+                aria-busy={folderPromptState?.phase === "busy"}
+              >
+                <span>
+                  {folderPrompt.mode === "rename"
+                    ? localize(language, "folderRenameConfirm")
+                    : localize(language, "folderCreateConfirm")}
+                </span>
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {folderDeletePath ? (
+        <div
+          className="resources-knowledge__folder-delete-confirmation"
+          role="alertdialog"
+          aria-modal="false"
+          aria-labelledby="resources-folder-delete-confirmation-message"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setFolderDeletePath(null);
+            }
+          }}
+        >
+          <span id="resources-folder-delete-confirmation-message">
+            {localizeValue(language, "folderDeleteConfirmation", folderDeletePath)}
+          </span>
+          <div className="resources-knowledge__delete-confirmation-actions">
+            <button
+              className="button button--compact"
+              type="button"
+              autoFocus
+              onClick={() => setFolderDeletePath(null)}
+              disabled={folderDeleteBusy}
+            >
+              <span>{t("cancel")}</span>
+            </button>
+            <button
+              className="button button--compact resources-knowledge__confirm-delete-action"
+              type="button"
+              onClick={confirmFolderDelete}
+              disabled={folderDeleteBusy}
+              aria-busy={folderDeleteBusy}
             >
               <TrashIcon size={13} />
               <span>{t("confirm")}</span>
@@ -2614,6 +3688,19 @@ export function ResourcesWorkbenchView({
               <ArrowRightIcon size={12} />
               <span>{selectedResourceOpenLabel}</span>
             </button>
+            {onExportResource && canWriteResources ? (
+              <button
+                className="button button--ghost button--compact resources-knowledge__export-action"
+                type="button"
+                onClick={() => exportSelectedResource(selectedResource.id)}
+                disabled={exportState?.phase === "busy"}
+                aria-busy={exportState?.phase === "busy"}
+                aria-label={`${localize(language, "exportAction")}: ${selectedResource.title}`}
+                title={localize(language, "exportAction")}
+              >
+                <span>{localize(language, "exportAction")}</span>
+              </button>
+            ) : null}
             {onDeleteResources ? (
               <button
                 className="button button--ghost button--compact resources-knowledge__delete-action"
@@ -2635,6 +3722,162 @@ export function ResourcesWorkbenchView({
               </button>
             ) : null}
           </div>
+          ) : null}
+
+          {!sandboxPreview && onOrganizeResource && canWriteResources ? (
+            <details className="resources-knowledge__organize" data-resource-organize="true">
+              <summary>
+                <strong>{localize(language, "organizeTitle")}</strong>
+              </summary>
+              <div className="resources-knowledge__organize-body">
+                <div
+                  className="resources-knowledge__organize-field"
+                  role="group"
+                  aria-label={localize(language, "organizeRenameLabel")}
+                >
+                  <span>{localize(language, "organizeRenameLabel")}</span>
+                  <input
+                    type="text"
+                    value={organizeRenameValue}
+                    onChange={(event) => setOrganizeRenameValue(event.target.value)}
+                    aria-label={localize(language, "organizeRenameLabel")}
+                    disabled={organizeState?.phase === "busy"}
+                  />
+                  <button
+                    className="button button--ghost button--compact"
+                    type="button"
+                    onClick={() =>
+                      runOrganizeAction({ action: "rename", title: organizeRenameValue.trim() })
+                    }
+                    disabled={organizeState?.phase === "busy" || !organizeRenameValue.trim()}
+                  >
+                    {localize(language, "organizeRenameAction")}
+                  </button>
+                </div>
+                <div
+                  className="resources-knowledge__organize-field"
+                  role="group"
+                  aria-label={localize(language, "organizeTagsLabel")}
+                >
+                  <span>{localize(language, "organizeTagsLabel")}</span>
+                  <input
+                    type="text"
+                    value={organizeTagsValue}
+                    onChange={(event) => setOrganizeTagsValue(event.target.value)}
+                    placeholder={localize(language, "organizeTagsLabel")}
+                    aria-label={localize(language, "organizeTagsLabel")}
+                    disabled={organizeState?.phase === "busy"}
+                  />
+                  <button
+                    className="button button--ghost button--compact"
+                    type="button"
+                    onClick={() =>
+                      runOrganizeAction({
+                        action: "set_tags",
+                        tags: organizeTagsValue
+                          .split(/[,，]/)
+                          .map((tag) => tag.trim())
+                          .filter(Boolean),
+                      })
+                    }
+                    disabled={organizeState?.phase === "busy"}
+                  >
+                    {localize(language, "organizeTagsAction")}
+                  </button>
+                </div>
+                <div
+                  className="resources-knowledge__organize-field"
+                  role="group"
+                  aria-label={localize(language, "organizeGroupLabel")}
+                >
+                  <span>{localize(language, "organizeGroupLabel")}</span>
+                  {libraryFolderEntries.length > 0 ? (
+                    <select
+                      value={organizeGroupValue}
+                      onChange={(event) => setOrganizeGroupValue(event.target.value)}
+                      aria-label={localize(language, "organizeGroupLabel")}
+                      disabled={organizeState?.phase === "busy"}
+                    >
+                      <option value="">{localize(language, "addUrlTargetFolderRoot")}</option>
+                      {libraryFolderEntries.map((entry) => (
+                        <option key={entry.path} value={entry.path}>
+                          {`${"  ".repeat(entry.depth + 1)}${entry.name} (${entry.resourceCount})`}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={organizeGroupValue}
+                      onChange={(event) => setOrganizeGroupValue(event.target.value)}
+                      placeholder={localize(language, "organizeGroupPlaceholder")}
+                      aria-label={localize(language, "organizeGroupPlaceholder")}
+                      disabled={organizeState?.phase === "busy"}
+                    />
+                  )}
+                  <button
+                    className="button button--ghost button--compact"
+                    type="button"
+                    onClick={() =>
+                      runOrganizeAction({ action: "set_group", group: organizeGroupValue.trim() })
+                    }
+                    disabled={
+                      organizeState?.phase === "busy" ||
+                      // In select mode the root option is a real target; the
+                      // free-text lane still needs a non-empty group name.
+                      (!organizeGroupValue.trim() && libraryFolderEntries.length === 0)
+                    }
+                  >
+                    {localize(language, "organizeGroupAction")}
+                  </button>
+                  {canWriteResources && onCreateLibraryFolder ? (
+                    <button
+                      className="button button--ghost button--compact"
+                      type="button"
+                      onClick={() => openFolderCreatePrompt("", selectedResource.id)}
+                      disabled={organizeState?.phase === "busy"}
+                    >
+                      {localize(language, "folderMoveToNew")}
+                    </button>
+                  ) : null}
+                  {selectedResource.collectionPath && libraryFolderEntries.length === 0 ? (
+                    <button
+                      className="button button--ghost button--compact"
+                      type="button"
+                      onClick={() => runOrganizeAction({ action: "set_group", group: "" })}
+                      disabled={organizeState?.phase === "busy"}
+                    >
+                      {localize(language, "organizeGroupClear")}
+                    </button>
+                  ) : null}
+                </div>
+                {selectedResource.collectionPath ? (
+                  <p className="template-metadata" data-resource-group-path="true">
+                    {selectedResource.collectionPath}
+                  </p>
+                ) : null}
+                {organizeState?.message ? (
+                  <p
+                    className="resources-knowledge__organize-status"
+                    data-organize-phase={organizeState.phase}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {organizeState.message}
+                  </p>
+                ) : null}
+                {exportState?.message ? (
+                  <p
+                    className="resources-knowledge__organize-status"
+                    data-export-phase={exportState.phase}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {exportState.message}
+                  </p>
+                ) : null}
+              </div>
+            </details>
           ) : null}
           </section>
         </ResourceReader>

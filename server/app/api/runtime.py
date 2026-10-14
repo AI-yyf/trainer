@@ -44,6 +44,7 @@ from ..workspace.provisioning import ProjectProvisioningService
 from ..workspace.remote_identity import RemoteProjectIdentity
 
 if TYPE_CHECKING:
+    from ..browser_bridge import BrowserBridgeService
     from ..db.research_repository import ResearchRepository
     from ..sandbox.service import SandboxService
 from ..training.attempt_store import AttemptStore
@@ -228,6 +229,9 @@ class TrainerRuntime:
     project_provisioning_service: ProjectProvisioningService | None = None
     project_adoption_index_service: ProjectAdoptionIndexService | None = None
     event_ledger: EventLedgerService | None = None
+    # Browser capture lane (pairing credentials + pending coach drafts). Wired
+    # by ``create_app`` from the sidecar data directory; None in test doubles.
+    browser_bridge: "BrowserBridgeService | None" = None
     steer_queues: dict[str, list[str]] = field(default_factory=dict)
     sandbox_operation_log: dict[str, dict[str, Any]] = field(default_factory=dict)
     requested_workspace_files: dict[str, list[str]] = field(default_factory=dict)

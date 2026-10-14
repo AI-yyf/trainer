@@ -9,6 +9,7 @@ import type { WorkspaceTrustGuard } from './workspaceTrust';
 import type { TrainerWorkspaceService } from './trainerWorkspaceService';
 import type { TrainerStreamingState } from '../../../shared/src/protocol';
 import type { WorkspaceGateway } from '../workspace/workspaceGateway';
+import type { BrowserCaptureRuntime } from '../browserCapture/runtime';
 
 export interface TrainerRuntimeWorkspaceContext {
   workspaceId: string;
@@ -29,6 +30,8 @@ export interface WorkbenchHost {
   openInEditor?(view: string): Promise<void>;
   /** Dispose the editor panel and reveal the sidebar view again. */
   collapseToSidebar?(): Promise<void>;
+  /** True while any workbench surface (sidebar or editor panel) is visible. */
+  isVisible?(): boolean;
 }
 
 export interface CommandContext {
@@ -48,4 +51,10 @@ export interface CommandContext {
   setStreamingState(streamingState: TrainerStreamingState): Promise<void>;
   getSessionId(): string | undefined;
   setSessionId(sessionId: string | undefined): Promise<void>;
+  /**
+   * Browser-capture runtime (pairing ledger, pending-draft poller, deep-link
+   * handler). Present once the extension host has wired it; commands fall back
+   * to a per-context session when it is absent.
+   */
+  browserCapture?: BrowserCaptureRuntime;
 }

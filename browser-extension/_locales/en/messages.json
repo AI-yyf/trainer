@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "Trainer Capture",
+    "description": "Extension name shown in the browser UI (toolbar tooltip, extension list, store)."
+  },
+  "appDescription": {
+    "message": "Add the current page, PDF or GitHub repository to the Trainer library in one click, or download it into the project folder: zero-config pairing, offline queue, and coach questions about a selection. A pure data channel that talks only to the local Trainer sidecar.",
+    "description": "Extension description shown by the browser."
+  }
+}

@@ -2450,6 +2450,16 @@ export const APP_UI_TEXT: Record<string, Record<string, string>> = {
     "ko-KR": "사이드바로 돌아가기",
     "pt-BR": "Voltar para a barra lateral",
   },
+  // Browser-capture deep link pointing at a resource that is no longer here.
+  "这条资料已不在资料库中。可以刷新资料库，或重新采集这个页面。": {
+    "en-US": "That captured resource is not in this library any more. Refresh the library or capture the page again.",
+    "es-ES": "Ese recurso capturado ya no esta en esta biblioteca. Actualiza la biblioteca o captura la pagina de nuevo.",
+    "fr-FR": "Cette ressource capturee n'est plus dans cette bibliotheque. Actualisez la bibliotheque ou capturez la page a nouveau.",
+    "de-DE": "Dieses erfasste Material ist nicht mehr in dieser Bibliothek. Aktualisiere die Bibliothek oder erfasse die Seite erneut.",
+    "ja-JP": "この取り込んだ資料は資料庫にありません。資料庫を更新するか、ページを再度取り込んでください。",
+    "ko-KR": "이 캡처한 자료는 더 이상 자료실에 없습니다. 자료실을 새로 고치거나 페이지를 다시 캡처하세요.",
+    "pt-BR": "Esse recurso capturado nao esta mais nesta biblioteca. Atualize a biblioteca ou capture a pagina de novo.",
+  },
 };
 
 /**

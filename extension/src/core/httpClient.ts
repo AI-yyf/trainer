@@ -90,6 +90,15 @@ export class SidecarHttpClient {
     return this.requestJson<T>('PUT', port, path, body, options);
   }
 
+  async deleteJson<T>(
+    port: number,
+    path: string,
+    body?: unknown,
+    options?: SidecarRequestOptions,
+  ): Promise<T> {
+    return this.requestJson<T>('DELETE', port, path, body, options);
+  }
+
   async probeHealth(
     port: number,
     path = SIDECAR_DEFAULTS.healthPath,

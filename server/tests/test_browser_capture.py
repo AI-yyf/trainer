@@ -434,3 +434,327 @@ def test_capture_keeps_web_extraction_failures_out_of_the_library(tmp_path, monk
         summary = client.get("/memory/summary", params={"workspace_id": workspace_id})
         assert summary.status_code == 200, summary.text
         assert summary.json()["memory"]["resources"] == []
+
+
+# --------------------------------------------------------------------------
+# The capture lane is a full ingestion pipeline: normalized-URL dedup, content
+# hashing, idempotency, selection metadata, focus binding and the deep link.
+# --------------------------------------------------------------------------
+
+
+def _pair_browser(client: TestClient, workspace_id: str, code: str = "246813") -> str:
+    session_id = _start_session(client, workspace_id)
+    registered = client.post(
+        "/browser/pair-code",
+        json={"code": code, "expires_in": 600, "session_id": session_id, "workspace_id": workspace_id},
+    )
+    assert registered.status_code == 200, registered.text
+    paired = client.post("/browser/pair", json={"code": code})
+    assert paired.status_code == 200, paired.text
+    return str(paired.json()["credential"])
+
+
+def _capture_body(url: str) -> str:
+    return f"Retry queues drain after the guard run for {url}.\n"
+
+
+def _patch_web_extract(monkeypatch, body_for) -> list[str]:
+    calls: list[str] = []
+
+    def fake_extract(url: str, *, network_enabled: bool = False) -> ExtractedContent:
+        calls.append(url)
+        return ExtractedContent(
+            title="Rotation notes",
+            text=body_for(url),
+            author=None,
+            date=None,
+            url=url,
+        )
+
+    monkeypatch.setattr("app.resources.capture.extract_from_url", fake_extract)
+    return calls
+
+
+def test_capture_persists_a_self_describing_markdown_snapshot(tmp_path, monkeypatch) -> None:
+    workspace_id = "workspace-capture-snapshot"
+    _patch_web_extract(monkeypatch, _capture_body)
+
+    with build_client(tmp_path) as client:
+        token = _pair_browser(client, workspace_id)
+        captured = client.post(
+            "/resources/capture",
+            json={
+                "url": "https://docs.example.com/rotation/",
+                "kind": "web",
+                "selection": "the guard run",
+                "client_capture_id": "snap-1",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert captured.status_code == 200, captured.text
+        payload = captured.json()
+        snapshot = Path(payload["source"]).read_text(encoding="utf-8")
+
+        # Metadata: title, source, capture time, kind and the selection flag.
+        assert snapshot.startswith("---\n")
+        assert "title: Rotation notes" in snapshot
+        assert "source: https://docs.example.com/rotation/" in snapshot
+        assert "capture_kind: web" in snapshot
+        assert "selection: true" in snapshot
+        assert "captured_at:" in snapshot
+        # The captured selection is preserved inside the snapshot.
+        assert "## Captured selection" in snapshot
+        assert "> the guard run" in snapshot
+        # Metadata tags: kind, domain, capture time and the selection flag.
+        assert "capture-selection" in payload["tags"]
+        assert "capture-domain:docs.example.com" in payload["tags"]
+        assert any(tag.startswith("captured-at:") for tag in payload["tags"])
+        assert any(tag.startswith("capture-key:") for tag in payload["tags"])
+        # Capture envelope fields for the extension.
+        assert payload["resource_id"] == payload["id"]
+        assert payload["deduped"] is False
+        assert payload["deep_link"] == (
+            f"vscode://local.trainer-extension/library/{payload['id']}"
+        )
+
+
+def test_repeated_capture_dedupes_by_normalized_url_and_client_id(tmp_path, monkeypatch) -> None:
+    workspace_id = "workspace-capture-dedup"
+    calls = _patch_web_extract(monkeypatch, _capture_body)
+
+    with build_client(tmp_path) as client:
+        token = _pair_browser(client, workspace_id, code="135792")
+        headers = {"Authorization": f"Bearer {token}"}
+        first = client.post(
+            "/resources/capture",
+            json={
+                "url": "https://docs.example.com/rotation/#section",
+                "kind": "web",
+                "client_capture_id": "dedup-1",
+            },
+            headers=headers,
+        )
+        assert first.status_code == 200, first.text
+        resource_id = first.json()["id"]
+
+        # Same client_capture_id: replayed verbatim (no second fetch, no new entry).
+        replayed = client.post(
+            "/resources/capture",
+            json={
+                "url": "https://docs.example.com/rotation/#section",
+                "kind": "web",
+                "client_capture_id": "dedup-1",
+            },
+            headers=headers,
+        )
+        assert replayed.status_code == 200, replayed.text
+        assert replayed.json()["id"] == resource_id
+        assert replayed.json()["deduped"] is True
+
+        # Same URL with tracking parameters / fragment / trailing slash: deduped.
+        duplicate = client.post(
+            "/resources/capture",
+            json={
+                "url": "https://docs.example.com/rotation/?utm_source=newsletter&utm_medium=email",
+                "kind": "web",
+                "client_capture_id": "dedup-2",
+            },
+            headers=headers,
+        )
+        assert duplicate.status_code == 200, duplicate.text
+        assert duplicate.json()["id"] == resource_id
+        assert duplicate.json()["deduped"] is True
+
+        # A different id for the same URL that was already captured by id…
+        assert len(calls) == 1
+
+        summary = client.get("/memory/summary", params={"workspace_id": workspace_id})
+        assert summary.status_code == 200, summary.text
+        assert [item["id"] for item in summary.json()["memory"]["resources"]] == [resource_id]
+
+
+def test_capture_dedupes_identical_content_from_a_different_url(tmp_path, monkeypatch) -> None:
+    """Content identity follows the Library's content-hash mechanism.
+
+    Two mirror URLs serving byte-identical PDFs are the same material: the
+    second capture answers with the existing resource id instead of a copy.
+    """
+
+    workspace_id = "workspace-capture-content-dedup"
+    pdf_body = minimal_pdf(["Mirrored handover checklist marker 8891."])
+
+    def fake_fetch(url: str, **kwargs):
+        return _readonly_response(pdf_body, url, "application/pdf")
+
+    monkeypatch.setattr("app.resources.capture.fetch_url", fake_fetch)
+
+    with build_client(tmp_path) as client:
+        token = _pair_browser(client, workspace_id, code="864209")
+        headers = {"Authorization": f"Bearer {token}"}
+        first = client.post(
+            "/resources/capture",
+            json={
+                "url": "https://mirror-a.example.com/handover.pdf",
+                "kind": "pdf",
+                "client_capture_id": "c-a",
+            },
+            headers=headers,
+        )
+        assert first.status_code == 200, first.text
+
+        second = client.post(
+            "/resources/capture",
+            json={
+                "url": "https://mirror-b.example.com/handover.pdf",
+                "kind": "pdf",
+                "client_capture_id": "c-b",
+            },
+            headers=headers,
+        )
+        assert second.status_code == 200, second.text
+        assert second.json()["deduped"] is True
+        assert second.json()["id"] == first.json()["id"]
+
+
+def test_capture_binds_a_known_learning_focus_and_ignores_an_unknown_one(
+    tmp_path, monkeypatch
+) -> None:
+    from app.core.models import LearningPlan, PlanStage
+
+    workspace_id = "workspace-capture-focus"
+    _patch_web_extract(monkeypatch, lambda url: f"Focus body for {url}.\n")
+
+    with build_client(tmp_path) as client:
+        token = _pair_browser(client, workspace_id, code="975310")
+        headers = {"Authorization": f"Bearer {token}"}
+        runtime = client.app.state.runtime  # type: ignore[attr-defined]
+        runtime.repository.save_plan(
+            workspace_id,
+            LearningPlan(
+                id="plan-focus",
+                title="Focus plan",
+                stages=[
+                    PlanStage(
+                        id="stage-guards",
+                        title="Guard ordering",
+                        goal="Order guards before retries",
+                        outcomes=["one ordered guard"],
+                        status="active",
+                    )
+                ],
+                current_stage_id="stage-guards",
+            ),
+        )
+
+        bound = client.post(
+            "/resources/capture",
+            json={
+                "url": "https://docs.example.com/guards",
+                "kind": "web",
+                "bind_focus_id": "stage-guards",
+                "client_capture_id": "focus-1",
+            },
+            headers=headers,
+        )
+        assert bound.status_code == 200, bound.text
+        assert "focus_binding:bound" in bound.json()["warnings"]
+
+        plan = runtime.repository.get_latest_plan(workspace_id)
+        assert plan is not None
+        assert plan.stages[0].resources == [bound.json()["id"]]
+
+        unknown = client.post(
+            "/resources/capture",
+            json={
+                "url": "https://docs.example.com/other-guards",
+                "kind": "web",
+                "bind_focus_id": "stage-does-not-exist",
+                "client_capture_id": "focus-2",
+            },
+            headers=headers,
+        )
+        assert unknown.status_code == 200, unknown.text
+        assert "focus_binding:focus_not_found" in unknown.json()["warnings"]
+        # The capture itself still landed.
+        assert unknown.json()["index_status"] == "indexed"
+
+
+def test_capture_rejects_a_credential_paired_to_another_workspace(tmp_path, monkeypatch) -> None:
+    workspace_id = "workspace-capture-mismatch"
+    _patch_web_extract(monkeypatch, _capture_body)
+
+    with build_client(tmp_path) as client:
+        token = _pair_browser(client, workspace_id, code="102030")
+        response = client.post(
+            "/resources/capture",
+            json={
+                "url": "https://docs.example.com/mismatch",
+                "kind": "web",
+                "workspace_id": "some-other-workspace",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"]["code"] == "workspace_mismatch"
+
+
+def test_capture_requires_a_valid_credential_when_one_is_presented(tmp_path, monkeypatch) -> None:
+    workspace_id = "workspace-capture-bad-credential"
+    _patch_web_extract(monkeypatch, _capture_body)
+
+    with build_client(tmp_path) as client:
+        _start_session(client, workspace_id)
+        response = client.post(
+            "/resources/capture",
+            json={"url": "https://docs.example.com/x", "kind": "web"},
+            headers={"Authorization": "Bearer revoked-or-made-up"},
+        )
+
+    assert response.status_code == 401, response.text
+    assert response.json()["detail"]["code"] == "invalid_credential"
+
+
+def test_github_capture_can_include_the_docs_listing(tmp_path, monkeypatch) -> None:
+    workspace_id = "workspace-capture-github-docs"
+    repo_url = "https://github.com/example-org/session-tools"
+    readme = "# Session Tools\n\nRotate signing keys before the deploy window.\n"
+    fetched: list[str] = []
+
+    def fake_fetch(url: str, **kwargs):
+        fetched.append(url)
+        if url.endswith("/readme"):
+            payload = json.dumps(
+                {
+                    "name": "README.md",
+                    "path": "README.md",
+                    "encoding": "base64",
+                    "content": base64.b64encode(readme.encode("utf-8")).decode("ascii"),
+                }
+            ).encode("utf-8")
+            return _readonly_response(payload, url, "application/json")
+        listing = json.dumps(
+            [{"path": "docs/keys.md"}, {"path": "docs/rotation.md"}]
+        ).encode("utf-8")
+        return _readonly_response(listing, url, "application/json")
+
+    monkeypatch.setattr("app.resources.capture.fetch_url", fake_fetch)
+
+    with build_client(tmp_path) as client:
+        token = _pair_browser(client, workspace_id, code="556677")
+        response = client.post(
+            "/resources/capture",
+            json={"url": repo_url, "kind": "github_repo", "include_docs": True},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200, response.text
+        snapshot = Path(response.json()["source"]).read_text(encoding="utf-8")
+
+    assert fetched == [
+        "https://api.github.com/repos/example-org/session-tools/readme",
+        "https://api.github.com/repos/example-org/session-tools/contents/docs",
+    ]
+    assert "## Repository docs/ layout" in snapshot
+    assert "- `docs/keys.md`" in snapshot

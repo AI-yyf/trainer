@@ -58,6 +58,12 @@ import {
   uploadResourceCommand,
 } from './resourceCommands';
 import {
+  libraryFoldersListCommand,
+  libraryFoldersCreateCommand,
+  libraryFoldersRenameCommand,
+  libraryFoldersDeleteCommand,
+} from './libraryFolderCommands';
+import {
   createGlobalPlanCommand,
   generatePlanCommand,
   linkCurrentProjectPlanCommand,
@@ -83,6 +89,11 @@ import {
   remoteVerifyCommand,
 } from './remoteVerificationCommands';
 import { restartSidecarCommand, stopSidecarCommand } from './sidecarCommands';
+import {
+  browserCapturePairingCodeCommand,
+  installBrowserCaptureCommand,
+  revokeBrowserCapturePairingCommand,
+} from './browserCaptureCommands';
 import {
   createResearchHandler,
   addResearchThemeHandler,
@@ -276,6 +287,10 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.indexResources, register: (ctx) => indexResourcesCommand(ctx) },
     { commandId: COMMAND_IDS.searchResources, register: (ctx, payload) => searchResourcesCommand(ctx, payload) },
     { commandId: COMMAND_IDS.deleteResource, register: (ctx, payload) => deleteResourceCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.libraryFoldersList, register: (ctx, payload) => libraryFoldersListCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.libraryFoldersCreate, register: (ctx, payload) => libraryFoldersCreateCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.libraryFoldersRename, register: (ctx, payload) => libraryFoldersRenameCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.libraryFoldersDelete, register: (ctx, payload) => libraryFoldersDeleteCommand(ctx, payload) },
     {
       commandId: COMMAND_IDS.confirmResourceOrganization,
       register: (ctx, payload) => confirmResourceOrganizationCommand(ctx, payload),
@@ -446,5 +461,16 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     },
     { commandId: COMMAND_IDS.approveResearchDecision, register: approveResearchDecisionHandler(httpClient, getState) },
     { commandId: COMMAND_IDS.getResearchStatus, register: getResearchStatusHandler(httpClient, getState) },
+    // Browser capture lane: VSIX-bundled extension install, pairing code
+    // issuance, and revocation of the browser-side credential.
+    { commandId: COMMAND_IDS.browserCaptureInstall, register: (ctx) => installBrowserCaptureCommand(ctx) },
+    {
+      commandId: COMMAND_IDS.browserCapturePairingCode,
+      register: (ctx) => browserCapturePairingCodeCommand(ctx),
+    },
+    {
+      commandId: COMMAND_IDS.browserCaptureRevokePairing,
+      register: (ctx) => revokeBrowserCapturePairingCommand(ctx),
+    },
   ];
 }

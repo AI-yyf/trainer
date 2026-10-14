@@ -9,6 +9,7 @@ import {
   clearForeignSidecarBinaries,
   resolveNativeSidecarTarget,
 } from "./bundle-sidecar-binary.mjs";
+import { syncBrowserCaptureExtension } from "./bundle-browser-capture.mjs";
 import {
   assertPackageVerified,
   verifyBundledBinaryManifest,
@@ -101,6 +102,11 @@ export function prepublishVsix({
   // sanitized bundle.
   const sanitizedSymlinks = sanitizePackagedSymlinks({ extensionDir });
   runScript("verify:sidecar-runtime", { extensionDir, env });
+  // The VSIX ships the unpacked browser capture extension so a user can load it
+  // with "Load unpacked" straight from ~/.trainer/browser-capture. Staging runs
+  // before package verification, which asserts the staged tree when this
+  // repository carries browser-extension/ source.
+  const browserCapture = syncBrowserCaptureExtension({ extensionDir, repoRoot, env });
   const packageReport = assertPackageVerified({ extensionDir, repoRoot, env });
   return {
     targetPlatform,
@@ -108,6 +114,7 @@ export function prepublishVsix({
     reusedBinary,
     binaryReport,
     sanitizedSymlinks,
+    browserCapture,
     packageReport,
   };
 }

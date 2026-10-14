@@ -18,7 +18,18 @@ const outputPath = join(repoRoot, 'dist', 'trainer-capture-extension.zip');
 
 // Only shipping-relevant entries are packaged; anything else in the directory
 // (screenshots, scratch files, OS metadata) is deliberately left out.
-const INCLUDE_ROOTS = ['manifest.json', 'background.js', 'shared.js', 'popup', 'icons', 'README.md'];
+// `_locales` carries the manifest-level strings (name/description via
+// __MSG_*__) for all eight supported languages, so it must ship next to the
+// runtime copy map in shared.js.
+const INCLUDE_ROOTS = [
+  'manifest.json',
+  'background.js',
+  'shared.js',
+  'popup',
+  'icons',
+  '_locales',
+  'README.md'
+];
 const EXCLUDED_PATTERNS = [
   /^\.DS_Store$/,
   /^\._/,

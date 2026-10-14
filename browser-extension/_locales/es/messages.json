@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "Captura de Trainer",
+    "description": "Nombre de la extensión en la interfaz del navegador (barra de herramientas, lista de extensiones, tienda)."
+  },
+  "appDescription": {
+    "message": "Añade la página actual, un PDF o un repositorio de GitHub a la biblioteca de Trainer con un clic, o descárgalo en la carpeta del proyecto: emparejamiento sin configuración, cola sin conexión y preguntas al entrenador sobre el texto seleccionado. Canal solo de datos: habla únicamente con el sidecar local de Trainer.",
+    "description": "Descripción que muestra el navegador."
+  }
+}

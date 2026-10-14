@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "Trainer 采集",
+    "description": "浏览器界面中显示的扩展名称（工具栏提示、扩展列表、商店）。"
+  },
+  "appDescription": {
+    "message": "一键把当前网页、PDF 或 GitHub 仓库加入 Trainer 资料库，或下载到项目文件夹：零配置配对、离线队列、划词问教练。纯数据通道，仅与本地 Trainer sidecar 通信。",
+    "description": "浏览器显示的扩展说明。"
+  }
+}

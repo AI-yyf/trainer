@@ -293,6 +293,34 @@
       {
         "command": "trainer.remote.companionState",
         "title": "Trainer: Get Remote Support State"
+      },
+      {
+        "command": "trainer.browserCapture.install",
+        "title": "Trainer: Install Browser Capture Extension"
+      },
+      {
+        "command": "trainer.browserCapture.pairingCode",
+        "title": "Trainer: Show Browser Pairing Code"
+      },
+      {
+        "command": "trainer.browserCapture.revokePairing",
+        "title": "Trainer: Revoke Browser Pairing"
+      },
+      {
+        "command": "trainer.library.folders.list",
+        "title": "Trainer: List Library Folders"
+      },
+      {
+        "command": "trainer.library.folders.create",
+        "title": "Trainer: Create Library Folder"
+      },
+      {
+        "command": "trainer.library.folders.rename",
+        "title": "Trainer: Rename Library Folder"
+      },
+      {
+        "command": "trainer.library.folders.delete",
+        "title": "Trainer: Delete Library Folder (to Trash)"
       }
     ],
     "viewsContainers": {
@@ -342,6 +370,7 @@
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "bundle:sidecar:binary": "node ./scripts/bundle-sidecar-binary.mjs",
+    "bundle:browser-capture": "node ./scripts/bundle-browser-capture.mjs",
     "bundle:sidecar": "node ./scripts/bundle-sidecar.mjs",
     "verify:package": "node ./scripts/verify-package.mjs",
     "verify:sidecar-runtime": "node ./scripts/verify-bundled-sidecar-runtime.mjs",

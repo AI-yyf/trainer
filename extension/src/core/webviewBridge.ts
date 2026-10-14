@@ -215,6 +215,11 @@ export class WorkbenchSidebarController
     });
   }
 
+  /** True while the sidebar webview is visible (drives visibility-gated polling). */
+  isVisible(): boolean {
+    return this.view?.visible === true;
+  }
+
   async show(): Promise<void> {
     await vscode.commands.executeCommand('workbench.view.extension.trainer');
     try {

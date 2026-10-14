@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!--
+    Trainer Capture mark — hand-drawn source for icons/icon16|32|48|128.png.
+
+    Indigo rounded square (#4338CA) with the gold geometric T coach mark
+    (#F59E0B). Flat fills and round caps only: the rasterizer (PyMuPDF/MuPDF)
+    is intentionally not asked for gradients or filters, and the geometry stays
+    legible down to 16px.
+
+    Re-render (from the repo root):
+      server/.venv/bin/python - <<'PY'
+      import pymupdf
+      src = "browser-extension/icons/trainer-capture.svg"
+      for size in (16, 32, 48, 128):
+          page = pymupdf.open(src)[0]
+          zoom = size / max(page.rect.width, page.rect.height)
+          page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=True).save(
+              f"browser-extension/icons/icon{size}.png"
+          )
+      PY
+  -->
+  <rect x="4" y="4" width="120" height="120" rx="30" fill="#4338CA" />
+  <g fill="none" stroke="#F59E0B" stroke-width="15" stroke-linecap="round">
+    <path d="M35 44h58" />
+    <path d="M64 44v40" />
+  </g>
+  <circle cx="64" cy="99" r="5" fill="#F59E0B" />
+</svg>

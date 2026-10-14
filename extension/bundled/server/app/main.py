@@ -17,6 +17,7 @@ from .api.routes.research import build_research_router
 from .api.routes.training_attempts import build_training_attempts_router
 from .api.routes.training_handoff import build_training_handoff_router
 from .api.runtime import TrainerRuntime
+from .browser_bridge import BrowserBridgeService
 from .core.config import Settings
 from .core.event_ledger import EventLedgerService
 from .core.settings import AppSettings
@@ -74,6 +75,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         data_root=data_dir,
     )
     memory_service.set_resource_dedupe_hook(resource_service.dedupe_resources)
+    browser_bridge = BrowserBridgeService(data_dir)
 
     runtime = TrainerRuntime(
         repository=repository,
@@ -96,6 +98,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         ),
         card_router_service=CardRouterService(event_ledger=event_ledger),
         event_ledger=event_ledger,
+        browser_bridge=browser_bridge,
     )
     runtime.hydrate_provider_capability_cache()
     runtime.sandbox_service = SandboxService(
@@ -124,14 +127,42 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     # TR-077 (per-instance auth token): the extension generates a random token
     # per sidecar launch and passes it via TRAINER_SIDECAR_TOKEN; every request
     # must carry it. When unset (manual dev launch), the guard stays open.
+    #
+    # The Trainer Capture browser extension cannot read the per-instance token
+    # (it authenticates with its own pairing credential), so the browser-facing
+    # lane is exempt by path: /browser/pair, /browser/status, the draft queue,
+    # and a Bearer-authenticated /resources/capture. /browser/pair-code stays
+    # inside the trusted boundary — the workbench host registers codes there.
     instance_token = os.getenv("TRAINER_SIDECAR_TOKEN", "").strip()
+    browser_lane_paths = frozenset(
+        {
+            "/browser/pair",
+            "/browser/status",
+            "/browser/coach-draft",
+            "/browser/pending-drafts",
+            "/browser/pending-drafts/ack",
+        }
+    )
+
+    def browser_lane_request(request: Request) -> bool:
+        path = request.url.path.rstrip("/") or "/"
+        if path in browser_lane_paths:
+            return True
+        if path == "/resources/capture":
+            authorization = str(request.headers.get("authorization") or "").strip().lower()
+            return authorization.startswith("bearer ")
+        return False
 
     @app.middleware("http")
     async def instance_token_guard(
         request: Request,
         call_next: RequestResponseEndpoint,
     ) -> Response:
-        if instance_token and request.headers.get("x-trainer-token") != instance_token:
+        if (
+            instance_token
+            and not browser_lane_request(request)
+            and request.headers.get("x-trainer-token") != instance_token
+        ):
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Trainer sidecar requires the per-instance token."},

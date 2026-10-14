@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "Trainer-Erfassung",
+    "description": "Name der Erweiterung in der Browser-Oberfläche (Symbolleiste, Erweiterungsliste, Store)."
+  },
+  "appDescription": {
+    "message": "Die aktuelle Seite, ein PDF oder ein GitHub-Repository mit einem Klick zur Trainer-Bibliothek hinzufügen oder in den Projektordner laden: Kopplung ohne Konfiguration, Offline-Warteschlange und Coach-Fragen zum markierten Text. Ein reiner Datenkanal, der nur mit dem lokalen Trainer-Sidecar spricht.",
+    "description": "Vom Browser angezeigte Beschreibung."
+  }
+}

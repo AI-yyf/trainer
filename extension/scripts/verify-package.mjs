@@ -14,6 +14,7 @@ import {
   SIDECAR_BINARY_MANIFEST_FILE,
   resolveNativeSidecarTarget,
 } from "./bundle-sidecar-binary.mjs";
+import { verifyBrowserCaptureBundle } from "./bundle-browser-capture.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -496,6 +497,10 @@ export function verifyPackage({
     webviewDistDir: path.join(extensionDir, "webview", "dist"),
   });
   const remoteCompanion = verifyRemoteCompanionBundle({ extensionDir });
+  // The capture bundle is staged from repo-root browser-extension/ by the
+  // prepublish chain. It is asserted whenever that source exists, so a package
+  // built from this repository always ships an installable capture extension.
+  const browserCapture = verifyBrowserCaptureBundle({ extensionDir, repoRoot });
   const sidecarParity = verifySidecarBundleParity({ extensionDir, repoRoot });
   const binaryManifest = verifyBundledBinaryManifest({
     extensionDir,
@@ -518,6 +523,7 @@ export function verifyPackage({
     missingRequiredPaths.length === 0 &&
     webviewDist.ok &&
     remoteCompanion.ok &&
+    (browserCapture.ok || !browserCapture.staged) &&
     metadataJunk.length === 0 &&
     sidecarParity.missingBundledFiles.length === 0 &&
     sidecarParity.unexpectedBundledFiles.length === 0 &&
@@ -531,6 +537,7 @@ export function verifyPackage({
     missingRequiredPaths,
     webviewDist,
     remoteCompanion,
+    browserCapture,
     metadataJunk,
     sidecarParity,
     binaryManifest,
@@ -570,6 +577,9 @@ export function formatPackageVerificationErrors(report) {
     lines.push(`- Invalid webview asset reference in ${item.entry}: ${item.reference}`);
   }
   for (const message of report.remoteCompanion?.errors ?? []) {
+    lines.push(`- ${message}`);
+  }
+  for (const message of report.browserCapture?.errors ?? []) {
     lines.push(`- ${message}`);
   }
   for (const item of report.metadataJunk) {

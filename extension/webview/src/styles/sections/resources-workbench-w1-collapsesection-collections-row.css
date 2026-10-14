@@ -132,3 +132,388 @@
   }
 }
 
+
+/* ---------------------------------------------------------------------------
+   Library "add by URL" form + per-resource organize panel.
+   Same token vocabulary as the surrounding library chrome: no hardcoded
+   colors, one visible primary action per surface (add / save), quiet ghosts
+   for the secondary steps.
+--------------------------------------------------------------------------- */
+
+.resources-knowledge__url-import {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+}
+
+.resources-knowledge__url-import-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-3);
+}
+
+.resources-knowledge__url-import-field input,
+.resources-knowledge__url-import-field select {
+  min-height: 26px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-0);
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+}
+
+.resources-knowledge__url-import-field input:focus-visible,
+.resources-knowledge__url-import-field select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.resources-knowledge__url-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.resources-knowledge__url-import-status,
+.resources-knowledge__organize-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.5;
+  color: var(--fg-3);
+}
+
+.resources-knowledge__url-import-status[data-url-import-phase="ok"],
+.resources-knowledge__organize-status[data-organize-phase="ok"],
+.resources-knowledge__organize-status[data-export-phase="ok"] {
+  color: var(--accent);
+}
+
+.resources-knowledge__organize {
+  margin-top: var(--space-2);
+  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  padding-top: var(--space-1);
+}
+
+.resources-knowledge__organize > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-2);
+}
+
+.resources-knowledge__organize-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.resources-knowledge__organize-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-3);
+}
+
+.resources-knowledge__organize-field > span:first-child {
+  flex: 0 0 auto;
+  min-width: 92px;
+}
+
+.resources-knowledge__organize-field input {
+  flex: 1 1 140px;
+  min-height: 26px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-0);
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+}
+
+.resources-knowledge__organize-field input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resources-knowledge__url-import-field input:focus-visible,
+  .resources-knowledge__url-import-field select:focus-visible,
+  .resources-knowledge__organize-field input:focus-visible {
+    outline: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Real library folders + the capture form's download controls.
+   Same token vocabulary as the library chrome: counts ride the existing muted
+   metadata tone, the folder rows stay one roving-free button list (not a
+   second ARIA tree), and write actions stay quiet ghosts.
+--------------------------------------------------------------------------- */
+
+.resources-knowledge__folders {
+  flex: 0 0 auto;
+  margin-top: var(--space-1);
+  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  padding-top: var(--space-1);
+}
+
+.resources-knowledge__folders > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-2);
+}
+
+.resources-knowledge__folders-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.resources-knowledge__folders-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.resources-knowledge__folders-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.5;
+  color: var(--fg-3);
+}
+
+.resources-knowledge__folders-status[data-folders-phase="failed"],
+.resources-knowledge__folders-status[data-folder-mutation-phase="failed"],
+.resources-knowledge__folders-status[data-folder-prompt-phase="failed"] {
+  color: var(--danger);
+}
+
+.resources-knowledge__folders-status[data-folder-mutation-phase="ok"] {
+  color: var(--accent);
+}
+
+.resources-knowledge__folders-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.resources-knowledge__folder-row {
+  display: flex;
+  min-width: 0;
+}
+
+.resources-knowledge__folder-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 24px;
+  padding-right: 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-2);
+  font-size: var(--trainer-font-2xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.resources-knowledge__folder-toggle:hover,
+.resources-knowledge__folder-toggle:focus-visible {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--fg-1);
+}
+
+.resources-knowledge__folder-toggle.is-selected {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--fg-1);
+}
+
+.resources-knowledge__folder-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -1px;
+}
+
+.resources-knowledge__folder-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  flex: 0 0 12px;
+  color: var(--fg-3);
+}
+
+.resources-knowledge__folder-dot {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--fg-3) 60%, transparent);
+}
+
+.resources-knowledge__folder-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resources-knowledge__folder-count {
+  flex: 0 0 auto;
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.resources-knowledge__folder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  padding-top: var(--space-1);
+  border-top: 1px dashed color-mix(in srgb, var(--line) 60%, transparent);
+}
+
+.resources-knowledge__folder-actions-path {
+  flex: 1 1 120px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-3);
+}
+
+.resources-knowledge__folder-delete-action {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--line));
+}
+
+.resources-knowledge__folder-prompt {
+  position: fixed;
+  z-index: 40;
+  left: 50%;
+  bottom: 56px;
+  transform: translateX(-50%);
+  width: min(320px, calc(100% - 24px));
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--bg-0);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--fg-1) 16%, transparent);
+}
+
+.resources-knowledge__folder-prompt-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.resources-knowledge__folder-prompt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-3);
+}
+
+.resources-knowledge__folder-prompt-field input {
+  min-height: 26px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+}
+
+.resources-knowledge__folder-prompt-field input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.resources-knowledge__folder-prompt-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.resources-knowledge__folder-delete-confirmation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--trainer-space-2);
+  color: var(--fg-1);
+  border-top: 1px solid color-mix(in srgb, var(--danger) 34%, var(--line));
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 28%, var(--line));
+  background: color-mix(in srgb, var(--danger) 6%, var(--bg-0));
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.4;
+}
+
+.resources-knowledge__folder-delete-confirmation > span {
+  min-width: 0;
+}
+
+.resources-knowledge__url-import-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-2);
+}
+
+.resources-knowledge__url-import-check input {
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+}
+
+.resources-knowledge__url-import-note {
+  color: var(--fg-3);
+  font-style: normal;
+}
+
+.resources-knowledge__url-import-status .button {
+  flex: 0 0 auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resources-knowledge__folder-toggle:focus-visible,
+  .resources-knowledge__folder-prompt-field input:focus-visible {
+    outline: none;
+  }
+}

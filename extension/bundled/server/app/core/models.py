@@ -775,6 +775,11 @@ class ResourceRecord(BaseModel):
     # TR-059: SHA-256 of the uploaded content, pinned at upload time so
     # evidence records can cite the exact content version they were built on.
     content_hash: str | None = None
+    # Trainer Library bookkeeping: workspace-relative POSIX paths of downloaded
+    # copies of this resource's source (see ``app.resources.library``). Empty
+    # for captures that were never downloaded into a library folder; kept in
+    # sync by library folder renames and trash moves.
+    library_paths: list[str] = Field(default_factory=list)
 
     @computed_field(return_type=ResourceTrustState)
     @property
@@ -784,6 +789,23 @@ class ResourceRecord(BaseModel):
             self.freshness,
             self.quality_flags,
         )
+
+
+class ResourceCaptureResponse(ResourceRecord):
+    """Browser-capture result: the landed resource plus the capture envelope.
+
+    The full resource record stays on the wire (the library, memory summary and
+    evidence lanes all read it), and the three capture-specific fields let the
+    browser extension render "added" vs "already in the library" and offer the
+    deep link back into the workbench without a second request.
+    """
+
+    resource_id: str = ""
+    deduped: bool = False
+    deep_link: str = ""
+    # Workspace-relative path of the downloaded artifact when the capture asked
+    # to save its source into a library folder (``download=true``).
+    saved_path: str | None = None
 
 
 class ResourceTrashItem(BaseModel):
@@ -799,6 +821,31 @@ class ResourceTrashItem(BaseModel):
 class ResourceTrashResponse(BaseModel):
     workspace_id: str
     items: list[ResourceTrashItem] = Field(default_factory=list)
+
+
+class LibraryGroupNode(BaseModel):
+    """One real folder in the Trainer Library group tree.
+
+    ``path`` is relative to the library management root (``Trainer Library``),
+    ``workspace_path`` is relative to the workspace root.
+    """
+
+    path: str
+    name: str
+    workspace_path: str = ""
+    resource_count: int = 0
+    children: list["LibraryGroupNode"] = Field(default_factory=list)
+
+
+class LibraryGroupsResponse(BaseModel):
+    """The real-folder group tree under the library management root."""
+
+    workspace_id: str
+    managed_root: str = ""
+    exists: bool = False
+    trash_root: str = ""
+    total_resource_count: int = 0
+    groups: list[LibraryGroupNode] = Field(default_factory=list)
 
 
 class LocalOwner(BaseModel):
@@ -2966,11 +3013,64 @@ class ResourceCaptureRequest(BaseModel):
     url: str
     kind: Literal["web", "pdf", "github_repo"]
     title: str | None = None
+    # Selection captures still store the full readable body; the excerpt is kept
+    # as capture metadata so the source stays honest after the page changes.
+    selection: str | None = None
+    # Optional learning-focus binding (a plan stage id). An unknown focus is
+    # reported per-field instead of failing the whole capture.
+    bind_focus_id: str | None = None
+    # Client-generated idempotency key: a retry with the same id replays the
+    # original result instead of capturing twice.
+    client_capture_id: str | None = None
+    # GitHub only: also snapshot the repository's docs/ listing.
+    include_docs: bool = False
+    # Task two (Trainer Library folder lane): also download the original
+    # artifact — the PDF bytes for ``kind=pdf`` or the whole repository for
+    # ``kind=github_repo`` — into a real folder inside the workspace.
+    download: bool = False
+    # Workspace-relative target folder for the download; created on demand and
+    # validated against the workspace authority boundary. Defaults to
+    # ``Trainer Library`` under the workspace root.
+    target_dir: str | None = None
 
     @model_validator(mode="after")
     def require_capture_url(self) -> "ResourceCaptureRequest":
         if not self.url.strip():
             raise ValueError("Capture requires a non-empty source URL.")
+        if str(self.target_dir or "").strip() and not self.download:
+            raise ValueError("target_dir requires download=true.")
+        return self
+
+
+class ResourceOrganizeRequest(BaseModel):
+    """User-driven library organization for one already-registered resource.
+
+    The actions reuse the existing resource record structure (name, tags,
+    collection_path/collection_root) — no second organizational model is
+    introduced.
+    """
+
+    session_id: str | None = None
+    workspace_id: str | None = None
+    resource_id: str
+    action: Literal["rename", "set_tags", "set_group"]
+    title: str | None = None
+    tags: list[str] | None = None
+    group: str | None = None
+
+    @model_validator(mode="after")
+    def require_action_payload(self) -> "ResourceOrganizeRequest":
+        if not self.resource_id.strip():
+            raise ValueError("Organize requires a resource_id.")
+        if self.action == "rename" and not str(self.title or "").strip():
+            raise ValueError("rename requires a non-empty title.")
+        if self.action == "set_tags" and self.tags is None:
+            raise ValueError("set_tags requires the tags list (use [] to clear).")
+        if self.action == "set_group":
+            # An empty group clears the grouping (the resource returns to the
+            # library root); None means the caller sent nothing at all.
+            if self.group is None:
+                raise ValueError("set_group requires the group value (use \"\" to clear).")
         return self
 
 

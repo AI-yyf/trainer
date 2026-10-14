@@ -12,6 +12,9 @@ htmlcov/
 extension/dist/
 extension/webview/dist/
 extension/.sidecar-build/
+# Staged browser capture extension copied out of browser-extension/ for VSIX
+# packaging (npm run bundle:browser-capture); a build artifact, never source.
+extension/browser-capture/
 *.tsbuildinfo
 
 # VS Code local test harness

@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "Trainer 캡처",
+    "description": "브라우저 UI(도구 모음, 확장 프로그램 목록, 스토어)에 표시되는 확장 프로그램 이름."
+  },
+  "appDescription": {
+    "message": "현재 페이지, PDF, GitHub 리포지토리를 클릭 한 번으로 Trainer 라이브러리에 추가하거나 프로젝트 폴더로 다운로드합니다. 설정 없는 페어링, 오프라인 대기열, 선택한 텍스트에 대한 코치 질문을 지원합니다. 로컬 Trainer sidecar와만 통신하는 순수 데이터 채널입니다.",
+    "description": "브라우저에 표시되는 설명."
+  }
+}

@@ -1474,6 +1474,63 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         };
       }
 
+      if (message.type === "ui/coachDraftPrefill") {
+        // Browser-capture draft: prefill only, never auto-send, and never
+        // disturb an unrelated status banner (same contract as ui/coachPrompt).
+        const draft = sanitizeVisibleText(message.text).trim();
+        if (!draft) {
+          return {};
+        }
+        return {
+          layout: persistLayout({
+            ...state.layout,
+            activeView: "coach",
+            composerDraft: draft,
+          }),
+        };
+      }
+
+      if (message.type === "ui/openResource") {
+        // Deep link landing point: open Library and focus the resource. A
+        // resource that no longer exists is reported honestly instead of
+        // opening an empty reader.
+        const resourceId = String(message.resourceId ?? "").trim();
+        if (!resourceId) {
+          return {};
+        }
+        const exists = state.data.resources.some((resource) => resource.id === resourceId);
+        if (!exists) {
+          return {
+            ...operationBannerState(
+              {
+                tone: "info",
+                message: appUiCopy(
+                  state.layout.composerLanguage,
+                  "\u8fd9\u6761\u8d44\u6599\u5df2\u4e0d\u5728\u8d44\u6599\u5e93\u4e2d\u3002\u53ef\u4ee5\u5237\u65b0\u8d44\u6599\u5e93\uff0c\u6216\u91cd\u65b0\u91c7\u96c6\u8fd9\u4e2a\u9875\u9762\u3002",
+                ),
+              },
+              "resources",
+            ),
+            layout: persistLayout({
+              ...state.layout,
+              activeView: "resources",
+            }),
+            resourceRestoreContext: undefined,
+          };
+        }
+        return {
+          ...operationBannerState(undefined),
+          resourceRestoreContext: {
+            surface: "detail" as const,
+            resourceId,
+          },
+          layout: persistLayout({
+            ...state.layout,
+            activeView: "resources",
+          }),
+        };
+      }
+
       return {};
     });
     if (versionedState) {

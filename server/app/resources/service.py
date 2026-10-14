@@ -16,6 +16,7 @@ from uuid import uuid4
 
 from ..core.models import (
     ResourceIndexRequest,
+    ResourceOrganizeRequest,
     ResourceTrashItem,
     ResourceUploadRequest,
 )
@@ -493,6 +494,253 @@ class ResourceService:
             chunks=chunks,
         )
         return updated
+
+    # ---------------------------------------------------------------- organize
+
+    MAX_RESOURCE_TAGS = 20
+    MAX_RESOURCE_TAG_CHARS = 40
+    MAX_RESOURCE_TITLE_CHARS = 200
+    _RESERVED_GROUP_SEGMENTS = frozenset(
+        {
+            ".trainer",
+            ".trainer-sandbox",
+            "collections",
+            "groups",
+            "inline-resources",
+            "sandbox",
+            "trainer",
+        }
+    )
+
+    def organize_resource(
+        self,
+        workspace_id: str,
+        request: ResourceOrganizeRequest,
+    ) -> ApiResourceRecord:
+        """Rename, retag or regroup one library resource.
+
+        The three actions only touch the existing resource record structure —
+        ``name``, ``tags`` and the proven ``collection_path``/``collection_root``
+        pair — and never invent a second organizational model. Grouping is a
+        real move inside Trainer's own managed storage; project and sandbox
+        artifacts stay with the existing Coach organize flow.
+        """
+
+        resource = self._require_workspace_resource(workspace_id, request.resource_id)
+        updates: dict[str, Any] = {}
+        if request.action == "rename":
+            updates["name"] = self._normalize_resource_title(request.title)
+        elif request.action == "set_tags":
+            updates["tags"] = self._normalize_resource_tags(request.tags or [])
+        elif request.action == "set_group":
+            group_path, collection_root = self._group_resource_file(
+                workspace_id,
+                resource,
+                request.group or "",
+            )
+            updates["source"] = group_path
+            updates["collection_path"] = self._collection_path_for_group(group_path, collection_root)
+            updates["collection_root"] = collection_root
+        else:  # pragma: no cover - Literal already constrains the action
+            raise ValueError(f"Unsupported organize action: {request.action}")
+
+        updated = resource.model_copy(update=updates)
+        self.repository.save_resource(workspace_id, updated)
+        self._ensure_registry_resource(updated)
+        if updated.index_status == "indexed":
+            chunks = self.registry.list_chunks(updated.id)
+            combined_text = "\n\n".join(
+                chunk.text for chunk in chunks if getattr(chunk, "text", None)
+            )
+            if not combined_text.strip():
+                combined_text = (
+                    self._search_index(workspace_id).document_content(updated.id)
+                    or updated.summary
+                    or updated.name
+                )
+            self._index_search_resource(
+                workspace_id,
+                updated,
+                combined_text=combined_text,
+                chunks=chunks,
+            )
+        return updated
+
+    def _normalize_resource_title(self, value: str | None) -> str:
+        text = " ".join(str(value or "").split())
+        if not text:
+            raise ValueError("A resource title cannot be empty.")
+        if any(ord(character) < 32 for character in text):
+            raise ValueError("A resource title cannot contain control characters.")
+        if len(text) > self.MAX_RESOURCE_TITLE_CHARS:
+            text = text[: self.MAX_RESOURCE_TITLE_CHARS - 1].rstrip() + "…"
+        return text
+
+    def _normalize_resource_tags(self, values: Iterable[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            text = " ".join(str(value or "").split())
+            if not text:
+                continue
+            text = text[: self.MAX_RESOURCE_TAG_CHARS]
+            key = text.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(text)
+            if len(normalized) >= self.MAX_RESOURCE_TAGS:
+                break
+        return normalized
+
+    def _group_resource_file(
+        self,
+        workspace_id: str,
+        resource: ApiResourceRecord,
+        group: str,
+    ) -> tuple[str, str | None]:
+        """Move an owned snapshot into (or out of) a user-named group directory.
+
+        Only Trainer's own managed snapshots move: the file lives under the
+        workspace's inline-resource root, the project-side sandbox mirror (if
+        any) keeps pointing at the same bytes, and imported folder collections
+        keep their structure. Returns the new local file path and the proven
+        collection root (None when the resource returns to the ungrouped root).
+        """
+
+        source_path = self._local_source_path(resource.source)
+        if source_path is None or not source_path.is_file():
+            raise ValueError("Only local library snapshots can be grouped.")
+        inline_root = self._inline_resource_root(workspace_id).resolve(strict=False)
+        resolved_source = source_path.resolve(strict=False)
+        try:
+            relative = resolved_source.relative_to(inline_root)
+        except ValueError as exc:
+            raise PermissionError(
+                "This resource is not in Trainer's managed library storage; use the Coach organize flow for project files."
+            ) from exc
+        if relative.parts and relative.parts[0] == "collections":
+            raise PermissionError(
+                "Imported folder collections keep their structure; group a copy instead."
+            )
+        segments = self._normalize_group_segments(group)
+        target_dir = inline_root
+        if segments:
+            target_dir = inline_root.joinpath("groups", *segments)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = target_dir / resolved_source.name
+        if target_path.resolve(strict=False) == resolved_source:
+            return str(resolved_source), self._existing_collection_root(resource)
+        if target_path.exists():
+            stem = target_path.stem
+            suffix = target_path.suffix
+            target_path = target_dir / f"{stem}-{resource.id.rsplit('-', 1)[-1][:8]}{suffix}"
+        try:
+            resolved_source.replace(target_path)
+        except OSError as exc:
+            raise ValueError(f"The resource file could not be moved: {exc}") from exc
+        if not segments:
+            return str(target_path), None
+        return str(target_path), str(target_dir)
+
+    def _normalize_group_segments(self, group: str) -> list[str]:
+        candidate = str(group or "").strip().replace("\\", "/")
+        candidate = candidate.strip("/")
+        if not candidate:
+            return []
+        parts = [segment.strip() for segment in candidate.split("/")]
+        if any(not segment or segment in {".", ".."} for segment in parts):
+            raise ValueError("A group name cannot contain empty, current or parent segments.")
+        if len(parts) > 3:
+            raise ValueError("A group path may have at most three nested levels.")
+        normalized: list[str] = []
+        for segment in parts:
+            if len(segment) > 60:
+                raise ValueError("Each group segment must be 60 characters or fewer.")
+            if any(ord(character) < 32 for character in segment):
+                raise ValueError("Group names cannot contain control characters.")
+            if segment.casefold() in self._RESERVED_GROUP_SEGMENTS:
+                raise ValueError(f"'{segment}' is reserved for Trainer storage.")
+            normalized.append(segment)
+        return normalized
+
+    @staticmethod
+    def _collection_path_for_group(
+        group_path: str,
+        collection_root: str | None,
+    ) -> str | None:
+        if collection_root is None:
+            return None
+        root = Path(collection_root)
+        return f"{root.name}/{Path(group_path).name}"
+
+    @staticmethod
+    def _existing_collection_root(resource: ApiResourceRecord) -> str | None:
+        root = str(resource.collection_root or "").strip()
+        return root or None
+
+    def export_resource(self, workspace_id: str, resource_id: str) -> dict[str, Any]:
+        """Resolve the bytes that "download/export" hands to the user.
+
+        The library's own snapshot is exported byte-for-byte: managed inline
+        files, sandbox-synced snapshots and versioned local copies qualify.
+        URL-only records without a local snapshot are refused honestly instead
+        of exporting a placeholder.
+        """
+
+        resource = self._require_workspace_resource(workspace_id, resource_id)
+        candidates: list[Path] = []
+        sandbox_path = str(resource.sandbox_path or "").strip()
+        if sandbox_path:
+            candidates.append(Path(sandbox_path))
+        candidates.append(Path(str(resource.source or "")))
+        canonical = str(resource.canonical_source or "").strip()
+        if canonical and "://" not in canonical:
+            candidates.append(Path(canonical))
+        for candidate in candidates:
+            try:
+                if candidate.is_file():
+                    return {
+                        "path": str(candidate),
+                        "filename": self._export_filename(resource, candidate),
+                        "media_type": self._export_media_type(resource, candidate),
+                    }
+            except OSError:
+                continue
+        raise ValueError(
+            "This resource has no local snapshot to export; open the source or re-index it first."
+        )
+
+    @staticmethod
+    def _export_filename(resource: ApiResourceRecord, path: Path) -> str:
+        name = ResourceService._safe_export_name(path.name)
+        if name:
+            return name
+        return ResourceService._safe_export_name(resource.name) or "resource"
+
+    @staticmethod
+    def _safe_export_name(value: str) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        cleaned = "".join(
+            character if (character.isalnum() or character in "._- ") else "-"
+            for character in text
+        ).strip(" .")
+        return cleaned[:120]
+
+    @staticmethod
+    def _export_media_type(resource: ApiResourceRecord, path: Path) -> str:
+        suffix = path.suffix.lower()
+        return {
+            ".pdf": "application/pdf",
+            ".md": "text/markdown",
+            ".markdown": "text/markdown",
+            ".txt": "text/plain",
+            ".json": "application/json",
+            ".html": "text/html",
+            ".htm": "text/html",
+        }.get(suffix, "application/octet-stream")
 
     def search_resources(
         self,
