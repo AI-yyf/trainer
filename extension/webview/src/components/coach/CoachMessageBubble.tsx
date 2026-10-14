@@ -1,6 +1,6 @@
 import { templateCopy } from "../../templates/templateCopy";
 import { CoachReply } from "../../templates/CoachReply";
-import { memo, type ReactNode } from "react";
+import { memo, useState, type ReactNode } from "react";
 
 import { TrainerIconBase } from "../icons/TrainerIconBase";
 
@@ -43,6 +43,7 @@ const GLYPH_RETRY = (
     <path d="M21 3v5h-5" />
   </>
 );
+const GLYPH_NEXT = <path d="M5 12h14" />;
 
 import {
   deriveTrainerToolActivity,
@@ -52,6 +53,7 @@ import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurface
 import type { ComposerLanguage, ConversationMessage } from "../../lib/types";
 import { nextStepRequiresConfirmationFromArtifacts } from "../../lib/nextStepConfirmation";
 import { CoachArtifactBlock, type CoachArtifactBlockData } from "./CoachArtifactBlock";
+import { artifactBlockCopy } from "../../lib/i18n/segments/coachArtifactBlockCopy";
 import { coachMessageBubbleCopy, COACH_MESSAGE_ACTION_LABELS } from "../../lib/i18n/segments/coachMessageBubbleCopy";
 import { CoachMessageParts } from "./CoachMessageParts";
 import { MessageRichContent } from "./MessageRichContent";
@@ -252,11 +254,14 @@ function CoachMessageBubbleImpl({
   const messageHasArtifacts = artifactCount > 0;
 
   const primaryArtifact = message.artifacts?.find((artifact) => Boolean(artifact.recommendedAction));
-  const primaryNextAction = primaryArtifact && onArtifactOpen && !streaming ? (
+  // 弹出式：最新回复的主操作默认隐藏，由图标排末尾的下一步按钮展开——
+  // 展开后动作条出现在消息底部，正好位于输入框上方。
+  const [nextActionRevealed, setNextActionRevealed] = useState(false);
+  const primaryNextAction = primaryArtifact && onArtifactOpen && !streaming && isLatestAssistant ? (
     <CoachArtifactBlock
       artifact={primaryArtifact}
       compact
-      slim={isLatestAssistant}
+      slim
       language={language}
       onOpen={(artifact) => onArtifactOpen(artifact, message)}
     />
@@ -428,7 +433,7 @@ function CoachMessageBubbleImpl({
           </div>
         )
       ) : null}
-        nextAction={primaryNextAction}
+        nextAction={isLatestAssistant ? null : primaryNextAction}
         tools={showAssistantActions ? (
           // Every delivered assistant message carries its shortcuts as small
           // icon buttons pinned to the message's bottom-left: learning-value
@@ -483,13 +488,26 @@ function CoachMessageBubbleImpl({
                   className="message-bubble__icon-action"
                   data-message-quick-action="retry"
                   aria-label={messageActionLabels.retry}
-                    disabled={Boolean(pendingAssistantAction)}
+                  disabled={Boolean(pendingAssistantAction)}
                   onClick={() => onMessageAction?.("retry", message)}
                 >
                   <ActionGlyph glyphs={GLYPH_RETRY} />
                 </button>
               ) : null}
+              {isLatestAssistant && primaryNextAction ? (
+                <button
+                  type="button"
+                  className="message-bubble__icon-action"
+                  data-message-quick-action="next-action"
+                  aria-label={artifactBlockCopy(language, "下一步")}
+                  aria-pressed={nextActionRevealed}
+                  onClick={() => setNextActionRevealed((value) => !value)}
+                >
+                  <ActionGlyph glyphs={GLYPH_NEXT} />
+                </button>
+              ) : null}
             </div>
+            {isLatestAssistant && nextActionRevealed && primaryNextAction ? primaryNextAction : null}
           </div>
         ) : null}
       />
