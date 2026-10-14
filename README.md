@@ -15,7 +15,7 @@ English · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · [Fr
 [![Release](https://img.shields.io/badge/source-v1.3.4-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-8b949e)](#install)
-[![Tests](https://img.shields.io/badge/tests-3%2C328%20cases-F59E0B)](#quality-gates)
+[![Tests](https://img.shields.io/badge/tests-5%2C363%20cases-F59E0B)](#quality-gates)
 [![i18n](https://img.shields.io/badge/i18n-8%20languages-A78BFA)](#i18n--eight-languages)
 
 [Why](#why-trainer-exists) ·
@@ -147,8 +147,9 @@ Flash cards, theory drills, and scenario experiments queue in the Training view:
 **How:**
 - **5-phase state machine** `LEARN → TRY → VERIFY → REFLECT → RETURN`, every transition logged to `phase_history`
 - **Trusted verification source whitelist**: `automated_test` / `evaluator` / `ide_current_file` / `server_evaluator` / `test_runner` / `verification_service` — a "manual claim" can never advance a card
+- **Body-level idempotent persistence**: a resent delivery replays through the reliability ledger instead of double-recording; an interrupted sidecar restart expires orphaned saves honestly — `connection_lost ≠ task_failed`
 - The card UI&apos;s `onSkip` / `onRate` handlers are **`@deprecated Unused`** — the only progression path is `onCardStatusTransition`
-- Key code: `server/app/training/handoff.py:40-47` · `extension/webview/src/components/training/TrainingCardPanel.tsx:78-85`
+- Key code: `server/app/training/handoff.py:40-47` · `server/app/training/reliability.py` · `extension/webview/src/components/training/TrainingCardPanel.tsx:78-85`
 
 ### ④ You Write, Coach Guides
 
@@ -162,7 +163,18 @@ The coach reads your files, checks diagnostics, and searches the workspace — b
 - `PedagogyService` emits a 12-field `ImplementationGuide` every turn — every field is a constraint on what the coach may ask next
 - `ImplementationCoach._current_step` is anchored to "the first failing path" or "the first known entry point" — never "explore the codebase"
 - Affect-driven tone: `AffectService` switches to `concise_rescue` mode after two consecutive failures
-- Key code: `server/app/pedagogy/implementation_coach.py:140-186` · `affect/service.py:142-152`
+- Guided-mode prompts carry two hard requirements: reasoning sentences sit **beside the code they explain**, and full solution blocks are off-limits (per-block ≤ ~10 lines)
+- Key code: `server/app/pedagogy/implementation_coach.py:140-186` · `affect/service.py:142-152` · `server/app/llm/prompts.py` (`_guided_mode_requirements`)
+
+### ⑤ Grounding & Explanation Quality — every reply is measured, not trusted
+
+Every coach turn flows through the `TeachingTurnFacts` contract and a 5-check grounding evaluation: fabricated code symbols, contradictory next steps, unanchored file pointers, missing verification hints — each one is caught before the reply ships, and a next step that isn&apos;t anchored reads as "confirm before acting", never as a fact.
+
+On top of grounding, a **non-gating explanation-quality evaluation** scores five dimensions per reply: does it address the learner, is it in the learner&apos;s language, does it anchor the next step&apos;s symbols, does it avoid dumping full solutions in guided mode, does the reasoning sit next to the code it explains. Inputs that cannot decide a dimension return `unclear` — never a guess.
+
+The 28-case dual-turn acceptance journey runs both evaluations against a real model. Latest run: **56/56 turns passed**; per-dimension data (e.g. reasoning markers present in 20 of 38 code-referencing turns) is in [`docs/maturity/teaching-journeys-report.md`](docs/maturity/2026-10-13-teaching-journeys-report.md).
+
+- Key code: `server/app/llm/turn_grounding.py` (governance) · `server/app/llm/explanation_quality.py` (quality) · `scripts/maturity/real_teaching_journeys_minimax.py` (acceptance harness)
 
 ---
 
@@ -231,7 +243,7 @@ Type `$` in Chat to open a searchable palette with six default entries. Manage c
 | Card progression gated | ❌ | ❌ | ⚠️ manual checkboxes | ✅ enforced verified |
 | Transferable skill promotion | ❌ | ❌ | ❌ | ✅ fail-closed across workspaces |
 | i18n | ⚠️ | ⚠️ | ⚠️ | ✅ 600+ keys × 8 |
-| Test suite | closed source | closed source | closed source | ✅ **3,328 cases** (open) |
+| Test suite | closed source | closed source | closed source | ✅ **5,363 cases** (open) |
 | Refuses to write for you | ❌ | ❌ | n/a | ✅ a philosophical bottom line |
 
 > One-liner: other tools make you write faster; Trainer makes you actually write.
@@ -350,6 +362,10 @@ Plans freeze and unfreeze; sessions survive restarts; card progress lives in SQL
 │                          │                              │    │
 │                          │  ├── ReAct agent loop        │    │
 │                          │  │   (dual-channel stream)   │    │
+│                          │  ├── TeachingTurnFacts       │    │
+│                          │  │   grounding (5 checks)    │    │
+│                          │  ├── Explanation quality     │    │
+│                          │  │   (5 dims, non-gating)    │    │
 │                          │  ├── Pedagogy (12-field guide)│   │
 │                          │  ├── Affect (failures→rescue)│    │
 │                          │  ├── Memory                  │    │
@@ -371,10 +387,10 @@ Plans freeze and unfreeze; sessions survive restarts; card progress lives in SQL
 | Folder | Contents | Size |
 |---|---|---|
 | `extension/src/` | Host: commands, workspace trust, secret storage, sidecar lifecycle | ~30k lines TS |
-| `extension/webview/` | React workbench: 3 destinations / 6 routes + Zustand + 8 languages | ~50k lines TSX |
-| `extension/tests/` | node:test suite (220 files / 1,679 cases) | 73,744 lines |
-| `server/app/` | FastAPI brain: agent / pedagogy / memory / FSRS / training | ~120k lines Python |
-| `server/tests/` | pytest suite (159 files / 1,649 cases) | 106,422 lines |
+| `extension/webview/` | React workbench: 3 destinations / 6 routes, store/selector views (mega views ≤ 25 props), single i18n home | ~87k lines TSX |
+| `extension/tests/` | node:test suite (255 files / 1,979 cases) | 81,628 lines |
+| `server/app/` | FastAPI brain: agent / pedagogy / memory / FSRS / training / grounding / explanation quality | ~138k lines Python |
+| `server/tests/` | pytest suite (200 files / 3,384 cases) | 116,846 lines |
 | `shared/src/` | **Shared pure functions + 24 governance modules** (host + webview + test) | ~3k lines TS |
 | `extension/bundled/` | Sidecar bundled into the VSIX (PyInstaller onedir) | ~250 MB |
 
@@ -428,6 +444,8 @@ Plans freeze and unfreeze; sessions survive restarts; card progress lives in SQL
 - **Delete goes to trash**: no `delete` op, only `move to <root>/.trash/<timestamp-uuid>/`
 - Sandbox previews enforce strict **path governance** — out-of-bounds paths get a flat 422
 - Skill sharing is a **pure-data import** — capped field lengths, built-ins win, **no code path exists**
+- **Training saves are idempotent by key**: a resent delivery replays through the reliability ledger instead of double-recording evidence; orphaned in-flight saves expire honestly at sidecar restart
+- The webview never rewrites host copy — localization is the host&apos;s job (the heuristic rewrite layer was removed)
 
 **Key code:** `server/app/workspace/authority.py:33-962` · `extension/src/provider/providerConfigStore.ts` · `shared/src/skillCatalog.ts:614-764`
 
@@ -439,15 +457,22 @@ Plans freeze and unfreeze; sessions survive restarts; card progress lives in SQL
 
 | Gate | Coverage | Notes |
 |---|---|---|
-| **Server tests** (pytest) | **159 files / 1,649 cases / 106,422 lines** | incl. 6 Hypothesis property-based suites |
-| **Extension tests** (node:test) | **220 files / 1,679 cases / 73,744 lines** | 109 source-guard files + 111 behavior tests |
+| **Server tests** (pytest) | **200 files / 3,384 cases / 116,846 lines** | incl. 6 Hypothesis property-based suites + grounding/quality/reliability suites |
+| **Extension tests** (node:test) | **255 files / 1,979 cases / 81,628 lines** | source guards (copy tables pinned in `lib/i18n/segments`) + behavior tests |
+| **Teaching-loop acceptance** | **28 dual-turn cases × (5 grounding checks + 5 quality dims)** | real model (MiniMax via relay); latest run 56/56 → 55 pass + 1 honest fallback; harness: `scripts/maturity/real_teaching_journeys_minimax.py` |
 | **E2E** | **11 specs / 4,335 lines** | real VS Code instance against a real model |
 | **Experience matrix** | **200 scenarios × 2 layers** | preview fixture + real sidecar |
 | **VSIX host driver** | **33 steps** | install → activate → stream → verify → assert real webview rendering |
-| **Static analysis** | ruff + pyright + tsc | zero warnings |
+| **Static analysis** | ruff + pyright + tsc | zero warnings (server pyright is a deterministic gate: `scripts/run-server-pyright.mjs`) |
+| **Security scan** | plaintext-credential gate | `scripts/verify-no-plaintext-credentials.mjs`, exit-code gated |
+| **UI geometry** | real-box assertions in the browser preview | `scripts/verify-ui-geometry.mjs` |
 | **Protocol matrix** | **5 protocols** | OpenAI Chat / Responses / Anthropic / Gemini / OpenAI-Compatible |
 | **i18n** | **8 languages × 600+ keys** | zh-CN / en-US / es-ES / fr-FR / de-DE / ja-JP / ko-KR / pt-BR |
 | **bundled sidecar** | **6 platform binaries** | win32-x64 / win32-arm64 / darwin-x64 / darwin-arm64 / linux-x64 / linux-arm64 |
+
+**The teaching-loop acceptance runs against a real model:**
+
+> 28 heterogeneous dual-turn cases (real code errors / complex debugging / cross-language transfer / principle teaching / project adaptation / advanced users / long-horizon recovery) drive `/turn` end-to-end through the bundled sidecar; every turn is scored by the grounding evaluation (fabricated symbols, contradictory next steps) and five non-gating explanation-quality dimensions, then a fresh-eyes auditor checks the classifications against raw model output. Latest reports: [`docs/maturity/teaching-journeys-report.md`](docs/maturity/teaching-journeys-report.md) · full history in [`docs/maturity/`](docs/maturity/).
 
 **The E2E suite runs in a real VS Code instance against a real model:**
 
@@ -475,7 +500,9 @@ Each E2E scenario carries `evidence: { realSidecar, limitation }` — **the test
 
 **6 surface-scoped overrides:** `resourceView` / `contextRail` / `trainingUi` / `orientationRail` / `composerAccessibility` / `leftoverHonesty` — translators only fill the surfaces they own, **not the full 600+ key table**.
 
-Key code: `extension/webview/src/lib/i18n/copy.ts` (5,283 lines)
+**Single i18n home:** all copy lives under `extension/webview/src/lib/i18n/` — `copy.ts` (typed CopyKey system), `appUiCopy.ts` (zh-key template system), and 13 `segments/*.ts` per-domain tables. Components carry zero inline copy; source guards pin every table to its segment file.
+
+Key code: `extension/webview/src/lib/i18n/`
 
 ---
 
@@ -598,6 +625,6 @@ If Trainer helped your workflow, feel free to cite it in your blog / paper / tal
 
 **// Train Your AI · Grow With Your AI**
 
-`v1.3.4` · Made with coffee, FSRS, 24 pure functions, 3,328 tests, and a heart that refuses to write code for you.
+`v1.3.4` · Made with coffee, FSRS, 24 pure functions, 5,363 tests, and a heart that refuses to write code for you.
 
 </div>
