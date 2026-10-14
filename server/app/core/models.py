@@ -2953,6 +2953,27 @@ class ResourceIndexRequest(BaseModel):
     enable_network: bool | None = None
 
 
+class ResourceCaptureRequest(BaseModel):
+    """Browser-capture intake: one URL handed over by the Trainer Capture extension.
+
+    The extension stays a pure data channel — it never injects scripts and never
+    sends page bodies. The sidecar performs the controlled fetch and extraction
+    for every kind (see ``app.resources.capture``).
+    """
+
+    session_id: str | None = None
+    workspace_id: str | None = None
+    url: str
+    kind: Literal["web", "pdf", "github_repo"]
+    title: str | None = None
+
+    @model_validator(mode="after")
+    def require_capture_url(self) -> "ResourceCaptureRequest":
+        if not self.url.strip():
+            raise ValueError("Capture requires a non-empty source URL.")
+        return self
+
+
 class ResourceSearchRequest(BaseModel):
     session_id: str | None = None
     workspace_id: str | None = None

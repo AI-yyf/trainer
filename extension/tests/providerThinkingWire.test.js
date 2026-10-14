@@ -1,7 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  classifyProviderThinkingSupport,
   describeProviderThinking,
+  providerThinkingMayEmit,
+  providerThinkingProbeObserved,
   updateProviderThinking,
   thinkingProtocolSupportsWire,
 } = require('../dist/shared/src/providerThinking.js');
@@ -127,4 +130,121 @@ test('wire support covers openai/anthropic/gemini families', () => {
   for (const p of ['openai_responses', 'openai_chat_completions', 'openai_chat_completions_compatible', 'anthropic_messages', 'gemini_generate_content']) {
     assert.equal(thinkingProtocolSupportsWire(p), true, p);
   }
+});
+
+// --- Smart adaptation (P0 model experience) ---------------------------------
+// The protocol-default `capabilities.thinking === false` (and a model entry that
+// mirrors it) is absence of evidence, not a verdict; only probe evidence rules.
+
+test('protocol-default thinking:false stays an unknown verdict, not unsupported', () => {
+  const context = {
+    protocol: 'openai_chat_completions_compatible',
+    model: 'manual-model',
+    profileCapabilities: { thinking: false },
+    modelCapabilities: { thinking: false },
+  };
+  assert.equal(classifyProviderThinkingSupport(context), 'unknown');
+  assert.equal(providerThinkingMayEmit(context), false);
+});
+
+test('probe evidence classifies supported and unsupported verdicts', () => {
+  const verified = {
+    protocol: 'openai_chat_completions_compatible',
+    model: 'manual-model',
+    capabilityEvidence: [{ name: 'thinking', declared: false, observed: true, state: 'verified' }],
+  };
+  assert.equal(classifyProviderThinkingSupport(verified), 'supported');
+  assert.equal(providerThinkingMayEmit(verified), true);
+
+  const rejected = {
+    protocol: 'openai_chat_completions_compatible',
+    model: 'manual-model',
+    capabilityEvidence: [{ name: 'thinking', declared: false, observed: false, state: 'unsupported' }],
+  };
+  assert.equal(classifyProviderThinkingSupport(rejected), 'unsupported');
+  assert.equal(providerThinkingMayEmit(rejected), false);
+});
+
+test('declared model or profile thinking support is a supported verdict', () => {
+  assert.equal(
+    classifyProviderThinkingSupport({
+      protocol: 'openai_responses',
+      model: 'o3',
+      modelCapabilities: { thinking: true },
+    }),
+    'supported',
+  );
+  assert.equal(
+    classifyProviderThinkingSupport({
+      protocol: 'anthropic_messages',
+      model: 'claude-sonnet-4',
+      profileCapabilities: { thinking: true },
+    }),
+    'supported',
+  );
+});
+
+test('unknown model shows nothing until a probe assessed thinking', () => {
+  const unprobed = {
+    protocol: 'openai_chat_completions_compatible',
+    model: 'manual-model',
+  };
+  assert.equal(providerThinkingProbeObserved(unprobed), false);
+  assert.equal(providerThinkingMayEmit(unprobed), false);
+
+  // A probe that assessed thinking but stayed inconclusive ("unverified") still
+  // counts as probed: the user's explicit choice may then reach the wire.
+  const inconclusive = {
+    ...unprobed,
+    capabilityEvidence: [{ name: 'thinking', declared: false, observed: null, state: 'unverified' }],
+  };
+  assert.equal(providerThinkingProbeObserved(inconclusive), true);
+  assert.equal(classifyProviderThinkingSupport(inconclusive), 'unknown');
+  assert.equal(providerThinkingMayEmit(inconclusive), true);
+});
+
+test('probed-unknown model round-trips an explicit strength choice to the wire', () => {
+  const context = {
+    protocol: 'openai_chat_completions_compatible',
+    model: 'deepseek-reasoner',
+    capabilityEvidence: [{ name: 'thinking', declared: false, observed: null, state: 'unverified' }],
+  };
+  const defaults = updateProviderThinking(
+    context,
+    { temperature: 0.2 },
+    { mode: 'enabled', reasoningEffort: 'high' },
+  );
+  assert.equal(defaults.reasoning_effort, 'high');
+  assert.equal(defaults.temperature, 0.2);
+  const descriptor = describeProviderThinking(context, defaults);
+  assert.equal(descriptor.config.mode, 'enabled');
+  assert.equal(descriptor.config.reasoningEffort, 'high');
+});
+
+test('unprobed unknown model still emits nothing (safe default preserved)', () => {
+  const context = {
+    protocol: 'openai_chat_completions_compatible',
+    model: 'manual-model',
+  };
+  const defaults = updateProviderThinking(
+    context,
+    {},
+    { mode: 'enabled', reasoningEffort: 'high' },
+  );
+  assert.equal(defaults.reasoning_effort, undefined);
+  assert.equal(defaults.thinking, undefined);
+});
+
+test('probe-unsupported model refuses the choice even after a probed verdict', () => {
+  const context = {
+    protocol: 'openai_chat_completions_compatible',
+    model: 'manual-model',
+    capabilityEvidence: [{ name: 'thinking', declared: false, observed: false, state: 'unsupported' }],
+  };
+  const defaults = updateProviderThinking(
+    context,
+    {},
+    { mode: 'enabled', reasoningEffort: 'high' },
+  );
+  assert.equal(defaults.reasoning_effort, undefined);
 });

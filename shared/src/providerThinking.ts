@@ -56,6 +56,13 @@ export function normalizeProviderThinkingConfig(
   return normalized;
 }
 
+export interface ProviderThinkingEvidenceEntry {
+  name?: unknown;
+  declared?: unknown;
+  observed?: unknown;
+  state?: unknown;
+}
+
 export interface ProviderThinkingNormalizationContext {
   protocol?: ProviderProtocol | string;
   model?: string;
@@ -71,9 +78,106 @@ export interface ProviderThinkingNormalizationContext {
   profileCapability?: boolean;
   /** Thinking capability observed by a live provider probe. */
   liveEvidence?: boolean;
+  /** Raw capability evidence from the latest connection probe. */
+  capabilityEvidence?: readonly ProviderThinkingEvidenceEntry[];
   /** Compatibility shape for callers carrying a capability object. */
   modelCapabilities?: { thinking?: boolean };
   profileCapabilities?: { thinking?: boolean };
+}
+
+/**
+ * Smart-adaptation verdict for the thinking control (P0 model experience):
+ *
+ * - `supported` — the model is declared or probe-verified to support thinking.
+ *   The control is shown and restores the last choice.
+ * - `unsupported` — a live probe explicitly observed that thinking is rejected
+ *   (`state=unsupported` / `observed=false`). The control is hidden.
+ * - `unknown` — no declaration and no conclusive evidence. The control stays
+ *   hidden until a probe has actually assessed thinking.
+ *
+ * Deliberately NOT `unsupported`: the protocol-default `capabilities.thinking
+ * === false` (e.g. the OpenAI-compatible default) and a model-capability entry
+ * that merely mirrors it (server routes fill `model_capabilities[model]` from
+ * the profile flags, `provider.py:110`). Those are absence of evidence, not a
+ * verdict.
+ */
+export type ProviderThinkingSupport = 'supported' | 'unsupported' | 'unknown';
+
+function thinkingEvidenceEntry(
+  context: ProviderThinkingNormalizationContext,
+): ProviderThinkingEvidenceEntry | undefined {
+  const evidence = context.capabilityEvidence;
+  if (!Array.isArray(evidence)) {
+    return undefined;
+  }
+  return evidence.find(
+    (entry) =>
+      entry &&
+      typeof entry === 'object' &&
+      String(entry.name ?? '').trim().toLowerCase() === 'thinking',
+  );
+}
+
+export function classifyProviderThinkingSupport(
+  context: ProviderThinkingNormalizationContext,
+): ProviderThinkingSupport {
+  const entry = thinkingEvidenceEntry(context);
+  if (entry) {
+    if (entry.state === 'verified' && entry.observed === true) {
+      return 'supported';
+    }
+    if (entry.state === 'unsupported' || entry.observed === false) {
+      return 'unsupported';
+    }
+  }
+  if (
+    context.liveEvidence === true ||
+    context.modelCapability === true ||
+    context.profileCapability === true ||
+    context.supported === true ||
+    context.modelCapabilities?.thinking === true ||
+    context.profileCapabilities?.thinking === true
+  ) {
+    return 'supported';
+  }
+  if (
+    context.modelCapability === false ||
+    context.profileCapability === false ||
+    context.supported === false
+  ) {
+    return 'unsupported';
+  }
+  return 'unknown';
+}
+
+/**
+ * True when a connection probe has actually assessed thinking for this
+ * connection+model (any verdict). "Unknown → 探测过再显示": the control only
+ * appears once a probe has run, so a fresh manual model never silently carries
+ * invented wire fields.
+ */
+export function providerThinkingProbeObserved(
+  context: ProviderThinkingNormalizationContext,
+): boolean {
+  return Boolean(thinkingEvidenceEntry(context));
+}
+
+/**
+ * Whether a thinking config may be written to the wire for this context: a
+ * supported model may always carry it; an unknown model only after a probe
+ * observed its thinking behaviour. An explicitly unsupported model never emits.
+ */
+export function providerThinkingMayEmit(
+  context: ProviderThinkingNormalizationContext,
+): boolean {
+  const support = classifyProviderThinkingSupport(context);
+  if (support === 'unsupported') {
+    return false;
+  }
+  if (support === 'supported') {
+    return true;
+  }
+  return providerThinkingProbeObserved(context);
 }
 
 export interface ProviderThinkingNormalization {
@@ -119,15 +223,6 @@ function positiveBudget(value: unknown): ProviderThinkingBudget | undefined {
 
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
-}
-
-function thinkingSupported(context: ProviderThinkingNormalizationContext): boolean {
-  return context.liveEvidence === true ||
-    context.modelCapability === true ||
-    context.profileCapability === true ||
-    context.modelCapabilities?.thinking === true ||
-    context.profileCapabilities?.thinking === true ||
-    context.supported === true;
 }
 
 function readConfig(input: Record<string, unknown>): { config?: ProviderThinkingConfig; migrated: boolean; invalid: boolean } {
@@ -279,7 +374,7 @@ export function normalizeProviderThinking(
   const minimax = /minimax/i.test(`${context.providerName ?? ''} ${context.baseUrl ?? ''} ${context.model ?? ''}`);
   if (minimax) {
     const requested = parsed.config ?? { mode: 'disabled' as const };
-    const enable = requested.mode === 'enabled' && thinkingSupported(context);
+    const enable = requested.mode === 'enabled' && providerThinkingMayEmit(context);
     const config: ProviderThinkingConfig = { ...requested, mode: enable ? 'enabled' : 'disabled' };
     emitMiniMaxThinking(target, config);
     return {
@@ -300,7 +395,7 @@ export function normalizeProviderThinking(
     };
   }
   if (parsed.invalid || !parsed.config) return { requestDefaults: target, migrated: parsed.migrated, emitted: false, reason: parsed.invalid ? 'invalid' : 'disabled' };
-  if (!thinkingSupported(context)) return { config: parsed.config, requestDefaults: target, migrated: parsed.migrated, emitted: false, reason: 'unknown_model' };
+  if (!providerThinkingMayEmit(context)) return { config: parsed.config, requestDefaults: target, migrated: parsed.migrated, emitted: false, reason: 'unknown_model' };
   // Disabled (and explicit auto) carry no wire fields — report the parsed mode
   // back so descriptors can render the choice instead of falling to 'auto'.
   // An explicit "off" restores its marker so the choice survives normalization.
@@ -397,11 +492,11 @@ export function updateProviderThinking(
   const protocol = normalizeProviderProtocol(context.protocol);
   const minimax = /minimax/i.test(`${context.providerName ?? ''} ${context.baseUrl ?? ''} ${context.model ?? ''}`);
   if (minimax) {
-    const enable = config.mode === 'enabled' && thinkingSupported(context);
+    const enable = config.mode === 'enabled' && providerThinkingMayEmit(context);
     emitMiniMaxThinking(next, { ...config, mode: enable ? 'enabled' : 'disabled' });
     return next;
   }
-  if (!protocol || !thinkingSupported(context)) return next;
+  if (!protocol || !providerThinkingMayEmit(context)) return next;
   if (config.mode === 'auto') return next;
   if (config.mode === 'disabled') {
     applyDisabledThinkingMarker(next, protocol);

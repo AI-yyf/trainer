@@ -6,5 +6,7 @@
 
 export { ActionButton } from "./ActionButton";
 export { TrainerSpinner } from "./TrainerSpinner";
+export { WorkbenchSurfaceButton } from "./WorkbenchSurfaceButton";
 
 export type { ActionButtonProps } from "./ActionButton";
+export type { WorkbenchSurfaceButtonProps } from "./WorkbenchSurfaceButton";

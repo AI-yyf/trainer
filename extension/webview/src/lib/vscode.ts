@@ -30,6 +30,7 @@ declare global {
   interface Window {
     acquireVsCodeApi?: () => VsCodeApi;
     __TRAINER_BOOTSTRAP__?: unknown;
+    __TRAINER_SURFACE__?: string;
     __TRAINER_BROWSER_PREVIEW__?: boolean;
     __TRAINER_PREVIEW_STORAGE_KEY__?: string;
     __TRAINER_PREVIEW_APPLY_HOST_MESSAGE__?: (message: unknown) => void;
@@ -475,6 +476,20 @@ export function requestNativeSkillDraft(description: string): Promise<{
 
 export function inVsCodeWebview(): boolean {
   return Boolean(getVsCodeApi());
+}
+
+/**
+ * Which host surface this bundle instance runs on. The sidebar view is the
+ * default; the host marks the open-in-editor panel (`__TRAINER_SURFACE__`)
+ * so the shell can swap the expand control for a "back to sidebar" control.
+ */
+export function getWorkbenchSurface(): "sidebar" | "editor" {
+  return window.__TRAINER_SURFACE__ === "editor" ? "editor" : "sidebar";
+}
+
+/** Editor-panel surface only: ask the host to collapse back into the sidebar. */
+export function requestCollapseToSidebar(): void {
+  postMessage({ type: "ui/collapseToSidebar" });
 }
 
 function normalizePersistedState(state: PersistedWorkbenchState): PersistedWorkbenchState {

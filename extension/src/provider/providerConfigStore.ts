@@ -1346,6 +1346,7 @@ export class ProviderConfigStore implements vscode.Disposable {
     profileCapabilities?: { thinking?: boolean };
     modelCapabilities?: { thinking?: boolean };
     liveEvidence: boolean;
+    capabilityEvidence?: Array<{ name?: unknown; observed?: unknown; state?: unknown }>;
   } {
     const evidence = this.getLastTestResult(config)?.capabilityEvidence;
     const liveEvidence = Array.isArray(evidence)
@@ -1361,6 +1362,9 @@ export class ProviderConfigStore implements vscode.Disposable {
       profileCapabilities: capabilities,
       modelCapabilities: model ? modelCapabilities?.[model] : undefined,
       liveEvidence,
+      // Raw per-capability evidence drives the unknown→probed smart adaptation:
+      // a probed-but-inconclusive model may still carry the user's explicit choice.
+      capabilityEvidence: Array.isArray(evidence) ? evidence : undefined,
     };
   }
 

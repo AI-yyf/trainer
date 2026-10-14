@@ -22,11 +22,16 @@ export interface AppShellProps {
   historyOpen: boolean;
   onHistory: () => void;
   onNavigate: (view: ActiveWorkbenchView) => void;
+  /**
+   * Surface control supplied by the app: on the editor-panel surface this is
+   * the "back to sidebar" action; the sidebar surface passes nothing.
+   */
+  surfaceControl?: ReactNode;
   children: ReactNode;
 }
 
 /** One identity row, three stable destinations, then the owning surface. */
-export function AppShell({ language, direction, activeView, context, historyOpen, onHistory, onNavigate, children }: AppShellProps) {
+export function AppShell({ language, direction, activeView, context, historyOpen, onHistory, onNavigate, surfaceControl, children }: AppShellProps) {
   const selected = primaryDestinationForRoute(activeView);
   // A workspace literally named "trainer" would read as "Trainer trainer" next
   // to the brand; same name (trimmed, case-insensitive) renders no context.
@@ -47,6 +52,7 @@ export function AppShell({ language, direction, activeView, context, historyOpen
               <SettingsIcon size={16} aria-hidden="true" />
             </button>
           </div>
+          {surfaceControl ? <span className="app-shell-header__surface">{surfaceControl}</span> : null}
         </div>
         <nav className="app-shell-nav" aria-label={NAV_LABEL[language]}>
           {PRIMARY_DESTINATIONS.map((view) => (

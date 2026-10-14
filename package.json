@@ -26,6 +26,7 @@
     "test": "npm run test:extension && npm run test:server",
     "verify": "node ./scripts/verify-workspace.mjs",
     "package:vsix": "npm run package:vsix --prefix extension",
+    "package:browser-extension": "node ./scripts/package-browser-extension.mjs",
     "verify:delivery": "npm run verify && npm run test:experience-matrix && npm run package:vsix",
     "test:remote-ssh-e2e": "node ./scripts/run-remote-ssh-e2e.mjs",
     "perf:probe": "node ./scripts/perf-probe.mjs",

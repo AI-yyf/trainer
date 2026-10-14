@@ -1,0 +1,51 @@
+/* ==========================================================================
+   Workbench surface controls + open-in-editor width behaviour
+   --------------------------------------------------------------------------
+   The same bundle runs in the sidebar view and in the full-width editor
+   panel. This section owns the surface control button and the width rules
+   that only apply on the wide (editor panel) surface. Token-only.
+   ========================================================================== */
+
+.app-shell-header__surface {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.workbench-surface-button {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* The label collapses first on narrow sidebar widths; the icon keeps the
+   control reachable and aria-label/title keeps it understandable. */
+@container trainer (max-width: 400px) {
+  .workbench-surface-button__label {
+    display: none;
+  }
+}
+
+.template-learning-home__header-actions,
+.coach-plan-view__surface-control {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--trainer-space-1);
+}
+
+/* Editor-panel surface: at panel widths the sidebar reading caps no longer
+   apply and the content column uses the full width. */
+@container trainer (min-width: 720px) {
+  .coach-plan-view__leftover-note,
+  .coach-leftover-note,
+  .resources-empty p {
+    max-width: none;
+  }
+
+  .resources-library-hero__root {
+    max-width: min(100%, 72ch);
+  }
+
+  .resources-knowledge__actions {
+    gap: var(--trainer-space-2);
+  }
+}

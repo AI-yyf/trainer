@@ -68,7 +68,7 @@ import {
   PROVIDER_TEMPLATE_GROUP_ORDER,
   PROVIDER_TEMPLATE_LABELS,
 } from "../../../../../shared/src/providerTemplateCatalog";
-import { describeProviderThinking, normalizeProviderThinkingConfig, synthesizeProviderThinkingDescriptor, thinkingProtocolSupportsWire, updateProviderThinking } from "../../../../../shared/src/providerThinking";
+import { classifyProviderThinkingSupport, describeProviderThinking, normalizeProviderThinkingConfig, providerThinkingProbeObserved, synthesizeProviderThinkingDescriptor, thinkingProtocolSupportsWire, updateProviderThinking } from "../../../../../shared/src/providerThinking";
 import type { ProviderThinkingConfig } from "../../../../../shared/src/providerThinking";
 import type { TrainerCapabilityVerdict } from "../../../../../shared/src/capabilityVerdict";
 import {
@@ -2853,11 +2853,15 @@ function CoachSettingsViewSheet({
   const draftRequestDefaults =
     asRecord(providerDraft.requestDefaults) ?? asRecord(provider.requestDefaults) ?? {};
   const draftRequestDefaultsSignature = requestDefaultsKey(draftRequestDefaults);
-  const draftThinkingLiveEvidence = lastTest?.capabilityEvidence?.some((entry) =>
-    entry.name.trim().toLowerCase() === "thinking" &&
-    entry.state === "verified" &&
-    entry.observed === true,
-  ) === true;
+  // Probe evidence is only evidence for the model it actually probed: a draft
+  // that switched models must not inherit the previous model's verdict.
+  const draftThinkingProbeApplies =
+    !lastTest?.model?.trim() ||
+    !providerDraft.model.trim() ||
+    lastTest.model.trim().toLowerCase() === providerDraft.model.trim().toLowerCase();
+  const draftThinkingCapabilityEvidence = draftThinkingProbeApplies
+    ? lastTest?.capabilityEvidence
+    : undefined;
   const draftThinkingModelCapabilities =
     canUseSavedModelMetadata && providerDraft.model.trim()
       ? provider.modelCapabilities?.[providerDraft.model.trim()]
@@ -2867,7 +2871,7 @@ function CoachSettingsViewSheet({
     model: providerDraft.model,
     providerName: providerDraft.name,
     baseUrl: providerDraft.baseUrl,
-    liveEvidence: draftThinkingLiveEvidence,
+    capabilityEvidence: draftThinkingCapabilityEvidence,
     modelCapabilities: draftThinkingModelCapabilities,
     profileCapabilities: provider.capabilities,
   };
@@ -2878,18 +2882,25 @@ function CoachSettingsViewSheet({
     providerDraft.thinkingConfig,
     draftProtocol,
   );
-  const describedThinking = describeProviderThinking(
-    draftThinkingContext,
-    draftRequestDefaults,
-  );
-  const thinkingSupported =
-    draftThinkingLiveEvidence ||
-    draftThinkingModelCapabilities?.thinking === true ||
-    provider.capabilities?.thinking === true;
+  // Smart adaptation: a probe that explicitly observed rejection hides the
+  // control; an unknown model shows it once a probe has assessed thinking; a
+  // declared/verified model always shows it and restores the last choice.
+  const draftThinkingSupport = classifyProviderThinkingSupport(draftThinkingContext);
+  const draftThinkingProbed = providerThinkingProbeObserved(draftThinkingContext);
+  const draftThinkingVisible =
+    thinkingProtocolSupportsWire(draftProtocol) &&
+    draftThinkingSupport !== "unsupported" &&
+    (draftThinkingSupport === "supported" || draftThinkingProbed);
+  const describedThinking = draftThinkingVisible
+    ? describeProviderThinking(draftThinkingContext, draftRequestDefaults)
+    : undefined;
+  const synthesizedThinking = draftThinkingVisible
+    ? synthesizeProviderThinkingDescriptor(draftThinkingContext, draftThinkingConfig ?? { mode: "auto" })
+    : undefined;
   const thinkingDescriptor = describedThinking
     ? { ...describedThinking, config: draftThinkingConfig ?? describedThinking.config }
-    : (thinkingSupported || draftThinkingConfig) && thinkingProtocolSupportsWire(draftProtocol)
-      ? synthesizeProviderThinkingDescriptor(draftThinkingContext, draftThinkingConfig ?? { mode: "auto" })
+    : synthesizedThinking
+      ? { ...synthesizedThinking, config: draftThinkingConfig ?? synthesizedThinking.config }
       : undefined;
   const currentDraftModel = providerDraft.model.trim();
   const currentLiveModel = canUseSavedModelMetadata ? provider.model.trim() : "";

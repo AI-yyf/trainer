@@ -78,7 +78,12 @@ test('extension manifest exposes Trainer as the VS Code-native universal coach',
   assert.equal(manifest.displayName, 'Trainer');
   assert.equal(manifest.description, 'A conversation-first universal learning coach for VS Code.');
   assert.equal(manifest.icon, 'media/trainer-icon.png');
-  assert.equal(manifest.contributes.viewsContainers.activitybar[0].title, 'Trainer');
+  // The sidebar header text is the view container title, and VS Code's sidebar
+  // CSS uppercases it (that is the "TRAINER" seen in screenshots). A single
+  // space is the stable empty expression: VS Code falls back to the literal
+  // "workbench.view.extension.trainer" only for a falsy title, and the
+  // single-view container then renders no header text at all.
+  assert.equal(manifest.contributes.viewsContainers.activitybar[0].title, ' ');
   assert.equal(manifest.contributes.viewsContainers.activitybar[0].icon, 'media/trainer-icon.svg');
   assert.equal(manifest.contributes.views.trainer[0].name, ' ');
   assert.equal(manifest.contributes.configuration.title, 'Trainer');

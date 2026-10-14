@@ -11,6 +11,7 @@ from ...core.models import (
     LibraryAssetLifecycleRequest,
     LibraryAssetLinkRequest,
     LibraryAssetUpsertRequest,
+    ResourceCaptureRequest,
     ResourceDeleteRequest,
     ResourceIndexRequest,
     ResourceRecord,
@@ -24,6 +25,7 @@ from ...resources.asset_library import (
     AssetLibraryError,
     AssetLibraryService,
 )
+from ...resources.capture import CaptureError, capture_source
 from ...workspace.authority import PermissionLevel, WorkspaceAuthority
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
@@ -362,6 +364,90 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             ) from exc
         except (FileNotFoundError, IsADirectoryError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return indexed
+
+    @router.post("/resources/capture", response_model=ResourceRecord)
+    def resource_capture(request: ResourceCaptureRequest) -> ResourceRecord:
+        """Browser-capture intake for the Trainer Capture extension.
+
+        The extension is a pure data channel: it sends one URL, a capture kind
+        and an optional title. The sidecar performs the controlled fetch and
+        extraction (trafilatura for web pages, bounded download for PDFs, the
+        default-branch README for GitHub repos) and lands the result through
+        the same upload/index chain as any other resource, so evidence,
+        sandbox sync and teaching assets stay uniform.
+        """
+
+        workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
+        network_enabled = bool(getattr(runtime.resource_service, "enable_network_fetch", False))
+        try:
+            captured = capture_source(
+                request.kind,
+                request.url,
+                network_enabled=network_enabled,
+                declared_title=request.title,
+            )
+        except CaptureError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail={"code": exc.code, "message": exc.detail},
+            ) from exc
+
+        try:
+            record = runtime.resource_service.upload(
+                workspace_id,
+                captured.as_upload_request(
+                    session_id=request.session_id,
+                    workspace_id=workspace_id,
+                ),
+            )
+        except PermissionError as exc:
+            raise HTTPException(
+                status_code=403,
+                detail="Resource source is outside an authorized workspace or collection.",
+            ) from exc
+        except (FileNotFoundError, IsADirectoryError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        try:
+            indexed = runtime.resource_service.index(
+                workspace_id,
+                ResourceIndexRequest(
+                    session_id=request.session_id,
+                    workspace_id=workspace_id,
+                    resource_id=record.id,
+                    # The capture already materialized the fetched content; the
+                    # index pass must not fetch anything on its own.
+                    enable_network=False,
+                ),
+            )
+            indexed, _ = runtime.postprocess_indexed_resource(workspace_id, indexed)
+        except (
+            KeyError,
+            PermissionError,
+            FileNotFoundError,
+            IsADirectoryError,
+            ValueError,
+        ) as exc:
+            # Keep the capture atomic: a registered-but-unindexed resource
+            # would otherwise linger invisibly in the library.
+            try:
+                runtime.resource_service.delete(
+                    workspace_id,
+                    record.id,
+                    sandbox_service=runtime.sandbox_service,
+                )
+            except Exception:
+                logger.warning(
+                    "Capture rollback failed for resource %s in workspace %s.",
+                    record.id,
+                    workspace_id,
+                    exc_info=True,
+                )
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "index_failed", "message": f"Captured resource could not be indexed: {exc}"},
+            ) from exc
         return indexed
 
     @router.post("/resource/search")

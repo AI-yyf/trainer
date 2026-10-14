@@ -36,6 +36,7 @@ import {
   UploadIcon,
 } from "../icons";
 import { CollapseSection } from "../common/CollapseSection";
+import { WorkbenchSurfaceButton } from "../common/WorkbenchSurfaceButton";
 import { MessageRichContent } from "../coach/MessageRichContent";
 
 import {
@@ -102,6 +103,12 @@ export interface ResourcesWorkbenchViewProps {
     onConfirm: () => void;
     onCancel: () => void;
   };
+  /**
+   * Host surface control: when provided (and the host can open editor tabs),
+   * the library toolbar renders the "open full width in an editor tab" button.
+   */
+  onExpandToEditor?: () => void;
+  expandToEditorLabel?: string;
 }
 
 export interface ResourceRestoreContext {
@@ -1293,6 +1300,8 @@ export function ResourcesWorkbenchView({
   onJoinLearning,
   onDebugVisibleFacts,
   organizationConfirm,
+  onExpandToEditor,
+  expandToEditorLabel,
 }: ResourcesWorkbenchViewProps) {
   const { t } = useTranslation();
   const treeRef = useRef<HTMLDivElement>(null);
@@ -2119,6 +2128,13 @@ export function ResourcesWorkbenchView({
         </label>
 
         <div className="resources-knowledge__actions" aria-label={localize(language, "title")}>
+          {onExpandToEditor && expandToEditorLabel ? (
+            <WorkbenchSurfaceButton
+              mode="expand"
+              label={expandToEditorLabel}
+              onClick={onExpandToEditor}
+            />
+          ) : null}
           <div className="resources-knowledge__import-menu-wrap">
             <button
               ref={importMenuTriggerRef}

@@ -29,6 +29,7 @@ import {
   trainingRestoreOrchestrationCommand,
 } from './memoryCommands';
 import { openWorkbenchCommand } from './openWorkbench';
+import { openViewInEditorCommand } from './viewLayoutCommands';
 import { generateSkillDraftCommand } from './skillCommands';
 import { openCoachScenarioCommand } from './coachScenarioCommands';
 import {
@@ -155,6 +156,10 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
 
   return [
     { commandId: COMMAND_IDS.openWorkbench, register: (ctx) => openWorkbenchCommand(ctx) },
+    {
+      commandId: COMMAND_IDS.openViewInEditor,
+      register: (ctx, payload) => openViewInEditorCommand(ctx, payload),
+    },
     { commandId: COMMAND_IDS.configureProvider, register: (ctx) => configureProviderCommand(ctx) },
     { commandId: COMMAND_IDS.saveProvider, register: (ctx, payload) => saveProviderFromWebviewCommand(ctx, payload) },
     { commandId: COMMAND_IDS.providerSpeedTest, register: (ctx, payload) => providerSpeedTestCommand(ctx, payload) },

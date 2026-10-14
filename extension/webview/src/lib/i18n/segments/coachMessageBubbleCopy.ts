@@ -62,6 +62,12 @@ export function coachMessageBubbleCopy(language: ComposerLanguage, key: string):
   return COACH_MESSAGE_BUBBLE_TEXT[key]?.[language] ?? key;
 }
 
+/**
+ * The five quick-action icon labels stay a single source of truth: the bubble
+ * uses them for `aria-label` and for the `data-action-label` attribute that the
+ * CSS hover/focus label renders (`.message-bubble__icon-action::after`) — no
+ * native title tooltip, and no second label dictionary.
+ */
 export const COACH_MESSAGE_ACTION_LABELS: Record<
   ComposerLanguage,
   Record<CoachMessageAction, string>

@@ -14,6 +14,8 @@ export interface ProviderRequestDefaultsIdentity {
   modelCapabilities?: { thinking?: boolean };
   /** Thinking capability observed by the stored live probe result. */
   liveEvidence?: boolean;
+  /** Raw capability evidence from the stored probe result. */
+  capabilityEvidence?: readonly { name?: unknown; observed?: unknown; state?: unknown }[];
 }
 
 const MINIMAX_PROVIDER_REQUEST_DEFAULTS: Record<string, unknown> = {
@@ -73,6 +75,7 @@ export function normalizeProviderRequestDefaults(
     knownModels: identity.knownModels,
     supported: identity.thinkingSupported,
     liveEvidence: identity.liveEvidence,
+    capabilityEvidence: identity.capabilityEvidence,
     modelCapabilities: identity.modelCapabilities,
     profileCapabilities: identity.capabilities,
   });

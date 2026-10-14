@@ -273,6 +273,19 @@ test('runtime rehydration restores durable Trash with the sovereign workspace be
       },
     },
     sidecarClient: {
+      async postJson(port, requestPath, body) {
+        requests.push({ port, requestPath, body });
+        // Reload restore: a persisted session id is re-verified with the server
+        // before rehydration continues (root-cause fix for "恢复不了").
+        return {
+          session_id: body?.session_id ?? 'stale-session',
+          workspace_id: workspaceRoot,
+          snapshot: {
+            context_id: workspaceRoot,
+            memory: { workspace: { workspace_id: workspaceRoot } },
+          },
+        };
+      },
       async getJson(port, requestPath) {
         requests.push({ port, requestPath });
         if (requestPath.startsWith('/resource/trash')) {
@@ -305,6 +318,11 @@ test('runtime rehydration restores durable Trash with the sovereign workspace be
   await rehydrateWorkbenchRuntime(context);
 
   assert.deepEqual(requests, [
+    {
+      port: 34891,
+      requestPath: '/session/activate',
+      body: { session_id: 'stale-session', workspace_id: workspaceRoot },
+    },
     {
       port: 34891,
       requestPath: '/memory/summary?workspace_id=F%3A%5Ctrainer%5Cworkspace-a&session_id=stale-session',
@@ -486,6 +504,15 @@ test('a workspace change waits out an older rehydration and hydrates the new wor
       async setManagedDataRootScope() {},
     },
     sidecarClient: {
+      async postJson(port, requestPath, body) {
+        requests.push({ port, requestPath, body });
+        // Stored-session verification: return the requested session so the
+        // first rehydration keeps its id while its memory/trash reads pend.
+        return {
+          session_id: body?.session_id,
+          snapshot: { memory: { workspace: {} } },
+        };
+      },
       async getJson(port, requestPath) {
         requests.push({ port, requestPath });
         if (requestPath.includes(encodeURIComponent(workspaceA))) {
@@ -558,8 +585,10 @@ test('a workspace change waits out an older rehydration and hydrates the new wor
   assert.deepEqual(
     requests.map(({ requestPath }) => requestPath),
     [
+      '/session/activate',
       `/memory/summary?workspace_id=${encodeURIComponent(workspaceA)}&session_id=session-a`,
       `/resource/trash?workspace_id=${encodeURIComponent(workspaceA)}`,
+      '/session/activate',
       `/memory/summary?workspace_id=${encodeURIComponent(workspaceB)}&session_id=session-b`,
       `/resource/trash?workspace_id=${encodeURIComponent(workspaceB)}`,
     ],

@@ -4539,8 +4539,15 @@ async def _handle_coach_finalize(context: ToolContext, args: dict[str, Any]) -> 
 # ---------------------------------------------------------------------------
 
 
-def build_default_tool_registry() -> ToolRegistry:
-    """Return the default registry used by Trainer's coach agent loop."""
+def build_default_tool_registry(
+    extra_tools: Iterable[ToolDefinition] | None = None,
+) -> ToolRegistry:
+    """Return the default registry used by Trainer's coach agent loop.
+
+    ``extra_tools`` carries dynamically discovered tools (currently MCP
+    servers, registered as ``mcp_<server>_<tool>``). They use the same
+    ToolDefinition / authority path as built-ins.
+    """
     registry = ToolRegistry()
 
     registry.register(
@@ -5311,6 +5318,12 @@ def build_default_tool_registry() -> ToolRegistry:
             handler=_handle_coach_finalize,
         )
     )
+
+    for extra_tool in extra_tools or ():
+        if registry.get(extra_tool.name) is not None:
+            logger.warning("extra_tool_name_collision", extra={"tool": extra_tool.name})
+            continue
+        registry.register(extra_tool)
 
     return registry
 

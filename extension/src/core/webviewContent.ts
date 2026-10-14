@@ -6,15 +6,21 @@ import * as vscode from 'vscode';
 import type { TrainerHostState } from './types';
 import { toBootstrapPayload } from './workbenchData';
 
+export type WorkbenchWebviewSurface = 'sidebar' | 'editor';
+
 export async function buildWorkbenchHtml(
   extensionContext: vscode.ExtensionContext,
   webview: vscode.Webview,
   state: TrainerHostState,
+  options?: { surface?: WorkbenchWebviewSurface },
 ): Promise<string> {
   const distDir = path.join(extensionContext.extensionPath, 'webview', 'dist');
   const htmlPath = path.join(distDir, 'index.html');
   const nonce = createNonce();
   const bootstrap = JSON.stringify(toBootstrapPayload(state)).replace(/</g, '\\u003c');
+  // The webview adapts surface controls (expand vs. collapse) from this flag;
+  // it is not state, so it stays out of the ACK-governed bootstrap payload.
+  const surface: WorkbenchWebviewSurface = options?.surface ?? 'sidebar';
 
   if (await exists(htmlPath)) {
     let html = await fs.readFile(htmlPath, 'utf8');
@@ -154,6 +160,7 @@ export async function buildWorkbenchHtml(
       `<body$1>
     <script nonce="${nonce}">
       window.__TRAINER_BOOTSTRAP__ = ${bootstrap};
+      window.__TRAINER_SURFACE__ = "${surface}";
       window.__TRAINER_WEBVIEW_READY__ = true;
     </script>`,
     );

@@ -232,6 +232,7 @@ from ._singleflight import (
 )
 from .routes._deps import RouterDeps
 from .routes.learning import build_learning_router
+from .routes.mcp import build_mcp_router
 from .routes.memory import build_memory_router
 from .routes.plan import build_plan_router
 from .routes.provider import build_provider_router
@@ -25830,5 +25831,6 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     router.include_router(build_provider_router(runtime, deps))
     router.include_router(build_sandbox_router(runtime, deps))
     router.include_router(build_plan_router(runtime, deps))
+    router.include_router(build_mcp_router(runtime, deps))
 
     return router

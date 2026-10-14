@@ -55,8 +55,10 @@
   margin-top: var(--space-1);
 }
 
-/* Grounding downgrade note on a next-step card (DESIGN.md §2.5): keep the
-   fact visible on the card itself, warning-toned, above the action. */
+/* Grounding downgrade note on a next-step card (DESIGN.md §2.5): the note stays
+   visible on the card, warning-toned, above the action. The badge itself rides
+   the action surface (slim bar / compact next action) so one downgrade never
+   renders its marker twice — allocation lives in resolveNextStepConfirmationOwner. */
 .artifact-card__confirm-note {
   display: flex;
   align-items: baseline;
@@ -71,15 +73,23 @@
   color: var(--fg-1);
 }
 
-.artifact-card__confirm-mark {
+/* The same badge on either action surface: the slim bar (latest reply's
+   revealed next action) and the compact NextAction detail. */
+.artifact-next-confirm {
   display: inline-flex;
   align-items: center;
+  margin-inline-start: 4px;
   padding: 1px var(--space-2);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--warning) 14%, var(--bg-1));
+  border: 1px solid color-mix(in srgb, var(--warning) 42%, var(--line));
   color: var(--warning);
   font-size: var(--trainer-font-3xs);
   white-space: nowrap;
+}
+
+.artifact-next-slim .artifact-next-confirm {
+  margin-inline-start: 0;
 }
 
 .artifact-card__next-action {

@@ -12,14 +12,16 @@ export interface LearningHomeProps {
   route?: { label: string; content: ReactNode };
   growth?: { label: string; content: ReactNode };
   evidence?: { label: string; content: ReactNode };
+  /** Optional surface control rendered in the header (e.g. open full width). */
+  headerActions?: ReactNode;
   children?: ReactNode;
 }
 
 /** Current learning precedes review, route, growth and evidence disclosures. */
-export function LearningHome({ currentLabel, title, stage, next, nextTools, state, review, route, growth, evidence, children }: LearningHomeProps) {
+export function LearningHome({ currentLabel, title, stage, next, nextTools, state, review, route, growth, evidence, headerActions, children }: LearningHomeProps) {
   return (
     <section className="template-learning-home" data-template="LearningHome" data-plan-primary="true">
-      <header><p className="template-metadata">{currentLabel}</p><h2>{title}</h2>{stage ? <p className="template-metadata">{stage}</p> : null}</header>
+      <header><p className="template-metadata">{currentLabel}</p><h2>{title}</h2>{stage ? <p className="template-metadata">{stage}</p> : null}{headerActions ? <div className="template-learning-home__header-actions">{headerActions}</div> : null}</header>
       {state}
       <NextAction {...next} />
       {nextTools}

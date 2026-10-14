@@ -51,7 +51,11 @@ import {
 } from "../../../../../shared/src/protocol";
 import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
 import type { ComposerLanguage, ConversationMessage } from "../../lib/types";
-import { nextStepRequiresConfirmationFromArtifacts } from "../../lib/nextStepConfirmation";
+import {
+  nextStepRequiresConfirmationFromArtifacts,
+  resolveNextStepConfirmationOwner,
+  statusNextStepPartIndex,
+} from "../../lib/nextStepConfirmation";
 import { CoachArtifactBlock, type CoachArtifactBlockData } from "./CoachArtifactBlock";
 import { artifactBlockCopy } from "../../lib/i18n/segments/coachArtifactBlockCopy";
 import { coachMessageBubbleCopy, COACH_MESSAGE_ACTION_LABELS } from "../../lib/i18n/segments/coachMessageBubbleCopy";
@@ -252,8 +256,28 @@ function CoachMessageBubbleImpl({
   const supportDetails = supportDetailLines(message, language);
   const detailBlocks: ReactNode[] = [];
   const messageHasArtifacts = artifactCount > 0;
+  const visibleBody = message.body;
+  const hasBody = visibleBody.trim().length > 0;
 
   const primaryArtifact = message.artifacts?.find((artifact) => Boolean(artifact.recommendedAction));
+  const visibleParts =
+    message.role === "assistant" && message.parts?.length
+      ? message.parts.filter((part) => !HIDDEN_ASSISTANT_PART_TYPES.has(part.type) &&
+          !(hasBody && ["training_card", "plan_update", "test_result"].includes(part.type)))
+      : message.parts;
+  // Grounding downgrade (DESIGN.md §2.5) stays honest but stops repeating: the
+  // message renders its "confirm before acting" marker exactly once, owned by
+  // the first surface that presents the next step — the visible-status
+  // next-step line, or the next-step artifact's action surface when no such
+  // line exists (`resolveNextStepConfirmationOwner`).
+  const turnRequiresConfirmation =
+    nextStepRequiresConfirmation || nextStepRequiresConfirmationFromArtifacts(message.artifacts);
+  const confirmationOwner = resolveNextStepConfirmationOwner({
+    requiresConfirmation: turnRequiresConfirmation,
+    hasStatusNextStep: statusNextStepPartIndex(visibleParts) >= 0,
+    hasArtifactNextStep: Boolean(primaryArtifact),
+  });
+  const artifactOwnsConfirmation = confirmationOwner === "artifact";
   // 弹出式：最新回复的主操作默认隐藏，由图标排末尾的下一步按钮展开——
   // 展开后动作条出现在消息底部，正好位于输入框上方。
   const [nextActionRevealed, setNextActionRevealed] = useState(false);
@@ -263,6 +287,7 @@ function CoachMessageBubbleImpl({
       compact
       slim
       language={language}
+      nextStepConfirmation={artifactOwnsConfirmation}
       onOpen={(artifact) => onArtifactOpen(artifact, message)}
     />
   ) : null;
@@ -272,7 +297,14 @@ function CoachMessageBubbleImpl({
         <summary>{templateCopy[language].evidence}</summary>
         <div className="message-bubble__artifacts">
           {message.artifacts.map((artifact, index) => (
-            <CoachArtifactBlock key={`${artifact.kind}:${index}`} artifact={artifact} language={language} openLabel={openArtifactLabel} onOpen={onArtifactOpen ? (current) => onArtifactOpen(current, message) : undefined} />
+            <CoachArtifactBlock
+              key={`${artifact.kind}:${index}`}
+              artifact={artifact}
+              language={language}
+              openLabel={openArtifactLabel}
+              nextStepConfirmation={artifactOwnsConfirmation && artifact === primaryArtifact}
+              onOpen={onArtifactOpen ? (current) => onArtifactOpen(current, message) : undefined}
+            />
           ))}
         </div>
       </details>,
@@ -302,8 +334,6 @@ function CoachMessageBubbleImpl({
   // the body plus the lane hairline styled in the conversation CSS.
   const showUserMeta = false;
   const showAssistantRail = message.role === "assistant";
-  const visibleBody = message.body;
-  const hasBody = visibleBody.trim().length > 0;
   const pendingAssistantAction = pendingMessageAction?.startsWith(`${message.id}:`)
     ? (pendingMessageAction.slice(message.id.length + 1) as CoachMessageAction)
     : null;
@@ -315,11 +345,6 @@ function CoachMessageBubbleImpl({
   const messageActionLabels = COACH_MESSAGE_ACTION_LABELS[language] ?? COACH_MESSAGE_ACTION_LABELS["en-US"];
   const shouldShowUserContextInline =
     message.role === "user" && !messageHasArtifacts && supportDetails.length === 1 && attachmentCount <= 1;
-  const visibleParts =
-    message.role === "assistant" && message.parts?.length
-      ? message.parts.filter((part) => !HIDDEN_ASSISTANT_PART_TYPES.has(part.type) &&
-          !(hasBody && ["training_card", "plan_update", "test_result"].includes(part.type)))
-      : message.parts;
   const hasParts = (visibleParts?.length ?? 0) > 0;
   const hasRunningActivities =
     message.role === "assistant" &&
@@ -398,10 +423,7 @@ function CoachMessageBubbleImpl({
           <CoachMessageParts
             parts={visibleParts ?? []}
             language={language}
-            nextStepRequiresConfirmation={
-              nextStepRequiresConfirmation ||
-              nextStepRequiresConfirmationFromArtifacts(message.artifacts)
-            }
+            nextStepRequiresConfirmation={confirmationOwner === "status-line"}
           />
         ) : null}
         {children}
@@ -440,12 +462,17 @@ function CoachMessageBubbleImpl({
           // actions first (training card / save to library), then the
           // utilities (copy / share), then regenerate on the latest reply
           // only. No overflow menu — nothing hides behind "···".
+          // Each icon feeds `data-action-label` for its CSS hover/focus label
+          // (`.message-bubble__icon-action::after`); the native title tooltip
+          // stays removed on purpose (37ca124) and the label text comes from
+          // the same eight-language COACH_MESSAGE_ACTION_LABELS map.
           <div className="message-bubble__tools">
             <div className="message-bubble__quick-tools" role="group" aria-label={coachMessageBubbleCopy(language, "这条回复的快捷操作")}>
               <button
                 type="button"
                 className="message-bubble__icon-action"
                 data-message-quick-action="copy"
+                data-action-label={messageActionLabels.copy}
                 aria-label={messageActionLabels.copy}
                 disabled={Boolean(pendingAssistantAction)}
                 onClick={() => onMessageAction?.("copy", message)}
@@ -456,6 +483,7 @@ function CoachMessageBubbleImpl({
                 type="button"
                 className="message-bubble__icon-action"
                 data-message-quick-action="share"
+                data-action-label={messageActionLabels.share}
                 aria-label={messageActionLabels.share}
                 disabled={Boolean(pendingAssistantAction)}
                 onClick={() => onMessageAction?.("share", message)}
@@ -466,6 +494,7 @@ function CoachMessageBubbleImpl({
                 type="button"
                 className="message-bubble__icon-action"
                 data-message-quick-action="save-resource"
+                data-action-label={messageActionLabels["save-resource"]}
                 aria-label={messageActionLabels["save-resource"]}
                 disabled={Boolean(pendingAssistantAction)}
                 onClick={() => onMessageAction?.("save-resource", message)}
@@ -476,6 +505,7 @@ function CoachMessageBubbleImpl({
                 type="button"
                 className="message-bubble__icon-action"
                 data-message-quick-action="training-card"
+                data-action-label={messageActionLabels["training-card"]}
                 aria-label={messageActionLabels["training-card"]}
                 disabled={Boolean(pendingAssistantAction)}
                 onClick={() => onMessageAction?.("training-card", message)}
@@ -487,6 +517,7 @@ function CoachMessageBubbleImpl({
                   type="button"
                   className="message-bubble__icon-action"
                   data-message-quick-action="retry"
+                  data-action-label={messageActionLabels.retry}
                   aria-label={messageActionLabels.retry}
                   disabled={Boolean(pendingAssistantAction)}
                   onClick={() => onMessageAction?.("retry", message)}
@@ -499,6 +530,7 @@ function CoachMessageBubbleImpl({
                   type="button"
                   className="message-bubble__icon-action"
                   data-message-quick-action="next-action"
+                  data-action-label={artifactBlockCopy(language, "下一步")}
                   aria-label={artifactBlockCopy(language, "下一步")}
                   aria-pressed={nextActionRevealed}
                   onClick={() => setNextActionRevealed((value) => !value)}

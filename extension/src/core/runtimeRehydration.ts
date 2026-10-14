@@ -6,7 +6,7 @@ import { recordProviderRestoreMs, recordRuntimeRehydration } from './runtimeMetr
 import type { CommandContext } from './commandContext';
 import type { SidecarStatus } from './types';
 import { flushPendingTransferPromotionScope } from './transferPromotionScope';
-import { mapResourceTrash, mergeMemorySummarySnapshot, mergeSessionStartSnapshot } from './workbenchData';
+import { mapResourceTrash, mergeMemorySummary, mergeMemorySummarySnapshot, mergeSessionStartSnapshot } from './workbenchData';
 import { describeProviderSendState } from '../../../shared/src/providerStatus';
 import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
 import { buildWorkspaceFileSnapshot } from './workspaceFileSnapshot';
@@ -33,6 +33,34 @@ const inflightRuntimeRehydrations = new WeakMap<
     promise: Promise<SidecarStatus>;
   }
 >();
+
+// Session ids the server issued to this runtime (project admission
+// provisioning, a session started here, a restored stored session). Such an id
+// is a fact, not a stored claim: re-verifying it through /session/activate
+// spends a redundant round trip on every later rehydration — and inside the
+// explicit-admission flow that request is not part of the setup the window
+// unlocks, so it must not be sent there at all.
+const serverIssuedSessionIds = new WeakMap<CommandContext, Set<string>>();
+
+/** Remember a session id the server handed to this runtime (see above). */
+export function rememberServerIssuedSession(
+  context: CommandContext,
+  sessionId: string | undefined,
+): void {
+  if (!sessionId) {
+    return;
+  }
+  const issued = serverIssuedSessionIds.get(context);
+  if (issued) {
+    issued.add(sessionId);
+    return;
+  }
+  serverIssuedSessionIds.set(context, new Set([sessionId]));
+}
+
+function sessionIssuedInRuntime(context: CommandContext, sessionId: string): boolean {
+  return serverIssuedSessionIds.get(context)?.has(sessionId) === true;
+}
 
 type RuntimeCopy = {
   rootMissing: string;
@@ -279,10 +307,6 @@ export async function ensureInitialSession(
   }
 
   const existingSessionId = context.getSessionId();
-  if (existingSessionId) {
-    return existingSessionId;
-  }
-
   const activeInitialization = inflightSessionInitializers.get(context);
   if (activeInitialization) {
     return activeInitialization;
@@ -295,6 +319,31 @@ export async function ensureInitialSession(
 
     const runtimeWorkspace = getRuntimeWorkspaceContext(context);
     const workspaceIdAtStart = runtimeWorkspace.workspaceId;
+
+    // Reload restore: a persisted session id is a claim, not a fact. Re-verify
+    // it with the server (activate restores the stored transcript) so a stale
+    // id — data root moved, project re-added, database replaced — cannot keep
+    // a dangling session that silently discards history on the next turn:
+    // the server's ensure_session() would start a brand-new empty session for
+    // an unknown id. When the stored id cannot be restored, fall through to
+    // /session/start, which resumes the workspace's latest thread and hands
+    // back the session id actually in use.
+    if (existingSessionId) {
+      // Request-level windows (explicit adoption) and post-provisioning
+      // rehydrations arrive with an id the server issued moments ago in this
+      // same runtime: it cannot be a stale claim, so skip the re-verification.
+      if (sessionIssuedInRuntime(context, existingSessionId)) {
+        return existingSessionId;
+      }
+      const restored = await restoreStoredSession(context, port, existingSessionId, workspaceIdAtStart);
+      if (restored) {
+        return restored;
+      }
+      if (getRuntimeWorkspaceContext(context).workspaceId !== workspaceIdAtStart) {
+        return context.getSessionId();
+      }
+    }
+
     const workspacePath = runtimeWorkspace.canonicalProjectPath;
     const workspaceName = workspacePath
       ? vscode.workspace.name || workspacePath.split(/[\\/]/).pop() || 'Trainer'
@@ -327,6 +376,7 @@ export async function ensureInitialSession(
     }
 
     await context.setSessionId(payload.session_id);
+    rememberServerIssuedSession(context, payload.session_id);
     await context.patchWorkbenchData(
       mergeSessionStartSnapshot(
         context.getHostState().bootstrap,
@@ -343,6 +393,67 @@ export async function ensureInitialSession(
     return await initialization;
   } finally {
     inflightSessionInitializers.delete(context);
+  }
+}
+
+/**
+ * Re-register a persisted session with the server and merge its transcript
+ * back into host state. Returns the resolved session id, or undefined when the
+ * stored session is unknown to the server (the caller then resumes the
+ * workspace's latest thread instead).
+ */
+async function restoreStoredSession(
+  context: CommandContext,
+  port: number,
+  sessionId: string,
+  workspaceIdAtStart: string,
+): Promise<string | undefined> {
+  try {
+    const payload = await context.sidecarClient.postJson<{ session_id?: string; snapshot?: unknown }>(
+      port,
+      '/session/activate',
+      { session_id: sessionId, workspace_id: workspaceIdAtStart },
+    );
+    if (getRuntimeWorkspaceContext(context).workspaceId !== workspaceIdAtStart) {
+      context.outputChannel.appendLine(
+        `[session] discarded stored session restore from stale workspace ${workspaceIdAtStart}`,
+      );
+      return context.getSessionId();
+    }
+    const resolvedSessionId =
+      typeof payload?.session_id === 'string' && payload.session_id.trim()
+        ? payload.session_id.trim()
+        : sessionId;
+    // Merge the stored transcript first: the restored conversation is on
+    // screen even if the later /memory/summary refresh fails. A snapshot that
+    // cannot merge (degenerate host state) must not lose the restored id — the
+    // memory refresh below remains the authoritative transcript source.
+    if (payload?.snapshot && typeof payload.snapshot === 'object') {
+      try {
+        await context.patchWorkbenchData(
+          mergeMemorySummary(context.getHostState().bootstrap, payload.snapshot),
+        );
+      } catch (error) {
+        context.outputChannel.appendLine(
+          `[session] stored session ${sessionId} snapshot could not be merged: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+    if (resolvedSessionId !== sessionId) {
+      await context.setSessionId(resolvedSessionId);
+    }
+    rememberServerIssuedSession(context, resolvedSessionId);
+    context.outputChannel.appendLine(`[session] restored stored session ${resolvedSessionId}`);
+    return resolvedSessionId;
+  } catch (error) {
+    context.outputChannel.appendLine(
+      `[session] stored session ${sessionId} could not be restored; resuming the workspace's latest thread (${
+        error instanceof Error ? error.message : String(error)
+      })`,
+    );
+    return undefined;
   }
 }
 

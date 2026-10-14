@@ -220,6 +220,7 @@ import {
 import { resolveTurnNextStepRequiresConfirmation } from "../lib/nextStepConfirmation";
 import { CoachComposer, ComposerIconButton } from "../components/composer";
 import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
+import { WorkbenchSurfaceButton } from "../components/common/WorkbenchSurfaceButton";
 import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
 import type {
   ResourceSearchRequest,
@@ -253,8 +254,10 @@ import { resolveResourceComposerCopy } from "../lib/i18n/resourceComposerCopy";
 import { resolvePlanViewCopy } from "../lib/i18n/planViewCopy";
 import { resolveTextDirection, type TextDirection } from "../lib/i18n/direction";
 import {
+  classifyProviderThinkingSupport,
   describeProviderThinking,
   normalizeProviderThinkingConfig,
+  providerThinkingProbeObserved,
   synthesizeProviderThinkingDescriptor,
   thinkingProtocolSupportsWire,
 } from "../../../../shared/src/providerThinking";
@@ -295,9 +298,11 @@ import {
 import {
   announceReady,
   getInjectedBootstrapState,
+  getWorkbenchSurface,
   persistBrowserPreviewProviderConfig,
   postDebugVisibleFacts,
   postMessage,
+  requestCollapseToSidebar,
   subscribeToHostMessages,
   requestNativeSkillDraft,
 } from "../lib/vscode";
@@ -3776,6 +3781,18 @@ export function App() {
   const isBrowserPreview = inBrowserPreviewEnvironment();
   const activeView = normalizeSidebarView(layout.activeView);
   const browserPreviewFixture = isBrowserPreviewFixtureMode();
+  // The same bundle runs in the sidebar view and in the full-width editor
+  // panel; only the sidebar offers "open in editor", and only the panel offers
+  // "back to sidebar".
+  const editorPanelSurface = getWorkbenchSurface() === "editor";
+  const canOpenInEditor = !editorPanelSurface && !isBrowserPreview;
+  const openViewInEditor = useCallback((view: "plan" | "resources") => {
+    postMessage({
+      type: "command/execute",
+      payload: { commandId: trainerCommands.openViewInEditor, payload: { view } },
+    });
+  }, []);
+  const expandToEditorLabel = appUiCopy(layout.composerLanguage, "在编辑器中打开");
   const t = resolveWorkbenchCopy(layout.composerLanguage);
   const openProviderSetup = useCallback(() => {
     // Deep link: Settings retains its surfaces, so pin the connection category
@@ -4905,45 +4922,51 @@ export function App() {
       return undefined;
     }
     const lastTest = provider.lastTestResult as
-      | { capabilityEvidence?: Array<{ name?: unknown; state?: unknown; observed?: unknown }> }
+      | {
+          capabilityEvidence?: Array<{
+            name?: unknown;
+            state?: unknown;
+            observed?: unknown;
+          }>;
+        }
       | undefined;
-    const liveEvidence = (lastTest?.capabilityEvidence ?? []).some(
-      (entry) =>
-        typeof entry?.name === "string" &&
-        entry.name.trim().toLowerCase() === "thinking" &&
-        entry.state === "verified" &&
-        entry.observed === true,
-    );
     const model = provider.resolvedModel ?? provider.model;
     const context = {
       protocol: provider.protocol,
       model,
       providerName: provider.name,
       baseUrl: provider.baseUrl,
-      liveEvidence,
+      capabilityEvidence: lastTest?.capabilityEvidence,
       modelCapabilities: model ? provider.modelCapabilities?.[model] : undefined,
       profileCapabilities: provider.capabilities,
     };
-    const descriptor = describeProviderThinking(context, provider.requestDefaults);
-    if (descriptor) {
-      return descriptor;
+    if (!thinkingProtocolSupportsWire(provider.protocol)) {
+      return undefined;
     }
-    // describeProviderThinking stays silent until thinking is already written
-    // into requestDefaults. The composer should still offer the control whenever
-    // the connection is *known* to support thinking — or the user already made
-    // a durable choice the wire can't express yet — so synthesize a descriptor
-    // seeded from the stored intent instead of hiding the section.
-    const modelThinking = model ? provider.modelCapabilities?.[model]?.thinking : undefined;
-    const supported =
-      liveEvidence || modelThinking === true || provider.capabilities?.thinking === true;
+    // Smart adaptation (P0 model experience): the protocol defaults mark
+    // `thinking:false` for every model (providerProtocols.ts:254) — that is
+    // absence of evidence, not a verdict. Only a probe that explicitly observed
+    // rejection hides the control; an unknown model shows it once a probe has
+    // assessed thinking; a declared/verified model always shows it and restores
+    // the last choice. The control never gates sending.
+    const support = classifyProviderThinkingSupport(context);
+    if (support === "unsupported") {
+      return undefined;
+    }
+    if (support === "unknown" && !providerThinkingProbeObserved(context)) {
+      return undefined;
+    }
     const storedThinking = normalizeProviderThinkingConfig(
       provider.thinkingConfig,
       provider.protocol,
     );
-    if ((!supported && !storedThinking) || !thinkingProtocolSupportsWire(provider.protocol)) {
+    const descriptor =
+      describeProviderThinking(context, provider.requestDefaults) ??
+      synthesizeProviderThinkingDescriptor(context, storedThinking ?? { mode: "auto" });
+    if (!descriptor) {
       return undefined;
     }
-    return synthesizeProviderThinkingDescriptor(context, storedThinking ?? { mode: "auto" });
+    return storedThinking ? { ...descriptor, config: storedThinking } : descriptor;
   }, [
     data.providerConfig.baseUrl,
     data.providerConfig.capabilities,
@@ -12239,6 +12262,8 @@ export function App() {
             })
           }
           isLiveBrowserPreview={isBrowserPreview && !browserPreviewFixture}
+          onExpandToEditor={canOpenInEditor ? () => openViewInEditor("resources") : undefined}
+          expandToEditorLabel={expandToEditorLabel}
           onOpenResource={(resourceId) =>
             postMessage({
               type: "resource/open",
@@ -12694,6 +12719,8 @@ export function App() {
         onNavigateToView={setActiveView}
         className="plan-pane"
         compactPrimary
+        onExpandToEditor={canOpenInEditor ? () => openViewInEditor("plan") : undefined}
+        expandToEditorLabel={expandToEditorLabel}
         leftoverNote={leftoverPlanNotLive
           ? learningPracticeReadyToContinue
             ? templateCopy[layout.composerLanguage].practiceReadyToContinue
@@ -13320,6 +13347,15 @@ export function App() {
         historyOpen={openMenu === "history"}
         onHistory={toggleComposerHistoryMenu}
         onNavigate={setActiveView}
+        surfaceControl={
+          editorPanelSurface ? (
+            <WorkbenchSurfaceButton
+              mode="collapse"
+              label={appUiCopy(layout.composerLanguage, "收起回侧边栏")}
+              onClick={requestCollapseToSidebar}
+            />
+          ) : undefined
+        }
       >
       <input
         ref={uploadFilesInputRef}

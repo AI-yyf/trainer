@@ -1358,8 +1358,33 @@ test('resource delete and restore messages reach the sidecar and return reconcil
   registry.dispose();
 });
 
-test('debug snapshot keeps the latest restore payload and outbound message types', async () => {
+test('sidebar view re-asserts the text-free title whenever it becomes visible', async () => {
   const extensionPath = await createExtensionFixtureDir();
+  const harness = createViewHarness();
+  const vscodeMock = createVscodeMock();
+  const { WorkbenchSidebarController } = loadWithVscodeMock(bridgeModulePath, vscodeMock);
+  const controller = new WorkbenchSidebarController(
+    { extensionPath, extensionUri: { fsPath: extensionPath } },
+    { async execute() { return { ok: true, message: 'noop' }; } },
+    () => createBootstrapState(),
+    { appendLine() {} },
+  );
+
+  await controller.resolveWebviewView(harness.view);
+  // VS Code keeps the manifest view name as the default title; a re-resolve
+  // (view moved/rebuilt) would surface it again, so the visibility handler
+  // re-asserts the empty title instead of relying on resolve alone.
+  assert.equal(harness.view.title, '');
+  harness.view.title = ' ';
+  harness.triggerVisibility(true);
+  await sleep(320);
+  await flushAsyncBridgeWork();
+
+  assert.equal(harness.view.title, '');
+  controller.dispose();
+});
+
+test('debug snapshot keeps the latest restore payload and outbound message types', async () => {  const extensionPath = await createExtensionFixtureDir();
   const harness = createViewHarness();
   const vscodeMock = createVscodeMock();
   const { WorkbenchSidebarController } = loadWithVscodeMock(bridgeModulePath, vscodeMock);

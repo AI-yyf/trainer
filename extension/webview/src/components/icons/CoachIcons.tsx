@@ -421,3 +421,25 @@ export function TrainingIcon(props: CoachIconProps) {
   return <TargetIcon {...props} />;
 }
 
+/* Surface controls: expand a workbench view into an editor tab, or collapse
+   the editor panel back into the sidebar. Same 16-grid outline grammar. */
+export function ExpandPanelIcon(props: CoachIconProps) {
+  return (
+    <CoachIconBase {...props}>
+      <path d="M2.4 3.2h4.4v9.6H2.4z" />
+      <path d="M9.4 8h4.2" />
+      <path d="m11.5 5.9 2.1 2.1-2.1 2.1" />
+    </CoachIconBase>
+  );
+}
+
+export function CollapsePanelIcon(props: CoachIconProps) {
+  return (
+    <CoachIconBase {...props}>
+      <path d="M2.4 3.2h4.4v9.6H2.4z" />
+      <path d="M13.6 8H9.4" />
+      <path d="M11.5 5.9 9.4 8l2.1 2.1" />
+    </CoachIconBase>
+  );
+}
+

@@ -10,6 +10,7 @@ import {
 } from "../../../../../shared/src/protocol";
 import type { ComposerLanguage } from "../../lib/types";
 import { resolveCopy } from "../../lib/i18n/copy";
+import { statusNextStepPartIndex } from "../../lib/nextStepConfirmation";
 
 import { MermaidBlock } from "./MermaidBlock";
 import { coachMessagePartsCopy } from "../../lib/i18n/segments/coachMessagePartsCopy";
@@ -26,6 +27,10 @@ export interface CoachMessagePartsProps {
    * Turn-level grounding downgrade (DESIGN.md §2.5): this turn's next step is
    * not anchored in the reply/code, so the visible-status next-step line gets
    * a "confirm before acting" marker instead of reading as verified guidance.
+   *
+   * Single-shot: only the FIRST next-step line renders the badge and note
+   * (`statusNextStepPartIndex`); the callers that own the artifact carrier pass
+   * `false` so a turn never repeats the marker (`resolveNextStepConfirmationOwner`).
    */
   nextStepRequiresConfirmation?: boolean;
 }
@@ -142,7 +147,7 @@ function renderPart(
   part: TrainerMessagePart,
   language: ComposerLanguage,
   index: number,
-  options?: { nextStepRequiresConfirmation?: boolean },
+  options?: { nextStepConfirmation?: boolean },
 ) {
   switch (part.type) {
     case "markdown":
@@ -286,7 +291,7 @@ function renderPart(
             <p className="message-part__meta">
               {copy(language, "下一步：")}
               {part.nextStep}
-              {options?.nextStepRequiresConfirmation ? (
+              {options?.nextStepConfirmation ? (
                 <span
                   className="message-part__confirm-mark"
                   data-next-step-requires-confirmation="true"
@@ -295,6 +300,11 @@ function renderPart(
                   {resolveCopy(language).nextStepConfirmBadge}
                 </span>
               ) : null}
+            </p>
+          ) : null}
+          {options?.nextStepConfirmation ? (
+            <p className="message-part__confirm-note" data-next-step-confirm-note="true">
+              {resolveCopy(language).nextStepConfirmNote}
             </p>
           ) : null}
           {part.resumeThread ? (
@@ -473,10 +483,16 @@ export function CoachMessageParts({
   language = "en-US",
   nextStepRequiresConfirmation = false,
 }: CoachMessagePartsProps) {
+  // Single-shot: the marker belongs to the first next-step line of the turn.
+  const confirmationPartIndex = nextStepRequiresConfirmation
+    ? statusNextStepPartIndex(parts)
+    : -1;
   return (
     <div className="message-bubble__parts">
       {parts.map((part, index) =>
-        renderPart(part, language, index, { nextStepRequiresConfirmation }),
+        renderPart(part, language, index, {
+          nextStepConfirmation: index === confirmationPartIndex,
+        }),
       )}
     </div>
   );

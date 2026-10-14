@@ -1,6 +1,7 @@
 export const trainerCommands = {
   generateSkillDraft: "trainer.skills.generateDraft",
   openWorkbench: "trainer.openWorkbench",
+  openViewInEditor: "trainer.view.openInEditor",
   configureProvider: "trainer.provider.configure",
   saveProvider: "trainer.provider.save",
   clearProvider: "trainer.provider.clear",
@@ -158,6 +159,13 @@ export const trainerCommandCatalog: TrainerCommandCatalogItem[] = [
     section: "Workbench",
     detail: "Reveal the Trainer sidebar in VS Code.",
     keywords: ["open", "sidebar", "panel", "trainer", "coach"],
+  },
+  {
+    id: trainerCommands.openViewInEditor,
+    title: "Open view in editor",
+    section: "Workbench",
+    detail: "Open the Learning or Resources view full width in an editor tab.",
+    keywords: ["open", "editor", "panel", "wide", "learning", "resources", "expand"],
   },
   {
     id: trainerCommands.sendMessage,

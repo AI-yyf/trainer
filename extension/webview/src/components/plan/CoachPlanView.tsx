@@ -19,7 +19,7 @@ import {
   sanitizeErrorSurfaceText,
 } from "../../../../../shared/src/errorSurfaceSanitizer";
 
-import { ActionButton } from "../common";
+import { ActionButton, WorkbenchSurfaceButton } from "../common";
 import { MessageRichContent } from "../coach/MessageRichContent";
 import {
   CheckMarkIcon,
@@ -218,6 +218,12 @@ export interface CoachPlanViewProps {
   projectPlanLink?: GlobalPlanProjectLink;
   onCreateGlobalPlan?: () => void;
   onLinkCurrentProjectPlan?: () => void;
+  /**
+   * Host surface control: when provided (and the host can open editor tabs),
+   * the header renders the "open full width in an editor tab" button.
+   */
+  onExpandToEditor?: () => void;
+  expandToEditorLabel?: string;
 }
 
 function planCopy(
@@ -724,11 +730,20 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     />
   ) : null;
   const leftoverNote = props.leftoverNote?.trim() || "";
+  const expandToEditorControl =
+    props.onExpandToEditor && props.expandToEditorLabel ? (
+      <WorkbenchSurfaceButton
+        mode="expand"
+        label={props.expandToEditorLabel}
+        onClick={props.onExpandToEditor}
+      />
+    ) : null;
   if (!plan) {
     const verifiedReturns = [...new Map([...pendingEvidenceItems, ...settledEvidenceItems]
       .filter(isVerifiedTrainingReturn).map(item => [item.id, item])).values()];
     return (
       <section className="template-learning-home" data-template="LearningHome" data-plan-leftover-not-live={leftoverNote ? "true" : undefined}>
+        {expandToEditorControl ? <div className="coach-plan-view__surface-control">{expandToEditorControl}</div> : null}
         <NextAction {...props.primaryAction} />
         {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
         {liveEvidenceDecisionRow}
@@ -960,6 +975,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       currentLabel={templateCopy[language].currentLearning}
       title={plan.title}
       stage={stageProgressText ? `${stageProgressText} · ${activeStageTitle}` : activeStageTitle}
+      headerActions={expandToEditorControl}
       next={props.primaryAction}
       nextTools={liveEvidenceDecisionRow}
       review={hasReviewDetails ? { label: resolvedRevisitSummaryLabel, content: <>

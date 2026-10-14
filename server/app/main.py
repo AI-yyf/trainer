@@ -114,6 +114,9 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         # letting stale `executing` records linger until their timeout.
         runtime.memory_service.expire_in_flight_training_reliability_at_startup()
         yield
+        from .llm.mcp_client import aclose_runtime_mcp_sessions
+
+        await aclose_runtime_mcp_sessions(runtime)
         runtime.resource_service.close()
 
     app = FastAPI(title="Trainer Sidecar", version="0.1.0", lifespan=lifespan)

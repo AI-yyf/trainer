@@ -2,7 +2,6 @@ import { NextAction } from "../../templates/NextAction";
 import type { ReactNode } from "react";
 
 import type { ComposerLanguage } from "../../lib/types";
-import { nextStepRequiresConfirmationFromMetadata } from "../../lib/nextStepConfirmation";
 import { resolveCopy } from "../../lib/i18n/copy";
 import { artifactBlockCopy, artifactInlineLeadCopy } from "../../lib/i18n/segments/coachArtifactBlockCopy";
 import { reviewConceptLabel } from "../../lib/reviewLabel";
@@ -41,6 +40,14 @@ export interface CoachArtifactBlockProps {
   language?: ComposerLanguage;
   icon?: ReactNode;
   interactive?: boolean;
+  /**
+   * Grounding downgrade (DESIGN.md §2.5) allocation: this artifact is the
+   * message's single confirmation carrier — the badge rides its action surface
+   * and the confirmation note its card, and nothing repeats elsewhere. The
+   * bubble allocates it via `resolveNextStepConfirmationOwner`, so a turn shows
+   * the marker exactly once.
+   */
+  nextStepConfirmation?: boolean;
   onOpen?: (artifact: CoachArtifactBlockData) => void;
 }
 
@@ -156,6 +163,7 @@ export function CoachArtifactBlock({
   interactive =
     Boolean(artifact.recommendedAction) ||
     !["note", "idea_implementation", "project_idea", "project_adaptation", "principle", "review", "plan_update", "next_step"].includes(artifact.kind),
+  nextStepConfirmation = false,
   onOpen,
 }: CoachArtifactBlockProps) {
   const classes = [
@@ -170,11 +178,10 @@ export function CoachArtifactBlock({
     ? actionButtonLabel(artifact.recommendedAction, language)
     : openLabel;
   const metadata = artifactMetadataRecord(artifact);
-  // Grounding downgrade (DESIGN.md §2.5): the server stamps the artifact
-  // metadata when the next step was not fully anchored; the card must keep
-  // that fact visible instead of presenting the step as verified guidance.
-  const requiresConfirmation = nextStepRequiresConfirmationFromMetadata(metadata);
-  const confirmCopy = requiresConfirmation ? resolveCopy(language) : undefined;
+  // Grounding downgrade (DESIGN.md §2.5): the marker is allocated once per
+  // message by the bubble; the badge rides the action surface and the note the
+  // card, so the same downgrade never repeats at the end of every text.
+  const confirmCopy = nextStepConfirmation ? resolveCopy(language) : undefined;
   const isRecallReview = artifact.kind === "review" &&
     metadata?.evidence_scope === "self_reported_recall";
   const displayFocus = isRecallReview && artifact.focusArea
@@ -186,11 +193,21 @@ export function CoachArtifactBlock({
     if (!onOpen || (!interactive && !artifact.recommendedAction)) return null;
     if (slim) {
       // Latest-reply variant: a one-line bar pinned above the composer flow —
-      // label + the action pill. The full criteria detail stays reachable via
-      // the reply's evidence fold instead of stacking under every reply.
+      // label + confirm badge + the action pill. The full criteria detail
+      // stays reachable via the reply's evidence fold instead of stacking
+      // under every reply.
       return (
         <div className="artifact-next-slim" data-template="NextAction">
           <span className="artifact-next-slim__label">{artifactBlockCopy(language, "下一步")}</span>
+          {confirmCopy ? (
+            <span
+              className="artifact-next-confirm"
+              data-next-step-requires-confirmation="true"
+              title={confirmCopy.nextStepConfirmNote}
+            >
+              {confirmCopy.nextStepConfirmBadge}
+            </span>
+          ) : null}
           <button
             type="button"
             className="button button--accent artifact-next-slim__action"
@@ -204,11 +221,23 @@ export function CoachArtifactBlock({
         </div>
       );
     }
+    const verificationDetail = artifact.verification?.[0];
     return (
       <NextAction
         label={artifactBlockCopy(language, "下一步")}
         title={displayTitle}
-        detail={artifact.verification?.[0] ?? (requiresConfirmation ? confirmCopy?.nextStepConfirmBadge : undefined)}
+        detail={confirmCopy ? (
+          <>
+            {verificationDetail ? `${verificationDetail} ` : null}
+            <span
+              className="artifact-next-confirm"
+              data-next-step-requires-confirmation="true"
+              title={confirmCopy.nextStepConfirmNote}
+            >
+              {confirmCopy.nextStepConfirmBadge}
+            </span>
+          </>
+        ) : verificationDetail}
         action={{ label: actionLabel, onClick: () => onOpen(artifact) }}
       />
     );
@@ -243,9 +272,8 @@ export function CoachArtifactBlock({
         </div>
       ) : null}
       {showTeaser && teaser ? <p className="artifact-card__teaser">{teaser}</p> : null}
-      {requiresConfirmation && confirmCopy ? (
+      {confirmCopy ? (
         <p className="artifact-card__confirm-note" data-next-step-requires-confirmation="true">
-          <span className="artifact-card__confirm-mark">{confirmCopy.nextStepConfirmBadge}</span>
           {confirmCopy.nextStepConfirmNote}
         </p>
       ) : null}

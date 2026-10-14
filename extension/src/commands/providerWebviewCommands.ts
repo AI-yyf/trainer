@@ -2286,21 +2286,27 @@ function normalizeThinkingPayload(payload?: SetProviderThinkingPayload): Provide
   return config;
 }
 
-function thinkingLiveEvidence(
+function thinkingCapabilityEvidence(
   context: CommandContext,
   config: ProviderConfig | undefined,
-): boolean {
+): {
+  liveEvidence: boolean;
+  capabilityEvidence?: Array<{ name?: unknown; observed?: unknown; state?: unknown }>;
+} {
   const lastTest = storedLastTestResult(context, config) as
-    | { capabilityEvidence?: Array<{ name?: unknown; state?: unknown; observed?: unknown }> }
+    | { capabilityEvidence?: Array<{ name?: unknown; observed?: unknown; state?: unknown }> }
     | undefined;
   const evidence = Array.isArray(lastTest?.capabilityEvidence) ? lastTest.capabilityEvidence : [];
-  return evidence.some(
-    (entry) =>
-      typeof entry?.name === 'string' &&
-      entry.name.trim().toLowerCase() === 'thinking' &&
-      entry.state === 'verified' &&
-      entry.observed === true,
-  );
+  return {
+    liveEvidence: evidence.some(
+      (entry) =>
+        typeof entry?.name === 'string' &&
+        entry.name.trim().toLowerCase() === 'thinking' &&
+        entry.state === 'verified' &&
+        entry.observed === true,
+    ),
+    capabilityEvidence: evidence.length > 0 ? evidence : undefined,
+  };
 }
 
 export async function setProviderThinkingCommand(
@@ -2316,13 +2322,15 @@ export async function setProviderThinkingCommand(
     return { ok: false, message: 'Save a provider before adjusting thinking.' };
   }
 
+  const thinkingEvidence = thinkingCapabilityEvidence(context, config);
   const nextRequestDefaults = updateProviderThinking(
     {
       protocol: config.protocol,
       model: config.model,
       providerName: config.name,
       baseUrl: config.baseUrl,
-      liveEvidence: thinkingLiveEvidence(context, config),
+      liveEvidence: thinkingEvidence.liveEvidence,
+      capabilityEvidence: thinkingEvidence.capabilityEvidence,
       modelCapabilities: config.modelCapabilities?.[config.model],
       profileCapabilities: config.capabilities,
     },

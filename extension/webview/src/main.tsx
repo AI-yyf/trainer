@@ -58,6 +58,7 @@ import "./styles/sections/w4-w1-training-unified-card-texture-motion.css";
 import "./styles/sections/settings-additive-layer-for-the-collapsesection-container-swap.css";
 import "./styles/sections/settings-ia-rebuild-status-summary-bar-section-anchors.css";
 import "./styles/sections/message-bubble-refinement-pass-premium-surfaces-calmer-hierarchy.css";
+import "./styles/sections/panel-surface.css";
 
 interface StartupErrorBoundaryProps {
   children: ReactNode;

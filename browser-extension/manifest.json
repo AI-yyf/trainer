@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Trainer Capture",
+  "version": "0.1.0",
+  "description": "一键把当前网页、PDF 链接或 GitHub 仓库添加到 Trainer 资料库。纯数据通道：只发送 URL，由本地 Trainer sidecar 抓取与解析。",
+  "permissions": ["tabs", "contextMenus", "storage", "notifications"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Trainer Capture",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

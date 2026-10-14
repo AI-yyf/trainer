@@ -248,5 +248,10 @@
   "file": "styles/sections/message-bubble-refinement-pass-premium-surfaces-calmer-hierarchy.css",
   "title": "Message bubble refinement pass — premium surfaces, calmer hierarchy",
   "lines": 892
+ },
+ {
+  "file": "styles/sections/panel-surface.css",
+  "title": "Workbench surface controls + open-in-editor width behaviour",
+  "lines": 51
  }
 ]

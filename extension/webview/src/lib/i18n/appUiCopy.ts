@@ -2431,6 +2431,25 @@ export const APP_UI_TEXT: Record<string, Record<string, string>> = {
     "ko-KR": "이 답변은 취소되었습니다. 생성된 내용은 그대로 남아 있습니다.",
     "pt-BR": "Esta resposta foi cancelada. O conteúdo gerado continua aqui.",
   },
+  // Surface controls: expand a view into a full-width editor tab / return.
+  "在编辑器中打开": {
+    "en-US": "Open in editor",
+    "es-ES": "Abrir en el editor",
+    "fr-FR": "Ouvrir dans l’éditeur",
+    "de-DE": "Im Editor öffnen",
+    "ja-JP": "エディターで開く",
+    "ko-KR": "편집기에서 열기",
+    "pt-BR": "Abrir no editor",
+  },
+  "收起回侧边栏": {
+    "en-US": "Back to sidebar",
+    "es-ES": "Volver a la barra lateral",
+    "fr-FR": "Revenir à la barre latérale",
+    "de-DE": "Zurück zur Seitenleiste",
+    "ja-JP": "サイドバーに戻す",
+    "ko-KR": "사이드바로 돌아가기",
+    "pt-BR": "Voltar para a barra lateral",
+  },
 };
 
 /**

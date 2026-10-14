@@ -11,6 +11,7 @@ import { SidecarHttpClient } from './core/httpClient';
 import { SidecarProcessManager } from './core/sidecarProcessManager';
 import type { TrainerHostState } from './core/types';
 import { WorkbenchSidebarController } from './core/webviewBridge';
+import { WorkbenchEditorPanel } from './core/workbenchPanel';
 import {
   applyDerivedHostState,
   createDefaultBootstrapData,
@@ -251,10 +252,36 @@ export async function activate(
     getHostState,
     outputChannel,
   );
+  const editorPanel = new WorkbenchEditorPanel(
+    extensionContext,
+    registry,
+    getHostState,
+    outputChannel,
+    () => workbench.show(),
+  );
+  // One host facade for commands: sidebar operations stay exactly as before,
+  // and the panel-aware operations drive the editor surface. `syncState` and
+  // host-authored messages fan out so a command run on either surface leaves
+  // both surfaces current.
+  const workbenchHost: CommandContext['workbench'] = {
+    show: () => workbench.show(),
+    syncState: async () => {
+      await workbench.syncState();
+      await editorPanel.syncState();
+    },
+    postMessage: async (message) => {
+      await workbench.postMessage(message);
+      await editorPanel.postHostMessage(message);
+    },
+    setRefreshHandler: (handler) => workbench.setRefreshHandler(handler),
+    resolveWebviewUriForPath: (filePath) => workbench.resolveWebviewUriForPath(filePath),
+    openInEditor: (view) => editorPanel.open(view),
+    collapseToSidebar: () => editorPanel.collapseToSidebar(),
+  };
 
   const commandContext: CommandContext = {
     ...bootstrapContext,
-    workbench,
+    workbench: workbenchHost,
     patchWorkbenchData: async (patch) => {
       hostState = patchHostState(hostState, patch);
       await updateDerivedHostState();
@@ -304,6 +331,7 @@ export async function activate(
     sidecarManager,
     tests,
     workbench,
+    editorPanel,
     providerStore.onDidChange(() => {
       void syncExtensionState(commandContext);
     }),

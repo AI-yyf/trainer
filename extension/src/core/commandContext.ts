@@ -25,6 +25,10 @@ export interface WorkbenchHost {
   postMessage(message: unknown): Promise<void>;
   setRefreshHandler(handler: (() => Promise<void>) | undefined): void;
   resolveWebviewUriForPath?(filePath: string): string | undefined;
+  /** Open a workbench view full width in an editor tab (trainer.view.openInEditor). */
+  openInEditor?(view: string): Promise<void>;
+  /** Dispose the editor panel and reveal the sidebar view again. */
+  collapseToSidebar?(): Promise<void>;
 }
 
 export interface CommandContext {

@@ -6910,6 +6910,7 @@ class ProviderService:
                 **attachment_delivery,
             }
         from .agent_loop import CoachAgentLoop
+        from .mcp_client import build_coach_mcp_tools
         from .tools import ToolContext, build_default_tool_registry
 
         messages = build_coaching_messages(
@@ -6938,10 +6939,12 @@ class ProviderService:
             max_tokens=max_tokens,
             messages=messages,
         )
-        registry = build_default_tool_registry()
         runtime_obj = (coach_context or {}).get("__runtime__") if coach_context else None
         workspace_id = str((coach_context or {}).get("workspace_id") or "workspace-default")
         session_id = str((coach_context or {}).get("session_id") or "")
+        registry = build_default_tool_registry(
+            extra_tools=await build_coach_mcp_tools(runtime_obj, workspace_id)
+        )
         context = ToolContext(
             runtime=runtime_obj,
             workspace_id=workspace_id,
@@ -7425,6 +7428,7 @@ class ProviderService:
             }
             return
         from .agent_loop import CoachAgentLoop
+        from .mcp_client import build_coach_mcp_tools
         from .tools import ToolContext, build_default_tool_registry
 
         messages = build_coaching_messages(
@@ -7459,10 +7463,12 @@ class ProviderService:
             max_tokens=max_tokens,
             messages=messages,
         )
-        registry = build_default_tool_registry()
         runtime_obj = (coach_context or {}).get("__runtime__") if coach_context else None
         workspace_id = str((coach_context or {}).get("workspace_id") or "workspace-default")
         session_id = str((coach_context or {}).get("session_id") or "")
+        registry = build_default_tool_registry(
+            extra_tools=await build_coach_mcp_tools(runtime_obj, workspace_id)
+        )
         context = ToolContext(
             runtime=runtime_obj,
             workspace_id=workspace_id,

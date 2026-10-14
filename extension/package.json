@@ -35,6 +35,10 @@
         "title": "Trainer: Open Coach Sidebar"
       },
       {
+        "command": "trainer.view.openInEditor",
+        "title": "Trainer: Open View in Editor"
+      },
+      {
         "command": "trainer.memory.refresh",
         "title": "Trainer: Refresh Memory"
       },
@@ -295,7 +299,7 @@
       "activitybar": [
         {
           "id": "trainer",
-          "title": "Trainer",
+          "title": " ",
           "icon": "media/trainer-icon.svg"
         }
       ]

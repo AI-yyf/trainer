@@ -196,7 +196,9 @@
 
 /* Grounding downgrade marker: a next step not anchored in the reply/code
    reads as "confirm before acting" (DESIGN.md §2.5) — warning-toned, inline,
-   never hidden. */
+   never hidden. Single-shot per message (message UX convergence, 2026-10-14):
+   one badge on the first next-step line, with the note rendered once directly
+   under it — the marker never trails every text of the turn. */
 .message-part__confirm-mark {
   display: inline-flex;
   align-items: center;
@@ -208,6 +210,13 @@
   color: var(--warning);
   font-size: var(--trainer-font-3xs);
   white-space: nowrap;
+}
+
+.message-part__confirm-note {
+  margin: 2px 0 0;
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.45;
+  color: var(--fg-1);
 }
 
 .message-part__details,
@@ -658,4 +667,59 @@
 
 /* Reply suffix cues: the coaching focus / next step / review rhythm render as
    quiet icons with tooltips instead of trailing text paragraphs. */
+
+
+/* --------------------------------------------------------------------------
+   Quick-action icon labels (message UX convergence)
+   The five shortcut icons reveal their own name on hover or keyboard focus.
+   The label is CSS-only — a pseudo-element fed by `data-action-label`, never
+   the native `title` tooltip (removed on purpose in 37ca124) — so it carries no
+   layout weight: one line, absolutely positioned, opacity-swapped. It hangs
+   from the button's inline start edge so it never leaves the bubble on the
+   narrowest sidebar, and it arrives after a short delay so a quick pass along
+   the row stays quiet. `prefers-reduced-motion` drops the delay and the
+   transition, not the label. Its text comes from the same eight-language
+   `COACH_MESSAGE_ACTION_LABELS` record as `aria-label`.
+   -------------------------------------------------------------------------- */
+.message-bubble__icon-action[data-action-label] {
+  position: relative;
+}
+
+.message-bubble__icon-action[data-action-label]::after {
+  content: attr(data-action-label);
+  position: absolute;
+  bottom: calc(100% + 5px);
+  inset-inline-start: 0;
+  z-index: 2;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-2) 96%, var(--bg-0));
+  color: var(--fg-0);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.35;
+  text-align: start;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--motion-fast) var(--motion-ease),
+    visibility 0s linear var(--motion-fast);
+}
+
+.message-bubble__icon-action[data-action-label]:hover:not(:disabled)::after,
+.message-bubble__icon-action[data-action-label]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--motion-fast) var(--motion-ease) 140ms,
+    visibility 0s linear 140ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-bubble__icon-action[data-action-label]::after {
+    transition: none;
+  }
+}
 

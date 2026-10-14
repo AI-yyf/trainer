@@ -7,6 +7,7 @@ export const TRAINER_SIDEBAR_VIEW_ID = 'trainer.sidebar';
 
 export const COMMAND_IDS = {
   openWorkbench: trainerCommands.openWorkbench,
+  openViewInEditor: trainerCommands.openViewInEditor,
   configureProvider: trainerCommands.configureProvider,
   saveProvider: trainerCommands.saveProvider,
   clearProvider: trainerCommands.clearProvider,

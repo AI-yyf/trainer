@@ -42,6 +42,7 @@ Rules:
 16. Introduce every important variable, function, API, or branch by role, origin, and what breaks without it.
 17. Every 2-3 new ideas, briefly recycle the state: what is known, what is still missing, and what the next proof point is.
 18. A code block presented as a runnable file must run as shown. When teaching an expected exception, catch it before later assertions or output, or put the deliberately failing command in a separate block and label it. Preserve indentation and keep source citations outside runnable code.
+19. End a teaching reply with one compact closing line that recaps what the learner now knows and what the next step proves or verifies. The closing summarizes the reply; it does not append a new exercise beyond rule 13. Never pad with "obviously" or "this is simple": every judgment carries a checkable reason.
 
 First-turn rule:
 On a first-turn or low-context conversation, do not jump straight into prescriptive instruction. First establish the coaching relationship by understanding the learner's goal, current level, project context, preferred rhythm, and where they feel stuck.
@@ -331,29 +332,50 @@ def _answer_policy_instruction(value: str | None) -> str:
 def _guided_mode_requirements(response_language: str | None) -> str:
     """Guided-lane craft rules appended after the Answer Policy Bias section.
 
-    Added after maturity-harness acceptance showed guided turns losing the
+    A 7-rule distillation of the RethinkFun intuition-lecture method (state ->
+    gap -> object; objects feel needed; reasoning beside code; one-line
+    known/next closing; no filler). Two of the rules were added earlier after
+    maturity-harness acceptance showed guided turns losing the
     ``explains_reasoning`` dimension (reasoning connectives sitting far from
     the code they explain) and shipping fenced blocks large enough to read as
-    a written-out solution (see ``app/llm/explanation_quality.py``). zh
+    a written-out solution (see ``app/llm/explanation_quality.py`` — the
+    evaluator is unchanged; the prompt rules are written to satisfy it). zh
     requests get the zh rules; every other (or unknown) locale falls back to
     English.
     """
     if str(response_language or "").strip().lower().startswith("zh"):
         return (
+            "- 先状态，后方案：回复开头先用一两句点出学习者当前的状态和卡住的缺口，再引入做法；"
+            "缺口没立起来之前，不要先抛代码或 API 名。\n"
             "- 解释“为什么这样做”时，把推理句紧跟在它所解释的代码或命令旁边，用“因为…所以…”"
             "（或“这意味着…”）的句式，让推理标记出现在对应代码引用的近旁，而不是集中堆在回复末尾。"
             "每一处代码引用至少有一句紧邻的“为什么”。\n"
+            "- 代码逐段回指概念：每给一段代码，先用一两句说明它补的是前面哪个缺口、维护什么状态，"
+            "再讲语法细节，并说清为什么只能这样写。\n"
             "- 引导模式下不要输出完整解决方案代码块：单个代码块不超过约 10 行，"
-            "只给学习者当前这一步需要的片段，其余部分留给学习者自己写。"
+            "只给学习者当前这一步需要的片段，其余部分留给学习者自己写。\n"
+            "- 让对象被需要出来：每引入一个新函数、参数、分支或 API，先说清为什么现在需要它、"
+            "缺失会怎样，不要先给定义再补解释。\n"
+            "- 结尾用一句话收束：说清现在已知什么、下一步验证或落笔什么；收束是总结，不是追加新练习。\n"
+            "- 不用“显然”“其实很简单”这类空话：每个判断都给出可检验的依据。"
         )
     return (
+        "- State before solution: open the reply with one or two sentences naming the learner's current state and the "
+        "gap they are stuck in, then introduce the move; do not show code or API names before the gap exists.\n"
         "- When you explain why a move works, put the reasoning sentence immediately beside the code or command it "
         "explains, in a \"because ... so ...\" (or \"this means ...\") form, so a reasoning marker sits right next to "
         "its code reference instead of being collected at the end of the reply. Every code citation gets at least one "
         "adjacent why.\n"
+        "- Walk code back to the concept, snippet by snippet: before the syntax of each block, say in one or two "
+        "sentences which gap it closes and what state it maintains, and why it can hardly be written any other way.\n"
         "- In guided mode, never hand over the complete solution as one code block: keep any single fenced block to "
         "roughly 10 lines or fewer and give only the fragment the learner needs for the current step; leave the rest "
-        "for the learner to write."
+        "for the learner to write.\n"
+        "- Make every object feel needed: for each new function, parameter, branch, or API, first say why it is needed "
+        "now and what breaks without it; never define first and explain later.\n"
+        "- Close with one sentence that names what is now known and what to verify or write next; the closing is a "
+        "recap, not a new exercise.\n"
+        "- No filler such as \"obviously\" or \"this is simple\": every judgment carries a checkable reason."
     )
 
 
@@ -828,6 +850,7 @@ def build_coaching_system_prompt(
             "- Make concepts feel necessary before naming them.\n"
             "- Do not start with a definition when the learner first needs the failure mode, pressure, or boundary.\n"
             "- Every important variable, function, API, or branch should answer: why is it needed now, what does it connect to, and what breaks without it?\n"
+            "- Treat each code block as the implementation of the concepts just built: say which gap it closes and what state it maintains before walking the syntax, and refer each part back to the concept it realizes.\n"
             "- Every 2-3 new ideas, briefly recycle the state so the learner knows what is already known, what is still missing, and what proof comes next."
         )
 

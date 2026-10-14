@@ -163,16 +163,16 @@ The coach reads your files, checks diagnostics, and searches the workspace — b
 - `PedagogyService` emits a 12-field `ImplementationGuide` every turn — every field is a constraint on what the coach may ask next
 - `ImplementationCoach._current_step` is anchored to "the first failing path" or "the first known entry point" — never "explore the codebase"
 - Affect-driven tone: `AffectService` switches to `concise_rescue` mode after two consecutive failures
-- Guided-mode prompts carry two hard requirements: reasoning sentences sit **beside the code they explain**, and full solution blocks are off-limits (per-block ≤ ~10 lines)
+- Guided-mode prompts carry a distilled seven-rule RethinkFun style contract: state before solution, reasoning sentences sitting **beside the code they explain**, per-snippet callbacks to the concept each block realizes, full solution blocks off-limits (per-block ≤ ~10 lines), a one-line known/next closing, and no filler phrases
 - Key code: `server/app/pedagogy/implementation_coach.py:140-186` · `affect/service.py:142-152` · `server/app/llm/prompts.py` (`_guided_mode_requirements`)
 
 ### ⑤ Grounding & Explanation Quality — every reply is measured, not trusted
 
-Every coach turn flows through the `TeachingTurnFacts` contract and a 5-check grounding evaluation: fabricated code symbols, contradictory next steps, unanchored file pointers, missing verification hints — each one is caught before the reply ships, and a next step that isn&apos;t anchored reads as "confirm before acting", never as a fact.
+Every coach turn flows through the `TeachingTurnFacts` contract and a 5-check grounding evaluation: fabricated code symbols, contradictory next steps, unanchored file pointers, missing verification hints — each one is caught before the reply ships, and a next step that isn&apos;t anchored reads as "confirm before acting", never as a fact. The downgrade marker renders exactly once per message — on the first surface that presents the next step — instead of trailing every text block.
 
 On top of grounding, a **non-gating explanation-quality evaluation** scores five dimensions per reply: does it address the learner, is it in the learner&apos;s language, does it anchor the next step&apos;s symbols, does it avoid dumping full solutions in guided mode, does the reasoning sit next to the code it explains. Inputs that cannot decide a dimension return `unclear` — never a guess.
 
-The 28-case dual-turn acceptance journey runs both evaluations against a real model. Latest run: **56/56 turns passed**; per-dimension data (e.g. reasoning markers present in 20 of 38 code-referencing turns) is in [`docs/maturity/teaching-journeys-report.md`](docs/maturity/2026-10-13-teaching-journeys-report.md).
+The 28-case dual-turn acceptance journey runs both evaluations against a real model. Latest run: **55 通过 / 1 次诚实回退** (post-calibration); the earlier round was **56/56** (pre-calibration) — both rounds are recorded honestly, and the latest run is the current fact. Per-dimension data (e.g. reasoning markers present in 20 of 38 code-referencing turns) is in [`docs/maturity/teaching-journeys-report.md`](docs/maturity/teaching-journeys-report.md) — the single source of truth for acceptance facts (machine-readable summary: [`docs/maturity/ACCEPTANCE_FACTS.md`](docs/maturity/ACCEPTANCE_FACTS.md)).
 
 - Key code: `server/app/llm/turn_grounding.py` (governance) · `server/app/llm/explanation_quality.py` (quality) · `scripts/maturity/real_teaching_journeys_minimax.py` (acceptance harness)
 
@@ -192,6 +192,8 @@ The 28-case dual-turn acceptance journey runs both evaluations against a real mo
 
 The full chat composer belongs to Chat. Learning and Resources carry structured context back through **Ask Coach**; focused practice owns its answer and reflection forms. The six existing routes and commands remain available. Learning contains the formal plan, FSRS review and four evidence-derived growth dimensions. Settings opens an index for Connection, Coach, Workspace and Preferences.
 
+Learning and Resources each carry a surface control that opens the same view full width in an editor tab (`trainer.view.openInEditor` — same bundle, same governed commands) with a "back to sidebar" control in the panel. The sidebar header stays text-free — the redundant title is removed and re-asserted on every visibility change; identity lives in the in-webview session header.
+
 <p align="center">
   <img src="assets/screenshots/plan.png" alt="Plan view" width="260" />
   <img src="assets/screenshots/resources.png" alt="Resources view" width="260" />
@@ -202,9 +204,9 @@ The full chat composer belongs to Chat. Learning and Resources carry structured 
 
 Streaming coach chat with tool access, `$` skill palette, image attachments, answer modes, context-usage ring, session history and share.
 
-**A coach reply highlights one next step. Its overflow menu retains:**
+**A coach reply highlights one next step. Every delivered reply carries its shortcuts as icon buttons — no overflow menu, nothing hides behind "···":**
 
-- **Copy reply as Markdown**
+- **Copy reply as Markdown** / **share** — icon-only, each revealing its own name on hover or keyboard focus (CSS labels from the same eight-language table as `aria-label`, not native tooltips)
 - **Save to library** (searchable + previewable)
 - **Convert to verifiable training card** — per message, not per session
 
@@ -276,7 +278,7 @@ Trainer streams a reply. **It does not rewrite your code.** It points at line 17
 
 ### T+2:30 — One-click training card
 
-Hover over the reply. Three buttons: `Copy` / `Save to library` / **`Create training card`**.
+Hover over the reply. Icon shortcuts — hover one to read its name: `Copy` / `Save to library` / **`Create training card`**.
 
 Click `Create training card` → card generated → enters Training view → FSRS schedules it for 3 days from now.
 
@@ -322,7 +324,7 @@ A live context-usage ring sits atop the conversation — **you see compression c
 
 ### Thinking Intensity
 
-Gated on per-model evidence — declared capability **or** verified probe. Never blindly forwarded.
+Gated on per-model evidence — declared capability **or** verified probe. Never blindly forwarded. The control adapts per model: a probe that explicitly observed rejection hides it; an unknown model shows it once a probe has assessed thinking, restoring your last strength choice; a declared or verified model always shows it — and the control never gates sending (`shared/src/providerThinking.ts`).
 
 ### Full-Power Library
 
@@ -336,7 +338,37 @@ Coach replies drop in with one click — **if you can search it back, you actual
 
 ### Long-Horizon State
 
-Plans freeze and unfreeze; sessions survive restarts; card progress lives in SQLite; reviews come due on the FSRS curve — **not on a to-do list**.
+Plans freeze and unfreeze; sessions survive restarts; card progress lives in SQLite; reviews come due on the FSRS curve — **not on a to-do list**. On reload a persisted session id is re-verified with the server: a stale id resumes the workspace&apos;s latest thread instead of leaving a session that silently discards history (`extension/src/core/runtimeRehydration.ts`).
+
+### Browser Quick Capture · 浏览器快速采集
+
+Right-click any page, link or GitHub repository and send it straight to the Trainer library — the [`browser-extension/`](browser-extension/) extension is a **pure data channel**: it never injects scripts into pages and never uploads page content, it only hands the local sidecar a URL.
+
+<!-- 截图占位：assets/screenshots/browser-capture.png（右键菜单 + 弹窗最近采集记录） -->
+
+- **Three capture kinds**: page, PDF link, GitHub repo (README of the default branch).
+- **Server-side fetch**: the sidecar performs the controlled, DNS-pinned fetch — web pages are extracted with trafilatura, PDFs run through the existing PDF ingest, repositories record the repo URL plus their README.
+- **Local only**: `host_permissions` cover `http://127.0.0.1/*` and `http://localhost/*`; nothing else is reachable from the extension.
+
+**Load it (unpacked):**
+
+1. Open `chrome://extensions` (Edge: `edge://extensions`) and enable **Developer mode**.
+2. Click **Load unpacked** and select the `browser-extension/` folder.
+3. Keep Trainer running; right-click a page → **添加到 Trainer 资料库**.
+
+**Download the zip instead:**
+
+```bash
+npm run package:browser-extension   # → dist/trainer-capture-extension.zip
+```
+
+Unzip it anywhere and load that folder as an unpacked extension. The extension popup stores the sidecar address (default `http://127.0.0.1:8765`), the target workspace ID, and — when the VS Code extension launched the sidecar — its per-launch access token.
+
+### MCP Integration · MCP 接入
+
+The coach agent can call external MCP servers (Gitee, GitHub, …) through a minimal stdio client — `initialize` / `tools/list` / `tools/call`, nothing more. **Off by default**: the sidecar only spawns servers explicitly listed in `TRAINER_MCP_SERVERS`, and every discovered tool joins the ReAct tool registry as `mcp_<server>_<tool>` under the same six-tier workspace authority gate (read-only tools pass; writes fail closed — an unrecognized verb counts as a write). Tokens ride the subprocess environment, never Trainer storage or logs, and `GET /mcp/status` reports each server as `ok` / `unavailable` / `unprobed` instead of failing silently.
+
+Configuration examples for the official Gitee / GitHub servers, the full security boundary and tests: [`docs/mcp.md`](docs/mcp.md).
 
 ---
 
@@ -392,6 +424,7 @@ Plans freeze and unfreeze; sessions survive restarts; card progress lives in SQL
 | `server/app/` | FastAPI brain: agent / pedagogy / memory / FSRS / training / grounding / explanation quality | ~138k lines Python |
 | `server/tests/` | pytest suite (200 files / 3,384 cases) | 116,846 lines |
 | `shared/src/` | **Shared pure functions + 24 governance modules** (host + webview + test) | ~3k lines TS |
+| `browser-extension/` | MV3 browser capture: page / PDF / GitHub repo → local sidecar (pure data channel) | ~1.2k lines JS |
 | `extension/bundled/` | Sidecar bundled into the VSIX (PyInstaller onedir) | ~250 MB |
 
 ### One Canonical Envelope
@@ -459,7 +492,7 @@ Plans freeze and unfreeze; sessions survive restarts; card progress lives in SQL
 |---|---|---|
 | **Server tests** (pytest) | **200 files / 3,384 cases / 116,846 lines** | incl. 6 Hypothesis property-based suites + grounding/quality/reliability suites |
 | **Extension tests** (node:test) | **255 files / 1,979 cases / 81,628 lines** | source guards (copy tables pinned in `lib/i18n/segments`) + behavior tests |
-| **Teaching-loop acceptance** | **28 dual-turn cases × (5 grounding checks + 5 quality dims)** | real model (MiniMax via relay); latest run 56/56 → 55 pass + 1 honest fallback; harness: `scripts/maturity/real_teaching_journeys_minimax.py` |
+| **Teaching-loop acceptance** | **28 dual-turn cases × (5 grounding checks + 5 quality dims)** | real model (MiniMax via relay); latest post-calibration run **55 通过 / 1 次诚实回退** (earlier pre-calibration round 56/56 — both recorded); harness: `scripts/maturity/real_teaching_journeys_minimax.py` |
 | **E2E** | **11 specs / 4,335 lines** | real VS Code instance against a real model |
 | **Experience matrix** | **200 scenarios × 2 layers** | preview fixture + real sidecar |
 | **VSIX host driver** | **33 steps** | install → activate → stream → verify → assert real webview rendering |
@@ -472,7 +505,7 @@ Plans freeze and unfreeze; sessions survive restarts; card progress lives in SQL
 
 **The teaching-loop acceptance runs against a real model:**
 
-> 28 heterogeneous dual-turn cases (real code errors / complex debugging / cross-language transfer / principle teaching / project adaptation / advanced users / long-horizon recovery) drive `/turn` end-to-end through the bundled sidecar; every turn is scored by the grounding evaluation (fabricated symbols, contradictory next steps) and five non-gating explanation-quality dimensions, then a fresh-eyes auditor checks the classifications against raw model output. Latest reports: [`docs/maturity/teaching-journeys-report.md`](docs/maturity/teaching-journeys-report.md) · full history in [`docs/maturity/`](docs/maturity/).
+> 28 heterogeneous dual-turn cases (real code errors / complex debugging / cross-language transfer / principle teaching / project adaptation / advanced users / long-horizon recovery) drive `/turn` end-to-end through the bundled sidecar; every turn is scored by the grounding evaluation (fabricated symbols, contradictory next steps) and five non-gating explanation-quality dimensions, then a fresh-eyes auditor checks the classifications against raw model output. Latest report: [`docs/maturity/teaching-journeys-report.md`](docs/maturity/teaching-journeys-report.md) (single source of truth) · machine-readable facts: [`docs/maturity/ACCEPTANCE_FACTS.md`](docs/maturity/ACCEPTANCE_FACTS.md) · full history in [`docs/maturity/`](docs/maturity/).
 
 **The E2E suite runs in a real VS Code instance against a real model:**
 

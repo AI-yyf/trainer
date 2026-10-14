@@ -116,16 +116,23 @@
 
 /* r-g0-quick-tools: copy/share icon buttons pin to the message bottom-left,
    next to the ··· menu that keeps the learning-value actions. The row never
-   steals focus from the reply: at rest it is dimmed, hover/focus raises it. */
+   steals focus from the reply: at rest it is dimmed, hover/focus raises it.
+   Narrow sidebar (320px): the row wraps, the icon group itself never does —
+   the revealed next-action bar moves to its own line instead of squeezing or
+   overflowing the icons. */
 .coach-conversation-view .message-bubble__tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
   margin-top: 2px;
+  min-width: 0;
 }
 
 .coach-conversation-view .message-bubble__quick-tools {
   display: inline-flex;
+  flex: none;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 2px;
 }
@@ -134,6 +141,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: none;
   width: 26px;
   height: 26px;
   padding: 0;
@@ -144,6 +152,16 @@
   cursor: pointer;
   transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease),
     border-color var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease);
+}
+
+.coach-conversation-view .message-bubble__icon-action svg {
+  flex: none;
+}
+
+.coach-conversation-view .message-bubble__tools .artifact-next-slim {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
 }
 
 .coach-conversation-view .message-bubble:hover .message-bubble__icon-action,

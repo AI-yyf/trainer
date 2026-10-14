@@ -2074,6 +2074,8 @@ type WebviewActionBody =
     }
   | { type: "resource/open"; payload: { resourceId: string } }
   | { type: "ui/focus"; payload: { target: "conversation" | "task" | "evaluation" } }
+  /** Editor-panel surface only: dispose the panel and return to the sidebar. */
+  | { type: "ui/collapseToSidebar" }
   // Research actions
   | { type: "research/create"; payload: { title: string; description: string } }
   | { type: "research/addTheme"; payload: { projectId: string; title: string; description: string; duration_weeks?: number; cadence?: string } }

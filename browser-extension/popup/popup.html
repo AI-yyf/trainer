@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Trainer Capture</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="header">
+      <img class="header__icon" src="../icons/icon48.png" alt="" width="22" height="22" />
+      <div class="header__text">
+        <strong class="header__title">Trainer Capture</strong>
+        <span id="connection-status" class="status status--pending" role="status" aria-live="polite">
+          检查连接…
+        </span>
+      </div>
+    </header>
+
+    <section class="panel" aria-labelledby="settings-title">
+      <h2 class="panel__title" id="settings-title">Sidecar 设置</h2>
+      <label class="field">
+        <span class="field__label">地址</span>
+        <input id="base-url" type="text" inputmode="url" spellcheck="false" placeholder="http://127.0.0.1:8765" />
+      </label>
+      <label class="field">
+        <span class="field__label">工作区 ID</span>
+        <input id="workspace-id" type="text" spellcheck="false" placeholder="workspace-default" />
+      </label>
+      <label class="field">
+        <span class="field__label">访问令牌（可选）</span>
+        <input id="sidecar-token" type="password" autocomplete="off" placeholder="x-trainer-token" />
+      </label>
+      <div class="actions">
+        <button id="save-settings" class="button button--primary" type="button">保存</button>
+        <span id="settings-feedback" class="feedback" role="status" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="history-title">
+      <h2 class="panel__title" id="history-title">最近采集</h2>
+      <ul id="history-list" class="history"></ul>
+    </section>
+
+    <footer class="footer">
+      <button id="open-trainer" class="button" type="button">打开 Trainer</button>
+      <p class="hint">
+        在网页或链接上右键 →「添加到 Trainer 资料库」即可采集。Trainer 工作台在 VS Code 侧边栏打开。
+      </p>
+    </footer>
+
+    <script src="../shared.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

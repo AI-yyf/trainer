@@ -7,7 +7,7 @@ import { provisionRemoteProject } from './remoteProjectAdmission';
 
 import type { CommandContext } from '../core/commandContext';
 import { maybePromptCarryOverOnProjectSwitch } from './memoryCommands';
-import { rehydrateWorkbenchRuntime } from '../core/runtimeRehydration';
+import { rehydrateWorkbenchRuntime, rememberServerIssuedSession } from '../core/runtimeRehydration';
 import { resolveTrainerWorkspaceAdmission, resolveTrainerProjectsList } from '../core/trainerWorkspaceAdmission';
 import { resolveCurrentTrainerProjectPath } from '../core/trainerWorkspaceAdmission';
 import { failClosedWorkbenchAfterWorkspaceTransfer, resetWorkbenchAfterRuntimeDataChange } from '../core/workbenchData';
@@ -1258,6 +1258,7 @@ async function provisionManagedProject(
     const identity = await provisionRemoteProject(context, projectPath, selectedRoot,
       (requestPath, body) => postUserInitiatedProjectAdmission(context, admissionPort, requestPath, body));
     await context.setSessionId(identity.agentSessionId);
+    rememberServerIssuedSession(context, identity.agentSessionId);
     return { kind: 'managed', identity };
   }
   const started = await postUserInitiatedProjectAdmission<{ session_id?: string }>(
@@ -1310,7 +1311,12 @@ async function provisionManagedProject(
     projectPath,
     decision,
   );
-  await context.setSessionId(completed.project_provisioning!.agent_session_id!);
+  const agentSessionId = completed.project_provisioning!.agent_session_id!;
+  await context.setSessionId(agentSessionId);
+  // The admission server just issued this session id: the rehydration that
+  // follows is a continuation, not a reload, so it must not re-verify the id
+  // through /session/activate inside the explicit-admission window.
+  rememberServerIssuedSession(context, agentSessionId);
   return { kind: 'managed', identity: completed.project_identity! };
 }
 

@@ -230,6 +230,7 @@ test('registerCommands wires internal recovery and training compatibility comman
   assert.ok(vscodeMock.__registeredCommandIds.includes(COMMAND_IDS.browseWorkspaceProject));
   assert.ok(vscodeMock.__registeredCommandIds.includes(COMMAND_IDS.ignoreWorkspaceProject));
   assert.ok(vscodeMock.__registeredCommandIds.includes(COMMAND_IDS.deleteWorkspaceProject));
+  assert.ok(vscodeMock.__registeredCommandIds.includes(COMMAND_IDS.openViewInEditor));
   assert.ok(extensionContext.subscriptions.length >= vscodeMock.__registeredCommandIds.length);
 });
 

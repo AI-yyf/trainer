@@ -11,6 +11,7 @@ import type {
   TrainerHostState,
   TrainerWebviewMessage,
 } from './types';
+import { resolveWebviewCommand } from './webviewCommandRouting';
 import { sanitizeErrorSurfaceJson, sanitizeErrorSurfaceText } from '../../../shared/src/errorSurfaceSanitizer';
 import {
   formatRuntimeMetrics,
@@ -240,9 +241,7 @@ export class WorkbenchSidebarController
     this.outputChannel.appendLine('[webview] resolve start');
     try {
       this.view = webviewView;
-      // Identity lives in the in-webview session header ("Trainer <workspace>");
-      // the view title bar stays text-free so only the actions show.
-      webviewView.title = '';
+      this.applyTextFreeViewTitle(webviewView);
       webviewView.webview.options = {
         enableScripts: true,
         localResourceRoots: [this.extensionContext.extensionUri],
@@ -259,6 +258,10 @@ export class WorkbenchSidebarController
 
       webviewView.onDidChangeVisibility(() => {
         if (webviewView.visible) {
+          // VS Code can resolve/re-resolve a visible webview view with the
+          // manifest default title (single-space): re-assert the text-free
+          // title on every visibility change, not only at resolve.
+          this.applyTextFreeViewTitle(webviewView);
           // Phase-A metric: a show must never fan out into provider, catalog,
           // or engine work. The counters make regressions measurable.
           recordWebviewVisibilityShow();
@@ -288,6 +291,30 @@ export class WorkbenchSidebarController
         }`,
       );
       throw error;
+    }
+  }
+
+  /**
+   * The sidebar header must stay text-free — identity lives in the in-webview
+   * session header ("Trainer <workspace>").
+   *
+   * VS Code mechanics (verified against the shipped workbench bundle):
+   * - The visible sidebar header is the view container title
+   *   (`viewsContainers.activitybar[0].title`); the sidebar CSS uppercases it.
+   * - For a single-view extension container VS Code merges the view into the
+   *   container and composes the header from the pane title:
+   *   an empty pane title shows the container title alone; a non-empty pane
+   *   title would render "container: viewTitle".
+   * - `WebviewView.title` set to `''` is honored exactly: VS Code only falls
+   *   back to the manifest view name for non-string values, and it does not
+   *   trim the value.
+   * The container title itself is blanked in package.json (a single space is
+   * the stable empty expression: a falsy title would make VS Code fall back to
+   * the literal "workbench.view.extension.trainer").
+   */
+  private applyTextFreeViewTitle(webviewView: vscode.WebviewView): void {
+    if (webviewView.title !== '') {
+      webviewView.title = '';
     }
   }
 
@@ -922,79 +949,7 @@ export class WorkbenchSidebarController
   private resolveCommand(
     message: TrainerWebviewMessage,
   ): { commandId: string; payload?: unknown } | undefined {
-    switch (message.type) {
-      case 'command/execute':
-        return {
-          commandId: message.payload.commandId,
-          payload: message.payload.payload,
-        };
-      case 'settings/primeProviderModels':
-        return { commandId: COMMAND_IDS.primeProviderModels };
-      case 'session/sendMessage':
-        return { commandId: COMMAND_IDS.sendMessage, payload: message.payload };
-      case 'session/sendStreamMessage':
-        return { commandId: COMMAND_IDS.sendStreamMessage, payload: message.payload };
-      case 'session/cancelStreamMessage':
-        return { commandId: COMMAND_IDS.cancelStreamMessage, payload: message.payload };
-      case 'settings/saveCoach':
-        return { commandId: COMMAND_IDS.saveCoachSettings, payload: message.payload };
-      case 'plan/generate':
-        return { commandId: COMMAND_IDS.generatePlan };
-      case 'plan/freeze':
-        return {
-          commandId: COMMAND_IDS.updatePlan,
-          payload: { frozen: message.payload.frozen },
-        };
-      case 'task/specify':
-        return {
-          commandId: COMMAND_IDS.taskSpecify,
-          payload: message.payload,
-        };
-      case 'task/next':
-        return { commandId: COMMAND_IDS.nextTask };
-      case 'task/evaluateCurrentFile':
-        return {
-          commandId: COMMAND_IDS.evaluateCurrentFile,
-          payload: message.payload,
-        };
-      case 'resource/upload':
-        return { commandId: COMMAND_IDS.uploadResource, payload: message.payload };
-      case 'resource/open':
-        return {
-          commandId: COMMAND_IDS.openResource,
-          payload: message.payload,
-        };
-      case 'ui/liveFollow':
-      case 'ui/focus':
-        return undefined;
-      default:
-        return this.resolveResearchCompatibilityCommand(message);
-    }
-  }
-
-  private resolveResearchCompatibilityCommand(
-    message: TrainerWebviewMessage,
-  ): { commandId: string; payload?: unknown } | undefined {
-    switch (message.type) {
-      case 'research/create':
-        return { commandId: COMMAND_IDS.createResearch, payload: message.payload };
-      case 'research/addTheme':
-        return { commandId: COMMAND_IDS.addResearchTheme, payload: message.payload };
-      case 'research/activateTheme':
-        return { commandId: COMMAND_IDS.activateResearchTheme, payload: message.payload };
-      case 'research/advance':
-        return { commandId: COMMAND_IDS.advanceResearch, payload: message.payload };
-      case 'research/message':
-        return { commandId: COMMAND_IDS.researchMessage, payload: message.payload };
-      case 'research/streamMessage':
-        return { commandId: COMMAND_IDS.researchStreamMessage, payload: message.payload };
-      case 'research/approve':
-        return { commandId: COMMAND_IDS.approveResearchDecision, payload: message.payload };
-      case 'research/getStatus':
-        return { commandId: COMMAND_IDS.getResearchStatus, payload: message.payload };
-      default:
-        return undefined;
-    }
+    return resolveWebviewCommand(message);
   }
 
   private recordOutboundMessage(message: unknown): void {

@@ -1802,6 +1802,7 @@ type TrainerWebviewMessageBody =
   | { type: 'session/cancelStreamMessage'; payload?: { messageId?: string } }
   | { type: 'settings/saveCoach'; payload: CoachSettingsPayload }
   | { type: 'ui/liveFollow'; payload: { enabled: boolean } }
+  | { type: 'ui/collapseToSidebar' }
   | { type: 'plan/generate' }
   | { type: 'plan/freeze'; payload: { frozen: boolean } }
   | { type: 'task/specify'; payload: { text?: string } }
