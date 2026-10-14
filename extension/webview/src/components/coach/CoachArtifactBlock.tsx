@@ -33,6 +33,9 @@ export interface CoachArtifactBlockProps {
   artifact: CoachArtifactBlockData;
   /** Replies with a readable body only need an actionable attachment. */
   compact?: boolean;
+  /** One-line action bar (label + pill) for the latest reply — the full
+   * criteria text stays out of the conversation flow. */
+  slim?: boolean;
   className?: string;
   openLabel?: string;
   language?: ComposerLanguage;
@@ -145,6 +148,7 @@ function artifactTeaser(
 export function CoachArtifactBlock({
   artifact,
   compact = false,
+  slim = false,
   className,
   openLabel = "Open",
   language = "en-US",
@@ -180,6 +184,26 @@ export function CoachArtifactBlock({
   if (compact) {
     if (["evaluation", "review"].includes(artifact.kind) && !artifact.recommendedAction) return null;
     if (!onOpen || (!interactive && !artifact.recommendedAction)) return null;
+    if (slim) {
+      // Latest-reply variant: a one-line bar pinned above the composer flow —
+      // label + the action pill. The full criteria detail stays reachable via
+      // the reply's evidence fold instead of stacking under every reply.
+      return (
+        <div className="artifact-next-slim" data-template="NextAction">
+          <span className="artifact-next-slim__label">{artifactBlockCopy(language, "下一步")}</span>
+          <button
+            type="button"
+            className="button button--accent artifact-next-slim__action"
+            data-primary-action="true"
+            data-action-intent={artifact.recommendedAction}
+            title={displayTitle}
+            onClick={() => onOpen(artifact)}
+          >
+            {actionLabel}
+          </button>
+        </div>
+      );
+    }
     return (
       <NextAction
         label={artifactBlockCopy(language, "下一步")}

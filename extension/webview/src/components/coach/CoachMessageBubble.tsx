@@ -253,7 +253,13 @@ function CoachMessageBubbleImpl({
 
   const primaryArtifact = message.artifacts?.find((artifact) => Boolean(artifact.recommendedAction));
   const primaryNextAction = primaryArtifact && onArtifactOpen && !streaming ? (
-    <CoachArtifactBlock artifact={primaryArtifact} compact language={language} onOpen={(artifact) => onArtifactOpen(artifact, message)} />
+    <CoachArtifactBlock
+      artifact={primaryArtifact}
+      compact
+      slim={isLatestAssistant}
+      language={language}
+      onOpen={(artifact) => onArtifactOpen(artifact, message)}
+    />
   ) : null;
   if (message.artifacts?.length) {
     detailBlocks.push(

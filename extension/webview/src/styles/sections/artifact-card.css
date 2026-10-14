@@ -96,3 +96,22 @@
 .artifact-card__action {
   margin-top: var(--space-2);
 }
+
+/* Latest-reply next-action bar: label + accent pill on one line (slim). */
+.artifact-next-slim {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.artifact-next-slim__label {
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-muted);
+}
+
+.artifact-next-slim__action {
+  border-radius: 999px;
+  font-size: var(--trainer-font-2xs);
+  padding: 4px 12px;
+}
