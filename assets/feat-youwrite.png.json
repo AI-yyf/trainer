@@ -1,0 +1,47 @@
+{
+  "model": "gpt-image-2",
+  "provider": "huishitu",
+  "account": "huishitu",
+  "request_style": "openai_images",
+  "network_route": "direct",
+  "workflow": "normal",
+  "generation_mode": "standard",
+  "text_zones": [],
+  "text_zone_style": null,
+  "asset_background": null,
+  "reference_fidelity": "faithful",
+  "references": [
+    {
+      "source": "/Users/Apple/Desktop/trainer/assets/refs/trainer_identity.png",
+      "role": "identity",
+      "uploaded_path": "/Users/Apple/Desktop/trainer/assets/refs/trainer_identity.png",
+      "tile": null
+    }
+  ],
+  "prompt": "[STYLE LOCK]\n\nOVER-THE-SHOULDER perspective. Foreground: a developer's hands \ntyping on a laptop keyboard, code on screen is clearly \nHUMAN-WRITTEN (with imperfect formatting, real typos being \nfixed, comments in natural language). Screen shows:\n\n  def search_users(query: str):\n      # TODO: 加边界检查\n      return db.query(...)\n\nBehind the developer, standing 3 meters back with hands behind \nher back: Trainer 娘 in 3/4 rear view, watching. Her stopwatch-\nwhip is tucked into her belt, not in use. She has round glasses \non, expression calm and patient. A small golden badge on her \njacket reads \"coach-first mode\".\n\nTo her LEFT: a large red X over a button labeled \"AI: write code\".\nTo her RIGHT: a green checkmark on a button labeled \"AI: review code\".\n\nAbove the scene, a banner reads:\n  \"我读你写。我教你懂。我替你——不写。\"\n  \"I read what you write. I teach you to understand. I write for you — never.\"\n\n[COMPOSITION]\nCanvas 1600x900. Developer's hands + laptop occupy lower 1/3. \nTrainer 娘 at middle 1/3. Banner at top 1/3. Crossed-out button \nat left, checkmark button at right.\n\n[LIGHTING]\nWarm desk lamp from upper-right lighting the developer's hands. \nCool ambient on Trainer 娘. Subtle gold rim on her shoulders.\n\n[PALETTE]\nslate-900 #0F172A (laptop screen), indigo-700 #4338CA (her \nsilhouette), success #10B981 (right button), danger #EF4444 \n(left button X), cream-bg #F5F3FF (background).\n\n[TEXTURE]\nRealistic screen glow on developer's face (visible in the \nedge of frame). Painterly brushwork on Trainer 娘's jacket. \nBanner has visible canvas weave.\n\n[NEGATIVE CONSTRAINTS]\nNO AI typing visible. NO ghost-text / autocompletion bubbles. \nNO diff comparison (it's just human code). NO photorealism \non character.\n\n[QUALITY TAGS]\nmasterwork, museum-print, chiaroscuro, atmospheric perspective",
+  "verbatim_text": [],
+  "shaped_prompt": "Use case: photorealistic-natural\nAsset type: finished raster image\nPrimary request: [STYLE LOCK]\n\nOVER-THE-SHOULDER perspective. Foreground: a developer's hands \ntyping on a laptop keyboard, code on screen is clearly \nHUMAN-WRITTEN (with imperfect formatting, real typos being \nfixed, comments in natural language). Screen shows:\n\n  def search_users(query: str):\n      # TODO: 加边界检查\n      return db.query(...)\n\nBehind the developer, standing 3 meters back with hands behind \nher back: Trainer 娘 in 3/4 rear view, watching. Her stopwatch-\nwhip is tucked into her belt, not in use. She has round glasses \non, expression calm and patient. A small golden badge on her \njacket reads \"coach-first mode\".\n\nTo her LEFT: a large red X over a button labeled \"AI: write code\".\nTo her RIGHT: a green checkmark on a button labeled \"AI: review code\".\n\nAbove the scene, a banner reads:\n  \"我读你写。我教你懂。我替你——不写。\"\n  \"I read what you write. I teach you to understand. I write for you — never.\"\n\n[COMPOSITION]\nCanvas 1600x900. Developer's hands + laptop occupy lower 1/3. \nTrainer 娘 at middle 1/3. Banner at top 1/3. Crossed-out button \nat left, checkmark button at right.\n\n[LIGHTING]\nWarm desk lamp from upper-right lighting the developer's hands. \nCool ambient on Trainer 娘. Subtle gold rim on her shoulders.\n\n[PALETTE]\nslate-900 #0F172A (laptop screen), indigo-700 #4338CA (her \nsilhouette), success #10B981 (right button), danger #EF4444 \n(left button X), cream-bg #F5F3FF (background).\n\n[TEXTURE]\nRealistic screen glow on developer's face (visible in the \nedge of frame). Painterly brushwork on Trainer 娘's jacket. \nBanner has visible canvas weave.\n\n[NEGATIVE CONSTRAINTS]\nNO AI typing visible. NO ghost-text / autocompletion bubbles. \nNO diff comparison (it's just human code). NO photorealism \non character.\n\n[QUALITY TAGS]\nmasterwork, museum-print, chiaroscuro, atmospheric perspective\nInput images: Image 1: identity input\nScene/backdrop: infer only what the request implies; keep it coherent and uncluttered\nSubject: make the requested subject the unmistakable focal point\nStyle/medium: follow the requested medium; if omitted, use a polished production-ready finish\nComposition/framing: one clear focal subject, coherent depth, intentional framing, no accidental clutter\nLighting/mood: consistent light direction, believable shadows, refined contrast and color\nColor palette: preserve colors from the request or references; avoid arbitrary brand colors\nMaterials/textures: physically plausible surfaces, fine texture, clean edges, no plastic-looking detail\nText (verbatim, every string must be exact): none specified\nConstraints: do not invent unrequested subjects; preserve reference identity, silhouette and key geometry when applicable\nAvoid: unrequested objects, extra people, duplicate subjects, distorted anatomy, bad hands, unreadable text, random logos, watermark, signature, border, overprocessed skin, plastic texture, muddy details, accidental collage\nRender at the highest native quality available. Prioritize subject fidelity, clean edges, coherent perspective and accurate requested text.\nDelivery intent: compose specifically for a 1600x900 canvas at 1.7778:1; keep important content inside the canvas and make every required element readable at that delivery size.\nReference policy: use each input only for its stated role; do not paste borders, watermarks, or old text from references; blend lighting and perspective naturally.\nReference fidelity: faithfully preserve the supplied reference's visual grammar, palette, paper texture, illustration language, hierarchy and recognizable subject geometry. Replace only content explicitly requested by the user.",
+  "requested_native_size": "3840x2160",
+  "native_size_policy": "target-ratio-maximum",
+  "requested_quality": "high",
+  "upstream_format": "PNG",
+  "native_size": [
+    3840,
+    2160
+  ],
+  "native_request_honored": true,
+  "native_output": "/Users/Apple/Desktop/trainer/assets/feat-youwrite.png",
+  "final_size": [
+    3840,
+    2160
+  ],
+  "target_size": [
+    1600,
+    900
+  ],
+  "output_size_mode": "native",
+  "resize_mode": null,
+  "delivery_sharpen": null,
+  "postprocess": "none",
+  "output": "/Users/Apple/Desktop/trainer/assets/feat-youwrite.png"
+}

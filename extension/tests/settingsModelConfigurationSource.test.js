@@ -25,8 +25,10 @@ test('settings stores context and output limits at the model level', () => {
   assert.match(source, /maxOutputTokens\?: number;/);
   assert.match(source, /const modelLimitNames = filterProviderModelOptions\(/);
   assert.match(source, /const selectableModelOptions = filterProviderModelOptions\(/);
-  assert.match(source, /const MODEL_PICKER_RECENT_OPTION_LIMIT = 5;/);
-  assert.match(source, /const MODEL_PICKER_SEARCH_OPTION_LIMIT = 8;/);
+  // P0 redirect: the 5/8 truncation caps are gone in favor of the defensive
+  // >=200 guard; the list stays complete with search filtering.
+  assert.match(source, /const MODEL_PICKER_DEFENSIVE_OPTION_LIMIT = 200;/);
+  assert.doesNotMatch(source, /MODEL_PICKER_RECENT_OPTION_LIMIT|MODEL_PICKER_SEARCH_OPTION_LIMIT/);
   assert.match(source, /const matchingModelOptions = useMemo\(/);
   assert.match(source, /const visibleModelOptions = useMemo\(/);
   assert.match(

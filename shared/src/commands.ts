@@ -66,6 +66,7 @@ export const trainerCommands = {
   resetSandboxRoot: "trainer.sandbox.resetRoot",
   chooseManagedDataFolder: "trainer.resource.chooseManagedDataFolder",
   resetManagedDataFolder: "trainer.resource.resetManagedDataFolder",
+  moveManagedDataUnderRoot: "trainer.resource.dataUnderRoot",
   chooseTrainerWorkspaceRoot: "trainer.workspace.chooseRoot",
   migrateTrainerWorkspaceRoot: "trainer.workspace.migrateRoot",
   backupTrainerWorkspace: "trainer.workspace.backup",

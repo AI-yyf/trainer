@@ -8,19 +8,25 @@ const path = require('node:path');
 const sharedStatusPath = path.resolve(__dirname, '..', '..', 'shared', 'src', 'providerStatus.ts');
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
-test('untested or unconfigured providers cannot send as a live coach', () => {
+/**
+ * P0 redirect: the send-state vocabulary is now exactly three states
+ * (ready / needs_configuration / request_failed). Missing configuration still
+ * blocks sending — but historical test results and model-list states are
+ * diagnostics only and never create a block.
+ */
+test('unconfigured or missing-key providers cannot send as a live coach', () => {
   const status = fs.readFileSync(sharedStatusPath, 'utf8');
   const app = fs.readFileSync(appPath, 'utf8');
 
-  const missingTest = status.indexOf('if (!provider.lastTestResult) {');
-  assert.ok(missingTest >= 0, 'expected missing lastTestResult branch');
-  const missingBlock = status.slice(missingTest, missingTest + 280);
-  assert.match(missingBlock, /blocked:\s*true/);
-  assert.match(missingBlock, /status:\s*'blocked_error'/);
-  assert.doesNotMatch(missingBlock, /blocked:\s*false/);
-
+  // Unconfigured/transport-missing and missing-key both produce a blocked
+  // needs_configuration state; no lastTestResult gate exists at all.
   assert.match(status, /if \(!provider\.configured \|\| transportMissing\) \{[\s\S]*?blocked:\s*true/);
+  assert.match(status, /status: 'needs_configuration',\s*reasonKind: 'missing_provider'/);
   assert.match(status, /if \(!provider\.apiKeyConfigured\) \{[\s\S]*?blocked:\s*true/);
+  assert.match(status, /status: 'needs_configuration',\s*reasonKind: 'missing_api_key'/);
+  // The historical gate is gone: no branch reads lastTestResult for blocking.
+  assert.doesNotMatch(status, /if \(!provider\.lastTestResult\) \{[\s\S]{0,280}blocked:\s*true/);
+  assert.doesNotMatch(status, /'blocked_error'|'degraded_error'|'warming'|'refreshing'/);
 
   // The sidecar connection pill is informational only: sending is gated by
   // provider configuration/health, never by transport state.

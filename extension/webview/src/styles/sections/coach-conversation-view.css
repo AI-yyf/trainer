@@ -114,6 +114,60 @@
   margin: 2px 0 0 auto;
 }
 
+/* r-g0-quick-tools: copy/share icon buttons pin to the message bottom-left,
+   next to the ··· menu that keeps the learning-value actions. The row never
+   steals focus from the reply: at rest it is dimmed, hover/focus raises it. */
+.coach-conversation-view .message-bubble__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: 2px;
+}
+
+.coach-conversation-view .message-bubble__quick-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.coach-conversation-view .message-bubble__icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--fg-muted) 55%, transparent);
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease);
+}
+
+.coach-conversation-view .message-bubble:hover .message-bubble__icon-action,
+.coach-conversation-view .message-bubble:focus-within .message-bubble__icon-action,
+.coach-conversation-view .message-bubble__icon-action:hover,
+.coach-conversation-view .message-bubble__icon-action:focus-visible {
+  color: var(--fg-muted);
+}
+
+.coach-conversation-view .message-bubble__icon-action:hover,
+.coach-conversation-view .message-bubble__icon-action:focus-visible {
+  background: color-mix(in srgb, var(--line) 40%, transparent);
+}
+
+.coach-conversation-view .message-bubble__icon-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-conversation-view .message-bubble__icon-action {
+    transition: none;
+  }
+}
+
 .coach-conversation-view .template-overflow > summary {
   color: color-mix(in srgb, var(--fg-muted) 55%, transparent);
   transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease);

@@ -1,0 +1,47 @@
+{
+  "model": "gpt-image-2",
+  "provider": "huishitu",
+  "account": "huishitu",
+  "request_style": "openai_images",
+  "network_route": "direct",
+  "workflow": "normal",
+  "generation_mode": "standard",
+  "text_zones": [],
+  "text_zone_style": null,
+  "asset_background": null,
+  "reference_fidelity": "faithful",
+  "references": [
+    {
+      "source": "/Users/Apple/Desktop/trainer/assets/refs/trainer_identity.png",
+      "role": "identity",
+      "uploaded_path": "/Users/Apple/Desktop/trainer/assets/refs/trainer_identity.png",
+      "tile": null
+    }
+  ],
+  "prompt": "[STYLE LOCK]\n\nTrainer 娘 at center, holding a flashcard up with both hands \nat face level — front side shows \"Q: 为什么 generator 比 \nlist 节省内存？\" in handwritten chalk, she's mid-flip, \nback side just visible showing \"A: lazy evaluation\" with \na green ✓ verified stamp.\n\nShe stands at the apex of a circular training loop track \ndrawn on the ground in chalk-green #86EFAC:\n\n  对话 → 证据 → 训练卡 → 验收 → (回到对话)\n\nEach loop segment has a small monument:\n  - 对话: speech bubble monument\n  - 证据: clipboard monument with checkmarks\n  - 训练卡: stack of cards monument\n  - 验收: stamp monument (same brass stamp from feat-verify)\n\nOutside the loop, three faded harness girl silhouettes \n(cursor, codex, claude code) leaning in to watch the loop, \ntheir forms semi-transparent indigo #312E81 with 0.3 opacity.\n\n[BACKGROUND]\nSoft warm slate with floating question marks and answer marks \nin chalk.\n\n[COMPOSITION]\nCanvas 1600x900. Circular loop fills 60% of canvas. Trainer 娘 \nat center of loop. Harness silhouettes at outer ring. Rule of \nthirds. Golden ratio.\n\n[LIGHTING]\nKey from upper-center (trainer face bright). Rim gold from \nflashcard edges. Soft volumetric haze through loop track.\n\n[PALETTE]\nindigo-700 #4338CA, chalk-green #86EFAC, gold-500 #F59E0B, \ncream-bg #F5F3FF, slate-700 #334155 (faded silhouettes).\n\n[TEXTURE]\nSharp focus on Trainer 娘 face and flashcard. Loop track has \nvisible chalk texture. Silhouettes have painterly soft edges.\n\n[NEGATIVE CONSTRAINTS]\nNO to-do list appearance (it's a loop, not a queue). NO \ncheckbox UI (use stamp instead). NO photorealism.\n\n[QUALITY TAGS]\nmasterwork, museum-print, chiaroscuro, golden-ratio, \ncinematic depth",
+  "verbatim_text": [],
+  "shaped_prompt": "Use case: photorealistic-natural\nAsset type: finished raster image\nPrimary request: [STYLE LOCK]\n\nTrainer 娘 at center, holding a flashcard up with both hands \nat face level — front side shows \"Q: 为什么 generator 比 \nlist 节省内存？\" in handwritten chalk, she's mid-flip, \nback side just visible showing \"A: lazy evaluation\" with \na green ✓ verified stamp.\n\nShe stands at the apex of a circular training loop track \ndrawn on the ground in chalk-green #86EFAC:\n\n  对话 → 证据 → 训练卡 → 验收 → (回到对话)\n\nEach loop segment has a small monument:\n  - 对话: speech bubble monument\n  - 证据: clipboard monument with checkmarks\n  - 训练卡: stack of cards monument\n  - 验收: stamp monument (same brass stamp from feat-verify)\n\nOutside the loop, three faded harness girl silhouettes \n(cursor, codex, claude code) leaning in to watch the loop, \ntheir forms semi-transparent indigo #312E81 with 0.3 opacity.\n\n[BACKGROUND]\nSoft warm slate with floating question marks and answer marks \nin chalk.\n\n[COMPOSITION]\nCanvas 1600x900. Circular loop fills 60% of canvas. Trainer 娘 \nat center of loop. Harness silhouettes at outer ring. Rule of \nthirds. Golden ratio.\n\n[LIGHTING]\nKey from upper-center (trainer face bright). Rim gold from \nflashcard edges. Soft volumetric haze through loop track.\n\n[PALETTE]\nindigo-700 #4338CA, chalk-green #86EFAC, gold-500 #F59E0B, \ncream-bg #F5F3FF, slate-700 #334155 (faded silhouettes).\n\n[TEXTURE]\nSharp focus on Trainer 娘 face and flashcard. Loop track has \nvisible chalk texture. Silhouettes have painterly soft edges.\n\n[NEGATIVE CONSTRAINTS]\nNO to-do list appearance (it's a loop, not a queue). NO \ncheckbox UI (use stamp instead). NO photorealism.\n\n[QUALITY TAGS]\nmasterwork, museum-print, chiaroscuro, golden-ratio, \ncinematic depth\nInput images: Image 1: identity input\nScene/backdrop: infer only what the request implies; keep it coherent and uncluttered\nSubject: make the requested subject the unmistakable focal point\nStyle/medium: follow the requested medium; if omitted, use a polished production-ready finish\nComposition/framing: one clear focal subject, coherent depth, intentional framing, no accidental clutter\nLighting/mood: consistent light direction, believable shadows, refined contrast and color\nColor palette: preserve colors from the request or references; avoid arbitrary brand colors\nMaterials/textures: physically plausible surfaces, fine texture, clean edges, no plastic-looking detail\nText (verbatim, every string must be exact): none specified\nConstraints: do not invent unrequested subjects; preserve reference identity, silhouette and key geometry when applicable\nAvoid: unrequested objects, extra people, duplicate subjects, distorted anatomy, bad hands, unreadable text, random logos, watermark, signature, border, overprocessed skin, plastic texture, muddy details, accidental collage\nRender at the highest native quality available. Prioritize subject fidelity, clean edges, coherent perspective and accurate requested text.\nDelivery intent: compose specifically for a 1600x900 canvas at 1.7778:1; keep important content inside the canvas and make every required element readable at that delivery size.\nReference policy: use each input only for its stated role; do not paste borders, watermarks, or old text from references; blend lighting and perspective naturally.\nReference fidelity: faithfully preserve the supplied reference's visual grammar, palette, paper texture, illustration language, hierarchy and recognizable subject geometry. Replace only content explicitly requested by the user.",
+  "requested_native_size": "3840x2160",
+  "native_size_policy": "target-ratio-maximum",
+  "requested_quality": "high",
+  "upstream_format": "PNG",
+  "native_size": [
+    3840,
+    2160
+  ],
+  "native_request_honored": true,
+  "native_output": "/Users/Apple/Desktop/trainer/assets/feat-training.png",
+  "final_size": [
+    3840,
+    2160
+  ],
+  "target_size": [
+    1600,
+    900
+  ],
+  "output_size_mode": "native",
+  "resize_mode": null,
+  "delivery_sharpen": null,
+  "postprocess": "none",
+  "output": "/Users/Apple/Desktop/trainer/assets/feat-training.png"
+}

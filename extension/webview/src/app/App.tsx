@@ -165,7 +165,7 @@ import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transf
 import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
 import { UtilityOverlay } from "../templates/UtilityOverlay";
 import { templateCopy } from "../templates/templateCopy";
-import { buildComposerProviderMenuItems, composerModelAutoRefreshDecision, composerModelPolicyHint, compactComposerModelLabel, settingsModelAutoPrimeDecision, type ComposerProviderMenuItem } from "../lib/composerModelHelpers";
+import { buildComposerProviderMenuItems, composerModelPolicyHint, compactComposerModelLabel, type ComposerProviderMenuItem } from "../lib/composerModelHelpers";
 import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel } from "../lib/viewLabels";
 import { WorkbenchSurfaces } from "./WorkbenchSurfaces";
 import { getSurfaceScrollElement, useSurfaceScroll } from "./useSurfaceScroll";
@@ -3696,8 +3696,6 @@ export function App() {
   const [resourceConversationContextIds, setResourceConversationContextIds] = useState<string[]>([]);
   const [resourcesViewSearchQuery, setResourcesViewSearchQuery] = useState("");
   const composerShellRef = useRef<HTMLDivElement | null>(null);
-  const composerModelAutoRefreshKeyRef = useRef("");
-  const settingsModelAutoPrimeKeyRef = useRef("");
   const hostMessageSequenceRef = useRef(0);
   const coachRuntimeContextSignatureRef = useRef<string | undefined>(undefined);
   const composerModelSearchRef = useRef<HTMLInputElement | null>(null);
@@ -8267,9 +8265,7 @@ export function App() {
     !composerUsesTrainingFlow &&
     !sendBlocked &&
     Boolean(
-      providerSendState.status === "degraded_error" || providerSendState.status === "refreshing"
-        ? providerSendState.warning
-        : undefined,
+      providerSendState.warning
     );
   // §六: one arbitration result drives both the coach pane takeover and the
   // composer presence bar, so at most one blocking surface is ever visible.
@@ -9429,107 +9425,6 @@ export function App() {
     },
     [isBrowserPreview, layout.composerLanguage, setOperationMessage],
   );
-
-  const primeSettingsProviderModels = useCallback(() => {
-    if (!data.providerConfig.configured || !data.providerConfig.apiKeyConfigured) {
-      return;
-    }
-
-    if (isBrowserPreview) {
-      void loadBrowserPreviewModule()
-        .then((browserPreview) =>
-          browserPreview.refreshBrowserPreviewProviderModels(previewSessionId),
-        )
-        .then(({ sessionId, messages }) => {
-          setPreviewSessionId(sessionId);
-          applyPreviewHostMessages(
-            messages.filter((message) => message.type !== "operation/status"),
-            true,
-          );
-        })
-        .catch(() => undefined);
-      return;
-    }
-
-    postMessage({
-      type: "settings/primeProviderModels",
-    });
-  }, [
-    applyPreviewHostMessages,
-    data.providerConfig.apiKeyConfigured,
-    data.providerConfig.configured,
-    isBrowserPreview,
-    previewSessionId,
-  ]);
-
-  useEffect(() => {
-    if (openMenu !== "model") {
-      composerModelAutoRefreshKeyRef.current = "";
-      return;
-    }
-
-    // §四十八: refresh decision + dedup key live in lib/composerModelHelpers.
-    const decision = composerModelAutoRefreshDecision(data.providerConfig);
-    if (!decision.needsRefresh) {
-      return;
-    }
-    if (composerModelAutoRefreshKeyRef.current === decision.refreshKey) {
-      return;
-    }
-
-    composerModelAutoRefreshKeyRef.current = decision.refreshKey;
-    refreshComposerProviderModels();
-  }, [
-    data.providerConfig.apiKeyConfigured,
-    data.providerConfig.availableModels,
-    data.providerConfig.baseUrl,
-    data.providerConfig.cacheExpiresAt,
-    data.providerConfig.cacheFetchedAt,
-    data.providerConfig.configured,
-    data.providerConfig.model,
-    data.providerConfig.modelListStatus,
-    data.providerConfig.name,
-    data.providerConfig.protocol,
-    openMenu,
-    refreshComposerProviderModels,
-  ]);
-
-  useEffect(() => {
-    if (activeView !== "settings") {
-      settingsModelAutoPrimeKeyRef.current = "";
-      return;
-    }
-
-    // §四十八: prime decision + dedup key live in lib/composerModelHelpers.
-    const decision = settingsModelAutoPrimeDecision(
-      data.providerConfig,
-      providerDraftHasChanges,
-    );
-    if (!decision.needsPrime) {
-      return;
-    }
-    if (settingsModelAutoPrimeKeyRef.current === decision.primeKey) {
-      return;
-    }
-
-    settingsModelAutoPrimeKeyRef.current = decision.primeKey;
-    primeSettingsProviderModels();
-  }, [
-    activeView,
-    data.providerConfig.apiKeyConfigured,
-    data.providerConfig.availableModels,
-    data.providerConfig.baseUrl,
-    data.providerConfig.cacheExpiresAt,
-    data.providerConfig.cacheFetchedAt,
-    data.providerConfig.configured,
-    data.providerConfig.model,
-    data.providerConfig.modelListStatus,
-    data.providerConfig.modelRetryable,
-    data.providerConfig.name,
-    data.providerConfig.protocol,
-    primeSettingsProviderModels,
-    providerDraftHasChanges,
-  ]);
 
   const switchComposerProviderProfile = useCallback((profileId: string) => {
     setOpenMenu(undefined);
@@ -11859,7 +11754,7 @@ export function App() {
   };
 
   const composerSurfaceHint = () => {
-    if (providerSendState.status === "degraded_error" || providerSendState.status === "refreshing") {
+    if (providerSendState.warning && !providerSendState.blocked) {
       return providerSendState.warning;
     }
     if (draft.trim().length === 0) {

@@ -33,6 +33,7 @@ const WORKSPACE_ADMISSION_REQUIRED_COMMAND_IDS = new Set<string>([
   COMMAND_IDS.resetSandboxRoot,
   COMMAND_IDS.chooseManagedDataFolder,
   COMMAND_IDS.resetManagedDataFolder,
+  COMMAND_IDS.moveManagedDataUnderRoot,
   COMMAND_IDS.refreshMemory,
   COMMAND_IDS.grantMemoryShare,
   COMMAND_IDS.revokeMemoryShare,

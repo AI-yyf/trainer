@@ -3,6 +3,8 @@ import { CoachReply } from "../../templates/CoachReply";
 import { OverflowActions } from "../../templates/OverflowActions";
 import { memo, type ReactNode } from "react";
 
+import { CopyIcon, ShareIcon } from "../icons";
+
 import {
   deriveTrainerToolActivity,
   findCoachVisibleStatusPart,
@@ -383,28 +385,57 @@ function CoachMessageBubbleImpl({
       ) : null}
         nextAction={primaryNextAction}
         tools={showAssistantActions ? (
-          <OverflowActions
-            label={coachMessageBubbleCopy(language, "这条回复的快捷操作")}
-            actions={([
-              // Learning-value actions lead; a divider separates the utility
-              // actions (r1-g0-5) so the menu reads learning-first.
-              "training-card",
-              "save-resource",
-              "separator",
-              "copy",
-              "share",
-              ...(isLatestAssistant ? ["retry"] : []),
-            ] as Array<CoachMessageAction | "separator">).map((entry) => (
-              entry === "separator"
-                ? { id: "separator", label: "", separator: true, disabled: false, onClick: () => {} }
-                : {
-                    id: entry,
-                    label: messageActionLabels[entry],
-                    disabled: Boolean(pendingAssistantAction),
-                    onClick: () => onMessageAction?.(entry, message),
-                  }
-            ))}
-          />
+          // r-g0-quick-tools: copy/share are the two utility actions learners
+          // reach for most — they become small icon buttons pinned to the
+          // message's bottom-left instead of hiding in the ··· menu. The
+          // learning-value actions (training card / save to library) and the
+          // regenerate action stay in the overflow menu.
+          <div className="message-bubble__tools">
+            <div className="message-bubble__quick-tools" role="group" aria-label={coachMessageBubbleCopy(language, "这条回复的快捷操作")}>
+              <button
+                type="button"
+                className="message-bubble__icon-action"
+                data-message-quick-action="copy"
+                aria-label={messageActionLabels.copy}
+                title={messageActionLabels.copy}
+                disabled={Boolean(pendingAssistantAction)}
+                onClick={() => onMessageAction?.("copy", message)}
+              >
+                <CopyIcon size={14} />
+              </button>
+              <button
+                type="button"
+                className="message-bubble__icon-action"
+                data-message-quick-action="share"
+                aria-label={messageActionLabels.share}
+                title={messageActionLabels.share}
+                disabled={Boolean(pendingAssistantAction)}
+                onClick={() => onMessageAction?.("share", message)}
+              >
+                <ShareIcon size={14} />
+              </button>
+            </div>
+            <OverflowActions
+              label={coachMessageBubbleCopy(language, "这条回复的快捷操作")}
+              actions={([
+                // Learning-value actions lead; a divider separates the utility
+                // actions (r1-g0-5) so the menu reads learning-first.
+                "training-card",
+                "save-resource",
+                "separator",
+                ...(isLatestAssistant ? (["retry"] as const) : []),
+              ] as Array<CoachMessageAction | "separator">).map((entry) => (
+                entry === "separator"
+                  ? { id: "separator", label: "", separator: true, disabled: false, onClick: () => {} }
+                  : {
+                      id: entry,
+                      label: messageActionLabels[entry],
+                      disabled: Boolean(pendingAssistantAction),
+                      onClick: () => onMessageAction?.(entry, message),
+                    }
+              ))}
+            />
+          </div>
         ) : null}
       />
     </article>

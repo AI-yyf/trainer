@@ -101,6 +101,8 @@ import type {
   TaskSpecView,
   TeachingDecisionView,
   TrainerHostState,
+  TrainerProjectListEntryView,
+  TrainerProjectsListView,
   ToneDecisionView,
   UserProfileView,
   WorkspaceAuthorityView,
@@ -4381,6 +4383,14 @@ function mapMemoryWorkspace(
       ),
       sameWorkspace ? fallback?.trainerWorkspace : undefined,
     ),
+    trainerProjects: mapTrainerProjectsList(
+      scopedTrainingSubmodeValue(
+        record.trainer_projects ?? record.trainerProjects,
+        incomingWorkspaceId,
+        sameWorkspace,
+      ),
+      sameWorkspace ? fallback?.trainerProjects : undefined,
+    ),
     resourceSandbox: (() => {
       const scopedSandbox = asRecord(
         scopedTrainingSubmodeValue(
@@ -5291,8 +5301,7 @@ function mapTrainingCardVerificationFields(
 function mapTrainerWorkspaceAdmission(
   value: unknown,
   fallback: TrainerWorkspaceAdmissionStateView | undefined,
-): TrainerWorkspaceAdmissionStateView | undefined {
-  const record = asRecord(value);
+): TrainerWorkspaceAdmissionStateView | undefined {  const record = asRecord(value);
   if (!record) {
     return fallback;
   }
@@ -5329,6 +5338,60 @@ function mapTrainerWorkspaceAdmission(
           : [],
       };
     })(),
+  };
+}
+
+function mapTrainerProjectsList(
+  value: unknown,
+  fallback: TrainerProjectsListView | undefined,
+): TrainerProjectsListView | undefined {
+  const record = asRecord(value);
+  if (!record) {
+    return fallback;
+  }
+  const rawProjects = Array.isArray(record.projects) ? record.projects : [];
+  const projects = rawProjects
+    .map((entry) => {
+      const project = asRecord(entry);
+      if (!project) {
+        return undefined;
+      }
+      const projectPath =
+        asString(project.project_path) ?? asString(project.projectPath) ?? undefined;
+      if (!projectPath?.trim()) {
+        return undefined;
+      }
+      const adoptionMode =
+        asString(project.adoption_mode) ?? asString(project.adoptionMode) ?? undefined;
+      const identityStatus =
+        asString(project.identity_status) ?? asString(project.identityStatus) ?? undefined;
+      const normalizedAdoptionMode: TrainerProjectListEntryView['adoptionMode'] =
+        adoptionMode === 'managed' || adoptionMode === 'browse' || adoptionMode === 'ignored'
+          ? adoptionMode
+          : 'managed';
+      const normalizedIdentityStatus: TrainerProjectListEntryView['identityStatus'] =
+        identityStatus === 'pending' ||
+        identityStatus === 'verified' ||
+        identityStatus === 'reconcile-required'
+          ? identityStatus
+          : undefined;
+      return {
+        projectPath,
+        projectName:
+          asString(project.project_name) ?? asString(project.projectName) ?? projectPath,
+        adoptionMode: normalizedAdoptionMode,
+        identityStatus: normalizedIdentityStatus,
+        isCurrent: asBoolean(project.is_current) ?? asBoolean(project.isCurrent) ?? false,
+        updatedAt: asString(project.updated_at) ?? asString(project.updatedAt) ?? undefined,
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  if (projects.length === 0 && !asString(record.root_path) && !asString(record.rootPath)) {
+    return fallback;
+  }
+  return {
+    rootPath: asString(record.root_path) ?? asString(record.rootPath) ?? fallback?.rootPath,
+    projects: projects.length > 0 ? projects : fallback?.projects ?? [],
   };
 }
 

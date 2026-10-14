@@ -110,7 +110,8 @@ test('provider send state blocks clearly when provider is missing', () => {
   );
 
   assert.equal(result.blocked, true);
-  assert.equal(result.status, 'missing_provider');
+  assert.equal(result.status, 'needs_configuration');
+  assert.equal(result.reasonKind, 'missing_provider');
   assert.match(result.reason ?? '', /model connection is not set up yet/i);
   assert.match(result.reason ?? '', /finish it in settings/i);
 });
@@ -129,7 +130,8 @@ test('provider send state blocks clearly when api key is missing', () => {
   );
 
   assert.equal(result.blocked, true);
-  assert.equal(result.status, 'missing_api_key');
+  assert.equal(result.status, 'needs_configuration');
+  assert.equal(result.reasonKind, 'missing_api_key');
   assert.match(result.reason ?? '', /connection is not complete yet/i);
   assert.match(result.reason ?? '', /add the key in settings/i);
 });
@@ -151,6 +153,7 @@ test('provider send state treats either missing transport field as provider setu
     );
 
     assert.equal(result.blocked, true);
-    assert.equal(result.status, 'missing_provider');
+    assert.equal(result.status, 'needs_configuration');
+    assert.equal(result.reasonKind, 'missing_provider');
   }
 });

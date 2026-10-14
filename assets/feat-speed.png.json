@@ -1,0 +1,47 @@
+{
+  "model": "gpt-image-2",
+  "provider": "huishitu",
+  "account": "huishitu",
+  "request_style": "openai_images",
+  "network_route": "direct",
+  "workflow": "normal",
+  "generation_mode": "standard",
+  "text_zones": [],
+  "text_zone_style": null,
+  "asset_background": null,
+  "reference_fidelity": "faithful",
+  "references": [
+    {
+      "source": "/Users/Apple/Desktop/trainer/assets/refs/trainer_identity.png",
+      "role": "identity",
+      "uploaded_path": "/Users/Apple/Desktop/trainer/assets/refs/trainer_identity.png",
+      "tile": null
+    }
+  ],
+  "prompt": "[STYLE LOCK]\n\nTrainer 娘 at center holding a large brass stopwatch raised \nhigh, her eyes focused on the watch face. Stopwatch hands at \n12 o'clock, ready to time.\n\nBENEATH her: a racetrack drawn in chalk on the ground, four \nlanes, four stylized \"gateway runner\" figures (small abstract \nchibi robots with brand-colored uniforms) at the starting \nblocks:\n\n  Lane 1: OpenAI uniform (white with gold), mid-stride\n  Lane 2: Anthropic uniform (black with copper), mid-stride\n  Lane 3: Gemini uniform (rainbow gradient), mid-stride\n  Lane 4: Custom relay uniform (gray with circuit pattern), \n          trailing\n\nFinish line banner:\n  🏁 Use fastest (42ms)\n\nBelow finish line, 4 colored badges:\n  🟢 42ms   (Lane 1 — gold)\n  🟢 87ms   (Lane 2 — gold)  \n  🟡 312ms  (Lane 3 — amber)\n  ⚫ timed out (Lane 4 — slate)\n\nOn the racetrack ground, chalk dust marks showing the \"warm-up \nrequest\" discarded first (drawn as faded footprints).\n\n[BACKGROUND]\nSoft slate background with faint dotted lines (DNS/CDN cold \nstart metaphor).\n\n[COMPOSITION]\nCanvas 1600x900. Trainer 娘 at upper-center holding stopwatch. \nRacetrack at lower 2/3. Lanes horizontal. Finish line at \nright.\n\n[LIGHTING]\nKey from upper-left. Lane 1 and 2 have gold rim light (fast). \nLane 3 has amber rim. Lane 4 has cool gray rim.\n\n[PALETTE]\nindigo-700 #4338CA, gold-500 #F59E0B, success #10B981, \nwarning #F59E0B, slate-700 #334155.\n\n[TEXTURE]\nSharp focus on stopwatch. Visible motion blur on the runners. \nChalk dust visible on track.\n\n[NEGATIVE CONSTRAINTS]\nNO real brand logos on uniforms (only color coding). NO \nphotorealistic stopwatch. NO photorealism on characters.\n\n[QUALITY TAGS]\nmasterwork, museum-print, chiaroscuro, motion blur, \ncinematic depth",
+  "verbatim_text": [],
+  "shaped_prompt": "Use case: photorealistic-natural\nAsset type: finished raster image\nPrimary request: [STYLE LOCK]\n\nTrainer 娘 at center holding a large brass stopwatch raised \nhigh, her eyes focused on the watch face. Stopwatch hands at \n12 o'clock, ready to time.\n\nBENEATH her: a racetrack drawn in chalk on the ground, four \nlanes, four stylized \"gateway runner\" figures (small abstract \nchibi robots with brand-colored uniforms) at the starting \nblocks:\n\n  Lane 1: OpenAI uniform (white with gold), mid-stride\n  Lane 2: Anthropic uniform (black with copper), mid-stride\n  Lane 3: Gemini uniform (rainbow gradient), mid-stride\n  Lane 4: Custom relay uniform (gray with circuit pattern), \n          trailing\n\nFinish line banner:\n  🏁 Use fastest (42ms)\n\nBelow finish line, 4 colored badges:\n  🟢 42ms   (Lane 1 — gold)\n  🟢 87ms   (Lane 2 — gold)  \n  🟡 312ms  (Lane 3 — amber)\n  ⚫ timed out (Lane 4 — slate)\n\nOn the racetrack ground, chalk dust marks showing the \"warm-up \nrequest\" discarded first (drawn as faded footprints).\n\n[BACKGROUND]\nSoft slate background with faint dotted lines (DNS/CDN cold \nstart metaphor).\n\n[COMPOSITION]\nCanvas 1600x900. Trainer 娘 at upper-center holding stopwatch. \nRacetrack at lower 2/3. Lanes horizontal. Finish line at \nright.\n\n[LIGHTING]\nKey from upper-left. Lane 1 and 2 have gold rim light (fast). \nLane 3 has amber rim. Lane 4 has cool gray rim.\n\n[PALETTE]\nindigo-700 #4338CA, gold-500 #F59E0B, success #10B981, \nwarning #F59E0B, slate-700 #334155.\n\n[TEXTURE]\nSharp focus on stopwatch. Visible motion blur on the runners. \nChalk dust visible on track.\n\n[NEGATIVE CONSTRAINTS]\nNO real brand logos on uniforms (only color coding). NO \nphotorealistic stopwatch. NO photorealism on characters.\n\n[QUALITY TAGS]\nmasterwork, museum-print, chiaroscuro, motion blur, \ncinematic depth\nInput images: Image 1: identity input\nScene/backdrop: infer only what the request implies; keep it coherent and uncluttered\nSubject: make the requested subject the unmistakable focal point\nStyle/medium: follow the requested medium; if omitted, use a polished production-ready finish\nComposition/framing: one clear focal subject, coherent depth, intentional framing, no accidental clutter\nLighting/mood: consistent light direction, believable shadows, refined contrast and color\nColor palette: preserve colors from the request or references; avoid arbitrary brand colors\nMaterials/textures: physically plausible surfaces, fine texture, clean edges, no plastic-looking detail\nText (verbatim, every string must be exact): none specified\nConstraints: do not invent unrequested subjects; preserve reference identity, silhouette and key geometry when applicable\nAvoid: unrequested objects, extra people, duplicate subjects, distorted anatomy, bad hands, unreadable text, random logos, watermark, signature, border, overprocessed skin, plastic texture, muddy details, accidental collage\nRender at the highest native quality available. Prioritize subject fidelity, clean edges, coherent perspective and accurate requested text.\nDelivery intent: compose specifically for a 1600x900 canvas at 1.7778:1; keep important content inside the canvas and make every required element readable at that delivery size.\nReference policy: use each input only for its stated role; do not paste borders, watermarks, or old text from references; blend lighting and perspective naturally.\nReference fidelity: faithfully preserve the supplied reference's visual grammar, palette, paper texture, illustration language, hierarchy and recognizable subject geometry. Replace only content explicitly requested by the user.",
+  "requested_native_size": "3840x2160",
+  "native_size_policy": "target-ratio-maximum",
+  "requested_quality": "high",
+  "upstream_format": "PNG",
+  "native_size": [
+    3840,
+    2160
+  ],
+  "native_request_honored": true,
+  "native_output": "/Users/Apple/Desktop/trainer/assets/feat-speed.png",
+  "final_size": [
+    3840,
+    2160
+  ],
+  "target_size": [
+    1600,
+    900
+  ],
+  "output_size_mode": "native",
+  "resize_mode": null,
+  "delivery_sharpen": null,
+  "postprocess": "none",
+  "output": "/Users/Apple/Desktop/trainer/assets/feat-speed.png"
+}

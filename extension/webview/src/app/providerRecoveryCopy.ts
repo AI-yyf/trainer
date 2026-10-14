@@ -55,23 +55,10 @@ function providerCoachBanner(
   const sendState = describeProviderSendState(provider, language);
   const lastCategory = provider.lastTestResult?.errorCategory ?? provider.modelErrorCategory;
 
-  if (
-    (sendState.status === "blocked_error" || sendState.status === "degraded_error") &&
-    lastCategory === "language_corruption"
-  ) {
+  if (lastCategory === "language_corruption") {
     return {
       tone: sendState.blocked ? "error" : "info",
       message: blockedMessage ?? providerRecoveryLocale(language).languageIntegrityDetail,
-    };
-  }
-
-  if (
-    (sendState.status === "blocked_error" || sendState.status === "degraded_error") &&
-    lastCategory === "language_probe_inconclusive"
-  ) {
-    return {
-      tone: "info",
-      message: blockedMessage ?? recovery.detail,
     };
   }
 
@@ -82,7 +69,7 @@ function providerCoachBanner(
     };
   }
 
-  if ((sendState.status === "degraded_error" || sendState.status === "refreshing") && sendState.warning) {
+  if (sendState.warning) {
     return {
       tone: "info",
       message: sendState.warning,
@@ -552,15 +539,17 @@ function providerRecoveryScenario(
   }
 
   const sendState = describeProviderSendState(provider, language);
-  if (sendState.status === "missing_provider") {
+  if (
+    sendState.reasonKind === "missing_provider" ||
+    sendState.reasonKind === "invalid_protocol"
+  ) {
     return hasSavedProviderProfiles(provider) ? "saved_connection" : "connection_setup";
   }
-  if (sendState.status === "missing_api_key") {
+  if (sendState.reasonKind === "missing_api_key") {
     return "missing_key";
   }
-  if (sendState.status === "warming" || sendState.status === "refreshing") {
-    return "checking";
-  }
+  // Model-list loading and historical test failures are diagnostics now: they
+  // no longer create a "checking" / "needs attention" composer scenario.
   return "needs_attention";
 }
 
@@ -596,15 +585,9 @@ function blockedComposerSetupMessage(
   _activeView: ActiveWorkbenchView,
   connectionState?: "starting" | "connected" | "offline",
 ): string {
-  if (
-    connectionState !== "offline" &&
-    connectionState !== "starting" &&
-    provider.configured &&
-    provider.apiKeyConfigured &&
-    !providerHasVerifiedStreamingProbe(provider)
-  ) {
-    return streamingCapabilityBlockReason(language);
-  }
+  // Streaming capability is no longer a composer gate: the stream path
+  // degrades gracefully at runtime, and a missing probe is a diagnostic, not
+  // permission to block sending.
   return providerRecoverySummary(provider, language, connectionState).detail;
 }
 
@@ -621,7 +604,7 @@ function blockedComposerPresenceMessage(
   const lastCategory = provider.lastTestResult?.errorCategory ?? provider.modelErrorCategory;
 
   if (
-    (sendState.status === "blocked_error" || sendState.status === "degraded_error") &&
+    sendState.status === "ready" &&
     lastCategory === "language_corruption"
   ) {
     return providerRecoveryLocale(language).languageIntegrityDetail;

@@ -91,7 +91,7 @@ import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, PlusIcon, TrashIcon } from "../icons";
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, FileIcon, PlusIcon, RefreshIcon, TrashIcon, UploadIcon } from "../icons";
 import { AlertTriangleIcon, DataFolderIcon, DoneIcon, ReloadIcon, SettingsShareIcon } from "../icons/inline";
 import { RemoteIcon } from "../icons/brand/trainerBrand";
 import { ResourcesNavIcon, TrainingNavIcon } from "../icons/navigation/coreNav";
@@ -151,8 +151,10 @@ type AnswerMode = CoachAnswerMode;
 type SaveState = "saved" | "unsaved" | "empty";
 type AnswerStylePreset = "simple" | "balanced" | "deep" | "custom";
 const DEFAULT_PROVIDER_CONNECTION_NAME = "custom-openai-compatible";
-const MODEL_PICKER_RECENT_OPTION_LIMIT = 5;
-const MODEL_PICKER_SEARCH_OPTION_LIMIT = 8;
+// P0: the model picker renders the full known list — search still filters, the
+// select scrolls. The only remaining cap is a defensive guard against an
+// absurd catalog (>= 200 entries), never a UI truncation of real data.
+const MODEL_PICKER_DEFENSIVE_OPTION_LIMIT = 200;
 const ANSWER_STYLE_STORAGE_KEY = "trainer.settings.answerStyle";
 /** Flash highlight lifetime for status-bar jumps (ms). Skipped under reduced motion. */
 const SETTINGS_SECTION_FLASH_MS = 600;
@@ -778,6 +780,17 @@ export interface CoachSettingsLabels {
   currentWorkspace: string;
   refreshWorkspaceAuthority: string;
   workspaceAuthorityEmpty: string;
+  workspaceDataArea: string;
+  workspaceDataUnderRoot: string;
+  workspaceDataInAppFolder: string;
+  workspaceDataMoveUnderRoot: string;
+  workspaceAdvanced: string;
+  addedProjects: string;
+  addedProjectsEmpty: string;
+  addedProjectsCurrent: string;
+  addedProjectsBrowse: string;
+  projectRemove: string;
+  projectRemoveNote: string;
   managedDataFolder: string;
   managedDataFolderHint: string;
   managedDataFolderRecommended: string;
@@ -1923,14 +1936,6 @@ function describeLanguageIntegrityFact(input: {
     };
   }
 
-  if (coachSendState.status === "warming" || coachSendState.status === "refreshing") {
-    return {
-      value: integrity("检查中", "Checking"),
-      tone: "pending",
-      detail: integrity("等这组 provider 完成 model 确认后，再跑 zh-CN 输入检查。", "Wait for model discovery to finish, then rerun the zh-CN check."),
-    };
-  }
-
   if (coachSendState.blocked) {
     return {
       value: integrity("待恢复", "Unavailable"),
@@ -2156,6 +2161,7 @@ function CoachSettingsViewSheet({
     memoryShareGrants,
     resourceSandbox,
     trainerWorkspace,
+    trainerProjects,
     remoteWorkspaceName,
     personalAccountTrusted,
     themePreference,
@@ -2202,6 +2208,8 @@ function CoachSettingsViewSheet({
     onRestoreTrainerWorkspaceBackup,
     onChooseManagedDataFolder,
     onResetManagedDataFolder,
+    onRemoveTrainerProject,
+    onMoveManagedDataUnderRoot,
     onRefreshMemory,
     onShareSession,
   } = useCoachSettingsViewState({ onCoachSettingsMutated });
@@ -2462,6 +2470,19 @@ function CoachSettingsViewSheet({
       managedDataConfiguredPathKey &&
       managedDataConfiguredPathKey !== managedDataDefaultPathKey,
   );
+  // Unified-root model (P0): data "at home" means the effective data directory
+  // lives inside the workspace root (its .trainer/ data area). Anything else —
+  // the app (globalStorage) default or an arbitrary custom folder — surfaces
+  // the one-click move-under-root action.
+  const managedDataUnderRoot = Boolean(
+    resourceSandbox?.effectivePath &&
+      trainerWorkspace?.rootPath &&
+      managedDataEffectivePathKey?.startsWith(
+        normalizeComparablePath(trainerWorkspace.rootPath) ?? "\u0000",
+      ),
+  );
+  // Settings "added projects" rows (reference-only removal; host confirms).
+  const addedProjectRows = trainerProjects?.projects ?? [];
 
   const memoryScopeLabel =
     memoryScope === "project"
@@ -2515,12 +2536,14 @@ function CoachSettingsViewSheet({
   const providerSaved = provider.configured;
   const savedProviderProfilesAvailable = hasSavedProviderProfiles(provider);
   const providerStreamingReady = streamingProbeIsVerified(lastTest);
-  const providerCoachReady = !coachSendState.blocked && providerTestPassed && providerStreamingReady;
+  // Send readiness is configuration completeness only (P0 save-and-go): a
+  // passing test and a verified streaming probe stay as diagnostic facts below,
+  // never as a send gate.
+  const providerCoachReady = !coachSendState.blocked;
   const providerNeedsApiKey = providerSaved && !provider.apiKeyConfigured;
-  const providerCoachBlockReason =
-    coachSendState.status === "missing_provider" || coachSendState.status === "missing_api_key"
-      ? coachSendState.reason
-      : undefined;
+  const providerCoachBlockReason = coachSendState.blocked
+    ? coachSendState.reason
+    : undefined;
   const reviewSummary = reviewRhythmSummary ?? copy.off;
   const runtimeStatusLabel = providerCoachReady
     ? settingsText(language, "可发送", "Ready")
@@ -2893,9 +2916,7 @@ function CoachSettingsViewSheet({
     draftModelPolicy,
     { retainModels: currentDraftModel ? [currentDraftModel] : [] },
   );
-  const modelPickerDefaultOptionLimit =
-    MODEL_PICKER_RECENT_OPTION_LIMIT + (currentDraftModel ? 1 : 0);
-  const modelPickerHasOverflow = selectableModelOptions.length > modelPickerDefaultOptionLimit;
+  const modelPickerHasOverflow = selectableModelOptions.length > MODEL_PICKER_DEFENSIVE_OPTION_LIMIT;
   const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [manualModelEntryOpen, setManualModelEntryOpen] = useState(false);
   const resetModelPickerSearch = () => {
@@ -2916,13 +2937,13 @@ function CoachSettingsViewSheet({
   );
   const visibleModelOptions = useMemo(() => {
     if (normalizedModelSearchQuery) {
-      return matchingModelOptions.slice(0, MODEL_PICKER_SEARCH_OPTION_LIMIT);
+      // Search filters but never truncates the matching data.
+      return matchingModelOptions;
     }
 
-    return selectableModelOptions.slice(0, modelPickerDefaultOptionLimit);
+    return selectableModelOptions.slice(0, MODEL_PICKER_DEFENSIVE_OPTION_LIMIT);
   }, [
     matchingModelOptions,
-    modelPickerDefaultOptionLimit,
     normalizedModelSearchQuery,
     selectableModelOptions,
   ]);
@@ -3792,38 +3813,26 @@ function CoachSettingsViewSheet({
       providerTestFreshness !== "fresh" ||
       (lastTest?.ok === true && (!providerTestReadiness.ready || !providerStreamingReady)));
   const resolvedCoachCapabilityLabel =
-    shouldSurfaceRecentTestFailure ||
-    coachSendState.status === "degraded_error" ||
-    coachSendState.status === "blocked_error"
+    shouldSurfaceRecentTestFailure || coachSendState.blocked
       ? providerFailureState.statusLabel
       : providerNeedsRetest
         ? settingsStatusPhrase(language, "needsAttention")
-      : coachSendState.status === "warming"
-        ? settingsText(language, "\u68C0\u67E5\u4E2D", "Checking")
         : coachCapabilityLabel;
   const resolvedCoachCapabilityTone =
-    shouldSurfaceRecentTestFailure ||
-    coachSendState.status === "degraded_error" ||
-    coachSendState.status === "blocked_error"
+    shouldSurfaceRecentTestFailure || coachSendState.blocked
       ? "warn"
       : providerNeedsRetest
         ? "warn"
-      : coachSendState.status === "warming"
-        ? "pending"
         : coachCapabilityTone;
   const resolvedCoachCapabilityDetail =
-    shouldSurfaceRecentTestFailure ||
-    coachSendState.status === "degraded_error" ||
-    coachSendState.status === "blocked_error"
+    shouldSurfaceRecentTestFailure || coachSendState.blocked
       ? availabilityFailureHint ?? providerCoachBlockReason ?? providerPrimaryAction
       : providerNeedsRetest
         ? settingsStatusPhrase(language, "connectionSavedNeedsTest")
-      : providerCoachReady
-        ? settingsText(language, "\u53EF\u53D1\u9001", "Send enabled")
-        : coachSendState.status === "warming"
-          ? settingsStatusPhrase(language, "checking")
+        : providerCoachReady
+          ? settingsText(language, "\u53EF\u53D1\u9001", "Send enabled")
           : providerCoachBlockReason ?? providerPrimaryAction;
-  const availabilityMode: ProviderSendStateStatus | "draft" | "recent_failure" | "needs_test" = providerHasDraftChanges
+  const availabilityMode: ProviderSendStateStatus | "draft" | "recent_failure" | "needs_test" | "warming" = providerHasDraftChanges
     ? "draft"
     : providerTestPending
       ? "warming"
@@ -3945,27 +3954,19 @@ function CoachSettingsViewSheet({
   const localizedImageCapabilityDetail =
     imageInputState.detail ?? imageInputState.reason ?? settingsStatusPhrase(language, "imageInputNotVerified");
   const localizedResolvedCoachCapabilityLabel =
-    shouldSurfaceRecentTestFailure ||
-    coachSendState.status === "degraded_error" ||
-    coachSendState.status === "blocked_error"
+    shouldSurfaceRecentTestFailure || coachSendState.blocked
       ? providerFailureState.statusLabel
       : providerNeedsRetest
         ? settingsStatusPhrase(language, "needsAttention")
-      : coachSendState.status === "warming"
-        ? settingsStatusPhrase(language, "checking")
         : localizedCoachCapabilityLabel;
   const localizedResolvedCoachCapabilityDetail =
-    shouldSurfaceRecentTestFailure ||
-    coachSendState.status === "degraded_error" ||
-    coachSendState.status === "blocked_error"
+    shouldSurfaceRecentTestFailure || coachSendState.blocked
       ? availabilityFailureHint ?? providerCoachBlockReason ?? providerPrimaryAction
       : providerNeedsRetest
         ? settingsStatusPhrase(language, "connectionSavedNeedsTest")
       : providerCoachReady
         ? settingsStatusPhrase(language, "sendEnabled")
-        : coachSendState.status === "warming"
-          ? settingsStatusPhrase(language, "checking")
-          : providerCoachBlockReason ?? providerPrimaryAction;
+        : providerCoachBlockReason ?? providerPrimaryAction;
   const PROVIDER_SETUP_STATUS_COPY: Record<ProviderSetupReason, string> = {
     workspace_root_missing: settingsText(language, "待选目录", "No folder yet"),
     workspace_untrusted: settingsText(language, "待信任", "Trust needed"),
@@ -4041,7 +4042,6 @@ function CoachSettingsViewSheet({
     saved_needs_test: settingsStatusPhrase(language, "connectionSavedNeedsTest"),
     provider_failure:
       availabilityFailureHint
-      ?? (availabilityMode === "blocked_error" ? providerRequirementNote : undefined)
       ?? providerPrimaryAction,
     checking: settingsStatusPhrase(language, "checking"),
     refreshing: settingsStatusPhrase(language, "refreshing"),
@@ -4520,7 +4520,7 @@ function CoachSettingsViewSheet({
     target: SettingsCategory;
     action?: () => void;
   }> = [];
-  if (providerNeedsApiKey || coachSendState.status === "missing_api_key") {
+  if (providerNeedsApiKey || coachSendState.reasonKind === "missing_api_key") {
     settingsStatusIssues.push({
       id: "key",
       label: settingsGlobalCopy.settingsStatusNoApiKey,
@@ -6033,10 +6033,84 @@ function CoachSettingsViewSheet({
             <WorkspaceRootRecoveryPanel
               trainerWorkspace={trainerWorkspace}
               onChooseRoot={onChooseTrainerWorkspaceRoot}
-              onMigrateRoot={onMigrateTrainerWorkspaceRoot}
-              onBackup={onBackupTrainerWorkspace}
-              onRestore={onRestoreTrainerWorkspaceBackup}
             />
+            {resourceSandbox ? (
+              <section className="settings-sheet__workspace-card" data-settings-subsection="data-area">
+                <div className="settings-sheet__authority-block-head">
+                  <span className="eyebrow">{copy.workspaceDataArea}</span>
+                </div>
+                <p className="settings-sheet__note settings-sheet__note--compact">
+                  {managedDataUnderRoot
+                    ? copy.workspaceDataUnderRoot
+                    : copy.workspaceDataInAppFolder}
+                </p>
+                {!managedDataUnderRoot ? (
+                  <div className="settings-actions settings-actions--compact">
+                    <ActionButton
+                      fullWidth={false}
+                      icon={<DataFolderIcon size={14} />}
+                      label={copy.workspaceDataMoveUnderRoot}
+                      detail={settingsText(language, "移动数据并重启后端", "Move data and restart")}
+                      onClick={onMoveManagedDataUnderRoot}
+                    />
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
+            <section className="settings-sheet__workspace-card" data-settings-subsection="added-projects">
+              <div className="settings-sheet__authority-block-head">
+                <span className="eyebrow">{copy.addedProjects}</span>
+              </div>
+              {addedProjectRows.length === 0 ? (
+                <p className="settings-sheet__note settings-sheet__note--compact">
+                  {copy.addedProjectsEmpty}
+                </p>
+              ) : (
+                <ul className="settings-added-projects" role="list">
+                  {addedProjectRows.map((project) => (
+                    <li
+                      key={project.projectPath}
+                      className="settings-added-projects__row"
+                      data-added-project-current={project.isCurrent ? "true" : undefined}
+                    >
+                      <div className="settings-added-projects__copy">
+                        <span className="settings-added-projects__name" title={project.projectPath}>
+                          {project.projectName}
+                          {project.isCurrent ? (
+                            <span className="settings-added-projects__badge">
+                              {copy.addedProjectsCurrent}
+                            </span>
+                          ) : project.adoptionMode === "browse" ? (
+                            <span className="settings-added-projects__badge settings-added-projects__badge--browse">
+                              {copy.addedProjectsBrowse}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span
+                          className="settings-sheet__path-value settings-added-projects__path"
+                          title={project.projectPath}
+                        >
+                          {project.projectPath}
+                        </span>
+                      </div>
+                      {onRemoveTrainerProject ? (
+                        <button
+                          type="button"
+                          className="toolbar-button settings-added-projects__remove"
+                          onClick={() => onRemoveTrainerProject(project.projectPath)}
+                        >
+                          {copy.projectRemove}
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="settings-sheet__note settings-sheet__note--compact">
+                {copy.projectRemoveNote}
+              </p>
+            </section>
             {remoteWorkspaceName ? <section className="settings-sheet__workspace-card" data-settings-subsection="remote-support">
                 {(() => {
                   const remoteSupportCopy = REMOTE_SUPPORT_COPY[language];
@@ -6078,101 +6152,126 @@ function CoachSettingsViewSheet({
                   );
                 })()}
             </section> : null}
-            {resourceSandbox ? (
-              <section className="settings-sheet__workspace-card">
-                <div className="settings-sheet__authority-block-head">
-                  <span className="eyebrow">{copy.managedDataFolder}</span>
-                  <div className="settings-actions settings-actions--compact">
-                    <ActionButton
-                      fullWidth={false}
-                      icon={<DataFolderIcon size={14} />}
-                      label={copy.managedDataFolderChoose}
-                      detail={settingsText(language, "切换并重启后端", "Switch and restart")}
-                      onClick={onChooseManagedDataFolder}
-                    />
+
+            <details className="settings-sheet__workspace-card settings-workspace-advanced" data-settings-subsection="workspace-advanced">
+              <summary>{copy.workspaceAdvanced}</summary>
+              <div className="settings-sheet__stack settings-sheet__stack--tight">
+                {resourceSandbox ? (
+                  <>
+                    <div className="settings-actions settings-actions--compact">
+                      <ActionButton
+                        fullWidth={false}
+                        icon={<DataFolderIcon size={14} />}
+                        label={copy.managedDataFolderChoose}
+                        detail={settingsText(language, "切换并重启后端", "Switch and restart")}
+                        onClick={onChooseManagedDataFolder}
+                      />
+                      <ActionButton
+                        fullWidth={false}
+                        icon={<ReloadIcon size={14} />}
+                        label={copy.managedDataFolderReset}
+                        detail={settingsText(language, "回到推荐目录", "Return to recommended")}
+                        onClick={onResetManagedDataFolder}
+                      />
+                    </div>
+                    <div className="settings-sheet__summary-grid">
+                      <SummaryCard
+                        label={copy.effectiveNow}
+                        value={
+                          <span
+                            className="settings-sheet__path-value"
+                            title={resourceSandbox.effectivePath}
+                          >
+                            {resourceSandbox.effectivePath}
+                          </span>
+                        }
+                        detail={managedDataSourceLabel}
+                      />
+                      {showManagedDataRecommendedCard ? (
+                        <SummaryCard
+                          label={copy.managedDataFolderRecommended}
+                          value={
+                            <span
+                              className="settings-sheet__path-value"
+                              title={resourceSandbox.defaultPath}
+                            >
+                              {resourceSandbox.defaultPath}
+                            </span>
+                          }
+                        />
+                      ) : null}
+                      {showManagedDataCustomCard ? (
+                        <SummaryCard
+                          label={copy.managedDataFolderCustom}
+                          value={
+                            <span
+                              className="settings-sheet__path-value"
+                              title={resourceSandbox.configuredPath}
+                            >
+                              {resourceSandbox.configuredPath}
+                            </span>
+                          }
+                        />
+                      ) : null}
+                    </div>
+                    {showManagedDataFallbackNote ? (
+                      <p className="settings-sheet__note settings-sheet__note--compact">
+                        {copy.managedDataFolderFallbackNote}
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
+                <div className="settings-actions settings-actions--compact">
+                  <ActionButton
+                    fullWidth={false}
+                    icon={<RefreshIcon size={14} />}
+                    label={settingsGlobalCopy.workspaceRootMigrate}
+                    detail={settingsGlobalCopy.workspaceRootMigrateDetail}
+                    onClick={onMigrateTrainerWorkspaceRoot}
+                  />
+                  <ActionButton
+                    fullWidth={false}
+                    icon={<FileIcon size={14} />}
+                    label={settingsGlobalCopy.workspaceRootBackup}
+                    detail={settingsGlobalCopy.workspaceRootBackupDetail}
+                    onClick={onBackupTrainerWorkspace}
+                  />
+                  <ActionButton
+                    fullWidth={false}
+                    icon={<UploadIcon size={14} />}
+                    label={settingsGlobalCopy.workspaceRootRestore}
+                    detail={settingsGlobalCopy.workspaceRootRestoreDetail}
+                    onClick={onRestoreTrainerWorkspaceBackup}
+                  />
+                </div>
+                <div className="settings-sheet__authority-block">
+                  <div className="settings-sheet__authority-block-head">
+                    <span className="eyebrow">{copy.currentWorkspace}</span>
                     <ActionButton
                       fullWidth={false}
                       icon={<ReloadIcon size={14} />}
-                      label={copy.managedDataFolderReset}
-                      detail={settingsText(language, "回到推荐目录", "Return to recommended")}
-                      onClick={onResetManagedDataFolder}
+                      label={copy.refreshWorkspaceAuthority}
+                      detail={settingsStatusPhrase(language, "rereadSandboxBoundary")}
+                      onClick={onRefreshWorkspaceAuthority}
                     />
                   </div>
-                </div>
-                <div className="settings-sheet__summary-grid">
-                  <SummaryCard
-                    label={copy.effectiveNow}
-                    value={
-                      <span
-                        className="settings-sheet__path-value"
-                        title={resourceSandbox.effectivePath}
-                      >
-                        {resourceSandbox.effectivePath}
+                  {workspaceAuthority ? (
+                    <WorkspaceAuthoritySummary
+                      language={language}
+                      authority={workspaceAuthority}
+                      className="workspace-authority-summary--compact"
+                    />
+                  ) : (
+                    <div className="empty-state settings-sheet__authority-empty">
+                      <span className="empty-state__icon" aria-hidden="true">
+                        <SettingsPreferencesIcon size={16} />
                       </span>
-                    }
-                    detail={managedDataSourceLabel}
-                  />
-                  {showManagedDataRecommendedCard ? (
-                    <SummaryCard
-                      label={copy.managedDataFolderRecommended}
-                      value={
-                        <span
-                          className="settings-sheet__path-value"
-                          title={resourceSandbox.defaultPath}
-                        >
-                          {resourceSandbox.defaultPath}
-                        </span>
-                      }
-                    />
-                  ) : null}
-                  {showManagedDataCustomCard ? (
-                    <SummaryCard
-                      label={copy.managedDataFolderCustom}
-                      value={
-                        <span
-                          className="settings-sheet__path-value"
-                          title={resourceSandbox.configuredPath}
-                        >
-                          {resourceSandbox.configuredPath}
-                        </span>
-                      }
-                    />
-                  ) : null}
+                      <span className="empty-state__title">{copy.workspaceAuthorityEmpty}</span>
+                    </div>
+                  )}
                 </div>
-                {showManagedDataFallbackNote ? (
-                  <p className="settings-sheet__note settings-sheet__note--compact">
-                    {copy.managedDataFolderFallbackNote}
-                  </p>
-                ) : null}
-              </section>
-            ) : null}
-
-            <div className="settings-sheet__authority-block">
-              <div className="settings-sheet__authority-block-head">
-                <span className="eyebrow">{copy.currentWorkspace}</span>
-                <ActionButton
-                  fullWidth={false}
-                  icon={<ReloadIcon size={14} />}
-                  label={copy.refreshWorkspaceAuthority}
-                  detail={settingsStatusPhrase(language, "rereadSandboxBoundary")}
-                  onClick={onRefreshWorkspaceAuthority}
-                />
               </div>
-              {workspaceAuthority ? (
-                <WorkspaceAuthoritySummary
-                  language={language}
-                  authority={workspaceAuthority}
-                  className="workspace-authority-summary--compact"
-                />
-              ) : (
-                <div className="empty-state settings-sheet__authority-empty">
-                  <span className="empty-state__icon" aria-hidden="true">
-                    <SettingsPreferencesIcon size={16} />
-                  </span>
-                  <span className="empty-state__title">{copy.workspaceAuthorityEmpty}</span>
-                </div>
-              )}
-            </div>
+            </details>
           </div>
         </section>
         ) : null}

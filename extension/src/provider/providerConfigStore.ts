@@ -832,7 +832,10 @@ export class ProviderConfigStore implements vscode.Disposable {
   private createDefaultConfig(): ProviderConfig {
     const protocol: ProviderProtocol = OPENAI_COMPATIBLE_PROTOCOL;
     const capabilities: CapabilityFlags = defaultCapabilitiesForProtocol(protocol);
-    const model = 'gpt-4.1-mini';
+    // P0: no placeholder model. This shell only backs flows that save a key or
+    // read a partial workspace override; the connection stays unconfigured
+    // until the user picks a model from the known list or types one.
+    const model = '';
 
     return {
       name: 'custom-openai-compatible',
@@ -841,7 +844,7 @@ export class ProviderConfigStore implements vscode.Disposable {
       model,
       protocol,
       capabilities,
-      catalogModels: [model],
+      catalogModels: [],
       modelCapabilities: {},
     };
   }

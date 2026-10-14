@@ -8,7 +8,7 @@ import { provisionRemoteProject } from './remoteProjectAdmission';
 import type { CommandContext } from '../core/commandContext';
 import { maybePromptCarryOverOnProjectSwitch } from './memoryCommands';
 import { rehydrateWorkbenchRuntime } from '../core/runtimeRehydration';
-import { resolveTrainerWorkspaceAdmission } from '../core/trainerWorkspaceAdmission';
+import { resolveTrainerWorkspaceAdmission, resolveTrainerProjectsList } from '../core/trainerWorkspaceAdmission';
 import { resolveCurrentTrainerProjectPath } from '../core/trainerWorkspaceAdmission';
 import { failClosedWorkbenchAfterWorkspaceTransfer, resetWorkbenchAfterRuntimeDataChange } from '../core/workbenchData';
 import {
@@ -244,7 +244,7 @@ function selectedRootFromManifest(manifest: TrainerWorkspaceManifest): SelectedT
   };
 }
 
-function runtimeDataRootUnder(rootPath: string): string {
+export function runtimeDataRootUnder(rootPath: string): string {
   // The managed runtime data root is a real filesystem location, so it is
   // always joined with the host separator rules: a Windows-style root keeps
   // the win32 join on Windows, while a POSIX host joins it with posix rules
@@ -874,6 +874,10 @@ async function patchWorkbenchAfterDeletedLiveProject(context: CommandContext): P
     context.trainerWorkspace,
     context.getHostState().workspace,
   );
+  const trainerProjects = await resolveTrainerProjectsList(
+    context.trainerWorkspace,
+    context.getHostState().workspace,
+  );
   const resourceSandbox = context.sidecarManager.getManagedDataFolderSnapshot(
     context.getHostState().workspace.workspaceFolder,
   );
@@ -885,6 +889,7 @@ async function patchWorkbenchAfterDeletedLiveProject(context: CommandContext): P
       workspace: {
         ...(failClosed.memory?.workspace ?? {}),
         trainerWorkspace,
+        trainerProjects,
         resourceSandbox,
       },
     },
@@ -895,6 +900,10 @@ async function patchWorkbenchAfterDeletedLiveProject(context: CommandContext): P
 export async function patchTrainerWorkspaceAdmission(context: CommandContext): Promise<void> {
   const current = context.getHostState().bootstrap;
   const trainerWorkspace = await resolveTrainerWorkspaceAdmission(
+    context.trainerWorkspace,
+    context.getHostState().workspace,
+  );
+  const trainerProjects = await resolveTrainerProjectsList(
     context.trainerWorkspace,
     context.getHostState().workspace,
   );
@@ -911,6 +920,7 @@ export async function patchTrainerWorkspaceAdmission(context: CommandContext): P
       workspace: {
         ...(failClosed.memory?.workspace ?? {}),
         trainerWorkspace,
+        trainerProjects,
         resourceSandbox,
       },
     },

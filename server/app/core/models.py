@@ -2927,6 +2927,7 @@ class ProviderModelsResponse(BaseModel):
     status_code: int | None = None
     diagnostics: list[str] = Field(default_factory=list)
     cache_hit: bool = False
+    incomplete: bool = False
 
 
 class ResourceUploadRequest(BaseModel):

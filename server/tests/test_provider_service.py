@@ -27,7 +27,10 @@ from app.llm.prompts import (
     infer_learner_signal,
 )
 from app.llm.provider_service import (
+    _ANTHROPIC_MODELS_PAGE_SIZE,
+    _GEMINI_MODELS_PAGE_SIZE,
     _LANGUAGE_PROBE_VARIANTS,
+    _NATIVE_MODEL_DISCOVERY_MAX_PAGES,
     _NATURAL_LANGUAGE_PROBE_PROMPT,
     DEFAULT_OPENAI_CLIENT_MAX_RETRIES,
     DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS,
@@ -2257,6 +2260,298 @@ def test_provider_list_models_reports_auth_errors_structurally() -> None:
     assert result.error_category == "invalid_key_or_permission"
     assert result.retryable is False
     assert result.status_code == 401
+
+
+class _FakeNativeResponse:
+    def __init__(self, payload: dict[str, object], status_code: int = 200) -> None:
+        self._payload = payload
+        self.status_code = status_code
+        self.text = json.dumps(payload)
+
+    def json(self) -> dict[str, object]:
+        return self._payload
+
+
+def _httpx_client_context(responses: list[_FakeNativeResponse]) -> MagicMock:
+    client = MagicMock()
+    client.get.side_effect = responses
+    context = MagicMock()
+    context.__enter__.return_value = client
+    context.__exit__.return_value = False
+    return context
+
+
+def test_provider_list_models_follows_anthropic_pagination_until_has_more_is_false() -> None:
+    config = ProviderConfig(
+        name="anthropic",
+        base_url="https://api.anthropic.com",
+        api_key_ref="trainer.anthropic",
+        model="claude-sonnet-4-20250514",
+        protocol="anthropic_messages",
+    )
+    service = ProviderService()
+
+    client_context = _httpx_client_context(
+        [
+            _FakeNativeResponse(
+                {
+                    "data": [{"id": "claude-opus-4-6"}, {"id": "claude-sonnet-4-20250514"}],
+                    "has_more": True,
+                    "last_id": "claude-sonnet-4-20250514",
+                }
+            ),
+            _FakeNativeResponse(
+                {
+                    "data": [{"id": "claude-haiku-4-5-20250514"}, {"id": "claude-sonnet-4-20250514"}],
+                    "has_more": True,
+                    "last_id": "claude-haiku-4-5-20250514",
+                }
+            ),
+            _FakeNativeResponse({"data": [{"id": "claude-3-5-haiku-20241022"}], "has_more": False}),
+        ]
+    )
+
+    with (
+        patch("app.llm.provider_service.httpx.Client", return_value=client_context),
+        patch.object(
+            service,
+            "_create_sync_client",
+            MagicMock(side_effect=AssertionError("OpenAI models.list should not be used")),
+        ),
+    ):
+        result = service.list_models(config, "sk-test")
+
+    client = client_context.__enter__.return_value
+    assert client.get.call_count == 3
+    first_call, second_call, third_call = client.get.call_args_list
+    assert first_call.kwargs["params"] == {"limit": _ANTHROPIC_MODELS_PAGE_SIZE}
+    assert second_call.kwargs["params"] == {
+        "limit": _ANTHROPIC_MODELS_PAGE_SIZE,
+        "after_id": "claude-sonnet-4-20250514",
+    }
+    assert third_call.kwargs["params"] == {
+        "limit": _ANTHROPIC_MODELS_PAGE_SIZE,
+        "after_id": "claude-haiku-4-5-20250514",
+    }
+    assert result.ok is True
+    assert result.incomplete is False
+    assert result.available_models == [
+        "claude-3-5-haiku-20241022",
+        "claude-haiku-4-5-20250514",
+        "claude-opus-4-6",
+        "claude-sonnet-4-20250514",
+    ]
+    assert result.resolved_model == "claude-sonnet-4-20250514"
+
+
+def test_provider_list_models_keeps_partial_anthropic_catalog_when_a_later_page_fails() -> None:
+    config = ProviderConfig(
+        name="anthropic",
+        base_url="https://api.anthropic.com",
+        api_key_ref="trainer.anthropic",
+        model="claude-sonnet-4-20250514",
+        protocol="anthropic_messages",
+    )
+    service = ProviderService()
+
+    page_one = _FakeNativeResponse(
+        {
+            "data": [{"id": "claude-opus-4-6"}, {"id": "claude-sonnet-4-20250514"}],
+            "has_more": True,
+            "last_id": "claude-sonnet-4-20250514",
+        }
+    )
+    page_two_failure = _FakeNativeResponse({"error": {"message": "upstream exploded"}}, status_code=500)
+    client_context = _httpx_client_context([page_one, page_two_failure, page_one, page_two_failure])
+
+    with patch("app.llm.provider_service.httpx.Client", return_value=client_context):
+        first = service.list_models(config, "sk-test")
+        second = service.list_models(config, "sk-test")
+
+    client = client_context.__enter__.return_value
+    assert client.get.call_count == 4
+    assert first.ok is True
+    assert first.listed is True
+    assert first.incomplete is True
+    assert first.available_models == ["claude-opus-4-6", "claude-sonnet-4-20250514"]
+    assert "Catalog may be incomplete" in first.detail
+    assert any("HTTP 500" in item for item in first.diagnostics)
+    assert any("models fetched so far" in item for item in first.diagnostics)
+    # An incomplete catalog must not be pinned in the short-lived cache.
+    assert second.cache_hit is False
+    assert second.incomplete is True
+
+
+def test_provider_list_models_stops_anthropic_pagination_at_the_safety_cap() -> None:
+    config = ProviderConfig(
+        name="anthropic",
+        base_url="https://api.anthropic.com",
+        api_key_ref="trainer.anthropic",
+        model="claude-sonnet-4-20250514",
+        protocol="anthropic_messages",
+    )
+    service = ProviderService()
+
+    client_context = _httpx_client_context(
+        [
+            _FakeNativeResponse(
+                {
+                    "data": [{"id": f"claude-model-{index}"}],
+                    "has_more": True,
+                    "last_id": f"claude-model-{index}",
+                }
+            )
+            for index in range(_NATIVE_MODEL_DISCOVERY_MAX_PAGES + 3)
+        ]
+    )
+
+    with patch("app.llm.provider_service.httpx.Client", return_value=client_context):
+        result = service.list_models(config, "sk-test")
+
+    client = client_context.__enter__.return_value
+    assert client.get.call_count == _NATIVE_MODEL_DISCOVERY_MAX_PAGES
+    assert result.ok is True
+    assert result.incomplete is True
+    assert len(result.available_models) == _NATIVE_MODEL_DISCOVERY_MAX_PAGES
+    assert any("stopped after" in item and "pages" in item for item in result.diagnostics)
+
+
+def test_provider_list_models_follows_gemini_pagination_until_page_token_exhausted() -> None:
+    config = ProviderConfig(
+        name="gemini",
+        base_url="https://generativelanguage.googleapis.com",
+        api_key_ref="trainer.gemini",
+        model="gemini-2.0-flash",
+        protocol="gemini_generate_content",
+    )
+    service = ProviderService()
+
+    client_context = _httpx_client_context(
+        [
+            _FakeNativeResponse(
+                {
+                    "models": [{"name": "models/gemini-2.0-flash", "inputTokenLimit": 1_048_576}],
+                    "nextPageToken": "cursor-1",
+                }
+            ),
+            _FakeNativeResponse(
+                {
+                    "models": [
+                        {"name": "models/gemini-2.5-pro", "inputTokenLimit": 1_048_576},
+                        {"name": "models/gemini-2.0-flash-lite"},
+                    ],
+                    "nextPageToken": "cursor-2",
+                }
+            ),
+            _FakeNativeResponse({"models": [{"name": "models/gemini-embedding-001"}]}),
+        ]
+    )
+
+    with (
+        patch("app.llm.provider_service.httpx.Client", return_value=client_context),
+        patch.object(
+            service,
+            "_create_sync_client",
+            MagicMock(side_effect=AssertionError("OpenAI models.list should not be used")),
+        ),
+    ):
+        result = service.list_models(config, "sk-test")
+
+    client = client_context.__enter__.return_value
+    assert client.get.call_count == 3
+    first_call, second_call, third_call = client.get.call_args_list
+    assert first_call.kwargs["params"] == {"pageSize": _GEMINI_MODELS_PAGE_SIZE}
+    assert second_call.kwargs["params"] == {"pageSize": _GEMINI_MODELS_PAGE_SIZE, "pageToken": "cursor-1"}
+    assert third_call.kwargs["params"] == {"pageSize": _GEMINI_MODELS_PAGE_SIZE, "pageToken": "cursor-2"}
+    assert result.ok is True
+    assert result.incomplete is False
+    assert result.available_models == [
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-2.5-pro",
+        "gemini-embedding-001",
+    ]
+    assert result.model_token_limits["gemini-2.5-pro"].context_window_tokens == 1_048_576
+
+
+def test_provider_list_models_keeps_partial_gemini_catalog_when_a_later_page_fails() -> None:
+    config = ProviderConfig(
+        name="gemini",
+        base_url="https://generativelanguage.googleapis.com",
+        api_key_ref="trainer.gemini",
+        model="gemini-2.0-flash",
+        protocol="gemini_generate_content",
+    )
+    service = ProviderService()
+
+    client_context = _httpx_client_context(
+        [
+            _FakeNativeResponse(
+                {
+                    "models": [{"name": "models/gemini-2.0-flash", "inputTokenLimit": 1_048_576}],
+                    "nextPageToken": "cursor-1",
+                }
+            ),
+            _FakeNativeResponse({"error": {"message": "backend error"}}, status_code=500),
+        ]
+    )
+
+    with patch("app.llm.provider_service.httpx.Client", return_value=client_context):
+        result = service.list_models(config, "sk-test")
+
+    client = client_context.__enter__.return_value
+    assert client.get.call_count == 2
+    assert result.ok is True
+    assert result.listed is True
+    assert result.incomplete is True
+    assert result.available_models == ["gemini-2.0-flash"]
+    assert result.model_token_limits["gemini-2.0-flash"].context_window_tokens == 1_048_576
+    assert "Catalog may be incomplete" in result.detail
+    assert any("HTTP 500" in item for item in result.diagnostics)
+    assert any("models fetched so far" in item for item in result.diagnostics)
+
+
+def test_provider_list_models_follows_openai_sdk_cursor_pagination_when_offered() -> None:
+    config = _make_config()
+    service = ProviderService()
+
+    page_one_items = [MagicMock(id="gateway-model-a")]
+    page_two_items = [MagicMock(id="gateway-model-b"), MagicMock(id="gateway-model-a")]
+    fake_client = MagicMock()
+    fake_client.models.list.return_value = SimpleNamespace(
+        data=page_one_items,
+        auto_paging_iter=lambda: iter([*page_one_items, *page_two_items]),
+    )
+
+    with patch.object(service, "_get_sync_openai_class", return_value=MagicMock(return_value=fake_client)):
+        result = service.list_models(config, "sk-test")
+
+    assert result.ok is True
+    assert result.incomplete is False
+    assert result.available_models == ["gateway-model-a", "gateway-model-b"]
+
+
+def test_provider_list_models_keeps_partial_openai_catalog_when_auto_paging_breaks() -> None:
+    config = _make_config()
+    service = ProviderService()
+
+    def _breaking_auto_paging_iter() -> object:
+        yield MagicMock(id="gateway-model-a")
+        raise RuntimeError("connection reset while paging")
+
+    fake_client = MagicMock()
+    fake_client.models.list.return_value = SimpleNamespace(
+        data=[MagicMock(id="gateway-model-a")],
+        auto_paging_iter=_breaking_auto_paging_iter,
+    )
+
+    with patch.object(service, "_get_sync_openai_class", return_value=MagicMock(return_value=fake_client)):
+        result = service.list_models(config, "sk-test")
+
+    assert result.ok is True
+    assert result.incomplete is True
+    assert result.available_models == ["gateway-model-a"]
+    assert any("interrupted mid-pagination" in item for item in result.diagnostics)
 
 
 def test_provider_test_reports_rate_limit_structurally() -> None:

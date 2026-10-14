@@ -694,23 +694,18 @@ test('saveProviderFromWebviewCommand keeps the model list ready but blocks coach
   });
 
   await flushDetachedSaveVerification();
+  // P0 save-and-go: the save persists and applies locally; discovery and the
+  // connection check are explicit follow-up actions, never part of saving.
   assert.equal(result.ok, true);
   assert.equal(savedConfigs[0].model, 'MiniMax-M3');
-  assert.equal(savedLastTests.length, 1);
-  assert.equal(savedLastTests[0].status, 'language_corruption');
-  assert.equal(savedLastTests[0].errorCategory, 'language_corruption');
-  assert.equal(savedLastTests[0].toolsReady, false);
-  assert.equal(savedLastTests[0].toolProbeStatus, 'unsupported');
-  assert.deepEqual(requestOptions.get('/provider/models'), { timeoutMs: 90_000 });
-  assert.deepEqual(requestOptions.get('/provider/test'), { timeoutMs: 90_000 });
+  assert.equal(savedLastTests.length, 0);
+  assert.equal(requestOptions.size, 0);
   const savedMessage = lastSaveOperationStatus(postedStatuses)?.payload.message ?? '';
-  assert.match(savedMessage, /Loaded 2 live models/i);
-  assert.match(savedMessage, /cannot coach with this connection yet/i);
-  assert.match(savedMessage, /question marks/i);
+  assert.match(savedMessage, /saved and active/i);
+  assert.doesNotMatch(savedMessage, /cannot coach with this connection yet/i);
   assert.equal(syncs.length, 2);
-  assert.equal(patches[1].providerConfig.modelListStatus, 'ready');
-  assert.equal(patches[1].providerConfig.lastTestResult.status, 'language_corruption');
-  assert.equal(patches[1].providerConfig.lastTestResult.errorCategory, 'language_corruption');
+  assert.equal(patches[0].providerConfig.modelListStatus, 'idle');
+  assert.equal(patches[0].providerConfig.resolvedModel, 'MiniMax-M3');
 });
 
 test('saveProviderFromWebviewCommand keeps the model list ready when zh-CN integrity is not fully verified yet', async () => {
@@ -868,19 +863,16 @@ test('saveProviderFromWebviewCommand keeps the model list ready when zh-CN integ
   });
 
   await flushDetachedSaveVerification();
+  // P0 save-and-go: an unverified zh-CN history is a diagnostic for later
+  // surfaces; the save itself stays network-free and reports applied state.
   assert.equal(result.ok, true);
   assert.equal(savedConfigs[0].model, 'MiniMax-M3');
-  assert.equal(savedLastTests.length, 1);
-  assert.equal(savedLastTests[0].status, 'language_probe_inconclusive');
-  assert.equal(savedLastTests[0].errorCategory, 'language_probe_inconclusive');
+  assert.equal(savedLastTests.length, 0);
   const savedMessage = lastSaveOperationStatus(postedStatuses)?.payload.message ?? '';
-  assert.match(savedMessage, /Loaded 2 live models/i);
-  assert.match(savedMessage, /zh-cn integrity still needs verification/i);
-  assert.doesNotMatch(savedMessage, /cannot coach with this connection yet/i);
+  assert.match(savedMessage, /saved and active/i);
   assert.equal(syncs.length, 2);
-  assert.equal(patches[1].providerConfig.modelListStatus, 'ready');
-  assert.equal(patches[1].providerConfig.lastTestResult.status, 'language_probe_inconclusive');
-  assert.equal(patches[1].providerConfig.lastTestResult.errorCategory, 'language_probe_inconclusive');
+  assert.equal(patches[0].providerConfig.modelListStatus, 'idle');
+  assert.equal(patches[0].providerConfig.resolvedModel, 'MiniMax-M3');
 });
 
 test('saveProviderFromWebviewCommand injects stable MiniMax defaults for custom MiniMax-like gateways', async () => {
@@ -1111,19 +1103,17 @@ test('saveProviderFromWebviewCommand tests the saved model when live discovery i
   });
   await flushDetachedSaveVerification();
 
+  // P0 save-and-go: a gateway without a model-list endpoint is fine — the
+  // save applies the configured model locally without any probe.
   assert.equal(result.ok, true);
-  assert.equal(savedLastTests.length, 1);
-  assert.equal(savedLastTests[0].ok, true);
-  assert.equal(savedLastTests[0].responseLanguage, 'zh-CN');
-  assert.equal(patches[1].providerConfig.modelListStatus, 'error');
-  assert.equal(patches[1].providerConfig.resolvedModel, 'MiniMax-M3');
-  assert.equal(patches[1].providerConfig.lastTestResult.ok, true);
-  assert.equal(patches[1].providerConfig.lastTestResult.responseLanguage, 'zh-CN');
-  // The test explicitly requests zh-CN, so the no-list success copy comes back
+  assert.equal(savedLastTests.length, 0);
+  assert.equal(patches[0].providerConfig.modelListStatus, 'idle');
+  assert.equal(patches[0].providerConfig.resolvedModel, 'MiniMax-M3');
+  // The save explicitly requests zh-CN, so the applied copy comes back
   // localized; match either language to pin the branch, not the wording.
   assert.match(
     lastSaveOperationStatus(postedStatuses)?.payload.message ?? '',
-    /current model is connected and ready|当前模型已连通可用/,
+    /saved and active|已保存并生效/,
   );
   assert.doesNotMatch(JSON.stringify(patches), /test-only-key/);
 });
@@ -1507,7 +1497,9 @@ test('switchProviderModelCommand persists a model chosen from the live available
   assert.equal(savedConfig.contextWindowTokens, 128000);
   assert.equal(savedConfig.maxOutputTokens, 12000);
   assert.equal(savedConfig.modelTokenLimits['MiniMax-M2.7-highspeed'].contextWindowTokens, 128000);
-  assert.equal(clearedLastTestConfig.model, 'MiniMax-M2.7-highspeed');
+  // P0 redirect: a switch no longer clears the stored verification — history
+  // stays scoped per {profileId, modelId} and is diagnostic only.
+  assert.equal(clearedLastTestConfig, undefined);
   assert.equal(syncs.length, 1);
   assert.equal(patches[0].providerConfig.model, 'MiniMax-M2.7-highspeed');
   assert.equal(patches[0].providerConfig.contextWindowTokens, 128000);
@@ -1636,8 +1628,9 @@ test('switchProviderModelCommand accepts a model preserved in the configured mod
   assert.equal(patches[0].providerConfig.model, 'MiniMax-M4-preview');
   assert.equal(patches[0].providerConfig.contextWindowTokens, 192000);
   assert.equal(patches[0].providerConfig.maxOutputTokens, 16000);
-  assert.equal(patches[0].providerConfig.modelListStatus, 'idle');
-  assert.match(patches[0].providerConfig.modelListDetail, /Test or refresh models/i);
+  // P0 redirect: the configured catalog is selectable state, so the landed
+  // switch reports a ready list and the switch-applied detail.
+  assert.equal(patches[0].providerConfig.modelListStatus, 'ready');
   assert.equal(patches[0].providerConfig.lastTestResult, undefined);
 });
 
@@ -3598,59 +3591,39 @@ test('saveProviderFromWebviewCommand never sends a newly saved key from an untru
     replaceApiKey: true,
   });
 
+  // P0 save-and-go: the save is a local persistence only. The key is stored
+  // locally, the detached finalization makes no sidecar call, and the save
+  // outcome message carries no verification claim.
   assert.equal(result.ok, true);
   assert.equal(savedApiKey, 'sk-local-only');
   assert.match(currentConfig.apiKeyRef, /^trainer\.provider\.[0-9a-f-]{36}$/i);
   await flushDetachedSaveVerification();
   assert.equal(sidecarStarts, 0);
   assert.equal(requests, 0);
-  // The trust outcome rides the background operation/status post, not the
-  // synchronous save result.
-  assert.match(
-    lastSaveOperationStatus(postedStatuses)?.payload.message ?? result.message ?? '',
-    /workspace trust/i,
-  );
+  const savedMessage =
+    lastSaveOperationStatus(postedStatuses)?.payload.message ?? result.message ?? '';
+  assert.doesNotMatch(savedMessage, /verified|verified the connection|tested/i);
 });
 
 for (const modelDraft of [undefined, '', '   ']) {
-  test(`saveProviderFromWebviewCommand discovers and tests a model for quick setup draft ${JSON.stringify(modelDraft)}`, async () => {
+  test(`P0 redirect: save rejects a quick setup draft without a model (${JSON.stringify(modelDraft)}) instead of silently picking one`, async () => {
     const { saveProviderFromWebviewCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
     const context = createContext();
     const savedConfigs = [];
-    let storedConfig;
-    const testedModels = [];
+    const sidecarPaths = [];
+    // First-time quick setup: nothing saved yet, so no model can be inherited.
+    context.providerStore.getConfig = () => undefined;
     context.providerStore.saveConfig = async (config) => {
       savedConfigs.push(config);
-      storedConfig = config;
     };
-    context.providerStore.getConfig = () => storedConfig;
     context.providerStore.getModelCache = () => undefined;
     context.providerStore.isModelCacheFresh = () => false;
     context.providerStore.isModelCacheCompatible = () => false;
-    context.providerStore.saveModelCache = async (_config, cache) => ({
-      ...cache,
-      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-    });
-    context.providerStore.saveLastTestResult = async () => {};
     context.providerStore.getLastTestResult = () => undefined;
     context.trustGuard = { async ensureTrusted() { return true; } };
-    context.providerStore.clearLastTestResult = async () => {};
-    context.sidecarClient.postJson = async (_port, path, body) => {
-      if (path === '/provider/models') {
-        return {
-          ok: true,
-          available_models: ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3'],
-          resolved_model: null,
-          model_token_limits: {},
-          source: 'live',
-          fetched_at: new Date().toISOString(),
-        };
-      }
-      if (path === '/provider/test') {
-        testedModels.push(body.provider.model);
-        return { ok: true, status: 'connected', success: true };
-      }
-      throw new Error(`Unexpected sidecar call: ${path}`);
+    context.sidecarClient.postJson = async (_port, path) => {
+      sidecarPaths.push(path);
+      return { ok: true, available_models: ['MiniMax-M2.7-highspeed'] };
     };
 
     // The real Quick Setup form supplies an empty string; legacy callers omit it.
@@ -3663,14 +3636,13 @@ for (const modelDraft of [undefined, '', '   ']) {
     });
     await flushDetachedSaveVerification();
 
-    assert.equal(result.ok, true);
-    const lastSaved = savedConfigs[savedConfigs.length - 1];
-    assert.equal(lastSaved.model, 'MiniMax-M2.7-highspeed');
-    assert.deepEqual(testedModels, ['MiniMax-M2.7-highspeed']);
-    assert.match(
-      lastSaveOperationStatus(postedStatuses)?.payload.message ?? '',
-      /MiniMax-M2\.7-highspeed/,
-    );
+    // No silent placeholder: the save refuses to run without a user-chosen
+    // model and never contacts the provider.
+    assert.equal(result.ok, false);
+    assert.match(result.message ?? '', /model/i);
+    assert.deepEqual(savedConfigs, []);
+    assert.deepEqual(sidecarPaths, []);
+    assert.equal(lastSaveOperationStatus(postedStatuses), undefined);
   });
 }
 

@@ -476,9 +476,6 @@ function providerSendGuard(
   providerConfig?: ProviderSendConfig,
   apiKey?: string,
   responseLanguage?: string,
-  options?: {
-    deferReplyProof?: boolean;
-  },
 ): { blocked: boolean; message?: string } {
   const language = resolveProviderGuardLanguage(context, responseLanguage);
   if (providerConfig) {
@@ -537,15 +534,11 @@ function providerSendGuard(
     language,
   );
 
-  // Transport-level problems (no connection, no key, unusable model list, a
-  // failing probe) still stop the send here. Proof *gaps* — a missing test or
-  // a past success that went stale — are settled downstream instead: the
-  // non-stream path runs an automatic /provider/test preflight, and the
-  // stream path lets the stream itself re-verify the connection.
-  if (
-    sendState.blocked &&
-    !isDownstreamProvableSendBlock(provider, sendState, options?.deferReplyProof === true)
-  ) {
+  // P0 send semantics: a blocked send state means required configuration is
+  // missing (or the operation lacks permission). Test history and model-list
+  // states are diagnostics — the real request is its own proof, and its
+  // failures are surfaced in the conversation (request_failed).
+  if (sendState.blocked) {
     return {
       blocked: true,
       message: sendState.reason,
@@ -554,49 +547,8 @@ function providerSendGuard(
 
   return {
     blocked: false,
-    message: sendState.blocked ? undefined : sendState.reason,
+    message: sendState.reason,
   };
-}
-
-/**
- * True when describeProviderSendState blocked only because reply proof is
- * missing or stale — a state the caller can resolve by probing (non-stream)
- * or by running the real stream (deferReplyProof). Hard failures of a past
- * probe (ok === false), language-mismatched proofs on a Chinese surface, and
- * transport/model-list problems stay blocking.
- */
-function isDownstreamProvableSendBlock(
-  provider: {
-    configured?: boolean;
-    apiKeyConfigured?: boolean;
-    protocol?: string;
-    modelListStatus?: string;
-    lastTestResult?: { ok?: boolean };
-  },
-  sendState: { blocked: boolean; status?: string },
-  deferReplyProof: boolean,
-): boolean {
-  if (!sendState.blocked || sendState.status !== 'blocked_error') {
-    return false;
-  }
-  if (provider.configured !== true || provider.apiKeyConfigured !== true) {
-    return false;
-  }
-  const declaredProtocol = typeof provider.protocol === 'string' ? provider.protocol.trim() : '';
-  if (declaredProtocol && !normalizeProviderProtocol(declaredProtocol)) {
-    return false;
-  }
-  if (provider.modelListStatus === 'error') {
-    return false;
-  }
-  const lastTest = provider.lastTestResult;
-  if (lastTest === undefined) {
-    // No proof at all — the non-stream preflight probes before the turn.
-    return true;
-  }
-  // A past success that went stale, targeted another connection, or skipped
-  // the Chinese integrity probe only re-proves itself through the real stream.
-  return lastTest.ok === true && deferReplyProof;
 }
 
 function providerModelPolicySendGuardMessage(
@@ -794,7 +746,6 @@ async function ensureCoachProviderReady(
   options?: {
     probeMessage?: string;
     responseLanguage?: string;
-    deferReplyProof?: boolean;
   },
 ): Promise<CommandExecutionResult | undefined> {
   const providerConfig = context.providerStore.getConfig();
@@ -813,12 +764,14 @@ async function ensureCoachProviderReady(
     };
   }
 
+  // P0: no pre-send /provider/test preflight. A complete configuration sends
+  // the real request directly; a real failure is classified and surfaced in
+  // the conversation (request_failed) with recovery actions.
   const sendGuard = providerSendGuard(
     context,
     providerConfig,
     apiKey,
     options?.responseLanguage,
-    { deferReplyProof: options?.deferReplyProof === true },
   );
   if (sendGuard.blocked) {
     return {
@@ -827,11 +780,7 @@ async function ensureCoachProviderReady(
     };
   }
 
-  if (options?.deferReplyProof) {
-    return undefined;
-  }
-
-  return ensureCoachReplyProof(context, providerConfig, apiKey, action, options);
+  return undefined;
 }
 
 type ProviderFailureMeta = {
@@ -874,26 +823,6 @@ async function updateStreamingState(
   await context.setStreamingState(next);
   return next;
 }
-
-type ProviderTestResponse = {
-  ok?: boolean;
-  status?: string;
-  provider_name?: string;
-  detail?: string;
-  error_category?: string;
-  retryable?: boolean;
-  status_code?: number;
-  capability_evidence?: unknown;
-  capabilityEvidence?: unknown;
-  tools_ready?: boolean;
-  toolsReady?: boolean;
-  tool_probe_status?: unknown;
-  toolProbeStatus?: unknown;
-  streaming_ready?: boolean;
-  streamingReady?: boolean;
-  stream_probe_status?: unknown;
-  streamProbeStatus?: unknown;
-};
 
 type ResumeProjectLanePayload = {
   workspaceId: string;
@@ -1192,32 +1121,6 @@ function currentProviderLastTestResult(
   return context.getHostState().bootstrap.providerConfig.lastTestResult;
 }
 
-function lastTestProvesReplyUnusable(
-  result:
-    | {
-        ok?: boolean;
-        status?: string;
-        detail?: string;
-        errorCategory?: string;
-      }
-    | undefined,
-): boolean {
-  if (!result || result.ok !== false) {
-    return false;
-  }
-  const status = result.status?.toLowerCase() ?? '';
-  const errorCategory = result.errorCategory?.toLowerCase() ?? '';
-  const detail = result.detail?.toLowerCase() ?? '';
-  return (
-    status === 'language_corruption' ||
-    errorCategory === 'language_corruption' ||
-    detailLooksLikeLanguageCorruption(detail) ||
-    status === 'empty_response' ||
-    errorCategory === 'empty_response' ||
-    /empty content|unusable|no final coaching reply content|final reply content/.test(detail)
-  );
-}
-
 function usableReplyFailureMessage(
   detail: string | undefined,
   categoryOrStatus?: string | undefined,
@@ -1509,117 +1412,6 @@ async function failCoachReplyProof(
   }
 
   return { ok: false, message: failure.detail };
-}
-
-async function ensureCoachReplyProof(
-  context: CommandContext,
-  providerConfig: ProviderConfig | undefined,
-  apiKey: string | undefined,
-  action: string,
-  options?: {
-    probeMessage?: string;
-    responseLanguage?: string;
-  },
-): Promise<CommandExecutionResult | undefined> {
-  const currentView = context.getHostState().bootstrap.providerConfig;
-  const responseLanguage = resolveProviderGuardLanguage(context, options?.responseLanguage);
-  const lastTestResult = currentProviderLastTestResult(context, providerConfig);
-  if (lastTestProvesReplyUnusable(lastTestResult)) {
-    return {
-      ok: false,
-      message: usableReplyFailureMessage(
-        lastTestResult?.detail,
-        lastTestResult?.errorCategory ?? lastTestResult?.status,
-        responseLanguage,
-      ),
-    };
-  }
-  if (lastTestResult?.ok) {
-    return undefined;
-  }
-  if (currentView.configured !== true) {
-    return undefined;
-  }
-
-  let status: SidecarStatus;
-  try {
-    status = await context.sidecarManager.ensureRunning();
-  } catch (error) {
-    return failCoachReplyProof(context, providerConfig, error, responseLanguage);
-  }
-  if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
-  }
-
-  let response: ProviderTestResponse;
-  try {
-    response = await context.sidecarClient.postJson<ProviderTestResponse>(
-      status.port,
-      '/provider/test',
-      {
-        provider: providerConfig,
-        probe_message: options?.probeMessage,
-        response_language: responseLanguage,
-        ...buildCoachProviderRequestBody(context, providerConfig, apiKey),
-      },
-      { timeoutMs: SIDECAR_DEFAULTS.providerRequestTimeoutMs },
-    );
-  } catch (error) {
-    return failCoachReplyProof(context, providerConfig, error, responseLanguage);
-  }
-
-  const ok = Boolean(response.ok);
-  const detail = response.detail?.trim() || `Trainer could not ${action}.`;
-  const capabilityTruth = normalizeProviderCapabilityTruth(response);
-  const savedResult = {
-    ok,
-    status: response.status ?? (ok ? 'connected' : 'failed'),
-    detail,
-    checkedAt: new Date().toISOString(),
-    providerName: response.provider_name?.trim() || providerConfig?.name || 'Provider',
-    baseUrl: providerConfig?.baseUrl ?? '',
-    model: providerConfig?.model ?? '',
-    errorCategory: response.error_category,
-    retryable: response.retryable,
-    statusCode: response.status_code ?? undefined,
-    responseLanguage,
-      capabilityEvidence: capabilityTruth.capabilityEvidence,
-      toolsReady: capabilityTruth.toolsReady,
-      toolProbeStatus: capabilityTruth.toolProbeStatus,
-      streamingReady: capabilityTruth.streamingReady,
-      streamProbeStatus: capabilityTruth.streamProbeStatus,
-      visionReady: capabilityTruth.visionReady,
-      visionProbeStatus: capabilityTruth.visionProbeStatus,
-      thinkingReady: capabilityTruth.thinkingReady,
-      thinkingProbeStatus: capabilityTruth.thinkingProbeStatus,
-    };
-  await persistProviderLastTestResult(context, providerConfig, savedResult);
-
-  if (ok) {
-    return undefined;
-  }
-
-  if (
-    response.error_category === 'language_probe_inconclusive' ||
-    response.status === 'language_probe_inconclusive'
-  ) {
-    return undefined;
-  }
-
-  return {
-    ok: false,
-    message:
-      response.error_category === 'empty_response' ||
-      response.status === 'empty_response' ||
-      response.error_category === 'language_corruption' ||
-      response.status === 'language_corruption'
-        ? usableReplyFailureMessage(
-            detail,
-            response.error_category ?? response.status,
-            responseLanguage,
-          )
-        : detail,
-  };
 }
 
 function isRetryableTimeoutFailure(error: unknown): boolean {
@@ -2272,7 +2064,6 @@ export async function sendStreamMessageCommand(
     }
     const providerGuard = await ensureCoachProviderReady(context, 'stream messages', {
       responseLanguage: streamPayload.responseLanguage,
-      deferReplyProof: true,
     });
     if (providerGuard) {
       return providerGuard;

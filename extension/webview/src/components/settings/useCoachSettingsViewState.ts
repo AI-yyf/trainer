@@ -28,6 +28,7 @@ import type {
   ProviderConfigView,
   TeachingStyle,
   ThemePreference,
+  TrainerProjectsList,
   TrainerWorkspaceAdmission,
 } from "../../lib/types";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
@@ -96,6 +97,7 @@ export interface CoachSettingsViewState {
   memoryShareGrants: MemoryShareGrant[];
   resourceSandbox: ManagedDataFolder | null;
   trainerWorkspace: TrainerWorkspaceAdmission | undefined;
+  trainerProjects: TrainerProjectsList | null;
   remoteWorkspaceName: string | undefined;
   personalAccountTrusted: boolean;
   // §layout knobs
@@ -150,6 +152,8 @@ export interface CoachSettingsViewState {
   onRestoreTrainerWorkspaceBackup: () => void;
   onChooseManagedDataFolder: () => void;
   onResetManagedDataFolder: () => void;
+  onRemoveTrainerProject: ((projectPath: string) => void) | undefined;
+  onMoveManagedDataUnderRoot: () => void;
   onRefreshMemory: () => void;
   onShareSession: () => Promise<void>;
 }
@@ -299,6 +303,7 @@ export function useCoachSettingsViewState({
     memoryShareGrants: memoryShareGrants ?? [],
     resourceSandbox: memoryWorkspace?.resourceSandbox ?? null,
     trainerWorkspace: memoryWorkspace?.trainerWorkspace,
+    trainerProjects: memoryWorkspace?.trainerProjects ?? null,
     remoteWorkspaceName: workspace?.isRemoteWorkspace ? workspace.remoteName : undefined,
     personalAccountTrusted: memoryWorkspace?.personalAccountTrusted === true,
     // §layout knobs
@@ -471,6 +476,33 @@ export function useCoachSettingsViewState({
       postMessage({
         type: "command/execute",
         payload: { commandId: trainerCommands.resetManagedDataFolder },
+      });
+    },
+    onRemoveTrainerProject: isBrowserPreview
+      ? undefined
+      : (projectPath: string) => {
+          // Removal dispatches the existing reference-only delete flow; the
+          // host shows the modal confirmation and never touches files.
+          postMessage({
+            type: "command/execute",
+            payload: {
+              commandId: trainerCommands.deleteWorkspaceProject,
+              payload: { projectPath },
+            },
+          });
+        },
+    onMoveManagedDataUnderRoot: () => {
+      if (isBrowserPreview) {
+        setOperationMessage({
+          tone: "info",
+          message:
+            appUiCopy(language, "浏览器预览不能迁移 managed data folder。请在 VS Code 侧栏里执行迁移。"),
+        });
+        return;
+      }
+      postMessage({
+        type: "command/execute",
+        payload: { commandId: trainerCommands.moveManagedDataUnderRoot },
       });
     },
     onRefreshMemory: () =>

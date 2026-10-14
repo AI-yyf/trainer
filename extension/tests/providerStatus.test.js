@@ -296,7 +296,7 @@ test('providerErrorHint uses plain zh-CN copy for malformed responses', () => {
   assert.doesNotMatch(hint ?? '', /OpenAI|protocol|协议/);
 });
 
-test('describeProviderSendState keeps zh-CN recovery hints clear and actionable', () => {
+test('P0 redirect: zh-CN recovery hints stay clear and actionable as a diagnostic warning', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const state = describeProviderSendState(
@@ -311,13 +311,15 @@ test('describeProviderSendState keeps zh-CN recovery hints clear and actionable'
     'zh-CN',
   );
 
-  assert.equal(state.blocked, true);
-  assert.match(state.reason ?? '', /连不上模型/);
-  assert.match(state.reason ?? '', /检查连接/);
-  assert.doesNotMatch(state.reason ?? '', /provider|base URL/);
+  // A historical model-list failure warns but never gates sending.
+  assert.equal(state.blocked, false);
+  assert.equal(state.status, 'ready');
+  assert.match(state.warning ?? '', /连不上模型/);
+  assert.match(state.warning ?? '', /检查连接/);
+  assert.doesNotMatch(state.warning ?? '', /provider|base URL/);
 });
 
-test('describeProviderSendState keeps raw technical failure details out of Chinese recovery copy', () => {
+test('P0 redirect: raw technical failure details stay out of Chinese send-state copy', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const state = describeProviderSendState(
@@ -332,8 +334,11 @@ test('describeProviderSendState keeps raw technical failure details out of Chine
     'zh-CN',
   );
 
-  assert.equal(state.blocked, true);
-  assert.equal(state.reason, '到“设置”检查连接后再试。');
+  // No category, no warning: the connection is sendable and raw transport
+  // details never surface in the send-state copy.
+  assert.equal(state.blocked, false);
+  assert.equal(state.status, 'ready');
+  assert.equal(state.warning, undefined);
   assert.doesNotMatch(state.reason ?? '', /HTTP|gateway|provider|base URL|diagnostic/i);
 });
 
@@ -367,7 +372,8 @@ test('describeProviderSendState does not treat empty New API URL and model as co
   );
 
   assert.equal(state.blocked, true);
-  assert.equal(state.status, 'missing_provider');
+  assert.equal(state.status, 'needs_configuration');
+  assert.equal(state.reasonKind, 'missing_provider');
 });
 
 test('describeProviderSendState distinguishes saved profiles from an active provider', () => {
@@ -387,12 +393,13 @@ test('describeProviderSendState distinguishes saved profiles from an active prov
   );
 
   assert.equal(state.blocked, true);
-  assert.equal(state.status, 'missing_provider');
+  assert.equal(state.status, 'needs_configuration');
+  assert.equal(state.reasonKind, 'missing_provider');
   assert.match(state.reason ?? '', /no saved connection is selected/i);
   assert.match(state.reason ?? '', /settings/i);
 });
 
-test('describeProviderSendState keeps an unlisted, untested configured model visibly unverified', () => {
+test('P0 redirect: an unlisted, untested configured model stays sendable — the first real send is its confirmation', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const state = describeProviderSendState(
@@ -406,12 +413,11 @@ test('describeProviderSendState keeps an unlisted, untested configured model vis
     'en-US',
   );
 
-  assert.equal(state.blocked, true);
-  assert.equal(state.status, 'blocked_error');
-  assert.match(state.reason ?? '', /has not been confirmed yet/i);
+  assert.equal(state.blocked, false);
+  assert.equal(state.status, 'ready');
 });
 
-test('describeProviderSendState keeps a discovered but untested model visibly unverified', () => {
+test('P0 redirect: a discovered but untested model stays sendable', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const state = describeProviderSendState(
@@ -425,12 +431,11 @@ test('describeProviderSendState keeps a discovered but untested model visibly un
     'en-US',
   );
 
-  assert.equal(state.blocked, true);
-  assert.equal(state.status, 'blocked_error');
-  assert.match(state.reason ?? '', /has not been confirmed yet/i);
+  assert.equal(state.blocked, false);
+  assert.equal(state.status, 'ready');
 });
 
-test('describeProviderSendState blocks coaching when the last connectivity test is missing', () => {
+test('P0 redirect: a missing connectivity test never blocks coaching', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const state = describeProviderSendState(
@@ -444,9 +449,8 @@ test('describeProviderSendState blocks coaching when the last connectivity test 
     'en-US',
   );
 
-  assert.equal(state.blocked, true);
-  assert.equal(state.status, 'blocked_error');
-  assert.match(state.reason ?? '', /has not been confirmed yet/i);
+  assert.equal(state.blocked, false);
+  assert.equal(state.status, 'ready');
 });
 
 test('describeProviderSendState accepts a current, targeted provider test when model discovery is unavailable', () => {
@@ -482,7 +486,7 @@ test('describeProviderSendState accepts a current, targeted provider test when m
   assert.equal(state.status, 'ready');
 });
 
-test('describeProviderSendState keeps a tested current model usable when model listing fails', () => {
+test('P0 redirect: a tested current model stays ready when model listing fails', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
   const now = Date.parse('2026-07-13T10:00:00.000Z');
 
@@ -513,12 +517,10 @@ test('describeProviderSendState keeps a tested current model usable when model l
   );
 
   assert.equal(state.blocked, false);
-  assert.equal(state.status, 'degraded_error');
-  assert.match(state.warning ?? '', /current model passed its connection test/i);
-  assert.match(state.warning ?? '', /model list is unavailable/i);
+  assert.equal(state.status, 'ready');
 });
 
-test('describeProviderSendState does not treat a legacy successful test as ready', () => {
+test('P0 redirect: a legacy successful test is diagnostic history, never a gate', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const state = describeProviderSendState(
@@ -538,9 +540,8 @@ test('describeProviderSendState does not treat a legacy successful test as ready
     'en-US',
   );
 
-  assert.equal(state.blocked, true);
-  assert.equal(state.status, 'blocked_error');
-  assert.match(state.reason ?? '', /has not been confirmed yet/i);
+  assert.equal(state.blocked, false);
+  assert.equal(state.status, 'ready');
 });
 
 test('describeProviderTestReadiness expires and invalidates a test for another connection', () => {
@@ -581,7 +582,7 @@ test('describeProviderTestReadiness expires and invalidates a test for another c
   assert.equal(mismatched.ready, false);
 });
 
-test('describeProviderSendState degrades an expired successful test on the same connection instead of blocking', () => {
+test('P0 redirect: an expired successful test on the same connection stays ready', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
   const now = Date.parse('2026-07-13T10:00:00.000Z');
 
@@ -611,14 +612,12 @@ test('describeProviderSendState degrades an expired successful test on the same 
     now,
   );
 
-  // A passing check on this exact connection degrades to a warning when it
-  // merely ages out; it must not hard-block the composer day after day.
+  // Test age is diagnostic freshness, not a send gate.
   assert.equal(state.blocked, false);
-  assert.equal(state.status, 'degraded_error');
-  assert.ok(state.warning);
+  assert.equal(state.status, 'ready');
 });
 
-test('describeProviderSendState requires a current zh-CN probe before Chinese coaching is ready', () => {
+test('P0 redirect: Chinese coaching no longer requires a current zh-CN probe', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
   const now = Date.parse('2026-07-13T10:00:00.000Z');
   const provider = {
@@ -653,13 +652,14 @@ test('describeProviderSendState requires a current zh-CN probe before Chinese co
     now,
   );
 
+  // The language probe is a diagnostic: the send gate is configuration only.
   assert.equal(englishState.status, 'ready');
-  assert.equal(chineseState.blocked, true);
-  assert.equal(chineseState.status, 'blocked_error');
+  assert.equal(chineseState.status, 'ready');
+  assert.equal(chineseState.blocked, false);
   assert.equal(verifiedChineseState.status, 'ready');
 });
 
-test('describeProviderSendState blocks coaching when the latest provider test failed authentication', () => {
+test('P0 redirect: a historical authentication failure warns without blocking', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const state = describeProviderSendState(
@@ -680,12 +680,12 @@ test('describeProviderSendState blocks coaching when the latest provider test fa
     'en-US',
   );
 
-  assert.equal(state.blocked, true);
-  assert.equal(state.status, 'blocked_error');
-  assert.match(state.reason ?? '', /connection cannot be used|key and access/i);
+  assert.equal(state.blocked, false);
+  assert.equal(state.status, 'ready');
+  assert.match(state.warning ?? '', /key and access|connection cannot be used/i);
 });
 
-test('describeProviderSendState blocks a reachable provider that returns only hidden reasoning', () => {
+test('P0 redirect: hidden-reasoning history stays a sanitized diagnostic warning', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const state = describeProviderSendState(
@@ -708,14 +708,13 @@ test('describeProviderSendState blocks a reachable provider that returns only hi
     'en-US',
   );
 
-  assert.equal(state.blocked, true);
-  assert.equal(state.status, 'blocked_error');
-  assert.match(state.reason ?? '', /no usable reply/i);
-  assert.match(state.reason ?? '', /choose another model/i);
-  assert.doesNotMatch(state.reason ?? '', /think|secret|diagnostic/i);
+  assert.equal(state.blocked, false);
+  assert.equal(state.status, 'ready');
+  assert.match(state.warning ?? '', /no usable reply/i);
+  assert.doesNotMatch(state.warning ?? '', /think|secret|diagnostic/i);
 });
 
-test('describeProviderSendState blocks a reasoning leak even when the model list is ready', () => {
+test('P0 redirect: a reasoning-leak history warns even when the model list is ready', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const state = describeProviderSendState(
@@ -736,13 +735,13 @@ test('describeProviderSendState blocks a reasoning leak even when the model list
     'en-US',
   );
 
-  assert.equal(state.blocked, true);
-  assert.equal(state.status, 'blocked_error');
-  assert.match(state.reason ?? '', /no usable reply/i);
-  assert.doesNotMatch(state.reason ?? '', /think|diagnostic/i);
+  assert.equal(state.blocked, false);
+  assert.equal(state.status, 'ready');
+  assert.match(state.warning ?? '', /no usable reply/i);
+  assert.doesNotMatch(state.warning ?? '', /think|diagnostic/i);
 });
 
-test('describeProviderSendState keeps English coaching available when the latest zh-CN integrity probe failed', () => {
+test('P0 redirect: English coaching stays available and informed when the zh-CN integrity probe failed', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const state = describeProviderSendState(
@@ -766,12 +765,11 @@ test('describeProviderSendState keeps English coaching available when the latest
   );
 
   assert.equal(state.blocked, false);
-  assert.equal(state.status, 'degraded_error');
-  assert.match(state.warning ?? '', /english can still work/i);
-  assert.match(state.warning ?? '', /switch connections/i);
+  assert.equal(state.status, 'ready');
+  assert.match(state.warning ?? '', /english can still work|switch connections/i);
 });
 
-test('describeProviderSendState still blocks zh-CN coaching when the latest zh-CN integrity probe failed', () => {
+test('P0 redirect: zh-CN coaching stays available (with a warning) when the zh-CN integrity probe failed', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const state = describeProviderSendState(
@@ -794,12 +792,13 @@ test('describeProviderSendState still blocks zh-CN coaching when the latest zh-C
     'zh-CN',
   );
 
-  assert.equal(state.blocked, true);
-  assert.equal(state.status, 'blocked_error');
-  assert.ok((state.reason ?? '').length > 0);
+  assert.equal(state.blocked, false);
+  assert.equal(state.status, 'ready');
+  assert.ok((state.warning ?? '').length > 0);
+  assert.match(state.warning ?? '', /更换连接|用英文继续/);
 });
 
-test('describeProviderSendState keeps coaching available when zh-CN integrity is not fully verified yet', () => {
+test('P0 redirect: coaching stays available when zh-CN integrity is not fully verified yet', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const state = describeProviderSendState(
@@ -823,11 +822,11 @@ test('describeProviderSendState keeps coaching available when zh-CN integrity is
   );
 
   assert.equal(state.blocked, false);
-  assert.equal(state.status, 'degraded_error');
+  assert.equal(state.status, 'ready');
   assert.match(state.warning ?? '', /chinese messages are not fully confirmed|test again/i);
 });
 
-test('describeProviderSendState keeps zh-CN coaching in warning mode when integrity is inconclusive', () => {
+test('P0 redirect: zh-CN coaching keeps the inconclusive-integrity warning without blocking', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const state = describeProviderSendState(
@@ -851,11 +850,11 @@ test('describeProviderSendState keeps zh-CN coaching in warning mode when integr
   );
 
   assert.equal(state.blocked, false);
-  assert.equal(state.status, 'degraded_error');
+  assert.equal(state.status, 'ready');
   assert.ok((state.warning ?? '').length > 0);
 });
 
-test('describeProviderSendState blocks current connectivity failures after a fresh provider test', () => {
+test('P0 redirect: connectivity-failure history reads as a diagnostic warning, not a block', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
 
   const now = Date.parse('2026-07-13T10:00:00.000Z');
@@ -904,13 +903,13 @@ test('describeProviderSendState blocks current connectivity failures after a fre
       now,
     );
 
-    assert.equal(state.blocked, true);
-    assert.equal(state.status, 'blocked_error');
-    assert.match(state.reason ?? '', failure.expected);
+    assert.equal(state.blocked, false);
+    assert.equal(state.status, 'ready');
+    assert.match(state.warning ?? '', failure.expected);
   }
 });
 
-test('describeProviderSendState keeps a stale connectivity failure degraded until a fresh current test confirms it', () => {
+test('P0 redirect: a stale connectivity failure stays a non-blocking warning', () => {
   const { describeProviderSendState } = require(providerStatusModulePath);
   const now = Date.parse('2026-07-13T10:00:00.000Z');
 
@@ -942,8 +941,8 @@ test('describeProviderSendState keeps a stale connectivity failure degraded unti
   );
 
   assert.equal(state.blocked, false);
-  assert.equal(state.status, 'degraded_error');
-  assert.match(state.warning ?? '', /latest check did not finish/i);
+  assert.equal(state.status, 'ready');
+  assert.match(state.warning ?? '', /latest connection check did not pass/i);
   assert.match(state.warning ?? '', /cannot reach the model/i);
 });
 
@@ -963,7 +962,9 @@ test('describeProviderImageInputState returns localized image guidance', () => {
     'ja-JP',
     now,
   );
-  assert.equal(untested.status, 'setup_required');
+  // P0 redirect: declared capabilities are already the fact — no probe is
+  // required before the connection reads as missing vision.
+  assert.equal(untested.status, 'missing_vision');
 
   const state = describeProviderImageInputState(
     {

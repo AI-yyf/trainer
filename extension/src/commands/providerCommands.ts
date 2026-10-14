@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import type { CommandContext } from '../core/commandContext';
+import { recordProviderHttpRequest } from '../core/runtimeMetrics';
 import { SIDECAR_DEFAULTS } from '../core/constants';
 import { trainerSessionBlockReason } from '../core/runtimeRehydration';
 import { defaultProviderCredentialMode, normalizeProviderRequestDefaults } from '../core/providerDefaults';
@@ -598,9 +599,14 @@ export async function configureProviderCommand(
     return { ok: false, message: 'Provider configuration cancelled.' };
   }
 
-  const model = await prompt('Chat model', existing?.model ?? 'gpt-4.1-mini');
+  // P0: no silent placeholder. The model must come from the user — picked
+  // from the known list or typed as a model ID — never pre-filled.
+  const model = await prompt('Chat model', existing?.model ?? '');
   if (!model) {
-    return { ok: false, message: 'Provider configuration cancelled.' };
+    return {
+      ok: false,
+      message: 'Model is required. Pick one from the known model list or type the model ID.',
+    };
   }
 
   const capabilities = await promptCapabilities(existing?.capabilities, protocol);
@@ -796,6 +802,9 @@ export async function testProviderCommand(
     (!payload?.protocol ||
       normalizeProviderProtocol(payload.protocol) === normalizeProviderProtocol(resolvedConfig.protocol));
   let response: ProviderTestResponse;
+  // Network boundary counter (P0): an explicit "test connection" is a real
+  // upstream attempt — it is the only /provider/test entry on this path.
+  const testRequestStartedAt = Date.now();
   try {
     response = await context.sidecarClient.postJson<ProviderTestResponse>(
       status.port,
@@ -803,7 +812,9 @@ export async function testProviderCommand(
       buildProviderTestRequestBody(context, testConfig, apiKey, responseLanguage),
       { timeoutMs: SIDECAR_DEFAULTS.providerRequestTimeoutMs },
     );
+    recordProviderHttpRequest(Date.now() - testRequestStartedAt);
   } catch {
+    recordProviderHttpRequest(Date.now() - testRequestStartedAt);
     response = {
       ok: false,
       configured: true,
@@ -1372,12 +1383,19 @@ export async function diagnoseProviderCommand(
 
   const apiKey = await resolveProviderApiKey(context, config);
 
-  const response = await context.sidecarClient.postJson<Record<string, unknown>>(
-    status.port,
-    '/provider/test',
-    buildProviderTestRequestBody(context, config, apiKey, resolveProviderResponseLanguage(context)),
-    { timeoutMs: SIDECAR_DEFAULTS.providerRequestTimeoutMs },
-  );
+  // Network boundary counter (P0): explicit diagnostics — never a hidden call.
+  const diagnosticsRequestStartedAt = Date.now();
+  let response: Record<string, unknown>;
+  try {
+    response = await context.sidecarClient.postJson<Record<string, unknown>>(
+      status.port,
+      '/provider/test',
+      buildProviderTestRequestBody(context, config, apiKey, resolveProviderResponseLanguage(context)),
+      { timeoutMs: SIDECAR_DEFAULTS.providerRequestTimeoutMs },
+    );
+  } finally {
+    recordProviderHttpRequest(Date.now() - diagnosticsRequestStartedAt);
+  }
 
   const providerConfigPatch = buildProviderDiagnosticsPatch(context, config, response);
   await context.patchWorkbenchData({

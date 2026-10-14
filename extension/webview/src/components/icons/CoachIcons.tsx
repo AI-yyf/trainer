@@ -194,6 +194,15 @@ export function LinkIcon(props: CoachIconProps) {
   );
 }
 
+export function CopyIcon(props: CoachIconProps) {
+  return (
+    <CoachIconBase {...props}>
+      <rect x="5.7" y="5.7" width="7" height="7" rx="1.2" />
+      <path d="M10.3 3.4H4.6A1.2 1.2 0 0 0 3.4 4.6v5.7" />
+    </CoachIconBase>
+  );
+}
+
 export function ShareIcon(props: CoachIconProps) {
   return (
     <CoachIconBase {...props}>

@@ -49,18 +49,45 @@ export interface ProviderStatusLike {
   };
 }
 
+/**
+ * Send-state semantics (P0 "ZCode-style model experience"): there are exactly
+ * three send states.
+ *
+ * - `ready` — the connection config is complete (baseUrl/key/model present and
+ *   well-formed) and a model is selected. The message can be sent. No test
+ *   record of any kind is required; the first real send is the connection's
+ *   live confirmation.
+ * - `needs_configuration` — a required config item is missing/malformed, or
+ *   the current operation lacks permission. Sending is blocked until fixed.
+ * - `request_failed` — a *sent* request really failed (401/403/404/429/
+ *   timeout/...). This state is produced by the send path (see
+ *   `describeProviderRequestFailure`), never by pre-send gating.
+ *
+ * Historical test results and model-list loading states are diagnostics only:
+ * they may inform warnings, but they are never the authority on sendability.
+ */
 export type ProviderSendStateStatus =
+  | 'ready'
+  | 'needs_configuration'
+  | 'request_failed';
+
+/**
+ * Finer-grained cause for a `needs_configuration` (or, from the send path, a
+ * `request_failed`) state. Kept separate from `status` so the three send
+ * states stay stable while recovery surfaces can still distinguish scenarios.
+ */
+export type ProviderSendStateReasonKind =
   | 'missing_provider'
   | 'missing_api_key'
-  | 'warming'
-  | 'blocked_error'
-  | 'degraded_error'
-  | 'refreshing'
-  | 'ready';
+  | 'invalid_protocol'
+  | 'unauthorized'
+  | 'request_failure';
 
 export interface ProviderSendState {
+  /** True only for `needs_configuration` — the send must not proceed. */
   blocked: boolean;
   status: ProviderSendStateStatus;
+  reasonKind?: ProviderSendStateReasonKind;
   reason?: string;
   warning?: string;
 }
@@ -106,38 +133,6 @@ const hardBlockingCategories = new Set([
   'truncated_or_empty',
 ]);
 
-const recentTestBlockingCategories = new Set([
-  'quota_exhausted',
-  'invalid_key_or_permission',
-  'invalid_api_key',
-  'authentication_failed',
-  'model_unsupported',
-  'model_not_supported',
-  'model_not_found',
-  'language_corruption',
-  'malformed_response',
-  'empty_response',
-  'reasoning_leak',
-  'reasoning_budget_exhausted',
-  'truncated_or_empty',
-]);
-
-const recentTestDegradedCategories = new Set([
-  'rate_limit',
-  'upstream_unavailable',
-  'timeout',
-  'network',
-  'network_error',
-  'context_length_exceeded',
-  'language_probe_inconclusive',
-]);
-
-const recentTestConnectivityFailureCategories = new Set([
-  'timeout',
-  'network',
-  'network_error',
-]);
-
 type ProviderStatusPhraseKey =
   | 'quota_exhausted'
   | 'invalid_key_or_permission'
@@ -162,7 +157,14 @@ type ProviderStatusPhraseKey =
   | 'missing_vision_detail'
   | 'missing_tools_reason'
   | 'missing_tools_detail'
-  | 'image_ready_detail';
+  | 'image_ready_detail'
+  | 'diagnostic_history_warning'
+  | 'recover_retry'
+  | 'recover_switch_model'
+  | 'recover_edit_key'
+  | 'recover_restore_quota'
+  | 'recover_check_connection'
+  | 'recover_start_sidecar';
 
 const providerStatusPhraseTable: Record<
   ProviderSurfaceLanguage,
@@ -193,6 +195,13 @@ const providerStatusPhraseTable: Record<
     missing_tools_reason: '图片暂时不能发送，文字对话仍可使用。',
     missing_tools_detail: '换一个支持图片的模型，或先继续文字对话。',
     image_ready_detail: '图片输入已就绪。下一次教练对话会把暂存图片一并发给模型。',
+    diagnostic_history_warning: '最近一次连接检查没有通过。这不会阻止发送；如果发送真的失败，错误会直接出现在对话里。',
+    recover_retry: '重试',
+    recover_switch_model: '换一个模型',
+    recover_edit_key: '编辑密钥',
+    recover_restore_quota: '补充额度',
+    recover_check_connection: '检查连接',
+    recover_start_sidecar: '重新启动 Trainer 后端',
   },
   'en-US': {
     quota_exhausted: 'The provider account has no quota left. Restore its quota or choose another connection in Settings, then try again.',
@@ -219,6 +228,13 @@ const providerStatusPhraseTable: Record<
     missing_tools_reason: 'Pictures cannot be sent right now, but text coaching still works.',
     missing_tools_detail: 'Choose a model that supports pictures, or continue with text for now.',
     image_ready_detail: 'Image input is ready. Staged pictures will be sent with the next coach turn.',
+    diagnostic_history_warning: 'The latest connection check did not pass. This does not block sending; if a real send fails, the error appears right in the conversation.',
+    recover_retry: 'Retry',
+    recover_switch_model: 'Switch model',
+    recover_edit_key: 'Edit key',
+    recover_restore_quota: 'Restore quota',
+    recover_check_connection: 'Check connection',
+    recover_start_sidecar: 'Restart the Trainer backend',
   },
   'es-ES': {
     quota_exhausted: 'La cuenta del proveedor no tiene cuota disponible. Añade cuota o elige otra conexión en Ajustes y vuelve a intentarlo.',
@@ -245,6 +261,13 @@ const providerStatusPhraseTable: Record<
     missing_tools_reason: 'Esta conexión puede guiar por texto, pero las imágenes no llegarán realmente al modelo porque la entrada de imágenes de Trainer todavía depende del flujo con herramientas.',
     missing_tools_detail: 'Para que las imágenes lleguen de verdad al modelo, esta conexión necesita por ahora visión y llamadas a herramientas.',
     image_ready_detail: 'La entrada de imágenes está lista. Las imágenes preparadas se enviarán con el siguiente turno del coach.',
+    diagnostic_history_warning: 'La última comprobación de conexión no pasó. Esto no bloquea el envío; si un envío real falla, el error aparece en la conversación.',
+    recover_retry: 'Reintentar',
+    recover_switch_model: 'Cambiar de modelo',
+    recover_edit_key: 'Editar clave',
+    recover_restore_quota: 'Reponer cuota',
+    recover_check_connection: 'Revisar conexión',
+    recover_start_sidecar: 'Reiniciar el backend de Trainer',
   },
   'fr-FR': {
     quota_exhausted: 'Le quota du fournisseur est épuisé. Rétablissez-le ou choisissez une autre connexion dans les paramètres, puis réessayez.',
@@ -271,6 +294,13 @@ const providerStatusPhraseTable: Record<
     missing_tools_reason: "Cette connexion peut coacher en texte, mais les images n'atteindront pas réellement le modèle car l'entrée image de Trainer dépend encore du chemin avec outils.",
     missing_tools_detail: "Pour que les images atteignent réellement le modèle, cette connexion a actuellement besoin à la fois de vision et d'appels d'outils.",
     image_ready_detail: "L'entrée image est prête. Les images préparées seront envoyées avec le prochain tour du coach.",
+    diagnostic_history_warning: 'La dernière vérification de connexion a échoué. Cela n’empêche pas l’envoi ; si un envoi réel échoue, l’erreur apparaît dans la conversation.',
+    recover_retry: 'Réessayer',
+    recover_switch_model: 'Changer de modèle',
+    recover_edit_key: 'Modifier la clé',
+    recover_restore_quota: 'Rétablir le quota',
+    recover_check_connection: 'Vérifier la connexion',
+    recover_start_sidecar: 'Redémarrer le backend Trainer',
   },
   'de-DE': {
     quota_exhausted: 'Das Anbieterkontingent ist aufgebraucht. Füllen Sie es auf oder wählen Sie in den Einstellungen eine andere Verbindung und versuchen Sie es erneut.',
@@ -297,6 +327,13 @@ const providerStatusPhraseTable: Record<
     missing_tools_reason: 'Diese Verbindung kann textbasiert coachen, aber Bilder erreichen das Modell nicht wirklich, weil die Bildeingabe von Trainer noch vom Werkzeugpfad abhängt.',
     missing_tools_detail: 'Damit Bilder das Modell wirklich erreichen, braucht diese Verbindung derzeit sowohl Vision als auch Tool-Aufrufe.',
     image_ready_detail: 'Die Bildeingabe ist bereit. Vorbereitete Bilder werden mit der nächsten Coach-Nachricht gesendet.',
+    diagnostic_history_warning: 'Die letzte Verbindungsprüfung war nicht erfolgreich. Das blockiert das Senden nicht; schlägt ein echtes Senden fehl, erscheint der Fehler direkt in der Unterhaltung.',
+    recover_retry: 'Erneut senden',
+    recover_switch_model: 'Modell wechseln',
+    recover_edit_key: 'Schlüssel bearbeiten',
+    recover_restore_quota: 'Kontingent auffüllen',
+    recover_check_connection: 'Verbindung prüfen',
+    recover_start_sidecar: 'Trainer-Backend neu starten',
   },
   'ja-JP': {
     quota_exhausted: '提供元の利用枠がなくなりました。利用枠を補充するか、設定で別の接続を選んでから再試行してください。',
@@ -323,6 +360,13 @@ const providerStatusPhraseTable: Record<
     missing_tools_reason: 'この接続はテキスト指導には使えますが、Trainer の画像入力はまだツール呼び出し経路に依存しているため、画像は実際にはモデルへ届きません。',
     missing_tools_detail: '画像を本当にモデルへ届けるには、この接続で vision とツール呼び出しの両方が必要です。',
     image_ready_detail: '画像入力の準備ができました。準備済みの画像は次の coach ターンで送信されます。',
+    diagnostic_history_warning: '直前の接続チェックは合格しませんでした。送信は妨げられません。実際の送信が失敗した場合は、エラーが会話内に表示されます。',
+    recover_retry: '再試行',
+    recover_switch_model: 'モデルを変える',
+    recover_edit_key: 'キーを編集',
+    recover_restore_quota: '利用枠を補充',
+    recover_check_connection: '接続を確認',
+    recover_start_sidecar: 'Trainer バックエンドを再起動',
   },
   'ko-KR': {
     quota_exhausted: '제공업체의 사용 한도가 소진되었습니다. 한도를 충전하거나 설정에서 다른 연결을 선택한 후 다시 시도하세요.',
@@ -349,6 +393,13 @@ const providerStatusPhraseTable: Record<
     missing_tools_reason: '이 연결은 텍스트 코칭은 가능하지만 Trainer의 이미지 입력이 아직 도구 호출 경로에 의존하므로 이미지는 실제로 모델에 도달하지 않습니다.',
     missing_tools_detail: '이미지가 실제로 모델에 도달하려면 현재 이 연결에 비전과 도구 호출이 모두 필요합니다.',
     image_ready_detail: '이미지 입력이 준비되었습니다. 준비된 이미지는 다음 coach 턴과 함께 전송됩니다.',
+    diagnostic_history_warning: '최근 연결 확인이 통과하지 못했습니다. 전송은 막히지 않으며, 실제 전송이 실패하면 오류가 대화에 바로 표시됩니다.',
+    recover_retry: '다시 시도',
+    recover_switch_model: '모델 변경',
+    recover_edit_key: '키 편집',
+    recover_restore_quota: '한도 충전',
+    recover_check_connection: '연결 확인',
+    recover_start_sidecar: 'Trainer 백엔드 재시작',
   },
   'pt-BR': {
     quota_exhausted: 'A conta do provedor está sem cota. Reponha a cota ou escolha outra conexão nas configurações e tente novamente.',
@@ -375,6 +426,13 @@ const providerStatusPhraseTable: Record<
     missing_tools_reason: 'Esta conexão consegue orientar por texto, mas as imagens não chegarão de fato ao modelo porque a entrada de imagem do Trainer ainda depende do fluxo com ferramentas.',
     missing_tools_detail: 'Para que as imagens realmente cheguem ao modelo, esta conexão precisa no momento de visão e chamadas de ferramentas.',
     image_ready_detail: 'A entrada de imagem está pronta. As imagens preparadas serão enviadas no próximo turno do coach.',
+    diagnostic_history_warning: 'A última verificação de conexão não passou. Isso não bloqueia o envio; se um envio real falhar, o erro aparece na conversa.',
+    recover_retry: 'Tentar de novo',
+    recover_switch_model: 'Trocar de modelo',
+    recover_edit_key: 'Editar chave',
+    recover_restore_quota: 'Repor cota',
+    recover_check_connection: 'Verificar conexão',
+    recover_start_sidecar: 'Reiniciar o backend do Trainer',
   },
 };
 
@@ -415,51 +473,6 @@ const unsupportedImageProtocolByLanguage: Record<
     detail: 'O Trainer envia imagens apenas pelos caminhos verificados OpenAI Chat ou Anthropic Messages. Troque o protocol ou use verificação por texto.',
   },
 };
-
-const unverifiedProviderWarningByLanguage: Record<ProviderSurfaceLanguage, string> = {
-  'zh-CN': '这组连接还没有确认可用。先测试连接或刷新模型后再继续。',
-  'en-US': 'This connection has not been confirmed yet. Test it or refresh models before continuing.',
-  'es-ES': 'Este modelo aún no se ha verificado. Prueba la conexión o actualiza los modelos antes de confiar en él.',
-  'fr-FR': "Ce modèle n'a pas encore été vérifié. Testez la connexion ou actualisez les modèles avant de vous y fier.",
-  'de-DE': 'Dieses Modell ist noch nicht verifiziert. Testen Sie die Verbindung oder aktualisieren Sie die Modelle, bevor Sie sich darauf verlassen.',
-  'ja-JP': 'この model はまだ検証されていません。使用する前に接続をテストするか、models を更新してください。',
-  'ko-KR': '이 model은 아직 검증되지 않았습니다. 사용하기 전에 연결을 테스트하거나 models를 새로 고치세요.',
-  'pt-BR': 'Este model ainda não foi verificado. Teste a conexão ou atualize os models antes de depender dele.',
-};
-
-function unverifiedProviderWarning(language: ProviderSurfaceLanguage): string {
-  return unverifiedProviderWarningByLanguage[language] ?? unverifiedProviderWarningByLanguage['en-US'];
-}
-
-const siblingModelWarningByLanguage: Record<ProviderSurfaceLanguage, string> = {
-  'zh-CN': '已切换到同连接下的新模型，尚未单独验证。可以直接发送，首次发送即完成确认；需要的话也可先测试。',
-  'en-US': "Switched to a new model on the same connection; it has not been verified individually yet. You can send now — the first send confirms it — or test first if you prefer.",
-  'es-ES': 'Cambiaste a un nuevo model en la misma conexión; aún no se ha verificado individualmente. Puedes enviar ahora — el primer envío lo confirma — o probar antes si lo prefieres.',
-  'fr-FR': "Vous êtes passé à un nouveau model sur la même connexion ; il n'a pas encore été vérifié individuellement. Vous pouvez envoyer — le premier envoi le confirme — ou tester d'abord si vous préférez.",
-  'de-DE': 'Sie haben auf ein neues model in derselben Verbindung gewechselt; es wurde noch nicht einzeln verifiziert. Sie können jetzt senden — die erste sendung bestätigt es — oder zuerst testen.',
-  'ja-JP': '同じ接続の新しい model に切り替えました。個別の検証はまだです。そのまま送信できます — 初回の送信で確認されます — または先にテストを。',
-  'ko-KR': '같은 연결의 새 model로 전환했습니다. 아직 개별 검증은 되지 않았습니다. 바로 보낼 수 있으며, 첫 전송이 확인을 대신합니다. 원하면 먼저 테스트하세요.',
-  'pt-BR': 'Você mudou para um novo model na mesma conexão; ainda não foi verificado individualmente. Pode enviar agora — o primeiro envio confirma — ou testar antes, se preferir.',
-};
-
-function siblingModelWarning(language: ProviderSurfaceLanguage): string {
-  return siblingModelWarningByLanguage[language] ?? siblingModelWarningByLanguage['en-US'];
-}
-
-const staleVerificationWarningByLanguage: Record<ProviderSurfaceLanguage, string> = {
-  'zh-CN': '这组连接之前的检查已通过，但结果有点旧了。现在可以直接发送；建议空闲时重新测试一次。',
-  'en-US': 'This connection passed an earlier check, but the result is a bit old. You can send now; re-test when convenient.',
-  'es-ES': 'Esta conexión pasó una comprobación anterior, pero el resultado ya es algo antiguo. Puedes enviar ahora; vuelve a probar cuando puedas.',
-  'fr-FR': "Cette connexion a passé une vérification plus tôt, mais le résultat commence à dater. Vous pouvez envoyer ; retestez quand vous le pourrez.",
-  'de-DE': 'Diese Verbindung hat eine frühere Prüfung bestanden, aber das Ergebnis ist schon etwas älter. Sie können jetzt senden; testen Sie bei Gelegenheit erneut.',
-  'ja-JP': 'この接続は以前のチェックに合格していますが、結果はやや古いものです。今すぐ送信できます。都合のよいときに再テストしてください。',
-  'ko-KR': '이 연결은 이전 검사를 통과했지만 결과가 다소 오래되었습니다. 지금 보낼 수 있으며, 편할 때 다시 테스트하세요.',
-  'pt-BR': 'Esta conexão passou em uma verificação anterior, mas o resultado já está um pouco antigo. Você pode enviar agora; teste novamente quando puder.',
-};
-
-function staleVerificationWarning(language: ProviderSurfaceLanguage): string {
-  return staleVerificationWarningByLanguage[language] ?? staleVerificationWarningByLanguage['en-US'];
-}
 
 const providerErrorCategoryKeyMap: Partial<Record<string, ProviderStatusPhraseKey>> = {
   quota_exhausted: 'quota_exhausted',
@@ -713,29 +726,6 @@ export function describeProviderTestReadiness(
   };
 }
 
-function languageIntegrityFallbackWarning(language: ProviderSurfaceLanguage): string {
-  if (providerSurfacePrefersChinese(language)) {
-    return '最近一次检查发现中文消息没有正常送达。请在“设置”更换连接；暂时可以用英文继续。';
-  }
-  return 'The latest check found that Chinese messages are not arriving intact. In Settings, switch connections; English can still work for now.';
-}
-
-function languageIntegrityInconclusiveWarning(
-  language: ProviderSurfaceLanguage,
-  targetedChinese: boolean,
-): string {
-  if (targetedChinese) {
-    if (providerSurfacePrefersChinese(language)) {
-      return '这条连接可以使用，但中文消息还没有完全确认。请重新测试；需要时可暂时用英文继续。';
-    }
-    return 'This connection can work, but Chinese messages are not fully confirmed yet. Test again; use English for now if needed.';
-  }
-  if (providerSurfacePrefersChinese(language)) {
-    return '这条连接可以使用，但消息是否完整送达还没确认。建议重新测试后再继续。';
-  }
-  return 'This connection can work, but message delivery is not fully confirmed yet. Test again before relying on it.';
-}
-
 function visibleCoachingTextRecovery(language: ProviderSurfaceLanguage): string {
   const messages: Record<ProviderSurfaceLanguage, string> = {
     'zh-CN': '这组连接没有返回可用回复。到“设置”换一个模型后重新测试。',
@@ -787,105 +777,6 @@ function providerGenericCheckHint(language: ProviderSurfaceLanguage): string {
   return providerStatusPhrase(language, 'generic_check_hint');
 }
 
-function providerDegradedWarning(
-  language: ProviderSurfaceLanguage,
-  hint: string | undefined,
-): string {
-  return `${providerStatusPhrase(language, 'degraded_warning')}${hint ? ` ${hint}` : ''}`.trim();
-}
-
-function describeRecentProviderTestState(
-  provider: Pick<
-    ProviderStatusLike,
-    'name' | 'baseUrl' | 'model' | 'protocol' | 'lastTestResult'
-  >,
-  language: ProviderSurfaceLanguage,
-  now: number,
-): ProviderSendState | undefined {
-  const lastTest = provider.lastTestResult;
-  if (!lastTest || lastTest.ok !== false) {
-    return undefined;
-  }
-
-  const category = lastTest.errorCategory ?? lastTest.status;
-  const hint =
-    providerErrorHint(
-      {
-        modelErrorCategory: category,
-        modelListDetail: lastTest.detail,
-      },
-      language,
-    ) ??
-    providerGenericCheckHint(language);
-
-  if (
-    category === 'language_corruption' &&
-    lastProviderTestTargetedChinese(lastTest) &&
-    !providerSurfacePrefersChinese(language)
-  ) {
-    return {
-      blocked: false,
-      status: 'degraded_error',
-      warning: languageIntegrityFallbackWarning(language),
-    };
-  }
-
-  if (category === 'language_probe_inconclusive') {
-    return {
-      blocked: false,
-      status: 'degraded_error',
-      warning: languageIntegrityInconclusiveWarning(
-        language,
-        lastProviderTestTargetedChinese(lastTest),
-      ),
-    };
-  }
-
-  const testReadiness = describeProviderTestReadiness(provider, language, now);
-  if (
-    category &&
-    recentTestConnectivityFailureCategories.has(category) &&
-    testReadiness.freshness === 'fresh' &&
-    testReadiness.targetsCurrentConnection === true
-  ) {
-    return {
-      blocked: true,
-      status: 'blocked_error',
-      reason: hint,
-    };
-  }
-
-  if (category && recentTestBlockingCategories.has(category)) {
-    return {
-      blocked: true,
-      status: 'blocked_error',
-      reason: hint,
-    };
-  }
-
-  if (category && recentTestDegradedCategories.has(category)) {
-    return {
-      blocked: false,
-      status: 'degraded_error',
-      warning: providerDegradedWarning(language, hint),
-    };
-  }
-
-  if (lastTest.retryable === true) {
-    return {
-      blocked: false,
-      status: 'degraded_error',
-      warning: providerDegradedWarning(language, hint),
-    };
-  }
-
-  return {
-    blocked: true,
-    status: 'blocked_error',
-    reason: hint,
-  };
-}
-
 /**
  * LM Studio / Ollama / llama.cpp style servers listen on loopback and accept
  * unauthenticated requests. For those connections the stored-key gate should
@@ -913,7 +804,7 @@ export function providerBaseUrlIsLocalService(baseUrl: string | undefined): bool
 export function describeProviderSendState(
   provider: ProviderStatusLike,
   language: ProviderSurfaceLanguage,
-  now = Date.now(),
+  _now = Date.now(),
 ): ProviderSendState {
   const transportMissing =
     (provider.baseUrl !== undefined && !String(provider.baseUrl).trim()) ||
@@ -921,146 +812,260 @@ export function describeProviderSendState(
   if (!provider.configured || transportMissing) {
     return {
       blocked: true,
-      status: 'missing_provider',
+      status: 'needs_configuration',
+      reasonKind: 'missing_provider',
       reason: missingProviderReason(provider, language),
     };
   }
 
   if (!provider.apiKeyConfigured) {
     // Local loopback services (LM Studio, Ollama, …) accept unauthenticated
-    // requests, so an absent key must not hard-block them.
+    // requests, so an absent key must not block them.
     if (providerBaseUrlIsLocalService(provider.baseUrl)) {
       return {
         blocked: false,
-        status: 'degraded_error',
+        status: 'ready',
         warning: providerStatusPhrase(language, 'local_service_no_key_warning'),
       };
     }
     return {
       blocked: true,
-      status: 'missing_api_key',
+      status: 'needs_configuration',
+      reasonKind: 'missing_api_key',
       reason: providerStatusPhrase(language, 'missing_api_key_reason'),
     };
   }
 
-    const testReadiness = describeProviderTestReadiness(provider, language, now);
-  if (provider.lastTestResult?.ok === true && !testReadiness.ready) {
-    // A passing check on this exact connection must not hard-block sending
-    // just because time has passed; the user would otherwise be re-gated
-    // every day. Degrade to a warning instead. Unknown or mismatched test
-    // targets stay blocked so a stale result can never vouch for a new one.
-    if (
-      testReadiness.freshness === 'stale' &&
-      testReadiness.targetsCurrentConnection === true &&
-      testReadiness.languageVerified
-    ) {
-      return {
-        blocked: false,
-        status: 'degraded_error',
-        warning: staleVerificationWarning(language),
-      };
-    }
-    // Switching models inside the same verified transport is not a new
-    // connection: the passing check vouches for sibling models, and the
-    // first send on the new model is its live confirmation. Hard-blocking
-    // here forced a full re-test on every model switch.
-    const sameTransport = providerTestTargetsSameTransport(provider);
-    if (
-      sameTransport === true &&
-      testReadiness.freshness !== 'unknown' &&
-      testReadiness.languageVerified
-    ) {
-      return {
-        blocked: false,
-        status: 'degraded_error',
-        warning: siblingModelWarning(language),
-      };
-    }
-    return {
-      blocked: true,
-      status: 'blocked_error',
-      reason: unverifiedProviderWarning(language),
-    };
-  }
-
+  // Format guard: a declared protocol must be a known one. This is a config
+  // validity check, not a connectivity proof.
   const declaredProtocol = typeof provider.protocol === 'string' ? provider.protocol.trim() : '';
   if (declaredProtocol && !normalizeProviderProtocol(declaredProtocol)) {
     return {
       blocked: true,
-      status: 'blocked_error',
-      reason: unverifiedProviderWarning(language),
+      status: 'needs_configuration',
+      reasonKind: 'invalid_protocol',
+      reason: providerStatusPhrase(language, 'generic_check_hint'),
     };
   }
 
-  const availableModels = Array.isArray(provider.availableModels) ? provider.availableModels : [];
-  const hasUsableModels = availableModels.length > 0;
-  const errorHint = providerErrorHint(provider, language) ?? providerGenericCheckHint(language);
-
-  if (provider.modelListStatus === 'loading' && !hasUsableModels) {
-    return {
-      blocked: true,
-      status: 'warming',
-      reason: providerStatusPhrase(language, 'warming_reason'),
-    };
-  }
-
-  if (provider.modelListStatus === 'error') {
-    if (testReadiness.ready) {
-      return {
-        blocked: false,
-        status: 'degraded_error',
-        warning: providerStatusPhrase(language, 'model_list_unavailable_warning'),
-      };
-    }
-
-    const shouldBlock = !hasUsableModels || hardBlockingCategories.has(provider.modelErrorCategory ?? '');
-    if (shouldBlock) {
-      return {
-        blocked: true,
-        status: 'blocked_error',
-        reason: errorHint,
-      };
-    }
-
-    return {
-      blocked: false,
-      status: 'degraded_error',
-      warning: providerDegradedWarning(language, errorHint),
-    };
-  }
-
-  if (provider.modelListStatus === 'loading' && hasUsableModels) {
-    return {
-      blocked: false,
-      status: 'refreshing',
-      warning: providerStatusPhrase(language, 'refreshing_warning'),
-    };
-  }
-
-  const recentTestState = describeRecentProviderTestState(provider, language, now);
-  if (recentTestState) {
-    return recentTestState;
-  }
-
-  if (!provider.lastTestResult) {
-    return {
-      blocked: true,
-      status: 'blocked_error',
-      reason: unverifiedProviderWarning(language),
-    };
-  }
-
-  if (!testReadiness.ready) {
-    return {
-      blocked: true,
-      status: 'blocked_error',
-      reason: unverifiedProviderWarning(language),
-    };
-  }
+  // Sendable. Historical test results and model-list states are diagnostics
+  // only: they may add a non-blocking warning, never a gate. The first real
+  // send is the live confirmation, and its failure becomes request_failed via
+  // describeProviderRequestFailure.
+  const diagnosticCategory = provider.lastTestResult?.ok === false
+    ? provider.lastTestResult.errorCategory ?? provider.lastTestResult.status
+    : provider.lastTestResult?.ok === undefined
+      ? provider.modelErrorCategory
+      : undefined;
+  const diagnosticHint = diagnosticCategory
+    ? providerErrorHint(
+        {
+          modelErrorCategory: diagnosticCategory,
+          modelListDetail: provider.lastTestResult?.detail ?? provider.modelListDetail,
+        },
+        language,
+      )
+    : undefined;
+  const warning = providerBaseUrlIsLocalService(provider.baseUrl)
+    ? providerStatusPhrase(language, 'local_service_no_key_warning')
+    : diagnosticHint
+      ? `${providerStatusPhrase(language, 'diagnostic_history_warning')} ${diagnosticHint}`.trim()
+      : undefined;
 
   return {
     blocked: false,
     status: 'ready',
+    ...(warning ? { warning } : {}),
+  };
+}
+
+export type ProviderRequestFailureOwner =
+  | 'local_runtime'
+  | 'authentication'
+  | 'billing'
+  | 'model'
+  | 'rate_limit'
+  | 'upstream'
+  | 'network'
+  | 'workspace'
+  | 'request';
+
+export type ProviderRequestFailureRecovery =
+  | 'retry'
+  | 'switch_model'
+  | 'edit_key'
+  | 'restore_quota'
+  | 'check_connection'
+  | 'start_sidecar'
+  | 'trust_workspace';
+
+export interface ProviderRequestFailureAttribution {
+  /** Normalized error category (same vocabulary as errorCategory fields). */
+  category: string;
+  /** Who owns the failure — drives the explanation copy. */
+  owner: ProviderRequestFailureOwner;
+  /** Localized explanation of what actually happened. */
+  explanation: string;
+  /** Localized, executable recovery actions in priority order. */
+  recoveryActions: Array<{ kind: ProviderRequestFailureRecovery; label: string }>;
+  retryable: boolean;
+}
+
+const REQUEST_FAILURE_OWNER_PHRASE: Record<
+  ProviderRequestFailureOwner,
+  ProviderStatusPhraseKey
+> = {
+  local_runtime: 'sidecar_unavailable',
+  authentication: 'invalid_key_or_permission',
+  billing: 'quota_exhausted',
+  model: 'model_not_found',
+  rate_limit: 'rate_limit',
+  upstream: 'upstream_unavailable',
+  network: 'network',
+  workspace: 'workspace_trust',
+  request: 'generic_check_hint',
+};
+
+const REQUEST_FAILURE_RECOVERY_PHRASE: Record<
+  ProviderRequestFailureRecovery,
+  ProviderStatusPhraseKey
+> = {
+  retry: 'recover_retry',
+  switch_model: 'recover_switch_model',
+  edit_key: 'recover_edit_key',
+  restore_quota: 'recover_restore_quota',
+  check_connection: 'recover_check_connection',
+  start_sidecar: 'recover_start_sidecar',
+  trust_workspace: 'workspace_trust',
+};
+
+function providerRequestFailureActions(
+  owner: ProviderRequestFailureOwner,
+  language: ProviderSurfaceLanguage,
+): Array<{ kind: ProviderRequestFailureRecovery; label: string }> {
+  switch (owner) {
+    case 'local_runtime':
+      return [
+        { kind: 'start_sidecar', label: providerStatusPhrase(language, 'recover_start_sidecar') },
+        { kind: 'retry', label: providerStatusPhrase(language, 'recover_retry') },
+      ];
+    case 'authentication':
+      return [
+        { kind: 'edit_key', label: providerStatusPhrase(language, 'recover_edit_key') },
+        { kind: 'retry', label: providerStatusPhrase(language, 'recover_retry') },
+      ];
+    case 'billing':
+      return [
+        { kind: 'restore_quota', label: providerStatusPhrase(language, 'recover_restore_quota') },
+        { kind: 'switch_model', label: providerStatusPhrase(language, 'recover_switch_model') },
+      ];
+    case 'model':
+      return [
+        { kind: 'switch_model', label: providerStatusPhrase(language, 'recover_switch_model') },
+        { kind: 'retry', label: providerStatusPhrase(language, 'recover_retry') },
+      ];
+    case 'rate_limit':
+    case 'upstream':
+      return [{ kind: 'retry', label: providerStatusPhrase(language, 'recover_retry') }];
+    case 'network':
+      return [
+        { kind: 'check_connection', label: providerStatusPhrase(language, 'recover_check_connection') },
+        { kind: 'retry', label: providerStatusPhrase(language, 'recover_retry') },
+      ];
+    case 'workspace':
+      return [
+        { kind: 'trust_workspace', label: providerStatusPhrase(language, 'workspace_trust') },
+      ];
+    default:
+      return [
+        { kind: 'check_connection', label: providerStatusPhrase(language, 'recover_check_connection') },
+        { kind: 'retry', label: providerStatusPhrase(language, 'recover_retry') },
+      ];
+  }
+}
+
+/**
+ * Attributes a *real* request failure (the send already happened) to an owner
+ * with a localized explanation and executable recovery actions. Error
+ * ownership: sidecar down = local runtime, 401 = authentication, 402 = billing
+ * / quota, 404 = model id, 429 = rate limit, timeout = upstream, 5xx =
+ * upstream, connect-class = network.
+ */
+export function describeProviderRequestFailure(
+  input: {
+    errorCategory?: string | undefined;
+    statusCode?: number | undefined;
+    detail?: string | undefined;
+  },
+  language: ProviderSurfaceLanguage,
+): ProviderRequestFailureAttribution {
+  const rawCategory = input.errorCategory?.trim() ?? '';
+  const statusCode = typeof input.statusCode === 'number' ? input.statusCode : undefined;
+  let category = rawCategory || 'unknown';
+  let owner: ProviderRequestFailureOwner = 'request';
+  let retryable = true;
+
+  if (rawCategory === 'workspace_trust') {
+    owner = 'workspace';
+    retryable = false;
+  } else if (
+    rawCategory === 'sidecar_unavailable' ||
+    rawCategory === 'sidecar_request_failed'
+  ) {
+    owner = 'local_runtime';
+  } else if (
+    rawCategory === 'quota_exhausted' ||
+    rawCategory === 'insufficient_quota' ||
+    statusCode === 402
+  ) {
+    category = rawCategory || 'quota_exhausted';
+    owner = 'billing';
+    retryable = false;
+  } else if (
+    rawCategory === 'invalid_key_or_permission' ||
+    rawCategory === 'invalid_api_key' ||
+    rawCategory === 'authentication_failed' ||
+    statusCode === 401 ||
+    statusCode === 403
+  ) {
+    category = rawCategory || 'authentication_failed';
+    owner = 'authentication';
+    retryable = false;
+  } else if (
+    rawCategory === 'model_not_found' ||
+    rawCategory === 'model_unsupported' ||
+    rawCategory === 'model_not_supported' ||
+    statusCode === 404
+  ) {
+    category = rawCategory || 'model_not_found';
+    owner = 'model';
+    retryable = false;
+  } else if (rawCategory === 'rate_limit' || statusCode === 429) {
+    category = rawCategory || 'rate_limit';
+    owner = 'rate_limit';
+  } else if (rawCategory === 'timeout') {
+    owner = 'upstream';
+  } else if (
+    rawCategory === 'upstream_unavailable' ||
+    (statusCode !== undefined && statusCode >= 500)
+  ) {
+    owner = 'upstream';
+  } else if (
+    rawCategory === 'network' ||
+    rawCategory === 'network_error'
+  ) {
+    owner = 'network';
+  } else if (statusCode !== undefined && statusCode >= 400 && statusCode < 500) {
+    owner = 'request';
+    retryable = false;
+  }
+
+  return {
+    category,
+    owner,
+    explanation: providerStatusPhrase(language, REQUEST_FAILURE_OWNER_PHRASE[owner]),
+    recoveryActions: providerRequestFailureActions(owner, language),
+    retryable,
   };
 }
 

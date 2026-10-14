@@ -71,6 +71,7 @@ export const COMMAND_IDS = {
   resetSandboxRoot: trainerCommands.resetSandboxRoot,
   chooseManagedDataFolder: trainerCommands.chooseManagedDataFolder,
   resetManagedDataFolder: trainerCommands.resetManagedDataFolder,
+  moveManagedDataUnderRoot: trainerCommands.moveManagedDataUnderRoot,
   chooseTrainerWorkspaceRoot: trainerCommands.chooseTrainerWorkspaceRoot,
   migrateTrainerWorkspaceRoot: trainerCommands.migrateTrainerWorkspaceRoot,
   backupTrainerWorkspace: trainerCommands.backupTrainerWorkspace,

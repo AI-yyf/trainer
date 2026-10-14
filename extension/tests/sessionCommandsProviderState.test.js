@@ -229,7 +229,7 @@ test('sendMessageCommand degrades provider state when a successful response repo
   assert.equal(errorPatch.providerConfig.modelListStatus, 'error');
 });
 
-test('sendMessageCommand keeps going when zh-CN integrity is not fully verified yet', async () => {
+test('P0 redirect: sendMessageCommand sends directly with no /provider/test preflight — integrity history is a diagnostic, not a gate', async () => {
   const vscodeMock = {
     commands: {
       async executeCommand() {
@@ -238,27 +238,12 @@ test('sendMessageCommand keeps going when zh-CN integrity is not fully verified 
     },
   };
   const { sendMessageCommand } = loadWithVscodeMock(sessionCommandsModulePath, vscodeMock);
+  const requestedPaths = [];
   const context = createContext({
     sidecarClient: {
       async postJson(port, requestPath) {
         assert.equal(port, 34891);
-        if (requestPath === '/provider/test') {
-          return {
-            ok: false,
-            configured: true,
-            api_key_supplied: true,
-            reachable: true,
-            success: false,
-            status: 'language_probe_inconclusive',
-            provider_name: 'Local Compatible',
-            detail:
-              'Language integrity probe was inconclusive. The provider replied, but it did not preserve the mixed CJK/ASCII probe text exactly enough for Trainer to trust it.',
-            diagnostics: ['Language integrity probe was inconclusive.'],
-            error_category: 'language_probe_inconclusive',
-            retryable: false,
-            status_code: 200,
-          };
-        }
+        requestedPaths.push(requestPath);
         assert.equal(requestPath, '/session/message');
         return {
           session_id: 'session-provider-state-inconclusive',
@@ -276,7 +261,18 @@ test('sendMessageCommand keeps going when zh-CN integrity is not fully verified 
       },
     },
   });
-  context.getHostState().bootstrap.providerConfig.lastTestResult = undefined;
+  context.getHostState().bootstrap.providerConfig.lastTestResult = {
+    ok: false,
+    status: 'language_probe_inconclusive',
+    errorCategory: 'language_probe_inconclusive',
+    detail: 'Language integrity probe was inconclusive.',
+    retryable: false,
+    checkedAt: new Date().toISOString(),
+    providerName: 'Local Compatible',
+    baseUrl: 'http://localhost:1234/v1',
+    model: 'demo-model',
+    protocol: 'openai_chat_completions_compatible',
+  };
 
   const result = await sendMessageCommand(context, {
     text: '先教我 VS Code remote workspace boundary，再给我一个很小的验证动作。',
@@ -285,13 +281,14 @@ test('sendMessageCommand keeps going when zh-CN integrity is not fully verified 
     includeCurrentFile: false,
   });
 
+  // The historical inconclusive probe does not block or pre-probe: the real
+  // send is the only network call.
   assert.equal(result.ok, true);
+  assert.deepEqual(requestedPaths, ['/session/message']);
   assert.equal(context.__sessionIds.at(-1), 'session-provider-state-inconclusive');
-  assert.equal(context.__savedResults.at(-1)?.status, 'language_probe_inconclusive');
-  assert.equal(context.__savedResults.at(-1)?.errorCategory, 'language_probe_inconclusive');
 });
 
-test('sendMessageCommand blocks a fresh connectivity failure before it reaches the sidecar', async () => {
+test('P0 redirect: a historical connectivity failure no longer blocks the send — it rides along as a diagnostic', async () => {
   const vscodeMock = {
     commands: {
       async executeCommand() {
@@ -300,22 +297,29 @@ test('sendMessageCommand blocks a fresh connectivity failure before it reaches t
     },
   };
   const { sendMessageCommand } = loadWithVscodeMock(sessionCommandsModulePath, vscodeMock);
-  let sidecarCalls = 0;
-  let sidecarStarts = 0;
+  const requestedPaths = [];
   const context = createContext({
     sidecarClient: {
-      async postJson() {
-        sidecarCalls += 1;
-        throw new Error('The blocked send must not reach the sidecar.');
+      async postJson(port, requestPath) {
+        assert.equal(port, 34891);
+        requestedPaths.push(requestPath);
+        assert.equal(requestPath, '/session/message');
+        return {
+          session_id: 'session-provider-state-after-network-error',
+          reply: {
+            role: 'assistant',
+            content: 'Start with the smallest trusted check.',
+            metadata: {},
+          },
+          snapshot: {
+            messages: [],
+            memory: {},
+            plan: { id: 'plan-1', title: 'Plan', frozen: false, stages: [] },
+          },
+        };
       },
     },
   });
-  context.sidecarManager = {
-    async ensureRunning() {
-      sidecarStarts += 1;
-      throw new Error('The blocked send must not start the sidecar.');
-    },
-  };
   context.getHostState().bootstrap.providerConfig.lastTestResult = {
     ok: false,
     status: 'network_error',
@@ -336,11 +340,11 @@ test('sendMessageCommand blocks a fresh connectivity failure before it reaches t
     includeCurrentFile: false,
   });
 
-  assert.equal(result.ok, false);
-  assert.match(result.message ?? '', /cannot reach the model/i);
-  assert.equal(sidecarCalls, 0);
-  assert.equal(sidecarStarts, 0);
-  assert.equal(context.__sessionIds.length, 0);
+  // The past failure is diagnostic history: the real request is the proof and
+  // a real failure would surface in the conversation as request_failed.
+  assert.equal(result.ok, true);
+  assert.deepEqual(requestedPaths, ['/session/message']);
+  assert.equal(context.__sessionIds.at(-1), 'session-provider-state-after-network-error');
 });
 
 test('sendStreamMessageCommand degrades provider state when stream completion reports empty_response', async () => {
@@ -408,7 +412,7 @@ test('sendStreamMessageCommand degrades provider state when stream completion re
   assert.equal(errorPatch.providerConfig.modelListStatus, 'error');
 });
 
-test('sendStreamMessageCommand blocks a fresh connectivity failure before starting a stream', async () => {
+test('P0 redirect: sendStreamMessageCommand starts the stream despite historical connectivity failures', async () => {
   const vscodeMock = {
     commands: {
       async executeCommand() {
@@ -417,28 +421,34 @@ test('sendStreamMessageCommand blocks a fresh connectivity failure before starti
     },
   };
   const { sendStreamMessageCommand } = loadWithVscodeMock(sessionCommandsModulePath, vscodeMock);
-  let sidecarCalls = 0;
-  let streamCalls = 0;
-  let sidecarStarts = 0;
   const context = createContext({
-    initialSessionId: 'session-provider-state-stream-blocked',
+    initialSessionId: 'session-provider-state-stream-history',
     sidecarClient: {
-      async postJson() {
-        sidecarCalls += 1;
-        throw new Error('The blocked stream must not probe the sidecar.');
-      },
-      async *fetchSSE() {
-        streamCalls += 1;
-        throw new Error('The blocked stream must not begin SSE.');
+      async *fetchSSE(port, requestPath) {
+        assert.equal(port, 34891);
+        assert.equal(requestPath, '/session/message/stream');
+        yield {
+          event: 'complete',
+          data: JSON.stringify({
+            tokens: 1,
+            response: {
+              session_id: 'session-provider-state-stream-after-history',
+              reply: {
+                role: 'assistant',
+                content: 'Keep the reply short and trustworthy.',
+                metadata: {},
+              },
+              snapshot: {
+                messages: [],
+                memory: {},
+                plan: { id: 'plan-1', title: 'Plan', frozen: false, stages: [] },
+              },
+            },
+          }),
+        };
       },
     },
   });
-  context.sidecarManager = {
-    async ensureRunning() {
-      sidecarStarts += 1;
-      throw new Error('The blocked stream must not start the sidecar.');
-    },
-  };
   context.getHostState().bootstrap.providerConfig.lastTestResult = {
     ok: false,
     status: 'timeout',
@@ -460,15 +470,8 @@ test('sendStreamMessageCommand blocks a fresh connectivity failure before starti
     includeCurrentFile: false,
   });
 
-  assert.equal(result.ok, false);
-  assert.match(result.message ?? '', /took too long to reply/i);
-  assert.equal(sidecarCalls, 0);
-  assert.equal(streamCalls, 0);
-  assert.equal(sidecarStarts, 0);
-  assert.equal(context.getStreamingState().isStreaming, false);
-  assert.equal(context.getStreamingState().streamMessageId, undefined);
-  assert.equal(
-    context.__postCalls.some((call) => call[0] === 'workbench' && call[1] === 'postMessage' && call[2]?.type === 'stream/start'),
-    false,
-  );
+  // Historical failures never pre-block the stream; a real stream failure is
+  // classified and surfaced in the conversation (request_failed).
+  assert.equal(result.ok, true);
+  assert.equal(context.__sessionIds.at(-1), 'session-provider-state-stream-after-history');
 });

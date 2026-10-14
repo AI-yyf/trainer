@@ -785,6 +785,21 @@ export interface TrainerWorkspaceAdmission {
   reconciliation?: TrainerWorkspaceReconciliation;
 }
 
+/** One row of the Settings "added projects" list. */
+export interface TrainerProjectListEntry {
+  projectPath: string;
+  projectName: string;
+  adoptionMode: TrainerProjectAdmissionStatus;
+  identityStatus?: "pending" | "verified" | "reconcile-required";
+  isCurrent: boolean;
+  updatedAt?: string;
+}
+
+export interface TrainerProjectsList {
+  rootPath?: string;
+  projects: TrainerProjectListEntry[];
+}
+
 export type MemoryShareCategory = "preferences" | "mastery";
 
 export interface MemoryShareGrant {
@@ -984,6 +999,7 @@ export interface MemorySnapshot {
     };
     resourceSandbox?: ManagedDataFolder;
     trainerWorkspace?: TrainerWorkspaceAdmission;
+    trainerProjects?: TrainerProjectsList;
     coachDefaults?: Partial<CoachDefaults> & {
       workspaceMemoryToggles?: Partial<WorkspaceMemoryToggles>;
     };

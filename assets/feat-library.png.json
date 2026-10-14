@@ -1,0 +1,47 @@
+{
+  "model": "gpt-image-2",
+  "provider": "huishitu",
+  "account": "huishitu",
+  "request_style": "openai_images",
+  "network_route": "direct",
+  "workflow": "normal",
+  "generation_mode": "standard",
+  "text_zones": [],
+  "text_zone_style": null,
+  "asset_background": null,
+  "reference_fidelity": "faithful",
+  "references": [
+    {
+      "source": "/Users/Apple/Desktop/trainer/assets/refs/trainer_identity.png",
+      "role": "identity",
+      "uploaded_path": "/Users/Apple/Desktop/trainer/assets/refs/trainer_identity.png",
+      "tile": null
+    }
+  ],
+  "prompt": "[STYLE LOCK]\n\nTrainer 娘 standing at center, hands behind back, looking at \nthree distinct zones arranged left-to-right:\n\nZONE 1 (left third): \"WORKSPACE\" — wooden bookshelf filled \nwith project code files (visible filenames like main.py, \nApp.tsx, schema.sql). Warm wood texture. Open book on top \nshelf showing a glowing search result.\n\nZONE 2 (middle third): \"SANDBOX\" — glass cabinet with brass \nrailings, containing uploaded resource files (PDF, DOCX, MD, \nimages) suspended in soft gold light. Tier A label on \nglass: \"Rich preview · CodeMirror · PDF.js · DOCX\". A small \nchalkboard sign on cabinet reads: \"for processing only, not \nyour project\".\n\nZONE 3 (right third): \"TRASH\" — black ceramic bin with brass \nlid, lid half-open. Inside, a crumpled paper with a faint \nTrainer stamp visible — labeled \"recoverable\". A small \ngolden arrow above the bin points back toward Zone 1, with \ntext \"restore within 30 days\".\n\nAbove the three zones, a curved arrow connecting all three, \nlabeled \"upload → index → search → preview → recycle → restore\".\n\n[COMPOSITION]\nCanvas 1600x900. Three zones equal width (33% each). Trainer 娘 \nat the boundary of Zone 1 and Zone 2, center vertical line.\n\n[LIGHTING]\nZone 1: warm wood lighting #F5E6D3.\nZone 2: cool gold glow #F59E0B.\nZone 3: cool slate #475569 with a small gold accent on the \nrecoverable paper.\n\n[PALETTE]\nwood-brown #78350F, glass-blue #7DD3FC, gold-500 #F59E0B, \nslate-700 #334155, cream-bg #F5F3FF.\n\n[TEXTURE]\nVisible wood grain on Zone 1. Glass reflection on Zone 2. \nCeramic texture on Zone 3.\n\n[NEGATIVE CONSTRAINTS]\nNO filesystem tree visualization (use bookshelf metaphor). \nNO actual PDFs visible (use abstract document icons). NO \nphotorealism.\n\n[QUALITY TAGS]\nmasterwork, museum-print, chiaroscuro, atmospheric perspective, \nmaterial texture contrast",
+  "verbatim_text": [],
+  "shaped_prompt": "Use case: photorealistic-natural\nAsset type: finished raster image\nPrimary request: [STYLE LOCK]\n\nTrainer 娘 standing at center, hands behind back, looking at \nthree distinct zones arranged left-to-right:\n\nZONE 1 (left third): \"WORKSPACE\" — wooden bookshelf filled \nwith project code files (visible filenames like main.py, \nApp.tsx, schema.sql). Warm wood texture. Open book on top \nshelf showing a glowing search result.\n\nZONE 2 (middle third): \"SANDBOX\" — glass cabinet with brass \nrailings, containing uploaded resource files (PDF, DOCX, MD, \nimages) suspended in soft gold light. Tier A label on \nglass: \"Rich preview · CodeMirror · PDF.js · DOCX\". A small \nchalkboard sign on cabinet reads: \"for processing only, not \nyour project\".\n\nZONE 3 (right third): \"TRASH\" — black ceramic bin with brass \nlid, lid half-open. Inside, a crumpled paper with a faint \nTrainer stamp visible — labeled \"recoverable\". A small \ngolden arrow above the bin points back toward Zone 1, with \ntext \"restore within 30 days\".\n\nAbove the three zones, a curved arrow connecting all three, \nlabeled \"upload → index → search → preview → recycle → restore\".\n\n[COMPOSITION]\nCanvas 1600x900. Three zones equal width (33% each). Trainer 娘 \nat the boundary of Zone 1 and Zone 2, center vertical line.\n\n[LIGHTING]\nZone 1: warm wood lighting #F5E6D3.\nZone 2: cool gold glow #F59E0B.\nZone 3: cool slate #475569 with a small gold accent on the \nrecoverable paper.\n\n[PALETTE]\nwood-brown #78350F, glass-blue #7DD3FC, gold-500 #F59E0B, \nslate-700 #334155, cream-bg #F5F3FF.\n\n[TEXTURE]\nVisible wood grain on Zone 1. Glass reflection on Zone 2. \nCeramic texture on Zone 3.\n\n[NEGATIVE CONSTRAINTS]\nNO filesystem tree visualization (use bookshelf metaphor). \nNO actual PDFs visible (use abstract document icons). NO \nphotorealism.\n\n[QUALITY TAGS]\nmasterwork, museum-print, chiaroscuro, atmospheric perspective, \nmaterial texture contrast\nInput images: Image 1: identity input\nScene/backdrop: infer only what the request implies; keep it coherent and uncluttered\nSubject: make the requested subject the unmistakable focal point\nStyle/medium: follow the requested medium; if omitted, use a polished production-ready finish\nComposition/framing: one clear focal subject, coherent depth, intentional framing, no accidental clutter\nLighting/mood: consistent light direction, believable shadows, refined contrast and color\nColor palette: preserve colors from the request or references; avoid arbitrary brand colors\nMaterials/textures: physically plausible surfaces, fine texture, clean edges, no plastic-looking detail\nText (verbatim, every string must be exact): none specified\nConstraints: do not invent unrequested subjects; preserve reference identity, silhouette and key geometry when applicable\nAvoid: unrequested objects, extra people, duplicate subjects, distorted anatomy, bad hands, unreadable text, random logos, watermark, signature, border, overprocessed skin, plastic texture, muddy details, accidental collage\nRender at the highest native quality available. Prioritize subject fidelity, clean edges, coherent perspective and accurate requested text.\nDelivery intent: compose specifically for a 1600x900 canvas at 1.7778:1; keep important content inside the canvas and make every required element readable at that delivery size.\nReference policy: use each input only for its stated role; do not paste borders, watermarks, or old text from references; blend lighting and perspective naturally.\nReference fidelity: faithfully preserve the supplied reference's visual grammar, palette, paper texture, illustration language, hierarchy and recognizable subject geometry. Replace only content explicitly requested by the user.",
+  "requested_native_size": "3840x2160",
+  "native_size_policy": "target-ratio-maximum",
+  "requested_quality": "high",
+  "upstream_format": "PNG",
+  "native_size": [
+    3840,
+    2160
+  ],
+  "native_request_honored": true,
+  "native_output": "/Users/Apple/Desktop/trainer/assets/feat-library.png",
+  "final_size": [
+    3840,
+    2160
+  ],
+  "target_size": [
+    1600,
+    900
+  ],
+  "output_size_mode": "native",
+  "resize_mode": null,
+  "delivery_sharpen": null,
+  "postprocess": "none",
+  "output": "/Users/Apple/Desktop/trainer/assets/feat-library.png"
+}

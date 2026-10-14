@@ -16,15 +16,17 @@ test('composer model switch prioritizes live models and excludes configured alia
 
   assert.match(helpers, /const liveModels = Array\.isArray\(provider\.availableModels\)/);
   assert.match(helpers, /const fallbackModels = \[/);
+  // P0 "all known models": the menu merges every known model — live list,
+  // saved catalog, manual IDs, and the current selection — instead of letting
+  // the live list shadow the fallback catalog.
   assert.match(
     helpers,
-    /\.\.\.\(liveModels\.length > 0 \? liveModels : fallbackModels\),/,
+    /const modelCandidates = providerApplied\s*\? \[\.\.\.liveModels, \.\.\.fallbackModels, resolvedModel, configuredModel\]\s*: \[\];/,
   );
   assert.match(helpers, /\.\.\.\(Array\.isArray\(provider\.catalogModels\)/);
   assert.match(helpers, /\.\.\.Object\.keys\(provider\.modelTokenLimits \?\? \{\}\)/);
   assert.match(helpers, /const resolvedModel = provider\.resolvedModel\?\.trim\(\) \?\? "";/);
   assert.match(helpers, /const configuredModel = provider\.model\.trim\(\);/);
-  assert.match(helpers, /\.\.\.\(resolvedModel \? \[\] : \[configuredModel\]\),/);
   assert.match(helpers, /const configuredModelIsAlias = Boolean\(/);
   assert.match(helpers, /\(configuredModelIsAlias && modelKey === configuredModelKey\)/);
   assert.match(helpers, /evaluateProviderModelPolicy,/);

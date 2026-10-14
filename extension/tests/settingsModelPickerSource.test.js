@@ -28,8 +28,11 @@ const settingsInlineTextPath = path.resolve(
 test('Settings keeps model selection compact, searchable, and recoverable with a full name', () => {
   const source = fs.readFileSync(settingsSourcePath, 'utf8');
 
-  assert.match(source, /const MODEL_PICKER_RECENT_OPTION_LIMIT = 5;/);
-  assert.match(source, /const MODEL_PICKER_SEARCH_OPTION_LIMIT = 8;/);
+  // P0 redirect: the 5/8 truncation caps are gone. The picker renders the
+  // full known list (search filters but never truncates); only a defensive
+  // >=200 guard against absurd catalogs remains.
+  assert.match(source, /const MODEL_PICKER_DEFENSIVE_OPTION_LIMIT = 200;/);
+  assert.doesNotMatch(source, /MODEL_PICKER_RECENT_OPTION_LIMIT|MODEL_PICKER_SEARCH_OPTION_LIMIT/);
   assert.match(
     source,
     /const draftModelPolicy = \{\s*allowedModels: providerDraft\.allowedModels \?\? provider\.allowedModels \?\? \[\],\s*deniedModels: providerDraft\.deniedModels \?\? provider\.deniedModels \?\? \[\],\s*\};/,
@@ -38,13 +41,13 @@ test('Settings keeps model selection compact, searchable, and recoverable with a
     source,
     /const selectableModelOptions = filterProviderModelOptions\(\s*mergeDraftStringList\(\s*currentDraftModel,\s*draftCatalogModels,\s*liveCatalogModels,\s*availableModels,\s*\),\s*draftModelPolicy,\s*\{ retainModels: currentDraftModel \? \[currentDraftModel\] : \[\] \},\s*\);/,
   );
+  assert.match(source, /const modelPickerHasOverflow = selectableModelOptions\.length > MODEL_PICKER_DEFENSIVE_OPTION_LIMIT;/);
+  // Search filters without truncating the matching data.
   assert.match(
     source,
-    /const modelPickerDefaultOptionLimit =\s*MODEL_PICKER_RECENT_OPTION_LIMIT \+ \(currentDraftModel \? 1 : 0\);/,
+    /if \(normalizedModelSearchQuery\) \{\s*\/\/ Search filters but never truncates the matching data\.\s*return matchingModelOptions;\s*\}/,
   );
-  assert.match(source, /const modelPickerHasOverflow = selectableModelOptions\.length > modelPickerDefaultOptionLimit;/);
-  assert.match(source, /return matchingModelOptions\.slice\(0, MODEL_PICKER_SEARCH_OPTION_LIMIT\);/);
-  assert.match(source, /return selectableModelOptions\.slice\(0, modelPickerDefaultOptionLimit\);/);
+  assert.match(source, /return selectableModelOptions\.slice\(0, MODEL_PICKER_DEFENSIVE_OPTION_LIMIT\);/);
   assert.match(source, /const showModelSearchInput = modelPickerHasOverflow \|\| manualModelEntryOpen;/);
   assert.match(source, /const exactMatchingModel = selectableModelOptions\.find\(/);
   assert.match(source, /const exactMatchingModelIsVisible = Boolean\(/);

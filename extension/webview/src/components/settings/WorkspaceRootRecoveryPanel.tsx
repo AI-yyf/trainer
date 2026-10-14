@@ -1,46 +1,28 @@
 import { ActionButton } from "../common";
-import { FileIcon, FolderIcon, RefreshIcon, UploadIcon } from "../icons";
+import { FolderIcon } from "../icons";
 import { useTranslation } from "../../lib/i18n/useTranslation";
 import type { TrainerWorkspaceAdmission } from "../../lib/types";
 
 export interface WorkspaceRootRecoveryPanelProps {
   trainerWorkspace?: TrainerWorkspaceAdmission;
   onChooseRoot?: () => void;
-  onMigrateRoot?: () => void;
-  onBackup?: () => void;
-  onRestore?: () => void;
 }
 
+/**
+ * Unified workspace-root card (P0 one-root model): the main view shows exactly
+ * one root — its path plus the choose/change action. Migration, backup,
+ * restore, authority refresh, and sandbox boundary live in the section's
+ * collapsed "advanced" disclosure (owned by CoachSettingsView).
+ */
 export function WorkspaceRootRecoveryPanel({
   trainerWorkspace,
   onChooseRoot,
-  onMigrateRoot,
-  onBackup,
-  onRestore,
 }: WorkspaceRootRecoveryPanelProps) {
   const { t } = useTranslation();
   const rootPath = trainerWorkspace?.rootPath?.trim();
   const rootIsReady = Boolean(rootPath && trainerWorkspace?.status !== "root-missing");
 
-  const statusBlock = (
-      <div className="workspace-root-recovery__status">
-        <span
-          className={`workspace-root-recovery__status-dot workspace-root-recovery__status-dot--${
-            rootIsReady ? "ready" : "missing"
-          }`}
-          aria-hidden="true"
-        />
-        <div className="workspace-root-recovery__status-copy">
-          <p className="workspace-root-recovery__detail">
-            {rootIsReady ? t("workspaceRootReady") : t("workspaceAdmissionRootMissingDetail")}
-          </p>
-        </div>
-      </div>
-  );
-
   if (rootIsReady) {
-    // The unified settings workspace section owns the header; the panel body
-    // stays chrome-free so the title is not painted twice.
     return (
       <div className="workspace-root-recovery workspace-root-recovery--ready">
         {rootPath ? (
@@ -50,43 +32,28 @@ export function WorkspaceRootRecoveryPanel({
           </p>
         ) : null}
         <ActionButton
-          icon={<RefreshIcon size={14} />}
-          label={t("workspaceRootMigrate")}
-          detail={t("workspaceRootMigrateDetail")}
-          tone="accent"
-          onClick={onMigrateRoot}
+          icon={<FolderIcon size={14} />}
+          label={t("workspaceRootChange")}
+          detail={t("workspaceRootChangeDetail")}
+          onClick={onChooseRoot}
         />
-        <details className="workspace-root-recovery__more">
-          <summary>{t("workspaceRootRecovery")}</summary>
-          <p className="workspace-root-recovery__privacy">{t("archivePrivacyNote")}</p>
-          <div className="workspace-root-recovery__actions">
-            <ActionButton
-              icon={<FileIcon size={14} />}
-              label={t("workspaceRootBackup")}
-              detail={t("workspaceRootBackupDetail")}
-              onClick={onBackup}
-            />
-            <ActionButton
-              icon={<UploadIcon size={14} />}
-              label={t("workspaceRootRestore")}
-              detail={t("workspaceRootRestoreDetail")}
-              onClick={onRestore}
-            />
-            <ActionButton
-              icon={<FolderIcon size={14} />}
-              label={t("workspaceRootChange")}
-              detail={t("workspaceRootChangeDetail")}
-              onClick={onChooseRoot}
-            />
-          </div>
-        </details>
       </div>
     );
   }
 
   return (
     <section className="workspace-root-recovery" aria-label={t("workspaceRootControl")}>
-      {statusBlock}
+      <div className="workspace-root-recovery__status">
+        <span
+          className="workspace-root-recovery__status-dot workspace-root-recovery__status-dot--missing"
+          aria-hidden="true"
+        />
+        <div className="workspace-root-recovery__status-copy">
+          <p className="workspace-root-recovery__detail">
+            {t("workspaceAdmissionRootMissingDetail")}
+          </p>
+        </div>
+      </div>
       <ActionButton
         icon={<FolderIcon size={14} />}
         label={t("workspaceAdmissionSelectRoot")}

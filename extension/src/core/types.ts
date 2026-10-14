@@ -926,6 +926,22 @@ export interface TrainerWorkspaceAdmissionView {
   reconciliation?: TrainerWorkspaceReconciliationView;
 }
 
+/** One row of the Settings "added projects" list (Task: manage adopted projects). */
+export interface TrainerProjectListEntryView {
+  projectPath: string;
+  projectName: string;
+  adoptionMode: TrainerProjectAdmissionStatus;
+  identityStatus?: 'pending' | 'verified' | 'reconcile-required';
+  /** True when this row is the workspace currently open in the window. */
+  isCurrent: boolean;
+  updatedAt?: string;
+}
+
+export interface TrainerProjectsListView {
+  rootPath?: string;
+  projects: TrainerProjectListEntryView[];
+}
+
 export type MemoryShareCategoryView = 'preferences' | 'mastery';
 
 export interface MemoryShareGrantView {
@@ -1044,6 +1060,7 @@ export interface MemorySnapshotView {
     latestStreamingCheckpoint?: StreamingCheckpointRecord;
     resourceSandbox?: ManagedDataFolderView;
     trainerWorkspace?: TrainerWorkspaceAdmissionView;
+    trainerProjects?: TrainerProjectsListView;
     coachDefaults?: {
       memoryScope?: 'project' | 'personal' | 'session';
       workingSetMode?: 'focused' | 'balanced' | 'broad';

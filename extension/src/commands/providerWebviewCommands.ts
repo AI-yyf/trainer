@@ -35,7 +35,6 @@ import {
 import {
   evaluateProviderModelPolicy,
   filterProviderModelOptions,
-  pickFreshConnectionModel,
   type ProviderModelPolicyEvaluation,
 } from '../../../shared/src/providerModelPolicy';
 import { normalizeProviderCapabilityTruth } from '../../../shared/src/providerTest';
@@ -99,6 +98,8 @@ export type RefreshProviderModelsPayload = {
 
 type SwitchProviderModelPayload = {
   model?: string;
+  /** Optional explicit profile half of the {profileId, modelId} selection identity. */
+  profileId?: string;
   reason?: string;
 };
 
@@ -115,36 +116,9 @@ type ProviderModelsResponse = {
   retryable?: boolean;
   status_code?: number;
   diagnostics?: string[];
+  incomplete?: boolean;
 };
 
-type ProviderTestResponse = {
-  ok?: boolean;
-  configured?: boolean;
-  api_key_supplied?: boolean;
-  reachable?: boolean;
-  success?: boolean;
-  status?: string;
-  provider_name?: string;
-  detail?: string;
-  diagnostics?: string[];
-  error_category?: string;
-  retryable?: boolean;
-  status_code?: number;
-  capability_evidence?: unknown;
-  capabilityEvidence?: unknown;
-  tools_ready?: boolean;
-  toolsReady?: boolean;
-  tool_probe_status?: unknown;
-  toolProbeStatus?: unknown;
-  streaming_ready?: boolean;
-  streamingReady?: boolean;
-  stream_probe_status?: unknown;
-  streamProbeStatus?: unknown;
-  vision_ready?: boolean;
-  visionReady?: boolean;
-  vision_probe_status?: unknown;
-  visionProbeStatus?: unknown;
-};
 
 type ProviderModelLookupResult = {
   ok: boolean;
@@ -171,6 +145,45 @@ type ProviderDashboardSnapshot = Record<string, unknown>;
 const inflightModelLookups = new Map<string, Promise<ProviderModelLookupResult>>();
 const draftModelLookupGenerations = new WeakMap<object, number>();
 const activeProviderModelLookupGenerations = new WeakMap<object, number>();
+// P0 switch race guard: module-level generation counter + per-context mutex so
+// rapid A→B→C model switches always land on C, and a superseded switch can
+// never write state after the newest one.
+const providerModelSwitchGenerations = new WeakMap<object, number>();
+const providerModelSwitchQueues = new WeakMap<object, Promise<unknown>>();
+
+function nextProviderModelSwitchGeneration(context: object): number {
+  const next = (providerModelSwitchGenerations.get(context) ?? 0) + 1;
+  providerModelSwitchGenerations.set(context, next);
+  return next;
+}
+
+function isLatestProviderModelSwitch(context: object, generation: number): boolean {
+  return providerModelSwitchGenerations.get(context) === generation;
+}
+
+function runExclusiveProviderModelSwitch<T>(
+  context: object,
+  task: () => Promise<T>,
+): Promise<T> {
+  const previous = providerModelSwitchQueues.get(context) ?? Promise.resolve();
+  const run = previous.then(task, task);
+  providerModelSwitchQueues.set(
+    context,
+    run.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
+  return run;
+}
+
+function activeProfileIdOf(context: CommandContext): string | undefined {
+  const store = context.providerStore as typeof context.providerStore & {
+    getProfileRegistrySnapshot?: () => { activeProfileId?: unknown };
+  };
+  const value = store.getProfileRegistrySnapshot?.().activeProfileId;
+  return typeof value === 'string' ? value.trim() || undefined : undefined;
+}
 
 const defaultCapabilities: CapabilityFlags = defaultCapabilitiesForProtocol(
   'openai_chat_completions_compatible',
@@ -465,129 +478,6 @@ function providerModelsRequestBody(
   };
 }
 
-async function verifyProviderAfterSave(
-  context: CommandContext,
-  config: ProviderConfig,
-  apiKey: string,
-  responseLanguage = resolveProviderResponseLanguage(context),
-  generation?: number,
-): Promise<ProviderLastTestResult | undefined> {
-  if (!(await context.trustGuard.ensureTrusted('test the provider connection'))) {
-    return {
-      ok: false,
-      status: 'workspace_trust',
-      detail:
-        'Provider settings were saved locally. Trust this workspace before Trainer sends the API key to test the connection.',
-      checkedAt: new Date().toISOString(),
-      providerName: config.name,
-      baseUrl: config.baseUrl,
-      model: config.model,
-      protocol: normalizeProviderProtocol(config.protocol),
-      protocolFamily: providerProtocolFamily(normalizeProviderProtocol(config.protocol)),
-      errorCategory: 'workspace_trust',
-      retryable: false,
-      responseLanguage,
-      capabilityEvidence: [],
-      toolsReady: false,
-      toolProbeStatus: 'unverified',
-      streamingReady: false,
-      streamProbeStatus: 'unverified',
-      visionReady: false,
-      visionProbeStatus: 'unverified',
-      thinkingReady: false,
-      thinkingProbeStatus: 'unverified',
-    };
-  }
-  let lastTestResult: ProviderLastTestResult;
-  // Phase-A metric: a real upstream verification attempt (the sidecar will
-  // contact the provider endpoint). Pure UI activity must keep this at 0.
-  let verifyStartedAt = 0;
-  try {
-    const status = await context.sidecarManager.ensureRunning();
-    if (status.lifecycle !== 'ready' || !status.port) {
-      throw new Error('sidecar unavailable');
-    }
-
-    verifyStartedAt = Date.now();
-    const response = await context.sidecarClient.postJson<ProviderTestResponse>(
-      status.port,
-      '/provider/test',
-      providerModelsRequestBody(context, config, apiKey, responseLanguage),
-      { timeoutMs: SIDECAR_DEFAULTS.providerRequestTimeoutMs },
-    );
-    recordProviderHttpRequest(Date.now() - verifyStartedAt);
-    const capabilityTruth = normalizeProviderCapabilityTruth(response);
-    lastTestResult = {
-      ok: Boolean(response.ok),
-      status: response.status ?? (response.ok ? 'connected' : 'failed'),
-      detail: sanitizeErrorSurfaceText(
-        response.detail?.trim() ||
-          (response.ok
-            ? 'Provider connected.'
-            : 'Trainer could not verify this provider yet.'),
-      ),
-      checkedAt: new Date().toISOString(),
-      workspaceId: getRuntimeWorkspaceId(context),
-      profileId: config.profileId,
-      providerName: response.provider_name?.trim() || config.name,
-      baseUrl: config.baseUrl,
-      model: config.model,
-      protocol: normalizeProviderProtocol(config.protocol),
-      protocolFamily: providerProtocolFamily(normalizeProviderProtocol(config.protocol)),
-      errorCategory: response.error_category,
-      retryable: response.retryable,
-      statusCode: response.status_code,
-      responseLanguage,
-      capabilityEvidence: capabilityTruth.capabilityEvidence,
-      toolsReady: capabilityTruth.toolsReady,
-      toolProbeStatus: capabilityTruth.toolProbeStatus,
-      streamingReady: capabilityTruth.streamingReady,
-      streamProbeStatus: capabilityTruth.streamProbeStatus,
-      visionReady: capabilityTruth.visionReady,
-      visionProbeStatus: capabilityTruth.visionProbeStatus,
-      thinkingReady: capabilityTruth.thinkingReady,
-      thinkingProbeStatus: capabilityTruth.thinkingProbeStatus,
-    };
-  } catch {
-    recordProviderHttpRequest(Date.now() - verifyStartedAt);
-    lastTestResult = {
-      ok: false,
-      status: 'sidecar_unavailable',
-      detail: 'Trainer could not finish the connection check. Try the check again in a moment.',
-      checkedAt: new Date().toISOString(),
-      workspaceId: getRuntimeWorkspaceId(context),
-      profileId: config.profileId,
-      providerName: config.name,
-      baseUrl: config.baseUrl,
-      model: config.model,
-      protocol: normalizeProviderProtocol(config.protocol),
-      protocolFamily: providerProtocolFamily(normalizeProviderProtocol(config.protocol)),
-      errorCategory: 'sidecar_unavailable',
-      retryable: true,
-      responseLanguage,
-      capabilityEvidence: [],
-      toolsReady: false,
-      toolProbeStatus: 'unverified',
-      streamingReady: false,
-      streamProbeStatus: 'unverified',
-      visionReady: false,
-      visionProbeStatus: 'unverified',
-      thinkingReady: false,
-      thinkingProbeStatus: 'unverified',
-    };
-  }
-  if (!(await isCurrentProviderModelLookup(context, config, apiKey, generation))) {
-    return undefined;
-  }
-  if (typeof context.providerStore.saveLastTestResult === 'function') {
-    return await context.providerStore.saveLastTestResult(config, lastTestResult, {
-      workspaceId: getRuntimeWorkspaceId(context),
-    });
-  }
-  return stripHostLastTestSecrets({
-    ...(lastTestResult as unknown as Record<string, unknown>),
-  }) as unknown as ProviderLastTestResult;
-}
 
 function isHardBlockingProviderError(category?: string): boolean {
   return (
@@ -713,16 +603,19 @@ export async function saveProviderFromWebviewCommand(
     input.baseUrl ?? existing?.baseUrl ?? 'http://localhost:1234/v1',
     resolvedProtocol,
   );
-  const hasExplicitModel =
-    hasOwn(input, 'model') && typeof input.model === 'string' && input.model.trim().length > 0;
-  // Quick setup sends an empty model until live discovery selects one. Treat
-  // whitespace just like an omitted model, preserving the background lookup.
-  const model = input.model?.trim() || existing?.model?.trim() || 'gpt-4.1-mini';
+  // P0: no silent placeholder defaults. A save without a model (fresh quick
+  // setup, whitespace-only draft) fails with an actionable message so the user
+  // picks from the known list or types the model ID — gpt-4.1-mini and friends
+  // are never assumed.
+  const model = input.model?.trim() || existing?.model?.trim() || '';
 
   if (!baseUrl || !model) {
+    const responseLanguage = resolveProviderResponseLanguage(context, input.responseLanguage);
     return {
       ok: false,
-      message: 'Add the service root and model before saving this connection.',
+      message: !model
+        ? providerHostCopy(responseLanguage, 'saveMissingModel')
+        : 'Add the service root and model before saving this connection.',
     };
   }
 
@@ -843,11 +736,17 @@ export async function saveProviderFromWebviewCommand(
   const savedConfig = preferPersistedProviderConfig(context.providerStore.getConfig(), config);
   const apiKey = await context.providerStore.getApiKey();
   const hasApiKey = Boolean(apiKey?.trim());
+  // P0 save-and-go: the save applies locally from what is already known.
+  // Cached/catalog models render immediately with zero network traffic; live
+  // discovery stays an explicit refresh action in the picker/settings.
   const cachedModels = context.providerStore.getModelCache(savedConfig);
-  const cacheUsable =
-    hasApiKey &&
-    context.providerStore.isModelCacheFresh(cachedModels) &&
-    context.providerStore.isModelCacheCompatible(savedConfig, cachedModels, apiKey ?? undefined);
+  const catalogModels = Array.isArray(savedConfig.availableModels)
+    ? savedConfig.availableModels
+    : [];
+  const knownModels = mergeAvailableModels(
+    catalogModels.length > 0 ? catalogModels : cachedModels?.availableModels,
+    cachedModels?.availableModels ?? [],
+  );
   await context.patchWorkbenchData({
     providerConfig: {
       ...applyDerivedHostState(
@@ -858,51 +757,44 @@ export async function saveProviderFromWebviewCommand(
         context.getSessionId(),
         hasApiKey,
       ).providerConfig,
-      availableModels: cacheUsable ? cachedModels?.availableModels ?? [] : [],
-      resolvedModel: cacheUsable ? cachedModels?.resolvedModel : undefined,
-      modelListStatus: hasApiKey ? 'loading' : 'idle',
-      modelListDetail: hasApiKey
-        ? cacheUsable
-          ? 'Trainer loaded cached models and is checking for a fresher list.'
-          : 'Trainer is fetching available models from this provider.'
-        : 'Add an API key to let Trainer fetch live models.',
-      cacheFetchedAt: cacheUsable ? cachedModels?.fetchedAt : undefined,
-      cacheExpiresAt: cacheUsable ? cachedModels?.expiresAt : undefined,
-      cacheSource: cacheUsable ? 'cache' : undefined,
-      modelErrorCategory: cacheUsable ? cachedModels?.lastErrorCategory : undefined,
-      modelStatusCode: cacheUsable ? cachedModels?.lastStatusCode : undefined,
-      modelRetryable: cacheUsable ? cachedModels?.retryable : undefined,
+      availableModels: knownModels,
+      resolvedModel: savedConfig.model,
+      modelListStatus: knownModels.length > 0 ? 'ready' : 'idle',
+      modelListDetail:
+        knownModels.length > 0
+          ? `Trainer restored ${knownModels.length} known model${knownModels.length === 1 ? '' : 's'} for this connection. Refresh models any time.`
+          : 'Connection saved. Use “Refresh models” to discover live models.',
+      cacheFetchedAt: cachedModels?.fetchedAt,
+      cacheExpiresAt: cachedModels?.expiresAt,
+      cacheSource: knownModels.length > 0 ? 'cache' : undefined,
+      modelErrorCategory: undefined,
+      modelStatusCode: undefined,
+      modelRetryable: undefined,
       lastTestResult: storedLastTestResult(context, savedConfig),
     },
   });
   await context.workbench.syncState();
 
   const responseLanguage = resolveProviderResponseLanguage(context, input.responseLanguage);
-  const message = hasApiKey
-    ? providerHostCopy(responseLanguage, 'saveChecking')
-    : providerBaseUrlIsLocalService(baseUrl)
-      ? providerHostCopy(responseLanguage, 'saveLocalNoKey')
+  const message = providerBaseUrlIsLocalService(baseUrl)
+    ? providerHostCopy(responseLanguage, 'saveLocalNoKey')
+    : hasApiKey
+      ? providerHostCopy(responseLanguage, 'saveApplied')
       : providerHostCopy(responseLanguage, 'saveNoKey');
 
-  // TR-014: the connection is persisted and live in host state above. Model
-  // discovery and the verification request are explicit network operations —
-  // they complete in the background and report through operation/status with
-  // a structured providerTest outcome, so "save" never waits on the network.
-  const verification = finalizeSavedProviderConnection(context, {
+  // P0: saving never touches the network. The detached finalize only syncs the
+  // locally-known catalog into host state (kept for test determinism).
+  const finalize = finalizeSavedProviderConnection(context, {
     savedConfig,
-    existing,
-    apiKey,
-    hasApiKey,
-    hasExplicitModel,
     providerChangeGeneration,
     responseLanguage,
   }).catch((error) => {
     const detail = error instanceof Error ? error.stack ?? error.message : String(error);
     context.outputChannel?.appendLine(
-      `[provider] background connection verification failed: ${detail}`,
+      `[provider] background save finalization failed: ${detail}`,
     );
   });
-  trackSaveVerificationForTests(verification);
+  trackSaveVerificationForTests(finalize);
 
   return {
     ok: true,
@@ -934,210 +826,74 @@ async function finalizeSavedProviderConnection(
   context: CommandContext,
   inputs: {
     savedConfig: ProviderConfig;
-    existing: ProviderConfig | undefined;
-    apiKey: string | undefined;
-    hasApiKey: boolean;
-    hasExplicitModel: boolean;
     providerChangeGeneration: number;
     responseLanguage?: ComposerLanguage;
   },
 ): Promise<void> {
-  const {
-    savedConfig,
-    existing,
-    apiKey,
-    hasApiKey,
-    hasExplicitModel,
-    providerChangeGeneration,
-    responseLanguage,
-  } = inputs;
-  let finalConfig = savedConfig;
-  let finalLastTestResult = storedLastTestResult(context, savedConfig);
-  let message = hasApiKey ? providerHostCopy(responseLanguage, 'saveChecking') : '';
+  const { savedConfig, providerChangeGeneration, responseLanguage } = inputs;
 
-  if (hasApiKey && apiKey?.trim()) {
-    const modelLookup = await fetchProviderModels(context, savedConfig, apiKey, {
-      preferCache: true,
-      backgroundRefresh: true,
-      responseLanguage,
-      generation: providerChangeGeneration,
-    });
-    if (!(await isCurrentProviderModelLookup(context, savedConfig, apiKey, providerChangeGeneration))) {
-      // A newer save superseded this one; it owns the outcome.
-      return;
-    }
-    // CC-Switch-style adoption: when the save did not name a model (a fresh
-    // relay paste, or a switched connection whose old model is not offered),
-    // adopt a sensible model from the live list instead of failing the very
-    // first verification with the silent placeholder. Explicitly typed models
-    // are never overridden.
-    const autoSelectedModel = modelLookup?.ok
-      ? pickFreshConnectionModel(
-          existing?.model,
-          modelLookup.availableModels,
-          hasExplicitModel,
-        )
-      : undefined;
-    const modelBaseForCatalog =
-      autoSelectedModel && autoSelectedModel !== savedConfig.model
-        ? { ...savedConfig, model: autoSelectedModel }
-        : savedConfig;
-    const catalogConfig = modelLookup
-      ? applyModelLookupToProviderConfig(modelBaseForCatalog, modelLookup)
-      : modelBaseForCatalog;
-    if (providerCatalogConfigDiffers(savedConfig, catalogConfig)) {
-      finalConfig = catalogConfig;
-      await context.providerStore.saveConfig(finalConfig);
-      finalConfig = context.providerStore.getConfig() ?? finalConfig;
-      if (modelLookup && finalConfig.model !== savedConfig.model) {
-        await context.providerStore.saveModelCache(finalConfig, {
-          availableModels: modelLookup.availableModels,
-          resolvedModel: modelLookup.resolvedModel,
-          modelTokenLimits: modelLookup.modelTokenLimits,
-          lastError: modelLookup.ok ? undefined : modelLookup.detail,
-          lastErrorCategory: modelLookup.errorCategory,
-          lastStatusCode: modelLookup.statusCode,
-          retryable: modelLookup.retryable,
-          fetchedAt: modelLookup.fetchedAt,
-          source: modelLookup.source,
-          apiKey: apiKey ?? undefined,
-        });
-      }
-    } else {
-      finalConfig = catalogConfig;
-    }
-
-    // A number of compatible gateways expose chat but intentionally omit a
-    // model-list endpoint. The configured model can still be checked safely,
-    // so model discovery must not be a prerequisite for connection testing.
-    if (finalConfig.model.trim() && modelLookup?.errorCategory !== 'workspace_trust') {
-      finalLastTestResult =
-        (await verifyProviderAfterSave(
-          context,
-          finalConfig,
-          apiKey ?? '',
-          responseLanguage,
-          providerChangeGeneration,
-        )) ??
-        storedLastTestResult(context, finalConfig);
-    } else {
-      finalLastTestResult = storedLastTestResult(context, finalConfig);
-    }
-
-    if (!(await isCurrentProviderModelLookup(context, finalConfig, apiKey, providerChangeGeneration))) {
-      // A newer save superseded this one; it owns the outcome.
-      return;
-    }
-
-    const finalViewState = applyDerivedHostState(
-      context.getHostState().bootstrap,
-      finalConfig,
-      context.getHostState().sidecar,
-      context.getHostState().workspace,
-      context.getSessionId(),
-      true,
-    ).providerConfig;
-
-    await context.patchWorkbenchData({
-      providerConfig: {
-        ...finalViewState,
-        availableModels: modelLookup?.ok
-          ? mergeAvailableModels(undefined, modelLookup.availableModels)
-          : finalConfig.availableModels ?? [],
-        resolvedModel: modelLookup?.resolvedModel ?? finalConfig.model,
-        modelListStatus: modelLookup?.ok ? 'ready' : 'error',
-        modelListDetail:
-          modelLookup?.detail ??
-          'Trainer could not fetch live models for this provider.',
-        cacheFetchedAt: modelLookup?.fetchedAt,
-        cacheExpiresAt: modelLookup?.expiresAt,
-        cacheSource: modelLookup?.source,
-        modelErrorCategory: modelLookup?.errorCategory,
-        modelStatusCode: modelLookup?.statusCode,
-        modelRetryable: modelLookup?.retryable,
-        lastTestResult: finalLastTestResult,
-      },
-      connection: {
-        ...context.getHostState().bootstrap.connection,
-        provider: {
-          ...context.getHostState().bootstrap.connection.provider,
-          ...providerConnectionPatch(finalConfig),
-        },
-      },
-    });
-    await context.workbench.syncState();
-
-    if (modelLookup?.ok && modelLookup.availableModels.length > 0) {
-      const modelCount = modelLookup.availableModels.length;
-      const resolvedSuffix =
-        modelLookup.resolvedModel && modelLookup.resolvedModel !== savedConfig.model
-          ? providerHostCopy(responseLanguage, 'modelResolvedSuffix', {
-              model: modelLookup.resolvedModel,
-            })
-          : '';
-      const autoSelectedSuffix =
-        autoSelectedModel && autoSelectedModel !== savedConfig.model
-          ? providerHostCopy(responseLanguage, 'modelAutoSelectedSuffix', {
-              model: autoSelectedModel,
-            })
-          : '';
-      const copyModels = (key: ProviderHostCopyKey) =>
-        providerHostCopy(responseLanguage, key, { count: modelCount });
-      if (finalLastTestResult?.ok) {
-        message =
-          `${copyModels(modelLookup.source === 'cache' ? 'modelsCachedVerified' : 'modelsLoadedVerified')}` +
-          `${autoSelectedSuffix}${resolvedSuffix}`;
-      } else if (finalLastTestResult?.errorCategory === 'language_probe_inconclusive') {
-        message =
-          `${copyModels(modelLookup.source === 'cache' ? 'modelsCachedInconclusive' : 'modelsLoadedInconclusive')}` +
-          ` ${finalLastTestResult.detail}${autoSelectedSuffix}${resolvedSuffix}`;
-      } else if (finalLastTestResult?.detail) {
-        message =
-          `${copyModels(modelLookup.source === 'cache' ? 'modelsCachedFailed' : 'modelsLoadedFailed')}` +
-          ` ${finalLastTestResult.detail}${autoSelectedSuffix}${resolvedSuffix}`;
-      } else {
-        message =
-          `${copyModels(modelLookup.source === 'cache' ? 'modelsCachedPlain' : 'modelsLoadedPlain')}` +
-          `${autoSelectedSuffix}${resolvedSuffix}`;
-      }
-    } else if (modelLookup?.detail) {
-      if (finalLastTestResult?.ok) {
-        message = `${providerHostCopy(responseLanguage, 'savedModelReadyNoList')} ${modelLookup.detail}`;
-      } else if (finalLastTestResult?.detail) {
-        message =
-          `${providerHostCopy(responseLanguage, 'savedModelUnverifiedNoList')} ` +
-          `${finalLastTestResult.detail}`;
-      } else {
-        message = `${providerHostCopy(responseLanguage, 'savedModelNoList')} ${modelLookup.detail}`;
-      }
-    }
+  // P0 save-and-go: the save already persisted and applied itself above. This
+  // detached tail re-syncs host state from local facts only — saved config,
+  // stored key presence, cached/known catalog — and never contacts
+  // /provider/models or /provider/test. If a newer save superseded this one,
+  // it owns the outcome and this tail is a no-op.
+  if (activeProviderModelLookupGeneration(context) !== providerChangeGeneration) {
+    return;
   }
+  const effectiveConfig = context.providerStore.getConfig() ?? savedConfig;
+  if (!sameCurrentProviderConfig(context, savedConfig)) {
+    return;
+  }
+  const apiKey = await context.providerStore.getApiKey();
+  if (activeProviderModelLookupGeneration(context) !== providerChangeGeneration) {
+    return;
+  }
+  const hasApiKey = Boolean(apiKey?.trim());
+  const cachedModels = context.providerStore.getModelCache(effectiveConfig);
+  const configuredCatalog = Array.isArray(effectiveConfig.availableModels)
+    ? effectiveConfig.availableModels
+    : [];
+  const knownModels = mergeAvailableModels(
+    configuredCatalog.length > 0 ? configuredCatalog : cachedModels?.availableModels,
+    cachedModels?.availableModels ?? [],
+  );
 
-  // The save itself already succeeded; the verification outcome rides on the
-  // structured providerTest field so "saved but not verified" never reads as
-  // a failed save. Tone stays success for exactly that reason.
+  await context.patchWorkbenchData({
+    providerConfig: {
+      ...applyDerivedHostState(
+        context.getHostState().bootstrap,
+        effectiveConfig,
+        context.getHostState().sidecar,
+        context.getHostState().workspace,
+        context.getSessionId(),
+        hasApiKey,
+      ).providerConfig,
+      availableModels: knownModels,
+      resolvedModel: effectiveConfig.model,
+      modelListStatus: knownModels.length > 0 ? 'ready' : 'idle',
+      modelListDetail:
+        knownModels.length > 0
+          ? `Trainer restored ${knownModels.length} known model${knownModels.length === 1 ? '' : 's'} for this connection. Refresh models any time.`
+          : 'Connection saved. Use “Refresh models” to discover live models.',
+      cacheFetchedAt: cachedModels?.fetchedAt,
+      cacheExpiresAt: cachedModels?.expiresAt,
+      cacheSource: knownModels.length > 0 ? 'cache' : undefined,
+      modelErrorCategory: undefined,
+      modelStatusCode: undefined,
+      modelRetryable: undefined,
+      lastTestResult: storedLastTestResult(context, effectiveConfig),
+    },
+  });
+  await context.workbench.syncState();
+
   if (typeof context.workbench.postMessage !== 'function') {
     return;
   }
   await context.workbench.postMessage(
-    toOperationStatus(true, message, {
-      ...(finalLastTestResult
-        ? {
-            ok: finalLastTestResult.ok,
-            ...(finalLastTestResult.errorCategory
-              ? { errorCategory: finalLastTestResult.errorCategory }
-              : {}),
-            ...(typeof finalLastTestResult.statusCode === 'number'
-              ? { statusCode: finalLastTestResult.statusCode }
-              : {}),
-            ...(typeof finalLastTestResult.retryable === 'boolean'
-              ? { retryable: finalLastTestResult.retryable }
-              : {}),
-          }
-        : {}),
-    }),
+    toOperationStatus(true, providerHostCopy(responseLanguage, 'saveApplied')),
   );
 }
+
 
 export async function openWorkspaceConfigCommand(
   context: CommandContext,
@@ -1189,7 +945,9 @@ export async function openWorkspaceConfigCommand(
               name: 'custom-openai-compatible',
               protocol: OPENAI_COMPATIBLE_PROTOCOL,
               baseUrl: 'http://localhost:1234/v1',
-              model: 'gpt-4.1-mini',
+              // P0: no placeholder model. The user fills the model in this
+              // file (or in Settings) — Trainer never assumes one.
+              model: '',
               capabilities: defaultCapabilities,
               requestDefaults: {},
             },
@@ -2104,187 +1862,208 @@ export async function switchProviderModelCommand(
     };
   }
 
-  const config = context.providerStore.getConfig();
-  if (!config) {
-    return {
-      ok: false,
-      message: 'Save a provider before switching models.',
-    };
-  }
+  // P0 race guard: every switch takes a module-level generation number and
+  // runs its read-modify-write exclusively per context. A→B→C issued quickly
+  // therefore always lands on C: B and A can neither interleave their saves
+  // nor write stale host state after C.
+  const switchGeneration = nextProviderModelSwitchGeneration(context);
+  return runExclusiveProviderModelSwitch(context, async () => {
+    const config = context.providerStore.getConfig();
+    if (!config) {
+      return {
+        ok: false,
+        message: 'Save a provider before switching models.',
+      };
+    }
 
-  const modelPolicy = evaluateProviderModelPolicy(model, config);
-  if (!modelPolicy.allowed) {
-    return providerModelPolicyFailure(
-      modelPolicy,
-      'Trainer kept your current model and did not change the connection.',
-    );
-  }
+    // Selection identity is {profileId, modelId}: an optional explicit profile
+    // switch happens first, and the model is then applied to that profile.
+    const requestedProfileId = payload?.profileId?.trim();
+    if (requestedProfileId) {
+      const activeProfileId = activeProfileIdOf(context);
+      if (activeProfileId && activeProfileId !== requestedProfileId) {
+        const switched = await context.providerStore.switchActiveProfile?.(requestedProfileId, 'model_switch');
+        if (switched === false) {
+          return {
+            ok: false,
+            message: providerHostCopy(
+              resolveProviderResponseLanguage(context),
+              'switchModelNotAllowed',
+              { model },
+            ),
+          };
+        }
+      }
+    }
 
-  nextActiveProviderModelLookupGeneration(context);
+    const effectiveCurrent = context.providerStore.getConfig() ?? config;
+    const modelPolicy = evaluateProviderModelPolicy(model, effectiveCurrent);
+    if (!modelPolicy.allowed) {
+      return providerModelPolicyFailure(
+        modelPolicy,
+        'Trainer kept your current model and did not change the connection.',
+      );
+    }
 
-  const currentView = context.getHostState().bootstrap.providerConfig;
-  const availableModels = Array.from(
-    new Set(
-      [
-        ...(Array.isArray(config.availableModels) ? config.availableModels : []),
-        ...(Array.isArray(currentView.availableModels) ? currentView.availableModels : []),
-      ]
-        .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
-        .filter(Boolean),
-    ),
-  );
-  const configuredModelCatalog = Array.from(
-    new Set(
-      [
-        ...(Array.isArray(config.catalogModels) ? config.catalogModels : []),
-        ...(Array.isArray(currentView.catalogModels) ? currentView.catalogModels : []),
-        ...Object.keys(config.modelTokenLimits ?? {}),
-        ...Object.keys(currentView.modelTokenLimits ?? {}),
-      ]
-        .map((entry) => entry.trim())
-        .filter(Boolean),
-    ),
-  );
-  const selectableModels = Array.from(new Set([...availableModels, ...configuredModelCatalog]));
-  if (
-    selectableModels.length > 0 &&
-    !selectableModels.some((entry) => entry.toLowerCase() === model.toLowerCase())
-  ) {
-    return {
-      ok: false,
-      message: providerHostCopy(
-        resolveProviderResponseLanguage(context),
-        'switchModelNotAllowed',
-        { model },
+    if (activeProviderModelLookupGeneration(context) > 0) {
+      // Any in-flight discovery/save from an older generation no longer owns
+      // the connection: bump the lookup generation so its late results drop.
+      nextActiveProviderModelLookupGeneration(context);
+    }
+
+    const currentView = context.getHostState().bootstrap.providerConfig;
+    const availableModels = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(effectiveCurrent.availableModels) ? effectiveCurrent.availableModels : []),
+          ...(Array.isArray(currentView.availableModels) ? currentView.availableModels : []),
+        ]
+          .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+          .filter(Boolean),
       ),
-    };
-  }
-
-  const currentModel = config.model?.trim() || currentView.model?.trim();
-  if (currentModel?.toLowerCase() === model.toLowerCase()) {
-    return {
-      ok: true,
-      message: providerHostCopy(resolveProviderResponseLanguage(context), 'switchAlreadyActive', { model }),
-      data: config,
-    };
-  }
-
-  const tokenState = resolveProviderModelTokenState(config, model, {
-    hasContextWindowTokens: false,
-    hasMaxOutputTokens: false,
-    hasModelTokenLimits: false,
-  });
-  const selectedModelIsLive = availableModels.some(
-    (entry) => entry.toLowerCase() === model.toLowerCase(),
-  );
-  const nextConfig: ProviderConfig = {
-    ...config,
-    model,
-    contextWindowTokens: tokenState.contextWindowTokens,
-    maxOutputTokens: tokenState.maxOutputTokens,
-    modelTokenLimits: tokenState.modelTokenLimits,
-    catalogModels: mergeCatalogModels(
-      config.catalogModels,
-      currentView.catalogModels,
-      config.model,
-      currentView.model,
-      model,
-    ),
-    availableModels: availableModels.length > 0 ? availableModels : config.availableModels,
-  };
-  await context.providerStore.saveConfig(nextConfig);
-  if (typeof context.providerStore.clearLastTestResult === 'function') {
-    await context.providerStore.clearLastTestResult(nextConfig, {
-      workspaceId: getRuntimeWorkspaceId(context),
-    });
-  }
-
-  // A model switch invalidates the previous verification. Re-verify the new
-  // model in the background so the composer unblocks itself the moment the
-  // fresh result lands — the switch itself must never wait on a live LLM
-  // roundtrip. A generation guard drops results from superseded switches.
-  const switchGeneration = activeProviderModelLookupGeneration(context);
-  void (async () => {
-    const apiKeyForSwitchTest = await context.providerStore.getApiKey();
-    if (!apiKeyForSwitchTest?.trim() || !nextConfig.model.trim()) {
-      return;
-    }
-    const switchLastTestResult = await verifyProviderAfterSave(
-      context,
-      nextConfig,
-      apiKeyForSwitchTest,
-      resolveProviderResponseLanguage(context),
-      switchGeneration,
     );
-    if (!switchLastTestResult) {
-      return;
+    const configuredModelCatalog = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(effectiveCurrent.catalogModels) ? effectiveCurrent.catalogModels : []),
+          ...(Array.isArray(currentView.catalogModels) ? currentView.catalogModels : []),
+          ...Object.keys(effectiveCurrent.modelTokenLimits ?? {}),
+          ...Object.keys(currentView.modelTokenLimits ?? {}),
+        ]
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+      ),
+    );
+    const selectableModels = Array.from(new Set([...availableModels, ...configuredModelCatalog]));
+    if (
+      selectableModels.length > 0 &&
+      !selectableModels.some((entry) => entry.toLowerCase() === model.toLowerCase())
+    ) {
+      return {
+        ok: false,
+        message: providerHostCopy(
+          resolveProviderResponseLanguage(context),
+          'switchModelNotAllowed',
+          { model },
+        ),
+      };
     }
-    const refreshedView = applyDerivedHostState(
+
+    const currentModel = effectiveCurrent.model?.trim() || currentView.model?.trim();
+    const activeProfileMatches =
+      !requestedProfileId ||
+      !activeProfileIdOf(context) ||
+      activeProfileIdOf(context) === requestedProfileId;
+    if (activeProfileMatches && currentModel?.toLowerCase() === model.toLowerCase()) {
+      return {
+        ok: true,
+        message: providerHostCopy(resolveProviderResponseLanguage(context), 'switchAlreadyActive', { model }),
+        data: effectiveCurrent,
+      };
+    }
+
+    const tokenState = resolveProviderModelTokenState(effectiveCurrent, model, {
+      hasContextWindowTokens: false,
+      hasMaxOutputTokens: false,
+      hasModelTokenLimits: false,
+    });
+    const selectedModelIsLive = availableModels.some(
+      (entry) => entry.toLowerCase() === model.toLowerCase(),
+    );
+    const nextConfig: ProviderConfig = {
+      ...effectiveCurrent,
+      model,
+      contextWindowTokens: tokenState.contextWindowTokens,
+      maxOutputTokens: tokenState.maxOutputTokens,
+      modelTokenLimits: tokenState.modelTokenLimits,
+      catalogModels: mergeCatalogModels(
+        effectiveCurrent.catalogModels,
+        currentView.catalogModels,
+        effectiveCurrent.model,
+        currentView.model,
+        model,
+      ),
+      availableModels: availableModels.length > 0 ? availableModels : effectiveCurrent.availableModels,
+    };
+    // Atomic persistence: only the newest generation may write. If a newer
+    // switch started while this awaited, skip both the save and the state
+    // write — the newer switch owns the outcome.
+    if (!isLatestProviderModelSwitch(context, switchGeneration)) {
+      return {
+        ok: true,
+        message: providerHostCopy(resolveProviderResponseLanguage(context), 'switchAlreadyActive', {
+          model: context.providerStore.getConfig()?.model ?? model,
+        }),
+        data: context.providerStore.getConfig() ?? nextConfig,
+      };
+    }
+    await context.providerStore.saveConfig(nextConfig);
+    if (!isLatestProviderModelSwitch(context, switchGeneration)) {
+      return {
+        ok: true,
+        data: context.providerStore.getConfig() ?? nextConfig,
+      };
+    }
+
+    const apiKey = await context.providerStore.getApiKey();
+    const savedEffectiveConfig = context.providerStore.getConfig() ?? nextConfig;
+    const knownModels = Array.isArray(savedEffectiveConfig.availableModels)
+      ? savedEffectiveConfig.availableModels
+      : [];
+    const catalogModels = Array.isArray(savedEffectiveConfig.catalogModels)
+      ? savedEffectiveConfig.catalogModels
+      : [];
+    const nextSelectableModels = mergeAvailableModels(
+      knownModels.length > 0 ? knownModels : catalogModels,
+      knownModels,
+    );
+    const nextViewState = applyDerivedHostState(
       context.getHostState().bootstrap,
-      context.providerStore.getConfig() ?? nextConfig,
+      savedEffectiveConfig,
       context.getHostState().sidecar,
       context.getHostState().workspace,
       context.getSessionId(),
-      Boolean(apiKeyForSwitchTest.trim()),
+      Boolean(apiKey?.trim()),
     ).providerConfig;
+
     await context.patchWorkbenchData({
       providerConfig: {
-        ...refreshedView,
-        lastTestResult: storedLastTestResult(
-          context,
-          context.providerStore.getConfig() ?? nextConfig,
+        ...nextViewState,
+        ...savedEffectiveConfig,
+        availableModels: nextSelectableModels.length > 0 ? nextSelectableModels : nextViewState.availableModels,
+        resolvedModel: model,
+        modelListStatus: nextSelectableModels.length > 0 ? 'ready' : nextViewState.modelListStatus ?? 'idle',
+        modelListDetail: providerHostCopy(
+          resolveProviderResponseLanguage(context),
+          'switchAppliedDetail',
+          { model },
         ),
+        modelErrorCategory: undefined,
+        modelStatusCode: undefined,
+        modelRetryable: undefined,
+        lastTestResult: storedLastTestResult(context, savedEffectiveConfig),
+      },
+      connection: {
+        ...context.getHostState().bootstrap.connection,
+        provider: {
+          ...context.getHostState().bootstrap.connection.provider,
+          ...providerConnectionPatch({
+            ...savedEffectiveConfig,
+            model,
+          }),
+        },
       },
     });
     await context.workbench.syncState();
-  })().catch(() => undefined);
 
-  const apiKey = await context.providerStore.getApiKey();
-  const effectiveConfig = context.providerStore.getConfig() ?? nextConfig;
-  const nextViewState = applyDerivedHostState(
-    context.getHostState().bootstrap,
-    effectiveConfig,
-    context.getHostState().sidecar,
-    context.getHostState().workspace,
-    context.getSessionId(),
-    Boolean(apiKey?.trim()),
-  ).providerConfig;
-  const selectionDetail = providerHostCopy(resolveProviderResponseLanguage(context), 'switchVerifyingDetail', { model });
-
-  await context.patchWorkbenchData({
-    providerConfig: {
-      ...nextViewState,
-      ...effectiveConfig,
-      availableModels: availableModels.length > 0 ? availableModels : nextViewState.availableModels,
-      resolvedModel: model,
-      modelListStatus: selectedModelIsLive ? 'ready' : 'idle',
-      modelListDetail: selectedModelIsLive
-        ? selectionDetail
-        : `Trainer switched to ${model} from the configured catalog. Test or refresh models before treating it as available.`,
-      modelErrorCategory: undefined,
-      modelStatusCode: undefined,
-      modelRetryable: undefined,
-      lastTestResult: storedLastTestResult(context, effectiveConfig),
-    },
-    connection: {
-      ...context.getHostState().bootstrap.connection,
-      provider: {
-        ...context.getHostState().bootstrap.connection.provider,
-        ...providerConnectionPatch({
-          ...effectiveConfig,
-          model,
-        }),
-      },
-    },
+    return {
+      ok: true,
+      message: providerHostCopy(resolveProviderResponseLanguage(context), 'switchApplied', { model }),
+      data: savedEffectiveConfig,
+    };
   });
-  await context.workbench.syncState();
-
-  return {
-    ok: true,
-    message: providerHostCopy(resolveProviderResponseLanguage(context), 'switchVerifying', { model }),
-    data: effectiveConfig,
-  };
 }
+
 
 export async function primeProviderModelsState(context: CommandContext): Promise<void> {
   const modelLookupGeneration = activeProviderModelLookupGeneration(context);

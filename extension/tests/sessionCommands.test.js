@@ -1008,10 +1008,10 @@ test('saveProviderFromWebviewCommand syncs runtime preferences into sidecar memo
   await flushDetachedProviderSaveVerification();
 
   assert.equal(result.ok, true);
-  // Provider save command fetches models and patches workbench; runtimePreferences
-  // sync to the sidecar is not part of this command.
+  // P0 save-and-go: saving is local persistence — no /provider/models call.
+  // Runtime preferences sync to the sidecar is not part of this command.
   const modelCall = context.__postCalls.find(([, requestPath]) => requestPath === '/provider/models');
-  assert.ok(modelCall, 'expected a /provider/models POST after saving provider');
+  assert.equal(modelCall, undefined, 'saving must not call /provider/models');
   assert.deepEqual(savedConfigs[0].requestDefaults, {
     extra_body: {
       thinking: {
@@ -1138,15 +1138,15 @@ test('saveProviderFromWebviewCommand keeps remote workspace keys proxied from lo
   const apiKeyRef = savedConfigs[0].apiKeyRef;
   assert.match(apiKeyRef, /^trainer\.provider\.[0-9a-f-]{36}$/i);
   assert.equal(savedConfigs[0].apiKey, undefined);
-  const modelCall = context.__postCalls.find(([, requestPath]) => requestPath === '/provider/models');
-  const testCall = context.__postCalls.find(([, requestPath]) => requestPath === '/provider/test');
-  assert.ok(modelCall);
-  assert.ok(testCall);
-  for (const [, , body] of [modelCall, testCall]) {
-    assert.equal(body.workspace_id, 'F:\\trainer-a');
-    assert.equal(body.api_key_ref, apiKeyRef);
-    assert.equal(body.apiKey, 'sk-remote');
-  }
+  // P0 save-and-go: saving never contacts the sidecar — the key stays in the
+  // local UI host and is proxied per request by the send path instead.
+  // __postCalls also records workbench postMessage records; only real HTTP
+  // request paths count as sidecar traffic.
+  assert.equal(
+    context.__postCalls.filter(([, requestPath]) => typeof requestPath === 'string' && requestPath.startsWith('/')).length,
+    0,
+    'saving must not call the sidecar',
+  );
   assert.equal(JSON.stringify(context.__patches).includes('sk-remote'), false);
   assert.equal(JSON.stringify(result.data).includes('sk-remote'), false);
 });
@@ -1274,16 +1274,15 @@ test('saveProviderFromWebviewCommand keeps workspace_secret keys in SecretStorag
 
   assert.equal(result.ok, true);
   assert.equal(savedConfigs[0].credentialMode, 'workspace_secret');
-  const modelCall = context.__postCalls.find(([, requestPath]) => requestPath === '/provider/models');
-  const testCall = context.__postCalls.find(([, requestPath]) => requestPath === '/provider/test');
-  assert.ok(modelCall);
-  assert.ok(testCall);
+  // P0 save-and-go: saving never contacts the sidecar — the workspace secret
+  // stays local and is forwarded per request by the send path instead.
   const apiKeyRef = savedConfigs[0].apiKeyRef;
   assert.match(apiKeyRef, /^trainer\.provider\.[0-9a-f-]{36}$/i);
-  assert.equal(modelCall[2].workspace_id, 'F:\\trainer-a');
-  assert.equal(modelCall[2].api_key_ref, apiKeyRef);
-  assert.equal(modelCall[2].apiKey, 'sk-workspace-secret');
-  assert.equal(testCall[2].api_key_ref, apiKeyRef);
+  assert.equal(
+    context.__postCalls.filter(([, requestPath]) => typeof requestPath === 'string' && requestPath.startsWith('/')).length,
+    0,
+    'saving must not call the sidecar',
+  );
   assert.equal(savedConfigs[0].apiKey, undefined);
   assert.equal(JSON.stringify(context.__patches).includes('sk-workspace-secret'), false);
   assert.equal(JSON.stringify(result.data).includes('sk-workspace-secret'), false);
@@ -2033,9 +2032,10 @@ test('updatePlanCommand restores formal plan history through the governed plan A
   });
 
   assert.equal(result.ok, true);
-  assert.equal(context.__postCalls[0][1], '/provider/test');
-  assert.equal(context.__postCalls[1][1], '/plan/update');
-  assert.deepEqual(context.__postCalls[1][2], {
+  // P0 redirect: governed plan writes go straight to the plan API — no
+  // /provider/test preflight precedes the restore.
+  assert.equal(context.__postCalls[0][1], '/plan/update');
+  assert.deepEqual(context.__postCalls[0][2], {
     plan_id: 'plan-1',
     workspace_id: 'F:\\trainer-a',
     instructions: 'Explicitly restore the current formal project plan from governed history.',
@@ -3730,7 +3730,7 @@ test('sendStreamMessageCommand stops models outside the allowed list before open
   assert.equal(sidecarCalls, 0);
 });
 
-test('sendMessageCommand blocks immediately when the last provider test already proved the reply is unusable', async () => {
+test('P0 redirect: an unusable-reply history no longer blocks the send — the real turn is the proof', async () => {
   const vscodeMock = {
     commands: {
       async executeCommand() {
@@ -3778,6 +3778,16 @@ test('sendMessageCommand blocks immediately when the last provider test already 
     async postJson(port, requestPath) {
       if (requestPath === '/session/message') {
         turnAttempts += 1;
+        return {
+          session_id: 'session-send-blocked-by-last-test',
+          reply: { content: '好的，我们继续这轮训练。', metadata: {} },
+          snapshot: {
+            messages: [],
+            memory: {},
+            plan: { id: 'plan-1', title: 'Plan', frozen: false, stages: [] },
+          },
+          suggested_actions: [],
+        };
       }
       throw new Error(`Unexpected POST ${requestPath}`);
     },
@@ -3794,13 +3804,13 @@ test('sendMessageCommand blocks immediately when the last provider test already 
     includeCurrentFile: false,
   });
 
-  assert.equal(result.ok, false);
-  assert.match(result.message ?? '', /\u4e2d\u6587\u6d88\u606f\u6ca1\u6709\u6b63\u5e38\u9001\u8fbe/);
-  assert.match(result.message ?? '', /\u8bbe\u7f6e/);
-  assert.equal(turnAttempts, 0);
+  // The corruption record is diagnostic history; the turn runs and a real
+  // failure would surface in the conversation as request_failed.
+  assert.equal(result.ok, true);
+  assert.equal(turnAttempts, 1);
 });
 
-test('sendMessageCommand does not reuse an English provider test for a zh-CN turn', async () => {
+test('P0 redirect: a zh-CN turn sends directly without consulting proof language', async () => {
   const vscodeMock = {
     commands: {
       async executeCommand() {
@@ -3832,12 +3842,22 @@ test('sendMessageCommand does not reuse an English provider test for a zh-CN tur
 
   let requestCount = 0;
   context.sidecarClient = {
-    async postJson() {
+    async postJson(_port, requestPath) {
       requestCount += 1;
-      throw new Error('The host guard should stop this turn before any sidecar request.');
+      assert.equal(requestPath, '/session/message');
+      return {
+        session_id: 'session-send-language-guard',
+        reply: { content: '好的，先检查中文输入。', metadata: {} },
+        snapshot: {
+          messages: [],
+          memory: {},
+          plan: { id: 'plan-1', title: 'Plan', frozen: false, stages: [] },
+        },
+        suggested_actions: [],
+      };
     },
     async getJson() {
-      throw new Error('The host guard should stop this turn before any sidecar request.');
+      throw new Error('Unexpected GET');
     },
   };
 
@@ -3848,19 +3868,18 @@ test('sendMessageCommand does not reuse an English provider test for a zh-CN tur
     includeCurrentFile: false,
   });
 
-  assert.equal(result.ok, false);
-  assert.match(result.message ?? '', /\u8fde\u63a5\u8fd8\u6ca1\u6709\u786e\u8ba4\u53ef\u7528/);
-  assert.match(result.message ?? '', /\u5148\u6d4b\u8bd5\u8fde\u63a5/);
-  assert.equal(requestCount, 0);
+  // Proof records are per-connection history, not per-language gates.
+  assert.equal(result.ok, true);
+  assert.equal(requestCount, 1);
 });
 
-test('sendMessageCommand runs a strict provider preflight before first coach send when no successful reply proof exists', async () => {
+test('P0 redirect: the first coach send goes straight to the turn — no provider preflight', async () => {
   const vscodeMock = {
     commands: {
       async executeCommand() {
         return undefined;
       },
-      },
+    },
   };
   const { sendMessageCommand } = loadWithVscodeMock(sessionCommandsModulePath, vscodeMock);
   const context = createContext({ initialSessionId: 'session-send-needs-validation' });
@@ -3887,18 +3906,13 @@ test('sendMessageCommand runs a strict provider preflight before first coach sen
 
   let testCalls = 0;
   let turnCalls = 0;
+  const requestPaths = [];
   context.sidecarClient = {
-    async postJson(port, requestPath, body, options) {
+    async postJson(_port, requestPath) {
+      requestPaths.push(requestPath);
       if (requestPath === '/provider/test') {
         testCalls += 1;
-        assert.equal(body.response_language, 'zh-CN');
-        assert.deepEqual(options, { timeoutMs: 90_000 });
-        return {
-          ok: true,
-          status: 'connected',
-          provider_name: 'Local Compatible',
-          detail: 'Provider reachable. Chat probe succeeded with model demo-model. Response: pong',
-        };
+        throw new Error('No preflight is allowed before a coach send.');
       }
       if (requestPath === '/session/message') {
         turnCalls += 1;
@@ -3929,15 +3943,12 @@ test('sendMessageCommand runs a strict provider preflight before first coach sen
   });
 
   assert.equal(result.ok, true);
-  assert.equal(testCalls, 1);
+  assert.equal(testCalls, 0);
   assert.equal(turnCalls, 1);
-  const providerTestPatch = context.__patches.find(
-    (patch) => patch?.providerConfig?.lastTestResult?.ok === true,
-  );
-  assert.equal(providerTestPatch.providerConfig.lastTestResult.responseLanguage, 'zh-CN');
+  assert.deepEqual(requestPaths, ['/session/message']);
 });
 
-test('sendMessageCommand stops before /session/message when the automatic provider preflight still proves the coach unusable', async () => {
+test('P0 redirect: no automatic preflight runs, so an unusable-reply history never stops the turn', async () => {
   const vscodeMock = {
     commands: {
       async executeCommand() {
@@ -3971,22 +3982,23 @@ test('sendMessageCommand stops before /session/message when the automatic provid
   let testCalls = 0;
   let turnCalls = 0;
   context.sidecarClient = {
-    async postJson(port, requestPath) {
+    async postJson(_port, requestPath) {
       if (requestPath === '/provider/test') {
         testCalls += 1;
-        return {
-          ok: false,
-          status: 'language_corruption',
-          provider_name: 'Local Compatible',
-          detail:
-            'Provider reachable, but it corrupted Chinese input into question marks before the model saw it.',
-          error_category: 'language_corruption',
-          retryable: false,
-          status_code: 200,
-        };
+        throw new Error('No automatic preflight is allowed before a coach send.');
       }
       if (requestPath === '/session/message') {
         turnCalls += 1;
+        return {
+          session_id: 'session-send-needs-validation-fail',
+          reply: { content: '好的，我们继续。', metadata: {} },
+          snapshot: {
+            messages: [],
+            memory: {},
+            plan: { id: 'plan-1', title: 'Plan', frozen: false, stages: [] },
+          },
+          suggested_actions: [],
+        };
       }
       throw new Error(`Unexpected POST ${requestPath}`);
     },
@@ -4003,13 +4015,12 @@ test('sendMessageCommand stops before /session/message when the automatic provid
     includeCurrentFile: false,
   });
 
-  assert.equal(result.ok, false);
-  assert.equal(testCalls, 1);
-  assert.equal(turnCalls, 0);
-  assert.equal(result.message, '这次没有收到可靠的中文回复。请检查模型连接后再试。');
+  assert.equal(result.ok, true);
+  assert.equal(testCalls, 0);
+  assert.equal(turnCalls, 1);
 });
 
-test('sendMessageCommand safely records a rate-limited automatic provider preflight', async () => {
+test('P0 redirect: without an automatic preflight there is nothing to rate-limit before the turn', async () => {
   const vscodeMock = {
     commands: {
       async executeCommand() {
@@ -4046,15 +4057,23 @@ test('sendMessageCommand safely records a rate-limited automatic provider prefli
     savedResult = result;
   };
   context.sidecarClient = {
-    async postJson(port, requestPath) {
+    async postJson(_port, requestPath) {
       if (requestPath === '/provider/test') {
         testCalls += 1;
-        throw new Error(
-          'Sidecar request failed (429): {"detail":"LOCAL_SECRET_SENTINEL rate limit"}',
-        );
+        throw new Error('No automatic preflight is allowed before a coach send.');
       }
       if (requestPath === '/session/message') {
         turnCalls += 1;
+        return {
+          session_id: 'session-send-preflight-rate-limit',
+          reply: { content: 'Keep going with the smallest next step.', metadata: {} },
+          snapshot: {
+            messages: [],
+            memory: {},
+            plan: { id: 'plan-1', title: 'Plan', frozen: false, stages: [] },
+          },
+          suggested_actions: [],
+        };
       }
       throw new Error(`Unexpected POST ${requestPath}`);
     },
@@ -4071,21 +4090,12 @@ test('sendMessageCommand safely records a rate-limited automatic provider prefli
     includeCurrentFile: false,
   });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.message, 'The model service is busy right now. Try again in a moment.');
-  assert.doesNotMatch(result.message ?? '', /LOCAL_SECRET_SENTINEL|429/);
-  assert.equal(testCalls, 1);
-  assert.equal(turnCalls, 0);
-  const failurePatch = context.__patches.find(
-    (patch) => patch?.providerConfig?.modelErrorCategory === 'rate_limit',
-  );
-  assert.ok(failurePatch);
-  assert.equal(failurePatch.providerConfig.modelStatusCode, 429);
-  assert.equal(failurePatch.providerConfig.modelRetryable, true);
-  assert.doesNotMatch(failurePatch.providerConfig.modelListDetail, /LOCAL_SECRET_SENTINEL|429/);
-  assert.equal(savedResult?.errorCategory, 'rate_limit');
-  assert.equal(savedResult?.retryable, true);
-  assert.doesNotMatch(savedResult?.detail ?? '', /LOCAL_SECRET_SENTINEL|429/);
+  // The turn itself is the only provider call; a real 429 would be classified
+  // on the send path with sanitized detail (request_failed).
+  assert.equal(result.ok, true);
+  assert.equal(testCalls, 0);
+  assert.equal(turnCalls, 1);
+  assert.equal(savedResult, undefined);
 });
 
 test('sendMessageCommand patches provider failure when turn returns empty_response', async () => {
@@ -4482,7 +4492,7 @@ test('sendStreamMessageCommand starts the first Chinese coach stream without a s
   );
 });
 
-test('sendStreamMessageCommand blocks a known unusable Chinese connection without sending or probing again', async () => {
+test('P0 redirect: a known unusable Chinese history does not stop the stream', async () => {
   const vscodeMock = {
     commands: {
       async executeCommand() {
@@ -4528,27 +4538,30 @@ test('sendStreamMessageCommand blocks a known unusable Chinese connection withou
   let testCalls = 0;
   let streamCalls = 0;
   context.sidecarClient = {
-    async postJson(port, requestPath) {
+    async postJson(_port, requestPath) {
       if (requestPath === '/provider/test') {
         testCalls += 1;
-        return {
-          ok: false,
-          status: 'language_corruption',
-          provider_name: 'Local Compatible',
-          detail:
-            'Provider reachable, but it corrupted Chinese input into question marks before the model saw it.',
-          error_category: 'language_corruption',
-          retryable: false,
-          status_code: 200,
-        };
+        throw new Error('No preflight is allowed before a stream.');
       }
       throw new Error(`Unexpected POST ${requestPath}`);
     },
-    async *fetchSSE() {
+    async *fetchSSE(_port, requestPath) {
       streamCalls += 1;
+      assert.equal(requestPath, '/session/message/stream');
       yield {
         event: 'complete',
-        data: JSON.stringify({}),
+        data: JSON.stringify({
+          tokens: 1,
+          response: {
+            session_id: 'session-stream-needs-validation-fail',
+            reply: { role: 'assistant', content: '我们继续这轮训练。', metadata: {} },
+            snapshot: {
+              messages: [],
+              memory: {},
+              plan: { id: 'plan-1', title: 'Plan', frozen: false, stages: [] },
+            },
+          },
+        }),
       };
     },
     async getJson() {
@@ -4565,16 +4578,10 @@ test('sendStreamMessageCommand blocks a known unusable Chinese connection withou
     includeCurrentFile: false,
   });
 
-  assert.equal(result.ok, false);
+  // Corruption history is diagnostic; the real stream is the proof.
+  assert.equal(result.ok, true);
   assert.equal(testCalls, 0);
-  assert.equal(streamCalls, 0);
-  assert.ok(result.message?.trim());
-  assert.equal(
-    context.__postCalls.some(
-      (call) => call[0] === 'workbench' && call[1] === 'postMessage' && call[2]?.type === 'stream/start',
-    ),
-    false,
-  );
+  assert.equal(streamCalls, 1);
 });
 
 test('sendStreamMessageCommand does not probe again for a stale successful connection record', async () => {

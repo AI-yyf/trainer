@@ -15,21 +15,26 @@ const helpersSourcePath = path.resolve(
   'composerModelHelpers.ts',
 );
 
-test('settings view quietly primes provider models when the saved connection needs a list refresh', () => {
+/**
+ * P0 redirect: the settings model list no longer auto-primes. Model discovery
+ * is an explicit network operation — the picker/settings expose an explicit
+ * "refresh models" action, and pure UI activity (opening Settings, saving,
+ * switching) must keep the /provider/models boundary counter at zero. The
+ * former auto-prime machinery (settingsModelAutoPrimeDecision + dedup ref)
+ * was therefore removed instead of being redirected.
+ */
+test('settings never auto-prime provider models; refresh stays an explicit action', () => {
   const source = fs.readFileSync(appSourcePath, 'utf8');
-  // §四十八: the prime decision internals live in lib/composerModelHelpers.ts.
   const helpers = fs.readFileSync(helpersSourcePath, 'utf8');
 
-  assert.match(source, /const settingsModelAutoPrimeKeyRef = useRef\(""\);/);
-  assert.match(source, /const primeSettingsProviderModels = useCallback\(\(\) => \{/);
-  assert.match(source, /type: "settings\/primeProviderModels"/);
-  assert.match(source, /messages\.filter\(\(message\) => message\.type !== "operation\/status"\)/);
-  assert.match(helpers, /export function settingsModelAutoPrimeDecision/);
-  assert.match(helpers, /providerDraftHasChanges \|\|/);
-  assert.match(helpers, /provider\.modelListStatus === "error" &&/);
-  assert.match(helpers, /provider\.modelRetryable !== false/);
-  assert.match(helpers, /const needsPrime =/);
-  assert.match(source, /settingsModelAutoPrimeDecision\(\s*data\.providerConfig,\s*providerDraftHasChanges,/);
-  assert.match(source, /settingsModelAutoPrimeKeyRef\.current = decision\.primeKey;/);
-  assert.match(source, /primeSettingsProviderModels\(\);/);
+  // The auto-prime machinery is gone from App and the helpers.
+  assert.doesNotMatch(source, /settingsModelAutoPrimeKeyRef/);
+  assert.doesNotMatch(source, /primeSettingsProviderModels/);
+  assert.doesNotMatch(source, /settings\/primeProviderModels/);
+  assert.doesNotMatch(source, /composerModelAutoRefreshDecision/);
+  assert.doesNotMatch(helpers, /export function settingsModelAutoPrimeDecision/);
+  assert.doesNotMatch(helpers, /export function composerModelAutoRefreshDecision/);
+
+  // Model listing still exists as a local fact + explicit refresh affordance.
+  assert.match(source, /appUiCopy\(layout\.composerLanguage, "刷新模型"\)/);
 });

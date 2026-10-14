@@ -9,7 +9,6 @@ import {
   evaluateProviderModelPolicy,
   filterProviderModelOptions,
 } from "../../../../shared/src/providerModelPolicy";
-import { normalizeProviderProtocol } from "../../../../shared/src/providerProtocols";
 
 export type ComposerProviderMenuItem = {
   id: string;
@@ -112,125 +111,6 @@ export function compactComposerModelLabel(
   );
 }
 
-export interface ComposerModelAutoRefreshInput {
-  configured: boolean;
-  apiKeyConfigured: boolean;
-  modelListStatus: string;
-  availableModels: ReadonlyArray<string> | undefined;
-  cacheExpiresAt?: string | undefined;
-  cacheFetchedAt?: string | undefined;
-  name: string;
-  baseUrl: string;
-  protocol?: string | undefined;
-  model: string;
-}
-
-export interface ComposerModelAutoRefreshDecision {
-  needsRefresh: boolean;
-  refreshKey: string;
-}
-
-/**
- * Decides whether opening the model menu should trigger a background model
- * list refresh, and the dedup key that keeps the refresh from re-firing
- * while the same provider state is on screen (§四十八: extracted from App.tsx).
- */
-export function composerModelAutoRefreshDecision(
-  provider: ComposerModelAutoRefreshInput,
-): ComposerModelAutoRefreshDecision {
-  if (
-    !provider.configured ||
-    !provider.apiKeyConfigured ||
-    provider.modelListStatus === "loading"
-  ) {
-    return { needsRefresh: false, refreshKey: "" };
-  }
-
-  const availableModelCount = Array.isArray(provider.availableModels)
-    ? provider.availableModels.filter((entry) => entry.trim().length > 0).length
-    : 0;
-  const cacheExpiryMs = provider.cacheExpiresAt
-    ? Date.parse(provider.cacheExpiresAt)
-    : Number.NaN;
-  const cacheExpired = Number.isFinite(cacheExpiryMs) && cacheExpiryMs <= Date.now();
-  const needsRefresh =
-    availableModelCount === 0 ||
-    provider.modelListStatus === "idle" ||
-    cacheExpired;
-
-  const refreshKey = [
-    provider.name.trim().toLowerCase(),
-    provider.baseUrl.trim().toLowerCase(),
-    normalizeProviderProtocol(provider.protocol),
-    provider.model.trim().toLowerCase(),
-    provider.cacheFetchedAt ?? "",
-    provider.cacheExpiresAt ?? "",
-    provider.modelListStatus,
-    availableModelCount,
-    cacheExpired ? "expired" : "fresh",
-  ].join("::");
-
-  return { needsRefresh, refreshKey };
-}
-
-export interface SettingsModelAutoPrimeInput extends ComposerModelAutoRefreshInput {
-  modelRetryable?: boolean | undefined;
-}
-
-export interface SettingsModelAutoPrimeDecision {
-  needsPrime: boolean;
-  primeKey: string;
-}
-
-/**
- * Decides whether the settings provider form should auto-prime its model
- * list (fetch when empty/expired, retry after a retryable error), plus the
- * dedup key that keeps the prime from re-firing (§四十八: extracted from App.tsx).
- */
-export function settingsModelAutoPrimeDecision(
-  provider: SettingsModelAutoPrimeInput,
-  providerDraftHasChanges: boolean,
-): SettingsModelAutoPrimeDecision {
-  if (
-    !provider.configured ||
-    !provider.apiKeyConfigured ||
-    providerDraftHasChanges ||
-    provider.modelListStatus === "loading"
-  ) {
-    return { needsPrime: false, primeKey: "" };
-  }
-
-  const availableModelCount = Array.isArray(provider.availableModels)
-    ? provider.availableModels.filter((entry) => entry.trim().length > 0).length
-    : 0;
-  const cacheExpiryMs = provider.cacheExpiresAt
-    ? Date.parse(provider.cacheExpiresAt)
-    : Number.NaN;
-  const cacheExpired = Number.isFinite(cacheExpiryMs) && cacheExpiryMs <= Date.now();
-  const shouldRetryAfterError =
-    provider.modelListStatus === "error" && provider.modelRetryable !== false;
-  const needsPrime =
-    availableModelCount === 0 ||
-    provider.modelListStatus === "idle" ||
-    cacheExpired ||
-    shouldRetryAfterError;
-
-  const primeKey = [
-    provider.name.trim().toLowerCase(),
-    provider.baseUrl.trim().toLowerCase(),
-    normalizeProviderProtocol(provider.protocol),
-    provider.model.trim().toLowerCase(),
-    provider.modelListStatus,
-    provider.cacheFetchedAt ?? "",
-    provider.cacheExpiresAt ?? "",
-    availableModelCount,
-    cacheExpired ? "expired" : "fresh",
-    shouldRetryAfterError ? "retryable-error" : "steady",
-  ].join("::");
-
-  return { needsPrime, primeKey };
-}
-
 /**
  * Builds the model-menu entries: one item per known model for the active
  * connection, then saved connection profiles (active one first). Falls back
@@ -252,17 +132,16 @@ export function buildComposerProviderMenuItems(
   const configuredModelIsAlias = Boolean(
     resolvedModelKey && configuredModelKey && resolvedModelKey !== configuredModelKey,
   );
+  // P0 "all known models": the menu exposes every model Trainer knows about —
+  // discovered live models, the saved catalog, manually added IDs, and the
+  // current selection — merged instead of the live list shadowing the rest.
   const liveModels = Array.isArray(provider.availableModels) ? provider.availableModels : [];
   const fallbackModels = [
     ...(Array.isArray(provider.catalogModels) ? provider.catalogModels : []),
     ...Object.keys(provider.modelTokenLimits ?? {}),
   ];
   const modelCandidates = providerApplied
-    ? [
-        ...(liveModels.length > 0 ? liveModels : fallbackModels),
-        resolvedModel,
-        ...(resolvedModel ? [] : [configuredModel]),
-      ]
+    ? [...liveModels, ...fallbackModels, resolvedModel, configuredModel]
     : [];
   const currentProviderModelPolicy = {
     allowedModels: provider.allowedModels,

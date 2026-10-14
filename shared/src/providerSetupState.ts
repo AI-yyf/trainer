@@ -144,6 +144,15 @@ export function deriveProviderSetupState(input: ProviderSetupMachineInput): Prov
   if (input.availabilityMode === 'missing_api_key') {
     return derivation('needs_key', 'saved_needs_key');
   }
+  if (input.availabilityMode === 'needs_configuration') {
+    // P0 send-state vocabulary: blocked only ever means configuration is
+    // missing (or the operation lacks permission). The key case keeps its
+    // dedicated copy; everything else is the fresh-setup path.
+    if (input.savedNeedsKey) {
+      return derivation('needs_key', 'saved_needs_key');
+    }
+    return derivation('needs_model', 'fresh_setup');
+  }
   if (input.availabilityMode === 'ready') {
     return derivation('ready', 'ready');
   }

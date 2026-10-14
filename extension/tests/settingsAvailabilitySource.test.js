@@ -168,9 +168,12 @@ test('settings keeps availability as the compact source of provider truth', () =
   const source = readSettingsSource();
   const strip = availabilityStripSource(source);
 
+  // P0 send-state vocabulary: the local availability mode keeps its draft /
+  // recent_failure / needs_test / warming facets, typed against the new
+  // three-state ProviderSendStateStatus union.
   assert.match(
     source,
-    /const availabilityMode: ProviderSendStateStatus \| "draft" \| "recent_failure" \| "needs_test" =/,
+    /const availabilityMode: ProviderSendStateStatus \| "draft" \| "recent_failure" \| "needs_test" \| "warming" =/,
   );
   assert.match(source, /const localizedResolvedAvailabilityStatusLabel =/);
   assert.match(source, /const localizedResolvedAvailabilityHeadline =/);
@@ -209,9 +212,11 @@ test('settings maps provider failures to retestable recovery states', () => {
   assert.match(source, /const shouldSurfaceRecentTestFailure =/);
   assert.match(source, /!shouldSurfaceRecentTestFailure/);
   assert.match(source, /shouldSurfaceRecentTestFailure\s*\? "recent_failure"\s*:\s*providerNeedsRetest/);
-  assert.match(source, /coachSendState\.status === "blocked_error"/);
-  assert.match(source, /coachSendState\.status === "degraded_error"/);
-  assert.match(source, /coachSendState\.status === "warming"/);
+  // P0 redirect: the blocked_error/degraded_error/warming status strings are
+  // gone; failure surfacing reads the blocked flag + reasonKind instead.
+  assert.match(source, /coachSendState\.blocked/);
+  assert.match(source, /coachSendState\.reasonKind === "missing_api_key"/);
+  assert.doesNotMatch(source, /"blocked_error"|"degraded_error"/);
   assert.match(source, /const providerTestRecoveryDetail =/);
   assert.match(source, /providerTestFeedback\?\.actionKind === "test-provider"/);
   assert.match(source, /lastTestFailure\?\.status === "failed" \? "test_failed"/);

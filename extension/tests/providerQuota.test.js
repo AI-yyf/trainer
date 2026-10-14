@@ -18,13 +18,17 @@ for (const language of ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'k
   });
 }
 
-test('a current exhausted-quota test blocks sending while the model catalog remains available', () => {
+test('P0 redirect: quota exhaustion stays a hard-blocking category for real failures, while a historical quota test result is only a diagnostic warning', () => {
+  // Real request failures with this category keep blocking recovery paths.
   assert.equal(isCoachProviderBlockingCategory('quota_exhausted'), true);
+  // A *historical* failed test no longer gates sending: the state stays ready
+  // with a non-blocking warning so the first real send is the proof.
   const state = describeProviderSendState({
     configured: true, apiKeyConfigured: true, model: 'model', baseUrl: 'https://example.test',
     availableModels: ['model'], modelListStatus: 'ready', modelErrorCategory: 'quota_exhausted',
     lastTestResult: { ok: false, errorCategory: 'quota_exhausted', retryable: false, model: 'model', baseUrl: 'https://example.test' },
   }, 'en-US');
-  assert.equal(state.blocked, true);
-  assert.match(state.reason, /quota/i);
+  assert.equal(state.blocked, false);
+  assert.equal(state.status, 'ready');
+  assert.match(state.warning ?? '', /quota/i);
 });

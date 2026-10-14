@@ -22,6 +22,10 @@ export type ProviderHostCopyKey =
   | 'saveChecking'
   | 'saveNoKey'
   | 'saveLocalNoKey'
+  | 'saveApplied'
+  | 'saveMissingModel'
+  | 'switchApplied'
+  | 'switchAppliedDetail'
   | 'modelsLoadedVerified'
   | 'modelsLoadedInconclusive'
   | 'modelsLoadedFailed'
@@ -73,6 +77,10 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     saveNoKey: '连接设置已保存,但还没有存放 API 密钥,Trainer 暂时无法工作。请先补上密钥。',
     saveLocalNoKey:
       '连接设置已保存。这组连接指向本机服务,不需要 API 密钥即可使用。请测试连接以确认可用。',
+    saveApplied: '连接设置已保存并生效。无需先测试——直接发送即可，第一次真实发送就是确认。',
+    saveMissingModel: '还没有选择模型。请从已知模型列表中选择一个，或直接填写模型 ID 后再保存。',
+    switchApplied: '已切换到模型“{model}”，立即生效。',
+    switchAppliedDetail: '已切换到 {model}。可直接发送；首次真实发送即完成确认。',
     modelsLoadedVerified: '已加载 {count} 个在线模型,并确认当前连接可用。',
     modelsLoadedInconclusive: '已加载 {count} 个在线模型,但中文完整性还需要再次确认。',
     modelsLoadedFailed: '已加载 {count} 个在线模型,但 Trainer 暂时无法用这组连接教学。',
@@ -121,6 +129,10 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
       'Provider settings saved, but Trainer still cannot work yet because no API key is stored. Add one before starting coaching.',
     saveLocalNoKey:
       'Provider settings saved. This connection points at a local service, so it can be used without an API key. Test the connection to verify it.',
+    saveApplied: 'Connection saved and active. No test needed — send directly; the first real send is the confirmation.',
+    saveMissingModel: 'No model selected yet. Pick one from the known model list, or type the model ID, then save.',
+    switchApplied: "Switched to model '{model}'. Active immediately.",
+    switchAppliedDetail: "Switched to {model}. You can send right away; the first real send confirms it.",
     modelsLoadedVerified: 'Loaded {count} live models and verified the current connection.',
     modelsLoadedInconclusive:
       'Loaded {count} live models, but zh-CN integrity still needs verification on this connection.',
@@ -179,6 +191,10 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
       'Configuración guardada, pero Trainer todavía no puede funcionar porque no hay clave API almacenada. Añade una antes de empezar.',
     saveLocalNoKey:
       'Configuración guardada. Esta conexión apunta a un servicio local, así que funciona sin clave API. Prueba la conexión para verificarla.',
+    saveApplied: 'Conexión guardada y activa. No hace falta probar antes: envía directamente; el primer envío real es la confirmación.',
+    saveMissingModel: 'Todavía no hay modelo elegido. Elige uno de la lista de modelos conocidos o escribe su ID y guarda.',
+    switchApplied: 'Cambiado al modelo «{model}». Activo desde ahora.',
+    switchAppliedDetail: 'Cambiado a {model}. Puedes enviar ahora; el primer envío real lo confirma.',
     modelsLoadedVerified: 'Se cargaron {count} modelos en vivo y se verificó la conexión actual.',
     modelsLoadedInconclusive:
       'Se cargaron {count} modelos en vivo, pero la integridad del chino (zh-CN) aún necesita verificación.',
@@ -241,6 +257,10 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
       'Paramètres enregistrés, mais Trainer ne peut pas encore fonctionner faute de clé API stockée. Ajoutez-en une pour commencer.',
     saveLocalNoKey:
       'Paramètres enregistrés. Cette connexion pointe vers un service local : elle fonctionne sans clé API. Testez la connexion pour la valider.',
+    saveApplied: 'Connexion enregistrée et active. Pas besoin de tester avant : envoyez directement ; le premier envoi réel confirme la connexion.',
+    saveMissingModel: 'Aucun modèle choisi. Choisissez-en un dans la liste des modèles connus ou saisissez son ID, puis enregistrez.',
+    switchApplied: 'Passé au modèle « {model} ». Actif immédiatement.',
+    switchAppliedDetail: 'Passé à {model}. Vous pouvez envoyer tout de suite ; le premier envoi réel le confirme.',
     modelsLoadedVerified: '{count} modèles en direct chargés et connexion actuelle vérifiée.',
     modelsLoadedInconclusive:
       '{count} modèles en direct chargés, mais l’intégrité du chinois (zh-CN) doit encore être vérifiée.',
@@ -306,6 +326,10 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
       'Einstellungen gespeichert, aber Trainer kann noch nicht arbeiten, da kein API-Schlüssel hinterlegt ist. Fügen Sie einen hinzu, bevor Sie starten.',
     saveLocalNoKey:
       'Einstellungen gespeichert. Diese Verbindung zeigt auf einen lokalen Dienst und funktioniert ohne API-Schlüssel. Testen Sie die Verbindung zur Bestätigung.',
+    saveApplied: 'Verbindung gespeichert und aktiv. Kein Test nötig – direkt senden; die erste echte Sendung ist die Bestätigung.',
+    saveMissingModel: 'Noch kein Modell ausgewählt. Wählen Sie eines aus der bekannten Modellliste oder geben Sie die Modell-ID ein, dann speichern.',
+    switchApplied: "Zu Modell '{model}' gewechselt. Sofort aktiv.",
+    switchAppliedDetail: "Zu {model} gewechselt. Sie können sofort senden; die erste echte Sendung bestätigt es.",
     modelsLoadedVerified: '{count} Live-Modelle geladen und die aktuelle Verbindung geprüft.',
     modelsLoadedInconclusive:
       '{count} Live-Modelle geladen, aber die chinesische Integrität muss noch bestätigt werden.',
@@ -369,6 +393,10 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
       '設定は保存されましたが、API キーが保存されていないため Trainer はまだ動作できません。先に追加してください。',
     saveLocalNoKey:
       '設定を保存しました。この接続はローカルサービスを指しているため、API キーなしで動作します。接続をテストして確認してください。',
+    saveApplied: '接続を保存して有効化しました。テストは不要です。そのまま送信でき、最初の実際の送信が確認になります。',
+    saveMissingModel: 'モデルが未選択です。既知のモデル一覧から選ぶか、モデル ID を入力してから保存してください。',
+    switchApplied: 'モデル「{model}」に切り替えました。すぐに使えます。',
+    switchAppliedDetail: '{model} に切り替えました。すぐ送信でき、最初の実際の送信で確認されます。',
     modelsLoadedVerified: 'ライブモデルを {count} 件読み込み、現在の接続を確認しました。',
     modelsLoadedInconclusive:
       'ライブモデルを {count} 件読み込みましたが、中国語 (zh-CN) の整合性にはさらなる確認が必要です。',
@@ -429,6 +457,10 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
       '설정은 저장되었지만 API 키가 없어 Trainer가 아직 동작할 수 없습니다. 시작하기 전에 키를 추가하세요.',
     saveLocalNoKey:
       '설정이 저장되었습니다. 이 연결은 로컬 서비스를 가리키므로 API 키 없이 동작합니다. 연결을 테스트해 확인하세요.',
+    saveApplied: '연결이 저장되고 활성화되었습니다. 테스트 없이 바로 보낼 수 있으며, 첫 실제 전송이 확인입니다.',
+    saveMissingModel: '아직 모델을 선택하지 않았습니다. 알려진 모델 목록에서 고르거나 모델 ID를 입력한 뒤 저장하세요.',
+    switchApplied: "모델 '{model}'(으)로 전환했습니다. 즉시 활성화됩니다.",
+    switchAppliedDetail: '{model}(으)로 전환했습니다. 바로 보낼 수 있으며 첫 실제 전송이 확인합니다.',
     modelsLoadedVerified: '라이브 모델 {count}개를 불러오고 현재 연결을 확인했습니다.',
     modelsLoadedInconclusive:
       '라이브 모델 {count}개를 불러왔지만, 중국어(zh-CN) 무결성 확인이 아직 필요합니다.',
@@ -491,6 +523,10 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
       'Configurações salvas, mas o Trainer ainda não funciona porque não há chave de API armazenada. Adicione uma antes de começar.',
     saveLocalNoKey:
       'Configurações salvas. Esta conexão aponta para um serviço local, então funciona sem chave de API. Teste a conexão para confirmar.',
+    saveApplied: 'Conexão salva e ativa. Não precisa testar antes: envie direto; o primeiro envio real é a confirmação.',
+    saveMissingModel: 'Nenhum modelo escolhido ainda. Escolha um da lista de modelos conhecidos ou digite o ID do modelo e salve.',
+    switchApplied: 'Mudou para o modelo “{model}”. Ativo imediatamente.',
+    switchAppliedDetail: 'Mudou para {model}. Você pode enviar agora; o primeiro envio real confirma.',
     modelsLoadedVerified: '{count} modelos ao vivo carregados e a conexão atual foi verificada.',
     modelsLoadedInconclusive:
       '{count} modelos ao vivo carregados, mas a integridade do chinês (zh-CN) ainda precisa de verificação.',

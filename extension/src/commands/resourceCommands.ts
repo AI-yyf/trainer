@@ -20,7 +20,8 @@ import type { ManagedDataFolderChangeResult } from '../core/sidecarProcessManage
 import { mergeMemorySummarySnapshot, mergeResourceRecords, resetWorkbenchAfterRuntimeDataChange } from '../core/workbenchData';
 import { rehydrateWorkbenchRuntime, trainerSessionBlockReason } from '../core/runtimeRehydration';
 import { getRuntimeWorkspaceId, withWorkspaceQuery } from './workspaceContext';
-import { basenameFs, looksLikeWindowsAbsolutePath } from '../core/workspaceRoots';
+import { basenameFs, looksLikeWindowsAbsolutePath, normalizeFsPath } from '../core/workspaceRoots';
+import { runtimeDataRootUnder } from './workspaceAdmissionCommands';
 
 const MAX_RESOURCE_UPLOADS = 100;
 type ResourceSourceMode = 'files' | 'folder' | 'url';
@@ -1093,6 +1094,49 @@ export async function resetManagedDataFolderCommand(
   const change = await context.sidecarManager.resetManagedDataFolder(workspaceFolder, {
     allowExistingTarget: true,
     copyExistingData: false,
+  });
+  return applyManagedDataFolderChange(context, change);
+}
+
+export async function moveManagedDataUnderRootCommand(
+  context: CommandContext,
+): Promise<CommandExecutionResult> {
+  const admissionBlock = resourceMutationAdmissionBlock(context);
+  if (admissionBlock) {
+    return admissionBlock;
+  }
+
+  if (!(await context.trustGuard.ensureTrusted('move Trainer data under the workspace root'))) {
+    return { ok: false, message: 'Workspace trust is required to move Trainer data under the workspace root.' };
+  }
+
+  // Unified-root model (P0): the recommended data home is the workspace
+  // root's `.trainer/runtime` data area. This reuses the exact migration
+  // machinery the root-selection flow uses (configureManagedDataFolder), so
+  // the move is the same vetted copy/restart path — only the destination is
+  // derived from the root instead of asked from the user.
+  const rootPath =
+    context.getHostState().bootstrap.memory.workspace?.trainerWorkspace?.rootPath?.trim() ||
+    context.trainerWorkspace.getRoot();
+  if (!rootPath) {
+    return {
+      ok: false,
+      message: 'Choose a Trainer workspace root first — data moves under it.',
+    };
+  }
+
+  const workspaceFolder = context.getHostState().workspace.workspaceFolder;
+  const targetFolder = runtimeDataRootUnder(rootPath);
+  const current = context.sidecarManager.getManagedDataFolderSnapshot(workspaceFolder);
+  const samePath = (left: string, right: string): boolean =>
+    normalizeFsPath(left).toLowerCase() === normalizeFsPath(right).toLowerCase() ||
+    left === right;
+  if (samePath(current.effectivePath, targetFolder)) {
+    return { ok: true, message: 'Trainer data already lives under the workspace root.' };
+  }
+
+  const change = await context.sidecarManager.configureManagedDataFolder(targetFolder, workspaceFolder, {
+    allowExistingTarget: true,
   });
   return applyManagedDataFolderChange(context, change);
 }

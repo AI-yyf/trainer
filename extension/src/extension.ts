@@ -18,7 +18,7 @@ import {
 } from './core/workbenchData';
 import { WorkspaceTrustGuard } from './core/workspaceTrust';
 import { TrainerWorkspaceService } from './core/trainerWorkspaceService';
-import { resolveTrainerWorkspaceAdmission } from './core/trainerWorkspaceAdmission';
+import { resolveTrainerWorkspaceAdmission, resolveTrainerProjectsList } from './core/trainerWorkspaceAdmission';
 import { ProviderConfigStore } from './provider/providerConfigStore';
 import { disposeTrialProviderServer } from './provider/trialProviderServer';
 import { TrainerTestController } from './testing/testController';
@@ -70,6 +70,10 @@ export async function activate(
     trainerWorkspace,
     initialWorkspace,
   );
+  const initialTrainerProjectsList = await resolveTrainerProjectsList(
+    trainerWorkspace,
+    initialWorkspace,
+  );
   sidecarClient.setTrainerAdmissionMode(initialTrainerWorkspaceAdmission?.status);
   let hostState: TrainerHostState = withTrainerWorkspaceSnapshot(
     {
@@ -86,6 +90,7 @@ export async function activate(
       ),
     },
     initialTrainerWorkspaceAdmission,
+    initialTrainerProjectsList,
   );
   const initialRuntimeWorkspace = await applyManagedDataRootScope(sidecarManager, hostState);
   hostState = withManagedDataFolderSnapshot(
@@ -109,6 +114,7 @@ export async function activate(
       trainerWorkspace,
       workspace,
     );
+    const trainerProjectsList = await resolveTrainerProjectsList(trainerWorkspace, workspace);
     sidecarClient.setTrainerAdmissionMode(trainerWorkspaceAdmission?.status);
     const derivedState = withTrainerWorkspaceSnapshot(
       {
@@ -128,6 +134,7 @@ export async function activate(
         ),
       },
       trainerWorkspaceAdmission,
+      trainerProjectsList,
     );
     const runtimeWorkspace = await applyManagedDataRootScope(sidecarManager, derivedState);
     hostState = withManagedDataFolderSnapshot(
@@ -142,6 +149,12 @@ export async function activate(
   };
 
   const restoreProviderModelCache = async (): Promise<void> => {
+    // P0 startup semantics: activation only restores configuration, the key
+    // reference, and the historical model-catalog cache. Historical failures
+    // (invalid_key_or_permission / model_unsupported / model_not_found) stay
+    // diagnostic history — they are attached for the diagnostics UI but are
+    // never restored as a current blocker, and nothing here probes the
+    // network.
     const provider = providerStore.getConfig();
     const apiKey = await providerStore.getApiKey();
     const lastTestResult = providerStore.getLastTestResult(provider, {
@@ -170,25 +183,11 @@ export async function activate(
       return;
     }
 
+    // The cached catalog is restored regardless of TTL freshness: a known
+    // model list is still the user's catalog (picker refresh stays explicit),
+    // and a stale list never blocks anything.
     const cache = providerStore.getModelCache(provider);
-    const hardBlockedByLastTest = Boolean(
-      lastTestResult &&
-        lastTestResult.ok === false &&
-        (lastTestResult.errorCategory === 'invalid_key_or_permission' ||
-          lastTestResult.errorCategory === 'model_unsupported' ||
-          lastTestResult.errorCategory === 'model_not_found'),
-    );
-    const hardBlockedByCache = Boolean(
-      cache &&
-        (cache.lastErrorCategory === 'invalid_key_or_permission' ||
-          cache.lastErrorCategory === 'model_unsupported' ||
-          cache.lastErrorCategory === 'model_not_found'),
-    );
-    const cacheUsable =
-      !hardBlockedByCache &&
-      providerStore.isModelCacheFresh(cache) &&
-      providerStore.isModelCacheCompatible(provider, cache, apiKey);
-    const restoreBlockedByLastTest = hardBlockedByLastTest && !cacheUsable;
+    const restoredModels = cache?.availableModels ?? [];
 
     hostState = {
       ...hostState,
@@ -196,46 +195,21 @@ export async function activate(
         ...baseBootstrap,
         providerConfig: {
           ...baseBootstrap.providerConfig,
-          availableModels: cacheUsable ? cache?.availableModels ?? [] : [],
-          resolvedModel: cacheUsable ? cache?.resolvedModel : undefined,
-          modelListStatus:
-            restoreBlockedByLastTest || hardBlockedByCache
-              ? 'error'
-              : cacheUsable
-                ? 'ready'
-                : 'idle',
+          availableModels: restoredModels,
+          resolvedModel: cache?.resolvedModel,
+          modelListStatus: restoredModels.length > 0 ? 'ready' : 'idle',
           modelListDetail:
-            restoreBlockedByLastTest
-              ? lastTestResult?.detail
-              : hardBlockedByCache
-                ? cache?.lastError || 'Trainer restored the last provider failure for this provider.'
-                : cacheUsable
-                  ? cache?.lastError || 'Trainer restored the cached model list for this provider.'
-                  : baseBootstrap.providerConfig.modelListDetail,
-          cacheFetchedAt: cacheUsable ? cache?.fetchedAt : undefined,
-          cacheExpiresAt: cacheUsable ? cache?.expiresAt : undefined,
-          cacheSource: cacheUsable || hardBlockedByCache ? 'cache' : undefined,
-          modelErrorCategory: restoreBlockedByLastTest
-            ? lastTestResult?.errorCategory
-            : hardBlockedByCache
-              ? cache?.lastErrorCategory
-              : cacheUsable
-                ? cache?.lastErrorCategory
-                : undefined,
-          modelStatusCode: restoreBlockedByLastTest
-            ? lastTestResult?.statusCode
-            : hardBlockedByCache
-              ? cache?.lastStatusCode
-              : cacheUsable
-                ? cache?.lastStatusCode
-                : undefined,
-          modelRetryable: restoreBlockedByLastTest
-            ? lastTestResult?.retryable
-            : hardBlockedByCache
-              ? cache?.retryable
-              : cacheUsable
-                ? cache?.retryable
-                : undefined,
+            restoredModels.length > 0
+              ? cache?.lastError ||
+                `Trainer restored ${restoredModels.length} known model${restoredModels.length === 1 ? '' : 's'} for this connection.`
+              : baseBootstrap.providerConfig.modelListDetail,
+          cacheFetchedAt: cache?.fetchedAt,
+          cacheExpiresAt: cache?.expiresAt,
+          cacheSource: cache ? 'cache' : undefined,
+          // Diagnostic history only — modelListStatus stays non-error.
+          modelErrorCategory: cache?.lastErrorCategory,
+          modelStatusCode: cache?.lastStatusCode,
+          modelRetryable: cache?.retryable,
           lastTestResult,
         },
       },
@@ -546,6 +520,7 @@ async function applyManagedDataRootScope(
 function withTrainerWorkspaceSnapshot(
   state: TrainerHostState,
   trainerWorkspace: NonNullable<TrainerHostState['bootstrap']['memory']['workspace']>['trainerWorkspace'],
+  trainerProjects?: NonNullable<TrainerHostState['bootstrap']['memory']['workspace']>['trainerProjects'],
 ): TrainerHostState {
   return {
     ...state,
@@ -556,6 +531,7 @@ function withTrainerWorkspaceSnapshot(
         workspace: {
           ...(state.bootstrap.memory.workspace ?? {}),
           trainerWorkspace,
+          trainerProjects,
         },
       },
     },
