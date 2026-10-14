@@ -246,6 +246,37 @@ const hostMessageSchema = z.discriminatedUnion("type", [
       stop_reason: z.union([z.string(), z.null()]).optional(),
     }),
   }),
+  // Library folder answers (list/create/rename/delete), correlated by the
+  // request's operationId. Without this entry the schema silently dropped the
+  // host's answers and every folder operation timed out as "unconfirmed".
+  z.object({
+    type: z.literal("library/folders"),
+    payload: z.object({
+      operationId: z.string().optional(),
+      ok: z.boolean(),
+      folders: z.unknown().optional(),
+      message: z.string().optional(),
+    }),
+  }),
+  // Deep link (vscode://.../library/<id>): flat by contract with
+  // `extension/src/browserCapture/deepLink.ts`.
+  z.object({
+    type: z.literal("ui/openResource"),
+    resourceId: z.string(),
+  }),
+  // Browser-captured coach draft: flat by contract with
+  // `extension/src/browserCapture/draftPoller.ts`.
+  z.object({
+    type: z.literal("ui/coachDraftPrefill"),
+    text: z.string(),
+  }),
+  z.object({
+    type: z.literal("resourceOrganization/pending"),
+    payload: z.object({
+      pending: z.boolean(),
+      operationCount: z.number().optional(),
+    }),
+  }),
 ]);
 
 const STORAGE_KEY = "trainer:webview";

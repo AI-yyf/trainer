@@ -113,6 +113,25 @@ export const OPERATION_SCOPE_CHANGED_MARKER = "[[trainer-operation-scope-changed
 /** The displayed practice did not match the host's live card; no run started. */
 export const TRAINING_VERIFICATION_TARGET_MISMATCH_MARKER = "[[trainer-training-verification-target-mismatch]]";
 
+/**
+ * The host marks curated, localized, path-free library failure copy with this
+ * marker (resourceCommands.ts `libraryCopy`). It is the ONE host-authored
+ * error text the error sanitizer may show: the marker proves the copy was
+ * authored for the user (localized, no paths, no internals), so the specific
+ * reason replaces the generic "try again" dead-end. Any unmarked host prose
+ * still falls back to local recovery copy.
+ */
+export const TRAINER_RESOURCE_FAILURE_MARKER = "[[trainer-resource-failure]] ";
+
+export function detectTrainerResourceFailure(message: string): boolean {
+  return message.startsWith(TRAINER_RESOURCE_FAILURE_MARKER);
+}
+
+/** The marked copy minus its marker — already localized by the host. */
+export function trainerResourceFailureMessage(message: string): string {
+  return message.slice(TRAINER_RESOURCE_FAILURE_MARKER.length).trim();
+}
+
 export function detectTrainingVerificationTargetMismatch(message: string): boolean {
   return message.includes(TRAINING_VERIFICATION_TARGET_MISMATCH_MARKER);
 }

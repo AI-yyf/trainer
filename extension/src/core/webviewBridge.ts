@@ -46,6 +46,12 @@ function resourceOperationStatusMessage(commandId: string, payload: unknown, mes
   const kind =
     commandId === COMMAND_IDS.uploadResource
       ? 'upload'
+      : commandId === COMMAND_IDS.captureResource
+      ? 'capture'
+      : commandId === COMMAND_IDS.organizeResource
+      ? 'organize'
+      : commandId === COMMAND_IDS.exportResource
+      ? 'export'
       : commandId === COMMAND_IDS.deleteResource
       ? 'delete'
       : commandId === COMMAND_IDS.restoreResource

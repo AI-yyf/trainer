@@ -273,7 +273,7 @@ test('Resources keeps a slow index refresh single-flight across rapid clicks', (
   );
   assert.match(viewSource, /aria-busy=\{isIndexRefreshing\}/);
 
-  assert.match(appSource, /type ResourceOperationKind = "delete" \| "restore" \| "search" \| "index" \| "upload";/);
+  assert.match(appSource, /type ResourceOperationKind =\n  \| "delete"\n  \| "restore"\n  \| "search"\n  \| "index"\n  \| "upload"\n  \| "capture"\n  \| "organize"\n  \| "export";/);
   assert.match(appSource, /const requestResourceIndex = useCallback\(\(\): Promise<void> =>/);
   assert.match(appSource, /kind: "index",[\s\S]*?commandId: trainerCommands\.indexResources,[\s\S]*?__trainerResourceOperationId: requestId/);
   assert.match(appSource, /isBrowserPreview[\s\S]*?: requestResourceIndex/);

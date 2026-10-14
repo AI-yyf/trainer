@@ -1275,6 +1275,9 @@ test('uploadResourceCommand exposes epub and eml in the file picker filters', as
         vscodeMock.__openDialogOptions = options;
         return undefined;
       },
+      // The typed-path fallback asks for a path when the dialog returns
+      // nothing; the test cancels it exactly like a dismissed dialog.
+      showInputBox: async () => undefined,
     },
   };
   const { uploadResourceCommand } = loadWithVscodeMock(resourceCommandsModulePath, vscodeMock);

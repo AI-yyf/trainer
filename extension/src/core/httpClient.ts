@@ -99,6 +99,95 @@ export class SidecarHttpClient {
     return this.requestJson<T>('DELETE', port, path, body, options);
   }
 
+  /**
+   * Fetch one response body as bytes (file downloads). The content type and
+   * the RFC 5987/6266 attachment filename travel with the bytes so callers can
+   * propose the server-chosen name in a save dialog.
+   */
+  async getBytes(
+    port: number,
+    path: string,
+    options?: SidecarRequestOptions,
+  ): Promise<{ bytes: Buffer; contentType?: string; filename?: string }> {
+    const timeoutMs = this.resolveRequestTimeoutMs(options?.timeoutMs);
+    return new Promise<{ bytes: Buffer; contentType?: string; filename?: string }>((resolve, reject) => {
+      let settled = false;
+      let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+      const settle = (callback: () => void): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (deadlineTimer) {
+          clearTimeout(deadlineTimer);
+        }
+        callback();
+      };
+      const fail = (error: Error): void => settle(() => reject(error));
+      const request = http.request(
+        {
+          method: 'GET',
+          host: SIDECAR_DEFAULTS.host,
+          port,
+          path,
+          timeout: timeoutMs,
+          headers: {
+            ...this.trainerAdmissionHeaders(),
+          },
+        },
+        (response) => {
+          if ((response.statusCode ?? 500) >= 400) {
+            const chunks: Buffer[] = [];
+            response.on('data', (chunk: Buffer | string) => {
+              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            });
+            response.on('end', () => {
+              if (settled) {
+                return;
+              }
+              const parsedError = parseSafeSidecarError(Buffer.concat(chunks).toString('utf8'));
+              fail(
+                new SidecarHttpError(
+                  response.statusCode ?? 500,
+                  `Sidecar request failed (${response.statusCode ?? 500}).`,
+                  parsedError,
+                ),
+              );
+            });
+            response.on('error', fail);
+            return;
+          }
+          const chunks: Buffer[] = [];
+          response.on('data', (chunk: Buffer | string) => {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          });
+          response.on('end', () => {
+            if (settled) {
+              return;
+            }
+            settle(() =>
+              resolve({
+                bytes: Buffer.concat(chunks),
+                contentType: response.headers['content-type']?.split(',')[0]?.trim() || undefined,
+                filename: attachmentFilename(response.headers['content-disposition']),
+              }),
+            );
+          });
+          response.on('error', fail);
+        },
+      );
+      const abortForTimeout = (): void => {
+        const error = new Error(`Sidecar request timed out after ${timeoutMs}ms: GET ${path}`);
+        fail(error);
+        request.destroy(error);
+      };
+      request.on('timeout', abortForTimeout);
+      request.on('error', fail);
+      deadlineTimer = setTimeout(abortForTimeout, timeoutMs);
+      request.end();
+    });
+  }
+
   async probeHealth(
     port: number,
     path = SIDECAR_DEFAULTS.healthPath,
@@ -402,8 +491,25 @@ export class SidecarHttpClient {
   }
 }
 
-function parseSafeSidecarError(text: string): SidecarErrorMetadata {
-  try {
+/** Read the attachment filename from a Content-Disposition header value. */
+function attachmentFilename(disposition: string | undefined): string | undefined {
+  const value = disposition?.trim();
+  if (!value) {
+    return undefined;
+  }
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(value);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim()) || undefined;
+    } catch {
+      return utf8Match[1].trim() || undefined;
+    }
+  }
+  const plainMatch = /filename="?([^";]+)"?/i.exec(value);
+  return plainMatch?.[1]?.trim() || undefined;
+}
+
+function parseSafeSidecarError(text: string): SidecarErrorMetadata {  try {
     const parsed: unknown = JSON.parse(text);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return {};

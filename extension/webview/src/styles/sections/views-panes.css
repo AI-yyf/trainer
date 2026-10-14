@@ -144,6 +144,12 @@
   scrollbar-gutter: stable;
 }
 
+/* Coach manages its own scrolling in __list; view-content must not
+   compete as a second scroller (nested scrollbars = janky dragging). */
+.view-content:has(.coach-conversation-view) {
+  overflow: hidden;
+}
+
 .view-content--docked {
   overflow: hidden;
   padding-top: 0;

@@ -334,10 +334,25 @@ function sourceChain(resource: ResourceRecord): string[] {
   );
 }
 
+/**
+ * Internal layout vocabulary must never become user-visible copy: the
+ * `local:`/`capture:` scheme tokens and the sandbox intake folders
+ * (`sources`, `inbox`, hash context folders, per-resource id folders) are
+ * storage facts, not names a learner chose.
+ */
+const INTERNAL_SOURCE_TOKEN_PATTERN = /^[a-z][a-z\d+.-]*:[a-z][\w.-]*$/i;
+const INTERNAL_LAYOUT_SEGMENT_PATTERN =
+  /^(sources|inbox|context-[0-9a-f]{8,}|resource-[0-9a-f]{6,})$/i;
+
 function compactSourceLabel(value: string): string {
   const source = value.trim();
   if (!source) {
     return source;
+  }
+
+  // A scheme token like `local:pdf` is an internal kind tag, not a source.
+  if (INTERNAL_SOURCE_TOKEN_PATTERN.test(source) && !isUrl(source)) {
+    return "";
   }
 
   if (isUrl(source)) {
@@ -351,7 +366,14 @@ function compactSourceLabel(value: string): string {
   }
 
   const segments = pathSegments(source);
-  return segments.length > 1 ? segments.slice(-2).join("/") : source;
+  if (segments.length > 1) {
+    // A path inside the managed intake layout reduces to the file itself.
+    if (segments.slice(0, -1).some((segment) => INTERNAL_LAYOUT_SEGMENT_PATTERN.test(segment))) {
+      return segments[segments.length - 1];
+    }
+    return segments.slice(-2).join("/");
+  }
+  return source;
 }
 
 type ResourceIndexNotice = {
@@ -385,9 +407,18 @@ function describeFreshness(freshness: ResourceRecord["freshness"], language: Com
   return localize(language, "unknown");
 }
 
-function resourceTrust(resource: ResourceRecord): string | undefined {
-  return resource.trustState?.trim() ||
-    (typeof resource.trustScore === "number" ? `${Math.round(resource.trustScore * 100)}%` : undefined);
+/** Localized trust wording — the raw `trusted` state value is internal vocabulary. */
+function resourceTrust(resource: ResourceRecord, language: ComposerLanguage): string | undefined {
+  const trustState = resource.trustState?.trim().toLowerCase();
+  if (trustState === "trusted") {
+    return localize(language, "trustTrusted");
+  }
+  if (trustState) {
+    return localize(language, "trustUnverified");
+  }
+  return typeof resource.trustScore === "number"
+    ? `${Math.round(resource.trustScore * 100)}%`
+    : undefined;
 }
 
 const resourceTrainingBlockingFlags = new Set([
@@ -778,7 +809,9 @@ function collectionPathSegments(
   ) {
     return [];
   }
-  return pathSegments(collectionPath);
+  // The intake layout (`sources/inbox/<resource-id>`, hash context folders) is
+  // storage, not filing; it never becomes a visible group on any surface.
+  return visibleCollectionSegments(pathSegments(collectionPath));
 }
 
 function trimHiddenCollectionRoots(segments: string[]): string[] {
@@ -961,15 +994,24 @@ function resourceTreeSegments(
     resource.collectionRoot,
   );
   if (logicalCollectionSegments.length > 0) {
-    return logicalCollectionSegments.slice(0, -1);
+    return visibleCollectionSegments(logicalCollectionSegments.slice(0, -1));
   }
 
   const candidates = new Set(resourcePathCandidates(resource, sandboxRoot));
   const matchingNode = sandboxNodes.find((node) => node.normalizedPaths.some((path) => candidates.has(path)));
   if (matchingNode) {
-    return matchingNode.relativeSegments.slice(0, -1);
+    return visibleCollectionSegments(matchingNode.relativeSegments.slice(0, -1));
   }
-  return fallbackCollectionSegments(resource, sandboxRoot);
+  return visibleCollectionSegments(fallbackCollectionSegments(resource, sandboxRoot));
+}
+
+/**
+ * Internal intake layout (`sources/inbox/<resource-id>`, hash context
+ * folders) describes where the bytes live, not how the learner filed the
+ * material; those segments never become user-visible groups.
+ */
+function visibleCollectionSegments(segments: string[]): string[] {
+  return segments.filter((segment) => !INTERNAL_LAYOUT_SEGMENT_PATTERN.test(segment.trim()));
 }
 
 function resourceTreeCollectionKind(
@@ -1329,14 +1371,37 @@ function ResourceTreeItem({
   );
 }
 
-function previewBodyWithoutDuplicateTitle(body: string, title: string): string {
-  const trimmed = body.trim();
-  const heading = trimmed.match(/^#\s+(.+?)(?:\r?\n|$)/);
-  if (!heading) {
+/**
+ * A captured snapshot stores its metadata as YAML-style front matter; the
+ * reader renders the body, and the envelope belongs to the source line.
+ */
+function previewBodyWithoutCaptureFrontmatter(body: string): string {
+  const lines = body.replace(/^\uFEFF/, "").split(/\r?\n/);
+  let index = 0;
+  while (index < lines.length && !lines[index]?.trim()) {
+    index += 1;
+  }
+  if (lines[index]?.trim() !== "---") {
     return body;
   }
+  const openFence = index;
+  for (let cursor = openFence + 1; cursor < Math.min(lines.length, openFence + 64); cursor += 1) {
+    if (lines[cursor]?.trim() === "---") {
+      return lines.slice(cursor + 1).join("\n").replace(/^\r?\n+/, "");
+    }
+  }
+  return body;
+}
+
+function previewBodyWithoutDuplicateTitle(body: string, title: string): string {
+  const withoutFrontmatter = previewBodyWithoutCaptureFrontmatter(body);
+  const trimmed = withoutFrontmatter.trim();
+  const heading = trimmed.match(/^#\s+(.+?)(?:\r?\n|$)/);
+  if (!heading) {
+    return withoutFrontmatter;
+  }
   if (heading[1].trim() !== title.trim()) {
-    return body;
+    return withoutFrontmatter;
   }
   return trimmed.slice(heading[0].length).trimStart();
 }
@@ -1354,7 +1419,9 @@ function orientationStateLabel(state: CoachOrientationState, language: ComposerL
   const copy = resolveCopy(language);
   switch (state) {
     case "needs_setup":
-      return copy.orientationStateNeedsSetup;
+      // For the resources pane this state means "the library is empty", not
+      // "the workspace needs configuring" — say exactly that.
+      return localize(language, "emptyTitle");
     case "waiting":
       return copy.orientationStateWaiting;
     case "working":
@@ -2314,19 +2381,25 @@ export function ResourcesWorkbenchView({
         ? onCreateLibraryFolder(targetPath)
         : Promise.resolve({ ok: false, message: "" });
     };
-    void Promise.resolve()
-      .then(() => runFolderWrite())
-      .then((outcome) => {
-        if (!outcome.ok) {
+  void Promise.resolve()
+    .then(() => runFolderWrite())
+    .then((outcome) => {
+      if (!outcome.ok) {
+        if (outcome.unconfirmed) {
+          // The write may still have landed: reconcile with the host instead
+          // of leaving a tree the user must refresh by hand.
+          loadLibraryFolders({ quiet: true });
+        } else {
           rollback();
-          setFolderPromptState({
-            phase: "failed",
-            message: outcome.unconfirmed
-              ? localize(language, "folderUnconfirmed")
-              : localizeValue(language, "folderFailed", outcome.message),
-          });
-          return;
         }
+        setFolderPromptState({
+          phase: "failed",
+          message: outcome.unconfirmed
+            ? localize(language, "folderUnconfirmed")
+            : localizeValue(language, "folderFailed", outcome.message),
+        });
+        return;
+      }
         // Immediate, local application: the folder is in the tree before any
         // refresh — a refresh only confirms the same fact.
         setLibraryFolders((current) =>
@@ -2636,7 +2709,7 @@ export function ResourcesWorkbenchView({
   const sandboxFileCount = sandboxState?.totalFiles ?? 0;
   const selectedResourceSource = selectedResource ? sourceChain(selectedResource) : [];
   const selectedResourceSourceLabel = Array.from(
-    new Set(selectedResourceSource.map(compactSourceLabel)),
+    new Set(selectedResourceSource.map(compactSourceLabel).filter(Boolean)),
   ).join(" / ");
   const selectedResourceOpenTarget = selectedResource
     ? resolveResourceOpenTarget(selectedResource)
@@ -2650,7 +2723,7 @@ export function ResourcesWorkbenchView({
   const selectedResourceIndexNotice = selectedResource
     ? resourceIndexNotice(selectedResource, language)
     : undefined;
-  const selectedResourceTrust = selectedResource ? resourceTrust(selectedResource) : undefined;
+  const selectedResourceTrust = selectedResource ? resourceTrust(selectedResource, language) : undefined;
   const selectedResourceFreshness = selectedResource?.freshness;
   const selectedResourcePreviewMode = selectedResource
     ? resourcePreviewMode(selectedResource, language)
@@ -2834,7 +2907,7 @@ export function ResourcesWorkbenchView({
       ) : null}
 
       {orientationState && (orientation?.state === "needs_setup" || orientationTone === "blocker" || !canWriteResources) ? (
-        <SystemState kind={orientation?.state === "needs_setup" ? "workspace-required" : orientationTone === "blocker" ? "recoverable-error" : "read-only"}
+        <SystemState kind={orientation?.state === "needs_setup" ? "empty" : orientationTone === "blocker" ? "recoverable-error" : "read-only"}
           title={orientationState} detail={orientation?.why}
           action={orientation && orientationCanAct ? { label: orientation.primaryActionLabel, onClick: () => onOrientationAction?.(orientation.primaryAction) } : undefined} />
       ) : orientation?.why && resources.length > 0 ? <p className="template-metadata">{orientation.why}</p> : null}
@@ -3231,8 +3304,9 @@ export function ResourcesWorkbenchView({
                   ? localizeValue(language, "foldersFailed", libraryFoldersState.message)
                   : localize(language, "foldersUnavailable")}
               </p>
-            ) : null}
-            {libraryFolderEntries.length === 0 ? (
+            ) : libraryFolderEntries.length === 0 ? (
+              // One honest line at a time: when reading folders failed, the
+              // "no folders yet" hint must not claim the same list is empty.
               <p className="resources-empty resources-empty--compact">
                 {localize(
                   language,
@@ -3560,7 +3634,7 @@ export function ResourcesWorkbenchView({
 
       {standaloneSandboxPreview ? (
         <ResourceReader parent={localize(language, "title")} title={(standaloneSandboxPreview.relativePath ?? standaloneSandboxPreview.path ?? "").split(/[\\/]/).pop() ?? resourcePreviewHeading(language)} source={standaloneSandboxPreview.path} onBack={() => { setResourceDetail(null); onRestoreContextChange?.(undefined); }}>
-          {standaloneSandboxPreview.previewKind === "markdown" ? <MessageRichContent body={standaloneSandboxPreview.content ?? standaloneSandboxPreview.excerpt ?? ""} language={language} /> : <pre className="resources-knowledge__content-preview-body">{standaloneSandboxPreview.content ?? standaloneSandboxPreview.excerpt ?? standaloneSandboxPreview.html ?? ""}</pre>}
+          {standaloneSandboxPreview.previewKind === "markdown" ? <MessageRichContent body={previewBodyWithoutCaptureFrontmatter(standaloneSandboxPreview.content ?? standaloneSandboxPreview.excerpt ?? "")} language={language} /> : <pre className="resources-knowledge__content-preview-body">{standaloneSandboxPreview.content ?? standaloneSandboxPreview.excerpt ?? standaloneSandboxPreview.html ?? ""}</pre>}
         </ResourceReader>
       ) : null}
 
@@ -3653,18 +3727,31 @@ export function ResourcesWorkbenchView({
           </>
           ) : null}
           {!sandboxPreview ? (
-          <div className="resources-knowledge__detail-actions">
+          <>
+            {/* The obvious "read this" action stays visible; everything that
+                manages the file hides behind one clearly-owned section, so
+                the reader shows a single primary row plus collapsed groups. */}
             {onPreviewResource && selectedResource.sandboxPath ? (
-              <button
-                className="button button--ghost button--compact"
-                type="button"
-                onClick={() => onPreviewResource(selectedResource.id)}
-                disabled={isBrowserPreview && !isLiveBrowserPreview}
-              >
-                <ArrowRightIcon size={12} />
-                <span>{resourcePreviewHeading(language)}</span>
-              </button>
+              <div className="resources-knowledge__detail-actions resources-knowledge__detail-actions--preview">
+                <button
+                  className="button button--primary button--compact"
+                  type="button"
+                  onClick={() => onPreviewResource(selectedResource.id)}
+                  disabled={isBrowserPreview && !isLiveBrowserPreview}
+                >
+                  <ArrowRightIcon size={12} />
+                  <span>{resourcePreviewHeading(language)}</span>
+                </button>
+              </div>
             ) : null}
+          <details
+            className="resources-knowledge__file-actions"
+            open={exportState?.message ? true : undefined}
+          >
+            <summary>
+              <strong>{localize(language, "fileActionsTitle")}</strong>
+            </summary>
+            <div className="resources-knowledge__detail-actions">
             {selectedResourceTrainingReadiness?.canRefresh ? (
               <button
                 className="button button--ghost button--compact"
@@ -3721,7 +3808,29 @@ export function ResourcesWorkbenchView({
                 <span>{localize(language, "deleteResource")}</span>
               </button>
             ) : null}
-          </div>
+            {exportState?.message ? (
+              <p
+                className="resources-knowledge__organize-status"
+                data-export-phase={exportState.phase}
+                role="status"
+                aria-live="polite"
+              >
+                {exportState.message}
+              </p>
+            ) : null}
+            {organizeState?.message ? (
+              <p
+                className="resources-knowledge__organize-status"
+                data-organize-phase={organizeState.phase}
+                role="status"
+                aria-live="polite"
+              >
+                {organizeState.message}
+              </p>
+            ) : null}
+            </div>
+          </details>
+          </>
           ) : null}
 
           {!sandboxPreview && onOrganizeResource && canWriteResources ? (
@@ -3864,16 +3973,6 @@ export function ResourcesWorkbenchView({
                     aria-live="polite"
                   >
                     {organizeState.message}
-                  </p>
-                ) : null}
-                {exportState?.message ? (
-                  <p
-                    className="resources-knowledge__organize-status"
-                    data-export-phase={exportState.phase}
-                    role="status"
-                    aria-live="polite"
-                  >
-                    {exportState.message}
                   </p>
                 ) : null}
               </div>

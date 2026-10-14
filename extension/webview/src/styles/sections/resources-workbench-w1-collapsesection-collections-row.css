@@ -206,6 +206,27 @@
   padding-top: var(--space-1);
 }
 
+/* The reader's file actions group: same collapsed-section rhythm as the
+   organize section so the reader reads as one primary row plus groups. */
+.resources-knowledge__file-actions {
+  margin-top: var(--space-2);
+  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  padding-top: var(--space-1);
+}
+
+.resources-knowledge__file-actions > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-2);
+}
+
+.resources-knowledge__file-actions .resources-knowledge__detail-actions {
+  margin-top: var(--space-1);
+}
+
 .resources-knowledge__organize > summary {
   display: inline-flex;
   align-items: center;

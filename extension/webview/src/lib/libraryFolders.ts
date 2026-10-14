@@ -209,10 +209,15 @@ export function parseLibraryFolderTree(payload: unknown): LibraryFolderNode[] {
   return linkLibraryFolderNodes(flat);
 }
 
-/** Folders derived from the resources' own `collection_path` values. */
+/**
+ * Folders derived from the resources' own `collection_path` values.
+ * Internal intake layout segments (`sources/inbox/<resource-id>`, hash
+ * context folders) are storage facts and never become user-visible folders.
+ */
 export function libraryFolderTreeFromResources(
   resources: readonly { collectionPath?: string; collectionRoot?: string }[],
 ): LibraryFolderNode[] {
+  const internalLayoutSegment = /^(sources|inbox|context-[0-9a-f]{8,}|resource-[0-9a-f]{6,})$/i;
   const flat = new Map<string, LibraryFolderNode>();
   for (const resource of resources) {
     if (!String(resource.collectionRoot ?? "").trim()) {
@@ -224,7 +229,10 @@ export function libraryFolderTreeFromResources(
     }
     // `collection_path` addresses the resource itself; its folder is the path
     // without the last segment (same rule as the resource tree).
-    const folderSegments = path.split("/").slice(0, -1);
+    const folderSegments = path
+      .split("/")
+      .slice(0, -1)
+      .filter((segment) => !internalLayoutSegment.test(segment));
     if (folderSegments.length === 0) {
       continue;
     }

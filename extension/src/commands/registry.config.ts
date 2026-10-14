@@ -56,6 +56,9 @@ import {
   restoreSandboxPathCommand,
   searchResourcesCommand,
   uploadResourceCommand,
+  captureResourceCommand,
+  organizeResourceCommand,
+  exportResourceCommand,
 } from './resourceCommands';
 import {
   libraryFoldersListCommand,
@@ -472,5 +475,12 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
       commandId: COMMAND_IDS.browserCaptureRevokePairing,
       register: (ctx) => revokeBrowserCapturePairingCommand(ctx),
     },
+    // Library capture/organize/export: internal bridge commands the webview's
+    // "add by URL" form, reader organize fields and export action post as
+    // `command/execute`. Registered last so the historical order above stays
+    // byte-identical.
+    { commandId: COMMAND_IDS.captureResource, register: (ctx, payload) => captureResourceCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.organizeResource, register: (ctx, payload) => organizeResourceCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.exportResource, register: (ctx, payload) => exportResourceCommand(ctx, payload) },
   ];
 }

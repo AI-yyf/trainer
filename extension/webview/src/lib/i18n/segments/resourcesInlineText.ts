@@ -131,6 +131,9 @@ export type ResourceTextKey =
   | "status"
   | "indexed"
   | "notIndexed"
+  | "trustTrusted"
+  | "trustUnverified"
+  | "fileActionsTitle"
   | "deleteResource"
   | "restoreResource"
   | "deleteResourceConfirmation"
@@ -246,6 +249,9 @@ export const resourceText: Record<ResourceTextKey, { zh: string; en: string }> =
   status: { zh: "\u72b6\u6001", en: "Status" },
   indexed: { zh: "\u5df2\u7d22\u5f15", en: "Indexed" },
   notIndexed: { zh: "\u672a\u7d22\u5f15", en: "Not indexed" },
+  trustTrusted: { zh: "\u6765\u6e90\u53ef\u4fe1", en: "Trusted source" },
+  trustUnverified: { zh: "\u6765\u6e90\u5f85\u786e\u8ba4", en: "Source unverified" },
+  fileActionsTitle: { zh: "\u6587\u4ef6\u64cd\u4f5c", en: "File actions" },
   openInVsCode: { zh: "\u5728 VS Code \u4e2d\u6253\u5f00", en: "Open in VS Code" },
   openInBrowser: { zh: "\u5728\u6d4f\u89c8\u5668\u4e2d\u6253\u5f00", en: "Open in browser" },
   openUnavailable: { zh: "\u6ca1\u6709\u53ef\u6253\u5f00\u7684\u6765\u6e90", en: "No openable source" },
@@ -419,6 +425,9 @@ export const resourceTextLocaleOverrides: Record<
     status: "Estado",
     indexed: "Indexado",
     notIndexed: "Sin indexar",
+    trustTrusted: "Fuente confiable",
+    trustUnverified: "Fuente sin confirmar",
+    fileActionsTitle: "Acciones de archivo",
     openInVsCode: "Abrir en VS Code",
     sandboxTitle: "Sandbox protegido",
     sandboxReady: "Sandbox disponible",
@@ -544,6 +553,9 @@ export const resourceTextLocaleOverrides: Record<
     status: "Statut",
     indexed: "Index\u00e9",
     notIndexed: "Non index\u00e9",
+    trustTrusted: "Source fiable",
+    trustUnverified: "Source non v\u00e9rifi\u00e9e",
+    fileActionsTitle: "Actions de fichier",
     openInVsCode: "Ouvrir dans VS Code",
     sandboxTitle: "Sandbox protege",
     sandboxReady: "Sandbox disponible",
@@ -669,6 +681,9 @@ export const resourceTextLocaleOverrides: Record<
     status: "Status",
     indexed: "Indexiert",
     notIndexed: "Nicht indexiert",
+    trustTrusted: "Verl\u00e4ssliche Quelle",
+    trustUnverified: "Quelle unbest\u00e4tigt",
+    fileActionsTitle: "Dateiaktionen",
     openInVsCode: "In VS Code oeffnen",
     sandboxTitle: "Geschuetzte Sandbox",
     sandboxReady: "Sandbox verfuegbar",
@@ -794,6 +809,9 @@ export const resourceTextLocaleOverrides: Record<
     status: "状態",
     indexed: "索引済み",
     notIndexed: "未索引",
+    trustTrusted: "来源可信",
+    trustUnverified: "来源待确认",
+    fileActionsTitle: "文件操作",
     openInVsCode: "VS Code で開く",
     sandboxTitle: "保護されたサンドボックス",
     sandboxReady: "サンドボックスを利用できます",
@@ -919,6 +937,9 @@ export const resourceTextLocaleOverrides: Record<
     status: "상태",
     indexed: "색인됨",
     notIndexed: "색인 안 됨",
+    trustTrusted: "신뢰할 수 있는 출처",
+    trustUnverified: "출처 미확인",
+    fileActionsTitle: "파일 작업",
     openInVsCode: "VS Code에서 열기",
     sandboxTitle: "보호된 샌드박스",
     sandboxReady: "샌드박스를 사용할 수 있습니다",
@@ -1044,6 +1065,9 @@ export const resourceTextLocaleOverrides: Record<
     status: "Status",
     indexed: "Indexado",
     notIndexed: "N\u00e3o indexado",
+    trustTrusted: "Fonte confi\u00e1vel",
+    trustUnverified: "Fonte n\u00e3o verificada",
+    fileActionsTitle: "A\u00e7\u00f5es de arquivo",
     openInVsCode: "Abrir no VS Code",
     sandboxTitle: "Sandbox protegido",
     sandboxReady: "Sandbox disponivel",

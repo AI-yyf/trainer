@@ -67,6 +67,12 @@ export class BrowserDraftPoller {
   private timer?: ReturnType<typeof setInterval>;
   private inFlight = false;
   private disposed = false;
+  /** Consecutive failed passes; drives the error backoff. */
+  private consecutiveFailures = 0;
+  /** Wall clock until which polls are skipped after repeated failures. */
+  private backoffUntil = 0;
+  /** The last error text reported; identical repeats stay silent. */
+  private lastReportedError?: string;
 
   constructor(options: BrowserDraftPollerOptions) {
     this.options = options;
@@ -105,6 +111,11 @@ export class BrowserDraftPoller {
   /**
    * One poll pass. Safe to call directly (tests do); overlapping ticks are
    * dropped rather than queued so a slow sidecar cannot pile up requests.
+   *
+   * Repeated failures back off geometrically (interval → 2× → 4× … capped at
+   * one minute) so a stale pairing or a dead port cannot flood the log with a
+   * 401 per second; a different error message is always reported immediately,
+   * and one clean pass resets the backoff.
    */
   async pollOnce(): Promise<BrowserDraftPollResult> {
     if (this.disposed || this.inFlight) {
@@ -117,11 +128,15 @@ export class BrowserDraftPoller {
     if (port === undefined) {
       return { state: 'no-sidecar', forwarded: 0, acknowledged: 0 };
     }
+    if (Date.now() < this.backoffUntil) {
+      return { state: 'idle', forwarded: 0, acknowledged: 0 };
+    }
 
     this.inFlight = true;
     try {
       const drafts = parsePendingDrafts(await this.options.fetchPendingDrafts(port));
       if (drafts.length === 0) {
+        this.resetBackoff();
         return { state: 'empty', forwarded: 0, acknowledged: 0 };
       }
 
@@ -133,6 +148,7 @@ export class BrowserDraftPoller {
         } catch (error) {
           // Leave the failed draft unacknowledged: the sidecar keeps it and the
           // next tick retries it.
+          this.enterBackoff();
           this.reportError(error);
         }
       }
@@ -143,8 +159,13 @@ export class BrowserDraftPoller {
           await this.options.acknowledgeDrafts(port, forwardedIds);
           acknowledged = forwardedIds.length;
         } catch (error) {
+          this.enterBackoff();
           this.reportError(error);
         }
+      }
+
+      if (forwardedIds.length > 0 && acknowledged === forwardedIds.length) {
+        this.resetBackoff();
       }
 
       return {
@@ -153,6 +174,7 @@ export class BrowserDraftPoller {
         acknowledged,
       };
     } catch (error) {
+      this.enterBackoff();
       const message = error instanceof Error ? error.message : String(error);
       this.reportError(error);
       return { state: 'idle', forwarded: 0, acknowledged: 0, error: message };
@@ -161,7 +183,29 @@ export class BrowserDraftPoller {
     }
   }
 
+  private resetBackoff(): void {
+    this.consecutiveFailures = 0;
+    this.backoffUntil = 0;
+    this.lastReportedError = undefined;
+  }
+
+  private enterBackoff(): void {
+    this.consecutiveFailures += 1;
+    const delayMs = Math.min(
+      this.intervalMs * 2 ** (this.consecutiveFailures - 1),
+      60_000,
+    );
+    this.backoffUntil = Date.now() + delayMs;
+  }
+
   private reportError(error: unknown): void {
-    this.options.onError?.(error instanceof Error ? error.message : String(error));
+    const message = error instanceof Error ? error.message : String(error);
+    // A failing poll loop runs every few seconds; repeating the identical
+    // failure text each tick is log noise, not new information.
+    if (message === this.lastReportedError) {
+      return;
+    }
+    this.lastReportedError = message;
+    this.options.onError?.(message);
   }
 }

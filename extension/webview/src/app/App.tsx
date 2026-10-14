@@ -203,6 +203,8 @@ import { ownsCoachComposer } from "../lib/workbenchDestinations";
 import {
   attestationUndeliveredMessage,
   detectAttestationUndelivered,
+  detectTrainerResourceFailure,
+  trainerResourceFailureMessage,
   detectTrainingVerificationTargetMismatch,
   detectOperationScopeChanged,
   detectPlanRevisionConflict,
@@ -355,7 +357,15 @@ type WorkspaceSettingsSnapshot = NonNullable<
 >;
 type DockedView = "plan" | "resources" | "training" | "progress" | "settings";
 type OperationMessage = TrainerOperationMessage;
-type ResourceOperationKind = "delete" | "restore" | "search" | "index" | "upload";
+type ResourceOperationKind =
+  | "delete"
+  | "restore"
+  | "search"
+  | "index"
+  | "upload"
+  | "capture"
+  | "organize"
+  | "export";
 type ResourceMutationOperationKind = "delete" | "restore";
 type PendingResourceOperation = {
   kind: ResourceOperationKind;
@@ -411,7 +421,7 @@ const coachFirstComposerPlaceholder: Record<ComposerLanguage, string> = {
 };
 
 const RESOURCE_OPERATION_STATUS_PATTERN =
-  /^\[\[trainer-resource-operation:(delete|restore|search|index|upload):([a-z0-9-]{1,96})\]\]\s*/i;
+  /^\[\[trainer-resource-operation:(delete|restore|search|index|upload|capture|organize|export):([a-z0-9-]{1,96})\]\]\s*/i;
 // Learning-feedback completion is a protocol acknowledgement, not a text
 // match: the host echoes the request id the UI generated inside a marker.
 const LEARNING_FEEDBACK_STATUS_PATTERN =
@@ -438,7 +448,10 @@ function parseResourceOperationStatus(
       kind !== "restore" &&
       kind !== "search" &&
       kind !== "index" &&
-      kind !== "upload"
+      kind !== "upload" &&
+      kind !== "capture" &&
+      kind !== "organize" &&
+      kind !== "export"
     ) ||
     !requestId
   ) {
@@ -628,6 +641,20 @@ function sanitizeHostFailureMessage(
 ): HostMessage {
   if (message.type !== "operation/status" || message.payload.tone !== "error") {
     return message;
+  }
+  // The host marks curated, localized, path-free library failure copy with
+  // the resource-failure marker (libraryCopy in resourceCommands.ts). Only
+  // that marked copy may pass through: the specific reason is the whole
+  // point, and a generic "try again" dead-ends. Everything unmarked keeps
+  // the local recovery copy below — arbitrary host prose never passes.
+  if (detectTrainerResourceFailure(message.payload.message)) {
+    return {
+      ...message,
+      payload: {
+        ...message.payload,
+        message: trainerResourceFailureMessage(message.payload.message),
+      },
+    };
   }
   const partialDeletion = parsePartialResourceDeletionFailure(message.payload.message);
   const resourceRecovery = resourceOperationFailureMessage(resourceOperationKind, language);
@@ -3433,12 +3460,13 @@ async function waitForResourceInSnapshot(
 async function waitForCapturedResource(
   url: string,
   beforeIds: ReadonlySet<string>,
+  timeoutMs: number = CAPTURE_CONFIRMATION_TIMEOUT_MS,
 ): Promise<
   | { deduped: boolean; title: string; resourceId: string; savedPath?: string }
   | undefined
 > {
   const tag = `captured-from:${url}`;
-  const deadline = Date.now() + CAPTURE_CONFIRMATION_TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
   for (;;) {
     const resources = useWorkbenchState.getState().data.resources;
     const match = resources.find(
@@ -9020,6 +9048,50 @@ export function App() {
     applyHostMessage(message);
   }, [applyHostMessage, previewSessionId]);
 
+  /**
+   * One correlated wait for a host resource command's `operation/status`.
+   * The host answers with `[[trainer-resource-operation:<kind>:<id>]] …`;
+   * success resolves, failure rejects with the (already localized) reason,
+   * and a quiet window resolves so the caller's own confirmation loop keeps
+   * owning honest "unconfirmed" reporting.
+   */
+  const beginResourceOperationStatusWait = useCallback(
+    (kind: "capture" | "organize" | "export", timeoutMs: number) => {
+      const requestId = `resource-${kind}-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+      const done = new Promise<void>((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => {
+          resourceOperationResolversRef.current.delete(requestId);
+          resolve();
+        }, timeoutMs);
+        resourceOperationResolversRef.current.set(requestId, {
+          kind,
+          resolve: () => {
+            resourceOperationResolversRef.current.delete(requestId);
+            window.clearTimeout(timeoutId);
+            resolve();
+          },
+          reject: (reason) => {
+            resourceOperationResolversRef.current.delete(requestId);
+            window.clearTimeout(timeoutId);
+            reject(reason);
+          },
+          timeoutId,
+        });
+      });
+      const settle = () => {
+        const pending = resourceOperationResolversRef.current.get(requestId);
+        if (pending?.kind === kind) {
+          resourceOperationResolversRef.current.delete(requestId);
+          window.clearTimeout(pending.timeoutId);
+        }
+      };
+      return { requestId, done, settle };
+    },
+    [],
+  );
+
   const captureResourceIntoLibrary = useCallback(
     async (input: ResourceCaptureInput): Promise<ResourceMutationOutcome> => {
       const url = input.url.trim();
@@ -9085,12 +9157,16 @@ export function App() {
       }
 
       // Inside VS Code the host owns sidecar access: post the capture command
-      // and wait (bounded) for the refreshed library snapshot to carry the
-      // captured resource. A host that cannot run the capture command, or a
-      // capture that never lands, is reported as unconfirmed — never as a
-      // silent "added to the library".
+      // and settle through EITHER the correlated operation status (fast,
+      // specific failure or success) OR the refreshed library snapshot. A
+      // status that names a failure surfaces its reason; a capture that never
+      // lands is reported as unconfirmed — never as a silent "added".
       const beforeIds = new Set(
         useWorkbenchState.getState().data.resources.map((resource) => resource.id),
+      );
+      const captureWait = beginResourceOperationStatusWait(
+        "capture",
+        CAPTURE_CONFIRMATION_TIMEOUT_MS,
       );
       postMessage({
         type: "command/execute",
@@ -9105,10 +9181,28 @@ export function App() {
             ...(targetDir ? { target_dir: targetDir } : {}),
             client_capture_id: clientCaptureId,
             workspace_id: data.memory.workspace?.workspaceId || undefined,
+            __trainerResourceOperationId: captureWait.requestId,
           },
         },
       });
-      const landed = await waitForCapturedResource(url, beforeIds);
+      let landed: Awaited<ReturnType<typeof waitForCapturedResource>>;
+      try {
+        landed = await Promise.race([
+          waitForCapturedResource(url, beforeIds),
+          captureWait.done.then(() => undefined),
+        ]);
+        captureWait.settle();
+        // The host applies the snapshot patch before its success status, but
+        // give the record one short extra window to arrive.
+        landed ??= await waitForCapturedResource(url, new Set(beforeIds), 10_000);
+      } catch (error) {
+        captureWait.settle();
+        const reason = error instanceof Error ? error.message : String(error);
+        return {
+          ok: false,
+          message: reason.replace("[[trainer-resource-failure]]", "").trim(),
+        };
+      }
       if (!landed) {
         return { ok: false, unconfirmed: true, message: "" };
       }
@@ -9121,6 +9215,7 @@ export function App() {
       };
     },
     [
+      beginResourceOperationStatusWait,
       browserPreviewFixture,
       isBrowserPreview,
       postMessage,
@@ -9380,6 +9475,10 @@ export function App() {
         .getState()
         .data.resources.find((item) => item.id === resourceId);
       const beforeCollectionPath = (before?.collectionPath ?? "").trim();
+      const organizeWait = beginResourceOperationStatusWait(
+        "organize",
+        ORGANIZE_CONFIRMATION_TIMEOUT_MS,
+      );
       postMessage({
         type: "command/execute",
         payload: {
@@ -9391,20 +9490,32 @@ export function App() {
             ...(request.tags !== undefined ? { tags: request.tags } : {}),
             ...(request.group !== undefined ? { group: request.group } : {}),
             workspace_id: data.memory.workspace?.workspaceId || undefined,
+            __trainerResourceOperationId: organizeWait.requestId,
           },
         },
       });
-      const confirmed = await waitForOrganizedResource(
-        resourceId,
-        request,
-        beforeCollectionPath,
-      );
+      let confirmed: boolean;
+      try {
+        confirmed = await Promise.race([
+          waitForOrganizedResource(resourceId, request, beforeCollectionPath),
+          organizeWait.done.then(() => true),
+        ]);
+        organizeWait.settle();
+      } catch (error) {
+        organizeWait.settle();
+        const reason = error instanceof Error ? error.message : String(error);
+        return {
+          ok: false,
+          message: reason.replace("[[trainer-resource-failure]]", "").trim(),
+        };
+      }
       if (!confirmed) {
         return { ok: false, unconfirmed: true, message: "" };
       }
       return { ok: true, message: "", resourceId };
     },
     [
+      beginResourceOperationStatusWait,
       browserPreviewFixture,
       isBrowserPreview,
       postMessage,
@@ -9445,19 +9556,39 @@ export function App() {
         }
       }
 
-      // Inside VS Code the host owns file writes (an OS save flow). The
-      // workbench states the request; the host reports the write itself, so
-      // the view shows "export requested" — never a completed export.
+      // Inside VS Code the host owns the OS save flow. The correlated
+      // operation status reports the real outcome — the chosen filename on
+      // success, the concrete reason on failure; a quiet window keeps the
+      // honest "requested" statement.
+      const exportWait = beginResourceOperationStatusWait("export", 120_000);
       postMessage({
         type: "command/execute",
         payload: {
           commandId: "trainer.resource.export",
-          payload: { resource_id: resourceId, workspace_id: data.memory.workspace?.workspaceId || undefined },
+          payload: {
+            resource_id: resourceId,
+            workspace_id: data.memory.workspace?.workspaceId || undefined,
+            __trainerResourceOperationId: exportWait.requestId,
+          },
         },
       });
-      return { ok: true, requested: true, message: "", resourceId };
+      try {
+        await exportWait.done;
+        exportWait.settle();
+        // The status message (already stripped of its marker) carries the
+        // saved filename; the view renders its own localized confirmation.
+        return { ok: true, message: "", resourceId };
+      } catch (error) {
+        exportWait.settle();
+        const reason = error instanceof Error ? error.message : String(error);
+        return {
+          ok: false,
+          message: reason.replace("[[trainer-resource-failure]]", "").trim(),
+        };
+      }
     },
     [
+      beginResourceOperationStatusWait,
       browserPreviewFixture,
       data.resources,
       isBrowserPreview,

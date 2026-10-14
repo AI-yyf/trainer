@@ -204,6 +204,24 @@ function preservedTrashListMessage(context: CommandContext): string {
     : 'The current Trash list is still shown.';
 }
 
+async function typedResourcePathFallback(kind: 'file' | 'folder'): Promise<string[] | undefined> {
+  // Mirrors the workspace-admission typed-path fallback: when the native
+  // dialog never appears, ask for a full path instead of failing silently.
+  const typed = await vscode.window.showInputBox({
+    title: kind === 'file' ? 'Trainer resource file' : 'Trainer resource folder',
+    prompt:
+      kind === 'file'
+        ? 'The file dialog did not open — type the full path of the file to import.'
+        : 'The folder dialog did not open — type the full path of the folder to import.',
+    placeHolder: kind === 'file' ? '/Users/<you>/notes/lecture.pdf' : '/Users/<you>/notes',
+    ignoreFocusOut: true,
+  });
+  const trimmed = typed?.trim();
+  // A typed path is passed through even when it does not exist yet: the
+  // per-file upload then reports the concrete failure instead of silence.
+  return trimmed ? [trimmed] : undefined;
+}
+
 export async function uploadResourceCommand(
   context: CommandContext,
   payload?: unknown,
@@ -322,10 +340,15 @@ export async function uploadResourceCommand(
       },
     });
 
-    if (!picks?.length) {
+    // The native file dialog can be unusable in some window setups (the same
+    // environment limitation the workspace-admission lane documents). Offer a
+    // typed-path fallback so importing never dead-ends silently.
+    const allFiles = picks?.length
+      ? picks.map((uri) => uri.fsPath)
+      : await typedResourcePathFallback('file');
+    if (!allFiles?.length) {
       return { ok: false, cancelled: true };
     }
-    const allFiles = picks.map((uri) => uri.fsPath);
     const supportedFiles = allFiles.filter((filePath) => isSupportedResourceFile(filePath));
     skippedUnsupported = allFiles.length - supportedFiles.length;
     if (supportedFiles.length === 0) {
@@ -357,7 +380,7 @@ export async function uploadResourceCommand(
       openLabel: 'Import folder into Trainer',
     });
 
-    const folderPath = picks?.[0]?.fsPath;
+    const folderPath = picks?.[0]?.fsPath ?? (await typedResourcePathFallback('folder'))?.[0];
     if (!folderPath) {
       return { ok: false, cancelled: true };
     }
@@ -475,8 +498,335 @@ export async function uploadResourceCommand(
   };
 }
 
-export async function indexResourcesCommand(
+/** A web capture fetches, cleans and indexes a remote page: give it room. */
+const RESOURCE_CAPTURE_TIMEOUT_MS = 120_000;
+
+type LibraryCopyKey =
+  | 'captureStartedBody'
+  | 'captureInvalidUrl'
+  | 'captureFetchFailed'
+  | 'captureNotConfirmed'
+  | 'organizeBlocked'
+  | 'organizeNotFound'
+  | 'organizeInvalid'
+  | 'exportNotFound'
+  | 'exportNoSnapshot'
+  | 'exportSaveCancelled'
+  | 'exportSaveFailed'
+  | 'exportSucceeded'
+  | 'previewNoSandboxCopy'
+  | 'previewOutsideSandbox'
+  | 'previewUnavailable'
+  | 'previewSandboxLoadFailed'
+  | 'openMissingSource'
+  | 'openInvalidSource';
+
+/**
+ * Curated, path-free library copy in the workspace response language. Failure
+ * copy carries the `[[trainer-resource-failure]]` marker so the webview's
+ * failure sanitizer can trust and pass through the specific reason instead of
+ * replacing it with the generic "try again" notice.
+ */
+function libraryCopy(key: LibraryCopyKey, language?: string, detail?: string): string {
+  const isChinese = language === 'zh-CN';
+  const failure = (zh: string, en: string): string =>
+    `[[trainer-resource-failure]] ${isChinese ? zh : en}`;
+  switch (key) {
+    case 'captureStartedBody':
+      return isChinese ? '正在抓取并整理这份资料…' : 'Capturing and processing this resource…';
+    case 'captureInvalidUrl':
+      return failure('这个链接看起来不完整。检查后重新粘贴一次。', 'That URL does not look complete. Check it and paste it again.');
+    case 'captureFetchFailed':
+      return failure(
+        `这份网页暂时抓取失败${detail ? `（${detail}）` : ''}。网络恢复后重试，或先把网页存成文件再导入。`,
+        `This page could not be captured right now${detail ? ` (${detail})` : ''}. Retry once the network is back, or save the page as a file and import it.`,
+      );
+    case 'captureNotConfirmed':
+      return failure(
+        '没能确认这次采集是否完成。请稍后查看资料库；如仍未出现，请重试一次。',
+        'It is not confirmed whether this capture finished. Check the library shortly; if it never appears, try once more.',
+      );
+    case 'organizeBlocked':
+      return failure(
+        '这份资料暂时不能移动或改名。它可能正在被索引或只读。',
+        'This resource cannot be moved or renamed right now. It may be indexing or read-only.',
+      );
+    case 'organizeNotFound':
+      return failure('这份资料已不在资料库里。刷新资料库后再试。', 'This resource is no longer in the library. Refresh Resources and try again.');
+    case 'organizeInvalid':
+      return failure('这次的整理请求不完整，没有生效。', 'This organize request was incomplete and was not applied.');
+    case 'exportNotFound':
+      return failure('这份资料已不在资料库里。刷新资料库后再试。', 'This resource is no longer in the library. Refresh Resources and try again.');
+    case 'exportNoSnapshot':
+      return failure('这份资料还没有可导出的本地副本。先把原文导入资料库，再导出。', 'This resource has no local snapshot to export yet. Import the original first, then export.');
+    case 'exportSaveCancelled':
+      return failure('已取消导出，资料保持不变。', 'Export cancelled. The resource is unchanged.');
+    case 'exportSaveFailed':
+      return failure(`导出没有成功${detail ? `（${detail}）` : ''}。换一个保存位置再试一次。`, `The export did not finish${detail ? ` (${detail})` : ''}. Pick a different save location and try again.`);
+    case 'exportSucceeded':
+      return isChinese ? `已导出：${detail ?? ''}` : `Exported: ${detail ?? ''}`;
+    case 'previewNoSandboxCopy':
+      return failure(
+        '这份资料还没有受管沙箱副本，可先用「在 VS Code 中打开」看原文。',
+        'This resource has no governed sandbox copy yet. Use native open to view the original.',
+      );
+    case 'previewOutsideSandbox':
+      return failure(
+        '这份资料的路径不在受管资料区内，暂不能预览。',
+        'The requested preview path is outside the governed Trainer sandbox.',
+      );
+    case 'previewUnavailable':
+      return failure('预览服务暂时不可用。稍后再试，或先用「在 VS Code 中打开」。', 'The preview service is unavailable right now. Try again shortly, or open the original natively.');
+    case 'previewSandboxLoadFailed':
+      return failure(`受管资料区暂时没能加载（${detail ?? 'unknown'}）。稍后重试预览。`, `The governed library area could not be loaded (${detail ?? 'unknown'}). Retry the preview shortly.`);
+    case 'openMissingSource':
+      return failure('这份资料没有可打开的原文。', 'This resource has no source to open.');
+    case 'openInvalidSource':
+      return failure('这份资料的原文地址无效，无法打开。', 'This resource has an invalid source and cannot be opened.');
+  }
+}
+
+function isResourceCapturePayloadRecord(payload: unknown): Record<string, unknown> {
+  return payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? (payload as Record<string, unknown>)
+    : {};
+}
+
+/** Internal bridge: the webview's "add by URL" capture, answered synchronously. */
+export async function captureResourceCommand(
   context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const admissionBlock = resourceMutationAdmissionBlock(context);
+  if (admissionBlock) {
+    return admissionBlock;
+  }
+
+  if (!(await context.trustGuard.ensureTrusted('capture a resource from a URL'))) {
+    return { ok: false, message: 'Workspace trust is required to capture resources.' };
+  }
+
+  const request = isResourceCapturePayloadRecord(payload);
+  const url = asString(request.url)?.trim() ?? '';
+  if (!url || !/^https?:\/\//i.test(url)) {
+    return { ok: false, message: libraryCopy('captureInvalidUrl', resourceResponseLanguage(context)) };
+  }
+
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: libraryCopy('captureFetchFailed', resourceResponseLanguage(context), status.detail ?? 'sidecar unavailable') };
+  }
+
+  const title = asString(request.title)?.trim();
+  const focusId = asString(request.bind_focus_id ?? request.bindFocusId)?.trim();
+  const targetDir = asString(request.target_dir ?? request.targetDir)?.trim();
+  const clientCaptureId = asString(request.client_capture_id ?? request.clientCaptureId)?.trim() ||
+    `library-capture-${Date.now().toString(36)}`;
+  try {
+    const captured = await context.sidecarClient.postJson<unknown>(
+      status.port,
+      '/resources/capture',
+      {
+        session_id: context.getSessionId(),
+        workspace_id: getRuntimeWorkspaceId(context) || asString(request.workspace_id)?.trim() || undefined,
+        url,
+        kind: asString(request.kind)?.trim() || 'web',
+        ...(title ? { title } : {}),
+        ...(focusId ? { bind_focus_id: focusId } : {}),
+        ...(request.download === true ? { download: true } : {}),
+        ...(targetDir ? { target_dir: targetDir } : {}),
+        client_capture_id: clientCaptureId,
+      },
+      { timeoutMs: RESOURCE_CAPTURE_TIMEOUT_MS },
+    );
+    const record = asRecord(captured) ?? {};
+    const deduped = asBoolean(record.deduped) === true;
+    // The response doubles as the refreshed resource record (the sidecar
+    // returns the full ResourceRecord shape plus capture extras), so one
+    // patch puts it straight into the library snapshot the webview waits on.
+    await context.patchWorkbenchData(
+      mergeResourceRecords(context.getHostState().bootstrap, [captured]),
+    );
+    const capturedTitle = asString(record.title)?.trim() || url;
+    return {
+      ok: true,
+      message: deduped
+        ? resourceResponseLanguage(context) === 'zh-CN'
+          ? `资料库已有这份内容：${capturedTitle}`
+          : `The library already has this content: ${capturedTitle}`
+        : capturedTitle,
+      data: captured,
+    };
+  } catch (error) {
+    const detail = errorSidecarDetail(error);
+    return {
+      ok: false,
+      message: libraryCopy('captureFetchFailed', resourceResponseLanguage(context), detail),
+    };
+  }
+}
+
+function errorSidecarDetail(error: unknown): string | undefined {
+  const metadata = (error as { metadata?: { detail?: unknown; code?: unknown } }).metadata;
+  const detail = typeof metadata?.detail === 'string' ? metadata.detail.trim() : '';
+  const code = typeof metadata?.code === 'string' ? metadata.code.trim() : '';
+  if (detail) {
+    return detail;
+  }
+  if (code) {
+    return code;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  // Keep the surfaced detail short and path-free: a fetch/timeout class, not a raw stack.
+  return /timed out/i.test(message)
+    ? 'timed out'
+    : /fetch|network|ECONN|ENOTFOUND|getaddrinfo/i.test(message)
+      ? 'fetch_failed'
+      : undefined;
+}
+
+/** Internal bridge: rename/retag/regroup one resource from the reader. */
+export async function organizeResourceCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const admissionBlock = resourceMutationAdmissionBlock(context);
+  if (admissionBlock) {
+    return admissionBlock;
+  }
+
+  if (!(await context.trustGuard.ensureTrusted('organize the resource library'))) {
+    return { ok: false, message: 'Workspace trust is required to organize resources.' };
+  }
+
+  const request = isResourceCapturePayloadRecord(payload);
+  const resourceId = asString(request.resource_id ?? request.resourceId)?.trim();
+  const action = asString(request.action)?.trim();
+  const language = resourceResponseLanguage(context);
+  if (!resourceId || !action || !['rename', 'set_tags', 'set_group'].includes(action)) {
+    return { ok: false, message: libraryCopy('organizeInvalid', language) };
+  }
+
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: libraryCopy('previewUnavailable', language) };
+  }
+
+  const tags = asStringArray(request.tags)?.map((tag) => tag.trim()).filter(Boolean);
+  try {
+    const organized = await context.sidecarClient.postJson<unknown>(status.port, '/resource/organize', {
+      session_id: context.getSessionId(),
+      workspace_id: getRuntimeWorkspaceId(context) || asString(request.workspace_id)?.trim() || undefined,
+      resource_id: resourceId,
+      action,
+      ...(action === 'rename' && asString(request.title)?.trim() ? { title: asString(request.title)?.trim() } : {}),
+      ...(action === 'set_tags' && tags ? { tags } : {}),
+      ...(action === 'set_group' ? { group: asString(request.group)?.trim() ?? '' } : {}),
+    });
+    await context.patchWorkbenchData(
+      mergeResourceRecords(context.getHostState().bootstrap, [organized]),
+    );
+    return { ok: true, message: '', data: organized };
+  } catch (error) {
+    const statusCode = (error as { statusCode?: unknown }).statusCode;
+    if (statusCode === 404) {
+      return { ok: false, message: libraryCopy('organizeNotFound', language) };
+    }
+    if (statusCode === 409) {
+      return { ok: false, message: libraryCopy('organizeBlocked', language) };
+    }
+    if (statusCode === 422) {
+      return { ok: false, message: libraryCopy('organizeInvalid', language) };
+    }
+    return { ok: false, message: libraryCopy('previewUnavailable', language) };
+  }
+}
+
+/** Internal bridge: save one resource's owned snapshot through the OS save flow. */
+export async function exportResourceCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  if (!(await context.trustGuard.ensureTrusted('export a resource'))) {
+    return { ok: false, message: 'Workspace trust is required to export resources.' };
+  }
+
+  const request = isResourceCapturePayloadRecord(payload);
+  const resourceId = asString(request.resource_id ?? request.resourceId)?.trim();
+  const language = resourceResponseLanguage(context);
+  const resource = resourceId
+    ? context.getHostState().bootstrap.resources.find((item) => item.id === resourceId)
+    : undefined;
+  if (!resource) {
+    return { ok: false, message: libraryCopy('exportNotFound', language) };
+  }
+
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: libraryCopy('previewUnavailable', language) };
+  }
+
+  const workspaceId = getRuntimeWorkspaceId(context);
+  const sessionId = context.getSessionId();
+  const query = new URLSearchParams({ resource_id: resource.id });
+  if (sessionId) {
+    query.set('session_id', sessionId);
+  }
+  if (workspaceId) {
+    query.set('workspace_id', workspaceId);
+  }
+
+  let bytes: Buffer;
+  let filename: string | undefined;
+  try {
+    const exported = await context.sidecarClient.getBytes(
+      status.port,
+      `/resource/export?${query.toString()}`,
+      { timeoutMs: RESOURCE_CAPTURE_TIMEOUT_MS },
+    );
+    bytes = exported.bytes;
+    filename = exported.filename || resource.title.trim() || resource.id;
+  } catch (error) {
+    const statusCode = (error as { statusCode?: unknown }).statusCode;
+    if (statusCode === 404) {
+      return { ok: false, message: libraryCopy('exportNotFound', language) };
+    }
+    if (statusCode === 409) {
+      return { ok: false, message: libraryCopy('exportNoSnapshot', language) };
+    }
+    return {
+      ok: false,
+      message: libraryCopy('exportSaveFailed', language, errorSidecarDetail(error)),
+    };
+  }
+
+  const sanitize = (value: string) => value.replace(/[\\/:*?"<>|]/g, '_').trim() || 'resource';
+  const defaultUri = vscode.workspace.workspaceFile
+    ? vscode.Uri.joinPath(vscode.Uri.file(path.dirname(vscode.workspace.workspaceFile.fsPath)), sanitize(filename))
+    : undefined;
+  const target = await vscode.window.showSaveDialog({
+    defaultUri,
+    saveLabel: language === 'zh-CN' ? '导出到本地' : 'Export',
+  });
+  if (!target) {
+    // Report the cancellation as a normal outcome (not `cancelled`): a
+    // cancelled status would suppress every message and leave the reader
+    // waiting on a save flow the user explicitly dismissed.
+    return { ok: false, message: libraryCopy('exportSaveCancelled', language) };
+  }
+
+  try {
+    await vscode.workspace.fs.writeFile(target, bytes);
+  } catch (error) {
+    return {
+      ok: false,
+      message: libraryCopy('exportSaveFailed', language, error instanceof Error ? error.message : String(error)),
+    };
+  }
+  return { ok: true, message: libraryCopy('exportSucceeded', language, sanitize(filename)), data: { path: target.fsPath } };
+}
+
+export async function indexResourcesCommand(  context: CommandContext,
 ): Promise<CommandExecutionResult> {
   const admissionBlock = resourceMutationAdmissionBlock(context);
   if (admissionBlock) {
@@ -555,6 +905,7 @@ export async function openResourceCommand(
     payload && typeof payload === 'object' && 'resourceId' in payload
       ? (payload as { resourceId?: unknown }).resourceId
       : undefined;
+  const language = resourceResponseLanguage(context);
 
   if (typeof resourceId !== 'string') {
     return { ok: false, message: 'No resource selected.' };
@@ -571,20 +922,50 @@ export async function openResourceCommand(
       ok: false,
       message:
         target.reason === 'missing_source'
-          ? 'This resource has no source to open.'
-          : 'This resource has an invalid source to open.',
+          ? libraryCopy('openMissingSource', language)
+          : libraryCopy('openInvalidSource', language),
     };
   }
 
   if (target.kind === 'vscode') {
-    await openLocalPathInVscode(target.source);
+    if (isNativeOpenExtension(path.extname(target.source).toLowerCase())) {
+      // PDF/Office/archive/media binaries render as garbage walls in a text
+      // editor; the OS default app is the honest "open the original" path.
+      await vscode.env.openExternal(vscode.Uri.file(target.source));
+    } else {
+      await openLocalPathInVscode(target.source);
+    }
   } else {
     await vscode.env.openExternal(vscode.Uri.parse(target.source));
   }
   return {
     ok: true,
-    message: `Opened ${resource.title}.`,
+    message: language === 'zh-CN' ? `已打开：${resource.title}` : `Opened ${resource.title}.`,
   };
+}
+
+/**
+ * Extensions a text editor cannot meaningfully render (binary documents,
+ * archives, audio/video). They open with the platform's default app instead.
+ */
+function isNativeOpenExtension(extension: string): boolean {
+  return new Set([
+    '.pdf',
+    '.doc',
+    '.docx',
+    '.ppt',
+    '.pptx',
+    '.xls',
+    '.xlsx',
+    '.epub',
+    '.zip',
+    '.mp3',
+    '.wav',
+    '.m4a',
+    '.mp4',
+    '.mov',
+    '.webm',
+  ]).has(extension);
 }
 
 async function openLocalPathInVscode(targetPath: string): Promise<void> {
@@ -745,6 +1126,7 @@ async function executeDeleteResourceCommand(
       deletionResponses,
       batchResult,
       trashSnapshotConfirmed,
+      resourceResponseLanguage(context),
     ),
     data:
       !deletionRequest.isBatch && fullySucceeded && summaryRefreshed
@@ -961,7 +1343,11 @@ async function executeRestoreResourceCommand(
     restoredResourceIds.length > 0 && failedRestorations.length === 0 && trashSnapshotConfirmed;
   return {
     ok: fullySucceeded,
-    message: buildResourceRestorationResultMessage(batchResult, trashSnapshotConfirmed),
+    message: buildResourceRestorationResultMessage(
+      batchResult,
+      trashSnapshotConfirmed,
+      resourceResponseLanguage(context),
+    ),
     data: batchResult,
   };
 }
@@ -1251,6 +1637,7 @@ export async function previewResourceCommand(
     return { ok: false, message: 'Workspace trust is required to preview resources.' };
   }
 
+  const language = resourceResponseLanguage(context);
   const resourceId =
     payload && typeof payload === 'object' && 'resourceId' in payload
       ? (payload as { resourceId?: unknown }).resourceId
@@ -1271,7 +1658,7 @@ export async function previewResourceCommand(
   if (!previewPath) {
     return {
       ok: false,
-      message: 'This resource has no governed sandbox copy to preview. Use native open for the original source.',
+      message: libraryCopy('previewNoSandboxCopy', language),
       data: { capability: 'native-open-only', source },
     };
   }
@@ -1291,17 +1678,21 @@ export async function previewResourceCommand(
     } catch (error) {
       return {
         ok: false,
-        message: `Unable to load the governed sandbox for preview: ${error instanceof Error ? error.message : String(error)}`,
+        message: libraryCopy(
+          'previewSandboxLoadFailed',
+          language,
+          error instanceof Error ? error.message : String(error),
+        ),
       };
     }
   }
   if (!sandboxRoot || !isPathWithinRoot(previewPath, sandboxRoot)) {
-    return { ok: false, message: 'The requested preview path is outside the governed Trainer sandbox.' };
+    return { ok: false, message: libraryCopy('previewOutsideSandbox', language) };
   }
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: libraryCopy('previewUnavailable', language, status.detail) };
   }
 
   try {
@@ -1331,13 +1722,15 @@ export async function previewResourceCommand(
     );
     return {
       ok: true,
-      message: `Previewed ${resource?.title ?? basenameFs(previewPath)}.`,
+      message: language === 'zh-CN'
+        ? `已打开预览：${resource?.title ?? basenameFs(previewPath)}`
+        : `Previewed ${resource?.title ?? basenameFs(previewPath)}.`,
       data: preview,
     };
   } catch {
     return {
       ok: false,
-      message: 'The governed preview is unavailable. Use native open if the source is still accessible.',
+      message: libraryCopy('previewUnavailable', language),
     };
   }
 }
@@ -2695,7 +3088,9 @@ function buildResourceDeletionResultMessage(
   responses: unknown[],
   result: ResourceDeletionBatchResult,
   trashSnapshotConfirmed: boolean,
+  language?: string,
 ): string {
+  const isChinese = language === 'zh-CN';
   if (
     !request.isBatch &&
     result.deletedResourceIds.length === 1 &&
@@ -2708,20 +3103,46 @@ function buildResourceDeletionResultMessage(
 
   const parts: string[] = [];
   if (result.deletedResourceIds.length > 0) {
-    parts.push(`Deleted ${formatResourceCount(result.deletedResourceIds.length)}.`);
+    parts.push(
+      isChinese
+        ? `已移入回收站 ${result.deletedResourceIds.length} 份资料。`
+        : `Deleted ${formatResourceCount(result.deletedResourceIds.length)}.`,
+    );
   } else {
-    parts.push('No resources were deleted.');
+    parts.push(isChinese ? '没有资料被删除。' : 'No resources were deleted.');
   }
   if (result.failures.length > 0) {
-    parts.push(`${formatResourceCount(result.failures.length)} could not be deleted.`);
+    parts.push(
+      isChinese
+        ? `有 ${result.failures.length} 份资料暂时没能删除。`
+        : `${formatResourceCount(result.failures.length)} could not be deleted.`,
+    );
   }
   if (!result.summaryRefreshed && result.deletedResourceIds.length > 0) {
-    parts.push('The workspace summary could not be refreshed.');
+    parts.push(
+      isChinese
+        ? '工作区摘要暂时没能刷新。'
+        : 'The workspace summary could not be refreshed.',
+    );
   }
   if (!trashSnapshotConfirmed && result.deletedResourceIds.length > 0) {
-    parts.push('The Trash state could not be confirmed. Reopen Resources to verify the current state.');
+    parts.push(
+      isChinese
+        ? '回收站状态暂时没能确认。重新打开「资料」页确认当前状态。'
+        : 'The Trash state could not be confirmed. Reopen Resources to verify the current state.',
+    );
   }
-  return parts.join(' ');
+  const allGood =
+    result.deletedResourceIds.length > 0 &&
+    result.failures.length === 0 &&
+    result.summaryRefreshed &&
+    trashSnapshotConfirmed;
+  const text = parts.join(isChinese ? '' : ' ');
+  // A not-fully-successful deletion reaches the webview's error sanitizer;
+  // the marker marks this copy as curated + localized so it is shown verbatim.
+  return allGood || (!request.isBatch && result.deletedResourceIds.length === 1 && result.failures.length === 0)
+    ? text
+    : `[[trainer-resource-failure]] ${text}`;
 }
 
 function buildResourceRestorationBatchResult(
@@ -2742,23 +3163,49 @@ function buildResourceRestorationBatchResult(
 function buildResourceRestorationResultMessage(
   result: ResourceRestorationBatchResult,
   trashSnapshotConfirmed: boolean,
+  language?: string,
 ): string {
+  const isChinese = language === 'zh-CN';
   const parts: string[] = [];
   if (result.restoredResourceIds.length > 0) {
-    parts.push(`Restored ${formatResourceCount(result.restoredResourceIds.length)}. Re-index before reuse.`);
+    parts.push(
+      isChinese
+        ? `已恢复 ${result.restoredResourceIds.length} 份资料。继续使用前先刷新索引：阅读器里的「刷新索引」按钮就是这一步。`
+        : `Restored ${formatResourceCount(result.restoredResourceIds.length)}. Re-index before reuse. Use "Refresh index" in the reader.`,
+    );
   } else {
-    parts.push('No resources were restored.');
+    parts.push(isChinese ? '没有资料被恢复。' : 'No resources were restored.');
   }
   if (result.failures.length > 0) {
-    parts.push(`${formatResourceCount(result.failures.length)} could not be restored.`);
+    parts.push(
+      isChinese
+        ? `有 ${result.failures.length} 份资料暂时没能恢复。`
+        : `${formatResourceCount(result.failures.length)} could not be restored.`,
+    );
   }
   if (!result.summaryRefreshed && result.restoredResourceIds.length > 0) {
-    parts.push('The workspace summary could not be refreshed.');
+    parts.push(
+      isChinese
+        ? '工作区摘要暂时没能刷新。'
+        : 'The workspace summary could not be refreshed.',
+    );
   }
   if (!trashSnapshotConfirmed && result.restoredResourceIds.length > 0) {
-    parts.push('The Trash state could not be confirmed. Reopen Resources to verify the current state.');
+    parts.push(
+      isChinese
+        ? '回收站状态暂时没能确认。重新打开「资料」页确认当前状态。'
+        : 'The Trash state could not be confirmed. Reopen Resources to verify the current state.',
+    );
   }
-  return parts.join(' ');
+  const allGood =
+    result.restoredResourceIds.length > 0 &&
+    result.failures.length === 0 &&
+    result.summaryRefreshed &&
+    trashSnapshotConfirmed;
+  const text = parts.join(isChinese ? '' : ' ');
+  // Same trust marker as deletions: a partial restore reaches the error
+  // sanitizer, and only marked copy is shown verbatim.
+  return allGood ? text : `[[trainer-resource-failure]] ${text}`;
 }
 
 function formatResourceCount(count: number): string {

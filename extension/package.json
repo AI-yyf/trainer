@@ -143,6 +143,18 @@
         "title": "Trainer: Upload Resources"
       },
       {
+        "command": "trainer.resource.capture",
+        "title": "Trainer: Capture Resource from URL"
+      },
+      {
+        "command": "trainer.resource.organize",
+        "title": "Trainer: Organize Resource"
+      },
+      {
+        "command": "trainer.resource.export",
+        "title": "Trainer: Export Resource to Local File"
+      },
+      {
         "command": "trainer.resource.index",
         "title": "Trainer: Index Resources"
       },
