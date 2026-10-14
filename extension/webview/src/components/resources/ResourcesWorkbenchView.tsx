@@ -994,7 +994,7 @@ function resourceTreeSegments(
     resource.collectionRoot,
   );
   if (logicalCollectionSegments.length > 0) {
-    return visibleCollectionSegments(logicalCollectionSegments.slice(0, -1));
+    return logicalCollectionSegments.slice(0, -1);
   }
 
   const candidates = new Set(resourcePathCandidates(resource, sandboxRoot));
@@ -1523,6 +1523,9 @@ export function ResourcesWorkbenchView({
     { phase: "idle" | "loading" | "ready" | "failed"; message?: string }
   >({ phase: "idle" });
   const [libraryFoldersOpen, setLibraryFoldersOpen] = useState(false);
+  // The reader's file-action section starts open (the actions stay reachable
+  // and keyboard-discoverable); collapsing it is the reader's own choice.
+  const [fileActionsOpen, setFileActionsOpen] = useState(true);
   const [expandedFolderPaths, setExpandedFolderPaths] = useState<string[]>([]);
   const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(null);
   const [folderPrompt, setFolderPrompt] = useState<
@@ -3746,7 +3749,8 @@ export function ResourcesWorkbenchView({
             ) : null}
           <details
             className="resources-knowledge__file-actions"
-            open={exportState?.message ? true : undefined}
+            open={fileActionsOpen || Boolean(exportState?.message)}
+            onToggle={(event) => setFileActionsOpen(event.currentTarget.open)}
           >
             <summary>
               <strong>{localize(language, "fileActionsTitle")}</strong>

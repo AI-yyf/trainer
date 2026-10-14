@@ -227,7 +227,7 @@ export const resourceText: Record<ResourceTextKey, { zh: string; en: string }> =
   searchPlaceholder: { zh: "\u641c\u7d22\u6807\u9898\u3001\u6765\u6e90\u6216\u6458\u8981", en: "Search title, source, or summary" },
   webSnapshots: { zh: "\u7f51\u9875\u5feb\u7167", en: "Web snapshots" },
   references: { zh: "\u53c2\u8003\u8d44\u6599", en: "References" },
-  imported: { zh: "\u5df2\u5bfc\u5165", en: "Imported" },
+  imported: { zh: "\u5bfc\u5165\u7684\u8d44\u6599", en: "Imported material" },
   captureWebSnapshot: { zh: "\u5bfc\u5165\u7f51\u9875\u5feb\u7167", en: "Capture webpage snapshot" },
   pendingIndex: { zh: "\u5f85\u7d22\u5f15", en: "Waiting to be indexed" },
   indexing: { zh: "\u7d22\u5f15\u4e2d", en: "Indexing" },

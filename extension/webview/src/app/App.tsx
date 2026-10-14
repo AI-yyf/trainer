@@ -372,6 +372,8 @@ type PendingResourceOperation = {
   resolve: () => void;
   reject: (reason?: unknown) => void;
   timeoutId: number;
+  /** The (marker-stripped) status text that settled this operation. */
+  statusMessage?: string;
 };
 type PendingResourceTrainingHandoff = {
   resourceId: string;
@@ -4104,6 +4106,9 @@ export function App() {
     }
     const operation = resourceOperationResolversRef.current.get(status.requestId);
     if (operation?.kind === status.kind) {
+      // The settling text travels with the operation: a caller that needs the
+      // concrete outcome (an exported filename) reads it without a second wait.
+      operation.statusMessage = status.message;
       resourceOperationResolversRef.current.delete(status.requestId);
       window.clearTimeout(operation.timeoutId);
       if (message.payload.tone === "error") {
@@ -9060,21 +9065,31 @@ export function App() {
       const requestId = `resource-${kind}-${Date.now().toString(36)}-${Math.random()
         .toString(36)
         .slice(2, 8)}`;
+      const operation = {
+        statusMessage: "",
+      };
       const done = new Promise<void>((resolve, reject) => {
         const timeoutId = window.setTimeout(() => {
           resourceOperationResolversRef.current.delete(requestId);
           resolve();
         }, timeoutMs);
+        const settle = (settledMessage?: string) => {
+          // resolveResourceOperationStatus may have already recorded the status
+          // text it settled with; never clobber it with an empty fallback.
+          if (settledMessage) {
+            operation.statusMessage = settledMessage;
+          }
+          resourceOperationResolversRef.current.delete(requestId);
+          window.clearTimeout(timeoutId);
+        };
         resourceOperationResolversRef.current.set(requestId, {
           kind,
           resolve: () => {
-            resourceOperationResolversRef.current.delete(requestId);
-            window.clearTimeout(timeoutId);
+            settle();
             resolve();
           },
           reject: (reason) => {
-            resourceOperationResolversRef.current.delete(requestId);
-            window.clearTimeout(timeoutId);
+            settle(reason instanceof Error ? reason.message : String(reason ?? ""));
             reject(reason);
           },
           timeoutId,
@@ -9087,7 +9102,9 @@ export function App() {
           window.clearTimeout(pending.timeoutId);
         }
       };
-      return { requestId, done, settle };
+      // The status text the host settled with (empty when none arrived).
+      const statusMessage = (): string => operation.statusMessage;
+      return { requestId, done, settle, statusMessage };
     },
     [],
   );
@@ -9574,10 +9591,13 @@ export function App() {
       });
       try {
         await exportWait.done;
+        const landedMessage = exportWait.statusMessage()
+          .replace("[[trainer-resource-failure]]", "")
+          .trim();
         exportWait.settle();
-        // The status message (already stripped of its marker) carries the
-        // saved filename; the view renders its own localized confirmation.
-        return { ok: true, message: "", resourceId };
+        // The host's status text is the finished sentence (it names the saved
+        // file); the reader shows it verbatim instead of re-wrapping it.
+        return { ok: true, requested: true, message: landedMessage, resourceId };
       } catch (error) {
         exportWait.settle();
         const reason = error instanceof Error ? error.message : String(error);

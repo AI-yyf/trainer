@@ -4,7 +4,7 @@
 - 矩阵规格：`docs/maturity/teaching-case-matrix.md`；台账与对账规则见该文件 §2（M1–M5）
 - 运行模式：`real`
 - 夹具校验（本地执行，无模型）：28/28 通过（pre-fix exit≠0 且 post-fix exit=0）
-- 回合分类统计：{'passed': 55, 'local_fallback': 1}
+- 回合分类统计：{'passed': 54, 'failed': 1, 'local_fallback': 1}
 
 ## 诚实声明
 
@@ -21,7 +21,7 @@
 | --- | --- | --- | --- | --- | --- |
 | 01-mutable-default | A | 1 / 0 | passed / passed | ok / ok |  |
 | 02-late-binding | A | 1 / 0 | passed / passed | ok / ok |  |
-| 03-nested-alias | A | 1 / 0 | passed / passed | ok / ok |  |
+| 03-nested-alias | A | 1 / 0 | failed / passed | server sent no grounding stamp for an ungrounded step / ok |  |
 | A4-dict-mutation | A | 1 / 0 | passed / passed | ok / ok |  |
 | 04-binary-search-boundary | B | 1 / 0 | passed / passed | ok / ok |  |
 | B2-import-env-stale | B | 1 / 0 | passed / passed | ok / ok |  |
@@ -51,15 +51,15 @@
 ## 解释质量汇总（非门控观察维度）
 
 - 已评估回合：55（provider_error / local_fallback / skipped_no_credentials 回合不产出解释质量）
-- solution_dump_suspected 回合：5/55
+- solution_dump_suspected 回合：2/55
 
 | 维度 | ok | weak | unclear |
 | --- | --- | --- | --- |
-| addresses_learner | 51 | 4 | 0 |
+| addresses_learner | 50 | 5 | 0 |
 | language_alignment | 48 | 6 | 1 |
-| anchored_symbols | 1 | 17 | 37 |
-| no_solution_dump | 42 | 5 | 8 |
-| explains_reasoning | 20 | 18 | 17 |
+| anchored_symbols | 3 | 15 | 37 |
+| no_solution_dump | 45 | 2 | 8 |
+| explains_reasoning | 16 | 22 | 17 |
 
 > 解释质量是结构化上报维度（`app/llm/explanation_quality.py`），不参与 classification 判定；`unclear` 表示该回合输入不足以判定。
 
