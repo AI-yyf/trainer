@@ -1372,7 +1372,9 @@ test('debug snapshot keeps the latest restore payload and outbound message types
   );
 
   await controller.resolveWebviewView(harness.view);
-  assert.equal(harness.view.title, 'Trainer');
+  // The view title bar stays text-free; identity lives in the in-webview
+  // session header (Trainer <workspace>).
+  assert.equal(harness.view.title, '');
   await controller.postMessage({
     type: 'ui/restoreView',
     payload: {
