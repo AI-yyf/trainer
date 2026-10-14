@@ -358,6 +358,9 @@ def _guided_mode_requirements(response_language: str | None) -> str:
             "缺失会怎样，不要先给定义再补解释。\n"
             "- 结尾用一句话收束：说清现在已知什么、下一步验证或落笔什么；收束是总结，不是追加新练习。\n"
             "- 不用“显然”“其实很简单”这类空话：每个判断都给出可检验的依据。"
+            "\n"
+            "- 数学公式用 $...$（行内）或 $$...$$（独立一行）包裹，不要用 \\( \\) 或 \\[ \\]，"
+            "客户端只渲染前一种写法。"
         )
     return (
         "- State before solution: open the reply with one or two sentences naming the learner's current state and the "
@@ -376,6 +379,9 @@ def _guided_mode_requirements(response_language: str | None) -> str:
         "- Close with one sentence that names what is now known and what to verify or write next; the closing is a "
         "recap, not a new exercise.\n"
         "- No filler such as \"obviously\" or \"this is simple\": every judgment carries a checkable reason."
+        "\n"
+        "- Wrap math in $...$ (inline) or $$...$$ (display, on its own line); never \\( \\) or \\[ \\], "
+        "the client renders only the former."
     )
 
 

@@ -6,6 +6,7 @@ import { messageRichContentCopy } from "../../lib/i18n/segments/messageRichConte
 import { MermaidBlock } from "./MermaidBlock";
 import { RichCodeBlock } from "./RichCodeBlock";
 import { resolveCodeBlockCopy } from "./codeBlockCopy";
+import { normalizeLatexDelimiters } from "../../../../../shared/src/latexDelimiters";
 
 const ReactMarkdown = lazy(async () => {
   const module = await import("react-markdown");
@@ -361,10 +362,13 @@ const StreamedStableBlock = memo(function StreamedStableBlock({
 });
 
 function MessageRichContentImpl({
-  body,
+  body: rawBody,
   language,
   streaming = false,
 }: MessageRichContentProps) {
+  // Coach replies may carry LaTeX in \[ \] / \( \) delimiters that
+  // remark-math cannot parse; normalize outside code fences/spans.
+  const body = useMemo(() => normalizeLatexDelimiters(rawBody), [rawBody]);
   // Split per frame: cheap line scan keeps completed blocks byte-stable so
   // their memoized renderers never re-parse.
   const split = useMemo(
