@@ -80,7 +80,7 @@ test('extension manifest exposes Trainer as the VS Code-native universal coach',
   assert.equal(manifest.icon, 'media/trainer-icon.png');
   assert.equal(manifest.contributes.viewsContainers.activitybar[0].title, 'Trainer');
   assert.equal(manifest.contributes.viewsContainers.activitybar[0].icon, 'media/trainer-icon.svg');
-  assert.equal(manifest.contributes.views.trainer[0].name, 'Trainer');
+  assert.equal(manifest.contributes.views.trainer[0].name, ' ');
   assert.equal(manifest.contributes.configuration.title, 'Trainer');
   assert.ok(
     manifest.contributes.commands.some(
