@@ -156,6 +156,10 @@
         "title": "Trainer: Use Recommended Managed Data Folder"
       },
       {
+        "command": "trainer.resource.dataUnderRoot",
+        "title": "Trainer: Move Data Under Workspace Root"
+      },
+      {
         "command": "trainer.workspace.chooseRoot",
         "title": "Trainer: Choose Workspace Root"
       },

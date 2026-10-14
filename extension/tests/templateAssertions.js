@@ -109,8 +109,12 @@ function reply() {
   assert.ok(html.indexOf('EVIDENCE') < html.indexOf('NEXT'));
   assert.ok(html.indexOf('NEXT') < html.indexOf('TOOLS'));
   const source = read('components/coach/CoachMessageBubble.tsx');
-  for (const action of ['copy','share','save-resource','training-card','retry']) assert.ok(source.includes(`"${action}"`));
-  assert.ok(source.includes('<OverflowActions'));
+  for (const action of ['copy','share','save-resource','training-card','retry']) {
+    assert.ok(source.includes(`"${action}"`));
+    assert.ok(source.includes(`data-message-quick-action="${action}"`));
+  }
+  // Every shortcut is a direct icon button - nothing hides behind a ··· menu.
+  assert.ok(!source.includes('<OverflowActions'));
   assert.ok(source.includes('message.role === "assistant"'));
 }
 function settings() {

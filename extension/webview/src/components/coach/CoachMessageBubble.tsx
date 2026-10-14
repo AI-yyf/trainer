@@ -1,9 +1,8 @@
 import { templateCopy } from "../../templates/templateCopy";
 import { CoachReply } from "../../templates/CoachReply";
-import { OverflowActions } from "../../templates/OverflowActions";
 import { memo, type ReactNode } from "react";
 
-import { CopyIcon, ShareIcon } from "../icons";
+import { BookOpenIcon, CopyIcon, PageIcon, RefreshIcon, ShareIcon } from "../icons";
 
 import {
   deriveTrainerToolActivity,
@@ -385,11 +384,11 @@ function CoachMessageBubbleImpl({
       ) : null}
         nextAction={primaryNextAction}
         tools={showAssistantActions ? (
-          // r-g0-quick-tools: copy/share are the two utility actions learners
-          // reach for most — they become small icon buttons pinned to the
-          // message's bottom-left instead of hiding in the ··· menu. The
-          // learning-value actions (training card / save to library) and the
-          // regenerate action stay in the overflow menu.
+          // Every delivered assistant message carries its shortcuts as small
+          // icon buttons pinned to the message's bottom-left: learning-value
+          // actions first (training card / save to library), then the
+          // utilities (copy / share), then regenerate on the latest reply
+          // only. No overflow menu — nothing hides behind "···".
           <div className="message-bubble__tools">
             <div className="message-bubble__quick-tools" role="group" aria-label={coachMessageBubbleCopy(language, "这条回复的快捷操作")}>
               <button
@@ -414,27 +413,42 @@ function CoachMessageBubbleImpl({
               >
                 <ShareIcon size={14} />
               </button>
+              <button
+                type="button"
+                className="message-bubble__icon-action"
+                data-message-quick-action="save-resource"
+                aria-label={messageActionLabels["save-resource"]}
+                title={messageActionLabels["save-resource"]}
+                disabled={Boolean(pendingAssistantAction)}
+                onClick={() => onMessageAction?.("save-resource", message)}
+              >
+                <BookOpenIcon size={14} />
+              </button>
+              <button
+                type="button"
+                className="message-bubble__icon-action"
+                data-message-quick-action="training-card"
+                aria-label={messageActionLabels["training-card"]}
+                title={messageActionLabels["training-card"]}
+                disabled={Boolean(pendingAssistantAction)}
+                onClick={() => onMessageAction?.("training-card", message)}
+              >
+                <PageIcon size={14} />
+              </button>
+              {isLatestAssistant ? (
+                <button
+                  type="button"
+                  className="message-bubble__icon-action"
+                  data-message-quick-action="retry"
+                  aria-label={messageActionLabels.retry}
+                  title={messageActionLabels.retry}
+                  disabled={Boolean(pendingAssistantAction)}
+                  onClick={() => onMessageAction?.("retry", message)}
+                >
+                  <RefreshIcon size={14} />
+                </button>
+              ) : null}
             </div>
-            <OverflowActions
-              label={coachMessageBubbleCopy(language, "这条回复的快捷操作")}
-              actions={([
-                // Learning-value actions lead; a divider separates the utility
-                // actions (r1-g0-5) so the menu reads learning-first.
-                "training-card",
-                "save-resource",
-                "separator",
-                ...(isLatestAssistant ? (["retry"] as const) : []),
-              ] as Array<CoachMessageAction | "separator">).map((entry) => (
-                entry === "separator"
-                  ? { id: "separator", label: "", separator: true, disabled: false, onClick: () => {} }
-                  : {
-                      id: entry,
-                      label: messageActionLabels[entry],
-                      disabled: Boolean(pendingAssistantAction),
-                      onClick: () => onMessageAction?.(entry, message),
-                    }
-              ))}
-            />
           </div>
         ) : null}
       />
