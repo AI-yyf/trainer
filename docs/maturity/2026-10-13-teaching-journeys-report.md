@@ -4,7 +4,7 @@
 - 矩阵规格：`docs/maturity/teaching-case-matrix.md`；台账与对账规则见该文件 §2（M1–M5）
 - 运行模式：`real`
 - 夹具校验（本地执行，无模型）：28/28 通过（pre-fix exit≠0 且 post-fix exit=0）
-- 回合分类统计：{'passed': 54, 'local_fallback': 2}
+- 回合分类统计：{'passed': 56}
 
 ## 诚实声明
 
@@ -22,7 +22,7 @@
 | 01-mutable-default | A | 1 / 0 | passed / passed | ok / ok |  |
 | 02-late-binding | A | 1 / 0 | passed / passed | ok / ok |  |
 | 03-nested-alias | A | 1 / 0 | passed / passed | ok / ok |  |
-| A4-dict-mutation | A | 1 / 0 | passed / local_fallback | ok / - |  |
+| A4-dict-mutation | A | 1 / 0 | passed / passed | ok / ok |  |
 | 04-binary-search-boundary | B | 1 / 0 | passed / passed | ok / ok |  |
 | B2-import-env-stale | B | 1 / 0 | passed / passed | ok / ok |  |
 | B3-async-ordering | B | 1 / 0 | passed / passed | ok / ok |  |
@@ -32,7 +32,7 @@
 | C3-var-capture | C | 1 / 0 | passed / passed | ok / ok |  |
 | C4-resource-cleanup | C | 1 / 0 | passed / passed | ok / ok |  |
 | D1-default-eval-time | D | 1 / 0 | passed / passed | ok / ok |  |
-| D2-closure-experiment | D | 1 / 0 | local_fallback / passed | - / ok |  |
+| D2-closure-experiment | D | 1 / 0 | passed / passed | ok / ok |  |
 | D3-copy-semantics | D | 1 / 0 | passed / passed | ok / ok |  |
 | D4-hash-contract | D | 1 / 0 | passed / passed | ok / ok |  |
 | E1-argparse-entry | E | 1 / 0 | passed / passed | ok / ok |  |
@@ -50,16 +50,16 @@
 
 ## 解释质量汇总（非门控观察维度）
 
-- 已评估回合：54（provider_error / local_fallback / skipped_no_credentials 回合不产出解释质量）
-- solution_dump_suspected 回合：6/54
+- 已评估回合：56（provider_error / local_fallback / skipped_no_credentials 回合不产出解释质量）
+- solution_dump_suspected 回合：3/56
 
 | 维度 | ok | weak | unclear |
 | --- | --- | --- | --- |
-| addresses_learner | 51 | 3 | 0 |
-| language_alignment | 45 | 8 | 1 |
-| anchored_symbols | 3 | 13 | 38 |
-| no_solution_dump | 40 | 6 | 8 |
-| explains_reasoning | 20 | 34 | 0 |
+| addresses_learner | 52 | 4 | 0 |
+| language_alignment | 47 | 8 | 1 |
+| anchored_symbols | 4 | 14 | 38 |
+| no_solution_dump | 45 | 3 | 8 |
+| explains_reasoning | 21 | 35 | 0 |
 
 > 解释质量是结构化上报维度（`app/llm/explanation_quality.py`），不参与 classification 判定；`unclear` 表示该回合输入不足以判定。
 
