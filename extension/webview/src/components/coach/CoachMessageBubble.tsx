@@ -2,7 +2,47 @@ import { templateCopy } from "../../templates/templateCopy";
 import { CoachReply } from "../../templates/CoachReply";
 import { memo, type ReactNode } from "react";
 
-import { BookOpenIcon, CopyIcon, PageIcon, RefreshIcon, ShareIcon } from "../icons";
+import { TrainerIconBase } from "../icons/TrainerIconBase";
+
+// Premium action glyphs: 24-grid geometry rendered on the unified
+// TrainerIconBase grammar (1.4 currentColor stroke) at optical 15px.
+function ActionGlyph({ glyphs }: { glyphs: ReactNode }) {
+  return (
+    <TrainerIconBase viewBox="0 0 24 24" size={15}>
+      {glyphs}
+    </TrainerIconBase>
+  );
+}
+
+const GLYPH_COPY = (
+  <>
+    <rect x="9" y="9" width="12" height="12" rx="2.2" />
+    <path d="M5 15c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h8c1.1 0 2 .9 2 2" />
+  </>
+);
+const GLYPH_SHARE = (
+  <>
+    <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" />
+    <path d="m16 6-4-4-4 4" />
+    <path d="M12 2v13" />
+  </>
+);
+const GLYPH_LIBRARY = (
+  <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+);
+const GLYPH_CARD = (
+  <>
+    <rect x="8" y="2" width="8" height="4" rx="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="m9 14 2 2 4-4" />
+  </>
+);
+const GLYPH_RETRY = (
+  <>
+    <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+    <path d="M21 3v5h-5" />
+  </>
+);
 
 import {
   deriveTrainerToolActivity,
@@ -399,7 +439,7 @@ function CoachMessageBubbleImpl({
                 disabled={Boolean(pendingAssistantAction)}
                 onClick={() => onMessageAction?.("copy", message)}
               >
-                <CopyIcon size={14} />
+                <ActionGlyph glyphs={GLYPH_COPY} />
               </button>
               <button
                 type="button"
@@ -409,7 +449,7 @@ function CoachMessageBubbleImpl({
                 disabled={Boolean(pendingAssistantAction)}
                 onClick={() => onMessageAction?.("share", message)}
               >
-                <ShareIcon size={14} />
+                <ActionGlyph glyphs={GLYPH_SHARE} />
               </button>
               <button
                 type="button"
@@ -419,7 +459,7 @@ function CoachMessageBubbleImpl({
                 disabled={Boolean(pendingAssistantAction)}
                 onClick={() => onMessageAction?.("save-resource", message)}
               >
-                <BookOpenIcon size={14} />
+                <ActionGlyph glyphs={GLYPH_LIBRARY} />
               </button>
               <button
                 type="button"
@@ -429,7 +469,7 @@ function CoachMessageBubbleImpl({
                 disabled={Boolean(pendingAssistantAction)}
                 onClick={() => onMessageAction?.("training-card", message)}
               >
-                <PageIcon size={14} />
+                <ActionGlyph glyphs={GLYPH_CARD} />
               </button>
               {isLatestAssistant ? (
                 <button
@@ -440,7 +480,7 @@ function CoachMessageBubbleImpl({
                     disabled={Boolean(pendingAssistantAction)}
                   onClick={() => onMessageAction?.("retry", message)}
                 >
-                  <RefreshIcon size={14} />
+                  <ActionGlyph glyphs={GLYPH_RETRY} />
                 </button>
               ) : null}
             </div>

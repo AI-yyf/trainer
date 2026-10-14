@@ -240,7 +240,9 @@ export class WorkbenchSidebarController
     this.outputChannel.appendLine('[webview] resolve start');
     try {
       this.view = webviewView;
-      webviewView.title = 'Trainer';
+      // Identity lives in the in-webview session header ("Trainer <workspace>");
+      // the view title bar stays text-free so only the actions show.
+      webviewView.title = '';
       webviewView.webview.options = {
         enableScripts: true,
         localResourceRoots: [this.extensionContext.extensionUri],
