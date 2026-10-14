@@ -277,6 +277,12 @@ test('host coach/session command surface has no WorkspaceEdit project rewrite pa
       assert.match(source, /\.vscode['"],\s*['"]trainer\.json['"]/);
       continue;
     }
+    if (name === 'resourceCommands.ts') {
+      // Sole intentional host writeFile: export a library resource to the
+      // learner's local file system (user-initiated export/save flow).
+      assert.match(source, /workspace\.fs\.writeFile\(target/);
+      continue;
+    }
     assert.doesNotMatch(
       source,
       /workspace\.fs\.writeFile/,
