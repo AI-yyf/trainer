@@ -261,6 +261,18 @@ def test_explains_reasoning_unclear_for_empty_reply() -> None:
     assert report.dimensions["explains_reasoning"] == "unclear"
 
 
+def test_explains_reasoning_unclear_when_guidance_references_no_code() -> None:
+    # Calibration (2026-10-14): guidance that references no code gives
+    # reasoning-near-code nothing to attach to - recorded as unclear, not weak.
+    report = _quality(
+        user_message="接下来该怎么安排？",
+        reply_text="先把当前这一小步做完，把结果带回来，我们再看下一步的方向。",
+        next_step_text="先完成当前这一小步，然后记录结果。",
+    )
+    assert report.dimensions["explains_reasoning"] == "unclear"
+    assert "references no code" in report.evidence["explains_reasoning"]
+
+
 # ---------------------------------------------------------------------------
 # Purity + shape: the report never touches the grounding gate
 # ---------------------------------------------------------------------------

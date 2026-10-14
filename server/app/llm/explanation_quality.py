@@ -319,11 +319,21 @@ def _span_gap(a: tuple[int, int], b: tuple[int, int]) -> int:
     return b[0] - a[1] if b[0] >= a[1] else a[0] - b[1]
 
 
-def _evaluate_explains_reasoning(reply: str) -> tuple[str, str]:
+def _evaluate_explains_reasoning(reply: str, next_step: str = "") -> tuple[str, str]:
     if not reply.strip():
         return VERDICT_UNCLEAR, "reply is empty; no prose to inspect"
     prose = _mask_fenced_code(reply)
     markers = _marker_spans(prose)
+    code_spans = _code_reference_spans(reply)
+    guidance_symbols = extract_code_symbols(next_step) if next_step else []
+    if not code_spans and not guidance_symbols:
+        # Calibration (2026-10-14 real-model runs): guidance that references no
+        # code at all gives reasoning-near-code nothing to attach to - "weak"
+        # here measured the metric, not the teaching.
+        return VERDICT_UNCLEAR, (
+            "guidance references no code (no fenced block or code symbol in the "
+            "reply or the next step); reasoning-near-code is unmeasurable"
+        )
     if not markers:
         return VERDICT_WEAK, (
             f"no reasoning connective in the reply prose "
@@ -376,7 +386,7 @@ def evaluate_explanation_quality(
         _evaluate_no_solution_dump(reply, answer_mode=answer_mode)
     )
     dimensions[DIM_EXPLAINS_REASONING], evidence[DIM_EXPLAINS_REASONING] = (
-        _evaluate_explains_reasoning(reply)
+        _evaluate_explains_reasoning(reply, str(facts.next_step_text or ""))
     )
 
     return ExplanationQualityReport(
