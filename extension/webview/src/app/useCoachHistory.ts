@@ -1,4 +1,4 @@
-import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import { postMessage } from "../lib/vscode";
 import { trainerCommands } from "../../../../shared/src/commands";
@@ -17,6 +17,36 @@ export interface CoachSessionListPayload {
   sessions: CoachSessionSummary[];
   ok?: boolean;
   message?: string;
+}
+
+const HISTORY_CACHE_PREFIX = "trainer.coachHistory.v1.";
+
+function historyCacheKey(cacheScope: string): string {
+  return `${HISTORY_CACHE_PREFIX}${cacheScope.trim() || "default"}`;
+}
+
+function readCachedSessions(cacheScope: string): CoachSessionSummary[] {
+  try {
+    const raw = window.localStorage.getItem(historyCacheKey(cacheScope));
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as { sessions?: unknown };
+    return Array.isArray(parsed?.sessions) ? (parsed.sessions as CoachSessionSummary[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedSessions(cacheScope: string, sessions: CoachSessionSummary[]): void {
+  try {
+    window.localStorage.setItem(
+      historyCacheKey(cacheScope),
+      JSON.stringify({ savedAt: Date.now(), sessions }),
+    );
+  } catch {
+    // Cache write failure only costs first-open latency, never correctness.
+  }
 }
 
 /** Pure: the synthetic entry the browser preview shows for the live chat. */
@@ -55,6 +85,8 @@ export interface UseCoachHistoryInput {
   composerLanguage: "zh-CN" | string;
   previewSessionId: string | undefined;
   conversationCount: number;
+  /** Cache scope: the workspace name, so another window never sees foreign sessions. */
+  cacheScope: string;
   setOpenMenu: Dispatch<SetStateAction<ComposerContextMenu | undefined>>;
   setOperationMessage: (message: {
     tone: "info" | "error";
@@ -83,24 +115,42 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
     composerLanguage,
     previewSessionId,
     conversationCount,
+    cacheScope,
     setOpenMenu,
     setOperationMessage,
   } = input;
   const zh = composerLanguage === "zh-CN";
 
-  const [coachSessions, setCoachSessions] = useState<CoachSessionSummary[]>([]);
-  const [coachSessionsStatus, setCoachSessionsStatus] = useState<CoachHistoryStatus>("idle");
+  // The cached list hydrates synchronously: the first click renders instantly,
+  // and the refresh below silently replaces it with the authoritative list.
+  const [coachSessions, setCoachSessions] = useState<CoachSessionSummary[]>(() =>
+    readCachedSessions(cacheScope),
+  );
+  const [coachSessionsStatus, setCoachSessionsStatus] = useState<CoachHistoryStatus>(() =>
+    coachSessions.length > 0 ? "ready" : "idle",
+  );
   const [coachSessionsMessage, setCoachSessionsMessage] = useState<string>();
+  const prefetchedRef = useRef(false);
 
-  const applySessionList = useCallback((payload: unknown) => {
-    const next = applySessionListPayload(payload as CoachSessionListPayload);
-    setCoachSessions(next.sessions);
-    setCoachSessionsStatus(next.status);
-    setCoachSessionsMessage(next.message);
-  }, []);
+  const applySessionList = useCallback(
+    (payload: unknown) => {
+      const next = applySessionListPayload(payload as CoachSessionListPayload);
+      setCoachSessions(next.sessions);
+      setCoachSessionsStatus(next.status);
+      setCoachSessionsMessage(next.message);
+      if (next.status === "ready" && next.sessions.length > 0) {
+        writeCachedSessions(cacheScope, next.sessions);
+      }
+    },
+    [cacheScope],
+  );
 
   const requestCoachSessions = useCallback(() => {
-    setCoachSessionsStatus("loading");
+    // With a hydrated cache the refresh stays quiet: the list remains on
+    // screen while the authoritative fetch runs, so the click never waits.
+    setCoachSessionsStatus((current) =>
+      current === "ready" || current === "loading" ? current : "loading",
+    );
     setCoachSessionsMessage(undefined);
     if (isBrowserPreview) {
       setCoachSessions([
@@ -118,6 +168,19 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
       payload: { commandId: trainerCommands.listCoachSessions },
     });
   }, [conversationCount, isBrowserPreview, previewSessionId, zh]);
+
+  // Prefetch once on mount: the cache warms (and the sidecar starts warming)
+  // long before the first history click.
+  useEffect(() => {
+    if (prefetchedRef.current || isBrowserPreview) {
+      return;
+    }
+    prefetchedRef.current = true;
+    postMessage({
+      type: "command/execute",
+      payload: { commandId: trainerCommands.listCoachSessions },
+    });
+  }, [isBrowserPreview]);
 
   const toggleComposerHistoryMenu = useCallback(() => {
     setOpenMenu((current: ComposerContextMenu) => {

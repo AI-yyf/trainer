@@ -164,9 +164,9 @@ export function CoachHistoryDrawer({
         />
       </div>
       <div className="composer-menu-panel__section">
-        {status === "loading" ? (
+        {status === "loading" && sessions.length === 0 ? (
           <SystemState kind="loading" title={copy.loading} />
-        ) : status === "error" ? (
+        ) : status === "error" && sessions.length === 0 ? (
           <SystemState kind="recoverable-error" title={statusMessage ?? copy.error} action={{ label: copy.refresh, onClick: onRefresh }} />
         ) : sessions.length === 0 ? (
           <SystemState kind="empty" title={copy.empty} />

@@ -663,43 +663,6 @@ function providerImageInputGuard(
   };
 }
 
-function providerHasVerifiedStreamingProbe(
-  provider: Pick<NonNullable<ReturnType<CommandContext['getHostState']>['bootstrap']['providerConfig']>, 'lastTestResult'>,
-): boolean {
-  const lastTest = provider.lastTestResult;
-  const streamingEvidence = lastTest?.capabilityEvidence?.find((entry) => {
-    const name = entry.name.trim().toLowerCase();
-    return name === 'streaming' || name === 'stream';
-  });
-
-  return (
-    lastTest?.ok === true &&
-    lastTest.streamingReady === true &&
-    lastTest.streamProbeStatus === 'verified' &&
-    streamingEvidence?.state === 'verified' &&
-    streamingEvidence.observed === true
-  );
-}
-
-function streamingCapabilityBlockReason(language: ComposerLanguage): string {
-  return language === 'zh-CN'
-    ? '\u5f53\u524d\u8fde\u63a5\u8fd8\u6ca1\u6709\u9a8c\u8bc1\u771f\u5b9e\u6d41\u5f0f\u8f93\u51fa\u3002\u8bf7\u5728\u8bbe\u7f6e\u4e2d\u91cd\u65b0\u6d4b\u8bd5 Provider\uff0c\u786e\u8ba4\u80fd\u89c2\u5bdf\u5230\u589e\u91cf\u7247\u6bb5\u540e\u518d\u5bf9\u8bdd\u3002'
-    : 'This connection has not verified real incremental output yet. Retest the provider in Settings and continue after a visible stream chunk is observed.';
-}
-
-function streamCapabilityDecision(
-  context: CommandContext,
-): 'verified' | 'unusable-honest' | 'unverified-stream' {
-  const lastTest = context.getHostState().bootstrap.providerConfig.lastTestResult;
-  if (providerHasVerifiedStreamingProbe({ lastTestResult: lastTest })) {
-    return 'verified';
-  }
-  if (lastTest?.ok === true) {
-    return 'unverified-stream';
-  }
-  return 'unusable-honest';
-}
-
 function resolveProviderGuardLanguage(
   context: CommandContext,
   responseLanguage?: string,
@@ -2084,15 +2047,10 @@ export async function sendStreamMessageCommand(
         };
       }
     }
-    const capabilityDecision = streamCapabilityDecision(context);
-    if (capabilityDecision === 'unverified-stream') {
-      const blockedMessageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await failClosedUnverifiedStreaming(context, blockedMessageId, responseLanguage);
-      return {
-        ok: false,
-        message: streamingCapabilityBlockReason(responseLanguage),
-      };
-    }
+    // Streaming capability is not a send gate: a historical probe that did not
+    // verify streaming is a diagnostic, and the first real send is the live
+    // confirmation. Runtime stream failures surface honestly through the
+    // request-failure attribution instead of a pre-flight re-test demand.
     if (streamPayload.attachments?.length) {
       const imageGuard = providerImageInputGuard(
         context,
@@ -4308,51 +4266,6 @@ async function postStreamReliabilityStatus(
       message,
       phase,
       surface: 'stream',
-    },
-  });
-}
-
-async function failClosedUnverifiedStreaming(
-  context: CommandContext,
-  messageId: string,
-  responseLanguage: ComposerLanguage,
-): Promise<void> {
-  const reason = streamingCapabilityBlockReason(responseLanguage);
-  await context.setStreamingState({
-    ...createEmptyTrainerStreamingState(),
-    isStreaming: true,
-    streamMessageId: messageId,
-    reliabilityPhase: 'pending',
-  });
-  await context.workbench.postMessage({
-    type: 'stream/start',
-    payload: { messageId },
-  });
-  for (const phase of ['pending', 'executing', 'failed'] as const) {
-    await updateStreamingState(context, (state) => ({
-      ...state,
-      isStreaming: true,
-      reliabilityPhase: phase,
-      reliabilityOutcome: phase === 'failed' ? 'failure' : undefined,
-    }));
-    await postStreamReliabilityStatus(context, phase, responseLanguage);
-  }
-  await updateStreamingState(context, (state) => ({
-    ...state,
-    isStreaming: false,
-    streamError: reason,
-    reliabilityPhase: 'acked',
-    reliabilityOutcome: 'failure',
-  }));
-  await postStreamReliabilityStatus(context, 'acked', responseLanguage);
-  await context.workbench.postMessage({
-    type: 'stream/error',
-    payload: {
-      messageId,
-      error: reason,
-      retryable: false,
-      reliabilityPhase: 'acked',
-      reliabilityOutcome: 'failure',
     },
   });
 }

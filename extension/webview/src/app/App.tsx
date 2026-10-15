@@ -10373,6 +10373,7 @@ export function App() {
     composerLanguage: layout.composerLanguage,
     previewSessionId,
     conversationCount: data.conversation.length,
+    cacheScope: data.workspaceName,
     setOpenMenu,
     setOperationMessage,
   });
