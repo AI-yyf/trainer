@@ -1,6 +1,6 @@
-import { templateCopy } from "../../templates/templateCopy";
 import { CoachReply } from "../../templates/CoachReply";
 import { memo, useState, type ReactNode } from "react";
+import { resolveCopy } from "../../lib/i18n/copy";
 
 import { TrainerIconBase } from "../icons/TrainerIconBase";
 
@@ -287,30 +287,18 @@ function CoachMessageBubbleImpl({
       compact
       slim
       language={language}
-      nextStepConfirmation={artifactOwnsConfirmation}
+      // The artifact-owned confirmation note is carried by the always-visible
+      // quiet line below (the disclosure is gone); the revealed action surface
+      // must not render a second copy.
+      nextStepConfirmation={false}
       onOpen={(artifact) => onArtifactOpen(artifact, message)}
     />
   ) : null;
-  if (message.artifacts?.length) {
-    detailBlocks.push(
-      <details key="artifacts" className="template-reply-evidence">
-        <summary>{templateCopy[language].evidence}</summary>
-        <div className="message-bubble__artifacts">
-          {message.artifacts.map((artifact, index) => (
-            <CoachArtifactBlock
-              key={`${artifact.kind}:${index}`}
-              artifact={artifact}
-              language={language}
-              openLabel={openArtifactLabel}
-              nextStepConfirmation={artifactOwnsConfirmation && artifact === primaryArtifact}
-              onOpen={onArtifactOpen ? (current) => onArtifactOpen(current, message) : undefined}
-            />
-          ))}
-        </div>
-      </details>,
-    );
-  }
-
+  // 查看证据 disclosure removed (user request): artifacts surface only through
+  // the primary next-action block — the thread stays one idea per bubble.
+  // The grounding downgrade must still be visible (DESIGN.md §2.5), so when
+  // the artifact surface owns the allocation the note renders as one quiet
+  // inline line instead of living inside a disclosure.
   if (hasSupportDetails && message.role !== "assistant") {
     detailBlocks.push(
       <div key="support" className="message-support-list message-support-list--compact">
@@ -323,10 +311,10 @@ function CoachMessageBubbleImpl({
     );
   }
 
-  // `detailBlocks` is only fed by these two sources, and a support block can be
-  // pushed while still empty (e.g. a preview without lines), so the gate reads
-  // the sources rather than the array.
-  const hasSupplementMaterial = messageHasArtifacts || (message.role !== "assistant" && supportDetails.length > 0);
+  // `detailBlocks` now only holds the non-assistant support block, and a
+  // support block can be pushed while still empty (e.g. a preview without
+  // lines), so the gate reads the sources rather than the array.
+  const hasSupplementMaterial = message.role !== "assistant" && supportDetails.length > 0;
   const showSystemMeta = message.role === "system";
   // Feed chrome stays out of the way: user turns render without a repeated
   // author/timestamp row; the timestamp remains available as a tooltip.
@@ -403,9 +391,12 @@ function CoachMessageBubbleImpl({
           </div>
         ) : null}
         {hasRunningActivities ? (
-          <p className="message-bubble__agent-status message-bubble__agent-status--working" role="status">
-            {coachMessageBubbleCopy(language, "正在核对上下文…")}
-          </p>
+          // §四十八: the orb is the only loading idiom here — real thinking
+          // detail comes from the AgentActivityStrip (headNote), never from a
+          // generic text annotation.
+          <div className="coach-streaming-dots" role="status" aria-live="polite">
+            <span className="coach-streaming-orb" aria-hidden="true" />
+          </div>
         ) : null}
         {!hasBody && fallbackStatusSummary ? (
           <p className="message-bubble__agent-status-summary">
@@ -425,6 +416,18 @@ function CoachMessageBubbleImpl({
             language={language}
             nextStepRequiresConfirmation={confirmationOwner === "status-line"}
           />
+        ) : null}
+        {artifactOwnsConfirmation && !streaming ? (
+          // Single-shot allocation (see resolveNextStepConfirmationOwner): with
+          // the artifacts disclosure gone, the artifact-owned downgrade renders
+          // as this one always-visible quiet line — never inside a fold.
+          <p
+            className="message-part__confirm-note"
+            data-next-step-confirm-note="true"
+            data-next-step-requires-confirmation="true"
+          >
+            {resolveCopy(language).nextStepConfirmNote}
+          </p>
         ) : null}
         {children}
         {streaming ? (

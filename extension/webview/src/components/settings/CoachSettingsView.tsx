@@ -68,7 +68,7 @@ import {
   PROVIDER_TEMPLATE_GROUP_ORDER,
   PROVIDER_TEMPLATE_LABELS,
 } from "../../../../../shared/src/providerTemplateCatalog";
-import { classifyProviderThinkingSupport, describeProviderThinking, normalizeProviderThinkingConfig, providerThinkingProbeObserved, synthesizeProviderThinkingDescriptor, thinkingProtocolSupportsWire, updateProviderThinking } from "../../../../../shared/src/providerThinking";
+import { classifyProviderThinkingSupport, describeProviderThinking, normalizeProviderThinkingConfig, synthesizeProviderThinkingDescriptor, thinkingProtocolSupportsWire, updateProviderThinking } from "../../../../../shared/src/providerThinking";
 import type { ProviderThinkingConfig } from "../../../../../shared/src/providerThinking";
 import type { TrainerCapabilityVerdict } from "../../../../../shared/src/capabilityVerdict";
 import {
@@ -2883,14 +2883,13 @@ function CoachSettingsViewSheet({
     draftProtocol,
   );
   // Smart adaptation: a probe that explicitly observed rejection hides the
-  // control; an unknown model shows it once a probe has assessed thinking; a
-  // declared/verified model always shows it and restores the last choice.
+  // control; otherwise it renders whenever the protocol can carry a thinking
+  // field. "自动" writes nothing until the learner picks a mode, and a
+  // gateway that rejects the choice is absorbed by the negotiated replay —
+  // so waiting for a probe only ever hid a working control.
   const draftThinkingSupport = classifyProviderThinkingSupport(draftThinkingContext);
-  const draftThinkingProbed = providerThinkingProbeObserved(draftThinkingContext);
   const draftThinkingVisible =
-    thinkingProtocolSupportsWire(draftProtocol) &&
-    draftThinkingSupport !== "unsupported" &&
-    (draftThinkingSupport === "supported" || draftThinkingProbed);
+    thinkingProtocolSupportsWire(draftProtocol) && draftThinkingSupport !== "unsupported";
   const describedThinking = draftThinkingVisible
     ? describeProviderThinking(draftThinkingContext, draftRequestDefaults)
     : undefined;

@@ -71,61 +71,72 @@
 .settings-view section:nth-child(3) { animation-delay: 80ms; }
 .settings-view section:nth-child(n + 4) { animation-delay: 120ms; }
 
-/* 流式等待:消息内『教练正在输入…』文字 + 三点脉冲。文字承载状态(高对比),
-   点只作装饰;文字颜色走 --fg-1,避免只有低对比动画点。 */
+/* 流式等待：单枚呼吸光点（ChatGPT 式）——加载时只有动画，不带文字注释；
+   思考细节由 AgentActivityStrip 同排显示。屏幕阅读器走容器的 aria-label。 */
 .coach-streaming-dots {
   display: inline-flex;
-  gap: 7px;
   align-items: center;
-  padding: 2px 0;
+  padding: 3px 0;
 }
 
-.coach-streaming-dots__label {
-  color: var(--fg-1);
-  font-size: var(--trainer-font-2xs);
-  line-height: 1.4;
-}
-
-.coach-streaming-dots__dots {
-  display: inline-flex;
-  gap: var(--space-1);
-  align-items: center;
-}
-
-.coach-streaming-dots__dots span {
-  width: 5px;
-  height: 5px;
+.coach-streaming-orb {
+  position: relative;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: var(--fg-1);
-  animation: coach-streaming-dot 1.2s var(--motion-ease) infinite;
+  background:
+    radial-gradient(
+      circle at 32% 28%,
+      color-mix(in srgb, var(--accent) 40%, white 60%) 0%,
+      var(--accent) 58%,
+      transparent 60%
+    ),
+    var(--accent);
+  animation: coach-orb-breathe 1.6s ease-in-out infinite;
 }
 
-.coach-streaming-dots__dots span:nth-child(2) {
-  animation-delay: 0.15s;
+.coach-streaming-orb::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  animation: coach-orb-halo 1.6s ease-out infinite;
 }
 
-.coach-streaming-dots__dots span:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-@keyframes coach-streaming-dot {
+@keyframes coach-orb-breathe {
   0%,
   100% {
-    opacity: 0.3;
-    transform: scale(0.8);
+    transform: scale(0.82);
+    opacity: 0.6;
   }
   50% {
+    transform: scale(1);
     opacity: 1;
-    transform: scale(1.15);
+  }
+}
+
+@keyframes coach-orb-halo {
+  0% {
+    transform: scale(0.72);
+    opacity: 0.85;
+  }
+  70%,
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .coach-streaming-dots__dots span,
-  .coach-streaming-dots span {
+  .coach-streaming-orb {
     animation: none;
-    opacity: 0.9;
+    opacity: 0.85;
     transform: none;
+  }
+  .coach-streaming-orb::after {
+    animation: none;
+    opacity: 0;
   }
 }
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import os
 import sqlite3
@@ -116,7 +118,11 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         # expire them honestly (failed/recoverable) at startup instead of
         # letting stale `executing` records linger until their timeout.
         runtime.memory_service.expire_in_flight_training_reliability_at_startup()
+        organizer_task = asyncio.create_task(runtime.run_background_resource_organizer())
         yield
+        organizer_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await organizer_task
         from .llm.mcp_client import aclose_runtime_mcp_sessions
 
         await aclose_runtime_mcp_sessions(runtime)

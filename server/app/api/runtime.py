@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import logging
 import re
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -15,6 +17,7 @@ from ..core.event_ledger import EVENT_AGENT_TURN_CHECKPOINTED, EventLedgerServic
 from ..core.models import (
     ProjectProvisioning,
     ProviderConfig,
+    ResourceIndexRequest,
     ResourceRecord,
     TrainerRoot,
     TurnRequest,
@@ -36,6 +39,14 @@ from ..pedagogy.service import PedagogyService
 from ..planner.service import PlannerService
 from ..research.service import ResearchOrchestratorService
 from ..resources.service import ResourceService
+
+logger = logging.getLogger("trainer.runtime")
+
+#: Background library organizer cadence: first sweep shortly after boot, then
+#: every five minutes, at most five resources per pass (local parsing only).
+BACKGROUND_ORGANIZER_FIRST_DELAY_SECONDS = 20.0
+BACKGROUND_ORGANIZER_INTERVAL_SECONDS = 300.0
+BACKGROUND_ORGANIZER_BATCH = 5
 from ..resources.versioning import ResourceVersionStore
 from ..specs.service import SpecService
 from ..workspace.adoption_index import ProjectAdoptionIndexService, ProjectAdoptionJobRecord
@@ -510,6 +521,58 @@ class TrainerRuntime:
         if refresh_sessions:
             summary["sessions_refreshed"] = self.refresh_workspace_sessions(resolved_workspace_id)
         return indexed, summary
+
+    async def run_background_resource_organizer(self) -> None:
+        """The coach organizes the library in the background.
+
+        Uploads and browser-capture downloads only *register* a resource
+        (``index_status="pending"``); without this loop it stays invisible to
+        retrieval until the learner presses 索引 on each one. A bounded,
+        local-first sweep indexes the pending backlog of the active workspace:
+        no network fetch, a small per-pass batch, and every failure recorded
+        honestly on the resource instead of retried forever.
+        """
+        logger.info("[resources] background organizer started")
+        await asyncio.sleep(BACKGROUND_ORGANIZER_FIRST_DELAY_SECONDS)
+        while True:
+            try:
+                organized = await self.organize_pending_resources_once()
+                if organized:
+                    logger.info(
+                        "[resources] background organizer indexed %d pending resource(s)",
+                        organized,
+                    )
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 - one bad pass must not kill the loop
+                logger.exception("[resources] background organizer pass failed")
+            await asyncio.sleep(BACKGROUND_ORGANIZER_INTERVAL_SECONDS)
+
+    async def organize_pending_resources_once(self) -> int:
+        workspace_id = self.resolve_workspace_id()
+        if not workspace_id:
+            return 0
+        candidates = [
+            record
+            for record in self.repository.list_resources(workspace_id)
+            if record.index_status == "pending" and record.parse_status != "failed"
+        ]
+        organized = 0
+        for record in candidates[:BACKGROUND_ORGANIZER_BATCH]:
+            try:
+                indexed = await asyncio.to_thread(
+                    self.resource_service.index,
+                    workspace_id,
+                    ResourceIndexRequest(resource_id=record.id, enable_network=False),
+                )
+                self.postprocess_indexed_resource(workspace_id, indexed)
+                organized += 1
+            except Exception:  # noqa: BLE001 - one bad resource must not stop the sweep
+                logger.exception(
+                    "[resources] background index failed for %s",
+                    record.id,
+                )
+        return organized
 
     @staticmethod
     def _validate_agent_checkpoint_id(checkpoint_id: str) -> str:

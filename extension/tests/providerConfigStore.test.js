@@ -171,7 +171,9 @@ test('ProviderConfigStore preserves modelCapabilities through save, active profi
   await store.saveConfig(config, 'sk-test');
 
   assert.deepEqual(store.getConfig().modelCapabilities, config.modelCapabilities);
-  assert.deepEqual(store.getConfig().requestDefaults, {});
+  // An explicit effort in request defaults is learner intent: it survives the
+  // save and reaches the wire (a rejecting gateway is absorbed downstream).
+  assert.deepEqual(store.getConfig().requestDefaults, { reasoning_effort: 'medium' });
   assert.deepEqual(store.getActiveProfileConfig().modelCapabilities, config.modelCapabilities);
   assert.deepEqual(store.getActiveProfile().modelCapabilities, config.modelCapabilities);
   assert.equal(store.getConfig().capabilities.structuredOutput, true);
@@ -372,7 +374,9 @@ test('ProviderConfigStore rehydrates workspace override modelCapabilities from t
 
   assert.equal(store.getConfig().modelCapabilities['gpt-4.1-mini'].vision, true);
   assert.equal(store.getConfig().modelCapabilities['gpt-4.1-mini'].structuredOutput, true);
-  assert.deepEqual(store.getConfig().requestDefaults, {});
+  // The workspace override's explicit effort is intent: rehydration keeps it
+  // on the wire shape instead of stripping it behind probe evidence.
+  assert.deepEqual(store.getConfig().requestDefaults, { reasoning_effort: 'medium' });
 });
 
 test('ProviderConfigStore seeds workspace override defaults from the shared protocol helper', async () => {
@@ -956,10 +960,13 @@ test('ProviderConfigStore seeds stable MiniMax requestDefaults for custom gatewa
   );
 
   assert.ok(config);
+  // A declared MiniMax thinking intent is honoured verbatim now — the store
+  // no longer rewrites an explicit "enabled" into "disabled" behind a probe
+  // gate; the gateway-side negotiated replay handles real rejections.
   assert.deepEqual(config.requestDefaults, {
     extra_body: {
       thinking: {
-        type: 'disabled',
+        type: 'enabled',
       },
       gateway_option: 'keep-me',
     },
@@ -967,7 +974,7 @@ test('ProviderConfigStore seeds stable MiniMax requestDefaults for custom gatewa
   assert.deepEqual(workspaceConfig.provider.requestDefaults, {
     extra_body: {
       thinking: {
-        type: 'disabled',
+        type: 'enabled',
       },
       gateway_option: 'keep-me',
     },
@@ -1265,7 +1272,7 @@ test('ProviderConfigStore prefers fresh request defaults over stale fallback thi
   assert.equal(cleared.thinkingConfig, undefined);
 });
 
-test('ProviderConfigStore keeps thinking fields off the wire without model capability evidence but retains the intent', async () => {
+test('ProviderConfigStore keeps explicit thinking intent on the wire without capability evidence', async () => {
   const { store } = createThinkingStore();
   await store.saveConfig(
     thinkingStoreConfig({
@@ -1279,8 +1286,11 @@ test('ProviderConfigStore keeps thinking fields off the wire without model capab
     'sk-test',
   );
 
+  // Protocol-default `thinking:false` is absence of evidence, not a verdict:
+  // the explicit learner choice reaches the wire, and the sidecar's negotiated
+  // replay absorbs a gateway that rejects it.
   const saved = store.getConfig();
-  assert.equal(saved.requestDefaults.reasoning_effort, undefined);
+  assert.equal(saved.requestDefaults.reasoning_effort, 'high');
   assert.deepEqual(saved.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
 });
 

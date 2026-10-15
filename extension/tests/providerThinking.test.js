@@ -24,28 +24,30 @@ test('normalizeProviderThinking emits protocol-specific fields only for known mo
   }
 });
 
-test('normalizeProviderThinking migrates legacy fields and omits unknown-model thinking', () => {
+test('normalizeProviderThinking migrates legacy fields onto the wire for unknown models', () => {
   const { normalizeProviderThinking } = require(modulePath);
   const result = normalizeProviderThinking(
     { reasoningEffort: 'medium', thinkingBudget: 1024, keep: 'yes' },
     { protocol: 'openai_responses', model: 'vendor-new-model' },
   );
   assert.deepEqual(result.config, { mode: 'enabled', budgetTokens: 1024, reasoningEffort: 'medium' });
-  assert.deepEqual(result.requestDefaults, { keep: 'yes' });
-  assert.equal(result.reason, 'unknown_model');
+  // Migrated legacy intent is still explicit intent: it reaches the wire, and
+  // the sidecar's negotiated replay absorbs a gateway that dislikes it.
+  assert.deepEqual(result.requestDefaults, { keep: 'yes', reasoning_effort: 'medium' });
+  assert.equal(result.emitted, true);
   assert.equal(result.migrated, true);
 });
 
-test('normalizeProviderThinking preserves MiniMax disabled wire contract', () => {
+test('normalizeProviderThinking honours the MiniMax enabled wire contract', () => {
   const { normalizeProviderThinking } = require(modulePath);
   const result = normalizeProviderThinking(
     { thinking: { mode: 'enabled' }, extra_body: { option: 'keep' } },
     { protocol: 'openai_chat_completions_compatible', providerName: 'MiniMax', model: 'MiniMax-M3' },
   );
   assert.deepEqual(result.requestDefaults, {
-    extra_body: { option: 'keep', thinking: { type: 'disabled' } },
+    extra_body: { option: 'keep', thinking: { type: 'enabled' } },
   });
-  assert.equal(result.reason, 'unknown_model');
+  assert.equal(result.emitted, true);
 });
 
 test('normalizeProviderThinking does not mutate the input defaults', () => {

@@ -268,7 +268,6 @@ import {
   classifyProviderThinkingSupport,
   describeProviderThinking,
   normalizeProviderThinkingConfig,
-  providerThinkingProbeObserved,
   synthesizeProviderThinkingDescriptor,
   thinkingProtocolSupportsWire,
 } from "../../../../shared/src/providerThinking";
@@ -5308,15 +5307,15 @@ export function App() {
     }
     // Smart adaptation (P0 model experience): the protocol defaults mark
     // `thinking:false` for every model (providerProtocols.ts:254) — that is
-    // absence of evidence, not a verdict. Only a probe that explicitly observed
-    // rejection hides the control; an unknown model shows it once a probe has
-    // assessed thinking; a declared/verified model always shows it and restores
-    // the last choice. The control never gates sending.
+    // absence of evidence, not a verdict. The control therefore renders
+    // whenever the protocol can carry a thinking field: "自动" emits nothing
+    // until the learner picks a mode, and a gateway that dislikes the choice
+    // is absorbed by the sidecar's negotiated replay (provider/thinking.py).
+    // Only an explicit probe verdict of "unsupported" hides it — a declared
+    // or verified model always shows it and restores the last choice. The
+    // control never gates sending.
     const support = classifyProviderThinkingSupport(context);
     if (support === "unsupported") {
-      return undefined;
-    }
-    if (support === "unknown" && !providerThinkingProbeObserved(context)) {
       return undefined;
     }
     const storedThinking = normalizeProviderThinkingConfig(

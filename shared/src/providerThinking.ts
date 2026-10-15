@@ -163,21 +163,20 @@ export function providerThinkingProbeObserved(
 }
 
 /**
- * Whether a thinking config may be written to the wire for this context: a
- * supported model may always carry it; an unknown model only after a probe
- * observed its thinking behaviour. An explicitly unsupported model never emits.
+ * Whether a thinking config may be written to the wire for this context.
+ *
+ * An explicitly unsupported model never emits. Supported and unknown models
+ * both emit an *explicit* learner choice: the control is user intent, not an
+ * inferred default, and a gateway that dislikes the field is absorbed by the
+ * sidecar's negotiated replay (server/app/llm/provider/thinking.py classifies
+ * the rejection, remembers the working policy, and replays once). Hiding the
+ * wire write behind probe evidence only ever produced a control that did
+ * nothing — the exact "cannot adjust thinking strength" complaint.
  */
 export function providerThinkingMayEmit(
   context: ProviderThinkingNormalizationContext,
 ): boolean {
-  const support = classifyProviderThinkingSupport(context);
-  if (support === 'unsupported') {
-    return false;
-  }
-  if (support === 'supported') {
-    return true;
-  }
-  return providerThinkingProbeObserved(context);
+  return classifyProviderThinkingSupport(context) !== 'unsupported';
 }
 
 export interface ProviderThinkingNormalization {

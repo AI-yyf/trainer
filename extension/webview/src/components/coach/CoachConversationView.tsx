@@ -214,13 +214,13 @@ function CoachConversationViewImpl({
                 }
               >
                 {item.streaming ? (
-                  <div className="coach-streaming-dots" role="status" aria-live="polite">
-                    <span className="coach-streaming-dots__label">
-                      {COACH_TYPING_LABELS[language] ?? COACH_TYPING_LABELS["en-US"]}
-                    </span>
-                    <span className="coach-streaming-dots__dots" aria-hidden="true">
-                      <span /><span /><span />
-                    </span>
+                  <div
+                    className="coach-streaming-dots"
+                    role="status"
+                    aria-live="polite"
+                    aria-label={COACH_TYPING_LABELS[language] ?? COACH_TYPING_LABELS["en-US"]}
+                  >
+                    <span className="coach-streaming-orb" aria-hidden="true" />
                   </div>
                 ) : null}
               </CoachMessageBubble>

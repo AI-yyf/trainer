@@ -26,9 +26,20 @@ const base = { protocol: 'openai_responses', model: 'gpt-5', supported: true };
 
 test('does not treat a known model catalog entry as thinking evidence', () => {
   const context = { protocol: 'openai_responses', model: 'listed-model', knownModels: ['listed-model'] };
-  assert.equal(describeProviderThinking(context, { reasoningEffort: 'high' }), undefined);
-  assert.deepEqual(normalizeProviderThinking({ reasoningEffort: 'high' }, context).requestDefaults, {});
-  assert.deepEqual(updateProviderThinking(context, {}, { mode: 'enabled', reasoningEffort: 'high' }), {});
+  // A catalog listing is not capability evidence: with no stored intent there
+  // is nothing to describe — but explicit defaults do describe, and the
+  // choice reaches the wire (negotiated replay absorbs rejections).
+  assert.equal(describeProviderThinking(context, {}), undefined);
+  const described = describeProviderThinking(context, { reasoningEffort: 'high' });
+  assert.equal(described?.kind, 'reasoning_effort');
+  assert.deepEqual(
+    normalizeProviderThinking({ reasoningEffort: 'high' }, context).requestDefaults,
+    { reasoning_effort: 'high' },
+  );
+  assert.deepEqual(
+    updateProviderThinking(context, {}, { mode: 'enabled', reasoningEffort: 'high' }),
+    { reasoning_effort: 'high' },
+  );
 });
 
 test('describes only explicit or live-confirmed native controls', () => {
@@ -55,8 +66,12 @@ test('describes only explicit or live-confirmed native controls', () => {
 
 test('does not treat a successful chat probe as thinking evidence', () => {
   const context = { protocol: 'openai_chat_completions_compatible', model: 'gateway-model' };
-  assert.equal(describeProviderThinking(context, { reasoningEffort: 'high' }), undefined);
-  assert.deepEqual(updateProviderThinking(context, {}, { mode: 'enabled', reasoningEffort: 'high' }), {});
+  assert.equal(describeProviderThinking(context, {}), undefined);
+  // Unknown capability does not block an explicit choice from the wire.
+  assert.deepEqual(
+    updateProviderThinking(context, {}, { mode: 'enabled', reasoningEffort: 'high' }),
+    { reasoning_effort: 'high' },
+  );
 });
 
 test('accepts only an observed thinking capability as live evidence', () => {

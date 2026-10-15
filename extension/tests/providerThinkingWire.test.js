@@ -143,8 +143,10 @@ test('protocol-default thinking:false stays an unknown verdict, not unsupported'
     profileCapabilities: { thinking: false },
     modelCapabilities: { thinking: false },
   };
+  // Catalog defaults mark every model thinking:false — absence of evidence.
+  // The verdict stays unknown, and unknown models carry an explicit choice.
   assert.equal(classifyProviderThinkingSupport(context), 'unknown');
-  assert.equal(providerThinkingMayEmit(context), false);
+  assert.equal(providerThinkingMayEmit(context), true);
 });
 
 test('probe evidence classifies supported and unsupported verdicts', () => {
@@ -184,16 +186,19 @@ test('declared model or profile thinking support is a supported verdict', () => 
   );
 });
 
-test('unknown model shows nothing until a probe assessed thinking', () => {
+test('unknown model shows the control, and probe verdicts still gate to unsupported', () => {
   const unprobed = {
     protocol: 'openai_chat_completions_compatible',
     model: 'manual-model',
   };
+  // Absence of evidence is not a verdict: the control renders for unknown
+  // models (protocol-level gating only), and an explicit choice may emit —
+  // a rejecting gateway is absorbed by the sidecar's negotiated replay.
   assert.equal(providerThinkingProbeObserved(unprobed), false);
-  assert.equal(providerThinkingMayEmit(unprobed), false);
+  assert.equal(providerThinkingMayEmit(unprobed), true);
 
-  // A probe that assessed thinking but stayed inconclusive ("unverified") still
-  // counts as probed: the user's explicit choice may then reach the wire.
+  // A probe that assessed thinking but stayed inconclusive ("unverified")
+  // stays unknown and may emit as well.
   const inconclusive = {
     ...unprobed,
     capabilityEvidence: [{ name: 'thinking', declared: false, observed: null, state: 'unverified' }],
@@ -221,18 +226,25 @@ test('probed-unknown model round-trips an explicit strength choice to the wire',
   assert.equal(descriptor.config.reasoningEffort, 'high');
 });
 
-test('unprobed unknown model still emits nothing (safe default preserved)', () => {
+test('unprobed unknown model carries an explicit choice; auto stays silent', () => {
   const context = {
     protocol: 'openai_chat_completions_compatible',
     model: 'manual-model',
   };
-  const defaults = updateProviderThinking(
+  // Explicit learner intent emits even without probe evidence: the sidecar's
+  // negotiated replay handles a gateway that rejects the field.
+  const explicit = updateProviderThinking(
     context,
     {},
     { mode: 'enabled', reasoningEffort: 'high' },
   );
-  assert.equal(defaults.reasoning_effort, undefined);
-  assert.equal(defaults.thinking, undefined);
+  assert.equal(explicit.reasoning_effort, 'high');
+
+  // "auto" (and a disabled choice on a non-MiniMax wire) still writes no
+  // thinking field — the safe default is unchanged.
+  const auto = updateProviderThinking(context, {}, { mode: 'auto' });
+  assert.equal(auto.reasoning_effort, undefined);
+  assert.equal(auto.thinking, undefined);
 });
 
 test('probe-unsupported model refuses the choice even after a probed verdict', () => {

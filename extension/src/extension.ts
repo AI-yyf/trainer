@@ -8,6 +8,7 @@ import { invalidateActiveTrainerStreams } from './commands/sessionCommands';
 import { getRuntimeWorkspaceContext } from './commands/workspaceContext';
 import { CONTEXT_KEYS, OUTPUT_CHANNEL_NAME, STORAGE_KEYS } from './core/constants';
 import type { CommandContext } from './core/commandContext';
+import { BootstrapSnapshotCache } from './core/bootstrapSnapshotCache';
 import { SidecarHttpClient } from './core/httpClient';
 import { SidecarProcessManager } from './core/sidecarProcessManager';
 import type { TrainerHostState } from './core/types';
@@ -58,6 +59,7 @@ export async function activate(
   sidecarClient.setInstanceTokenProvider(() => sidecarManager.getInstanceToken());
   const trustGuard = new WorkspaceTrustGuard();
   const trainerWorkspace = new TrainerWorkspaceService(extensionContext);
+  const bootstrapCache = new BootstrapSnapshotCache(extensionContext);
   trustGuard.rememberActiveEditor();
   const tests = new TrainerTestController();
 
@@ -148,6 +150,17 @@ export async function activate(
       ...hostState.bootstrap,
       streamingState,
     };
+    // Stale-while-revalidate cache: every authoritative state landing while the
+    // runtime is live refreshes the snapshot the next activation restores.
+    if (
+      sidecarManager.getStatus().lifecycle === 'ready' &&
+      hostState.sessionId
+    ) {
+      bootstrapCache.schedulePersist(
+        getRuntimeWorkspaceContext({ getHostState }).workspaceId,
+        hostState.bootstrap,
+      );
+    }
   };
 
   const restoreProviderModelCache = async (): Promise<void> => {
@@ -363,6 +376,7 @@ export async function activate(
     tests,
     workbench,
     editorPanel,
+    bootstrapCache,
     providerStore.onDidChange(() => {
       void syncExtensionState(commandContext);
     }),
@@ -475,6 +489,24 @@ export async function activate(
       sessionId: restoredSessionId,
     };
     await updateDerivedHostState();
+  }
+  // Stale-while-revalidate: seed the last known bootstrap before anything
+  // renders, so the webview's first bootstrap already carries the restored
+  // thread. The sidecar's cold start no longer gates first paint; the
+  // authoritative snapshot from rehydration replaces this when it lands.
+  const seededBootstrap = bootstrapCache.load(
+    getRuntimeWorkspaceContext({ getHostState }).workspaceId,
+  );
+  if (seededBootstrap) {
+    hostState = {
+      ...hostState,
+      bootstrap: {
+        ...seededBootstrap,
+        connection: hostState.bootstrap.connection,
+        streamingState: hostState.bootstrap.streamingState,
+      },
+    };
+    outputChannel.appendLine('[activation] seeded cached bootstrap (stale-while-revalidate)');
   }
   await restoreProviderModelCache();
   await syncExtensionState(commandContext);

@@ -3719,7 +3719,7 @@ function createThinkingTestContext(existingConfig) {
   return context;
 }
 
-test('setProviderThinkingCommand persists the chosen intent when the wire cannot emit it', async () => {
+test('setProviderThinkingCommand persists the chosen intent onto the wire without evidence', async () => {
   const { setProviderThinkingCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
   const context = createThinkingTestContext({
     name: 'Local Compatible',
@@ -3747,8 +3747,9 @@ test('setProviderThinkingCommand persists the chosen intent when the wire cannot
 
   assert.equal(result.ok, true);
   const saved = context.__savedConfigs[0];
-  // No capability evidence: the wire stays clean but the durable intent survives.
-  assert.equal(saved.requestDefaults.reasoning_effort, undefined);
+  // Explicit learner intent reaches the wire even without capability
+  // evidence; the sidecar's negotiated replay handles a rejecting gateway.
+  assert.equal(saved.requestDefaults.reasoning_effort, 'high');
   assert.equal(saved.requestDefaults.temperature, 0.4);
   assert.deepEqual(saved.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
   const providerPatch = context.__patches[context.__patches.length - 1].providerConfig;
