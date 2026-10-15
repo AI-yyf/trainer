@@ -4288,18 +4288,31 @@ export function App() {
       }
       const replyDoc = coachReplyMarkdown(message, layout.composerLanguage);
       if (action === "share" || action === "copy") {
+        const text = action === "copy" ? message.body : replyDoc.markdown;
+        let copied = false;
         try {
-          await navigator.clipboard.writeText(action === "copy" ? message.body : replyDoc.markdown);
-          setOperationMessage({
-            tone: "success",
-            message: appUiCopy(layout.composerLanguage, "这条教练回复已复制到剪贴板。"),
-          });
+          await navigator.clipboard.writeText(text);
+          copied = true;
         } catch {
-          setOperationMessage({
-            tone: "error",
-            message: appUiCopy(layout.composerLanguage, "复制失败,请重试。"),
-          });
+          // webview iframe 可能没有 clipboard-write 权限——回落 execCommand
+          try {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.cssText = "position:fixed;opacity:0;pointer-events:none";
+            document.body.appendChild(ta);
+            ta.select();
+            copied = document.execCommand("copy");
+            document.body.removeChild(ta);
+          } catch {
+            copied = false;
+          }
         }
+        setOperationMessage({
+          tone: copied ? "success" : "error",
+          message: copied
+            ? appUiCopy(layout.composerLanguage, "这条教练回复已复制到剪贴板。")
+            : appUiCopy(layout.composerLanguage, "复制失败,请重试。"),
+        });
         return;
       }
       if (!beginPendingMessageAction(`${message.id}:${action}`)) return;
