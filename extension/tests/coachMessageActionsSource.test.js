@@ -135,10 +135,15 @@ test('share action copies the selected reply to the clipboard', () => {
   const source = fs.readFileSync(appPath, 'utf8');
   const handlerStart = source.indexOf('const handleCoachMessageAction');
   assert.ok(handlerStart > -1, 'expected handleCoachMessageAction');
-  const handler = source.slice(handlerStart, handlerStart + 2500);
+  const handler = source.slice(handlerStart, handlerStart + 3500);
 
   assert.match(handler, /action === "share"/);
-  assert.match(handler, /navigator\.clipboard\.writeText\(action === "copy" \? message\.body : replyDoc\.markdown\)/);
+  assert.match(handler, /const text = action === "copy" \? message\.body : replyDoc\.markdown;/);
+  assert.match(handler, /navigator\.clipboard\.writeText\(text\)/);
+  // Webview iframes may lack clipboard-write permission: the execCommand
+  // fallback keeps share/copy working instead of failing silently.
+  assert.match(handler, /document\.execCommand\("copy"\)/);
+  assert.match(handler, /tone: copied \? "success" : "error"/);
   assert.match(handler, /appUiCopy\(layout\.composerLanguage, "这条教练回复已复制到剪贴板。"\)/);
   const appUiCopySource = fs.readFileSync(appUiCopyPath, 'utf8');
   assert.match(appUiCopySource, /"en-US": "Coach reply copied to clipboard\."/);
