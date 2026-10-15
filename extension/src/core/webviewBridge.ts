@@ -306,8 +306,10 @@ export class WorkbenchSidebarController
   }
 
   /**
-   * The sidebar header must stay text-free — identity lives in the in-webview
-   * session header ("Trainer <workspace>").
+   * The sidebar pane header IS the VS Code-native "Trainer" identity: the
+   * container title in package.json carries it, and a runtime pane title of
+   * '' keeps VS Code rendering the container title alone (a non-empty pane
+   * title would compose "Trainer: <viewTitle>").
    *
    * VS Code mechanics (verified against the shipped workbench bundle):
    * - The visible sidebar header is the view container title
@@ -319,9 +321,6 @@ export class WorkbenchSidebarController
    * - `WebviewView.title` set to `''` is honored exactly: VS Code only falls
    *   back to the manifest view name for non-string values, and it does not
    *   trim the value.
-   * The container title itself is blanked in package.json (a single space is
-   * the stable empty expression: a falsy title would make VS Code fall back to
-   * the literal "workbench.view.extension.trainer").
    */
   private applyTextFreeViewTitle(webviewView: vscode.WebviewView): void {
     if (webviewView.title !== '') {

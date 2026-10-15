@@ -4597,7 +4597,13 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     ) -> dict[str, object]:
         if not resource_ids:
             return {}
-        return runtime.resource_service.build_requested_resource_context(workspace_id, list(resource_ids))
+        ids = list(resource_ids)
+        # Just-in-time teaching digestion: the learner pointed the coach at
+        # these materials, so each gets digested (总结/预备题目/直观案例) once
+        # per content version — fire-and-forget, never blocking the turn, and
+        # never a blanket sweep over the whole library.
+        runtime.request_resource_digestion(workspace_id, ids)
+        return runtime.resource_service.build_requested_resource_context(workspace_id, ids)
 
     def request_resource_ids(request: TurnRequest | SessionMessageRequest) -> list[str]:
         # Composer IDs describe a Resources search scope, not attached materials.

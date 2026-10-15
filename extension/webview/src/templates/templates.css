@@ -12,21 +12,10 @@
   color: var(--fg-muted);
   font-size: var(--trainer-font-xs);
 }
-.app-shell-header__brand {
-  flex: none;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--fg-0);
-}
 .app-shell-header__context {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.app-shell-header__context::before {
-  content: "·";
-  margin-inline-end: 8px;
-  color: var(--fg-muted);
 }
 .app-shell-header__utilities { display: flex; gap: 4px; margin-inline-start: auto; }
 .app-shell-header__utility {

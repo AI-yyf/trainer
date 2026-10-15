@@ -38,7 +38,6 @@ export function AppShell({ language, direction, activeView, context, historyOpen
     <div className="trainer-shell" lang={language} dir={direction} data-text-direction={direction} data-template="AppShell">
       <header className="app-shell-header">
         <div className="app-shell-header__identity">
-          <span className="app-shell-header__brand" aria-hidden="true">Trainer</span>
           {trimmedContext ? <span className="app-shell-header__context" title={trimmedContext}>{trimmedContext}</span> : null}
           <div className="app-shell-header__utilities">
             <button type="button" className="app-shell-header__utility" data-testid="trainer-history-toggle" aria-label={HISTORY_LABEL[language]} title={HISTORY_LABEL[language]} aria-expanded={historyOpen} onClick={onHistory}>

@@ -19,6 +19,7 @@ from ..core.models import (
     ProviderConfig,
     ResourceIndexRequest,
     ResourceRecord,
+    TeachingKnowledgeAsset,
     TrainerRoot,
     TurnRequest,
     WorkbenchSnapshot,
@@ -42,11 +43,51 @@ from ..resources.service import ResourceService
 
 logger = logging.getLogger("trainer.runtime")
 
-#: Background library organizer cadence: first sweep shortly after boot, then
-#: every five minutes, at most five resources per pass (local parsing only).
-BACKGROUND_ORGANIZER_FIRST_DELAY_SECONDS = 20.0
-BACKGROUND_ORGANIZER_INTERVAL_SECONDS = 300.0
+#: Background library organizer: one startup sweep, then purely event-driven.
+#: Arrival bursts coalesce into one debounced, single-flight pass. No recurring
+#: timer exists — an idle Trainer schedules nothing at all.
+BACKGROUND_ORGANIZER_STARTUP_DELAY_SECONDS = 20.0
+BACKGROUND_ORGANIZER_DEBOUNCE_SECONDS = 15.0
 BACKGROUND_ORGANIZER_BATCH = 5
+
+#: Teaching digestion: material window per LLM call (keeps the single digest
+#: call cheap) and the strict-JSON output parser used by the prompt contract.
+RESOURCE_DIGEST_MAX_CHARS = 6000
+
+
+def _parse_teaching_digest(raw: str) -> dict[str, list[str] | str] | None:
+    import json as _json
+
+    text = (raw or "").strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lstrip().startswith("json"):
+            text = text.lstrip()[4:]
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        parsed = _json.loads(text[start : end + 1])
+    except ValueError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+
+    def as_text(value: object) -> str:
+        return str(value or "").strip()
+
+    def as_list(value: object) -> list[str]:
+        if isinstance(value, list):
+            return [as_text(item) for item in value if as_text(item)]
+        return []
+
+    return {
+        "summary": as_text(parsed.get("summary")),
+        "practice_questions": as_list(parsed.get("practice_questions")),
+        "intuitive_examples": as_list(parsed.get("intuitive_examples")),
+        "common_pitfalls": as_list(parsed.get("common_pitfalls")),
+    }
 from ..resources.versioning import ResourceVersionStore
 from ..specs.service import SpecService
 from ..workspace.adoption_index import ProjectAdoptionIndexService, ProjectAdoptionJobRecord
@@ -222,6 +263,18 @@ class TrainerRuntime:
     provider_config: ProviderConfig | None = None
     provider_api_key: str | None = None
     provider_service_cache: dict[str, ProviderService] = field(default_factory=dict)
+    # Event-driven library organizer state (see request_organizer_sweep).
+    _organizer_loop: asyncio.AbstractEventLoop | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _organizer_sweep_task: asyncio.Task | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _organizer_sweep_pending: bool = field(
+        default=False, init=False, repr=False, compare=False
+    )
+    # Just-in-time teaching digestion: one queued/in-flight resource set.
+    _digest_queued: set[str] = field(default_factory=set, init=False, repr=False, compare=False)
     # Capability observations are request-gating truth, not provider declarations.
     # Keys include only a serialized provider config and a one-way API-key digest.
     provider_capability_cache: dict[str, dict[str, str]] = field(default_factory=dict)
@@ -523,30 +576,31 @@ class TrainerRuntime:
         return indexed, summary
 
     async def run_background_resource_organizer(self) -> None:
-        """The coach organizes the library in the background.
+        """One bounded startup sweep, then the organizer goes quiet.
 
         Uploads and browser-capture downloads only *register* a resource
-        (``index_status="pending"``); without this loop it stays invisible to
-        retrieval until the learner presses 索引 on each one. A bounded,
-        local-first sweep indexes the pending backlog of the active workspace:
-        no network fetch, a small per-pass batch, and every failure recorded
-        honestly on the resource instead of retried forever.
+        (``index_status="pending"``); without a sweep it stays invisible to
+        retrieval until the learner presses 索引 on each one. The sweep is
+        event-driven, never periodic: this startup pass clears any backlog,
+        and every later arrival calls :meth:`request_organizer_sweep` — one
+        debounced, single-flight pass per burst of new resources. Purely
+        local parsing: no LLM calls, no network, so it burns no tokens while
+        idle.
         """
-        logger.info("[resources] background organizer started")
-        await asyncio.sleep(BACKGROUND_ORGANIZER_FIRST_DELAY_SECONDS)
-        while True:
-            try:
-                organized = await self.organize_pending_resources_once()
-                if organized:
-                    logger.info(
-                        "[resources] background organizer indexed %d pending resource(s)",
-                        organized,
-                    )
-            except asyncio.CancelledError:
-                raise
-            except Exception:  # noqa: BLE001 - one bad pass must not kill the loop
-                logger.exception("[resources] background organizer pass failed")
-            await asyncio.sleep(BACKGROUND_ORGANIZER_INTERVAL_SECONDS)
+        logger.info("[resources] background organizer armed (startup sweep in %.0fs)",
+                    BACKGROUND_ORGANIZER_STARTUP_DELAY_SECONDS)
+        await asyncio.sleep(BACKGROUND_ORGANIZER_STARTUP_DELAY_SECONDS)
+        try:
+            organized = await self.organize_pending_resources_once()
+            if organized:
+                logger.info(
+                    "[resources] startup organizer indexed %d pending resource(s)",
+                    organized,
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - a failed sweep must not kill shutdown
+            logger.exception("[resources] startup organizer sweep failed")
 
     async def organize_pending_resources_once(self) -> int:
         workspace_id = self.resolve_workspace_id()
@@ -573,6 +627,220 @@ class TrainerRuntime:
                     record.id,
                 )
         return organized
+
+    def bind_organizer_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Remember the serving loop so worker threads can request sweeps."""
+        self._organizer_loop = loop
+
+    def request_resource_digestion(self, workspace_id: str, resource_ids: list[str]) -> None:
+        """Thread-safe, deduplicated teaching-digestion request.
+
+        Called from the coaching-turn path after a turn actually *used* those
+        resources. One in-flight digestion at a time, and each resource is
+        digested once per content version (cache key below) — a library is
+        never blanket-processed, so token spend stays proportional to what the
+        learner is actually studying.
+        """
+        loop = self._organizer_loop
+        if loop is None or loop.is_closed():
+            return
+        wanted = [
+            resource_id.strip()
+            for resource_id in resource_ids
+            if resource_id and resource_id.strip()
+        ]
+        if not wanted:
+            return
+        try:
+            loop.call_soon_threadsafe(self._schedule_resource_digestion, workspace_id, wanted)
+        except RuntimeError:
+            return
+
+    def _schedule_resource_digestion(self, workspace_id: str, resource_ids: list[str]) -> None:
+        queued = [rid for rid in resource_ids if rid not in self._digest_queued]
+        self._digest_queued.update(queued)
+
+        async def drain() -> None:
+            # A quiet period after the requesting turn: the coach's own reply
+            # is never delayed or interleaved with digestion traffic.
+            await asyncio.sleep(BACKGROUND_ORGANIZER_DEBOUNCE_SECONDS)
+            for resource_id in queued:
+                try:
+                    await self.digest_resource_for_teaching(workspace_id, resource_id)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001 - digestion is best-effort
+                    logger.exception(
+                        "[resources] teaching digestion failed for %s",
+                        resource_id,
+                    )
+                finally:
+                    self._digest_queued.discard(resource_id)
+
+        asyncio.create_task(drain())
+
+    async def digest_resource_for_teaching(
+        self,
+        workspace_id: str,
+        resource_id: str,
+    ) -> dict[str, object] | None:
+        """Digest ONE resource into teaching materials — 总结、预备题目、直观案例.
+
+        This is the *expensive* kind of organizing (one LLM call), so it runs
+        only on demand: after a coaching turn used the resource, or via
+        ``POST /resource/digest``. Results persist as teaching assets with a
+        content-hash cache key, so the same version is never paid for twice.
+        """
+        record = next(
+            (
+                item
+                for item in self.repository.list_resources(workspace_id)
+                if item.id == resource_id
+            ),
+            None,
+        )
+        if record is None or record.index_status != "indexed":
+            return None
+        content_hash = ""
+        version_store = self.resource_version_store
+        if version_store is not None:
+            content_hash = version_store.current_content_hash(workspace_id, resource_id) or ""
+        cache_prefix = f"resource-digest::{resource_id}::"
+        cache_key = f"{cache_prefix}{content_hash or 'v0'}"
+        current_version = [
+            asset
+            for asset in self.repository.list_teaching_assets(workspace_id=workspace_id)
+            if asset.source_key == cache_key
+        ]
+        if current_version:
+            return {"cached": True, "assets": current_version}
+
+        chunks = self.resource_service.registry.list_chunks(resource_id)
+        material = "\n\n".join(
+            chunk.text for chunk in sorted(chunks, key=lambda item: item.order) if chunk.text
+        )[:RESOURCE_DIGEST_MAX_CHARS]
+        if not material.strip():
+            material = (record.summary or "").strip()
+        if not material:
+            return None
+
+        service = self.provider_service
+        if service is None or not service.has_api_key:
+            return None
+        raw = await service.chat_completion(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "你是教练的教学准备助手。基于给定材料，输出严格的 JSON（不要代码围栏、"
+                        "不要多余文字），字段："
+                        '{"summary": string, "practice_questions": string[3], '
+                        '"intuitive_examples": string[2], "common_pitfalls": string[2]}。'
+                        "summary 用三句话讲清材料的核心机制；practice_questions 是学习者读完应能"
+                        "回答的预备题；intuitive_examples 用贴近生活的类比解释；common_pitfalls "
+                        "列出易误解点。全部使用简体中文。"
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"材料标题：{record.name}\n\n材料内容：\n{material}",
+                },
+            ],
+            temperature=0.2,
+            max_tokens=900,
+        )
+        digest = _parse_teaching_digest(raw)
+        if digest is None:
+            logger.warning(
+                "[resources] teaching digestion returned unparseable output for %s",
+                resource_id,
+            )
+            return None
+
+        saved: list[TeachingKnowledgeAsset] = []
+        focus_area = record.name.strip() or record.kind
+        retrieved_hints = [focus_area, record.kind, *record.tags[:2]]
+        bundles: list[tuple[str, str, str]] = [
+            ("concept_card", "核心总结", digest.get("summary", "")),
+            ("exercise_set", "预备题目", "\n".join(digest.get("practice_questions", []))),
+            ("code_examples", "直观案例", "\n".join(digest.get("intuitive_examples", []))),
+            ("common_pitfall", "常见误区", "\n".join(digest.get("common_pitfalls", []))),
+        ]
+        for kind, label, body in bundles:
+            body = str(body or "").strip()
+            if not body:
+                continue
+            asset = TeachingKnowledgeAsset(
+                # Deterministic id: re-digesting the same content version
+                # upserts the same rows instead of accumulating duplicates.
+                id=f"asset-{hashlib.sha1(cache_key.encode()).hexdigest()[:12]}-{kind}",
+                kind=kind,
+                scope="project",
+                workspace_id=workspace_id,
+                title=f"{focus_area} · {label}",
+                summary=body[:400],
+                concept_card=body if kind == "concept_card" else "",
+                exercise_set=body if kind == "exercise_set" else "",
+                code_examples=body if kind == "code_examples" else "",
+                common_pitfall=body if kind == "common_pitfall" else "",
+                origin="resource",
+                source_key=cache_key,
+                source_ids=[resource_id],
+                source_fragments=[record.canonical_source or record.source],
+                evidence_snippets=[body[:400]],
+                retrieval_hints=retrieved_hints,
+                source_summary=(record.summary or "")[:400],
+                source_freshness=record.freshness,
+                source_retrieved_at=record.fetched_at,
+                tags=[record.kind, *record.tags[:2]],
+                focus_area=focus_area,
+                scenario="resource_digest",
+                trust_score=record.trust_score,
+            )
+            saved.append(self.memory_service.record_teaching_asset(workspace_id, asset))
+        return {"cached": False, "assets": saved}
+
+    def request_organizer_sweep(self) -> None:
+        """Thread-safe, debounced, single-flight sweep request.
+
+        Called from sync routes (upload / capture) running in FastAPI's
+        worker pool whenever a new pending resource exists. Bursts coalesce:
+        one pass runs after the quiet period, and an arrival during a running
+        pass carries over exactly once. No timers, no idle wakeups.
+        """
+        loop = self._organizer_loop
+        if loop is None or loop.is_closed():
+            return
+        try:
+            loop.call_soon_threadsafe(self._schedule_organizer_sweep)
+        except RuntimeError:
+            # Loop already torn down during shutdown.
+            return
+
+    def _schedule_organizer_sweep(self) -> None:
+        if self._organizer_sweep_task is not None and not self._organizer_sweep_task.done():
+            self._organizer_sweep_pending = True
+            return
+
+        async def sweep() -> None:
+            await asyncio.sleep(BACKGROUND_ORGANIZER_DEBOUNCE_SECONDS)
+            while True:
+                self._organizer_sweep_pending = False
+                try:
+                    organized = await self.organize_pending_resources_once()
+                    if organized:
+                        logger.info(
+                            "[resources] event organizer indexed %d pending resource(s)",
+                            organized,
+                        )
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001 - one bad pass must not strand the flag
+                    logger.exception("[resources] event organizer sweep failed")
+                if not self._organizer_sweep_pending:
+                    return
+
+        self._organizer_sweep_task = asyncio.create_task(sweep())
 
     @staticmethod
     def _validate_agent_checkpoint_id(checkpoint_id: str) -> str:

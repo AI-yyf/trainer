@@ -19,6 +19,7 @@ from ...core.models import (
     ResourceCaptureRequest,
     ResourceCaptureResponse,
     ResourceDeleteRequest,
+    ResourceDigestRequest,
     ResourceIndexRequest,
     ResourceOrganizeRequest,
     ResourceRecord,
@@ -385,7 +386,40 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             ) from exc
         except (FileNotFoundError, IsADirectoryError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # Event-driven library organizer: one debounced local sweep for this
+        # arrival — never a recurring timer.
+        runtime.request_organizer_sweep()
         return record
+
+    @router.post("/resource/digest")
+    def resource_digest(request: ResourceDigestRequest) -> dict[str, object]:
+        """Digest one indexed resource into teaching materials.
+
+        Runs the single LLM digestion (总结/预备题目/直观案例/常见误区) on
+        demand; results are cached by content hash, so repeat calls for the
+        same resource version cost nothing.
+        """
+        workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
+        import asyncio
+
+        try:
+            result = asyncio.run(
+                runtime.digest_resource_for_teaching(workspace_id, request.resource_id)
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 - surface honest failures
+            raise HTTPException(status_code=502, detail=f"Digestion failed: {exc}") from exc
+        if result is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Resource must be indexed (and a provider configured) before digestion.",
+            )
+        assets = result.get("assets") or []
+        return {
+            "cached": bool(result.get("cached")),
+            "assets": [asset.model_dump(by_alias=True) if hasattr(asset, "model_dump") else asset for asset in assets],
+        }
 
     @router.post("/resource/index", response_model=ResourceRecord)
     def resource_index(request: ResourceIndexRequest) -> ResourceRecord:

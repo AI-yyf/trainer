@@ -3000,6 +3000,14 @@ class ResourceIndexRequest(BaseModel):
     enable_network: bool | None = None
 
 
+class ResourceDigestRequest(BaseModel):
+    """One-resource teaching digestion (总结/预备题目/直观案例/常见误区)."""
+
+    session_id: str | None = None
+    workspace_id: str | None = None
+    resource_id: str
+
+
 class ResourceCaptureRequest(BaseModel):
     """Browser-capture intake: one URL handed over by the Trainer Capture extension.
 

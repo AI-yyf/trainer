@@ -339,7 +339,7 @@
       "activitybar": [
         {
           "id": "trainer",
-          "title": " ",
+          "title": "Trainer",
           "icon": "media/trainer-icon.svg"
         }
       ]
