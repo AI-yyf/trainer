@@ -100,7 +100,19 @@ test('returnToSurface banner copy covers all eight UI languages', () => {
     assert.notEqual(resources.back, plan.back);
   }
   const fallback = dock.dockReturnBannerCopy('xx-XX', 'plan');
-  assert.equal(fallback.title, 'Coach replied · view it');
+  assert.equal(fallback.title, 'Coach replied');
+});
+
+test('visible send-preference switch copy covers all eight UI languages', () => {
+  for (const language of ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR']) {
+    const copy = dock.dockSendPreferenceCopy(language);
+    assert.ok(copy.label.length > 0);
+    assert.ok(copy.jump.length > 0);
+    assert.ok(copy.stay.length > 0);
+    assert.notEqual(copy.jump, copy.stay);
+  }
+  const fallback = dock.dockSendPreferenceCopy('xx-XX');
+  assert.equal(fallback.label, 'After send');
 });
 
 test('App wiring: dock gate, surface-keyed scope effect, anchor chip, stay banner', () => {
@@ -125,10 +137,48 @@ test('App wiring: dock gate, surface-keyed scope effect, anchor chip, stay banne
   assert.match(app, /const messageText = appendDockAnchor\(rawMessageText, dockAnchor\);/);
   assert.match(app, /const dockAnchor = activeView === "coach" \? null : resolveDockContextAnchor\(/);
 
-  // Default jump-to-coach; stay mode records the surface for the return banner.
+  // Default jump-to-coach; stay mode records the surface in the store and the
+  // stream/complete reducer raises the actionable returnToSurface notice
+  // (§3.7) — batched fixture completions included.
   assert.match(app, /dockSendNavigation\(dockSendPreference, activeView\) === "jump_to_coach"/);
-  assert.match(app, /dockStaySendRef\.current = \{ surface: activeView \};/);
-  assert.match(app, /message: dockReturnBannerCopy\(layout\.composerLanguage, dockStay\.surface\)\.title,/);
+  assert.match(app, /markDockStaySend\(activeView\);/);
+  assert.match(app, /clearDockReturnNotice\(\)/);
+  assert.doesNotMatch(app, /dockStaySendRef/);
+  assert.doesNotMatch(app, /setDockReturnNotice/);
+  assert.match(state, /dockStaySendSurface: null,/);
+  assert.match(state, /dockReturnNotice: null,/);
+  assert.match(state, /markDockStaySend: \(surface\) => set\(\{ dockStaySendSurface: surface, dockReturnNotice: null \}\)/);
+  assert.match(state, /dockStaySurface && nextStreaming\.completionStopReason !== "cancelled"/);
+  assert.match(state, /dockReturnNotice: dockStaySurface, dockStaySendSurface: null/);
+  assert.match(state, /clearDockReturnNotice: \(\) => set\(\{ dockReturnNotice: null \}\)/);
+
+  // The visible send-preference switch renders in the dock strip on
+  // Learning/Resources only and persists through the store action.
+  assert.match(app, /<DockSendPreferenceSwitch/);
+  assert.match(app, /value=\{normalizeDockSendPreference\(layout\.composerSendPreference\)\}/);
+  assert.match(app, /onChange=\{setComposerSendPreference\}/);
+  assert.match(app, /activeView === "plan" \|\| activeView === "resources" \? \(/);
+  assert.match(app, /setComposerSendPreference: state\.setComposerSendPreference,/);
+
+  // The returnToSurface bar is injected into Learning's Now area (live and
+  // leftover branches) and the top of the Resources surface.
+  assert.match(app, /dockReturnNotice=\{dockReturnNotice === "plan" \? \(/);
+  assert.match(app, /dockReturnNotice === "resources" \? \(/);
+  const bar = read('components/composer/DockReturnToSurfaceBar.tsx');
+  assert.match(bar, /data-dock-return="true"/);
+  assert.match(bar, /data-dock-return-action="view"/);
+  assert.match(bar, /data-dock-return-action="stay"/);
+  assert.match(bar, /dockReturnBannerCopy\(language, surface\)/);
+  const preference = read('components/composer/DockSendPreferenceSwitch.tsx');
+  assert.match(preference, /data-dock-send-preference="true"/);
+  assert.match(preference, /data-dock-send-preference-option="jump"/);
+  assert.match(preference, /data-dock-send-preference-option="stay"/);
+  assert.match(preference, /aria-pressed=\{value === "stay"\}/);
+  assert.match(preference, /dockSendPreferenceCopy\(language\)/);
+  const planView = read('components/plan/CoachPlanView.tsx');
+  assert.match(planView, /dockReturnNotice\?: ReactNode;/);
+  assert.match(planView, /nextTools=\{props\.dockReturnNotice \? <>\{props\.dockReturnNotice\}\{liveEvidenceDecisionRow\}<\/> : liveEvidenceDecisionRow\}/);
+  assert.match(planView, /\{props\.dockReturnNotice\}\n        \{leftoverNote/);
 
   // Preference persists in the workbench layout state, default jump.
   assert.match(app, /normalizeDockSendPreference\(layout\.composerSendPreference\)/);

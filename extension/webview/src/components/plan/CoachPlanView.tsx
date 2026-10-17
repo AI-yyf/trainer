@@ -232,6 +232,11 @@ export interface CoachPlanViewProps {
    */
   onExpandToEditor?: () => void;
   expandToEditorLabel?: string;
+  /**
+   * §3.7 red line 5 (stay mode): returnToSurface bar injected into the Now
+   * area after a stay-mode dock send finishes on Learning.
+   */
+  dockReturnNotice?: ReactNode;
 }
 
 function planCopy(
@@ -764,6 +769,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       <section className="template-learning-home" data-template="LearningHome" data-plan-leftover-not-live={leftoverNote ? "true" : undefined}>
         {expandToEditorControl ? <div className="coach-plan-view__surface-control">{expandToEditorControl}</div> : null}
         {learningSystemState ?? <NextAction {...props.primaryAction} />}
+        {props.dockReturnNotice}
         {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
         {liveEvidenceDecisionRow}
         {verifiedReturns.length ? (
@@ -1009,7 +1015,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       headerActions={expandToEditorControl}
       state={learningSystemState}
       next={props.primaryAction}
-      nextTools={liveEvidenceDecisionRow}
+      nextTools={props.dockReturnNotice ? <>{props.dockReturnNotice}{liveEvidenceDecisionRow}</> : liveEvidenceDecisionRow}
       route={{ label: stageProgressText ? `${resolvedStagesLabel} · ${stageProgressText}` : resolvedStagesLabel, content: <>
         {renderComposerDraftReplacement("stage")}
         {plan.stages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={stage.id === activeStage?.id} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}

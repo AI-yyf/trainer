@@ -327,6 +327,16 @@ export interface WorkbenchStore {
    */
   operationMessageSurface: OperationMessageSurface;
   streaming: StreamingState;
+  /**
+   * §3.7 red line 5 (stay mode): the dock surface whose send is waiting on
+   * the next non-cancelled stream completion. Transient — never persisted.
+   */
+  dockStaySendSurface: "plan" | "resources" | null;
+  /**
+   * §3.7 red line 5: actionable returnToSurface notice owned by one dock
+   * surface ("View reply" follows the answer into Coach). Transient.
+   */
+  dockReturnNotice: "plan" | "resources" | null;
   resourceOrganizationPending?: { pending: true; operationCount?: number };
   resourceRestoreContext?: ResourceRestoreContext;
   trainingRestoreContext?: TrainingRestoreContext;
@@ -357,6 +367,8 @@ export interface WorkbenchStore {
   setComposerDraft: (draft: string) => void;
   selectComposerDraftScope: (scope: string) => void;
   setComposerSendPreference: (preference: "jump" | "stay") => void;
+  markDockStaySend: (surface: "plan" | "resources") => void;
+  clearDockReturnNotice: () => void;
   rememberSurfaceScroll: (key: string, position: number) => void;
   setActivityDraft: (key: string, draft: string) => void;
   setOperationMessage: (message?: OperationMessage, surface?: OperationMessageSurface) => void;
@@ -749,6 +761,8 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   pendingComposerLanguage: undefined,
   ...initialOperationBanner,
   streaming: initialStreamingState,
+  dockStaySendSurface: null,
+  dockReturnNotice: null,
   resourceOrganizationPending: undefined,
   resourceRestoreContext: undefined,
   trainingRestoreContext: undefined,
@@ -888,6 +902,8 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
     set((state) => ({
       layout: persistLayout({ ...state.layout, composerSendPreference: preference }),
     })),
+  markDockStaySend: (surface) => set({ dockStaySendSurface: surface, dockReturnNotice: null }),
+  clearDockReturnNotice: () => set({ dockReturnNotice: null }),
   rememberSurfaceScroll: (key, position) => set((state) => ({
     layout: persistLayout({ ...state.layout, surfaceScrollPositions: { ...state.layout.surfaceScrollPositions, [key]: position } }),
   })),
@@ -1280,8 +1296,20 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             normalizeOperationReliabilityOutcome(message.payload.reliabilityOutcome) ??
             (hadEncodingIssue ? "failure" : "success"),
         };
+        // §3.7 red line 5 (stay mode): the completed stay-mode send raises the
+        // returnToSurface notice in the same synchronous batch that ends the
+        // stream — render-time transition detection would miss batched
+        // completions (fixture streams and fast real streams alike).
+        const dockStaySurface = state.dockStaySendSurface;
+        const dockNoticePatch =
+          dockStaySurface && nextStreaming.completionStopReason !== "cancelled"
+            ? { dockReturnNotice: dockStaySurface, dockStaySendSurface: null }
+            : dockStaySurface
+              ? { dockStaySendSurface: null }
+              : {};
         return {
           streaming: nextStreaming,
+          ...dockNoticePatch,
           ...operationBannerState(
             hadEncodingIssue
               ? {
@@ -1315,6 +1343,9 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         };
         return {
           streaming: nextStreaming,
+          // §3.7 stay mode: a failed stream delivers no answer — drop the
+          // pending dock marker without raising the returnToSurface notice.
+          dockStaySendSurface: null,
           ...operationBannerState(
             deriveTrainerStreamingOperationMessage(language, nextStreaming, {
               errorCategory: message.payload.category,
@@ -1342,6 +1373,9 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             reliabilityPhase: "acked",
             reliabilityOutcome: "failure",
           },
+          // §3.7 stay mode: a cancelled stream delivers no answer — drop the
+          // pending dock marker without raising the returnToSurface notice.
+          dockStaySendSurface: null,
           ...operationBannerState({
             tone: "info",
             message: cancelledMessage,

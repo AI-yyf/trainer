@@ -232,7 +232,9 @@ async function submitPlanComposerRequest(page, mode, message) {
   await more.locator(':scope > summary').click();
   const action = more.getByRole('button', { name: mode === 'generate' ? /^Adjust plan/ : 'Ask Coach' });
   if (await action.isDisabled()) {
-    await expect(page.locator('#coach-composer')).toHaveCount(0);
+    // §3.7: Learning owns the dock composer even when this plan intent is
+    // unavailable — a disabled action only means no plan-composer draft.
+    await expect(page.locator('#coach-composer')).toHaveCount(1);
     return false;
   }
   await action.click();
@@ -358,7 +360,10 @@ test.describe("Trainer three-destination shell", () => {
       await page.getByTestId(viewNavigationTestId(view)).click();
       await expectActiveView(page, "en-US", view);
       await expect(tabs.first()).toBeVisible();
-      await expect(page.locator(".composer-shell")).toHaveCount(view === "coach" ? 1 : 0);
+      await expect(page.locator(".composer-shell")).toHaveCount(1);
+      // §3.7 red line 5: the visible send-preference switch belongs to the
+      // docked surfaces only — a Coach send always keeps the thread in front.
+      await expect(page.locator("[data-dock-send-preference]")).toHaveCount(view === "coach" ? 0 : 1);
     }
 
     // Settings lives in the header gear and is not a chat surface.
@@ -371,6 +376,48 @@ test.describe("Trainer three-destination shell", () => {
     await expectThreePrimaryDestinations(page, "en-US");
     await expectActiveView(page, "en-US", "settings");
     await expect(page.locator(".composer-shell")).toHaveCount(0);
+    await expectNoConsoleErrors(errors);
+  });
+
+  test("dock send preference surfaces on Learning and the stay-mode return bar closes the loop", async ({ page }) => {
+    const errors = attachConsoleErrorCollector(page);
+
+    await openPreview(page, "plan", {
+      lang: "en-US",
+      scenario: "ready",
+      connection: "connected",
+    });
+    await expectActiveView(page, "en-US", "plan");
+
+    const preference = page.locator("[data-dock-send-preference]");
+    await expect(preference).toBeVisible();
+    const jump = preference.locator('[data-dock-send-preference-option="jump"]');
+    const stay = preference.locator('[data-dock-send-preference-option="stay"]');
+    await expect(jump).toHaveAttribute("aria-pressed", "true");
+    await stay.click();
+    await expect(stay).toHaveAttribute("aria-pressed", "true");
+    await expect(jump).toHaveAttribute("aria-pressed", "false");
+
+    // Stay-mode send keeps Learning in front and lands the actionable bar.
+    await page.locator("#coach-composer").fill("Stay-mode dock closure check.");
+    await page.locator(".composer__send").click();
+    await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
+    const bar = page.locator("[data-dock-return]");
+    await expect(bar).toBeVisible({ timeout: 30000 });
+    await expect(bar).toContainText("Coach replied");
+
+    // "Back to Learning" clears the bar and keeps the surface.
+    await bar.locator('[data-dock-return-action="stay"]').click();
+    await expect(page.locator("[data-dock-return]")).toHaveCount(0);
+    await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
+
+    // A second stay-mode send lands the bar again; "View reply" jumps to Coach.
+    await page.locator("#coach-composer").fill("Second stay-mode send.");
+    await page.locator(".composer__send").click();
+    await expect(bar).toBeVisible({ timeout: 30000 });
+    await bar.locator('[data-dock-return-action="view"]').click();
+    await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
+    await expect(page.locator("[data-dock-return]")).toHaveCount(0);
     await expectNoConsoleErrors(errors);
   });
 
@@ -441,7 +488,9 @@ test.describe("Trainer three-destination shell", () => {
       });
       expect(formalPlanAfter).toEqual(formalPlanBefore);
       if (!submitted) {
-        await expect(page.locator("#coach-composer")).toHaveCount(0);
+        // §3.7: the dock composer stays mounted on Learning; the disabled plan
+        // intent only means no plan-composer draft is seeded.
+        await expect(page.locator("#coach-composer")).toHaveCount(1);
         continue;
       }
       await expect.poll(() =>
@@ -1399,6 +1448,9 @@ test.describe("Trainer three-destination shell", () => {
     expect(visibleMoreCount).toBeLessThanOrEqual(1);
     expect(await page.evaluate(() => window.__EVIDENCE_CONTEXT_ACTIONS__
       .filter(message => message.type.startsWith('session/send') || message.payload?.commandId === 'trainer.evidence.adopt'))).toEqual([]);
+    // The evidence composer mode is a mode chip + placeholder, not a seeded
+    // draft: the learner writes the request, then sends it.
+    await page.locator("#coach-composer").fill('请帮我整理当前待核对的证据。');
     await page.locator('.composer__send').click();
     await expect.poll(() => page.evaluate(() => window.__EVIDENCE_CONTEXT_ACTIONS__
       .some(message => message.type.startsWith('session/send')))).toBe(true);

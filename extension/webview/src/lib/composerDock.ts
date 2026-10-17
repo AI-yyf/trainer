@@ -142,14 +142,14 @@ export function appendDockAnchor(text: string, anchor: DockContextAnchor | null)
  * Eight UI languages, keyed the same way as copy.ts.
  */
 const DOCK_RETURN_BANNER_COPY: Record<string, { title: string; action: string; back: string }> = {
-  "zh-CN": { title: "教练已回答 · 去查看", action: "去查看", back: "回到学习" },
-  "en-US": { title: "Coach replied · view it", action: "View reply", back: "Back to Learning" },
-  "es-ES": { title: "El coach respondió · verlo", action: "Ver respuesta", back: "Volver al aprendizaje" },
-  "fr-FR": { title: "Le coach a répondu · voir", action: "Voir la réponse", back: "Retour à l'apprentissage" },
-  "de-DE": { title: "Coach geantwortet · ansehen", action: "Antwort ansehen", back: "Zurück zum Lernen" },
-  "ja-JP": { title: "コーチが回答しました · 確認", action: "回答を見る", back: "学習に戻る" },
-  "ko-KR": { title: "코치가 답했습니다 · 확인", action: "답변 보기", back: "학습으로 돌아가기" },
-  "pt-BR": { title: "O coach respondeu · ver", action: "Ver resposta", back: "Voltar ao aprendizado" },
+  "zh-CN": { title: "教练已回答", action: "去查看", back: "回到学习" },
+  "en-US": { title: "Coach replied", action: "View reply", back: "Back to Learning" },
+  "es-ES": { title: "El coach respondió", action: "Ver respuesta", back: "Volver al aprendizaje" },
+  "fr-FR": { title: "Le coach a répondu", action: "Voir la réponse", back: "Retour à l'apprentissage" },
+  "de-DE": { title: "Coach geantwortet", action: "Antwort ansehen", back: "Zurück zum Lernen" },
+  "ja-JP": { title: "コーチが回答しました", action: "回答を見る", back: "学習に戻る" },
+  "ko-KR": { title: "코치가 답했습니다", action: "답변 보기", back: "학습으로 돌아가기" },
+  "pt-BR": { title: "O coach respondeu", action: "Ver resposta", back: "Voltar ao aprendizado" },
 };
 
 export function dockReturnBannerCopy(
@@ -180,4 +180,26 @@ function surfaceBackCopy(language: string): string {
     "pt-BR": "Voltar aos recursos",
   };
   return table[language] ?? table["en-US"];
+}
+
+/**
+ * Send-preference switch copy (§3.7 red line 5): a visible two-option switch
+ * in the dock strip on Learning/Resources. "jump" is the historical default —
+ * a send follows the streamed answer into Coach; "stay" keeps the working
+ * surface and leans on the returnToSurface bar. Coach never renders it: a
+ * send there always stays in the thread.
+ */
+const DOCK_SEND_PREFERENCE_COPY: Record<string, { label: string; jump: string; stay: string }> = {
+  "zh-CN": { label: "发送后", jump: "跳转回答", stay: "留在本页" },
+  "en-US": { label: "After send", jump: "Jump to reply", stay: "Stay here" },
+  "es-ES": { label: "Tras enviar", jump: "Ir a la respuesta", stay: "Quedarme aquí" },
+  "fr-FR": { label: "Après l'envoi", jump: "Aller à la réponse", stay: "Rester ici" },
+  "de-DE": { label: "Nach dem Senden", jump: "Zur Antwort", stay: "Hierbleiben" },
+  "ja-JP": { label: "送信後", jump: "回答へ移動", stay: "ここに留まる" },
+  "ko-KR": { label: "전송 후", jump: "답변으로 이동", stay: "여기 머무르기" },
+  "pt-BR": { label: "Após enviar", jump: "Ir para a resposta", stay: "Ficar aqui" },
+};
+
+export function dockSendPreferenceCopy(language: string): { label: string; jump: string; stay: string } {
+  return DOCK_SEND_PREFERENCE_COPY[language] ?? DOCK_SEND_PREFERENCE_COPY["en-US"];
 }

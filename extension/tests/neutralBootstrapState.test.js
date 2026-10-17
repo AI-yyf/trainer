@@ -295,6 +295,88 @@ test('page exit immediately persists the latest scoped draft before the debounce
   } finally { global.window = previousWindow; }
 });
 
+test('surface-keyed draft scopes keep Learning/Resources drafts from overwriting the Coach draft (#5129 class)', () => {
+  const previousWindow = global.window;
+  global.window = {
+    setTimeout: () => 0,
+    clearTimeout: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+  try {
+    const state = loadWorkbenchState();
+    const sessionKey = 'workspace-one\u0000session-one';
+    const planScope = `${sessionKey}\u0000dock:plan`;
+    const resourcesScope = `${sessionKey}\u0000dock:resources`;
+
+    // Coach draft is typed first; Learning starts from its own empty scope.
+    state.getState().selectComposerDraftScope(sessionKey);
+    state.getState().setComposerDraft('coach draft must survive');
+    state.getState().selectComposerDraftScope(planScope);
+    assert.equal(state.getState().layout.composerDraft, '', 'Learning starts from its own (empty) draft');
+    state.getState().setComposerDraft('plan draft');
+
+    // Switching to a surface that never had a draft must not invent one
+    // (hidden surfaces never auto-write drafts, §3.7 / design doc line 245).
+    state.getState().selectComposerDraftScope(resourcesScope);
+    assert.equal(state.getState().layout.composerDraft, '');
+    assert.equal(state.getState().layout.composerDrafts[resourcesScope], undefined);
+
+    // Returning to Coach restores the coach draft; the plan draft never leaked.
+    state.getState().selectComposerDraftScope(sessionKey);
+    assert.equal(state.getState().layout.composerDraft, 'coach draft must survive');
+    assert.equal(state.getState().layout.composerDrafts[sessionKey], 'coach draft must survive');
+    assert.equal(state.getState().layout.composerDrafts[planScope], 'plan draft');
+
+    // Later typing updates only the visible surface's scope.
+    state.getState().setComposerDraft('coach draft v2');
+    assert.equal(state.getState().layout.composerDrafts[sessionKey], 'coach draft v2');
+    assert.equal(state.getState().layout.composerDrafts[planScope], 'plan draft');
+
+    // Re-selecting the active scope is a no-op, never a rewrite.
+    const before = state.getState().layout;
+    state.getState().selectComposerDraftScope(sessionKey);
+    assert.equal(state.getState().layout, before);
+  } finally { global.window = previousWindow; }
+});
+
+test('a stay-mode dock send raises the returnToSurface notice on stream completion', () => {
+  const previousWindow = global.window;
+  global.window = {
+    setTimeout: () => 0,
+    clearTimeout: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+  try {
+    const state = loadWorkbenchState();
+    state.getState().markDockStaySend('plan');
+    assert.equal(state.getState().dockStaySendSurface, 'plan');
+    assert.equal(state.getState().dockReturnNotice, null);
+
+    // The whole fixture stream lands in one synchronous batch; the notice is
+    // still raised because the reducer — not a render transition — decides.
+    state.getState().applyHostMessage({ type: 'stream/start', payload: { messageId: 'stay-1' } });
+    state.getState().applyHostMessage({
+      type: 'stream/complete',
+      payload: { messageId: 'stay-1', tokens: 3, summary: 'done' },
+    });
+    assert.equal(state.getState().dockReturnNotice, 'plan');
+    assert.equal(state.getState().dockStaySendSurface, null);
+
+    state.getState().clearDockReturnNotice();
+    assert.equal(state.getState().dockReturnNotice, null);
+
+    // A cancelled stay-mode stream delivers no answer: the marker drops and
+    // no notice is raised.
+    state.getState().markDockStaySend('resources');
+    state.getState().applyHostMessage({ type: 'stream/start', payload: { messageId: 'stay-2' } });
+    state.getState().applyHostMessage({ type: 'stream/cancelled', payload: { messageId: 'stay-2' } });
+    assert.equal(state.getState().dockReturnNotice, null);
+    assert.equal(state.getState().dockStaySendSurface, null);
+  } finally { global.window = previousWindow; }
+});
+
 function assertNoFixtureData(data) {
   assert.doesNotMatch(
     JSON.stringify(data),

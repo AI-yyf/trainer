@@ -200,7 +200,7 @@ import {
 import { AppShell } from "../templates/AppShell";
 import { PracticeResponse } from "../templates/PracticeResponse";
 import { ActivityHeader } from "../templates/ActivityHeader";
-import { appendDockAnchor, composerDockDraftScope, dockReturnBannerCopy, dockSendNavigation, docksComposer, normalizeDockSendPreference, resolveDockContextAnchor } from "../lib/composerDock";
+import { appendDockAnchor, composerDockDraftScope, dockSendNavigation, docksComposer, normalizeDockSendPreference, resolveDockContextAnchor } from "../lib/composerDock";
 import { useComposerDockAnchor } from "./useComposerDockAnchor";
 import { PLAN_COPY } from "../lib/i18n/segments/planInlineText";
 import {
@@ -223,7 +223,7 @@ import {
   type OperationMessageSurface,
 } from "../lib/operationMessageGovernance";
 import { resolveTurnNextStepRequiresConfirmation } from "../lib/nextStepConfirmation";
-import { CoachComposer, ComposerIconButton } from "../components/composer";
+import { CoachComposer, ComposerIconButton, DockReturnToSurfaceBar, DockSendPreferenceSwitch } from "../components/composer";
 import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
 import { WorkbenchSurfaceButton } from "../components/common/WorkbenchSurfaceButton";
 import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
@@ -3788,6 +3788,10 @@ export function App() {
     setActiveView,
     setResourceRestoreContext,
     setComposerDraft,
+    setComposerSendPreference,
+    markDockStaySend,
+    clearDockReturnNotice,
+    dockReturnNotice,
     setComposerLanguage,
     setComposerAnswerMode,
     setTeachingStyle,
@@ -3825,6 +3829,10 @@ export function App() {
       setActiveView: state.setActiveView,
       setResourceRestoreContext: state.setResourceRestoreContext,
       setComposerDraft: state.setComposerDraft,
+      setComposerSendPreference: state.setComposerSendPreference,
+      markDockStaySend: state.markDockStaySend,
+      clearDockReturnNotice: state.clearDockReturnNotice,
+      dockReturnNotice: state.dockReturnNotice,
       setComposerLanguage: state.setComposerLanguage,
       setComposerAnswerMode: state.setComposerAnswerMode,
       setTeachingStyle: state.setTeachingStyle,
@@ -10269,7 +10277,10 @@ export function App() {
       if (dockSendNavigation(dockSendPreference, activeView) === "jump_to_coach") {
         setActiveView("coach");
       } else {
-        dockStaySendRef.current = { surface: activeView };
+        // §3.7 red line 5: the store raises the returnToSurface notice when
+        // this send's stream completes — even when every stream message lands
+        // in one synchronous batch (fixture streams, fast real streams).
+        markDockStaySend(activeView);
       }
     }
     setComposerDraft("");
@@ -11242,22 +11253,22 @@ export function App() {
   }, [setComposerDraft, streaming.isStreaming, streaming.streamMessageId]);
 
   const streamWasActiveRef = useRef(streaming.isStreaming);
-  const dockStaySendRef = useRef<null | { surface: "plan" | "resources" }>(null);
+  // §3.7 red line 5 (stay mode): the store owns the stay-send marker and the
+  // returnToSurface notice (raised inside the stream/complete reducer, so a
+  // batched fixture completion still closes the loop); the App only navigates
+  // or dismisses.
+  const handleDockReturnViewReply = useCallback(() => {
+    clearDockReturnNotice();
+    setActiveView("coach");
+  }, [clearDockReturnNotice, setActiveView]);
+  const handleDockReturnDismiss = useCallback(() => clearDockReturnNotice(), [clearDockReturnNotice]);
   useEffect(() => {
     const wasActive = streamWasActiveRef.current;
     streamWasActiveRef.current = streaming.isStreaming;
     if (wasActive && !streaming.isStreaming && streaming.completionStopReason !== "cancelled") {
       streamResumeDraftRef.current = "";
-      const dockStay = dockStaySendRef.current;
-      if (dockStay) {
-        dockStaySendRef.current = null;
-        setOperationMessage({
-          tone: "success",
-          message: dockReturnBannerCopy(layout.composerLanguage, dockStay.surface).title,
-        });
-      }
     }
-  }, [layout.composerLanguage, streaming.completionStopReason, streaming.isStreaming]);
+  }, [streaming.completionStopReason, streaming.isStreaming]);
 
   const renderComposerAccessory = () => {
     if (!openMenu) {
@@ -13154,6 +13165,14 @@ export function App() {
   const renderResourcesView = () => {
     return (
       <section className="resources-view">
+        {dockReturnNotice === "resources" ? (
+          <DockReturnToSurfaceBar
+            language={layout.composerLanguage}
+            surface="resources"
+            onViewReply={handleDockReturnViewReply}
+            onDismiss={handleDockReturnDismiss}
+          />
+        ) : null}
         <Suspense
           fallback={<ViewFallback label={resourcesViewLabel(layout.composerLanguage)} language={layout.composerLanguage} />}
         >
@@ -13731,6 +13750,14 @@ export function App() {
       <Suspense fallback={<ViewFallback label={t.plan} language={layout.composerLanguage} />}>
         <CoachPlanView
         plan={workspaceSessionBlocked ? null : visibleFormalPlan}
+        dockReturnNotice={dockReturnNotice === "plan" ? (
+          <DockReturnToSurfaceBar
+            language={layout.composerLanguage}
+            surface="plan"
+            onViewReply={handleDockReturnViewReply}
+            onDismiss={handleDockReturnDismiss}
+          />
+        ) : undefined}
         primaryAction={{
           label: templateCopy[layout.composerLanguage].nextAction,
           title: learningPrimaryAction.title,
@@ -14556,6 +14583,13 @@ export function App() {
               <span>{dockAnchorControl.anchor.label}</span>
               <button type="button" className="template-back" onClick={dockAnchorControl.suppress}>{appUiCopy(layout.composerLanguage, "清除")}</button>
             </div> : null}
+            {activeView === "plan" || activeView === "resources" ? (
+              <DockSendPreferenceSwitch
+                language={layout.composerLanguage}
+                value={normalizeDockSendPreference(layout.composerSendPreference)}
+                onChange={setComposerSendPreference}
+              />
+            ) : null}
             {coachSuggestionChips}
             <CoachComposer
               attachmentScope={attachmentScope}
