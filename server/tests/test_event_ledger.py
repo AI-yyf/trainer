@@ -260,9 +260,10 @@ class TestNewEventTypeConstants:
         assert EVENT_TEACHING_ASSET_UPSERTED in ALL_EVENT_TYPES
 
     def test_all_canonical_event_types_present(self) -> None:
-        from app.core.event_ledger import ALL_EVENT_TYPES
+        from app.core.event_ledger import ALL_EVENT_TYPES, EVENT_TELEMETRY_CONSENT_CHANGED
 
-        assert len(ALL_EVENT_TYPES) == 41
+        assert len(ALL_EVENT_TYPES) == 42
+        assert EVENT_TELEMETRY_CONSENT_CHANGED in ALL_EVENT_TYPES
 
     def test_dependency_mastery_updated_constant(self) -> None:
         from app.core.event_ledger import (
@@ -383,8 +384,8 @@ class TestNewEventConstants:
         assert EVENT_DEPENDENCY_MASTERY_UPDATED == "dependency_mastery_updated"
 
     def test_total_event_type_count(self) -> None:
-        """ALL_EVENT_TYPES must contain exactly 41 event types (including agent checkpoints)."""
-        assert len(ALL_EVENT_TYPES) == 41
+        """ALL_EVENT_TYPES must contain exactly 42 event types (including agent checkpoints + telemetry consent)."""
+        assert len(ALL_EVENT_TYPES) == 42
 
     def test_record_new_event_types(self) -> None:
         """New event types can be recorded and queried back."""
