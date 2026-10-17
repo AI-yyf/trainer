@@ -57,6 +57,8 @@ Er ist keine Chat-Shell — er ist ein Coach mit Gedächtnis, Lehrplan und Prüf
 - Er **erinnert** sich über Sitzungen, Projekte und Wochen hinweg an dich und plant Wiederholungen auf der FSRS-Vergessenskurve
 - Er **schreibt niemals Produktionscode für dich** — du schreibst, er lehrt, **ihr wächst zusammen**
 
+**Und diese Disziplin reicht über den Code hinaus.** Dieselbe „erst verifizieren"-Schleife deckt jetzt auch Literatur und Sprachenlernen ab: Close Reading mit ¶-verankerten Anmerkungen, Imitationsschreiben mit Rückanker zum Original, Theorie-Konzeptkarten — jedes Fach wird über sein eigenes Verifier-Paket und eigene Fortschrittsdimensionen gelehrt, nicht durch umetikettierte Code-Checks.
+
 <div align="center">
 
 | vibe coding · der heutige Standard | Trainer · wie es sein sollte |
@@ -228,6 +230,7 @@ Tippe `$` im Chat für eine durchsuchbare Palette mit sechs Vorschlägen. Eigene
 | Workspace-Berechtigungsstufen | ❌ | ⚠️ Trust-Dialog | ❌ | ✅ 6 Stufen + harte Remote-Sperre |
 | Karten-Fortschritt gegated | ❌ | ❌ | ⚠️ manuelle Checkboxen | ✅ Verifikation erzwungen |
 | Beförderung übertragbarer Skills | ❌ | ❌ | ❌ | ✅ fail-closed über Workspaces |
+| Jenseits von Code (Literatur & Sprachen) | ❌ | ❌ | ❌ | ✅ eingebaute Literatur-/Sprach-Verifier-Pakete |
 | i18n | ⚠️ | ⚠️ | ⚠️ | ✅ 600+ Keys × 8 |
 | Testsuite | closed source | closed source | closed source | ✅ **3.328 Fälle** (offen) |
 | Verweigert das Schreiben für dich | ❌ | ❌ | n/v | ✅ eine philosophische Grenze |
@@ -426,6 +429,7 @@ Pläne frieren ein und tauen auf; Sitzungen überleben Neustarts; der Karten-For
 - **Löschen geht in den Papierkorb**: kein `delete`-Op, nur `move to <root>/.trash/<timestamp-uuid>/`
 - Sandbox-Vorschauen erzwingen strenge **Path-Governance** — Pfade außerhalb der Grenzen bekommen ein kompromissloses 422
 - Skill-Sharing ist ein **reiner Datenimport** — begrenzte Feldlängen, Eingebaute gewinnen, **ein Code-Pfad existiert nicht**
+- **Telemetrie ist Opt-in und standardmäßig aus**: Nichts verlässt den Rechner, bis du den Schalter in den Einstellungen umlegst; der Export enthält nur grobkörnige lokale Ereigniszählungen — keine Inhalte, keine Pfade, keine Identität (Payload per Schema geprüft durch `scripts/verify-telemetry-payload.mjs`; Consent-Änderungen werden im lokalen Ereignis-Ledger auditiert)
 
 **Zentraler Code:** `server/app/workspace/authority.py:33-962` · `extension/src/provider/providerConfigStore.ts` · `shared/src/skillCatalog.ts:614-764`
 

@@ -57,6 +57,8 @@ No es una carcasa de chat — es un coach con memoria, un temario y una polític
 - Te **recuerda** entre sesiones, proyectos y semanas, programando repasos sobre la curva de olvido de FSRS
 - **Nunca escribe código de producción por ti** — tú escribes, él enseña, **crecéis juntos**
 
+**Y la disciplina va más allá del código.** El mismo bucle de "verificar primero" ahora cubre literatura y aprendizaje de idiomas: lectura atenta con anotaciones ancladas a ¶, escritura por imitación anclada a la fuente, tarjetas de conceptos teóricos — cada materia se enseña con su propio paquete de verificación y sus dimensiones de progreso, no con comprobaciones de código disfrazadas.
+
 <div align="center">
 
 | vibe coding · la norma de hoy | Trainer · cómo debería ser |
@@ -228,6 +230,7 @@ Escribe `$` en Chat para abrir una paleta con búsqueda y seis opciones iniciale
 | Niveles de permiso del workspace | ❌ | ⚠️ diálogo de confianza | ❌ | ✅ 6 niveles + bloqueo duro en remoto |
 | Progresión de tarjetas con compuerta | ❌ | ❌ | ⚠️ casillas manuales | ✅ verificada y forzada |
 | Promoción de skills transferibles | ❌ | ❌ | ❌ | ✅ fail closed entre workspaces |
+| Más allá del código (literatura e idiomas) | ❌ | ❌ | ❌ | ✅ paquetes de verificación de literatura/idiomas integrados |
 | i18n | ⚠️ | ⚠️ | ⚠️ | ✅ 600+ claves × 8 |
 | Suite de tests | código cerrado | código cerrado | código cerrado | ✅ **3.328 casos** (abierta) |
 | Se niega a escribir por ti | ❌ | ❌ | n/a | ✅ una línea roja filosófica |
@@ -426,6 +429,7 @@ Los planes se congelan y descongelan; las sesiones sobreviven a los reinicios; e
 - **Borrar va a la papelera**: no existe la operación `delete`, solo `move to <root>/.trash/<timestamp-uuid>/`
 - Las previsualizaciones del sandbox aplican una **gobernanza de rutas** estricta — las rutas fuera de límites reciben un 422 sin más
 - Compartir skills es una **importación de datos puros** — longitudes de campo limitadas, las integradas ganan, **no existe ruta de código**
+- **La telemetría es opt-in y está desactivada por defecto**: nada sale de la máquina hasta que actives el interruptor en Ajustes; la exportación solo contiene recuentos locales y agregados de eventos — sin contenido, sin rutas, sin identidad (carga útil validada por esquema en `scripts/verify-telemetry-payload.mjs`; los cambios de consentimiento se auditan en el libro de eventos local)
 
 **Código clave:** `server/app/workspace/authority.py:33-962` · `extension/src/provider/providerConfigStore.ts` · `shared/src/skillCatalog.ts:614-764`
 

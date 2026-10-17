@@ -57,6 +57,8 @@ Não é uma casca de chat — é um coach com memória, um currículo e uma pol�
 - Ele **lembra** de você entre sessões, projetos e semanas, agendando revisões na curva de esquecimento do FSRS
 - Ele **nunca escreve código de produção por você** — você escreve, ele ensina, **vocês crescem juntos**
 
+**E a disciplina vai além do código.** O mesmo ciclo de "verificar primeiro" agora cobre literatura e aprendizado de idiomas: leitura atenta com anotações ancoradas em ¶, escrita por imitação ancorada na fonte, cartões de conceito teórico — cada matéria ensinada pelo próprio pacote de verificação e pelas próprias dimensões de progresso, não por checagens de código disfarçadas.
+
 <div align="center">
 
 | vibe coding · a norma de hoje | Trainer · como deveria ser |
@@ -228,6 +230,7 @@ Digite `$` no Chat para abrir uma paleta pesquisável com seis sugestões inicia
 | Níveis de permissão de workspace | ❌ | ⚠️ diálogo de confiança | ❌ | ✅ 6 níveis + trava dura no remoto |
 | Progressão de cartão travada | ❌ | ❌ | ⚠️ checkboxes manuais | ✅ verificação obrigatória |
 | Promoção de habilidade transferível | ❌ | ❌ | ❌ | ✅ fail-closed entre workspaces |
+| Além do código (literatura e idiomas) | ❌ | ❌ | ❌ | ✅ pacotes de verificação de literatura/idiomas integrados |
 | i18n | ⚠️ | ⚠️ | ⚠️ | ✅ 600+ chaves × 8 |
 | Suíte de testes | código fechado | código fechado | código fechado | ✅ **3.328 casos** (aberta) |
 | Se recusa a escrever por você | ❌ | ❌ | n/a | ✅ um limite filosófico inegociável |
@@ -426,6 +429,7 @@ Planos congelam e descongelam; sessões sobrevivem a reinícios; o progresso dos
 - **Delete vai para a lixeira**: não existe operação `delete`, apenas `move to <root>/.trash/<timestamp-uuid>/`
 - Previews em sandbox impõem **governança de caminhos** estrita — caminho fora do limite recebe um 422 seco
 - Compartilhar habilidades é **import de dados puros** — limites de tamanho por campo, nativas vencem, **nenhum caminho de código existe**
+- **A telemetria é opt-in e desativada por padrão**: nada sai da máquina até você ativar o interruptor nas Configurações; a exportação carrega apenas contagens locais e agregadas de eventos — sem conteúdo, sem caminhos, sem identidade (carga com esquema validado por `scripts/verify-telemetry-payload.mjs`; mudanças de consentimento são auditadas no livro de eventos local)
 
 **Código-chave:** `server/app/workspace/authority.py:33-962` · `extension/src/provider/providerConfigStore.ts` · `shared/src/skillCatalog.ts:614-764`
 

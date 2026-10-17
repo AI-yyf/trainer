@@ -57,6 +57,8 @@ Ce n'est pas un simple habillage de chat — c'est un coach avec de la mémoire,
 - Il se **souvient** de toi entre les sessions, les projets et les semaines, et planifie les révisions sur la courbe d'oubli FSRS
 - Il **n'écrit jamais ton code de production à ta place** — tu écris, il enseigne, **vous grandissez ensemble**
 
+**Et cette discipline dépasse le code.** La même boucle "vérifier d'abord" couvre désormais la littérature et l'apprentissage des langues : lecture attentive avec annotations ancrées sur ¶, écriture par imitation ancrée à la source, cartes de concepts théoriques — chaque matière est enseignée via son propre pack de vérification et ses dimensions de progression, pas via des contrôles de code déguisés.
+
 <div align="center">
 
 | vibe coding · la norme actuelle | Trainer · comment ça devrait être |
@@ -228,6 +230,7 @@ Tape `$` dans Chat pour ouvrir une palette avec recherche et six suggestions ini
 | Paliers de permission du workspace | ❌ | ⚠️ dialogue de confiance | ❌ | ✅ 6 paliers + verrou dur à distance |
 | Progression des cartes verrouillée | ❌ | ❌ | ⚠️ cases à cocher manuelles | ✅ vérification imposée |
 | Promotion des compétences transférables | ❌ | ❌ | ❌ | ✅ échec par défaut entre workspaces |
+| Au-delà du code (littérature et langues) | ❌ | ❌ | ❌ | ✅ packs de vérification littérature/langues intégrés |
 | i18n | ⚠️ | ⚠️ | ⚠️ | ✅ 600+ clés × 8 |
 | Suite de tests | source fermée | source fermée | source fermée | ✅ **3 328 cas** (ouverte) |
 | Refuse d'écrire à ta place | ❌ | ❌ | n/a | ✅ une limite philosophique non négociable |
@@ -426,6 +429,7 @@ Les plans se gèlent et se dégèlent ; les sessions survivent aux redémarrages
 - **La suppression passe par la corbeille** : pas d'opération `delete`, seulement `move to <root>/.trash/<timestamp-uuid>/`
 - Les aperçus sandbox imposent une **gouvernance stricte des chemins** — un chemin hors limites prend un 422 sec
 - Le partage de skills est un **import de pures données** — longueurs de champs plafonnées, les intégrés gagnent, **aucun chemin de code n'existe**
+- **La télémétrie est en opt-in et désactivée par défaut** : rien ne quitte la machine tant que tu n'actives pas l'interrupteur dans les Paramètres ; l'export ne contient que des comptages d'événements locaux agrégés — aucun contenu, aucun chemin, aucune identité (charge utile contrôlée par schéma via `scripts/verify-telemetry-payload.mjs` ; les changements de consentement sont audités dans le journal d'événements local)
 
 **Code clé :** `server/app/workspace/authority.py:33-962` · `extension/src/provider/providerConfigStore.ts` · `shared/src/skillCatalog.ts:614-764`
 

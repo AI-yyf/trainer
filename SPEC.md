@@ -1,7 +1,7 @@
 # Trainer 规格说明书
 
 版本：v1.1
-最后更新：2026-10-16
+最后更新：2026-10-17
 项目路径：本仓库根目录（`trainer/`）
 状态：P1 Release Candidate
 
@@ -267,6 +267,7 @@ context chips / Ask Trainer... / + / Send
 3. destructive 需用户明确授权 + trash + checkpoint + ledger
 4. Provider Capability Truth：不信任声明，真实 probe
 5. Sidecar 生命周期：sidebar reopen ≠ restart / switch view ≠ model reload
+6. 遥测默认关闭、可选加入：导出仅含白名单事件的粗粒度本地计数聚合 —— 无内容、无路径、无身份；opt-out 导出为空（fail-closed），consent 变更入本地事件账本审计，载荷由 CI schema 门禁守卫（`scripts/verify-telemetry-payload.mjs`）
 
 ## 14. CI / Release
 
