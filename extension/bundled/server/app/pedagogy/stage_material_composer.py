@@ -88,6 +88,7 @@ def _build_materials_user_prompt(
     indexed_resource_titles: list[str],
     teaching_asset_hints: list[str],
     language: str,
+    research_hints: list[str] | None = None,
 ) -> str:
     lines = [
         f"Plan: {plan_title.strip() or '(untitled plan)'}",
@@ -105,6 +106,10 @@ def _build_materials_user_prompt(
     lines.extend(f"- {title.strip()}" for title in indexed_resource_titles if title.strip())
     lines.append("Existing teaching asset hints:")
     lines.extend(f"- {hint.strip()}" for hint in teaching_asset_hints if hint.strip())
+    prep_hints = [hint for hint in (research_hints or []) if hint.strip()]
+    if prep_hints:
+        lines.append("Background preparation collected for this stage (use as grounding, prefer over inventing sources):")
+        lines.extend(f"- {hint.strip()}" for hint in prep_hints)
     lines.append(f"Language: write every title, summary, content, and source note in {language}.")
     return "\n".join(lines)
 
@@ -285,11 +290,13 @@ class StageMaterialComposer:
         profile_summary: str = "",
         indexed_resource_titles: list[str] | None = None,
         teaching_asset_hints: list[str] | None = None,
+        research_hints: list[str] | None = None,
         response_language: str | None = None,
     ) -> list[TeachingKnowledgeAsset]:
         language = (response_language or _DEFAULT_MATERIAL_LANGUAGE).strip()
         resource_titles = [title for title in (indexed_resource_titles or []) if title.strip()]
         asset_hints = [hint for hint in (teaching_asset_hints or []) if hint.strip()]
+        prep_hints = [hint for hint in (research_hints or []) if hint.strip()]
         outcomes = [outcome for outcome in stage_outcomes if outcome.strip()]
         exercises = [exercise for exercise in stage_exercises if exercise.strip()]
 
@@ -310,6 +317,7 @@ class StageMaterialComposer:
                         profile_summary=profile_summary,
                         indexed_resource_titles=resource_titles,
                         teaching_asset_hints=asset_hints,
+                        research_hints=prep_hints,
                         language=language,
                     ),
                 },

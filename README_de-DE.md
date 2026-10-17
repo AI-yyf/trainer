@@ -4,7 +4,7 @@
 
 <img src="assets/banner.png" alt="Trainer — Trainiere deine KI · Wachse mit deiner KI · Wo KI und Menschen zusammen wachsen" width="100%" />
 
-**Ein langfristiger Coding-Coach, der in deiner VS Code Sidebar lebt.**
+**Ein langfristiger Technologie-Coach mit Programmierung als Ausgangspunkt, der in deiner VS Code Sidebar lebt.**
 
 **Er plant, drillt, verifiziert und merkt sich alles über dich — aber deinen Code schreibt er nie.**
 

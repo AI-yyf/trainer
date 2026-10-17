@@ -250,10 +250,11 @@ test("stage materials live inside per-stage disclosures and old plan materials c
   const done = stages.locator('[data-plan-stage="stage-2"]');
   await expect(active).toHaveAttribute('data-stage-status', 'active');
   await expect(done).toHaveAttribute('data-stage-status', 'done');
-  // Per-stage details stay closed until opened; they hold the objective, the
-  // 生成资料 action and the generated materials.
+  // The active stage starts open (it holds the objective, the 生成资料 action
+  // and the generated materials); non-active stages stay closed until opened.
   const activeDetails = active.locator('details');
-  await expect(activeDetails).not.toHaveAttribute('open', '');
+  await expect(activeDetails).toHaveAttribute('open', '');
+  await expect(done.locator('details')).not.toHaveAttribute('open', '');
   // CSS locator on purpose: role queries skip content inside a closed details.
   await expect(activeDetails.locator('button:has-text("生成资料0")')).toHaveCount(1);
   // Old plan materials clear when the formal plan is replaced.

@@ -15,6 +15,26 @@ export type { ProviderCapabilityEvidence, ProviderProbeUsage } from "../../../..
 import type { ProviderThinkingConfig } from "../../../../shared/src/providerThinking";
 
 export type ThemePreference = "system" | "light" | "dark";
+
+/** Local usage insights payload from GET /insights/local-usage (P1 #12, §6.1). */
+export interface LocalUsageInsights {
+  window_days: number;
+  window_start: string;
+  window_end: string;
+  total_events: number;
+  active_days: number;
+  streak_days: number;
+  totals: Record<string, number>;
+  daily: Array<{
+    date: string;
+    practice_submissions: number;
+    stage_advances: number;
+    evidence_adopted: number;
+    resources_indexed: number;
+    any_activity: boolean;
+  }>;
+  last_activity_at: string | null;
+}
 export type LearningSurfaceAlignment = "left" | "right";
 export type TeachingStyle = "auto" | "guided" | "concept-first" | "hands-on" | "challenging";
 export type CoachAnswerMode = "auto" | "coach-first" | "balanced" | "direct";
@@ -640,7 +660,7 @@ export interface ResourceRecord {
   library_paths?: string[];
   id: string;
   title: string;
-  kind: "pdf" | "image" | "markdown" | "text" | "code" | "url" | "video";
+  kind: "pdf" | "epub" | "image" | "markdown" | "text" | "code" | "url" | "video";
   status: "ready" | "indexing" | "attention";
   summary: string;
   source?: string;
@@ -1404,13 +1424,23 @@ export interface TrainingSkillDimensionState {
   evidence?: TrainingSkillEvidenceRow[];
 }
 
-/** Evidence → skill-state projection mirrored into workspace memory. */
+/** Evidence → skill-state projection mirrored into workspace memory.
+ * P2 #21: dimension keys are the subject-scoped registry — code adds
+ * implementation/debugging; literature adds expression/appreciation. */
+export type TrainingSkillDimensionKey =
+  | "comprehension"
+  | "implementation"
+  | "debugging"
+  | "expression"
+  | "appreciation"
+  | "transfer";
+
 export interface TrainingSkillProjection {
   workspaceId?: string;
   attemptId?: string;
   cardId?: string;
   updatedAt?: string;
-  dimensions: Partial<Record<"comprehension" | "implementation" | "debugging" | "transfer", TrainingSkillDimensionState>>;
+  dimensions: Partial<Record<TrainingSkillDimensionKey, TrainingSkillDimensionState>>;
 }
 
 export interface WorkspaceTrainingState {
@@ -1763,6 +1793,11 @@ export interface BootstrapData {
   runtimeDataGeneration?: string;
   /** History confirmed for the current workspace by a server session snapshot. */
   sessionHistoryRestored?: boolean;
+  /**
+   * Opt-in anonymous telemetry consent as answered by the sidecar; undefined
+   * means "not asked yet", the server default is off (fail-closed display).
+   */
+  telemetryOptIn?: boolean;
   workspaceName: string;
   sessionLabel: string;
   /** Remote-window identity for the webview (Remote-SSH/WSL/Tunnel/container). */
@@ -1940,6 +1975,8 @@ export interface PersistedWorkbenchState extends UiLayoutState {
   composerDraft: string;
   composerDraftScope?: string;
   composerDrafts?: Record<string, string>;
+  /** Dock composer send behavior (§3.7): jump to Coach (default) or stay. */
+  composerSendPreference?: "jump" | "stay";
   surfaceScrollPositions?: Record<string, number>;
   /** Activity responses are isolated by workspace, session and card identity. */
   activityDrafts?: Record<string, string>;
@@ -2108,6 +2145,7 @@ type HostMessageBody =
   | { type: "state/syncStatus"; payload: { status: WebviewSyncStatus; generation: number } }
   | { type: "stageMaterials/settled"; payload: { workspaceId: string; planId: string; stageId: string } }
   | { type: "skills/draftResult"; payload: { requestId: string; ok: boolean; draft?: { trigger: string; title: string; detail: string; prompt: string; source: "model" | "template" }; message?: string } }
+  | { type: "insights/localUsageResult"; payload: { requestId: string; ok: boolean; insights?: LocalUsageInsights; message?: string } }
   | { type: "bootstrap"; payload: BootstrapData; sync?: WebviewSyncEnvelope }
   | { type: "state/patch"; payload: Partial<BootstrapData>; sync?: WebviewSyncEnvelope }
   | {

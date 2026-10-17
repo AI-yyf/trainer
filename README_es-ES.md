@@ -4,7 +4,7 @@
 
 <img src="assets/banner.png" alt="Trainer — Entrena a tu IA · Crece con tu IA · Donde la IA y los humanos crecen juntos" width="100%" />
 
-**Un coach de programación a largo plazo que vive en la barra lateral de tu VS Code.**
+**Un coach tecnológico a largo plazo que empieza con la programación y vive en la barra lateral de tu VS Code.**
 
 **Planifica, entrena, verifica y lo recuerda todo sobre ti — pero nunca escribe tu código.**
 

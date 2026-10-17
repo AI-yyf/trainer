@@ -30,6 +30,14 @@ const layers = [
     external: false,
   },
   {
+    id: "telemetry-schema",
+    label: "Opt-in telemetry payload schema guard (real sidecar, throwaway data dir)",
+    command: process.execPath,
+    args: ["scripts/verify-telemetry-payload.mjs"],
+    cwd: repoRoot,
+    external: false,
+  },
+  {
     id: "server-pyright",
     label: "Server pyright (CI-equivalent)",
     command: process.execPath,

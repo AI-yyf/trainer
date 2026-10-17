@@ -1,0 +1,109 @@
+{
+  "_type": "trainer.subject.profile",
+  "version": 1,
+  "id": "german-grammar",
+  "family": "language-learning",
+  "verifier_pack": "literature",
+  "dimensions": [
+    "comprehension",
+    "expression",
+    "appreciation",
+    "transfer"
+  ],
+  "dimension_labels": {
+    "zh-CN": {
+      "comprehension": "德语理解",
+      "expression": "语法应用",
+      "appreciation": "文本鉴赏",
+      "transfer": "迁移"
+    },
+    "en-US": {
+      "comprehension": "German comprehension",
+      "expression": "Grammar application",
+      "appreciation": "Text appreciation",
+      "transfer": "Transfer"
+    },
+    "es-ES": {
+      "comprehension": "Comprensión alemana",
+      "expression": "Aplicación gramatical",
+      "appreciation": "Apreciación del texto",
+      "transfer": "Transferencia"
+    },
+    "fr-FR": {
+      "comprehension": "Compréhension de l'allemand",
+      "expression": "Application grammaticale",
+      "appreciation": "Appréciation du texte",
+      "transfer": "Transfert"
+    },
+    "de-DE": {
+      "comprehension": "Deutschverständnis",
+      "expression": "Grammatikanwendung",
+      "appreciation": "Textwürdigung",
+      "transfer": "Transfer"
+    },
+    "ja-JP": {
+      "comprehension": "ドイツ語理解",
+      "expression": "文法適用",
+      "appreciation": "文章鑑賞",
+      "transfer": "転移"
+    },
+    "ko-KR": {
+      "comprehension": "독일어 이해",
+      "expression": "문법 적용",
+      "appreciation": "본문 감상",
+      "transfer": "전이"
+    },
+    "pt-BR": {
+      "comprehension": "Compreensão de alemão",
+      "expression": "Aplicação gramatical",
+      "appreciation": "Apreciação do texto",
+      "transfer": "Transferência"
+    }
+  },
+  "deliverable_kinds": [
+    "text_payload",
+    "file_based"
+  ],
+  "skill_triggers": [
+    "$精读",
+    "$仿写"
+  ],
+  "scenario_packs": [
+    "close-reading-workshop",
+    "imitative-writing-lab"
+  ],
+  "workspace_signatures": {
+    "manifests": [],
+    "extensions": [
+      ".epub",
+      ".pdf",
+      ".md",
+      ".txt"
+    ],
+    "prose_density_min": 0.65,
+    "no_build_manifests": true
+  },
+  "locale_adaptation": {
+    "default_content_locale": "de",
+    "supported_locales": [
+      "zh",
+      "en",
+      "ja",
+      "de",
+      "fr",
+      "ko",
+      "es",
+      "pt"
+    ],
+    "counter_mode": "latin_word",
+    "quote_delimiters": [
+      "„“",
+      "«»",
+      "“”"
+    ]
+  },
+  "unverifiable_capabilities": [
+    "oral_recitation_prosody",
+    "spoken_fluency_pace"
+  ]
+}

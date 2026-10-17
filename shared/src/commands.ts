@@ -1,5 +1,6 @@
 export const trainerCommands = {
   generateSkillDraft: "trainer.skills.generateDraft",
+  refreshLocalUsage: "trainer.insights.refreshLocalUsage",
   openWorkbench: "trainer.openWorkbench",
   openViewInEditor: "trainer.view.openInEditor",
   configureProvider: "trainer.provider.configure",
@@ -17,6 +18,8 @@ export const trainerCommands = {
   refreshProviderProfiles: "trainer.provider.refreshProfiles",
   startProviderTrial: "trainer.provider.startTrial",
   setPersonalAccountTrust: "trainer.memory.setPersonalAccountTrust",
+  setTelemetryOptIn: "trainer.telemetry.setOptIn",
+  refreshTelemetryStatus: "trainer.telemetry.refreshStatus",
   openWorkspaceConfig: "trainer.config.openWorkspace",
   restartSidecar: "trainer.sidecar.restart",
   stopSidecar: "trainer.sidecar.stop",

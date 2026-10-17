@@ -242,19 +242,31 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
     @router.get("/training/attempt/{attempt_id}/projection")
     def get_skill_projection(attempt_id: str, workspace_id: str | None = None) -> dict:
         """Evidence → skill state projection (Phase-D capability model)."""
+        from app.api.training_skill_evidence import resolve_workspace_projection_scope
         from app.training.skill_projection import project_skills
         store = require_store()
         attempt = store.get_attempt(attempt_id, workspace_id=workspace_id)
         if attempt is None:
             raise HTTPException(status_code=404, detail="Training attempt not found.")
+        workspace_id_resolved = str(attempt.get("workspace_id") or workspace_id or "")
+        family, dimensions, default_dimension = resolve_workspace_projection_scope(
+            runtime, workspace_id_resolved
+        )
         projection = project_skills(
             _projection_records(
                 store,
-                workspace_id=str(attempt.get("workspace_id") or workspace_id or ""),
+                workspace_id=workspace_id_resolved,
                 card_id=str(attempt.get("card_id") or ""),
             ),
             card_id=attempt.get("card_id"),
+            dimensions=dimensions,
+            default_dimension=default_dimension,
         )
-        return {"ok": True, "card_id": attempt.get("card_id"), "projection": projection}
+        return {
+            "ok": True,
+            "card_id": attempt.get("card_id"),
+            "subject_family": family,
+            "projection": projection,
+        }
 
     return router

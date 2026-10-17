@@ -90,6 +90,7 @@ def _parse_teaching_digest(raw: str) -> dict[str, list[str] | str] | None:
     }
 from ..resources.versioning import ResourceVersionStore
 from ..specs.service import SpecService
+from ..telemetry.service import TelemetryService
 from ..workspace.adoption_index import ProjectAdoptionIndexService, ProjectAdoptionJobRecord
 from ..workspace.authority import PermissionLevel, WorkspaceAuthority
 from ..workspace.provisioning import ProjectProvisioningService
@@ -292,6 +293,8 @@ class TrainerRuntime:
     card_router_service: CardRouterService | None = None
     project_provisioning_service: ProjectProvisioningService | None = None
     project_adoption_index_service: ProjectAdoptionIndexService | None = None
+    # Opt-in anonymous telemetry (P2 #18): consent + coarse ledger aggregates.
+    telemetry_service: TelemetryService | None = None
     event_ledger: EventLedgerService | None = None
     # Browser capture lane (pairing credentials + pending coach drafts). Wired
     # by ``create_app`` from the sidecar data directory; None in test doubles.
@@ -705,8 +708,9 @@ class TrainerRuntime:
         version_store = self.resource_version_store
         if version_store is not None:
             content_hash = version_store.current_content_hash(workspace_id, resource_id) or ""
+        lang_suffix = f"::{record.content_language.strip()}" if getattr(record, "content_language", None) and str(record.content_language).strip() else ""
         cache_prefix = f"resource-digest::{resource_id}::"
-        cache_key = f"{cache_prefix}{content_hash or 'v0'}"
+        cache_key = f"{cache_prefix}{content_hash or 'v0'}{lang_suffix}"
         current_version = [
             asset
             for asset in self.repository.list_teaching_assets(workspace_id=workspace_id)

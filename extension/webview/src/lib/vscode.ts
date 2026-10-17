@@ -9,6 +9,7 @@ import type {
   CoachDefaults,
   DebugVisibleWorkbenchFacts,
   HostMessage,
+  LocalUsageInsights,
   PersistedWorkbenchState,
   WebviewAction,
 } from "./types";
@@ -82,6 +83,20 @@ const hostMessageSchema = z.discriminatedUnion("type", [
     requestId: z.string(), ok: z.boolean(), message: z.string().optional(),
     draft: z.object({ trigger: z.string(), title: z.string(), detail: z.string(), prompt: z.string(),
       source: z.enum(["model", "template"]) }).optional(),
+  }) }),
+  z.object({ type: z.literal("insights/localUsageResult"), payload: z.object({
+    requestId: z.string(), ok: z.boolean(), message: z.string().optional(),
+    insights: z.object({
+      window_days: z.number().int(), window_start: z.string(), window_end: z.string(),
+      total_events: z.number().int(), active_days: z.number().int(), streak_days: z.number().int(),
+      totals: z.record(z.string(), z.number()),
+      daily: z.array(z.object({
+        date: z.string(), practice_submissions: z.number().int(),
+        stage_advances: z.number().int(), evidence_adopted: z.number().int(),
+        resources_indexed: z.number().int(), any_activity: z.boolean(),
+      })),
+      last_activity_at: z.string().nullable(),
+    }).optional(),
   }) }),
   z.object({
     type: z.literal("bootstrap"),
@@ -507,6 +522,37 @@ export function requestNativeSkillDraft(description: string): Promise<{
 
 export function inVsCodeWebview(): boolean {
   return Boolean(getVsCodeApi());
+}
+
+/**
+ * Request the local usage insights snapshot (P1 #12, §6.1). A read-only
+ * ledger aggregation served by the sidecar; coarse counts only, nothing
+ * leaves the machine. Rejects with a displayable message on failure.
+ */
+export function requestLocalUsageInsights(windowDays: number): Promise<LocalUsageInsights> {
+  const requestId = `insights-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return new Promise((resolve, reject) => {
+    const unsubscribe = subscribeToHostMessages((message) => {
+      if (message.type !== "insights/localUsageResult" || message.payload.requestId !== requestId) return;
+      window.clearTimeout(timeoutId);
+      unsubscribe();
+      if (message.payload.ok && message.payload.insights) resolve(message.payload.insights);
+      else reject(new Error(message.payload.message ?? "Local usage data is unavailable right now."));
+    });
+    const timeoutId = window.setTimeout(() => {
+      unsubscribe();
+      reject(new Error("Local usage insights timed out. Please retry."));
+    }, 15_000);
+    try {
+      postMessage({ type: "command/execute", payload: {
+        commandId: trainerCommands.refreshLocalUsage, payload: { requestId, windowDays },
+      } });
+    } catch (error) {
+      window.clearTimeout(timeoutId);
+      unsubscribe();
+      reject(error);
+    }
+  });
 }
 
 /**

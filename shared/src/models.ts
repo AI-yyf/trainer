@@ -209,6 +209,8 @@ export type ActiveThreadSnapshot = {
 export type FirstLookSummary = {
   folderRole: FolderRole;
   projectTypeGuess: ProjectTypeGuess;
+  /** P2 #24: heuristic-only subject family; `undefined` means code (fail-closed). */
+  subjectFamily?: "code" | "literature";
   confidence: number;
   whyThisGuess: string;
   entryPoints: string[];
@@ -277,7 +279,7 @@ export type PlanRuntimeStatus = {
 
 export type ResourceRecord = {
   id: string;
-  kind: "pdf" | "image" | "text" | "markdown" | "code" | "url" | "video";
+  kind: "pdf" | "epub" | "image" | "text" | "markdown" | "code" | "url" | "video";
   name: string;
   source: string;
   tags: string[];

@@ -81,6 +81,11 @@ EVENT_REFLECTION_RECORDED = "reflection_recorded"
 # Agent recovery (1)
 EVENT_AGENT_TURN_CHECKPOINTED = "agent_turn_checkpointed"
 
+# Telemetry consent (1) — §P2-18: consent changes are audited like every other
+# state change; the entry carries only the opt-in flag and a charset-checked
+# source token.
+EVENT_TELEMETRY_CONSENT_CHANGED = "telemetry_consent_changed"
+
 ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVENT_CARD_CANDIDATE_CREATED,
     EVENT_CARD_STATUS_TRANSITIONED,
@@ -123,6 +128,7 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVENT_EVALUATION_FEEDBACK_RECORDED,
     EVENT_REFLECTION_RECORDED,
     EVENT_AGENT_TURN_CHECKPOINTED,
+    EVENT_TELEMETRY_CONSENT_CHANGED,
 })
 
 

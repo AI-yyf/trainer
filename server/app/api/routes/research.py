@@ -15,6 +15,12 @@ from ...research.service import ResearchOrchestratorService
 def build_research_router(
     service: ResearchOrchestratorService, provider_service: ProviderService | None = None
 ) -> APIRouter:
+    # P1 #13 (§5): advance role transitions brief through the coach provider
+    # when one is wired; otherwise the orchestrator keeps its template path.
+    if provider_service is not None and getattr(provider_service, "has_api_key", False):
+        from ...research.briefing import ProviderRoleBriefing
+
+        service.attach_role_briefing(ProviderRoleBriefing(provider_service))
     router = APIRouter(prefix="/research", tags=["research"])
 
     @router.post("/create")

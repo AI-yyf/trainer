@@ -14,7 +14,9 @@ test("compact blocked Plan keeps its next action reachable without management pa
   await page.goto("/vscode-preview.html?view=plan&lang=en-US&scenario=plan-blocked&connection=connected");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
   await applyPlanOnlyFixture(page);
-  const primary = page.locator('[data-template=NextAction] button');
+  // Blocked states render as a quiet SystemState bar; the accent primary button
+  // is reserved for forward motion (continue step / practice / review).
+  const primary = page.locator('[data-template=SystemState] button');
   await expect(primary).toBeVisible();
   await expect(primary).toHaveAttribute('data-action-intent', 'resolve_blocker');
   await expect(page.locator('details[data-plan-governance-disclosure]')).not.toHaveAttribute('open', '');

@@ -6,7 +6,9 @@ export type GuidedTrainingPreviewScenario =
   | "training-debug"
   | "training-function"
   | "training-resource"
-  | "training-dependency";
+  | "training-dependency"
+  | "training-close-reading"
+  | "training-theory-concept";
 
 type PreviewLanguage = ComposerLanguage;
 
@@ -257,6 +259,8 @@ const previewScenarioFocusCopy: Partial<
     "training-function": "contrato de función",
     "training-resource": "de recurso a conocimiento fiable",
     "training-dependency": "dominio de dependencias y API",
+    "training-close-reading": "lectura atenta con anclas ¶",
+    "training-theory-concept": "concepto de teoría literaria",
   },
   "fr-FR": {
     "training-remote": "espace de travail distant VS Code",
@@ -264,6 +268,8 @@ const previewScenarioFocusCopy: Partial<
     "training-function": "contrat de fonction",
     "training-resource": "des ressources au savoir fiable",
     "training-dependency": "maîtrise des dépendances et des API",
+    "training-close-reading": "lecture analytique avec ancres ¶",
+    "training-theory-concept": "concept de théorie littéraire",
   },
   "de-DE": {
     "training-remote": "VS Code-Remote-Arbeitsbereich",
@@ -271,6 +277,8 @@ const previewScenarioFocusCopy: Partial<
     "training-function": "Funktionsvertrag",
     "training-resource": "von Ressourcen zu verlässlichem Wissen",
     "training-dependency": "Abhängigkeiten und APIs sicher beherrschen",
+    "training-close-reading": "verankerte Textanalyse (¶-Anker)",
+    "training-theory-concept": "Begriff der Literaturtheorie",
   },
   "ja-JP": {
     "training-remote": "VS Code のリモートワークスペース",
@@ -278,6 +286,8 @@ const previewScenarioFocusCopy: Partial<
     "training-function": "関数の契約",
     "training-resource": "資料を信頼できる知識にする",
     "training-dependency": "依存関係と API の理解",
+    "training-close-reading": "¶ アンカーによる精読",
+    "training-theory-concept": "文学理論の概念",
   },
   "ko-KR": {
     "training-remote": "VS Code 원격 작업 영역",
@@ -285,6 +295,8 @@ const previewScenarioFocusCopy: Partial<
     "training-function": "함수 계약",
     "training-resource": "자료를 신뢰할 수 있는 지식으로 만들기",
     "training-dependency": "의존성과 API 이해",
+    "training-close-reading": "¶ 앵커 정독",
+    "training-theory-concept": "문학 이론 개념",
   },
   "pt-BR": {
     "training-remote": "espaço de trabalho remoto do VS Code",
@@ -292,6 +304,8 @@ const previewScenarioFocusCopy: Partial<
     "training-function": "contrato de função",
     "training-resource": "de recurso a conhecimento confiável",
     "training-dependency": "domínio de dependências e APIs",
+    "training-close-reading": "leitura atenta com âncoras ¶",
+    "training-theory-concept": "conceito de teoria literária",
   },
 };
 
@@ -367,6 +381,13 @@ function previewScenarioFocus(
   if (scenario === "training-dependency") {
     return "dependency and API mastery";
   }
+  if (scenario === "training-close-reading") {
+    return "anchored close reading";
+  }
+  if (scenario === "training-theory-concept") {
+    return "theory concept application";
+  }
+  return "function contract";
   return "function contract";
 }
 
@@ -456,6 +477,8 @@ export const guidedTrainingPreviewScenarios: GuidedTrainingPreviewScenario[] = [
   "training-function",
   "training-resource",
   "training-dependency",
+  "training-close-reading",
+  "training-theory-concept",
 ];
 
 export function resolveGuidedTrainingPreviewScenarioData(

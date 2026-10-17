@@ -39,7 +39,7 @@ test('language switch keeps the active view and composer stays the super-entry',
     state,
     /setComposerLanguage:\s*\(composerLanguage\)\s*=>\s*set\(\(state\)\s*=>\s*\(\{\s*layout:\s*persistLayout\(\{\s*\.\.\.state\.layout,\s*composerLanguage,/,
   );
-  assert.match(app, /showComposerShell = ownsCoachComposer\(activeView\)/);
+  assert.match(app, /showComposerShell = docksComposer\(activeView\)/);
   assert.match(settings, /data-settings-language="true"/);
   assert.doesNotMatch(
     types,

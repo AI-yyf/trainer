@@ -1,13 +1,15 @@
 # Trainer 规格说明书
 
 版本：v1.1
-最后更新：2026-10-08
+最后更新：2026-10-16
 项目路径：本仓库根目录（`trainer/`）
 状态：P1 Release Candidate
 
 ## 1. 产品定位
 
-Trainer = **AI Programming Coach / AI 通用技术教练**
+Trainer = **通用技术教练（编程起点） / General Technology Coach, coding-first**
+
+定位说明：编程是第一学科与默认入口，产品架构（SubjectProfile 数据化注册表 + Verifier Pack）保证其他技术学科乃至文学可零代码接入；但对外表述统一为"技术教练（编程起点）"，不再自称"编程教练"。
 
 核心价值链：
 
@@ -243,6 +245,7 @@ Coach 默认工作在 inspect / annotate。destructive 需用户明确授权 + t
 ## 12. 设计原则
 
 ### Composer 是核心交互
+Composer 常驻于 Coach / Learning / Resources 三个目的地；对话所有权唯一，归属教练线程——所有目的地发出的消息进入同一线程，surface 只决定草稿与上下文锚的隔离。Training 视图保留卡内答题与训练专用 composer 的裁决维持有效（Training 不被 Learning 收编）。
 context chips / Ask Trainer... / + / Send
 支持 current file / selection / resource / image，统一从 + 展开。
 

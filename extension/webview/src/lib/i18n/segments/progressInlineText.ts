@@ -4,52 +4,68 @@
  * strings, languages, keys and constant names unchanged.
  */
 
-import type { ComposerLanguage, TrainingSkillDimensionState } from "../../types";
+import type { ComposerLanguage, TrainingSkillDimensionKey, TrainingSkillDimensionState } from "../../types";
 
-export type DimensionKey = "comprehension" | "implementation" | "debugging" | "transfer";
+/** P2 #21: dimension keys come from the subject-scoped registry (code adds
+ * implementation/debugging; literature adds expression/appreciation). */
+export type DimensionKey = TrainingSkillDimensionKey;
 
 export const DIMENSION_LABELS: Record<ComposerLanguage, Record<DimensionKey, string>> = {
-  "zh-CN": { comprehension: "理解", implementation: "实现", debugging: "调试", transfer: "迁移" },
+  "zh-CN": { comprehension: "理解", implementation: "实现", debugging: "调试", expression: "表达", appreciation: "鉴赏", transfer: "迁移" },
   "en-US": {
     comprehension: "Comprehension",
     implementation: "Implementation",
     debugging: "Debugging",
+    expression: "Expression",
+    appreciation: "Appreciation",
     transfer: "Transfer",
   },
   "es-ES": {
     comprehension: "Comprensión",
     implementation: "Implementación",
     debugging: "Depuración",
+    expression: "Expresión",
+    appreciation: "Apreciación",
     transfer: "Transferencia",
   },
   "fr-FR": {
     comprehension: "Compréhension",
     implementation: "Implémentation",
     debugging: "Débogage",
+    expression: "Expression",
+    appreciation: "Appréciation",
     transfer: "Transfert",
   },
   "de-DE": {
     comprehension: "Verständnis",
     implementation: "Implementierung",
     debugging: "Fehlersuche",
+    expression: "Ausdruck",
+    appreciation: "Würdigung",
     transfer: "Transfer",
   },
   "ja-JP": {
     comprehension: "理解",
     implementation: "実装",
     debugging: "デバッグ",
-    transfer: "転用",
+    expression: "表現",
+    appreciation: "鑑賞",
+    transfer: "転移",
   },
   "ko-KR": {
     comprehension: "이해",
     implementation: "구현",
     debugging: "디버깅",
+    expression: "표현",
+    appreciation: "감상",
     transfer: "전이",
   },
   "pt-BR": {
     comprehension: "Compreensão",
     implementation: "Implementação",
     debugging: "Depuração",
+    expression: "Expressão",
+    appreciation: "Apreciação",
     transfer: "Transferência",
   },
 };

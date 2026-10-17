@@ -205,3 +205,77 @@ test('filtering on the trigger token keeps the resolved skill visible with args'
   );
   assert.equal(skills[0]?.trigger, '$explain');
 });
+
+// P2 #16: the four built-in literature skills ship as first-class triggers with
+// eight-language complete copy, and custom skills can never shadow them.
+const LITERATURE_TRIGGERS = [
+  ['$精读', 'close-reading-selection'],
+  ['$仿写', 'imitation-writing'],
+  ['$批注', 'annotate-selection'],
+  ['$文论概念', 'literary-theory-concept'],
+];
+const LANGUAGES = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
+
+test('literature skills exist as built-in triggers', () => {
+  for (const [trigger, id] of LITERATURE_TRIGGERS) {
+    const skill = trainerSkillCatalog.find((item) => item.trigger === trigger);
+    assert.ok(skill, `missing literature skill ${trigger}`);
+    assert.equal(skill.id, id);
+    assert.equal(skill.section, 'Coach');
+    // Non-ASCII triggers resolve through the same leading-token rule.
+    assert.equal(trainerSkillTriggerToken(`${trigger} 《孔乙己》`), trigger);
+  }
+});
+
+test('literature skill copy is complete in all eight languages', () => {
+  for (const [, id] of LITERATURE_TRIGGERS) {
+    const skill = trainerSkillCatalog.find((item) => item.id === id);
+    assert.ok(skill, id);
+    for (const language of LANGUAGES) {
+      for (const [field, label] of [['title', 'title'], ['detail', 'detail'], ['prompt', 'prompt']]) {
+        const value = skill[field]?.[language];
+        assert.ok(typeof value === 'string' && value.length > 0, `${id}/${field}/${language}`);
+      }
+    }
+  }
+});
+
+test('literature skills filter and merge like every built-in skill', () => {
+  const found = filterTrainerSkills('$精读', createContext(), 8);
+  assert.equal(found[0]?.id, 'close-reading-selection');
+
+  // Built-ins win on trigger collisions: a custom $批注 cannot shadow the shipped skill.
+  const merged = mergeSkillCatalog([
+    {
+      id: 'custom-annotate',
+      trigger: '$批注',
+      title: 'Custom annotate',
+      prompt: 'Custom prompt',
+      keywords: [],
+    },
+  ]);
+  const annotate = merged.find((skill) => skill.trigger === '$批注');
+  assert.equal(annotate?.id, 'annotate-selection');
+});
+
+// P2 #25: the command face prunes by classifier subject family. Code workspaces
+// hide the literature skill subset; literature workspaces and cold starts
+// (no projection yet) keep them.
+test('literature skills prune by subject family in the context', () => {
+  for (const [trigger, id] of LITERATURE_TRIGGERS) {
+    const token = trainerSkillTriggerToken(trigger);
+
+    const inCode = filterTrainerSkills(token, createContext({ subjectFamily: 'code' }), 12);
+    assert.ok(!inCode.some((skill) => skill.id === id), `${id} must be pruned in code workspaces`);
+
+    const inLiterature = filterTrainerSkills(token, createContext({ subjectFamily: 'literature' }), 12);
+    assert.ok(inLiterature.some((skill) => skill.id === id), `${id} must stay in literature workspaces`);
+
+    const coldStart = filterTrainerSkills(token, createContext({}), 12);
+    assert.ok(coldStart.some((skill) => skill.id === id), `${id} must stay before any projection exists`);
+  }
+
+  // Domain skills are subject-universal: pruning never touches them.
+  const reviewInCode = filterTrainerSkills('$review', createContext({ subjectFamily: 'code' }), 6);
+  assert.ok(reviewInCode.some((skill) => skill.id === 'review-file'));
+});

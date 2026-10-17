@@ -22,6 +22,17 @@ from typing import Any
 
 _DIMENSIONS = ("comprehension", "implementation", "debugging", "transfer")
 
+# P2 #21: the dimension vocabulary is subject-scoped. The projection ladder,
+# trust semantics and transfer rule stay globally uniform (P4); only the
+# dimension vocabulary follows the SubjectProfile registry. Unknown families
+# fall back fail-closed to the code vocabulary.
+LITERATURE_DIMENSIONS = ("comprehension", "expression", "appreciation", "transfer")
+DIMENSION_REGISTRY: dict[str, tuple[str, ...]] = {
+    "code": _DIMENSIONS,
+    "literature": LITERATURE_DIMENSIONS,
+}
+_KNOWN_DIMENSIONS = frozenset(_DIMENSIONS) | frozenset(LITERATURE_DIMENSIONS)
+
 # Evidence result → contribution to the skill state ladder.
 _RESULT_WEIGHT: dict[str, int] = {
     "passed": 2,
@@ -184,6 +195,8 @@ def project_skills(
     evidence_records: list[dict[str, Any]],
     *,
     card_id: str | None = None,
+    dimensions: tuple[str, ...] | list[str] | None = None,
+    default_dimension: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Pure projection: evidence records → skill states per dimension.
 
@@ -191,10 +204,35 @@ def project_skills(
     evidence_id` is falsy contribute. Stale evidence is excluded because it
     belongs to an older artifact version.
 
+    ``dimensions`` (P2 #21) scopes the projection to a SubjectProfile's
+    dimension vocabulary: every key must be a registered dimension, with no
+    duplicates — anything else raises (fail-closed). ``default_dimension``
+    re-points the fallback for evidence records that carry no explicit
+    ``dimension`` field; it must itself be part of the projected set.
+    Unset values reproduce the historical code-subject behaviour exactly.
+
     Returns: {dimension: {state, score, evidence_ids, verified_count}}
     """
+    if dimensions is None:
+        active_dimensions = _DIMENSIONS
+    else:
+        active_dimensions = tuple(str(dim or "").strip() for dim in dimensions)
+        unknown = [dim for dim in active_dimensions if dim not in _KNOWN_DIMENSIONS]
+        if not active_dimensions or "" in active_dimensions or len(set(active_dimensions)) != len(active_dimensions):
+            raise ValueError(
+                "project_skills requires non-empty, duplicate-free dimensions "
+                f"from the registry; got {dimensions!r}"
+            )
+        if unknown:
+            raise ValueError(f"project_skills got dimensions outside the registry: {unknown}")
+    fallback_dimension = default_dimension or "implementation"
+    if fallback_dimension not in active_dimensions:
+        raise ValueError(
+            f"default_dimension {fallback_dimension!r} is outside the projected "
+            f"dimension set {active_dimensions}"
+        )
     result: dict[str, dict[str, Any]] = {}
-    for dim in _DIMENSIONS:
+    for dim in active_dimensions:
         result[dim] = {
             "state": "not_verified",
             "score": 0,
@@ -206,15 +244,15 @@ def project_skills(
         }
 
     independent_success_keys: dict[str, set[tuple[str, str]]] = {
-        dim: set() for dim in _DIMENSIONS
+        dim: set() for dim in active_dimensions
     }
     independent_evidence_keys: dict[str, set[str]] = {
-        dim: set() for dim in _DIMENSIONS
+        dim: set() for dim in active_dimensions
     }
-    assisted_success_keys: dict[str, set[str]] = {dim: set() for dim in _DIMENSIONS}
+    assisted_success_keys: dict[str, set[str]] = {dim: set() for dim in active_dimensions}
     transfer_context_keys: set[tuple[str, ...]] = set()
-    failed_dimensions: dict[str, bool] = {dim: False for dim in _DIMENSIONS}
-    partial_dimensions: dict[str, bool] = {dim: False for dim in _DIMENSIONS}
+    failed_dimensions: dict[str, bool] = {dim: False for dim in active_dimensions}
+    partial_dimensions: dict[str, bool] = {dim: False for dim in active_dimensions}
 
     for index, rec in enumerate(evidence_records):
         if rec.get("superseded_by_evidence_id"):
@@ -243,7 +281,7 @@ def project_skills(
         # All evidence contributes to implementation; failed evidence
         # contributes to debugging.  Preview/sandbox alone is not transfer.
         transfer_fact = _has_transfer_fact(rec)
-        raw_dimension = rec.get("dimension", "implementation")
+        raw_dimension = str(rec.get("dimension") or fallback_dimension)
         dims = set()
         if raw_dimension != "transfer" or transfer_fact:
             dims.add(raw_dimension)
@@ -289,7 +327,7 @@ def project_skills(
                 elif result_str == "partial":
                     partial_dimensions[dim] = True
 
-    for dim in _DIMENSIONS:
+    for dim in active_dimensions:
         result[dim]["evidence"].reverse()
         result[dim]["independent_evidence_count"] = len(independent_evidence_keys[dim])
         result[dim]["independent_attempt_count"] = len(independent_success_keys[dim])

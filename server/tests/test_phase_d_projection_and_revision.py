@@ -376,3 +376,148 @@ def test_projection_carries_evidence_drilldown_rows_newest_first() -> None:
     assert rows[0]["timestamp"].startswith("2026-09-28")
     assert rows[0]["assistance_level"] == "independent"
     assert rows[1]["scenario"] == "q-learning update"
+
+
+# ---------------------------------------------------------------------------
+# P2 #21: subject-scoped dimension registry
+# ---------------------------------------------------------------------------
+
+
+def _lit_ev(evidence_id: str, **overrides: object) -> dict:
+    return _ev(evidence_id, evidence_id=evidence_id, **overrides)
+
+
+def test_literature_dimension_set_projects_without_engineering_rows() -> None:
+    from app.training.skill_projection import LITERATURE_DIMENSIONS
+
+    records = [
+        _lit_ev("lit-1", attempt_id="a1"),
+        _lit_ev("lit-2", attempt_id="a2"),
+    ]
+    projection = project_skills(
+        records,
+        card_id="card-lit",
+        dimensions=LITERATURE_DIMENSIONS,
+        default_dimension="comprehension",
+    )
+    assert set(projection) == {"comprehension", "expression", "appreciation", "transfer"}
+    # No explicit dimension field → comprehension (the submission's first
+    # obligation is the text response), and two distinct attempts make it
+    # repeat_verified under the same governance ladder.
+    assert projection["comprehension"]["state"] == "repeat_verified"
+    assert projection["comprehension"]["verified_count"] == 2
+    for dim in ("expression", "appreciation", "transfer"):
+        assert projection[dim]["state"] == "not_verified"
+        assert projection[dim]["verified_count"] == 0
+
+
+def test_explicit_literature_dimension_field_still_routs() -> None:
+    from app.training.skill_projection import LITERATURE_DIMENSIONS
+
+    records = [
+        _lit_ev("lit-a", attempt_id="a1", dimension="expression"),
+        _lit_ev("lit-b", attempt_id="a2", dimension="appreciation"),
+    ]
+    projection = project_skills(
+        records, dimensions=LITERATURE_DIMENSIONS, default_dimension="comprehension"
+    )
+    assert projection["expression"]["verified_count"] == 1
+    assert projection["appreciation"]["verified_count"] == 1
+    assert projection["comprehension"]["verified_count"] == 0
+
+
+def test_default_call_keeps_the_historical_code_vocabulary() -> None:
+    projection = project_skills([_ev("h1")])
+    assert list(projection) == ["comprehension", "implementation", "debugging", "transfer"]
+    assert projection["implementation"]["verified_count"] == 1
+
+
+def test_unknown_duplicate_or_out_of_set_dimensions_fail_closed() -> None:
+    with pytest.raises(ValueError):
+        project_skills([], dimensions=("comprehension", "gibberish"))
+    with pytest.raises(ValueError):
+        project_skills([], dimensions=("comprehension", "comprehension"))
+    with pytest.raises(ValueError):
+        project_skills([], dimensions=())
+    with pytest.raises(ValueError):
+        project_skills([], dimensions=None, default_dimension="appreciation")
+    # The literature default is inside its own set — sanity mirror.
+    from app.training.skill_projection import LITERATURE_DIMENSIONS
+
+    project_skills([], dimensions=LITERATURE_DIMENSIONS, default_dimension="comprehension")
+
+
+class _StoreStub:
+    def __init__(self, attempts: list[dict], evidence: dict[str, list[dict]]):
+        self._attempts = attempts
+        self._evidence = evidence
+
+    def list_attempts(self, *, workspace_id: str) -> list[dict]:
+        return [a for a in self._attempts if a["workspace_id"] == workspace_id]
+
+    def list_evidence(self, attempt_id: str) -> list[dict]:
+        return list(self._evidence.get(attempt_id, []))
+
+
+class _MemoryStub:
+    def __init__(self, cards: dict[str, object]):
+        self._cards = cards
+
+    def get_card(self, workspace_id: str, card_id: str):
+        return self._cards.get(card_id)
+
+    def update_workspace_state(self, workspace_id: str, **kwargs: object) -> None:
+        self.saved = kwargs
+
+
+class _RuntimeStub:
+    def __init__(self, store, memory):
+        self.attempt_store = store
+        self.memory_service = memory
+
+
+def _lit_card(card_id: str):
+    from app.core.models import TrainingCardCandidateSnapshot
+
+    return TrainingCardCandidateSnapshot(
+        card_id=card_id,
+        card_type="practice",
+        title="《孔乙己》批注练习",
+        target_skill="annotation",
+        scenario_pack="literature_close_reading",
+        validation_method="Run the anchored rubric review.",
+    )
+
+
+def test_resolve_workspace_scope_votes_majority_and_ties_to_code() -> None:
+    from app.api.training_skill_evidence import resolve_workspace_projection_scope
+
+    lit_card = _lit_card("card-lit")
+    code_card = None  # unknown card id → code family
+    store = _StoreStub(
+        [
+            {"workspace_id": "ws", "card_id": "card-lit"},
+            {"workspace_id": "ws", "card_id": "card-lit"},
+            {"workspace_id": "ws", "card_id": "card-code"},
+        ],
+        {},
+    )
+    runtime = _RuntimeStub(store, _MemoryStub({"card-lit": lit_card, "card-code": code_card}))
+    family, dimensions, default_dimension = resolve_workspace_projection_scope(runtime, "ws")
+    assert family == "literature"
+    assert dimensions == ("comprehension", "expression", "appreciation", "transfer")
+    assert default_dimension == "comprehension"
+
+    tie = _StoreStub(
+        [
+            {"workspace_id": "ws2", "card_id": "card-lit"},
+            {"workspace_id": "ws2", "card_id": "card-code"},
+        ],
+        {},
+    )
+    family2, dimensions2, default2 = resolve_workspace_projection_scope(
+        _RuntimeStub(tie, _MemoryStub({"card-lit": lit_card})), "ws2"
+    )
+    assert family2 == "code"
+    assert dimensions2 == ("comprehension", "implementation", "debugging", "transfer")
+    assert default2 == "implementation"

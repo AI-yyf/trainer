@@ -159,8 +159,10 @@ class TrainingHandoffGenerator:
     _TRUSTED_VERIFICATION_SOURCES = frozenset(
         {
             "automated_test",
+            "deterministic_hook",
             "evaluator",
             "ide_current_file",
+            "rubric_dual_review",
             "server_evaluator",
             "test_runner",
             "verification_service",

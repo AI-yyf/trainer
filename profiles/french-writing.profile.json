@@ -1,0 +1,109 @@
+{
+  "_type": "trainer.subject.profile",
+  "version": 1,
+  "id": "french-writing",
+  "family": "language-learning",
+  "verifier_pack": "literature",
+  "dimensions": [
+    "comprehension",
+    "expression",
+    "appreciation",
+    "transfer"
+  ],
+  "dimension_labels": {
+    "zh-CN": {
+      "comprehension": "法语理解",
+      "expression": "法语写作",
+      "appreciation": "文本鉴赏",
+      "transfer": "迁移"
+    },
+    "en-US": {
+      "comprehension": "French comprehension",
+      "expression": "French writing",
+      "appreciation": "Text appreciation",
+      "transfer": "Transfer"
+    },
+    "es-ES": {
+      "comprehension": "Comprensión francesa",
+      "expression": "Escritura francesa",
+      "appreciation": "Apreciación del texto",
+      "transfer": "Transferencia"
+    },
+    "fr-FR": {
+      "comprehension": "Compréhension du français",
+      "expression": "Écriture française",
+      "appreciation": "Appréciation du texte",
+      "transfer": "Transfert"
+    },
+    "de-DE": {
+      "comprehension": "Französisch-Verständnis",
+      "expression": "Französisches Schreiben",
+      "appreciation": "Textwürdigung",
+      "transfer": "Transfer"
+    },
+    "ja-JP": {
+      "comprehension": "フランス語理解",
+      "expression": "フランス語作文",
+      "appreciation": "文章鑑賞",
+      "transfer": "転移"
+    },
+    "ko-KR": {
+      "comprehension": "프랑스어 이해",
+      "expression": "프랑스어 쓰기",
+      "appreciation": "본문 감상",
+      "transfer": "전이"
+    },
+    "pt-BR": {
+      "comprehension": "Compreensão de francês",
+      "expression": "Escrita em francês",
+      "appreciation": "Apreciação do texto",
+      "transfer": "Transferência"
+    }
+  },
+  "deliverable_kinds": [
+    "text_payload",
+    "file_based"
+  ],
+  "skill_triggers": [
+    "$仿写",
+    "$批注",
+    "$文论概念"
+  ],
+  "scenario_packs": [
+    "imitative-writing-lab"
+  ],
+  "workspace_signatures": {
+    "manifests": [],
+    "extensions": [
+      ".epub",
+      ".pdf",
+      ".md",
+      ".txt"
+    ],
+    "prose_density_min": 0.65,
+    "no_build_manifests": true
+  },
+  "locale_adaptation": {
+    "default_content_locale": "fr",
+    "supported_locales": [
+      "zh",
+      "en",
+      "ja",
+      "de",
+      "fr",
+      "ko",
+      "es",
+      "pt"
+    ],
+    "counter_mode": "latin_word",
+    "quote_delimiters": [
+      "«»",
+      "« »",
+      "“”"
+    ]
+  },
+  "unverifiable_capabilities": [
+    "oral_recitation_prosody",
+    "spoken_fluency_pace"
+  ]
+}

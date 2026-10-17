@@ -16,8 +16,7 @@ import {
   STATE_LABELS,
   type DimensionKey,
 } from "../../lib/i18n/segments/progressInlineText";
-
-const DIMENSION_KEYS: DimensionKey[] = ["comprehension", "implementation", "debugging", "transfer"];
+import { dimensionKeysFor } from "../../lib/progressDimensions";
 
 function dimensionState(
   projection: TrainingSkillProjection | undefined,
@@ -43,7 +42,8 @@ export interface ProgressViewProps {
 export function ProgressView({ language, projection, onOpenTraining, onBack }: ProgressViewProps) {
   const copy = COPY[language];
   const [expandedDimension, setExpandedDimension] = useState<DimensionKey | undefined>();
-  const hasAnyEvidence = DIMENSION_KEYS.some((key) => {
+  const dimensionKeys = dimensionKeysFor(projection);
+  const hasAnyEvidence = dimensionKeys.some((key) => {
     const state = dimensionState(projection, key);
     return Boolean(state && (state.verifiedCount ?? 0) > 0);
   });
@@ -62,7 +62,7 @@ export function ProgressView({ language, projection, onOpenTraining, onBack }: P
     <GrowthEvidence parent={planViewLabel(language)} title={copy.title} updated={updatedLabel ? copy.updated(updatedLabel) : undefined} onBack={onBack}>
       {hasAnyEvidence ? (
         <ul className="progress-view__dimensions">
-          {DIMENSION_KEYS.map((key) => {
+          {dimensionKeys.map((key) => {
             const state = dimensionState(projection, key);
             const count = state?.verifiedCount ?? 0;
             const rows: TrainingSkillEvidenceRow[] = state?.evidence ?? [];
@@ -121,7 +121,7 @@ export function ProgressView({ language, projection, onOpenTraining, onBack }: P
           {(() => {
             const transfer = dimensionState(projection, "transfer");
             if (transfer && transfer.verifiedCount && transfer.verifiedCount > 0) return null;
-            const strongest = DIMENSION_KEYS
+            const strongest = dimensionKeys
               .map((k) => dimensionState(projection, k))
               .filter((s) => s && (s.verifiedCount ?? 0) > 0);
             if (strongest.length < 2) return null;

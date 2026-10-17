@@ -94,9 +94,10 @@ function practice() {
   assert.ok(read('app/App.tsx').includes('activityDrafts?.[activityDraftKey]'));
 }
 function learning() {
-  const html = render('templates/LearningHome.tsx', 'LearningHome', { currentLabel: 'Current learning', title: 'Goal', stage: '2 / 4', next: {label: 'Next step', title: 'Repair mapping', detail: 'Done when checks pass', action: {label:'Continue',onClick(){}}}, ...Object.fromEntries(['review','route','growth','evidence'].map(key => [key,{label:key,content:key+'-content'}])) });
+  const html = render('templates/LearningHome.tsx', 'LearningHome', { currentLabel: 'Current learning', title: 'Goal', stage: '2 / 4', next: {label: 'Next step', title: 'Repair mapping', detail: 'Done when checks pass', action: {label:'Continue',onClick(){}}}, ...Object.fromEntries(['proof','route','growth'].map(key => [key,{label:key,content:key+'-content'}])) });
   assert.equal((html.match(/data-primary-action="true"/g) || []).length, 1);
-  assert.equal((html.match(/<details/g) || []).length, 4);
+  // §3.4: reviews + evidence merged into one proof disclosure — 3 details total.
+  assert.equal((html.match(/<details/g) || []).length, 3);
   assert.ok(!html.includes('<details open'));
   assert.ok(html.indexOf('Goal') < html.indexOf('Repair mapping'));
   const plan = read('components/plan/CoachPlanView.tsx');

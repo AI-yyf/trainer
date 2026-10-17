@@ -84,5 +84,40 @@
   .stage-material-generate__shimmer {
     animation: none;
   }
-  
 }
+
+/* ==========================================================================
+   LearningHome responsive container-query layout (§3.6):
+   - Narrow container (< 640px): stacked Now / Path / Proof sections.
+   - Wide container (>= 640px): Now full-width action strip + Path / Proof
+     two-column bento layout.
+   ========================================================================== */
+
+@container trainer (min-width: 640px) {
+  .template-learning-home {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    column-gap: var(--space-4);
+    align-items: start;
+  }
+
+  .template-learning-home > header,
+  .template-learning-home > .template-next-action,
+  .template-learning-home > .template-system-state,
+  .template-learning-home > [data-plan-evidence-decisions="true"],
+  .template-learning-home > [data-plan-leftover-note="true"] {
+    grid-column: 1 / -1;
+  }
+
+  .template-learning-home > details[data-learning-section="route"] {
+    grid-column: 1;
+  }
+
+  .template-learning-home > details[data-learning-section="reviews"],
+  .template-learning-home > details[data-learning-section="growth"],
+  .template-learning-home > details[data-plan-more-plans="true"],
+  .template-learning-home > details[data-plan-governance-disclosure="true"] {
+    grid-column: 2;
+  }
+}
+

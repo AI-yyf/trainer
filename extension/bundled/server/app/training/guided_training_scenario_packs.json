@@ -1562,6 +1562,616 @@
           }
         }
       }
+    },
+    {
+      "id": "literature_close_reading",
+      "previewScenario": "training-close-reading",
+      "sourceChain": {
+        "zh-CN": [
+          "课文文本",
+          "¶ 段落锚",
+          "批注产出"
+        ],
+        "en-US": [
+          "Course text",
+          "¶ paragraph anchors",
+          "Annotation output"
+        ]
+      },
+      "currentFocus": {
+        "zh-CN": "锚定式精读",
+        "en-US": "anchored close reading"
+      },
+      "coachSummary": {
+        "zh-CN": "先把精读讲成可验证的练习：叙述视角、分段批注和理解问题都落在 ¶ 段落锚上，没有证据的解读不进训练。",
+        "en-US": "Close reading becomes a verifiable exercise: narrative viewpoint, layered annotations, and one comprehension question all land on ¶ paragraph anchors; unsupported readings stay out of training."
+      },
+      "practiceGoal": {
+        "zh-CN": "完成三段分层批注（词汇、句式、结构），每条批注都带 ¶ 锚点引用。",
+        "en-US": "Finish three layered annotations (diction, syntax, structure), each citing its ¶ anchor."
+      },
+      "flashGoal": {
+        "zh-CN": "把可验证批注的三要素压成一句能快速回忆的规则。",
+        "en-US": "Compress the three parts of a verifiable annotation into one quickly recallable rule."
+      },
+      "practiceNextStep": {
+        "zh-CN": "带回三段批注",
+        "en-US": "Return with the three annotations"
+      },
+      "flashNextStep": {
+        "zh-CN": "提交闪记答案",
+        "en-US": "Submit the flash answer"
+      },
+      "practice": {
+        "cardId": "card-training-close-reading-practice",
+        "type": "practice",
+        "title": {
+          "zh-CN": "练习：三段锚定批注",
+          "en-US": "Practice: Three anchored annotations"
+        },
+        "whyNow": {
+          "zh-CN": "没有原文锚点的批注无法复核，精读会退化成印象。",
+          "en-US": "An annotation without a source anchor cannot be rechecked, and close reading degrades into impressions."
+        },
+        "focusArea": {
+          "zh-CN": "锚定式精读",
+          "en-US": "Anchored close reading"
+        },
+        "targetSkill": {
+          "zh-CN": "分层批注（词汇/句式/结构）",
+          "en-US": "Layered annotation (diction/syntax/structure)"
+        },
+        "scenario": {
+          "zh-CN": "你正在读一篇小说或散文，需要对三个段落各写一条可复核的批注。",
+          "en-US": "You are reading a short story or essay and must annotate three passages with recheckable annotations."
+        },
+        "problemStatement": {
+          "zh-CN": "选三个段落，各写一条批注：一条词汇、一条句式、一条结构，每条都引用它的 ¶ 锚点。",
+          "en-US": "Pick three passages and write one annotation each — diction, syntax, structure — each citing its ¶ anchor."
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "打开已导入的课文，用 ¶ 锚点定位三个批注点，写完批注后运行锚定 rubric 复核。",
+          "en-US": "Open the imported text, locate three annotation points by ¶ anchor, write the annotations, then run the anchored rubric review."
+        },
+        "apiHints": [],
+        "constraints": {
+          "zh-CN": [
+            "每条批注先给锚点，再给观察。",
+            "把事实观察和个人解读分开陈述。",
+            "没有可验证观察的段落不要写批注。"
+          ],
+          "en-US": [
+            "Cite the anchor before the observation.",
+            "State factual observation separately from interpretation.",
+            "Do not annotate a passage without a verifiable observation."
+          ]
+        },
+        "deliverable": {
+          "zh-CN": "三段带 ¶ 锚点的分层批注。",
+          "en-US": "Three layered annotations, each with its ¶ anchor."
+        },
+        "selfCheck": {
+          "zh-CN": [
+            "每个锚点能否由他人精确定位？",
+            "观察是否区分了词汇、句式、结构三层？",
+            "有没有臆测课文没有提供的上下文？"
+          ],
+          "en-US": [
+            "Can each anchor be located exactly by someone else?",
+            "Do the observations separate diction, syntax, and structure?",
+            "Did you invent context the text does not provide?"
+          ]
+        },
+        "validationMethod": {
+          "zh-CN": "对每条批注核对锚点、观察点和层次归属，再用宿主 rubric 复核一次。",
+          "en-US": "Check each annotation for anchor, observation, and layer, then run the host rubric review once."
+        },
+        "learnerDeliverables": {
+          "zh-CN": [
+            "三个 ¶ 锚点。",
+            "三条分层批注。",
+            "一条理解问题。"
+          ],
+          "en-US": [
+            "The three ¶ anchors.",
+            "The three layered annotations.",
+            "One comprehension question."
+          ]
+        },
+        "verificationSteps": {
+          "zh-CN": [
+            "逐条核对锚点。",
+            "分类观察：词汇/句式/结构。",
+            "用 rubric 复核一遍。"
+          ],
+          "en-US": [
+            "Check anchors one by one.",
+            "Classify observations: diction/syntax/structure.",
+            "Run the rubric review once."
+          ]
+        },
+        "successSignal": {
+          "zh-CN": "你的批注可以被另一个人按锚点复核，而无需重读全文。",
+          "en-US": "Someone else can recheck every annotation by anchor without rereading the whole text."
+        },
+        "expectedSymbols": [],
+        "filesToTouch": [],
+        "hintLadder": {
+          "zh-CN": [
+            "先锁定第一个锚点。",
+            "只描述你能复述的观察。",
+            "最后把观察归入三个层次之一。"
+          ],
+          "en-US": [
+            "Lock the first anchor first.",
+            "Describe only observations you can reproduce verbatim.",
+            "Then classify each observation into one of the three layers."
+          ]
+        },
+        "commonMistakes": {
+          "zh-CN": [
+            "用印象代替可复核的观察。",
+            "把解读写进事实层。"
+          ],
+          "en-US": [
+            "Replacing recheckable observation with impressions.",
+            "Mixing interpretation into the factual layer."
+          ]
+        },
+        "stuckRecovery": {
+          "zh-CN": "回到第一个你觉得'有点怪'的词，从它开始写锚点。",
+          "en-US": "Return to the first word that strikes you as odd and start the anchor there."
+        },
+        "reflectionPrompt": {
+          "zh-CN": "哪一条批注最难写出锚点？为什么？",
+          "en-US": "Which annotation was hardest to anchor, and why?"
+        },
+        "returnWith": {
+          "zh-CN": "带回三个锚点、三段批注和一条理解问题。",
+          "en-US": "Return with the three anchors, the annotations, and one comprehension question."
+        }
+      },
+      "flash": {
+        "cardId": "card-training-close-reading-flash",
+        "type": "flash",
+        "title": {
+          "zh-CN": "闪记：可验证批注的要素",
+          "en-US": "Flash: What makes an annotation verifiable"
+        },
+        "whyNow": {
+          "zh-CN": "记住批注的可复核性，精读的每一步才站得住。",
+          "en-US": "Retaining recheckability keeps every close-reading step on solid ground."
+        },
+        "focusArea": {
+          "zh-CN": "锚定式精读",
+          "en-US": "Anchored close reading"
+        },
+        "targetSkill": {
+          "zh-CN": "批注要素回忆",
+          "en-US": "Annotation anatomy recall"
+        },
+        "scenario": {
+          "zh-CN": "你需要说明一条批注为什么可以从精读进入训练。",
+          "en-US": "You need to explain why one annotation is allowed to move from close reading into training."
+        },
+        "problemStatement": {
+          "zh-CN": "一条可验证的批注必须包含哪三部分？",
+          "en-US": "Which three parts must a verifiable annotation contain?"
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "先说 ¶ 锚点，再说观察层次，最后说它如何被复核。",
+          "en-US": "Name the ¶ anchor first, then the observation layer, then how it gets rechecked."
+        },
+        "apiHints": [],
+        "constraints": {
+          "zh-CN": [
+            "回答必须包含锚点、观察层次和复核路径。"
+          ],
+          "en-US": [
+            "The answer must include anchor, observation layer, and recheck path."
+          ]
+        },
+        "validationMethod": {
+          "zh-CN": "按锚点、观察层次、复核路径三段核对答案。",
+          "en-US": "Check the answer against anchor, observation layer, and recheck path."
+        },
+        "learnerDeliverables": {
+          "zh-CN": [
+            "¶ 锚点。",
+            "观察层次。",
+            "复核路径。"
+          ],
+          "en-US": [
+            "The ¶ anchor.",
+            "The observation layer.",
+            "The recheck path."
+          ]
+        },
+        "verificationSteps": {
+          "zh-CN": [
+            "先说锚点。",
+            "再说明观察层次。",
+            "最后说明复核方式。"
+          ],
+          "en-US": [
+            "State the anchor first.",
+            "Then the observation layer.",
+            "Finish with the recheck path."
+          ]
+        },
+        "successSignal": {
+          "zh-CN": "你能把批注结构和它的复核方式连起来。",
+          "en-US": "You can connect an annotation's anatomy to the way it gets rechecked."
+        },
+        "expectedSymbols": [],
+        "filesToTouch": [],
+        "hintLadder": {
+          "zh-CN": [
+            "不要跳过锚点。",
+            "再补观察层次。",
+            "最后命名复核路径。"
+          ],
+          "en-US": [
+            "Do not skip the anchor.",
+            "Add the observation layer next.",
+            "Then name the recheck path."
+          ]
+        },
+        "commonMistakes": {
+          "zh-CN": [
+            "把没有锚点的感想当作批注。"
+          ],
+          "en-US": [
+            "Treating an unanchored impression as an annotation."
+          ]
+        },
+        "stuckRecovery": {
+          "zh-CN": "回到'别人能否按它找到原文'来判断。",
+          "en-US": "Judge it by whether someone else could locate the passage from it."
+        },
+        "reflectionPrompt": {
+          "zh-CN": "三要素里你最容易漏掉哪一个？",
+          "en-US": "Which of the three parts are you most likely to omit?"
+        },
+        "returnWith": {
+          "zh-CN": "带回批注的三个要素。",
+          "en-US": "Return with the three parts of a verifiable annotation."
+        },
+        "knowledgeType": {
+          "zh-CN": "精读知识",
+          "en-US": "literature_close_reading"
+        },
+        "question": {
+          "zh-CN": "一条可验证的批注必须包含哪三部分？",
+          "en-US": "Which three parts must a verifiable annotation contain?"
+        },
+        "context": {
+          "zh-CN": "从原文锚点精读，而不是从印象复述。",
+          "en-US": "Read from source anchors rather than restating impressions."
+        },
+        "answerMode": {
+          "zh-CN": "text",
+          "en-US": "text"
+        },
+        "expectedAnswer": {
+          "zh-CN": "说出 ¶ 锚点、观察层次（词汇/句式/结构），以及 rubric 复核路径。",
+          "en-US": "Name the ¶ anchor, the observation layer (diction/syntax/structure), and the rubric recheck path."
+        },
+        "feedback": {
+          "zh-CN": {
+            "correct": "很好。批注 anchored 才能复核。",
+            "incorrect": "缺一不可：锚点、观察层次、复核路径。"
+          },
+          "en-US": {
+            "correct": "Good. An anchored annotation is recheckable.",
+            "incorrect": "All three are required: anchor, observation layer, recheck path."
+          }
+        }
+      }
+    },
+    {
+      "id": "literature_theory_concept",
+      "previewScenario": "training-theory-concept",
+      "sourceChain": {
+        "zh-CN": [
+          "文论概念",
+          "最小定义与出处",
+          "两处 ¶ 锚点证据"
+        ],
+        "en-US": [
+          "Literary theory concept",
+          "Minimal definition with provenance",
+          "Two ¶-anchored evidence passages"
+        ]
+      },
+      "currentFocus": {
+        "zh-CN": "文论概念应用",
+        "en-US": "theory concept application"
+      },
+      "coachSummary": {
+        "zh-CN": "文论概念只有在原文里找到两个锚点证据才算被理解：先最小定义与出处，再证据，最后 150 字应用。",
+        "en-US": "A theory concept counts as understood only once two anchored passages support it: minimal definition with provenance first, then evidence, then a 150-word application."
+      },
+      "practiceGoal": {
+        "zh-CN": "为一个概念写出带出处的最小定义，并找到两处 ¶ 锚点证据。",
+        "en-US": "Write a provenance-backed minimal definition for one concept and find two ¶-anchored passages supporting it."
+      },
+      "flashGoal": {
+        "zh-CN": "把概念的最小定义与一个常见误用压成可回忆记忆。",
+        "en-US": "Compress the concept's minimal definition and one common misuse into a recallable memory."
+      },
+      "practiceNextStep": {
+        "zh-CN": "带回定义与两处证据",
+        "en-US": "Return with the definition and two anchors"
+      },
+      "flashNextStep": {
+        "zh-CN": "提交闪记答案",
+        "en-US": "Submit the flash answer"
+      },
+      "practice": {
+        "cardId": "card-training-theory-concept-practice",
+        "type": "practice",
+        "title": {
+          "zh-CN": "练习：一个概念读两处证据",
+          "en-US": "Practice: One concept, two anchored evidence passages"
+        },
+        "whyNow": {
+          "zh-CN": "没有出处的定义和没有锚点的证据，都会让文论退化成术语堆砌。",
+          "en-US": "Definitions without provenance and evidence without anchors turn literary theory into jargon stacking."
+        },
+        "focusArea": {
+          "zh-CN": "文论概念应用",
+          "en-US": "Theory concept application"
+        },
+        "targetSkill": {
+          "zh-CN": "概念定义与锚点证据匹配",
+          "en-US": "Definition-to-evidence matching"
+        },
+        "scenario": {
+          "zh-CN": "你选了一个文论概念（如不可靠叙述），要用原文支撑它。",
+          "en-US": "You picked one literary theory concept (e.g. unreliable narration) and must ground it in the source text."
+        },
+        "problemStatement": {
+          "zh-CN": "写出概念的最小定义与出处，再找出两处支持它的段落并各引一个 ¶ 锚点。",
+          "en-US": "Write the minimal definition with provenance, then find two supporting passages each cited with a ¶ anchor."
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "在资料里查概念出处，回到课文定位两处段落，写 150 字应用并区分事实与解读。",
+          "en-US": "Look up the concept's provenance in resources, locate two passages in the text, and write a 150-word application separating fact from interpretation."
+        },
+        "apiHints": [],
+        "constraints": {
+          "zh-CN": [
+            "定义必须写明出处。",
+            "两处证据各带 ¶ 锚点。",
+            "应用段落把观察与解读分开。"
+          ],
+          "en-US": [
+            "The definition must state its provenance.",
+            "Each of the two passages cites a ¶ anchor.",
+            "The application separates observation from interpretation."
+          ]
+        },
+        "deliverable": {
+          "zh-CN": "最小定义 + 两处锚点证据 + 150 字应用。",
+          "en-US": "A minimal definition, two anchored passages, and a 150-word application."
+        },
+        "selfCheck": {
+          "zh-CN": [
+            "定义的出处是否可查？",
+            "两处证据是否真的支持该概念？",
+            "解读部分有没有伪装成事实？"
+          ],
+          "en-US": [
+            "Is the definition's provenance traceable?",
+            "Do both passages actually support the concept?",
+            "Is any interpretation disguised as fact?"
+          ]
+        },
+        "validationMethod": {
+          "zh-CN": "核对定义出处与两处锚点证据，再用 rubric 复核应用段落。",
+          "en-US": "Check the definition's provenance and the two anchors, then run the rubric review on the application."
+        },
+        "learnerDeliverables": {
+          "zh-CN": [
+            "带出处的定义。",
+            "两个 ¶ 锚点。",
+            "150 字应用。"
+          ],
+          "en-US": [
+            "The provenance-backed definition.",
+            "Two ¶ anchors.",
+            "The 150-word application."
+          ]
+        },
+        "verificationSteps": {
+          "zh-CN": [
+            "核对定义出处。",
+            "逐个检查锚点。",
+            "复核应用段落的事实/解读分层。"
+          ],
+          "en-US": [
+            "Check the definition source.",
+            "Inspect each anchor.",
+            "Recheck the application's fact/interpretation split."
+          ]
+        },
+        "successSignal": {
+          "zh-CN": "你能让另一个人从定义走到证据再到应用，每步都可复核。",
+          "en-US": "Someone can walk from definition to evidence to application, rechecking every step."
+        },
+        "expectedSymbols": [],
+        "filesToTouch": [],
+        "hintLadder": {
+          "zh-CN": [
+            "先补全定义的出处。",
+            "再定位第一处锚点。",
+            "最后写应用，注意事实与解读分层。"
+          ],
+          "en-US": [
+            "Complete the definition's provenance first.",
+            "Locate the first anchor next.",
+            "Then write the application, keeping fact and interpretation apart."
+          ]
+        },
+        "commonMistakes": {
+          "zh-CN": [
+            "用术语冒充定义。",
+            "让解读冒充原文观察。"
+          ],
+          "en-US": [
+            "Passing off jargon as a definition.",
+            "Letting interpretation pose as source observation."
+          ]
+        },
+        "stuckRecovery": {
+          "zh-CN": "回到一个你已经能说清用法的概念，而不是追新概念。",
+          "en-US": "Fall back to a concept whose usage you can already explain instead of chasing a new one."
+        },
+        "reflectionPrompt": {
+          "zh-CN": "你选的概念让你重新看到了课文里的什么？",
+          "en-US": "What did the concept let you see anew in the text?"
+        },
+        "returnWith": {
+          "zh-CN": "带回定义、两个锚点和应用段落。",
+          "en-US": "Return with the definition, the two anchors, and the application."
+        }
+      },
+      "flash": {
+        "cardId": "card-training-theory-concept-flash",
+        "type": "flash",
+        "title": {
+          "zh-CN": "闪记：概念定义与常见误用",
+          "en-US": "Flash: Concept definition and its common misuse"
+        },
+        "whyNow": {
+          "zh-CN": "记住定义的出处和常见误用，文论概念就不会被张冠李戴。",
+          "en-US": "Retaining provenance and the common misuse keeps the concept from being misapplied."
+        },
+        "focusArea": {
+          "zh-CN": "文论概念应用",
+          "en-US": "Theory concept application"
+        },
+        "targetSkill": {
+          "zh-CN": "概念定义与误用回忆",
+          "en-US": "Definition and misuse recall"
+        },
+        "scenario": {
+          "zh-CN": "你需要说明概念的定义、出处和一个常见误用。",
+          "en-US": "You need to state the concept's definition, provenance, and one common misuse."
+        },
+        "problemStatement": {
+          "zh-CN": "这个概念的出处是什么，最常见的误用是什么？",
+          "en-US": "What is the concept's provenance, and what is its most common misuse?"
+        },
+        "suggestedWorkspaceAction": {
+          "zh-CN": "先说定义与出处，再举一个误用例子并说明为什么错。",
+          "en-US": "State the definition and provenance first, then give a misuse example and why it fails."
+        },
+        "apiHints": [],
+        "constraints": {
+          "zh-CN": [
+            "回答必须包含定义、出处与误用。"
+          ],
+          "en-US": [
+            "The answer must include definition, provenance, and misuse."
+          ]
+        },
+        "validationMethod": {
+          "zh-CN": "按定义、出处、误用三段核对答案。",
+          "en-US": "Check the answer against definition, provenance, and misuse."
+        },
+        "learnerDeliverables": {
+          "zh-CN": [
+            "定义与出处。",
+            "一个误用例子。"
+          ],
+          "en-US": [
+            "The definition and provenance.",
+            "One misuse example."
+          ]
+        },
+        "verificationSteps": {
+          "zh-CN": [
+            "先说定义。",
+            "再说出处。",
+            "最后说误用为何错。"
+          ],
+          "en-US": [
+            "State the definition first.",
+            "Then the provenance.",
+            "Finish with why the misuse fails."
+          ]
+        },
+        "successSignal": {
+          "zh-CN": "你能识别概念被误用时的语言信号。",
+          "en-US": "You can recognize the linguistic signal that a concept is being misused."
+        },
+        "expectedSymbols": [],
+        "filesToTouch": [],
+        "hintLadder": {
+          "zh-CN": [
+            "不要跳过出处。",
+            "再举误用。",
+            "最后解释为什么错。"
+          ],
+          "en-US": [
+            "Do not skip the provenance.",
+            "Give the misuse next.",
+            "Then explain why it fails."
+          ]
+        },
+        "commonMistakes": {
+          "zh-CN": [
+            "背术语而不说出处。"
+          ],
+          "en-US": [
+            "Reciting the term without its provenance."
+          ]
+        },
+        "stuckRecovery": {
+          "zh-CN": "回到原书的定义段落或权威词条。",
+          "en-US": "Return to the defining passage or an authoritative reference."
+        },
+        "reflectionPrompt": {
+          "zh-CN": "这个概念的出处你能在资料里几秒内找到吗？",
+          "en-US": "Can you find the concept's provenance in your resources within seconds?"
+        },
+        "returnWith": {
+          "zh-CN": "带回定义、出处与误用。",
+          "en-US": "Return with the definition, provenance, and misuse."
+        },
+        "knowledgeType": {
+          "zh-CN": "文论知识",
+          "en-US": "literature_theory_concept"
+        },
+        "question": {
+          "zh-CN": "这个概念的出处是什么，最常见的误用是什么？",
+          "en-US": "What is the concept's provenance, and what is its most common misuse?"
+        },
+        "context": {
+          "zh-CN": "概念要有出处，观察要与解读分开。",
+          "en-US": "Concepts need provenance; observation stays separate from interpretation."
+        },
+        "answerMode": {
+          "zh-CN": "text",
+          "en-US": "text"
+        },
+        "expectedAnswer": {
+          "zh-CN": "先定义与出处，再说明一个误用例子并解释为什么错。",
+          "en-US": "State the definition and provenance, then one misuse example and why it fails."
+        },
+        "feedback": {
+          "zh-CN": {
+            "correct": "很好。出处与误用你都带上了。",
+            "incorrect": "补上出处，再举一个误用例子。"
+          },
+          "en-US": {
+            "correct": "Good. You brought provenance and misuse.",
+            "incorrect": "Add the provenance, then give a misuse example."
+          }
+        }
+      }
     }
   ]
 }

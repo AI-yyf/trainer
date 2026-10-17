@@ -322,6 +322,8 @@ class PreviewService:
             content = get_structured_preview_markdown(file_path)
         if content is None and suffix == ".pdf":
             content = _convert_pdf_to_markdown(file_path)
+        if content is None and suffix == ".epub":
+            content = _convert_epub_to_markdown(file_path)
         if content is None and suffix in {".docx", ".pptx"}:
             content = _convert_openxml_to_markdown(file_path)
         if content is None and suffix in {".odt", ".ods", ".odp"}:

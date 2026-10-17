@@ -59,7 +59,10 @@ test('Plan keeps formal truth, evidence, and blockers distinct without silent mu
   const html = learningPlan(blocked);
   assert.ok(html.includes('Runner is missing'));
   assert.ok(html.includes('Resolve with coach'));
-  assert.equal((html.match(/data-primary-action="true"/g) || []).length, 1);
+  // §3.2: blocked states own no accent primary button — they render as a quiet
+  // SystemState bar whose ghost action keeps the intent hook.
+  assert.equal((html.match(/data-primary-action="true"/g) || []).length, 0);
+  assert.equal((html.match(/data-action-intent="resolve_blocker"/g) || []).length, 1);
   assert.doesNotMatch(source, /fallbackGovernanceItems|resolvePlanDecisionStrip|pickPlanPrimaryAction/);
   assert.match(source, /next=\{props\.primaryAction\}/);
 });

@@ -226,6 +226,7 @@ class ResourceService:
             name=request.name,
             source=request.source,
             tags=request.tags,
+            content_language=str(request.content_language).strip() if request.content_language else None,
             summary="Registered and waiting for parsing.",
             source_type=self._source_type(request.kind, request.source),
             canonical_source=canonical_source,
@@ -359,6 +360,17 @@ class ResourceService:
                 [f"Source content conflicts with an existing indexed version of {resource.name}."],
             )
         trust_score = self._trust_score(resource.kind, quality_flags)
+        paragraph_anchors_raw = source_provenance.get("paragraph_anchors")
+        paragraph_anchors = (
+            list(paragraph_anchors_raw)
+            if isinstance(paragraph_anchors_raw, list)
+            else []
+        )
+        detected_content_language = str(
+            resource.content_language
+            or source_provenance.get("content_language")
+            or ""
+        ).strip() or None
         knowledge_fragments = self._knowledge_fragments(
             resource=resource,
             canonical_source=canonical_source,
@@ -369,6 +381,8 @@ class ResourceService:
             duplicate_key=duplicate_key,
             version=current_version,
             workspace_id=workspace_id,
+            paragraph_anchors=paragraph_anchors,
+            content_language=detected_content_language,
         )
         if canonical_duplicate is not None:
             knowledge_fragments = []
@@ -404,6 +418,8 @@ class ResourceService:
                     "fetched_at": fetched_at or "",
                     "content_type": content_type,
                 },
+                "paragraph_anchors": paragraph_anchors[:64],
+                "content_language": detected_content_language or "",
             },
         )
         self.registry.mark_indexed(
@@ -435,6 +451,7 @@ class ResourceService:
                 "knowledge_fragments": knowledge_fragments,
                 "source_governance": source_governance,
                 "content_hash": (current_version or {}).get("content_hash") or resource.content_hash,
+                "content_language": detected_content_language or resource.content_language,
             }
         )
         if canonical_duplicate is not None:
@@ -1792,6 +1809,7 @@ class ResourceService:
             "code": ".txt",
             "text": ".txt",
             "pdf": ".pdf",
+            "epub": ".epub",
             "image": ".txt",
         }.get(kind, ".txt")
 
@@ -1964,7 +1982,7 @@ class ResourceService:
         return flags
 
     def _trust_score(self, kind: str, quality_flags: list[str]) -> float:
-        base = 0.84 if kind in {"markdown", "code", "text", "pdf"} else 0.74 if kind == "url" else 0.55
+        base = 0.84 if kind in {"markdown", "code", "text", "pdf", "epub"} else 0.74 if kind == "url" else 0.55
         if "network_disabled" in quality_flags:
             base -= 0.4
         if "fetch_failed" in quality_flags:
@@ -1999,15 +2017,33 @@ class ResourceService:
         duplicate_key: str,
         version: dict[str, Any] | None = None,
         workspace_id: str = "",
+        paragraph_anchors: list[dict[str, Any]] | None = None,
+        content_language: str | None = None,
     ) -> list[dict[str, Any]]:
         blocking_flags = {"duplicate", "source_conflict", "fetch_failed", "blocked_source", "network_disabled", "placeholder", "no_content"}
         if any(flag in blocking_flags for flag in quality_flags):
             return []
         fragments: list[dict[str, Any]] = []
-        for chunk in chunks[:3]:
+        anchors = paragraph_anchors or []
+        for idx, chunk in enumerate(chunks[:3]):
             snippet = self._truncate(chunk.text.strip(), max_chars=180)
             if not snippet:
                 continue
+            anchor_meta = anchors[idx] if idx < len(anchors) and isinstance(anchors[idx], dict) else {}
+            paragraph_anchor = str(
+                anchor_meta.get("anchor_id")
+                or f"¶chunk:{chunk.order}@{chunk.start_line or 0}"
+            )
+            loc_dict: dict[str, Any] = {
+                "path": canonical_source,
+                "chunk_id": chunk.chunk_id,
+                "line_start": chunk.start_line,
+                "line_end": chunk.end_line,
+                "paragraph_anchor": paragraph_anchor,
+            }
+            for key in ("page", "paragraph_index", "char_offset", "char_length", "spine_index", "spine_id", "element_path", "href"):
+                if key in anchor_meta and anchor_meta[key] is not None:
+                    loc_dict[key] = anchor_meta[key]
             fragment_payload = {
                 "id": chunk.chunk_id,
                 "resource_id": resource.id,
@@ -2029,23 +2065,15 @@ class ResourceService:
                 "focus_area": resource.name.strip() or resource.kind,
                 "line_start": chunk.start_line,
                 "line_end": chunk.end_line,
-                "location": {
-                    "path": canonical_source,
-                    "chunk_id": chunk.chunk_id,
-                    "line_start": chunk.start_line,
-                    "line_end": chunk.end_line,
-                },
+                "paragraph_anchor": paragraph_anchor,
+                "content_language": content_language or resource.content_language,
+                "location": loc_dict,
                 "why_it_matters": self._why_it_matters(resource, chunk),
                 **provenance_payload(
                     resource_id=resource.id,
                     version_id=(version or {}).get("version_id"),
                     content_hash=(version or {}).get("content_hash") or resource.content_hash,
-                    location={
-                        "path": canonical_source,
-                        "chunk_id": chunk.chunk_id,
-                        "line_start": chunk.start_line,
-                        "line_end": chunk.end_line,
-                    },
+                    location=loc_dict,
                 ),
             }
             if workspace_id:

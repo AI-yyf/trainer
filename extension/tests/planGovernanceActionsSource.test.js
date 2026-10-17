@@ -390,7 +390,7 @@ test('bound pending evidence exposes approval and quiet reject/defer beside it',
   assert.equal((html.match(/data-primary-action="true"/g) || []).length, 1);
   assert.ok(html.includes('data-plan-evidence-decision="defer"'));
   assert.ok(html.includes('data-plan-evidence-decision="reject"'));
-  assert.ok(html.indexOf('data-plan-evidence-decisions="true"') < html.indexOf('data-learning-section="evidence"'));
+  assert.ok(html.indexOf('data-plan-evidence-decisions="true"') < html.indexOf('data-learning-section="reviews"'));
   const source = fs.readFileSync(appPath, 'utf8');
   assert.match(source, /commandId: trainerCommands\.evidenceDefer/);
   assert.match(source, /commandId: trainerCommands\.evidenceReject/);
@@ -467,7 +467,10 @@ test('Plan first screen keeps one primary action and leftover-not-live honesty',
   const { learningAction, learningPlan } = require('./templateAssertions');
   const setup = learningAction({ workspace: { ready: false }, evidence: { pending: [{ id: 'e1', summary: 'Old result' }] } });
   const html = learningPlan(setup, { plan: null, leftoverNote: 'Stored plan is not the current step.' });
-  assert.equal((html.match(/data-primary-action="true"/g) || []).length, 1);
+  // §3.2: blocked states (workspace not ready) own no accent primary button —
+  // they render as a quiet SystemState bar with a ghost action.
+  assert.equal((html.match(/data-primary-action="true"/g) || []).length, 0);
+  assert.equal((html.match(/data-action-intent="choose_workspace"/g) || []).length, 1);
   assert.ok(html.includes('Choose workspace'));
   assert.ok(html.includes('data-plan-leftover-note="true" role="status" aria-live="polite"'));
   assert.ok(!html.includes('Approve this evidence'));

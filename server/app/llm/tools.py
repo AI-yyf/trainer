@@ -52,6 +52,17 @@ from ..core.models import (
     SandboxRestoreRequest,
     SandboxWriteRequest,
 )
+from ..evaluator.models import CheckResult, CheckStatus
+from ..evaluator.verifiers import (
+    DEFAULT_SUBJECT_FAMILY,
+    LocalRubricReviewer,
+    RubricItem,
+    RubricSpec,
+    VerifierPack,
+    verifier_pack_for,
+    verify_submission_with_pack,
+)
+from ..training.card_request import DeliverableKind, normalize_deliverable_kind
 
 logger = logging.getLogger("trainer.llm.tools")
 
@@ -269,6 +280,15 @@ class ToolRegistry:
                     "with resource_composer_intent.mode=organize."
                 ),
             }
+        if name == "run_rubric_review" and not _rubric_review_allowed(context):
+            return {
+                "ok": False,
+                "error": "rubric_review_not_allowed",
+                "detail": (
+                    "run_rubric_review is only available in a host-gated practice "
+                    "turn with a card rubric attached; it never runs speculatively."
+                ),
+            }
         if name in denied:
             return {
                 "ok": False,
@@ -364,6 +384,15 @@ def _explicit_training_card_request_allowed(context: ToolContext) -> bool:
 def _formal_plan_mutation_allowed(context: ToolContext) -> bool:
     extra = context.extra if isinstance(context.extra, dict) else {}
     return extra.get("formal_plan_mutation") is True
+
+
+def _rubric_review_allowed(context: ToolContext) -> bool:
+    """Host-gated rubric review (P2 #15): same explicit-flag pattern as the
+    formal-plan write gate. The host sets this only when the turn carries a
+    practice verification context with a card rubric, so the coach cannot run
+    rubric reviews speculatively in ordinary chat."""
+    extra = context.extra if isinstance(context.extra, dict) else {}
+    return extra.get("rubric_review_allowed") is True
 
 
 def _task_mint_tool_allowed(context: ToolContext) -> bool:
@@ -3011,7 +3040,41 @@ async def _handle_verify_practice_current_file(
     context: ToolContext,
     args: dict[str, Any],
 ) -> dict[str, Any]:
-    current_file = context.extra.get("current_file") if isinstance(context.extra, dict) else None
+    extra = context.extra if isinstance(context.extra, dict) else {}
+    current_file = extra.get("current_file")
+    text_submission = extra.get("text_submission")
+    deliverable_kind = _practice_deliverable_kind(context, current_file if isinstance(current_file, dict) else None)
+
+    if deliverable_kind == "text_payload" and not isinstance(current_file, dict):
+        if isinstance(text_submission, dict):
+            current_file = {
+                "path": str(text_submission.get("path") or "card://text_payload"),
+                "language_id": str(text_submission.get("language_id") or "markdown"),
+                "content": str(text_submission.get("content") or text_submission.get("text") or ""),
+                "diagnostics": text_submission.get("diagnostics") or [],
+                "subject_family": text_submission.get("subject_family") or extra.get("subject_family") or "literature",
+                "deliverable_kind": "text_payload",
+                "card_config": text_submission.get("card_config"),
+                "rubric_items": text_submission.get("rubric_items"),
+                "anchor_text": text_submission.get("anchor_text"),
+                "human_adopted": text_submission.get("human_adopted"),
+                "locale": text_submission.get("locale"),
+            }
+        elif isinstance(text_submission, str):
+            current_file = {
+                "path": "card://text_payload",
+                "language_id": "markdown",
+                "content": text_submission,
+                "diagnostics": [],
+                "subject_family": extra.get("subject_family") or "literature",
+                "deliverable_kind": "text_payload",
+                "card_config": extra.get("card_config"),
+                "rubric_items": extra.get("rubric_items"),
+                "anchor_text": extra.get("anchor_text"),
+                "human_adopted": extra.get("human_adopted"),
+                "locale": extra.get("locale"),
+            }
+
     if not isinstance(current_file, dict):
         return {
             "ok": False,
@@ -3022,7 +3085,12 @@ async def _handle_verify_practice_current_file(
             "next_step": "Open the learner's implementation file and run Verify current file again.",
         }
 
-    content = current_file.get("content") or current_file.get("content_excerpt") or ""
+    content = (
+        current_file.get("content")
+        or current_file.get("content_excerpt")
+        or (current_file.get("text_payload") if deliverable_kind == "text_payload" else "")
+        or ""
+    )
     if not isinstance(content, str):
         content = str(content)
     if not content.strip():
@@ -3041,6 +3109,27 @@ async def _handle_verify_practice_current_file(
     error_diagnostics = [item for item in diagnostics if _diagnostic_severity(item) == "error"]
     warning_diagnostics = [item for item in diagnostics if _diagnostic_severity(item) == "warning"]
     allow_warnings = bool(args.get("allow_warnings") is True)
+
+    # P1 #9 & #15: subject_family and deliverable_kind routing. The pack decides
+    # *how* a practice submission is verified; unknown/absent families fall back
+    # to the historical code lane unless deliverable_kind == "text_payload",
+    # which routes to the rubric/hook pack lane (§7.2).
+    family = _practice_subject_family(context, current_file)
+    if family == DEFAULT_SUBJECT_FAMILY and deliverable_kind == "text_payload":
+        family = "literature"
+    pack = verifier_pack_for(family)
+    if pack.subject_family != DEFAULT_SUBJECT_FAMILY or deliverable_kind == "text_payload":
+        return _verify_practice_with_pack(
+            pack,
+            content=content,
+            args=args,
+            current_file=current_file,
+            diagnostics=diagnostics,
+            error_diagnostics=error_diagnostics,
+            warning_diagnostics=warning_diagnostics,
+            allow_warnings=allow_warnings,
+            deliverable_kind=deliverable_kind,
+        )
 
     criteria = [
         str(item).strip()
@@ -3145,16 +3234,701 @@ async def _handle_verify_practice_current_file(
         "summary": summary,
         "next_step": next_step,
     }
-    persistence = _persist_practice_verification_result(
-        context,
-        payload=payload,
-        args=args,
-        current_file=current_file,
-        missing_results=missing_results,
+    persistence = (
+        _persist_practice_verification_result(
+            context,
+            payload=payload,
+            args=args,
+            current_file=current_file,
+            missing_results=missing_results,
+        )
+        if pack.persists_practice_evidence
+        else {}
     )
     if persistence:
         payload.update(persistence)
     return payload
+
+
+def _practice_subject_family(context: ToolContext, current_file: dict[str, Any]) -> str:
+    """Host-trusted subject family for practice routing (P1 #9).
+
+    Only host-supplied data may name a family: the file snapshot the IDE sent
+    and the coach context the host assembled. Tool *arguments* are
+    model-authored, so accepting a family from there would let a model pick
+    its own (weaker) verifier — the exact fail-open this routing must not have.
+    """
+    extra = context.extra if isinstance(context.extra, dict) else {}
+    for candidate in (current_file.get("subject_family"), extra.get("subject_family")):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip().lower()
+    return DEFAULT_SUBJECT_FAMILY
+
+
+def _practice_deliverable_kind(
+    context: ToolContext,
+    current_file: dict[str, Any] | None,
+) -> DeliverableKind:
+    """Host-trusted deliverable carrier (P1 #15, §7.2).
+
+    Only host-supplied context or file snapshot may declare ``text_payload`` vs
+    ``file_based``; model tool arguments are never consulted.
+    """
+    extra = context.extra if isinstance(context.extra, dict) else {}
+    raw_kind: str | None = None
+    for candidate in (
+        current_file.get("deliverable_kind") if isinstance(current_file, dict) else None,
+        extra.get("deliverable_kind"),
+    ):
+        if isinstance(candidate, str) and candidate.strip():
+            raw_kind = candidate.strip().lower()
+            break
+    if raw_kind in {"file_based", "text_payload"}:
+        return normalize_deliverable_kind(raw_kind)
+    if "text_submission" in extra and not isinstance(current_file, dict):
+        return "text_payload"
+    return "file_based"
+
+
+def _acceptance_signal_check(
+    criterion_results: list[dict[str, Any]],
+    missing_results: list[dict[str, Any]],
+) -> CheckResult:
+    """The acceptance-signal match, as a deterministic in-process check.
+
+    The code lane reports these matches as evidence text only; a non-command
+    pack needs them as a *check* so ``combine_verdict`` can count them toward
+    "at least one deterministic pass". Matching stays the historical substring
+    rule — no new leniency is introduced by routing. Zero criteria yields
+    SKIPPED, never PASSED: an empty requirement list must not read as evidence.
+    """
+    total = len(criterion_results)
+    if total == 0:
+        return CheckResult(
+            name="acceptance-signals",
+            status=CheckStatus.SKIPPED,
+            summary="No acceptance criteria were supplied for this practice card.",
+        )
+    matched = max(0, total - len(missing_results))
+    return CheckResult(
+        name="acceptance-signals",
+        status=CheckStatus.PASSED if matched == total else CheckStatus.FAILED,
+        summary=f"{matched}/{total} acceptance signals matched in the submission",
+    )
+
+
+def _host_rubric_spec(current_file: dict[str, Any]) -> RubricSpec | None:
+    """Build a card's rubric from host-supplied data, never from model args.
+
+    Items missing a statement or an anchor are dropped rather than repaired:
+    ``RubricItem`` refuses anchor-free criteria, and a repair here would let an
+    anchor-free rubric reach the reviewer through the back door.
+    """
+    raw_items = current_file.get("rubric_items")
+    if not isinstance(raw_items, list):
+        return None
+    items: list[RubricItem] = []
+    for raw in raw_items:
+        if not isinstance(raw, dict):
+            continue
+        raw_criteria = raw.get("criteria")
+        try:
+            items.append(
+                RubricItem(
+                    statement=str(raw.get("statement") or ""),
+                    anchor=str(raw.get("anchor") or ""),
+                    criteria=(
+                        tuple(str(entry) for entry in raw_criteria)
+                        if isinstance(raw_criteria, (list, tuple))
+                        else ()
+                    ),
+                )
+            )
+        except ValueError:
+            continue
+    if not items:
+        return None
+    anchor_text = current_file.get("anchor_text")
+    return RubricSpec(
+        items=tuple(items),
+        anchor_text=str(anchor_text) if isinstance(anchor_text, str) else "",
+    )
+
+
+def _verify_practice_with_pack(
+    pack: VerifierPack,
+    *,
+    content: str,
+    args: dict[str, Any],
+    current_file: dict[str, Any],
+    diagnostics: list[str],
+    error_diagnostics: list[str],
+    warning_diagnostics: list[str],
+    allow_warnings: bool,
+    deliverable_kind: DeliverableKind = "file_based",
+) -> dict[str, Any]:
+    """Non-command practice lane (P1 #9): hooks + anchor-forced rubric.
+
+    Blocking IDE diagnostics gate every family, so a text submission sitting in
+    a file the language server flags is not verified either. The verdict is
+    reported honestly — ``needs_review`` whenever deterministic evidence is
+    missing — and evidence minting stays behind ``pack.persists_practice_evidence``
+    so a pack whose source is not whitelisted can never write training evidence.
+    """
+    path = str(current_file.get("path") or "unknown")
+    language_id = str(current_file.get("language_id") or "unknown")
+
+    criteria = [
+        str(item).strip()
+        for item in args.get("acceptance_criteria", [])
+        if isinstance(item, str) and item.strip()
+    ] if isinstance(args.get("acceptance_criteria"), list) else []
+    expected_symbols = [
+        str(item).strip()
+        for item in args.get("expected_symbols", [])
+        if isinstance(item, str) and item.strip()
+    ] if isinstance(args.get("expected_symbols"), list) else []
+    check_items = [*criteria, *expected_symbols]
+    content_lower = content.lower()
+    criterion_results = [_criterion_result(item, content_lower) for item in check_items]
+    missing_results = [item for item in criterion_results if item.get("status") != "matched"]
+
+    try:
+        max_evidence = max(1, min(int(args.get("max_evidence", 8) or 8), 20))
+    except Exception:
+        max_evidence = 8
+
+    card_config = current_file.get("card_config")
+    rubric = _host_rubric_spec(current_file)
+    human_adopted = current_file.get("human_adopted") is True
+    locale = str(current_file.get("locale") or "").strip() or None
+    verdict = verify_submission_with_pack(
+        pack,
+        submission=content,
+        card_config=card_config if isinstance(card_config, dict) else None,
+        rubric=rubric,
+        human_adopted=human_adopted,
+        locale=locale,
+        extra_deterministic=(_acceptance_signal_check(criterion_results, missing_results),),
+    )
+
+    evidence = [
+        f"Read active IDE file {path} ({language_id}) for subject family '{pack.subject_family}'.",
+        f"Submission length: {len(content)} characters.",
+        f"Deterministic checks run: {len(verdict.hook_results)}.",
+    ]
+    for result in verdict.hook_results:
+        evidence.append(f"{result.name}: {result.status.value} — {result.summary}")
+    if verdict.rubric_review is not None:
+        review = verdict.rubric_review
+        graded = len(review.matched) + len(review.missing)
+        evidence.append(
+            f"Rubric review ({review.source}): {len(review.matched)}/{graded} items matched."
+            if graded
+            else f"Rubric review ({review.source}): {review.summary}"
+        )
+    for item in criterion_results:
+        if item.get("status") == "matched":
+            evidence.append(f"Matched: {item.get('text')}")
+
+    hook_errors = [
+        result for result in verdict.hook_results if result.status == CheckStatus.ERROR
+    ]
+    if error_diagnostics:
+        status = "blocked"
+        passed = False
+        reason = "error_diagnostics"
+        summary = "Practice verification is blocked by VS Code error diagnostics."
+        next_step = "Fix the error diagnostics in the active file, then run Verify current file again."
+    elif warning_diagnostics and not allow_warnings:
+        status = "needs_review"
+        passed = False
+        reason = "warning_diagnostics"
+        summary = "The submission was read, but warning diagnostics need review before it can pass."
+        next_step = "Review the warning diagnostics or rerun verification with warnings explicitly allowed."
+    elif hook_errors:
+        status = "blocked"
+        passed = False
+        reason = "verifier_error"
+        summary = f"A deterministic check crashed: {hook_errors[0].name} — {hook_errors[0].summary}."
+        next_step = "Fix the card's verification declaration, then run Verify current file again."
+    elif verdict.status == CheckStatus.PASSED:
+        status = "passed"
+        passed = True
+        reason = "pack_checks_passed"
+        summary = verdict.summary
+        next_step = "Return to Training and mark the practice result as verified evidence."
+    elif verdict.status == CheckStatus.FAILED:
+        status = "needs_review"
+        passed = False
+        reason = "failed_deterministic_checks"
+        failed_names = [
+            result.name
+            for result in verdict.hook_results
+            if result.status == CheckStatus.FAILED
+        ]
+        if failed_names:
+            summary = f"{verdict.summary} Failing checks: {', '.join(failed_names[:3])}."
+        else:
+            summary = verdict.summary
+        next_step = "Revise the submission to satisfy the failing checks, then run Verify current file again."
+    else:
+        status = "needs_review"
+        passed = False
+        reason = "deterministic_evidence_required"
+        summary = verdict.summary
+        next_step = (
+            "Semantic review alone cannot verify a submission; satisfy at least one "
+            "deterministic check or have the card adopted explicitly, then verify again."
+        )
+
+    payload: dict[str, Any] = {
+        "ok": True,
+        "tool": "verify_practice_current_file",
+        "status": status,
+        "passed": passed,
+        "reason": reason,
+        "subject_family": pack.subject_family,
+        "deliverable_kind": deliverable_kind,
+        "evidence_source": pack.evidence_source,
+        "path": path,
+        "language_id": language_id,
+        "diagnostics_count": len(diagnostics),
+        "blocking_diagnostics": error_diagnostics[:8],
+        "warning_diagnostics": warning_diagnostics[:8],
+        "criteria": criterion_results,
+        "matched_signal_count": max(0, len(criterion_results) - len(missing_results)),
+        "total_signal_count": len(criterion_results),
+        "deterministic_checks": [
+            {"name": result.name, "status": result.status.value, "summary": result.summary}
+            for result in verdict.hook_results
+        ],
+        "rubric_review": (
+            {
+                "status": verdict.rubric_review.status.value,
+                "summary": verdict.rubric_review.summary,
+                "matched": list(verdict.rubric_review.matched),
+                "missing": list(verdict.rubric_review.missing),
+                "source": verdict.rubric_review.source,
+            }
+            if verdict.rubric_review is not None
+            else None
+        ),
+        "evidence": evidence[:max_evidence],
+        "summary": summary,
+        "next_step": next_step,
+        "practice_evidence_persisted": False,
+    }
+    if not pack.persists_practice_evidence:
+        payload["evidence_trust_note"] = (
+            f"'{pack.evidence_source}' is not yet a host-trusted verification source, "
+            "so this verdict informs coaching but cannot mint training evidence."
+        )
+    return payload
+
+
+# ---------------------------------------------------------------------------
+# Literature tools (P2 #15): read_resource_excerpt / compare_with_anchor /
+# run_rubric_review. All three are read-only for the conversation; none of
+# them mints training evidence, and run_rubric_review is additionally gated
+# behind an explicit host flag (same pattern as the formal-plan write gate).
+# ---------------------------------------------------------------------------
+
+
+def _excerpt_sentence_list(text: str) -> list[str]:
+    """Split text into sentences with CJK-aware terminators (deterministic)."""
+    sentences: list[str] = []
+    current: list[str] = []
+    for char in str(text or "").strip():
+        current.append(char)
+        if char in "。！？!?…；;":
+            candidate = "".join(current).strip()
+            if candidate:
+                sentences.append(candidate)
+            current = []
+    tail = "".join(current).strip()
+    if tail:
+        sentences.append(tail)
+    return sentences
+
+
+def _sentence_stats(sentences: list[str]) -> dict[str, Any]:
+    lengths = [len("".join(s.split())) for s in sentences if s.strip()]
+    if not lengths:
+        return {"sentence_count": 0, "mean_length": 0.0, "std_length": 0.0}
+    mean = sum(lengths) / len(lengths)
+    variance = sum((value - mean) ** 2 for value in lengths) / len(lengths)
+    return {
+        "sentence_count": len(lengths),
+        "mean_length": round(mean, 2),
+        "std_length": round(variance ** 0.5, 2),
+    }
+
+
+def _punctuation_density(text: str) -> float:
+    if not text:
+        return 0.0
+    punctuation = sum(1 for char in text if char in "，。、；：？！""''（）[]《》“”\",.!?;:()[]{}")
+    return round(punctuation * 100 / max(1, len(text)), 2)
+
+
+def _compare_deterministic_signals(anchor_text: str, submission: str) -> dict[str, Any]:
+    """Deterministic imitation-comparison statistics (no semantic judgment)."""
+    anchor_stats = _sentence_stats(_excerpt_sentence_list(anchor_text))
+    submission_stats = _sentence_stats(_excerpt_sentence_list(submission))
+    delta = round(abs(anchor_stats["mean_length"] - submission_stats["mean_length"]), 2)
+    rhythm_similarity = max(0.0, 1.0 - delta / max(1.0, anchor_stats["mean_length"] or 1.0))
+    return {
+        "anchor": {**anchor_stats, "punctuation_density": _punctuation_density(anchor_text)},
+        "submission": {**submission_stats, "punctuation_density": _punctuation_density(submission)},
+        "mean_sentence_length_delta": delta,
+        "rhythm_similarity": round(rhythm_similarity, 3),
+        "lane": "deterministic",
+        "evidence_bearing": False,
+    }
+
+
+async def _resolve_excerpt_resource(context: ToolContext, args: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    resource_service = getattr(context.runtime, "resource_service", None)
+    if resource_service is None:
+        return None, "service_unavailable"
+    registry = getattr(resource_service, "registry", None)
+    if registry is None:
+        return None, "registry_unavailable"
+    resource_id = str(args.get("resource_id") or "").strip()
+    if resource_id:
+        record = registry.get(resource_id)
+        if record is None:
+            return None, "resource_not_found"
+        return record, None
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return None, "missing_selector"
+    search = getattr(resource_service, "search_resources", None)
+    if search is None:
+        search = getattr(resource_service, "search", None)
+    if search is None:
+        return None, "unsupported"
+    try:
+        response = search(workspace_id=context.workspace_id, query=query, top_k=1)
+        if inspect.isawaitable(response):
+            response = await response
+    except Exception as exc:
+        return None, f"search_failed: {exc.__class__.__name__}"
+    hits = getattr(response, "hits", None)
+    if hits is None and isinstance(response, dict):
+        hits = response.get("hits")
+    record = None
+    if hits:
+        first = hits[0]
+        candidate_id = getattr(first, "resource_id", None)
+        if candidate_id is None and isinstance(first, dict):
+            candidate_id = first.get("resource_id") or first.get("id")
+        if candidate_id:
+            record = registry.get(str(candidate_id))
+    if record is None:
+        return None, "no_resource_match"
+    return record, None
+
+
+def _resource_fragments(resource: Any) -> list[dict[str, Any]]:
+    """Knowledge fragments for either resource record shape.
+
+    The registry dataclass stores them under ``metadata["knowledge_fragments"]``;
+    the API Pydantic model also carries a top-level ``knowledge_fragments`` list.
+    """
+    fragments: Any = getattr(resource, "knowledge_fragments", None)
+    if not isinstance(fragments, list):
+        metadata = getattr(resource, "metadata", None)
+        fragments = metadata.get("knowledge_fragments") if isinstance(metadata, dict) else None
+    return [item for item in fragments if isinstance(item, dict)] if isinstance(fragments, list) else []
+
+
+def _citation_for_anchor(resource: Any, anchor_id: str) -> str | None:
+    """Look up the version-scoped citation for a ¶ anchor, when present."""
+    for fragment in _resource_fragments(resource):
+        if fragment.get("paragraph_anchor") == anchor_id:
+            citation = fragment.get("citation_id")
+            if isinstance(citation, str) and citation.strip():
+                return citation
+    return None
+
+
+def _resource_display(resource: Any) -> dict[str, Any]:
+    """Display fields for either resource record shape."""
+    metadata = getattr(resource, "metadata", None)
+    metadata = metadata if isinstance(metadata, dict) else {}
+    name = str(getattr(resource, "name", None) or getattr(resource, "title", None) or "")
+    source = str(
+        getattr(resource, "canonical_source", None)
+        or getattr(resource, "source", None)
+        or getattr(resource, "source_uri", None)
+        or ""
+    )
+    kind = getattr(resource, "kind", None)
+    try:
+        kind = kind.value  # ResourceKind enum (registry dataclass shape)
+    except AttributeError:
+        pass
+    return {
+        "id": str(resource.id),
+        "name": name,
+        "kind": str(kind or ""),
+        "source": source,
+        "content_language": (
+            getattr(resource, "content_language", None) or metadata.get("content_language") or None
+        ),
+        "content_hash": getattr(resource, "content_hash", None) or metadata.get("content_hash") or None,
+    }
+
+
+def _chunk_for_anchor(chunks: list[Any], anchor_id: str) -> list[Any]:
+    """Resolve an anchor id to chunks: exact chunk id, synthetic ¶chunk anchor,
+    or a real paragraph anchor (EPUB spine / PDF page) via its fragment's
+    ``location.chunk_id``."""
+    matched = [c for c in chunks if getattr(c, "chunk_id", None) == anchor_id]
+    if not matched:
+        matched = [
+            c for c in chunks
+            if f"¶chunk:{getattr(c, 'order', 0)}@{getattr(c, 'start_line', 0)}" == anchor_id
+        ]
+    return matched
+
+
+def _chunk_id_for_paragraph_anchor(resource: Any, anchor_id: str) -> str | None:
+    for fragment in _resource_fragments(resource):
+        if fragment.get("paragraph_anchor") == anchor_id:
+            location = fragment.get("location")
+            if isinstance(location, dict) and location.get("chunk_id"):
+                return str(location["chunk_id"])
+    return None
+
+
+async def _handle_read_resource_excerpt(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    """Read a real excerpt from the resource library (read-only, P2 #15).
+
+    Serves actual chunk text — never fabricated — and pins every excerpt to
+    its stable ¶ anchor plus the version-scoped citation when the fragment is
+    available, so coach answers can cite the passage without drifting on
+    re-layout.
+    """
+    record, error = await _resolve_excerpt_resource(context, args)
+    if record is None:
+        if error in {"missing_selector"}:
+            return {
+                "ok": False,
+                "error": error,
+                "detail": "read_resource_excerpt requires resource_id or query.",
+            }
+        return {"ok": False, "error": error or "read_failed"}
+    resource_service = getattr(context.runtime, "resource_service", None)
+    registry = getattr(resource_service, "registry", None)
+    chunks = registry.list_chunks(record.id) if registry is not None else []
+    if not chunks:
+        return {
+            "ok": False,
+            "error": "index_missing",
+            "detail": (
+                "This resource has no indexed chunks yet; index it (or upload a "
+                "text-bearing copy) before asking for excerpts."
+            ),
+            "resource_id": record.id,
+        }
+    anchor_id = str(args.get("anchor_id") or "").strip()
+    selected: list[Any] = []
+    if anchor_id:
+        matched = _chunk_for_anchor(chunks, anchor_id)
+        if not matched:
+            fragment_chunk_id = _chunk_id_for_paragraph_anchor(record, anchor_id)
+            if fragment_chunk_id:
+                matched = [c for c in chunks if getattr(c, "chunk_id", None) == fragment_chunk_id]
+        if not matched:
+            return {
+                "ok": False,
+                "error": "anchor_not_found",
+                "detail": f"No chunk matches anchor {anchor_id!r}.",
+                "resource_id": record.id,
+                "available_anchors": [
+                    f"¶chunk:{getattr(c, 'order', i)}@{getattr(c, 'start_line', 0)}"
+                    for i, c in enumerate(chunks[:12])
+                ],
+            }
+        selected = matched
+    else:
+        selected = list(chunks[:3])
+    try:
+        max_chars = max(200, min(int(args.get("chars", 1600) or 1600), 4000))
+    except Exception:
+        max_chars = 1600
+    per_excerpt = max(400, max_chars // max(1, len(selected)))
+    excerpts: list[dict[str, Any]] = []
+    for chunk in selected:
+        text = str(getattr(chunk, "text", "") or "").strip()
+        if not text:
+            continue
+        chunk_anchor = f"¶chunk:{getattr(chunk, 'order', 0)}@{getattr(chunk, 'start_line', 0)}"
+        if len(text) > per_excerpt:
+            text = text[:per_excerpt] + "…"
+        # A real paragraph anchor (EPUB spine / PDF page) carries its fragment's
+        # citation; the synthetic chunk anchor is the fallback identity.
+        citation = (_citation_for_anchor(record, anchor_id) if anchor_id else None) or _citation_for_anchor(
+            record, chunk_anchor
+        )
+        excerpts.append({
+            "anchor_id": chunk_anchor,
+            "paragraph_anchor": anchor_id or None,
+            "text": text,
+            "start_line": getattr(chunk, "start_line", None),
+            "end_line": getattr(chunk, "end_line", None),
+            "citation_id": citation,
+        })
+    return {
+        "ok": True,
+        "tool": "read_resource_excerpt",
+        "read_only": True,
+        "resource": _resource_display(record),
+        "excerpts": excerpts,
+        "note": (
+            "Excerpts come from indexed chunk text with stable ¶ anchors; cite the "
+            "anchor or citation id instead of re-describing the passage."
+        ),
+    }
+
+
+async def _handle_compare_with_anchor(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    """Imitation comparison (P2 #15): deterministic stats against an anchor.
+
+    The anchor can come inline (``anchor_text``) or from the library
+    (``resource_id`` + ``anchor_id`` → real chunk text). This tool only
+    produces deterministic signals — it never upgrades evidence, never
+    verifies, and says so in every response.
+    """
+    submission = str(args.get("submission") or "").strip()
+    if not submission:
+        return {
+            "ok": False,
+            "error": "missing_submission",
+            "detail": "compare_with_anchor requires the learner's submission text.",
+        }
+    anchor_text = str(args.get("anchor_text") or "").strip()
+    anchor_citation: str | None = None
+    anchor_resource: dict[str, Any] | None = None
+    if not anchor_text:
+        resource_id = str(args.get("resource_id") or "").strip()
+        anchor_id = str(args.get("anchor_id") or "").strip()
+        if not resource_id or not anchor_id:
+            return {
+                "ok": False,
+                "error": "missing_anchor",
+                "detail": (
+                    "Provide anchor_text, or resource_id + anchor_id to load the "
+                    "anchor passage from the resource library."
+                ),
+            }
+        record, error = await _resolve_excerpt_resource(context, {"resource_id": resource_id})
+        if record is None:
+            return {"ok": False, "error": error or "anchor_unavailable"}
+        resource_service = getattr(context.runtime, "resource_service", None)
+        registry = getattr(resource_service, "registry", None)
+        chunks = registry.list_chunks(record.id) if registry is not None else []
+        matched = _chunk_for_anchor(chunks, anchor_id)
+        if not matched:
+            fragment_chunk_id = _chunk_id_for_paragraph_anchor(record, anchor_id)
+            if fragment_chunk_id:
+                matched = [c for c in chunks if getattr(c, "chunk_id", None) == fragment_chunk_id]
+        if not matched:
+            return {
+                "ok": False,
+                "error": "anchor_not_found",
+                "detail": f"No chunk matches anchor {anchor_id!r}.",
+                "resource_id": record.id,
+            }
+        anchor_text = str(getattr(matched[0], "text", "") or "").strip()
+        anchor_citation = _citation_for_anchor(record, anchor_id)
+        display = _resource_display(record)
+        anchor_resource = {"id": display["id"], "name": display["name"], "source": display["source"]}
+    if not anchor_text:
+        return {"ok": False, "error": "empty_anchor", "detail": "The resolved anchor passage is empty."}
+    signals = _compare_deterministic_signals(anchor_text, submission)
+    return {
+        "ok": True,
+        "tool": "compare_with_anchor",
+        "read_only": True,
+        "anchor": {
+            "resource": anchor_resource,
+            "anchor_id": str(args.get("anchor_id") or "") or None,
+            "citation_id": anchor_citation,
+            "chars": len(anchor_text),
+        },
+        "signals": signals,
+        "interpretation": (
+            "Rhythm similarity is a deterministic ratio of mean sentence-length "
+            "agreement; it says nothing about intent or quality."
+        ),
+        "evidence_note": (
+            "Deterministic comparison alone never verifies a practice; evidence "
+            "still flows only through the training verification flow with the "
+            "trusted-source whitelist."
+        ),
+    }
+
+
+async def _handle_run_rubric_review(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    """Explicitly-gated rubric review (P2 #15).
+
+    The rubric ALWAYS comes from the host card context (``rubric_items`` on
+    the host current_file) — never from model-authored arguments — and the
+    reviewer lane is the deterministic local one. The result is advisory to
+    the conversation: it never mints evidence on its own (§2.2 P4 fail-closed).
+    """
+    extra = context.extra if isinstance(context.extra, dict) else {}
+    submission = str(args.get("submission") or "").strip()
+    if not submission:
+        return {
+            "ok": False,
+            "error": "missing_submission",
+            "detail": "run_rubric_review requires the submission text to review.",
+        }
+    current_file = extra.get("current_file")
+    rubric = _host_rubric_spec(current_file) if isinstance(current_file, dict) else None
+    if rubric is None:
+        # text_payload lane: the host also delivers the card rubric on the
+        # text_submission payload (same host data, different carrier).
+        text_submission = extra.get("text_submission")
+        if isinstance(text_submission, dict) and isinstance(text_submission.get("rubric_items"), list):
+            rubric = _host_rubric_spec({
+                "rubric_items": text_submission.get("rubric_items"),
+                "anchor_text": text_submission.get("anchor_text"),
+            })
+    if rubric is None:
+        return {
+            "ok": False,
+            "error": "host_rubric_missing",
+            "detail": (
+                "run_rubric_review needs a host-supplied card rubric "
+                "(rubric_items with non-empty anchors). Model-authored rubrics "
+                "are refused by design."
+            ),
+        }
+    review = LocalRubricReviewer().review(rubric, submission)
+    return {
+        "ok": True,
+        "tool": "run_rubric_review",
+        "read_only": True,
+        "rubric_source": "host_card",
+        "reviewer_lane": review.source,
+        "status": review.status.value,
+        "summary": review.summary,
+        "matched": list(review.matched),
+        "missing": list(review.missing),
+        "item_count": len(rubric.items),
+        "evidence_bearing": False,
+        "note": (
+            "Rubric review alone is not evidence: verification still requires a "
+            "deterministic pass (or explicit human adoption) through the "
+            "training verification flow."
+        ),
+    }
 
 
 def _persist_practice_verification_result(
@@ -4585,6 +5359,85 @@ def build_default_tool_registry(
                 "required": ["query"],
             },
             handler=_handle_search_resources,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="read_resource_excerpt",
+            description=(
+                "Read a real excerpt from the learner's resource library by "
+                "resource_id (or a query resolving one resource), optionally "
+                "pinned to a ¶ anchor. Returns indexed chunk text with stable "
+                "paragraph anchors and the version-scoped citation when "
+                "available. Read-only: cite the anchor instead of re-describing "
+                "the passage."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "resource_id": _string("Resource to read; preferred over query."),
+                    "query": _string("Fallback query resolving a single resource."),
+                    "anchor_id": _string(
+                        "Optional ¶ anchor (e.g. ¶chunk:2@14) or chunk id to read exactly."
+                    ),
+                    "chars": {
+                        "type": "integer",
+                        "description": "Maximum excerpt size in characters (200-4000).",
+                        "minimum": 200,
+                        "maximum": 4000,
+                        "default": 1600,
+                    },
+                },
+            },
+            handler=_handle_read_resource_excerpt,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="compare_with_anchor",
+            description=(
+                "Compare the learner's imitation submission against an anchor "
+                "passage (inline anchor_text, or resource_id + anchor_id from "
+                "the library). Returns deterministic rhythm statistics — "
+                "sentence-length mean/variation, punctuation density — and "
+                "never verifies: deterministic signals alone are not evidence."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "submission": _string("The learner's imitation text."),
+                    "anchor_text": _string(
+                        "Inline anchor passage; omit to load resource_id + anchor_id from the library."
+                    ),
+                    "resource_id": _string("Library resource holding the anchor passage."),
+                    "anchor_id": _string("¶ anchor (or chunk id) of the anchor passage."),
+                },
+                "required": ["submission"],
+            },
+            handler=_handle_compare_with_anchor,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="run_rubric_review",
+            description=(
+                "Run the card's host-supplied rubric (anchored items) against a "
+                "submission and report per-item matched/missing. Gated: only "
+                "available in a host-gated practice turn. The review is advisory "
+                "and evidence_bearing=false — it never verifies alone; evidence "
+                "still flows through the training verification flow."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "submission": _string("Submission text to review against the card rubric."),
+                },
+                "required": ["submission"],
+            },
+            handler=_handle_run_rubric_review,
         )
     )
 

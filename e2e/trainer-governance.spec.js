@@ -143,15 +143,15 @@ test.describe("Trainer preview plan governance", () => {
     });
 
     const plan = page.locator(".plan-view");
-    const next = plan.locator('[data-template=NextAction]');
+    const next = plan.locator('[data-template=SystemState]');
     await expect(next.locator('h3')).toHaveText('Resolve the current blocker');
     await expect(
       plan
-        .locator("[data-template=NextAction]")
+        .locator("[data-template=SystemState]")
         .getByText("The current file verification does not yet support this plan step.", { exact: true }),
     ).toBeVisible();
 
-    const recovery = plan.locator('[data-template=NextAction] > button');
+    const recovery = plan.locator('[data-template=SystemState] > button');
     await expect(recovery).toHaveText('Resolve with coach');
     await expect(recovery).toHaveAttribute('data-action-intent', 'resolve_blocker');
     await expect(recovery).toBeEnabled();
@@ -198,7 +198,7 @@ test.describe("Trainer preview plan governance", () => {
       });
 
       const plan = page.locator(".plan-view");
-      const decisionStrip = plan.locator("[data-template=NextAction]");
+      const decisionStrip = plan.locator("[data-template=SystemState]");
       await expect(decisionStrip).toContainText(testCase.title);
       await expect(decisionStrip).toContainText(testCase.blocker);
       await expect(decisionStrip.getByRole('button')).toHaveText(testCase.action);

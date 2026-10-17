@@ -1,9 +1,15 @@
 import { LearningHome } from "../../templates/LearningHome";
 import { NextAction, type NextActionProps } from "../../templates/NextAction";
-import { SystemState } from "../../templates/SystemState";
+import { SystemState, type SystemStateKind } from "../../templates/SystemState";
 import { templateCopy } from "../../templates/templateCopy";
 import { trainingViewLabel } from "../../lib/viewLabels";
+import { starterTemplate, starterTemplates, starterTemplateDefsFor, resolveStarterSubjectFamily } from "../../lib/courseTemplates";
 import { isVerifiedTrainingReturn } from "../../lib/learningActionResolver";
+import {
+  DIMENSION_LABELS,
+  STATE_LABELS,
+  type DimensionKey,
+} from "../../lib/i18n/segments/progressInlineText";
 import {
   isValidElement,
   useEffect,
@@ -15,7 +21,6 @@ import {
 } from "react";
 
 import {
-  describeSafeStructuredValue,
   sanitizeErrorSurfaceText,
 } from "../../../../../shared/src/errorSurfaceSanitizer";
 
@@ -47,6 +52,7 @@ import type {
   PlanRuntimeReviewPoint,
   PlanStage,
   ReviewQueueItem,
+  TrainingSkillProjection,
 } from "../../lib/types";
 
 export interface PlanReviewItem {
@@ -133,6 +139,8 @@ export interface CoachPlanViewProps {
   title?: string;
   titleNote?: ReactNode;
   composerDraftReplacement?: PlanComposerDraftReplacementPrompt;
+  /** Server-side skill projection; renders as calm dots in the growth slot. */
+  projection?: TrainingSkillProjection;
   goalLabel?: string;
   goalSummary?: ReactNode;
   goalHint?: string;
@@ -738,13 +746,24 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         onClick={props.onExpandToEditor}
       />
     ) : null;
+  const primaryIntent = typeof props.primaryAction.action.id === "string" ? props.primaryAction.action.id : "";
+  const blockingKind = BLOCKING_SYSTEM_STATE_KIND[primaryIntent];
+  const learningSystemState = blockingKind ? (
+    <SystemState
+      kind={blockingKind}
+      title={props.primaryAction.title}
+      detail={props.primaryAction.detail}
+      action={blockingKind === "processing" ? undefined : { ...props.primaryAction.action }}
+      actionTone="ghost"
+    />
+  ) : undefined;
   if (!plan) {
     const verifiedReturns = [...new Map([...pendingEvidenceItems, ...settledEvidenceItems]
       .filter(isVerifiedTrainingReturn).map(item => [item.id, item])).values()];
     return (
       <section className="template-learning-home" data-template="LearningHome" data-plan-leftover-not-live={leftoverNote ? "true" : undefined}>
         {expandToEditorControl ? <div className="coach-plan-view__surface-control">{expandToEditorControl}</div> : null}
-        <NextAction {...props.primaryAction} />
+        {learningSystemState ?? <NextAction {...props.primaryAction} />}
         {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
         {liveEvidenceDecisionRow}
         {verifiedReturns.length ? (
@@ -758,6 +777,13 @@ export function CoachPlanView(props: CoachPlanViewProps) {
             ))}</div>
           </details>
         ) : null}
+        <details className="template-disclosure" data-learning-section="template">
+          <summary>{templateCopy[language].startFromTemplate}</summary>
+          {/* P2 #16: cold start shows every built-in pack; literature ships three. */}
+          {starterTemplates.map((def) => (
+            <StarterTemplateArticle key={def.id} def={def} language={language} />
+          ))}
+        </details>
         {renderComposerDraftReplacement("stage")}
         {actions?.length ? <details className="template-disclosure"><summary>{resolvedActionsLabel}</summary><div>{actions.map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} disabled={action.disabled} onClick={action.onClick} />)}</div></details> : null}
         {globalPlanContext}
@@ -970,27 +996,51 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const hasBackgroundDetails = backgroundRows.length > 0 || noteRows.length > 0 || hasTrajectoryDetails;
   const evidenceTone = evidenceCounts.pending > 0 ? "warning" : evidenceCounts.deferred > 0 ? "muted" : "good";
   const hasEvidenceDetails = evidenceCounts.total > 0;
+  // §3.4: reviews and evidence are one debt to the learner — "待回顾 (N)".
+  // The number counts what is actually owed (due reviews + pending/deferred
+  // evidence); settled history stays inside, never in the headline.
+  const proofDebtCount = (props.dueReviewItems?.length ?? 0) + evidenceCounts.pending + evidenceCounts.deferred;
+  const hasProofDetails = hasReviewDetails || hasEvidenceDetails;
   return (
     <LearningHome
       currentLabel={templateCopy[language].currentLearning}
       title={plan.title}
       stage={stageProgressText ? `${stageProgressText} · ${activeStageTitle}` : activeStageTitle}
       headerActions={expandToEditorControl}
+      state={learningSystemState}
       next={props.primaryAction}
       nextTools={liveEvidenceDecisionRow}
-      review={hasReviewDetails ? { label: resolvedRevisitSummaryLabel, content: <>
+      route={{ label: stageProgressText ? `${resolvedStagesLabel} · ${stageProgressText}` : resolvedStagesLabel, content: <>
+        {renderComposerDraftReplacement("stage")}
+        {plan.stages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={stage.id === activeStage?.id} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
+        <details className="template-disclosure" data-learning-section="template">
+          <summary>{templateCopy[language].startFromTemplate}</summary>
+          {/* P2 #21: a live projection scopes the packs to the workspace subject. */}
+          {starterTemplateDefsFor(resolveStarterSubjectFamily(props.projection)).map((def) => (
+            <StarterTemplateArticle key={def.id} def={def} language={language} />
+          ))}
+        </details>
+      </> }}
+      growth={{ label: templateCopy[language].growth, content: (
+        <>
+          <div className="template-metadata" data-plan-growth-dots="true">
+            {GROWTH_DIMENSION_KEYS.map((key) => {
+              const dimension = props.projection?.dimensions?.[key];
+              return (
+                <span key={key} data-plan-growth-dimension={key}>
+                  {DIMENSION_LABELS[language][key]} · {STATE_LABELS[language][dimension?.state ?? "not_verified"]}
+                </span>
+              );
+            })}
+          </div>
+          <button type="button" className="template-back" data-plan-growth-link="progress" onClick={() => props.onNavigateToView?.("progress")}>{planViewText.viewGrowth}</button>
+        </>
+      ) }}
+      proof={hasProofDetails ? { label: `${templateCopy[language].proofPending} (${proofDebtCount})`, content: <>
         {reviewSupportRow ? renderNodeWithParagraph(reviewSupportRow.body) : null}
         {props.dueReviewItems?.slice(0, 4).map((item) => <div key={item.id}><strong>{item.title}</strong><p>{compactReviewLane(item, language)}</p></div>)}
         <button type="button" className="template-back" onClick={() => useWorkbenchState.getState().openTrainingReviewQueue()}>{templateCopy[language].startReview}</button>
-      </> } : undefined}
-      route={{ label: resolvedStagesLabel, content: <>
-        {renderComposerDraftReplacement("stage")}
-        {plan.stages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={stage.id === activeStage?.id} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
-      </> }}
-      growth={{ label: templateCopy[language].growth, content: (
-        <button type="button" className="template-back" data-plan-growth-link="progress" onClick={() => props.onNavigateToView?.("progress")}>{planViewText.viewGrowth}</button>
-      ) }}
-      evidence={hasEvidenceDetails ? { label: `${planViewText.practiceRecordsLabel} (${evidenceCounts.total})`, content: <>
+        {hasEvidenceDetails ? (
         <section
           className={`coach-plan-view__details-group coach-plan-view__details-group--evidence is-${evidenceTone}`}
           aria-label={planViewText.practiceRecordsLabel}
@@ -1076,15 +1126,21 @@ export function CoachPlanView(props: CoachPlanViewProps) {
             </div>
           ) : null}
         </section>
+        ) : null}
       </> } : undefined}
     >
       {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
       {renderComposerDraftReplacement("project-subplan")}
-      <details className="template-disclosure"><summary>{t("globalPlanLabel")}</summary><div>{globalPlanContext}</div></details>
-      {projectSubplans.length > 0 ? <details className="template-disclosure coach-plan-view__project-subplans"><summary>{`${resolvedProjectSubplansLabel} (${projectSubplans.length})`}</summary><div>{projectSubplans.map((subplan) => {
-        const detail = projectSubplanDetail(subplan, language);
-        return <button key={subplan.id} type="button" className="template-back" disabled={!props.onProjectSubplanSelect} onClick={() => props.onProjectSubplanSelect?.(subplan)}><span>{subplan.title}</span>{detail ? <span className="template-metadata"> · {detail}</span> : null}</button>;
-      })}</div></details> : null}
+      <details className="template-disclosure" data-plan-more-plans="true">
+        <summary>{templateCopy[language].morePlans}</summary>
+        <div>
+          <details className="template-disclosure"><summary>{t("globalPlanLabel")}</summary><div>{globalPlanContext}</div></details>
+          {projectSubplans.length > 0 ? <details className="template-disclosure coach-plan-view__project-subplans"><summary>{`${resolvedProjectSubplansLabel} (${projectSubplans.length})`}</summary><div>{projectSubplans.map((subplan) => {
+            const detail = projectSubplanDetail(subplan, language);
+            return <button key={subplan.id} type="button" className="template-back" disabled={!props.onProjectSubplanSelect} onClick={() => props.onProjectSubplanSelect?.(subplan)}><span>{subplan.title}</span>{detail ? <span className="template-metadata"> · {detail}</span> : null}</button>;
+          })}</div></details> : null}
+        </div>
+      </details>
       <details className="template-disclosure" data-plan-governance-disclosure="true">
         <summary>{resolvedDetailsSummaryLabel}</summary>
         <div>
@@ -1093,8 +1149,6 @@ export function CoachPlanView(props: CoachPlanViewProps) {
           {(actions ?? []).map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} detail={action.detail} disabled={action.disabled} onClick={action.onClick} />)}
           {planChangeCandidates.map((candidate) => <div key={candidate.id}>
             <p>{sanitizeErrorSurfaceText(candidate.reason, language)}</p>
-            <p>{describeSafeStructuredValue(candidate.diff, language, planCopy(language, "noVisibleDiff"))}</p>
-            <p>{describeSafeStructuredValue(candidate.impact, language, planCopy(language, "noVisibleImpact"))}</p>
             {candidate.status === "pending" ? <>
               <ActionButton tone="ghost" label={planCopy(language, "adoptAdjustment")} onClick={() => onAcknowledgePlanChange?.(candidate.id)} />
               <ActionButton tone="ghost" label={planCopy(language, "dismissAdjustment")} onClick={() => onRejectPlanChange?.(candidate.id)} />
@@ -1108,6 +1162,38 @@ export function CoachPlanView(props: CoachPlanViewProps) {
 
 function StatusLabel({ label }: { label: string }) {
   return <span className="coach-plan-view__status">{label}</span>;
+}
+
+/**
+ * P2 #16: one built-in course pack inside the starter-template disclosure —
+ * a nested details whose summary is the pack title; expanding shows the
+ * three-stage path. Copy comes from the pack's own language map, so every
+ * pack stays eight-language complete without touching the app shell.
+ */
+function StarterTemplateArticle({
+  def,
+  language,
+}: {
+  def: import("../../lib/courseTemplates").StarterTemplateDef;
+  language: import("../../lib/types").ComposerLanguage;
+}) {
+  const template = def.byLanguage[language];
+  return (
+    <details className="template-disclosure" data-starter-template={def.id}>
+      <summary>{template.title}</summary>
+      <article data-starter-template-subject={def.subjectFamily}>
+        <p>{template.summary}</p>
+        <ol className="template-starter-stages">
+          {template.stages.map((stage, index) => (
+            <li key={stage.title} data-starter-stage={String(index + 1)}>
+              <p>{index + 1}. {stage.title}</p>
+              <p className="template-metadata">{stage.objective}</p>
+            </li>
+          ))}
+        </ol>
+      </article>
+    </details>
+  );
 }
 
 /** Staggered entrance delay: one step per item, capped at the first 8 items. */
@@ -1154,6 +1240,24 @@ function StageMaterialGenerateButton({ planId, stageId }: { planId: string; stag
  * closed by default, so the roadmap stays quiet until the learner opens it.
  * The active stage additionally gets the accent left-edge bar (.stage-row--active).
  */
+/**
+ * Blocking states never own the primary-action button: they render as a quiet
+ * SystemState bar (§3.2 of docs/plans/2026-10-15-general-coach-pivot-design.md)
+ * so the big accent button keeps meaning exactly one thing — forward motion
+ * (continue step / practice / review). The ghost action stays reachable and
+ * keeps its data-action-intent hook for governance tests.
+ */
+const BLOCKING_SYSTEM_STATE_KIND: Record<string, SystemStateKind> = {
+  choose_workspace: "workspace-required",
+  configure_provider: "provider-required",
+  restore_state: "recoverable-error",
+  wait_for_restore: "processing",
+  resolve_blocker: "recoverable-error",
+};
+
+/** Same dimension order as ProgressView; labels/states come from the shared segment. */
+const GROWTH_DIMENSION_KEYS: DimensionKey[] = ["comprehension", "implementation", "debugging", "transfer"];
+
 function PlanStageSection({
   stage,
   planId,
@@ -1173,6 +1277,7 @@ function PlanStageSection({
     >
       <details
         className="template-disclosure coach-plan-view__stage-details"
+        open={isActive}
       >
         <summary>
           <span className="stage-block__title-text">{stage.title}</span>

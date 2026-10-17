@@ -1,0 +1,110 @@
+{
+  "_type": "trainer.subject.profile",
+  "version": 1,
+  "id": "code",
+  "family": "code",
+  "verifier_pack": "code",
+  "dimensions": [
+    "comprehension",
+    "implementation",
+    "debugging",
+    "transfer"
+  ],
+  "dimension_labels": {
+    "zh-CN": {
+      "comprehension": "概念理解",
+      "implementation": "实现",
+      "debugging": "调试",
+      "transfer": "迁移"
+    },
+    "en-US": {
+      "comprehension": "Comprehension",
+      "implementation": "Implementation",
+      "debugging": "Debugging",
+      "transfer": "Transfer"
+    },
+    "es-ES": {
+      "comprehension": "Comprensión",
+      "implementation": "Implementación",
+      "debugging": "Depuración",
+      "transfer": "Transferencia"
+    },
+    "fr-FR": {
+      "comprehension": "Compréhension",
+      "implementation": "Implémentation",
+      "debugging": "Débogage",
+      "transfer": "Transfert"
+    },
+    "de-DE": {
+      "comprehension": "Verständnis",
+      "implementation": "Implementierung",
+      "debugging": "Fehlersuche",
+      "transfer": "Transfer"
+    },
+    "ja-JP": {
+      "comprehension": "概念理解",
+      "implementation": "実装",
+      "debugging": "デバッグ",
+      "transfer": "応用・転移"
+    },
+    "ko-KR": {
+      "comprehension": "개념 이해",
+      "implementation": "구현",
+      "debugging": "디버깅",
+      "transfer": "전이"
+    },
+    "pt-BR": {
+      "comprehension": "Compreensão",
+      "implementation": "Implementação",
+      "debugging": "Depuração",
+      "transfer": "Transferência"
+    }
+  },
+  "deliverable_kinds": [
+    "file_based",
+    "text_payload"
+  ],
+  "skill_triggers": [
+    "$review",
+    "$next",
+    "$explain",
+    "$verify",
+    "$plan",
+    "$remember"
+  ],
+  "scenario_packs": [
+    "debug-loop",
+    "remote-ssh",
+    "function-guidance"
+  ],
+  "workspace_signatures": {
+    "manifests": [
+      "pyproject.toml",
+      "package.json",
+      "Cargo.toml",
+      "go.mod"
+    ],
+    "extensions": [
+      ".py",
+      ".ts",
+      ".tsx",
+      ".js",
+      ".rs",
+      ".go"
+    ]
+  },
+  "locale_adaptation": {
+    "default_content_locale": "en",
+    "supported_locales": [
+      "zh",
+      "en",
+      "ja",
+      "de",
+      "fr",
+      "ko",
+      "es",
+      "pt"
+    ]
+  },
+  "unverifiable_capabilities": []
+}

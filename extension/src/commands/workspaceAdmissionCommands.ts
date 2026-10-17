@@ -56,6 +56,7 @@ type ProjectClassificationResponse = {
   project_discovery?: ProjectDiscoveryPayload;
   folder_role?: FirstLookSummary['folderRole'];
   project_type_guess?: FirstLookSummary['projectTypeGuess'];
+  subject_family?: FirstLookSummary['subjectFamily'];
   confidence?: number;
   why_this_guess?: string;
   entry_points?: string[];
@@ -137,6 +138,7 @@ function firstLookSummaryFromClassification(
   return {
     folderRole: response.folder_role ?? 'mixed_uncertain',
     projectTypeGuess: response.project_type_guess ?? 'unknown',
+    subjectFamily: response.subject_family ?? 'code',
     confidence: response.confidence ?? 0,
     whyThisGuess: response.why_this_guess ?? '',
     entryPoints: response.entry_points ?? [],

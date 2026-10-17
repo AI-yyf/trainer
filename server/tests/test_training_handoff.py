@@ -391,6 +391,67 @@ class TestTrainingHandoffGenerator:
         assert "不是对持久掌握的断言" in zh_handoff.handoff_content.completion_claim
         assert "supports one result" not in zh_handoff.handoff_content.success_signal
 
+    @pytest.mark.parametrize(
+        ("evidence_source", "artifact"),
+        [
+            ("rubric_dual_review", "rubric review: 2/2 items matched; reviewer distinct from coach model"),
+            ("deterministic_hook", "hook 字数区间: passed (156 chars within 120-200)"),
+        ],
+    )
+    def test_literature_verification_sources_attest_with_artifact(self, evidence_source, artifact):
+        """P2 #23: whitelisted literature sources verify only with an inspectable artifact."""
+        from app.core.models import TrainingCardCandidateSnapshot
+
+        card = TrainingCardCandidateSnapshot(
+            card_id="card-literature",
+            title="Verify one annotation card",
+            card_type="practice",
+            target_skill="annotation card",
+            validation_method="Run the anchored rubric review.",
+        )
+        handoff = TrainingHandoffGenerator().build_handoff_record(
+            card,
+            {
+                "correct": True,
+                "evidence": [artifact],
+                "evidence_source": evidence_source,
+                "verified_by_evaluator": True,
+            },
+        )
+
+        assert handoff.verification_state == "verified"
+        assert handoff.evidence[0].verification_source == evidence_source
+
+        # Without the evaluator attestation the same source stays untrusted.
+        unattested = TrainingHandoffGenerator().build_handoff_record(
+            card,
+            {"correct": True, "evidence": [artifact], "evidence_source": evidence_source},
+        )
+        assert unattested.verification_state == "verification_required"
+        assert unattested.evidence[0].verification_source == ""
+
+    def test_model_self_review_is_still_refused_as_untrusted(self):
+        """The whitelist expansion cannot smuggle in an LLM-self-review source."""
+        from app.core.models import TrainingCardCandidateSnapshot
+
+        card = TrainingCardCandidateSnapshot(
+            card_id="card-self",
+            title="Try one self-review",
+            card_type="practice",
+            target_skill="self review",
+        )
+        handoff = TrainingHandoffGenerator().build_handoff_record(
+            card,
+            {
+                "correct": True,
+                "evidence": ["模型自己说写得不错"],
+                "evidence_source": "model_self_review",
+                "verified_by_evaluator": True,
+            },
+        )
+        assert handoff.verification_state == "verification_required"
+        assert handoff.evidence[0].verification_source == ""
+
     def test_current_ide_file_verification_alias_remains_trusted_after_restart(self):
         """Older agent evidence must resolve to the canonical IDE verifier source."""
         from app.core.models import TrainingCardCandidateSnapshot

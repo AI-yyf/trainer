@@ -1,0 +1,111 @@
+{
+  "_type": "trainer.subject.profile",
+  "version": 1,
+  "id": "japanese-learning",
+  "family": "language-learning",
+  "verifier_pack": "literature",
+  "dimensions": [
+    "comprehension",
+    "expression",
+    "appreciation",
+    "transfer"
+  ],
+  "dimension_labels": {
+    "zh-CN": {
+      "comprehension": "日语理解",
+      "expression": "日语表达",
+      "appreciation": "文本鉴赏",
+      "transfer": "迁移"
+    },
+    "en-US": {
+      "comprehension": "Japanese comprehension",
+      "expression": "Japanese expression",
+      "appreciation": "Text appreciation",
+      "transfer": "Transfer"
+    },
+    "es-ES": {
+      "comprehension": "Comprensión japonesa",
+      "expression": "Expresión japonesa",
+      "appreciation": "Apreciación del texto",
+      "transfer": "Transferencia"
+    },
+    "fr-FR": {
+      "comprehension": "Compréhension du japonais",
+      "expression": "Expression japonaise",
+      "appreciation": "Appréciation du texte",
+      "transfer": "Transfert"
+    },
+    "de-DE": {
+      "comprehension": "Japanisch-Verständnis",
+      "expression": "Japanischer Ausdruck",
+      "appreciation": "Textwürdigung",
+      "transfer": "Transfer"
+    },
+    "ja-JP": {
+      "comprehension": "日本語理解",
+      "expression": "日本語表現",
+      "appreciation": "文章鑑賞",
+      "transfer": "転移"
+    },
+    "ko-KR": {
+      "comprehension": "일본어 이해",
+      "expression": "일본어 표현",
+      "appreciation": "본문 감상",
+      "transfer": "전이"
+    },
+    "pt-BR": {
+      "comprehension": "Compreensão de japonês",
+      "expression": "Expressão em japonês",
+      "appreciation": "Apreciação do texto",
+      "transfer": "Transferência"
+    }
+  },
+  "deliverable_kinds": [
+    "text_payload",
+    "file_based"
+  ],
+  "skill_triggers": [
+    "$精读",
+    "$批注",
+    "$仿写"
+  ],
+  "scenario_packs": [
+    "close-reading-workshop",
+    "imitative-writing-lab"
+  ],
+  "workspace_signatures": {
+    "manifests": [],
+    "extensions": [
+      ".epub",
+      ".pdf",
+      ".md",
+      ".txt"
+    ],
+    "prose_density_min": 0.65,
+    "no_build_manifests": true
+  },
+  "locale_adaptation": {
+    "default_content_locale": "ja",
+    "supported_locales": [
+      "zh",
+      "en",
+      "ja",
+      "de",
+      "fr",
+      "ko",
+      "es",
+      "pt"
+    ],
+    "counter_mode": "cjk_char_or_latin_word",
+    "quote_delimiters": [
+      "「」",
+      "『』",
+      "《》",
+      "“”"
+    ]
+  },
+  "unverifiable_capabilities": [
+    "oral_recitation_prosody",
+    "handwriting_stroke_order"
+  ]
+}

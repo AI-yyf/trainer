@@ -36,6 +36,10 @@ def _denied_auto_mint_tool_names(extra: dict[str, Any]) -> list[str]:
         denied.append("import_resource_url")
     if extra.get("explicit_resource_organize") is not True:
         denied.append("organize_resources")
+    # Host-gated rubric review (P2 #15): arms only on an explicit learner
+    # request with a host card rubric present, or a host flag.
+    if extra.get("rubric_review_allowed") is not True:
+        denied.append("run_rubric_review")
     # Same live-plan identity as HTTP /task/next and /task/specify.
     if (
         pressure_blocks
@@ -46,6 +50,19 @@ def _denied_auto_mint_tool_names(extra: dict[str, Any]) -> list[str]:
         denied.append("specify_task")
         denied.append("next_task")
     return denied
+
+
+def _host_rubric_items_present(extra: dict[str, Any]) -> bool:
+    """Host-supplied card rubric present (P2 #15): text_submission or the
+    host current_file carries non-empty ``rubric_items``. Model tool arguments
+    are never consulted."""
+    for key in ("text_submission", "current_file"):
+        payload = extra.get(key)
+        if isinstance(payload, dict):
+            items = payload.get("rubric_items")
+            if isinstance(items, list) and items:
+                return True
+    return False
 
 
 def _stamp_explicit_write_tool_flags(
@@ -69,6 +86,15 @@ def _stamp_explicit_write_tool_flags(
         isinstance(coach_context, dict)
         and coach_context.get("explicit_resource_organize") is True
     ) or resource_write_explicitly_requested(extra, mode="organize")
+    from ..training.card_request import message_requests_rubric_review
+
+    extra["rubric_review_allowed"] = (
+        isinstance(coach_context, dict)
+        and coach_context.get("rubric_review_allowed") is True
+    ) or (
+        message_requests_rubric_review(learner_message)
+        and _host_rubric_items_present(extra)
+    )
     if (
         extra.get("library_sandbox_work") is True
         or str(extra.get("active_view") or "").strip().lower() == "resources"
@@ -150,7 +176,15 @@ def _build_agent_tool_context_extra(
         "pace_signal",
         "first_turn_priority",
         "formal_plan_mutation",
+        # Host-gated rubric review (P2 #15): like formal_plan_mutation, this is
+        # an explicit host decision about the turn's verification lane; the
+        # model can never assert it.
+        "rubric_review_allowed",
         "completed_training_return_feedback",
+        # Host-declared subject family (P1 #9). Practice verification routes on
+        # it; it is a fact about the workspace, so it only ever arrives from the
+        # host — never from model-authored tool arguments.
+        "subject_family",
         # Local-only cooperative cancellation signal for active SSE turns.
         "stream_cancel_event",
     ):

@@ -13,6 +13,8 @@ export interface WorkspaceAdmissionPanelProps {
   status: WorkspaceAdmissionStatus;
   projectName?: string;
   projectPath?: string;
+  /** P2 #24: classifier subject profile; only "literature" changes the copy. */
+  subjectFamily?: "code" | "literature";
   onSelectWorkspaceRoot?: () => void;
   onSelectProject?: () => void;
   onAddProject?: () => void;
@@ -172,6 +174,11 @@ export function WorkspaceAdmissionPanel(props: WorkspaceAdmissionPanelProps) {
             {t(stateCopy.label)}
           </h3>
           <p className="workspace-admission__detail">{t(stateCopy.detail)}</p>
+          {props.subjectFamily === "literature" ? (
+            <p className="workspace-admission__detail">
+              {t("workspaceAdmissionSubjectLiterature")}
+            </p>
+          ) : null}
         </div>
       </div>
 

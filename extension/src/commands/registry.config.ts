@@ -31,7 +31,9 @@ import {
 import { openWorkbenchCommand } from './openWorkbench';
 import { openViewInEditorCommand } from './viewLayoutCommands';
 import { generateSkillDraftCommand } from './skillCommands';
+import { refreshLocalUsageCommand } from './insightsCommands';
 import { openCoachScenarioCommand } from './coachScenarioCommands';
+import { refreshTelemetryStatusCommand, setTelemetryOptInCommand } from './telemetryCommands';
 import {
   chooseSandboxRootCommand,
   createSandboxFileCommand,
@@ -329,6 +331,8 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.trustWorkspaceWindow, register: (ctx) => trustWorkspaceWindowCommand(ctx) },
     { commandId: COMMAND_IDS.startProviderTrial, register: (ctx) => startProviderTrialCommand(ctx) },
     { commandId: COMMAND_IDS.setPersonalAccountTrust, register: (ctx, payload) => setPersonalAccountTrustCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.setTelemetryOptIn, register: (ctx, payload) => setTelemetryOptInCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.refreshTelemetryStatus, register: (ctx) => refreshTelemetryStatusCommand(ctx) },
     { commandId: COMMAND_IDS.migrateTrainerWorkspaceRoot, register: (ctx) => migrateTrainerWorkspaceRootCommand(ctx) },
     { commandId: COMMAND_IDS.backupTrainerWorkspace, register: (ctx) => backupTrainerWorkspaceCommand(ctx) },
     {
@@ -482,5 +486,8 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.captureResource, register: (ctx, payload) => captureResourceCommand(ctx, payload) },
     { commandId: COMMAND_IDS.organizeResource, register: (ctx, payload) => organizeResourceCommand(ctx, payload) },
     { commandId: COMMAND_IDS.exportResource, register: (ctx, payload) => exportResourceCommand(ctx, payload) },
+    // Local usage insights bridge: a read-only webview → sidecar round trip,
+    // registered last so the historical order above stays byte-identical.
+    { commandId: COMMAND_IDS.refreshLocalUsage, register: (ctx, payload) => refreshLocalUsageCommand(ctx, payload) },
   ];
 }

@@ -4,7 +4,7 @@
 
 <img src="assets/banner.png" alt="Trainer — Train Your AI · Grow With Your AI · Where AI and Humans Grow Together" width="100%" />
 
-**A long-term coding coach that lives in your VS Code sidebar.**
+**A long-term technology coach that starts with coding, living in your VS Code sidebar.**
 
 **It plans, drills, verifies, and remembers everything about you — but never writes your code.**
 
@@ -56,6 +56,8 @@ It's not a chat shell — it's a coach with memory, a curriculum, and an exam po
 - It **verifies** mastery against your real code — talking about FastAPI counts for nothing until the current file proves it
 - It **remembers** you across sessions, projects, and weeks, scheduling reviews on the FSRS forgetting curve
 - It **never writes production code for you** — you write, it teaches, **you grow together**
+
+**And the discipline travels beyond code.** The same verify-first loop now covers literature and language learning: close reading with ¶-anchored annotation, imitation writing anchored back to the source, theory-concept cards — each subject taught through its own verifier pack and progress dimensions, not code checks in disguise.
 
 <div align="center">
 
@@ -244,6 +246,7 @@ Type `$` in Chat to open a searchable palette with six default entries. Manage c
 | Workspace permission tiers | ❌ | ⚠️ trust dialog | ❌ | ✅ 6 tiers + remote hard-lock |
 | Card progression gated | ❌ | ❌ | ⚠️ manual checkboxes | ✅ enforced verified |
 | Transferable skill promotion | ❌ | ❌ | ❌ | ✅ fail-closed across workspaces |
+| Works beyond code (literature & languages) | ❌ | ❌ | ❌ | ✅ built-in literature/language verifier packs |
 | i18n | ⚠️ | ⚠️ | ⚠️ | ✅ 600+ keys × 8 |
 | Test suite | closed source | closed source | closed source | ✅ **5,363 cases** (open) |
 | Refuses to write for you | ❌ | ❌ | n/a | ✅ a philosophical bottom line |
@@ -477,6 +480,7 @@ Configuration examples for the official Gitee / GitHub servers, the full securit
 - **Delete goes to trash**: no `delete` op, only `move to <root>/.trash/<timestamp-uuid>/`
 - Sandbox previews enforce strict **path governance** — out-of-bounds paths get a flat 422
 - Skill sharing is a **pure-data import** — capped field lengths, built-ins win, **no code path exists**
+- **Telemetry is opt-in and default-off**: nothing leaves the machine until you flip the switch in Settings; the export carries coarse local event counts only — no content, no paths, no identity (payload schema-guarded by `scripts/verify-telemetry-payload.mjs`; consent changes are audited in the local event ledger)
 - **Training saves are idempotent by key**: a resent delivery replays through the reliability ledger instead of double-recording evidence; orphaned in-flight saves expire honestly at sidecar restart
 - The webview never rewrites host copy — localization is the host&apos;s job (the heuristic rewrite layer was removed)
 
@@ -492,7 +496,7 @@ Configuration examples for the official Gitee / GitHub servers, the full securit
 |---|---|---|
 | **Server tests** (pytest) | **200 files / 3,384 cases / 116,846 lines** | incl. 6 Hypothesis property-based suites + grounding/quality/reliability suites |
 | **Extension tests** (node:test) | **255 files / 1,979 cases / 81,628 lines** | source guards (copy tables pinned in `lib/i18n/segments`) + behavior tests |
-| **Teaching-loop acceptance** | **28 dual-turn cases × (5 grounding checks + 5 quality dims)** | real model (MiniMax via relay); latest post-calibration run **55 通过 / 1 次诚实回退** (earlier pre-calibration round 56/56 — both recorded); harness: `scripts/maturity/real_teaching_journeys_minimax.py` |
+| **Teaching-loop acceptance** | **32 dual-turn cases (28 code + 4 literature) × (5 grounding checks + 5 quality dims)** | real model (MiniMax via relay); latest post-calibration run **55 通过 / 1 次诚实回退** (earlier pre-calibration round 56/56 — both recorded). Real-model acceptance covers the 28 code cases; the 4 literature cases (2026-10-17) are fixture-verified locally and their real-model round is not yet sampled — recorded honestly, no claims. Harness: `scripts/maturity/real_teaching_journeys_minimax.py` |
 | **E2E** | **11 specs / 4,335 lines** | real VS Code instance against a real model |
 | **Experience matrix** | **200 scenarios × 2 layers** | preview fixture + real sidecar |
 | **VSIX host driver** | **33 steps** | install → activate → stream → verify → assert real webview rendering |
@@ -505,7 +509,7 @@ Configuration examples for the official Gitee / GitHub servers, the full securit
 
 **The teaching-loop acceptance runs against a real model:**
 
-> 28 heterogeneous dual-turn cases (real code errors / complex debugging / cross-language transfer / principle teaching / project adaptation / advanced users / long-horizon recovery) drive `/turn` end-to-end through the bundled sidecar; every turn is scored by the grounding evaluation (fabricated symbols, contradictory next steps) and five non-gating explanation-quality dimensions, then a fresh-eyes auditor checks the classifications against raw model output. Latest report: [`docs/maturity/teaching-journeys-report.md`](docs/maturity/teaching-journeys-report.md) (single source of truth) · machine-readable facts: [`docs/maturity/ACCEPTANCE_FACTS.md`](docs/maturity/ACCEPTANCE_FACTS.md) · full history in [`docs/maturity/`](docs/maturity/).
+> 32 heterogeneous dual-turn cases drive `/turn` end-to-end through the bundled sidecar: 28 code cases (real code errors / complex debugging / cross-language transfer / principle teaching / project adaptation / advanced users / long-horizon recovery) plus a 4-case literature block (close reading, imitation writing, theory-concept cards, passage comparison — objective ¶-anchor/verbatim-quote checkers, real-model round not yet sampled). Every turn is scored by the grounding evaluation (fabricated symbols, contradictory next steps) and five non-gating explanation-quality dimensions, then a fresh-eyes auditor checks the classifications against raw model output. Latest report: [`docs/maturity/teaching-journeys-report.md`](docs/maturity/teaching-journeys-report.md) (single source of truth) · machine-readable facts: [`docs/maturity/ACCEPTANCE_FACTS.md`](docs/maturity/ACCEPTANCE_FACTS.md) · full history in [`docs/maturity/`](docs/maturity/).
 
 **The E2E suite runs in a real VS Code instance against a real model:**
 

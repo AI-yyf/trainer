@@ -31,10 +31,12 @@ test('Coach tool and reasoning surfaces sanitize errors instead of dumping JSON'
 
 test('Plan candidate diffs are sanitized instead of JSON.stringified', () => {
   const plan = read('components/plan/CoachPlanView.tsx');
-  assert.match(plan, /describeSafeStructuredValue\(/);
+  // §3.4: candidates render one sanitized reason sentence + adopt/dismiss —
+  // diff/impact structured JSON is no longer rendered at all.
   assert.match(plan, /sanitizeErrorSurfaceText\(candidate\.reason/);
   assert.doesNotMatch(plan, /JSON\.stringify\(candidate\.diff\)/);
   assert.doesNotMatch(plan, /JSON\.stringify\(candidate\.impact\)/);
+  assert.doesNotMatch(plan, /describeSafeStructuredValue\(candidate\./);
 });
 
 test('Settings and Training display host errors through the sanitizer', () => {

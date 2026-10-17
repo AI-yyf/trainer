@@ -4127,6 +4127,7 @@ async def test_agentic_reply_routes_history_and_loop_mode_into_agent_loop(monkey
         "record_learning_note",
         "import_resource_url",
         "organize_resources",
+        "run_rubric_review",
         "specify_task",
         "next_task",
     ]

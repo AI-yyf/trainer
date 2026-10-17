@@ -22,6 +22,7 @@ from ..core.models import (
     FolderRole,
     ProjectTypeGuess,
 )
+from .subject_scan import detect_workspace_subject_family
 
 if TYPE_CHECKING:
     from .authority import WorkspaceAuthority
@@ -568,6 +569,7 @@ def _first_look_from_scan(
         FirstLookSummary(
             folder_role=folder_role,
             project_type_guess=project_type,
+            subject_family=detect_workspace_subject_family(scan),
             confidence=round(confidence, 2),
             why_this_guess=why_this_guess,
             entry_points=entry_points,
@@ -1779,6 +1781,7 @@ def _parse_llm_response(base: FirstLookSummary, response: Any) -> FirstLookSumma
     return FirstLookSummary(
         folder_role=folder_role,
         project_type_guess=project_type_guess,
+        subject_family=base.subject_family,
         confidence=round(confidence, 2),
         why_this_guess=str(parsed.get("why_this_guess", base.why_this_guess)),
         entry_points=base.entry_points,

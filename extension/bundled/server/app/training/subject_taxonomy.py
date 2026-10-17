@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-LearningFamily = Literal["code", "theory"]
+# P1 #10: "literature" joins the taxonomy as a first-class family. It maps
+# onto the evaluator's verifier registry (``evaluator.verifiers``) through
+# :func:`verifier_subject_family`; governance semantics are untouched.
+LearningFamily = Literal["code", "theory", "literature"]
 LearningSubtype = Literal[
     "remote",
     "debug",
@@ -29,6 +32,10 @@ class LearningSubject:
     @property
     def is_theory(self) -> bool:
         return self.family == "theory"
+
+    @property
+    def is_literature(self) -> bool:
+        return self.family == "literature"
 
 
 _REMOTE_MARKERS = (
@@ -248,6 +255,36 @@ _READING_MARKERS = (
     "古诗",
 )
 
+# P1 #10: unambiguous *literary practice* terms. Deliberately narrower than the
+# reading/writing marker sets above — generic "essay"/"novel" text keeps
+# classifying as theory/writing or theory/reading so existing cards never
+# change family. Only clearly literary-course wording flips to literature.
+_LITERATURE_WRITING_MARKERS = (
+    "imitative writing",
+    "book review",
+    "reading response",
+    "literary criticism",
+    "仿写",
+    "读后感",
+    "文学评论",
+    "文学批评",
+)
+
+_LITERATURE_MARKERS = (
+    *_LITERATURE_WRITING_MARKERS,
+    "close reading",
+    "literary analysis",
+    "annotated reading",
+    "精读",
+    "批注",
+    "文论",
+    "散文",
+    "诗歌赏析",
+    "文学鉴赏",
+    "修辞",
+    "意象",
+)
+
 
 def build_subject_blob(*parts: object) -> str:
     return " ".join(
@@ -259,6 +296,21 @@ def build_subject_blob(*parts: object) -> str:
 
 def _has_exact_token(blob: str, token: str) -> bool:
     return f" {token} " in f" {blob} "
+
+
+def verifier_subject_family(family: LearningFamily | str | None) -> str:
+    """Map a taxonomy family or profile id onto the evaluator's verifier registry key (P1 #10/#17).
+
+    Resolves through ``subject_profile.get_subject_profile`` when a profile matches,
+    and falls back fail-closed to ``"code"`` for unknown/unregistered families.
+    """
+    from .subject_profile import load_subject_profiles
+
+    key = str(family or "").strip().lower()
+    profiles = load_subject_profiles()
+    if key in profiles:
+        return profiles[key].verifier_pack
+    return "literature" if key == "literature" else "code"
 
 
 def classify_learning_subject(*parts: object) -> LearningSubject:
@@ -278,6 +330,13 @@ def classify_learning_subject(*parts: object) -> LearningSubject:
         return LearningSubject("code", "implementation")
     if any(marker in blob for marker in _DERIVATION_MARKERS):
         return LearningSubject("theory", "derivation")
+    if any(marker in blob for marker in _LITERATURE_MARKERS):
+        subtype = (
+            "writing"
+            if any(marker in blob for marker in _LITERATURE_WRITING_MARKERS)
+            else "reading"
+        )
+        return LearningSubject("literature", subtype)  # type: ignore[arg-value]
     if any(marker in blob for marker in _WRITING_MARKERS):
         return LearningSubject("theory", "writing")
     if any(marker in blob for marker in _MEMORIZATION_MARKERS):

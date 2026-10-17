@@ -6,6 +6,7 @@ from hashlib import sha1
 from typing import TYPE_CHECKING, Any
 
 from ..network_fetch import ControlledFetchError
+from .briefing import ResearchRoleBriefing
 from .models import (
     AgentRole,
     Artifact,
@@ -56,11 +57,17 @@ class ResearchOrchestratorService:
         web_search: WebSearchClient | None = None,
         *,
         network_enabled: bool = False,
+        role_briefing: ResearchRoleBriefing | None = None,
     ) -> None:
         self._projects: dict[str, ResearchProject] = {}
         self._repository = repository
         self._web_search = web_search or WebSearchClient(network_enabled=network_enabled)
         self._search_enricher = SearchResultEnricher(self._web_search)
+        self._role_briefing = role_briefing
+
+    def attach_role_briefing(self, briefing: ResearchRoleBriefing | None) -> None:
+        """Wire (or clear) the LLM briefing source for advance role transitions."""
+        self._role_briefing = briefing
 
     def _persist_project(self, project: ResearchProject) -> None:
         """Persist project and all nested entities to repository if available."""
@@ -540,9 +547,46 @@ class ResearchOrchestratorService:
             "agent_state": project.agent_state.to_dict(),
         }
 
+    def _role_briefing_message(
+        self,
+        project: ResearchProject,
+        theme: ResearchTheme,
+        role: AgentRole,
+        default_text: str,
+    ) -> tuple[str, str]:
+        """Briefing copy for a role transition, with auditable provenance.
+
+        Returns ``(message, source)`` where source is ``"llm"`` or
+        ``"template"``. Any briefing failure falls back to the fixed template
+        so the advance loop never blocks on the provider (design §5/§9: real
+        briefings when wired, and the provenance stays visible either way).
+        """
+        if self._role_briefing is None:
+            return default_text, "template"
+        findings = [
+            finding.content.strip()[:200]
+            for thread in theme.threads
+            for finding in thread.findings
+            if finding.content.strip()
+        ][-5:]
+        try:
+            brief = self._role_briefing.brief(
+                role=role,
+                theme_title=theme.title,
+                theme_description=theme.description,
+                findings=findings,
+                language="zh-CN",
+            )
+        except Exception:
+            brief = None
+        if brief:
+            return f"[{role.value.upper()}] {brief}", "llm"
+        return default_text, "template"
+
     def _advance_theme(self, project: ResearchProject, theme: ResearchTheme) -> dict[str, Any]:
         old_role = project.agent_state.current_role
         actions_taken = []
+        briefing_sources: list[str] = []
 
         overdue = ResearchScheduler.overdue_checkpoints(theme)
         if overdue:
@@ -555,38 +599,54 @@ class ResearchOrchestratorService:
 
         if project.agent_state.current_iteration == 0:
             project.agent_state.switch_role(AgentRole.RESEARCHER)
-            project.gate.add_message(
-                "agent",
+            message, source = self._role_briefing_message(
+                project,
+                theme,
+                AgentRole.RESEARCHER,
                 f"Starting research iteration for '{theme.title}'. "
                 f"Role: RESEARCHER. Focus: Deep search and information gathering.",
             )
+            briefing_sources.append(source)
+            project.gate.add_message("agent", message)
             actions_taken.append("Switched to RESEARCHER role for deep search phase.")
 
         elif project.agent_state.current_iteration == 1:
             project.agent_state.switch_role(AgentRole.EDITOR)
-            project.gate.add_message(
-                "agent",
+            message, source = self._role_briefing_message(
+                project,
+                theme,
+                AgentRole.EDITOR,
                 f"Editing phase for '{theme.title}'. "
                 f"Role: EDITOR. Focus: Organize findings into coherent structure.",
             )
+            briefing_sources.append(source)
+            project.gate.add_message("agent", message)
             actions_taken.append("Switched to EDITOR role for organization phase.")
 
         elif project.agent_state.current_iteration == 2:
             project.agent_state.switch_role(AgentRole.CRITIC)
-            project.gate.add_message(
-                "agent",
+            message, source = self._role_briefing_message(
+                project,
+                theme,
+                AgentRole.CRITIC,
                 f"Critique phase for '{theme.title}'. "
                 f"Role: CRITIC. Focus: Review for gaps, inconsistencies, and weaknesses.",
             )
+            briefing_sources.append(source)
+            project.gate.add_message("agent", message)
             actions_taken.append("Switched to CRITIC role for review phase.")
 
         elif project.agent_state.current_iteration >= 3:
             project.agent_state.switch_role(AgentRole.SYNTHESIZER)
-            project.gate.add_message(
-                "agent",
+            message, source = self._role_briefing_message(
+                project,
+                theme,
+                AgentRole.SYNTHESIZER,
                 f"Synthesis phase for '{theme.title}'. "
                 f"Role: SYNTHESIZER. Focus: Final synthesis and artifact creation.",
             )
+            briefing_sources.append(source)
+            project.gate.add_message("agent", message)
             actions_taken.append("Switched to SYNTHESIZER role for final synthesis.")
 
             approval = project.gate.request_approval(
@@ -610,6 +670,7 @@ class ResearchOrchestratorService:
             "theme_title": theme.title,
             "role_transition": f"{old_role} → {project.agent_state.current_role}",
             "actions_taken": actions_taken,
+            "briefing_source": briefing_sources[-1] if briefing_sources else "template",
             "iteration": project.agent_state.current_iteration,
             "can_continue": can_continue,
             "progress": ResearchScheduler.progress_percentage(theme),

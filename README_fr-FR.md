@@ -4,7 +4,7 @@
 
 <img src="assets/banner.png" alt="Trainer — Entraîne ton IA · Grandis avec ton IA · Là où l'IA et les humains grandissent ensemble" width="100%" />
 
-**Le coach de code longue durée qui vit dans ta barre latérale VS Code.**
+**Le coach technologique de longue durée qui commence par le code et vit dans ta barre latérale VS Code.**
 
 **Il planifie, fait réviser, vérifie et se souvient de tout ce qui te concerne — mais il n'écrit jamais ton code.**
 

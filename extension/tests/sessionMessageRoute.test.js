@@ -441,7 +441,7 @@ test('sendStreamMessageCommand routes default Coach turns through /session/messa
   assert.equal(options.signal.aborted, false);
 });
 
-test('sendStreamMessageCommand locally fail-closes unverified streaming with a visible timeline', async () => {
+test('sendStreamMessageCommand sends unverified streaming probe providers to the sidecar instead of blocking locally', async () => {
   const vscodeMock = {
     window: {
       activeTextEditor: undefined,
@@ -464,31 +464,15 @@ test('sendStreamMessageCommand locally fail-closes unverified streaming with a v
   };
 
   const result = await sendStreamMessageCommand(context, {
-    text: 'Do not start until streaming is verified.',
+    text: 'Sends never demand a re-test; live send confirms streaming.',
     stream: true,
     includeCurrentFile: false,
   });
 
-  assert.equal(result.ok, false);
-  assert.match(result.message, /has not verified real incremental output/i);
-  assert.equal(context.__streamCalls.length, 0);
-  const types = context.__hostMessages.map((message) => message.type);
-  assert.equal(types.includes('stream/start'), true);
-  assert.equal(types.includes('stream/error'), true);
-  assert.ok(types.indexOf('stream/start') < types.indexOf('stream/error'));
-  const phases = context.__hostMessages
-    .filter((message) => message.type === 'operation/status')
-    .map((message) => message.payload?.phase);
-  assert.deepEqual(
-    ['pending', 'executing', 'failed', 'acked'].every((phase) => phases.includes(phase)),
-    true,
-  );
-  assert.ok(phases.indexOf('pending') < phases.indexOf('executing'));
-  assert.ok(phases.indexOf('executing') < phases.indexOf('failed'));
-  assert.ok(phases.indexOf('failed') < phases.indexOf('acked'));
+  assert.equal(result.ok, true);
+  assert.equal(context.__streamCalls.length, 1);
+  assert.equal(context.__hostMessages.some((message) => message.type === 'stream/start'), true);
   assert.equal(context.getStreamingState().isStreaming, false);
-  assert.equal(context.getStreamingState().reliabilityPhase, 'acked');
-  assert.equal(context.getStreamingState().reliabilityOutcome, 'failure');
 });
 
 test('sendStreamMessageCommand sends never-tested providers to the sidecar instead of a silent local gate', async () => {

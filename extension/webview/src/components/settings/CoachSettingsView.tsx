@@ -52,12 +52,13 @@ import {
   sidecarRestartCopy,
 } from "../../lib/i18n/segments/providerSettingsCopy";
 import { MemorySharingPanel } from "./MemorySharingPanel";
+import { TelemetryOptInPanel } from "./TelemetryOptInPanel";
 import { providerRecoveryLocale } from "../../app/providerRecoveryCopy";
 import {
   deriveProviderSetupState,
   type ProviderSetupReason,
 } from "../../../../../shared/src/providerSetupState";
-import type { ProviderEndpointSpeedTestResult } from "../../lib/types";
+import type { LocalUsageInsights, ProviderEndpointSpeedTestResult } from "../../lib/types";
 import {
   isNewApiConnectionType,
   parseProviderConnectionPaste,
@@ -103,7 +104,7 @@ import { settingsText } from "./settingsText";
 import { languageIntegrityText } from "./languageIntegrityCopy";
 import { useCoachSettingsViewState, useCoachSettingsHostFacts } from "./useCoachSettingsViewState";
 import { useProviderConnection } from "../../app/providerConnectionContext";
-import { postMessage as postWebviewMessage } from "../../lib/vscode";
+import { postMessage as postWebviewMessage, requestLocalUsageInsights } from "../../lib/vscode";
 import {
   trainerSkillCatalog,
   normalizeCustomSkillTrigger,
@@ -2164,6 +2165,7 @@ function CoachSettingsViewSheet({
     trainerProjects,
     remoteWorkspaceName,
     personalAccountTrusted,
+    telemetryOptIn,
     themePreference,
     learningSurfaceAlignment,
     language,
@@ -2200,6 +2202,8 @@ function CoachSettingsViewSheet({
     onGrantMemoryShare,
     onRevokeMemoryShare,
     onSetPersonalAccountTrust,
+    onTelemetryOptInChange,
+    onTelemetryStatusRefresh,
     onTrustWindow,
     onRefreshWorkspaceAuthority,
     onChooseTrainerWorkspaceRoot,
@@ -2257,6 +2261,44 @@ function CoachSettingsViewSheet({
     setActiveSettingsCategory(id);
   };
   const [advancedContextPinned, setAdvancedContextPinned] = useState<boolean | undefined>();
+  // Local usage insights (P1 #12, §6.1): loaded lazily the first time the
+  // disclosure opens; the ledger aggregation is read-only and local-only.
+  const [usageInsightsPinned, setUsageInsightsPinned] = useState<boolean | undefined>();
+  const [usageInsights, setUsageInsights] = useState<LocalUsageInsights | null>(null);
+  const [usageInsightsError, setUsageInsightsError] = useState<string | null>(null);
+  const [usageInsightsLoading, setUsageInsightsLoading] = useState(false);
+  const [usageWindowDays, setUsageWindowDays] = useState<7 | 30>(30);
+  const usageInsightsLoadedForRef = useRef<0 | 7 | 30>(0);
+  const usageInsightsRequestSeqRef = useRef(0);
+  const loadUsageInsights = (windowDays: 7 | 30) => {
+    const requestSeq = ++usageInsightsRequestSeqRef.current;
+    setUsageInsightsLoading(true);
+    setUsageInsightsError(null);
+    requestLocalUsageInsights(windowDays)
+      .then((insights) => {
+        if (usageInsightsRequestSeqRef.current !== requestSeq) return;
+        setUsageInsights(insights);
+        usageInsightsLoadedForRef.current = windowDays;
+      })
+      .catch((error: unknown) => {
+        if (usageInsightsRequestSeqRef.current !== requestSeq) return;
+        setUsageInsights(null);
+        setUsageInsightsError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (usageInsightsRequestSeqRef.current === requestSeq) setUsageInsightsLoading(false);
+      });
+  };
+  const handleUsageInsightsToggle = (open: boolean) => {
+    setUsageInsightsPinned(open);
+    if (open && usageInsightsLoadedForRef.current !== usageWindowDays && !usageInsightsLoading) {
+      loadUsageInsights(usageWindowDays);
+    }
+  };
+  const handleUsageWindowChange = (windowDays: 7 | 30) => {
+    setUsageWindowDays(windowDays);
+    if (usageInsightsPinned) loadUsageInsights(windowDays);
+  };
   const [customSkillDraft, setCustomSkillDraft] = useState({
     trigger: "",
     title: "",
@@ -6516,6 +6558,14 @@ function CoachSettingsViewSheet({
             onGrantMemoryShare={onGrantMemoryShare}
             onRevokeMemoryShare={onRevokeMemoryShare}
           />
+
+          <TelemetryOptInPanel
+            language={language}
+            connectionState={backendConnectionState}
+            telemetryOptIn={telemetryOptIn}
+            onTelemetryOptInChange={onTelemetryOptInChange}
+            onTelemetryStatusRefresh={onTelemetryStatusRefresh}
+          />
             </div>
 
             <div className="settings-subsection" data-settings-subsection="review">
@@ -6901,6 +6951,80 @@ function CoachSettingsViewSheet({
                 {settingsText(language, "这些标识用于问题排查；连接诊断在“连接”页。", "Use these identifiers when reporting issues; connection diagnostics live under Connection.")}
               </p>
             </div>
+
+            <CollapseSection
+              level={2}
+              persistenceKey="settings-usage-insights"
+              open={usageInsightsPinned ?? false}
+              onToggle={handleUsageInsightsToggle}
+              title={<span className="eyebrow">{settingsText(language, "使用洞察", "Usage insights")}</span>}
+              subtitle={<span className="settings-sheet__defaults-preview">{settingsText(language, "只汇总本机事件账本，只读、不联网。", "Local ledger, read-only. Nothing leaves this machine.")}</span>}
+            >
+              <div className="settings-sheet__minor-body" data-settings-subsection="usage-insights">
+                <div className="settings-grid settings-grid--compact settings-grid--tight">
+                  <div className="settings-row" data-usage-insights-window="true">
+                    <span className="eyebrow">{settingsText(language, "统计区间", "Window")}</span>
+                    <ChoiceList
+                      active={String(usageWindowDays)}
+                      items={[
+                        { label: settingsText(language, "近 7 天", "Last 7 days"), value: "7" },
+                        { label: settingsText(language, "近 30 天", "Last 30 days"), value: "30" },
+                      ]}
+                      onChange={(value) => handleUsageWindowChange(value === "7" ? 7 : 30)}
+                    />
+                  </div>
+                </div>
+                {usageInsightsLoading ? (
+                  <p className="settings-sheet__note settings-sheet__note--compact">{settingsText(language, "读取中…", "Loading…")}</p>
+                ) : usageInsightsError ? (
+                  <p className="settings-sheet__note settings-sheet__note--compact" data-usage-insights-error="true">{usageInsightsError}</p>
+                ) : usageInsights && usageInsights.total_events === 0 ? (
+                  <p className="settings-sheet__note settings-sheet__note--compact">{settingsText(language, "这个区间还没有任何记录。", "No activity recorded in this window yet.")}</p>
+                ) : usageInsights ? (
+                  <>
+                    <div className="settings-sheet__simple-list" data-usage-insights-totals="true">
+                      <SimpleInfoRow label={settingsText(language, "卡片", "Cards")} value={String(usageInsights.totals.cards ?? 0)} />
+                      <SimpleInfoRow label={settingsText(language, "计划", "Plans")} value={String(usageInsights.totals.plans ?? 0)} />
+                      <SimpleInfoRow label={settingsText(language, "证据", "Evidence")} value={String(usageInsights.totals.evidence ?? 0)} />
+                      <SimpleInfoRow label={settingsText(language, "练习提交", "Practice submissions")} value={String(usageInsights.totals.practice_submissions ?? 0)} />
+                      <SimpleInfoRow label={settingsText(language, "资源", "Resources")} value={String(usageInsights.totals.resources ?? 0)} />
+                      <SimpleInfoRow label={settingsText(language, "反思", "Reflections")} value={String(usageInsights.totals.reflections ?? 0)} />
+                      <SimpleInfoRow label={settingsText(language, "教学资产", "Teaching assets")} value={String(usageInsights.totals.teaching_assets ?? 0)} />
+                      <SimpleInfoRow label={settingsText(language, "活跃天数", "Active days")} value={String(usageInsights.active_days)} />
+                      <SimpleInfoRow label={settingsText(language, "连续活跃", "Day streak")} value={String(usageInsights.streak_days)} />
+                    </div>
+                    <span className="eyebrow">{settingsText(language, "每日活跃", "Daily activity")}</span>
+                    <div data-usage-insights-daily="true" role="img" aria-label={settingsText(language, "每日活跃", "Daily activity")}>
+                      {usageInsights.daily.map((day) => (
+                        <span
+                          key={day.date}
+                          title={day.date}
+                          style={{
+                            display: "inline-block",
+                            width: 8,
+                            height: 8,
+                            borderRadius: 2,
+                            marginRight: 2,
+                            background: day.any_activity
+                              ? "var(--accent)"
+                              : "var(--line, transparent)",
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  className="context-chip"
+                  data-usage-insights-refresh="true"
+                  onClick={() => loadUsageInsights(usageWindowDays)}
+                  disabled={usageInsightsLoading}
+                >
+                  <span>{settingsText(language, "刷新", "Refresh")}</span>
+                </button>
+              </div>
+            </CollapseSection>
 
             <CollapseSection
               level={2}

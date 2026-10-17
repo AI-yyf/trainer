@@ -184,7 +184,7 @@ AssetSourceKind = Literal[
 ]
 AssetLinkRelation = Literal["available_to", "derived_from", "references", "pinned"]
 TrainingCardType = Literal["practice", "flash", "drill", "transfer"]
-TrainingLearningFamily = Literal["code", "theory"]
+TrainingLearningFamily = Literal["code", "theory", "literature"]
 TrainingCardStatus = Literal[
     "candidate",
     "active",
@@ -219,6 +219,10 @@ FolderRole = Literal[
     "learning_materials",
     "mixed_uncertain",
 ]
+# P2 #24: subject family mirrors the literature/code pivot. Detection lives in
+# workspace.subject_scan; the default keeps every historical workspace on
+# ``code`` so adoption payloads never change meaning silently.
+WorkspaceSubjectFamily = Literal["code", "literature"]
 ProjectTypeGuess = Literal[
     "web_app",
     "api_service",
@@ -743,11 +747,12 @@ class SourceIntakeGovernance(BaseModel):
 
 class ResourceRecord(BaseModel):
     id: str
-    kind: Literal["pdf", "image", "text", "markdown", "code", "url", "video"]
+    kind: Literal["pdf", "epub", "image", "text", "markdown", "code", "url", "video"]
     name: str
     source: str
     tags: list[str] = Field(default_factory=list)
     source_items: list[str] = Field(default_factory=list)
+    content_language: str | None = None
     # Stable display path inside a resource collection. This is intentionally
     # separate from the sandbox artifact path, which may include an isolation key.
     collection_path: str | None = None
@@ -2242,6 +2247,7 @@ class FirstLookSummary(BaseModel):
 
     folder_role: FolderRole = "mixed_uncertain"
     project_type_guess: ProjectTypeGuess = "unknown"
+    subject_family: WorkspaceSubjectFamily = "code"
     confidence: float = 0.0
     why_this_guess: str = ""
     entry_points: list[str] = Field(default_factory=list)
@@ -2980,11 +2986,12 @@ class ProviderModelsResponse(BaseModel):
 class ResourceUploadRequest(BaseModel):
     session_id: str | None = None
     workspace_id: str | None = None
-    kind: Literal["pdf", "image", "text", "markdown", "code", "url", "video"]
+    kind: Literal["pdf", "epub", "image", "text", "markdown", "code", "url", "video"]
     name: str
     source: str
     content: str | None = None
     content_encoding: Literal["utf-8", "base64"] | None = None
+    content_language: str | None = None
     tags: list[str] = Field(default_factory=list)
     source_type: Literal["file", "folder", "url"] = "file"
     source_items: list[str] = Field(default_factory=list)

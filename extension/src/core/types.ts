@@ -1530,6 +1530,13 @@ export interface BootstrapData {
   runtimeDataGeneration?: string;
   /** History confirmed for the current workspace by a server session snapshot. */
   sessionHistoryRestored?: boolean;
+  /**
+   * Opt-in anonymous telemetry consent (P2 #18), as answered by the sidecar
+   * (/telemetry/consent + /telemetry/status). Machine-scoped, never
+   * workspace-scoped; `undefined` means "not yet asked this session", and the
+   * server-side default is off.
+   */
+  telemetryOptIn?: boolean;
   workspaceName: string;
   sessionLabel: string;
   /** Remote-window identity for the webview (Remote-SSH/WSL/Tunnel/container). */

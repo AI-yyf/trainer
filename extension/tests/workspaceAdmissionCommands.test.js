@@ -321,26 +321,28 @@ function createContext(options = {}) {
           };
         }
         if (requestPath === '/workspace/classify') {
-          return {
-            folder_role: 'existing_engineering',
-            project_type_guess: 'api_service',
-            confidence: 0.92,
-            why_this_guess: 'The folder contains service and route modules.',
-            entry_points: ['server/app/main.py'],
-            directory_anchors: ['server/app'],
-            core_modules_or_materials: ['server/app/api/routers.py'],
-            risk_zones: ['server/app/api/routers.py'],
-            training_opportunities: ['Trace a request from route to service.'],
-            unknowns: ['Runtime deployment target.'],
-            recommended_next_step: 'Start from the API router boundary.',
-            classification_method: 'heuristic',
-            classified_at: '2026-07-31T00:00:00.000Z',
-            root_identity: {
-              rootId: 'root-admission',
-              rootPath: 'C:\\trainer-workspace-tests\\root',
-            },
-            project_discovery: { discovery_id: 'discovery-admission' },
-          };
+          return (
+            (options.classifyResponse ?? {
+              folder_role: 'existing_engineering',
+              project_type_guess: 'api_service',
+              confidence: 0.92,
+              why_this_guess: 'The folder contains service and route modules.',
+              entry_points: ['server/app/main.py'],
+              directory_anchors: ['server/app'],
+              core_modules_or_materials: ['server/app/api/routers.py'],
+              risk_zones: ['server/app/api/routers.py'],
+              training_opportunities: ['Trace a request from route to service.'],
+              unknowns: ['Runtime deployment target.'],
+              recommended_next_step: 'Start from the API router boundary.',
+              classification_method: 'heuristic',
+              classified_at: '2026-07-31T00:00:00.000Z',
+              root_identity: {
+                rootId: 'root-admission',
+                rootPath: 'C:\\trainer-workspace-tests\\root',
+              },
+              project_discovery: { discovery_id: 'discovery-admission' },
+            })
+          );
         }
         if (requestPath === '/workspace/discovery/decision') {
           adoptionJobId = 'job-admission';
@@ -533,6 +535,8 @@ test('choosing a Trainer Workspace Root classifies the current project before an
     .find((patch) => patch?.memory?.workspaceUnderstanding?.firstLookSummary);
   assert.equal(firstLookPatch.memory.workspaceUnderstanding.firstLookSummary.folderRole, 'existing_engineering');
   assert.equal(firstLookPatch.memory.workspaceUnderstanding.firstLookSummary.projectTypeGuess, 'api_service');
+  // P2 #24: the subject family rides along; default (absent) stays code.
+  assert.equal(firstLookPatch.memory.workspaceUnderstanding.firstLookSummary.subjectFamily, 'code');
   assert.equal(
     firstLookPatch.memory.workspaceUnderstanding.firstLookSummary.recommendedNextStep,
     'Start from the API router boundary.',
@@ -552,6 +556,43 @@ test('choosing a Trainer Workspace Root classifies the current project before an
     'configure',
     'restart',
   ]);
+});
+
+test('a literature classification keeps the literature subject family on the first look', async () => {
+  const vscodeMock = createVscodeMock('C:\\trainer-workspace-tests\\root');
+  const { chooseTrainerWorkspaceRootCommand } = loadWithVscodeMock(commandsModulePath, vscodeMock);
+  const context = createContext({
+    classifyResponse: {
+      folder_role: 'learning_materials',
+      project_type_guess: 'documentation',
+      subject_family: 'literature',
+      confidence: 0.82,
+      why_this_guess: 'A named novel corpus with EPUB and annotated essays.',
+      entry_points: [],
+      directory_anchors: ['novels'],
+      core_modules_or_materials: ['novels', 'essays'],
+      risk_zones: [],
+      training_opportunities: ['Annotate three passages with ¶ anchors.'],
+      unknowns: [],
+      recommended_next_step: 'Pick the first chapter and start a close reading.',
+      classification_method: 'heuristic',
+      classified_at: '2026-08-01T00:00:00.000Z',
+      root_identity: {
+        rootId: 'root-admission',
+        rootPath: 'C:\\trainer-workspace-tests\\root',
+      },
+      project_discovery: { discovery_id: 'discovery-admission' },
+    },
+  });
+
+  const result = await chooseTrainerWorkspaceRootCommand(context);
+
+  assert.equal(result.ok, true);
+  const firstLookPatch = [...context.__patches]
+    .reverse()
+    .find((patch) => patch?.memory?.workspaceUnderstanding?.firstLookSummary);
+  assert.equal(firstLookPatch.memory.workspaceUnderstanding.firstLookSummary.subjectFamily, 'literature');
+  assert.equal(firstLookPatch.memory.workspaceUnderstanding.firstLookSummary.folderRole, 'learning_materials');
 });
 
 test('multi-root project picker chooses an explicit Windows folder without replacing the Trainer root', async () => {

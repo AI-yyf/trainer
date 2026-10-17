@@ -14,9 +14,9 @@ const catalog = require(path.resolve(
   'guided_training_scenario_packs.json',
 ));
 
-test('guided training scenario pack catalog covers the five teaching domains', () => {
+test('guided training scenario pack catalog covers the seven teaching domains', () => {
   const packs = Array.isArray(catalog.packs) ? catalog.packs : [];
-  assert.equal(packs.length, 5);
+  assert.equal(packs.length, 7);
   assert.deepEqual(
     packs.map((pack) => pack.previewScenario),
     [
@@ -25,8 +25,40 @@ test('guided training scenario pack catalog covers the five teaching domains', (
       'training-function',
       'training-resource',
       'training-dependency',
+      'training-close-reading',
+      'training-theory-concept',
     ],
   );
+});
+
+test('literature scenario packs anchor every deliverable to the course text', () => {
+  const byId = new Map(catalog.packs.map((pack) => [pack.id, pack]));
+  const closeReading = byId.get('literature_close_reading');
+  const theory = byId.get('literature_theory_concept');
+
+  // P2 #16: literature packs carry ¶-anchor discipline, no code files, and the
+  // same card shape as the engineering packs (zh-CN + en-US inline, eight
+  // languages completed by the webview fallback copy).
+  for (const pack of [closeReading, theory]) {
+    assert.ok(pack, 'literature pack missing');
+    assert.ok(pack.currentFocus?.['en-US']);
+    assert.ok(pack.practice?.title?.['zh-CN']);
+    assert.ok(pack.flash?.title?.['en-US']);
+    assert.ok(pack.practice?.deliverable?.['en-US']);
+    assert.deepEqual(pack.practice?.filesToTouch, []);
+    assert.ok(pack.practice?.learnerDeliverables?.['en-US']);
+    assert.ok(pack.practice?.validationMethod?.['zh-CN']);
+    assert.ok(pack.flash?.question?.['en-US']);
+    assert.ok(pack.flash?.feedback?.['zh-CN']?.correct);
+    assert.ok(pack.flash?.feedback?.['en-US']?.incorrect);
+  }
+
+  assert.match(closeReading?.sourceChain?.['en-US']?.join(' ') ?? '', /¶ paragraph anchors/);
+  assert.match(theory?.sourceChain?.['zh-CN']?.join(' ') ?? '', /两处 ¶ 锚点证据/);
+  assert.equal(closeReading?.practiceNextStep?.['en-US'], 'Return with the three annotations');
+  assert.equal(theory?.practiceNextStep?.['en-US'], 'Return with the definition and two anchors');
+  assert.equal(closeReading?.practice?.cardId, 'card-training-close-reading-practice');
+  assert.equal(theory?.flash?.knowledgeType?.['en-US'], 'literature_theory_concept');
 });
 
 test('guided training scenario pack catalog keeps key English teaching cues intact', () => {

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import cast
+from dataclasses import asdict
+from typing import Any, cast
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from ...browser_bridge import BrowserBridgeService, BrowserCredential
 from ...core.models import (
@@ -46,6 +48,8 @@ from ...resources.library import (
 )
 from ...resources.library_copy import library_message
 from ...resources.library_downloads import ArtifactNote
+from ...training.course_fork import fork_course_manifest
+from ...training.course_pack import build_course_manifest, inspect_course_manifest
 from ...workspace.authority import PermissionLevel, WorkspaceAuthority
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
@@ -56,6 +60,39 @@ logger = logging.getLogger(__name__)
 # registers this URI handler (extension/src/browserCapture/deepLink.ts) and
 # focuses the resource in the workbench.
 DEEP_LINK_PREFIX = "vscode://local.trainer-extension/library/"
+
+
+class CourseImportRequest(BaseModel):
+    """Body of ``POST /resource/course/import`` (§4.2 inspect-only)."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    manifest: dict[str, Any] = Field(default_factory=dict)
+    session_id: str | None = None
+    workspace_id: str | None = Field(default=None, alias="workspaceId")
+
+
+class CourseAdoptRequest(BaseModel):
+    """Body of ``POST /resource/course/adopt``: the explicit fork write (§4.2)."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    manifest: dict[str, Any] = Field(default_factory=dict)
+    session_id: str | None = None
+    workspace_id: str | None = Field(default=None, alias="workspaceId")
+    response_language: str | None = Field(default=None, alias="responseLanguage")
+    card_type: str = "practice"
+
+
+class CourseExportRequest(BaseModel):
+    """Body of ``POST /resource/course/export``: plan + referenced resources."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    session_id: str | None = None
+    workspace_id: str | None = Field(default=None, alias="workspaceId")
+    plan_id: str | None = Field(default=None, alias="planId")
+    subject_family: str = ""
 
 
 def capture_deep_link(resource_id: str) -> str:
@@ -447,6 +484,115 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         except (FileNotFoundError, IsADirectoryError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return indexed
+
+    @router.post("/resource/course/import")
+    def resource_course_import(request: CourseImportRequest) -> dict[str, object]:
+        """Inspect a shared ``course.json`` manifest (§4.2).
+
+        INSPECT-only by design: the external template stays read-only until the
+        explicit adopt step (#11) writes anything. This endpoint validates the
+        manifest fail-closed, resolves ``subject_family`` through the verifier
+        registry and reports which rubric entries survive the anchor rule.
+        """
+        try:
+            inspection = inspect_course_manifest(request.manifest)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {
+            "ok": True,
+            "manifest": inspection.manifest.model_dump(by_alias=True),
+            "trust": asdict(inspection.trust),
+        }
+
+    @router.post("/resource/course/adopt")
+    def resource_course_adopt(request: CourseAdoptRequest) -> dict[str, object]:
+        """Fork a course into this workspace and try its first card (#11).
+
+        Explicit write step: the manifest becomes a local plan, and the fork
+        attempts the first card through the card generator's resource source
+        path. When the referenced resource is not indexed/trusted yet the card
+        is reported ``deferred`` with the exact missing precondition — the fork
+        never improvises a card. The generated card is returned as a candidate
+        and is not bound into the training ledger: minting stays on
+        ``/training/generate-card``.
+        """
+        workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
+        try:
+            inspection = inspect_course_manifest(request.manifest)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        result = fork_course_manifest(
+            inspection.manifest,
+            runtime=runtime,
+            workspace_id=workspace_id,
+            response_language=request.response_language,
+            card_type=request.card_type,
+        )
+        refresh_workspace_sessions(workspace_id)
+        return {
+            "ok": True,
+            "plan": result.plan.model_dump(by_alias=True),
+            "plan_revision": result.revision,
+            "subject_family": inspection.trust.resolved_subject_family,
+            "first_card_status": result.first_card_status,
+            "first_card_reason": result.first_card_reason,
+            "first_card": (
+                result.first_card.model_dump(by_alias=True)
+                if result.first_card is not None
+                else None
+            ),
+            "unresolved_resource_refs": result.unresolved_resource_refs,
+            "trust": asdict(inspection.trust),
+        }
+
+    @router.post("/resource/course/export")
+    def resource_course_export(request: CourseExportRequest) -> dict[str, object]:
+        """Build a shareable ``course.json`` from a workspace plan (§4.1).
+
+        Read-only: stages come from the plan (latest or by id), resources from
+        the stages' bindings (falling back to the library head), cards are not
+        exported yet (#11 owns the fork→card flow). The manifest is validated
+        with the same rules import uses, so export can never ship a document
+        import would reject.
+        """
+        workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
+        if request.plan_id:
+            found = runtime.repository.get_plan_by_id(request.plan_id)
+            if found is None:
+                raise HTTPException(status_code=404, detail=f"plan not found: {request.plan_id}")
+            plan_workspace_id, plan = found
+            if plan_workspace_id != workspace_id:
+                raise HTTPException(
+                    status_code=403, detail="Plan belongs to another workspace."
+                )
+        else:
+            plan = runtime.repository.get_latest_plan(workspace_id)
+            if plan is None:
+                raise HTTPException(
+                    status_code=404, detail="No learning plan to export in this workspace."
+                )
+        resources = runtime.repository.list_resources(workspace_id)
+        referenced_ids = {rid for stage in plan.stages for rid in stage.resources}
+        referenced = [record for record in resources if record.id in referenced_ids]
+        exported_resources = referenced or list(resources)[:50]
+        manifest = build_course_manifest(
+            title=plan.title,
+            subject_family=request.subject_family,
+            summary=plan.summary,
+            stages=plan.stages,
+            resources=exported_resources,
+        )
+        inspection = inspect_course_manifest(manifest)
+        notes = list(inspection.trust.notes)
+        if not referenced and exported_resources:
+            notes.append("no stage resource bindings found; exported the library head instead")
+        trust = asdict(inspection.trust)
+        trust["notes"] = notes
+        return {
+            "ok": True,
+            "manifest": inspection.manifest.model_dump(by_alias=True),
+            "trust": trust,
+        }
 
     def browser_bridge_service() -> BrowserBridgeService | None:
         service = getattr(runtime, "browser_bridge", None)

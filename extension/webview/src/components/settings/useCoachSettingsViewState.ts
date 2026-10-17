@@ -100,6 +100,7 @@ export interface CoachSettingsViewState {
   trainerProjects: TrainerProjectsList | null;
   remoteWorkspaceName: string | undefined;
   personalAccountTrusted: boolean;
+  telemetryOptIn: boolean | undefined;
   // §layout knobs
   themePreference: ThemePreference;
   learningSurfaceAlignment: LearningSurfaceAlignment;
@@ -144,6 +145,8 @@ export interface CoachSettingsViewState {
   onGrantMemoryShare: (() => void) | undefined;
   onRevokeMemoryShare: ((sourceWorkspaceId: string) => void) | undefined;
   onSetPersonalAccountTrust: ((enabled: boolean) => void) | undefined;
+  onTelemetryOptInChange: ((enabled: boolean) => void) | undefined;
+  onTelemetryStatusRefresh: (() => void) | undefined;
   onTrustWindow: () => void;
   onRefreshWorkspaceAuthority: () => void;
   onChooseTrainerWorkspaceRoot: () => void;
@@ -166,6 +169,7 @@ export function useCoachSettingsViewState({
   const backendConnectionState = useWorkbenchState((state) => state.data.connection.state);
   const memoryWorkspace = useWorkbenchState((state) => state.data.memory.workspace);
   const memoryShareGrants = useWorkbenchState((state) => state.data.memory.memoryShareGrants);
+  const telemetryOptIn = useWorkbenchState((state) => state.data.telemetryOptIn);
   const workspace = useWorkbenchState((state) => state.data.workspace);
   const profile = useWorkbenchState((state) => state.data.profile);
   const conversation = useWorkbenchState((state) => state.data.conversation);
@@ -306,6 +310,7 @@ export function useCoachSettingsViewState({
     trainerProjects: memoryWorkspace?.trainerProjects ?? null,
     remoteWorkspaceName: workspace?.isRemoteWorkspace ? workspace.remoteName : undefined,
     personalAccountTrusted: memoryWorkspace?.personalAccountTrusted === true,
+    telemetryOptIn,
     // §layout knobs
     themePreference,
     learningSurfaceAlignment,
@@ -410,6 +415,20 @@ export function useCoachSettingsViewState({
               commandId: trainerCommands.setPersonalAccountTrust,
               payload: { enabled },
             },
+          }),
+    onTelemetryOptInChange: isBrowserPreview
+      ? undefined
+      : (enabled) =>
+          postMessage({
+            type: "command/execute",
+            payload: { commandId: trainerCommands.setTelemetryOptIn, payload: { enabled } },
+          }),
+    onTelemetryStatusRefresh: isBrowserPreview
+      ? undefined
+      : () =>
+          postMessage({
+            type: "command/execute",
+            payload: { commandId: trainerCommands.refreshTelemetryStatus },
           }),
     onTrustWindow: () =>
       postMessage({

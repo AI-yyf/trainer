@@ -15,7 +15,9 @@ from starlette.responses import JSONResponse, Response
 from .affect.service import AffectService
 from .api.admission import browse_only_rejection
 from .api.routers import build_router
+from .api.routes.insights import build_insights_router
 from .api.routes.research import build_research_router
+from .api.routes.telemetry import build_telemetry_router
 from .api.routes.training_attempts import build_training_attempts_router
 from .api.routes.training_handoff import build_training_handoff_router
 from .api.runtime import TrainerRuntime
@@ -36,6 +38,7 @@ from .resources.service import ResourceService
 from .resources.versioning import ResourceVersionStore
 from .sandbox.service import SandboxService
 from .specs.service import SpecService
+from .telemetry.service import TelemetryService
 from .training.attempt_store import AttemptStore
 from .training.card_generator import CardGenerationService
 from .training.card_router import CardRouterService
@@ -103,6 +106,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         browser_bridge=browser_bridge,
     )
     runtime.hydrate_provider_capability_cache()
+    runtime.telemetry_service = TelemetryService(event_ledger, data_dir)
     runtime.sandbox_service = SandboxService(
         data_root=data_dir,
         event_ledger=event_ledger,
@@ -200,6 +204,8 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     app.include_router(build_research_router(runtime.research_service, runtime.provider_service))
     app.include_router(build_training_handoff_router(runtime))
     app.include_router(build_training_attempts_router(runtime))
+    app.include_router(build_insights_router(runtime))
+    app.include_router(build_telemetry_router(runtime))
     app.state.runtime = runtime
     app.state.settings = settings
     return app

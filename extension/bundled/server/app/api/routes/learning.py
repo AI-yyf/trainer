@@ -87,8 +87,19 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
             )
             if asset.title
         ]
+        from ...pedagogy.research_hints import collect_research_hints
         from ...pedagogy.stage_material_composer import StageMaterialComposer
 
+        focus_area = str(payload.get("focus_area") or payload.get("focusArea") or "")
+        # P1 #13 (§5): the preparation engine's background references for this
+        # focus area become stage-material grounding hints. Read-only; an
+        # empty result only means the research lane has nothing relevant yet.
+        research_hints = collect_research_hints(
+            research_service=getattr(runtime, "research_service", None),
+            workspace_id=resolved_workspace_id,
+            topic=stage.title,
+            focus_area=focus_area,
+        )
         composer = StageMaterialComposer(provider_service=provider_service)
         response_language = str(
             payload.get("response_language") or payload.get("responseLanguage") or "zh-CN"
@@ -102,9 +113,10 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                 stage_goal=stage.goal,
                 stage_outcomes=list(stage.outcomes or []),
                 stage_exercises=stage_exercises,
-                focus_area=str(payload.get("focus_area") or payload.get("focusArea") or ""),
+                focus_area=focus_area,
                 profile_summary=profile_summary,
                 teaching_asset_hints=hints,
+                research_hints=research_hints or None,
                 response_language=response_language,
             ), timeout=90)
         except TimeoutError as exc:
@@ -158,7 +170,16 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         return {"ok": True, **result}
 
     _HOST_TRUSTED_VERIFICATION_SOURCES = frozenset(
-        {"automated_test", "evaluator", "ide_current_file", "server_evaluator", "test_runner", "verification_service"}
+        {
+            "automated_test",
+            "deterministic_hook",
+            "evaluator",
+            "ide_current_file",
+            "rubric_dual_review",
+            "server_evaluator",
+            "test_runner",
+            "verification_service",
+        }
     )
 
     @router.post("/training/verification/attest")

@@ -24,7 +24,7 @@ export function SystemState({ kind, title, detail, action, actionTone = "accent"
       <h3>{title}</h3>
       {detail ? <div className="template-system-state__detail">{detail}</div> : null}
       {children}
-      {action ? <button type="button" className={`button ${actionTone === "ghost" ? "button--ghost" : "button--accent"}`} data-primary-action={actionTone === "ghost" ? undefined : "true"} disabled={action.disabled || action.busy} aria-busy={action.busy || undefined} onClick={action.onClick}>{action.label}</button> : null}
+      {action ? <button type="button" className={`button ${actionTone === "ghost" ? "button--ghost" : "button--accent"}`} data-primary-action={actionTone === "ghost" ? undefined : "true"} data-action-intent={action.id ?? undefined} disabled={action.disabled || action.busy} aria-busy={action.busy || undefined} onClick={action.onClick}>{action.label}</button> : null}
     </section>
   );
 }

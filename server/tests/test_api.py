@@ -11450,6 +11450,61 @@ def test_attest_refuses_unresolvable_workspace_binding(tmp_path: Path) -> None:
         assert response.json()["detail"]["code"] == "workspace_binding_unavailable"
 
 
+@pytest.mark.parametrize(
+    "evidence_source",
+    ["rubric_dual_review", "deterministic_hook"],
+)
+def test_attest_accepts_p2_literature_sources_and_still_rejects_unknown(tmp_path: Path, evidence_source: str) -> None:
+    """P2 #23: the literature sources join the trusted whitelist; unknown
+    sources are refused at the same gate with the updated catalog."""
+    with build_client(tmp_path) as client:
+        started = client.post(
+            "/session/start",
+            json={"workspace_id": "workspace-attest-literature", "workspace_name": "Attest Literature"},
+        )
+        assert started.status_code == 200, started.text
+        session_id = started.json()["session_id"]
+
+        from app.core.models import TrainingCardCandidateSnapshot
+
+        card = TrainingCardCandidateSnapshot(
+            card_id="card-attest-literature",
+            card_type="practice",
+            title="Verify one annotation card",
+            target_skill="annotation card",
+            validation_method="Run the anchored rubric review.",
+            status="active",
+        )
+        client.app.state.runtime.memory_service.upsert_card("workspace-attest-literature", card)
+
+        accepted = client.post(
+            "/training/verification/attest",
+            json={
+                "session_id": session_id,
+                "workspace_id": "workspace-attest-literature",
+                "card_id": "card-attest-literature",
+                "evidence_source": evidence_source,
+                "passed": True,
+                "tests_output": "rubric review: 2/2 items matched",
+            },
+        )
+        assert accepted.status_code == 200, accepted.text
+
+        rejected = client.post(
+            "/training/verification/attest",
+            json={
+                "session_id": session_id,
+                "workspace_id": "workspace-attest-literature",
+                "card_id": "card-attest-literature",
+                "evidence_source": "model_self_review",
+                "passed": True,
+                "tests_output": "模型自己说写得好",
+            },
+        )
+        assert rejected.status_code == 422, rejected.text
+        assert "model_self_review" not in rejected.json()["detail"]
+        assert "rubric_dual_review" in rejected.json()["detail"]
+
 def test_attempt_evidence_rejects_workspace_mismatch(tmp_path: Path) -> None:
     with build_client(tmp_path) as client:
         started = client.post(

@@ -1,0 +1,113 @@
+{
+  "_type": "trainer.subject.profile",
+  "version": 1,
+  "id": "literature",
+  "family": "literature",
+  "verifier_pack": "literature",
+  "dimensions": [
+    "comprehension",
+    "expression",
+    "appreciation",
+    "transfer"
+  ],
+  "dimension_labels": {
+    "zh-CN": {
+      "comprehension": "理解",
+      "expression": "表达",
+      "appreciation": "鉴赏",
+      "transfer": "迁移"
+    },
+    "en-US": {
+      "comprehension": "Comprehension",
+      "expression": "Expression",
+      "appreciation": "Appreciation",
+      "transfer": "Transfer"
+    },
+    "es-ES": {
+      "comprehension": "Comprensión",
+      "expression": "Expresión",
+      "appreciation": "Apreciación",
+      "transfer": "Transferencia"
+    },
+    "fr-FR": {
+      "comprehension": "Compréhension",
+      "expression": "Expression",
+      "appreciation": "Appréciation",
+      "transfer": "Transfert"
+    },
+    "de-DE": {
+      "comprehension": "Verständnis",
+      "expression": "Ausdruck",
+      "appreciation": "Würdigung",
+      "transfer": "Transfer"
+    },
+    "ja-JP": {
+      "comprehension": "理解",
+      "expression": "表現",
+      "appreciation": "鑑賞",
+      "transfer": "転移"
+    },
+    "ko-KR": {
+      "comprehension": "이해",
+      "expression": "표현",
+      "appreciation": "감상",
+      "transfer": "전이"
+    },
+    "pt-BR": {
+      "comprehension": "Compreensão",
+      "expression": "Expressão",
+      "appreciation": "Apreciação",
+      "transfer": "Transferência"
+    }
+  },
+  "deliverable_kinds": [
+    "text_payload",
+    "file_based"
+  ],
+  "skill_triggers": [
+    "$精读",
+    "$仿写",
+    "$批注",
+    "$文论概念"
+  ],
+  "scenario_packs": [
+    "close-reading-workshop",
+    "imitative-writing-lab"
+  ],
+  "workspace_signatures": {
+    "manifests": [],
+    "extensions": [
+      ".epub",
+      ".pdf",
+      ".md",
+      ".txt"
+    ],
+    "prose_density_min": 0.65,
+    "no_build_manifests": true
+  },
+  "locale_adaptation": {
+    "default_content_locale": "zh",
+    "supported_locales": [
+      "zh",
+      "en",
+      "ja",
+      "de",
+      "fr",
+      "ko",
+      "es",
+      "pt"
+    ],
+    "counter_mode": "cjk_char_or_latin_word",
+    "quote_delimiters": [
+      "“”",
+      "「」",
+      "『』",
+      "《》",
+      "«»",
+      "„“"
+    ]
+  },
+  "unverifiable_capabilities": [
+    "oral_recitation_prosody"
+  ]
+}

@@ -110,3 +110,42 @@ test('onboarding copy exists in every locale', () => {
   assert.ok(copySource.includes('onboardingTrialAction: "'));
   assert.ok(copySource.includes('onboardingModelPastePlaceholder: "'));
 });
+
+test('P2 #24: the admission panel surfaces the classifier subject family honestly', () => {
+  const panel = read(webviewRoot, 'components/firstlook/WorkspaceAdmissionPanel.tsx');
+
+  // The literature line exists, is opt-in via the prop, and stays silent for
+  // the code default (fail-closed surface: code workspaces see no change).
+  assert.match(panel, /subjectFamily\?: "code" \| "literature";/);
+  assert.match(panel, /props\.subjectFamily === "literature"/);
+  assert.match(panel, /t\("workspaceAdmissionSubjectLiterature"\)/);
+
+  const copySource = read(webviewRoot, 'lib/i18n/copy.ts');
+  assert.equal(
+    (copySource.match(/workspaceAdmissionSubjectLiterature: "/g) ?? []).length,
+    8,
+    'workspaceAdmissionSubjectLiterature must exist in all eight locales',
+  );
+
+  // The webview maps the classifier field from the sidecar payload.
+  const workbenchData = read(extensionRoot, 'core/workbenchData.ts');
+  assert.match(workbenchData, /record\.subject_family\) \?\? asString\(record\.subjectFamily\)/);
+  assert.match(workbenchData, /subjectFamily === 'literature'/);
+
+  // App passes the live first-look summary's subject family to the panel.
+  const app = read(webviewRoot, 'app/App.tsx');
+  assert.match(app, /subjectFamily=\{firstLookSummary\?\.subjectFamily\}/);
+});
+
+test('P2 #25: the skill context carries the subject family and literature skills prune on code', () => {
+  const catalog = read(sharedRoot, 'skillCatalog.ts');
+  assert.match(catalog, /subjectFamily\?: "code" \| "literature";/);
+  assert.equal(
+    (catalog.match(/when: \(context\) => context\.subjectFamily !== "code",/g) ?? []).length,
+    4,
+    'the four literature skills must all prune on code workspaces',
+  );
+
+  const app = read(webviewRoot, 'app/App.tsx');
+  assert.match(app, /resolveStarterSubjectFamily\(data\.workspaceTrainingState\?\.skillProjection\)/);
+});

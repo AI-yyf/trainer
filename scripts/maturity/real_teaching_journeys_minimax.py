@@ -3,8 +3,15 @@
 Methodology per ``docs/maturity/2026-10-08-real-teaching-quality.md`` and the
 case matrix in ``docs/maturity/teaching-case-matrix.md``:
 
-- 28 cases = 7 categories × 4, each a double-turn journey: pre-broken code
-  (exit≠0), learner turn 1, scripted fix, learner turn 2, verify exit 0.
+- 32 cases = 28 code cases (7 categories × 4) + 4 literature cases, each a
+  double-turn journey. Code cases: pre-broken code (exit≠0), learner turn 1,
+  scripted fix, learner turn 2, verify exit 0. Literature cases: an original
+  prose material with ¶ anchors, learner turn 1, scripted completion of the
+  literature deliverable (批注/仿写/概念卡), learner turn 2, and a local
+  deliverable checker (entry script) that fails on the incomplete stub and
+  passes on the completed work — the same pre≠0/post=0 backbone, anchored in
+  object criteria (anchors present, quoted text appears verbatim in the
+  material, required sections exist), never in aesthetic judgment.
 - Real sidecar + real provider only. Locally the fixture backbone (pre-fix
   exit≠0 / post-fix exit=0) always runs; the model turns run only when
   credentials are present. Without credentials every turn is recorded as
@@ -184,6 +191,8 @@ def _case(
     argv: list[str] | None = None,
     answer_mode: str = "guided",
     new_session: bool = False,
+    subject: str = "code",
+    language_id: str | None = None,
 ) -> dict:
     return {
         "id": case_id,
@@ -200,6 +209,8 @@ def _case(
         "topic_tokens": topic_tokens,
         "answer_mode": answer_mode,
         "new_session": new_session,
+        "subject": subject,
+        "language_id": language_id,
     }
 
 
@@ -1313,11 +1324,452 @@ CASES: list[dict] = [
         turn2="补上 n <= 0 的守卫就对了。之前的结论在别的切片场景还成立吗？",
         topic_tokens=["切片", "边界", "last_n"],
     ),
+    # ----- L. literature journeys (4) ----------------------------------------
+    # Original prose material (in-repo fixture text), ¶ anchors, and an
+    # objective deliverable checker: the incomplete stub must fail (exit≠0)
+    # and the completed work must pass (exit=0) — the same pre/post backbone
+    # as the code cases, judged by structure (anchors/verbatim quotes/
+    # sections), never by taste.
+    _case(
+        "L1-close-read-annotate", "L", "novice", "literature",
+        files={
+            "夜航.md": """
+            ¶1 渡船离开码头时，灯还没熄。水面上浮着货轮的白光，往远处一层层淡下去，直到和夜色分不出边界。船身很轻地晃，像有人在头顶上缓缓拍手。
+            ¶2 掌灯的老人把烟按灭在船舷上，说水夜里最怕的不是深，是静。风一停，桨声就格外响，响得人心里发空。他说这话时并不看人，只看着河。
+            ¶3 我问他这样摆渡了多少年。他没有回答，只是把灯芯挑高了一截，光就落到了我的鞋面上。
+            """,
+            "批注.md": """
+            # 「夜航」批注（¶1–¶3）
+
+            TODO：回合一之后再完成三条批注。
+            """,
+            "check_annotate.py": """
+            import re
+            import sys
+            from pathlib import Path
+
+            material = Path("夜航.md").read_text(encoding="utf-8")
+
+
+            def fail(reason: str) -> None:
+                print(f"FAIL: {reason}")
+                sys.exit(1)
+
+
+            notes = Path("批注.md")
+            if not notes.exists():
+                fail("批注.md 不存在")
+            text = notes.read_text(encoding="utf-8")
+            if "TODO" in text:
+                fail("批注还是空壳")
+            anchors = [a for a in ("¶1", "¶2", "¶3") if a in text]
+            if len(anchors) < 2:
+                fail(f"锚点不足：只出现 {anchors}")
+            hits = [q for q in re.findall(r"「([^」]{8,})」", text) if q in material]
+            if len(hits) < 2:
+                fail(f"钉住原句的引文不足：{len(hits)} 条")
+            if "主旨" not in text:
+                fail("缺主旨一句话")
+            print("ok")
+            """,
+        },
+        fixed_files={
+            "夜航.md": """
+            ¶1 渡船离开码头时，灯还没熄。水面上浮着货轮的白光，往远处一层层淡下去，直到和夜色分不出边界。船身很轻地晃，像有人在头顶上缓缓拍手。
+            ¶2 掌灯的老人把烟按灭在船舷上，说水夜里最怕的不是深，是静。风一停，桨声就格外响，响得人心里发空。他说这话时并不看人，只看着河。
+            ¶3 我问他这样摆渡了多少年。他没有回答，只是把灯芯挑高了一截，光就落到了我的鞋面上。
+            """,
+            "批注.md": """
+            # 「夜航」批注（¶1–¶3）
+
+            ## 批注一（锚 ¶1）
+            引文：「水面上浮着货轮的白光，往远处一层层淡下去，直到和夜色分不出边界。」
+            细读：光的层次给夜写出了距离，"分不出边界"让水面有了容积。
+
+            ## 批注二（锚 ¶2）
+            引文：「水夜里最怕的不是深，是静。」
+            细读：用"怕的不是深"翻转常识，静比深更叫人不安。
+
+            ## 批注三（锚 ¶3）
+            引文：「只是把灯芯挑高了一截，光就落到了我的鞋面上。」
+            细读：不答之答——光落在鞋面上即是回答。
+
+            主旨：这篇散文把问不出的东西交给灯来回答。
+            """,
+            "check_annotate.py": """
+            import re
+            import sys
+            from pathlib import Path
+
+            material = Path("夜航.md").read_text(encoding="utf-8")
+
+
+            def fail(reason: str) -> None:
+                print(f"FAIL: {reason}")
+                sys.exit(1)
+
+
+            notes = Path("批注.md")
+            if not notes.exists():
+                fail("批注.md 不存在")
+            text = notes.read_text(encoding="utf-8")
+            if "TODO" in text:
+                fail("批注还是空壳")
+            anchors = [a for a in ("¶1", "¶2", "¶3") if a in text]
+            if len(anchors) < 2:
+                fail(f"锚点不足：只出现 {anchors}")
+            hits = [q for q in re.findall(r"「([^」]{8,})」", text) if q in material]
+            if len(hits) < 2:
+                fail(f"钉住原句的引文不足：{len(hits)} 条")
+            if "主旨" not in text:
+                fail("缺主旨一句话")
+            print("ok")
+            """,
+        },
+        entry="check_annotate.py", primary_file="夜航.md",
+        turn1="我在精读这段《夜航》。帮我先把 ¶1 和 ¶2 选出来，说明为什么从这里下批注最合适。",
+        turn2="批注写完了，三条都钉在 ¶ 锚点上。请复核引文是否全是原句，并让我自己说出主旨那一句话。",
+        topic_tokens=["精读", "批注", "锚点"],
+        subject="literature", language_id="markdown",
+    ),
+    _case(
+        "L2-imitation-transfer", "L", "advanced", "literature",
+        files={
+            "旧巷.md": """
+            ¶1 巷子窄，两个人迎面走过来，要各自侧身让一让肩膀。墙根的青苔从砖缝里长出来，一层压着一层，像时间叠出来的绒毯。
+            ¶2 卖豆腐的木桶放在井台边，水面浮着几片碎叶，捞掉之后，就只剩下一汪清凉的井气。打水的人不说话，绳子在辘轳上转一圈，桶就沉下去。
+            """,
+            "仿写.md": """
+            # 仿写：旧巷
+
+            ## 仿写段
+            TODO：回合一之后再写仿写段与对照表。
+            """,
+            "check_imitate.py": """
+            import re
+            import sys
+            from pathlib import Path
+
+            material = Path("旧巷.md").read_text(encoding="utf-8")
+
+
+            def fail(reason: str) -> None:
+                print(f"FAIL: {reason}")
+                sys.exit(1)
+
+
+            draft = Path("仿写.md")
+            if not draft.exists():
+                fail("仿写.md 不存在")
+            text = draft.read_text(encoding="utf-8")
+            if "TODO" in text:
+                fail("仿写还是空壳")
+            if "对照表" not in text:
+                fail("缺对照表")
+            rows = re.findall(r"¶\\d[^|\\n]*\\|\\s*仿写[一二三四]", text)
+            if len(rows) < 2:
+                fail(f"对照行不足 2 行：{len(rows)}")
+            before, _, body = text.partition("## 仿写段")
+            body = body.partition("## 对照表")[0]
+            if len(re.findall(r"[\\u4e00-\\u9fff]", body)) < 60:
+                fail("仿写段太短")
+            for i in range(0, max(len(material) - 13, 1)):
+                window = material[i : i + 14]
+                if window.strip() and window in body:
+                    fail(f"整段照搬原文：{window[:14]}")
+            print("ok")
+            """,
+        },
+        fixed_files={
+            "旧巷.md": """
+            ¶1 巷子窄，两个人迎面走过来，要各自侧身让一让肩膀。墙根的青苔从砖缝里长出来，一层压着一层，像时间叠出来的绒毯。
+            ¶2 卖豆腐的木桶放在井台边，水面浮着几片碎叶，捞掉之后，就只剩下一汪清凉的井气。打水的人不说话，绳子在辘轳上转一圈，桶就沉下去。
+            """,
+            "仿写.md": """
+            # 仿写：旧巷
+
+            ## 仿写段
+            毕业后的第二个月回到县城，那条巷子还是那么窄。迎面的自行车铃响了一声，我们都停下来让一让。墙根的青苔比记忆里厚了些，绿从砖缝里继续往上爬。井台上站着邻居家放学回来的少年，他不看辘轳，只看手里的手机屏幕，光把他的脸照得很白。
+
+            ## 对照表
+            | 原文 | 仿写 |
+            | --- | --- |
+            | ¶1 侧身让肩 | 仿写一：与放学少年让路 |
+            | ¶1 青苔一层压一层 | 仿写二：青苔在记忆里更厚 |
+            | ¶2 井台与辘轳 | 仿写三：辘轳换成了手机屏幕 |
+            """,
+            "check_imitate.py": """
+            import re
+            import sys
+            from pathlib import Path
+
+            material = Path("旧巷.md").read_text(encoding="utf-8")
+
+
+            def fail(reason: str) -> None:
+                print(f"FAIL: {reason}")
+                sys.exit(1)
+
+
+            draft = Path("仿写.md")
+            if not draft.exists():
+                fail("仿写.md 不存在")
+            text = draft.read_text(encoding="utf-8")
+            if "TODO" in text:
+                fail("仿写还是空壳")
+            if "对照表" not in text:
+                fail("缺对照表")
+            rows = re.findall(r"¶\\d[^|\\n]*\\|\\s*仿写[一二三四]", text)
+            if len(rows) < 2:
+                fail(f"对照行不足 2 行：{len(rows)}")
+            before, _, body = text.partition("## 仿写段")
+            body = body.partition("## 对照表")[0]
+            if len(re.findall(r"[\\u4e00-\\u9fff]", body)) < 60:
+                fail("仿写段太短")
+            for i in range(0, max(len(material) - 13, 1)):
+                window = material[i : i + 14]
+                if window.strip() and window in body:
+                    fail(f"整段照搬原文：{window[:14]}")
+            print("ok")
+            """,
+        },
+        entry="check_imitate.py", primary_file="旧巷.md",
+        turn1="我想拿《旧巷》练仿写。先帮我拆 ¶1、¶2 各自的叙述骨架，而不是整段抄下来。",
+        turn2="仿写写完了，对照表也补上了。请复核我是不是只是换名字照搬，而不是真的做了结构迁移。",
+        topic_tokens=["仿写", "对照", "迁移"],
+        subject="literature", language_id="markdown",
+    ),
+    _case(
+        "L3-theory-concept-card", "L", "advanced", "literature",
+        files={
+            "雨与灯.md": """
+            ¶1 雨把街面打湿，霓虹倒下来，在水洼里碎成一片一片。路灯亮得像有人在雨里点了一盏一盏的纸灯，光晕往雨雾里洇开，看久了，纸灯和霓虹分不清谁先谁后。
+            ¶2 我躲在骑楼底下等雨小一点。骑车的人从我面前过去，车灯把雨丝拉成一条一条的银线，又迅速合拢，像什么都没有发生过。
+            """,
+            "概念卡.md": """
+            # 概念卡：意象
+
+            ## 定义
+            TODO：回合一之后再完成定义、原文证据与迁移。
+            """,
+            "check_concept.py": """
+            import re
+            import sys
+            from pathlib import Path
+
+            material = Path("雨与灯.md").read_text(encoding="utf-8")
+
+
+            def fail(reason: str) -> None:
+                print(f"FAIL: {reason}")
+                sys.exit(1)
+
+
+            card = Path("概念卡.md")
+            if not card.exists():
+                fail("概念卡.md 不存在")
+            text = card.read_text(encoding="utf-8")
+            if "TODO" in text:
+                fail("概念卡还是空壳")
+            for header in ("定义", "原文证据", "迁移"):
+                if header not in text:
+                    fail(f"缺「{header}」一节")
+            for anchor in ("¶1", "¶2"):
+                if anchor not in text:
+                    fail(f"证据未引用锚点 {anchor}")
+            hits = [q for q in re.findall(r"「([^」]{10,})」", text) if q in material]
+            if len(hits) < 1:
+                fail("原文证据没有钉住原句")
+            definition = text.partition("## 定义")[2].partition("##")[0]
+            if len(re.findall(r"[\\u4e00-\\u9fff]", definition)) < 16:
+                fail("定义太短")
+            transfer = text.partition("## 迁移")[2]
+            if len(re.findall(r"[\\u4e00-\\u9fff]", transfer)) < 20:
+                fail("迁移示例太短")
+            print("ok")
+            """,
+        },
+        fixed_files={
+            "雨与灯.md": """
+            ¶1 雨把街面打湿，霓虹倒下来，在水洼里碎成一片一片。路灯亮得像有人在雨里点了一盏一盏的纸灯，光晕往雨雾里洇开，看久了，纸灯和霓虹分不清谁先谁后。
+            ¶2 我躲在骑楼底下等雨小一点。骑车的人从我面前过去，车灯把雨丝拉成一条一条的银线，又迅速合拢，像什么都没有发生过。
+            """,
+            "概念卡.md": """
+            # 概念卡：意象
+
+            ## 定义
+            意象是语言把意义带进画面的方式：一个具体物件承担起整段情绪的秤砣。
+
+            ## 原文证据
+            - ¶1「霓虹倒下来，在水洼里碎成一片一片」：倒影先于实物出现，是雨夜的第一个意象。
+            - ¶2「车灯把雨丝拉成一条一条的银线」：被拉长的雨丝同样是意象。
+            - 证据说明：意象不只是名词，「纸灯」「银线」都参与了这一夜的说话。
+
+            ## 迁移
+            把「书桌上的旧台灯」放进一篇童年随笔，让灯光替回忆表态——同一个秤砣原理用在了完全不同的物件上。
+            """,
+            "check_concept.py": """
+            import re
+            import sys
+            from pathlib import Path
+
+            material = Path("雨与灯.md").read_text(encoding="utf-8")
+
+
+            def fail(reason: str) -> None:
+                print(f"FAIL: {reason}")
+                sys.exit(1)
+
+
+            card = Path("概念卡.md")
+            if not card.exists():
+                fail("概念卡.md 不存在")
+            text = card.read_text(encoding="utf-8")
+            if "TODO" in text:
+                fail("概念卡还是空壳")
+            for header in ("定义", "原文证据", "迁移"):
+                if header not in text:
+                    fail(f"缺「{header}」一节")
+            for anchor in ("¶1", "¶2"):
+                if anchor not in text:
+                    fail(f"证据未引用锚点 {anchor}")
+            hits = [q for q in re.findall(r"「([^」]{10,})」", text) if q in material]
+            if len(hits) < 1:
+                fail("原文证据没有钉住原句")
+            definition = text.partition("## 定义")[2].partition("##")[0]
+            if len(re.findall(r"[\\u4e00-\\u9fff]", definition)) < 16:
+                fail("定义太短")
+            transfer = text.partition("## 迁移")[2]
+            if len(re.findall(r"[\\u4e00-\\u9fff]", transfer)) < 20:
+                fail("迁移示例太短")
+            print("ok")
+            """,
+        },
+        entry="check_concept.py", primary_file="雨与灯.md",
+        turn1="读到「雨与灯」这一段，我想做一张意象的概念卡。帮我从 ¶1 里选一个最小的证据先站住。",
+        turn2="概念卡写完了：定义、原文证据、迁移都有。请复核证据是不是贴的句子、迁移例子是不是真的迁移了。",
+        topic_tokens=["意象", "概念", "证据"],
+        subject="literature", language_id="markdown",
+    ),
+    _case(
+        "L4-compare-two-pieces", "L", "novice", "literature",
+        files={
+            "灯下.md": """
+            ¶A1 母亲在灯下补袜子，顶针一转，线脚就排成整齐的队伍。灯罩上有一圈灰边，被我擦过许多次，又总是长回来。
+            ¶A2 她忽然抬起头，说线要打结了，你先去睡。我不肯，就把下巴搁在椅背上，看灯影把两个人的影子挨得很近。
+            """,
+            "桥上.md": """
+            ¶B1 父亲站在桥上看河，转身背对着我，手扶栏杆的青石。石头被几十年的手摸得发亮，比桥面上任何一块都光滑。
+            ¶B2 河水很远，声音近。他不说什么，我也跟着不说，只把听见的流水当成今晚唯一的课程。
+            """,
+            "对照.md": """
+            # 对照：灯下 / 桥上
+
+            ## 共性
+            TODO：回合一之后再完成共性与差异。
+            """,
+            "check_compare.py": """
+            import re
+            import sys
+            from pathlib import Path
+
+            a = Path("灯下.md").read_text(encoding="utf-8")
+            b = Path("桥上.md").read_text(encoding="utf-8")
+
+
+            def fail(reason: str) -> None:
+                print(f"FAIL: {reason}")
+                sys.exit(1)
+
+
+            draft = Path("对照.md")
+            if not draft.exists():
+                fail("对照.md 不存在")
+            text = draft.read_text(encoding="utf-8")
+            if "TODO" in text:
+                fail("对照稿还是空壳")
+            for header in ("共性", "差异"):
+                if header not in text:
+                    fail(f"缺「{header}」一栏")
+            for anchor in ("¶A1", "¶B1"):
+                if anchor not in text:
+                    fail(f"对照未引用锚点 {anchor}")
+            quotes = re.findall(r"「([^」]{8,})」", text)
+            if not any(q in a for q in quotes):
+                fail("《灯下》没有引文钉住原句")
+            if not any(q in b for q in quotes):
+                fail("《桥上》没有引文钉住原句")
+            print("ok")
+            """,
+        },
+        fixed_files={
+            "灯下.md": """
+            ¶A1 母亲在灯下补袜子，顶针一转，线脚就排成整齐的队伍。灯罩上有一圈灰边，被我擦过许多次，又总是长回来。
+            ¶A2 她忽然抬起头，说线要打结了，你先去睡。我不肯，就把下巴搁在椅背上，看灯影把两个人的影子挨得很近。
+            """,
+            "桥上.md": """
+            ¶B1 父亲站在桥上看河，转身背对着我，手扶栏杆的青石。石头被几十年的手摸得发亮，比桥面上任何一块都光滑。
+            ¶B2 河水很远，声音近。他不说什么，我也跟着不说，只把听见的流水当成今晚唯一的课程。
+            """,
+            "对照.md": """
+            # 对照：灯下 / 桥上
+
+            ## 共性
+            - 两篇都把感情压进一个器物：¶A1 的顶针与 ¶B1 的青石，都是被岁月摸亮的物件。
+            - 引文：「母亲在灯下补袜子，顶针一转，线脚就排成整齐的队伍。」
+
+            ## 差异
+            - ¶A2 用影子写亲密（两人被灯影挨近），¶B2 用听流水的静默写距离（只把流水当课程）。
+            - 引文：「只把听见的流水当成今晚唯一的课程。」
+
+            ## 复核
+            有一处我还没有证明：¶B2 的"陪伴"是不是也可以读成"沉默的迁就"。
+            """,
+            "check_compare.py": """
+            import re
+            import sys
+            from pathlib import Path
+
+            a = Path("灯下.md").read_text(encoding="utf-8")
+            b = Path("桥上.md").read_text(encoding="utf-8")
+
+
+            def fail(reason: str) -> None:
+                print(f"FAIL: {reason}")
+                sys.exit(1)
+
+
+            draft = Path("对照.md")
+            if not draft.exists():
+                fail("对照.md 不存在")
+            text = draft.read_text(encoding="utf-8")
+            if "TODO" in text:
+                fail("对照稿还是空壳")
+            for header in ("共性", "差异"):
+                if header not in text:
+                    fail(f"缺「{header}」一栏")
+            for anchor in ("¶A1", "¶B1"):
+                if anchor not in text:
+                    fail(f"对照未引用锚点 {anchor}")
+            quotes = re.findall(r"「([^」]{8,})」", text)
+            if not any(q in a for q in quotes):
+                fail("《灯下》没有引文钉住原句")
+            if not any(q in b for q in quotes):
+                fail("《桥上》没有引文钉住原句")
+            print("ok")
+            """,
+        },
+        entry="check_compare.py", primary_file="灯下.md",
+        turn1="《灯下》和《桥上》都通读了。先帮我定一个最小对照单元：¶A1 和 ¶B1 为什么能并排放？",
+        turn2="对照稿写完了，共性和差异都落了锚点。请复核两篇引文是否都钉住原句，并指出哪一条断言我还没有证明。",
+        topic_tokens=["对照", "共性", "锚点"],
+        subject="literature", language_id="markdown",
+    ),
 ]
 
 
 def selected_cases() -> list[dict]:
-    """All 28 cases, or the ``TRAINER_MATURITY_CASE_IDS`` smoke subset."""
+    """All 32 cases (28 code + 4 literature), or the ``TRAINER_MATURITY_CASE_IDS`` smoke subset."""
     raw = os.environ.get("TRAINER_MATURITY_CASE_IDS", "").strip()
     if not raw:
         return CASES
@@ -1404,7 +1856,7 @@ def turn_payload(
     provider: dict,
     api_key: str,
 ) -> dict:
-    language = "javascript" if case["runtime"] == "node" else "python"
+    language = case.get("language_id") or ("javascript" if case["runtime"] == "node" else "python")
     return {
         "session_id": sid,
         "message": message,
@@ -1837,25 +2289,42 @@ def explanation_quality_markdown(summary: dict) -> list[str]:
     return lines
 
 
-def write_report(result: dict) -> None:
+def _literature_cases(result_cases: list[dict]) -> int:
+    code_ids = {case["id"] for case in CASES if case.get("subject", "code") == "code"}
+    return sum(1 for case in result_cases if case["case"] not in code_ids)
+
+
+def write_report(result: dict, report_path: Path) -> None:
     fixtures_ok = sum(1 for case in result["cases"] if case["fixture"]["fixture_ok"])
     counts = _classification_counts(result)
+    literature = _literature_cases(result["cases"])
+    total = len(CASES)
+    literature_total = sum(1 for case in CASES if case.get("subject", "code") != "code")
     lines = [
-        "# 教学旅程 28 案例报告（2026-10-13）",
+        f"# 教学旅程案例报告（全矩阵 {total} 案例 · 本次 {len(result['cases'])} 案例）",
         "",
-        "- harness：`scripts/maturity/real_teaching_journeys_minimax.py`（28 组双回合，7 类 × 4）",
+        f"- harness：`scripts/maturity/real_teaching_journeys_minimax.py`（{total} 组双回合：28 代码案例 A–G×4 + {literature_total} 文学案例 L）",
         "- 矩阵规格：`docs/maturity/teaching-case-matrix.md`；台账与对账规则见该文件 §2（M1–M5）",
         f"- 运行模式：`{result['mode']}`",
         f"- 夹具校验（本地执行，无模型）：{fixtures_ok}/{len(result['cases'])} 通过（pre-fix exit≠0 且 post-fix exit=0）",
         f"- 回合分类统计：{counts}",
         "",
     ]
+    if literature:
+        lines += [
+            (
+                "- 文学案例（category L）：夹具=交付物校验器（¶ 锚点、引文与原文逐字互查、栏目完整性），"
+                "材料正文跨回合不变，回合 1→2 之间写完交付物；判据全部是客观结构判据，不含审美判断。"
+            ),
+            "",
+        ]
     if result["mode"] == "skipped_no_credentials":
+        skips = 2 * len(result["cases"])
         lines += [
             "## 诚实声明",
             "",
             "本环境未设置 `TRAINER_MATURITY_API_KEY` / `TRAINER_MATURITY_PROVIDER_BASE_URL`，",
-            "**56 个模型回合全部标记 `skipped_no_credentials`：未向任何 provider 发起调用，",
+            f"**{skips} 个模型回合全部标记 `skipped_no_credentials`：未向任何 provider 发起调用，",
             "本报告不构成、也不得被引用为「真实模型通过」**。夹具骨架为本地真实执行。",
             "",
         ]
@@ -1903,11 +2372,37 @@ def write_report(result: dict) -> None:
         "`TRAINER_MATURITY_WORKSPACE`（默认 `tmp/maturity-ws/`，不入库）。",
         "",
     ]
-    REPORT_PATH.write_text("\n".join(lines), encoding="utf-8")
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def report_target_path(cases: list[dict], *, mode: str) -> Path:
+    """Report path for this run.
+
+    Only a full-matrix REAL-model run regenerates the standing acceptance
+    report. Subset smoke runs AND credential-less full runs contribute no
+    model facts, so they write to their own dated file instead of clobbering
+    the standing report (a skipped run erasing ``55 passed / 1 honest
+    fallback`` would be an acceptance-continuity bug). The standing report
+    keeps matrix-structure updates only when a real run re-records it.
+    ``TRAINER_MATURITY_REPORT_PATH`` overrides either way.
+    """
+    override = os.environ.get("TRAINER_MATURITY_REPORT_PATH", "").strip()
+    if override:
+        return Path(override)
+    subset = len(cases) != len(CASES)
+    if subset or mode == "skipped_no_credentials":
+        stamp = time.strftime("%Y-%m-%d", time.localtime())
+        if subset:
+            ids = "-".join(str(case["id"]).split("-")[0] for case in cases)
+            tag = f"subset-{ids}-{len(cases)}"
+        else:
+            tag = "full-no-model"
+        return REPO_ROOT / "docs" / "maturity" / f"{stamp}-teaching-journeys-report-{tag}.md"
+    return REPORT_PATH
 
 
 def main() -> int:
-    print("=== Trainer 教学旅程 28 案例 harness ===")
+    print(f"=== Trainer 教学旅程案例 harness（全矩阵 {len(CASES)} 案例） ===")
     cases = selected_cases()
     if len(cases) != len(CASES):
         print(f"[filter] TRAINER_MATURITY_CASE_IDS 冒烟子集：{len(cases)}/{len(CASES)} 案例")
@@ -1929,7 +2424,7 @@ def main() -> int:
         result = skipped_run(fixtures, cases)
         print(
             "\n[skip] TRAINER_MATURITY_API_KEY / TRAINER_MATURITY_PROVIDER_BASE_URL 未设置："
-            "56 个模型回合全部 skipped_no_credentials，未执行真实调用。"
+            f"{2 * len(cases)} 个模型回合全部 skipped_no_credentials，未执行真实调用。"
         )
     else:
         provider = build_provider()
@@ -1942,13 +2437,14 @@ def main() -> int:
     (WORKSPACE / "report.json").write_text(
         json.dumps(report_payload, ensure_ascii=False, indent=1), encoding="utf-8"
     )
-    write_report(result)
+    report_path = report_target_path(cases, mode=result["mode"])
+    write_report(result, report_path)
     print(f"\n夹具：{fixture_ok}/{len(cases)} 通过；回合分类：{counts}")
     print(
         f"解释质量（非门控）：已评估 {explanation_summary['evaluated_turns']} 回合，"
         f"solution_dump_suspected {explanation_summary['solution_dump_suspected_turns']} 回合"
     )
-    print(f"报告：{REPORT_PATH}")
+    print(f"报告：{report_path}")
     return 0 if fixture_ok == len(cases) else 1
 
 

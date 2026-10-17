@@ -71,6 +71,7 @@ server/.qdrant/
 .opencode/
 .omo/
 .codex/
+.workbuddy/
 .tmp/
 .tmp_restore/
 .vscode/

@@ -2195,6 +2195,10 @@ const guidedTrainingPreviewScenarioAliasMap: Record<string, GuidedTrainingPrevie
   resource_knowledge: "training-resource",
   "training-dependency": "training-dependency",
   dependency_mastery: "training-dependency",
+  "training-close-reading": "training-close-reading",
+  literature_close_reading: "training-close-reading",
+  "training-theory-concept": "training-theory-concept",
+  literature_theory_concept: "training-theory-concept",
 };
 
 type PreviewTextLocaleOverrides<T extends string | string[]> = Partial<

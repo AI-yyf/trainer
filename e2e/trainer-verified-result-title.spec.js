@@ -33,7 +33,7 @@ for (const [language, title] of [['zh-CN', '确认这次验证结果'], ['en-US'
     const primary = page.locator('[data-surface=plan] [data-template=NextAction]');
     await expect(primary.locator('h3')).toHaveText(title);
     await expect(primary.getByRole('button')).toHaveAttribute('data-action-intent', 'adopt_evidence');
-    const evidence = page.locator('[data-learning-section=evidence]');
+    const evidence = page.locator('[data-learning-section=reviews]');
     await expect(evidence.getByText(rawSummary, { exact: true })).not.toBeVisible();
     await evidence.locator(':scope > summary').click();
     await expect(evidence.getByText(rawSummary, { exact: true })).toBeVisible();

@@ -108,6 +108,7 @@ const defaultPersistedState: PersistedWorkbenchState = {
     },
   },
   composerDraft: "",
+  composerSendPreference: "jump",
 };
 
 const initialUi: PersistedWorkbenchState = {
@@ -355,6 +356,7 @@ export interface WorkbenchStore {
   setCoachDefaults: (defaults: Partial<CoachDefaults>) => void;
   setComposerDraft: (draft: string) => void;
   selectComposerDraftScope: (scope: string) => void;
+  setComposerSendPreference: (preference: "jump" | "stay") => void;
   rememberSurfaceScroll: (key: string, position: number) => void;
   setActivityDraft: (key: string, draft: string) => void;
   setOperationMessage: (message?: OperationMessage, surface?: OperationMessageSurface) => void;
@@ -882,6 +884,10 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
     return { layout: persistLayout({ ...state.layout, composerDraftScope: scope,
       composerDrafts: drafts, composerDraft: drafts[scope] ?? (previous ? "" : state.layout.composerDraft) }) };
   }),
+  setComposerSendPreference: (preference) =>
+    set((state) => ({
+      layout: persistLayout({ ...state.layout, composerSendPreference: preference }),
+    })),
   rememberSurfaceScroll: (key, position) => set((state) => ({
     layout: persistLayout({ ...state.layout, surfaceScrollPositions: { ...state.layout.surfaceScrollPositions, [key]: position } }),
   })),

@@ -23,6 +23,7 @@ from ..specs.models import RequirementItem, TaskSpec
 from .check_cache import CHECK_RESULT_CACHE
 from .models import CheckCommand, CheckResult, CheckStatus, EvaluationRequest, SemanticReview
 from .models import EvaluationReport as LaneEvaluationReport
+from .verifiers import VerifierPack, verifier_pack_for
 
 
 def _prefers_chinese(language: str | None) -> bool:
@@ -253,47 +254,22 @@ class EvaluationPipeline:
         runner: CommandRunner | None = None,
         hypothesis_hook: HypothesisHook | None = None,
         semantic_reviewer: SemanticReviewer | None = None,
+        verifier_pack: VerifierPack | None = None,
     ) -> None:
         self._runner = runner or default_command_runner()
         self._hypothesis_hook = hypothesis_hook or DefaultHypothesisHook()
         self._semantic_reviewer = semantic_reviewer or DefaultSemanticReviewer()
+        # Subject-scoped deterministic check plan (§2.2 verifier registry).
+        # Missing/unknown families resolve to the "code" pack, i.e. the exact
+        # pre-registry chain; packs never add trust sources, only commands.
+        self._verifier_pack = verifier_pack or verifier_pack_for(None)
 
     def plan_commands(self, request: EvaluationRequest) -> list[CheckCommand]:
-        # Absolute target so tools can check a project file while cwd stays sandboxed.
-        target = (
-            str(Path(request.target_path).resolve())
-            if request.target_path
-            else "."
-        )
-        # Fail-closed: never fall back to project parent / os.getcwd() (ruff/pytest
-        # caches like .pytest_cache must not land in the learner project).
-        cwd = request.workspace
-        if not cwd:
-            raise ValueError(
-                "EvaluationRequest.workspace sandbox cwd is required; "
-                "refusing project/os.getcwd() to avoid tool cache side effects."
-            )
-        pytest_args = list(request.pytest_args) if request.pytest_args else [target]
-        if "-p" not in pytest_args:
-            pytest_args = [*pytest_args, "-p", "no:cacheprovider"]
-        # PyInstaller's sys.executable is the sidecar launcher, not a Python CLI.
-        python = request.verification_python or (
-            (shutil.which("python3") or shutil.which("python") or "python3")
-            if getattr(sys, "frozen", False) else sys.executable
-        )
-        modules = bool(request.verification_python or getattr(sys, "frozen", False))
-        commands = [
-            CheckCommand(name="ruff", argv=[python, "-m", "ruff", "check", target] if modules else ["ruff", "check", target], cwd=cwd),
-            CheckCommand(name="pyright", argv=[python, "-m", "pyright", target] if modules else ["pyright", target], cwd=cwd),
-            CheckCommand(
-                name="pytest",
-                argv=[python, "-m", "pytest", *pytest_args],
-                cwd=cwd,
-            ),
-        ]
-        if _has_python_script_entrypoint(request.code or ""):
-            commands.append(CheckCommand(name="python-script", argv=[python, "-B", target], cwd=cwd))
-        return commands
+        # Delegates to the pack's planner (PythonToolchainPlanner for "code",
+        # moved verbatim so behavior is identical). Subclasses/tests may still
+        # override this method; the sandbox-cwd fail-closed guard lives inside
+        # the planner and propagates.
+        return list(self._verifier_pack.command_planner.plan(request))
 
     def evaluate(self, request: EvaluationRequest) -> LaneEvaluationReport:
         # Always own a TemporaryDirectory as tool cwd — ignore any caller workspace
@@ -1180,30 +1156,6 @@ def _code_evidence_text(source: str, language_id: str | None) -> str:
 _PYTHON_EVIDENCE_EXPRESSIONS = (
     ast.Name, ast.Attribute, ast.Subscript, ast.Call, ast.Dict, ast.List, ast.Tuple, ast.Set,
 )
-
-
-def _has_python_script_entrypoint(code: str) -> bool:
-    """Run explicit executable entry points, never credit an empty library module."""
-    try:
-        module = ast.parse(code)
-    except SyntaxError:
-        return False
-    for statement in module.body:
-        if not isinstance(statement, ast.If) or not isinstance(statement.test, ast.Compare):
-            continue
-        test = statement.test
-        if len(test.ops) != 1 or not isinstance(test.ops[0], ast.Eq):
-            continue
-        operands = [test.left, *test.comparators]
-        if not (any(isinstance(node, ast.Name) and node.id == "__name__" for node in operands)
-                and any(isinstance(node, ast.Constant) and node.value == "__main__"
-                        for node in operands)):
-            continue
-        if any(isinstance(node, (ast.Assert, ast.Call))
-               for item in statement.body for node in ast.walk(item)
-               if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))):
-            return True
-    return False
 
 
 def _criterion_output_numbers(criterion: str) -> list[str]:

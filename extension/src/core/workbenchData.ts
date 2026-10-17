@@ -4151,6 +4151,8 @@ function mapFirstLookSummary(
 
   const folderRole = toFirstLookFolderRole(asString(record.folder_role));
   const projectTypeGuess = toProjectTypeGuess(asString(record.project_type_guess));
+  const subjectFamily =
+    asString(record.subject_family) ?? asString(record.subjectFamily);
   const confidence = asNumber(record.confidence);
   const whyThisGuess = asString(record.why_this_guess) ?? asString(record.whyThisGuess) ?? "";
   const entryPoints = asStringArray(record.entry_points) ?? asStringArray(record.entryPoints) ?? [];
@@ -4170,6 +4172,7 @@ function mapFirstLookSummary(
   if (
     !folderRole &&
     !projectTypeGuess &&
+    !subjectFamily &&
     confidence === undefined &&
     !whyThisGuess &&
     entryPoints.length === 0 &&
@@ -4188,6 +4191,12 @@ function mapFirstLookSummary(
   return {
     folderRole: folderRole ?? fallback?.folderRole ?? 'mixed_uncertain',
     projectTypeGuess: projectTypeGuess ?? fallback?.projectTypeGuess ?? 'unknown',
+    subjectFamily:
+      subjectFamily === 'literature'
+        ? 'literature'
+        : subjectFamily === 'code'
+          ? 'code'
+          : fallback?.subjectFamily ?? 'code',
     confidence: confidence ?? fallback?.confidence ?? 0,
     whyThisGuess: whyThisGuess || fallback?.whyThisGuess || '',
     entryPoints: entryPoints.length > 0 ? entryPoints : fallback?.entryPoints ?? [],

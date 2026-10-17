@@ -71,9 +71,12 @@ class IngestService:
         vision_enabled: bool,
     ) -> tuple[str, list[str], dict[str, object]]:
         kind = request.kind or ResourceKind.UNKNOWN
-        if kind is ResourceKind.PDF:
-            text, warnings = _extract_pdf_text(request)
-            return text, warnings, {}
+        if kind is ResourceKind.PDF or Path(request.source_uri).suffix.lower() == ".pdf":
+            text, warnings, provenance = _extract_pdf_text(request)
+            return text, warnings, provenance
+        if kind is ResourceKind.EPUB or Path(request.source_uri).suffix.lower() == ".epub":
+            text, warnings, provenance = _extract_epub_text(request)
+            return text, warnings, provenance
         if kind is ResourceKind.IMAGE:
             text, warnings = _extract_image_stub(request, vision_enabled=vision_enabled)
             return text, warnings, {}
@@ -132,6 +135,10 @@ class ResourceIngestor:
             "character_count": len(text),
             "chunk_count": len(chunks),
         }
+        if source_provenance.get("paragraph_anchors"):
+            metadata_updates["paragraph_anchors"] = source_provenance["paragraph_anchors"]
+        if source_provenance.get("content_language"):
+            metadata_updates["content_language"] = source_provenance["content_language"]
         if kind is ResourceKind.IMAGE and vision_enabled:
             metadata_updates["vision_ready"] = True
         self._registry.attach_chunks(
@@ -164,6 +171,8 @@ class ResourceIngestor:
         suffix = Path(source_uri).suffix.lower()
         if suffix == ".pdf":
             return ResourceKind.PDF
+        if suffix == ".epub":
+            return ResourceKind.EPUB
         if suffix in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}:
             return ResourceKind.IMAGE
         if suffix in {".md", ".markdown"}:
@@ -212,17 +221,180 @@ class ResourceIngestor:
         return chunks
 
 
-def _extract_pdf_text(request: IngestionRequest) -> tuple[str, list[str]]:
+def _build_pdf_paragraph_anchors(pages: list[str]) -> list[dict[str, object]]:
+    """Build stable page + char-offset paragraph anchors for PDF (§7.4, §7.8)."""
+    anchors: list[dict[str, object]] = []
+    for page_no, page_text in enumerate(pages, start=1):
+        cursor = 0
+        for p_idx, block in enumerate(re.split(r"\n\s*\n", page_text), start=1):
+            stripped = block.strip()
+            if not stripped:
+                continue
+            pos = page_text.find(stripped, cursor)
+            char_offset = pos if pos >= 0 else cursor
+            cursor = max(cursor, char_offset + len(stripped))
+            anchors.append(
+                {
+                    "anchor_id": f"¶p{page_no}.{p_idx}@{char_offset}",
+                    "kind": "pdf",
+                    "page": page_no,
+                    "paragraph_index": p_idx,
+                    "char_offset": char_offset,
+                    "char_length": len(stripped),
+                }
+            )
+    return anchors
+
+
+def _extract_pdf_text(request: IngestionRequest) -> tuple[str, list[str], dict[str, object]]:
     warnings: list[str] = []
     if fitz is not None and Path(request.source_uri).exists():
         with fitz.open(request.source_uri) as doc:  # type: ignore[attr-defined]
             pages = [str(page.get_text()) for page in doc]
-        return "\n\n".join(pages).strip(), warnings
+        anchors = _build_pdf_paragraph_anchors(pages)
+        return "\n\n".join(pages).strip(), warnings, {"paragraph_anchors": anchors}
     if isinstance(request.content, bytes):
         warnings.append("PyMuPDF unavailable; falling back to byte decode for PDF content.")
-        return request.content.decode("utf-8", errors="ignore"), warnings
+        decoded = request.content.decode("utf-8", errors="ignore")
+        anchors = _build_pdf_paragraph_anchors([decoded])
+        return decoded, warnings, {"paragraph_anchors": anchors}
     warnings.append("PDF ingest ran in stub mode because PyMuPDF was unavailable or the file was missing.")
-    return str(request.content or ""), warnings
+    text = str(request.content or "")
+    anchors = _build_pdf_paragraph_anchors([text]) if text.strip() else []
+    return text, warnings, {"paragraph_anchors": anchors}
+
+
+def _extract_epub_text(request: IngestionRequest) -> tuple[str, list[str], dict[str, object]]:
+    """Extract EPUB text and build stable spine + element-path paragraph anchors (P1 #16, §7.4, §7.8)."""
+    import io
+    import posixpath
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    warnings: list[str] = []
+    archive_source: str | io.BytesIO | None = None
+    if Path(request.source_uri).exists():
+        archive_source = request.source_uri
+    elif isinstance(request.content, bytes):
+        archive_source = io.BytesIO(request.content)
+    elif isinstance(request.content, str) and request.content.strip():
+        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", request.content) if p.strip()]
+        anchors = [
+            {
+                "anchor_id": f"¶spine0/body/p[{idx}]@0",
+                "kind": "epub",
+                "spine_index": 0,
+                "spine_id": "inline",
+                "element_path": f"/body/p[{idx}]",
+                "char_offset": 0,
+                "char_length": len(p),
+            }
+            for idx, p in enumerate(paragraphs, start=1)
+        ]
+        return request.content.strip(), warnings, {"paragraph_anchors": anchors}
+
+    if archive_source is None:
+        warnings.append("EPUB resource had no readable archive path or inline content.")
+        return "", warnings, {}
+
+    try:
+        with zipfile.ZipFile(archive_source) as archive:
+            container_xml = archive.read("META-INF/container.xml")
+            container_root = ET.fromstring(container_xml)
+            opf_path = ""
+            for elem in container_root.iter():
+                if elem.tag.split("}")[-1] == "rootfile":
+                    opf_path = str(elem.attrib.get("full-path") or "").strip()
+                    if opf_path:
+                        break
+            if not opf_path:
+                warnings.append("EPUB container.xml did not declare a rootfile.")
+                return "", warnings, {}
+            opf_root = ET.fromstring(archive.read(opf_path))
+            manifest: dict[str, str] = {}
+            spine: list[str] = []
+            content_language: str | None = None
+            for elem in opf_root.iter():
+                local = elem.tag.split("}")[-1]
+                if local == "language" and content_language is None:
+                    lang_text = "".join(elem.itertext()).strip()
+                    if lang_text:
+                        content_language = lang_text
+                elif local == "item":
+                    item_id = str(elem.attrib.get("id") or "").strip()
+                    href = str(elem.attrib.get("href") or "").strip()
+                    if item_id and href:
+                        manifest[item_id] = href
+                elif local == "itemref":
+                    idref = str(elem.attrib.get("idref") or "").strip()
+                    if idref:
+                        spine.append(idref)
+
+            opf_dir = posixpath.dirname(opf_path)
+            extracted_paragraphs: list[str] = []
+            anchors: list[dict[str, object]] = []
+            for spine_idx, idref in enumerate(spine):
+                href = manifest.get(idref)
+                if not href:
+                    continue
+                chapter_path = posixpath.normpath(posixpath.join(opf_dir, href))
+                try:
+                    raw_html = archive.read(chapter_path).decode("utf-8", errors="ignore")
+                except KeyError:
+                    continue
+                p_index = 0
+                try:
+                    chapter_root = ET.fromstring(raw_html)
+                    for elem in chapter_root.iter():
+                        tag = elem.tag.split("}")[-1].lower()
+                        if tag in {"p", "h1", "h2", "h3", "h4", "blockquote", "li"}:
+                            text_val = " ".join("".join(elem.itertext()).split()).strip()
+                            if not text_val:
+                                continue
+                            p_index += 1
+                            element_path = f"/body/{tag}[{p_index}]"
+                            extracted_paragraphs.append(text_val)
+                            anchors.append(
+                                {
+                                    "anchor_id": f"¶spine:{idref}:{element_path}",
+                                    "kind": "epub",
+                                    "spine_index": spine_idx,
+                                    "spine_id": idref,
+                                    "href": chapter_path,
+                                    "element_path": element_path,
+                                    "char_offset": 0,
+                                    "char_length": len(text_val),
+                                }
+                            )
+                except Exception:
+                    # Fallback regex paragraph extraction if XHTML isn't strict XML
+                    for block in re.findall(r"<(?:p|h[1-6]|blockquote)[^>]*>(.*?)</(?:p|h[1-6]|blockquote)>", raw_html, flags=re.I | re.S):
+                        cleaned = re.sub(r"<[^>]+>", " ", block)
+                        cleaned = " ".join(cleaned.split()).strip()
+                        if not cleaned:
+                            continue
+                        p_index += 1
+                        element_path = f"/body/p[{p_index}]"
+                        extracted_paragraphs.append(cleaned)
+                        anchors.append(
+                            {
+                                "anchor_id": f"¶spine:{idref}:{element_path}",
+                                "kind": "epub",
+                                "spine_index": spine_idx,
+                                "spine_id": idref,
+                                "href": chapter_path,
+                                "element_path": element_path,
+                                "char_offset": 0,
+                                "char_length": len(cleaned),
+                            }
+                        )
+            provenance: dict[str, object] = {"paragraph_anchors": anchors}
+            if content_language:
+                provenance["content_language"] = content_language
+            return "\n\n".join(extracted_paragraphs).strip(), warnings, provenance
+    except Exception as exc:
+        warnings.append(f"EPUB parsing failed: {exc}")
+        return "", warnings, {}
 
 
 def _extract_image_stub(request: IngestionRequest, *, vision_enabled: bool) -> tuple[str, list[str]]:

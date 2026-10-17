@@ -18,6 +18,7 @@ import {
   type ReactNode,
 } from "react";
 import { reviewConceptLabel } from "../lib/reviewLabel";
+import { resolveStarterSubjectFamily } from "../lib/courseTemplates";
 
 import { resourceRecordIsAcknowledgedUpload } from "../../../../shared/src/resourceWorkbenchGovernance";
 import { trainerCommands } from "../../../../shared/src/commands";
@@ -199,7 +200,9 @@ import {
 import { AppShell } from "../templates/AppShell";
 import { PracticeResponse } from "../templates/PracticeResponse";
 import { ActivityHeader } from "../templates/ActivityHeader";
-import { ownsCoachComposer } from "../lib/workbenchDestinations";
+import { appendDockAnchor, composerDockDraftScope, dockReturnBannerCopy, dockSendNavigation, docksComposer, normalizeDockSendPreference, resolveDockContextAnchor } from "../lib/composerDock";
+import { useComposerDockAnchor } from "./useComposerDockAnchor";
+import { PLAN_COPY } from "../lib/i18n/segments/planInlineText";
 import {
   attestationUndeliveredMessage,
   detectAttestationUndelivered,
@@ -4724,7 +4727,7 @@ export function App() {
       settingsActionState,
     ],
   );
-  const showComposerShell = ownsCoachComposer(activeView);
+  const showComposerShell = docksComposer(activeView);
   const openTrainingCoachBridge = useCallback(
     (bridge: Parameters<typeof composeTrainingCoachBridgeDraft>[0]) => {
       setActiveView("coach");
@@ -4837,9 +4840,11 @@ export function App() {
     : surfaceInstanceKey;
   useEffect(() => {
     if (hasReceivedHostState && data.sessionLabel) {
-      useWorkbenchState.getState().selectComposerDraftScope(composerSessionKey);
+      useWorkbenchState.getState().selectComposerDraftScope(
+        composerDockDraftScope(activeView, composerSessionKey),
+      );
     }
-  }, [composerSessionKey, data.sessionLabel, hasReceivedHostState]);
+  }, [activeView, composerSessionKey, data.sessionLabel, hasReceivedHostState]);
   const normalizedDraft = draft.trim();
   useEffect(() => {
     if (activeView === "plan" && normalizedDraft) {
@@ -8537,6 +8542,7 @@ export function App() {
       hasSelection: Boolean(data.liveContext.selectionRange),
       relatedFilesCount: data.liveContext.relatedFiles.length,
       resourceCount: data.resources.length,
+      subjectFamily: resolveStarterSubjectFamily(data.workspaceTrainingState?.skillProjection),
     }),
     [
       activeView,
@@ -8544,6 +8550,7 @@ export function App() {
       data.liveContext.selectionRange,
       data.liveContext.relatedFiles.length,
       data.resources.length,
+      data.workspaceTrainingState?.skillProjection,
     ],
   );
   const customSkills = useMemo(
@@ -10192,6 +10199,16 @@ export function App() {
       return;
     }
 
+    const dockSendPreference = normalizeDockSendPreference(layout.composerSendPreference);
+    const dockAnchor = activeView === "coach" ? null : resolveDockContextAnchor(
+      activeView,
+      {
+        stageTitle: activePlanStage?.title,
+        stageProgress: dockStageProgressLabel,
+        resourceLabel: selectedResourceNavigationLabel,
+      },
+      dockAnchorControl.suppressed,
+    );
     const analyzedIntent =
       sendAnalysis.intent === "coach" ||
       sendAnalysis.intent === "next_task" ||
@@ -10222,11 +10239,12 @@ export function App() {
       return;
     }
     const intent = formalPlanGeneration ? "plan" : analyzedIntent;
-    const messageText =
+    const rawMessageText =
       sendAnalysis.draftBody ||
       (hasImageAttachments
         ? buildGenericImageReviewPrompt(layout.composerLanguage, normalizedDraft)
         : defaultPromptText(intent, layout.composerLanguage));
+    const messageText = appendDockAnchor(rawMessageText, dockAnchor);
 
     sendTurn({
       text: messageText,
@@ -10247,6 +10265,13 @@ export function App() {
       contextDetail: intent === "review" ? "full" : undefined,
       attachments: composerAttachments,
     });
+    if (activeView === "plan" || activeView === "resources") {
+      if (dockSendNavigation(dockSendPreference, activeView) === "jump_to_coach") {
+        setActiveView("coach");
+      } else {
+        dockStaySendRef.current = { surface: activeView };
+      }
+    }
     setComposerDraft("");
     setComposerAttachments([]);
     setCoachPlanContext(undefined);
@@ -10859,6 +10884,22 @@ export function App() {
         data.memory.selectedResourceDetail?.source ?? liveSandboxPreview?.path,
         layout.composerLanguage === "zh-CN" ? 22 : 46,
       );
+  const dockStageProgressLabel = hasFormalPlan && activePlanStage
+    ? PLAN_COPY[layout.composerLanguage].stageProgress
+        .replace(
+          "{index}",
+          String(
+            data.plan.stages.findIndex((stage) => stage.id === activePlanStage.id) + 1,
+          ),
+        )
+        .replace("{total}", String(data.plan.stages.length))
+    : null;
+  const dockAnchorControl = useComposerDockAnchor(
+    activeView,
+    activePlanStage?.title,
+    dockStageProgressLabel,
+    selectedResourceNavigationLabel,
+  );
   const resourceConversationContextLabel = useMemo(() => {
     if (resourceConversationContextIds.length === 0) {
       return undefined;
@@ -11201,13 +11242,22 @@ export function App() {
   }, [setComposerDraft, streaming.isStreaming, streaming.streamMessageId]);
 
   const streamWasActiveRef = useRef(streaming.isStreaming);
+  const dockStaySendRef = useRef<null | { surface: "plan" | "resources" }>(null);
   useEffect(() => {
     const wasActive = streamWasActiveRef.current;
     streamWasActiveRef.current = streaming.isStreaming;
     if (wasActive && !streaming.isStreaming && streaming.completionStopReason !== "cancelled") {
       streamResumeDraftRef.current = "";
+      const dockStay = dockStaySendRef.current;
+      if (dockStay) {
+        dockStaySendRef.current = null;
+        setOperationMessage({
+          tone: "success",
+          message: dockReturnBannerCopy(layout.composerLanguage, dockStay.surface).title,
+        });
+      }
     }
-  }, [streaming.completionStopReason, streaming.isStreaming]);
+  }, [layout.composerLanguage, streaming.completionStopReason, streaming.isStreaming]);
 
   const renderComposerAccessory = () => {
     if (!openMenu) {
@@ -12166,6 +12216,7 @@ export function App() {
         status={trainerWorkspaceAdmission.status}
         projectName={trainerWorkspaceAdmission.projectName}
         projectPath={trainerWorkspaceAdmission.projectPath}
+        subjectFamily={firstLookSummary?.subjectFamily}
         reconciliation={trainerWorkspaceAdmission.reconciliation}
         onRetryAdmission={() => runWorkspaceAdmissionCommand(trainerCommands.retryWorkspaceAdmission, { responseLanguage: layout.composerLanguage })}
         onContinueAdmission={() => runWorkspaceAdmissionCommand(trainerCommands.continueWorkspaceAdmission, { responseLanguage: layout.composerLanguage })}
@@ -13689,6 +13740,7 @@ export function App() {
             onClick: runLearningPrimaryAction },
         }}
         primaryEvidenceId={learningPrimaryAction.target.evidenceId}
+        projection={data.workspaceTrainingState?.skillProjection}
         onNavigateToView={setActiveView}
         className="plan-pane"
         compactPrimary
@@ -14499,6 +14551,10 @@ export function App() {
             {coachPlanContext ? <div className="template-context" role="group">
               <span>{resolvePlanComposerCopy(layout.composerLanguage).modes[coachPlanContext].label}</span>
               <button type="button" className="template-back" onClick={() => setCoachPlanContext(undefined)}>{appUiCopy(layout.composerLanguage, "清除")}</button>
+            </div> : null}
+            {dockAnchorControl.anchor && activeView !== "coach" ? <div className="template-context" role="group" data-dock-anchor="true">
+              <span>{dockAnchorControl.anchor.label}</span>
+              <button type="button" className="template-back" onClick={dockAnchorControl.suppress}>{appUiCopy(layout.composerLanguage, "清除")}</button>
             </div> : null}
             {coachSuggestionChips}
             <CoachComposer
