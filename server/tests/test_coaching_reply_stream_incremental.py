@@ -116,3 +116,37 @@ async def test_plain_stream_hides_reasoning_and_releases_only_visible_text() -> 
     assert "infinite recursion" in streamed
     # The visible payload is complete: every visible provider delta arrived.
     assert streamed == "".join(parts[2:])
+
+
+@pytest.mark.asyncio
+async def test_empty_stream_escalates_the_budget_once_and_recovers() -> None:
+    """Reasoning-first models can end the stream with finish_reason=length and
+    no visible text. With nothing emitted, one escalated non-stream retry must
+    recover the reply instead of surfacing an empty/failed turn."""
+    service = ProviderService(config=_config(), api_key="sk-test")
+    service._get_client = lambda: object()  # type: ignore[method-assign]
+    service._plain_completion_uses_agent_binding = lambda: False  # type: ignore[method-assign]
+
+    async def empty_stream(**_kwargs: object) -> tuple[Any, None]:
+        async def _iterate():
+            yield _chunk("", finish_reason="length")
+
+        return _iterate(), None
+
+    budgets: list[int | None] = []
+
+    async def fake_create(**kwargs: object) -> tuple[Any, None]:
+        budgets.append(kwargs.get("max_tokens"))
+        if kwargs.get("stream"):
+            return await empty_stream()
+        message = SimpleNamespace(content="Recovered visible answer.", tool_calls=[])
+        choice = SimpleNamespace(message=message, finish_reason="stop")
+        return SimpleNamespace(choices=[choice]), None
+
+    service._create_chat_completion = fake_create  # type: ignore[method-assign]
+
+    yielded = await _collect(service, "解释这个函数")
+
+    assert "Recovered visible answer." in "".join(yielded)
+    assert budgets[0] == 1024, budgets
+    assert budgets[1] == 8192, budgets

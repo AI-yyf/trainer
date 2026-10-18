@@ -4925,6 +4925,46 @@ async def test_openai_chat_call_extracts_content_and_tool_calls() -> None:
     assert result["tool_calls"] == []
 
 
+async def test_openai_chat_call_escalates_the_budget_after_a_truncated_reply() -> None:
+    """Reasoning-first models can spend the whole budget on hidden reasoning
+    (finish_reason=length, no visible text). One escalated retry must recover
+    the reply instead of surfacing a provider fallback."""
+    service, mock_client = _make_provider_service_with_mock_client()
+    binding = ProviderAgentBinding(provider_service=service, protocol="openai_chat_completions")
+
+    truncated_message = MagicMock()
+    truncated_message.content = ""
+    truncated_message.tool_calls = []
+    truncated_choice = MagicMock()
+    truncated_choice.message = truncated_message
+    truncated_choice.finish_reason = "length"
+    truncated_response = MagicMock()
+    truncated_response.choices = [truncated_choice]
+
+    recovered_message = MagicMock()
+    recovered_message.content = "Recovered visible coaching reply."
+    recovered_message.tool_calls = []
+    recovered_choice = MagicMock()
+    recovered_choice.message = recovered_message
+    recovered_choice.finish_reason = "stop"
+    recovered_response = MagicMock()
+    recovered_response.choices = [recovered_choice]
+
+    mock_client.chat.completions.create = AsyncMock(
+        side_effect=[truncated_response, recovered_response],
+    )
+
+    result = await binding.build_agent_provider().call(
+        [{"role": "user", "content": "解释这个函数"}],
+        None,
+    )
+
+    assert result["content"] == "Recovered visible coaching reply."
+    first_call, second_call = mock_client.chat.completions.create.await_args_list
+    assert first_call.kwargs["max_tokens"] == 1024
+    assert second_call.kwargs["max_tokens"] == 8192
+
+
 async def test_agent_binding_protocol_call_matrix_preserves_tools() -> None:
     registry = build_default_tool_registry()
     messages = [

@@ -116,6 +116,11 @@ ANTHROPIC_AUTH_MISMATCH_MARKERS = (
     "unsupported",
 )
 OPENAI_VISIBLE_REPLY_RETRY_ATTEMPTS = 2
+#: Reasoning-first models can spend the entire coaching output budget on hidden
+#: reasoning and end with finish_reason="length" and no visible text. One
+#: escalation retry (4x base, capped here) recovers them without changing the
+#: normal budget for everyone else.
+OPENAI_TRUNCATED_OUTPUT_RETRY_MAX_TOKENS = 8192
 OPENAI_VISIBLE_REPLY_RETRY_HINT = (
     "Return at least one visible user-facing coaching sentence outside any <think>...</think> block. "
     "Do not leave the visible reply empty."
@@ -1445,6 +1450,58 @@ class ProviderAgentBinding:
                 continue
         return None
 
+    async def _openai_truncated_budget_retry(
+        self,
+        client: Any,
+        *,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        model: str,
+    ) -> dict[str, Any] | None:
+        """Retry once with a larger output budget after a truncated reply.
+
+        A reasoning-first gateway can consume the whole ``max_tokens`` on
+        hidden reasoning, ending with ``finish_reason="length"`` and no visible
+        text. Escalating the budget (4x, capped) is the only recovery that
+        keeps the model usable; adaptive, so it costs nothing for models that
+        answer within the normal budget.
+        """
+        escalated = min(
+            max(int(self._max_tokens) * 4, OPENAI_TRUNCATED_OUTPUT_RETRY_MAX_TOKENS),
+            OPENAI_TRUNCATED_OUTPUT_RETRY_MAX_TOKENS,
+        )
+        if escalated <= int(self._max_tokens):
+            return None
+        kwargs: dict[str, Any] = {
+            "messages": messages,
+            "temperature": self._temperature,
+            "max_tokens": escalated,
+        }
+        kwargs.update(_openai_tool_payload(tools))
+        kwargs = self._provider_service._apply_request_defaults(kwargs)  # noqa: SLF001
+        try:
+            response = await client.chat.completions.create(model=model, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - escalation is best-effort
+            logger.warning(
+                "openai_truncated_budget_retry_failed",
+                extra={
+                    "detail": safe_provider_diagnostic(
+                        exc,
+                        api_key=self._api_key_for_diagnostics(),
+                    )
+                },
+            )
+            return None
+        parsed = _parse_openai_chat_response(response)
+        try:
+            return self._validated_result(
+                response,
+                parsed,
+                protocol="openai_chat_completions",
+            )
+        except ProviderRuntimeResponseError:
+            return None
+
     # -- OpenAI chat completions -------------------------------------------
 
     async def _openai_chat_call(
@@ -1489,6 +1546,14 @@ class ProviderAgentBinding:
                 )
                 if retry_result is not None:
                     return retry_result
+                budget_result = await self._openai_truncated_budget_retry(
+                    client,
+                    messages=formatted,
+                    tools=tools,
+                    model=candidate,
+                )
+                if budget_result is not None:
+                    return budget_result
             return self._validated_result(
                 response,
                 parsed,
@@ -1612,6 +1677,27 @@ class ProviderAgentBinding:
                     "content": retry_text,
                     "tool_calls": retry_tool_calls,
                     "stop_reason": "tool_calls" if retry_tool_calls else "stop",
+                }
+                return
+            # Reasoning-first models can exhaust the stream budget on hidden
+            # reasoning; nothing visible was yielded, so a single escalated
+            # retry is safe (and replays as one delta).
+            budget_result = await self._openai_truncated_budget_retry(
+                client,
+                messages=formatted,
+                tools=tools,
+                model=chosen_model,
+            )
+            if budget_result is not None:
+                budget_text = str(budget_result.get("content") or "")
+                budget_tool_calls = list(budget_result.get("tool_calls") or [])
+                if budget_text:
+                    yield {"type": "delta", "delta": budget_text}
+                yield {
+                    "type": "final",
+                    "content": budget_text,
+                    "tool_calls": budget_tool_calls,
+                    "stop_reason": "tool_calls" if budget_tool_calls else "stop",
                 }
                 return
         normalized = self._validated_result(

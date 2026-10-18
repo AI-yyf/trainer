@@ -81,7 +81,8 @@ def _is_kimi_like_provider(provider: ProviderConfig | None) -> bool:
 # Reasoning-first model families whose hidden reasoning can consume an entire
 # small output budget before the first visible token, regardless of gateway.
 _REASONING_FIRST_MODEL_PATTERN = re.compile(
-    r"deepseek[-_. ]?r|deepseek[-_. ]?reasoner|qwq|o1(?:[-_.](?:mini|preview|pro))?|"
+    r"deepseek[-_. ]?r|deepseek[-_. ]?reasoner|deepseek[-_. ]?v\d|qwq|"
+    r"o1(?:[-_.](?:mini|preview|pro))?|"
     r"o3(?:[-_.]mini)?|o4[-_.]mini|glm[-_. ]?\d*[-_. ]?z|thinking|reasoner",
     re.IGNORECASE,
 )

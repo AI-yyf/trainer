@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import re
 import socket
 from contextvars import ContextVar
@@ -180,6 +181,8 @@ from .provider_protocols import (
 )
 from .vision_challenge import build_vision_challenge
 from .vision_payload import openai_responses_input_image_parts
+
+logger = logging.getLogger("trainer.provider")
 
 DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS = 45.0
 DEFAULT_OPENAI_CLIENT_MAX_RETRIES = 0
@@ -764,6 +767,17 @@ class ProviderService:
         model_supported: bool | None,
         error: Exception,
     ) -> None:
+        # Provider turn failures must be observable in the sidecar log: the
+        # user-facing copy is intentionally generic, which previously left a
+        # failing gateway with no diagnostic trail at all. ``detail`` is
+        # already redacted by the classifier.
+        logger.warning(
+            "[provider] reply failure category=%s status=%s retryable=%s detail=%s",
+            category,
+            status_code,
+            retryable,
+            _compact_text(detail, limit=400),
+        )
         self._last_reply_failure.set(
             {
                 "error_category": category,
@@ -3239,6 +3253,20 @@ class ProviderService:
             return max(default, 8192)
         return default
 
+    @staticmethod
+    def _escalated_chat_budget(requested: int | None) -> int | None:
+        """One-shot budget escalation for truncated reasoning replies.
+
+        Reasoning-first models can spend several thousand tokens thinking
+        before any visible text; a 4x jump from the coaching default (1024)
+        still truncated on measured runs, so the single retry grants the
+        reasoned headroom directly. It only fires after an explicit truncation,
+        so models that answer within the normal budget never pay for it.
+        """
+        base = _positive_int(requested) or DEFAULT_COACHING_MAX_OUTPUT_TOKENS
+        escalated = min(max(int(base) * 4, 8192), 8192)
+        return escalated if escalated > int(base) else None
+
     def _plain_completion_protocol(self) -> str | None:
         provider = self._config or ProviderConfig(
             name="unspecified-provider",
@@ -5375,12 +5403,39 @@ class ProviderService:
                 temperature=0.7,
                 max_tokens=max_tokens,
             )
-            content = _require_provider_runtime_response(
-                "openai_chat_completions",
-                response,
-                api_key=self._api_key,
-                allow_local_empty_fallback=True,
-            )
+            try:
+                content = _require_provider_runtime_response(
+                    "openai_chat_completions",
+                    response,
+                    api_key=self._api_key,
+                    allow_local_empty_fallback=True,
+                )
+            except ProviderRuntimeResponseError as exc:
+                # Reasoning-first models can exhaust the coaching budget on
+                # hidden reasoning (truncated_or_empty). Escalate once before
+                # falling back; nothing visible was produced yet.
+                if getattr(exc, "provider_error_category", None) != "truncated_or_empty":
+                    raise
+                escalated = self._escalated_chat_budget(max_tokens)
+                if escalated is None:
+                    raise
+                logger.warning(
+                    "[provider] coaching reply truncated; retrying once with max_tokens=%s",
+                    escalated,
+                )
+                response, _ = await self._create_chat_completion(
+                    client=client,
+                    model=model,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=escalated,
+                )
+                content = _require_provider_runtime_response(
+                    "openai_chat_completions",
+                    response,
+                    api_key=self._api_key,
+                    allow_local_empty_fallback=True,
+                )
             return self.finalize_coaching_reply(
                 content or "",
                 profile=profile,
@@ -6371,11 +6426,38 @@ class ProviderService:
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
-            return _require_provider_runtime_response(
-                "openai_chat_completions",
-                response,
-                api_key=self._api_key,
-            )
+            try:
+                return _require_provider_runtime_response(
+                    "openai_chat_completions",
+                    response,
+                    api_key=self._api_key,
+                )
+            except ProviderRuntimeResponseError as exc:
+                # Reasoning-first models can spend the whole budget on hidden
+                # reasoning and end with no visible text (truncated_or_empty).
+                # Escalate once before surfacing a provider failure: adaptive,
+                # so non-reasoning models never pay for it.
+                if getattr(exc, "provider_error_category", None) != "truncated_or_empty":
+                    raise
+                escalated = self._escalated_chat_budget(max_tokens)
+                if escalated is None:
+                    raise
+                logger.warning(
+                    "[provider] truncated reply; retrying once with max_tokens=%s",
+                    escalated,
+                )
+                response, _ = await self._create_chat_completion(
+                    client=client,
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=escalated,
+                )
+                return _require_provider_runtime_response(
+                    "openai_chat_completions",
+                    response,
+                    api_key=self._api_key,
+                )
         except ContextBudgetExhaustedError as exc:
             raise RuntimeError(self._context_budget_status_reply(None)) from exc
         except Exception as exc:
@@ -6448,6 +6530,34 @@ class ProviderService:
             if tail:
                 raw_content += tail
                 yield tail
+            if not raw_content.strip():
+                # Nothing visible was emitted, so an escalated retry cannot
+                # duplicate content: recover reasoning-first truncation here
+                # instead of surfacing an empty/failed stream.
+                escalated = self._escalated_chat_budget(max_tokens)
+                if escalated is not None:
+                    logger.warning(
+                        "[provider] empty stream; retrying once with max_tokens=%s",
+                        escalated,
+                    )
+                    try:
+                        retry_response, _ = await self._create_chat_completion(
+                            client=self._get_client(),
+                            model=model,
+                            messages=messages,
+                            temperature=temperature,
+                            max_tokens=escalated,
+                        )
+                        retry_text = _require_provider_runtime_response(
+                            "openai_chat_completions",
+                            retry_response,
+                            api_key=self._api_key,
+                        )
+                    except Exception:  # noqa: BLE001 - fall through to the honest error
+                        retry_text = ""
+                    if retry_text.strip():
+                        raw_content = retry_text
+                        yield retry_text
             _require_provider_runtime_response(
                 "openai_chat_completions",
                 {
@@ -8354,6 +8464,46 @@ async def _provider_service_coaching_reply_stream(
                     if reply_override:
                         yield reply_override
             return
+        if not raw_content.strip() and not yielded_visible:
+            # Reasoning-first models can exhaust the stream budget on hidden
+            # reasoning (finish_reason=length, nothing visible). Nothing was
+            # emitted, so one escalated non-stream retry cannot duplicate text.
+            escalated = self._escalated_chat_budget(max_tokens)
+            if escalated is not None:
+                logger.warning(
+                    "[provider] coaching stream empty; retrying once with max_tokens=%s",
+                    escalated,
+                )
+                try:
+                    retry_response, _ = await self._create_chat_completion(
+                        client=self._get_client(),
+                        model=model,
+                        messages=messages,
+                        temperature=0.7,
+                        max_tokens=escalated,
+                    )
+                    retry_text = _require_provider_runtime_response(
+                        "openai_chat_completions",
+                        retry_response,
+                        api_key=self._api_key,
+                        allow_local_empty_fallback=True,
+                    )
+                except Exception:  # noqa: BLE001 - fall through to the honest error
+                    retry_text = ""
+                if retry_text.strip():
+                    raw_content = retry_text
+                    pending_visible = retry_text
+                    # The recovered reply is complete: the original stream's
+                    # truncated finish_reason must not mark it as truncated.
+                    finish_reason = "stop"
+                    retry_corruption = _mixed_script_reply_corruption_detail(
+                        raw_content,
+                        message=message,
+                        response_language=response_language,
+                    )
+                    if retry_corruption:
+                        self._record_reply_language_corruption(retry_corruption)
+                        return
         _require_provider_runtime_response(
             "openai_chat_completions",
             {
