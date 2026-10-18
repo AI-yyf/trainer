@@ -2123,6 +2123,10 @@ def run_real_journeys(provider: dict, api_key: str, cases: list[dict]) -> dict:
                         json={
                             "workspace_id": WORKSPACE.as_posix(),
                             "workspace_name": "maturity-teaching-journeys",
+                            # The extension always sends the real project root;
+                            # without it the server cannot verify file pointers
+                            # and grounding stays 'unverifiable' (M5 parity).
+                            "workspace_path": WORKSPACE.as_posix(),
                         },
                     )
                     session_id = str((started.json() or {}).get("session_id") or "")
@@ -2172,16 +2176,19 @@ def run_real_journeys(provider: dict, api_key: str, cases: list[dict]) -> dict:
                             turn_no,
                             payload,
                             error,
-                            code_text=code_text,
+                            # M5 parity: the server's grounding corpus is
+                            # current_file.path + content + message; include
+                            # the path so bare file names in the current file
+                            # anchor exactly as they do server-side.
+                            code_text=f"{file_path}\n{code_text}",
                             message=message,
                             history_text=history_text,
-                            # M5 parity: case files live in the case directory
-                            # (and the next step references them by bare name),
-                            # so the local file checker mirrors that root —
-                            # not the workspace root, where bare names never
-                            # exist and every current-file step would read as
-                            # ungrounded.
-                            workspace_root=case_root,
+                            # M5 parity: the server resolves file pointers
+                            # against the workspace root it was started with
+                            # (WORKSPACE), so the local recompute must use the
+                            # same root. The request's own file path is sent as
+                            # `projects/<case>/<file>`, which exists under it.
+                            workspace_root=WORKSPACE,
                             body_disk_consistent=body_disk_consistent,
                         )
                     )

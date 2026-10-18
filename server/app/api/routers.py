@@ -124,6 +124,7 @@ from ..llm.turn_grounding import (
     looks_like_narration_opening,
     memory_provenance_summary,
     sanitize_memory_anchor,
+    trim_ungrounded_segments,
 )
 from ..memory.models import utc_now
 from ..memory.note_request import message_requests_explicit_learning_note
@@ -3106,6 +3107,15 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         "timeout",
         "network",
         "unknown",
+    }
+
+    # First-turn lanes ship a canonical, hand-composed next step; the grounding
+    # retry must not replace that ruling with a model rewrite.
+    DETERMINISTIC_LANE_SCENARIOS = {
+        "remote_workspace",
+        "debug_loop",
+        "function_guidance",
+        "project_adaptation",
     }
 
     NON_LEARNING_RECOVERY_STOP_REASONS = {
@@ -10864,6 +10874,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         *,
         agent_meta: dict[str, object] | None,
         coaching_service: ProviderService | None,
+        scenario: str | None = None,
     ) -> bool:
         """A retry needs a model-authored next step and a live-usable provider.
 
@@ -10872,21 +10883,46 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         repair, recovery/fallback lanes) or for turns with no model chrome at
         all — those go straight to the honest downgrade.
         """
+        def _blocked(reason: str) -> bool:
+            logger.warning("[grounding] retry blocked: %s", reason)
+            return False
+
         if coaching_service is None:
-            return False
+            return _blocked("no coaching service")
+        if str(scenario or "").strip() in DETERMINISTIC_LANE_SCENARIOS:
+            # First-turn lanes ship a canonical, hand-composed step (remote
+            # boundary, debug loop, function guidance, project adaptation);
+            # rewriting it with the model would replace the ruling.
+            return _blocked("deterministic lane scenario")
+        # The turn just produced a provider reply, so the turn itself is the
+        # live proof: only the transport must be configured (no prior Settings
+        # test is required for a grounded rewrite).
+        if not bool(getattr(coaching_service, "has_api_key", False)):
+            return _blocked("no api key")
+        service_config = getattr(coaching_service, "_config", None)
+        if isinstance(service_config, ProviderConfig) and not provider_transport_is_configured(
+            service_config.name,
+            service_config.base_url,
+            service_config.model,
+        ):
+            return _blocked("transport not configured")
         if not isinstance(agent_meta, dict) or not agent_meta:
-            return False
+            # The plain guided lane carries no agent chrome, but its reply and
+            # next step are still provider-authored (fallbacks set fell_back,
+            # so they never arrive here empty). Allowing the rewrite is what
+            # turns an ungrounded guided step into a grounded one.
+            return True
         if not str(agent_meta.get("next_step") or "").strip():
-            return False
+            return _blocked("no model-authored next step")
         if bool(agent_meta.get("fell_back")):
-            return False
+            return _blocked("fell back")
         if bool(agent_meta.get("local_sequence_fallback")):
-            return False
+            return _blocked("local sequence fallback")
         if bool(agent_meta.get("guided_lane_visible_repaired")):
-            return False
+            return _blocked("visible repaired")
         if str(agent_meta.get("stop_reason") or "").strip() in PROVIDER_REPLY_STOP_REASONS:
-            return False
-        return provider_is_live_usable(coaching_service, {})
+            return _blocked("provider reply stop reason")
+        return True
 
     def grounding_retry_first_line(raw: object) -> str:
         """Take the first meaningful line of a regenerated next step."""
@@ -10913,14 +10949,21 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         request: TurnRequest | SessionMessageRequest,
         reply_content: str,
         next_step_text: str,
+        ungrounded: list[str] | None = None,
     ) -> str:
         """One bounded regeneration attempt; any failure degrades to downgrade."""
         code_text = turn_grounding_code_text(request)
+        forbidden = [str(item).strip() for item in (ungrounded or []) if str(item).strip()]
         context_parts = [
             f"Learner message:\n{str(request.message or '').strip()[:2000]}",
             f"Coach reply (already delivered):\n{str(reply_content or '').strip()[:2000]}",
             f"Current code:\n{code_text[:2000]}" if code_text.strip() else "",
             f"Rejected next step (references symbols or files that do not exist):\n{next_step_text[:500]}",
+            # Naming the forbidden references explicitly prevents the model from
+            # copying them out of the rejected step it was just shown.
+            f"Do NOT mention any of these unverified references: {', '.join(forbidden)}."
+            if forbidden
+            else "",
         ]
         messages = [
             {
@@ -10989,24 +11032,67 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             next_step_text=next_step_text,
         )
         decision = evaluate_turn_grounding(facts)
-        if (
+        retry_eligible = (
             not decision.grounded
             and coaching_service is not None
             and turn_grounding_retry_eligible(
                 agent_meta=agent_meta,
                 coaching_service=coaching_service,
+                scenario=(
+                    str(getattr(turn_summary, "scenario", "") or "")
+                    if isinstance(turn_summary, CoachTurnSummary)
+                    else ""
+                ),
             )
-        ):
+        )
+        if retry_eligible and coaching_service is not None:
             regenerated = await request_grounding_regeneration(
                 coaching_service=coaching_service,
                 request=request,
                 reply_content=str(reply_content or ""),
                 next_step_text=next_step_text,
+                ungrounded=decision.referenced_symbols,
             )
             # `retry_used` means "a retry was attempted" in the rules layer; an
             # empty regeneration is still an attempt, so the re-check runs with
             # the (possibly empty) regenerated text and both layers agree.
             decision = evaluate_turn_grounding(facts, retry_generate=lambda: regenerated)
+        if not decision.grounded:
+            # Deterministic lane steps and exhausted retries: drop exactly the
+            # segments carrying ungrounded references instead of shipping a
+            # fabricated demand or replacing the lane ruling.
+            trimmed = trim_ungrounded_segments(next_step_text, decision.referenced_symbols)
+            if trimmed and trimmed != next_step_text.strip():
+                trimmed_facts = build_teaching_turn_facts(
+                    turn_id=turn_grounding_turn_id(request),
+                    reply_text=str(reply_content or ""),
+                    code_text=turn_grounding_code_text(request),
+                    history_text=history_text,
+                    user_message=str(request.message or ""),
+                    workspace_evidence=turn_grounding_workspace_evidence(request),
+                    agent_evidence=agent_meta,
+                    next_step_text=trimmed,
+                )
+                if evaluate_turn_grounding(trimmed_facts).grounded:
+                    decision = GroundingDecision(
+                        grounded=True,
+                        referenced_symbols=[],
+                        # A correction was attempted and shipped (deterministic
+                        # trim, no provider call).
+                        retry_used=True,
+                        requires_confirmation=False,
+                        corrected_next_step=trimmed,
+                    )
+        if not decision.grounded:
+            # One diagnostic line per ungrounded turn: which references failed,
+            # whether a retry was allowed, and whether it corrected the step.
+            logger.warning(
+                "[grounding] ungrounded=%s retry_eligible=%s retry_used=%s corrected=%s",
+                decision.referenced_symbols,
+                retry_eligible,
+                decision.retry_used,
+                bool(decision.corrected_next_step),
+            )
         # Field-level memory admission mapping (§2.6/§2.7) travels with the
         # decision so persistence can pass it to the memory writer.
         coach_turn_payload[GROUNDING_MEMORY_PROVENANCE_CACHE_KEY] = memory_provenance_summary(

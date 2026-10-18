@@ -62,7 +62,7 @@ free-form prose without any code symbol never does.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 
 from .reply_continuity import visible_next_step
@@ -1435,6 +1435,30 @@ def sanitize_memory_anchor(
     return ""
 
 
+def trim_ungrounded_segments(text: object, ungrounded: Iterable[str] | None) -> str:
+    """Drop sentence segments that contain ungrounded references.
+
+    Deterministic lane steps may carry a model-appended tail ("复盘节奏：…")
+    that names a file or symbol absent from the turn; rewriting the canonical
+    lane step with the model would replace the ruling, but shipping the
+    fabricated tail would be dishonest. Trimming keeps the canonical sentence
+    and removes exactly the ungrounded claim. Returns the original text when
+    no symbol can be located in a segment (the caller then downgrades).
+    """
+    raw = str(text or "").strip()
+    symbols = [str(item).strip() for item in (ungrounded or []) if str(item).strip()]
+    if not raw or not symbols:
+        return raw
+    segments = re.split(r"(?<=[。！？!?])|(?<=\n)", raw)
+    kept = [
+        segment
+        for segment in segments
+        if not any(symbol_in_text(symbol, segment) for symbol in symbols)
+    ]
+    trimmed = "".join(kept).strip()
+    return trimmed if trimmed and trimmed != raw else raw
+
+
 def grounding_correction_instruction(response_language: object = None) -> str:
     """Corrective instruction for the one allowed regeneration attempt.
 
@@ -1447,9 +1471,10 @@ def grounding_correction_instruction(response_language: object = None) -> str:
     if chinese:
         return (
             "下一步必须只引用当前对话与代码中真实存在的事实；"
-            "不得索要未出现的函数名/文件。"
+            "不得索要未出现的函数名/文件，也不要从被拒绝的句子里复制这些名字。"
         )
     return (
         "The next step must only reference facts that really exist in the current "
-        "conversation and code; do not demand function names or files that never appear."
+        "conversation and code; do not demand function names or files that never appear, "
+        "and do not copy such names out of the rejected sentence."
     )

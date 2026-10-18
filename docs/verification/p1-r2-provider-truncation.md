@@ -59,6 +59,7 @@ no diagnostic trail.
 | After tuning to 8192, previously failing subset (`03-nested-alias`, C2, C3, D1) | **8/8 passed**, 0 fallback |
 | Final full rerun (8192, before probe fix) | 59 passed / 2 failed / 3 local_fallback |
 | **Final full rerun (8192 + probe escalation)** | **62 passed / 2 failed / 0 local_fallback** |
+| **After the R5 grounding fixes** | **64 passed / 0 failed / 0 local_fallback** (see `p1-r5-grounding.md`) |
 
 The probe path (`/provider/test`) now uses the same bounded escalation: a
 blank compact probe retries at 8192 tokens instead of reporting the provider

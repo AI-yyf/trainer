@@ -186,6 +186,21 @@ def test_no_retry_hook_downgrades_immediately() -> None:
     assert decision.requires_confirmation is True
 
 
+def test_trim_ungrounded_segments_keeps_the_canonical_step() -> None:
+    from app.llm.turn_grounding import trim_ungrounded_segments
+
+    step = (
+        "先挑第一层受影响的边界，落下最小安全 patch，验证完再动下一层。"
+        " 复盘节奏：这一步落地后，再围绕「nested_alias.py」做一次很窄的 patch 式回看。"
+    )
+    assert trim_ungrounded_segments(step, ["nested_alias.py"]) == (
+        "先挑第一层受影响的边界，落下最小安全 patch，验证完再动下一层。"
+    )
+    # No locatable segment: return the original so the caller downgrades.
+    assert trim_ungrounded_segments("Keep going.", ["ghost.py"]) == "Keep going."
+    assert trim_ungrounded_segments(step, []) == step
+
+
 def test_correction_instruction_mentions_grounding_rule() -> None:
     chinese = grounding_correction_instruction("zh-CN")
     english = grounding_correction_instruction("en-US")
@@ -193,6 +208,10 @@ def test_correction_instruction_mentions_grounding_rule() -> None:
     assert "真实存在" in chinese
     assert "函数名" in chinese
     assert "really exist" in english
+    # The rejected step is shown to the model as context; the instruction must
+    # forbid copying its ungrounded names (the E4 case repeated nested_alias.py).
+    assert "复制" in chinese
+    assert "copy such names" in english
 
 
 # ---------------------------------------------------------------------------
