@@ -265,6 +265,10 @@ test('the pairing command registers a six-digit code and shows it with a copy ac
   assert.equal(registration.port, 34891);
   assert.match(registration.body.code, /^[0-9]{6}$/);
   assert.equal(registration.body.expires_in, 600);
+  // The registration binds the code to the host's runtime workspace, so the
+  // credential (and every capture it makes) belongs to that project only.
+  assert.equal(typeof registration.body.workspace_id, 'string');
+  assert.ok(registration.body.workspace_id.length > 0);
   assert.equal(infoMessages.length, 1);
   assert.ok(infoMessages[0].message.includes(registration.body.code));
   assert.ok(infoMessages[0].message.includes('single use'));

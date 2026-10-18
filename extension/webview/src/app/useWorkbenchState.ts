@@ -56,7 +56,7 @@ import type {
   TeachingStyle,
   ThemePreference,
 } from "../lib/types";
-import { normalizeTeachingStyle } from "../lib/types";
+import { COACH_DRAFT_APPLIED_LIMIT, normalizeTeachingStyle } from "../lib/types";
 
 type WorkbenchMemoryState = BootstrapData["memory"] & {
   memoryEvidence: string[];
@@ -966,6 +966,39 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       // Legacy fixtures never enter the production versioned transport.
       return;
     }
+    if (message.type === "ui/coachDraftPrefill") {
+      // Browser-captured draft: prefill only, never auto-send, and never
+      // disturb an unrelated status banner (same contract as ui/coachPrompt).
+      // The host retries until it gets the applied receipt, so a delivery for
+      // a draft id that is already in the composer is a no-op — except that
+      // it still confirms delivery again.
+      const draft = sanitizeVisibleText(message.text).trim();
+      const draftId = typeof message.draftId === "string" ? message.draftId.trim() : "";
+      const appliedDraftIds = current.layout.appliedDraftIds ?? [];
+      const alreadyApplied = Boolean(draftId) && appliedDraftIds.includes(draftId);
+      if (draft && !alreadyApplied) {
+        set((state) => ({
+          layout: persistLayout({
+            ...state.layout,
+            activeView: "coach",
+            composerDraft: draft,
+            ...(draftId
+              ? {
+                  appliedDraftIds: [...(state.layout.appliedDraftIds ?? []), draftId].slice(
+                    -COACH_DRAFT_APPLIED_LIMIT,
+                  ),
+                }
+              : {}),
+          }),
+        }));
+      }
+      if (draftId) {
+        // Confirm delivery only after the prefill reached the composer: the
+        // host turns this receipt into the sidecar queue acknowledgement.
+        postMessage({ type: "ui/coachDraftPrefillApplied", payload: { draftId } });
+      }
+      return;
+    }
     set((state) => {
       if (message.type === "operation/lifecycle") {
         const { identity, phase } = message.payload;
@@ -1502,22 +1535,6 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
 
       if (message.type === "ui/coachPrompt") {
         const draft = sanitizeVisibleText(message.payload.draft).trim();
-        if (!draft) {
-          return {};
-        }
-        return {
-          layout: persistLayout({
-            ...state.layout,
-            activeView: "coach",
-            composerDraft: draft,
-          }),
-        };
-      }
-
-      if (message.type === "ui/coachDraftPrefill") {
-        // Browser-capture draft: prefill only, never auto-send, and never
-        // disturb an unrelated status banner (same contract as ui/coachPrompt).
-        const draft = sanitizeVisibleText(message.text).trim();
         if (!draft) {
           return {};
         }

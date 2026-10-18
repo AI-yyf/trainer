@@ -11,6 +11,11 @@ long-lived Bearer credential issued here:
 - the credential is persisted (only its SHA-256 hash) in the sidecar data
   directory, so it survives restarts until it is revoked.
 
+The pending coach-draft queue is strictly workspace-scoped: every queued draft
+carries the workspace its selection was captured for (the credential's
+workspace), and the host can only read/acknowledge drafts of the workspace it
+polls for. A capture can therefore never surface in another project's coach.
+
 Nothing in this module performs network fetches or library writes; the capture
 pipeline itself lives in ``app.resources.capture``.
 """
@@ -43,6 +48,9 @@ _MAX_PENDING_DRAFTS = 50
 _MAX_ACKED_DRAFT_IDS = 200
 _DRAFT_SELECTION_LIMIT = 1200
 _DRAFT_TITLE_LIMIT = 160
+# Workspace and client id are joined with NUL: repository paths never contain
+# it, so ("ws-a", "1") and ("ws-a\01", "") cannot collide.
+_DRAFT_DEDUPE_SEPARATOR = "\u0000"
 
 
 class BrowserPairingError(RuntimeError):
@@ -99,16 +107,21 @@ class BrowserCredential:
 @dataclass(slots=True)
 class _PendingDraft:
     id: str
+    workspace_id: str
     text: str
     client_id: str
     created_at: str
 
     def as_payload(self) -> dict[str, str]:
-        return {"id": self.id, "text": self.text}
+        return {"id": self.id, "workspace_id": self.workspace_id, "text": self.text}
 
 
 def _hashed(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _draft_dedupe_key(workspace_id: str, client_id: str) -> str:
+    return f"{workspace_id}{_DRAFT_DEDUPE_SEPARATOR}{client_id}"
 
 
 def _utc_now_iso() -> str:
@@ -415,12 +428,20 @@ class BrowserBridgeService:
     def enqueue_draft(
         self,
         *,
+        workspace_id: str,
         selection: str,
         url: str = "",
         title: str = "",
         client_id: str = "",
         language: str | None = None,
     ) -> dict[str, object]:
+        normalized_workspace = str(workspace_id or "").strip()
+        if not normalized_workspace:
+            raise BrowserPairingError(
+                "invalid_workspace",
+                "A coach draft requires the workspace its selection was captured for.",
+                status_code=422,
+            )
         excerpt = " ".join(str(selection or "").split())
         if not excerpt:
             raise BrowserPairingError(
@@ -434,10 +455,27 @@ class BrowserBridgeService:
         with self._lock:
             if normalized_client_id:
                 for draft in self._pending_drafts:
-                    if draft.client_id == normalized_client_id:
+                    if (
+                        draft.workspace_id == normalized_workspace
+                        and draft.client_id == normalized_client_id
+                    ):
                         return {"ok": True, "draft_id": draft.id, "duplicate": True}
-                if normalized_client_id in self._acked_draft_client_ids:
+                if (
+                    _draft_dedupe_key(normalized_workspace, normalized_client_id)
+                    in self._acked_draft_client_ids
+                ):
                     return {"ok": True, "draft_id": "", "duplicate": True}
+            if len(self._pending_drafts) >= _MAX_PENDING_DRAFTS:
+                # The queue only drains through receipts from a visible
+                # workbench. When it is full, refuse the new capture loudly
+                # instead of silently evicting a queued (still undelivered)
+                # one — a dropped capture the user cannot see is worse than a
+                # visible "try again".
+                raise BrowserPairingError(
+                    "draft_queue_full",
+                    "Trainer is already holding the maximum number of captured drafts. Open the Coach view to receive them, then capture again.",
+                    status_code=429,
+                )
             text = build_coach_draft_text(
                 selection=excerpt,
                 url=str(url or "").strip(),
@@ -446,31 +484,42 @@ class BrowserBridgeService:
             )
             draft = _PendingDraft(
                 id=f"draft-{uuid4().hex[:12]}",
+                workspace_id=normalized_workspace,
                 text=text,
                 client_id=normalized_client_id,
                 created_at=_utc_now_iso(),
             )
             self._pending_drafts.append(draft)
-            while len(self._pending_drafts) > _MAX_PENDING_DRAFTS:
-                self._pending_drafts.pop(0)
             return {"ok": True, "draft_id": draft.id, "duplicate": False}
 
-    def pending_drafts(self) -> list[dict[str, str]]:
+    def pending_drafts(self, workspace_id: str) -> list[dict[str, str]]:
+        normalized_workspace = str(workspace_id or "").strip()
+        if not normalized_workspace:
+            # Never hand a caller that did not state its workspace every
+            # project's captures: an unscoped read is refused, not guessed.
+            return []
         with self._lock:
-            return [draft.as_payload() for draft in self._pending_drafts]
+            return [
+                draft.as_payload()
+                for draft in self._pending_drafts
+                if draft.workspace_id == normalized_workspace
+            ]
 
-    def ack_drafts(self, ids: list[str]) -> int:
+    def ack_drafts(self, workspace_id: str, ids: list[str]) -> int:
+        normalized_workspace = str(workspace_id or "").strip()
         wanted = {str(item).strip() for item in ids if str(item).strip()}
-        if not wanted:
+        if not normalized_workspace or not wanted:
             return 0
         with self._lock:
             remaining: list[_PendingDraft] = []
             removed = 0
             for draft in self._pending_drafts:
-                if draft.id in wanted:
+                if draft.workspace_id == normalized_workspace and draft.id in wanted:
                     removed += 1
                     if draft.client_id:
-                        self._acked_draft_client_ids.append(draft.client_id)
+                        self._acked_draft_client_ids.append(
+                            _draft_dedupe_key(draft.workspace_id, draft.client_id)
+                        )
                         if len(self._acked_draft_client_ids) > _MAX_ACKED_DRAFT_IDS:
                             del self._acked_draft_client_ids[
                                 : len(self._acked_draft_client_ids) - _MAX_ACKED_DRAFT_IDS

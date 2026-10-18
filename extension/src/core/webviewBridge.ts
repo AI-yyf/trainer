@@ -167,6 +167,7 @@ export class WorkbenchSidebarController
   private view?: vscode.WebviewView;
   private liveFollowEnabled = true;
   private refreshHandler?: () => Promise<void>;
+  private draftPrefillReceiptHandler?: (draftId: string) => void;
   private lastRenderedHtml?: string;
   private lastLifecycleAckAt = 0;
   private awaitingLifecycleAck = false;
@@ -421,6 +422,14 @@ export class WorkbenchSidebarController
     this.refreshHandler = handler;
   }
 
+  /**
+   * Applied receipt for `ui/coachDraftPrefill`: the browser-capture runtime
+   * resolves its delivery wait with this callback.
+   */
+  setDraftPrefillReceiptHandler(handler: ((draftId: string) => void) | undefined): void {
+    this.draftPrefillReceiptHandler = handler;
+  }
+
   resolveWebviewUriForPath(filePath: string): string | undefined {
     if (!this.view) {
       return undefined;
@@ -532,6 +541,11 @@ export class WorkbenchSidebarController
 
       if (message.type === 'state/ack') {
         this.stateTransport.acknowledge(message.payload);
+        return;
+      }
+
+      if (message.type === 'ui/coachDraftPrefillApplied') {
+        this.draftPrefillReceiptHandler?.(message.payload.draftId);
         return;
       }
 

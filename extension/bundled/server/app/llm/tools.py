@@ -3588,7 +3588,7 @@ def _compare_deterministic_signals(anchor_text: str, submission: str) -> dict[st
     }
 
 
-async def _resolve_excerpt_resource(context: ToolContext, args: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+async def _resolve_excerpt_resource(context: ToolContext, args: dict[str, Any]) -> tuple[Any | None, str | None]:
     resource_service = getattr(context.runtime, "resource_service", None)
     if resource_service is None:
         return None, "service_unavailable"
@@ -3666,10 +3666,7 @@ def _resource_display(resource: Any) -> dict[str, Any]:
         or ""
     )
     kind = getattr(resource, "kind", None)
-    try:
-        kind = kind.value  # ResourceKind enum (registry dataclass shape)
-    except AttributeError:
-        pass
+    kind = getattr(kind, "value", kind)  # ResourceKind enum (registry dataclass shape)
     return {
         "id": str(resource.id),
         "name": name,

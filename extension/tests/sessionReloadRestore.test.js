@@ -48,8 +48,10 @@ const vscodeMock = { workspace: { name: 'trainer' }, env: { language: 'zh-cn' } 
 const { createDefaultBootstrapData } = loadWithVscodeMock(workbenchDataModulePath, vscodeMock);
 const { rehydrateWorkbenchRuntime } = loadWithVscodeMock(runtimeRehydrationModulePath, vscodeMock);
 
-// The host derives the runtime workspace id from the sovereign project path.
-const WORKSPACE = '/trainer/project';
+// The host derives the runtime workspace id from the sovereign project path
+// and normalizes it with the host platform's path rules (on Windows the same
+// root resolves to an absolute drive path like D:\trainer\project).
+const WORKSPACE = path.resolve('/trainer/project');
 
 /** Minimal stateful stand-in for the sidecar's session store. */
 function createFakeSidecar(sessions, latestSessionId) {

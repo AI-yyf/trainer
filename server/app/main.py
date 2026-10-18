@@ -144,17 +144,17 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     #
     # The Trainer Capture browser extension cannot read the per-instance token
     # (it authenticates with its own pairing credential), so the browser-facing
-    # lane is exempt by path: /browser/pair, /browser/status, the draft queue,
-    # and a Bearer-authenticated /resources/capture. /browser/pair-code stays
-    # inside the trusted boundary — the workbench host registers codes there.
+    # lane is exempt by path: /browser/pair, /browser/status, the draft compose
+    # route, and a Bearer-authenticated /resources/capture. /browser/pair-code
+    # stays inside the trusted boundary — the workbench host registers codes
+    # there. The pending-drafts read/ack routes are host-facing too (the host is
+    # their only consumer), so they stay inside this boundary as well.
     instance_token = os.getenv("TRAINER_SIDECAR_TOKEN", "").strip()
     browser_lane_paths = frozenset(
         {
             "/browser/pair",
             "/browser/status",
             "/browser/coach-draft",
-            "/browser/pending-drafts",
-            "/browser/pending-drafts/ack",
         }
     )
 

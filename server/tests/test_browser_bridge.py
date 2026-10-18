@@ -233,6 +233,7 @@ def test_coach_drafts_queue_dedupe_and_ack(tmp_path) -> None:
         assert first.status_code == 200, first.text
         assert first.json()["ok"] is True
         assert first.json()["duplicate"] is False
+        assert first.json()["workspace_id"] == "workspace-bridge-drafts"
         draft_id = first.json()["draft_id"]
 
         repeated = client.post(
@@ -249,10 +250,17 @@ def test_coach_drafts_queue_dedupe_and_ack(tmp_path) -> None:
         assert repeated.json()["duplicate"] is True
         assert repeated.json()["draft_id"] == draft_id
 
-        pending = client.get("/browser/pending-drafts", headers=headers)
+        # The host polls and acks on the trusted loopback boundary (no Bearer):
+        # it cannot read the browser credential.
+        pending = client.get(
+            "/browser/pending-drafts",
+            params={"workspace_id": "workspace-bridge-drafts"},
+        )
         assert pending.status_code == 200, pending.text
+        assert pending.json()["workspace_id"] == "workspace-bridge-drafts"
         drafts = pending.json()["drafts"]
         assert [draft["id"] for draft in drafts] == [draft_id]
+        assert drafts[0]["workspace_id"] == "workspace-bridge-drafts"
         text = drafts[0]["text"]
         # The draft quotes the selection and cites title + URL, and stays editable text.
         assert "rotation guard" in text
@@ -261,12 +269,17 @@ def test_coach_drafts_queue_dedupe_and_ack(tmp_path) -> None:
 
         acked = client.post(
             "/browser/pending-drafts/ack",
-            json={"ids": [draft_id]},
-            headers=headers,
+            json={"ids": [draft_id], "workspace_id": "workspace-bridge-drafts"},
         )
         assert acked.status_code == 200, acked.text
         assert acked.json()["removed"] == 1
-        assert client.get("/browser/pending-drafts", headers=headers).json()["drafts"] == []
+        assert (
+            client.get(
+                "/browser/pending-drafts",
+                params={"workspace_id": "workspace-bridge-drafts"},
+            ).json()["drafts"]
+            == []
+        )
 
         # An acked client id does not come back as a fresh duplicate.
         replayed = client.post(
@@ -276,6 +289,104 @@ def test_coach_drafts_queue_dedupe_and_ack(tmp_path) -> None:
         )
         assert replayed.status_code == 200, replayed.text
         assert replayed.json()["duplicate"] is True
+
+
+def test_pending_drafts_are_scoped_to_the_polling_workspace(tmp_path) -> None:
+    """A capture from project A must never surface in project B's coach."""
+
+    with build_client(tmp_path) as client:
+        token_a = _pair(client, "workspace-bridge-a", code="111111")
+        token_b = _pair(client, "workspace-bridge-b", code="222222")
+
+        created_a = client.post(
+            "/browser/coach-draft",
+            json={"selection": "captured in project A", "client_id": "a-1"},
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+        assert created_a.status_code == 200, created_a.text
+        created_b = client.post(
+            "/browser/coach-draft",
+            json={"selection": "captured in project B", "client_id": "b-1"},
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        assert created_b.status_code == 200, created_b.text
+        draft_a = created_a.json()["draft_id"]
+        draft_b = created_b.json()["draft_id"]
+
+        only_a = client.get("/browser/pending-drafts", params={"workspace_id": "workspace-bridge-a"})
+        only_b = client.get("/browser/pending-drafts", params={"workspace_id": "workspace-bridge-b"})
+        assert [draft["id"] for draft in only_a.json()["drafts"]] == [draft_a]
+        assert [draft["id"] for draft in only_b.json()["drafts"]] == [draft_b]
+        # The draft text itself never crosses the workspace boundary.
+        assert "captured in project A" in only_a.json()["drafts"][0]["text"]
+        assert draft_b not in [draft["id"] for draft in only_a.json()["drafts"]]
+
+        # Acking A's queue leaves B untouched, and B's id cannot be acked
+        # through A's scope even when presented explicitly.
+        acked = client.post(
+            "/browser/pending-drafts/ack",
+            json={"ids": [draft_a, draft_b], "workspace_id": "workspace-bridge-a"},
+        )
+        assert acked.status_code == 200, acked.text
+        assert acked.json()["removed"] == 1
+        assert client.get("/browser/pending-drafts", params={"workspace_id": "workspace-bridge-a"}).json()[
+            "drafts"
+        ] == []
+        remaining_b = client.get(
+            "/browser/pending-drafts",
+            params={"workspace_id": "workspace-bridge-b"},
+        ).json()["drafts"]
+        assert [draft["id"] for draft in remaining_b] == [draft_b]
+
+
+def test_pending_drafts_refuse_an_unscoped_host_call(tmp_path) -> None:
+    """Without a workspace reference the sidecar refuses instead of guessing."""
+
+    with build_client(tmp_path) as client:
+        _pair(client, "workspace-bridge-scope", code="333333")
+
+        unscoped = client.get("/browser/pending-drafts")
+        assert unscoped.status_code == 422, unscoped.text
+        assert unscoped.json()["detail"]["code"] == "workspace_required"
+
+        unscoped_ack = client.post("/browser/pending-drafts/ack", json={"ids": ["draft-unknown"]})
+        assert unscoped_ack.status_code == 422, unscoped_ack.text
+        assert unscoped_ack.json()["detail"]["code"] == "workspace_required"
+
+
+def test_a_full_draft_queue_refuses_new_captures_loudly(tmp_path, monkeypatch) -> None:
+    """Capacity refuses the new capture; queued drafts are never silently evicted."""
+
+    monkeypatch.setattr("app.browser_bridge.service._MAX_PENDING_DRAFTS", 2)
+    with build_client(tmp_path) as client:
+        token = _pair(client, "workspace-bridge-full", code="444444")
+        headers = {"Authorization": f"Bearer {token}"}
+        for index in (1, 2):
+            created = client.post(
+                "/browser/coach-draft",
+                json={"selection": f"capture {index}", "client_id": f"full-{index}"},
+                headers=headers,
+            )
+            assert created.status_code == 200, created.text
+
+        overflow = client.post(
+            "/browser/coach-draft",
+            json={"selection": "one capture too many", "client_id": "full-3"},
+            headers=headers,
+        )
+        assert overflow.status_code == 429, overflow.text
+        assert overflow.json()["detail"]["code"] == "draft_queue_full"
+
+        # Both earlier captures are still queued and deliverable.
+        drafts = client.get(
+            "/browser/pending-drafts",
+            params={"workspace_id": "workspace-bridge-full"},
+        ).json()["drafts"]
+        queued_excerpts = [
+            next(line for line in draft["text"].splitlines() if line.startswith("> capture"))
+            for draft in drafts
+        ]
+        assert queued_excerpts == ["> capture 1", "> capture 2"]
 
 
 def test_coach_drafts_require_a_selection_and_a_credential(tmp_path) -> None:
@@ -357,7 +468,10 @@ def test_coach_draft_route_uses_the_workspace_response_language(tmp_path) -> Non
         )
         assert created.status_code == 200, created.text
 
-        drafts = client.get("/browser/pending-drafts", headers=headers).json()["drafts"]
+        drafts = client.get(
+            "/browser/pending-drafts",
+            params={"workspace_id": "workspace-bridge-draft-language"},
+        ).json()["drafts"]
         assert len(drafts) == 1
         assert drafts[0]["text"].startswith("Ayudame a entender este fragmento")
 
@@ -398,3 +512,16 @@ def test_browser_lane_paths_are_not_blocked_by_the_instance_token(tmp_path, monk
             client.get("/browser/status", headers={"Authorization": f"Bearer {token}"}).status_code
             == 200
         )
+
+        # ...while the host-facing pending-draft queue stays inside the boundary:
+        # the host can present the instance token, the browser lane cannot.
+        queue_path = "/browser/pending-drafts"
+        blocked_queue = client.get(queue_path, params={"workspace_id": "workspace-bridge-token"})
+        assert blocked_queue.status_code == 401, blocked_queue.text
+        allowed_queue = client.get(
+            queue_path,
+            params={"workspace_id": "workspace-bridge-token"},
+            headers={"x-trainer-token": "instance-secret"},
+        )
+        assert allowed_queue.status_code == 200, allowed_queue.text
+        assert allowed_queue.json()["drafts"] == []

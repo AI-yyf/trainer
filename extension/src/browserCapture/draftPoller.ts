@@ -6,13 +6,23 @@ import { BROWSER_CAPTURE } from '../core/constants';
  * Background poller for `GET /browser/pending-drafts`: it only runs while a
  * workbench surface is visible and only touches the sidecar when there is
  * something to fetch — an empty queue produces no `postMessage` and no ack.
- * Every draft it successfully hands to the webview is acknowledged with
- * `POST /browser/pending-drafts/ack {ids}` so the sidecar can drop it.
+ *
+ * Delivery is receipt-confirmed: a draft is acknowledged with `POST
+ * /browser/pending-drafts/ack` only after the workbench has applied the
+ * prefill and answered with the matching receipt (`DraftReceiptChannel`). A
+ * draft whose receipt never arrives stays queued server-side and the next
+ * tick retries it; the webview applies each draft id at most once, so a retry
+ * can confirm but never re-stamp an already-applied prefill.
+ *
+ * The queue is workspace-scoped end to end: every read states the runtime
+ * workspace id and drafts whose workspace does not match are dropped rather
+ * than shown — a capture from project A must never reach project B's coach.
  */
 
 export interface PendingBrowserDraft {
   id: string;
   text: string;
+  workspaceId: string;
 }
 
 export const COACH_DRAFT_PREFILL_MESSAGE = 'ui/coachDraftPrefill';
@@ -22,12 +32,17 @@ export interface BrowserDraftPollerOptions {
   getSidecarPort: () => number | undefined;
   /** True while the sidebar or editor workbench surface is visible. */
   isWorkbenchVisible: () => boolean;
-  /** Delivers one draft to the workbench webview (`ui/coachDraftPrefill`). */
-  forwardDraft: (text: string) => Promise<void>;
-  /** GET /browser/pending-drafts */
-  fetchPendingDrafts: (port: number) => Promise<unknown>;
-  /** POST /browser/pending-drafts/ack {ids} */
-  acknowledgeDrafts: (port: number, ids: string[]) => Promise<void>;
+  /** Runtime workspace id this poller may read drafts for (isolation scope). */
+  getWorkspaceId: () => string;
+  /**
+   * Delivers one draft to the workbench; resolves only once the webview has
+   * confirmed it applied the prefill (the delivery receipt).
+   */
+  forwardDraft: (draft: PendingBrowserDraft) => Promise<void>;
+  /** GET /browser/pending-drafts?workspace_id=... */
+  fetchPendingDrafts: (port: number, workspaceId: string) => Promise<unknown>;
+  /** POST /browser/pending-drafts/ack {workspace_id, ids} */
+  acknowledgeDrafts: (port: number, workspaceId: string, ids: string[]) => Promise<void>;
   intervalMs?: number;
   onError?: (message: string) => void;
   setIntervalFn?: (handler: () => void, intervalMs: number) => ReturnType<typeof setInterval>;
@@ -35,7 +50,7 @@ export interface BrowserDraftPollerOptions {
 }
 
 export interface BrowserDraftPollResult {
-  state: 'idle' | 'forwarded' | 'empty' | 'hidden' | 'no-sidecar';
+  state: 'idle' | 'forwarded' | 'empty' | 'hidden' | 'no-sidecar' | 'unscoped';
   forwarded: number;
   acknowledged: number;
   error?: string;
@@ -54,11 +69,52 @@ export function parsePendingDrafts(payload: unknown): PendingBrowserDraft[] {
     const record = entry as Record<string, unknown>;
     const id = typeof record.id === 'string' ? record.id.trim() : '';
     const text = typeof record.text === 'string' ? record.text : '';
+    const workspaceId = typeof record.workspace_id === 'string' ? record.workspace_id.trim() : '';
     if (id && text.trim()) {
-      parsed.push({ id, text });
+      parsed.push({ id, text, workspaceId });
     }
   }
   return parsed;
+}
+
+/**
+ * Delivery receipts for forwarded prefills.
+ *
+ * `waitForReceipt` resolves `true` on the matching `notify` and `false` on
+ * timeout, so the caller can turn a timeout into an ordinary failed delivery
+ * without an unhandled rejection. A receipt that arrives after its wait
+ * already timed out is simply dropped; the next delivery attempt re-waits.
+ */
+export class DraftReceiptChannel {
+  private readonly waiters = new Map<string, () => void>();
+
+  waitForReceipt(draftId: string, timeoutMs: number): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const settle = (): void => {
+        if (timer !== undefined) {
+          clearTimeout(timer);
+        }
+        resolve(true);
+      };
+      timer = setTimeout(() => {
+        if (this.waiters.get(draftId) === settle) {
+          this.waiters.delete(draftId);
+        }
+        resolve(false);
+      }, timeoutMs);
+      this.waiters.set(draftId, settle);
+    });
+  }
+
+  notify(draftId: string): void {
+    const settle = this.waiters.get(draftId);
+    if (!settle) {
+      return;
+    }
+    this.waiters.delete(draftId);
+    settle();
+  }
 }
 
 export class BrowserDraftPoller {
@@ -124,6 +180,12 @@ export class BrowserDraftPoller {
     if (!this.options.isWorkbenchVisible()) {
       return { state: 'hidden', forwarded: 0, acknowledged: 0 };
     }
+    const workspaceId = this.options.getWorkspaceId().trim();
+    if (!workspaceId) {
+      // Without a workspace there is no honest read to make: fetching
+      // unscoped could pull another project's captures into this coach.
+      return { state: 'unscoped', forwarded: 0, acknowledged: 0 };
+    }
     const port = this.options.getSidecarPort();
     if (port === undefined) {
       return { state: 'no-sidecar', forwarded: 0, acknowledged: 0 };
@@ -134,7 +196,22 @@ export class BrowserDraftPoller {
 
     this.inFlight = true;
     try {
-      const drafts = parsePendingDrafts(await this.options.fetchPendingDrafts(port));
+      const fetched = parsePendingDrafts(
+        await this.options.fetchPendingDrafts(port, workspaceId),
+      );
+      const foreign = fetched.filter(
+        (draft) => draft.workspaceId && draft.workspaceId !== workspaceId,
+      );
+      if (foreign.length > 0) {
+        // The sidecar filters by workspace; a foreign draft here would be an
+        // isolation breach. Never show it, never ack it — report it.
+        this.reportError(
+          `${foreign.length} queued draft(s) belong to another workspace and stay queued`,
+        );
+      }
+      const drafts = fetched.filter(
+        (draft) => !draft.workspaceId || draft.workspaceId === workspaceId,
+      );
       if (drafts.length === 0) {
         this.resetBackoff();
         return { state: 'empty', forwarded: 0, acknowledged: 0 };
@@ -143,7 +220,7 @@ export class BrowserDraftPoller {
       const forwardedIds: string[] = [];
       for (const draft of drafts) {
         try {
-          await this.options.forwardDraft(draft.text);
+          await this.options.forwardDraft(draft);
           forwardedIds.push(draft.id);
         } catch (error) {
           // Leave the failed draft unacknowledged: the sidecar keeps it and the
@@ -156,7 +233,7 @@ export class BrowserDraftPoller {
       let acknowledged = 0;
       if (forwardedIds.length > 0) {
         try {
-          await this.options.acknowledgeDrafts(port, forwardedIds);
+          await this.options.acknowledgeDrafts(port, workspaceId, forwardedIds);
           acknowledged = forwardedIds.length;
         } catch (error) {
           this.enterBackoff();

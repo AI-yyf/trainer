@@ -7,6 +7,7 @@ import type { ComposerLanguage } from '../../../shared/src/types';
 import { BROWSER_CAPTURE } from '../core/constants';
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
+import { getRuntimeWorkspaceContext } from './workspaceContext';
 import {
   BrowserPairingSession,
   type BrowserPairingIssue,
@@ -54,6 +55,7 @@ export function resolveBrowserCapturePairingSession(context: CommandContext): Br
     session = new BrowserPairingSession({
       transport: createSidecarPairingTransport({
         sidecarClient: context.sidecarClient,
+        workspaceId: () => getRuntimeWorkspaceContext(context).workspaceId,
         ensureSidecarPort: async () => {
           const status = await context.sidecarManager.ensureRunning();
           if (status.lifecycle !== 'ready' || !status.port) {

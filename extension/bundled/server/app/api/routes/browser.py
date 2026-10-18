@@ -12,8 +12,16 @@ boundary. Route-level behavior:
 - ``GET  /browser/status``         workspace name, learning-focus options and
                                    the library count for the paired workspace;
 - ``POST /browser/coach-draft``    queue a prefilled coach draft (selection);
-- ``GET  /browser/pending-drafts`` host polls queued drafts;
-- ``POST /browser/pending-drafts/ack`` host acks the drafts it forwarded.
+- ``GET  /browser/pending-drafts`` host polls queued drafts (host-facing:
+                                   trusted loopback / instance token, and an
+                                   explicit workspace reference is required);
+- ``POST /browser/pending-drafts/ack`` host acks the drafts it forwarded (same
+                                   host-facing boundary).
+
+The browser extension never reads the pending queue — the host is its only
+consumer — so the two queue routes do not take a Bearer credential. They are
+strictly workspace-scoped: a caller that does not state which workspace it is
+polling for gets an error, never another project's captures.
 """
 
 from __future__ import annotations
@@ -208,6 +216,7 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
         bridge = _browser_bridge(runtime)
         try:
             queued = bridge.enqueue_draft(
+                workspace_id=credential.workspace_id,
                 selection=str(body.get("selection") or ""),
                 url=str(body.get("url") or ""),
                 title=str(body.get("title") or ""),
@@ -221,19 +230,53 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             ) from exc
         return {"workspace_id": credential.workspace_id, **queued}
 
+    def host_workspace_scope(raw_workspace_id: object, raw_session_id: object) -> str:
+        """The workspace a host-facing queue call is scoped to.
+
+        The host always knows its runtime workspace id; a call without one is
+        refused instead of being guessed from the latest session, because
+        guessing is exactly how one project's captures would surface in
+        another project's coach.
+        """
+
+        workspace_id = str(raw_workspace_id or "").strip()
+        session_id = str(raw_session_id or "").strip()
+        if not workspace_id and not session_id:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "workspace_required",
+                    "message": "Pending drafts are workspace-scoped: pass workspace_id or session_id.",
+                },
+            )
+        return current_workspace_id(
+            session_id=session_id or None,
+            workspace_id=workspace_id or None,
+        )
+
     @router.get("/browser/pending-drafts")
-    def list_pending_drafts(request: Request) -> dict[str, object]:
-        _require_browser_credential(runtime, request)
-        return {"drafts": _browser_bridge(runtime).pending_drafts()}
+    def list_pending_drafts(
+        workspace_id: str | None = None,
+        session_id: str | None = None,
+    ) -> dict[str, object]:
+        """Host poll: only the drafts captured for the polling workspace."""
+
+        scope = host_workspace_scope(workspace_id, session_id)
+        return {"workspace_id": scope, "drafts": _browser_bridge(runtime).pending_drafts(scope)}
 
     @router.post("/browser/pending-drafts/ack")
-    def acknowledge_pending_drafts(request: Request, payload: dict[str, Any]) -> dict[str, object]:
-        _require_browser_credential(runtime, request)
+    def acknowledge_pending_drafts(payload: dict[str, Any]) -> dict[str, object]:
+        """Host ack: drop only drafts that belong to the acking workspace."""
+
         body = payload if isinstance(payload, dict) else {}
+        scope = host_workspace_scope(
+            body.get("workspace_id", body.get("workspaceId")),
+            body.get("session_id", body.get("sessionId")),
+        )
         raw_ids = body.get("ids")
         ids = [str(item) for item in raw_ids] if isinstance(raw_ids, list) else []
-        removed = _browser_bridge(runtime).ack_drafts(ids)
-        return {"ok": True, "removed": removed}
+        removed = _browser_bridge(runtime).ack_drafts(scope, ids)
+        return {"ok": True, "workspace_id": scope, "removed": removed}
 
     return router
 

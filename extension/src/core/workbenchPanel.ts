@@ -48,6 +48,7 @@ export class WorkbenchEditorPanel implements vscode.Disposable {
   private pendingFocusView?: WorkbenchPanelView;
   private focusedView: WorkbenchPanelView = 'plan';
   private disposed = false;
+  private draftPrefillReceiptHandler?: (draftId: string) => void;
   private readonly stateTransport: WebviewStateTransport;
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -162,6 +163,14 @@ export class WorkbenchEditorPanel implements vscode.Disposable {
     await this.revealSidebar();
   }
 
+  /**
+   * Applied receipt for `ui/coachDraftPrefill`: the browser-capture runtime
+   * resolves its delivery wait with this callback.
+   */
+  setDraftPrefillReceiptHandler(handler: ((draftId: string) => void) | undefined): void {
+    this.draftPrefillReceiptHandler = handler;
+  }
+
   async syncState(options?: { forceFull?: boolean }): Promise<void> {
     if (this.disposed || !this.panel || !this.ready) {
       return;
@@ -223,6 +232,9 @@ export class WorkbenchEditorPanel implements vscode.Disposable {
         }
         case 'state/ack':
           this.stateTransport.acknowledge(message.payload);
+          return;
+        case 'ui/coachDraftPrefillApplied':
+          this.draftPrefillReceiptHandler?.(message.payload.draftId);
           return;
         case 'request/bootstrap':
           await this.syncState({ forceFull: true });

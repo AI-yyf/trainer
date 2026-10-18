@@ -189,6 +189,12 @@ export const BROWSER_CAPTURE = {
   pairingCodeTtlMs: 10 * 60 * 1_000,
   /** Draft forwarding cadence while a workbench surface is visible. */
   draftPollIntervalMs: 3_000,
+  /**
+   * How long a forwarded draft waits for the workbench's applied receipt
+   * before the poll retries. The queue entry stays unacknowledged until the
+   * receipt arrives, so a dropped delivery can never look delivered.
+   */
+  draftReceiptTimeoutMs: 4_000,
   /** Sidecar contract paths (see the pair_api_contract in the delivery notes). */
   pairCodePath: '/browser/pair-code',
   pairPath: '/browser/pair',

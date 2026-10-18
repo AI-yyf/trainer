@@ -93,6 +93,14 @@ def test_digest_generates_four_assets_then_caches_by_content(tmp_path: Path) -> 
     assert len(assets) == 4
     kinds = {asset.kind for asset in assets}
     assert kinds == {"concept_card", "exercise_set", "code_examples", "common_pitfall"}
+    # Every digest section must land in the text field its kind maps to (see
+    # stage_material_composer._CONTENT_FIELD_BY_KIND): the model ignores unknown
+    # fields (extra="ignore"), so a wrong field name silently drops the body.
+    by_kind = {asset.kind: asset for asset in assets}
+    assert "旋转护栏" in by_kind["concept_card"].concept_card
+    assert "护栏为何先于队列运行？" in by_kind["exercise_set"].exercise_seed
+    assert "门禁先于闸机放行" in by_kind["code_examples"].example
+    assert "误以为护栏在队列之后运行" in by_kind["common_pitfall"].common_pitfall
     assert all(asset.scenario == "resource_digest" for asset in assets)
     assert all("resource-digest::" in asset.source_key for asset in assets)
 

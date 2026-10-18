@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -78,10 +79,13 @@ def test_code_pack_plans_historical_toolchain() -> None:
         assert command.cwd == "/tmp/sandbox"
         assert command.argv, "argv must never be empty"
     # Frozen/venv-less interpreter: bare console scripts, absolute target.
-    # (Path.resolve() may expand platform symlink prefixes like /tmp -> /private/tmp.)
+    # The planner resolves the target with the host's own path rules: native
+    # separators on Windows, and platform symlink prefixes may expand
+    # (/tmp -> /private/tmp on macOS). Compare against the same resolution
+    # instead of a POSIX literal.
     ruff_argv = commands[0].argv
     assert ruff_argv[:2] == ["ruff", "check"]
-    assert ruff_argv[-1].endswith("/exercise.py")
+    assert ruff_argv[-1] == str(Path("/tmp/lesson/exercise.py").resolve())
     pytest_argv = commands[2].argv
     assert pytest_argv[-2:] == ["-p", "no:cacheprovider"]
 

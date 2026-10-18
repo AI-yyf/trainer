@@ -452,7 +452,8 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 status_code=404,
                 detail="Resource must be indexed (and a provider configured) before digestion.",
             )
-        assets = result.get("assets") or []
+        raw_assets = result.get("assets")
+        assets = raw_assets if isinstance(raw_assets, list) else []
         return {
             "cached": bool(result.get("cached")),
             "assets": [asset.model_dump(by_alias=True) if hasattr(asset, "model_dump") else asset for asset in assets],

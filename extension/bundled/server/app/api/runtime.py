@@ -9,7 +9,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
-from typing import TYPE_CHECKING, Any, Callable, Iterable, cast
+from typing import TYPE_CHECKING, Any, Callable, Iterable, TypedDict, cast
 from uuid import uuid4
 
 from ..affect.service import AffectService
@@ -19,6 +19,7 @@ from ..core.models import (
     ProviderConfig,
     ResourceIndexRequest,
     ResourceRecord,
+    TeachingAssetKind,
     TeachingKnowledgeAsset,
     TrainerRoot,
     TurnRequest,
@@ -40,6 +41,22 @@ from ..pedagogy.service import PedagogyService
 from ..planner.service import PlannerService
 from ..research.service import ResearchOrchestratorService
 from ..resources.service import ResourceService
+from ..resources.versioning import ResourceVersionStore
+from ..specs.service import SpecService
+from ..telemetry.service import TelemetryService
+from ..training.attempt_store import AttemptStore
+from ..training.card_generator import CardGenerationService
+from ..training.card_router import CardRouterService
+from ..training.plan_revision import PlanRevisionStore
+from ..workspace.adoption_index import ProjectAdoptionIndexService, ProjectAdoptionJobRecord
+from ..workspace.authority import PermissionLevel, WorkspaceAuthority
+from ..workspace.provisioning import ProjectProvisioningService
+from ..workspace.remote_identity import RemoteProjectIdentity
+
+if TYPE_CHECKING:
+    from ..browser_bridge import BrowserBridgeService
+    from ..db.research_repository import ResearchRepository
+    from ..sandbox.service import SandboxService
 
 logger = logging.getLogger("trainer.runtime")
 
@@ -55,7 +72,16 @@ BACKGROUND_ORGANIZER_BATCH = 5
 RESOURCE_DIGEST_MAX_CHARS = 6000
 
 
-def _parse_teaching_digest(raw: str) -> dict[str, list[str] | str] | None:
+class _TeachingDigest(TypedDict):
+    """Strict shape of the digest JSON contract (see system prompt)."""
+
+    summary: str
+    practice_questions: list[str]
+    intuitive_examples: list[str]
+    common_pitfalls: list[str]
+
+
+def _parse_teaching_digest(raw: str) -> _TeachingDigest | None:
     import json as _json
 
     text = (raw or "").strip()
@@ -88,22 +114,7 @@ def _parse_teaching_digest(raw: str) -> dict[str, list[str] | str] | None:
         "intuitive_examples": as_list(parsed.get("intuitive_examples")),
         "common_pitfalls": as_list(parsed.get("common_pitfalls")),
     }
-from ..resources.versioning import ResourceVersionStore
-from ..specs.service import SpecService
-from ..telemetry.service import TelemetryService
-from ..workspace.adoption_index import ProjectAdoptionIndexService, ProjectAdoptionJobRecord
-from ..workspace.authority import PermissionLevel, WorkspaceAuthority
-from ..workspace.provisioning import ProjectProvisioningService
-from ..workspace.remote_identity import RemoteProjectIdentity
 
-if TYPE_CHECKING:
-    from ..browser_bridge import BrowserBridgeService
-    from ..db.research_repository import ResearchRepository
-    from ..sandbox.service import SandboxService
-from ..training.attempt_store import AttemptStore
-from ..training.card_generator import CardGenerationService
-from ..training.card_router import CardRouterService
-from ..training.plan_revision import PlanRevisionStore
 
 DEFAULT_WORKSPACE_ID = "workspace-default"
 DEFAULT_WORKSPACE_NAME = "Trainer"
@@ -708,7 +719,8 @@ class TrainerRuntime:
         version_store = self.resource_version_store
         if version_store is not None:
             content_hash = version_store.current_content_hash(workspace_id, resource_id) or ""
-        lang_suffix = f"::{record.content_language.strip()}" if getattr(record, "content_language", None) and str(record.content_language).strip() else ""
+        content_language = (record.content_language or "").strip()
+        lang_suffix = f"::{content_language}" if content_language else ""
         cache_prefix = f"resource-digest::{resource_id}::"
         cache_key = f"{cache_prefix}{content_hash or 'v0'}{lang_suffix}"
         current_version = [
@@ -764,7 +776,7 @@ class TrainerRuntime:
         saved: list[TeachingKnowledgeAsset] = []
         focus_area = record.name.strip() or record.kind
         retrieved_hints = [focus_area, record.kind, *record.tags[:2]]
-        bundles: list[tuple[str, str, str]] = [
+        bundles: list[tuple[TeachingAssetKind, str, str]] = [
             ("concept_card", "核心总结", digest.get("summary", "")),
             ("exercise_set", "预备题目", "\n".join(digest.get("practice_questions", []))),
             ("code_examples", "直观案例", "\n".join(digest.get("intuitive_examples", []))),
@@ -784,8 +796,8 @@ class TrainerRuntime:
                 title=f"{focus_area} · {label}",
                 summary=body[:400],
                 concept_card=body if kind == "concept_card" else "",
-                exercise_set=body if kind == "exercise_set" else "",
-                code_examples=body if kind == "code_examples" else "",
+                exercise_seed=body if kind == "exercise_set" else "",
+                example=body if kind == "code_examples" else "",
                 common_pitfall=body if kind == "common_pitfall" else "",
                 origin="resource",
                 source_key=cache_key,

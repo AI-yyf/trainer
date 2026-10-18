@@ -13,7 +13,7 @@ import type {
   PersistedWorkbenchState,
   WebviewAction,
 } from "./types";
-import { normalizeSidebarView, normalizeTeachingStyle } from "./types";
+import { COACH_DRAFT_APPLIED_LIMIT, normalizeSidebarView, normalizeTeachingStyle } from "./types";
 
 interface VsCodeApi {
   getState(): PersistedWorkbenchState | undefined;
@@ -280,10 +280,12 @@ const hostMessageSchema = z.discriminatedUnion("type", [
     resourceId: z.string(),
   }),
   // Browser-captured coach draft: flat by contract with
-  // `extension/src/browserCapture/draftPoller.ts`.
+  // `extension/src/browserCapture/draftPoller.ts`. `draftId` is optional so a
+  // receipt-less prefill still applies (it just cannot be acknowledged).
   z.object({
     type: z.literal("ui/coachDraftPrefill"),
     text: z.string(),
+    draftId: z.string().optional(),
   }),
   z.object({
     type: z.literal("resourceOrganization/pending"),
@@ -393,7 +395,16 @@ export function postMessage(action: WebviewAction): WebviewOperationIdentity | u
   const api = getVsCodeApi();
   if (api) {
     const scope = hostSyncScope;
-    const tracked = scope && action.type !== "state/ack" && action.type !== "request/bootstrap" && action.type !== "ui/liveFollow";
+    // Flow-control messages never carry an operation identity: the ACK
+    // handshake, bootstrap requests, live-follow toggles and the draft
+    // delivery receipt are answered by dedicated host handling, not by the
+    // scoped command lifecycle.
+    const tracked =
+      scope &&
+      action.type !== "state/ack" &&
+      action.type !== "request/bootstrap" &&
+      action.type !== "ui/liveFollow" &&
+      action.type !== "ui/coachDraftPrefillApplied";
     if (tracked && !action.operation) {
       const payload = "payload" in action && action.payload && typeof action.payload === "object"
         ? action.payload as Record<string, unknown> : undefined;
@@ -630,6 +641,11 @@ function normalizePersistedState(state: PersistedWorkbenchState): PersistedWorkb
         : { customSkills: normalizeTrainerCustomSkills(state.coachDefaults.customSkills) }),
     },
     composerDraft: state.composerDraft ?? "",
+    appliedDraftIds: Array.isArray(state.appliedDraftIds)
+      ? state.appliedDraftIds
+          .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+          .slice(-COACH_DRAFT_APPLIED_LIMIT)
+      : undefined,
     previewProviderConfig: stripProviderSnapshotSecrets(state.previewProviderConfig),
   };
 }

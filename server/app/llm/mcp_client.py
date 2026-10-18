@@ -409,10 +409,18 @@ class McpStdioClient:
             try:
                 process.stdin.write(data)
                 await process.stdin.drain()
-            except (BrokenPipeError, ConnectionResetError, RuntimeError) as exc:
-                raise McpTransportError(
+            except (OSError, RuntimeError) as exc:
+                # A failed write to the child's stdin is terminal for this
+                # stdio session (BrokenPipeError/ConnectionResetError are
+                # OSError subclasses; Windows may surface other OSError
+                # codes). Record it as a disconnect so availability checks do
+                # not depend on the exit code having been reaped yet.
+                detail = (
                     f"MCP server {self.config.name!r} closed its stdin: {exc.__class__.__name__}"
-                ) from exc
+                )
+                if self._disconnect_reason is None:
+                    self._disconnect_reason = detail
+                raise McpTransportError(detail) from exc
 
     async def _read_loop(self) -> None:
         process = self._process
@@ -507,6 +515,11 @@ class McpStdioClient:
             return (
                 f"MCP server {self.config.name!r} exited with code {process.returncode}."
             )
+        # The child reaper may not have recorded the exit code yet (notably on
+        # Windows). A recorded transport disconnect already means the session
+        # is unusable, so callers never receive a half-dead client.
+        if self._disconnect_reason is not None:
+            return self._disconnect_reason
         return None
 
     async def close(self) -> None:

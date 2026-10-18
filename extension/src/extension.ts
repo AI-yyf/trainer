@@ -331,6 +331,7 @@ export async function activate(
   // (vscode://local.trainer-extension/library/<resourceId>).
   const browserCapture = createBrowserCaptureRuntime({
     sidecarClient,
+    getWorkspaceId: () => getRuntimeWorkspaceContext({ getHostState }).workspaceId,
     getSidecarStatus: () => {
       const status = sidecarManager.getStatus();
       return { lifecycle: status.lifecycle, port: status.port };
@@ -346,6 +347,13 @@ export async function activate(
     outputChannel,
   });
   commandContext.browserCapture = browserCapture;
+  // A forwarded draft is acknowledged to the sidecar only after the workbench
+  // confirms the prefill was applied; both surfaces report the same receipt.
+  const handleDraftPrefillReceipt = (draftId: string): void => {
+    browserCapture.notifyDraftApplied(draftId);
+  };
+  workbench.setDraftPrefillReceiptHandler(handleDraftPrefillReceipt);
+  editorPanel.setDraftPrefillReceiptHandler(handleDraftPrefillReceipt);
   browserCapture.drafts.start();
   extensionContext.subscriptions.push(
     browserCapture,

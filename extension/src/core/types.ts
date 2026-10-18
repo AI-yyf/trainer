@@ -1803,6 +1803,16 @@ type TrainerWebviewMessageBody =
   | { type: 'debug/visibleFacts'; payload: DebugVisibleWorkbenchFacts }
   | { type: 'request/bootstrap' }
   | { type: 'settings/primeProviderModels' }
+  | {
+      /**
+       * Browser-capture delivery receipt: the webview applied (or already had
+       * applied) the `ui/coachDraftPrefill` with this draft id. The host turns
+       * it into the sidecar queue ack, so the queue entry is only dropped once
+       * delivery is confirmed.
+       */
+      type: 'ui/coachDraftPrefillApplied';
+      payload: { draftId: string };
+    }
   | { type: 'command/execute'; payload: { commandId: string; payload?: unknown } }
   | { type: 'session/sendMessage'; payload: SessionMessagePayload }
   | { type: 'session/sendStreamMessage'; payload: StreamMessagePayload }

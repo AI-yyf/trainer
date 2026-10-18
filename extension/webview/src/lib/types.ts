@@ -1980,8 +1980,20 @@ export interface PersistedWorkbenchState extends UiLayoutState {
   surfaceScrollPositions?: Record<string, number>;
   /** Activity responses are isolated by workspace, session and card identity. */
   activityDrafts?: Record<string, string>;
+  /**
+   * Browser-capture draft ids already applied to the composer. The host
+   * retries a draft until the webview confirms it, so the apply must be
+   * idempotent across retries and webview reloads.
+   */
+  appliedDraftIds?: string[];
   previewProviderConfig?: Partial<ProviderConfigView>;
 }
+
+/**
+ * How many applied browser-capture draft ids the layout remembers; ids older
+ * than the window fall off (a replay then simply re-applies).
+ */
+export const COACH_DRAFT_APPLIED_LIMIT = 64;
 
 export interface RestoreViewPayload {
   sessionId?: string;
@@ -2099,6 +2111,12 @@ type WebviewActionBody =
   | { type: "session/cancelStreamMessage"; payload?: { messageId?: string } }
   | { type: "settings/saveCoach"; payload: CoachSettingsRequest }
   | { type: "ui/liveFollow"; payload: { enabled: boolean } }
+  /**
+   * Applied receipt for a browser-captured draft: the prefill with this id is
+   * in the composer (or was already applied earlier). The host acknowledges
+   * the sidecar queue entry on this receipt.
+   */
+  | { type: "ui/coachDraftPrefillApplied"; payload: { draftId: string } }
   | { type: "plan/generate" }
   | { type: "plan/freeze"; payload: { frozen: boolean } }
   | { type: "task/specify"; payload: { text?: string } }
@@ -2179,9 +2197,11 @@ type HostMessageBody =
   /**
    * Browser-captured coach draft forwarded by the host draft poller: prefill
    * the Coach composer without sending. Flat by contract with
-   * `extension/src/browserCapture/draftPoller.ts`.
+   * `extension/src/browserCapture/draftPoller.ts`. `draftId` identifies the
+   * sidecar queue entry so the webview can answer the applied receipt the
+   * poller waits for before acknowledging delivery.
    */
-  | { type: "ui/coachDraftPrefill"; text: string }
+  | { type: "ui/coachDraftPrefill"; text: string; draftId?: string }
   /**
    * Answer to one real-folder request (`/library/groups` list/create/rename/
    * delete) that the webview posted as a host command. Correlated by the
