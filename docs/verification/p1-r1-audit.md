@@ -93,7 +93,26 @@ After alignment: **470/470 geometry assertions pass**. Representative
 screenshots (narrowest 340-dark-zh and 460-light-en) are stored beside this
 file.
 
-## 5. Known gaps (not yet P1-complete)
+## 5. R2 verification on this baseline
+
+R2 (Provider / model switch / session restore) was verified rule by rule on
+`312a590`:
+
+| R2 rule | Evidence |
+| --- | --- |
+| No forced probe before sending | `grep unverified-stream extension/src/commands/sessionCommands.ts` → 0 matches; the webview's `providerHasVerifiedStreamingProbe` / `streamingCapabilityBlockReason` exports have no call sites |
+| Historical test results never block a send | `shared/src/providerStatus.ts` `describeProviderSendState` returns `ready` with at most a diagnostic warning; `providerThinkingMayEmit` returns `classify !== 'unsupported'` |
+| Instant session restore | `extension/src/core/bootstrapSnapshotCache.ts` (stale-while-revalidate seed) is present and wired in `extension.ts` |
+| Model switching races | `providerWebviewCommands.ts` module-level generation counter + per-context mutex; `providerCommands.test.js` covers the race |
+| Interrupted stream keeps content | stream reliability/checkpoint tests in the green extension suite |
+| Workspace switch isolation | round-1 draft-scope isolation (`composerDockDraftScope` per-surface keys) + draft-chain tests |
+| Stable identity | provider config carries `profileId`; saved-test scope is keyed by workspace + profile (`providerStore.setActiveWorkspaceId`) |
+
+No R2 blocker was found on this baseline; the remaining R2 risk is
+device-level (real provider 401/429/timeout flows), covered by MD-04 tests and
+the next device smoke.
+
+## 6. Known gaps (not yet P1-complete)
 
 1. REL-02 real-device smoke (real sidecar + real browser capture + real
    workspace) must be run after the next VSIX install.
