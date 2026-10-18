@@ -488,6 +488,46 @@ def test_provider_test_retries_blank_chat_probe_before_reporting_empty_response(
     assert any("retried the compact chat probe" in item.lower() for item in result.diagnostics)
 
 
+def test_provider_test_escalates_the_probe_budget_after_a_blank_reasoning_probe() -> None:
+    """A reasoning-first model can spend the compact probe budget on hidden
+    reasoning and return blank visible text. The retry must use the same
+    bounded escalation as the coaching lanes instead of reporting the provider
+    as unusable."""
+    config = ProviderConfig(
+        name="linksub",
+        base_url="https://linksub.fun/v1",
+        api_key_ref="trainer.linksub",
+        model="deepseek-v4.1-flash",
+    )
+    service = ProviderService()
+    fake_client = MagicMock()
+    budgets: list[int | None] = []
+    compact_attempts = 0
+
+    def completion_side_effect(*, messages: list[dict[str, str]], **kwargs: object):
+        nonlocal compact_attempts
+        budgets.append(kwargs.get("max_tokens"))
+        last_user = messages[-1]["content"]
+        mock_choice = MagicMock()
+        if "只返回一个可见中文短句：provider ready。" in last_user:
+            compact_attempts += 1
+            mock_choice.message.content = "" if compact_attempts == 1 else "provider ready。"
+        else:
+            mock_choice.message.content = _provider_test_reply_for_prompt(last_user, "pong")
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        return mock_response
+
+    fake_client.chat.completions.create.side_effect = completion_side_effect
+
+    with patch.object(service, "_get_sync_openai_class", return_value=MagicMock(return_value=fake_client)):
+        result = service.test(config, "sk-test", response_language="zh-CN")
+
+    assert result.ok is True
+    assert budgets[0] == 1024
+    assert budgets[1] == 8192
+
+
 def test_provider_test_keeps_a_trusted_visible_reply_when_language_probe_is_inconclusive() -> None:
     config = ProviderConfig(
         name="minimax-provider",

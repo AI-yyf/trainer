@@ -4987,6 +4987,13 @@ class ProviderService:
                 diagnostics = []
                 hidden_reasoning_observed = False
                 probe_max_tokens = _visible_probe_max_tokens(provider)
+                # Reasoning-first models can spend the whole compact-probe
+                # budget on hidden reasoning; retries use the same bounded
+                # escalation as the coaching lanes so a working model is not
+                # reported as an unusable provider.
+                probe_retry_max_tokens = (
+                    self._escalated_chat_budget(probe_max_tokens) or probe_max_tokens
+                )
                 if (
                     self._configured_protocol(provider) == "gemini_generate_content"
                     and not self._gemini_base_url_is_google_native(provider)
@@ -5047,7 +5054,7 @@ class ProviderService:
                                         }
                                     ],
                                     "temperature": 0,
-                                        "max_tokens": probe_max_tokens,
+                                        "max_tokens": probe_retry_max_tokens,
                                 },
                                 provider,
                             )
@@ -5085,7 +5092,7 @@ class ProviderService:
                                         }
                                 ],
                                 "temperature": 0,
-                                "max_tokens": probe_max_tokens,
+                                "max_tokens": probe_retry_max_tokens,
                             },
                             provider,
                         )
@@ -5114,7 +5121,7 @@ class ProviderService:
                     if not preview:
                         reasoning_budget_exhausted = _reasoning_budget_exhausted(
                             latest_probe_response,
-                            max_tokens=probe_max_tokens,
+                            max_tokens=max(probe_max_tokens, probe_retry_max_tokens),
                         )
                         if hidden_reasoning_observed:
                             diagnostics.append(

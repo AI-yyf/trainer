@@ -57,19 +57,23 @@ no diagnostic trail.
 | Before the fix | 4 passed / 60 local_fallback (64 turns) |
 | After the first escalation (4096) | **54 passed / 1 failed / 9 local_fallback** |
 | After tuning to 8192, previously failing subset (`03-nested-alias`, C2, C3, D1) | **8/8 passed**, 0 fallback |
-| Final full 32-case rerun (8192) | **59 passed / 2 failed / 3 local_fallback** (64 turns) |
+| Final full rerun (8192, before probe fix) | 59 passed / 2 failed / 3 local_fallback |
+| **Final full rerun (8192 + probe escalation)** | **62 passed / 2 failed / 0 local_fallback** |
 
-The final rerun's residual, with the real provider log:
+The probe path (`/provider/test`) now uses the same bounded escalation: a
+blank compact probe retries at 8192 tokens instead of reporting the provider
+as unusable. Real-gateway check: `/provider/test` on `deepseek-v4.1-flash`
+returns `ok: true` with a visible zh-CN probe reply, and the full rerun's
+sidecar log has **zero** `Provider test failed` lines.
+
+The final rerun's residual is entirely teaching quality (R5), not provider
+usability:
 
 | Turns | Classification | Cause |
 | --- | --- | --- |
-| 2 | `failed` | `server sent no grounding stamp for an ungrounded step` — a grounding-honesty gap (R5), not provider usability |
-| 1 | `local_fallback` | `language_corruption` — the gateway returned mojibake; Trainer honestly refused to treat it as a clean turn |
-| 2 | `local_fallback` | `Provider test failed` — the connection-test probe path still exceeds its small probe budget on this gateway (follow-up) |
+| 2 | `failed` | `server sent no grounding stamp for an ungrounded step` (`03-nested-alias` t1, `E4-package-layout` t2) — grounding-honesty gap |
 
-57 budget escalations fired across the run; only these 5 turns did not end in
-a model-produced, trustworthy reply, and each is classified honestly rather
-than counted as a pass.
+64/64 turns are now model-produced; no local fallback remains.
 
 Regression tests added:
 `test_openai_chat_call_escalates_the_budget_after_a_truncated_reply`,
