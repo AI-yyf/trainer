@@ -360,7 +360,11 @@ async function main() {
       await page.goto(`${base}?view=${view}&scenario=${scenario}`, { waitUntil: "networkidle" });
       const tabs = await page.locator('.app-shell-nav button').allTextContents();
       check(tabs.join('|') === '对话|学习|资料', `navigation: ${view}/${scenario} has three stable destinations`);
-      check(await page.locator('.composer-shell').count() === (view === 'coach' ? 1 : 0), `composer: ${view}/${scenario} has the correct owner`);
+      // §3.7 product ruling (composerDock.ts): the persistent dock composer is
+      // mounted on the three primary destinations and nowhere else — Training
+      // owns its phase inputs, Progress/Settings are utilities.
+      const expectedComposerShells = ['coach', 'plan', 'resources'].includes(view) ? 1 : 0;
+      check(await page.locator('.composer-shell').count() === expectedComposerShells, `composer: ${view}/${scenario} has the correct owner`);
     }
   }
 
@@ -459,7 +463,9 @@ async function main() {
   await page.goto(`${base}?view=plan&scenario=ready`, { waitUntil: "networkidle" });
   check(await page.locator('[data-template="LearningHome"]').isVisible(), "learning: current learning uses the shared home template");
   const learningDisclosures = await page.locator('[data-template="LearningHome"] > [data-learning-section]').evaluateAll(items => items.map(item => item.open));
-  check(learningDisclosures.length === 4 && learningDisclosures.every(open => !open), "learning: review, route, growth and evidence start closed");
+  // §3.4 merged proof debt (due reviews + evidence to adopt) into the
+  // "reviews" section, so the home carries three closed disclosures.
+  check(learningDisclosures.length === 3 && learningDisclosures.every(open => !open), "learning: review, route and growth start closed (§3.4 evidence merged into review)");
 
   // Visual fixtures validate geometry, not native/backend completion.
   for (const width of [340, 420, 460]) for (const theme of ['dark', 'light']) for (const lang of ['zh-CN', 'en-US']) {
@@ -469,14 +475,18 @@ async function main() {
       await page.locator('#root[data-trainer-app-ready="true"]').waitFor();
       await page.waitForTimeout(100);
       const metrics = await page.evaluate(() => {
-        const visible = [...document.querySelectorAll('[data-primary-action="true"], .button--accent, .button--primary, .composer__send')].filter(el => {
+        // The dock composer's send affordance is a persistent input control on
+        // all three primary destinations (§3.7), not a competing page CTA: the
+        // one-primary-intent rule applies to page actions, so `.composer__send`
+        // is excluded. Every other accent/primary/page action still counts.
+        const visible = [...document.querySelectorAll('[data-primary-action="true"], .button--accent, .button--primary')].filter(el => {
           const r = el.getBoundingClientRect();
           return r.width > 0 && r.height > 0 && r.top < innerHeight && r.bottom > 0;
         });
         return { overflow: document.documentElement.scrollWidth - innerWidth, primary: new Set(visible).size };
       });
       check(metrics.overflow <= 1, `${view}/${width}/${theme}/${lang}: no horizontal overflow`);
-      check(metrics.primary <= 1, `${view}/${width}/${theme}/${lang}: ${metrics.primary} primary action(s) in the first viewport`);
+      check(metrics.primary <= 1, `${view}/${width}/${theme}/${lang}: ${metrics.primary} primary page action(s) in the first viewport`);
       if (keepShots) await page.screenshot({ path: path.join(shotDir, `${view}-${width}-${theme}-${lang}.png`) });
     }
   }
