@@ -242,6 +242,20 @@ async function main() {
   // ---- 1. coach thread has no dead zone -------------------------------
   await page.goto(`${base}?view=coach&scenario=ready`, { waitUntil: "networkidle" });
   await page.waitForTimeout(600);
+  // UX-02: a configured provider is send-ready with no connection test. Type
+  // a draft first (the send button is empty-draft-disabled by design), then a
+  // disabled send would mean a probe/config gate crept back into the composer.
+  await page.locator("#coach-composer").fill("geometry probe draft");
+  const sendState = await page.evaluate(() => {
+    const send = document.querySelector(".composer__send");
+    if (!send) return { missing: true };
+    return { disabled: send.disabled === true, busy: send.classList.contains("is-busy") };
+  });
+  check(
+    !sendState.missing && sendState.disabled === false && sendState.busy === false,
+    "ux-02: configured provider is send-ready without a connection test",
+  );
+  await page.locator("#coach-composer").fill("");
   const coach = await page.evaluate(() => {
     const list = document.querySelector(".coach-conversation-view__list");
     // The resume line carries a data attribute (App.tsx renders
