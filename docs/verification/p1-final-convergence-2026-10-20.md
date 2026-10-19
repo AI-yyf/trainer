@@ -5,22 +5,27 @@
 
 ## 0. 结论
 
-- **三平台发布门已全绿**：GitHub Actions `Trainer Cross-Platform Verify`
-  run `39323264391`（`ee36bc6`）9/9 jobs success；Windows x64、macOS ARM64、
-  Linux x64 的 VSIX 均完成打包、原生安装与安装态 host E2E（35/39/35 步）。
+- **三平台发布门已全绿**：`Trainer Cross-Platform Verify` run `39323264391`
+  （`ee36bc6`）9/9 jobs success；Windows x64、macOS ARM64、Linux x64 的 VSIX
+  均完成打包、原生安装与安装态 host E2E（35/39/35 步）。最终 UI 候选
+  `d8df946` 的复跑见 §2。
 - **Remote-SSH Layer 1 全绿**：run `39323280968`（`ee36bc6`）两 job success；
   11/11 transport steps（exec、逐字节读、搜索、sha256、验证 pass/fail、
   中断→unknown、断线重连）。Layer 2（真人进入真实 Remote-SSH VS Code Server
   窗口）仍是 **Not Executed**。
 - **浏览器扩展真实链路 15/15**：打包后的 MV3 扩展 + 真实 sidecar，覆盖配对、
   Web / GitHub README / PDF 采集、离线队列 + flush、库状态、撤销、旧凭据 401。
+- **200% 字号 + 八语言逐屏矩阵 96/96**：6 个 surface × 8 语言 × normal/200%；
+  截图与 report 在 [`p1-final-a11y/`](p1-final-a11y/)；期间发现并修复了
+  Progress 行标签/计数重叠与主按钮裁切。
+- **非固定真实项目样本**：连接段附件两回合，`minimax-m3` 与 `glm-5.3` 均给出
+  正确、引用真实符号的回复；独立 AI 审阅通过（附延迟/next_step caveat），
+  **真人签核仍 Pending**（§3.1）。
 - **本地工程门**：`npm run verify` exit 0；3644 server tests、2184 extension
   tests、471 geometry、200+200 experience scenarios、性能预算通过。
-- **仍不能宣告 “Trainer P1 Mature — Ready for Release”**：真实教学质量的
-  **非固定夹具样本 + 人工审阅**未成立（提供的测试中转无法完成完整 coach turn：
-  两个模型返回空回复、两个超时）；Remote-SSH Layer 2、200% 字号/八语言逐屏
-  视觉、品牌 Chrome/Edge 未打包安装、下载到项目目录的真实链路仍未执行。
-  见 §6。
+- **仍不能宣告 “Trainer P1 Mature — Ready for Release”**：真人教学签核、
+  Remote-SSH Layer 2、品牌 Chrome/Edge 未打包安装、下载到项目目录的真实链路
+  仍未执行；非固定样本还有 480s 预算与结构化 next_step 两项 caveat。见 §6。
 
 ## 1. 版本与产物事实
 
@@ -29,23 +34,23 @@
 | Repository | `https://github.com/AI-yyf/trainer` |
 | Baseline | `main` @ `7e440de614a5224c4d75ac7153c394a2ea1d4f84`（v1.3.4） |
 | Work branch | `maturity/p1-final-convergence-2026-10-20`（已推送；未合并 `main`） |
-| Release-candidate source | **`ee36bc637b9622f4e9851fe418201e96f2827275`** |
+| Release-candidate source | **`d8df946be0c242e62afc73735d3a564c2c196e0c`** |
 | Product version | `1.3.4`（`npm run verify:version`） |
 | Working tree | clean（本记录提交前） |
-| CI runs | Cross-Platform `39323264391`；Remote-SSH `39323280968`；均 success |
+| CI runs | Cross-Platform `39339620872`；Remote-SSH `39339633989`；均 success |
 | Server tests | **3644 passed**，28 subtests（`npm run verify`） |
 | Extension tests | **2184 pass / 2185 tests / 0 fail**（1 skipped） |
 
-### 三平台 VSIX（run `39323264391`，source `ee36bc6`）
+### 三平台 VSIX（run `39339620872`，source `d8df946`，`sourceDirty=false`）
 
 | Target | Bytes | SHA-256 | Native install | Host E2E |
 | --- | --- | --- | --- | --- |
-| `win32-x64` | 92,029,481 | `38e798f0429c6607baa0575b78dd24ed6fe4e6b614156c413b11c75a81cf5b11` | ok=true | **35/35**, 125.8s |
-| `darwin-arm64` | 120,837,217 | `207bbd1305bdfe84b6153aff981eee80cb2ce4f92edc8cac96a158af8ae26729` | ok=true | **35/35**, 34.7s |
-| `linux-x64` | 154,930,073 | `e06fb36791c9baf7495d4b7dc0f5aaa8254e7d1a60a5ee43e6c7debc05c962b5` | ok=true | **39/39**, 32.5s |
+| `win32-x64` | 92,725,372 | `274d119fe46dcaf920df5cf1443484fe426cf23131a44987f8ff061afe620024` | ok=true | **35/35**, 131.3s |
+| `darwin-arm64` | 121,948,036 | `8cb6457d2f076cef50d2661e053ffe434fa2b3c38161ad82615f7b27786542c2` | ok=true | **35/35**, 28.3s |
+| `linux-x64` | 156,320,375 | `c6fb7243e54d3e52f6721fc85a74ea36202499f3b9bacd13b60f256ee4594037` | ok=true | **39/39**, 26.3s |
 
-每个 VSIX 同时上传 `.vsix.build.json`（来源提交、平台、运行时依赖、文件
-SHA-256）。机器可读汇总见
+每个 VSIX 的 `.vsix.build.json` 记录来源提交、平台、运行时依赖和 VSIX
+SHA-256；上表的 SHA-256 已用下载后的 VSIX 文件逐字节复核一致。机器可读汇总见
 [`p1-final-cross-platform.json`](p1-final-cross-platform.json)。
 
 ## 2. 工程门（本地实际执行）
@@ -64,6 +69,7 @@ SHA-256）。机器可读汇总见
 | `npm run test:experience-sidecar` | **200 passed** |
 | `npm run package:browser-extension` | 20 files / **62,184 bytes**，8 个 `_locales` |
 | `npm run test:browser-capture-e2e` | **15 / 15**（packaged MV3 + real sidecar） |
+| `npm run test:ui-a11y` | **96 / 96**（8 语言 × 6 view × normal/200% 字号；见 §7） |
 | `npm run test:vsix-e2e` | 本地 35/35（dc43797 产物）；CI 三平台另见 §1 |
 | `npm run perf:probe` | budgets pass（见 §4） |
 | `node scripts/capture-ui-golden.mjs` | 10/10 screenshots |
@@ -76,16 +82,33 @@ SHA-256）。机器可读汇总见
 | 历史 28 案例 | 55 passed / 1 honest fallback | 已归档在 `2026-10-13-teaching-journeys-report.md` |
 | Live provider smoke（`linksub.fun` / `minimax-m3`） | success，7.99s | 小提示词探测 |
 | 2 案例真实子集（`minimax-m3`） | 3 passed / 1 provider_error（`ReadTimeout`） | 上游超时；未伪装为通过 |
-| 非固定真实项目探针（本仓库 `server/app/network_fetch.py`） | **未成立** | `deepseek-v4.1-flash` 与 `glm-5.3` 返回空/截断回复，产品落到确定性 intake 模板；`minimax-m3` / `kimi-k3` 在完整 coach turn 上超时（300s/600s） |
+| 非固定真实项目样本（`network_fetch.py` 连接段，57 行） | **内容质量独立审阅通过（附 caveat）** | `minimax-m3` 2,535/803 chars（508.73s/3.91s）；`glm-5.3` 1,496/1,348 chars（398.43s/35.48s）；原文与审阅见 §3.1 |
+
+### 3.1 非固定真实项目样本
+
+- 附件只含 `server/app/network_fetch.py` 的连接段（`_ResolvedAddress` /
+  `_ResolvedTarget` / `_connect_verified` / `_remaining_timeout`），57 行 /
+  2,158 字符，SHA-256 `b12d0be223cf23e667d8583ec4892b640db0e3882763d68849c4150a936eaef2`。
+  完整文件版本在中转上返回空/截断，已不作为样本。
+- 原始回复：
+  [`minimax-m3`](../maturity/2026-10-20-real-project-probe-minimax-m3.json) /
+  [`glm-5.3`](../maturity/2026-10-20-real-project-probe-glm-5.3.json)。
+- 独立 AI 审阅记录：
+  [`2026-10-20-real-project-review.md`](../maturity/2026-10-20-real-project-review.md)。
+  **该记录明确不是真人审阅；owner 人工签核仍为 Pending。**
 
 诚实结论：
 
-- 固定 32 案例矩阵的 **64/64** 是当前唯一完整的真实模型教学证据；它不是
-  “所有真实教学质量合格”的证明。
-- 非固定真实项目样本在本次提供的测试中转上**没有取得可用模型回复**，因此
-  不计为教学通过，也不能替代人工审阅。产品在该情形下返回的是安全的 intake
-  模板（不伪造下一步），但这不是高质量教学回答。
-- **人工审阅未执行**；不得把 Agent 评价或固定矩阵通过记作人工审阅。
+- 两个模型都正确解释了 `getaddrinfo` 的 AAAA 优先、`socket.connect()` 耗尽
+  deadline、`_connect_verified` 的排序 + 5s 单地址上限，并给出了可执行的
+  最小验证/测试切入点；内容质量通过独立审阅。
+- **Caveat 1**：结构化 `coach_turn.next_step` 仍是泛化句（“先说清规则…” /
+  “先在 network_fetch.py 里改一个小点…”），正文里的具体动作没有进入该字段；
+  若 UI 只显示结构化字段，下一步会偏弱。
+- **Caveat 2**：`minimax-m3` 回合 1 508.73s，超过 480s coach 预算（扩展会先
+  超时）；`glm-5.3` 398.43s 在预算内但很慢。这是模型/中转延迟，不是发送链路
+  逻辑错误；回合 2 为 3.91s / 35.48s。
+- **人工审阅仍未执行**；不得把独立 Agent 审阅或固定矩阵通过记作真人审阅。
 
 ## 4. 性能实测
 
@@ -114,13 +137,16 @@ SHA-256）。机器可读汇总见
 | 浏览器采集把 5xx/超时谎报为“Trainer 未运行” | 队列分支无条件 `recordConnection('offline')` | 仅 transport 失败记 offline；8 语言排队文案改为“未能完成采集” | 15/15 浏览器 E2E；copy tests 63/63 |
 | 安装态 E2E 等待隐式 provider 探测 | 产品已不在保存时强制探测 | E2E 显式 `trainer.provider.test` | 三平台 host E2E 35/39/35 |
 | 安装态 E2E 标题断言过期 | 断言未跟上空白 pane title 设计 | 读取空标题赋值，断言单标题契约 | 三平台 title/theme 步 green |
+| Progress 200% 字号标签/计数重叠 | 按钮内 flex 容器不允许换行，count 从标签内部开始 | `.progress-view__row-toggle` 允许 wrap；count 改为可换行 | 96/96 a11y；`progressRowOverlaps=0` |
+| Progress 主按钮 200% 字号被裁切 | 共享 `.button` 的 `white-space: nowrap` | 该主操作允许换行、`max-width:100%` | de-DE 200% 截图 |
+| 八语言/200% 视觉无逐屏证据 | 只有 420/460 的 golden 与 DOM 矩阵 | 新增 8 语言 × 6 view × normal/200% 截图与断言 | `npm run test:ui-a11y` 96/96 |
 
 ## 6. 功能矩阵与遗留
 
 | 模块 | 实现状态 | 自动化 | 原生验收 | 遗留问题 |
 | --- | --- | --- | --- | --- |
-| Coach | 完整 | 2184 ext + 200 preview + 200 sidecar | 三平台 host E2E | 非固定真实项目样本未取得可用模型回复 |
-| Provider | 完整 | provider/config/race 测试 | live smoke + 三平台显式 test | 测试中转在长 coach turn 上超时/空回复 |
+| Coach | 完整 | 2184 ext + 200 preview + 200 sidecar | 三平台 host E2E | 非固定样本内容审阅通过；真人签核 Pending；结构化 next_step 泛化 |
+| Provider | 完整 | provider/config/race 测试 | live smoke + 三平台显式 test | `minimax-m3` 508.7s 超 480s 预算；`glm-5.3` 398.4s 偏慢 |
 | Learning | 完整 | geometry + 200 matrix | 三平台 host state | 无已知阻断 |
 | Training | 完整 | server + host E2E | 三平台 host E2E | 无已知阻断 |
 | Memory | 完整 | server suite | host reopen/隔离 | 无已知阻断 |
@@ -128,14 +154,16 @@ SHA-256）。机器可读汇总见
 | Browser Extension | 完整 | 6 组 unit + 15 项真实 E2E | Chrome for Testing + 真实 sidecar | 品牌 Chrome 155 / Edge 通过 `--load-extension` 安装不可自动化 |
 | Remote SSH | Layer 1 完整 | Linux transport E2E 11/11 | CI ubuntu green | **Layer 2 真人窗口 Not Executed** |
 | MCP | 完整 | authority + client 测试 | 未接真实 MCP server | 真实 server 发现/失败恢复未设备验收 |
-| Settings | 完整 | geometry + screenshots | 三平台 title/theme（dark/light/HC） | 200% 字号 / 八语言逐屏截图未执行 |
+| Settings | 完整 | geometry + screenshots | 三平台 title/theme（dark/light/HC） | 200%/八语言 96/96 已过；真人逐屏签核 Pending |
 | Release | 三平台产物 | package + install + host E2E | **win32-x64 / darwin-arm64 / linux-x64 全绿** | 正式 tag/Release 未发布（授权边界） |
 
 **明确未执行（Not Executed，不计为 Passed）**
 
-1. 非固定复杂真实项目的可用真实模型教学样本 + 人工审阅。
+1. 非固定真实项目样本的 **owner/真人教学签核**（内容样本与独立 AI 审阅已完成，
+   见 §3.1；Agent 审阅不能替代人工）。
 2. 真实 Remote-SSH VS Code Server 窗口（Layer 2）人工验收。
-3. 200% 字号与八语言逐屏截图审查（八语言 200 场景矩阵已通过 DOM 断言）。
+3. 96 张 200%/八语言截图已生成并通过自动断言；**人工逐屏签核**仍 Pending
+   （本次人工查看了 4 张 contact sheet，其余留作 owner 复核）。
 4. 品牌 Chrome / Edge 的 unpacked extension 安装（Chrome 155 已移除
    `--load-extension`；Edge 未安装）；Chrome for Testing 已通过。
 5. PDF / GitHub 仓库 **下载到当前允许的项目工作区** 的真实浏览器 E2E
@@ -149,6 +177,14 @@ SHA-256）。机器可读汇总见
   Resources、Progress、Settings（连接/快速设置）、Skill palette/manager、narrow。
 - 逐屏人工检查 6 个主面：无遮挡、裁切、重复主操作或死按钮；Learning/Training/
   Progress 首屏各只有一个主操作；Settings 只呈现一个阻塞项。
+- **200% 字号 + 八语言矩阵**：`npm run test:ui-a11y` 生成 96 张截图
+  （8 语言 × 6 view × normal-light/font200-dark），断言横向溢出、占位符文本和
+  Progress 行重叠，**96/96 pass**。证据：
+  [`p1-final-a11y/report.json`](p1-final-a11y/report.json) 与
+  [`p1-final-a11y/`](p1-final-a11y/) 下 16 张 contact sheet。
+- 该矩阵发现并修复了两个真实 200% 缺陷：Progress 标签/计数重叠（按钮内 flex
+  不换行）与 Progress 主按钮被裁切（共享按钮 nowrap）。de-DE/zh-CN 200% 与
+  de-DE normal 的 contact sheet 已人工复核；其余语言 sheet 留作 owner 逐屏签核。
 - Coach 短会话底部锚定、顶部留白是 CSS 中记录的设计决定，不是回归；长会话由
   300 消息性能探针覆盖。
 - 品牌 Chrome 155 的 flag 限制是浏览器行为，不是扩展缺陷；打包 MV3 已由
@@ -166,6 +202,7 @@ npm run test:experience-matrix
 npm run test:experience-sidecar
 npm run package:browser-extension
 npm run test:browser-capture-e2e
+npm run test:ui-a11y
 npm run perf:probe
 npm run package:vsix
 TRAINER_SKIP_VSIX_REBUILD=1 node extension/scripts/verify-vsix-install.mjs
@@ -185,11 +222,13 @@ gh workflow run nightly-remote-ssh.yml \
 
 ## 9. 最终判定
 
-**三平台发布门：GREEN（run `39323264391`）。**
-**Remote-SSH Layer 1：GREEN（run `39323280968`）；Layer 2：Not Executed。**
+**三平台发布门：GREEN（run `39339620872`，`d8df946`；35/39/35 host steps）。**
+**Remote-SSH Layer 1：GREEN（run `39339633989`）；Layer 2：Not Executed。**
 **浏览器扩展真实链路：GREEN（15/15）。**
+**200% 字号 + 八语言视觉矩阵：GREEN（96/96）。**
+**非固定真实项目样本：内容独立审阅通过；真人签核 Pending。**
 
 **Trainer P1 Mature — Ready for Release：NOT YET。**
-剩余阻断项是 §6 的 1–5：非固定真实教学质量与人工审阅未成立、Remote-SSH
-Layer 2、200% 字号/八语言逐屏、品牌 Chrome/Edge 安装、下载到项目目录的真实
-浏览器链路。它们不是已通过的项，不能用固定矩阵或 Agent 评价替代。
+剩余阻断项是 §6 的 1–6：owner/真人教学签核、Remote-SSH Layer 2、96 张截图的
+人工逐屏签核、品牌 Chrome/Edge 安装、下载到项目目录的真实浏览器链路、正式
+Release 授权。它们不是已通过的项，不能用固定矩阵或 Agent 评价替代。

@@ -1,9 +1,9 @@
 {
- "runId": 39323264391,
- "runUrl": "https://github.com/AI-yyf/trainer/actions/runs/39323264391",
+ "runId": 39339620872,
+ "runUrl": "https://github.com/AI-yyf/trainer/actions/runs/39339620872",
  "workflow": "Trainer Cross-Platform Verify",
  "event": "workflow_dispatch",
- "headSha": "ee36bc637b9622f4e9851fe418201e96f2827275",
+ "headSha": "d8df946be0c242e62afc73735d3a564c2c196e0c",
  "conclusion": "success",
  "jobCount": 9,
  "allJobsGreen": true,
@@ -12,7 +12,7 @@
    "ok": true,
    "steps": 35,
    "failing_steps": [],
-   "durationMs": 34739,
+   "durationMs": 28272,
    "provider": {
     "source": "fixture",
     "protocol": "openai_chat_completions_compatible",
@@ -49,7 +49,7 @@
    "ok": true,
    "steps": 39,
    "failing_steps": [],
-   "durationMs": 32526,
+   "durationMs": 26274,
    "provider": {
     "source": "fixture",
     "protocol": "openai_chat_completions_compatible",
@@ -86,7 +86,7 @@
    "ok": true,
    "steps": 35,
    "failing_steps": [],
-   "durationMs": 125824,
+   "durationMs": 131329,
    "provider": {
     "source": "fixture",
     "protocol": "openai_chat_completions_compatible",
@@ -129,33 +129,35 @@
   {
    "platform": "win32-x64",
    "artifact": "trainer-vsix-windows-latest-win32-x64",
-   "bytes": 92029481,
-   "sha256": "38e798f0429c6607baa0575b78dd24ed6fe4e6b614156c413b11c75a81cf5b11"
+   "bytes": 92725372,
+   "sha256": "274d119fe46dcaf920df5cf1443484fe426cf23131a44987f8ff061afe620024",
+   "sourceCommit": "d8df946be0c242e62afc73735d3a564c2c196e0c",
+   "sourceDirty": false
   },
   {
    "platform": "darwin-arm64",
    "artifact": "trainer-vsix-macos-latest-darwin-arm64",
-   "bytes": 120837217,
-   "sha256": "207bbd1305bdfe84b6153aff981eee80cb2ce4f92edc8cac96a158af8ae26729"
+   "bytes": 121948036,
+   "sha256": "8cb6457d2f076cef50d2661e053ffe434fa2b3c38161ad82615f7b27786542c2",
+   "sourceCommit": "d8df946be0c242e62afc73735d3a564c2c196e0c",
+   "sourceDirty": false
   },
   {
    "platform": "linux-x64",
    "artifact": "trainer-vsix-ubuntu-latest-linux-x64",
-   "bytes": 154930073,
-   "sha256": "e06fb36791c9baf7495d4b7dc0f5aaa8254e7d1a60a5ee43e6c7debc05c962b5"
+   "bytes": 156320375,
+   "sha256": "c6fb7243e54d3e52f6721fc85a74ea36202499f3b9bacd13b60f256ee4594037",
+   "sourceCommit": "d8df946be0c242e62afc73735d3a564c2c196e0c",
+   "sourceDirty": false
   }
  ],
  "remoteSsh": {
-  "runId": 39323280968,
-  "runUrl": "https://github.com/AI-yyf/trainer/actions/runs/39323280968",
-  "headSha": "ee36bc637b9622f4e9851fe418201e96f2827275",
+  "runId": 39339633989,
+  "runUrl": "https://github.com/AI-yyf/trainer/actions/runs/39339633989",
+  "headSha": "d8df946be0c242e62afc73735d3a564c2c196e0c",
   "conclusion": "success",
-  "jobs": {
-   "Remote-SSH E2E (ubuntu)": "success",
-   "Server regression (ubuntu)": "success"
-  },
-  "layer1Transport": "11/11 steps ok (exec, byte-exact read, search, sha256, verification pass/fail, interrupted->unknown, reconnect)",
-  "layer2Manual": "Not Executed (requires a human in a real Remote-SSH VS Code Server window)"
+  "layer1Transport": "11/11 steps ok",
+  "layer2Manual": "Not Executed"
  },
  "browserCaptureE2E": {
   "ok": true,
@@ -174,7 +176,19 @@
    "old credential 401"
   ],
   "artifact": "dist/trainer-capture-extension.zip (20 files, 62184 bytes, 8 locales)",
-  "boundary": "Branded Google Chrome 155 no longer honors --load-extension for unpacked extensions; Edge not installed. The packaged MV3 artifact is validated in Chrome for Testing."
+  "boundary": "Branded Google Chrome 155 no longer honors --load-extension; Edge not installed."
  },
- "generatedAt": "2026-10-19T21:10:00Z"
+ "uiAccessibility": {
+  "pages": 96,
+  "passed": 96,
+  "failed": 0,
+  "modes": [
+   "normal-light",
+   "font200-dark"
+  ],
+  "languages": 8,
+  "views": 6,
+  "evidence": "docs/verification/p1-final-a11y/"
+ },
+ "generatedAt": "2026-10-20T07:55:00Z"
 }
