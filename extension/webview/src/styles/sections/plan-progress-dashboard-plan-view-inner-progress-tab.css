@@ -12,5 +12,13 @@
 
 .progress-view__nudge-action {
   margin-top: var(--space-1);
+  /* At 200% font the translated label exceeds a 420px sidebar; the shared
+     .button rule is nowrap, so this primary action would clip. Let it wrap
+     inside the pane instead of overflowing. */
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+  text-align: start;
 }
 

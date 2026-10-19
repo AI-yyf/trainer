@@ -75,6 +75,9 @@
   gap: var(--space-3);
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--surface-2);
+  /* At 200% font the label + count no longer fit on one 420px line. Let the
+     count drop to its own line instead of starting inside the label. */
+  flex-wrap: wrap;
 }
 
 .progress-view__row:last-child {
@@ -86,14 +89,17 @@
    at a glance. These rows were two lines each with the count marooned at the
    far right, which made four numbers look like four unrelated sentences.
    Deliberately no bar or percentage: this surface reports honest capability
-   bands, and a gauge would imply a precision the evidence does not carry. */
+   bands, and a gauge would imply a precision the evidence does not carry.
+   `flex: 0 0 auto` is load-bearing: with shrink enabled the main column gave
+   the count a start position inside the label at 200% font. */
 .progress-view__row-main {
   display: flex;
   flex-direction: row;
   align-items: baseline;
   gap: var(--space-2);
   min-width: 0;
-  flex: 1 1 auto;
+  max-width: 100%;
+  flex: 0 0 auto;
 }
 
 .progress-view__dimension {
@@ -114,9 +120,11 @@
 .progress-view__evidence {
   font-size: var(--trainer-font-2xs);
   color: var(--fg-muted);
-  white-space: nowrap;
+  white-space: normal;
   flex: none;
   min-inline-size: 7.5em;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   text-align: end;
   font-variant-numeric: tabular-nums;
 }
@@ -2794,6 +2802,11 @@
   justify-content: space-between;
   gap: var(--space-2);
   inline-size: 100%;
+  /* The row is a <button>, so this is the real flex container. With 200% font
+     (or long German labels at normal size) the count no longer fits beside the
+     label; wrap it onto its own line rather than letting it start inside the
+     label. */
+  flex-wrap: wrap;
   padding: 0;
   border: none;
   background: none;
