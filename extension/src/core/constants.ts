@@ -213,10 +213,12 @@ export const SIDECAR_DEFAULTS = {
   // When the sidecar reported ready recently, skip re-probing before each
   // command and trust the cached status.
   healthCheckTtlMs: 10_000,
-  // The first macOS launch after an update validates the bundled native
-  // libraries. This exceeded 60s during the native regression with concurrent
-  // builds/tests; keep the bounded startup window separate from fast probes.
-  startupTimeoutMs: process.platform === 'darwin' ? 120_000 : 20_000,
+  // First launch after an install/update validates the bundled native
+  // libraries; macOS exceeded 60s during the native regression, and Windows
+  // hosted runners exceed 20s while the ~245 MB bundled tree is first opened
+  // (AV scanning). Keep one bounded first-launch window on every platform,
+  // separate from the fast health probes above.
+  startupTimeoutMs: 120_000,
   requestTimeoutMs: 15_000,
   providerRequestTimeoutMs: 90_000,
   // A full coach turn runs the ReAct loop server-side; reasoning-first

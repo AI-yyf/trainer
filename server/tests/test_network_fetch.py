@@ -79,6 +79,88 @@ def test_controlled_fetch_connects_the_vetted_ip_without_re_resolving(monkeypatc
     assert connected_to == [("93.184.216.34", 80)]
 
 
+def _target_with(addresses: list[tuple[int, tuple[object, ...]]]) -> _ResolvedTarget:
+    return _ResolvedTarget(
+        url="http://source.example/article",
+        scheme="http",
+        host="source.example",
+        port=80,
+        request_target="/article",
+        addresses=tuple(
+            _ResolvedAddress(family, socket.IPPROTO_TCP, sockaddr)
+            for family, sockaddr in addresses
+        ),
+    )
+
+
+def test_controlled_fetch_prefers_ipv4_when_dns_returns_aaaa_first(monkeypatch) -> None:
+    attempted: list[tuple[int, tuple[object, ...]]] = []
+
+    class FakeSocket:
+        def __init__(self, family: int) -> None:
+            self.family = family
+
+        def settimeout(self, _timeout: float) -> None:
+            pass
+
+        def connect(self, sockaddr: tuple[object, ...]) -> None:
+            attempted.append((self.family, sockaddr))
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "app.network_fetch.socket.socket",
+        lambda family, *_args, **_kwargs: FakeSocket(family),
+    )
+    target = _target_with(
+        [
+            (socket.AF_INET6, ("2606:4700::1", 80, 0, 0)),
+            (socket.AF_INET, ("93.184.216.34", 80)),
+        ]
+    )
+
+    connected = ControlledHttpFetcher()._connect_verified(target)
+
+    assert connected.family == socket.AF_INET
+    assert attempted == [(socket.AF_INET, ("93.184.216.34", 80))]
+
+
+def test_controlled_fetch_falls_back_to_ipv6_after_ipv4_refusal(monkeypatch) -> None:
+    attempted: list[int] = []
+
+    class FakeSocket:
+        def __init__(self, family: int) -> None:
+            self.family = family
+
+        def settimeout(self, _timeout: float) -> None:
+            pass
+
+        def connect(self, _sockaddr: tuple[object, ...]) -> None:
+            attempted.append(self.family)
+            if self.family == socket.AF_INET:
+                raise ConnectionRefusedError("refused")
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "app.network_fetch.socket.socket",
+        lambda family, *_args, **_kwargs: FakeSocket(family),
+    )
+    target = _target_with(
+        [
+            (socket.AF_INET6, ("2606:4700::1", 80, 0, 0)),
+            (socket.AF_INET, ("93.184.216.34", 80)),
+        ]
+    )
+
+    connected = ControlledHttpFetcher()._connect_verified(target)
+
+    assert connected.family == socket.AF_INET6
+    assert attempted == [socket.AF_INET, socket.AF_INET6]
+
+
 def test_controlled_fetch_validates_every_redirect_hop(monkeypatch) -> None:
     fetcher = ControlledHttpFetcher()
     resolved_urls: list[str] = []

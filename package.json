@@ -21,6 +21,7 @@
     "test:experience-matrix": "npx playwright test e2e/trainer-experience-matrix.spec.js --workers=4 --reporter=line",
     "test:experience-sidecar": "node ./scripts/run-real-sidecar-experience-matrix.mjs",
     "test:verification-matrix": "node ./scripts/run-verification-matrix.mjs",
+    "test:browser-capture-e2e": "node ./scripts/run-browser-capture-e2e.mjs",
     "test:vsix-e2e": "node ./extension/scripts/verify-vsix-e2e.mjs",
     "test:server": "node ./scripts/run-server-tests.mjs",
     "test": "npm run test:extension && npm run test:server",

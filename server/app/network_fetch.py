@@ -265,10 +265,18 @@ class ControlledHttpFetcher:
         deadline: float | None = None,
     ) -> socket.socket:
         failures: list[Exception] = []
-        for address in target.addresses:
+        # Prefer IPv4. getaddrinfo commonly returns AAAA first; on a host with
+        # no working IPv6 route the first connect would consume the whole
+        # deadline and the IPv4 address would never be tried. The vetted
+        # address list is unchanged — only the attempt order is.
+        ordered = sorted(
+            target.addresses,
+            key=lambda address: 0 if address.family == socket.AF_INET else 1,
+        )
+        for address in ordered:
             sock = socket.socket(address.family, socket.SOCK_STREAM, address.protocol)
             try:
-                sock.settimeout(self._remaining_timeout(deadline))
+                sock.settimeout(min(self._remaining_timeout(deadline), 5.0))
                 sock.connect(address.sockaddr)
                 if target.scheme == "https":
                     context = ssl.create_default_context()
