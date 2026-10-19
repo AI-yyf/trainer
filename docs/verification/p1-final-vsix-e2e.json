@@ -1,5 +1,6 @@
 {
  "ok": true,
+ "rebuiltCurrentVsix": false,
  "version": "1.3.4",
  "extensionId": "local.trainer-extension",
  "vsixPath": "/Users/Apple/Desktop/trainer/extension/trainer-extension-1.3.4-darwin-arm64.vsix",
@@ -16,7 +17,7 @@
    "toolProbeRequests": 2
   }
  },
- "durationMs": 45711,
+ "durationMs": 46309,
  "steps": [
   {
    "name": "find-installed-extension",
@@ -26,47 +27,47 @@
   {
    "name": "activate-installed-extension",
    "ok": true,
-   "durationMs": 9
+   "durationMs": 11
   },
   {
    "name": "open-coach-sidebar",
    "ok": true,
-   "durationMs": 1526
+   "durationMs": 1534
   },
   {
    "name": "focus-sidebar",
    "ok": true,
-   "durationMs": 2
+   "durationMs": 8
   },
   {
    "name": "restart-sidecar",
    "ok": true,
-   "durationMs": 29904
+   "durationMs": 30461
   },
   {
    "name": "probe-sidecar-health",
    "ok": true,
-   "durationMs": 8
+   "durationMs": 9
   },
   {
    "name": "admit-temporary-trainer-workspace",
    "ok": true,
-   "durationMs": 2756
+   "durationMs": 2782
   },
   {
    "name": "refresh-memory",
    "ok": true,
-   "durationMs": 28
+   "durationMs": 26
   },
   {
    "name": "upload-inline-resource",
    "ok": true,
-   "durationMs": 55
+   "durationMs": 60
   },
   {
    "name": "refresh-sandbox-capability",
    "ok": true,
-   "durationMs": 18
+   "durationMs": 21
   },
   {
    "name": "assert-sandbox-capability-truth",
@@ -76,7 +77,7 @@
   {
    "name": "provider-and-message",
    "ok": true,
-   "durationMs": 1014
+   "durationMs": 1085
   },
   {
    "name": "set-provider-verification-language",
@@ -91,27 +92,27 @@
   {
    "name": "test-provider-connection",
    "ok": true,
-   "durationMs": 849
+   "durationMs": 925
   },
   {
    "name": "await-provider-verification",
    "ok": true,
-   "durationMs": 0
+   "durationMs": 1
   },
   {
    "name": "send-coach-message",
    "ok": true,
-   "durationMs": 134
+   "durationMs": 129
   },
   {
    "name": "seed-review-queue-through-public-command",
    "ok": true,
-   "durationMs": 54
+   "durationMs": 59
   },
   {
    "name": "assert-training-review-queue-host-state",
    "ok": true,
-   "durationMs": 1
+   "durationMs": 0
   },
   {
    "name": "capture-owned-workbench-after-review-queue-command",
@@ -121,12 +122,12 @@
   {
    "name": "assert-training-theory-drill-host-state",
    "ok": true,
-   "durationMs": 1215
+   "durationMs": 1208
   },
   {
    "name": "seed-dependency-mastery-through-public-command",
    "ok": true,
-   "durationMs": 55
+   "durationMs": 53
   },
   {
    "name": "capture-owned-workbench-after-theory-drill-command",
@@ -136,7 +137,7 @@
   {
    "name": "assert-training-scenario-lab-webview-debug-state",
    "ok": true,
-   "durationMs": 630
+   "durationMs": 613
   },
   {
    "name": "capture-owned-workbench-after-scenario-restore",
@@ -146,7 +147,7 @@
   {
    "name": "assert-training-next-hop-webview-debug-state",
    "ok": true,
-   "durationMs": 2993
+   "durationMs": 3028
   },
   {
    "name": "capture-owned-workbench-after-next-hop-restore",
@@ -156,17 +157,17 @@
   {
    "name": "assert-resources-resource-detail-webview-debug-state",
    "ok": true,
-   "durationMs": 1625
+   "durationMs": 1640
   },
   {
    "name": "capture-owned-workbench-after-resource-detail-restore",
    "ok": true,
-   "durationMs": 0
+   "durationMs": 1
   },
   {
    "name": "assert-resources-embedded-preview-webview-debug-state",
    "ok": true,
-   "durationMs": 791
+   "durationMs": 789
   },
   {
    "name": "capture-owned-workbench-after-embedded-preview-restore",
@@ -176,7 +177,7 @@
   {
    "name": "assert-resources-sandbox-restore-webview-debug-state",
    "ok": true,
-   "durationMs": 43
+   "durationMs": 28
   },
   {
    "name": "capture-owned-workbench-after-sandbox-restore",
@@ -186,12 +187,12 @@
   {
    "name": "assert-title-configuration-and-theme-state",
    "ok": true,
-   "durationMs": 2601
+   "durationMs": 2622
   },
   {
    "name": "assert-cross-workspace-reopen-history-truth",
    "ok": true,
-   "durationMs": 427
+   "durationMs": 311
   }
  ],
  "evidenceSummary": {
@@ -211,5 +212,6 @@
   "themeCapturePairPassCount": 0,
   "themeCapturePairSkipCount": 3,
   "themeCapturePairFailCount": 0
- }
+ },
+ "note": "Run with TRAINER_SKIP_VSIX_REBUILD=1 against the committed 1.3.4 darwin-arm64 artifact (SHA-256 563d7840cf9bd847ee1ae8be8b1d3ccb8f587e97bebb0deb12ff9e7a9a7f2c03)."
 }
