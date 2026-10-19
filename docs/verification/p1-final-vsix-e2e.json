@@ -1,0 +1,215 @@
+{
+ "ok": true,
+ "version": "1.3.4",
+ "extensionId": "local.trainer-extension",
+ "vsixPath": "/Users/Apple/Desktop/trainer/extension/trainer-extension-1.3.4-darwin-arm64.vsix",
+ "provider": {
+  "source": "fixture",
+  "protocol": "openai_chat_completions_compatible",
+  "model": "trainer-e2e-fixture-model",
+  "usedPartialExternalOverride": false,
+  "fixtureStats": {
+   "modelsRequests": 2,
+   "chatCompletionRequests": 18,
+   "responsesRequests": 0,
+   "streamingRequests": 3,
+   "toolProbeRequests": 2
+  }
+ },
+ "durationMs": 45711,
+ "steps": [
+  {
+   "name": "find-installed-extension",
+   "ok": true,
+   "durationMs": 0
+  },
+  {
+   "name": "activate-installed-extension",
+   "ok": true,
+   "durationMs": 9
+  },
+  {
+   "name": "open-coach-sidebar",
+   "ok": true,
+   "durationMs": 1526
+  },
+  {
+   "name": "focus-sidebar",
+   "ok": true,
+   "durationMs": 2
+  },
+  {
+   "name": "restart-sidecar",
+   "ok": true,
+   "durationMs": 29904
+  },
+  {
+   "name": "probe-sidecar-health",
+   "ok": true,
+   "durationMs": 8
+  },
+  {
+   "name": "admit-temporary-trainer-workspace",
+   "ok": true,
+   "durationMs": 2756
+  },
+  {
+   "name": "refresh-memory",
+   "ok": true,
+   "durationMs": 28
+  },
+  {
+   "name": "upload-inline-resource",
+   "ok": true,
+   "durationMs": 55
+  },
+  {
+   "name": "refresh-sandbox-capability",
+   "ok": true,
+   "durationMs": 18
+  },
+  {
+   "name": "assert-sandbox-capability-truth",
+   "ok": true,
+   "durationMs": 0
+  },
+  {
+   "name": "provider-and-message",
+   "ok": true,
+   "durationMs": 1014
+  },
+  {
+   "name": "set-provider-verification-language",
+   "ok": true,
+   "durationMs": 21
+  },
+  {
+   "name": "save-provider",
+   "ok": true,
+   "durationMs": 9
+  },
+  {
+   "name": "test-provider-connection",
+   "ok": true,
+   "durationMs": 849
+  },
+  {
+   "name": "await-provider-verification",
+   "ok": true,
+   "durationMs": 0
+  },
+  {
+   "name": "send-coach-message",
+   "ok": true,
+   "durationMs": 134
+  },
+  {
+   "name": "seed-review-queue-through-public-command",
+   "ok": true,
+   "durationMs": 54
+  },
+  {
+   "name": "assert-training-review-queue-host-state",
+   "ok": true,
+   "durationMs": 1
+  },
+  {
+   "name": "capture-owned-workbench-after-review-queue-command",
+   "ok": true,
+   "durationMs": 0
+  },
+  {
+   "name": "assert-training-theory-drill-host-state",
+   "ok": true,
+   "durationMs": 1215
+  },
+  {
+   "name": "seed-dependency-mastery-through-public-command",
+   "ok": true,
+   "durationMs": 55
+  },
+  {
+   "name": "capture-owned-workbench-after-theory-drill-command",
+   "ok": true,
+   "durationMs": 1
+  },
+  {
+   "name": "assert-training-scenario-lab-webview-debug-state",
+   "ok": true,
+   "durationMs": 630
+  },
+  {
+   "name": "capture-owned-workbench-after-scenario-restore",
+   "ok": true,
+   "durationMs": 0
+  },
+  {
+   "name": "assert-training-next-hop-webview-debug-state",
+   "ok": true,
+   "durationMs": 2993
+  },
+  {
+   "name": "capture-owned-workbench-after-next-hop-restore",
+   "ok": true,
+   "durationMs": 0
+  },
+  {
+   "name": "assert-resources-resource-detail-webview-debug-state",
+   "ok": true,
+   "durationMs": 1625
+  },
+  {
+   "name": "capture-owned-workbench-after-resource-detail-restore",
+   "ok": true,
+   "durationMs": 0
+  },
+  {
+   "name": "assert-resources-embedded-preview-webview-debug-state",
+   "ok": true,
+   "durationMs": 791
+  },
+  {
+   "name": "capture-owned-workbench-after-embedded-preview-restore",
+   "ok": true,
+   "durationMs": 0
+  },
+  {
+   "name": "assert-resources-sandbox-restore-webview-debug-state",
+   "ok": true,
+   "durationMs": 43
+  },
+  {
+   "name": "capture-owned-workbench-after-sandbox-restore",
+   "ok": true,
+   "durationMs": 0
+  },
+  {
+   "name": "assert-title-configuration-and-theme-state",
+   "ok": true,
+   "durationMs": 2601
+  },
+  {
+   "name": "assert-cross-workspace-reopen-history-truth",
+   "ok": true,
+   "durationMs": 427
+  }
+ ],
+ "evidenceSummary": {
+  "evidenceScope": "installed-host-checks",
+  "visualTargetAsserted": false,
+  "visualChecksPerformed": 0,
+  "stepCountsByEvidenceScope": {
+   "host-command-state": 18,
+   "host-state": 4,
+   "native-capture-artifact": 7,
+   "webview-debug-state": 5,
+   "title-configuration-and-theme-state": 1
+  },
+  "captureStepPassCount": 0,
+  "captureStepSkipCount": 7,
+  "captureStepFailCount": 0,
+  "themeCapturePairPassCount": 0,
+  "themeCapturePairSkipCount": 3,
+  "themeCapturePairFailCount": 0
+ }
+}

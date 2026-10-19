@@ -1,0 +1,9 @@
+{
+ "ok": true,
+ "category": "success",
+ "model": "minimax-m3",
+ "protocol": "openai_chat_completions_compatible",
+ "elapsedMs": 7986,
+ "endpoint_host": "linksub.fun",
+ "note": "live provider smoke run on 2026-10-19; API key supplied via environment only and never written to the repository."
+}
