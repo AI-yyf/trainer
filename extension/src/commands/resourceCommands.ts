@@ -500,6 +500,11 @@ export async function uploadResourceCommand(
 
 /** A web capture fetches, cleans and indexes a remote page: give it room. */
 const RESOURCE_CAPTURE_TIMEOUT_MS = 120_000;
+/** First-time parse + chunk + embed can exceed the generic 15s request budget
+ *  (measured on Windows hosted runners: the server finished at ~15s but the
+ *  client had already counted the index as failed). Keep a bounded but real
+ *  long-operation budget; a genuinely hung sidecar still aborts. */
+const RESOURCE_INDEX_TIMEOUT_MS = 120_000;
 
 type LibraryCopyKey =
   | 'captureStartedBody'
@@ -855,7 +860,7 @@ export async function indexResourcesCommand(  context: CommandContext,
         workspace_id: getRuntimeWorkspaceId(context),
         resource_id: resource.id,
         enable_network: resource.kind === 'url',
-      });
+      }, { timeoutMs: RESOURCE_INDEX_TIMEOUT_MS });
       indexed.push(response);
     } catch {
       failedCount += 1;
@@ -2290,7 +2295,7 @@ async function indexUploadedResources(
         workspace_id: workspaceId,
         resource_id: resourceId,
         enable_network: isUrlResourceUpload(upload),
-      });
+      }, { timeoutMs: RESOURCE_INDEX_TIMEOUT_MS });
     } catch {
       failedCount += 1;
       continue;

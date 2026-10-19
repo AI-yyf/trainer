@@ -244,9 +244,11 @@ test('indexResourcesCommand reindexes stale records even when their coarse statu
     context.getHostState().bootstrap.resources[1],
     staleResource,
   ];
-  context.sidecarClient.postJson = async (port, requestPath, body) => {
+  const indexTimeouts = [];
+  context.sidecarClient.postJson = async (port, requestPath, body, options) => {
     context.__requests.push({ port, requestPath, body });
     assert.equal(requestPath, '/resource/index');
+    indexTimeouts.push(options?.timeoutMs);
     return {
       id: body.resource_id,
       title: staleResource.title,
@@ -264,6 +266,7 @@ test('indexResourcesCommand reindexes stale records even when their coarse statu
   const result = await indexResourcesCommand(context);
 
   assert.equal(result.ok, true);
+  assert.deepEqual(indexTimeouts, [120000]);
   assert.deepEqual(context.__requests, [
     {
       port: 34891,
@@ -1331,8 +1334,12 @@ test('uploadResourceCommand accepts inline uploads without opening picker UI', a
   };
   const { uploadResourceCommand } = loadWithVscodeMock(resourceCommandsModulePath, vscodeMock);
   const context = createContext();
-  context.sidecarClient.postJson = async (port, requestPath, body) => {
+  const indexTimeouts = [];
+  context.sidecarClient.postJson = async (port, requestPath, body, options) => {
     context.__requests.push({ port, requestPath, body });
+    if (requestPath === '/resource/index') {
+      indexTimeouts.push(options?.timeoutMs);
+    }
     if (requestPath === '/resource/upload') {
       return {
         id: 'resource-inline-1',
@@ -1379,6 +1386,7 @@ test('uploadResourceCommand accepts inline uploads without opening picker UI', a
   });
 
   assert.equal(result.ok, true);
+  assert.deepEqual(indexTimeouts, [120000]);
   assert.match(result.message ?? '', /Imported 1 resource\(s\) and indexed 1\./i);
   assert.deepEqual(context.__requests, [
     {
