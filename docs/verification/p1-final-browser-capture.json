@@ -1,0 +1,84 @@
+{
+ "ok": true,
+ "browser": "playwright-chromium",
+ "extensionDir": "/tmp/browser-capture-packaged3",
+ "target": "https://example.com/",
+ "checks": [
+  {
+   "name": "sidecar-health",
+   "ok": true,
+   "detail": "http://127.0.0.1:8765"
+  },
+  {
+   "name": "pair-code-registered",
+   "ok": true,
+   "detail": "workspace=browser-capture-e2e"
+  },
+  {
+   "name": "extension-worker",
+   "ok": true,
+   "detail": "gckalkgikddcgjkpijkjjpmjchagghih"
+  },
+  {
+   "name": "paired-in-popup",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "credential-stored",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "capture-indexed",
+   "ok": true,
+   "detail": "ok"
+  },
+  {
+   "name": "library-status",
+   "ok": true,
+   "detail": "count=1"
+  },
+  {
+   "name": "github-readme-captured",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "pdf-captured",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "multi-kind-library-status",
+   "ok": true,
+   "detail": "count=3"
+  },
+  {
+   "name": "sidecar-stopped-for-offline",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "offline-queued",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "offline-flushed",
+   "ok": true,
+   "detail": "flushed=1"
+  },
+  {
+   "name": "offline-library-status",
+   "ok": true,
+   "detail": "count=4"
+  },
+  {
+   "name": "revoked-credential-rejected",
+   "ok": true,
+   "detail": ""
+  }
+ ],
+ "generatedAt": "2026-10-19T20:48:23.192Z"
+}

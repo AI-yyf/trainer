@@ -492,12 +492,13 @@ Configuration examples for the official Gitee / GitHub servers, the full securit
 
 | Gate | Coverage | Notes |
 |---|---|---|
-| **Server tests** (pytest) | **221 files / 3,625 cases / 123,352 lines** | incl. 6 Hypothesis property-based suites + grounding/quality/reliability suites |
-| **Extension tests** (node:test) | **276 files / 2,179 cases / 87,308 lines** | source guards (copy tables pinned in `lib/i18n/segments`) + behavior tests |
+| **Server tests** (pytest) | **3,644 cases** (221 files) | incl. 6 Hypothesis property-based suites + grounding/quality/reliability suites |
+| **Extension tests** (node:test) | **2,184 passing cases** (276 files, 1 skipped) | source guards (copy tables pinned in `lib/i18n/segments`) + behavior tests |
 | **Teaching-loop acceptance** | **32 dual-turn cases (28 code + 4 literature) × (5 grounding checks + 5 quality dims)** | real model via an OpenAI-compatible relay; latest full run **64/64 turns passed** (0 failed, 0 fallback), including the 4 literature cases. Earlier 28-case 55/1 and 56/56 rounds are archived. The 2026-10-19 artifact predates per-run metadata; new runs record commit/model/platform in `report.json`, and the harness writes the canonical report plus a dated archive: `scripts/maturity/real_teaching_journeys_minimax.py` |
-| **E2E** | **11 specs / 4,335 lines** | real VS Code instance against a real model |
+| **E2E** | **11 specs / 4,335 lines** | real installed VS Code + bundled sidecar (deterministic fixture provider; live-model smoke is separate) |
 | **Experience matrix** | **200 scenarios × 2 layers** | preview fixture + real sidecar |
-| **VSIX host driver** | **33 steps** | install → activate → stream → verify → assert real webview rendering |
+| **VSIX host driver** | **35 steps (39 on Linux)** | install → activate → stream → verify → assert real webview rendering; green on win32-x64, darwin-arm64 and linux-x64 |
+| **Browser capture E2E** | **15 checks** | packaged MV3 extension + real sidecar: web, GitHub README, PDF, offline queue/flush, revoke → old credential 401 |
 | **Static analysis** | ruff + pyright + tsc | zero warnings (server pyright is a deterministic gate: `scripts/run-server-pyright.mjs`) |
 | **Security scan** | plaintext-credential gate | `scripts/verify-no-plaintext-credentials.mjs`, exit-code gated |
 | **UI geometry** | real-box assertions in the browser preview | `scripts/verify-ui-geometry.mjs` |

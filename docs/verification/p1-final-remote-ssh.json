@@ -1,0 +1,34 @@
+{
+ "runId": 39316565793,
+ "runUrl": "https://github.com/AI-yyf/trainer/actions/runs/39316565793",
+ "workflow": "Trainer Nightly Remote-SSH E2E",
+ "headSha": "6a91a14014037ce9862b988df528d03545090fa3",
+ "conclusion": "success",
+ "jobs": {
+  "Remote-SSH E2E (ubuntu)": "success",
+  "Server regression (ubuntu)": "success"
+ },
+ "layer1": {
+  "transport": "real localhost sshd (keypair auth)",
+  "steps": [
+   "provision keypair",
+   "start localhost sshd",
+   "ssh exec reaches the remote shell",
+   "seed remote workspace",
+   "read remote file byte-exact",
+   "search remote workspace",
+   "hash remote artifact (sha256 matches local)",
+   "verification completes and passes",
+   "artifact change makes the same verification fail",
+   "interrupted run leaves the outcome unknown",
+   "reconnect after disconnect"
+  ],
+  "passed": 11,
+  "failed": 0
+ },
+ "layer2": {
+  "status": "Not Executed",
+  "reason": "Requires a human inside a real Remote-SSH VS Code Server window; the workflow produces the VSIX and the bilingual manual checklist for that pass."
+ },
+ "generatedAt": "2026-10-19T20:45:00Z"
+}

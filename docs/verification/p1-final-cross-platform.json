@@ -1,0 +1,180 @@
+{
+ "runId": 39323264391,
+ "runUrl": "https://github.com/AI-yyf/trainer/actions/runs/39323264391",
+ "workflow": "Trainer Cross-Platform Verify",
+ "event": "workflow_dispatch",
+ "headSha": "ee36bc637b9622f4e9851fe418201e96f2827275",
+ "conclusion": "success",
+ "jobCount": 9,
+ "allJobsGreen": true,
+ "hostAcceptance": {
+  "macos-latest": {
+   "ok": true,
+   "steps": 35,
+   "failing_steps": [],
+   "durationMs": 34739,
+   "provider": {
+    "source": "fixture",
+    "protocol": "openai_chat_completions_compatible",
+    "model": "trainer-e2e-fixture-model",
+    "usedPartialExternalOverride": false,
+    "fixtureStats": {
+     "modelsRequests": 2,
+     "chatCompletionRequests": 18,
+     "responsesRequests": 0,
+     "streamingRequests": 3,
+     "toolProbeRequests": 2
+    }
+   },
+   "evidenceSummary": {
+    "evidenceScope": "installed-host-checks",
+    "visualTargetAsserted": false,
+    "visualChecksPerformed": 0,
+    "stepCountsByEvidenceScope": {
+     "host-command-state": 18,
+     "host-state": 4,
+     "native-capture-artifact": 7,
+     "webview-debug-state": 5,
+     "title-configuration-and-theme-state": 1
+    },
+    "captureStepPassCount": 0,
+    "captureStepSkipCount": 7,
+    "captureStepFailCount": 0,
+    "themeCapturePairPassCount": 0,
+    "themeCapturePairSkipCount": 3,
+    "themeCapturePairFailCount": 0
+   }
+  },
+  "ubuntu-latest": {
+   "ok": true,
+   "steps": 39,
+   "failing_steps": [],
+   "durationMs": 32526,
+   "provider": {
+    "source": "fixture",
+    "protocol": "openai_chat_completions_compatible",
+    "model": "trainer-e2e-fixture-model",
+    "usedPartialExternalOverride": false,
+    "fixtureStats": {
+     "modelsRequests": 2,
+     "chatCompletionRequests": 18,
+     "responsesRequests": 0,
+     "streamingRequests": 3,
+     "toolProbeRequests": 2
+    }
+   },
+   "evidenceSummary": {
+    "evidenceScope": "installed-host-checks",
+    "visualTargetAsserted": false,
+    "visualChecksPerformed": 0,
+    "stepCountsByEvidenceScope": {
+     "host-command-state": 22,
+     "host-state": 4,
+     "native-capture-artifact": 7,
+     "webview-debug-state": 5,
+     "title-configuration-and-theme-state": 1
+    },
+    "captureStepPassCount": 0,
+    "captureStepSkipCount": 7,
+    "captureStepFailCount": 0,
+    "themeCapturePairPassCount": 0,
+    "themeCapturePairSkipCount": 3,
+    "themeCapturePairFailCount": 0
+   }
+  },
+  "windows-latest": {
+   "ok": true,
+   "steps": 35,
+   "failing_steps": [],
+   "durationMs": 125824,
+   "provider": {
+    "source": "fixture",
+    "protocol": "openai_chat_completions_compatible",
+    "model": "trainer-e2e-fixture-model",
+    "usedPartialExternalOverride": false,
+    "fixtureStats": {
+     "modelsRequests": 2,
+     "chatCompletionRequests": 18,
+     "responsesRequests": 0,
+     "streamingRequests": 3,
+     "toolProbeRequests": 2
+    }
+   },
+   "evidenceSummary": {
+    "evidenceScope": "installed-host-checks",
+    "visualTargetAsserted": false,
+    "visualChecksPerformed": 0,
+    "stepCountsByEvidenceScope": {
+     "host-command-state": 18,
+     "host-state": 4,
+     "native-capture-artifact": 7,
+     "webview-debug-state": 5,
+     "title-configuration-and-theme-state": 1
+    },
+    "captureStepPassCount": 7,
+    "captureStepSkipCount": 0,
+    "captureStepFailCount": 0,
+    "themeCapturePairPassCount": 3,
+    "themeCapturePairSkipCount": 0,
+    "themeCapturePairFailCount": 0
+   }
+  }
+ },
+ "nativeInstall": {
+  "macos-latest": "ok=true (install.log)",
+  "ubuntu-latest": "ok=true (install.log)",
+  "windows-latest": "ok=true (install.log)"
+ },
+ "artifacts": [
+  {
+   "platform": "win32-x64",
+   "artifact": "trainer-vsix-windows-latest-win32-x64",
+   "bytes": 92029481,
+   "sha256": "38e798f0429c6607baa0575b78dd24ed6fe4e6b614156c413b11c75a81cf5b11"
+  },
+  {
+   "platform": "darwin-arm64",
+   "artifact": "trainer-vsix-macos-latest-darwin-arm64",
+   "bytes": 120837217,
+   "sha256": "207bbd1305bdfe84b6153aff981eee80cb2ce4f92edc8cac96a158af8ae26729"
+  },
+  {
+   "platform": "linux-x64",
+   "artifact": "trainer-vsix-ubuntu-latest-linux-x64",
+   "bytes": 154930073,
+   "sha256": "e06fb36791c9baf7495d4b7dc0f5aaa8254e7d1a60a5ee43e6c7debc05c962b5"
+  }
+ ],
+ "remoteSsh": {
+  "runId": 39323280968,
+  "runUrl": "https://github.com/AI-yyf/trainer/actions/runs/39323280968",
+  "headSha": "ee36bc637b9622f4e9851fe418201e96f2827275",
+  "conclusion": "success",
+  "jobs": {
+   "Remote-SSH E2E (ubuntu)": "success",
+   "Server regression (ubuntu)": "success"
+  },
+  "layer1Transport": "11/11 steps ok (exec, byte-exact read, search, sha256, verification pass/fail, interrupted->unknown, reconnect)",
+  "layer2Manual": "Not Executed (requires a human in a real Remote-SSH VS Code Server window)"
+ },
+ "browserCaptureE2E": {
+  "ok": true,
+  "browser": "Chrome for Testing (Playwright Chromium)",
+  "checks": 15,
+  "failures": 0,
+  "coverage": [
+   "pairing",
+   "web capture",
+   "GitHub README capture",
+   "PDF capture",
+   "offline queue",
+   "flush",
+   "library status",
+   "revoke",
+   "old credential 401"
+  ],
+  "artifact": "dist/trainer-capture-extension.zip (20 files, 62184 bytes, 8 locales)",
+  "boundary": "Branded Google Chrome 155 no longer honors --load-extension for unpacked extensions; Edge not installed. The packaged MV3 artifact is validated in Chrome for Testing."
+ },
+ "generatedAt": "2026-10-19T21:10:00Z"
+}
