@@ -174,7 +174,7 @@ Every coach turn flows through the `TeachingTurnFacts` contract and a 5-check gr
 
 On top of grounding, a **non-gating explanation-quality evaluation** scores five dimensions per reply: does it address the learner, is it in the learner&apos;s language, does it anchor the next step&apos;s symbols, does it avoid dumping full solutions in guided mode, does the reasoning sit next to the code it explains. Inputs that cannot decide a dimension return `unclear` — never a guess.
 
-The 28-case dual-turn acceptance journey runs both evaluations against a real model. Latest run: **55 通过 / 1 次诚实回退** (post-calibration); the earlier round was **56/56** (pre-calibration) — both rounds are recorded honestly, and the latest run is the current fact. Per-dimension data (e.g. reasoning markers present in 20 of 38 code-referencing turns) is in [`docs/maturity/teaching-journeys-report.md`](docs/maturity/teaching-journeys-report.md) — the single source of truth for acceptance facts (machine-readable summary: [`docs/maturity/ACCEPTANCE_FACTS.md`](docs/maturity/ACCEPTANCE_FACTS.md)).
+The 32-case dual-turn acceptance journey (28 code + 4 literature) runs both evaluations against a real model. Latest run: **64/64 turns passed** (0 failed, 0 local fallback). The earlier 28-case rounds (**55 + 1 honest fallback**, and **56/56** pre-calibration) are archived, not rewritten. Per-dimension data is in [`docs/maturity/teaching-journeys-report.md`](docs/maturity/teaching-journeys-report.md) — the single source of truth for acceptance facts (machine-readable summary: [`docs/maturity/ACCEPTANCE_FACTS.md`](docs/maturity/ACCEPTANCE_FACTS.md)).
 
 - Key code: `server/app/llm/turn_grounding.py` (governance) · `server/app/llm/explanation_quality.py` (quality) · `scripts/maturity/real_teaching_journeys_minimax.py` (acceptance harness)
 
@@ -211,8 +211,6 @@ Streaming coach chat with tool access, `$` skill palette, image attachments, ans
 - **Copy reply as Markdown** / **share** — icon-only, each revealing its own name on hover or keyboard focus (CSS labels from the same eight-language table as `aria-label`, not native tooltips)
 - **Save to library** (searchable + previewable)
 - **Convert to verifiable training card** — per message, not per session
-
-<p align="center"><img src="assets/screenshots/message-actions.png" alt="Per-message actions" width="520" /></p>
 
 ### Custom `$` Skills — create, share, install
 
@@ -496,7 +494,7 @@ Configuration examples for the official Gitee / GitHub servers, the full securit
 |---|---|---|
 | **Server tests** (pytest) | **221 files / 3,625 cases / 123,352 lines** | incl. 6 Hypothesis property-based suites + grounding/quality/reliability suites |
 | **Extension tests** (node:test) | **276 files / 2,179 cases / 87,308 lines** | source guards (copy tables pinned in `lib/i18n/segments`) + behavior tests |
-| **Teaching-loop acceptance** | **32 dual-turn cases (28 code + 4 literature) × (5 grounding checks + 5 quality dims)** | real model (MiniMax via relay); latest post-calibration run **55 通过 / 1 次诚实回退** (earlier pre-calibration round 56/56 — both recorded). Real-model acceptance covers the 28 code cases; the 4 literature cases (2026-10-17) are fixture-verified locally and their real-model round is not yet sampled — recorded honestly, no claims. Harness: `scripts/maturity/real_teaching_journeys_minimax.py` |
+| **Teaching-loop acceptance** | **32 dual-turn cases (28 code + 4 literature) × (5 grounding checks + 5 quality dims)** | real model via an OpenAI-compatible relay; latest full run **64/64 turns passed** (0 failed, 0 fallback), including the 4 literature cases. Earlier 28-case 55/1 and 56/56 rounds are archived. The 2026-10-19 artifact predates per-run metadata; new runs record commit/model/platform in `report.json`, and the harness writes the canonical report plus a dated archive: `scripts/maturity/real_teaching_journeys_minimax.py` |
 | **E2E** | **11 specs / 4,335 lines** | real VS Code instance against a real model |
 | **Experience matrix** | **200 scenarios × 2 layers** | preview fixture + real sidecar |
 | **VSIX host driver** | **33 steps** | install → activate → stream → verify → assert real webview rendering |

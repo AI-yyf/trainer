@@ -1039,6 +1039,20 @@ writeProgress();
         });
       }, { ok: (data) => data && data.ok === true });
 
+      // Saving a complete connection is enough to send: Trainer deliberately
+      // does not force a probe on save (P1 §4.2). An installed-host acceptance
+      // run still wants the diagnostic path exercised, so call it explicitly
+      // and assert its real result instead of waiting for an implicit side effect.
+      await record("test-provider-connection", async () => {
+        return await vscode.commands.executeCommand("trainer.provider.test", {
+          responseLanguage: "zh-CN",
+        });
+      }, {
+        ok: (data) => data && data.ok === true,
+        errorMessage: (data) =>
+          "Explicit provider test did not succeed: " + JSON.stringify(data),
+      });
+
       await record("await-provider-verification", async () => {
         const deadline = Date.now() + providerBoundRequestTimeoutMs;
         while (Date.now() < deadline) {
@@ -2424,14 +2438,18 @@ writeProgress();
               typeof data.containerTitle === "string" &&
               data.containerTitle.toLowerCase() === "trainer" &&
               data.viewId === "trainer.sidebar" &&
+              // Shipped contract: the manifest pane name is blank (a single
+              // space) and the runtime title is "", so VS Code shows the
+              // "Trainer" container title exactly once instead of composing
+              // "Trainer: Trainer".
               typeof data.viewName === "string" &&
-              data.viewName.toLowerCase() === "trainer" &&
+              data.viewName.trim() === "" &&
               (data.contextualTitle === null || data.contextualTitle.toLowerCase() === "trainer") &&
               typeof data.openCommandTitle === "string" &&
               /open.*sidebar/i.test(data.openCommandTitle) &&
               data.runtimeTitleAssignmentFound === true &&
               typeof data.runtimeWebviewTitle === "string" &&
-              data.runtimeWebviewTitle.toLowerCase() === "trainer" &&
+              data.runtimeWebviewTitle === "" &&
               Array.isArray(data.themeRuns) &&
               data.themeRuns.length === 3 &&
               data.themeRuns.every(
@@ -3154,9 +3172,12 @@ function readInstalledRuntimeViewTitleEvidence(installedExtensionId) {
     };
   }
   const source = fs.readFileSync(sourcePath, "utf8");
-  const assignmentMatch = source.match(/webviewView\.title\s*=\s*['"]([^'"]+)['"]/);
+  // The shipped contract assigns an empty pane title so VS Code renders the
+  // container title alone (a non-empty pane title composes "Trainer: <view>").
+  // Accept the empty assignment as evidence; only a missing assignment fails.
+  const assignmentMatch = source.match(/webviewView\.title\s*=\s*(['"])(.*?)\1/);
   return {
-    title: assignmentMatch ? assignmentMatch[1] : null,
+    title: assignmentMatch ? assignmentMatch[2] : null,
     titleAssignmentFound: Boolean(assignmentMatch),
     sourcePath,
   };

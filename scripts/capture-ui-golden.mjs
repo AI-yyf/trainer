@@ -12,8 +12,6 @@
  *   training.png              Training (训练) view with the active card
  *   settings-connected.png    Settings connection summary (connected)
  *   settings-quick-setup.png  Settings connection edit level (quick setup)
- *   message-actions.png       Coach reply with its action overflow opened
- *   message-actions-row.png   Element close-up of the action overflow
  *   skill-deck.png            `$` skill palette open in the composer
  *   skill-manager.png         Settings → Coach custom Skill manager
  *   progress.png              Progress (成长) view
@@ -219,24 +217,6 @@ const SHOTS = [
     },
   },
   {
-    // The ready coach seed is one compact reply. r2-g0-4: the overflow is
-    // opened so this shot shows the expanded per-message actions instead of
-    // duplicating the chat-first-run capture (same urlParams otherwise).
-    name: "message-actions",
-    file: "message-actions.png",
-    title: "Coach reply with per-message actions open (ready)",
-    urlParams: { view: "coach", scenario: "ready" },
-    async interact(page) { await page.locator(".template-overflow > summary").last().click(); },
-  },
-  {
-    name: "message-actions-row",
-    file: "message-actions-row.png",
-    title: "Per-message overflow actions",
-    async interact(page) { await page.locator(".template-overflow > summary").last().click(); },
-    urlParams: { view: "coach", scenario: "ready" },
-    elementSelector: ".template-overflow >> nth=-1",
-  },
-  {
     name: "skill-deck",
     file: "skill-deck.png",
     title: "$ skill palette",
@@ -365,7 +345,7 @@ async function main() {
         await openShot(page, baseUrl, shot);
         await captureShot(page, shot);
         const { width, height, bytes } = pngSize(path.join(outputDir, shot.file));
-        if (bytes < MIN_PNG_BYTES && shot.name !== "message-actions-row") {
+        if (bytes < MIN_PNG_BYTES) {
           fail(`${shot.file} looks blank (${bytes} bytes).`);
         }
         captured.push({ shot, width, height, bytes });

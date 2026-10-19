@@ -60,11 +60,13 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
 import textwrap
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -74,13 +76,12 @@ SERVER_DIR = REPO_ROOT / "server"
 if str(SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(SERVER_DIR))
 
-import httpx  # noqa: E402
-
-from app.llm.explanation_quality import (  # noqa: E402
+import httpx
+from app.llm.explanation_quality import (
     EXPLANATION_DIMENSIONS,
     evaluate_explanation_quality,
 )
-from app.llm.turn_grounding import (  # noqa: E402
+from app.llm.turn_grounding import (
     build_teaching_turn_facts,
     evaluate_turn_grounding,
 )
@@ -91,7 +92,11 @@ WORKSPACE = Path(
     os.environ.get("TRAINER_MATURITY_WORKSPACE", str(REPO_ROOT / "tmp" / "maturity-ws"))
 )
 PACING_SECONDS = float(os.environ.get("TRAINER_MATURITY_PACING_SECONDS", "12"))
-REPORT_PATH = REPO_ROOT / "docs" / "maturity" / "2026-10-13-teaching-journeys-report.md"
+# A full real-model run refreshes the standing (canonical) report and also
+# leaves a dated archive. Writing one hard-coded historical date, as this
+# harness used to do, silently rewrote 2026-10-13 on every run.
+STANDING_REPORT_PATH = REPO_ROOT / "docs" / "maturity" / "teaching-journeys-report.md"
+REPORT_PATH = STANDING_REPORT_PATH
 
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
@@ -163,6 +168,64 @@ def sidecar_base() -> str:
         "(plaintext is refused for credential-bearing requests)."
     )
     return f"{scheme}://{SIDECAR_HOST}:{SIDECAR_PORT}"
+
+
+def _git_value(*args: str) -> str:
+    """Best-effort git fact for the report; never fails a run.
+
+    The acceptance artifact used to have no commit/time/platform facts, which
+    made every report impossible to tie to a checkout. These values are
+    recorded, not inferred; a missing git binary yields ``unknown``.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return completed.stdout.strip() if completed.returncode == 0 else ""
+
+
+def build_run_metadata(result: dict, cases: list[dict], *, started_at: float) -> dict:
+    """Machine-readable run identity stored beside the classification counts.
+
+    Only the provider *host* is recorded; the URL path, query and any
+    credential stay out of the artifact.
+    """
+    provider_url = os.environ.get("TRAINER_MATURITY_PROVIDER_BASE_URL", "").strip()
+    provider_host = (urlparse(provider_url).hostname or "") if provider_url else ""
+    status = _git_value("status", "--porcelain")
+    return {
+        "schema_version": 1,
+        "harness": "scripts/maturity/real_teaching_journeys_minimax.py",
+        "mode": str(result.get("mode", "")),
+        "started_at": datetime.fromtimestamp(started_at, timezone.utc).isoformat(),
+        "finished_at": datetime.now(timezone.utc).isoformat(),
+        "git_commit": _git_value("rev-parse", "HEAD") or "unknown",
+        "git_dirty": bool(status),
+        "platform": platform.platform(),
+        "machine": platform.machine(),
+        "python": platform.python_version(),
+        "model": (
+            os.environ.get("TRAINER_MATURITY_MODEL", "MiniMax-M2.7").strip()
+            or "MiniMax-M2.7"
+        ),
+        "provider_host": provider_host,
+        "case_count": len(cases),
+        "full_matrix": len(cases) == len(CASES),
+        "turn_count": sum(len(case.get("turns", [])) for case in result.get("cases", [])),
+        "classification_counts": _classification_counts(result),
+        "fixture_ok": sum(
+            1
+            for case in result.get("cases", [])
+            if case.get("fixture", {}).get("fixture_ok")
+        ),
+    }
 
 
 def _case_file(text: str) -> str:
@@ -2317,6 +2380,25 @@ def write_report(result: dict, report_path: Path) -> None:
         f"- 回合分类统计：{counts}",
         "",
     ]
+    run = result.get("run") if isinstance(result.get("run"), dict) else None
+    if run:
+        lines += [
+            "## 运行标识",
+            "",
+            "| 字段 | 值 |",
+            "| --- | --- |",
+            f"| git commit | `{run.get('git_commit', 'unknown')}` |",
+            f"| git dirty | `{run.get('git_dirty')}` |",
+            f"| model | `{run.get('model', '')}` |",
+            f"| provider host | `{run.get('provider_host', '')}` |",
+            f"| platform | `{run.get('platform', '')}` (`{run.get('machine', '')}`) |",
+            f"| python | `{run.get('python', '')}` |",
+            f"| started (UTC) | `{run.get('started_at', '')}` |",
+            f"| finished (UTC) | `{run.get('finished_at', '')}` |",
+            f"| cases / turns | `{run.get('case_count')}` / `{run.get('turn_count')}` |",
+            f"| full matrix | `{run.get('full_matrix')}` |",
+            "",
+        ]
     if literature:
         lines += [
             (
@@ -2409,6 +2491,7 @@ def report_target_path(cases: list[dict], *, mode: str) -> Path:
 
 
 def main() -> int:
+    started_at = time.time()
     print(f"=== Trainer 教学旅程案例 harness（全矩阵 {len(CASES)} 案例） ===")
     cases = selected_cases()
     if len(cases) != len(CASES):
@@ -2440,12 +2523,31 @@ def main() -> int:
     fixture_ok = sum(1 for case in result["cases"] if case["fixture"]["fixture_ok"])
     counts = _classification_counts(result)
     explanation_summary = explanation_quality_summary(result)
+    result["run"] = build_run_metadata(result, cases, started_at=started_at)
     report_payload = {**result, "explanation_quality_summary": explanation_summary}
     (WORKSPACE / "report.json").write_text(
         json.dumps(report_payload, ensure_ascii=False, indent=1), encoding="utf-8"
     )
     report_path = report_target_path(cases, mode=result["mode"])
     write_report(result, report_path)
+    # A full real-model run refreshes the canonical report; keep the same
+    # content under its run date so history is append-only. An explicit
+    # TRAINER_MATURITY_REPORT_PATH override suppresses the archive (smoke runs
+    # must not write into the repo).
+    if (
+        not os.environ.get("TRAINER_MATURITY_REPORT_PATH", "").strip()
+        and len(cases) == len(CASES)
+        and result["mode"] != "skipped_no_credentials"
+    ):
+        archive_path = (
+            REPO_ROOT
+            / "docs"
+            / "maturity"
+            / f"{time.strftime('%Y-%m-%d')}-teaching-journeys-report.md"
+        )
+        if archive_path != report_path:
+            write_report(result, archive_path)
+            print(f"归档：{archive_path}")
     print(f"\n夹具：{fixture_ok}/{len(cases)} 通过；回合分类：{counts}")
     print(
         f"解释质量（非门控）：已评估 {explanation_summary['evaluated_turns']} 回合，"

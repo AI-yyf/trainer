@@ -1,12 +1,10 @@
-# 教学旅程案例报告（全矩阵 32 案例 · 本次 32 案例）
+# 教学旅程 28 案例报告（2026-10-13）
 
-- harness：`scripts/maturity/real_teaching_journeys_minimax.py`（32 组双回合：28 代码案例 A–G×4 + 4 文学案例 L）
+- harness：`scripts/maturity/real_teaching_journeys_minimax.py`（28 组双回合，7 类 × 4）
 - 矩阵规格：`docs/maturity/teaching-case-matrix.md`；台账与对账规则见该文件 §2（M1–M5）
 - 运行模式：`real`
-- 夹具校验（本地执行，无模型）：32/32 通过（pre-fix exit≠0 且 post-fix exit=0）
-- 回合分类统计：{'passed': 64}
-
-- 文学案例（category L）：夹具=交付物校验器（¶ 锚点、引文与原文逐字互查、栏目完整性），材料正文跨回合不变，回合 1→2 之间写完交付物；判据全部是客观结构判据，不含审美判断。
+- 夹具校验（本地执行，无模型）：28/28 通过（pre-fix exit≠0 且 post-fix exit=0）
+- 回合分类统计：{'passed': 55, 'local_fallback': 1}
 
 ## 诚实声明
 
@@ -36,7 +34,7 @@
 | D1-default-eval-time | D | 1 / 0 | passed / passed | ok / ok |  |
 | D2-closure-experiment | D | 1 / 0 | passed / passed | ok / ok |  |
 | D3-copy-semantics | D | 1 / 0 | passed / passed | ok / ok |  |
-| D4-hash-contract | D | 1 / 0 | passed / passed | ok / ok |  |
+| D4-hash-contract | D | 1 / 0 | passed / local_fallback | ok / - |  |
 | E1-argparse-entry | E | 1 / 0 | passed / passed | ok / ok |  |
 | E2-async-call-site | E | 1 / 0 | passed / passed | ok / ok |  |
 | E3-unit-test-contract | E | 1 / 0 | passed / passed | ok / ok |  |
@@ -49,23 +47,19 @@
 | G2-review-interval | G | 1 / 0 | passed / passed | ok / ok |  |
 | G3-provider-recovery | G | 1 / 0 | passed / passed | ok / ok |  |
 | G4-return-after-days | G | 1 / 0 | passed / passed | ok / ok |  |
-| L1-close-read-annotate | L | 1 / 0 | passed / passed | ok / ok |  |
-| L2-imitation-transfer | L | 1 / 0 | passed / passed | ok / ok |  |
-| L3-theory-concept-card | L | 1 / 0 | passed / passed | ok / ok |  |
-| L4-compare-two-pieces | L | 1 / 0 | passed / passed | ok / ok |  |
 
 ## 解释质量汇总（非门控观察维度）
 
-- 已评估回合：64（provider_error / local_fallback / skipped_no_credentials 回合不产出解释质量）
-- solution_dump_suspected 回合：3/64
+- 已评估回合：55（provider_error / local_fallback / skipped_no_credentials 回合不产出解释质量）
+- solution_dump_suspected 回合：5/55
 
 | 维度 | ok | weak | unclear |
 | --- | --- | --- | --- |
-| addresses_learner | 56 | 8 | 0 |
-| language_alignment | 57 | 6 | 1 |
-| anchored_symbols | 0 | 9 | 55 |
-| no_solution_dump | 53 | 3 | 8 |
-| explains_reasoning | 24 | 11 | 29 |
+| addresses_learner | 51 | 4 | 0 |
+| language_alignment | 48 | 6 | 1 |
+| anchored_symbols | 1 | 17 | 37 |
+| no_solution_dump | 42 | 5 | 8 |
+| explains_reasoning | 20 | 18 | 17 |
 
 > 解释质量是结构化上报维度（`app/llm/explanation_quality.py`），不参与 classification 判定；`unclear` 表示该回合输入不足以判定。
 

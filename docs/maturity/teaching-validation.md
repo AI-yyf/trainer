@@ -1,5 +1,10 @@
 # 真实教学质量验收（28 组双回合教学旅程）
 
+> **历史快照（2026-10-13，第 3 轮）**：本文件记录的是当时无合规凭证、56 回合全部
+> `skipped_no_credentials` 的轮次，**不构成真实模型通过证据**。后续真实模型运行
+> （含 32 案例 / 64 回合的 64/64 运行）以 [`teaching-journeys-report.md`](teaching-journeys-report.md)
+> 为唯一最新事实来源，数值摘要见 [`ACCEPTANCE_FACTS.md`](ACCEPTANCE_FACTS.md)。
+
 - 日期：2026-10-13；舞台：成熟化第 3 阶段（真实教学质量验收）
 - 脚本：`scripts/maturity/real_teaching_journeys_minimax.py`（第 3 轮收敛版：含 `TRAINER_MATURITY_CASE_IDS` 冒烟过滤与分类/对账修正；该版本随第 3 轮检查点入库，早期 3c548f3 不含上述修正）
 - 矩阵规格：`docs/maturity/teaching-case-matrix.md`；设计契约：`docs/maturity/DESIGN.md` §2/§5

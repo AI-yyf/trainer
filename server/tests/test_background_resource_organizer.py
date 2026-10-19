@@ -102,7 +102,22 @@ def test_event_sweep_indexes_on_arrival_single_flight(tmp_path: Path, monkeypatc
         # An arrival while the pass is scheduled/running coalesces into the
         # same single-flight chain instead of forking a second timer.
         runtime.request_organizer_sweep()
-        await asyncio.sleep(0.4)
+        # request_organizer_sweep() hops through call_soon_threadsafe, so the
+        # task attribute is set on a later turn of this loop.
+        for _ in range(100):
+            if runtime._organizer_sweep_task is not None:
+                break
+            await asyncio.sleep(0.01)
+        # Wait on the real task, never a fixed sleep: indexing uses a worker
+        # thread and Windows hosted runners can exceed any small wall-clock
+        # budget (this exact assertion flaked the Windows CI job).
+        for _ in range(4):
+            task = runtime._organizer_sweep_task
+            if task is None:
+                break
+            await asyncio.wait_for(task, timeout=60)
+            if runtime._organizer_sweep_task is task:
+                break
         assert runtime._organizer_sweep_pending is False
         assert (
             runtime._organizer_sweep_task is None or runtime._organizer_sweep_task.done()
