@@ -527,7 +527,8 @@ async function runCapture(target, options) {
   await TrainerCapture.recordHistory(
     buildHistoryEntry(normalizedTarget, 'queued', queueMessage, null)
   );
-  await recordConnection('offline');
+  // A 5xx/timeout means "reachable but did not finish", not "Trainer is gone".
+  await recordConnection(response.status ? 'ok' : 'offline');
   await updateBadge();
 
   if (settings.notify !== false) {
@@ -557,6 +558,7 @@ async function flushQueue(options) {
 
   let flushed = 0;
   let lastError = '';
+  let lastStatus = 0;
   let stop = false;
   const savedPaths = [];
 
@@ -604,6 +606,7 @@ async function flushQueue(options) {
     if (response.retryable) {
       queue = TrainerCapture.markQueueAttempt(queue, item.clientCaptureId, response.message);
       lastError = response.message;
+      lastStatus = Number(response.status) || 0;
       stop = true;
       break;
     }
@@ -643,7 +646,7 @@ async function flushQueue(options) {
     return { ok: true, flushed, remaining: queue.length, message };
   }
   if (lastError) {
-    await recordConnection('offline');
+    await recordConnection(lastStatus ? 'ok' : 'offline');
     return { ok: false, flushed: 0, remaining: queue.length, reason: 'offline', message: copy.queueOffline };
   }
   return { ok: true, flushed: 0, remaining: queue.length, message: copy.queueNothing };

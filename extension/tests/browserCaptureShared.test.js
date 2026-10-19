@@ -1153,6 +1153,24 @@ test('every download/offline/queue copy key exists in all eight languages', () =
   assert.equal(TrainerCapture.COPY.en.downloadPlaceholder, TrainerCapture.DEFAULT_TARGET_DIR);
 });
 
+test('queued copy describes an unfinished capture, not an offline Trainer', () => {
+  const offlineClaim =
+    /not running|未运行|no está en ejecución|n’est pas démarré|läuft nicht|起動していない|실행 중이 아니|não está em execução/i;
+  for (const locale of SUPPORTED_LOCALES) {
+    for (const key of [
+      'captureQueued',
+      'captureDownloadQueued',
+      'notifyQueuedTitle',
+    ]) {
+      assert.doesNotMatch(
+        TrainerCapture.COPY[locale][key],
+        offlineClaim,
+        `${locale}.${key} must not claim Trainer is offline; the sidecar may have answered with 5xx`,
+      );
+    }
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Popup / worker static guards (task 三 and 四)
 // ---------------------------------------------------------------------------

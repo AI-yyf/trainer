@@ -15,6 +15,7 @@
  */
 
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -50,8 +51,17 @@ function assert(condition, message) {
 }
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function offlineEnv(extra = {}) {
-  const env = { ...process.env };
+/** Chrome derives an unpacked extension's ID from its real absolute path. */
+function unpackedExtensionId(directory) {
+  const real = fs.realpathSync(directory);
+  const hash = crypto.createHash("sha256").update(real).digest("hex").slice(0, 32);
+  return hash
+    .split("")
+    .map((digit) => String.fromCharCode(97 + Number.parseInt(digit, 16)))
+    .join("");
+}
+
+function offlineEnv(extra = {}) {  const env = { ...process.env };
   for (const key of [
     "HTTP_PROXY",
     "HTTPS_PROXY",
@@ -182,21 +192,28 @@ async function main() {
 
     context = await chromium.launchPersistentContext(profileDir, {
       headless: process.env.TRAINER_BROWSER_E2E_HEADLESS === "1",
+      channel: process.env.TRAINER_BROWSER_E2E_CHANNEL || undefined,
       args: [
         `--disable-extensions-except=${extensionDir}`,
         `--load-extension=${extensionDir}`,
       ],
     });
 
-    let [worker] = context.serviceWorkers();
-    if (!worker) {
-      worker = await context.waitForEvent("serviceworker", { timeout: 30000 });
-    }
-    const extensionId = new URL(worker.url()).host;
-    ok("extension-worker", extensionId);
-
+    let extensionId = unpackedExtensionId(extensionDir);
     const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup/popup.html`);
+    try {
+      await popup.goto(`chrome-extension://${extensionId}/popup/popup.html`, {
+        timeout: 15000,
+      });
+    } catch {
+      let [worker] = context.serviceWorkers();
+      if (!worker) {
+        worker = await context.waitForEvent("serviceworker", { timeout: 30000 });
+      }
+      extensionId = new URL(worker.url()).host;
+      await popup.goto(`chrome-extension://${extensionId}/popup/popup.html`);
+    }
+    ok("extension-worker", extensionId);
     await popup.locator("#pair-panel").waitFor({ state: "visible", timeout: 30000 });
     await popup.locator("#pair-code").waitFor({ state: "visible", timeout: 30000 });
 
@@ -265,6 +282,42 @@ async function main() {
     );
     ok("library-status", `count=${status.body.library_count}`);
 
+    const captureLane = async (url, kind, title) => {
+      const result = await popup.evaluate(
+        (payload) =>
+          new Promise((resolve) => {
+            chrome.runtime.sendMessage(
+              { type: "trainer:capture", ...payload },
+              resolve,
+            );
+          }),
+        { url, kind, title },
+      );
+      assert(
+        result && (result.status === "ok" || result.status === "duplicated"),
+        `${kind} capture failed: ${JSON.stringify(result)}`,
+      );
+      return result;
+    };
+    await captureLane(
+      "https://github.com/AI-yyf/trainer",
+      "github_repo",
+      "AI-yyf/trainer",
+    );
+    ok("github-readme-captured");
+    await captureLane(
+      "https://pdfobject.com/pdf/sample.pdf",
+      "pdf",
+      "Sample PDF",
+    );
+    ok("pdf-captured");
+    const multiStatus = await browserStatus(baseUrl, credential);
+    assert(
+      Number(multiStatus.body?.library_count) >= 3,
+      `Multi-kind captures are missing: ${JSON.stringify(multiStatus.body)}`,
+    );
+    ok("multi-kind-library-status", `count=${multiStatus.body.library_count}`);
+
     // Offline queue: with the sidecar down the extension must persist the
     // capture, and a later flush must deliver it to the same library.
     await stopSidecar();
@@ -300,7 +353,7 @@ async function main() {
     ok("offline-flushed", `flushed=${flush.flushed}`);
     const flushedStatus = await browserStatus(baseUrl, credential);
     assert(
-      flushedStatus.status === 200 && Number(flushedStatus.body?.library_count) >= 2,
+      flushedStatus.status === 200 && Number(flushedStatus.body?.library_count) >= 4,
       `Flushed capture is missing from the library: ${JSON.stringify(flushedStatus.body)}`,
     );
     ok("offline-library-status", `count=${flushedStatus.body.library_count}`);
@@ -330,6 +383,18 @@ async function main() {
   }
 
   const failed = checks.filter((check) => !check.ok);
+  const report = {
+    ok: failed.length === 0,
+    browser: process.env.TRAINER_BROWSER_E2E_CHANNEL || "playwright-chromium",
+    extensionDir,
+    target: CAPTURE_URL,
+    checks,
+    generatedAt: new Date().toISOString(),
+  };
+  const reportPath = String(process.env.TRAINER_BROWSER_E2E_REPORT || "").trim();
+  if (reportPath) {
+    fs.writeFileSync(path.resolve(reportPath), `${JSON.stringify(report, null, 1)}\n`, "utf8");
+  }
   console.log(
     `\n[${failed.length === 0 ? "PASS" : "FAIL"}] ${checks.length - failed.length}/${checks.length} browser-capture checks`,
   );
