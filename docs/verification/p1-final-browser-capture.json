@@ -1,13 +1,18 @@
 {
  "ok": true,
  "browser": "playwright-chromium",
- "extensionDir": "/tmp/browser-capture-packaged3",
+ "extensionDir": "/tmp/browser-capture-packaged4",
  "target": "https://example.com/",
  "checks": [
   {
    "name": "sidecar-health",
    "ok": true,
    "detail": "http://127.0.0.1:8765"
+  },
+  {
+   "name": "workspace-session",
+   "ok": true,
+   "detail": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-browser-e2e-project-zYl3Ou"
   },
   {
    "name": "pair-code-registered",
@@ -17,7 +22,7 @@
   {
    "name": "extension-worker",
    "ok": true,
-   "detail": "gckalkgikddcgjkpijkjjpmjchagghih"
+   "detail": "gndabmoipmenfcnepkfmhljadnidphlp"
   },
   {
    "name": "paired-in-popup",
@@ -55,6 +60,36 @@
    "detail": "count=3"
   },
   {
+   "name": "pdf-downloaded",
+   "ok": true,
+   "detail": "Trainer Library/Downloads/Sample PDF.pdf"
+  },
+  {
+   "name": "pdf-not-overwritten",
+   "ok": true,
+   "detail": "Sample PDF.pdf"
+  },
+  {
+   "name": "github-repo-downloaded",
+   "ok": true,
+   "detail": "Trainer Library/Repos/Hello-World"
+  },
+  {
+   "name": "github-repo-not-overwritten",
+   "ok": true,
+   "detail": "Trainer Library/Repos/Hello-World"
+  },
+  {
+   "name": "download-404-not-retried",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "download-path-traversal-refused",
+   "ok": true,
+   "detail": ""
+  },
+  {
    "name": "sidecar-stopped-for-offline",
    "ok": true,
    "detail": ""
@@ -62,17 +97,22 @@
   {
    "name": "offline-queued",
    "ok": true,
-   "detail": ""
+   "detail": "web + pdf download"
   },
   {
    "name": "offline-flushed",
    "ok": true,
-   "detail": "flushed=1"
+   "detail": "flushed=2"
+  },
+  {
+   "name": "offline-pdf-retried",
+   "ok": true,
+   "detail": "Retry PDF.pdf"
   },
   {
    "name": "offline-library-status",
    "ok": true,
-   "detail": "count=4"
+   "detail": "count=6"
   },
   {
    "name": "revoked-credential-rejected",
@@ -80,5 +120,5 @@
    "detail": ""
   }
  ],
- "generatedAt": "2026-10-19T20:48:23.192Z"
+ "generatedAt": "2026-10-20T01:29:16.310Z"
 }

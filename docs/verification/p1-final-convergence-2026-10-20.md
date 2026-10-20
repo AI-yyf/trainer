@@ -12,8 +12,9 @@
   11/11 transport steps（exec、逐字节读、搜索、sha256、验证 pass/fail、
   中断→unknown、断线重连）。Layer 2（真人进入真实 Remote-SSH VS Code Server
   窗口）仍是 **Not Executed**。
-- **浏览器扩展真实链路 15/15**：打包后的 MV3 扩展 + 真实 sidecar，覆盖配对、
-  Web / GitHub README / PDF 采集、离线队列 + flush、库状态、撤销、旧凭据 401。
+- **浏览器扩展真实链路 23/23**：打包后的 MV3 扩展 + 真实 sidecar，覆盖配对、
+  Web / GitHub README / PDF 采集、PDF/GitHub 仓库下载到项目目录、不覆盖、
+  404 不重试、路径穿越拒绝、离线队列（web + download）+ flush、撤销、旧凭据 401。
 - **200% 字号 + 八语言逐屏矩阵 96/96**：6 个 surface × 8 语言 × normal/200%；
   截图与 report 在 [`p1-final-a11y/`](p1-final-a11y/)；期间发现并修复了
   Progress 行标签/计数重叠与主按钮裁切。
@@ -23,8 +24,9 @@
 - **本地工程门**：`npm run verify` exit 0；3644 server tests、2184 extension
   tests、471 geometry、200+200 experience scenarios、性能预算通过。
 - **仍不能宣告 “Trainer P1 Mature — Ready for Release”**：真人教学签核、
-  Remote-SSH Layer 2、品牌 Chrome/Edge 未打包安装、下载到项目目录的真实链路
-  仍未执行；非固定样本还有 480s 预算与结构化 next_step 两项 caveat。见 §6。
+  Remote-SSH Layer 2、96 张截图的人工逐屏签核、品牌 Chrome/Edge 未打包安装；
+  非固定样本还有 480s 预算与结构化 next_step 两项 caveat。见 §6。
+  PDF/GitHub 下载到项目目录已由 23/23 真实 E2E 覆盖（§7）。
 
 ## 1. 版本与产物事实
 
@@ -67,7 +69,7 @@ SHA-256；上表的 SHA-256 已用下载后的 VSIX 文件逐字节复核一致�
 | `npm run test:experience-matrix` | **200 passed** |
 | `npm run test:experience-sidecar` | **200 passed** |
 | `npm run package:browser-extension` | 20 files / **62,184 bytes**，8 个 `_locales` |
-| `npm run test:browser-capture-e2e` | **15 / 15**（packaged MV3 + real sidecar） |
+| `npm run test:browser-capture-e2e` | **23 / 23**（packaged MV3 + real sidecar，含下载） |
 | `npm run test:ui-a11y` | **96 / 96**（8 语言 × 6 view × normal/200% 字号；见 §7） |
 | `npm run test:vsix-e2e` | 本地 35/35（dc43797 产物）；CI 三平台另见 §1 |
 | `npm run perf:probe` | budgets pass（见 §4） |
@@ -133,7 +135,7 @@ SHA-256；上表的 SHA-256 已用下载后的 VSIX 文件逐字节复核一致�
 | Windows 资源索引被记为失败 | `/resource/index` 使用 15s 通用超时，Windows 首轮解析 >15s | 索引使用 120s 长任务预算 | 资源命令 40/40；CI Windows host green |
 | 受控抓取在 IPv6 不可达时超时 | 首个 AAAA 地址耗尽整个 deadline，IPv4 从不尝试 | IPv4 优先 + 单次连接上限；保留 DNS 钉扎与私网拒绝 | `test_network_fetch.py` 35 passed；live `example.com` 200 |
 | Windows 首次 sidecar 启动超时 | 非 macOS 仅 20s startup 预算 | 全平台统一 120s 有界首启窗口 | CI Windows host green |
-| 浏览器采集把 5xx/超时谎报为“Trainer 未运行” | 队列分支无条件 `recordConnection('offline')` | 仅 transport 失败记 offline；8 语言排队文案改为“未能完成采集” | 15/15 浏览器 E2E；copy tests 63/63 |
+| 浏览器采集把 5xx/超时谎报为“Trainer 未运行” | 队列分支无条件 `recordConnection('offline')` | 仅 transport 失败记 offline；8 语言排队文案改为“未能完成采集” | 23/23 浏览器 E2E（含下载）；copy tests 63/63 |
 | 安装态 E2E 等待隐式 provider 探测 | 产品已不在保存时强制探测 | E2E 显式 `trainer.provider.test` | 三平台 host E2E 35/39/35 |
 | 安装态 E2E 标题断言过期 | 断言未跟上空白 pane title 设计 | 读取空标题赋值，断言单标题契约 | 三平台 title/theme 步 green |
 | Progress 200% 字号标签/计数重叠 | 按钮内 flex 容器不允许换行，count 从标签内部开始 | `.progress-view__row-toggle` 允许 wrap；count 改为可换行 | 96/96 a11y；`progressRowOverlaps=0` |
@@ -150,8 +152,8 @@ SHA-256；上表的 SHA-256 已用下载后的 VSIX 文件逐字节复核一致�
 | Learning | 完整 | geometry + 200 matrix | 三平台 host state | 无已知阻断 |
 | Training | 完整 | server + host E2E | 三平台 host E2E | 无已知阻断 |
 | Memory | 完整 | server suite | host reopen/隔离 | 无已知阻断 |
-| Resources | 完整 | download-safety + server + matrix | 三平台 resource/preview/restore | 下载到项目目录的真实链路未做浏览器 E2E |
-| Browser Extension | 完整 | 6 组 unit + 15 项真实 E2E | Chrome for Testing + 真实 sidecar | 品牌 Chrome 155 / Edge 通过 `--load-extension` 安装不可自动化 |
+| Resources | 完整 | download-safety + server + matrix | 三平台 resource/preview/restore | 浏览器 PDF/GitHub 下载已通过真实 E2E |
+| Browser Extension | 完整 | 6 组 unit + 23 项真实 E2E | Chrome for Testing + 真实 sidecar | 品牌 Chrome 155 / Edge 通过 `--load-extension` 安装不可自动化 |
 | Remote SSH | Layer 1 完整 | Linux transport E2E 11/11 | CI ubuntu green | **Layer 2 真人窗口 Not Executed** |
 | MCP | 完整 | authority + client 测试 | 未接真实 MCP server | 真实 server 发现/失败恢复未设备验收 |
 | Settings | 完整 | geometry + screenshots | 三平台 title/theme（dark/light/HC） | 200%/八语言 96/96 已过；真人逐屏签核 Pending |
@@ -166,9 +168,7 @@ SHA-256；上表的 SHA-256 已用下载后的 VSIX 文件逐字节复核一致�
    （本次人工查看了 4 张 contact sheet，其余留作 owner 复核）。
 4. 品牌 Chrome / Edge 的 unpacked extension 安装（Chrome 155 已移除
    `--load-extension`；Edge 未安装）；Chrome for Testing 已通过。
-5. PDF / GitHub 仓库 **下载到当前允许的项目工作区** 的真实浏览器 E2E
-   （采集与索引已通过，下载安全有 server 单测）。
-6. 正式 tag / GitHub Release / 面向用户发布（需 owner 授权）。
+5. 正式 tag / GitHub Release / 面向用户发布（需 owner 授权）。
 
 ## 7. 视觉验收
 
@@ -190,6 +190,11 @@ SHA-256；上表的 SHA-256 已用下载后的 VSIX 文件逐字节复核一致�
   300 消息性能探针覆盖。
 - 品牌 Chrome 155 的 flag 限制是浏览器行为，不是扩展缺陷；打包 MV3 已由
   Chrome for Testing 验证。
+- **下载链路**：PDF 与 GitHub 仓库均真实写入 `Trainer Library/...`；同内容重下
+  返回 `duplicate-local` 且字节不变（不覆盖）；404 为不可重试失败；`../` 目标
+  目录被 422 拒绝且工作区外无写入；sidecar 离线时 web + PDF 下载排队，重启
+  flush 后 `flushed=2`、PDF 落到目标目录。证据：
+  [`p1-final-browser-capture.json`](p1-final-browser-capture.json)。
 
 ## 8. 复现命令
 
@@ -225,11 +230,11 @@ gh workflow run nightly-remote-ssh.yml \
 
 **三平台发布门：GREEN（run `39345769307`，`14f42ee`；35/39/35 host steps）。**
 **Remote-SSH Layer 1：GREEN（run `39345782386`）；Layer 2：Not Executed。**
-**浏览器扩展真实链路：GREEN（15/15）。**
+**浏览器扩展真实链路（含 PDF/GitHub 下载）：GREEN（23/23）。**
 **200% 字号 + 八语言视觉矩阵：GREEN（96/96）。**
 **非固定真实项目样本：内容独立审阅通过；真人签核 Pending。**
 
 **Trainer P1 Mature — Ready for Release：NOT YET。**
-剩余阻断项是 §6 的 1–6：owner/真人教学签核、Remote-SSH Layer 2、96 张截图的
-人工逐屏签核、品牌 Chrome/Edge 安装、下载到项目目录的真实浏览器链路、正式
-Release 授权。它们不是已通过的项，不能用固定矩阵或 Agent 评价替代。
+剩余阻断项是 §6 的 1–5：owner/真人教学签核、Remote-SSH Layer 2、96 张截图的
+人工逐屏签核、品牌 Chrome/Edge 安装、正式 Release 授权。它们不是已通过的项，
+不能用固定矩阵或 Agent 评价替代。

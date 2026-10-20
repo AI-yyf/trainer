@@ -165,21 +165,27 @@
  "browserCaptureE2E": {
   "ok": true,
   "browser": "Chrome for Testing (Playwright Chromium)",
-  "checks": 15,
+  "checks": 23,
   "failures": 0,
   "coverage": [
    "pairing",
    "web capture",
    "GitHub README capture",
    "PDF capture",
-   "offline queue",
+   "PDF download to project",
+   "GitHub repo download to project",
+   "download no-overwrite (same content reuse / duplicate-local)",
+   "download 404 is not retried",
+   "download path traversal refused",
+   "offline queue (web + PDF download)",
    "flush",
    "library status",
    "revoke",
    "old credential 401"
   ],
   "artifact": "dist/trainer-capture-extension.zip (20 files, 62184 bytes, 8 locales)",
-  "boundary": "Branded Google Chrome 155 no longer honors --load-extension; Edge not installed."
+  "boundary": "Branded Google Chrome 155 no longer honors --load-extension; Edge not installed.",
+  "evidence": "docs/verification/p1-final-browser-capture.json"
  },
  "uiAccessibility": {
   "pages": 96,
