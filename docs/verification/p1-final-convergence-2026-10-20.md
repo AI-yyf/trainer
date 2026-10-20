@@ -5,11 +5,10 @@
 
 ## 0. 结论
 
-- **三平台发布门已全绿**：`Trainer Cross-Platform Verify` run `39323264391`
-  （`ee36bc6`）9/9 jobs success；Windows x64、macOS ARM64、Linux x64 的 VSIX
-  均完成打包、原生安装与安装态 host E2E（35/39/35 步）。最终 UI 候选
-  `d8df946` 的复跑见 §2。
-- **Remote-SSH Layer 1 全绿**：run `39323280968`（`ee36bc6`）两 job success；
+- **三平台发布门已全绿**：`Trainer Cross-Platform Verify` run `39345769307`
+  （`14f42ee`）9/9 jobs success；Windows x64、macOS ARM64、Linux x64 的 VSIX
+  均完成打包、原生安装与安装态 host E2E（35/39/35 步）。最终 UI 候选 `14f42ee` 的复跑见 §1。
+- **Remote-SSH Layer 1 全绿**：run `39345782386`（`14f42ee`）两 job success；
   11/11 transport steps（exec、逐字节读、搜索、sha256、验证 pass/fail、
   中断→unknown、断线重连）。Layer 2（真人进入真实 Remote-SSH VS Code Server
   窗口）仍是 **Not Executed**。
@@ -34,20 +33,20 @@
 | Repository | `https://github.com/AI-yyf/trainer` |
 | Baseline | `main` @ `7e440de614a5224c4d75ac7153c394a2ea1d4f84`（v1.3.4） |
 | Work branch | `maturity/p1-final-convergence-2026-10-20`（已推送；未合并 `main`） |
-| Release-candidate source | **`d8df946be0c242e62afc73735d3a564c2c196e0c`** |
+| Release-candidate source | **`14f42eef1135bc55b368df19bad6eef1ff23c78d`** |
 | Product version | `1.3.4`（`npm run verify:version`） |
 | Working tree | clean（本记录提交前） |
-| CI runs | Cross-Platform `39339620872`；Remote-SSH `39339633989`；均 success |
+| CI runs | Cross-Platform `39345769307`；Remote-SSH `39345782386`；均 success |
 | Server tests | **3644 passed**，28 subtests（`npm run verify`） |
 | Extension tests | **2184 pass / 2185 tests / 0 fail**（1 skipped） |
 
-### 三平台 VSIX（run `39339620872`，source `d8df946`，`sourceDirty=false`）
+### 三平台 VSIX（run `39345769307`，source `14f42ee`，`sourceDirty=false`）
 
 | Target | Bytes | SHA-256 | Native install | Host E2E |
 | --- | --- | --- | --- | --- |
-| `win32-x64` | 92,725,372 | `274d119fe46dcaf920df5cf1443484fe426cf23131a44987f8ff061afe620024` | ok=true | **35/35**, 131.3s |
-| `darwin-arm64` | 121,948,036 | `8cb6457d2f076cef50d2661e053ffe434fa2b3c38161ad82615f7b27786542c2` | ok=true | **35/35**, 28.3s |
-| `linux-x64` | 156,320,375 | `c6fb7243e54d3e52f6721fc85a74ea36202499f3b9bacd13b60f256ee4594037` | ok=true | **39/39**, 26.3s |
+| `win32-x64` | 92,726,183 | `dee61d901e64608476f9dd5283aecb55a6efb9fad22673a425e573918b9e5973` | ok=true | **35/35**, 151.3s |
+| `darwin-arm64` | 121,950,161 | `396a09f939a9bdeb3e843c2587fb448be5448eb3aac596a01f9dd52f9fd46068` | ok=true | **35/35**, 31.3s |
+| `linux-x64` | 156,320,065 | `5a5252f7c74cd6df651447ed24d63b9362e3da99d99afe9fd1ab53e10b39a554` | ok=true | **39/39**, 30.7s |
 
 每个 VSIX 的 `.vsix.build.json` 记录来源提交、平台、运行时依赖和 VSIX
 SHA-256；上表的 SHA-256 已用下载后的 VSIX 文件逐字节复核一致。机器可读汇总见
@@ -139,6 +138,7 @@ SHA-256；上表的 SHA-256 已用下载后的 VSIX 文件逐字节复核一致�
 | 安装态 E2E 标题断言过期 | 断言未跟上空白 pane title 设计 | 读取空标题赋值，断言单标题契约 | 三平台 title/theme 步 green |
 | Progress 200% 字号标签/计数重叠 | 按钮内 flex 容器不允许换行，count 从标签内部开始 | `.progress-view__row-toggle` 允许 wrap；count 改为可换行 | 96/96 a11y；`progressRowOverlaps=0` |
 | Progress 主按钮 200% 字号被裁切 | 共享 `.button` 的 `white-space: nowrap` | 该主操作允许换行、`max-width:100%` | de-DE 200% 截图 |
+| es-ES composer 标签被压成单字母竖排 | `.template-context` 不换行，label 被两个按钮挤到 1ch | label 12em flex basis + context wrap；新增 `<4em` 断言 | es-ES 200% 截图；narrowLabels=0 |
 | 八语言/200% 视觉无逐屏证据 | 只有 420/460 的 golden 与 DOM 矩阵 | 新增 8 语言 × 6 view × normal/200% 截图与断言 | `npm run test:ui-a11y` 96/96 |
 
 ## 6. 功能矩阵与遗留
@@ -182,9 +182,10 @@ SHA-256；上表的 SHA-256 已用下载后的 VSIX 文件逐字节复核一致�
   Progress 行重叠，**96/96 pass**。证据：
   [`p1-final-a11y/report.json`](p1-final-a11y/report.json) 与
   [`p1-final-a11y/`](p1-final-a11y/) 下 16 张 contact sheet。
-- 该矩阵发现并修复了两个真实 200% 缺陷：Progress 标签/计数重叠（按钮内 flex
-  不换行）与 Progress 主按钮被裁切（共享按钮 nowrap）。de-DE/zh-CN 200% 与
-  de-DE normal 的 contact sheet 已人工复核；其余语言 sheet 留作 owner 逐屏签核。
+- 该矩阵发现并修复了三个真实 200% 缺陷：Progress 标签/计数重叠（按钮内 flex
+  不换行）、Progress 主按钮被裁切（共享按钮 nowrap）、es-ES composer 标签被
+  压成单字母竖排（context 不换行）。de-DE/zh-CN/es-ES 200% 与 de-DE/es-ES/ja-JP
+  normal 的 contact sheet 已人工复核；其余语言 sheet 留作 owner 逐屏签核。
 - Coach 短会话底部锚定、顶部留白是 CSS 中记录的设计决定，不是回归；长会话由
   300 消息性能探针覆盖。
 - 品牌 Chrome 155 的 flag 限制是浏览器行为，不是扩展缺陷；打包 MV3 已由
@@ -222,8 +223,8 @@ gh workflow run nightly-remote-ssh.yml \
 
 ## 9. 最终判定
 
-**三平台发布门：GREEN（run `39339620872`，`d8df946`；35/39/35 host steps）。**
-**Remote-SSH Layer 1：GREEN（run `39339633989`）；Layer 2：Not Executed。**
+**三平台发布门：GREEN（run `39345769307`，`14f42ee`；35/39/35 host steps）。**
+**Remote-SSH Layer 1：GREEN（run `39345782386`）；Layer 2：Not Executed。**
 **浏览器扩展真实链路：GREEN（15/15）。**
 **200% 字号 + 八语言视觉矩阵：GREEN（96/96）。**
 **非固定真实项目样本：内容独立审阅通过；真人签核 Pending。**

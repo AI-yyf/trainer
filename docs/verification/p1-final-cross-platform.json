@@ -1,9 +1,9 @@
 {
- "runId": 39339620872,
- "runUrl": "https://github.com/AI-yyf/trainer/actions/runs/39339620872",
+ "runId": 39345769307,
+ "runUrl": "https://github.com/AI-yyf/trainer/actions/runs/39345769307",
  "workflow": "Trainer Cross-Platform Verify",
  "event": "workflow_dispatch",
- "headSha": "d8df946be0c242e62afc73735d3a564c2c196e0c",
+ "headSha": "14f42eef1135bc55b368df19bad6eef1ff23c78d",
  "conclusion": "success",
  "jobCount": 9,
  "allJobsGreen": true,
@@ -12,7 +12,7 @@
    "ok": true,
    "steps": 35,
    "failing_steps": [],
-   "durationMs": 28272,
+   "durationMs": 31338,
    "provider": {
     "source": "fixture",
     "protocol": "openai_chat_completions_compatible",
@@ -49,7 +49,7 @@
    "ok": true,
    "steps": 39,
    "failing_steps": [],
-   "durationMs": 26274,
+   "durationMs": 30670,
    "provider": {
     "source": "fixture",
     "protocol": "openai_chat_completions_compatible",
@@ -86,7 +86,7 @@
    "ok": true,
    "steps": 35,
    "failing_steps": [],
-   "durationMs": 131329,
+   "durationMs": 151331,
    "provider": {
     "source": "fixture",
     "protocol": "openai_chat_completions_compatible",
@@ -129,32 +129,35 @@
   {
    "platform": "win32-x64",
    "artifact": "trainer-vsix-windows-latest-win32-x64",
-   "bytes": 92725372,
-   "sha256": "274d119fe46dcaf920df5cf1443484fe426cf23131a44987f8ff061afe620024",
-   "sourceCommit": "d8df946be0c242e62afc73735d3a564c2c196e0c",
+   "artifactId": 12231471091,
+   "bytes": 92726183,
+   "sha256": "dee61d901e64608476f9dd5283aecb55a6efb9fad22673a425e573918b9e5973",
+   "sourceCommit": "14f42eef1135bc55b368df19bad6eef1ff23c78d",
    "sourceDirty": false
   },
   {
    "platform": "darwin-arm64",
    "artifact": "trainer-vsix-macos-latest-darwin-arm64",
-   "bytes": 121948036,
-   "sha256": "8cb6457d2f076cef50d2661e053ffe434fa2b3c38161ad82615f7b27786542c2",
-   "sourceCommit": "d8df946be0c242e62afc73735d3a564c2c196e0c",
+   "artifactId": 12231495995,
+   "bytes": 121950161,
+   "sha256": "396a09f939a9bdeb3e843c2587fb448be5448eb3aac596a01f9dd52f9fd46068",
+   "sourceCommit": "14f42eef1135bc55b368df19bad6eef1ff23c78d",
    "sourceDirty": false
   },
   {
    "platform": "linux-x64",
    "artifact": "trainer-vsix-ubuntu-latest-linux-x64",
-   "bytes": 156320375,
-   "sha256": "c6fb7243e54d3e52f6721fc85a74ea36202499f3b9bacd13b60f256ee4594037",
-   "sourceCommit": "d8df946be0c242e62afc73735d3a564c2c196e0c",
+   "artifactId": 12230473273,
+   "bytes": 156320065,
+   "sha256": "5a5252f7c74cd6df651447ed24d63b9362e3da99d99afe9fd1ab53e10b39a554",
+   "sourceCommit": "14f42eef1135bc55b368df19bad6eef1ff23c78d",
    "sourceDirty": false
   }
  ],
  "remoteSsh": {
-  "runId": 39339633989,
-  "runUrl": "https://github.com/AI-yyf/trainer/actions/runs/39339633989",
-  "headSha": "d8df946be0c242e62afc73735d3a564c2c196e0c",
+  "runId": 39345782386,
+  "runUrl": "https://github.com/AI-yyf/trainer/actions/runs/39345782386",
+  "headSha": "14f42eef1135bc55b368df19bad6eef1ff23c78d",
   "conclusion": "success",
   "layer1Transport": "11/11 steps ok",
   "layer2Manual": "Not Executed"
@@ -190,5 +193,5 @@
   "views": 6,
   "evidence": "docs/verification/p1-final-a11y/"
  },
- "generatedAt": "2026-10-20T07:55:00Z"
+ "generatedAt": "2026-10-20T09:20:00Z"
 }
