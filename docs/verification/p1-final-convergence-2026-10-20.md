@@ -163,6 +163,8 @@ SHA-256；上表的 SHA-256 已用下载后的 VSIX 文件逐字节复核一致�
 
 1. 非固定真实项目样本的 **owner/真人教学签核**（内容样本与独立 AI 审阅已完成，
    见 §3.1；Agent 审阅不能替代人工）。
+   **签核入口**：[review §6 人工签核](../maturity/2026-10-20-real-project-review.md#6-人工签核owner-sign-off--required)。
+   截至本记录刷新仍为 **Pending**：已请求 owner 决策但未收到回复，**未代签**。
 2. 真实 Remote-SSH VS Code Server 窗口（Layer 2）人工验收。
 3. 96 张 200%/八语言截图已生成并通过自动断言；**人工逐屏签核**仍 Pending
    （本次人工查看了 4 张 contact sheet，其余留作 owner 复核）。

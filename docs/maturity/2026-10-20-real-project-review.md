@@ -84,6 +84,16 @@ API key 已脱敏；`grep sk-` 为 0。
    这说明“完整文件 + 长 system prompt”会触发中转限制，不能作为教学质量证据。
    本次 57 行连接段是可用样本。
 
+### 4.1 对“下一步”的事实核验
+
+- GLM 回合 2 建议的“替换 `socket.socket`、断言尝试顺序”已由 shipped tests
+  实现：`server/tests/test_network_fetch.py` 的
+  `test_controlled_fetch_prefers_ipv4_when_dns_returns_aaaa_first` 与
+  `test_controlled_fetch_falls_back_to_ipv6_after_ipv4_refusal`（35 passed）。
+  这说明模型给出的最小测试切入点是可执行且与真实实现一致的。
+- 两个模型引用的 `_connect_verified` / `_remaining_timeout` / `_ResolvedTarget` /
+  `getaddrinfo` / `socket.connect` 均存在于当前 `network_fetch.py`；没有虚构符号。
+
 ## 5. 结论
 
 - **非固定真实项目样本的内容质量：独立审阅通过（附 §4 两项 caveat）。**
@@ -91,3 +101,18 @@ API key 已脱敏；`grep sk-` 为 0。
 - 不得把本记录当作 §7.2 的“人工审阅已完成”。固定 64/64 矩阵与本样本是
   两类证据；本样本证明了真实项目文件上的解释/下一步可用，但不能替代
   人工对教学深度与迁移的判断。
+
+## 6. 人工签核（Owner sign-off — required）
+
+> 该栏只能由 owner/真人填写；AI agent 不得代签。填写后把结论回填到
+> `docs/verification/p1-final-convergence-2026-10-20.md` §6 第 1 项与 §9。
+
+- Reviewer（姓名/角色）：
+- Date：
+- Decision：☐ Approve　☐ Approve with notes　☐ Reject
+- Notes：
+- 已复核证据：`2026-10-20-real-project-probe-minimax-m3.json`、
+  `2026-10-20-real-project-probe-glm-5.3.json`、本审阅记录
+- Signature / commit：
+
+**Status: PENDING — 等待 owner 人工签核。**
