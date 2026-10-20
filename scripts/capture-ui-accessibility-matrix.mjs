@@ -157,11 +157,32 @@ async function inspectPage(page) {
         });
       }
     }
+    // At 200% font a squeezed composer label degrades to one character per
+    // line (observed in es-ES "Tras el envío"); a usable label keeps at least
+    // ~4 em of width.
+    const narrowContextLabels = [];
+    for (const span of document.querySelectorAll(".template-context > span")) {
+      const rect = span.getBoundingClientRect();
+      const fontSize = Number.parseFloat(getComputedStyle(span).fontSize);
+      if (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        Number.isFinite(fontSize) &&
+        rect.width < fontSize * 4
+      ) {
+        narrowContextLabels.push({
+          text: String(span.textContent || "").slice(0, 40),
+          width: Math.round(rect.width),
+          fontSize,
+        });
+      }
+    }
     return {
       viewportWidth,
       documentOverflow: document.documentElement.scrollWidth > viewportWidth + 1,
       overflowingElements: overflow,
       progressRowOverlaps,
+      narrowContextLabels,
       textMarkers: markers,
       textLength: text.length,
     };
@@ -224,6 +245,7 @@ async function main() {
             !inspection.documentOverflow &&
             inspection.overflowingElements.length === 0 &&
             inspection.progressRowOverlaps.length === 0 &&
+            inspection.narrowContextLabels.length === 0 &&
             inspection.textMarkers.length === 0;
           const entry = {
             mode: mode.id,
@@ -239,6 +261,7 @@ async function main() {
               `docOverflow=${inspection.documentOverflow} ` +
               `elements=${inspection.overflowingElements.length} ` +
               `progressOverlaps=${inspection.progressRowOverlaps.length} ` +
+              `narrowLabels=${inspection.narrowContextLabels.length} ` +
               `markers=${inspection.textMarkers.join(",") || "-"}`,
           );
         }

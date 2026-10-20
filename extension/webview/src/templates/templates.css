@@ -119,7 +119,12 @@
 .template-attachment-input { display: flex; flex-wrap: wrap; gap: 8px; color: var(--fg-muted); }
 .template-attachment-input input { max-width: 100%; font: inherit; font-size: var(--trainer-font-xs); }
 .template-attachment, .template-context { display: flex; align-items: center; gap: 12px; min-width: 0; padding-block: 4px; color: var(--fg-muted); font-size: var(--trainer-font-xs); }
-.template-context > span, .template-attachment > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* At 200% font a long label (es "Tras el envío") plus the two answer-mode
+   buttons do not fit on one 420px line; without wrapping the label shrinks to
+   one character per line. Give the label a real flex basis and let the buttons
+   move to the next line instead. */
+.template-context { flex-wrap: wrap; }
+.template-context > span, .template-attachment > span { flex: 1 1 12em; min-width: 0; overflow-wrap: anywhere; }
 /* r1-g0-4: the palette splits into a positioned wrapper plus a scroller whose
    max-height CommandPalette row-aligns to whole entries; the wrapper hosts the
    bottom fade + "↓ N more" hint while rows sit below the fold. */
