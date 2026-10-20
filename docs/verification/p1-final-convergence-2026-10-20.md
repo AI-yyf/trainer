@@ -238,3 +238,15 @@ gh workflow run nightly-remote-ssh.yml \
 剩余阻断项是 §6 的 1–5：owner/真人教学签核、Remote-SSH Layer 2、96 张截图的
 人工逐屏签核、品牌 Chrome/Edge 安装、正式 Release 授权。它们不是已通过的项，
 不能用固定矩阵或 Agent 评价替代。
+
+## 10. Owner handoff（仅剩人工/授权动作）
+
+| 待办 | 可直接使用的材料 |
+| --- | --- |
+| 非固定样本人工签核 | 原始回复 [`minimax-m3`](../maturity/2026-10-20-real-project-probe-minimax-m3.json) / [`glm-5.3`](../maturity/2026-10-20-real-project-probe-glm-5.3.json)；独立审阅 [`review`](../maturity/2026-10-20-real-project-review.md)（明确标注非人工） |
+| Remote-SSH Layer 2 | [L2 手动验收清单](p1-final-remote-ssh-l2-checklist.md)；run [`39345782386`](https://github.com/AI-yyf/trainer/actions/runs/39345782386) 的 `trainer-remote-ssh-l2-vsix` 构件 |
+| 96 张截图人工签核 | [contact sheets](p1-final-a11y/)（16 张，覆盖 normal-light/font200-dark × 8 语言）与 [report.json](p1-final-a11y/report.json) |
+| 正式 Release 授权 | 候选源码 `14f42ee`；三平台 VSIX 与 SHA-256 见 §1；当前分支 tip 为测试/文档提交，未打 tag、未发布 Release |
+
+本文件与上述材料只提供可核对的证据；真人签核、Layer 2 窗口验收和正式发布授权
+必须由 owner 完成。
