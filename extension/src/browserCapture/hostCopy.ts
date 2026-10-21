@@ -17,7 +17,11 @@ export type BrowserCaptureHostCopyKey =
   | 'installStepExtensions'
   | 'installStepDeveloperMode'
   | 'installStepLoadUnpacked'
+  | 'installStepPair'
   | 'installFolderFallback'
+  | 'openExtensionsPage'
+  | 'noChromiumBrowserFound'
+  | 'browserOpenFailed'
   | 'copyFolderPath'
   | 'copyCode'
   | 'installBundleMissing'
@@ -39,18 +43,22 @@ type BrowserCaptureHostCopyTable = Record<BrowserCaptureHostCopyKey, string>;
 
 export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptureHostCopyTable> = {
   'zh-CN': {
-    installReady: '{label} 已就绪，位于 ~/.trainer/browser-capture。',
-    installStepExtensions: '1. 在浏览器中打开 chrome://extensions（或 edge://extensions）。',
+    installReady: '{label} 已就绪。',
+    installStepExtensions: '1. 打开浏览器的扩展页：chrome://extensions、edge://extensions、brave://extensions、opera://extensions、vivaldi://extensions（Arc 用 arc://extensions）。',
     installStepDeveloperMode: '2. 开启开发者模式。',
     installStepLoadUnpacked: '3. 选择“加载已解压的扩展程序”，选中 {dir}。',
+    installStepPair: '4. 在 Trainer 设置中点“显示配对码”，再到扩展弹窗输入。',
     installFolderFallback: 'Trainer 无法自动打开该文件夹。请在文件管理器中手动打开：{dir}',
+    openExtensionsPage: '打开扩展页',
+    noChromiumBrowserFound: '没有检测到 Chromium 浏览器。请手动打开 Chrome、Edge、Brave、Arc、Opera 或 Vivaldi 的扩展页。',
+    browserOpenFailed: 'Trainer 无法打开 {browser}：{reason}',
     copyFolderPath: '复制文件夹路径',
     copyCode: '复制配对码',
     installBundleMissing:
       '当前 Trainer 构建未内置浏览器采集拓展。请安装包含 browser-capture/ 的 Trainer VSIX。',
     installFailed: 'Trainer 无法安装浏览器采集拓展：{reason}',
     installSucceeded:
-      '{label} 已安装到 {dir}。请在 chrome://extensions 中以“加载已解压的扩展程序”方式加载。',
+      '{label} 已安装到 {dir}。请在浏览器的扩展页中以“加载已解压的扩展程序”方式加载。',
     sidecarUnavailable: 'sidecar 不可用。',
     pairingCodeSummaryOne: '请在 1 分钟内将此配对码输入 Trainer 采集弹窗（单次有效）。',
     pairingCodeSummaryMany: '请在 {minutes} 分钟内将此配对码输入 Trainer 采集弹窗（单次有效）。',
@@ -64,18 +72,22 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     deepLinkOpenedLog: '深链已打开资源 {resourceId}（投递尝试 {attempts} 次）',
   },
   'en-US': {
-    installReady: '{label} is ready in ~/.trainer/browser-capture.',
-    installStepExtensions: '1. Open chrome://extensions (or edge://extensions) in the browser.',
+    installReady: '{label} is ready.',
+    installStepExtensions: '1. Open your browser\'s extensions page: chrome://extensions, edge://extensions, brave://extensions, opera://extensions, vivaldi://extensions (Arc: arc://extensions).',
     installStepDeveloperMode: '2. Turn on Developer mode.',
     installStepLoadUnpacked: '3. Choose "Load unpacked" and select {dir}.',
+    installStepPair: '4. In Trainer Settings, choose "Show pairing code", then enter it in the extension popup.',
     installFolderFallback:
       'Trainer could not open the folder automatically. Open this path in your file manager: {dir}',
+    openExtensionsPage: 'Open Extensions Page',
+    noChromiumBrowserFound: 'No Chromium browser was detected. Open the extensions page of Chrome, Edge, Brave, Arc, Opera or Vivaldi manually.',
+    browserOpenFailed: 'Trainer could not open {browser}: {reason}',
     copyFolderPath: 'Copy Folder Path',
     copyCode: 'Copy Code',
     installBundleMissing:
       'This Trainer build does not bundle the browser capture extension. Install a Trainer VSIX that ships browser-capture/.',
     installFailed: 'Trainer could not install the browser capture extension: {reason}',
-    installSucceeded: '{label} installed to {dir}. Load it unpacked from chrome://extensions.',
+    installSucceeded: '{label} installed to {dir}. Load it unpacked from your browser\'s extensions page.',
     sidecarUnavailable: 'Sidecar is unavailable.',
     pairingCodeSummaryOne:
       'Enter this code in the Trainer Capture popup within 1 minute (single use).',
@@ -94,19 +106,23 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       'deep link opened resource {resourceId} (delivery attempts: {attempts})',
   },
   'es-ES': {
-    installReady: '{label} está listo en ~/.trainer/browser-capture.',
-    installStepExtensions: '1. Abre chrome://extensions (o edge://extensions) en el navegador.',
+    installReady: '{label} está listo.',
+    installStepExtensions: '1. Abre la página de extensiones de tu navegador: chrome://extensions, edge://extensions, brave://extensions, opera://extensions o vivaldi://extensions (Arc: arc://extensions).',
     installStepDeveloperMode: '2. Activa el modo de desarrollador.',
     installStepLoadUnpacked: '3. Elige «Cargar descomprimida» y selecciona {dir}.',
+    installStepPair: '4. En Ajustes de Trainer elige «Mostrar código de emparejamiento» e introdúcelo en la ventana de la extensión.',
     installFolderFallback:
       'Trainer no pudo abrir la carpeta automáticamente. Ábrela manualmente en tu gestor de archivos: {dir}',
+    openExtensionsPage: 'Abrir página de extensiones',
+    noChromiumBrowserFound: 'No se detectó ningún navegador Chromium. Abre manualmente la página de extensiones de Chrome, Edge, Brave, Arc, Opera o Vivaldi.',
+    browserOpenFailed: 'Trainer no pudo abrir {browser}: {reason}',
     copyFolderPath: 'Copiar ruta de la carpeta',
     copyCode: 'Copiar código',
     installBundleMissing:
       'Esta versión de Trainer no incluye la extensión de captura. Instala un VSIX de Trainer que incluya browser-capture/.',
     installFailed: 'Trainer no pudo instalar la extensión de captura: {reason}',
     installSucceeded:
-      '{label} se instaló en {dir}. Cárgala como extensión descomprimida desde chrome://extensions.',
+      '{label} se instaló en {dir}. Cárgala como extensión descomprimida desde la página de extensiones de tu navegador.',
     sidecarUnavailable: 'El sidecar no está disponible.',
     pairingCodeSummaryOne:
       'Introduce este código en la ventana de Trainer Capture en 1 minuto (un solo uso).',
@@ -127,19 +143,23 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       'el enlace profundo abrió el recurso {resourceId} (intentos de entrega: {attempts})',
   },
   'fr-FR': {
-    installReady: '{label} est prêt dans ~/.trainer/browser-capture.',
-    installStepExtensions: '1. Ouvrez chrome://extensions (ou edge://extensions) dans le navigateur.',
+    installReady: '{label} est prêt.',
+    installStepExtensions: '1. Ouvrez la page des extensions de votre navigateur : chrome://extensions, edge://extensions, brave://extensions, opera://extensions ou vivaldi://extensions (Arc : arc://extensions).',
     installStepDeveloperMode: '2. Activez le mode développeur.',
     installStepLoadUnpacked: '3. Choisissez « Charger l’extension non empaquetée » et sélectionnez {dir}.',
+    installStepPair: '4. Dans Réglages de Trainer, choisissez « Afficher le code d’association », puis saisissez-le dans la fenêtre de l’extension.',
     installFolderFallback:
       'Trainer n’a pas pu ouvrir le dossier automatiquement. Ouvrez-le dans votre gestionnaire de fichiers : {dir}',
+    openExtensionsPage: 'Ouvrir la page des extensions',
+    noChromiumBrowserFound: 'Aucun navigateur Chromium détecté. Ouvrez manuellement la page des extensions de Chrome, Edge, Brave, Arc, Opera ou Vivaldi.',
+    browserOpenFailed: 'Trainer n’a pas pu ouvrir {browser} : {reason}',
     copyFolderPath: 'Copier le chemin du dossier',
     copyCode: 'Copier le code',
     installBundleMissing:
       'Cette version de Trainer n’inclut pas l’extension de capture. Installez un VSIX Trainer contenant browser-capture/.',
     installFailed: 'Trainer n’a pas pu installer l’extension de capture : {reason}',
     installSucceeded:
-      '{label} a été installé dans {dir}. Chargez-le comme extension non empaquetée depuis chrome://extensions.',
+      '{label} a été installé dans {dir}. Chargez-le comme extension non empaquetée depuis la page des extensions de votre navigateur.',
     sidecarUnavailable: 'Le sidecar est indisponible.',
     pairingCodeSummaryOne:
       'Saisissez ce code dans la fenêtre Trainer Capture sous 1 minute (usage unique).',
@@ -160,19 +180,23 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       'le lien profond a ouvert la ressource {resourceId} (tentatives de livraison : {attempts})',
   },
   'de-DE': {
-    installReady: '{label} ist bereit unter ~/.trainer/browser-capture.',
-    installStepExtensions: '1. Öffne chrome://extensions (oder edge://extensions) im Browser.',
+    installReady: '{label} ist bereit.',
+    installStepExtensions: '1. Öffne die Erweiterungsseite deines Browsers: chrome://extensions, edge://extensions, brave://extensions, opera://extensions oder vivaldi://extensions (Arc: arc://extensions).',
     installStepDeveloperMode: '2. Aktiviere den Entwicklermodus.',
     installStepLoadUnpacked: '3. Wähle „Entpackte Erweiterung laden“ und dann {dir}.',
+    installStepPair: '4. Wähle in den Trainer-Einstellungen „Kopplungscode anzeigen“ und gib ihn im Erweiterungsfenster ein.',
     installFolderFallback:
       'Trainer konnte den Ordner nicht automatisch öffnen. Öffne diesen Pfad selbst im Dateimanager: {dir}',
+    openExtensionsPage: 'Erweiterungsseite öffnen',
+    noChromiumBrowserFound: 'Kein Chromium-Browser gefunden. Öffne die Erweiterungsseite von Chrome, Edge, Brave, Arc, Opera oder Vivaldi manuell.',
+    browserOpenFailed: 'Trainer konnte {browser} nicht öffnen: {reason}',
     copyFolderPath: 'Ordnerpfad kopieren',
     copyCode: 'Code kopieren',
     installBundleMissing:
       'Diese Trainer-Version enthält die Browser-Erweiterung nicht. Installiere ein Trainer-VSIX mit browser-capture/.',
     installFailed: 'Trainer konnte die Browser-Erweiterung nicht installieren: {reason}',
     installSucceeded:
-      '{label} wurde nach {dir} installiert. Lade sie über chrome://extensions als entpackte Erweiterung.',
+      '{label} wurde nach {dir} installiert. Lade sie über die Erweiterungsseite deines Browsers als entpackte Erweiterung.',
     sidecarUnavailable: 'Der Sidecar ist nicht verfügbar.',
     pairingCodeSummaryOne:
       'Gib diesen Code innerhalb von 1 Minute im Trainer-Capture-Fenster ein (einmalig verwendbar).',
@@ -193,20 +217,24 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       'Deep-Link hat Ressource {resourceId} geöffnet (Zustellversuche: {attempts})',
   },
   'ja-JP': {
-    installReady: '{label} は ~/.trainer/browser-capture に用意できました。',
-    installStepExtensions: '1. ブラウザーで chrome://extensions（Edge は edge://extensions）を開きます。',
+    installReady: '{label} の準備ができました。',
+    installStepExtensions: '1. ブラウザーの拡張機能ページを開きます：chrome://extensions、edge://extensions、brave://extensions、opera://extensions、vivaldi://extensions（Arc は arc://extensions）。',
     installStepDeveloperMode: '2. デベロッパーモードをオンにします。',
     installStepLoadUnpacked:
       '3.「パッケージ化されていない拡張機能を読み込む」を選び、{dir} を指定します。',
+    installStepPair: '4. Trainer の設定で「ペアリングコードを表示」を選び、拡張機能のポップアップに入力します。',
     installFolderFallback:
       'Trainer はフォルダーを自動で開けませんでした。ファイルマネージャーで次のパスを開いてください：{dir}',
+    openExtensionsPage: '拡張機能ページを開く',
+    noChromiumBrowserFound: 'Chromium 系ブラウザーが見つかりません。Chrome、Edge、Brave、Arc、Opera、Vivaldi の拡張機能ページを手動で開いてください。',
+    browserOpenFailed: 'Trainer は {browser} を開けませんでした：{reason}',
     copyFolderPath: 'フォルダーのパスをコピー',
     copyCode: 'コードをコピー',
     installBundleMissing:
       'この Trainer ビルドにはブラウザーキャプチャ拡張機能が含まれていません。browser-capture/ を含む Trainer VSIX をインストールしてください。',
     installFailed: 'Trainer はブラウザーキャプチャ拡張機能をインストールできませんでした：{reason}',
     installSucceeded:
-      '{label} を {dir} にインストールしました。chrome://extensions から「パッケージ化されていない拡張機能」として読み込んでください。',
+      '{label} を {dir} にインストールしました。ブラウザーの拡張機能ページから「パッケージ化されていない拡張機能」として読み込んでください。',
     sidecarUnavailable: 'sidecar を利用できません。',
     pairingCodeSummaryOne:
       'このコードを 1 分以内に Trainer Capture のポップアップへ入力してください（1 回限り有効）。',
@@ -227,19 +255,23 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       'ディープリンクでリソース {resourceId} を開きました（配信試行: {attempts} 回）',
   },
   'ko-KR': {
-    installReady: '{label}이(가) ~/.trainer/browser-capture에 준비되었습니다.',
-    installStepExtensions: '1. 브라우저에서 chrome://extensions(또는 edge://extensions)를 엽니다.',
+    installReady: '{label}이(가) 준비되었습니다.',
+    installStepExtensions: '1. 브라우저의 확장 프로그램 페이지를 엽니다: chrome://extensions, edge://extensions, brave://extensions, opera://extensions, vivaldi://extensions (Arc: arc://extensions).',
     installStepDeveloperMode: '2. 개발자 모드를 켭니다.',
     installStepLoadUnpacked: '3. "압축해제된 확장 프로그램을 로드"를 선택하고 {dir}을(를) 지정합니다.',
+    installStepPair: '4. Trainer 설정에서 "페어링 코드 표시"를 선택한 뒤 확장 프로그램 팝업에 입력하세요.',
     installFolderFallback:
       'Trainer가 폴더를 자동으로 열지 못했습니다. 파일 관리자에서 다음 경로를 직접 여세요: {dir}',
+    openExtensionsPage: '확장 프로그램 페이지 열기',
+    noChromiumBrowserFound: 'Chromium 브라우저를 찾지 못했습니다. Chrome, Edge, Brave, Arc, Opera, Vivaldi의 확장 프로그램 페이지를 직접 여세요.',
+    browserOpenFailed: 'Trainer가 {browser}을(를) 열지 못했습니다: {reason}',
     copyFolderPath: '폴더 경로 복사',
     copyCode: '코드 복사',
     installBundleMissing:
       '이 Trainer 빌드에는 브라우저 캡처 확장이 포함되어 있지 않습니다. browser-capture/가 포함된 Trainer VSIX를 설치하세요.',
     installFailed: 'Trainer가 브라우저 캡처 확장을 설치하지 못했습니다: {reason}',
     installSucceeded:
-      '{label}을(를) {dir}에 설치했습니다. chrome://extensions에서 "압축해제된 확장 프로그램"으로 로드하세요.',
+      '{label}을(를) {dir}에 설치했습니다. 브라우저의 확장 프로그램 페이지에서 "압축해제된 확장 프로그램"으로 로드하세요.',
     sidecarUnavailable: 'sidecar를 사용할 수 없습니다.',
     pairingCodeSummaryOne: '1분 안에 이 코드를 Trainer Capture 팝업에 입력하세요(1회용).',
     pairingCodeSummaryMany: '{minutes}분 안에 이 코드를 Trainer Capture 팝업에 입력하세요(1회용).',
@@ -257,19 +289,23 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       '딥링크로 리소스 {resourceId}을(를) 열었습니다(전달 시도: {attempts}회)',
   },
   'pt-BR': {
-    installReady: '{label} está pronto em ~/.trainer/browser-capture.',
-    installStepExtensions: '1. Abra chrome://extensions (ou edge://extensions) no navegador.',
+    installReady: '{label} está pronto.',
+    installStepExtensions: '1. Abra a página de extensões do seu navegador: chrome://extensions, edge://extensions, brave://extensions, opera://extensions ou vivaldi://extensions (Arc: arc://extensions).',
     installStepDeveloperMode: '2. Ative o modo de desenvolvedor.',
     installStepLoadUnpacked: '3. Escolha "Carregar sem compactação" e selecione {dir}.',
+    installStepPair: '4. Nas Configurações do Trainer, escolha “Mostrar código de pareamento” e insira-o na janela da extensão.',
     installFolderFallback:
       'O Trainer não conseguiu abrir a pasta automaticamente. Abra este caminho no gerenciador de arquivos: {dir}',
+    openExtensionsPage: 'Abrir página de extensões',
+    noChromiumBrowserFound: 'Nenhum navegador Chromium foi detectado. Abra manualmente a página de extensões do Chrome, Edge, Brave, Arc, Opera ou Vivaldi.',
+    browserOpenFailed: 'O Trainer não conseguiu abrir {browser}: {reason}',
     copyFolderPath: 'Copiar caminho da pasta',
     copyCode: 'Copiar código',
     installBundleMissing:
       'Esta versão do Trainer não inclui a extensão de captura. Instale um VSIX do Trainer que inclua browser-capture/.',
     installFailed: 'O Trainer não conseguiu instalar a extensão de captura: {reason}',
     installSucceeded:
-      '{label} foi instalado em {dir}. Carregue-o sem compactação em chrome://extensions.',
+      '{label} foi instalado em {dir}. Carregue-o sem compactação na página de extensões do seu navegador.',
     sidecarUnavailable: 'O sidecar está indisponível.',
     pairingCodeSummaryOne:
       'Digite este código na janela do Trainer Capture em até 1 minuto (uso único).',

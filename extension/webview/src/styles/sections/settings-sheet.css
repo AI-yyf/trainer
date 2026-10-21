@@ -437,10 +437,12 @@
 
 .settings-sheet__status--dense .context-chip {
   flex: 0 0 auto;
+  max-width: 100%;
   min-height: 22px;
   padding: 3px 7px;
   border-radius: var(--radius-sm);
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .settings-sheet__status--dense .context-chip strong {
@@ -1514,16 +1516,19 @@
    Applies to the consolidated preferences body so every row lines up. */
 .settings-sheet__defaults-body .settings-row {
   display: grid;
-  grid-template-columns: minmax(84px, 38%) minmax(0, 1fr);
+  grid-template-columns: minmax(84px, 45%) minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   padding: 3px 0;
 }
 
+/* At 200% font a fixed one-line label ellipsized mid-word ("Posición d…").
+   Let it wrap; the row grows instead of hiding the setting's name. */
 .settings-sheet__defaults-body .settings-row > .eyebrow {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 
 /* Section entrance animations create stacking contexts. Raise the section

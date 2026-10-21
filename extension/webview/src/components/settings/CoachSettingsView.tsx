@@ -273,6 +273,90 @@ function learningSurfaceAlignmentCopy(language: ComposerLanguage): {
   }
 }
 
+function browserCaptureSettingsCopy(language: ComposerLanguage): {
+  title: string;
+  body: string;
+  install: string;
+  open: string;
+  pair: string;
+  hint: string;
+} {
+  switch (language) {
+    case "zh-CN":
+      return {
+        title: "浏览器采集",
+        body: "把网页、PDF 和选中文本一键采集到资料库。支持 Chrome、Edge、Brave、Arc、Opera、Vivaldi 等所有 Chromium 浏览器。",
+        install: "安装浏览器扩展",
+        open: "打开扩展页",
+        pair: "显示配对码",
+        hint: "安装只需一次：在浏览器扩展页开启开发者模式，选择“加载已解压的扩展程序”，指向 Trainer 打开的文件夹。Trainer 更新会刷新该文件夹；在扩展页点一次“重新加载”即可。",
+      };
+    case "es-ES":
+      return {
+        title: "Captura del navegador",
+        body: "Guarda páginas, PDF y texto seleccionado en tu biblioteca con un clic. Compatible con Chrome, Edge, Brave, Arc, Opera y Vivaldi.",
+        install: "Instalar extensión",
+        open: "Abrir página de extensiones",
+        pair: "Mostrar código de emparejamiento",
+        hint: "La instalación se hace una sola vez: activa el modo desarrollador, elige «Cargar descomprimida» y selecciona la carpeta que abre Trainer. Las actualizaciones refrescan esa carpeta; pulsa «Recargar» una vez en la página de extensiones.",
+      };
+    case "fr-FR":
+      return {
+        title: "Capture navigateur",
+        body: "Enregistrez pages, PDF et texte sélectionné dans votre bibliothèque en un clic. Compatible avec Chrome, Edge, Brave, Arc, Opera et Vivaldi.",
+        install: "Installer l’extension",
+        open: "Ouvrir la page des extensions",
+        pair: "Afficher le code d’association",
+        hint: "L’installation se fait une seule fois : activez le mode développeur, choisissez « Charger l’extension non empaquetée » et sélectionnez le dossier ouvert par Trainer. Les mises à jour rafraîchissent ce dossier ; cliquez une fois sur « Recharger » dans la page des extensions.",
+      };
+    case "de-DE":
+      return {
+        title: "Browser-Erfassung",
+        body: "Speichere Webseiten, PDFs und markierten Text mit einem Klick in deiner Bibliothek. Unterstützt Chrome, Edge, Brave, Arc, Opera und Vivaldi.",
+        install: "Browser-Erweiterung installieren",
+        open: "Erweiterungsseite öffnen",
+        pair: "Kopplungscode anzeigen",
+        hint: "Die Installation ist einmalig: Entwicklermodus aktivieren, „Entpackte Erweiterung laden“ wählen und den von Trainer geöffneten Ordner auswählen. Trainer-Updates erneuern diesen Ordner; klicke auf der Erweiterungsseite einmal auf „Neu laden“.",
+      };
+    case "ja-JP":
+      return {
+        title: "ブラウザー取り込み",
+        body: "Web ページ、PDF、選択したテキストをワンクリックでライブラリへ保存します。Chrome、Edge、Brave、Arc、Opera、Vivaldi に対応しています。",
+        install: "ブラウザー拡張機能をインストール",
+        open: "拡張機能ページを開く",
+        pair: "ペアリングコードを表示",
+        hint: "インストールは一度だけです。拡張機能ページでデベロッパーモードをオンにし、「パッケージ化されていない拡張機能を読み込む」で Trainer が開いたフォルダーを選びます。Trainer の更新時にフォルダーが更新されるので、拡張機能ページで一度「再読み込み」してください。",
+      };
+    case "ko-KR":
+      return {
+        title: "브라우저 캡처",
+        body: "웹 페이지, PDF, 선택한 텍스트를 클릭 한 번으로 자료실에 저장합니다. Chrome, Edge, Brave, Arc, Opera, Vivaldi를 지원합니다.",
+        install: "브라우저 확장 프로그램 설치",
+        open: "확장 프로그램 페이지 열기",
+        pair: "페어링 코드 표시",
+        hint: "설치는 한 번만 하면 됩니다. 확장 프로그램 페이지에서 개발자 모드를 켜고 '압축해제된 확장 프로그램을 로드'를 선택한 뒤 Trainer가 연 폴더를 지정하세요. Trainer 업데이트 시 폴더가 갱신되며, 확장 프로그램 페이지에서 한 번 '새로고침'하면 됩니다.",
+      };
+    case "pt-BR":
+      return {
+        title: "Captura do navegador",
+        body: "Salve páginas, PDFs e texto selecionado na sua biblioteca com um clique. Compatível com Chrome, Edge, Brave, Arc, Opera e Vivaldi.",
+        install: "Instalar extensão do navegador",
+        open: "Abrir página de extensões",
+        pair: "Mostrar código de pareamento",
+        hint: "A instalação é feita uma única vez: ative o modo desenvolvedor, escolha “Carregar sem compactação” e selecione a pasta aberta pelo Trainer. As atualizações renovam essa pasta; clique uma vez em “Recarregar” na página de extensões.",
+      };
+    default:
+      return {
+        title: "Browser capture",
+        body: "Save web pages, PDFs and selected text to your library in one click. Works with Chrome, Edge, Brave, Arc, Opera and Vivaldi.",
+        install: "Install browser extension",
+        open: "Open extensions page",
+        pair: "Show pairing code",
+        hint: "Install once: turn on Developer mode, choose “Load unpacked” and select the folder Trainer opens. Trainer updates refresh that folder; click Reload once on the extensions page.",
+      };
+  }
+}
+
 interface ProviderProfileView {
   id: string;
   label: string;
@@ -2232,6 +2316,7 @@ function CoachSettingsViewSheet({
     ...labels,
   } as CoachSettingsLabels;
   const settingsGlobalCopy = resolveWorkbenchCopy(language);
+  const browserCaptureCopy = browserCaptureSettingsCopy(language);
   const surfaceAlignmentCopy = learningSurfaceAlignmentCopy(language);
   const classes = ["settings-sheet", "coach-settings-view", className].filter(Boolean).join(" ");
   const providerDirectoryRef = useRef<HTMLDivElement | null>(null);
@@ -4541,25 +4626,25 @@ function CoachSettingsViewSheet({
       id: "connection",
       label: settingsGlobalCopy.settingsSectionConnection,
       dirty: connectionDirty,
-      icon: <SettingsConnectionIcon size={16} active={activeSettingsCategory === "connection"} />,
+      icon: <SettingsConnectionIcon size={18} active={activeSettingsCategory === "connection"} />,
     },
     {
       id: "workspace",
       label: settingsPhrase(language, "navWorkspace"),
       dirty: false,
-      icon: <SettingsWorkspaceIcon size={16} active={activeSettingsCategory === "workspace"} />,
+      icon: <SettingsWorkspaceIcon size={18} active={activeSettingsCategory === "workspace"} />,
     },
     {
       id: "teaching",
       label: templateCopy[language].coach,
       dirty: false,
-      icon: <SettingsTeachingIcon size={16} active={activeSettingsCategory === "teaching"} />,
+      icon: <SettingsTeachingIcon size={18} active={activeSettingsCategory === "teaching"} />,
     },
     {
       id: "preferences",
       label: settingsGlobalCopy.settingsPreferences,
       dirty: false,
-      icon: <SettingsPreferencesIcon size={16} active={activeSettingsCategory === "preferences"} />,
+      icon: <SettingsPreferencesIcon size={18} active={activeSettingsCategory === "preferences"} />,
     },
   ] as const;
   const settingsStatusConnectionReady = providerCoachReady && !providerHasDraftChanges;
@@ -5185,7 +5270,7 @@ function CoachSettingsViewSheet({
                 aria-label={localizedSaveProfileLabel}
                 onClick={onSaveProviderProfile}
               >
-                <DoneIcon size={13} />
+                <DoneIcon size={14} />
                 <span>{localizedSaveProfileLabel}</span>
               </button>
             ) : null}
@@ -5206,7 +5291,7 @@ function CoachSettingsViewSheet({
                 className="settings-provider-bar__add"
                 onClick={() => setConnectionView("add")}
               >
-                <PlusIcon size={13} />
+                <PlusIcon size={14} />
                 <span>{settingsPhrase(language, "addProvider")}</span>
               </button>
             ) : null}
@@ -6461,6 +6546,50 @@ function CoachSettingsViewSheet({
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="settings-subsection" data-settings-subsection="browser-capture">
+              <span className="eyebrow settings-subsection__title">{browserCaptureCopy.title}</span>
+              <p className="settings-sheet__note settings-sheet__note--compact">{browserCaptureCopy.body}</p>
+              <div className="settings-actions settings-actions--compact">
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() =>
+                    postWebviewMessage({
+                      type: "command/execute",
+                      payload: { commandId: trainerCommands.installBrowserCapture },
+                    })
+                  }
+                >
+                  {browserCaptureCopy.install}
+                </button>
+                <button
+                  type="button"
+                  className="toolbar-button"
+                  onClick={() =>
+                    postWebviewMessage({
+                      type: "command/execute",
+                      payload: { commandId: trainerCommands.openBrowserExtensionsPage },
+                    })
+                  }
+                >
+                  {browserCaptureCopy.open}
+                </button>
+                <button
+                  type="button"
+                  className="toolbar-button"
+                  onClick={() =>
+                    postWebviewMessage({
+                      type: "command/execute",
+                      payload: { commandId: trainerCommands.showBrowserPairingCode },
+                    })
+                  }
+                >
+                  {browserCaptureCopy.pair}
+                </button>
+              </div>
+              <p className="settings-sheet__note settings-sheet__note--compact">{browserCaptureCopy.hint}</p>
             </div>
 
             <div className="settings-subsection" data-settings-subsection="memory">

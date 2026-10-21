@@ -2,7 +2,19 @@ import type { ReactNode } from "react";
 import type { ActiveWorkbenchView, ComposerLanguage } from "../lib/types";
 import { viewLabels } from "../lib/viewLabels";
 import { PRIMARY_DESTINATIONS, primaryDestinationForRoute } from "../lib/workbenchDestinations";
-import { HistoryIcon, SettingsIcon } from "../components/icons";
+import {
+  CoachNavIcon,
+  HistoryIcon,
+  LearningNavIcon,
+  ResourcesNavIcon,
+  SettingsIcon,
+} from "../components/icons";
+
+const PRIMARY_NAV_ICONS = {
+  coach: CoachNavIcon,
+  plan: LearningNavIcon,
+  resources: ResourcesNavIcon,
+} as const;
 
 const NAV_LABEL: Record<ComposerLanguage, string> = {
   "zh-CN": "主导航", "en-US": "Primary navigation", "es-ES": "Navegación principal", "fr-FR": "Navigation principale",
@@ -41,20 +53,24 @@ export function AppShell({ language, direction, activeView, context, historyOpen
           {trimmedContext ? <span className="app-shell-header__context" title={trimmedContext}>{trimmedContext}</span> : null}
           <div className="app-shell-header__utilities">
             <button type="button" className="app-shell-header__utility" data-testid="trainer-history-toggle" aria-label={HISTORY_LABEL[language]} title={HISTORY_LABEL[language]} aria-expanded={historyOpen} onClick={onHistory}>
-              <HistoryIcon size={16} aria-hidden="true" />
+              <HistoryIcon size={18} aria-hidden="true" />
             </button>
             <button type="button" className="app-shell-header__utility" data-testid="trainer-view-nav-settings" aria-label={viewLabels[language].settings} title={viewLabels[language].settings} aria-pressed={activeView === "settings"} aria-current={activeView === "settings" ? "page" : undefined} onClick={() => onNavigate("settings")}>
-              <SettingsIcon size={16} aria-hidden="true" />
+              <SettingsIcon size={18} aria-hidden="true" />
             </button>
           </div>
           {surfaceControl ? <span className="app-shell-header__surface">{surfaceControl}</span> : null}
         </div>
         <nav className="app-shell-nav" aria-label={NAV_LABEL[language]}>
-          {PRIMARY_DESTINATIONS.map((view) => (
-            <button key={view} type="button" className="app-shell-nav__item" data-testid={`trainer-view-nav-${view}`} aria-label={viewLabels[language][view]} aria-pressed={selected === view} aria-current={selected === view ? "page" : undefined} onClick={() => onNavigate(view)}>
-              {viewLabels[language][view]}
-            </button>
-          ))}
+          {PRIMARY_DESTINATIONS.map((view) => {
+            const Icon = PRIMARY_NAV_ICONS[view];
+            return (
+              <button key={view} type="button" className="app-shell-nav__item" data-testid={`trainer-view-nav-${view}`} aria-label={viewLabels[language][view]} aria-pressed={selected === view} aria-current={selected === view ? "page" : undefined} onClick={() => onNavigate(view)}>
+                <Icon size={18} active={selected === view} aria-hidden="true" />
+                <span>{viewLabels[language][view]}</span>
+              </button>
+            );
+          })}
         </nav>
       </header>
       {children}

@@ -61,7 +61,7 @@ export function ActionButton({
         {detail ? <span className="action-button__detail">{detail}</span> : null}
       </span>
       <span className="action-button__chev" aria-hidden="true">
-        <ArrowRightIcon size={13} />
+        <ArrowRightIcon size={14} />
       </span>
     </button>
   );

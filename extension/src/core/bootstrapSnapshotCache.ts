@@ -42,29 +42,58 @@ function sanitizeForCache(bootstrap: BootstrapData): BootstrapData {
   };
 }
 
+interface PendingPersist {
+  workspaceId: string;
+  bootstrap: BootstrapData;
+}
+
 export class BootstrapSnapshotCache {
   private timer?: ReturnType<typeof setTimeout>;
-  private pendingKey?: string;
+  private pending?: PendingPersist;
 
   constructor(private readonly extensionContext: vscode.ExtensionContext) {}
 
-  /** Debounced: message merges arrive in bursts (snapshot + summary + trash). */
+  /**
+   * Debounced: message merges arrive in bursts (snapshot + summary + trash).
+   *
+   * The timer is deliberately NOT reset on every call. Streaming and patch
+   * traffic can arrive faster than the debounce window for minutes at a time;
+   * resetting would starve the write forever (the original bug that left the
+   * cache empty). Instead the first call arms the timer and every later call
+   * only replaces the pending payload, so a write lands at most 1.5s after the
+   * first change in a burst and always contains the newest conversation.
+   */
   schedulePersist(workspaceId: string, bootstrap: BootstrapData): void {
     if (!workspaceId || bootstrap.conversation.length === 0) {
       return;
     }
-    this.pendingKey = workspaceId;
+    this.pending = { workspaceId, bootstrap };
     if (this.timer) {
-      clearTimeout(this.timer);
+      return;
     }
     this.timer = setTimeout(() => {
       this.timer = undefined;
-      if (this.pendingKey !== workspaceId) {
-        return;
-      }
-      void this.persistNow(workspaceId, bootstrap);
+      void this.flushPending();
     }, PERSIST_DEBOUNCE_MS);
     this.timer.unref?.();
+  }
+
+  /** Persist the newest pending payload immediately (deactivate, tests). */
+  async flush(): Promise<void> {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = undefined;
+    }
+    await this.flushPending();
+  }
+
+  private async flushPending(): Promise<void> {
+    const pending = this.pending;
+    this.pending = undefined;
+    if (!pending) {
+      return;
+    }
+    await this.persistNow(pending.workspaceId, pending.bootstrap);
   }
 
   private async persistNow(workspaceId: string, bootstrap: BootstrapData): Promise<void> {
@@ -73,20 +102,19 @@ export class BootstrapSnapshotCache {
         savedAt: new Date().toISOString(),
         bootstrap: sanitizeForCache(bootstrap),
       };
-      const serialized = JSON.stringify(payload);
-      if (serialized.length > MAX_CACHE_BYTES) {
-        // Oversized thread: keep the cache useful by dropping to a smaller tail.
-        const trimmed: CachedBootstrapEnvelope = {
-          ...payload,
-          bootstrap: {
-            ...payload.bootstrap,
-            conversation: payload.bootstrap.conversation.slice(-60),
-          },
+      let serialized = JSON.stringify(payload);
+      // Oversized thread: keep the cache useful by halving the tail until it
+      // fits. A single giant message can still exceed the budget; in that case
+      // skip the write rather than risk an unbounded memento.
+      while (serialized.length > MAX_CACHE_BYTES && payload.bootstrap.conversation.length > 1) {
+        const keep = Math.max(1, Math.floor(payload.bootstrap.conversation.length / 2));
+        payload.bootstrap = {
+          ...payload.bootstrap,
+          conversation: payload.bootstrap.conversation.slice(-keep),
         };
-        await this.extensionContext.workspaceState.update(
-          cacheKey(workspaceId),
-          JSON.stringify(trimmed),
-        );
+        serialized = JSON.stringify(payload);
+      }
+      if (serialized.length > MAX_CACHE_BYTES) {
         return;
       }
       await this.extensionContext.workspaceState.update(cacheKey(workspaceId), serialized);
@@ -113,10 +141,12 @@ export class BootstrapSnapshotCache {
   }
 
   async clear(workspaceId: string): Promise<void> {
-    if (this.timer && this.pendingKey === workspaceId) {
-      clearTimeout(this.timer);
-      this.timer = undefined;
-      this.pendingKey = undefined;
+    if (this.pending?.workspaceId === workspaceId) {
+      this.pending = undefined;
+      if (this.timer) {
+        clearTimeout(this.timer);
+        this.timer = undefined;
+      }
     }
     try {
       await this.extensionContext.workspaceState.update(cacheKey(workspaceId), undefined);
@@ -130,5 +160,6 @@ export class BootstrapSnapshotCache {
       clearTimeout(this.timer);
       this.timer = undefined;
     }
+    this.pending = undefined;
   }
 }

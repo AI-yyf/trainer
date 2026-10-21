@@ -1089,6 +1089,30 @@ writeProgress();
       errorMessage: (data) => "Provider/message journey did not finish: " + JSON.stringify(data),
     });
 
+    // The stale-while-revalidate cache is what removes the cold-start wait on
+    // the next window. A live conversation must persist it within the debounce
+    // window; without this check a broken scheduler would stay invisible until
+    // a human noticed the next launch was slow again.
+    await record("bootstrap-snapshot-cached", async () => {
+      const deadline = Date.now() + 6_000;
+      while (Date.now() < deadline) {
+        const extension = vscode.extensions.getExtension(extensionId);
+        const exported = extension && extension.isActive ? extension.exports : undefined;
+        const state = exported && typeof exported.getDebugState === "function"
+          ? exported.getDebugState()
+          : undefined;
+        const cached = state && state.cachedBootstrap;
+        if (cached && Array.isArray(cached.conversation) && cached.conversation.length > 0) {
+          return { cachedMessages: cached.conversation.length };
+        }
+        await sleep(250);
+      }
+      throw new Error("The workspace bootstrap snapshot was never persisted after a live conversation.");
+    }, {
+      ok: (data) => Boolean(data && data.cachedMessages > 0),
+      errorMessage: (data) => "Bootstrap cache was not persisted: " + JSON.stringify(data),
+    });
+
     const reviewQueueSeed = await record("seed-review-queue-through-public-command", async () => {
       const accepted = await vscode.commands.executeCommand("trainer.training.reviewQueueAction", {
         concept: "dependency injection",

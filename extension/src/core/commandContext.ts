@@ -51,6 +51,8 @@ export interface CommandContext {
   setStreamingState(streamingState: TrainerStreamingState): Promise<void>;
   getSessionId(): string | undefined;
   setSessionId(sessionId: string | undefined): Promise<void>;
+  /** Drop the stale-while-revalidate snapshot for this workspace. */
+  clearBootstrapCache?(): Promise<void>;
   /**
    * Browser-capture runtime (pairing ledger, pending-draft poller, deep-link
    * handler). Present once the extension host has wired it; commands fall back

@@ -36,6 +36,7 @@ import { RemoteWorkspaceGateway } from './workspace/remoteWorkspaceGateway';
 import type { WorkspaceGateway } from './workspace/workspaceGateway';
 
 let sidecarManagerRef: SidecarProcessManager | undefined;
+let bootstrapCacheRef: BootstrapSnapshotCache | undefined;
 
 type TrainerExtensionDebugApi = {
   getDebugState: () => {
@@ -44,6 +45,8 @@ type TrainerExtensionDebugApi = {
     workspace: TrainerHostState['workspace'];
     streamingState: TrainerHostState['streamingState'];
     bootstrap: TrainerHostState['bootstrap'];
+    /** Last stale-while-revalidate snapshot persisted for this workspace. */
+    cachedBootstrap?: TrainerHostState['bootstrap'];
     hostState: TrainerHostState;
     workbench: ReturnType<WorkbenchSidebarController['getDebugSnapshot']>;
   };
@@ -60,6 +63,7 @@ export async function activate(
   const trustGuard = new WorkspaceTrustGuard();
   const trainerWorkspace = new TrainerWorkspaceService(extensionContext);
   const bootstrapCache = new BootstrapSnapshotCache(extensionContext);
+  bootstrapCacheRef = bootstrapCache;
   trustGuard.rememberActiveEditor();
   const tests = new TrainerTestController();
 
@@ -102,6 +106,20 @@ export async function activate(
     sidecarManager,
     initialRuntimeWorkspace.legacyWorkspaceId,
   );
+  // Overlap the PyInstaller cold start with the rest of activation. Previously
+  // the engine only started after provider restore + the first webview render,
+  // so every window paid the full cold-start latency on top of first paint. The
+  // later rehydration call joins this same ensureRunning() promise.
+  if (vscode.workspace.isTrusted) {
+    outputChannel.appendLine('[sidecar] prewarm requested during activation');
+    void sidecarManager.ensureRunning().then(
+      (status) => outputChannel.appendLine(`[sidecar] prewarm ${status.lifecycle}`),
+      (error) =>
+        outputChannel.appendLine(
+          `[sidecar] prewarm failed: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+    );
+  }
   const getHostState = (): TrainerHostState => hostState;
   const syncProviderLastTestScope = (): string => {
     const workspaceId = getRuntimeWorkspaceContext({ getHostState }).workspaceId;
@@ -109,6 +127,24 @@ export async function activate(
     return workspaceId;
   };
   syncProviderLastTestScope();
+  // Stale-while-revalidate: seed the last known bootstrap before the view
+  // provider is registered, so even the very first resolve already carries the
+  // restored thread. The sidecar's cold start no longer gates first paint; the
+  // authoritative snapshot from rehydration replaces this when it lands.
+  const seededBootstrap = bootstrapCache.load(
+    getRuntimeWorkspaceContext({ getHostState }).workspaceId,
+  );
+  if (seededBootstrap) {
+    hostState = {
+      ...hostState,
+      bootstrap: {
+        ...seededBootstrap,
+        connection: hostState.bootstrap.connection,
+        streamingState: hostState.bootstrap.streamingState,
+      },
+    };
+    outputChannel.appendLine('[activation] seeded cached bootstrap (stale-while-revalidate)');
+  }
   const updateDerivedHostState = async (): Promise<void> => {
     syncProviderLastTestScope();
     const apiKey = await providerStore.getApiKey();
@@ -323,6 +359,11 @@ export async function activate(
       await persistWorkspaceSessionId(extensionContext, trustGuard.getSnapshot().workspaceFolder, sessionId);
       await updateDerivedHostState();
     },
+    clearBootstrapCache: async () => {
+      await bootstrapCache.clear(
+        getRuntimeWorkspaceContext({ getHostState }).workspaceId,
+      );
+    },
   };
   registry.setContext(commandContext);
 
@@ -498,24 +539,6 @@ export async function activate(
     };
     await updateDerivedHostState();
   }
-  // Stale-while-revalidate: seed the last known bootstrap before anything
-  // renders, so the webview's first bootstrap already carries the restored
-  // thread. The sidecar's cold start no longer gates first paint; the
-  // authoritative snapshot from rehydration replaces this when it lands.
-  const seededBootstrap = bootstrapCache.load(
-    getRuntimeWorkspaceContext({ getHostState }).workspaceId,
-  );
-  if (seededBootstrap) {
-    hostState = {
-      ...hostState,
-      bootstrap: {
-        ...seededBootstrap,
-        connection: hostState.bootstrap.connection,
-        streamingState: hostState.bootstrap.streamingState,
-      },
-    };
-    outputChannel.appendLine('[activation] seeded cached bootstrap (stale-while-revalidate)');
-  }
   await restoreProviderModelCache();
   await syncExtensionState(commandContext);
 
@@ -565,6 +588,9 @@ export async function activate(
         workspace: snapshot.workspace,
         streamingState: snapshot.streamingState,
         bootstrap: snapshot.bootstrap,
+        cachedBootstrap: bootstrapCache.load(
+          getRuntimeWorkspaceContext({ getHostState }).workspaceId,
+        ),
         visibleFacts: workbenchSnapshot.lastVisibleFactsPayload,
         hostState: snapshot,
         workbench: workbenchSnapshot,
@@ -574,6 +600,12 @@ export async function activate(
 }
 
 export async function deactivate(): Promise<void> {
+  // Flush the deferred bootstrap write before the host goes away; otherwise a
+  // debounce armed during the last streaming burst is lost with the process.
+  if (bootstrapCacheRef) {
+    await bootstrapCacheRef.flush();
+    bootstrapCacheRef = undefined;
+  }
   if (sidecarManagerRef) {
     await sidecarManagerRef.stop();
     sidecarManagerRef = undefined;

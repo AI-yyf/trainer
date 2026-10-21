@@ -8,7 +8,7 @@ import { TrainerIconBase } from "../icons/TrainerIconBase";
 // TrainerIconBase grammar (1.4 currentColor stroke) at optical 15px.
 function ActionGlyph({ glyphs }: { glyphs: ReactNode }) {
   return (
-    <TrainerIconBase viewBox="0 0 24 24" size={15}>
+    <TrainerIconBase viewBox="0 0 24 24" size={16}>
       {glyphs}
     </TrainerIconBase>
   );

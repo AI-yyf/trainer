@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { ChevronRightIcon } from '../icons';
+
 /**
  * CollapseSection — the single multi-level folding primitive for the whole
  * workbench. All collapsible regions (Plan stages/materials, Resources,
@@ -98,15 +100,7 @@ export function CollapseSection(props: CollapseSectionProps): JSX.Element {
           aria-controls={bodyId}
           onClick={() => setOpen(!isOpen)}
         >
-          <svg
-            className="collapse-section__chevron"
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            aria-hidden="true"
-          >
-            <path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
+          <ChevronRightIcon className="collapse-section__chevron" size={12} aria-hidden="true" />
           <span className="collapse-section__title">{title}</span>
           {badge ? <span className="collapse-section__badge">{badge}</span> : null}
           {subtitle ? <span className="collapse-section__subtitle">{subtitle}</span> : null}

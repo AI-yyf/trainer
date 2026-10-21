@@ -229,6 +229,12 @@ body {
   gap: 8px;
 }
 
+/* Author `display:flex` above outranks the UA [hidden] rule; opt out
+   explicitly so paired/offline/capture panels actually swap. */
+.panel[hidden] {
+  display: none;
+}
+
 .panel--reveal {
   animation: panel-enter var(--dur) var(--ease) both;
 }

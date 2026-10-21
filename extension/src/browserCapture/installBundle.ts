@@ -206,5 +206,6 @@ export function captureInstallGuide(steps: {
     browserCaptureHostCopy(language, 'installStepExtensions'),
     browserCaptureHostCopy(language, 'installStepDeveloperMode'),
     browserCaptureHostCopy(language, 'installStepLoadUnpacked', { dir: steps.targetDir }),
+    browserCaptureHostCopy(language, 'installStepPair'),
   ].join('\n');
 }

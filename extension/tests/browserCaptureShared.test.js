@@ -164,6 +164,32 @@ test('buildProbeCandidates probes the default port then the managed range', () =
   assert.equal(new Set(candidates).size, candidates.length);
 });
 
+test('discoverSidecar returns every reachable Trainer window, not just the default port', async () => {
+  const originalFetch = global.fetch;
+  const reachable = new Set(['http://127.0.0.1:8765', 'http://127.0.0.1:34892']);
+  global.fetch = async (url) => {
+    const baseUrl = String(url).replace(/\/health$/, '');
+    if (!reachable.has(baseUrl)) {
+      throw new TypeError('connect ECONNREFUSED');
+    }
+    return new Response(JSON.stringify({ status: 'ok' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  try {
+    const discovery = await TrainerCapture.discoverSidecar({});
+    assert.equal(discovery.found, true);
+    assert.equal(discovery.baseUrl, 'http://127.0.0.1:8765');
+    assert.deepEqual(discovery.baseUrls, [
+      'http://127.0.0.1:8765',
+      'http://127.0.0.1:34892',
+    ]);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('buildProbeCandidates prefers the stored URL and de-duplicates it', () => {
   const stored = TrainerCapture.buildProbeCandidates({ storedBaseUrl: 'http://127.0.0.1:34899' });
   assert.equal(stored[0], 'http://127.0.0.1:34899');
@@ -710,7 +736,7 @@ test('the host copy source declares the eight-language table and the pinned Engl
   }
   // The install guide and the pairing bar keep the exact English strings that
   // browserCaptureInstall / browserCapturePairing pin.
-  assert.ok(source.includes('1. Open chrome://extensions (or edge://extensions) in the browser.'));
+  assert.ok(source.includes("1. Open your browser\\'s extensions page: chrome://extensions"));
   assert.ok(source.includes('2. Turn on Developer mode.'));
   assert.ok(source.includes('3. Choose "Load unpacked" and select {dir}.'));
   assert.ok(source.includes('Copy Folder Path'));
@@ -807,7 +833,7 @@ test('host copy formats placeholders and keeps the pinned English values', (t) =
   assert.equal(en.copyCode, 'Copy Code');
   assert.equal(
     en.installStepExtensions,
-    '1. Open chrome://extensions (or edge://extensions) in the browser.'
+    "1. Open your browser's extensions page: chrome://extensions, edge://extensions, brave://extensions, opera://extensions, vivaldi://extensions (Arc: arc://extensions)."
   );
   assert.equal(en.sidecarUnavailable, 'Sidecar is unavailable.');
   assert.match(browserCaptureHostCopy('en-US', 'pairingCodeSummaryMany', { minutes: 10 }), /single use/);
@@ -1180,6 +1206,18 @@ const POPUP_JS_PATH = path.resolve(__dirname, '..', '..', 'browser-extension', '
 const POPUP_CSS_PATH = path.resolve(__dirname, '..', '..', 'browser-extension', 'popup', 'popup.css');
 const BACKGROUND_JS_PATH = path.resolve(__dirname, '..', '..', 'browser-extension', 'background.js');
 const MANIFEST_PATH = path.resolve(__dirname, '..', '..', 'browser-extension', 'manifest.json');
+
+
+test('popup actually hides inactive panels and refreshes the library count after capture', () => {
+  const css = fs.readFileSync(path.resolve(__dirname, '..', '..', 'browser-extension', 'popup', 'popup.css'), 'utf8');
+  assert.match(css, /\.panel\[hidden\]\s*\{[^}]*display:\s*none/s);
+  const js = fs.readFileSync(path.resolve(__dirname, '..', '..', 'browser-extension', 'popup', 'popup.js'), 'utf8');
+  const captureStart = js.indexOf('async function capturePage()');
+  const downloadStart = js.indexOf('async function downloadToProject()');
+  assert.ok(captureStart > 0 && downloadStart > captureStart);
+  const captureBody = js.slice(captureStart, downloadStart);
+  assert.match(captureBody, /refreshStateFromHost\(\)/);
+});
 
 test('the popup carries the three states and the full offline queue manager', () => {
   const html = fs.readFileSync(POPUP_HTML_PATH, 'utf8');

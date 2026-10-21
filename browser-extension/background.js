@@ -302,12 +302,13 @@ async function sendCaptureWithRecovery(payload, auth) {
   }
   // The sidecar may have restarted on another managed port; re-discover once
   // and retry with the same credential (client_capture_id keeps it idempotent).
-  const rediscovered = await TrainerCapture.discoverSidecar({ storedBaseUrl: auth.baseUrl });
-  if (!rediscovered.found || !rediscovered.baseUrl || rediscovered.baseUrl === auth.baseUrl) {
+  // Only switch to an instance that actually accepts the credential.
+  const recoveredBaseUrl = await findPairedBaseUrl(auth);
+  if (!recoveredBaseUrl) {
     return result;
   }
-  await TrainerCapture.saveAuth(rediscovered.baseUrl, auth.credential);
-  result = await TrainerCapture.sendCapture(rediscovered.baseUrl, auth.credential, payload);
+  await TrainerCapture.saveAuth(recoveredBaseUrl, auth.credential);
+  result = await TrainerCapture.sendCapture(recoveredBaseUrl, auth.credential, payload);
   return result;
 }
 
@@ -685,17 +686,36 @@ async function buildState() {
   };
 }
 
+/**
+ * Find another reachable Trainer window that accepts this extension's stored
+ * credential. A second VS Code window answers /health too, but it will reject
+ * a credential minted by a sibling instance (401) — switching to it blindly
+ * turns a real "Trainer is offline" case into "credential invalid".
+ */
+async function findPairedBaseUrl(auth) {
+  const rediscovered = await TrainerCapture.discoverSidecar({ storedBaseUrl: auth.baseUrl });
+  const candidates = Array.isArray(rediscovered.baseUrls) && rediscovered.baseUrls.length
+    ? rediscovered.baseUrls
+    : (rediscovered.baseUrl ? [rediscovered.baseUrl] : []);
+  for (const baseUrl of candidates) {
+    if (!baseUrl || baseUrl === auth.baseUrl) continue;
+    const probe = await TrainerCapture.fetchStatus(baseUrl, auth.credential);
+    if (probe.ok) return baseUrl;
+  }
+  return '';
+}
+
 async function fetchStatusWithRecovery(auth) {
   let result = await TrainerCapture.fetchStatus(auth.baseUrl, auth.credential);
   if (result.ok || !result.transportError) {
     return result;
   }
-  const rediscovered = await TrainerCapture.discoverSidecar({ storedBaseUrl: auth.baseUrl });
-  if (!rediscovered.found || !rediscovered.baseUrl || rediscovered.baseUrl === auth.baseUrl) {
+  const recoveredBaseUrl = await findPairedBaseUrl(auth);
+  if (!recoveredBaseUrl) {
     return result;
   }
-  await TrainerCapture.saveAuth(rediscovered.baseUrl, auth.credential);
-  result = await TrainerCapture.fetchStatus(rediscovered.baseUrl, auth.credential);
+  await TrainerCapture.saveAuth(recoveredBaseUrl, auth.credential);
+  result = await TrainerCapture.fetchStatus(recoveredBaseUrl, auth.credential);
   return result;
 }
 

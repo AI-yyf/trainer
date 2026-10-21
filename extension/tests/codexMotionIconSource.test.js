@@ -59,7 +59,8 @@ test('composer action glyphs go through the unified TrainerIconBase stroke famil
   const training = read('components/training/TrainingWorkbenchView.tsx');
 
   assert.match(trainerBase, /viewBox = "0 0 20 20"/);
-  assert.match(trainerBase, /strokeWidth=\{1\.4\}/);
+  assert.match(trainerBase, /const strokeWidth = viewBox === "0 0 24 24" \? 1\.9 : 1\.4;/);
+  assert.match(trainerBase, /strokeWidth=\{strokeWidth\}/);
   assert.match(trainerBase, /stroke="currentColor"/);
   assert.match(trainerBase, /strokeLinecap="round"/);
   assert.match(coachIcons, /from "\.\/TrainerIconBase"/);

@@ -283,7 +283,11 @@ async function main() {
       if (auth["trainerCapture.credential"]) break;
       await sleep(250);
     }
-    assert(auth["trainerCapture.credential"], "The extension did not store a credential.");
+    const pairFeedback = (await popup.locator("#pair-feedback").textContent().catch(() => "")) || "";
+    assert(
+      auth["trainerCapture.credential"],
+      `The extension did not store a credential. feedback=${JSON.stringify(pairFeedback.trim())}`,
+    );
     assert(
       String(auth["trainerCapture.baseUrl"]).includes(`:${port}`),
       `Extension paired with an unexpected base URL: ${auth["trainerCapture.baseUrl"]}`,

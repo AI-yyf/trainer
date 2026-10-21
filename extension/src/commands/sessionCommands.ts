@@ -3304,6 +3304,10 @@ export async function restartSessionCommand(
       runtimeWorkspace.workspaceId,
     ),
   );
+  // A brand-new thread must not resurrect the previous thread from the
+  // stale-while-revalidate cache on the next window open. Clear after the
+  // last patch so a patch-scheduled write cannot repopulate it.
+  await context.clearBootstrapCache?.();
   await context.workbench.syncState();
   await context.workbench.postMessage({
     type: 'ui/restoreView',

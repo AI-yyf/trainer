@@ -8,6 +8,15 @@ function CoachIconBase({ size = 16, ...props }: CoachIconProps) {
   return <TrainerIconBase size={size} viewBox="0 0 16 16" {...props} />;
 }
 
+export function TerminalIcon(props: CoachIconProps) {
+  return (
+    <CoachIconBase {...props}>
+      <path d="m3.5 4.5 3.2 3.5-3.2 3.5" />
+      <path d="M8.5 11.5h4" />
+    </CoachIconBase>
+  );
+}
+
 export function ComposeIcon(props: CoachIconProps) {
   return (
     <CoachIconBase {...props}>

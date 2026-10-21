@@ -60,6 +60,7 @@ const elements = {
 
 const copy = TrainerCapture.copyFor(TrainerCapture.browserLocale());
 let detectedBaseUrl = '';
+let detectedBaseUrls = [];
 let currentTab = { url: '', title: '', kind: 'web' };
 let lastQueueCount = -1;
 let lastTabUrl = '';
@@ -461,6 +462,9 @@ async function runDetection() {
 
   const discovery = await TrainerCapture.discoverSidecar({ storedBaseUrl: auth.baseUrl });
   detectedBaseUrl = discovery.found ? discovery.baseUrl : '';
+  detectedBaseUrls = Array.isArray(discovery.baseUrls) && discovery.baseUrls.length
+    ? discovery.baseUrls
+    : (discovery.found ? [discovery.baseUrl] : []);
   if (discovery.found) {
     elements.detectLine.textContent = t('detected', { url: discovery.baseUrl });
   } else {
@@ -486,19 +490,44 @@ async function pairNow() {
   }
   elements.pairSubmit.disabled = true;
   setFeedback(elements.pairFeedback, t('checking'), '');
-  const result = await TrainerCapture.pairSidecar(detectedBaseUrl, code);
-  if (!result.ok) {
+  // Try every reachable Trainer window. With two VS Code windows open the
+  // sidecar that answers the fastest may not be the one holding this code.
+  const bases = [detectedBaseUrl, ...detectedBaseUrls].filter(
+    (value, index, list) => value && list.indexOf(value) === index,
+  );
+  let result = null;
+  let pairedBaseUrl = '';
+  for (const baseUrl of bases) {
+    result = await TrainerCapture.pairSidecar(baseUrl, code);
+    if (result.ok) {
+      pairedBaseUrl = baseUrl;
+      break;
+    }
+  }
+  if (!result || !result.ok) {
     elements.pairSubmit.disabled = false;
-    setFeedback(elements.pairFeedback, result.message || t('pairTransport'), 'error');
+    setFeedback(
+      elements.pairFeedback,
+      (result && (result.message || t('pairTransport'))) || t('pairTransport'),
+      'error',
+    );
     return;
   }
-  await TrainerCapture.saveAuth(detectedBaseUrl, result.credential);
+  detectedBaseUrl = pairedBaseUrl;
+  elements.detectLine.textContent = t('detected', { url: pairedBaseUrl });
+  await TrainerCapture.saveAuth(pairedBaseUrl, result.credential);
   await TrainerCapture.clearNotice();
   elements.pairCode.value = '';
   setFeedback(elements.pairFeedback, t('pairSuccess'), '');
   const refreshed = await send({ type: 'trainer:refresh' });
   renderState(refreshed.state || (await send({ type: 'trainer:state' })));
   elements.pairSubmit.disabled = false;
+}
+
+
+async function refreshStateFromHost() {
+  const refreshed = await send({ type: 'trainer:refresh' });
+  renderState((refreshed && refreshed.state) || (await send({ type: 'trainer:state' })));
 }
 
 async function capturePage() {
@@ -512,7 +541,10 @@ async function capturePage() {
   if (!failed) {
     drawSuccessCheck();
   }
-  renderState(await send({ type: 'trainer:state' }));
+  // Re-fetch the sidecar status: the local cache still carries the previous
+  // library count, so a successful capture otherwise shows "library 1" after
+  // the second item landed.
+  await refreshStateFromHost();
   await renderTabLine();
 }
 
@@ -546,7 +578,7 @@ async function downloadToProject() {
   if (!failed) {
     drawSuccessCheck();
   }
-  renderState(await send({ type: 'trainer:state' }));
+  await refreshStateFromHost();
   await renderTabLine();
 }
 

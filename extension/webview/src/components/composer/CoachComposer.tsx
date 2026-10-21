@@ -741,13 +741,13 @@ export function CoachComposer({
       {imageStaging.error ? <SystemState kind="recoverable-error" title={imageStaging.error} /> : null}
       {attachmentsEnabled && showAttachmentCapabilityNote && attachmentCapabilityText ? (
         <div className="composer__capability-note" id={attachmentCapabilityNoteId} role="status">
-          <AttachmentIcon size={13} />
+          <AttachmentIcon size={14} />
           <span>{attachmentCapabilityText}</span>
         </div>
       ) : null}
       {stagedAttachments.length > 0 && resolvedSubmitBlockedReason ? (
         <div className="composer__capability-note" id={submitBlockedReasonId} role="status">
-          <AttachmentIcon size={13} />
+          <AttachmentIcon size={14} />
           <span>{resolvedSubmitBlockedReason}</span>
         </div>
       ) : null}

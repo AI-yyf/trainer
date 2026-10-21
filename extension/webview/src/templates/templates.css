@@ -7,7 +7,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 28px;
+  min-height: 32px;
   min-width: 0;
   color: var(--fg-muted);
   font-size: var(--trainer-font-xs);
@@ -17,33 +17,46 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.app-shell-header__utilities { display: flex; gap: 4px; margin-inline-start: auto; }
+.app-shell-header__utilities { display: flex; gap: 2px; margin-inline-start: auto; }
 .app-shell-header__utility {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 4px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   background: transparent;
   color: var(--fg-muted);
   cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
 }
 .app-shell-header__utility:hover { background: var(--bg-1); color: var(--fg-0); }
+.app-shell-header__utility:active { background: var(--bg-2); }
+.app-shell-header__utility[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.app-shell-header__utility:disabled { opacity: 0.45; cursor: default; background: transparent; color: var(--fg-muted); }
 .app-shell-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
 .app-shell-nav__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   min-width: 0;
-  min-height: 36px;
-  padding: 8px 4px;
+  min-height: 46px;
+  padding: 6px 2px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--fg-muted);
   font: inherit;
   font-size: var(--trainer-font-sm);
+  font-weight: 500;
+  line-height: 1.25;
   cursor: pointer;
+  transition: color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
 }
+.app-shell-nav__item > span { min-width: 0; overflow-wrap: anywhere; text-align: center; }
 .app-shell-nav__item:hover { color: var(--fg-0); }
 .app-shell-nav__item[aria-current="page"] { color: var(--fg-0); border-bottom-color: var(--accent); }
 :where(.app-shell-header button, .template-back):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }

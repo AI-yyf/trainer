@@ -25,6 +25,11 @@ import {
   openCaptureFolder,
   resolveCaptureInstallDir,
 } from '../browserCapture/installBundle';
+import {
+  detectChromiumBrowsers,
+  openBrowserExtensionsPage,
+  type ChromiumBrowser,
+} from '../browserCapture/browserLauncher';
 
 /** Host-side copy for the current VS Code UI locale (en-US fallback). */
 function resolveHostLanguage(): ComposerLanguage {
@@ -115,9 +120,12 @@ export async function installBrowserCaptureCommand(
     guide = `${guide}\n${copy('installFolderFallback', { dir: targetDir })}`;
   }
   const copyPathLabel = copy('copyFolderPath');
-  void vscode.window.showInformationMessage(guide, copyPathLabel).then((choice) => {
+  const openPageLabel = copy('openExtensionsPage');
+  void vscode.window.showInformationMessage(guide, copyPathLabel, openPageLabel).then((choice) => {
     if (choice === copyPathLabel) {
       void vscode.env.clipboard.writeText(targetDir);
+    } else if (choice === openPageLabel) {
+      void openBrowserExtensionsPageCommand(context);
     }
   });
 
@@ -126,6 +134,59 @@ export async function installBrowserCaptureCommand(
     ok: true,
     message: copy('installSucceeded', { label, dir: targetDir }),
     data: { targetDir: installed.targetDir, version: installed.version, fileCount: installed.fileCount },
+  };
+}
+
+/**
+ * `trainer.browserCapture.openExtensionsPage`: open the correct native
+ * extensions page in a detected Chromium browser. Branded browsers do not
+ * allow silent unpacked installs, so this removes the URL-typing and
+ * browser-choosing steps while keeping the user in control of the actual
+ * "Load unpacked" confirmation.
+ */
+export async function openBrowserExtensionsPageCommand(
+  context: CommandContext,
+): Promise<CommandExecutionResult> {
+  const copy = hostCopy(resolveHostLanguage());
+  const browsers = detectChromiumBrowsers();
+  if (browsers.length === 0) {
+    void vscode.window.showInformationMessage(copy('noChromiumBrowserFound'));
+    return { ok: false, message: copy('noChromiumBrowserFound') };
+  }
+
+  let browser: ChromiumBrowser = browsers[0];
+  if (browsers.length > 1) {
+    const picked = await vscode.window.showQuickPick(
+      browsers.map((candidate) => ({
+        label: candidate.label,
+        description: candidate.extensionsUrl,
+        browser: candidate,
+      })),
+      { placeHolder: copy('openExtensionsPage') },
+    );
+    if (!picked) {
+      return { ok: true, cancelled: true };
+    }
+    browser = picked.browser;
+  }
+
+  const opened = openBrowserExtensionsPage(browser);
+  if (!opened.spawned) {
+    const message = copy('browserOpenFailed', {
+      browser: browser.label,
+      reason: `${opened.command} ${opened.args.join(' ')}`,
+    });
+    context.outputChannel.appendLine(`[browser-capture] ${message}`);
+    void vscode.window.showWarningMessage(message);
+    return { ok: false, message };
+  }
+  context.outputChannel.appendLine(
+    `[browser-capture] opened ${browser.label} extensions page (${browser.extensionsUrl})`,
+  );
+  return {
+    ok: true,
+    message: `${browser.label} · ${browser.extensionsUrl}`,
+    data: { browserId: browser.id, extensionsUrl: browser.extensionsUrl },
   };
 }
 

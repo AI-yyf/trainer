@@ -2535,9 +2535,9 @@ export function ResourcesWorkbenchView({
           onClick={() => toggleFolderPath(entry.path)}
         >
           <span className="resources-knowledge__folder-chevron" aria-hidden="true">
-            {hasChildren ? <ChevronDownIcon size={11} /> : <span className="resources-knowledge__folder-dot" />}
+            {hasChildren ? <ChevronDownIcon size={12} /> : <span className="resources-knowledge__folder-dot" />}
           </span>
-          <FolderIcon size={13} aria-hidden="true" />
+          <FolderIcon size={14} aria-hidden="true" />
           <span className="resources-knowledge__folder-name">{entry.name}</span>
           <span className="resources-knowledge__folder-count">{entry.resourceCount}</span>
         </button>
@@ -2849,7 +2849,7 @@ export function ResourcesWorkbenchView({
       <div className="resources-knowledge__toolbar">
         <label className="resources-search resources-search--hero resources-knowledge__search">
           <span className="sr-only">{localize(language, "searchPlaceholder")}</span>
-          <SearchIcon size={13} aria-hidden="true" />
+          <SearchIcon size={14} aria-hidden="true" />
           <input
             type="search"
             value={query}
@@ -2931,7 +2931,7 @@ export function ResourcesWorkbenchView({
             onClick={() => runImportAction(onImportFiles)}
           >
             <span className="menu-list__icon" aria-hidden="true">
-              <UploadIcon size={13} />
+              <UploadIcon size={14} />
             </span>
             <span className="menu-list__body">
               <strong>{t("addFiles")}</strong>
@@ -2944,7 +2944,7 @@ export function ResourcesWorkbenchView({
             onClick={() => runImportAction(onImportFolder)}
           >
             <span className="menu-list__icon" aria-hidden="true">
-              <FolderIcon size={13} />
+              <FolderIcon size={14} />
             </span>
             <span className="menu-list__body">
               <strong>{t("addFolder")}</strong>
@@ -2968,7 +2968,7 @@ export function ResourcesWorkbenchView({
             }
           >
             <span className="menu-list__icon" aria-hidden="true">
-              <LinkIcon size={13} />
+              <LinkIcon size={14} />
             </span>
             <span className="menu-list__body">
               <strong>{localize(language, "captureWebSnapshot")}</strong>
@@ -3258,7 +3258,7 @@ export function ResourcesWorkbenchView({
         >
           <summary>
             <span>
-              <FolderIcon size={13} aria-hidden="true" />
+              <FolderIcon size={14} aria-hidden="true" />
               <strong>
                 {localize(language, "foldersTitle")}
                 {libraryFolderEntries.length > 0 ? ` (${libraryFolderEntries.length})` : ""}
@@ -3393,7 +3393,7 @@ export function ResourcesWorkbenchView({
       >
         <summary>
           <span>
-            <TrashIcon size={13} aria-hidden="true" />
+            <TrashIcon size={14} aria-hidden="true" />
             {/* r1-g2-1: one expression — "回收站 (1)" — instead of a title row
                 plus a second count sentence on the far edge. */}
             <strong>
@@ -3503,7 +3503,7 @@ export function ResourcesWorkbenchView({
               type="button"
               onClick={confirmDeleteSelectedResources}
             >
-              <TrashIcon size={13} />
+              <TrashIcon size={14} />
               <span>{t("confirm")}</span>
             </button>
           </div>
@@ -3628,7 +3628,7 @@ export function ResourcesWorkbenchView({
               disabled={folderDeleteBusy}
               aria-busy={folderDeleteBusy}
             >
-              <TrashIcon size={13} />
+              <TrashIcon size={14} />
               <span>{t("confirm")}</span>
             </button>
           </div>

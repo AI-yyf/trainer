@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { getRuntimeWorkspaceContext } from '../commands/workspaceContext';
+import { SidecarHttpError } from './httpClient';
 import { refreshWorkspaceAuthorityCommand } from '../commands/memoryCommands';
 import { recordProviderRestoreMs, recordRuntimeRehydration } from './runtimeMetrics';
 import type { CommandContext } from './commandContext';
@@ -453,6 +454,13 @@ async function restoreStoredSession(
         error instanceof Error ? error.message : String(error)
       })`,
     );
+    // A 404 is a fact about the server, not a transient failure: the stored id
+    // no longer exists (the database was reset or the thread was pruned). Drop
+    // it so later launches go straight to /session/start instead of paying for
+    // and logging the same failing round trip on every open.
+    if (error instanceof SidecarHttpError && error.statusCode === 404) {
+      await context.setSessionId(undefined);
+    }
     return undefined;
   }
 }

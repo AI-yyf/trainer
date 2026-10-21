@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import { sanitizeErrorSurfaceJson } from "../../../../../../shared/src/errorSurfaceSanitizer";
 import type { ToolCallPart } from "../../../lib/types";
+import { ChevronDownIcon, TerminalIcon } from "../../icons";
 
 export interface ToolCallRendererProps {
   part: ToolCallPart;
@@ -47,10 +48,7 @@ export function ToolCallRenderer({ part, className }: ToolCallRendererProps) {
     <div className={`tool-call-renderer ${className ?? ""}`}>
       <div className="tool-call-renderer__header">
         <span className="tool-call-renderer__icon" aria-hidden="true">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 17l6-6-6-6" />
-            <path d="M12 19h8" />
-          </svg>
+          <TerminalIcon size={14} />
         </span>
         <span className="tool-call-renderer__name">{part.name}</span>
         <span className={`tool-call-renderer__status tool-call-renderer__status--${resolvedStatus}`}>
@@ -67,17 +65,10 @@ export function ToolCallRenderer({ part, className }: ToolCallRendererProps) {
             aria-expanded={expanded}
           >
             <span>{expanded ? "Hide parameters" : "Show parameters"}</span>
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
+            <ChevronDownIcon
+              size={12}
               style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
-            >
-              <path d="M6 9l6 6 6-6" />
-            </svg>
+            />
           </button>
           {expanded && (
             <pre className="tool-call-renderer__args">

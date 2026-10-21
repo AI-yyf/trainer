@@ -202,7 +202,7 @@ test('the three-step guide names chrome://extensions, Developer mode and Load un
   const guide = captureInstallGuide({ targetDir: '/home/trainer/.trainer/browser-capture', version: '0.1.0' });
 
   assert.match(guide, /Trainer Capture 0\.1\.0/);
-  assert.match(guide, /1\. Open chrome:\/\/extensions/);
+  assert.match(guide, /1\. Open your browser's extensions page: chrome:\/\/extensions/);
   assert.match(guide, /2\. Turn on Developer mode/);
   assert.match(guide, /3\. Choose "Load unpacked"/);
   assert.match(guide, /\/home\/trainer\/\.trainer\/browser-capture/);
@@ -300,7 +300,7 @@ test('the install command copies the bundled extension, opens the folder and sho
     assert.match(messages[0].message, /chrome:\/\/extensions/);
     assert.match(messages[0].message, /Developer mode/);
     assert.match(messages[0].message, /Load unpacked/);
-    assert.deepEqual(messages[0].actions, ['Copy Folder Path']);
+    assert.deepEqual(messages[0].actions, ['Copy Folder Path', 'Open Extensions Page']);
 
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(clipboardWrites, [installDir]);

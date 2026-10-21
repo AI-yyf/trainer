@@ -1842,26 +1842,35 @@
   async function discoverSidecar(options) {
     const candidates = buildProbeCandidates(options || {});
     if (!candidates.length) {
-      return { found: false, baseUrl: '', needsAuth: false, candidates };
+      return { found: false, baseUrl: '', baseUrls: [], needsAuth: false, candidates };
     }
     const fast = candidates.slice(0, 2);
     const slow = candidates.slice(2);
+    const hits = [];
     const settle = async (list) => {
       const results = await Promise.all(list.map((candidate) => probeBaseUrl(candidate)));
-      return results.find((entry) => entry.reachable) || null;
+      for (const entry of results) {
+        if (entry.reachable) hits.push(entry);
+      }
+      return hits[0] || null;
     };
-    const fastHit = await settle(fast);
-    if (fastHit) {
-      return { found: true, baseUrl: fastHit.baseUrl, needsAuth: fastHit.needsAuth, candidates };
+    await settle(fast);
+    // Probe the managed range even when the default port answers: with two
+    // VS Code windows the default 8765 sidecar may belong to a different
+    // window than the one that minted this pairing code.
+    if (slow.length) {
+      await settle(slow);
     }
-    if (!slow.length) {
-      return { found: false, baseUrl: '', needsAuth: false, candidates };
-    }
-    const slowHit = await settle(slow);
-    if (slowHit) {
-      return { found: true, baseUrl: slowHit.baseUrl, needsAuth: slowHit.needsAuth, candidates };
-    }
-    return { found: false, baseUrl: '', needsAuth: false, candidates };
+    return {
+      found: hits.length > 0,
+      baseUrl: hits[0] ? hits[0].baseUrl : '',
+      // Multiple VS Code windows run independent sidecars. Pairing must try
+      // every reachable instance: the first one is not necessarily the window
+      // that minted the code.
+      baseUrls: hits.map((entry) => entry.baseUrl),
+      needsAuth: hits[0] ? hits[0].needsAuth : false,
+      candidates,
+    };
   }
 
   async function pairSidecar(baseUrl, code) {

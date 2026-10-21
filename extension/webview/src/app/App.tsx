@@ -11303,7 +11303,7 @@ export function App() {
                 }
               >
                 <span className="menu-list__icon" aria-hidden="true">
-                  <UploadIcon size={13} />
+                  <UploadIcon size={14} />
                 </span>
                 <span className="menu-list__body">
                   <strong>{t.addFiles}</strong>
@@ -11323,7 +11323,7 @@ export function App() {
                 }
               >
                 <span className="menu-list__icon" aria-hidden="true">
-                  <FolderIcon size={13} />
+                  <FolderIcon size={14} />
                 </span>
                 <span className="menu-list__body">
                   <strong>{t.addFolder}</strong>
@@ -11343,7 +11343,7 @@ export function App() {
                   }
                 >
                   <span className="menu-list__icon" aria-hidden="true">
-                    <LinkIcon size={13} />
+                    <LinkIcon size={14} />
                   </span>
                   <span className="menu-list__body">
                     <strong>{t.addUrl}</strong>
@@ -14522,7 +14522,7 @@ export function App() {
                     }}
                   >
                     <span className="composer-presencebar__blocked-icon" aria-hidden="true">
-                      <WarningIcon size={13} />
+                      <WarningIcon size={14} />
                     </span>
                     <span className="composer-presencebar__blocked-copy">
                       {workspaceSessionBlocked ? (

@@ -24,7 +24,7 @@ export function WorkbenchSurfaceButton({ mode, label, onClick }: WorkbenchSurfac
       onClick={onClick}
     >
       <span className="button__icon" aria-hidden="true">
-        <Icon size={13} />
+        <Icon size={14} />
       </span>
       <span className="workbench-surface-button__label">{label}</span>
     </button>
