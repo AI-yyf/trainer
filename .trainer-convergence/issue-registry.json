@@ -179,8 +179,8 @@
       "title": "Linux browser detection fails on Windows CI",
       "priority": "P0",
       "area": "browser",
-      "status": "FIXED_LOCAL",
-      "evidence": "executableInPath used host path delimiter; fix uses target-platform path API",
+      "status": "DONE",
+      "evidence": "run 39821561882 (96d5e92) Cross-Platform Verify 9/9 success",
       "acceptance": "Cross-Platform Verify UI (windows) passes on this fix"
     },
     {

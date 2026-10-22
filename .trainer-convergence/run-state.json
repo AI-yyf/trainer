@@ -1,7 +1,7 @@
 {
   "version": 1,
   "loop": 1,
-  "phase": "WAVE1_FIX",
+  "phase": "WAVE1_CONTINUED",
   "head": "e7e6f4161e929378c0186be5e3311e710b89fcf6",
   "working_tree": {
     "modified": [
@@ -9,9 +9,17 @@
     ]
   },
   "next": [
-    "commit T-0020 fix",
-    "push",
-    "watch CI run",
-    "dispatch deepseek audits for T-0002/T-0003/T-0006/T-0001"
-  ]
+    "T-0005 cache session binding",
+    "T-0001 non-blocking secrets",
+    "watch CI 39827738106 for 7121259",
+    "then T-0016/T-0017 attempts concurrency"
+  ],
+  "last_head": "71212595ae033f42337749c399ad6324e7aaa512",
+  "results": {
+    "T-0020": "DONE (CI 9/9 at 96d5e92)",
+    "T-0002/T-0003/T-0004/T-0006/T-0007": "implemented+tested locally (03f3792, 7121259)"
+  },
+  "blocked": {
+    "deepseek_subagents": "provider reasoning-level not configured; master-owned implementation instead"
+  }
 }
