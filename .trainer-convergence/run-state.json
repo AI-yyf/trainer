@@ -40,8 +40,8 @@
     "deepseek_subagents": "provider reasoning-level not configured; master-owned implementation instead"
   },
   "ci": {
-    "head": "0e196c4",
-    "conclusion": "success",
+    "head": "13d150d",
+    "conclusion": "success (after failed-job rerun; Windows package infra-flake)",
     "jobs": "9/9"
   }
 }
