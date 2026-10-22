@@ -2,12 +2,12 @@
   "version": 1,
   "gates": {
     "ci_cross_platform": {
-      "status": "FAIL",
-      "evidence": "run 39636536608: 8/9, UI windows failed T-0020"
+      "status": "PASS",
+      "evidence": "run @3f14067: 9/9 jobs success (UI/Server/Package x mac/ubuntu/windows)"
     },
     "native_install_e2e": {
-      "status": "OPEN",
-      "evidence": "not run at e7e6f41"
+      "status": "PASS_MAC",
+      "evidence": "vsix-e2e ok=True 36/36 incl bootstrap-snapshot-cached at final SHA; win/linux legs via CI"
     },
     "browser_e2e": {
       "status": "PASS_LOCAL",
