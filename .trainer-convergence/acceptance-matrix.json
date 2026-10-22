@@ -3,7 +3,7 @@
   "gates": {
     "ci_cross_platform": {
       "status": "PASS",
-      "evidence": "run @3f14067: 9/9 jobs success (UI/Server/Package x mac/ubuntu/windows)"
+      "evidence": "run @0e196c4: 9/9 jobs success after settings-card revert"
     },
     "native_install_e2e": {
       "status": "PASS_MAC",

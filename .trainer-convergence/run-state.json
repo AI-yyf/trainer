@@ -42,7 +42,7 @@
     "deepseek_subagents": "provider reasoning-level not configured; master-owned implementation instead"
   },
   "ci": {
-    "head": "3f14067",
+    "head": "0e196c4",
     "conclusion": "success",
     "jobs": "9/9"
   }
