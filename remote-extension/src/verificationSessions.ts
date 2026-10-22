@@ -54,6 +54,9 @@ type SessionRecord = {
   finishedAt?: string;
   stdout: string;
   stderr: string;
+  /** Absolute characters dropped from the head once the cap kicks in. */
+  stdoutBase: { value: number };
+  stderrBase: { value: number };
   environment?: RemoteEnvironment;
   error?: string;
   killTree?: () => void;
@@ -78,15 +81,26 @@ function runningKeyOf(spec: RemoteProcessSpec): string {
     executable: spec.executable,
     args: [...spec.args],
     cwd: spec.cwd ?? '',
+    // Environment is part of run identity (T-0019): MODE=one and MODE=two
+    // are different runs even when the command line is identical.
+    env: spec.env ?? {},
   });
 }
 
-function appendCapped(buffer: string, chunk: string): string {
+function appendCapped(
+  buffer: string,
+  chunk: string,
+  base: { value: number },
+): string {
   const merged = buffer + chunk;
   if (merged.length <= VERIFICATION_OUTPUT_CAP) {
     return merged;
   }
   // Keep the tail: later output matters more when diagnosing a failed run.
+  // Track how many absolute characters were dropped so reader offsets stay
+  // anchored to total-written instead of the shrinking buffer (T-0018).
+  const dropped = merged.length - VERIFICATION_OUTPUT_CAP;
+  base.value += dropped;
   return merged.slice(merged.length - VERIFICATION_OUTPUT_CAP);
 }
 
@@ -160,20 +174,25 @@ export function createVerificationSessionManager(options: VerificationSessionMan
         }
       }
 
-      const environmentSnapshot = await environment();
-      const sessionId = generateSessionId();
+      // Register the session BEFORE the first await so two concurrent starts
+      // of the same identity cannot both pass the running-check and spawn
+      // twice (T-0019).
       const session: SessionRecord = {
-        sessionId,
+        sessionId: generateSessionId(),
         spec,
         state: 'running',
         startedAt: new Date(now()).toISOString(),
         stdout: '',
         stderr: '',
-        environment: environmentSnapshot,
+        stdoutBase: { value: 0 },
+        stderrBase: { value: 0 },
         runningKey: key,
       };
-      sessions.set(sessionId, session);
+      sessions.set(session.sessionId, session);
 
+      const environmentSnapshot = await environment();
+      session.environment = environmentSnapshot;
+      const sessionId = session.sessionId;
       let spawned: SpawnedVerificationProcess;
       try {
         spawned = spawnVerification(spec, spec.cwd || undefined);
@@ -186,10 +205,10 @@ export function createVerificationSessionManager(options: VerificationSessionMan
 
       session.killTree = spawned.killTree;
       spawned.onStdout((chunk) => {
-        session.stdout = appendCapped(session.stdout, chunk);
+        session.stdout = appendCapped(session.stdout, chunk, session.stdoutBase);
       });
       spawned.onStderr((chunk) => {
-        session.stderr = appendCapped(session.stderr, chunk);
+        session.stderr = appendCapped(session.stderr, chunk, session.stderrBase);
       });
       void spawned.exited.then(
         ({ code, error }) => {
@@ -226,8 +245,13 @@ export function createVerificationSessionManager(options: VerificationSessionMan
       if (!session) {
         throw new Error(`Unknown verification session: ${sessionId}`);
       }
-      const stdoutChunk = session.stdout.slice(Math.max(0, stdoutOffset));
-      const stderrChunk = session.stderr.slice(Math.max(0, stderrOffset));
+      // Offsets are absolute (total written). Reads from before the cap are
+      // clamped to the surviving window; totals keep counting so the next
+      // poll resumes after the tail instead of rereading it (T-0018).
+      const stdoutBase = Math.max(0, stdoutOffset - session.stdoutBase.value);
+      const stderrBase = Math.max(0, stderrOffset - session.stderrBase.value);
+      const stdoutChunk = session.stdout.slice(Math.max(0, stdoutBase));
+      const stderrChunk = session.stderr.slice(Math.max(0, stderrBase));
       const status: RemoteVerificationStatus = {
         session_id: session.sessionId,
         state: session.state,
@@ -235,8 +259,8 @@ export function createVerificationSessionManager(options: VerificationSessionMan
         finished_at: session.finishedAt,
         stdout_chunk: stdoutChunk,
         stderr_chunk: stderrChunk,
-        stdout_total: session.stdout.length,
-        stderr_total: session.stderr.length,
+        stdout_total: session.stdoutBase.value + session.stdout.length,
+        stderr_total: session.stderrBase.value + session.stderr.length,
         environment: session.environment as RemoteEnvironment,
         spec: session.spec,
       };

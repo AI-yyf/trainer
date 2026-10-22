@@ -246,10 +246,38 @@ test('output buffers keep the tail under the cap', async () => {
   spawn.stdoutListeners.forEach((listener) => listener(bigChunk));
   spawn.stdoutListeners.forEach((listener) => listener(bigChunk));
   const status = manager.status(started.session_id, 0, 0);
-  assert.equal(status.stdout_total <= 200_000, true);
-  assert.equal(status.stdout_chunk.length, status.stdout_total);
+  // totals are absolute (300k written); only the surviving window is capped.
+  assert.equal(status.stdout_total, 300_000);
+  assert.equal(status.stdout_chunk.length, 200_000);
   // The tail (not the head) is kept.
   assert.equal(status.stdout_chunk.endsWith('xxxx'), true);
+});
+
+test('offsets survive truncation and env changes create distinct runs', async () => {
+  const { manager, fake } = await makeManager();
+  // 120k chunks over the 200k cap truncate mid-stream; absolute totals keep
+  // counting so the next poll resumes after the tail (T-0018).
+  const started = await manager.startSession(PYTEST_SPEC);
+  const spawn = fake.spawns[0];
+  spawn.stdoutListeners.forEach((l) => l('a'.repeat(120_000)));
+  const first = manager.status(started.session_id, 0, 0);
+  assert.equal(first.stdout_total, 120_000);
+
+  spawn.stdoutListeners.forEach((l) => l('b'.repeat(120_000)));
+  const second = manager.status(started.session_id, first.stdout_total, 0);
+  assert.equal(second.stdout_total, 240_000);
+  assert.equal(second.stdout_chunk, 'b'.repeat(120_000), 'resume lands after the head that was dropped');
+
+  spawn.stdoutListeners.forEach((l) => l('c'.repeat(120_000)));
+  const third = manager.status(started.session_id, second.stdout_total, 0);
+  assert.equal(third.stdout_total, 360_000);
+  assert.equal(third.stdout_chunk, 'c'.repeat(120_000));
+  assert.equal(third.stdout_chunk.includes('b'), false, 'no reread of the surviving tail');
+
+  // T-0019: env is part of run identity — a different MODE is another run.
+  const variant = await manager.startSession({ ...PYTEST_SPEC, env: { MODE: 'two' } });
+  assert.notEqual(variant.session_id, started.session_id);
+  assert.equal(fake.spawns.length, 2);
 });
 
 test('terminal sessions are evicted oldest-first beyond maxSessions', async () => {
