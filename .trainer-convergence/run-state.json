@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "loop": 5,
+  "phase": "WAVE6_EVIDENCE_BACKFILL",
+  "head": "13d150d996d20200fd2147737e032a063aab9b7a",
+  "results": {
+    "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
+    "T-0027": "CONFIRMED_OPEN (real-provider samples show structured next_step diverging from prose; needs coach_finalize contract fix validated vs real provider)",
+    "T-0001": "DONE_LOCAL (ee059dd)",
+    "T-0002": "DONE_LOCAL (03f3792)",
+    "T-0003": "DONE_LOCAL (03f3792)",
+    "T-0004": "DONE_LOCAL (03f3792)",
+    "T-0005": "DONE_LOCAL (7262f75)",
+    "T-0006": "DONE_LOCAL (03f3792)",
+    "T-0007": "DONE_LOCAL (03f3792)",
+    "T-0008": "DONE_LOCAL (cbbb559)",
+    "T-0009": "DONE_LOCAL (84d99d1)",
+    "T-0010": "DONE_LOCAL (ef528a7)",
+    "T-0011": "DONE_LOCAL (22b0e67)",
+    "T-0012": "DONE_LOCAL (41fb253 + 010442f docs half)",
+    "T-0013": "DONE_LOCAL (01dc793)",
+    "T-0014": "DONE_LOCAL (8156430; old-card back-fill limitation recorded)",
+    "T-0015": "DONE_LOCAL (01dc793)",
+    "T-0016": "DONE_LOCAL (845e040)",
+    "T-0017": "DONE_LOCAL (845e040)",
+    "T-0018": "DONE_LOCAL (37810ea)",
+    "T-0019": "DONE_LOCAL (37810ea)",
+    "T-0020": "DONE (CI 9/9 at 96d5e92, run 39821561882)",
+    "T-0021": "DONE_MAC (36/36 vsix-e2e at final SHA); win/linux legs = CI",
+    "T-0022": "DONE_LOCAL (eb87712)",
+    "T-0023": "DONE_LOCAL (6c75e0f)",
+    "T-0025": "DONE_LOCAL (5bf50a7)"
+  },
+  "blocked": {
+    "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
+    "T-0026_caveat": "single relay/model sample; rerun when owner relay state changes",
+    "Remote-SSH_L2": "real Remote-SSH window — environment not available in this session",
+    "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
+  },
+  "ci": {
+    "head": "0e196c4",
+    "conclusion": "success",
+    "jobs": "9/9"
+  },
+  "next": [
+    "CI on 542959d+ (T-0027 evidence registration)",
+    "T-0027 contract fix needs real-provider validation loop (owner relay)",
+    "owner sign-off + real Remote-SSH window remain human/environment gated"
+  ]
+}
