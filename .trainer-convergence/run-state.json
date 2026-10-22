@@ -1,7 +1,7 @@
 {
   "version": 1,
   "loop": 1,
-  "phase": "WAVE5_DONE_VERIFIED",
+  "phase": "WAVE5_VERIFIED_CI",
   "head": "e7e6f4161e929378c0186be5e3311e710b89fcf6",
   "working_tree": {
     "modified": [
@@ -40,8 +40,8 @@
     "deepseek_subagents": "provider reasoning-level not configured; master-owned implementation instead"
   },
   "ci": {
-    "head": "13d150d",
-    "conclusion": "success (after failed-job rerun; Windows package infra-flake)",
+    "head": "09a6b29",
+    "conclusion": "success",
     "jobs": "9/9"
   }
 }

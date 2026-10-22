@@ -3,7 +3,7 @@
   "gates": {
     "ci_cross_platform": {
       "status": "PASS",
-      "evidence": "run 39862267440 @13d150d: 9/9 jobs success after Windows package infra-flake rerun (sidecar /health 90s timeout on runner; no code change; rerun green)"
+      "evidence": "run @09a6b29: 9/9 jobs success with T-0024 view-aware status card landed"
     },
     "native_install_e2e": {
       "status": "PASS_MAC",
