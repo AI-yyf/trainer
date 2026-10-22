@@ -411,8 +411,12 @@ async function runCapture(target, options) {
   const dedupKey = trainerDedupKey(normalizedTarget);
 
   const label = TrainerCapture.captureLabel(normalizedTarget) || url;
-  const duplicate = TrainerCapture.findLocalDuplicate({ history, queue }, dedupKey);
-  if (duplicate) {
+  // Only the pending queue may short-circuit locally: a past SUCCESS record
+  // must not impersonate this capture, because the resource may have been
+  // deleted or the user may want a fresh download (T-0011). The server owns
+  // existence/dedupe and answers with the real result.
+  const duplicate = TrainerCapture.findLocalDuplicate({ history: [], queue }, dedupKey);
+  if (duplicate && duplicate.where === "queue") {
     const deepLink =
       duplicate.entry.deepLink || TrainerCapture.buildDeepLink(duplicate.entry.resourceId);
     const savedPath = duplicate.entry.savedPath || '';
