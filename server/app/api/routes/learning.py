@@ -16,6 +16,8 @@ from ._deps import RouterDeps
 def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
     router = APIRouter(tags=["learning"])
 
+    from ...api.training_skill_evidence import persist_skill_projection
+
     current_workspace_id = deps.current_workspace_id
     trusted_write_workspace_id = deps.trusted_write_workspace_id
     current_snapshot = deps.current_snapshot
@@ -218,6 +220,33 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                 verification_artifact = validate_remote_verification_artifact(verification_artifact, provisioning.project_path)
             except ValueError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # T-0013: an attested run may only certify the card it belongs to. When
+        # the card declares target files and the host bound an artifact file,
+        # the artifact must be one of those targets (canonical comparison);
+        # otherwise an unrelated passing test could mark this practice verified.
+        if verification_artifact is not None:
+            artifact_path = str(verification_artifact.get("artifact_path") or verification_artifact.get("artifact_uri") or "")
+            attest_card = runtime.memory_service.get_card(resolved_workspace_id, card_id)
+            card_targets = list(getattr(attest_card, "files_to_touch", []) or [])
+            if artifact_path and card_targets:
+                from urllib.parse import unquote as _unquote
+                from urllib.parse import urlsplit as _urlsplit
+
+                artifact_name = _unquote(_urlsplit(artifact_path).path).rsplit("/", 1)[-1].lower()
+                target_names = {
+                    str(item).replace("\\", "/").rstrip("/").rsplit("/", 1)[-1].lower()
+                    for item in card_targets
+                    if str(item).strip()
+                }
+                if target_names and artifact_name not in target_names:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "code": "artifact_not_card_target",
+                            "message": "This verification ran against a file that is not a target of the current training card.",
+                        },
+                    )
+
         updated = runtime.memory_service.record_training_practice_evaluation_result(
             workspace_id=resolved_workspace_id,
             card_id=card_id,
@@ -231,5 +260,67 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
             idempotency_key=idempotency_key,
             verification_artifact=verification_artifact,
         )
+
+        # T-0015: remote verification writes the SAME unified evidence as the
+        # local evaluator — attempt binding, artifact hash, trust level — then
+        # refreshes the skill projection from that record. Success flags alone
+        # never create growth.
+        evidence_recorded = False
+        if verification_artifact is not None:
+            store = getattr(runtime, "attempt_store", None)
+            if store is not None:
+                artifact_hash = str(verification_artifact.get("sha256") or "")
+                artifact_path = str(verification_artifact.get("artifact_path") or "")
+                runner_version = f"companion-remote:{verification_artifact.get('companion_session_id', '')}"
+                attempt = store.find_active_attempt(resolved_workspace_id, card_id)
+                if attempt is None:
+                    history = store.list_attempts(workspace_id=resolved_workspace_id, card_id=card_id)
+                    attempt = history[-1] if history else None
+                if attempt is None:
+                    attempt = store.start_attempt(
+                        workspace_id=resolved_workspace_id,
+                        card_id=card_id,
+                        file_path=artifact_path,
+                        file_hash=artifact_hash,
+                    )
+                else:
+                    store.update_attempt_for_workspace(
+                        attempt["attempt_id"],
+                        workspace_id=resolved_workspace_id,
+                        file_path=artifact_path,
+                        file_hash=artifact_hash,
+                    )
+                # Replay-safe: the same run (hash + companion session) records
+                # once; a resent attestation replays the ledger without
+                # double-writing growth evidence.
+                already = any(
+                    item.get("artifact_hash") == artifact_hash
+                    and item.get("runner_version") == runner_version
+                    for item in store.list_evidence(attempt["attempt_id"])
+                )
+                if not already:
+                    store.record_evidence(
+                        attempt_id=attempt["attempt_id"],
+                        caller_workspace_id=resolved_workspace_id,
+                        artifact_hash=artifact_hash,
+                        result="passed" if passed else "failed",
+                        trust_level="controlled_check",
+                        runner_version=runner_version,
+                        execution_location="remote",
+                    )
+                    persist_skill_projection(runtime, resolved_workspace_id, attempt["attempt_id"])
+                    evidence_recorded = True
+
+        if evidence_recorded:
+            # The response must carry the growth state this run produced, so a
+            # replay of the same attestation returns an identical workspace.
+            # Only the projection key is folded in: the reliability wrapper's
+            # replay contract returns the plain internal workspace dict.
+            fresh = runtime.memory_service.snapshot(resolved_workspace_id).workspace
+            if isinstance(fresh.get("training_skill_projection"), dict):
+                updated = {
+                    **updated,
+                    "training_skill_projection": fresh["training_skill_projection"],
+                }
         return {"ok": True, "workspace": updated}
     return router

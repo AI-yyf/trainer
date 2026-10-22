@@ -180,3 +180,55 @@ def test_completed_local_return_self_report_preserves_trusted_evidence(tmp_path:
         assert repeated.status_code == 200, repeated.text
         assert repeated.json()["workspace"]["latest_training_handoff"] == handoff
         assert [item.model_dump() for item in service.evidence_queue(workspace_id).pending] == before
+
+
+def test_remote_attestation_writes_unified_evidence_and_rejects_unrelated_file(tmp_path: Path) -> None:
+    """T-0013/T-0015: remote runs bind card targets and write growth evidence."""
+    with _client(tmp_path) as client:
+        provision = _admit(client, tmp_path)
+        runtime = client.app.state.runtime
+        workspace_id = provision["context_id"]
+
+        # The card declares its practice target; the run's artifact matches it.
+        runtime.memory_service.upsert_card(workspace_id, TrainingCardCandidateSnapshot(
+            card_id="owned-card-targeted", card_type="practice", title="Verify practice.py",
+            target_skill="reliability", validation_method="Run practice.py", status="active",
+            files_to_touch=["practice.py"],
+        ))
+
+        payload = _attest(provision, _artifact())
+        payload["card_id"] = "owned-card-targeted"
+        payload["idempotency_key"] = "remote-verify:owned-run:owned-card-targeted"
+        first = client.post("/training/verification/attest", json=payload)
+        assert first.status_code == 200, first.text
+
+        store = runtime.attempt_store
+        attempts = store.list_attempts(workspace_id=workspace_id, card_id="owned-card-targeted")
+        assert attempts, "remote attestation must bind an attempt"
+        evidence = store.list_evidence(attempts[-1]["attempt_id"])
+        assert evidence, "unified evidence must be recorded for the remote run"
+        assert evidence[-1]["execution_location"] == "remote"
+        assert evidence[-1]["artifact_hash"] == "a" * 64
+
+        projection = runtime.memory_service.snapshot(workspace_id).workspace.get(
+            "training_skill_projection"
+        )
+        assert projection, "the skill projection must refresh from remote evidence"
+
+        # A run against an unrelated file cannot certify this card.
+        unrelated = _artifact()
+        unrelated["artifact_uri"] = ("vscode-remote://ssh-remote+owned/tmp/project/unrelated.py")
+        unrelated["sha256"] = "b" * 64
+        unrelated["companion_session_id"] = "unrelated-run"
+        bad = client.post("/training/verification/attest", json={
+            "workspace_id": provision["context_id"],
+            "session_id": provision["agent_session_id"],
+            "card_id": "owned-card-targeted",
+            "passed": True,
+            "evidence_source": "test_runner",
+            "summary": "Unrelated passing test",
+            "idempotency_key": "remote-verify:unrelated-run:owned-card-targeted",
+            "verification_artifact": unrelated,
+        })
+        assert bad.status_code == 409, bad.text
+        assert bad.json()["detail"]["code"] == "artifact_not_card_target"
