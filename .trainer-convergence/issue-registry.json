@@ -233,8 +233,8 @@
       "title": "Real teaching latency far beyond budget",
       "priority": "P1",
       "area": "teaching",
-      "status": "BLOCKED",
-      "evidence": "minimax-m3 508s / glm-5.3 398s first turn on recorded sample",
+      "status": "MEASURED",
+      "evidence": "Real provider glm-5.3 (linksub relay) @13d150d tree: first chunk 5.6-12.8s, total 10.9-19.0s across 5 samples (evidence/real-provider-latency-glm53-*.json). Earlier 398-508s samples were a different relay state; current relay is far inside budget. Single relay/model caveat recorded.",
       "acceptance": "First meaningful feedback measured separately; requires real provider runs"
     },
     {
@@ -242,8 +242,8 @@
       "title": "Prose next step disagrees with structured next_step",
       "priority": "P1",
       "area": "teaching",
-      "status": "OPEN",
-      "evidence": "recorded review shows divergence",
+      "status": "CONFIRMED_OPEN",
+      "evidence": "Real-provider samples show structured next_step diverging from prose: boilerplate \"围绕…先做一个小动作，把结果带回来\" or mixed EN/ZH text vs specific prose next step (evidence/real-provider-latency-glm53-*.json). Root: coach_finalize structured next_step contract; needs prompt/contract fix validated against real provider.",
       "acceptance": "One next-step object drives prose and UI"
     },
     {
