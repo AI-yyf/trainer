@@ -84,6 +84,10 @@ const hostMessageSchema = z.discriminatedUnion("type", [
     draft: z.object({ trigger: z.string(), title: z.string(), detail: z.string(), prompt: z.string(),
       source: z.enum(["model", "template"]) }).optional(),
   }) }),
+  z.object({ type: z.literal("browserCapture/statusResult"), payload: z.object({
+    prepared: z.boolean(), paired: z.boolean(),
+    capturedCount: z.number().nullable().optional(), version: z.string().optional(),
+  }) }),
   z.object({ type: z.literal("insights/localUsageResult"), payload: z.object({
     requestId: z.string(), ok: z.boolean(), message: z.string().optional(),
     insights: z.object({

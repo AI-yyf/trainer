@@ -97,6 +97,7 @@ import { restartSidecarCommand, stopSidecarCommand } from './sidecarCommands';
 import {
   browserCapturePairingCodeCommand,
   installBrowserCaptureCommand,
+  browserCaptureStatusCommand,
   openBrowserExtensionsPageCommand,
   revokeBrowserCapturePairingCommand,
 } from './browserCaptureCommands';
@@ -475,6 +476,10 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     {
       commandId: COMMAND_IDS.browserCaptureOpenExtensionsPage,
       register: (ctx) => openBrowserExtensionsPageCommand(ctx),
+    },
+    {
+      commandId: COMMAND_IDS.browserCaptureStatus,
+      register: (ctx) => browserCaptureStatusCommand(ctx),
     },
     {
       commandId: COMMAND_IDS.browserCapturePairingCode,

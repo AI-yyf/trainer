@@ -2164,6 +2164,8 @@ type HostMessageBody =
   | { type: "stageMaterials/settled"; payload: { workspaceId: string; planId: string; stageId: string } }
   | { type: "skills/draftResult"; payload: { requestId: string; ok: boolean; draft?: { trigger: string; title: string; detail: string; prompt: string; source: "model" | "template" }; message?: string } }
   | { type: "insights/localUsageResult"; payload: { requestId: string; ok: boolean; insights?: LocalUsageInsights; message?: string } }
+  /** Host answer for `trainer.browserCapture.status` (Settings card, T-0024). */
+  | { type: "browserCapture/statusResult"; payload: { prepared: boolean; paired: boolean; capturedCount?: number | null; version?: string } }
   | { type: "bootstrap"; payload: BootstrapData; sync?: WebviewSyncEnvelope }
   | { type: "state/patch"; payload: Partial<BootstrapData>; sync?: WebviewSyncEnvelope }
   | {

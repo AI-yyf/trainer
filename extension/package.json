@@ -315,6 +315,10 @@
         "title": "Trainer: Open Browser Extensions Page"
       },
       {
+        "command": "trainer.browserCapture.status",
+        "title": "Trainer: Browser Capture Status"
+      },
+      {
         "command": "trainer.browserCapture.pairingCode",
         "title": "Trainer: Show Browser Pairing Code"
       },

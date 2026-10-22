@@ -21,6 +21,8 @@ import {
 import {
   CaptureBundleSourceError,
   captureInstallGuide,
+  readCaptureBundleMarker,
+  resolveInstalledCaptureDir,
   installCaptureBundle,
   openCaptureFolder,
   resolveCaptureInstallDir,
@@ -135,6 +137,66 @@ export async function installBrowserCaptureCommand(
     message: copy('installSucceeded', { label, dir: targetDir }),
     data: { targetDir: installed.targetDir, version: installed.version, fileCount: installed.fileCount },
   };
+}
+
+export interface BrowserCaptureInstallStatus {
+  prepared: boolean;
+  paired: boolean;
+  capturedCount: number | null;
+  version?: string;
+  installDir: string;
+}
+
+/**
+ * Real install/pair state for the Settings card (T-0024). "Loaded in the
+ * browser" is intentionally unknowable from the host — the card treats the
+ * pairing state as the actionable signal instead of inventing a step we
+ * cannot observe.
+ */
+export async function browserCaptureInstallStatus(
+  context: CommandContext,
+): Promise<BrowserCaptureInstallStatus> {
+  const installDir = resolveInstalledCaptureDir(os.homedir());
+  const marker = readCaptureBundleMarker(path.join(installDir, BROWSER_CAPTURE.versionFileName));
+  const prepared = fs.existsSync(path.join(installDir, 'manifest.json'));
+  const status = context.sidecarManager.getStatus();
+  let paired = false;
+  let capturedCount: number | null = null;
+  if (status.lifecycle === 'ready' && status.port) {
+    try {
+      const workspaceId = getRuntimeWorkspaceContext(context).workspaceId;
+      const summary = await context.sidecarClient.getJson<{
+        library_count?: number;
+      }>(status.port, `/browser/status?workspace_id=${encodeURIComponent(workspaceId)}`);
+      capturedCount = typeof summary.library_count === 'number' ? summary.library_count : null;
+      paired = true;
+    } catch (error) {
+      // 401/absent pairing both land here: the card shows "not paired".
+      context.outputChannel.appendLine(
+        `[browser-capture] status probe failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  return { prepared, paired, capturedCount, version: marker?.version, installDir };
+}
+
+/**
+ * `trainer.browserCapture.status`: JSON payload for the Settings card.
+ */
+export async function browserCaptureStatusCommand(
+  context: CommandContext,
+): Promise<CommandExecutionResult> {
+  const status = await browserCaptureInstallStatus(context);
+  await context.workbench.postMessage({
+    type: 'browserCapture/statusResult',
+    payload: {
+      prepared: status.prepared,
+      paired: status.paired,
+      capturedCount: status.capturedCount,
+      version: status.version,
+    },
+  });
+  return { ok: true, data: status, message: '' };
 }
 
 /**
