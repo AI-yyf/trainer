@@ -9,16 +9,18 @@
     ]
   },
   "next": [
-    "CI runs for 7121259/49dcc90/7262f75/ee059dd",
-    "T-0016/T-0017 attempts concurrency (wave2)",
-    "T-0008 capture identity pinning"
+    "T-0008 capture identity pinning",
+    "T-0013/T-0014/T-0015 verification evidence unification",
+    "CI green on latest head"
   ],
   "last_head": "ee059dd",
   "results": {
     "T-0020": "DONE (CI 9/9 at 96d5e92)",
     "T-0002/T-0003/T-0004/T-0006/T-0007": "implemented+tested locally (03f3792, 7121259)",
     "T-0005": "DONE_LOCAL (7262f75)",
-    "T-0001": "DONE_LOCAL (ee059dd)"
+    "T-0001": "DONE_LOCAL (ee059dd)",
+    "T-0016": "DONE_LOCAL",
+    "T-0017": "DONE_LOCAL"
   },
   "blocked": {
     "deepseek_subagents": "provider reasoning-level not configured; master-owned implementation instead"

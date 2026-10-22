@@ -143,8 +143,8 @@
       "title": "Concurrent starts create two active attempts",
       "priority": "P0",
       "area": "training",
-      "status": "OPEN",
-      "evidence": "attempt_store lookup+insert not atomic; no unique active constraint",
+      "status": "DONE_LOCAL",
+      "evidence": "test_training_attempts.py 11/11; BEGIN IMMEDIATE find-or-create",
       "acceptance": "find-or-create is transactional/unique; duplicates impossible under concurrency"
     },
     {
@@ -152,8 +152,8 @@
       "title": "Concurrent attempt save loses hint level",
       "priority": "P0",
       "area": "training",
-      "status": "OPEN",
-      "evidence": "attempt JSON read-modify-write; hint level can regress",
+      "status": "DONE_LOCAL",
+      "evidence": "merge txn + monotonic rank; 11/11 + isolation 6/6",
       "acceptance": "Field merges preserve concurrent fields; assistance level never regresses"
     },
     {
