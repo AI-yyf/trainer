@@ -181,6 +181,13 @@ export function resolveProviderApiKeyRef(
 
 export class ProviderConfigStore implements vscode.Disposable {
   private readonly decryptionFailures = new Set<string>();
+  /**
+   * Keyring reads must never take the activation hostage (issue T-0001).
+   * `transient` keeps the stored credential; only a definitive decrypt
+   * failure qualifies for the destructive cleanup path.
+   */
+  private readonly secretReadFailures = new Map<string, 'transient' | 'corrupted'>();
+  private static readonly SECRET_READ_TIMEOUT_MS = 1_500;
 
   private readonly emitter = new vscode.EventEmitter<ProviderConfig | undefined>();
   private readonly profileRegistry: ProviderProfileRegistry;
@@ -423,17 +430,53 @@ export class ProviderConfigStore implements vscode.Disposable {
    */
   private async safeSecretGet(apiKeyRef: string): Promise<string | undefined> {
     try {
-      return await this.extensionContext.secrets.get(this.secretKey(apiKeyRef));
+      const value = await this.readSecretWithTimeout(apiKeyRef);
+      this.secretReadFailures.delete(apiKeyRef);
+      this.decryptionFailures.delete(apiKeyRef);
+      return value;
     } catch (error) {
-      this.decryptionFailures.add(apiKeyRef);
-      try {
-        await this.extensionContext.secrets.delete(this.secretKey(apiKeyRef));
-      } catch {
-        // 清理失败也不阻塞主流程——密钥已被视为不存在。
+      const corrupted = this.isCorruptSecretError(error);
+      this.secretReadFailures.set(apiKeyRef, corrupted ? 'corrupted' : 'transient');
+      if (corrupted) {
+        this.decryptionFailures.add(apiKeyRef);
+        try {
+          await this.extensionContext.secrets.delete(this.secretKey(apiKeyRef));
+        } catch {
+          // 清理失败也不阻塞主流程——密钥已被视为不存在。
+        }
       }
       this.emitter.fire(this.getConfig() ?? undefined);
       return undefined;
     }
+  }
+
+  /** Bounded read: a hung keyring rejects as transient instead of blocking. */
+  private async readSecretWithTimeout(apiKeyRef: string): Promise<string | undefined> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        this.extensionContext.secrets.get(this.secretKey(apiKeyRef)),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            reject(new Error('keyring read timed out'));
+          }, ProviderConfigStore.SECRET_READ_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    }
+  }
+
+  private isCorruptSecretError(error: unknown): boolean {
+    const message = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+    return /bad.?decrypt|decrypt|corrupt|integrity/i.test(message);
+  }
+
+  /** 'transient' | 'corrupted' for the last failed read of this ref. */
+  secretReadFailureKind(apiKeyRef: string): 'transient' | 'corrupted' | undefined {
+    return this.secretReadFailures.get(apiKeyRef);
   }
 
   /** 本次会话内发生过密钥解密失败(用于 UI 提示重新粘贴)。 */
@@ -447,7 +490,9 @@ export class ProviderConfigStore implements vscode.Disposable {
       return undefined;
     }
 
-    return this.extensionContext.secrets.get(this.secretKey(config.apiKeyRef));
+    // Never throws, never hangs: keyring trouble degrades to "no key" and is
+    // surfaced through secretReadFailureKind for the provider UI.
+    return this.safeSecretGet(config.apiKeyRef);
   }
 
   getModelCache(config = this.getConfig()): ProviderModelCache | undefined {

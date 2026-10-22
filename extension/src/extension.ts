@@ -69,7 +69,10 @@ export async function activate(
 
   sidecarManagerRef = sidecarManager;
 
-  const initialApiKey = await providerStore.getApiKey();
+  // Keyring reads are bounded and non-fatal, but they still cost up to the
+  // timeout. Do not let them gate view registration: the configured flag is
+  // patched as soon as the read settles (issue T-0001).
+  const initialApiKeyReady = providerStore.getApiKey().then((value) => ({ value }));
   const initialWorkspace = trustGuard.getSnapshot();
   let workspaceGateway: WorkspaceGateway = initialWorkspace.isRemoteWorkspace
     ? new RemoteWorkspaceGateway(initialWorkspace.remoteName)
@@ -86,7 +89,7 @@ export async function activate(
   let hostState: TrainerHostState = withTrainerWorkspaceSnapshot(
     {
       provider: providerStore.getConfig(),
-      providerApiKeyConfigured: Boolean(initialApiKey?.trim()),
+      providerApiKeyConfigured: false,
       sidecar: sidecarManager.getStatus(),
       workspace: initialWorkspace,
       sessionId: undefined,
@@ -553,6 +556,14 @@ export async function activate(
     };
     await updateDerivedHostState();
   }
+  // First paint path above is already registered; now fold the keyring answer
+  // in and refresh the derived flag before the provider cache restore.
+  const { value: initialApiKey } = await initialApiKeyReady;
+  hostState = {
+    ...hostState,
+    providerApiKeyConfigured: Boolean(initialApiKey?.trim()),
+  };
+  await updateDerivedHostState();
   await restoreProviderModelCache();
   await syncExtensionState(commandContext);
 
