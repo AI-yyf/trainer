@@ -1,7 +1,7 @@
 {
   "version": 1,
   "loop": 1,
-  "phase": "WAVE4_DONE",
+  "phase": "WAVE4_REGRESSION_FIXED",
   "head": "e7e6f4161e929378c0186be5e3311e710b89fcf6",
   "working_tree": {
     "modified": [
@@ -9,10 +9,10 @@
     ]
   },
   "next": [
-    "owner teaching sign-off (T-0028)",
-    "real Remote-SSH window (Layer2)",
-    "real-provider latency (T-0026/27)",
-    "final CI on latest head"
+    "full matrix + geometry + a11y on 0d7fd28",
+    "CI green",
+    "T-0024 redesign behind view flag",
+    "BLOCKED: owner/real-env items"
   ],
   "last_head": "ee059dd",
   "results": {
@@ -24,7 +24,7 @@
     "T-0017": "DONE_LOCAL",
     "T-0008": "DONE_LOCAL",
     "T-0009": "DONE_LOCAL (84d99d1)",
-    "T-0012": "DONE_LOCAL",
+    "T-0012": "DONE_LOCAL (010442f/41fb253 + revert of settings card only)",
     "T-0010": "DONE_LOCAL",
     "T-0011": "DONE_LOCAL",
     "T-0014": "DONE_LOCAL (8156430)",
@@ -35,7 +35,7 @@
     "T-0022": "DONE_LOCAL (eb87712)",
     "T-0023": "DONE_LOCAL (6c75e0f)",
     "T-0021": "mac installed-host E2E 36/36 at final SHA; win/linux via CI",
-    "T-0024": "DONE_LOCAL",
+    "T-0024": "REGRESSION \u2192 reverted (0d7fd28); needs view-aware redesign",
     "T-0025": "DONE_LOCAL"
   },
   "blocked": {

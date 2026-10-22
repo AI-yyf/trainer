@@ -215,8 +215,8 @@
       "title": "Browser install/update status is opaque",
       "priority": "P2",
       "area": "browser",
-      "status": "DONE_LOCAL",
-      "evidence": "status command + live chips (54a8ec4); loaded-in-browser unknowable host-side by design",
+      "status": "REGRESSION",
+      "evidence": "status card in keep-alive settings sheet deterministically broke X11 (Resources→Training) preview restore; card reverted at 0d7fd28, status command retained; needs view-aware re-design (mount only when settings visible via App-level flag, not checkVisibility)",
       "acceptance": "Status card reflects real install→load→pair→capture states"
     },
     {
