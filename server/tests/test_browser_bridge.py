@@ -525,3 +525,37 @@ def test_browser_lane_paths_are_not_blocked_by_the_instance_token(tmp_path, monk
         )
         assert allowed_queue.status_code == 200, allowed_queue.text
         assert allowed_queue.json()["drafts"] == []
+
+
+def test_pending_drafts_survive_sidecar_restart(tmp_path: Path) -> None:
+    """T-0009: accepted drafts are durable state, not process memory."""
+    data_root = tmp_path / "bridge-data"
+
+    first = BrowserBridgeService(data_root)
+    enqueued = first.enqueue_draft(
+        workspace_id="ws-drafts",
+        selection="persist me across restarts",
+        client_id="client-1",
+    )
+    assert enqueued["ok"] is True and enqueued["duplicate"] is False
+    assert len(first.pending_drafts("ws-drafts")) == 1
+
+    restarted = BrowserBridgeService(data_root)
+    drafts = restarted.pending_drafts("ws-drafts")
+    assert len(drafts) == 1
+    assert drafts[0]["id"] == enqueued["draft_id"]
+    assert "persist me across restarts" in drafts[0]["text"]
+
+    assert restarted.ack_drafts("ws-drafts", [drafts[0]["id"]]) == 1
+    assert restarted.pending_drafts("ws-drafts") == []
+
+    # The ack receipt also survives: the same client capture must not be
+    # re-delivered as a "new" draft after yet another restart.
+    third = BrowserBridgeService(data_root)
+    duplicate = third.enqueue_draft(
+        workspace_id="ws-drafts",
+        selection="persist me across restarts",
+        client_id="client-1",
+    )
+    assert duplicate["duplicate"] is True
+    assert third.pending_drafts("ws-drafts") == []

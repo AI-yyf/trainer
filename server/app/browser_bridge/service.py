@@ -197,12 +197,43 @@ class BrowserBridgeService:
                 for key, value in captures.items()
                 if isinstance(value, dict)
             }
+        # Accepted-but-undelivered drafts survive restarts (T-0009): they were
+        # acknowledged to the browser as stored, so losing them on a sidecar
+        # restart would break that promise.
+        raw_drafts = payload.get("pending_drafts")
+        if isinstance(raw_drafts, list):
+            drafts: list[_PendingDraft] = []
+            for entry in raw_drafts:
+                if not isinstance(entry, dict):
+                    continue
+                draft_id = str(entry.get("id") or "").strip()
+                workspace_id = str(entry.get("workspace_id") or "").strip()
+                text = str(entry.get("text") or "")
+                if not draft_id or not workspace_id or not text:
+                    continue
+                drafts.append(
+                    _PendingDraft(
+                        id=draft_id,
+                        workspace_id=workspace_id,
+                        text=text,
+                        client_id=str(entry.get("client_id") or ""),
+                        created_at=str(entry.get("created_at") or _utc_now_iso()),
+                    )
+                )
+            self._pending_drafts = drafts
+        raw_acked = payload.get("acked_draft_client_ids")
+        if isinstance(raw_acked, list):
+            self._acked_draft_client_ids = [
+                str(item) for item in raw_acked if str(item).strip()
+            ]
 
     def _write_state_locked(self) -> None:
         payload = {
             "version": _STATE_VERSION,
             "credentials": list(self._credentials.values()),
             "captures": self._captures,
+            "pending_drafts": [asdict(draft) for draft in self._pending_drafts],
+            "acked_draft_client_ids": list(self._acked_draft_client_ids),
         }
         serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2)
         try:
@@ -490,6 +521,7 @@ class BrowserBridgeService:
                 created_at=_utc_now_iso(),
             )
             self._pending_drafts.append(draft)
+            self._write_state_locked()
             return {"ok": True, "draft_id": draft.id, "duplicate": False}
 
     def pending_drafts(self, workspace_id: str) -> list[dict[str, str]]:
@@ -527,6 +559,8 @@ class BrowserBridgeService:
                 else:
                     remaining.append(draft)
             self._pending_drafts = remaining
+            if removed:
+                self._write_state_locked()
             return removed
 
 
