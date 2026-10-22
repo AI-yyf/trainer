@@ -9,9 +9,12 @@
     ]
   },
   "next": [
-    "T-0009 draft persistence (server)",
-    "T-0010..T-0012 resource intent",
-    "CI watch"
+    "T-0012 include_docs supplement",
+    "T-0010 operation-scoped download wait",
+    "T-0011 client dedup defers to server",
+    "T-0013..T-0015 verification evidence",
+    "T-0018/T-0019 remote",
+    "T-0022/T-0023 ux"
   ],
   "last_head": "ee059dd",
   "results": {
@@ -21,7 +24,9 @@
     "T-0001": "DONE_LOCAL (ee059dd)",
     "T-0016": "DONE_LOCAL",
     "T-0017": "DONE_LOCAL",
-    "T-0008": "DONE_LOCAL"
+    "T-0008": "DONE_LOCAL",
+    "T-0009": "DONE_LOCAL (84d99d1)",
+    "T-0012": "PARTIAL: binding done; docs supplement open"
   },
   "blocked": {
     "deepseek_subagents": "provider reasoning-level not configured; master-owned implementation instead"

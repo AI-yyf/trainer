@@ -80,8 +80,8 @@
       "title": "Accepted selection drafts lost on sidecar restart",
       "priority": "P1",
       "area": "browser",
-      "status": "OPEN",
-      "evidence": "browser_bridge keeps pending drafts in memory only",
+      "status": "DONE_LOCAL",
+      "evidence": "test_browser_bridge 18/18; state-file persistence with ack receipts",
       "acceptance": "Accepted drafts survive sidecar restart with delivery/application states"
     },
     {
@@ -107,8 +107,8 @@
       "title": "URL dedup skips docs supplement and focus binding",
       "priority": "P1",
       "area": "resources",
-      "status": "OPEN",
-      "evidence": "server returns early on URL/hash hit before include_docs/focus handling",
+      "status": "PARTIAL",
+      "evidence": "focus binding executes on dedup (test_browser_capture 19/19); include_docs supplement still OPEN",
       "acceptance": "Re-capture with new intent performs supplement/binding and reports real result"
     },
     {
