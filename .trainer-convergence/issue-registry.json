@@ -215,8 +215,8 @@
       "title": "Browser install/update status is opaque",
       "priority": "P2",
       "area": "browser",
-      "status": "REGRESSION",
-      "evidence": "status card in keep-alive settings sheet deterministically broke X11 (Resources→Training) preview restore; card reverted at 0d7fd28, status command retained; needs view-aware re-design (mount only when settings visible via App-level flag, not checkVisibility)",
+      "status": "BLOCKED",
+      "evidence": "Card withdrawn at 0d7fd28 after deterministic X11 preview regression. Probe evidence: persisted activeView oscillates settings↔training 1:1 with re-applied ui/restoreView (settings-writer is in the preview bundle; no app-code writer found; no console/page errors). Re-verified 0d7fd28 bundle: X11/X12 x3 pass, full matrix 200/200, CI 9/9 @0e196c4. Re-design BLOCKED on harness-level fix: preview bootstrap apply must not fight in-page view writes; writer stack capture via localStorage spy was bypassed (persist path uses a captured reference), needs harness instrumentation (expose store writer or persist-through wrapper).",
       "acceptance": "Status card reflects real install→load→pair→capture states"
     },
     {

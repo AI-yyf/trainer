@@ -1,7 +1,7 @@
 {
   "version": 1,
   "loop": 1,
-  "phase": "WAVE4_REGRESSION_FIXED",
+  "phase": "WAVE5_DONE",
   "head": "e7e6f4161e929378c0186be5e3311e710b89fcf6",
   "working_tree": {
     "modified": [
@@ -9,10 +9,8 @@
     ]
   },
   "next": [
-    "full matrix + geometry + a11y on 0d7fd28",
-    "CI green",
-    "T-0024 redesign behind view flag",
-    "BLOCKED: owner/real-env items"
+    "harness instrumentation to identify settings-writer (T-0024 redesign precondition)",
+    "BLOCKED external items unchanged (T-0026/27/28, Remote-SSH L2)"
   ],
   "last_head": "ee059dd",
   "results": {
@@ -35,7 +33,7 @@
     "T-0022": "DONE_LOCAL (eb87712)",
     "T-0023": "DONE_LOCAL (6c75e0f)",
     "T-0021": "mac installed-host E2E 36/36 at final SHA; win/linux via CI",
-    "T-0024": "REGRESSION \u2192 reverted (0d7fd28); needs view-aware redesign",
+    "T-0024": "BLOCKED (harness settings-writer oscillation; card withdrawn at 0d7fd28; 0e196c4 CI 9/9; matrix 200/200 re-verified)",
     "T-0025": "DONE_LOCAL"
   },
   "blocked": {
