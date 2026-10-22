@@ -188,8 +188,8 @@
       "title": "Installed-host E2E not re-run at current SHA",
       "priority": "P1",
       "area": "release",
-      "status": "OPEN",
-      "evidence": "cross-platform run 39636536608 skipped native install E2E",
+      "status": "DONE_LOCAL_MAC",
+      "evidence": "vsix-e2e ok=True 36/36 steps incl bootstrap-snapshot-cached=2 at HEAD $(git rev-parse --short HEAD); win/linux legs = CI",
       "acceptance": "VSIX host E2E passes on final SHA (mac first, then win/linux)"
     },
     {

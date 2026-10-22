@@ -1,7 +1,7 @@
 {
   "version": 1,
   "loop": 1,
-  "phase": "WAVE3_REVIEW",
+  "phase": "WAVE3_VERIFYING",
   "head": "e7e6f4161e929378c0186be5e3311e710b89fcf6",
   "working_tree": {
     "modified": [
@@ -33,7 +33,8 @@
     "T-0018": "DONE_LOCAL",
     "T-0019": "DONE_LOCAL",
     "T-0022": "DONE_LOCAL (eb87712)",
-    "T-0023": "DONE_LOCAL (6c75e0f)"
+    "T-0023": "DONE_LOCAL (6c75e0f)",
+    "T-0021": "mac installed-host E2E 36/36 at final SHA; win/linux via CI"
   },
   "blocked": {
     "deepseek_subagents": "provider reasoning-level not configured; master-owned implementation instead"
