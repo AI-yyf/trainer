@@ -838,6 +838,14 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                     existing=existing,
                 )
                 existing = library.remember_download(workspace_id, existing, download) or existing
+                # Dedup reuses content, never the user's new intent (T-0012):
+                # an explicit focus binding must execute on this request.
+                focus_binding = ""
+                focus_id = str(request.bind_focus_id or "").strip()
+                if focus_id:
+                    focus_binding = bind_capture_to_learning_focus(
+                        workspace_id, existing.id, focus_id
+                    )
                 if bridge is not None and client_capture_id:
                     bridge.remember_capture(
                         client_capture_id,
@@ -851,6 +859,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                     existing,
                     deduped=True,
                     warnings=download_warnings,
+                    focus_binding=focus_binding,
                     saved_path=download.relative_path if download else None,
                 )
 
@@ -885,6 +894,12 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 existing=duplicate,
             )
             duplicate = library.remember_download(workspace_id, duplicate, download) or duplicate
+            focus_binding = ""
+            focus_id = str(request.bind_focus_id or "").strip()
+            if focus_id:
+                focus_binding = bind_capture_to_learning_focus(
+                    workspace_id, duplicate.id, focus_id
+                )
             if bridge is not None and client_capture_id:
                 bridge.remember_capture(
                     client_capture_id,
@@ -898,6 +913,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 duplicate,
                 deduped=True,
                 warnings=[*list(captured.warnings), *download_warnings],
+                focus_binding=focus_binding,
                 saved_path=download.relative_path if download else None,
             )
 

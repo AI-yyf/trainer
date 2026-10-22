@@ -758,3 +758,60 @@ def test_github_capture_can_include_the_docs_listing(tmp_path, monkeypatch) -> N
     ]
     assert "## Repository docs/ layout" in snapshot
     assert "- `docs/keys.md`" in snapshot
+
+
+def test_deduped_capture_still_binds_a_new_learning_focus(tmp_path, monkeypatch) -> None:
+    """T-0012: dedup reuses content but executes the request's new intent."""
+    from app.core.models import LearningPlan, PlanStage
+
+    workspace_id = "workspace-dedup-focus"
+    _patch_web_extract(monkeypatch, lambda url: f"Dedup body for {url}.\n")
+
+    with build_client(tmp_path) as client:
+        token = _pair_browser(client, workspace_id, code="246810")
+        headers = {"Authorization": f"Bearer {token}"}
+        runtime = client.app.state.runtime  # type: ignore[attr-defined]
+        runtime.repository.save_plan(
+            workspace_id,
+            LearningPlan(
+                id="plan-dedup",
+                title="Dedup plan",
+                stages=[
+                    PlanStage(
+                        id="stage-second",
+                        title="Second pass",
+                        goal="Revisit with focus",
+                        outcomes=["one revisit"],
+                        status="active",
+                    )
+                ],
+                current_stage_id="stage-second",
+            ),
+        )
+
+        first = client.post(
+            "/resources/capture",
+            json={"url": "https://docs.example.com/revisit", "kind": "web", "client_capture_id": "d-1"},
+            headers=headers,
+        )
+        assert first.status_code == 200, first.text
+        assert first.json()["deduped"] is False
+
+        second = client.post(
+            "/resources/capture",
+            json={
+                "url": "https://docs.example.com/revisit",
+                "kind": "web",
+                "bind_focus_id": "stage-second",
+                "client_capture_id": "d-2",
+            },
+            headers=headers,
+        )
+        assert second.status_code == 200, second.text
+        assert second.json()["deduped"] is True
+        assert second.json()["id"] == first.json()["id"]
+        assert "focus_binding:bound" in second.json()["warnings"]
+
+        plan = runtime.repository.get_latest_plan(workspace_id)
+        assert plan is not None
+        assert plan.stages[0].resources == [first.json()["id"]]
