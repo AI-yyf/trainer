@@ -8,8 +8,8 @@
       "title": "SecretStorage read exception blocks activation",
       "priority": "P0",
       "area": "startup",
-      "status": "OPEN",
-      "evidence": "extension/src/extension.ts activate() awaits providerStore.getApiKey() before view registration; getApiKey surfaces SecretStorage errors",
+      "status": "DONE_LOCAL",
+      "evidence": "secretReadResilience.test.js 3/3; commit ee059dd",
       "acceptance": "Slow/failing keyring cannot block first paint; provider errors surface only on provider actions"
     },
     {
@@ -44,8 +44,8 @@
       "title": "Startup cache not bound to session/empty state",
       "priority": "P1",
       "area": "startup",
-      "status": "OPEN",
-      "evidence": "bootstrapSnapshotCache keyed by workspace only; empty conversation skipped; sessionId not part of envelope",
+      "status": "DONE_LOCAL",
+      "evidence": "bootstrapSnapshotCache.test.js 6/6; commit 7262f75",
       "acceptance": "Cache restores only matching workspace+session; empty session overwrites/clears stale thread"
     },
     {
