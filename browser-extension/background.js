@@ -455,7 +455,8 @@ async function runCapture(target, options) {
     includeDocs: normalizedTarget.includeDocs,
     download: normalizedTarget.download,
     targetDir: normalizedTarget.targetDir,
-    clientCaptureId
+    clientCaptureId,
+    workspaceId: auth.workspaceId
   });
 
   if (settings.notify !== false) {
@@ -530,7 +531,8 @@ async function runCapture(target, options) {
     includeDocs: normalizedTarget.includeDocs,
     download: normalizedTarget.download,
     targetDir: normalizedTarget.targetDir,
-    clientCaptureId
+    clientCaptureId,
+    workspaceId: auth.workspaceId
   });
   // Re-read under the lock: the `queue` snapshot above may already be stale.
   const enqueued = await withQueueLock(async () => {
@@ -793,6 +795,14 @@ async function refreshState() {
   const result = await fetchStatusWithRecovery(auth);
   if (result.ok) {
     await TrainerCapture.saveStatusCache(result.status);
+    // Keep the pinned identity in sync with the instance that actually
+    // accepted the credential (T-0008): a re-pair or migration updates it.
+    const authoritativeWorkspaceId = String(
+      (result.status && result.status.workspaceId) || ''
+    ).trim();
+    if (authoritativeWorkspaceId && authoritativeWorkspaceId !== auth.workspaceId) {
+      await TrainerCapture.saveAuth(auth.baseUrl, auth.credential, authoritativeWorkspaceId);
+    }
     await TrainerCapture.clearNotice();
     await recordConnection('ok');
   } else if (result.unauthorized) {

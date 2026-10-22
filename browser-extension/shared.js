@@ -61,6 +61,7 @@
     history: 'trainerCapture.history',
     queue: 'trainerCapture.queue',
     focusId: 'trainerCapture.focusId',
+    workspaceId: 'trainerCapture.workspaceId',
     targetDir: 'trainerCapture.targetDir',
     connection: 'trainerCapture.connection',
     statusCache: 'trainerCapture.statusCache',
@@ -1510,6 +1511,9 @@
     if (!Number.isFinite(next.attempts)) {
       next.attempts = 0;
     }
+    if (next.workspaceId === undefined) {
+      next.workspaceId = '';
+    }
     const alreadyQueued = list.some(
       (entry) =>
         entry.clientCaptureId === next.clientCaptureId ||
@@ -1605,6 +1609,12 @@
       kind,
       client_capture_id: String(source.clientCaptureId || '')
     };
+    // Workspace identity: lets the sidecar reject any capture that arrives at
+    // a different workspace than the one that accepted it (T-0008).
+    const workspaceId = String(source.workspaceId || '').trim();
+    if (workspaceId) {
+      payload.workspace_id = workspaceId;
+    }
     const title = String(source.title || '').trim();
     if (title) {
       payload.title = title;
@@ -1666,6 +1676,7 @@
     const rawCount = source.library_count !== undefined ? source.library_count : source.libraryCount;
     const count = Number(rawCount);
     return {
+      workspaceId: String(source.workspace_id || source.workspaceId || '').trim(),
       workspaceName: String(source.workspace_name || source.workspaceName || '').trim(),
       libraryCount: Number.isFinite(count) ? count : 0,
       focusOptions: rawOptions
@@ -1920,7 +1931,8 @@
     if (!credential) {
       return { ok: false, reason: 'empty_credential', message: dict.pairCodeRejected };
     }
-    return { ok: true, credential, baseUrl: base };
+    const workspaceId = String((result.body && result.body.workspace_id) || '').trim();
+    return { ok: true, credential, baseUrl: base, workspaceId };
   }
 
   async function revokePairing(baseUrl, credential) {
@@ -2026,25 +2038,33 @@
   async function loadAuth() {
     const stored = await chrome.storage.local.get({
       [STORAGE_KEYS.baseUrl]: '',
-      [STORAGE_KEYS.credential]: ''
+      [STORAGE_KEYS.credential]: '',
+      [STORAGE_KEYS.workspaceId]: ''
     });
     return {
       baseUrl: normalizeBaseUrl(stored[STORAGE_KEYS.baseUrl]),
-      credential: String(stored[STORAGE_KEYS.credential] || '').trim()
+      credential: String(stored[STORAGE_KEYS.credential] || '').trim(),
+      workspaceId: String(stored[STORAGE_KEYS.workspaceId] || '').trim()
     };
   }
 
-  async function saveAuth(baseUrl, credential) {
+  async function saveAuth(baseUrl, credential, workspaceId) {
     const normalized = normalizeBaseUrl(baseUrl);
     const token = String(credential || '').trim();
     if (!normalized || !token) {
       return loadAuth();
     }
-    await chrome.storage.local.set({
+    // Pin the paired workspace so in-flight/queued captures carry the identity
+    // they were accepted under (issue T-0008). Re-pairing replaces it.
+    const updates = {
       [STORAGE_KEYS.baseUrl]: normalized,
       [STORAGE_KEYS.credential]: token
-    });
-    return { baseUrl: normalized, credential: token };
+    };
+    if (workspaceId !== undefined) {
+      updates[STORAGE_KEYS.workspaceId] = String(workspaceId || '').trim();
+    }
+    await chrome.storage.local.set(updates);
+    return { baseUrl: normalized, credential: token, workspaceId: String(workspaceId || '').trim() };
   }
 
   async function clearAuth() {

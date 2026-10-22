@@ -489,6 +489,7 @@ test('normalizeStatusPayload maps /browser/status and filters bad focus options'
       ]
     }),
     {
+      workspaceId: '',
       workspaceName: 'Trainer Repo',
       libraryCount: 12,
       focusOptions: [
@@ -498,6 +499,7 @@ test('normalizeStatusPayload maps /browser/status and filters bad focus options'
     }
   );
   assert.deepEqual(TrainerCapture.normalizeStatusPayload(null), {
+    workspaceId: '',
     workspaceName: '',
     libraryCount: 0,
     focusOptions: []
