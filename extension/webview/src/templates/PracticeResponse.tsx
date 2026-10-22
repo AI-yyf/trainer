@@ -52,7 +52,12 @@ export function PracticeResponse({ language, label, prompt, value, submitLabel, 
         onPaste={(event) => { if (event.clipboardData.files.length && !busy && !disabled) { event.preventDefault(); void stageImages(event.clipboardData.files); } }} />
       {attachmentsAvailable ? <label className="template-attachment-input">{copy.image}<input type="file" accept="image/*" multiple disabled={disabled || busy} onChange={(event) => { if (event.target.files) void stageImages(event.target.files); event.target.value = ""; }} /></label> : null}
       {attachments.map((attachment) => <div className="template-attachment" key={attachment.id}><span>{attachment.name}</span><button type="button" className="template-back" disabled={disabled || busy} onClick={() => onAttachmentsChange?.(attachments.filter((item) => item.id !== attachment.id))}>{copy.remove}</button></div>)}
-      {imageStaging.error || attachmentError ? <SystemState kind="recoverable-error" title={imageStaging.error ?? attachmentError ?? copy.error} /> : null}
+      {/* The model's image-capability warning is only relevant when the
+          learner actually tried to attach an image (T-0023): a text-only
+          reflection must never surface an unrelated recoverable error. */}
+      {(imageStaging.error || (attachments.length > 0 && attachmentError)) ? (
+        <SystemState kind="recoverable-error" title={imageStaging.error ?? attachmentError ?? copy.error} />
+      ) : null}
       <button type="submit" className="button button--accent" data-primary-action="true" disabled={disabled || busy || imageStaging.busy || !hasContent || (attachments.length > 0 && !attachmentsAvailable)} aria-busy={busy || undefined}>{submitLabel}</button>
     </form>
   );
