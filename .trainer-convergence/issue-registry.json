@@ -215,8 +215,8 @@
       "title": "Browser install/update status is opaque",
       "priority": "P2",
       "area": "browser",
-      "status": "BLOCKED",
-      "evidence": "Verified: reverted Settings (0d7fd28 semantics) passes X11/X12 3x under 4 workers + full matrix 200/200. Deterministic trigger was the un-gated keep-alive mount fetch (posts trainer.browserCapture.status on every view). A sheetVisible-gated variant was attempted but bisect runs were polluted by stale builds after JSX surgery; clean re-design path is known: render chips + fetch strictly behind an App-provided sheetVisible prop (verified pattern exists in 0d7fd28 lineage), validate with X11 x3 + full matrix + CI before landing.",
+      "status": "DONE_LOCAL",
+      "evidence": "ROOT CAUSE FIXED at c7be597: stale getLayout closures (composer draft persist) wrote layout snapshots with a pre-change activeView, clobbering the persisted view after restoreView. persistLayout/draft-flush now stamp the live active view. T-0024 status card re-introduced behind App-provided sheetVisible (fetch+chips render only while settings is the active view). Verified: X11/X12 x3 under 4 workers, full matrix 200/200, extension tests green.",
       "acceptance": "Status card reflects real install→load→pair→capture states"
     },
     {

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "loop": 1,
-  "phase": "WAVE5_DONE",
+  "phase": "WAVE5_DONE_VERIFIED",
   "head": "e7e6f4161e929378c0186be5e3311e710b89fcf6",
   "working_tree": {
     "modified": [
@@ -9,8 +9,8 @@
     ]
   },
   "next": [
-    "harness instrumentation to identify settings-writer (T-0024 redesign precondition)",
-    "BLOCKED external items unchanged (T-0026/27/28, Remote-SSH L2)"
+    "CI on c7be597",
+    "owner/real-env BLOCKED items unchanged"
   ],
   "last_head": "ee059dd",
   "results": {
@@ -33,7 +33,7 @@
     "T-0022": "DONE_LOCAL (eb87712)",
     "T-0023": "DONE_LOCAL (6c75e0f)",
     "T-0021": "mac installed-host E2E 36/36 at final SHA; win/linux via CI",
-    "T-0024": "BLOCKED (clean redesign path known; validate via X11 x3 + matrix + CI)",
+    "T-0024": "DONE_LOCAL (c7be597): root cause = stale layout persist clobbering activeView; card re-introduced view-aware",
     "T-0025": "DONE_LOCAL"
   },
   "blocked": {
