@@ -5,7 +5,6 @@ import { SystemState } from "../../templates/SystemState";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
 import {
   type ReactNode,
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -105,7 +104,7 @@ import { settingsText } from "./settingsText";
 import { languageIntegrityText } from "./languageIntegrityCopy";
 import { useCoachSettingsViewState, useCoachSettingsHostFacts } from "./useCoachSettingsViewState";
 import { useProviderConnection } from "../../app/providerConnectionContext";
-import { postMessage as postWebviewMessage, requestLocalUsageInsights, subscribeToHostMessages } from "../../lib/vscode";
+import { postMessage as postWebviewMessage, requestLocalUsageInsights } from "../../lib/vscode";
 import {
   trainerSkillCatalog,
   normalizeCustomSkillTrigger,
@@ -281,12 +280,6 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
   open: string;
   pair: string;
   hint: string;
-  statusTitle: string;
-  statusPrepared: string;
-  statusUnprepared: string;
-  statusPaired: string;
-  statusUnpaired: string;
-  statusRefresh: string;
 } {
   switch (language) {
     case "zh-CN":
@@ -296,12 +289,6 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         install: "安装浏览器扩展",
         open: "打开扩展页",
         pair: "显示配对码",
-        statusTitle: "安装状态",
-        statusPrepared: "扩展文件已准备",
-        statusUnprepared: "扩展文件未安装",
-        statusPaired: "已配对当前工作区",
-        statusUnpaired: "未配对",
-        statusRefresh: "刷新状态",
         hint: "安装只需一次：在浏览器扩展页开启开发者模式，选择“加载已解压的扩展程序”，指向 Trainer 打开的文件夹。Trainer 更新会刷新该文件夹；在扩展页点一次“重新加载”即可。",
       };
     case "es-ES":
@@ -311,12 +298,6 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         install: "Instalar extensión",
         open: "Abrir página de extensiones",
         pair: "Mostrar código de emparejamiento",
-        statusTitle: "Estado de instalación",
-        statusPrepared: "Archivos listos",
-        statusUnprepared: "Archivos no instalados",
-        statusPaired: "Emparejado con este espacio",
-        statusUnpaired: "Sin emparejar",
-        statusRefresh: "Actualizar estado",
         hint: "La instalación se hace una sola vez: activa el modo desarrollador, elige «Cargar descomprimida» y selecciona la carpeta que abre Trainer. Las actualizaciones refrescan esa carpeta; pulsa «Recargar» una vez en la página de extensiones.",
       };
     case "fr-FR":
@@ -326,12 +307,6 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         install: "Installer l’extension",
         open: "Ouvrir la page des extensions",
         pair: "Afficher le code d’association",
-        statusTitle: "État de l’installation",
-        statusPrepared: "Fichiers prêts",
-        statusUnprepared: "Fichiers non installés",
-        statusPaired: "Associé à cet espace",
-        statusUnpaired: "Non associé",
-        statusRefresh: "Actualiser l’état",
         hint: "L’installation se fait une seule fois : activez le mode développeur, choisissez « Charger l’extension non empaquetée » et sélectionnez le dossier ouvert par Trainer. Les mises à jour rafraîchissent ce dossier ; cliquez une fois sur « Recharger » dans la page des extensions.",
       };
     case "de-DE":
@@ -341,12 +316,6 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         install: "Browser-Erweiterung installieren",
         open: "Erweiterungsseite öffnen",
         pair: "Kopplungscode anzeigen",
-        statusTitle: "Installationsstatus",
-        statusPrepared: "Dateien bereit",
-        statusUnprepared: "Dateien nicht installiert",
-        statusPaired: "Mit diesem Workspace gekoppelt",
-        statusUnpaired: "Nicht gekoppelt",
-        statusRefresh: "Status aktualisieren",
         hint: "Die Installation ist einmalig: Entwicklermodus aktivieren, „Entpackte Erweiterung laden“ wählen und den von Trainer geöffneten Ordner auswählen. Trainer-Updates erneuern diesen Ordner; klicke auf der Erweiterungsseite einmal auf „Neu laden“.",
       };
     case "ja-JP":
@@ -356,12 +325,6 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         install: "ブラウザー拡張機能をインストール",
         open: "拡張機能ページを開く",
         pair: "ペアリングコードを表示",
-        statusTitle: "インストール状態",
-        statusPrepared: "ファイル準備完了",
-        statusUnprepared: "ファイル未インストール",
-        statusPaired: "このワークスペースとペアリング済み",
-        statusUnpaired: "未ペアリング",
-        statusRefresh: "状態を更新",
         hint: "インストールは一度だけです。拡張機能ページでデベロッパーモードをオンにし、「パッケージ化されていない拡張機能を読み込む」で Trainer が開いたフォルダーを選びます。Trainer の更新時にフォルダーが更新されるので、拡張機能ページで一度「再読み込み」してください。",
       };
     case "ko-KR":
@@ -371,12 +334,6 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         install: "브라우저 확장 프로그램 설치",
         open: "확장 프로그램 페이지 열기",
         pair: "페어링 코드 표시",
-        statusTitle: "설치 상태",
-        statusPrepared: "파일 준비됨",
-        statusUnprepared: "파일 미설치",
-        statusPaired: "이 작업 공간과 페어링됨",
-        statusUnpaired: "페어링 안 됨",
-        statusRefresh: "상태 새로고침",
         hint: "설치는 한 번만 하면 됩니다. 확장 프로그램 페이지에서 개발자 모드를 켜고 '압축해제된 확장 프로그램을 로드'를 선택한 뒤 Trainer가 연 폴더를 지정하세요. Trainer 업데이트 시 폴더가 갱신되며, 확장 프로그램 페이지에서 한 번 '새로고침'하면 됩니다.",
       };
     case "pt-BR":
@@ -386,12 +343,6 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         install: "Instalar extensão do navegador",
         open: "Abrir página de extensões",
         pair: "Mostrar código de pareamento",
-        statusTitle: "Estado da instalação",
-        statusPrepared: "Arquivos prontos",
-        statusUnprepared: "Arquivos não instalados",
-        statusPaired: "Pareado com este espaço",
-        statusUnpaired: "Não pareado",
-        statusRefresh: "Atualizar estado",
         hint: "A instalação é feita uma única vez: ative o modo desenvolvedor, escolha “Carregar sem compactação” e selecione a pasta aberta pelo Trainer. As atualizações renovam essa pasta; clique uma vez em “Recarregar” na página de extensões.",
       };
     default:
@@ -401,12 +352,6 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         install: "Install browser extension",
         open: "Open extensions page",
         pair: "Show pairing code",
-        statusTitle: "Install status",
-        statusPrepared: "Extension files ready",
-        statusUnprepared: "Extension files not installed",
-        statusPaired: "Paired with this workspace",
-        statusUnpaired: "Not paired",
-        statusRefresh: "Refresh status",
         hint: "Install once: turn on Developer mode, choose “Load unpacked” and select the folder Trainer opens. Trainer updates refresh that folder; click Reload once on the extensions page.",
       };
   }
@@ -2372,42 +2317,12 @@ function CoachSettingsViewSheet({
   } as CoachSettingsLabels;
   const settingsGlobalCopy = resolveWorkbenchCopy(language);
   const browserCaptureCopy = browserCaptureSettingsCopy(language);
-  const refreshCaptureStatus = useCallback(() => {
-    postWebviewMessage({
-      type: "command/execute",
-      payload: { commandId: "trainer.browserCapture.status" },
-    });
-  }, []);
-  useEffect(() => {
-    const unsubscribe = subscribeToHostMessages((message) => {
-      if (message.type !== "browserCapture/statusResult") return;
-      const payload = message.payload as {
-        prepared: boolean;
-        paired: boolean;
-        capturedCount?: number | null;
-        version?: string;
-      };
-      setCaptureStatus({
-        prepared: payload.prepared,
-        paired: payload.paired,
-        capturedCount: typeof payload.capturedCount === "number" ? payload.capturedCount : null,
-        version: typeof payload.version === "string" ? payload.version : undefined,
-      });
-    });
-    refreshCaptureStatus();
-    return unsubscribe;
-  }, [refreshCaptureStatus]);
   const surfaceAlignmentCopy = learningSurfaceAlignmentCopy(language);
   const classes = ["settings-sheet", "coach-settings-view", className].filter(Boolean).join(" ");
   const providerDirectoryRef = useRef<HTMLDivElement | null>(null);
   const providerTemplatesRef = useRef<HTMLDivElement | null>(null);
   const [connectionView, setConnectionView] = useState<"auto" | "edit" | "add" | "advanced">("auto");
   const [advancedReturnView, setAdvancedReturnView] = useState<"auto" | "edit">("auto");
-  // T-0024: real install status, fetched from the host on mount/refresh.
-  const [captureStatus, setCaptureStatus] = useState<
-    | { prepared: boolean; paired: boolean; capturedCount: number | null; version?: string }
-    | undefined
-  >(undefined);
   const apiKeyInputRef = useRef<HTMLInputElement | null>(null);
   const modelPickerRef = useRef<HTMLDetailsElement | null>(null);
 
@@ -5606,14 +5521,7 @@ function CoachSettingsViewSheet({
               ? [provider.model, providerRequirementNote].filter(Boolean).join(" · ")
               : id === "workspace" ? remoteWorkspaceName || resourceSandbox?.effectivePath || trainerWorkspace?.rootPath
               : id === "teaching" ? teachingStyleItems.find((item) => item.value === teachingStyle)?.label ?? copy.auto
-              : [
-                  LANGUAGE_LABELS[language],
-                  themePreference === "dark"
-                    ? copy.dark
-                    : themePreference === "light"
-                      ? copy.light
-                      : copy.system,
-                ].join(" · ") };
+              : `${language} · ${themePreference}` };
           })}
           onSelect={openSettingsCategorySection}
         />
@@ -6643,20 +6551,6 @@ function CoachSettingsViewSheet({
             <div className="settings-subsection" data-settings-subsection="browser-capture">
               <span className="eyebrow settings-subsection__title">{browserCaptureCopy.title}</span>
               <p className="settings-sheet__note settings-sheet__note--compact">{browserCaptureCopy.body}</p>
-              <div className="settings-row" data-browser-capture-status="true">
-                <span className="eyebrow">{browserCaptureCopy.statusTitle}</span>
-                <div className="settings-actions settings-actions--compact" role="status">
-                  <span className={`context-chip ${captureStatus?.prepared ? "is-enabled" : ""}`}>
-                    <span>{captureStatus?.prepared ? browserCaptureCopy.statusPrepared : browserCaptureCopy.statusUnprepared}</span>
-                  </span>
-                  <span className={`context-chip ${captureStatus?.paired ? "is-enabled" : ""}`}>
-                    <span>{captureStatus?.paired ? browserCaptureCopy.statusPaired : browserCaptureCopy.statusUnpaired}</span>
-                  </span>
-                  <button type="button" className="toolbar-button" onClick={refreshCaptureStatus}>
-                    {browserCaptureCopy.statusRefresh}
-                  </button>
-                </div>
-              </div>
               <div className="settings-actions settings-actions--compact">
                 <button
                   type="button"

@@ -376,12 +376,48 @@ async function exerciseCrossView(page, scenario) {
   if (destination === "training") {
     // Training is an internal route without a top-level tab: the host restores
     // it through ui/restoreView (the growth section has no Training button).
-    await page.evaluate(() =>
-      window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__?.({
-        type: "ui/restoreView",
-        payload: { activeView: "training" },
-      }),
-    );
+    // Re-apply while polling: the preview bootstrap can land after the first
+    // apply and reset the persisted view, so one shot is not authoritative.
+    await expect.poll(async () => {
+      const apply = await page.evaluate(() => {
+        const storageProto = Object.getPrototypeOf(window.localStorage);
+        if (!storageProto.__trainerPatched) {
+          storageProto.__trainerPatched = true;
+          const original = storageProto.setItem;
+          storageProto.setItem = function patchedSetItem(key, value) {
+            if (key === window.__TRAINER_PREVIEW_STORAGE_KEY__) {
+              try {
+                const parsed = JSON.parse(String(value));
+                if (parsed.activeView === "settings") {
+                  (window.__WRITER_STACKS__ ||= []).push(
+                    new Error("settings-writer").stack?.split("\n").slice(1, 10).join(" | ") || "no-stack",
+                  );
+                }
+              } catch { /* ignore */ }
+            }
+            return original.call(this, key, value);
+          };
+        }
+        window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__?.({
+          type: "ui/restoreView",
+          payload: { activeView: "training" },
+        });
+        const key = window.__TRAINER_PREVIEW_STORAGE_KEY__;
+        const raw = key ? window.localStorage.getItem(key) : undefined;
+        return {
+          persisted: raw ? JSON.parse(raw).activeView : null,
+          planCurrent: document.querySelector('[data-testid="trainer-view-nav-plan"]')?.getAttribute("aria-current") || null,
+        };
+      });
+      if (process.env.TRAINER_X11_DEBUG === "1") {
+        const stacks = await page.evaluate(() => (window.__WRITER_STACKS__ || []).slice(0, 2));
+        if (stacks.length) {
+          console.log(`[x11-writer-stacks][attempt]`, JSON.stringify(stacks));
+        }
+        console.log("[x11-probe]", JSON.stringify(apply));
+      }
+      return apply.planCurrent;
+    }, { timeout: 5_000 }).toBe("page");
   } else {
     const target = page.getByTestId(`trainer-view-nav-${destination}`);
     await expect(target).toHaveCount(1);
@@ -530,6 +566,14 @@ test.describe.parallel("Trainer 200-scenario user experience matrix (Preview lay
   for (const scenario of SCENARIOS) {
     test(`${scenario.id}: ${scenario.title}`, async ({ page }) => {
       const consoleErrors = collectConsoleErrors(page);
+      page.on("pageerror", (error) => {
+        console.log(`[pageerror][${scenario.id}]`, String(error).slice(0, 400));
+      });
+      page.on("console", (message) => {
+        if (message.type() === "error" || message.type() === "warning") {
+          console.log(`[console.${message.type()}][${scenario.id}]`, message.text().slice(0, 300));
+        }
+      });
       await openScenario(page, scenario);
       const actionResult = await runners[scenario.runner](page, scenario);
       await assertVisibleContracts(page, scenario);
