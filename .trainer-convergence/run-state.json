@@ -9,9 +9,9 @@
     ]
   },
   "next": [
-    "T-0008 capture identity pinning",
-    "T-0013/T-0014/T-0015 verification evidence unification",
-    "CI green on latest head"
+    "T-0009 draft persistence (server)",
+    "T-0010..T-0012 resource intent",
+    "CI watch"
   ],
   "last_head": "ee059dd",
   "results": {
@@ -20,7 +20,8 @@
     "T-0005": "DONE_LOCAL (7262f75)",
     "T-0001": "DONE_LOCAL (ee059dd)",
     "T-0016": "DONE_LOCAL",
-    "T-0017": "DONE_LOCAL"
+    "T-0017": "DONE_LOCAL",
+    "T-0008": "DONE_LOCAL"
   },
   "blocked": {
     "deepseek_subagents": "provider reasoning-level not configured; master-owned implementation instead"

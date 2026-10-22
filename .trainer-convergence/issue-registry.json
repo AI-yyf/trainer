@@ -71,8 +71,8 @@
       "title": "Old request delivers captures to new pairing's workspace",
       "priority": "P0",
       "area": "browser",
-      "status": "OPEN",
-      "evidence": "queued items lack pairing/workspace identity; revoke/re-pair does not fence in-flight work",
+      "status": "DONE_LOCAL",
+      "evidence": "workspaceId pinned in auth/queue/payload; 65 shared + 23 E2E green",
       "acceptance": "Tasks pin workspaceId+pairingId+operationId; stale tasks never deliver to new workspace"
     },
     {
