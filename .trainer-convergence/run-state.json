@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "loop": 1,
+  "phase": "WAVE1_FIX",
+  "head": "e7e6f4161e929378c0186be5e3311e710b89fcf6",
+  "working_tree": {
+    "modified": [
+      "extension/src/browserCapture/browserLauncher.ts (T-0020 fix, tests green locally)"
+    ]
+  },
+  "next": [
+    "commit T-0020 fix",
+    "push",
+    "watch CI run",
+    "dispatch deepseek audits for T-0002/T-0003/T-0006/T-0001"
+  ]
+}

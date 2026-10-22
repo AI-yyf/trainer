@@ -1,0 +1,259 @@
+{
+  "version": 1,
+  "updated": "2026-10-23",
+  "baseline_commit": "e7e6f4161e929378c0186be5e3311e710b89fcf6",
+  "issues": [
+    {
+      "id": "T-0001",
+      "title": "SecretStorage read exception blocks activation",
+      "priority": "P0",
+      "area": "startup",
+      "status": "OPEN",
+      "evidence": "extension/src/extension.ts activate() awaits providerStore.getApiKey() before view registration; getApiKey surfaces SecretStorage errors",
+      "acceptance": "Slow/failing keyring cannot block first paint; provider errors surface only on provider actions"
+    },
+    {
+      "id": "T-0002",
+      "title": "Session selection races and cross-workspace contamination",
+      "priority": "P0",
+      "area": "coach",
+      "status": "OPEN",
+      "evidence": "activateCoachSessionCommand commits late responses without workspace/session generation re-check",
+      "acceptance": "A→B selection keeps B; workspace switch during activate never writes A's session into B"
+    },
+    {
+      "id": "T-0003",
+      "title": "Provider cross-connection model switch fails without rollback",
+      "priority": "P0",
+      "area": "provider",
+      "status": "OPEN",
+      "evidence": "providerWebviewCommands switches profile before model validation and returns error without rollback",
+      "acceptance": "Invalid target keeps profile+model+UI unchanged; error text matches actual state"
+    },
+    {
+      "id": "T-0004",
+      "title": "Model refresh failure clears visible catalog",
+      "priority": "P1",
+      "area": "provider",
+      "status": "OPEN",
+      "evidence": "failed refresh returns availableModels: [] and UI overwrites cached catalog",
+      "acceptance": "Refresh failure keeps previous catalog visible with refreshed-at + failure state"
+    },
+    {
+      "id": "T-0005",
+      "title": "Startup cache not bound to session/empty state",
+      "priority": "P1",
+      "area": "startup",
+      "status": "OPEN",
+      "evidence": "bootstrapSnapshotCache keyed by workspace only; empty conversation skipped; sessionId not part of envelope",
+      "acceptance": "Cache restores only matching workspace+session; empty session overwrites/clears stale thread"
+    },
+    {
+      "id": "T-0006",
+      "title": "Browser offline queue concurrent updates lose tasks",
+      "priority": "P0",
+      "area": "browser",
+      "status": "OPEN",
+      "evidence": "background.js read-modify-write races between captures and flush",
+      "acceptance": "Concurrent captures/flush never lose an accepted task; queue mutations serialized"
+    },
+    {
+      "id": "T-0007",
+      "title": "Stale port owned by another window clears queue",
+      "priority": "P0",
+      "area": "browser",
+      "status": "OPEN",
+      "evidence": "401 treated as permanent, queue items removed, connection marked ok",
+      "acceptance": "401 triggers identity re-discovery or pauses delivery; queue never cleared on auth mismatch"
+    },
+    {
+      "id": "T-0008",
+      "title": "Old request delivers captures to new pairing's workspace",
+      "priority": "P0",
+      "area": "browser",
+      "status": "OPEN",
+      "evidence": "queued items lack pairing/workspace identity; revoke/re-pair does not fence in-flight work",
+      "acceptance": "Tasks pin workspaceId+pairingId+operationId; stale tasks never deliver to new workspace"
+    },
+    {
+      "id": "T-0009",
+      "title": "Accepted selection drafts lost on sidecar restart",
+      "priority": "P1",
+      "area": "browser",
+      "status": "OPEN",
+      "evidence": "browser_bridge keeps pending drafts in memory only",
+      "acceptance": "Accepted drafts survive sidecar restart with delivery/application states"
+    },
+    {
+      "id": "T-0010",
+      "title": "Old resource mistaken as this download's success",
+      "priority": "P0",
+      "area": "resources",
+      "status": "OPEN",
+      "evidence": "waitForCapturedResource matches prior captured-from record",
+      "acceptance": "Operation completion requires this operationId/clientCaptureId result"
+    },
+    {
+      "id": "T-0011",
+      "title": "Deleted resource cannot be re-captured",
+      "priority": "P1",
+      "area": "browser",
+      "status": "OPEN",
+      "evidence": "client-side history duplicate short-circuits before server",
+      "acceptance": "Deleted resources can be re-captured; server decides existence"
+    },
+    {
+      "id": "T-0012",
+      "title": "URL dedup skips docs supplement and focus binding",
+      "priority": "P1",
+      "area": "resources",
+      "status": "OPEN",
+      "evidence": "server returns early on URL/hash hit before include_docs/focus handling",
+      "acceptance": "Re-capture with new intent performs supplement/binding and reports real result"
+    },
+    {
+      "id": "T-0013",
+      "title": "Unrelated remote test certifies current training card",
+      "priority": "P0",
+      "area": "training",
+      "status": "OPEN",
+      "evidence": "remote verification only checks project/authority/hash, not card target relation",
+      "acceptance": "Verification binds card+files+hashes+runId; unrelated tests cannot mark verified"
+    },
+    {
+      "id": "T-0014",
+      "title": "Late attestation overwrites current card selection",
+      "priority": "P0",
+      "area": "training",
+      "status": "OPEN",
+      "evidence": "learning route writes selected_card_id without generation check",
+      "acceptance": "Late results append to history; current selection unchanged"
+    },
+    {
+      "id": "T-0015",
+      "title": "Remote verification writes no unified growth evidence",
+      "priority": "P0",
+      "area": "training",
+      "status": "OPEN",
+      "evidence": "remote attest writes legacy queue only; training_evidence stays empty",
+      "acceptance": "Local and remote verification produce the same trusted evidence record"
+    },
+    {
+      "id": "T-0016",
+      "title": "Concurrent starts create two active attempts",
+      "priority": "P0",
+      "area": "training",
+      "status": "OPEN",
+      "evidence": "attempt_store lookup+insert not atomic; no unique active constraint",
+      "acceptance": "find-or-create is transactional/unique; duplicates impossible under concurrency"
+    },
+    {
+      "id": "T-0017",
+      "title": "Concurrent attempt save loses hint level",
+      "priority": "P0",
+      "area": "training",
+      "status": "OPEN",
+      "evidence": "attempt JSON read-modify-write; hint level can regress",
+      "acceptance": "Field merges preserve concurrent fields; assistance level never regresses"
+    },
+    {
+      "id": "T-0018",
+      "title": "Long remote log incremental reads return wrong data",
+      "priority": "P1",
+      "area": "remote",
+      "status": "OPEN",
+      "evidence": "verificationSessions uses buffer length as offset after truncation",
+      "acceptance": "Absolute cursor reads work past truncation; truncation is reported"
+    },
+    {
+      "id": "T-0019",
+      "title": "Remote run dedup ignores environment variables",
+      "priority": "P1",
+      "area": "remote",
+      "status": "OPEN",
+      "evidence": "dedup key lacks env; concurrent start can double-launch",
+      "acceptance": "env+policy in identity; start promise registered before first await"
+    },
+    {
+      "id": "T-0020",
+      "title": "Linux browser detection fails on Windows CI",
+      "priority": "P0",
+      "area": "browser",
+      "status": "FIXED_LOCAL",
+      "evidence": "executableInPath used host path delimiter; fix uses target-platform path API",
+      "acceptance": "Cross-Platform Verify UI (windows) passes on this fix"
+    },
+    {
+      "id": "T-0021",
+      "title": "Installed-host E2E not re-run at current SHA",
+      "priority": "P1",
+      "area": "release",
+      "status": "OPEN",
+      "evidence": "cross-platform run 39636536608 skipped native install E2E",
+      "acceptance": "VSIX host E2E passes on final SHA (mac first, then win/linux)"
+    },
+    {
+      "id": "T-0022",
+      "title": "Composer dock squeezes Learning content on short windows",
+      "priority": "P1",
+      "area": "ux",
+      "status": "OPEN",
+      "evidence": "340×450 leaves ~161px for learning content",
+      "acceptance": "Primary action visible and content usable at 340×450/600"
+    },
+    {
+      "id": "T-0023",
+      "title": "Text-only reflection shows irrelevant image-capability warning",
+      "priority": "P1",
+      "area": "ux",
+      "status": "OPEN",
+      "evidence": "PracticeResponse renders recoverable-error whenever image flag present",
+      "acceptance": "Warning only when user actually attempts an image"
+    },
+    {
+      "id": "T-0024",
+      "title": "Browser install/update status is opaque",
+      "priority": "P2",
+      "area": "browser",
+      "status": "PARTIAL",
+      "evidence": "Settings card exists; no pipeline for installed/loaded/paired/capture status",
+      "acceptance": "Status card reflects real install→load→pair→capture states"
+    },
+    {
+      "id": "T-0025",
+      "title": "Settings leaks internal terminology and mixed concerns",
+      "priority": "P2",
+      "area": "ux",
+      "status": "OPEN",
+      "evidence": "preferences detail mixes appearance/memory/runtime internals",
+      "acceptance": "Detail pages grouped; internal ids confined to diagnostics"
+    },
+    {
+      "id": "T-0026",
+      "title": "Real teaching latency far beyond budget",
+      "priority": "P1",
+      "area": "teaching",
+      "status": "BLOCKED",
+      "evidence": "minimax-m3 508s / glm-5.3 398s first turn on recorded sample",
+      "acceptance": "First meaningful feedback measured separately; requires real provider runs"
+    },
+    {
+      "id": "T-0027",
+      "title": "Prose next step disagrees with structured next_step",
+      "priority": "P1",
+      "area": "teaching",
+      "status": "OPEN",
+      "evidence": "recorded review shows divergence",
+      "acceptance": "One next-step object drives prose and UI"
+    },
+    {
+      "id": "T-0028",
+      "title": "Human teaching-quality sign-off outstanding",
+      "priority": "P1",
+      "area": "teaching",
+      "status": "BLOCKED",
+      "evidence": "owner sign-off section empty in 2026-10-20 review",
+      "acceptance": "Owner completes review §6"
+    }
+  ]
+}

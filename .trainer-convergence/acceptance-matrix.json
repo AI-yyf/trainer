@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "gates": {
+    "ci_cross_platform": {
+      "status": "FAIL",
+      "evidence": "run 39636536608: 8/9, UI windows failed T-0020"
+    },
+    "native_install_e2e": {
+      "status": "OPEN",
+      "evidence": "not run at e7e6f41"
+    },
+    "browser_e2e": {
+      "status": "PASS_LOCAL",
+      "evidence": "23/23 browser-capture E2E + real Chrome 155 manual install/capture"
+    },
+    "remote_ssh_e2e": {
+      "status": "BLOCKED",
+      "evidence": "Layer1 transport only; real Remote-SSH window not available"
+    },
+    "teaching_acceptance": {
+      "status": "BLOCKED",
+      "evidence": "owner sign-off pending; real-provider latency issues recorded"
+    },
+    "design_acceptance": {
+      "status": "PARTIAL",
+      "evidence": "96/96 a11y + 471 geometry on 14f42ee; UX convergence screens need re-shoot at final SHA"
+    }
+  }
+}

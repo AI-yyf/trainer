@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "wave": 1,
+  "root_causes": [
+    {
+      "id": "RC1",
+      "name": "async-identity",
+      "issues": [
+        "T-0002",
+        "T-0003",
+        "T-0008",
+        "T-0010",
+        "T-0013",
+        "T-0014"
+      ]
+    },
+    {
+      "id": "RC2",
+      "name": "non-atomic-store",
+      "issues": [
+        "T-0006",
+        "T-0007",
+        "T-0016",
+        "T-0017"
+      ]
+    },
+    {
+      "id": "RC3",
+      "name": "startup-lifecycle",
+      "issues": [
+        "T-0001",
+        "T-0005",
+        "T-0026"
+      ]
+    },
+    {
+      "id": "RC4",
+      "name": "resource-intent",
+      "issues": [
+        "T-0009",
+        "T-0011",
+        "T-0012"
+      ]
+    },
+    {
+      "id": "RC5",
+      "name": "evidence-unification",
+      "issues": [
+        "T-0013",
+        "T-0014",
+        "T-0015",
+        "T-0017"
+      ]
+    },
+    {
+      "id": "RC6",
+      "name": "remote-execution",
+      "issues": [
+        "T-0018",
+        "T-0019"
+      ]
+    },
+    {
+      "id": "RC7",
+      "name": "ux-convergence",
+      "issues": [
+        "T-0022",
+        "T-0023",
+        "T-0024",
+        "T-0025"
+      ]
+    },
+    {
+      "id": "RC8",
+      "name": "release-gate",
+      "issues": [
+        "T-0020",
+        "T-0021",
+        "T-0028"
+      ]
+    }
+  ],
+  "wave1_order": [
+    "T-0020",
+    "T-0002",
+    "T-0003",
+    "T-0004",
+    "T-0006",
+    "T-0007",
+    "T-0001",
+    "T-0005"
+  ],
+  "wave2_order": [
+    "T-0016",
+    "T-0017",
+    "T-0008",
+    "T-0010",
+    "T-0011",
+    "T-0012"
+  ],
+  "wave3_order": [
+    "T-0013",
+    "T-0014",
+    "T-0015",
+    "T-0018",
+    "T-0019",
+    "T-0022",
+    "T-0023"
+  ]
+}
