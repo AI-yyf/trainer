@@ -1458,3 +1458,34 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* T-0022: on short windows the dock must never squeeze out the learning
+   content or hide the primary send action. Collapse secondary dock chrome
+   (context anchor, send preference) and shrink the frame; the context anchor
+   remains reachable — its chips move into the message when relevant. */
+@media (max-height: 700px) {
+  .trainer-shell .template-context[data-dock-anchor="true"],
+  .trainer-shell [data-dock-send-preference="true"] {
+    display: none;
+  }
+
+  .trainer-shell .composer__frame textarea {
+    min-height: 30px;
+    max-block-size: 26vh;
+  }
+
+  .trainer-shell .composer__footer {
+    min-height: 26px;
+  }
+}
+
+@media (max-height: 520px) {
+  .trainer-shell .composer__frame textarea {
+    min-height: 26px;
+    max-block-size: 20vh;
+  }
+
+  .trainer-shell .coach-suggestion-chips {
+    display: none;
+  }
+}
