@@ -197,8 +197,8 @@
       "title": "Composer dock squeezes Learning content on short windows",
       "priority": "P1",
       "area": "ux",
-      "status": "OPEN",
-      "evidence": "340×450 leaves ~161px for learning content",
+      "status": "DONE_LOCAL",
+      "evidence": "composer.css short-height rules; geometry 471/471 + a11y 96/96 re-run",
       "acceptance": "Primary action visible and content usable at 340×450/600"
     },
     {
@@ -206,8 +206,8 @@
       "title": "Text-only reflection shows irrelevant image-capability warning",
       "priority": "P1",
       "area": "ux",
-      "status": "OPEN",
-      "evidence": "PracticeResponse renders recoverable-error whenever image flag present",
+      "status": "DONE_LOCAL",
+      "evidence": "PracticeResponse gate; extension tests green (6c75e0f)",
       "acceptance": "Warning only when user actually attempts an image"
     },
     {

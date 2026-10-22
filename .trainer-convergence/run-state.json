@@ -1,7 +1,7 @@
 {
   "version": 1,
   "loop": 1,
-  "phase": "WAVE1_REVIEW",
+  "phase": "WAVE3_REVIEW",
   "head": "e7e6f4161e929378c0186be5e3311e710b89fcf6",
   "working_tree": {
     "modified": [
@@ -9,9 +9,10 @@
     ]
   },
   "next": [
-    "T-0022 short-window composer density",
-    "T-0023 text-only reflection image warning",
-    "CI green + installed-host E2E"
+    "CI green on latest heads",
+    "installed-host E2E at final SHA (T-0021)",
+    "T-0012 docs supplement",
+    "owner/real-env BLOCKED items"
   ],
   "last_head": "ee059dd",
   "results": {
@@ -30,7 +31,9 @@
     "T-0013": "DONE_LOCAL",
     "T-0015": "DONE_LOCAL",
     "T-0018": "DONE_LOCAL",
-    "T-0019": "DONE_LOCAL"
+    "T-0019": "DONE_LOCAL",
+    "T-0022": "DONE_LOCAL (eb87712)",
+    "T-0023": "DONE_LOCAL (6c75e0f)"
   },
   "blocked": {
     "deepseek_subagents": "provider reasoning-level not configured; master-owned implementation instead"
