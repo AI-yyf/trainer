@@ -1,0 +1,17 @@
+provider capability test ok
+[next-line] data: {"type": "tool_result", "id": "call_ab8cfda9ab5f41ed9cd453c1", "name": "recall_memory", "ok": true, "result": {"ok": true, "current_focus": "\u5f53\u524d\u805a\u7126\uff1a\u7ee7\u7eed\u987a\u7740\u4f60\u6700\u8fd1\u8fd9\u6761\u6700\u5
+[next-line] data: {"type": "tool_call", "id": "call_19fb698b44544a258a93d7a3", "name": "coach_finalize", "arguments": "{\"confidence\":\"high\",\"decision\":\"\u7b2c\u4e00\u6b65\u4fdd\u6301\u4e0d\u53d8\uff1a\u8fd0\u884c first_async.py\uff0c\u9a8c\u8bc1
+[next-line] data: {"type": "tool_result", "id": "call_19fb698b44544a258a93d7a3", "name": "coach_finalize", "ok": true, "result": {"ok": true, "final": true, "summary": "\u6309\u65e2\u6709\u4e3b\u7ebf\u7ed9\u51fa asyncio \u6700\u5c0f\u7b2c\u4e00\u6b65\u
+[next-line] data: {"tokens": 339, "response": {"session_id": "session-d853434b90", "reply": {"id": "message-0daf1c83e7", "role": "assistant", "content": "按既有主线给出 asyncio 最小第一步：first_async.py 单协程 + 三个成功信号 + 加分验证，强调协程对象 vs 执行的分界线。\n\n第一步保持不变：运行 first_asy
+{
+  "captured_at": "2026-10-22T23:55:04.790Z",
+  "has_complete_event": true,
+  "model": "glm-5.3",
+  "protocol": "openai_chat_completions_compatible",
+  "first_chunk_ms": 11446,
+  "total_ms": 19013,
+  "visible_chars": 824,
+  "structured_next_step": "学习者运行 first_async.py，确认三个成功信号（输出顺序正确、无 RuntimeWarning、能说清协程对象 vs 执行）后回报，再进入并发计时验证。",
+  "prose_next_step_section": "我们做**并发计时验证**（两个协程并发 sleep，总耗时约 1 秒而非 2 秒）。",
+  "next_step_consistent_with_prose": false
+}
