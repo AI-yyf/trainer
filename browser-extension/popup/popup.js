@@ -9,8 +9,8 @@
  *   2. paired, Trainer not running — an explicit "Trainer is not running" card
  *      plus the full offline queue manager (list, delete one, clear, retry
  *      now); capturing and downloading keep working and queue locally;
- *   3. connected — a status card (workspace + library count) and the last
- *      five captures with deep links into the Trainer library.
+ *   3. connected — the workspace label and the last captures with deep links
+ *      into the Trainer library.
  *
  * Copy follows the browser locale (zh-CN, en-US, es-ES, fr-FR, de-DE, ja-JP,
  * ko-KR, pt-BR — with English as the fallback). Motion is explanatory only and
@@ -33,7 +33,6 @@ const elements = {
   offlinePanel: document.getElementById('offline-panel'),
   connectedPanel: document.getElementById('connected-panel'),
   workspaceName: document.getElementById('workspace-name'),
-  libraryCount: document.getElementById('library-count'),
   capturePanel: document.getElementById('capture-panel'),
   pageLine: document.getElementById('page-line'),
   focusSelect: document.getElementById('focus-select'),
@@ -55,7 +54,8 @@ const elements = {
   revoke: document.getElementById('revoke'),
   repair: document.getElementById('repair'),
   openTrainer: document.getElementById('open-trainer'),
-  notice: document.getElementById('notice')
+  notice: document.getElementById('notice'),
+  close: document.getElementById('popup-close')
 };
 
 const copy = TrainerCapture.copyFor(TrainerCapture.browserLocale());
@@ -77,6 +77,16 @@ function applyCopy() {
   }
   for (const node of document.querySelectorAll('[data-copy-placeholder]')) {
     node.setAttribute('placeholder', t(node.getAttribute('data-copy-placeholder')));
+  }
+  // Icon-only controls keep their words in tooltips/accessible names, so the
+  // window stays visual instead of wordy.
+  for (const node of document.querySelectorAll('[data-copy-title]')) {
+    node.setAttribute('title', t(node.getAttribute('data-copy-title')));
+  }
+  for (const node of document.querySelectorAll('[data-copy-label]')) {
+    const label = t(node.getAttribute('data-copy-label'));
+    node.setAttribute('aria-label', label);
+    node.setAttribute('title', label);
   }
 }
 
@@ -161,6 +171,7 @@ function setStatus(tone, message) {
 }
 
 function setFeedback(node, message, tone) {
+  node.hidden = false;
   node.textContent = message || '';
   node.classList.remove('feedback--error', 'feedback--warn');
   if (tone === 'error') {
@@ -219,9 +230,10 @@ function queueMetaText(entry) {
 
 function renderQueue(state) {
   const queue = Array.isArray(state.queue) ? state.queue : [];
-  elements.queueCount.textContent = queue.length
-    ? t('queueCount', { count: queue.length })
-    : t('queueEmpty');
+  // The count slot is a number, not a sentence; the empty state lives in its
+  // own line so the header stays icon-and-number quiet.
+  elements.queueCount.textContent = queue.length ? String(queue.length) : '';
+  elements.queueCount.hidden = queue.length === 0;
 
   elements.queueList.textContent = '';
   elements.queueEmpty.hidden = queue.length > 0;
@@ -399,9 +411,6 @@ function renderState(state) {
   }
 
   elements.workspaceName.textContent = workspace || '—';
-  elements.libraryCount.textContent = t('libraryCountLabel', {
-    count: Number(state && state.libraryCount) || 0
-  });
 
   renderFocusOptions(state || {});
   renderQueue(state || {});
@@ -541,9 +550,8 @@ async function capturePage() {
   if (!failed) {
     drawSuccessCheck();
   }
-  // Re-fetch the sidecar status: the local cache still carries the previous
-  // library count, so a successful capture otherwise shows "library 1" after
-  // the second item landed.
+  // Re-fetch the sidecar status so the workspace label and history reflect
+  // the capture that just landed instead of the pre-capture cache.
   await refreshStateFromHost();
   await renderTabLine();
 }
@@ -690,6 +698,10 @@ elements.queueClear.addEventListener('click', () => {
 elements.revoke.addEventListener('click', () => {
   void disconnectAndRepair();
 });
+
+if (elements.close) {
+  elements.close.addEventListener('click', () => window.close());
+}
 
 elements.repair.addEventListener('click', () => {
   void disconnectAndRepair();

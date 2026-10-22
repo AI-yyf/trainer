@@ -41,7 +41,7 @@ const REPO_URL = "https://github.com/octocat/Hello-World";
 const DOWNLOAD_DIR = "Trainer Library/Downloads";
 const REPO_DIR = "Trainer Library/Repos";
 const WORKSPACE_ID = "browser-capture-e2e";
-const WORKSPACE_NAME = "Browser Capture E2E";
+const WORKSPACE_NAME = "Trainer";
 
 const checks = [];
 function ok(name, detail = "") {

@@ -1225,7 +1225,7 @@ const MANIFEST_PATH = path.resolve(__dirname, '..', '..', 'browser-extension', '
 
 test('popup actually hides inactive panels and refreshes the library count after capture', () => {
   const css = fs.readFileSync(path.resolve(__dirname, '..', '..', 'browser-extension', 'popup', 'popup.css'), 'utf8');
-  assert.match(css, /\.panel\[hidden\]\s*\{[^}]*display:\s*none/s);
+  assert.match(css, /\[hidden\]\s*\{[^}]*display:\s*none/s);
   const js = fs.readFileSync(path.resolve(__dirname, '..', '..', 'browser-extension', 'popup', 'popup.js'), 'utf8');
   const captureStart = js.indexOf('async function capturePage()');
   const downloadStart = js.indexOf('async function downloadToProject()');
@@ -1266,7 +1266,7 @@ test('the popup carries the three states and the full offline queue manager', ()
 test('every data-copy key used by the popup exists in the copy map', () => {
   const html = fs.readFileSync(POPUP_HTML_PATH, 'utf8');
   const used = new Set();
-  for (const match of html.matchAll(/data-copy(?:-placeholder)?="([A-Za-z0-9_]+)"/g)) {
+  for (const match of html.matchAll(/data-copy(?:-placeholder|-title|-label)?="([A-Za-z0-9_]+)"/g)) {
     used.add(match[1]);
   }
   assert.ok(used.size >= 20, 'the popup must drive its copy through data-copy attributes');
@@ -1291,14 +1291,17 @@ test('every id the popup script looks up exists in the popup markup', () => {
   }
 });
 
-test('the popup icons are inline SVG with one stroke grammar and reduced-motion fallback', () => {
+test('the popup is a monochrome icon-led card (no legacy brand chrome)', () => {
   const html = fs.readFileSync(POPUP_HTML_PATH, 'utf8');
   assert.match(html, /stroke-width="1\.7"/);
   assert.match(html, /stroke-linecap="round"/);
   assert.match(html, /stroke-linejoin="round"/);
   assert.ok((html.match(/<symbol id="icon-/g) || []).length >= 12, 'expected a full inline icon sprite');
-  assert.match(html, /#4338CA/i, 'the brand mark uses the Trainer indigo');
-  assert.match(html, /#F59E0B/i, 'the brand mark uses the Trainer gold');
+  assert.match(html, /id="popup-close"/, 'the card has its own close affordance');
+  // The 2026-10 monochrome redesign removes the indigo/gold logo block from
+  // the popup; the toolbar PNG carries the monochrome brand instead.
+  assert.doesNotMatch(html, /#4338CA/i);
+  assert.doesNotMatch(html, /#F59E0B/i);
 
   const css = fs.readFileSync(POPUP_CSS_PATH, 'utf8');
   assert.match(css, /prefers-color-scheme: dark/);
@@ -1306,9 +1309,9 @@ test('the popup icons are inline SVG with one stroke grammar and reduced-motion 
   assert.match(css, /@keyframes panel-enter/);
   assert.match(css, /@keyframes check-draw/);
   assert.match(css, /@keyframes count-bump/);
-  assert.match(css, /@keyframes shake/);
-  assert.match(css, /--indigo-600: #4338ca/);
-  assert.match(css, /--gold-500: #f59e0b/);
+  assert.match(css, /@keyframes shake-x/);
+  assert.doesNotMatch(css, /--indigo-600/);
+  assert.doesNotMatch(css, /--gold-500/);
 });
 
 test('the worker registers the PDF and GitHub download menu entries', () => {
