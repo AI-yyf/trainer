@@ -9095,8 +9095,10 @@ export function App() {
       const operation = {
         statusMessage: "",
       };
+      let timedOut = false;
       const done = new Promise<void>((resolve, reject) => {
         const timeoutId = window.setTimeout(() => {
+          timedOut = true;
           resourceOperationResolversRef.current.delete(requestId);
           resolve();
         }, timeoutMs);
@@ -9131,7 +9133,10 @@ export function App() {
       };
       // The status text the host settled with (empty when none arrived).
       const statusMessage = (): string => operation.statusMessage;
-      return { requestId, done, settle, statusMessage };
+      // True only when the window expired without a host verdict — callers
+      // must not treat that as success evidence for an older record.
+      const hasTimedOut = (): boolean => timedOut;
+      return { requestId, done, settle, statusMessage, hasTimedOut };
     },
     [],
   );
@@ -9230,6 +9235,7 @@ export function App() {
         },
       });
       let landed: Awaited<ReturnType<typeof waitForCapturedResource>>;
+      let operationRejected: unknown;
       try {
         landed = await Promise.race([
           waitForCapturedResource(url, beforeIds),
@@ -9249,6 +9255,36 @@ export function App() {
       }
       if (!landed) {
         return { ok: false, unconfirmed: true, message: "" };
+      }
+      if (landed.deduped) {
+        // A pre-existing record for this URL is not evidence that THIS
+        // operation finished (T-0010): before treating it as a deduped
+        // success, wait for the correlated host verdict. A failure rejects
+        // here; a verdict timeout keeps the result unconfirmed instead of
+        // dressing an old path up as this download.
+        if (!captureWait.hasTimedOut()) {
+          try {
+            await captureWait.done;
+          } catch (error) {
+            operationRejected = error;
+          }
+          if (operationRejected) {
+            const reason =
+              operationRejected instanceof Error
+                ? operationRejected.message
+                : String(operationRejected ?? "");
+            return {
+              ok: false,
+              message: reason.replace("[[trainer-resource-failure]]", "").trim(),
+            };
+          }
+          // The remembered download path may have landed with the status
+          // patch; re-read the record once for the freshest savedPath.
+          const refreshed = await waitForCapturedResource(url, new Set(), 2_000);
+          if (refreshed && refreshed.resourceId === landed.resourceId) {
+            landed = refreshed;
+          }
+        }
       }
       return {
         ok: true,
