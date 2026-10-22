@@ -34,6 +34,7 @@ declare global {
     __TRAINER_SURFACE__?: string;
     __TRAINER_BROWSER_PREVIEW__?: boolean;
     __TRAINER_PREVIEW_STORAGE_KEY__?: string;
+    __TRAINER_PREVIEW_ACTIVE_VIEW__?: string;
     __TRAINER_PREVIEW_APPLY_HOST_MESSAGE__?: (message: unknown) => void;
     __TRAINER_WEBVIEW_READY__?: boolean;
   }

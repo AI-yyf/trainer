@@ -5644,6 +5644,7 @@ function configureBrowserPreviewEnvironment(state: BrowserPreviewState): void {
   const previewStorageKey = `trainer:webview:preview:${window.location.search || "default"}`;
   window.__TRAINER_BROWSER_PREVIEW__ = true;
   window.__TRAINER_PREVIEW_STORAGE_KEY__ = previewStorageKey;
+  window.__TRAINER_PREVIEW_ACTIVE_VIEW__ = state.activeView;
   document.body.classList.remove("vscode-light", "vscode-dark");
   document.body.classList.add(`vscode-${state.vscodeTheme ?? "dark"}`);
   window.addEventListener(PREVIEW_WEBVIEW_ACTION_EVENT, (event) => {
@@ -6888,11 +6889,24 @@ export function installBrowserPreviewHarness(): void {
       recoverable: true,
     },
   ];
-  bootstrap.activeView = state.activeView;
+  bootstrap.activeView =
+    (window.__TRAINER_PREVIEW_ACTIVE_VIEW__ as BrowserPreviewState["activeView"] | undefined) ??
+    state.activeView;
   if (connectionState !== "offline") {
     state.previewProviderConfig = structuredClone(bootstrap.providerConfig);
   }
   try {
+    if (state.activeView === "settings") {
+      const holder = window as typeof window & {
+        __TRAINER_HARNESS_SETTINGS_STACKS__?: string[];
+      };
+      holder.__TRAINER_HARNESS_SETTINGS_STACKS__ = holder.__TRAINER_HARNESS_SETTINGS_STACKS__ || [];
+      if (holder.__TRAINER_HARNESS_SETTINGS_STACKS__.length < 3) {
+        holder.__TRAINER_HARNESS_SETTINGS_STACKS__.push(
+          new Error("harness-settings-persist").stack?.split("\n").slice(1, 9).join(" | ") || "no-stack",
+        );
+      }
+    }
     window.localStorage.setItem(previewStorageKey, JSON.stringify(toPreviewPersistedState(state)));
   } catch {
     // Browser preview should keep rendering even when storage is blocked.
@@ -6908,6 +6922,9 @@ export function installBrowserPreviewHarness(): void {
         return;
       }
       Object.assign(state, nextState);
+      // Track the app's live view so bootstrap rebuilds never carry a stale
+      // one back into the app (T-0024: the settings-writer fight).
+      window.__TRAINER_PREVIEW_ACTIVE_VIEW__ = state.activeView;
       try {
         window.localStorage.setItem(previewStorageKey, JSON.stringify(toPreviewPersistedState(state)));
       } catch {

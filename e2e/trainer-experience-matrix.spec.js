@@ -431,6 +431,14 @@ async function exerciseCrossView(page, scenario) {
       return raw ? JSON.parse(raw).activeView : undefined;
     }),
   ).toBe(scenario.userAction.targetView);
+  if (process.env.TRAINER_X11_DEBUG === "1") {
+    const stacks = await page.evaluate(() => ({
+      app: (window.__TRAINER_SETTINGS_WRITER_STACKS__ || []).slice(0, 2),
+      harness: (window.__TRAINER_HARNESS_SETTINGS_STACKS__ || []).slice(0, 2),
+      view: new URLSearchParams(window.location.search).get("view"),
+    }));
+    console.log(`[x11-stacks][${scenario.id}]`, JSON.stringify(stacks));
+  }
   return { kind: "navigate_to_view", targetView: scenario.userAction.targetView };
 }
 

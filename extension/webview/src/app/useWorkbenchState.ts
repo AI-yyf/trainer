@@ -391,8 +391,13 @@ export interface WorkbenchStore {
   resetStream: () => void;
 }
 
+// Live selection authority (T-0024): stale closures that persist the whole
+// layout (language/theme writers) must never overwrite the active view the
+// learner has since moved to. Only setActiveView/applyHostMessage update this.
+let liveActiveView: ActiveWorkbenchView = "coach";
+
 function persistLayout(next: PersistedWorkbenchState): PersistedWorkbenchState {
-  setPersistedState(next);
+  setPersistedState({ ...next, activeView: liveActiveView });
   return next;
 }
 
@@ -411,12 +416,12 @@ function flushComposerDraftPersist(): void {
   composerDraftPersistTimer = undefined;
   const getLayout = pendingComposerDraftLayout;
   pendingComposerDraftLayout = undefined;
-  if (getLayout) setPersistedState(getLayout());
+  if (getLayout) setPersistedState({ ...getLayout(), activeView: liveActiveView });
 }
 
 function scheduleComposerDraftPersist(getLayout: () => PersistedWorkbenchState): void {
   if (typeof window === "undefined") {
-    setPersistedState(getLayout());
+    setPersistedState({ ...getLayout(), activeView: liveActiveView });
     return;
   }
   pendingComposerDraftLayout = getLayout;
@@ -789,13 +794,28 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       }),
     })),
   setActiveView: (activeView) =>
-    set((state) => ({
-      trainingReviewQueueRequested: activeView === "training" && state.trainingReviewQueueRequested,
-      layout: persistLayout({
-        ...state.layout,
-        activeView: normalizeSidebarView(activeView),
-      }),
-    })),
+    set((state) => {
+      const normalized = normalizeSidebarView(activeView);
+      liveActiveView = normalized;
+      if (typeof window !== "undefined" && normalized === "settings") {
+        const holder = window as typeof window & {
+          __TRAINER_SETTINGS_SWITCH_STACKS__?: string[];
+        };
+        holder.__TRAINER_SETTINGS_SWITCH_STACKS__ = holder.__TRAINER_SETTINGS_SWITCH_STACKS__ || [];
+        if (holder.__TRAINER_SETTINGS_SWITCH_STACKS__.length < 3) {
+          holder.__TRAINER_SETTINGS_SWITCH_STACKS__.push(
+            new Error("settings-switch").stack?.split("\n").slice(1, 10).join(" | ") || "no-stack",
+          );
+        }
+      }
+      return {
+        trainingReviewQueueRequested: activeView === "training" && state.trainingReviewQueueRequested,
+        layout: persistLayout({
+          ...state.layout,
+          activeView: normalized,
+        }),
+      };
+    }),
   setResourceRestoreContext: (resourceRestoreContext) => set({ resourceRestoreContext }),
   setComposerLanguage: (composerLanguage) =>
     set((state) => ({
@@ -1514,6 +1534,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
                   summary: payload.latestSummary,
                 }
               : undefined;
+        liveActiveView = requestedView as ActiveWorkbenchView;
         return {
           data:
             restoredTrainingState === state.data.workspaceTrainingState
@@ -1529,6 +1550,9 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           layout: persistLayout({
             ...state.layout,
             activeView: requestedView,
+            // restoreView IS an authoritative view move (ui/restoreView).
+            // Keep liveActiveView in sync so later stale layout persists do
+            // not flip the learner back (T-0024).
           }),
         };
       }
