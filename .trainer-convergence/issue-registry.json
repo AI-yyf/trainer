@@ -116,8 +116,8 @@
       "title": "Unrelated remote test certifies current training card",
       "priority": "P0",
       "area": "training",
-      "status": "OPEN",
-      "evidence": "remote verification only checks project/authority/hash, not card target relation",
+      "status": "DONE_LOCAL",
+      "evidence": "artifact_not_card_target gate + test_remote_verification_artifact 11/11",
       "acceptance": "Verification binds card+files+hashes+runId; unrelated tests cannot mark verified"
     },
     {
@@ -134,8 +134,8 @@
       "title": "Remote verification writes no unified growth evidence",
       "priority": "P0",
       "area": "training",
-      "status": "OPEN",
-      "evidence": "remote attest writes legacy queue only; training_evidence stays empty",
+      "status": "DONE_LOCAL",
+      "evidence": "unified evidence + projection on remote attest; replay-safe",
       "acceptance": "Local and remote verification produce the same trusted evidence record"
     },
     {
