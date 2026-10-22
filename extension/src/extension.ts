@@ -131,19 +131,32 @@ export async function activate(
   // provider is registered, so even the very first resolve already carries the
   // restored thread. The sidecar's cold start no longer gates first paint; the
   // authoritative snapshot from rehydration replaces this when it lands.
-  const seededBootstrap = bootstrapCache.load(
+  const cacheEntry = bootstrapCache.load(
     getRuntimeWorkspaceContext({ getHostState }).workspaceId,
   );
-  if (seededBootstrap) {
-    hostState = {
-      ...hostState,
-      bootstrap: {
-        ...seededBootstrap,
-        connection: hostState.bootstrap.connection,
-        streamingState: hostState.bootstrap.streamingState,
-      },
-    };
-    outputChannel.appendLine('[activation] seeded cached bootstrap (stale-while-revalidate)');
+  if (cacheEntry) {
+    // A cached thread is only seeded when it belongs to the session this
+    // window is about to restore (or when either side is still unknown). A
+    // mismatch means the cache is from a discarded session: drop it instead
+    // of flashing someone else's thread (issue T-0005).
+    const sessionMatches =
+      !cacheEntry.sessionId ||
+      !hostState.sessionId ||
+      cacheEntry.sessionId === hostState.sessionId;
+    if (!sessionMatches) {
+      await bootstrapCache.clear(getRuntimeWorkspaceContext({ getHostState }).workspaceId);
+      outputChannel.appendLine('[activation] dropped cached bootstrap from a different session');
+    } else {
+      hostState = {
+        ...hostState,
+        bootstrap: {
+          ...cacheEntry.bootstrap,
+          connection: hostState.bootstrap.connection,
+          streamingState: hostState.bootstrap.streamingState,
+        },
+      };
+      outputChannel.appendLine('[activation] seeded cached bootstrap (stale-while-revalidate)');
+    }
   }
   const updateDerivedHostState = async (): Promise<void> => {
     syncProviderLastTestScope();
@@ -195,6 +208,7 @@ export async function activate(
       bootstrapCache.schedulePersist(
         getRuntimeWorkspaceContext({ getHostState }).workspaceId,
         hostState.bootstrap,
+        hostState.sessionId,
       );
     }
   };
@@ -590,7 +604,7 @@ export async function activate(
         bootstrap: snapshot.bootstrap,
         cachedBootstrap: bootstrapCache.load(
           getRuntimeWorkspaceContext({ getHostState }).workspaceId,
-        ),
+        )?.bootstrap,
         visibleFacts: workbenchSnapshot.lastVisibleFactsPayload,
         hostState: snapshot,
         workbench: workbenchSnapshot,

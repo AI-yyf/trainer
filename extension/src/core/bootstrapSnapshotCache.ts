@@ -23,6 +23,8 @@ const MAX_CACHE_BYTES = 2_000_000;
 
 interface CachedBootstrapEnvelope {
   savedAt: string;
+  /** Session the snapshot belonged to; seeds must match or be unknown. */
+  sessionId?: string;
   bootstrap: BootstrapData;
 }
 
@@ -45,6 +47,13 @@ function sanitizeForCache(bootstrap: BootstrapData): BootstrapData {
 interface PendingPersist {
   workspaceId: string;
   bootstrap: BootstrapData;
+  sessionId?: string;
+}
+
+export interface CachedBootstrapEntry {
+  bootstrap: BootstrapData;
+  sessionId?: string;
+  savedAt: string;
 }
 
 export class BootstrapSnapshotCache {
@@ -63,11 +72,14 @@ export class BootstrapSnapshotCache {
    * only replaces the pending payload, so a write lands at most 1.5s after the
    * first change in a burst and always contains the newest conversation.
    */
-  schedulePersist(workspaceId: string, bootstrap: BootstrapData): void {
-    if (!workspaceId || bootstrap.conversation.length === 0) {
+  schedulePersist(workspaceId: string, bootstrap: BootstrapData, sessionId?: string): void {
+    // A session-less snapshot cannot be bound, so it must never evict a bound
+    // one. An EMPTY conversation bound to a session is a real state (the user
+    // started a new thread) and must overwrite the stale cached thread.
+    if (!workspaceId || !sessionId) {
       return;
     }
-    this.pending = { workspaceId, bootstrap };
+    this.pending = { workspaceId, bootstrap, sessionId };
     if (this.timer) {
       return;
     }
@@ -93,13 +105,18 @@ export class BootstrapSnapshotCache {
     if (!pending) {
       return;
     }
-    await this.persistNow(pending.workspaceId, pending.bootstrap);
+    await this.persistNow(pending.workspaceId, pending.bootstrap, pending.sessionId);
   }
 
-  private async persistNow(workspaceId: string, bootstrap: BootstrapData): Promise<void> {
+  private async persistNow(
+    workspaceId: string,
+    bootstrap: BootstrapData,
+    sessionId?: string,
+  ): Promise<void> {
     try {
       const payload: CachedBootstrapEnvelope = {
         savedAt: new Date().toISOString(),
+        sessionId,
         bootstrap: sanitizeForCache(bootstrap),
       };
       let serialized = JSON.stringify(payload);
@@ -123,7 +140,7 @@ export class BootstrapSnapshotCache {
     }
   }
 
-  load(workspaceId: string): BootstrapData | undefined {
+  load(workspaceId: string): CachedBootstrapEntry | undefined {
     try {
       const raw = this.extensionContext.workspaceState.get<string>(cacheKey(workspaceId));
       if (!raw) {
@@ -134,7 +151,7 @@ export class BootstrapSnapshotCache {
       if (!bootstrap || !Array.isArray(bootstrap.conversation) || typeof bootstrap.workspaceName !== 'string') {
         return undefined;
       }
-      return bootstrap;
+      return { bootstrap, sessionId: parsed.sessionId, savedAt: parsed.savedAt };
     } catch {
       return undefined;
     }
