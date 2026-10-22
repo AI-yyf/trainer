@@ -107,8 +107,8 @@
       "title": "URL dedup skips docs supplement and focus binding",
       "priority": "P1",
       "area": "resources",
-      "status": "PARTIAL",
-      "evidence": "focus binding executes on dedup (test_browser_capture 19/19); include_docs supplement still OPEN",
+      "status": "DONE_LOCAL",
+      "evidence": "binding + docs supplement; tests 21/21 (010442f/41fb253)",
       "acceptance": "Re-capture with new intent performs supplement/binding and reports real result"
     },
     {
@@ -215,8 +215,8 @@
       "title": "Browser install/update status is opaque",
       "priority": "P2",
       "area": "browser",
-      "status": "PARTIAL",
-      "evidence": "Settings card exists; no pipeline for installed/loaded/paired/capture status",
+      "status": "DONE_LOCAL",
+      "evidence": "status command + live chips (54a8ec4); loaded-in-browser unknowable host-side by design",
       "acceptance": "Status card reflects real install→load→pair→capture states"
     },
     {
@@ -224,8 +224,8 @@
       "title": "Settings leaks internal terminology and mixed concerns",
       "priority": "P2",
       "area": "ux",
-      "status": "OPEN",
-      "evidence": "preferences detail mixes appearance/memory/runtime internals",
+      "status": "DONE_LOCAL",
+      "evidence": "localized Preferences summary; a11y 96/96 + geometry 471/471 re-run (5bf50a7)",
       "acceptance": "Detail pages grouped; internal ids confined to diagnostics"
     },
     {

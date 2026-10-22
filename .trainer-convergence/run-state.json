@@ -1,7 +1,7 @@
 {
   "version": 1,
   "loop": 1,
-  "phase": "WAVE3_DONE",
+  "phase": "WAVE4_DONE",
   "head": "e7e6f4161e929378c0186be5e3311e710b89fcf6",
   "working_tree": {
     "modified": [
@@ -9,10 +9,10 @@
     ]
   },
   "next": [
-    "CI green on latest heads",
-    "installed-host E2E at final SHA (T-0021)",
-    "T-0012 docs supplement",
-    "owner/real-env BLOCKED items"
+    "owner teaching sign-off (T-0028)",
+    "real Remote-SSH window (Layer2)",
+    "real-provider latency (T-0026/27)",
+    "final CI on latest head"
   ],
   "last_head": "ee059dd",
   "results": {
@@ -24,7 +24,7 @@
     "T-0017": "DONE_LOCAL",
     "T-0008": "DONE_LOCAL",
     "T-0009": "DONE_LOCAL (84d99d1)",
-    "T-0012": "PARTIAL: binding done; docs supplement open",
+    "T-0012": "DONE_LOCAL",
     "T-0010": "DONE_LOCAL",
     "T-0011": "DONE_LOCAL",
     "T-0014": "DONE_LOCAL (8156430)",
@@ -34,7 +34,9 @@
     "T-0019": "DONE_LOCAL",
     "T-0022": "DONE_LOCAL (eb87712)",
     "T-0023": "DONE_LOCAL (6c75e0f)",
-    "T-0021": "mac installed-host E2E 36/36 at final SHA; win/linux via CI"
+    "T-0021": "mac installed-host E2E 36/36 at final SHA; win/linux via CI",
+    "T-0024": "DONE_LOCAL",
+    "T-0025": "DONE_LOCAL"
   },
   "blocked": {
     "deepseek_subagents": "provider reasoning-level not configured; master-owned implementation instead"
