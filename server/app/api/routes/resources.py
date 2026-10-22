@@ -30,6 +30,7 @@ from ...core.models import (
     ResourceTrashResponse,
     ResourceUploadRequest,
 )
+from ...core.models import ResourceRecord as _ApiResourceRecord  # type annotation only
 from ...resources.asset_library import (
     AssetApprovalRequired,
     AssetLibraryError,
@@ -827,8 +828,8 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             return download, warnings
 
         def supplement_docs_for(
-            resource: ApiResourceRecord,
-        ) -> tuple[ApiResourceRecord, list[str]]:
+            resource: "_ApiResourceRecord",
+        ) -> tuple["_ApiResourceRecord", list[str]]:
             """T-0012: honor include_docs on a deduped repo capture.
 
             Appends the repository docs/ layout to the owned snapshot once
@@ -873,7 +874,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                         enable_network=False,
                     ),
                 )
-            except Exception as exc:  # noqa: BLE001 - supplement is best-effort
+            except Exception:  # noqa: BLE001 - supplement is best-effort
                 logger.warning(
                     "Docs supplement reindex failed for %s in workspace %s.",
                     updated.id,
