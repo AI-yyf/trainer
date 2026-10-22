@@ -50,6 +50,19 @@ const GITHUB_PAGE_PATTERNS = ['https://github.com/*', 'https://www.github.com/*'
 // actions, the handler re-validates the real URL before capturing.
 const PDF_PATTERNS = ['*://*/*.pdf*'];
 
+// Every queue mutation runs through one serialized critical section.
+// Concurrent captures, flushes and capacity checks must never read a stale
+// snapshot and overwrite each other (issue T-0006).
+let queueMutationChain = Promise.resolve();
+function withQueueLock(task) {
+  const run = queueMutationChain.then(task, task);
+  queueMutationChain = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
 function dict() {
   return TrainerCapture.activeCopy();
 }
@@ -519,7 +532,19 @@ async function runCapture(target, options) {
     targetDir: normalizedTarget.targetDir,
     clientCaptureId
   });
-  const enqueued = TrainerCapture.enqueueCapture(queue, item, TrainerCapture.LIMITS.queue);
+  // Re-read under the lock: the `queue` snapshot above may already be stale.
+  const enqueued = await withQueueLock(async () => {
+    const fresh = await TrainerCapture.loadQueue();
+    return TrainerCapture.enqueueCapture(fresh, item, TrainerCapture.LIMITS.queue);
+  });
+  if (enqueued.rejectedFull) {
+    const message = TrainerCapture.formatCopy(copy.captureQueueFull, {});
+    if (settings.notify !== false) {
+      await notifyResult(copy.notifyFailedTitle, message, '');
+    }
+    await updateBadge();
+    return { status: 'failed', message, deepLink: '' };
+  }
   await TrainerCapture.saveQueue(enqueued.queue);
   const queueMessage = TrainerCapture.formatCopy(
     download ? copy.captureDownloadQueued : copy.captureQueued,
@@ -545,9 +570,15 @@ async function runCapture(target, options) {
 // ------------------------------------------------------------ queue flush --
 
 async function flushQueue(options) {
+  // Serialized against captures so items added while a flush runs are never
+  // overwritten by the flush's final save.
+  return withQueueLock(() => flushQueueLocked(options));
+}
+
+async function flushQueueLocked(options) {
   const settings = options || {};
   const copy = dict();
-  const auth = await TrainerCapture.loadAuth();
+  let auth = await TrainerCapture.loadAuth();
   let queue = await TrainerCapture.loadQueue();
   if (!auth.credential || !auth.baseUrl) {
     return { ok: false, flushed: 0, remaining: queue.length, reason: 'unpaired', message: copy.queueUnpaired };
@@ -608,6 +639,26 @@ async function flushQueue(options) {
       queue = TrainerCapture.markQueueAttempt(queue, item.clientCaptureId, response.message);
       lastError = response.message;
       lastStatus = Number(response.status) || 0;
+      stop = true;
+      break;
+    }
+
+    if (response.unauthorized) {
+      // 401 means "reachable, wrong identity", not "deliverable". Try to find
+      // the instance that accepts this credential once; otherwise pause with
+      // the item kept (issue T-0007).
+      const recoveredBaseUrl = await findPairedBaseUrl(auth);
+      if (recoveredBaseUrl && recoveredBaseUrl !== auth.baseUrl) {
+        await TrainerCapture.saveAuth(recoveredBaseUrl, auth.credential);
+        auth = { ...auth, baseUrl: recoveredBaseUrl };
+        queue = TrainerCapture.markQueueAttempt(queue, item.clientCaptureId, response.message);
+        continue;
+      }
+      await TrainerCapture.saveNotice(response.message || copy.errUnauthorized);
+      await recordConnection('offline');
+      queue = TrainerCapture.markQueueAttempt(queue, item.clientCaptureId, response.message);
+      lastError = response.message;
+      lastStatus = Number(response.status) || 401;
       stop = true;
       break;
     }
@@ -707,7 +758,20 @@ async function findPairedBaseUrl(auth) {
 
 async function fetchStatusWithRecovery(auth) {
   let result = await TrainerCapture.fetchStatus(auth.baseUrl, auth.credential);
-  if (result.ok || !result.transportError) {
+  if (result.ok) {
+    return result;
+  }
+  // A 401 is "reachable, wrong identity": another window may own this port.
+  // Only switching to an instance that validates the credential counts.
+  if (result.unauthorized) {
+    const recoveredBaseUrl = await findPairedBaseUrl(auth);
+    if (recoveredBaseUrl && recoveredBaseUrl !== auth.baseUrl) {
+      await TrainerCapture.saveAuth(recoveredBaseUrl, auth.credential);
+      return TrainerCapture.fetchStatus(recoveredBaseUrl, auth.credential);
+    }
+    return result;
+  }
+  if (!result.transportError) {
     return result;
   }
   const recoveredBaseUrl = await findPairedBaseUrl(auth);

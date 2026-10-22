@@ -279,20 +279,35 @@ test('enqueueCapture is idempotent by client id and dedup key', () => {
   assert.equal(third.queue.length, 1);
 });
 
-test('enqueueCapture keeps FIFO order and drops the oldest entry past the limit', () => {
+test('enqueueCapture never silently evicts accepted work; a full queue rejects', () => {
   let queue = [];
-  for (const slug of ['a', 'b', 'c']) {
-    const result = TrainerCapture.enqueueCapture(
-      queue,
-      TrainerCapture.createQueueItem({ url: `https://example.com/${slug}`, kind: 'web' }),
-      2
-    );
-    queue = result.queue;
-  }
+  const first = TrainerCapture.enqueueCapture(
+    queue,
+    TrainerCapture.createQueueItem({ url: 'https://example.com/a', kind: 'web' }),
+    2
+  );
+  assert.equal(first.added, true);
+  queue = first.queue;
+  const second = TrainerCapture.enqueueCapture(
+    queue,
+    TrainerCapture.createQueueItem({ url: 'https://example.com/b', kind: 'web' }),
+    2
+  );
+  assert.equal(second.added, true);
+  queue = second.queue;
+
+  const overflow = TrainerCapture.enqueueCapture(
+    queue,
+    TrainerCapture.createQueueItem({ url: 'https://example.com/c', kind: 'web' }),
+    2
+  );
+  // The third capture is refused instead of dropping the oldest accepted task.
+  assert.equal(overflow.rejectedFull, true);
+  assert.equal(overflow.added, false);
+  assert.equal(overflow.dropped.length, 0);
   assert.equal(queue.length, 2);
-  assert.equal(queue[0].url, 'https://example.com/b');
-  assert.equal(queue[1].url, 'https://example.com/c');
-  assert.equal(TrainerCapture.takeNextQueueItem(queue).url, 'https://example.com/b');
+  assert.equal(queue[0].url, 'https://example.com/a');
+  assert.equal(queue[1].url, 'https://example.com/b');
 });
 
 test('dequeueCapture and markQueueAttempt operate on client capture ids', () => {

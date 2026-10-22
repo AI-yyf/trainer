@@ -230,6 +230,7 @@
       captureDownloaded: '已下载到 {path}',
       captureDownloadedDeduped: '该文件已在项目文件夹：{path}',
       captureDownloadQueued: 'Trainer 未能完成下载，已排队（{count} 条待投递）',
+      captureQueueFull: '待投递队列已满（100 条）。请先连接 Trainer 完成投递，再采集新内容。',
       notifyDownloadTitle: 'Trainer 下载',
       savedPathLabel: '已保存：{path}',
       openInVsCode: '在 VS Code 打开',
@@ -350,6 +351,7 @@
       captureDownloaded: 'Downloaded to {path}',
       captureDownloadedDeduped: 'Already downloaded to {path}',
       captureDownloadQueued: 'Trainer could not finish the download; queued ({count} pending)',
+      captureQueueFull: 'The pending queue is full (100). Deliver it to Trainer before capturing more.',
       notifyDownloadTitle: 'Trainer download',
       savedPathLabel: 'Saved to {path}',
       openInVsCode: 'Open in VS Code',
@@ -470,6 +472,7 @@
       captureDownloaded: 'Descargado en {path}',
       captureDownloadedDeduped: 'Ya está descargado en {path}',
       captureDownloadQueued: 'Trainer no pudo completar la descarga; en cola ({count} pendientes)',
+      captureQueueFull: 'La cola pendiente está llena (100). Entrégala a Trainer antes de capturar más.',
       notifyDownloadTitle: 'Descarga de Trainer',
       savedPathLabel: 'Guardado en {path}',
       openInVsCode: 'Abrir en VS Code',
@@ -590,6 +593,7 @@
       captureDownloaded: 'Téléchargé dans {path}',
       captureDownloadedDeduped: 'Déjà téléchargé dans {path}',
       captureDownloadQueued: 'Trainer n’a pas pu terminer le téléchargement ; en attente ({count} en attente)',
+      captureQueueFull: 'La file d’attente est pleine (100). Livrez-la à Trainer avant de capturer davantage.',
       notifyDownloadTitle: 'Téléchargement Trainer',
       savedPathLabel: 'Enregistré dans {path}',
       openInVsCode: 'Ouvrir dans VS Code',
@@ -710,6 +714,7 @@
       captureDownloaded: 'Nach {path} geladen',
       captureDownloadedDeduped: 'Bereits nach {path} geladen',
       captureDownloadQueued: 'Trainer konnte den Download nicht abschließen; in Warteschlange ({count} ausstehend)',
+      captureQueueFull: 'Die Warteschlange ist voll (100). Übertrage sie an Trainer, bevor du weiter erfasst.',
       notifyDownloadTitle: 'Trainer-Download',
       savedPathLabel: 'Gespeichert unter {path}',
       openInVsCode: 'In VS Code öffnen',
@@ -830,6 +835,7 @@
       captureDownloaded: '{path} にダウンロードしました',
       captureDownloadedDeduped: 'すでに {path} にあります',
       captureDownloadQueued: 'Trainer がダウンロードを完了できなかったため、キューに追加しました（{count} 件待ち）',
+      captureQueueFull: '待機キューがいっぱいです（100 件）。Trainer に送信してから新しい取得を行ってください。',
       notifyDownloadTitle: 'Trainer のダウンロード',
       savedPathLabel: '保存先：{path}',
       openInVsCode: 'VS Code で開く',
@@ -950,6 +956,7 @@
       captureDownloaded: '{path}에 다운로드했습니다',
       captureDownloadedDeduped: '이미 {path}에 있습니다',
       captureDownloadQueued: 'Trainer가 다운로드를 완료하지 못해 대기열에 넣었습니다({count}개 대기)',
+      captureQueueFull: '대기 열이 가득 찼습니다(100개). Trainer로 전송한 후에 새로 캡처하세요.',
       notifyDownloadTitle: 'Trainer 다운로드',
       savedPathLabel: '저장 위치: {path}',
       openInVsCode: 'VS Code에서 열기',
@@ -1070,6 +1077,7 @@
       captureDownloaded: 'Baixado para {path}',
       captureDownloadedDeduped: 'Já está baixado em {path}',
       captureDownloadQueued: 'O Trainer não conseguiu concluir o download; na fila ({count} pendentes)',
+      captureQueueFull: 'A fila pendente está cheia (100). Entregue ao Trainer antes de capturar mais.',
       notifyDownloadTitle: 'Download do Trainer',
       savedPathLabel: 'Salvo em {path}',
       openInVsCode: 'Abrir no VS Code',
@@ -1500,14 +1508,15 @@
         (entry.dedupKey && entry.dedupKey === next.dedupKey)
     );
     if (alreadyQueued) {
-      return { queue: list, added: false, dropped: [] };
+      return { queue: list, added: false, dropped: [], rejectedFull: false };
+    }
+    // Accepted-but-undelivered work must never be silently evicted: a full
+    // queue rejects the new capture and the caller reports it honestly.
+    if (list.length >= cap) {
+      return { queue: list, added: false, dropped: [], rejectedFull: true };
     }
     list.push(next);
-    const dropped = [];
-    while (list.length > cap) {
-      dropped.push(list.shift());
-    }
-    return { queue: list, added: true, dropped };
+    return { queue: list, added: true, dropped: [], rejectedFull: false };
   }
 
   function dequeueCapture(queue, clientCaptureId) {

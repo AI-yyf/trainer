@@ -1086,6 +1086,14 @@ export class ProviderConfigStore implements vscode.Disposable {
     return activeProfileId ? this.getProfileConfigById(activeProfileId) : undefined;
   }
 
+  /**
+   * Read-only profile view for pre-commit validation. Model switches must
+   * validate the *target* profile before any profile switch is persisted.
+   */
+  getProfileConfigForValidation(profileId: string): ProviderConfig | undefined {
+    return this.getProfileConfigById(profileId);
+  }
+
   private getProfileConfigById(profileId: string): ProviderConfig | undefined {
     const profile = this.profileRegistry.getProfile(profileId);
     return profile ? this.profileToProviderConfig(profile) : undefined;

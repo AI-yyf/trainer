@@ -1529,8 +1529,14 @@ export async function fetchProviderModels(
         await reconcileProviderSuccessState(context, config, apiKey, options?.generation);
       }
 
+      // A failed refresh must not blank the picker: the store preserves the
+      // previous catalog when the fresh list is empty, and the UI consumes
+      // this return value directly.
+      const visibleModels =
+        lookup.availableModels.length > 0 ? lookup.availableModels : savedCache.availableModels;
       return {
         ...lookup,
+        availableModels: visibleModels,
         fetchedAt: savedCache.fetchedAt,
         expiresAt: savedCache.expiresAt,
       };
@@ -1559,7 +1565,9 @@ export async function fetchProviderModels(
       return {
         ok: false,
         detail: 'Trainer could not get the model list right now. The saved model can still be tested.',
-        availableModels: [],
+        // Transport failure keeps the last known catalog selectable instead of
+        // wiping the picker; savedCache carries the preserved models.
+        availableModels: savedCache.availableModels,
         source: 'live',
         fetchedAt: savedCache.fetchedAt,
         expiresAt: savedCache.expiresAt,
@@ -1876,27 +1884,25 @@ export async function switchProviderModelCommand(
       };
     }
 
-    // Selection identity is {profileId, modelId}: an optional explicit profile
-    // switch happens first, and the model is then applied to that profile.
+    // Selection identity is {profileId, modelId}. Validate the *target*
+    // profile first: a failed model check must never leave the connection
+    // already switched (the old order persisted the profile switch before
+    // validating the model, then claimed nothing had changed).
     const requestedProfileId = payload?.profileId?.trim();
-    if (requestedProfileId) {
-      const activeProfileId = activeProfileIdOf(context);
-      if (activeProfileId && activeProfileId !== requestedProfileId) {
-        const switched = await context.providerStore.switchActiveProfile?.(requestedProfileId, 'model_switch');
-        if (switched === false) {
-          return {
-            ok: false,
-            message: providerHostCopy(
-              resolveProviderResponseLanguage(context),
-              'switchModelNotAllowed',
-              { model },
-            ),
-          };
-        }
-      }
+    const validationConfig = requestedProfileId
+      ? context.providerStore.getProfileConfigForValidation(requestedProfileId)
+      : (context.providerStore.getConfig() ?? config);
+    if (requestedProfileId && !validationConfig) {
+      return {
+        ok: false,
+        message: providerHostCopy(
+          resolveProviderResponseLanguage(context),
+          'switchModelNotAllowed',
+          { model },
+        ),
+      };
     }
-
-    const effectiveCurrent = context.providerStore.getConfig() ?? config;
+    const effectiveCurrent = validationConfig ?? config;
     const modelPolicy = evaluateProviderModelPolicy(model, effectiveCurrent);
     if (!modelPolicy.allowed) {
       return providerModelPolicyFailure(
@@ -1962,7 +1968,27 @@ export async function switchProviderModelCommand(
       };
     }
 
-    const tokenState = resolveProviderModelTokenState(effectiveCurrent, model, {
+    // All validations passed: only now may the connection move. The profile
+    // switch and the model write below are one logical commit.
+    if (requestedProfileId) {
+      const activeProfileId = activeProfileIdOf(context);
+      if (activeProfileId && activeProfileId !== requestedProfileId) {
+        const switched = await context.providerStore.switchActiveProfile?.(requestedProfileId, 'model_switch');
+        if (switched === false) {
+          return {
+            ok: false,
+            message: providerHostCopy(
+              resolveProviderResponseLanguage(context),
+              'switchModelNotAllowed',
+              { model },
+            ),
+          };
+        }
+      }
+    }
+    const committedBaseConfig = context.providerStore.getConfig() ?? effectiveCurrent;
+
+    const tokenState = resolveProviderModelTokenState(committedBaseConfig, model, {
       hasContextWindowTokens: false,
       hasMaxOutputTokens: false,
       hasModelTokenLimits: false,
@@ -1971,19 +1997,19 @@ export async function switchProviderModelCommand(
       (entry) => entry.toLowerCase() === model.toLowerCase(),
     );
     const nextConfig: ProviderConfig = {
-      ...effectiveCurrent,
+      ...committedBaseConfig,
       model,
       contextWindowTokens: tokenState.contextWindowTokens,
       maxOutputTokens: tokenState.maxOutputTokens,
       modelTokenLimits: tokenState.modelTokenLimits,
       catalogModels: mergeCatalogModels(
-        effectiveCurrent.catalogModels,
+        committedBaseConfig.catalogModels,
         currentView.catalogModels,
-        effectiveCurrent.model,
+        committedBaseConfig.model,
         currentView.model,
         model,
       ),
-      availableModels: availableModels.length > 0 ? availableModels : effectiveCurrent.availableModels,
+      availableModels: availableModels.length > 0 ? availableModels : committedBaseConfig.availableModels,
     };
     // Atomic persistence: only the newest generation may write. If a newer
     // switch started while this awaited, skip both the save and the state

@@ -4411,6 +4411,26 @@ export async function listCoachSessionsCommand(
   }
 }
 
+// Session selection identity: only the newest activate request may commit.
+// A slow activation for session A must never overwrite a newer selection of B,
+// and a workspace switch during the request must discard the stale result
+// (issue T-0002).
+const sessionActivationGenerations = new WeakMap<object, { latest: number }>();
+
+function nextSessionActivationGeneration(context: CommandContext): number {
+  let state = sessionActivationGenerations.get(context);
+  if (!state) {
+    state = { latest: 0 };
+    sessionActivationGenerations.set(context, state);
+  }
+  state.latest += 1;
+  return state.latest;
+}
+
+function isLatestSessionActivation(context: CommandContext, generation: number): boolean {
+  return sessionActivationGenerations.get(context)?.latest === generation;
+}
+
 export async function activateCoachSessionCommand(
   context: CommandContext,
   payload?: { sessionId?: string; session_id?: string },
@@ -4419,6 +4439,8 @@ export async function activateCoachSessionCommand(
   if (!requestedSessionId) {
     return { ok: false, message: 'session_id is required.' };
   }
+  const activationGeneration = nextSessionActivationGeneration(context);
+  const requestedWorkspaceId = getRuntimeWorkspaceContext(context).workspaceId;
   const workspaceGate = trainerWorkspaceSessionGate(context);
   if (workspaceGate) {
     return workspaceGate;
@@ -4439,6 +4461,13 @@ export async function activateCoachSessionCommand(
   } catch (error) {
     logCheckpointFailure(context, 'activate', error);
     return { ok: false, message: 'Trainer could not open that conversation.' };
+  }
+  // Stale-result fence: a newer activation or a workspace switch owns the UI.
+  if (
+    !isLatestSessionActivation(context, activationGeneration) ||
+    getRuntimeWorkspaceContext(context).workspaceId !== requestedWorkspaceId
+  ) {
+    return { ok: true, cancelled: true };
   }
   const resolvedSessionId =
     asNonEmptyString(asTrainingRecord(activateResponse)?.session_id) ?? requestedSessionId;
