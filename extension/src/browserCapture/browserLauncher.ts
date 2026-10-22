@@ -121,12 +121,15 @@ function executableInPath(
   name: string,
   pathValue: string,
   existsSync: (candidate: string) => boolean,
+  pathApi: typeof path.posix,
 ): string | undefined {
-  for (const dir of pathValue.split(path.delimiter)) {
+  // Follow the target platform's separator, not the host's: this module is
+  // exercised for all three platforms from a single test process.
+  for (const dir of pathValue.split(pathApi.delimiter)) {
     if (!dir) {
       continue;
     }
-    const candidate = path.join(dir, name);
+    const candidate = pathApi.join(dir, name);
     if (existsSync(candidate)) {
       return candidate;
     }
@@ -198,7 +201,7 @@ export function detectChromiumBrowsers({
     // Linux (and other POSIX desktops): PATH is the only portable registry.
     const pathValue = env.PATH ?? '';
     for (const name of probe.linuxNames ?? []) {
-      const executable = executableInPath(name, pathValue, existsSync);
+      const executable = executableInPath(name, pathValue, existsSync, path.posix);
       if (executable) {
         detected.push({
           id: probe.id,
