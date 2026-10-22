@@ -89,8 +89,8 @@
       "title": "Old resource mistaken as this download's success",
       "priority": "P0",
       "area": "resources",
-      "status": "OPEN",
-      "evidence": "waitForCapturedResource matches prior captured-from record",
+      "status": "DONE_LOCAL",
+      "evidence": "DONE_LOCAL (ef528a7)",
       "acceptance": "Operation completion requires this operationId/clientCaptureId result"
     },
     {
@@ -98,8 +98,8 @@
       "title": "Deleted resource cannot be re-captured",
       "priority": "P1",
       "area": "browser",
-      "status": "OPEN",
-      "evidence": "client-side history duplicate short-circuits before server",
+      "status": "DONE_LOCAL",
+      "evidence": "DONE_LOCAL (this head)",
       "acceptance": "Deleted resources can be re-captured; server decides existence"
     },
     {
