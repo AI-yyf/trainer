@@ -5606,7 +5606,14 @@ function CoachSettingsViewSheet({
               ? [provider.model, providerRequirementNote].filter(Boolean).join(" · ")
               : id === "workspace" ? remoteWorkspaceName || resourceSandbox?.effectivePath || trainerWorkspace?.rootPath
               : id === "teaching" ? teachingStyleItems.find((item) => item.value === teachingStyle)?.label ?? copy.auto
-              : `${language} · ${themePreference}` };
+              : [
+                  LANGUAGE_LABELS[language],
+                  themePreference === "dark"
+                    ? copy.dark
+                    : themePreference === "light"
+                      ? copy.light
+                      : copy.system,
+                ].join(" · ") };
           })}
           onSelect={openSettingsCategorySection}
         />
