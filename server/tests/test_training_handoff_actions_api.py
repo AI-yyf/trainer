@@ -309,3 +309,74 @@ def test_return_adopt_advances_training_next_and_does_not_paint_workspace_b(tmp_
         assert (body_b.get("workspace") or {}).get("selected_card_title") != "Keep one auth check"
         transfer = (body_b.get("workspace") or {}).get("latest_transfer_state") or {}
         assert transfer.get("state") != "transferable"
+
+
+def test_late_attestation_for_old_card_keeps_current_selection(tmp_path: Path) -> None:
+    """T-0014: a delayed result must never re-capture the selection."""
+    workspace_id = "late-attest-workspace"
+    settings = _settings(tmp_path / "trainer-data")
+    app = create_app(settings)
+
+    with TestClient(app) as client:
+        client.post(
+            "/session/start",
+            json={"workspace_id": workspace_id, "workspace_name": "Late Attest"},
+        )
+
+        def make_card(card_id: str, title: str) -> TrainingCardCandidateSnapshot:
+            return TrainingCardCandidateSnapshot(
+                card_id=card_id,
+                card_type="practice",
+                title=title,
+                status="active",
+                focus_area="focus " + card_id,
+                target_skill="skill " + card_id,
+                validation_method="Run its focused test.",
+            )
+
+        old_card = make_card("old-card", "Old practice")
+        new_card = make_card("new-card", "Current practice")
+        app.state.runtime.memory_service.upsert_card(workspace_id, old_card)
+        app.state.runtime.memory_service.upsert_card(workspace_id, new_card)
+
+        def verify(card_id: str, summary: str) -> None:
+            app.state.runtime.memory_service.record_training_practice_evaluation_result(
+                workspace_id=workspace_id,
+                card_id=card_id,
+                passed=True,
+                summary=summary,
+                next_step="Record a reflection, then return the card.",
+                focus_area="focus " + card_id,
+                evidence_source="test_runner",
+                verified_by_evaluator=True,
+            )
+
+        verify("old-card", "Old card verified first")
+        verify("new-card", "Learner moved on to the current card")
+
+        before = app.state.runtime.memory_service.snapshot(workspace_id).workspace
+        assert before["selected_card_id"] == "new-card"
+
+        # The old card's result arrives LATE: its evaluation started before the
+        # learner switched (started_at predates the selection stamp), but its
+        # commit lands after the newer result.
+        late = app.state.runtime.memory_service._record_training_practice_evaluation_result_body(
+            evaluation_started_at="2000-01-01T00:00:00+00:00",
+            workspace_id=workspace_id,
+            card_id="old-card",
+            passed=True,
+            summary="Late attestation for the old card",
+            next_step="Record a reflection, then return the card.",
+            focus_area="focus old-card",
+            evidence_source="test_runner",
+            verified_by_evaluator=True,
+        )
+        assert late  # the old card's own state still updated
+
+        after = app.state.runtime.memory_service.snapshot(workspace_id).workspace
+        assert after["selected_card_id"] == "new-card", (
+            "a late result for the old card must not capture the selection"
+        )
+        # Card-status transitions need their own handoff lifecycle; the
+        # guarantee under test is only that the late result can never hijack
+        # the learner's selection (registry: T-0014).
