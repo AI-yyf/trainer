@@ -161,8 +161,8 @@
       "title": "Long remote log incremental reads return wrong data",
       "priority": "P1",
       "area": "remote",
-      "status": "OPEN",
-      "evidence": "verificationSessions uses buffer length as offset after truncation",
+      "status": "DONE_LOCAL",
+      "evidence": "remoteVerificationSessions 11/11 incl. truncation cursor test",
       "acceptance": "Absolute cursor reads work past truncation; truncation is reported"
     },
     {
@@ -170,8 +170,8 @@
       "title": "Remote run dedup ignores environment variables",
       "priority": "P1",
       "area": "remote",
-      "status": "OPEN",
-      "evidence": "dedup key lacks env; concurrent start can double-launch",
+      "status": "DONE_LOCAL",
+      "evidence": "env in runningKey + pre-await registration test",
       "acceptance": "env+policy in identity; start promise registered before first await"
     },
     {

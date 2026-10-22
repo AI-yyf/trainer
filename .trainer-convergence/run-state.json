@@ -9,10 +9,9 @@
     ]
   },
   "next": [
-    "T-0018 long-log cursor",
-    "T-0019 env in run identity",
-    "T-0022/T-0023 ux",
-    "CI on 149c4aa+"
+    "T-0022 short-window composer density",
+    "T-0023 text-only reflection image warning",
+    "CI green + installed-host E2E"
   ],
   "last_head": "ee059dd",
   "results": {
@@ -29,7 +28,9 @@
     "T-0011": "DONE_LOCAL",
     "T-0014": "DONE_LOCAL (8156430)",
     "T-0013": "DONE_LOCAL",
-    "T-0015": "DONE_LOCAL"
+    "T-0015": "DONE_LOCAL",
+    "T-0018": "DONE_LOCAL",
+    "T-0019": "DONE_LOCAL"
   },
   "blocked": {
     "deepseek_subagents": "provider reasoning-level not configured; master-owned implementation instead"
