@@ -33,7 +33,7 @@
     "T-0022": "DONE_LOCAL (eb87712)",
     "T-0023": "DONE_LOCAL (6c75e0f)",
     "T-0021": "mac installed-host E2E 36/36 at final SHA; win/linux via CI",
-    "T-0024": "BLOCKED (harness settings-writer oscillation; card withdrawn at 0d7fd28; 0e196c4 CI 9/9; matrix 200/200 re-verified)",
+    "T-0024": "BLOCKED (clean redesign path known; validate via X11 x3 + matrix + CI)",
     "T-0025": "DONE_LOCAL"
   },
   "blocked": {

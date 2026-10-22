@@ -216,7 +216,7 @@
       "priority": "P2",
       "area": "browser",
       "status": "BLOCKED",
-      "evidence": "Card withdrawn at 0d7fd28 after deterministic X11 preview regression. Probe evidence: persisted activeView oscillates settings↔training 1:1 with re-applied ui/restoreView (settings-writer is in the preview bundle; no app-code writer found; no console/page errors). Re-verified 0d7fd28 bundle: X11/X12 x3 pass, full matrix 200/200, CI 9/9 @0e196c4. Re-design BLOCKED on harness-level fix: preview bootstrap apply must not fight in-page view writes; writer stack capture via localStorage spy was bypassed (persist path uses a captured reference), needs harness instrumentation (expose store writer or persist-through wrapper).",
+      "evidence": "Verified: reverted Settings (0d7fd28 semantics) passes X11/X12 3x under 4 workers + full matrix 200/200. Deterministic trigger was the un-gated keep-alive mount fetch (posts trainer.browserCapture.status on every view). A sheetVisible-gated variant was attempted but bisect runs were polluted by stale builds after JSX surgery; clean re-design path is known: render chips + fetch strictly behind an App-provided sheetVisible prop (verified pattern exists in 0d7fd28 lineage), validate with X11 x3 + full matrix + CI before landing.",
       "acceptance": "Status card reflects real install→load→pair→capture states"
     },
     {
