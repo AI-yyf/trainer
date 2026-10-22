@@ -328,3 +328,89 @@ def test_attempt_update_resolves_the_active_attempt_by_card(tmp_path: Path) -> N
             },
         )
         assert foreign.status_code == 404, foreign.text
+
+
+# ---------------------------------------------------------------------------
+# Concurrency contracts (T-0016 / T-0017)
+# ---------------------------------------------------------------------------
+
+
+def test_concurrent_start_attempt_creates_single_active(tmp_path: Path) -> None:
+    import threading
+
+    store = AttemptStore(tmp_path / "attempts.db")
+    barrier = threading.Barrier(8)
+    results: list[dict] = []
+
+    def start() -> None:
+        barrier.wait()
+        results.append(
+            store.start_attempt(
+                workspace_id="ws-race",
+                card_id="card-race",
+                file_path="src/a.py",
+                file_hash="hash-race",
+            )
+        )
+
+    threads = [threading.Thread(target=start) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    active_ids = {item["attempt_id"] for item in results}
+    assert len(active_ids) == 1, f"racing starts produced {len(active_ids)} attempts"
+
+    history = store.list_attempts(workspace_id="ws-race", card_id="card-race")
+    active_history = [item for item in history if item["status"] == "active"]
+    assert len(active_history) == 1
+
+
+def test_concurrent_answer_and_hint_updates_merge(tmp_path: Path) -> None:
+    import threading
+
+    store = AttemptStore(tmp_path / "attempts.db")
+    attempt = store.start_attempt(workspace_id="ws-merge", card_id="card-merge")
+    attempt_id = attempt["attempt_id"]
+    release = threading.Event()
+
+    def write_answer() -> None:
+        release.wait()
+        store.update_attempt(attempt_id, answer_draft="NEW ANSWER")
+
+    def write_hint() -> None:
+        release.wait()
+        store.update_attempt(attempt_id, assistance_level="hint_level_3")
+
+    threads = [threading.Thread(target=write_answer), threading.Thread(target=write_hint)]
+    for thread in threads:
+        thread.start()
+    release.set()
+    for thread in threads:
+        thread.join()
+
+    merged = store.get_attempt(attempt_id)
+    assert merged is not None
+    assert merged["answer_draft"] == "NEW ANSWER"
+    assert merged["assistance_level"] == "hint_level_3", "concurrent hint must survive"
+
+
+def test_assistance_level_never_regresses(tmp_path: Path) -> None:
+    store = AttemptStore(tmp_path / "attempts.db")
+    attempt = store.start_attempt(
+        workspace_id="ws-hint", card_id="card-hint", assistance_level="hint_level_3"
+    )
+    attempt_id = attempt["attempt_id"]
+
+    lowered = store.update_attempt(attempt_id, assistance_level="hint_level_1")
+    assert lowered is not None
+    assert lowered["assistance_level"] == "hint_level_3"
+
+    lowered_again = store.update_attempt(attempt_id, assistance_level="independent")
+    assert lowered_again is not None
+    assert lowered_again["assistance_level"] == "hint_level_3"
+
+    raised = store.update_attempt(attempt_id, assistance_level="hint_level_2")
+    assert raised is not None
+    assert raised["assistance_level"] == "hint_level_3"

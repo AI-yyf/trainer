@@ -47,6 +47,16 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+_ASSISTANCE_RANK: dict[str, int] = {
+    "independent": 0,
+    "hint_level_1": 1,
+    "hint_level_2": 2,
+    "hint_level_3": 3,
+}
+
+_ACTIVE_STATUSES = ("active", "answered", "implemented", "verified")
+
+
 def content_hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -84,17 +94,9 @@ class AttemptStore:
         file_version: int | None = None,
         assistance_level: str = "independent",
     ) -> dict[str, Any]:
-        # Idempotent enter: an in-flight attempt for the same workspace+card is
-        # resumed, never duplicated (return/close retires it first).
-        active = self.find_active_attempt(workspace_id, card_id)
-        if active is not None:
-            refreshed = self.update_attempt(
-                active["attempt_id"],
-                file_path=file_path,
-                file_hash=file_hash,
-                file_version=file_version,
-            )
-            return refreshed or active
+        # Idempotent enter, concurrency-safe (T-0016): the check-then-insert
+        # runs inside one BEGIN IMMEDIATE transaction, so two racing starts
+        # (double click, two windows) cannot both observe "no active attempt".
         attempt_id = f"attempt-{uuid.uuid4().hex}"
         now = utc_now()
         payload = {
@@ -112,29 +114,54 @@ class AttemptStore:
         }
         connection = self._connect()
         try:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = self._active_payload(connection, workspace_id, card_id)
+            if existing is not None:
+                if file_path is not None:
+                    existing["file_path"] = file_path
+                if file_hash is not None:
+                    existing["file_hash"] = file_hash
+                if file_version is not None:
+                    existing["file_version"] = file_version
+                existing["updated_at"] = utc_now()
+                connection.execute(
+                    "UPDATE training_attempts SET payload = ? WHERE attempt_id = ?",
+                    (json.dumps(existing, ensure_ascii=False), existing["attempt_id"]),
+                )
+                connection.commit()
+                return existing
             connection.execute(
                 "INSERT INTO training_attempts (attempt_id, workspace_id, card_id, payload) VALUES (?, ?, ?, ?)",
                 (attempt_id, workspace_id, card_id, json.dumps(payload, ensure_ascii=False)),
             )
             connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
         finally:
             connection.close()
         return payload
 
+    @staticmethod
+    def _active_payload(
+        connection: sqlite3.Connection, workspace_id: str, card_id: str
+    ) -> dict[str, Any] | None:
+        rows = connection.execute(
+            "SELECT payload FROM training_attempts WHERE workspace_id = ? AND card_id = ? ORDER BY rowid",
+            (workspace_id, card_id),
+        ).fetchall()
+        for row in rows:
+            payload = json.loads(row["payload"])
+            if payload.get("status") in _ACTIVE_STATUSES:
+                return payload
+        return None
+
     def find_active_attempt(self, workspace_id: str, card_id: str) -> dict[str, Any] | None:
         connection = self._connect()
         try:
-            rows = connection.execute(
-                "SELECT payload FROM training_attempts WHERE workspace_id = ? AND card_id = ? ORDER BY rowid",
-                (workspace_id, card_id),
-            ).fetchall()
+            return self._active_payload(connection, workspace_id, card_id)
         finally:
             connection.close()
-        for row in rows:
-            payload = json.loads(row["payload"])
-            if payload.get("status") in ("active", "answered", "implemented", "verified"):
-                return payload
-        return None
 
     def close_attempt(self, attempt_id: str, *, workspace_id: str) -> dict[str, Any] | None:
         # Return retires the attempt lifecycle without deleting history.
@@ -168,39 +195,53 @@ class AttemptStore:
         file_hash: str | None = None,
         file_version: int | None = None,
     ) -> dict[str, Any] | None:
-        existing = self._read_attempt_row(attempt_id)
-        if existing is None:
-            return None
-        # Workspace isolation: cross-workspace writes fail closed.
-        if (
-            workspace_id is not None
-            and json.loads(existing["payload"]).get("workspace_id") != workspace_id
-        ):
-            return None
-        payload = json.loads(existing["payload"])
-        if answer_draft is not None:
-            payload["answer_draft"] = answer_draft
-        if assistance_level is not None:
-            payload["assistance_level"] = assistance_level
-        if status is not None:
-            payload["status"] = status
-        if file_path is not None:
-            payload["file_path"] = file_path
-        if file_hash is not None:
-            payload["file_hash"] = file_hash
-        if file_version is not None:
-            payload["file_version"] = file_version
-        payload["updated_at"] = utc_now()
+        # Read-modify-write inside one IMMEDIATE transaction so concurrent
+        # field updates (answer + hint) merge instead of last-writer-wins
+        # clobbering each other (T-0017).
         connection = self._connect()
         try:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT payload FROM training_attempts WHERE attempt_id = ?",
+                (attempt_id,),
+            ).fetchone()
+            if row is None:
+                connection.rollback()
+                return None
+            payload = json.loads(row["payload"])
+            if workspace_id is not None and payload.get("workspace_id") != workspace_id:
+                connection.rollback()
+                return None
+            if answer_draft is not None:
+                payload["answer_draft"] = answer_draft
+            if assistance_level is not None:
+                # Assistance never regresses (T-0017): a racing older request
+                # must not lower a hint level the learner already reached.
+                current = str(payload.get("assistance_level") or "independent")
+                current_rank = _ASSISTANCE_RANK.get(current)
+                next_rank = _ASSISTANCE_RANK.get(assistance_level)
+                if current_rank is None or next_rank is None or next_rank >= current_rank:
+                    payload["assistance_level"] = assistance_level
+            if status is not None:
+                payload["status"] = status
+            if file_path is not None:
+                payload["file_path"] = file_path
+            if file_hash is not None:
+                payload["file_hash"] = file_hash
+            if file_version is not None:
+                payload["file_version"] = file_version
+            payload["updated_at"] = utc_now()
             connection.execute(
                 "UPDATE training_attempts SET payload = ? WHERE attempt_id = ?",
                 (json.dumps(payload, ensure_ascii=False), attempt_id),
             )
             connection.commit()
+            return payload
+        except Exception:
+            connection.rollback()
+            raise
         finally:
             connection.close()
-        return payload
 
     def list_attempts(
         self,
