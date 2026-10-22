@@ -125,8 +125,8 @@
       "title": "Late attestation overwrites current card selection",
       "priority": "P0",
       "area": "training",
-      "status": "OPEN",
-      "evidence": "learning route writes selected_card_id without generation check",
+      "status": "DONE_LOCAL",
+      "evidence": "ordering fence + regression test; historical back-fill of old card status recorded as known limitation",
       "acceptance": "Late results append to history; current selection unchanged"
     },
     {
