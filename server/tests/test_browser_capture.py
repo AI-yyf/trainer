@@ -458,6 +458,17 @@ def _capture_body(url: str) -> str:
     return f"Retry queues drain after the guard run for {url}.\n"
 
 
+
+def _patch_github(monkeypatch, readme_text="# Learning Repo\n") -> None:
+    monkeypatch.setattr(
+        "app.resources.capture._fetch_github_readme",
+        lambda owner, name: (readme_text, "README.md"),
+    )
+    monkeypatch.setattr(
+        "app.resources.capture._fetch_github_docs_listing",
+        lambda owner, name: "docs/setup.md\n",
+    )
+
 def _patch_web_extract(monkeypatch, body_for) -> list[str]:
     calls: list[str] = []
 
@@ -815,3 +826,108 @@ def test_deduped_capture_still_binds_a_new_learning_focus(tmp_path, monkeypatch)
         plan = runtime.repository.get_latest_plan(workspace_id)
         assert plan is not None
         assert plan.stages[0].resources == [first.json()["id"]]
+
+
+def test_deduped_repo_capture_with_include_docs_supplements_once(tmp_path, monkeypatch) -> None:
+    """T-0012 (docs half): include_docs on a dedup hit appends the docs/ layout
+    exactly once, reindexes, and reports the real result."""
+    workspace_id = "workspace-dedup-docs"
+    _patch_web_extract(monkeypatch, lambda url: f"Repo body for {url}.\n")
+    _patch_github(monkeypatch)
+    monkeypatch.setattr(
+        "app.resources.capture._fetch_github_docs_listing",
+        lambda owner, name: "docs/setup.md\n",
+    )
+
+    with build_client(tmp_path) as client:
+        token = _pair_browser(client, workspace_id, code="135790")
+        headers = {"Authorization": f"Bearer {token}"}
+        repo_url = "https://github.com/example/learning-repo"
+
+        first = client.post(
+            "/resources/capture",
+            json={"url": repo_url, "kind": "github_repo", "client_capture_id": "docs-0"},
+            headers=headers,
+        )
+        assert first.status_code == 200, first.text
+        resource_id = first.json()["id"]
+        assert first.json()["deduped"] is False
+
+        def read_snapshot() -> str:
+            record = next(
+                item
+                for item in client.app.state.runtime.repository.list_resources(workspace_id)
+                if item.id == resource_id
+            )
+            return open(record.source, encoding="utf-8").read()
+
+        assert "Repository docs/ layout" not in read_snapshot()
+
+        second = client.post(
+            "/resources/capture",
+            json={
+                "url": repo_url,
+                "kind": "github_repo",
+                "include_docs": True,
+                "client_capture_id": "docs-1",
+            },
+            headers=headers,
+        )
+        assert second.status_code == 200, second.text
+        assert second.json()["deduped"] is True
+        assert second.json()["id"] == resource_id
+        assert "docs-supplemented" in second.json()["tags"]
+        assert "Repository docs/ layout" in read_snapshot()
+        assert "docs/setup.md" in read_snapshot()
+
+        # Idempotent: a third request does not append twice.
+        third = client.post(
+            "/resources/capture",
+            json={
+                "url": repo_url,
+                "kind": "github_repo",
+                "include_docs": True,
+                "client_capture_id": "docs-2",
+            },
+            headers=headers,
+        )
+        assert third.status_code == 200, third.text
+        assert read_snapshot().count("Repository docs/ layout") == 1
+
+
+def test_deduped_repo_capture_reports_docs_listing_failure(tmp_path, monkeypatch) -> None:
+    """A failed docs listing returns an honest warning and stays retryable."""
+    workspace_id = "workspace-dedup-docs-fail"
+    _patch_web_extract(monkeypatch, lambda url: f"Repo body for {url}.\n")
+    _patch_github(monkeypatch, readme_text="# Broken Docs Repo\n")
+    monkeypatch.setattr(
+        "app.resources.capture._fetch_github_docs_listing",
+        lambda owner, name: "",
+    )
+
+    with build_client(tmp_path) as client:
+        token = _pair_browser(client, workspace_id, code="246800")
+        headers = {"Authorization": f"Bearer {token}"}
+        repo_url = "https://github.com/example/broken-docs"
+
+        first = client.post(
+            "/resources/capture",
+            json={"url": repo_url, "kind": "github_repo", "client_capture_id": "df-0"},
+            headers=headers,
+        )
+        assert first.status_code == 200, first.text
+
+        second = client.post(
+            "/resources/capture",
+            json={
+                "url": repo_url,
+                "kind": "github_repo",
+                "include_docs": True,
+                "client_capture_id": "df-1",
+            },
+            headers=headers,
+        )
+        assert second.status_code == 200, second.text
+        assert second.json()["deduped"] is True
+        assert any("docs/ listing" in str(w) for w in second.json()["warnings"])
+        assert "docs-supplemented" not in second.json()["tags"]

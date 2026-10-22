@@ -706,3 +706,21 @@ def _slug(value: str) -> str:
     slug = "".join(character if character.isalnum() else "-" for character in value.lower()).strip("-")
     return slug or "capture"
 
+
+
+def github_docs_section(url: str) -> tuple[str | None, str | None]:
+    """Public supplement helper for dedup re-captures (T-0012).
+
+    Returns ``(section_markdown, None)`` when the repository docs/ listing was
+    read, or ``(None, warning)`` when it was not. Never raises for a
+    non-GitHub URL — callers gate on kind themselves.
+    """
+    repo = parse_github_repo(url)
+    if repo is None:
+        return None, None
+    listing = _fetch_github_docs_listing(repo[0], repo[1])
+    if not listing:
+        return None, (
+            "The repository docs/ listing could not be read; the snapshot keeps the README only."
+        )
+    return "\n\n## Repository docs/ layout\n\n" + listing, None

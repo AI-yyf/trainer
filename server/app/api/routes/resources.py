@@ -40,6 +40,7 @@ from ...resources.capture import (
     CaptureError,
     capture_source,
     capture_url_key,
+    github_docs_section,
 )
 from ...resources.library import (
     LibraryDownload,
@@ -825,6 +826,65 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             warnings = [download_warning(note, language) for note in download.notes]
             return download, warnings
 
+        def supplement_docs_for(
+            resource: ApiResourceRecord,
+        ) -> tuple[ApiResourceRecord, list[str]]:
+            """T-0012: honor include_docs on a deduped repo capture.
+
+            Appends the repository docs/ layout to the owned snapshot once
+            (idempotent via a ``docs-supplemented`` tag), reindexes, and
+            reports the real outcome instead of pretending the flag was a
+            no-op. A failed listing returns an honest warning and stays
+            retryable.
+            """
+            warnings: list[str] = []
+            if request.kind != "github_repo" or not request.include_docs:
+                return resource, warnings
+            if "docs-supplemented" in (resource.tags or []):
+                return resource, warnings
+            section, docs_warning = github_docs_section(request.url)
+            if docs_warning or not section:
+                if docs_warning:
+                    warnings.append(f"docs:{docs_warning}")
+                return resource, warnings
+            from pathlib import Path as _Path
+
+            snapshot_path = _Path(resource.source)
+            if not snapshot_path.is_file():
+                warnings.append(
+                    "docs: This snapshot is stored externally; the docs/ listing was not appended."
+                )
+                return resource, warnings
+            text = snapshot_path.read_text(encoding="utf-8", errors="ignore")
+            if "Repository docs/ layout" in text:
+                return resource, warnings
+            snapshot_path.write_text(text + "\n" + section, encoding="utf-8")
+            updated = resource.model_copy(
+                update={"tags": [*(resource.tags or []), "docs-supplemented"]}
+            )
+            runtime.repository.save_resource(workspace_id, updated)
+            try:
+                runtime.resource_service.index(
+                    workspace_id,
+                    ResourceIndexRequest(
+                        session_id=request.session_id,
+                        workspace_id=workspace_id,
+                        resource_id=updated.id,
+                        enable_network=False,
+                    ),
+                )
+            except Exception as exc:  # noqa: BLE001 - supplement is best-effort
+                logger.warning(
+                    "Docs supplement reindex failed for %s in workspace %s.",
+                    updated.id,
+                    workspace_id,
+                    exc_info=True,
+                )
+                warnings.append(
+                    "docs: The docs/ layout was appended but search indexing lagged behind."
+                )
+            return updated, warnings
+
         # Fast path: the requested URL is already captured in this library.
         requested_key = capture_url_key(request.url)
         if requested_key:
@@ -838,6 +898,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                     existing=existing,
                 )
                 existing = library.remember_download(workspace_id, existing, download) or existing
+                existing, docs_warnings = supplement_docs_for(existing)
                 # Dedup reuses content, never the user's new intent (T-0012):
                 # an explicit focus binding must execute on this request.
                 focus_binding = ""
@@ -858,7 +919,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 return _capture_response(
                     existing,
                     deduped=True,
-                    warnings=download_warnings,
+                    warnings=[*docs_warnings, *download_warnings],
                     focus_binding=focus_binding,
                     saved_path=download.relative_path if download else None,
                 )
@@ -894,6 +955,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 existing=duplicate,
             )
             duplicate = library.remember_download(workspace_id, duplicate, download) or duplicate
+            duplicate, docs_warnings = supplement_docs_for(duplicate)
             focus_binding = ""
             focus_id = str(request.bind_focus_id or "").strip()
             if focus_id:
@@ -912,7 +974,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             return _capture_response(
                 duplicate,
                 deduped=True,
-                warnings=[*list(captured.warnings), *download_warnings],
+                warnings=[*list(captured.warnings), *docs_warnings, *download_warnings],
                 focus_binding=focus_binding,
                 saved_path=download.relative_path if download else None,
             )
