@@ -13,7 +13,7 @@
 }
 
 .stage-row + .stage-row {
-  margin-top: var(--trainer-space-2);
+  margin-top: var(--space-2);
 }
 
 .stage-row--active::before {

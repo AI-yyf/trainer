@@ -1256,7 +1256,7 @@ function ResourceTreeItem({
         data-resource-tree-item-id={node.id}
         tabIndex={activeTreeItemId === node.id ? 0 : -1}
         style={{
-          paddingInlineStart: `calc(var(--trainer-space-2) + ${depth} * var(--trainer-space-4))`,
+          paddingInlineStart: `calc(var(--space-2) + ${depth} * var(--space-4))`,
         }}
         title={node.resource.title}
         onFocus={() => onActiveTreeItemChange(node.id)}

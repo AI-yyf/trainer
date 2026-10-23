@@ -201,7 +201,10 @@ class TrainingReliabilityMixin:
     # Bounded acquire (T-0046): a wedged run must not block the workspace's
     # training endpoints forever; on timeout the caller gets an honest,
     # unmutated view of the current workspace instead of proceeding unlocked.
-    _RELIABILITY_LOCK_WAIT_SECONDS: float = 120.0
+    # Owner review tightened 120s -> 15s: waiters should get an explicit
+    # running status quickly; long bodies finish in the background of their
+    # own request and duplicates get the busy view rather than blocking.
+    _RELIABILITY_LOCK_WAIT_SECONDS: float = 15.0
 
     @classmethod
     def _reliability_lock_for(cls, workspace_id: str) -> threading.Lock:

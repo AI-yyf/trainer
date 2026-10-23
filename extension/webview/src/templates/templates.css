@@ -80,7 +80,7 @@
 /* §3.7 red line 5: the dock send-preference switch is a two-option group; the
    pressed option lifts out of the muted text color. */
 .template-context [aria-pressed="true"] { color: var(--fg-0); font-weight: 600; }
-.template-secondary-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--trainer-space-3); }
+.template-secondary-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .template-practice-response { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; padding-block: 16px; }
 .template-practice-response label { font-size: var(--trainer-font-sm); font-weight: 600; }
 .template-practice-response textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-0); color: var(--fg-0); font: inherit; line-height: 1.5; resize: vertical; }

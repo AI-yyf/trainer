@@ -194,6 +194,21 @@ function renderState(state) {
 
   elements.revoke.hidden = !paired;
 
+  // Owner-directed recovery entry: hidden normally, shown only when captures
+  // are queued while unpaired — the learner must know the material survived
+  // and how to recover it from Trainer.
+  const queueCount = Number(state && state.queueCount) || 0;
+  const recovery = document.getElementById('pair-recovery');
+  if (recovery) {
+    if (!paired && queueCount > 0) {
+      recovery.hidden = false;
+      recovery.textContent = t('pairQueueWaiting', { count: queueCount });
+    } else {
+      recovery.hidden = true;
+      recovery.textContent = '';
+    }
+  }
+
   renderFocusOptions(state || {});
 
   if (state && state.targetDir && document.activeElement !== elements.targetDir) {

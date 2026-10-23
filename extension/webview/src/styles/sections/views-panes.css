@@ -1307,7 +1307,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
-  padding: 6px var(--trainer-space-2);
+  padding: 6px var(--space-2);
   color: var(--fg-1);
   border-top: 1px solid color-mix(in srgb, var(--danger) 34%, var(--line));
   border-bottom: 1px solid color-mix(in srgb, var(--danger) 28%, var(--line));
@@ -1321,7 +1321,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
-  padding: 6px var(--trainer-space-2);
+  padding: 6px var(--space-2);
   color: var(--fg-1);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
@@ -1492,7 +1492,7 @@
   width: 100%;
   min-width: 0;
   min-height: 28px;
-  padding: var(--space-1) var(--trainer-space-2);
+  padding: var(--space-1) var(--space-2);
   color: var(--fg-1);
   border: 1px solid transparent;
   background: transparent;
@@ -1601,7 +1601,7 @@
 
 .resources-knowledge__content-preview-body--markdown {
   margin: 0;
-  padding: 6px var(--trainer-space-2) var(--space-2);
+  padding: 6px var(--space-2) var(--space-2);
   overflow: auto;
   min-height: 108px;
   max-height: min(220px, 30vh);
@@ -1648,7 +1648,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 3px 10px;
-  margin: 0 var(--trainer-space-2);
+  margin: 0 var(--space-2);
   padding: 5px 0;
   border-top: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
@@ -1696,7 +1696,7 @@
 
 .resources-knowledge__preview-summary {
   display: -webkit-box;
-  margin: 0 var(--trainer-space-2);
+  margin: 0 var(--space-2);
   overflow: hidden;
   color: var(--fg-1);
   font-size: var(--trainer-font-3xs);
@@ -1706,7 +1706,7 @@
 }
 
 .resources-knowledge__reuse-summary {
-  margin: 0 var(--trainer-space-2);
+  margin: 0 var(--space-2);
   color: var(--fg-muted);
   font-size: var(--trainer-font-3xs);
   line-height: 1.4;
@@ -1718,7 +1718,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 5px;
-  padding: 0 var(--trainer-space-2) var(--space-1);
+  padding: 0 var(--space-2) var(--space-1);
 }
 
 .resources-knowledge__open-action {
@@ -1811,7 +1811,7 @@
   align-items: baseline;
   gap: 2px var(--space-2);
   min-width: 0;
-  padding: 3px var(--trainer-space-2);
+  padding: 3px var(--space-2);
   border-left: 2px solid color-mix(in srgb, var(--line) 58%, transparent);
   background: color-mix(in srgb, var(--bg-1) 64%, transparent);
   font-size: var(--trainer-font-3xs);

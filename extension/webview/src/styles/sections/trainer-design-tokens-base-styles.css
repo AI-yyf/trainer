@@ -30,6 +30,8 @@
   --trainer-font-xl: calc(var(--trainer-font-ui) + 6px);
   --trainer-font-2xl: calc(var(--trainer-font-ui) + 9px);
 
+  /* Deprecated legacy scale — do not use in new styles; the --space-* scale
+     above is the single source (sizes 1-4 match values, 5/6 diverged). */
   --trainer-space-1: 4px;
   --trainer-space-2: 8px;
   --trainer-space-3: 12px;

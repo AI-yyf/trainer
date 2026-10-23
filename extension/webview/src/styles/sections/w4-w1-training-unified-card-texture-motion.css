@@ -8,7 +8,7 @@
 .training-card {
   border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
   border-radius: var(--radius-md);
-  padding: var(--trainer-space-3);
+  padding: var(--space-3);
   background: var(--surface-1);
   min-width: 0;
 }

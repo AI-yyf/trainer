@@ -17,27 +17,36 @@
       "title": "Session selection races and cross-workspace contamination",
       "priority": "P0",
       "area": "coach",
-      "status": "OPEN",
+      "status": "DONE_LOCAL",
       "evidence": "activateCoachSessionCommand commits late responses without workspace/session generation re-check",
-      "acceptance": "A→B selection keeps B; workspace switch during activate never writes A's session into B"
+      "acceptance": "A→B selection keeps B; workspace switch during activate never writes A's session into B",
+      "resolved_at": "2026-10-23 (registry sync; fix landed earlier)",
+      "resolved_sha": "03f3792",
+      "sync_note": "Registry sync 2026-10-23: this entry had remained OPEN after its fix landed. Verified at HEAD fae10fc: fix commit 03f3792 is an ancestor, the fix code is present, and its regression tests pass in the 3674-green server suite / extension suite. Closed per original verification results, not by assertion."
     },
     {
       "id": "T-0003",
       "title": "Provider cross-connection model switch fails without rollback",
       "priority": "P0",
       "area": "provider",
-      "status": "OPEN",
+      "status": "DONE_LOCAL",
       "evidence": "providerWebviewCommands switches profile before model validation and returns error without rollback",
-      "acceptance": "Invalid target keeps profile+model+UI unchanged; error text matches actual state"
+      "acceptance": "Invalid target keeps profile+model+UI unchanged; error text matches actual state",
+      "resolved_at": "2026-10-23 (registry sync; fix landed earlier)",
+      "resolved_sha": "03f3792",
+      "sync_note": "Registry sync 2026-10-23: this entry had remained OPEN after its fix landed. Verified at HEAD fae10fc: fix commit 03f3792 is an ancestor, the fix code is present, and its regression tests pass in the 3674-green server suite / extension suite. Closed per original verification results, not by assertion."
     },
     {
       "id": "T-0004",
       "title": "Model refresh failure clears visible catalog",
       "priority": "P1",
       "area": "provider",
-      "status": "OPEN",
+      "status": "DONE_LOCAL",
       "evidence": "failed refresh returns availableModels: [] and UI overwrites cached catalog",
-      "acceptance": "Refresh failure keeps previous catalog visible with refreshed-at + failure state"
+      "acceptance": "Refresh failure keeps previous catalog visible with refreshed-at + failure state",
+      "resolved_at": "2026-10-23 (registry sync; fix landed earlier)",
+      "resolved_sha": "03f3792",
+      "sync_note": "Registry sync 2026-10-23: this entry had remained OPEN after its fix landed. Verified at HEAD fae10fc: fix commit 03f3792 is an ancestor, the fix code is present, and its regression tests pass in the 3674-green server suite / extension suite. Closed per original verification results, not by assertion."
     },
     {
       "id": "T-0005",
@@ -53,18 +62,24 @@
       "title": "Browser offline queue concurrent updates lose tasks",
       "priority": "P0",
       "area": "browser",
-      "status": "OPEN",
+      "status": "DONE_LOCAL",
       "evidence": "background.js read-modify-write races between captures and flush",
-      "acceptance": "Concurrent captures/flush never lose an accepted task; queue mutations serialized"
+      "acceptance": "Concurrent captures/flush never lose an accepted task; queue mutations serialized",
+      "resolved_at": "2026-10-23 (registry sync; fix landed earlier)",
+      "resolved_sha": "03f3792",
+      "sync_note": "Registry sync 2026-10-23: this entry had remained OPEN after its fix landed. Verified at HEAD fae10fc: fix commit 03f3792 is an ancestor, the fix code is present, and its regression tests pass in the 3674-green server suite / extension suite. Closed per original verification results, not by assertion."
     },
     {
       "id": "T-0007",
       "title": "Stale port owned by another window clears queue",
       "priority": "P0",
       "area": "browser",
-      "status": "OPEN",
+      "status": "DONE_LOCAL",
       "evidence": "401 treated as permanent, queue items removed, connection marked ok",
-      "acceptance": "401 triggers identity re-discovery or pauses delivery; queue never cleared on auth mismatch"
+      "acceptance": "401 triggers identity re-discovery or pauses delivery; queue never cleared on auth mismatch",
+      "resolved_at": "2026-10-23 (registry sync; fix landed earlier)",
+      "resolved_sha": "03f3792",
+      "sync_note": "Registry sync 2026-10-23: this entry had remained OPEN after its fix landed. Verified at HEAD fae10fc: fix commit 03f3792 is an ancestor, the fix code is present, and its regression tests pass in the 3674-green server suite / extension suite. Closed per original verification results, not by assertion."
     },
     {
       "id": "T-0008",
