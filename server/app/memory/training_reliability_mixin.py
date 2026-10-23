@@ -318,15 +318,16 @@ class TrainingReliabilityMixin:
             # state with the stale local snapshot — the success still lands in
             # the dedupe ledger so the body can never re-execute.
             persisted_now = self._load_training_reliability(structured)
+            # A same-request cancel racing a completed work() is owned by
+            # the mark_succeeded/cancel_after machinery (acked, evidence
+            # kept) — never treated as a foreign control transition.
             control_moved = (
                 persisted_now is not None
                 and persisted_now != record
                 and str(persisted_now.get("request_id") or "") == str(record.get("request_id") or "")
-                # A same-request cancel racing a completed work() is owned by
-                # the mark_succeeded/cancel_after machinery (acked, evidence
-                # kept) — never treated as a foreign control transition.
                 and str(persisted_now.get("phase") or "") != "cancelled"
             )
+            control_state = persisted_now if control_moved else None
             next_snapshot = int(structured._workspace.get(WORKSPACE_SNAPSHOT_REVISION_KEY) or 0) + 1
             latest_handoff = structured._workspace.get("latest_training_handoff")
             persisted_phase = learning_phase
@@ -344,9 +345,9 @@ class TrainingReliabilityMixin:
                 outcome="success",
                 snapshot_revision=next_snapshot,
             )
-            if control_moved:
+            if control_state is not None:
                 workspace = self._save_training_reliability(
-                    resolved, structured, persisted_now, dedupe=success_dedupe
+                    resolved, structured, control_state, dedupe=success_dedupe
                 )
             else:
                 workspace = self._save_training_reliability(
