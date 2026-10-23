@@ -103,3 +103,19 @@
   approach; the prompt contract + real-provider samples remain the primary
   defense. Documented, non-blocking.
 - Still BLOCKED on external: T-0028 owner sign-off, Remote-SSH L2 window.
+
+## 2026-10-23 — Owner review wave: findings closed, install-state acceptance re-run
+- Owner deep review findings addressed @1806154: fact-source sync (five stale OPEN
+  registry entries closed against fix commit 03f3792 after verifying ancestry and
+  green regression tests; a11y locale count corrected to 8); popup recovery entry
+  shown only when captures are queued while unpaired (8 locales); reliability lock
+  wait 120s->15s so waiters get an honest busy view quickly; spacing token
+  convergence — all 41 legacy --trainer-space-1..4 usages mapped to the unified
+  --space-* scale (identical values, zero visual delta), diverged 5/6 deprecated.
+- Full install-state VSIX host E2E re-executed at latest HEAD: run 39961046680
+  (workflow_dispatch, run_vsix_host_e2e=true) — Windows/macOS/Ubuntu native
+  install + host E2E all success, closing the "latest HEAD install-state" gap
+  the owner identified.
+- Remaining per owner plan: real Remote-SSH window L2 acceptance (BLOCKED, env),
+  owner §6 sign-off + human teaching-quality review (BLOCKED, human), final
+  manual visual sign-off (human), then freeze/tag/release (owner decision).

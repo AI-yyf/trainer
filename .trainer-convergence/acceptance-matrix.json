@@ -3,11 +3,11 @@
   "gates": {
     "ci_cross_platform": {
       "status": "PASS",
-      "evidence": "run 39907998471 @c0811ee: 9/9 jobs success with audit-wave-2 fixes T-0039..T-0045 landed"
+      "evidence": "push run 39957586539 @1806154: 9/9 jobs success (owner-review wave: fact-source sync, popup recovery entry, lock 15s, spacing convergence)"
     },
     "native_install_e2e": {
-      "status": "PASS_MAC",
-      "evidence": "vsix-e2e ok=True 36/36 incl bootstrap-snapshot-cached at final SHA; win/linux legs via CI"
+      "status": "PASS",
+      "evidence": "run 39961046680 @1806154 (workflow_dispatch, run_vsix_host_e2e=true): installed-VSIX host E2E executed natively on Windows, macOS and Ubuntu (isolated display/secure keyring) plus 9/9 CI jobs — closes the 'latest HEAD install-state' gap"
     },
     "browser_e2e": {
       "status": "PASS_LOCAL",
