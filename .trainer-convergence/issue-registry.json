@@ -487,6 +487,21 @@
       "resolved_at": "2026-10-23",
       "resolved_sha": "see commit after 04e5639",
       "resolution": "Bounded acquire (120s budget, class attr _RELIABILITY_LOCK_WAIT_SECONDS): on timeout the caller gets the honest current workspace WITHOUT mutating (no unlocked writes — T-0032 stays closed) and work() never executes concurrently. Failure-first: pre-fix demo proved the second call blocks unboundedly. Behavior test test_lock_timeout_returns_honest_busy_view_without_hanging."
+    },
+    {
+      "id": "T-0048",
+      "title": "Post-turn hydrate re-derives coaching_state and memory thread persists pre-repair filler",
+      "priority": "P1",
+      "area": "teaching",
+      "status": "FIXED_VALIDATED",
+      "discovered": "2026-10-23",
+      "source": "evidence re-audit of t0029-1..5 real-provider samples (residual-field disposition check at final HEAD)",
+      "detail": "t0029-1/2/4 showed snapshot.coaching_state.next_step carrying the unrelated mint「围绕…先做一个小动作，把结果带回来。」while reply/coach_turn/active_thread carried the turn-anchored step; initially read as pre-T-0035 artifacts, then reproduced AT HEAD by a new API-boundary test: /turn (and the /turn/stream provider-failure fallback) call hydrate_snapshot AFTER execute_turn already applied the repaired agent step, and derive_coaching_state rebuilt coaching_state from pre-turn memory, re-minting the generic lane — one response shipping two different next steps to the coach bubble and the Learning lane teasers (which read coaching_state.next_step). Two adjacent gaps found in the same audit: (a) persist_turn_reflection recorded the PRE-repair filler into memory.active_thread and workspace mirrors because the T-0027 repair ran later inside build_session_response, and grounding evaluated the pre-repair step; (b) the non-stream finalize close collapses the model's sections onto one line, so visible_next_step could not read a labelled action in that lane and the filler shipped unrepaired.",
+      "resolution": "Three layers, failure-first (both new API tests failed pre-fix): (1) hydrate_snapshot gains preserve_turn_coaching_state; the two post-turn call sites (/turn response snapshot, /turn/stream fallback) skip the derive when the turn already authored coaching state — all pre-turn/GET sites keep deriving. (2) The T-0027/T-0035/T-0036 repair is extracted into repair_generic_finalize_next_step and additionally invoked in execute_turn BEFORE grounding and memory persistence, so the recorded thread, the grounding gate and the response surfaces all ship the same step; the repair only touches a non-empty agent_meta so the legacy (non-agent) lane never surfaces as agentic (regression caught by test_turn_keeps_clean_chinese_remote_reply_for_english_request, root-caused to populating an empty legacy meta dict). (3) reply_continuity gains a sentence-boundary inline lane (label+colon at a sentence start, code fences dropped, past-tense paren guard, line-level reader still wins) so compact closes stay readable without letting mid-sentence label mentions count as actions.",
+      "acceptance": "One next step drives reply, coach_turn, coaching_state, resume_thread, active_thread and workspace mirrors of the SAME response",
+      "evidence": "server/tests/test_next_step_surface_consistency.py (repair-lane + anchored-rescue-lane API tests); full server suite 3677 passed incl. bundled-mirror integrity; ruff + pyright clean on changed files",
+      "resolved_at": "2026-10-23",
+      "resolved_sha": "de0b7f5"
     }
   ]
 }

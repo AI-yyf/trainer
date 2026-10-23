@@ -119,3 +119,29 @@
 - Remaining per owner plan: real Remote-SSH window L2 acceptance (BLOCKED, env),
   owner §6 sign-off + human teaching-quality review (BLOCKED, human), final
   manual visual sign-off (human), then freeze/tag/release (owner decision).
+
+## 2026-10-23 — T-0048 reopened and closed: next-step surface desynchronization at HEAD
+- Evidence re-audit of t0029-1..5 (delayed disposition check) reproduced AT HEAD
+  the exact artifact those samples showed: /turn (and the /turn/stream fallback)
+  hydrate_snapshot AFTER execute_turn, and derive_coaching_state rebuilt
+  coaching_state from pre-turn memory — re-minting「围绕…先做一个小动作，把结果
+  带回来。」into snapshot.coaching_state.next_step while reply/coach_turn carried
+  the turn-anchored step. One response, two next steps (coach bubble vs Learning
+  lane teasers). Registered T-0048 (P1).
+- Two adjacent gaps fixed in the same wave: memory.active_thread + workspace
+  mirrors persisted the PRE-repair filler (persist ran before the T-0027 repair,
+  and grounding evaluated the pre-repair step); the non-stream finalize close
+  collapses labelled sections onto one line so visible_next_step could not read
+  the reply action in that lane (new sentence-boundary inline lane, fences
+  dropped, past-tense guard; mid-sentence label mentions still stay prose).
+- Failure-first: both API tests in
+  server/tests/test_next_step_surface_consistency.py failed pre-fix. One
+  regression caught and root-caused during the wave (repair populated an empty
+  legacy-lane agent_meta → turn surfaced as agentic; guard now requires a
+  non-empty meta). Full server suite 3677 passed incl. bundled-mirror
+  integrity; ruff + pyright clean on changed files.
+- probe `next_step_consistent_with_prose: false` values in t0027-final-*/t0029-*
+  are a probe-heuristic artifact (substring vs a prose section the reply does
+  not contain), NOT divergence — the structured steps are concrete and the
+  authoritative surfaces agree; API-boundary tests now pin that contract.
+- Still BLOCKED on external: T-0028 owner sign-off, Remote-SSH L2 window.

@@ -34,7 +34,8 @@
     "audit-wave-1": "9 P1 findings (T-0030..T-0038) from final-SHA independent audits; all FIXED_VALIDATED @6861ce4 failure-first",
     "audit-wave-2": "7 P1 findings (T-0039..T-0045) from adversarial re-audit of wave-1 fixes; all FIXED_VALIDATED @c0811ee",
     "T-0046": "FIXED_VALIDATED (f5c67ad: bounded lock acquire + honest busy view; failure-first demo proved unbounded blocking pre-fix)",
-    "owner-review-wave": "Owner 2026-10-23 review findings closed @1806154: (1) fact-source sync — five stale OPEN registry entries verified against fix commit 03f3792 and closed with sync evidence; a11y locale count corrected 12->8; (2) popup recovery entry on abnormal state (8 locales); (3) reliability lock wait 120s->15s (fast busy view); (4) spacing token convergence — 41 legacy usages mapped to the unified scale (zero visual delta), legacy 5/6 deprecated; (5) full install-state VSIX host E2E re-run at latest HEAD (run 39961046680, 3 platforms)"
+    "owner-review-wave": "Owner 2026-10-23 review findings closed @1806154: (1) fact-source sync — five stale OPEN registry entries verified against fix commit 03f3792 and closed with sync evidence; a11y locale count corrected 12->8; (2) popup recovery entry on abnormal state (8 locales); (3) reliability lock wait 120s->15s (fast busy view); (4) spacing token convergence — 41 legacy usages mapped to the unified scale (zero visual delta), legacy 5/6 deprecated; (5) full install-state VSIX host E2E re-run at latest HEAD (run 39961046680, 3 platforms)",
+    "T-0048": "FIXED_VALIDATED (this commit: post-turn hydrate no longer re-derives turn-authored coaching_state; memory thread records the repaired step; sentence-boundary inline extractor for compact closes; API-boundary tests server/tests/test_next_step_surface_consistency.py; full suite 3677 green)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
@@ -66,5 +67,6 @@
     "sha": "1806154",
     "conclusion": "success",
     "platforms": "windows/macos/ubuntu"
-  }
+  },
+  "notes": "T-0048 reopened the loop from evidence re-audit and closed same-day. Remaining external gates unchanged: T-0028 owner sign-off (teaching_acceptance), real Remote-SSH window (remote_ssh_e2e L2)."
 }

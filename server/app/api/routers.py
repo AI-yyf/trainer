@@ -11102,6 +11102,76 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         )
         return decision
 
+    def repair_generic_finalize_next_step(
+        reply_content: str,
+        agent_meta: dict[str, object] | None,
+        coach_turn_data: dict[str, object] | None,
+        *,
+        response_language: str | None,
+    ) -> dict[str, object] | None:
+        """T-0027 repair: when the finalize next_step is generic filler (goal
+        restatement, "do a small action" phrasing) or a pasted prose blob
+        (markdown headings / code fences / over the extractor's 240-char
+        action cap) while the visible reply carries a concrete labelled next
+        action, prefer the reply's own labelled action so the structured next
+        step matches what the learner is actually told to do. Mutates
+        agent_meta in place and re-merges the repaired step into
+        coach_turn_data (T-0035), returning the payload to persist. Callers
+        must run this BEFORE grounding and memory persistence so every
+        consumer — memory thread, grounding gate, response surfaces — sees
+        the same shipped step (T-0048)."""
+        if not reply_content or not isinstance(agent_meta, dict):
+            return coach_turn_data
+        finalize_next_step = str(agent_meta.get("next_step") or "").strip()
+        generic_fillers = (
+            "先做一个小动作",
+            "把结果带回来",
+            "do a small action",
+            # ImplementationCoach rescue/fallback template shapes (T-0029):
+            # unanchored by construction unless the target was derived from
+            # this turn; prefer the reply's own labelled action.
+            "压成一个很小的补丁目标",
+            "先交付一个小而可复盘的",
+        )
+        weighted_length = sum(
+            2 if ord(ch) > 0x2E80 else 1 for ch in finalize_next_step
+        )
+        looks_generic = (
+            not finalize_next_step
+            or any(filler in finalize_next_step for filler in generic_fillers)
+            # CJK-aware short threshold (T-0036): a 6-11 hanzi step can be
+            # fully concrete ("先跑一次测试"); counting hanzi as 2 keeps
+            # it while still catching 6-letter English fragments.
+            or weighted_length < 12
+            or len(finalize_next_step) > 240
+            or "```" in finalize_next_step
+            or "## " in finalize_next_step
+        )
+        if not looks_generic:
+            return coach_turn_data
+        reply_action = visible_next_step(reply_content)
+        if not reply_action:
+            return coach_turn_data
+        agent_meta["next_step"] = reply_action
+        # T-0035: the pre-repair filler also lives in resume_thread and the
+        # coach-turn summary; rebuild both from the repaired step or the
+        # generic filler resurfaces next turn through the continuation path.
+        repaired_resume = build_resume_thread_text(
+            str(agent_meta.get("summary") or ""),
+            reply_action,
+            response_language=response_language,
+        )
+        if repaired_resume:
+            agent_meta["resume_thread"] = repaired_resume
+        if isinstance(coach_turn_data, dict):
+            coach_turn_data = merge_agent_finalize_into_coach_turn(
+                coach_turn_data,
+                summary=str(agent_meta.get("summary") or "") or None,
+                next_step=reply_action,
+                resume_thread=repaired_resume or None,
+            )
+        return coach_turn_data
+
     def build_session_response(
         *,
         state,
@@ -11438,60 +11508,13 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             request.response_language,
         )
         agent_meta = repaired_agent_meta or None
-        # T-0027 repair: when the finalize next_step is generic filler (goal
-        # restatement, "do a small action" phrasing) or a pasted prose blob
-        # (markdown headings / code fences / over the extractor's 240-char
-        # action cap) while the visible reply ends with a concrete labelled
-        # next action, prefer the reply's own labelled action so the
-        # structured next step matches what the learner is actually told to do.
-        if reply_content and isinstance(agent_meta, dict):
-            finalize_next_step = str(agent_meta.get("next_step") or "").strip()
-            generic_fillers = (
-                "先做一个小动作",
-                "把结果带回来",
-                "do a small action",
-                # ImplementationCoach rescue/fallback template shapes (T-0029):
-                # unanchored by construction unless the target was derived from
-                # this turn; prefer the reply's own labelled action.
-                "压成一个很小的补丁目标",
-                "先交付一个小而可复盘的",
-            )
-            weighted_length = sum(
-                2 if ord(ch) > 0x2E80 else 1 for ch in finalize_next_step
-            )
-            looks_generic = (
-                not finalize_next_step
-                or any(filler in finalize_next_step for filler in generic_fillers)
-                # CJK-aware short threshold (T-0036): a 6-11 hanzi step can be
-                # fully concrete ("先跑一次测试"); counting hanzi as 2 keeps
-                # it while still catching 6-letter English fragments.
-                or weighted_length < 12
-                or len(finalize_next_step) > 240
-                or "```" in finalize_next_step
-                or "## " in finalize_next_step
-            )
-            if looks_generic:
-                reply_action = visible_next_step(reply_content)
-                if reply_action:
-                    agent_meta["next_step"] = reply_action
-                    # T-0035: the pre-repair filler also lives in
-                    # resume_thread and the coach-turn summary; rebuild both
-                    # from the repaired step or the generic filler resurfaces
-                    # next turn through the continuation path.
-                    repaired_resume = build_resume_thread_text(
-                        str(agent_meta.get("summary") or ""),
-                        reply_action,
-                        response_language=request.response_language,
-                    )
-                    if repaired_resume:
-                        agent_meta["resume_thread"] = repaired_resume
-                    if isinstance(refreshed_coach_turn_data, dict):
-                        refreshed_coach_turn_data = merge_agent_finalize_into_coach_turn(
-                            refreshed_coach_turn_data,
-                            summary=str(agent_meta.get("summary") or "") or None,
-                            next_step=reply_action,
-                            resume_thread=repaired_resume or None,
-                        )
+        # T-0027/T-0035/T-0048 repair — see repair_generic_finalize_next_step.
+        refreshed_coach_turn_data = repair_generic_finalize_next_step(
+            reply_content,
+            agent_meta,
+            refreshed_coach_turn_data,
+            response_language=request.response_language,
+        )
         if (
             not message_requests_explicit_explanation_or_example(getattr(request, "message", None))
             and str(response_scenario or "").strip().lower() in GUIDED_VISIBLE_REPAIR_SCENARIOS
@@ -17078,22 +17101,31 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         active_view: str | None = None,
         session_workspace_id: str | None = None,
         preserve_session_history: bool = False,
+        preserve_turn_coaching_state: bool = False,
     ) -> WorkbenchSnapshot:
         snapshot.session_history_restored = preserve_session_history
         due_reviews = snapshot.memory.due_reviews
         snapshot.review_queue_summary = summarize_review_queue(due_reviews, response_language)
         snapshot.next_review_due = due_reviews[0].due_at if due_reviews else None
-        snapshot.coaching_state = derive_coaching_state(
-            snapshot=snapshot,
-            response_language=response_language,
-            answer_mode=answer_mode,
-            scenario=scenario,
-            learner_signal=learner_signal,
-            message=message,
-            current_file=current_file,
-            grounding_context=grounding_context,
-            active_view=active_view,
-        )
+        # T-0048: when the turn already authored coaching state (agent_meta
+        # apply after the T-0027 repair), re-deriving here would rebuild from
+        # pre-turn memory and re-mint the generic「围绕…先做一个小动作」lane,
+        # desynchronizing the learning surfaces from the coach reply in the
+        # SAME response. Derive only when no turn-authored state exists.
+        if preserve_turn_coaching_state and snapshot.coaching_state is not None:
+            pass
+        else:
+            snapshot.coaching_state = derive_coaching_state(
+                snapshot=snapshot,
+                response_language=response_language,
+                answer_mode=answer_mode,
+                scenario=scenario,
+                learner_signal=learner_signal,
+                message=message,
+                current_file=current_file,
+                grounding_context=grounding_context,
+                active_view=active_view,
+            )
         profile = snapshot.profile
         workspace_memory = snapshot.memory.workspace if isinstance(snapshot.memory.workspace, dict) else {}
         workspace_id = (
@@ -21029,6 +21061,17 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         "evidence": list(turn_summary.evidence or []),
                     }
         response_snapshot = state.snapshot.model_copy(deep=True)
+        # T-0048: repair a generic finalize step BEFORE grounding and memory
+        # persistence so the recorded thread, the grounding gate and the
+        # response surfaces all ship the same step. Only a non-empty
+        # agent_meta carries a finalize step; an empty dict is the legacy
+        # (non-agent) lane and must stay empty or the turn surfaces as agentic.
+        coach_turn_payload = repair_generic_finalize_next_step(
+            assistant_content,
+            agent_meta if isinstance(agent_meta, dict) and agent_meta else None,
+            coach_turn_payload,
+            response_language=request.response_language,
+        ) or coach_turn_payload
         grounding_decision = await resolve_turn_grounding_async(
             coach_turn_payload=coach_turn_payload,
             reply_content=assistant_content,
@@ -22567,6 +22610,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             )
             hydrate_snapshot(
                 response.snapshot,
+                preserve_turn_coaching_state=True,
                 response_language=request.response_language
                 or str(workspace_memory.get("response_language") or "").strip()
                 or None,
@@ -24524,6 +24568,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                             )
                             hydrate_snapshot(
                                 fallback_response.snapshot,
+                                preserve_turn_coaching_state=True,
                                 response_language=request.response_language
                                 or str(fallback_workspace_memory.get("response_language") or "").strip()
                                 or None,
