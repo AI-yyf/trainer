@@ -139,7 +139,10 @@
   regression caught and root-caused during the wave (repair populated an empty
   legacy-lane agent_meta → turn surfaced as agentic; guard now requires a
   non-empty meta). Full server suite 3677 passed incl. bundled-mirror
-  integrity; ruff + pyright clean on changed files.
+  integrity; ruff + pyright clean on changed files. One UI source-guard
+  (coachFinalizeNextStepContract) tracked the extracted helper + the new
+  pre-persist invocation site. CI 9/9 @c84dadb (run 39978190239); fix
+  commit 6d8fb10, guard commit c84dadb.
 - probe `next_step_consistent_with_prose: false` values in t0027-final-*/t0029-*
   are a probe-heuristic artifact (substring vs a prose section the reply does
   not contain), NOT divergence — the structured steps are concrete and the

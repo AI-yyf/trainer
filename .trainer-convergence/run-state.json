@@ -2,7 +2,7 @@
   "version": 1,
   "loop": 5,
   "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "1806154",
+  "head": "c84dadb",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -35,7 +35,7 @@
     "audit-wave-2": "7 P1 findings (T-0039..T-0045) from adversarial re-audit of wave-1 fixes; all FIXED_VALIDATED @c0811ee",
     "T-0046": "FIXED_VALIDATED (f5c67ad: bounded lock acquire + honest busy view; failure-first demo proved unbounded blocking pre-fix)",
     "owner-review-wave": "Owner 2026-10-23 review findings closed @1806154: (1) fact-source sync — five stale OPEN registry entries verified against fix commit 03f3792 and closed with sync evidence; a11y locale count corrected 12->8; (2) popup recovery entry on abnormal state (8 locales); (3) reliability lock wait 120s->15s (fast busy view); (4) spacing token convergence — 41 legacy usages mapped to the unified scale (zero visual delta), legacy 5/6 deprecated; (5) full install-state VSIX host E2E re-run at latest HEAD (run 39961046680, 3 platforms)",
-    "T-0048": "FIXED_VALIDATED (this commit: post-turn hydrate no longer re-derives turn-authored coaching_state; memory thread records the repaired step; sentence-boundary inline extractor for compact closes; API-boundary tests server/tests/test_next_step_surface_consistency.py; full suite 3677 green)"
+    "T-0048": "FIXED_VALIDATED (6d8fb10: post-turn hydrate no longer re-derives turn-authored coaching_state; memory thread records the repaired step; sentence-boundary inline extractor for compact closes; API-boundary tests server/tests/test_next_step_surface_consistency.py; full suite 3677 green); CI 9/9 @c84dadb (run 39978190239)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
