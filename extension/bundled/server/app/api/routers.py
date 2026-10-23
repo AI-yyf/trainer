@@ -23385,6 +23385,16 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     decision=grounding_decision,
                     agent_meta=final_agent_meta if isinstance(final_agent_meta, dict) else None,
                 ) or final_agent_meta
+                # T-0048: repair a generic finalize step BEFORE the reflection
+                # persists, so the memory thread and the shipped stream step
+                # match what build_session_response will surface (its repair
+                # alone runs after this persist).
+                coach_turn = repair_generic_finalize_next_step(
+                    full_content,
+                    final_agent_meta if isinstance(final_agent_meta, dict) and final_agent_meta else None,
+                    coach_turn,
+                    response_language=request.response_language,
+                ) or coach_turn
                 persist_turn_reflection(
                     workspace_id=workspace_id,
                     session_id=state.session_id,
@@ -24751,6 +24761,16 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     decision=grounding_decision,
                     agent_meta=final_agent_meta if isinstance(final_agent_meta, dict) else None,
                 ) or final_agent_meta
+                # T-0048: repair a generic finalize step BEFORE the reflection
+                # persists, so the memory thread and the shipped stream step
+                # match what build_session_response will surface (its repair
+                # alone runs after this persist).
+                coach_turn = repair_generic_finalize_next_step(
+                    full_content,
+                    final_agent_meta if isinstance(final_agent_meta, dict) and final_agent_meta else None,
+                    coach_turn,
+                    response_language=request.response_language,
+                ) or coach_turn
                 persist_turn_reflection(
                     workspace_id=workspace_id,
                     session_id=state.session_id,

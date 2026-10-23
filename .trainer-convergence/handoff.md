@@ -148,3 +148,21 @@
   not contain), NOT divergence — the structured steps are concrete and the
   authoritative surfaces agree; API-boundary tests now pin that contract.
 - Still BLOCKED on external: T-0028 owner sign-off, Remote-SSH L2 window.
+
+## 2026-10-24 — Owner key delivered; real-model journey complete; T-0049 closed
+- Owner supplied a fresh linksub test key (used ONLY via env; zero key/host
+  strings in the repo — grep-verified before commit). Journey probe extended
+  with the missing /provider/test capability step and reply-text evidence.
+- Real-model teaching journey now COMPLETE: 10/10 steps (evidence/journey-real/)
+  — streaming capability verified on the relay, honesty-first replies (declined
+  unseen code twice, no fabrication), plan continuity across a sidecar restart,
+  concrete tool-anchored next step with success signal (SLICE OK) + formal-verify
+  offer, cross-workspace isolation holds. Probe fixes were tooling-only.
+- T-0049 (P1, adversarial recheck of T-0048): the two streaming MAIN paths
+  persisted the turn reflection BEFORE the T-0027 repair — memory thread +
+  workspace focus recorded the filler and the stream shipped it as
+  response.agent.next_step while response snapshot coaching_state was repaired.
+  Fixed by running repair_generic_finalize_next_step after grounding and before
+  persist in both paths (same non-empty-meta guard). Failure-first streaming
+  test added; suite 3678 green; ruff/pyright clean.
+- Still BLOCKED on external: T-0028 owner §6 sign-off, Remote-SSH L2 window.

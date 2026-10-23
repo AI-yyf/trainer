@@ -228,3 +228,69 @@ def test_anchored_rescue_step_stays_consistent_without_a_labelled_action(
     assert surfaces["active_thread"] == ANCHORED_RESCUE, surfaces
     assert FILLER_MINT not in surfaces["coaching_state"], surfaces
     assert FILLER_TAIL not in surfaces["coaching_state"], surfaces
+
+
+def test_streaming_turn_persists_the_repaired_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T-0048 adjacent lane: /session/message/stream persists the turn
+    reflection BEFORE build_session_response runs the T-0027 repair, so the
+    memory thread must get the repaired step from the same pre-persist repair
+    the non-streaming turn uses — never the filler."""
+    summary = f"asyncio 的并发发生在事件循环里，而不是线程里。**下一步**：{REPAIRED_ACTION}"
+    scripted = _FinalizeScriptedProvider(
+        summary=summary,
+        next_step=f"围绕「我在学 Python 的 asyncio」{FILLER_MINT}，{FILLER_TAIL}。",
+    )
+
+    def build_agent_provider(_self: ProviderService, **_kwargs: object):
+        return scripted, scripted
+
+    monkeypatch.setattr(ProviderService, "build_agent_provider", build_agent_provider)
+
+    workspace_id = "workspace-stream-persist-repair"
+    with build_client(tmp_path / "sidecar") as client:
+        runtime = client.app.state.runtime
+        seed_verified_capabilities(
+            runtime,
+            ProviderConfig.model_validate(SCRIPTED_PROVIDER_PAYLOAD),
+            "test-only-key",
+        )
+        started = client.post(
+            "/session/start",
+            json={
+                "workspace_id": workspace_id,
+                "workspace_name": "Stream persist repair",
+                "workspace_path": str(tmp_path / "learner-project"),
+            },
+        )
+        assert started.status_code == 200, started.text
+        session_id = str(started.json()["session_id"])
+        response = client.post(
+            "/session/message/stream",
+            json={
+                "session_id": session_id,
+                "workspace_id": workspace_id,
+                "message": "我在学 Python 的 asyncio，能帮我从第一步开始吗？",
+                "response_language": "zh-CN",
+                "answer_mode": "guided",
+                "use_agent_loop": True,
+                "provider": SCRIPTED_PROVIDER_PAYLOAD,
+                "api_key": "test-only-key",
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert "event: complete" in response.text
+        assert "event: error" not in response.text
+
+        # Re-open the workspace: the restored snapshot reads the PERSISTED
+        # memory lane, which is what the next turn's continuation sees.
+        restored = client.post(
+            "/session/start",
+            json={"workspace_id": workspace_id, "workspace_name": "Stream persist repair"},
+        )
+        assert restored.status_code == 200, restored.text
+        # /session/start returns the snapshot itself; memory is top-level.
+        thread = (restored.json().get("memory") or {}).get("active_thread") or {}
+        assert thread.get("next_step") == REPAIRED_ACTION, thread
+        assert FILLER_MINT not in str(thread.get("next_step") or "")

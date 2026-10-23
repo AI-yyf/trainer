@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-23",
+  "updated": "2026-10-24",
   "baseline_commit": "e7e6f4161e929378c0186be5e3311e710b89fcf6",
   "issues": [
     {
@@ -502,6 +502,21 @@
       "evidence": "server/tests/test_next_step_surface_consistency.py (repair-lane + anchored-rescue-lane API tests); full server suite 3677 passed incl. bundled-mirror integrity; ruff + pyright clean on changed files",
       "resolved_at": "2026-10-23",
       "resolved_sha": "de0b7f5"
+    },
+    {
+      "id": "T-0049",
+      "title": "Streaming main paths persist the pre-repair filler and ship it as response.agent.next_step",
+      "priority": "P1",
+      "area": "teaching",
+      "status": "FIXED_VALIDATED",
+      "discovered": "2026-10-24",
+      "source": "independent adversarial recheck of the T-0048 fix (adjacent-path audit)",
+      "detail": "T-0048 inserted the pre-persist repair in execute_turn, covering /turn, /session/message and the stream fallback — but the two streaming MAIN paths (/session/message/stream, /turn/stream) run their own agent loop and call persist_turn_reflection BEFORE build_session_response. API-boundary test proved: the memory thread (active_thread + workspace latest_coaching_focus) recorded the pre-repair filler「围绕…先做一个小动作，把结果带回来。」and the stream's shipped response.agent.next_step stayed filler while response.snapshot.coaching_state was repaired (build-time repair patches a dict instance the caller does not re-read for the agent field).",
+      "resolution": "repair_generic_finalize_next_step now also runs in both streaming main paths immediately after apply_grounding_decision and BEFORE persist_turn_reflection — same non-empty-agent_meta guard, mutating final_agent_meta in place so the persisted reflection, the shipped response.agent.next_step and the build-time surfaces all carry the repaired step (the build-time call then no-ops). Failure-first: test_streaming_turn_persists_the_repaired_step failed pre-fix (thread.next_step=filler) and passes post-fix; full suite 3678 green incl. bundled-mirror integrity; ruff + pyright clean.",
+      "acceptance": "Streaming turn ships ONE repaired step across response.agent, response.snapshot and the persisted memory thread",
+      "evidence": "server/tests/test_next_step_surface_consistency.py (3 API tests incl. streaming persist); resolved at commit on this branch",
+      "resolved_at": "2026-10-24",
+      "resolved_sha": "PENDING_COMMIT"
     }
   ]
 }
