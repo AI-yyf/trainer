@@ -2,7 +2,7 @@
   "version": 1,
   "loop": 5,
   "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "6861ce4",
+  "head": "189c4d1",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -40,8 +40,8 @@
     "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
   },
   "ci": {
-    "run_id": 39890030512,
-    "sha": "ed8a4f8",
+    "run_id": 39900477852,
+    "sha": "189c4d1",
     "conclusion": "success",
     "jobs": "9/9"
   },
