@@ -852,7 +852,7 @@ test('host copy formats placeholders and keeps the pinned English values', (t) =
     en.installStepExtensions,
     "1. Open your browser's extensions page: chrome://extensions, edge://extensions, brave://extensions, opera://extensions, vivaldi://extensions (Arc: arc://extensions)."
   );
-  assert.equal(en.sidecarUnavailable, 'Sidecar is unavailable.');
+  assert.equal(en.sidecarUnavailable, 'Trainer is unavailable.');
   assert.match(browserCaptureHostCopy('en-US', 'pairingCodeSummaryMany', { minutes: 10 }), /single use/);
   assert.equal(
     browserCaptureHostCopy('en-US', 'pairingCodeSummaryOne', { minutes: 1 }),

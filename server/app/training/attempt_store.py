@@ -386,7 +386,7 @@ class AttemptStore:
             if skip_if is not None and skip_if(items):
                 connection.rollback()
                 return None
-            for prior, row in zip(items, live_rows):
+            for prior, row in zip(items, live_rows, strict=True):
                 if (
                     prior.get("superseded_by_evidence_id") is None
                     and trust_rank.get(trust_level, 0) >= trust_rank.get(prior.get("trust_level"), 0)
