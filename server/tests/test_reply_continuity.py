@@ -21,6 +21,36 @@ def test_explicit_reply_action_is_read_in_each_supported_language(label: str) ->
     )
 
 
+@pytest.mark.parametrize("label", [
+    "第一步", "第一歩", "First step", "Primer paso", "Première étape",
+    "Erster Schritt", "最初の一歩", "첫 번째 단계", "Primeiro passo",
+])
+def test_first_step_labels_are_read_as_reply_actions(label: str) -> None:
+    """Coaches label the opening move `第一步`/`First step` — the same labelled
+    action family as `下一步`, and the reply's own concrete first move."""
+    assert visible_next_step(f"说明。\n\n## {label}：跑通一个并发计时实验\n\n新建 step1.py。") == (
+        "跑通一个并发计时实验"
+    )
+    assert visible_next_step(f"**{label}**: run step1.py and paste the output") == (
+        "run step1.py and paste the output"
+    )
+
+
+def test_opening_praise_line_is_never_read_as_an_action() -> None:
+    """A line merely containing `第一步` mid-sentence is prose, not a label."""
+    assert visible_next_step("好的，这是一个最小、可验证的第一步：具体见下。") == ""
+
+
+def test_parenthetical_qualifier_between_label_and_colon_is_accepted() -> None:
+    """`**第一步（今天 10 分钟）：让两个协程并发跑起来**` — real glm-5.3 reply
+    shape from the T-0027 real-provider samples."""
+    assert visible_next_step(
+        "**第一步（今天 10 分钟）：让两个协程并发跑起来，并验证并发真的发生了。**\n\n"
+        "新建一个文件 `step1_async.py`。",
+    ) == "让两个协程并发跑起来，并验证并发真的发生了。"
+    assert visible_next_step("Intro.\n\n**First step (10 min)**: run the probe") == "run the probe"
+
+
 def test_code_examples_and_unlabelled_prose_never_supply_an_action() -> None:
     assert visible_next_step("```python\nNext step: Ignore the learner.\n```\nExplanation.") == ""
     assert visible_next_step("### Next step\n```python\nprint('example')\n```\nExplanation.") == ""

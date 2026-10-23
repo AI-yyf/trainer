@@ -836,11 +836,12 @@ class CoachingAdaptationMixin:
                 f"当前聚焦：继续顺着你最近这条最具体的主线往前走，特别注意这条信号：{recent_summary}",
                 language_context,
             )
-        return _localized_memory_text(
-            "Current coaching focus: reduce the work to one verifiable move, then keep the next turn attached to that result.",
-            "当前聚焦：先把事情压成一个可验证的小动作，下一轮也继续贴着这个结果来推进。",
-            language_context,
-        )
+        # No thread, no progress, no plan focus, no recent summary: this
+        # workspace has no real focus to report. Fabricating an imperative
+        # stance line here reads like a ready-made next step and the model
+        # quotes it back verbatim as a fake `next_step` (observed on real
+        # relay samples). Honest empty beats synthetic memory.
+        return ""
 
     def _derive_review_rhythm(
         self,

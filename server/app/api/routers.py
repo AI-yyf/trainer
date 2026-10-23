@@ -11439,10 +11439,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         )
         agent_meta = repaired_agent_meta or None
         # T-0027 repair: when the finalize next_step is generic filler (goal
-        # restatement, "do a small action" phrasing) while the visible reply
-        # ends with a concrete labelled next action, prefer the reply's own
-        # labelled action so the structured next step matches what the learner
-        # is actually told to do.
+        # restatement, "do a small action" phrasing) or a pasted prose blob
+        # (markdown headings / code fences / over the extractor's 240-char
+        # action cap) while the visible reply ends with a concrete labelled
+        # next action, prefer the reply's own labelled action so the
+        # structured next step matches what the learner is actually told to do.
         if reply_content and isinstance(agent_meta, dict):
             finalize_next_step = str(agent_meta.get("next_step") or "").strip()
             generic_fillers = ("先做一个小动作", "把结果带回来", "do a small action")
@@ -11450,6 +11451,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 not finalize_next_step
                 or any(filler in finalize_next_step for filler in generic_fillers)
                 or len(finalize_next_step) < 12
+                or len(finalize_next_step) > 240
+                or "```" in finalize_next_step
+                or "## " in finalize_next_step
             )
             if looks_generic:
                 reply_action = visible_next_step(reply_content)

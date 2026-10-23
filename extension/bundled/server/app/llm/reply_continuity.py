@@ -6,9 +6,12 @@ import re
 
 _NEXT_STEP = re.compile(
     r"^(?:#{1,6}\s*)?(?:\*\*)?"
-    r"(?:下一步|next step|siguiente paso|étape suivante|nächster schritt|"
-    r"次のステップ|다음 단계|próximo passo)"
-    r"(?:\*\*)?\s*(?:[:：,，]\s*(.*)|$)",
+    r"(?:下一步|第一个?[步歩]|next step|first step|siguiente paso|primer paso|"
+    r"étape suivante|première étape|nächster schritt|erster schritt|"
+    r"次のステップ|最初の一歩|다음 단계|첫 번째 단계|próximo passo|primeiro passo)"
+    # A parenthetical qualifier may sit between label and colon, with the bold
+    # close on either side (`第一步（今天 10 分钟）：…`, `**First step (10 min)**: …`).
+    r"(?:\s*[（(][^）)]{0,40}[）)])?(?:\s*\*\*)?\s*(?:[:：,，]\s*(.*)|$)",
     re.I,
 )
 
@@ -33,6 +36,7 @@ def visible_next_step(content: str) -> str:
         matched = _NEXT_STEP.fullmatch(stripped)
         if matched is not None:
             action = (matched.group(1) or "").strip()
+            action = re.sub(r"\*+\s*$", "", action).strip()
             if action:
                 return action[:240]
             waiting = True
