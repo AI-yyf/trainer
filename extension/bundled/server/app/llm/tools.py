@@ -6155,7 +6155,14 @@ def build_default_tool_registry(
                 "type": "object",
                 "properties": {
                     "summary": _string("Short summary of what was investigated or decided this turn."),
-                    "next_step": _string("Concrete next step the learner should take next."),
+                    "next_step": _string(
+                        "The ONE concrete verifiable move from this turn's evidence, "
+                        "extracted from what you already established: name the exact "
+                        "file, command, or check and its success signal. Never restate "
+                        "the learner's goal, never say 'do a small action and bring the "
+                        "result back', and never invent a step you did not ground in "
+                        "evidence this turn."
+                    ),
                     "decision": _string("Short conclusion or decision the coach reached."),
                     "blocker": _string("Remaining blocker or unresolved issue, if any."),
                     "teaching_note": _string("One short teaching note to remember from this turn."),

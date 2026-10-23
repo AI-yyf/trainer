@@ -8190,8 +8190,11 @@ class MemoryService(
         cancel: bool = False,
         verification_artifact: dict[str, str] | None = None,
     ) -> dict[str, Any]:
+        evaluation_started_at = utc_now().isoformat()
+
         def work() -> dict[str, Any]:
             return self._record_training_practice_evaluation_result_body(
+                evaluation_started_at=evaluation_started_at,
                 workspace_id=workspace_id,
                 card_id=card_id,
                 card_title=card_title,
@@ -8222,6 +8225,7 @@ class MemoryService(
     def _record_training_practice_evaluation_result_body(
         self,
         *,
+        evaluation_started_at: str = "",
         workspace_id: str | None = None,
         card_id: str | None = None,
         card_title: str | None = None,
@@ -8254,6 +8258,19 @@ class MemoryService(
         card = self.get_card(resolved_workspace_id, cleaned_card_id)
         if card is None:
             raise ValueError(f"Training card {cleaned_card_id!r} not found")
+
+        # Late-result fence (T-0014): an older verification that STARTED before
+        # the learner's selection moved may still update its own card/evidence,
+        # but it must never re-capture the selection. The selection stamp is
+        # written by whichever result legitimately moved it last.
+        selection_moved_at = str(
+            structured._workspace.get("selected_card_updated_at") or ""
+        )
+        historical_result = bool(
+            selection_moved_at
+            and evaluation_started_at
+            and selection_moved_at > evaluation_started_at
+        )
 
         # Keep the runtime state aligned with the handoff's evidence trust boundary.
         # A positive client result alone must never advance a card to implemented.
@@ -8634,10 +8651,20 @@ class MemoryService(
                 if verification_pending
                 else "evaluation"
             ),
-            selected_card_id=selected_card_id,
-            selected_card_type="practice",
-            selected_card_title=title,
-            selected_card_status=status,
+            # A historical result updates its own card/evidence but leaves the
+            # learner's current selection untouched (T-0014). A legitimate
+            # selection move stamps its ordering time for the next fence.
+            **(
+                {}
+                if historical_result
+                else {
+                    "selected_card_id": selected_card_id,
+                    "selected_card_type": "practice",
+                    "selected_card_title": title,
+                    "selected_card_status": status,
+                    "selected_card_updated_at": utc_now().isoformat(),
+                }
+            ),
             **({"latest_training_verification": {
                 "card_id": selected_card_id, "passed": passed,
                 "verification_artifact": dict(verification_artifact),
