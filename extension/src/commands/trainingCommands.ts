@@ -15,7 +15,11 @@ import {
   sanitizeErrorSurfaceText,
   waitingComposerEnqueueFailureText,
 } from "../../../shared/src/errorSurfaceSanitizer";
-import { getRuntimeWorkspaceId } from "./workspaceContext";
+import {
+  captureRuntimeIdentity,
+  getRuntimeWorkspaceId,
+  runtimeIdentityChanged,
+} from "./workspaceContext";
 import { withWorkspaceQuery } from "./workspaceContext";
 import { stripHostLastTestSecrets } from "../../../shared/src/hostLastTestGovernance";
 
@@ -437,10 +441,16 @@ async function rehydrateTrainingSummary(
   port: number,
   workspaceId?: string,
 ): Promise<void> {
+  const runtimeIdentity = captureRuntimeIdentity(context);
   const summary = await context.sidecarClient.getJson<unknown>(
     port,
     withWorkspaceQuery("/memory/summary", context, workspaceId),
   );
+  if (runtimeIdentityChanged(context, runtimeIdentity)) {
+    // T-0034: the runtime moved to another workspace while the fetch ran;
+    // re-stamping the stale summary would cross workspace boundaries.
+    return;
+  }
   await context.patchWorkbenchData(
     mergeMemorySummarySnapshot(
       context.getHostState().bootstrap,

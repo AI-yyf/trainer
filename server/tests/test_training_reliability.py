@@ -366,3 +366,47 @@ def test_memory_service_timeout_race_keeps_work_as_succeeded(tmp_path) -> None:
     assert record["phase"] == "acked"
     assert record["outcome"] == "success"
     assert record["timeout_after"] is True
+
+
+def test_same_key_concurrent_requests_run_work_once(tmp_path) -> None:
+    """T-0032: two same-key requests racing on the threadpool must not both
+    execute work() — the second waits for the first's outcome and replays."""
+    import threading
+    import time
+
+    service = MemoryService(TrainerRepository(tmp_path / "reliability-concurrent.db"))
+    workspace_id = "workspace-reliability-concurrent"
+    calls: list[str] = []
+    release = threading.Event()
+
+    def slow_work() -> dict[str, object]:
+        calls.append("ran")
+        release.wait(timeout=5)
+        return {"ok": True}
+
+    results: list[dict] = []
+
+    def run() -> None:
+        results.append(
+            service.run_training_reliability(
+                workspace_id,
+                request_id="req-concurrent",
+                command_id="trainer.training.practiceReturn",
+                card_id="race-card",
+                work=slow_work,
+            )
+        )
+
+    first_thread = threading.Thread(target=run)
+    first_thread.start()
+    while not calls:
+        time.sleep(0.01)
+    second_thread = threading.Thread(target=run)
+    second_thread.start()
+    time.sleep(0.2)
+    release.set()
+    first_thread.join(timeout=10)
+    second_thread.join(timeout=10)
+    assert calls == ["ran"], f"work must run exactly once, saw {calls}"
+    assert results[0]["latest_training_reliability"]["phase"] == "acked"
+    assert results[1]["latest_training_reliability"]["phase"] == "acked"

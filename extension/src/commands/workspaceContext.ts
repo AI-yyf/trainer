@@ -92,6 +92,38 @@ export function getRuntimeWorkspaceContext(
   };
 }
 
+/**
+ * Runtime identity fence (T-0034): capture before an async fetch, re-check
+ * before committing the result. A slow fetch for workspace A must never
+ * re-stamp its conversation/memory into workspace B after the user switches.
+ */
+export type RuntimeIdentitySnapshot = {
+  generation: string | undefined;
+  workspaceId: string;
+  sessionId: string | undefined;
+};
+
+export function captureRuntimeIdentity(
+  context: Pick<CommandContext, 'getHostState' | 'getSessionId'>,
+): RuntimeIdentitySnapshot {
+  return {
+    generation: context.getHostState().bootstrap.runtimeDataGeneration,
+    workspaceId: getRuntimeWorkspaceId(context),
+    sessionId: context.getSessionId(),
+  };
+}
+
+export function runtimeIdentityChanged(
+  context: Pick<CommandContext, 'getHostState' | 'getSessionId'>,
+  identity: RuntimeIdentitySnapshot,
+): boolean {
+  return (
+    context.getHostState().bootstrap.runtimeDataGeneration !== identity.generation ||
+    getRuntimeWorkspaceId(context) !== identity.workspaceId ||
+    context.getSessionId() !== identity.sessionId
+  );
+}
+
 export function getRuntimeWorkspaceId(context: Pick<CommandContext, 'getHostState'>): string {
   return getRuntimeWorkspaceContext(context).workspaceId;
 }

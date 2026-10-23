@@ -34,6 +34,14 @@ def visible_next_step(content: str) -> str:
         if fence:
             continue
         matched = _NEXT_STEP.fullmatch(stripped)
+        if matched is not None and any(
+            token in segment.casefold()
+            for segment in re.findall(r"[（(]([^）)]{0,40})[）)]", stripped)
+            for token in ("已完成", "已落地", "done", "completed")
+        ):
+            # A past-tense qualifier marks a recap label ("下一步（已完成）：…");
+            # a completed action is never the learner's next move.
+            matched = None
         if matched is None:
             # Label headed sections carry a short suffix noun before the
             # action (`## 第一步代码`, `### Next steps`); the action itself

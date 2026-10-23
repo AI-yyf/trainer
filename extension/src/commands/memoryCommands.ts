@@ -5,7 +5,13 @@ import type { CommandContext } from '../core/commandContext';
 import { STORAGE_KEYS } from '../core/constants';
 import type { BootstrapData, CommandExecutionResult } from '../core/types';
 import { mapWorkspaceAuthority, mergeMemorySummarySnapshot } from '../core/workbenchData';
-import { getRuntimeWorkspaceId, getWorkspaceId, withWorkspaceQuery } from './workspaceContext';
+import {
+  captureRuntimeIdentity,
+  getRuntimeWorkspaceId,
+  getWorkspaceId,
+  runtimeIdentityChanged,
+  withWorkspaceQuery,
+} from './workspaceContext';
 import {
   asNonEmptyString,
   asNumber,
@@ -309,8 +315,14 @@ export async function trainingRestoreOrchestrationCommand(
   const workspaceId = request.workspaceId ?? getRuntimeWorkspaceId(context);
   const sessionId = request.sessionId ?? context.getSessionId();
   const note = request.note;
+  // T-0034: a slow restore must not re-stamp a stale summary into whatever
+  // workspace the runtime has switched to mid-flight.
+  const runtimeIdentity = captureRuntimeIdentity(context);
 
   let summary = await fetchMemorySummary(context, workspaceId, sessionId);
+  if (runtimeIdentityChanged(context, runtimeIdentity)) {
+    return { ok: false, message: 'Trainer data changed while restoring. Reopen the restore action.' };
+  }
   await patchFromSummary(context, summary);
 
   const status = await context.sidecarManager.ensureRunning();
@@ -323,6 +335,9 @@ export async function trainingRestoreOrchestrationCommand(
   }
 
   summary = await fetchMemorySummary(context, workspaceId, sessionId);
+  if (runtimeIdentityChanged(context, runtimeIdentity)) {
+    return { ok: false, message: 'Trainer data changed while restoring. Reopen the restore action.' };
+  }
   await patchFromSummary(context, summary);
   await context.workbench.syncState();
   await context.workbench.postMessage({
@@ -356,6 +371,7 @@ export async function debugRestoreViewCommand(
   const request = normalizeDebugRestorePayload(payload);
   const workspaceId = request.workspaceId ?? resolveWorkspaceId(context);
   const requestedSessionId = request.sessionId ?? context.getSessionId();
+  const runtimeIdentity = captureRuntimeIdentity(context);
 
   let summary = await fetchMemorySummary(context, workspaceId, requestedSessionId);
   const restoreStep = resolveExplicitTrainingRestoreStepFromSummary(summary, request, workspaceId);
@@ -372,6 +388,9 @@ export async function debugRestoreViewCommand(
     };
   }
 
+  if (runtimeIdentityChanged(context, runtimeIdentity)) {
+    return { ok: false, message: 'Trainer data changed while restoring. Reopen the restore action.' };
+  }
   await patchFromSummary(context, summary);
 
   if (restoreStep) {

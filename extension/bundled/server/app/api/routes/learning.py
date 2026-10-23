@@ -292,22 +292,25 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                     )
                 # Replay-safe: the same run (hash + companion session) records
                 # once; a resent attestation replays the ledger without
-                # double-writing growth evidence.
-                already = any(
-                    item.get("artifact_hash") == artifact_hash
-                    and item.get("runner_version") == runner_version
-                    for item in store.list_evidence(attempt["attempt_id"])
+                # double-writing growth evidence. The dedupe predicate runs
+                # inside the store's IMMEDIATE transaction (T-0031), so two
+                # identical attestations racing on the threadpool cannot both
+                # pass the check and double-record.
+                recorded = store.record_evidence(
+                    attempt_id=attempt["attempt_id"],
+                    caller_workspace_id=resolved_workspace_id,
+                    artifact_hash=artifact_hash,
+                    result="passed" if passed else "failed",
+                    trust_level="controlled_check",
+                    runner_version=runner_version,
+                    execution_location="remote",
+                    skip_if=lambda items: any(
+                        item.get("artifact_hash") == artifact_hash
+                        and item.get("runner_version") == runner_version
+                        for item in items
+                    ),
                 )
-                if not already:
-                    store.record_evidence(
-                        attempt_id=attempt["attempt_id"],
-                        caller_workspace_id=resolved_workspace_id,
-                        artifact_hash=artifact_hash,
-                        result="passed" if passed else "failed",
-                        trust_level="controlled_check",
-                        runner_version=runner_version,
-                        execution_location="remote",
-                    )
+                if recorded is not None:
                     persist_skill_projection(runtime, resolved_workspace_id, attempt["attempt_id"])
                     evidence_recorded = True
 

@@ -120,3 +120,15 @@ async def test_current_concept_answer_and_next_step_survive_an_old_editor_lane(
     assert result["next_step"] == action
     assert "函数名" not in str(result)
     assert service.consume_last_reply_failure() is None
+
+
+def test_past_tense_parenthetical_label_is_a_recap_not_an_action() -> None:
+    """T-0036: `下一步（已完成）：跑通登录页` reports what the learner already
+    did — it must never be read as the next move."""
+    assert visible_next_step(
+        " Recap of the last round.\n\n下一步（已完成）：跑通登录页\n\n先跑一次测试。",
+    ) == ""
+    # A forward-looking parenthetical still works.
+    assert visible_next_step("Intro.\n\n下一步（今天 10 分钟）：跑通一个并发计时实验") == (
+        "跑通一个并发计时实验"
+    )

@@ -11456,10 +11456,16 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 "压成一个很小的补丁目标",
                 "先交付一个小而可复盘的",
             )
+            weighted_length = sum(
+                2 if ord(ch) > 0x2E80 else 1 for ch in finalize_next_step
+            )
             looks_generic = (
                 not finalize_next_step
                 or any(filler in finalize_next_step for filler in generic_fillers)
-                or len(finalize_next_step) < 12
+                # CJK-aware short threshold (T-0036): a 6-11 hanzi step can be
+                # fully concrete ("先跑一次测试"); counting hanzi as 2 keeps
+                # it while still catching 6-letter English fragments.
+                or weighted_length < 12
                 or len(finalize_next_step) > 240
                 or "```" in finalize_next_step
                 or "## " in finalize_next_step
@@ -11468,6 +11474,24 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 reply_action = visible_next_step(reply_content)
                 if reply_action:
                     agent_meta["next_step"] = reply_action
+                    # T-0035: the pre-repair filler also lives in
+                    # resume_thread and the coach-turn summary; rebuild both
+                    # from the repaired step or the generic filler resurfaces
+                    # next turn through the continuation path.
+                    repaired_resume = build_resume_thread_text(
+                        str(agent_meta.get("summary") or ""),
+                        reply_action,
+                        response_language=request.response_language,
+                    )
+                    if repaired_resume:
+                        agent_meta["resume_thread"] = repaired_resume
+                    if isinstance(refreshed_coach_turn_data, dict):
+                        refreshed_coach_turn_data = merge_agent_finalize_into_coach_turn(
+                            refreshed_coach_turn_data,
+                            summary=str(agent_meta.get("summary") or "") or None,
+                            next_step=reply_action,
+                            resume_thread=repaired_resume or None,
+                        )
         if (
             not message_requests_explicit_explanation_or_example(getattr(request, "message", None))
             and str(response_scenario or "").strip().lower() in GUIDED_VISIBLE_REPAIR_SCENARIOS
@@ -22778,20 +22802,25 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 ),
                 media_type="text/event-stream",
             )
-        ensure_streaming_ready(coaching_service, request.response_language)
-        ensure_agent_tools_ready(request, coaching_service)
+        try:
+            ensure_streaming_ready(coaching_service, request.response_language)
+            ensure_agent_tools_ready(request, coaching_service)
 
-        use_agent_stream = _resolve_agent_loop_enabled(
-            request, coaching_service, stream=True, payload=payload
-        )
-        attachment_delivery = describe_request_attachment_delivery(
-            request,
-            coaching_service,
-            use_agent_loop=use_agent_stream,
-        )
-        attachments_payload = [a.model_dump() for a in request.attachments]
-        stream_recovery_requested = resource_contract_stream_recovery_requested(request.message)
-        learning_project_state = workspace_learning_project_state(state.workspace_id)
+            use_agent_stream = _resolve_agent_loop_enabled(
+                request, coaching_service, stream=True, payload=payload
+            )
+            attachment_delivery = describe_request_attachment_delivery(
+                request,
+                coaching_service,
+                use_agent_loop=use_agent_stream,
+            )
+            attachments_payload = [a.model_dump() for a in request.attachments]
+            stream_recovery_requested = resource_contract_stream_recovery_requested(request.message)
+            learning_project_state = workspace_learning_project_state(state.workspace_id)
+        except BaseException as exc:
+            # Same singleflight fail-closed rule as /turn/stream (T-0033).
+            _fail_stream_session_singleflight(exc)
+            raise
         if learning_project_state.get("prompt_status") == "pending" and (
             message_confirms_learning_project_folder(request.message)
             or message_rejects_learning_project_folder(request.message)
@@ -23686,11 +23715,18 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 ),
                 media_type="text/event-stream",
             )
-        ensure_streaming_ready(coaching_service, request.response_language)
-        ensure_agent_tools_ready(request, coaching_service)
-        use_agent_stream = _resolve_agent_loop_enabled(
-            request, coaching_service, stream=True, payload=payload
-        )
+        try:
+            ensure_streaming_ready(coaching_service, request.response_language)
+            ensure_agent_tools_ready(request, coaching_service)
+            use_agent_stream = _resolve_agent_loop_enabled(
+                request, coaching_service, stream=True, payload=payload
+            )
+        except BaseException as exc:
+            # The owner already claimed the singleflight key (T-0033): a sync
+            # setup failure must resolve the inflight future or a same-key
+            # retry waits forever without ever receiving the failure.
+            _fail_stream_turn_singleflight(exc)
+            raise
         stream_recovery_requested = (
             request.intent == "coach"
             and resource_contract_stream_recovery_requested(request.message)

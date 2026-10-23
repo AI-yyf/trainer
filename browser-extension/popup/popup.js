@@ -114,6 +114,13 @@ function revealPanel(element) {
   // Reading offsetWidth restarts the CSS animation on the next paint.
   void element.offsetWidth;
   element.classList.add('panel--reveal');
+  // The previously focused control may now sit inside a hidden panel (for
+  // example #pair-submit after pairing succeeds); keep keyboard and screen
+  // reader users anchored to the panel that just appeared.
+  if (!element.contains(document.activeElement)) {
+    element.setAttribute('tabindex', '-1');
+    element.focus({ preventScroll: true });
+  }
 }
 
 function bump(element) {

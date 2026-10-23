@@ -18,7 +18,7 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .skill_projection import normalize_evidence_result
 
@@ -312,6 +312,7 @@ class AttemptStore:
         resource_version_id: str | None = None,
         resource_content_hash: str | None = None,
         resource_location: dict[str, Any] | None = None,
+        skip_if: Callable[[list[dict[str, Any]]], bool] | None = None,
     ) -> dict[str, Any] | None:
         # Identity derives from the stored attempt — the client cannot forge
         # another workspace's or card's evidence.
@@ -332,18 +333,6 @@ class AttemptStore:
             error_code=error_code,
             limitations=limitations,
         )
-
-        # A self report cannot replace a controlled result for the same
-        # artifact. Changed artifact hashes still expire old evidence below.
-        trust_rank = {"self_reported": 0, "model_review": 1, "static_analysis": 2, "controlled_check": 3}
-        for row in self.list_evidence_rows(attempt_id):
-            payload = json.loads(row["payload"])
-            if (
-                payload.get("superseded_by_evidence_id") is None
-                and trust_rank.get(trust_level, 0) >= trust_rank.get(payload.get("trust_level"), 0)
-            ):
-                payload["superseded_by_evidence_id"] = evidence_id
-                self._write_evidence_row(row["evidence_id"], payload)
 
         payload = {
             "evidence_id": evidence_id,
@@ -379,24 +368,77 @@ class AttemptStore:
         ):
             if value is not None:
                 payload[key] = value
-        self._write_evidence_row(evidence_id, payload)
-        verified = any(
-            item.get("artifact_hash") == artifact_hash
-            and item.get("trust_level") == "controlled_check"
-            and item.get("result") == "passed"
-            and not item.get("superseded_by_evidence_id")
-            for item in self.list_evidence(attempt_id)
-        )
-        self.update_attempt(
-            attempt_id,
-            status=(
-                "returned" if attempt.get("status") == "returned"
-                else "verified" if verified
-                else "implemented" if attempt.get("status") == "verified"
-                else attempt.get("status")
-            ),
-            file_hash=artifact_hash,
-        )
+
+        # The whole supersede-scan + insert + attempt-status update is one
+        # IMMEDIATE transaction (T-0031): a racing writer must see this
+        # writer's row in its own scan, so exactly one live evidence row
+        # survives per artifact and a newer failed evaluation demotes a
+        # stale verified attempt.
+        trust_rank = {"self_reported": 0, "model_review": 1, "static_analysis": 2, "controlled_check": 3}
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            live_rows = connection.execute(
+                "SELECT evidence_id, payload FROM training_evidence WHERE attempt_id = ? ORDER BY created_at",
+                (attempt_id,),
+            ).fetchall()
+            items = [json.loads(row["payload"]) for row in live_rows]
+            if skip_if is not None and skip_if(items):
+                connection.rollback()
+                return None
+            for prior, row in zip(items, live_rows):
+                if (
+                    prior.get("superseded_by_evidence_id") is None
+                    and trust_rank.get(trust_level, 0) >= trust_rank.get(prior.get("trust_level"), 0)
+                ):
+                    prior["superseded_by_evidence_id"] = evidence_id
+                    connection.execute(
+                        "UPDATE training_evidence SET payload = ? WHERE evidence_id = ?",
+                        (json.dumps(prior, ensure_ascii=False), row["evidence_id"]),
+                    )
+            connection.execute(
+                "INSERT OR REPLACE INTO training_evidence (evidence_id, workspace_id, attempt_id, created_at, payload) VALUES (?, ?, ?, ?, ?)",
+                (
+                    evidence_id,
+                    payload.get("workspace_id", ""),
+                    payload.get("attempt_id", ""),
+                    payload.get("created_at", utc_now()),
+                    json.dumps(payload, ensure_ascii=False),
+                ),
+            )
+            items.append(payload)
+            verified = any(
+                item.get("artifact_hash") == artifact_hash
+                and item.get("trust_level") == "controlled_check"
+                and item.get("result") == "passed"
+                and not item.get("superseded_by_evidence_id")
+                for item in items
+            )
+            attempt_row = connection.execute(
+                "SELECT payload FROM training_attempts WHERE attempt_id = ?",
+                (attempt_id,),
+            ).fetchone()
+            if attempt_row is not None:
+                attempt_payload = json.loads(attempt_row["payload"])
+                next_status = (
+                    "returned" if attempt_payload.get("status") == "returned"
+                    else "verified" if verified
+                    else "implemented" if attempt_payload.get("status") == "verified"
+                    else attempt_payload.get("status")
+                )
+                attempt_payload["status"] = next_status
+                attempt_payload["file_hash"] = artifact_hash
+                attempt_payload["updated_at"] = utc_now()
+                connection.execute(
+                    "UPDATE training_attempts SET payload = ? WHERE attempt_id = ?",
+                    (json.dumps(attempt_payload, ensure_ascii=False), attempt_id),
+                )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
         # The brand-new record is current by definition: the attempt's bound
         # artifact hash now matches it.
         payload["is_current"] = True

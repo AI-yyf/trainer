@@ -37,6 +37,10 @@ from uuid import uuid4
 logger = logging.getLogger(__name__)
 
 PAIR_CODE_LENGTH = 6
+# T-0037: /browser/pair is token-exempt and the code is 6 digits, so failed
+# exchanges must be capped or a local loopback process can brute-force the
+# window and obtain a long-lived workspace-bound credential.
+PAIR_CODE_MAX_FAILED_ATTEMPTS = 5
 PAIR_CODE_DEFAULT_TTL_SECONDS = 600
 PAIR_CODE_MIN_TTL_SECONDS = 30
 PAIR_CODE_MAX_TTL_SECONDS = 3600
@@ -148,6 +152,8 @@ class BrowserBridgeService:
         self._clock = clock
         self._lock = threading.RLock()
         self._pair_codes: dict[str, PairCodeRegistration] = {}
+        self._pair_failed_attempts = 0
+        self._pair_lockout_active = False
         self._latest_pair_code_id = ""
         self._credentials: dict[str, dict[str, object]] = {}
         self._captures: dict[str, dict[str, object]] = {}
@@ -292,6 +298,8 @@ class BrowserBridgeService:
             # live pairing window exists at a time.
             self._pair_codes = {normalized_code: registration}
             self._latest_pair_code_id = uuid4().hex[:12]
+            self._pair_failed_attempts = 0
+            self._pair_lockout_active = False
         return registration
 
     def _prune_expired_codes_locked(self, now: float) -> None:
@@ -318,6 +326,23 @@ class BrowserBridgeService:
         with self._lock:
             registration = self._pair_codes.get(normalized_code)
             if registration is None:
+                self._pair_failed_attempts += 1
+                if (
+                    self._pair_lockout_active
+                    or (self._pair_codes and self._pair_failed_attempts >= PAIR_CODE_MAX_FAILED_ATTEMPTS)
+                ):
+                    # Kill the live window: the guesses were close enough to a
+                    # brute force that the code must not keep accepting tries.
+                    # The lockout stays honest (429, not "unknown") until a
+                    # fresh code is registered in Trainer.
+                    self._pair_codes = {}
+                    self._pair_failed_attempts = 0
+                    self._pair_lockout_active = True
+                    raise BrowserPairingError(
+                        "pair_attempts_exceeded",
+                        "Too many failed pairing attempts. Generate a new pairing code in Trainer.",
+                        status_code=429,
+                    )
                 raise BrowserPairingError(
                     "unknown_pair_code",
                     "This pairing code is not registered by Trainer (it may have been replaced).",
@@ -332,6 +357,8 @@ class BrowserBridgeService:
                 )
             # Single use: the code is consumed by this exchange.
             self._pair_codes.pop(normalized_code, None)
+            self._pair_failed_attempts = 0
+            self._pair_lockout_active = False
             token = f"{CREDENTIAL_PREFIX}{secrets.token_urlsafe(32)}"
             credential = BrowserCredential(
                 token_hash=_hashed(token),

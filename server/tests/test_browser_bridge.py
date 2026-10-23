@@ -559,3 +559,48 @@ def test_pending_drafts_survive_sidecar_restart(tmp_path: Path) -> None:
     )
     assert duplicate["duplicate"] is True
     assert third.pending_drafts("ws-drafts") == []
+
+
+def test_repeated_wrong_pair_guesses_kill_the_live_pairing_window(tmp_path) -> None:
+    """T-0037: /browser/pair is token-exempt, so unrestrained guessing of the
+    six-digit code is a credential brute force. After five failed exchanges
+    the live pairing window is killed: further guesses — including the
+    correct code — require a freshly generated code."""
+    with build_client(tmp_path) as client:
+        session_id = _start_session(client, "workspace-bridge-brute")
+        response = client.post(
+            "/browser/pair-code",
+            json={
+                "code": "012345",
+                "expires_in": 600,
+                "session_id": session_id,
+                "workspace_id": "workspace-bridge-brute",
+            },
+        )
+        assert response.status_code == 200, response.text
+
+        statuses = []
+        for guess in ("111111", "222222", "333333", "444444", "555555"):
+            guess_response = client.post("/browser/pair", json={"code": guess, "session_id": session_id})
+            statuses.append(guess_response.status_code)
+        assert statuses == [404, 404, 404, 404, 429], statuses
+
+        # The correct code is consumed by the lockout: no replay of guesses.
+        correct = client.post("/browser/pair", json={"code": "012345", "session_id": session_id})
+        assert correct.status_code == 429, correct.text
+
+        # A freshly generated code pairs normally again.
+        re_register = client.post(
+            "/browser/pair-code",
+            json={
+                "code": "654321",
+                "expires_in": 600,
+                "session_id": session_id,
+                "workspace_id": "workspace-bridge-brute",
+            },
+        )
+        assert re_register.status_code == 200, re_register.text
+        ok = client.post("/browser/pair", json={"code": "654321", "session_id": session_id})
+        assert ok.status_code == 200, ok.text
+        payload = ok.json()
+        assert payload.get("token") or payload.get("credential"), payload.keys()

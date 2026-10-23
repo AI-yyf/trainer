@@ -59,7 +59,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installFailed: 'Trainer 无法安装浏览器采集拓展：{reason}',
     installSucceeded:
       '{label} 已安装到 {dir}。请在浏览器的扩展页中以“加载已解压的扩展程序”方式加载。',
-    sidecarUnavailable: 'sidecar 不可用。',
+    sidecarUnavailable: 'Trainer 暂时不可用。',
     pairingCodeSummaryOne: '请在 1 分钟内将此配对码输入 Trainer 采集弹窗（单次有效）。',
     pairingCodeSummaryMany: '请在 {minutes} 分钟内将此配对码输入 Trainer 采集弹窗（单次有效）。',
     pairingCodeIssued: 'Trainer 浏览器配对码已生成。请在 Trainer 采集弹窗中输入。',
@@ -88,7 +88,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       'This Trainer build does not bundle the browser capture extension. Install a Trainer VSIX that ships browser-capture/.',
     installFailed: 'Trainer could not install the browser capture extension: {reason}',
     installSucceeded: '{label} installed to {dir}. Load it unpacked from your browser\'s extensions page.',
-    sidecarUnavailable: 'Sidecar is unavailable.',
+    sidecarUnavailable: 'Trainer is unavailable.',
     pairingCodeSummaryOne:
       'Enter this code in the Trainer Capture popup within 1 minute (single use).',
     pairingCodeSummaryMany:
@@ -123,7 +123,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installFailed: 'Trainer no pudo instalar la extensión de captura: {reason}',
     installSucceeded:
       '{label} se instaló en {dir}. Cárgala como extensión descomprimida desde la página de extensiones de tu navegador.',
-    sidecarUnavailable: 'El sidecar no está disponible.',
+    sidecarUnavailable: 'Trainer no está disponible.',
     pairingCodeSummaryOne:
       'Introduce este código en la ventana de Trainer Capture en 1 minuto (un solo uso).',
     pairingCodeSummaryMany:
@@ -160,7 +160,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installFailed: 'Trainer n’a pas pu installer l’extension de capture : {reason}',
     installSucceeded:
       '{label} a été installé dans {dir}. Chargez-le comme extension non empaquetée depuis la page des extensions de votre navigateur.',
-    sidecarUnavailable: 'Le sidecar est indisponible.',
+    sidecarUnavailable: 'Trainer est indisponible.',
     pairingCodeSummaryOne:
       'Saisissez ce code dans la fenêtre Trainer Capture sous 1 minute (usage unique).',
     pairingCodeSummaryMany:
@@ -197,7 +197,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installFailed: 'Trainer konnte die Browser-Erweiterung nicht installieren: {reason}',
     installSucceeded:
       '{label} wurde nach {dir} installiert. Lade sie über die Erweiterungsseite deines Browsers als entpackte Erweiterung.',
-    sidecarUnavailable: 'Der Sidecar ist nicht verfügbar.',
+    sidecarUnavailable: 'Trainer ist nicht verfügbar.',
     pairingCodeSummaryOne:
       'Gib diesen Code innerhalb von 1 Minute im Trainer-Capture-Fenster ein (einmalig verwendbar).',
     pairingCodeSummaryMany:
@@ -235,7 +235,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installFailed: 'Trainer はブラウザーキャプチャ拡張機能をインストールできませんでした：{reason}',
     installSucceeded:
       '{label} を {dir} にインストールしました。ブラウザーの拡張機能ページから「パッケージ化されていない拡張機能」として読み込んでください。',
-    sidecarUnavailable: 'sidecar を利用できません。',
+    sidecarUnavailable: 'Trainer を利用できません。',
     pairingCodeSummaryOne:
       'このコードを 1 分以内に Trainer Capture のポップアップへ入力してください（1 回限り有効）。',
     pairingCodeSummaryMany:
@@ -272,7 +272,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installFailed: 'Trainer가 브라우저 캡처 확장을 설치하지 못했습니다: {reason}',
     installSucceeded:
       '{label}을(를) {dir}에 설치했습니다. 브라우저의 확장 프로그램 페이지에서 "압축해제된 확장 프로그램"으로 로드하세요.',
-    sidecarUnavailable: 'sidecar를 사용할 수 없습니다.',
+    sidecarUnavailable: 'Trainer를 사용할 수 없습니다.',
     pairingCodeSummaryOne: '1분 안에 이 코드를 Trainer Capture 팝업에 입력하세요(1회용).',
     pairingCodeSummaryMany: '{minutes}분 안에 이 코드를 Trainer Capture 팝업에 입력하세요(1회용).',
     pairingCodeIssued:
@@ -306,7 +306,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installFailed: 'O Trainer não conseguiu instalar a extensão de captura: {reason}',
     installSucceeded:
       '{label} foi instalado em {dir}. Carregue-o sem compactação na página de extensões do seu navegador.',
-    sidecarUnavailable: 'O sidecar está indisponível.',
+    sidecarUnavailable: 'O Trainer está indisponível.',
     pairingCodeSummaryOne:
       'Digite este código na janela do Trainer Capture em até 1 minuto (uso único).',
     pairingCodeSummaryMany:

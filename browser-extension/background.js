@@ -538,10 +538,15 @@ async function runCapture(target, options) {
     clientCaptureId,
     workspaceId: auth.workspaceId
   });
-  // Re-read under the lock: the `queue` snapshot above may already be stale.
+  // Re-read and persist under the lock: a save after the lock releases lets a
+  // concurrent capture/flush read stale state and erase the just-enqueued item.
   const enqueued = await withQueueLock(async () => {
     const fresh = await TrainerCapture.loadQueue();
-    return TrainerCapture.enqueueCapture(fresh, item, TrainerCapture.LIMITS.queue);
+    const next = TrainerCapture.enqueueCapture(fresh, item, TrainerCapture.LIMITS.queue);
+    if (!next.rejectedFull) {
+      await TrainerCapture.saveQueue(next.queue);
+    }
+    return next;
   });
   if (enqueued.rejectedFull) {
     const message = TrainerCapture.formatCopy(copy.captureQueueFull, {});
@@ -551,7 +556,6 @@ async function runCapture(target, options) {
     await updateBadge();
     return { status: 'failed', message, deepLink: '' };
   }
-  await TrainerCapture.saveQueue(enqueued.queue);
   const queueMessage = TrainerCapture.formatCopy(
     download ? copy.captureDownloadQueued : copy.captureQueued,
     { count: enqueued.queue.length }

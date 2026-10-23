@@ -749,18 +749,26 @@ const initialOperationBanner = operationBannerState(
 
 export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   trainingReviewQueueRequested: false,
-  openTrainingReviewQueue: () => set((state) => ({
-    trainingReviewQueueRequested: true,
-    layout: persistLayout({ ...state.layout, activeView: "training" }),
-  })),
+  // Both review entries are authoritative view moves: keep liveActiveView in
+  // sync or a reload reopens the previous view (T-0038, T-0024 family).
+  openTrainingReviewQueue: () => set((state) => {
+    liveActiveView = "training";
+    return {
+      trainingReviewQueueRequested: true,
+      layout: persistLayout({ ...state.layout, activeView: "training" }),
+    };
+  }),
   settingsCategoryRequest: null,
   requestSettingsCategory: (category) => set({ settingsCategoryRequest: category }),
   consumeSettingsCategoryRequest: () => set({ settingsCategoryRequest: null }),
-  beginTrainingReview: () => set((state) => ({
-    trainingReviewQueueRequested: false,
-    trainingRestoreContext: undefined,
-    layout: persistLayout({ ...state.layout, activeView: "training" }),
-  })),
+  beginTrainingReview: () => set((state) => {
+    liveActiveView = "training";
+    return {
+      trainingReviewQueueRequested: false,
+      trainingRestoreContext: undefined,
+      layout: persistLayout({ ...state.layout, activeView: "training" }),
+    };
+  }),
   data: initialData,
   layout: initialUi,
   pendingComposerLanguage: undefined,
@@ -997,6 +1005,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       const appliedDraftIds = current.layout.appliedDraftIds ?? [];
       const alreadyApplied = Boolean(draftId) && appliedDraftIds.includes(draftId);
       if (draft && !alreadyApplied) {
+        liveActiveView = "coach"; // authoritative move (T-0038)
         set((state) => ({
           layout: persistLayout({
             ...state.layout,
@@ -1562,6 +1571,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         if (!draft) {
           return {};
         }
+        liveActiveView = "coach"; // authoritative move (T-0038)
         return {
           layout: persistLayout({
             ...state.layout,

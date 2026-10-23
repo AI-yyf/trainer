@@ -1415,3 +1415,23 @@ test('the packaged bundle covers every file the manifest references', () => {
     }
   }
 });
+
+test('T-0030: capture enqueue persists inside the queue-mutation critical section', () => {
+  // The enqueue path must save the queue while still holding withQueueLock —
+  // a save after the lock releases lets a concurrent capture/flush read stale
+  // state and erase the just-enqueued item (silent loss of an accepted task).
+  const backgroundSource = fs.readFileSync(
+    path.resolve(__dirname, '..', '..', 'browser-extension', 'background.js'),
+    'utf8'
+  );
+  const lockStart = backgroundSource.indexOf('const enqueued = await withQueueLock(async () => {');
+  assert.ok(lockStart > 0, 'enqueue lock closure must exist in runCapture');
+  const lockEnd = backgroundSource.indexOf('\n  });', lockStart);
+  assert.ok(lockEnd > lockStart, 'enqueue lock closure must close');
+  const criticalSection = backgroundSource.slice(lockStart, lockEnd);
+  assert.match(criticalSection, /await TrainerCapture\.saveQueue\(next\.queue\)/,
+    'saveQueue must run inside the withQueueLock closure');
+  // The rejectedFull path must not persist (nothing changed).
+  const rejectedBranch = criticalSection.slice(criticalSection.indexOf('if (!next.rejectedFull)'));
+  assert.ok(rejectedBranch.length > 0);
+});
