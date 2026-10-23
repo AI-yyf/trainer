@@ -377,6 +377,69 @@
       "resolved_at": "2026-10-23",
       "resolved_sha": "6861ce4",
       "resolution": "popup revealPanel focuses the shown panel; pairTransport/sidecarUnavailable reworded in 8 locales; four webview writers keep liveActiveView; popup hex promoted to --queued/--warn tokens"
+    },
+    {
+      "id": "T-0039",
+      "title": "debugRestoreViewCommand second patch unfenced — cross-workspace contamination remains",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "audit wave 2 (adversarial review of wave-1 fixes)",
+      "detail": "memoryCommands.ts:396-408; only the first patchFromSummary is fenced. After ensureRunning+postJson+second fetch, the code re-stamps workspace A's summary into workspace B and re-points the host session id without re-checking runtime identity."
+    },
+    {
+      "id": "T-0040",
+      "title": "mark/clear_evidence_source_deleted unlocked RMW loses T-0031 supersede flags",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "audit wave 2 (adversarial review of wave-1 fixes)",
+      "detail": "attempt_store.py:447-520; a resource delete's stale pre-read payload written back wipes superseded_by_evidence_id set by the transactional record_evidence — two live rows per artifact, deleted-source citation served as current. Also record_evidence must birth-flag new rows whose artifact_hash already carries source_deleted."
+    },
+    {
+      "id": "T-0041",
+      "title": "removeQueueEntry/clearQueueEntries/revokePairing bypass withQueueLock",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "audit wave 2 (adversarial review of wave-1 fixes)",
+      "detail": "background.js:871-894; a popup clear/remove racing a locked flush resurrects removed items (flush's final save writes its stale snapshot) or erases a just-enqueued capture — the loss class T-0030 closed for capture/flush."
+    },
+    {
+      "id": "T-0042",
+      "title": "reliability recover/expire/latest bypass the per-workspace lock; finish-line check covers only cancels",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "audit wave 2 (adversarial review of wave-1 fixes)",
+      "detail": "training_reliability_mixin.py:104-161 + routes/training_handoff.py:102-116; a control-route expire/recover during a locked run lets the finish line clobber the newer record (stale local snapshot) and the same body re-executes. Finish line must re-verify persisted phase/revision; control ops must take the lock."
+    },
+    {
+      "id": "T-0043",
+      "title": "ui/openResource unwired for liveActiveView; liveActiveView never seeded from persisted layout",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "audit wave 2 (adversarial review of wave-1 fixes)",
+      "detail": "useWorkbenchState.ts:1605-1621 (openResource branches) + :397 (seed). Deep-link to Resources then any layout persist rewrites persistence with the stale view; and a reload that restores training/resources still has liveActiveView=coach until the first navigation."
+    },
+    {
+      "id": "T-0044",
+      "title": "revealPanel focus cascade steals keyboard focus to the last revealed panel on popup open",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "audit wave 2 (adversarial review of wave-1 fixes)",
+      "detail": "popup.js:120-123 + renderState loop; all panels start hidden so every open re-reveals and re-focuses, cascading to history/download instead of the primary capture row. Restrict focus moves to cases where the focused control's panel just became hidden."
+    },
+    {
+      "id": "T-0045",
+      "title": "browser-lane token exemption is path-scoped, not method-scoped: unauthenticated DELETE /browser/pair revokes pairing",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "audit wave 2 (adversarial review of wave-1 fixes)",
+      "detail": "main.py:153-168 exempts /browser/pair regardless of method; any local process can revoke the user's pairing (DoS). Exempt POST /browser/pair and Bearer-bearing requests; require the instance token for bearer-less DELETE."
     }
   ]
 }
