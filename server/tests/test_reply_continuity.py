@@ -132,3 +132,11 @@ def test_past_tense_parenthetical_label_is_a_recap_not_an_action() -> None:
     assert visible_next_step("Intro.\n\n下一步（今天 10 分钟）：跑通一个并发计时实验") == (
         "跑通一个并发计时实验"
     )
+
+
+def test_recap_paren_variants_are_never_read_as_actions() -> None:
+    """Deferred-P2 closure: `（已经完成）/（已解决）/（已验证）` are recap
+    qualifiers just like `（已完成）` — a past-tense label never supplies the
+    learner's next move."""
+    assert visible_next_step("Recap.\n\n下一步（已经完成）：跑通登录页\n\n先跑一次测试。") == ""
+    assert visible_next_step("Recap.\n\n**Next step (resolved)**: migrate the config\n\nRun the probe.") == ""

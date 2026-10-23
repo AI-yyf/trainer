@@ -28,7 +28,8 @@
     --hover: #1e1e1e;
     --danger: #ff6b60;
     --ok: #34d399;
-  }
+  --warn: #f59e0b;
+}
 }
 
 * { box-sizing: border-box; }

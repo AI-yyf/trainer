@@ -22717,9 +22717,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         def _fail_stream_session_singleflight(error: BaseException) -> None:
             if not request_id:
                 return
+            wrapped = error if isinstance(error, Exception) else RuntimeError(str(error) or "session message failed")
             fail_session_request_singleflight(
                 request_key,
-                error,
+                wrapped,
                 inflight=inflight_session_requests,
                 guard=completed_session_requests_guard,
             )
@@ -23641,9 +23642,13 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         def _fail_stream_turn_singleflight(error: BaseException) -> None:
             if not request_id:
                 return
+            # Waiters re-raise whatever the future holds; a bare CancelledError
+            # would close their stream with zero frames, so they receive a
+            # wrapped failure they can surface through the documented path.
+            wrapped = error if isinstance(error, Exception) else RuntimeError(str(error) or "training turn failed")
             fail_session_request_singleflight(
                 request_key,
-                error,
+                wrapped,
                 inflight=inflight_session_requests,
                 guard=completed_session_requests_guard,
             )

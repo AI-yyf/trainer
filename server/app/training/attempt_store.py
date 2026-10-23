@@ -566,6 +566,8 @@ class AttemptStore:
     # -- internals ----------------------------------------------------------
 
     def _write_evidence_row(self, evidence_id: str, payload: dict[str, Any]) -> None:
+        """Direct row write, retained for test seeding of mutated evidence
+        states (self_reported demotion, source_deleted simulation)."""
         connection = self._connect()
         try:
             connection.execute(
