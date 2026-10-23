@@ -76,3 +76,16 @@
 7. 两项完成后重新评估 §12 全部停止条件；任何 FAIL 重开修复循环（先写失败用例）。
 8. 注意事项：真实 Provider 探针使用 /tmp/trainer-conv/latency-probe.mjs（端口被占用会
    显式失败——历史上僵尸 sidecar 曾让整轮样本跑到旧代码上）；每次运行用独立 workspace id。
+
+## 2026-10-23 — Owner-directed popup redesign (minimal card)
+- All-owner feedback applied @7cf5760: the browser-extension popup now has
+  exactly two states — pairing (first run, with sidecar detection) and
+  capture (page / PDF / GitHub repo row, library binding, optional
+  project-folder download). Removed: import-history panel, offline /
+  connected status cards and the status dot/line, the queue manager panel
+  (queued captures deliver automatically; the toolbar badge carries the
+  count), the redundant repair button, and their orphaned CSS/sprite
+  symbols (-420 lines). Footer keeps Open Trainer + revoke pairing.
+- Structure test now pins the minimal card AND asserts the removed panels
+  stay removed. CI 9/9 @7cf5760 (run 39942589905).
+- Still BLOCKED on external: T-0028 owner sign-off, Remote-SSH L2 window.

@@ -2,7 +2,7 @@
   "version": 1,
   "loop": 5,
   "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "bd1879a",
+  "head": "7cf5760",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -41,8 +41,8 @@
     "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
   },
   "ci": {
-    "run_id": 39907998471,
-    "sha": "c0811ee",
+    "run_id": 39942589905,
+    "sha": "7cf5760",
     "conclusion": "success",
     "jobs": "9/9"
   },
@@ -57,5 +57,6 @@
     "geometry": "471/471",
     "a11y": "96/96",
     "reshot": "2026-10-23"
-  }
+  },
+  "popup_redesign": "owner-directed minimal card @7cf5760: removed import-history panel, connection-status displays and queue manager UI; two states (pairing / capture) remain"
 }
