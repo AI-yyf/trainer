@@ -32,3 +32,18 @@
   empty attribute selector ([data-plan-fact=      ]) that silently disabled the narrow-width plan-fact wrap
   rule (f7ef9cd) — it was also the source of an esbuild css-syntax warning on every build.
 - Still BLOCKED on external: T-0028 owner sign-off, Remote-SSH L2 real window. Do not convert to PASS.
+
+## 2026-10-23 — Audit wave 1: nine P1s found and closed (loop reopened per §12)
+- Four parallel read-only audits at the final SHA (architecture / security / race+data / UX) found 9 P1s +
+  1 low (popup hex tokens). All registered (T-0030..T-0038) and fixed failure-first @6861ce4.
+- Data-integrity: browser-capture enqueue now persists inside the queue lock; evidence recording is one
+  IMMEDIATE transaction with in-transaction attest dedupe; the training reliability slot is serialized
+  per workspace so same-key requests replay instead of double-running.
+- Availability/fencing: stream-route sync setup failures resolve the singleflight future (no stranded
+  waiters); training restore/rehydrate commands fence on runtime identity before re-stamping summaries.
+- Security: /browser/pair kills the live code after five failed guesses (429 until a fresh code).
+- Correctness/UX: T-0027 repair now also rebuilds resume_thread + coach-turn summary; CJK-aware short-step
+  threshold and past-tense paren guard; popup panel focus, jargon-free capture copy (8 locales),
+  liveActiveView authority in all four remaining writers, popup tokens for the two hex colors.
+- Verification: server 3670 green (incl. mirror-integrity guard), extension suite exit 0, npm run check
+  clean, CI pending on 6861ce4. T-0028 sign-off and Remote-SSH L2 remain BLOCKED on external conditions.
