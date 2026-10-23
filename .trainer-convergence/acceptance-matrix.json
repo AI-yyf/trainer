@@ -19,11 +19,11 @@
     },
     "teaching_acceptance": {
       "status": "BLOCKED",
-      "evidence": "owner sign-off still pending (T-0028, human-only); code-side confirmed defect closed: T-0027 next_step contract FIXED_VALIDATED @e84049d — real provider glm-5.3 4/5 samples emit the exact concrete step consistent with prose (evidence/t0027-final-1..5.json); residual pedagogy rescue-lane template tracked as T-0029"
+      "evidence": "owner sign-off still pending (T-0028, human-only); code-side defects closed: T-0027 next_step contract FIXED_VALIDATED @e84049d (4/5 concrete) and T-0029 rescue-template anchoring FIXED_VALIDATED @b91194b (5/5 turn-anchored, evidence/t0029-1..5.json)"
     },
     "design_acceptance": {
-      "status": "PARTIAL",
-      "evidence": "96/96 a11y + 471 geometry on 14f42ee; UX convergence screens need re-shoot at final SHA"
+      "status": "PASS",
+      "evidence": "re-shot at final SHA f7ef9cd: 471/471 geometry assertions + 96/96 a11y pages (12 locales x 6 surfaces x dark/light x font200); dead [data-plan-fact] selector repaired (f7ef9cd)"
     }
   }
 }

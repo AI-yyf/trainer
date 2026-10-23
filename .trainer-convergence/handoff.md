@@ -22,3 +22,13 @@
   templates to the reply action or derive target from turn content.
 - Still BLOCKED on external: T-0028 owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) and
   Remote-SSH L2 real-window acceptance; do not convert to PASS.
+
+## 2026-10-23 — T-0029 closed, design acceptance re-shot
+- T-0029 FIXED_VALIDATED @b91194b (failure-first: both new tests failed pre-fix; verified via stash). Root fix:
+  ImplementationCoach target label must appear in the learner's message or the message's own first-sentence
+  subject wins; extractor suffix whitelist (第一步代码 / Next steps); router repair predicate covers the
+  rescue-template shapes. glm-5.3 5/5 samples turn-anchored (evidence/t0029-1..5.json).
+- Design acceptance re-shot at f7ef9cd: 471/471 geometry + 96/96 a11y. Found and fixed en route: a corrupted
+  empty attribute selector ([data-plan-fact=      ]) that silently disabled the narrow-width plan-fact wrap
+  rule (f7ef9cd) — it was also the source of an esbuild css-syntax warning on every build.
+- Still BLOCKED on external: T-0028 owner sign-off, Remote-SSH L2 real window. Do not convert to PASS.
