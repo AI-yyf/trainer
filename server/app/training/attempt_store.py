@@ -386,6 +386,25 @@ class AttemptStore:
             if skip_if is not None and skip_if(items):
                 connection.rollback()
                 return None
+            # T-0040: evidence for content whose source is already flagged
+            # deleted is born flagged — a deleted-source citation must never
+            # re-enter the live set through a later verification run.
+            deleted_source = next(
+                (
+                    item
+                    for item in items
+                    if item.get("artifact_hash") == artifact_hash and item.get("source_deleted")
+                ),
+                None,
+            )
+            if deleted_source is not None:
+                payload["source_deleted"] = True
+                payload["source_deleted_resource_id"] = deleted_source.get(
+                    "source_deleted_resource_id"
+                )
+                payload["limitations"] = list(payload.get("limitations") or []) + [
+                    "source deleted"
+                ]
             for prior, row in zip(items, live_rows, strict=True):
                 if (
                     prior.get("superseded_by_evidence_id") is None
@@ -455,6 +474,10 @@ class AttemptStore:
         connection = self._connect()
         updated = 0
         try:
+            # T-0040: the scan+update must hold the write lock so a concurrent
+            # transactional record_evidence cannot interleave and have its
+            # supersede pointer wiped by this method's pre-read payloads.
+            connection.execute("BEGIN IMMEDIATE")
             rows = connection.execute(
                 "SELECT evidence_id, payload FROM training_evidence WHERE workspace_id = ?",
                 (workspace_id,),
@@ -489,6 +512,8 @@ class AttemptStore:
         connection = self._connect()
         updated = 0
         try:
+            # T-0040: same write-lock discipline as the mark path.
+            connection.execute("BEGIN IMMEDIATE")
             rows = connection.execute(
                 "SELECT evidence_id, payload FROM training_evidence WHERE workspace_id = ?",
                 (workspace_id,),

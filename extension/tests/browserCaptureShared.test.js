@@ -1435,3 +1435,28 @@ test('T-0030: capture enqueue persists inside the queue-mutation critical sectio
   const rejectedBranch = criticalSection.slice(criticalSection.indexOf('if (!next.rejectedFull)'));
   assert.ok(rejectedBranch.length > 0);
 });
+
+test('T-0041: every background queue writer runs inside the queue lock', () => {
+  const backgroundSource = fs.readFileSync(
+    path.resolve(__dirname, '..', '..', 'browser-extension', 'background.js'),
+    'utf8'
+  );
+  // removeQueueEntry and clearQueueEntries must route their load+save through
+  // withQueueLock, and revokePairing's queue drop must too — an unlocked save
+  // racing a locked flush resurrects removed items or erases fresh captures.
+  assert.match(
+    backgroundSource,
+    /const next = await withQueueLock\(async \(\) => \{\s*const queue = await TrainerCapture\.loadQueue\(\);\s*const updated = TrainerCapture\.removeQueueItem/,
+    'removeQueueEntry must lock'
+  );
+  const clearFn = backgroundSource.slice(
+    backgroundSource.indexOf('async function clearQueueEntries'),
+    backgroundSource.indexOf('}', backgroundSource.indexOf('saveQueue(TrainerCapture.clearQueue())'))
+  );
+  assert.match(clearFn, /withQueueLock/, 'clearQueueEntries must lock');
+  const revokeSection = backgroundSource.slice(
+    backgroundSource.indexOf('await TrainerCapture.clearAuth();'),
+    backgroundSource.indexOf('await TrainerCapture.clearHistory();')
+  );
+  assert.match(revokeSection, /withQueueLock/, 'revokePairing queue drop must lock');
+});

@@ -33,9 +33,15 @@ def build_client(tmp_path: Path, *, enable_network_fetch: bool = False) -> TestC
     return TestClient(create_app(settings))
 
 
-def _start_session(client: TestClient, workspace_id: str, workspace_name: str = "Bridge WS") -> str:
+def _start_session(
+    client: TestClient,
+    workspace_id: str,
+    workspace_name: str = "Bridge WS",
+    headers: dict[str, str] | None = None,
+) -> str:
     started = client.post(
         "/session/start",
+        headers=headers,
         json={"workspace_id": workspace_id, "workspace_name": workspace_name},
     )
     assert started.status_code == 200, started.text
@@ -604,3 +610,56 @@ def test_repeated_wrong_pair_guesses_kill_the_live_pairing_window(tmp_path) -> N
         assert ok.status_code == 200, ok.text
         payload = ok.json()
         assert payload.get("token") or payload.get("credential"), payload.keys()
+
+
+def test_pair_route_exemption_is_method_scoped_under_instance_token(tmp_path, monkeypatch) -> None:
+    """T-0045: with an instance token configured, the browser-lane exemption
+    covers POST /browser/pair (code exchange) and Bearer DELETE (self-revoke);
+    the bearer-less host revoke keeps requiring the instance token."""
+    monkeypatch.setenv("TRAINER_SIDECAR_TOKEN", "test-instance-token")
+    host_headers = {"x-trainer-token": "test-instance-token"}
+    with build_client(tmp_path) as client:
+        session_id = _start_session(
+            client, "workspace-bridge-method-scope", headers=host_headers
+        )
+        registered = client.post(
+            "/browser/pair-code",
+            headers=host_headers,
+            json={
+                "code": "778899",
+                "expires_in": 600,
+                "session_id": session_id,
+                "workspace_id": "workspace-bridge-method-scope",
+            },
+        )
+        assert registered.status_code == 200, registered.text
+
+        # POST exchange rides the lane (no instance token header).
+        paired = client.post("/browser/pair", json={"code": "778899", "session_id": session_id})
+        assert paired.status_code == 200, paired.text
+        credential = paired.json().get("credential") or paired.json().get("token")
+        assert credential
+
+        # Bearer DELETE (self-revoke) rides the lane.
+        self_revoke = client.delete(
+            "/browser/pair",
+            headers={"Authorization": f"Bearer {credential}"},
+        )
+        assert self_revoke.status_code == 200, self_revoke.text
+
+        # Bearer-less DELETE is a host action: it requires the instance token.
+        re_register = client.post(
+            "/browser/pair-code",
+            headers=host_headers,
+            json={
+                "code": "112233",
+                "expires_in": 600,
+                "session_id": session_id,
+                "workspace_id": "workspace-bridge-method-scope",
+            },
+        )
+        assert re_register.status_code == 200, re_register.text
+        host_revoke = client.delete("/browser/pair")
+        assert host_revoke.status_code == 401, host_revoke.text
+        with_token = client.delete("/browser/pair", headers={"x-trainer-token": "test-instance-token"})
+        assert with_token.status_code == 200, with_token.text

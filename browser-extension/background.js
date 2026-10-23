@@ -868,7 +868,11 @@ async function revokePairing() {
   // the badge does not keep counting forever after an explicit revoke, and
   // clear the local capture records so a later re-capture is not short-
   // circuited by the client-side duplicate hint.
-  await TrainerCapture.saveQueue([]);
+  // Queue mutations serialize with capture/flush (T-0041): a lockless save
+  // here would erase a capture enqueued while revoke was running.
+  await withQueueLock(async () => {
+    await TrainerCapture.saveQueue([]);
+  });
   await TrainerCapture.clearHistory();
   await recordConnection('unknown');
   await updateBadge();
@@ -882,16 +886,21 @@ async function removeQueueEntry(clientCaptureId) {
   if (!id) {
     return { ok: false, message: dict().queueNothing };
   }
-  const queue = await TrainerCapture.loadQueue();
-  const next = TrainerCapture.removeQueueItem(queue, id);
-  await TrainerCapture.saveQueue(next);
+  const next = await withQueueLock(async () => {
+    const queue = await TrainerCapture.loadQueue();
+    const updated = TrainerCapture.removeQueueItem(queue, id);
+    await TrainerCapture.saveQueue(updated);
+    return updated;
+  });
   await updateBadge();
   return { ok: true, remaining: next.length, state: await buildState() };
 }
 
 /** Queue manager: clear every pending capture (task 三). */
 async function clearQueueEntries() {
-  await TrainerCapture.saveQueue(TrainerCapture.clearQueue());
+  await withQueueLock(async () => {
+    await TrainerCapture.saveQueue(TrainerCapture.clearQueue());
+  });
   await updateBadge();
   return { ok: true, remaining: 0, state: await buildState() };
 }

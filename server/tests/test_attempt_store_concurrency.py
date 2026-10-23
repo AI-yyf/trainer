@@ -106,3 +106,50 @@ class RecordEvidenceConcurrencyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SourceDeletedFlagTests(unittest.TestCase):
+    def test_new_evidence_for_deleted_content_is_born_flagged(self) -> None:
+        """T-0040: TR-076 must hold for evidence recorded AFTER a delete —
+        a new row for the same artifact hash carries source_deleted, so a
+        deleted-source citation can never be served as current."""
+        with tempfile.TemporaryDirectory() as tmp:
+            store = AttemptStore(str(Path(tmp) / "attempts.db"))
+            attempt = store.start_attempt(
+                workspace_id="ws-deleted-source",
+                card_id="card-1",
+                file_path="lesson.py",
+                file_hash="hash-del",
+            )
+            store.record_evidence(
+                attempt_id=attempt["attempt_id"],
+                caller_workspace_id="ws-deleted-source",
+                artifact_hash="hash-del",
+                result="passed",
+                trust_level="controlled_check",
+            )
+            store.mark_evidence_source_deleted(
+                workspace_id="ws-deleted-source", content_hash="hash-del"
+            )
+            fresh = store.record_evidence(
+                attempt_id=attempt["attempt_id"],
+                caller_workspace_id="ws-deleted-source",
+                artifact_hash="hash-del",
+                result="passed",
+                trust_level="controlled_check",
+            )
+            self.assertIsNotNone(fresh)
+            self.assertTrue(
+                fresh.get("source_deleted"),
+                "evidence for a deleted source must be born flagged",
+            )
+
+    def test_mark_and_clear_run_inside_the_write_transaction(self) -> None:
+        import inspect
+
+        from app.training.attempt_store import AttemptStore as Store
+
+        mark_src = inspect.getsource(Store.mark_evidence_source_deleted)
+        clear_src = inspect.getsource(Store.clear_evidence_source_deleted)
+        self.assertIn("BEGIN IMMEDIATE", mark_src)
+        self.assertIn("BEGIN IMMEDIATE", clear_src)

@@ -395,6 +395,10 @@ export interface WorkbenchStore {
 // layout (language/theme writers) must never overwrite the active view the
 // learner has since moved to. Only setActiveView/applyHostMessage update this.
 let liveActiveView: ActiveWorkbenchView = "coach";
+// T-0043: a reload restores the persisted view in memory — liveActiveView
+// must agree from the start, or the first layout-only persist (scroll,
+// theme, draft flush) quietly rewrites persistence back to the old view.
+liveActiveView = initialUi.activeView;
 
 function persistLayout(next: PersistedWorkbenchState): PersistedWorkbenchState {
   setPersistedState({ ...next, activeView: liveActiveView });
@@ -1591,6 +1595,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         }
         const exists = state.data.resources.some((resource) => resource.id === resourceId);
         if (!exists) {
+          liveActiveView = "resources"; // authoritative move (T-0043)
           return {
             ...operationBannerState(
               {
@@ -1609,6 +1614,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             resourceRestoreContext: undefined,
           };
         }
+        liveActiveView = "resources"; // authoritative move (T-0043)
         return {
           ...operationBannerState(undefined),
           resourceRestoreContext: {

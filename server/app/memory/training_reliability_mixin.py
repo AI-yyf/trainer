@@ -313,6 +313,20 @@ class TrainingReliabilityMixin:
                 raise
 
             structured = self._structured_for(resolved)
+            # T-0042 finish line: if a locked control route moved OUR record
+            # (expire/recover) while work() ran, never clobber the newer honest
+            # state with the stale local snapshot — the success still lands in
+            # the dedupe ledger so the body can never re-execute.
+            persisted_now = self._load_training_reliability(structured)
+            control_moved = (
+                persisted_now is not None
+                and persisted_now != record
+                and str(persisted_now.get("request_id") or "") == str(record.get("request_id") or "")
+                # A same-request cancel racing a completed work() is owned by
+                # the mark_succeeded/cancel_after machinery (acked, evidence
+                # kept) — never treated as a foreign control transition.
+                and str(persisted_now.get("phase") or "") != "cancelled"
+            )
             next_snapshot = int(structured._workspace.get(WORKSPACE_SNAPSHOT_REVISION_KEY) or 0) + 1
             latest_handoff = structured._workspace.get("latest_training_handoff")
             persisted_phase = learning_phase
@@ -330,7 +344,14 @@ class TrainingReliabilityMixin:
                 outcome="success",
                 snapshot_revision=next_snapshot,
             )
-            workspace = self._save_training_reliability(resolved, structured, finished, dedupe=success_dedupe)
+            if control_moved:
+                workspace = self._save_training_reliability(
+                    resolved, structured, persisted_now, dedupe=success_dedupe
+                )
+            else:
+                workspace = self._save_training_reliability(
+                    resolved, structured, finished, dedupe=success_dedupe
+                )
             if isinstance(result, dict):
                 merged = dict(result)
                 merged[WORKSPACE_RELIABILITY_KEY] = workspace.get(WORKSPACE_RELIABILITY_KEY)

@@ -114,10 +114,13 @@ function revealPanel(element) {
   // Reading offsetWidth restarts the CSS animation on the next paint.
   void element.offsetWidth;
   element.classList.add('panel--reveal');
-  // The previously focused control may now sit inside a hidden panel (for
-  // example #pair-submit after pairing succeeds); keep keyboard and screen
-  // reader users anchored to the panel that just appeared.
-  if (!element.contains(document.activeElement)) {
+  // Move focus only when the previously focused control actually sat inside
+  // a panel that just became hidden (for example #pair-submit after pairing
+  // succeeds). On popup open every panel is revealed from `hidden` — focusing
+  // each would cascade to the last panel instead of the primary action.
+  const previous = document.activeElement;
+  const previousPanel = previous instanceof HTMLElement ? previous.closest('.panel') : null;
+  if (previousPanel && previousPanel.hidden) {
     element.setAttribute('tabindex', '-1');
     element.focus({ preventScroll: true });
   }

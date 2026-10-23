@@ -152,7 +152,6 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     instance_token = os.getenv("TRAINER_SIDECAR_TOKEN", "").strip()
     browser_lane_paths = frozenset(
         {
-            "/browser/pair",
             "/browser/status",
             "/browser/coach-draft",
         }
@@ -160,6 +159,19 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
 
     def browser_lane_request(request: Request) -> bool:
         path = request.url.path.rstrip("/") or "/"
+        if path == "/browser/pair":
+            # T-0045: the exemption is method-scoped. The browser's code
+            # exchange (POST) and a Bearer-authenticated self-revoke (DELETE)
+            # ride the lane; the bearer-less host revoke requires the
+            # instance token — otherwise any local process could revoke the
+            # user's pairing.
+            method = request.method.upper()
+            if method == "POST":
+                return True
+            if method == "DELETE":
+                authorization = str(request.headers.get("authorization") or "").strip().lower()
+                return authorization.startswith("bearer ")
+            return False
         if path in browser_lane_paths:
             return True
         if path == "/resources/capture":

@@ -402,6 +402,12 @@ export async function debugRestoreViewCommand(
     summary = await fetchMemorySummary(context, workspaceId, requestedSessionId);
   }
 
+  // T-0039: the second fetch ran after awaits — re-check the runtime fence
+  // before re-stamping, or a mid-flight workspace switch gets workspace A's
+  // summary (and session id) committed into workspace B.
+  if (runtimeIdentityChanged(context, runtimeIdentity)) {
+    return { ok: false, message: 'Trainer data changed while restoring. Reopen the restore action.' };
+  }
   await patchFromSummary(context, summary);
 
   const resolvedSessionId = requestedSessionId ?? context.getSessionId();
