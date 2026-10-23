@@ -62,3 +62,17 @@
   CancelledError closes the SSE stream with zero frames, --warn token is light-bg-tuned, dead
   _write_evidence_row helper, /browser/pair DoS-by-lockout tradeoff (recovery = one click).
 - Still BLOCKED on external: T-0028 owner sign-off, Remote-SSH L2 real window. Do not convert to PASS.
+
+## 恢复命令（§8.1 — 会话重启后按序执行）
+1. `git fetch origin && git checkout maturity/p1-final-convergence-2026-10-20 && git pull` — 恢复到 86951a4（代码 c0811ee）。
+2. `cd server && python3.12 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"`（若 venv 缺失）。
+3. `npm install && npm run build`（根目录；刷新 dist 供设计探针使用）。
+4. 读取 `.trainer-convergence/run-state.json` + 本文件末三节恢复上下文；未关闭项只有
+   T-0028（所有者 §6 签核）与 Remote-SSH L2 实机两项，均为外部条件。
+5. 所有者签核到位 → 运行教学质量复核并把 teaching_acceptance 从 BLOCKED 改为实测结果，
+   回填 docs/maturity/2026-10-20-real-project-review.md §6 与 JSON 证据。
+6. 真实 Remote-SSH 窗口到位 → 运行 L2 实机验收（与本地相同的统一 evidence 写入），
+   回填 remote_ssh_e2e 的 JSON 证据。
+7. 两项完成后重新评估 §12 全部停止条件；任何 FAIL 重开修复循环（先写失败用例）。
+8. 注意事项：真实 Provider 探针使用 /tmp/trainer-conv/latency-probe.mjs（端口被占用会
+   显式失败——历史上僵尸 sidecar 曾让整轮样本跑到旧代码上）；每次运行用独立 workspace id。
