@@ -269,6 +269,87 @@
       "resolved_at": "2026-10-23",
       "resolved_sha": "b91194b",
       "resolution": "Three-layer fix: (1) ImplementationCoach._target_label derives the template target from THIS turn's message subject when the lane label never appears in the message; (2) visible_next_step reads actions from label-headed sections with a bounded suffix whitelist (## 第一步代码 / ### Next steps); (3) router T-0027 repair treats rescue-template shapes as unanchored and prefers the reply's labelled action. Failure-first tests confirmed (2 new pytest tests failed pre-fix). Real provider glm-5.3: 5/5 samples turn-anchored — 3/5 fully concrete labelled actions, 2/5 anchored rescue directive (evidence/t0029-1..5.json). Full server suite 3666 green incl. bundled-mirror integrity guard."
+    },
+    {
+      "id": "T-0030",
+      "title": "Browser capture enqueue persists outside withQueueLock — accepted capture silently lost",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "final-SHA independent audit (architecture/security/race/UX)",
+      "detail": "browser-extension/background.js:542-554; saveQueue runs after the lock releases, so a second capture/flush reading stale queue state can erase the first item (interleave documented by race audit). Violates the no-silent-loss contract."
+    },
+    {
+      "id": "T-0031",
+      "title": "AttemptStore.record_evidence supersede+insert+attempt-update is an unlocked multi-connection RMW",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "final-SHA independent audit (architecture/security/race/UX)",
+      "detail": "server/app/training/attempt_store.py:338-399 via separate connections; concurrent evidence writers can both pass the supersede scan, keeping a stale passed evidence live (verified=True despite newer failed evaluation). Attest dedupe (routes/learning.py:293-312) shares the class."
+    },
+    {
+      "id": "T-0032",
+      "title": "run_training_reliability single-slot check-then-act unlocked across threadpool routes",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "final-SHA independent audit (architecture/security/race/UX)",
+      "detail": "server/app/memory/training_reliability_mixin.py:209-282; two same-key requests can both run work() and last-writer-win the slot — the R1 replay contract only holds if the second load sees the first's in-flight save."
+    },
+    {
+      "id": "T-0033",
+      "title": "/turn/stream + /session/message/stream: sync exception after singleflight claim strands waiters forever",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "final-SHA independent audit (architecture/security/race/UX)",
+      "detail": "server/app/api/routers.py:23623-23689 and :22752-22781; ensure_streaming_ready failures after the claim never resolve the inflight future, so a client retry with the same request_id hangs on 'wait' (fail-closed promise broken)."
+    },
+    {
+      "id": "T-0034",
+      "title": "Generation-fence coverage partial: training restore/debug restore/rehydrate/resource commits unfenced",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "final-SHA independent audit (architecture/security/race/UX)",
+      "detail": "extension/src/commands/memoryCommands.ts:300-375, trainingCommands.ts:435-449; a slow workspace-A fetch can patch A's conversation/memory into workspace B after a switch (cross-workspace contamination via mergeWorkspaceStampedSnapshot re-stamping)."
+    },
+    {
+      "id": "T-0035",
+      "title": "T-0027 repair leaves pre-repair filler inside resume_thread and persisted coach_turn metadata",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "final-SHA independent audit (architecture/security/race/UX)",
+      "detail": "server/app/api/routers.py:11392-11408/10464/11545-11550; the shipped next_step is repaired but resume_thread/coaching_state still embed the generic filler — the defect resurfaces next turn via the continuation path."
+    },
+    {
+      "id": "T-0036",
+      "title": "T-0027 repair len<12 heuristic corrupts good short CJK next steps",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "final-SHA independent audit (architecture/security/race/UX)",
+      "detail": "routers.py repair predicate; 6-11 char concrete steps (先跑一次测试) are classified generic and replaced by the reply's first labelled line, which can be a completed-recap label (下一步（已完成）：…). Needs CJK-aware threshold + past-tense paren guard."
+    },
+    {
+      "id": "T-0037",
+      "title": "Browser pairing code brute-force: /browser/pair exempt from token guard with no attempt cap",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "final-SHA independent audit (architecture/security/race/UX)",
+      "detail": "server/app/main.py:152-168 + browser_bridge/service.py:304-349; 6-digit code, 600s TTL, no lockout — a local loopback process can exhaust the space and obtain a long-lived workspace-bound credential."
+    },
+    {
+      "id": "T-0038",
+      "title": "Popup focus lost to body on panel swap; 'sidecar' jargon in popup+host error copy; liveActiveView unwired writers; popup hex colors outside tokens",
+      "status": "CONFIRMED",
+      "severity": "P1",
+      "discovered": "2026-10-23",
+      "source": "final-SHA independent audit (architecture/security/race/UX)",
+      "detail": "popup.js:390-397 (no focus management); shared.js:264+8 locales and browserCapture/hostCopy.ts:91 jargon; useWorkbenchState.ts:754/762/1003/1567 set activeView without liveActiveView (T-0024 class reload regression); popup.css:174,262 hex outside tokens."
     }
   ]
 }
