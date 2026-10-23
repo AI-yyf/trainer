@@ -1,7 +1,7 @@
 {
   "version": 1,
   "loop": 5,
-  "phase": "WAVE6_EVIDENCE_BACKFILL",
+  "phase": "BLOCKED_ON_EXTERNAL",
   "head": "13d150d996d20200fd2147737e032a063aab9b7a",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
@@ -38,13 +38,13 @@
     "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
   },
   "ci": {
-    "head": "0e196c4",
+    "head": "a243ae0",
     "conclusion": "success",
-    "jobs": "9/9"
+    "jobs": "9/9 (T-0026/27 evidence registration run)"
   },
   "next": [
-    "CI on 542959d+ (T-0027 evidence registration)",
-    "T-0027 contract fix needs real-provider validation loop (owner relay)",
-    "owner sign-off + real Remote-SSH window remain human/environment gated"
+    "owner sign-off (T-0028) — human",
+    "real Remote-SSH window (L2) — environment",
+    "T-0027 contract fix validated vs real provider — owner relay cadence"
   ]
 }
