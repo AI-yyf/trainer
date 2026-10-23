@@ -23,7 +23,7 @@
     },
     "design_acceptance": {
       "status": "PASS",
-      "evidence": "re-shot at final SHA f7ef9cd: 471/471 geometry assertions + 96/96 a11y pages (12 locales x 6 surfaces x dark/light x font200); dead [data-plan-fact] selector repaired (f7ef9cd)"
+      "evidence": "re-shot at final SHA f025727 (code c0811ee, after audit waves 1-2 UI changes): 471/471 geometry assertions + 96/96 a11y pages (12 locales x 6 surfaces x dark/light x font200); evidence/design-a11y-report-f025727.json"
     }
   }
 }
