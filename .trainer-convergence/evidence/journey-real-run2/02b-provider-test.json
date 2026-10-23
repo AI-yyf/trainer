@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "ok": true,
+  "streaming_ready": true,
+  "model_supported": true,
+  "stream_probe_status": "verified",
+  "tools_ready": true
+}

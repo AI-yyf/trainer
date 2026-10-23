@@ -26,3 +26,9 @@ across a sidecar restart, executable next step with success signal and a
 formal-verification offer. This completes the real-model journey evidence for
 the release gate's journey item; the human teaching sign-off (T-0028) remains
 a separate owner-only gate.
+
+## Run 2 — T-0049 fix confirmation (2026-10-24, evidence/journey-real-run2/)
+Re-ran the identical journey against the T-0049 fix code (streaming pre-persist
+repair): 10/10 steps 200 again. Step 06 this round shipped the T-0029 anchored
+rescue directive (turn-anchored to 「Python 多线程」, no labelled action in the
+reply) — consistent with the documented rescue-lane behavior.

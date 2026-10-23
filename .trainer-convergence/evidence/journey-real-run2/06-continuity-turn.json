@@ -1,0 +1,7 @@
+{
+  "status": 200,
+  "visible_chars": 1162,
+  "has_complete": true,
+  "next_step": "先把 Python 多线程 压成一个很小的补丁目标，再继续写。",
+  "reply_excerpt": "好，接着上一步继续：没有检测到你打开的工作区文件，所以我先把「这一步」按教练主线写成一个可直接落地的最小补丁目标，你可以照着敲。\n\n## 这一步的最小补丁目标（Python 多线程）\n\n**目标：写一个 `thread_demo.py`，包含一个明确的并发行为和一个可观察的验证点。**\n\n```python\nimport threading\nimport time\n\nresults = []\nlock = threading.Lock()\n\ndef worker(n):\n    time.sleep(0.1)          # 模拟一点工作，让并发可观察\n    with lock:               # 保护共享列表\n        results.append(n)\n    print(f\"线程 {threading.current_thread().name} 完成 n={n}\")\n\nthreads = [threading.Thread(target=worker, args=(i,)) for i in range(5)]\nfor t in threads:\n    t.start()\nfor t in threads:\n    t.join()\n\nprint(\"results =\", results)\nassert sorted(results) == [0, 1, 2, 3, 4]\nprint(\"OK: 全部线程安全地完成了\")\n```\n\n## 怎么验证（两个检查，对齐你计划的 verify_method）\n\n1. **能证明变化的检查**：运行 `python thread_demo.py`，观察 5 行 \"线程... 完成\" 几乎同时（约 0.1s 内）打印出来，而不是一个接一个各等 0.1s--这就是并发行为的最小证明。最后输出 `OK:...` 说明断言通过。\n\n2. **边界检查（不只是 happy path）**：把 `lock` 相关的两行删掉再跑几次（或把 `results.append` 换成读-改-写累加一个计数器），对比"
+}
