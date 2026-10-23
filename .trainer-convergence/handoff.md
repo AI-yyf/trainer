@@ -47,3 +47,18 @@
   liveActiveView authority in all four remaining writers, popup tokens for the two hex colors.
 - Verification: server 3670 green (incl. mirror-integrity guard), extension suite exit 0, npm run check
   clean, CI pending on 6861ce4. T-0028 sign-off and Remote-SSH L2 remain BLOCKED on external conditions.
+
+## 2026-10-23 — Audit wave 2: adversarial re-audit of the wave-1 fixes, seven gaps closed
+- Four parallel read-only auditors re-ran at 69fbcd2 attacking the wave-1 fixes directly. Found 7 P1s
+  (T-0039..T-0045), several of them incompletenesses in wave 1 itself (unfenced second restore patch,
+  unlocked source-deleted siblings, unlocked queue clear/remove/revoke, reliability control routes
+  bypassing the new lock, one missed liveActiveView writer + missing startup seed, popup focus cascade
+  on open, path-scoped token exemption). All FIXED_VALIDATED @c0811ee (pyright narrowing fix).
+- Verification: behavior tests (evidence born-flagged, method-scoped lane exemption, reliability
+  cancel-race) + contract pins; server full suite green, extension suite exit 0, npm run check clean,
+  pyright clean, CI 9/9 @c0811ee (run 39907998471).
+- P2 records (not blockers, documented in the audit transcripts): reliability lock unbounded acquire
+  (no timeout escape), T-0036 predicate residuals for unlisted generic fillers ≥12 weight, waiter
+  CancelledError closes the SSE stream with zero frames, --warn token is light-bg-tuned, dead
+  _write_evidence_row helper, /browser/pair DoS-by-lockout tradeoff (recovery = one click).
+- Still BLOCKED on external: T-0028 owner sign-off, Remote-SSH L2 real window. Do not convert to PASS.

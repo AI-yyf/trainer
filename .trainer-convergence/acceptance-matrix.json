@@ -3,7 +3,7 @@
   "gates": {
     "ci_cross_platform": {
       "status": "PASS",
-      "evidence": "run 39900477852 @189c4d1: 9/9 jobs success with audit-wave fixes T-0030..T-0038 landed"
+      "evidence": "run 39907998471 @c0811ee: 9/9 jobs success with audit-wave-2 fixes T-0039..T-0045 landed"
     },
     "native_install_e2e": {
       "status": "PASS_MAC",
