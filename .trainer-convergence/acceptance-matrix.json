@@ -3,7 +3,7 @@
   "gates": {
     "ci_cross_platform": {
       "status": "PASS",
-      "evidence": "run @09a6b29: 9/9 jobs success with T-0024 view-aware status card landed"
+      "evidence": "run 39884131711 @5622c29: 9/9 jobs success (UI/Server/Package x macos/windows/ubuntu) with the full T-0027 fix stack landed"
     },
     "native_install_e2e": {
       "status": "PASS_MAC",
@@ -19,7 +19,7 @@
     },
     "teaching_acceptance": {
       "status": "BLOCKED",
-      "evidence": "owner sign-off pending; real-provider latency issues recorded"
+      "evidence": "owner sign-off still pending (T-0028, human-only); code-side confirmed defect closed: T-0027 next_step contract FIXED_VALIDATED @e84049d — real provider glm-5.3 4/5 samples emit the exact concrete step consistent with prose (evidence/t0027-final-1..5.json); residual pedagogy rescue-lane template tracked as T-0029"
     },
     "design_acceptance": {
       "status": "PARTIAL",
