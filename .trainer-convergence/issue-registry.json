@@ -516,7 +516,7 @@
       "acceptance": "Streaming turn ships ONE repaired step across response.agent, response.snapshot and the persisted memory thread",
       "evidence": "server/tests/test_next_step_surface_consistency.py (3 API tests incl. streaming persist); resolved at commit on this branch",
       "resolved_at": "2026-10-24",
-      "resolved_sha": "PENDING_COMMIT"
+      "resolved_sha": "fc245cf"
     }
   ]
 }
