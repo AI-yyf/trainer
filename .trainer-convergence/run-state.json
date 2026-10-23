@@ -2,7 +2,7 @@
   "version": 1,
   "loop": 5,
   "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "7cf5760",
+  "head": "f5c67ad",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -32,7 +32,8 @@
     "T-0025": "DONE_LOCAL (5bf50a7)",
     "T-0029": "FIXED_VALIDATED (b91194b: turn-subject target anchoring + suffix-whitelist extractor + router repair predicate; glm-5.3 5/5 anchored, evidence/t0029-1..5.json)",
     "audit-wave-1": "9 P1 findings (T-0030..T-0038) from final-SHA independent audits; all FIXED_VALIDATED @6861ce4 failure-first",
-    "audit-wave-2": "7 P1 findings (T-0039..T-0045) from adversarial re-audit of wave-1 fixes; all FIXED_VALIDATED @c0811ee"
+    "audit-wave-2": "7 P1 findings (T-0039..T-0045) from adversarial re-audit of wave-1 fixes; all FIXED_VALIDATED @c0811ee",
+    "T-0046": "FIXED_VALIDATED (f5c67ad: bounded lock acquire + honest busy view; failure-first demo proved unbounded blocking pre-fix)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
@@ -41,8 +42,8 @@
     "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
   },
   "ci": {
-    "run_id": 39942589905,
-    "sha": "7cf5760",
+    "run_id": 39946921786,
+    "sha": "f5c67ad",
     "conclusion": "success",
     "jobs": "9/9"
   },

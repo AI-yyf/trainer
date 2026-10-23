@@ -89,3 +89,17 @@
 - Structure test now pins the minimal card AND asserts the removed panels
   stay removed. CI 9/9 @7cf5760 (run 39942589905).
 - Still BLOCKED on external: T-0028 owner sign-off, Remote-SSH L2 window.
+
+## 2026-10-23 — Deferred-P2 wave closed; T-0046 bounded lock acquire
+- T-0046 FIXED_VALIDATED @f5c67ad (failure-first: pre-fix demo showed the
+  second same-workspace call blocks unboundedly on the lock). Bounded
+  acquire (120s) now returns the honest current workspace without mutation
+  on timeout — T-0032's serialization is intact, work() never runs
+  concurrently. CI 9/9 (run 39946921786).
+- Popup minimal card @7cf5760 (owner-directed): two states only, no import
+  history / connection status / queue manager; CI 9/9 (run 39942589905).
+- Remaining deferred item: T-0036 predicate residual (unlisted generic
+  fillers ≥12 weighted chars can still ship) — inherent to the blocklist
+  approach; the prompt contract + real-provider samples remain the primary
+  defense. Documented, non-blocking.
+- Still BLOCKED on external: T-0028 owner sign-off, Remote-SSH L2 window.
