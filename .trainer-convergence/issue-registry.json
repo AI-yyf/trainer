@@ -461,6 +461,17 @@
       "resolved_at": "2026-10-23",
       "resolved_sha": "c0811ee",
       "resolution": "browser-lane exemption method-scoped: POST /browser/pair + Bearer DELETE exempt; bearer-less host revoke requires the instance token; behavior test under TRAINER_SIDECAR_TOKEN"
+    },
+    {
+      "id": "T-0046",
+      "title": "Reliability lock unbounded acquire — wedged run blocks training endpoints forever",
+      "status": "FIXED_VALIDATED",
+      "severity": "medium",
+      "discovered": "2026-10-23",
+      "source": "audit wave 2 P2 record, closed in the deferred-P2 wave",
+      "resolved_at": "2026-10-23",
+      "resolved_sha": "see commit after 04e5639",
+      "resolution": "Bounded acquire (120s budget, class attr _RELIABILITY_LOCK_WAIT_SECONDS): on timeout the caller gets the honest current workspace WITHOUT mutating (no unlocked writes — T-0032 stays closed) and work() never executes concurrently. Failure-first: pre-fix demo proved the second call blocks unboundedly. Behavior test test_lock_timeout_returns_honest_busy_view_without_hanging."
     }
   ]
 }

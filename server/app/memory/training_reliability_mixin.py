@@ -198,6 +198,10 @@ class TrainingReliabilityMixin:
     # checks before either persists its in-flight record and double-run.
     _reliability_locks: dict[str, threading.Lock] = {}
     _reliability_locks_guard = threading.Lock()
+    # Bounded acquire (T-0046): a wedged run must not block the workspace's
+    # training endpoints forever; on timeout the caller gets an honest,
+    # unmutated view of the current workspace instead of proceeding unlocked.
+    _RELIABILITY_LOCK_WAIT_SECONDS: float = 120.0
 
     @classmethod
     def _reliability_lock_for(cls, workspace_id: str) -> threading.Lock:
@@ -224,7 +228,15 @@ class TrainingReliabilityMixin:
         work: Callable[[], dict[str, Any]],
     ) -> dict[str, Any]:
         resolved = self._resolve_workspace_for_write(workspace_id)
-        with self._reliability_lock_for(resolved):
+        if not self._reliability_lock_for(resolved).acquire(
+            timeout=self._RELIABILITY_LOCK_WAIT_SECONDS
+        ):
+            # Honest busy view: another run holds this workspace's slot. Read
+            # the current state WITHOUT mutating (no unlocked writes — that
+            # would reopen T-0032) and never execute work() concurrently.
+            structured = self._structured_for(resolved)
+            return dict(structured._workspace)
+        try:
             structured = self._structured_for(resolved)
             existing = expire_if_needed(self._load_training_reliability(structured))
             if existing is not None and existing != self._load_training_reliability(structured):
@@ -360,3 +372,5 @@ class TrainingReliabilityMixin:
                 merged[TRAINING_RELIABILITY_DEDUPE_KEY] = workspace.get(TRAINING_RELIABILITY_DEDUPE_KEY)
                 return merged
             return workspace
+        finally:
+            self._reliability_lock_for(resolved).release()

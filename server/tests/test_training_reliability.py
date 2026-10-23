@@ -410,3 +410,62 @@ def test_same_key_concurrent_requests_run_work_once(tmp_path) -> None:
     assert calls == ["ran"], f"work must run exactly once, saw {calls}"
     assert results[0]["latest_training_reliability"]["phase"] == "acked"
     assert results[1]["latest_training_reliability"]["phase"] == "acked"
+
+
+def test_lock_timeout_returns_honest_busy_view_without_hanging(tmp_path, monkeypatch) -> None:
+    """T-0046: a wedged same-workspace run must not block training endpoints
+    forever — the lock acquire is bounded, and on timeout the caller gets the
+    current (unmutated) workspace instead of proceeding unlocked."""
+    import threading
+    import time
+
+    service = MemoryService(TrainerRepository(tmp_path / "reliability-lock-timeout.db"))
+    workspace_id = "workspace-reliability-lock-timeout"
+    release = threading.Event()
+
+    def hung_work() -> dict[str, object]:
+        release.wait(timeout=10)
+        return {"ok": True}
+
+    results: list[dict] = []
+
+    def first() -> None:
+        results.append(
+            service.run_training_reliability(
+                workspace_id,
+                request_id="req-lock-hold",
+                command_id="trainer.training.practiceReturn",
+                card_id="timeout-card",
+                work=hung_work,
+            )
+        )
+
+    first_thread = threading.Thread(target=first)
+    first_thread.start()
+    while not service._reliability_lock_for(workspace_id).locked():
+        time.sleep(0.01)
+
+    # Shrink the wait budget for the test, then call while the lock is held.
+    monkeypatch.setattr(
+        type(service), "_RELIABILITY_LOCK_WAIT_SECONDS", 0.2, raising=False
+    )
+    second_thread = threading.Thread(
+        target=lambda: results.append(
+            service.run_training_reliability(
+                workspace_id,
+                request_id="req-lock-timeout",
+                command_id="trainer.training.practiceReturn",
+                card_id="other-card",
+                work=lambda: {"ok": True, "ran": True},
+            )
+        )
+    )
+    second_thread.start()
+    second_thread.join(timeout=5)
+    assert not second_thread.is_alive(), "the busy path must return promptly"
+    release.set()
+    first_thread.join(timeout=10)
+
+    busy = results[1]
+    assert busy.get("ran") is None, "the busy view must not execute work()"
+    assert "latest_training_reliability" in busy, "busy view is the current workspace"
