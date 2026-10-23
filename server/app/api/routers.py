@@ -111,6 +111,7 @@ from ..llm.provider_service import (
     _build_language_corruption_recovery_override,
     redact_provider_error,
 )
+from ..llm.reply_continuity import visible_next_step
 from ..llm.stream_agent_metadata import merge_stream_agent_metadata
 from ..llm.training_review_context import active_training_review, apply_training_review_context
 from ..llm.turn_grounding import (
@@ -11437,6 +11438,23 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             request.response_language,
         )
         agent_meta = repaired_agent_meta or None
+        # T-0027 repair: when the finalize next_step is generic filler (goal
+        # restatement, "do a small action" phrasing) while the visible reply
+        # ends with a concrete labelled next action, prefer the reply's own
+        # labelled action so the structured next step matches what the learner
+        # is actually told to do.
+        if reply_content and isinstance(agent_meta, dict):
+            finalize_next_step = str(agent_meta.get("next_step") or "").strip()
+            generic_fillers = ("先做一个小动作", "把结果带回来", "do a small action")
+            looks_generic = (
+                not finalize_next_step
+                or any(filler in finalize_next_step for filler in generic_fillers)
+                or len(finalize_next_step) < 12
+            )
+            if looks_generic:
+                reply_action = visible_next_step(reply_content)
+                if reply_action:
+                    agent_meta["next_step"] = reply_action
         if (
             not message_requests_explicit_explanation_or_example(getattr(request, "message", None))
             and str(response_scenario or "").strip().lower() in GUIDED_VISIBLE_REPAIR_SCENARIOS
