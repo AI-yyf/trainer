@@ -2,7 +2,7 @@
   "version": 1,
   "loop": 5,
   "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "c0811ee",
+  "head": "bd1879a",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -51,5 +51,11 @@
     "real Remote-SSH window (L2) — environment",
     "T-0027 contract fix validated vs real provider — owner relay cadence"
   ],
-  "updated": "2026-10-23"
+  "updated": "2026-10-23",
+  "design_acceptance": {
+    "sha": "f025727/bd1879a",
+    "geometry": "471/471",
+    "a11y": "96/96",
+    "reshot": "2026-10-23"
+  }
 }
