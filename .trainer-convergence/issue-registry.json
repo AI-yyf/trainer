@@ -242,9 +242,12 @@
       "title": "Prose next step disagrees with structured next_step",
       "priority": "P1",
       "area": "teaching",
-      "status": "CONFIRMED_OPEN",
+      "status": "FIXED_VALIDATED",
       "evidence": "Real-provider samples show structured next_step diverging from prose: boilerplate \"围绕…先做一个小动作，把结果带回来\" or mixed EN/ZH text vs specific prose next step (evidence/real-provider-latency-glm53-*.json). Root: coach_finalize structured next_step contract; needs prompt/contract fix validated against real provider.",
-      "acceptance": "One next-step object drives prose and UI"
+      "acceptance": "One next-step object drives prose and UI",
+      "resolved_at": "2026-10-23",
+      "resolved_sha": "e84049d",
+      "resolution": "coach_finalize next_step contract fixed at four layers: (1) tools.py schema + prompts.py finalize clause demand an evidence-extracted move with success signal, forbidding goal restatement, filler, and quoting recalled focus text; (2) routers.py T-0027 repair replaces generic OR pasted-prose steps (fence/heading/>240 chars) with the reply's labelled action, never fabricates; (3) reply_continuity extractor recognizes 第一步/First step families, parenthetical qualifiers, bold-close both sides; (4) fresh workspaces get honest-empty current_focus instead of a synthetic imperative line glm-5.3 quoted verbatim. Real-provider validation (linksub + glm-5.3, fresh sidecar per sample, port-guarded): 4/5 samples emit the exact concrete step consistent with prose (.trainer-convergence/evidence/t0027-final-1..5.json). Residual 1/5 comes from ImplementationCoach._current_step needs_rescue template (pedagogy rescue lane, not coach_finalize) — registered as T-0029."
     },
     {
       "id": "T-0028",
@@ -254,6 +257,15 @@
       "status": "BLOCKED",
       "evidence": "owner sign-off section empty in 2026-10-20 review",
       "acceptance": "Owner completes review §6"
+    },
+    {
+      "id": "T-0029",
+      "title": "Pedagogy rescue lane emits generic template next_step unanchored to the turn",
+      "status": "CONFIRMED",
+      "severity": "medium",
+      "discovered": "2026-10-23",
+      "evidence": ".trainer-convergence/evidence/t0027-final-5.json",
+      "detail": "When model finalize is missing and learner_state.needs_rescue, ImplementationCoach._current_step returns '先把 {target} 压成一个很小的补丁目标，再继续写。' with target defaulting to the lane label ('implementation'), unrelated to the turn's actual reply (an asyncio first step). Observed 1/5 real-provider samples. Fix direction: anchor rescue templates to the turn's reply action (reuse visible_next_step) or derive target from the turn content."
     }
   ]
 }
