@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -1528,6 +1529,40 @@ class PedagogyServiceTests(unittest.TestCase):
         self.assertEqual(idea[1].scenario, "idea_implementation")
         self.assertNotEqual(principle[1].lesson_shape, idea[1].lesson_shape)
         self.assertNotEqual(principle[1].teaching_strategy, idea[1].teaching_strategy)
+
+    def test_rescue_step_targets_the_turn_subject_not_the_lane_label(self) -> None:
+        """T-0029: the rescue template must name THIS turn's subject. A bare
+        lane label that never appears in the learner's message must not become
+        the target (observed on real-provider samples: an asyncio first-step
+        turn shipped 「先把 implementation 压成一个很小的补丁目标」)."""
+        service = PedagogyService()
+        request = TurnRequest(
+            message="我在学 Python 的 asyncio。请给我一个最小、可验证的第一步，并说明成功信号。",
+        )
+        memory_snapshot = _memory_snapshot(due_review_count=0, due_reviews=[])
+        learner_state = service.infer_learner_state(
+            request=request,
+            profile=_profile(),
+            memory_snapshot=memory_snapshot,
+        )
+        learner_state = replace(learner_state, needs_rescue=True)
+        decision = service.decide_teaching(
+            request=request,
+            learner_state=learner_state,
+            profile=_profile(),
+            memory_snapshot=memory_snapshot,
+        )
+        # Force the unanchored lane-label condition that real turns hit when
+        # the lane/thread focus is the scenario name.
+        decision = replace(decision, focus_area="implementation")
+        guide = service._implementation_coach.build_guide(
+            request=request,
+            learner_state=learner_state,
+            decision=decision,
+            memory_snapshot=memory_snapshot,
+        )
+        self.assertNotIn("implementation", guide.current_step)
+        self.assertIn("asyncio", guide.current_step)
 
 
 if __name__ == "__main__":

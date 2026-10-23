@@ -61,7 +61,28 @@ test('router repairs generic or pasted-prose next_step from the reply labelled a
   assert.match(routersSource, /len\(finalize_next_step\) > 240/);
   assert.match(routersSource, /"```" in finalize_next_step/);
   assert.match(routersSource, /"## " in finalize_next_step/);
+  // T-0029: ImplementationCoach rescue/fallback template shapes are unanchored
+  // by construction — the repair prefers the reply's labelled action for them.
+  assert.match(routersSource, /压成一个很小的补丁目标/);
+  assert.match(routersSource, /先交付一个小而可复盘的/);
   // Repair never fabricates: only replaces when the reply yields a labelled action.
   assert.match(routersSource, /reply_action = visible_next_step\(reply_content\)/);
   assert.match(routersSource, /if reply_action:\n\s+agent_meta\["next_step"\] = reply_action/);
+});
+
+test('pedagogy rescue templates derive their target from the turn subject', () => {
+  // T-0029 root fix: a lane label that never appears in the learner's message
+  // must not become the template target; the message subject wins.
+  const coachSource = fs.readFileSync(
+    path.resolve(__dirname, '..', '..', 'server', 'app', 'pedagogy', 'implementation_coach.py'),
+    'utf8',
+  );
+  assert.match(coachSource, /label\.casefold\(\) in str\(message or ""\)\.casefold\(\)/);
+  assert.match(coachSource, /_message_subject/);
+  // The extractor reads actions from label-headed sections (第一步代码 / Next steps).
+  const continuitySource = fs.readFileSync(
+    path.resolve(__dirname, '..', '..', 'server', 'app', 'llm', 'reply_continuity.py'),
+    'utf8',
+  );
+  assert.match(continuitySource, /"代码", "练习", "实验", "检查", "步骤", "行动", "任务", "code", "s"/);
 });

@@ -34,6 +34,16 @@ def visible_next_step(content: str) -> str:
         if fence:
             continue
         matched = _NEXT_STEP.fullmatch(stripped)
+        if matched is None:
+            # Label headed sections carry a short suffix noun before the
+            # action (`## 第一步代码`, `### Next steps`); the action itself
+            # lives on the following line. Only a bounded whitelist qualifies.
+            for noun in ("代码", "练习", "实验", "检查", "步骤", "行动", "任务", "code", "s"):
+                if stripped.lower().endswith(noun) and len(stripped) > len(noun):
+                    matched = _NEXT_STEP.fullmatch(stripped[: -len(noun)].rstrip())
+                    if matched is not None:
+                        break
+                    matched = None
         if matched is not None:
             action = (matched.group(1) or "").strip()
             action = re.sub(r"\*+\s*$", "", action).strip()

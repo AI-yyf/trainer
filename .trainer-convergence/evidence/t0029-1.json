@@ -1,0 +1,97 @@
+{
+  "captured_at": "2026-10-23T02:11:29.814Z",
+  "has_complete_event": true,
+  "model": "glm-5.3",
+  "protocol": "openai_chat_completions_compatible",
+  "first_chunk_ms": 29249,
+  "total_ms": 34427,
+  "visible_chars": 855,
+  "structured_next_step": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。",
+  "raw_finalize_next_step": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。",
+  "completion_next_step": null,
+  "coach_turn_next_step": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。",
+  "next_step_fields": [
+    {
+      "path": "response.reply.metadata.coach_visible_status.nextStep",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.reply.metadata.parts[0].nextStep",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.reply.metadata.coach_turn.next_step",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.reply.metadata.coach_focus.next_step",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.snapshot.messages[1].metadata.coach_visible_status.nextStep",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.snapshot.messages[1].metadata.parts[0].nextStep",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.snapshot.messages[1].metadata.coach_turn.next_step",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.snapshot.messages[1].metadata.coach_focus.next_step",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.snapshot.memory.workspace.latest_coach_orientation.next_step",
+      "value": "先保存并测试 provider。"
+    },
+    {
+      "path": "response.snapshot.memory.workspace.latest_coach_focus.next_step",
+      "value": "围绕「我在学 Python 的 asyncio」先做一个小动作，把结果带回来。"
+    },
+    {
+      "path": "response.snapshot.memory.workspace.latest_coaching_focus.next_step",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.snapshot.memory.workspace.latest_coach_provenance.next_step",
+      "value": "model_claim"
+    },
+    {
+      "path": "response.snapshot.memory.workspace.active_thread.next_step",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.snapshot.memory.active_thread.next_step",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.snapshot.coaching_state.next_step",
+      "value": "围绕「我在学 Python 的 asyncio」先做一个小动作，把结果带回来。"
+    },
+    {
+      "path": "response.snapshot.plan_runtime_status.current_main_thread.next_step",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.snapshot.coachOrientation.next_step",
+      "value": "先保存并测试 provider。"
+    },
+    {
+      "path": "response.coach_turn.next_step",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.agent_meta.next_step",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    },
+    {
+      "path": "response.agent.next_step",
+      "value": "先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。"
+    }
+  ],
+  "prose_next_step_section": "",
+  "next_step_consistent_with_prose": false
+}

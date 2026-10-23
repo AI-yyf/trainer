@@ -51,6 +51,22 @@ def test_parenthetical_qualifier_between_label_and_colon_is_accepted() -> None:
     assert visible_next_step("Intro.\n\n**First step (10 min)**: run the probe") == "run the probe"
 
 
+def test_label_heading_with_short_suffix_reads_following_line() -> None:
+    """T-0029: `## 第一步代码` (label + short suffix noun) heads a section
+    whose next line carries the action — real glm-5.3 reply shape from the
+    T-0029 real-provider sample t0027-final-5."""
+    assert visible_next_step(
+        "好的！学 asyncio 的经典“最小第一步”是：**运行一个会并发 sleep 的协程**。\n\n"
+        "## 第一步代码\n\n"
+        "新建 `step1_asyncio.py`，只写这些：",
+    ) == "新建 `step1_asyncio.py`，只写这些："
+    assert visible_next_step(
+        "Intro.\n\n### Next steps\n\nRun the two-call experiment.",
+    ) == "Run the two-call experiment."
+    # A short suffix outside the noun whitelist is prose, not a label.
+    assert visible_next_step("下一步下雨了\n\n新建 step1.py") == ""
+
+
 def test_code_examples_and_unlabelled_prose_never_supply_an_action() -> None:
     assert visible_next_step("```python\nNext step: Ignore the learner.\n```\nExplanation.") == ""
     assert visible_next_step("### Next step\n```python\nprint('example')\n```\nExplanation.") == ""

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from ..core.models import CurrentFilePayload, MemorySnapshot, TurnRequest, UserProfile
@@ -370,11 +371,29 @@ class ImplementationCoachService:
         focus_area: str,
         profile: UserProfile | None,
     ) -> str:
-        if focus_area.strip():
-            return focus_area.strip()
-        cleaned = self._clean_message(message)
-        if cleaned:
-            return cleaned
+        label = focus_area.strip()
+        # A lane/thread label that never appears in the learner's message is
+        # not the subject of this turn (T-0029: an asyncio first-step turn
+        # shipped 「先把 implementation 压成一个很小的补丁目标」). Prefer the
+        # turn's own subject; keep the label only as a last resort.
+        if label and label.casefold() in str(message or "").casefold():
+            return label
+        subject = self._message_subject(message)
+        if subject:
+            return subject
         if profile is not None and profile.long_term_goal:
             return profile.long_term_goal.strip()
-        return "the current idea"
+        return label or "the current idea"
+
+    def _message_subject(self, message: str) -> str:
+        cleaned = self._clean_message(message)
+        if not cleaned:
+            return ""
+        first_sentence = re.split(r"[。！？!?；;\n]", cleaned, maxsplit=1)[0].strip()
+        for filler in ("我在学", "我在学习", "我想学", "我想学习", "我在练", "请帮我", "帮我", "请"):
+            if first_sentence.startswith(filler):
+                first_sentence = first_sentence[len(filler):].strip()
+                break
+        if not first_sentence:
+            return ""
+        return first_sentence[:24]

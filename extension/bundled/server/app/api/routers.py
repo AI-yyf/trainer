@@ -11446,7 +11446,16 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         # structured next step matches what the learner is actually told to do.
         if reply_content and isinstance(agent_meta, dict):
             finalize_next_step = str(agent_meta.get("next_step") or "").strip()
-            generic_fillers = ("先做一个小动作", "把结果带回来", "do a small action")
+            generic_fillers = (
+                "先做一个小动作",
+                "把结果带回来",
+                "do a small action",
+                # ImplementationCoach rescue/fallback template shapes (T-0029):
+                # unanchored by construction unless the target was derived from
+                # this turn; prefer the reply's own labelled action.
+                "压成一个很小的补丁目标",
+                "先交付一个小而可复盘的",
+            )
             looks_generic = (
                 not finalize_next_step
                 or any(filler in finalize_next_step for filler in generic_fillers)
