@@ -23,7 +23,7 @@
     },
     "design_acceptance": {
       "status": "PASS",
-      "evidence": "re-shot at final SHA f025727 (code c0811ee, after audit waves 1-2 UI changes): 471/471 geometry assertions + 96/96 a11y pages (8 locales x 6 surfaces x dark/light x font200); evidence/design-a11y-report-f025727.json"
+      "evidence": "re-shot at ce024b9 (code includes popup minimal card @7cf5760, spacing convergence @1806154, T-0048 @6d8fb10): 471/471 geometry assertions (verify-ui-geometry, exit 0) + 96/96 a11y pages (8 locales x 6 surfaces x normal-light/font200-dark, evidence/design-a11y-report-ce024b9.json) + perf probe budgets pass (streaming burst longtask=0, warm nav p90 within 100ms; workbench surfaces structurally unchanged so perf-probe-baseline.json stays per the re-shoot discipline); prior shot f025727/c0811ee"
     }
   }
 }
