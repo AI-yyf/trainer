@@ -3,7 +3,7 @@
   "gates": {
     "ci_cross_platform": {
       "status": "PASS",
-      "evidence": "run 39884131711 @5622c29: 9/9 jobs success (UI/Server/Package x macos/windows/ubuntu) with the full T-0027 fix stack landed"
+      "evidence": "run 39890030512 @ed8a4f8: 9/9 jobs success (UI/Server/Package x macos/windows/ubuntu) with T-0029 fix + plan-fact selector repair landed"
     },
     "native_install_e2e": {
       "status": "PASS_MAC",
