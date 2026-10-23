@@ -19,7 +19,7 @@
     },
     "teaching_acceptance": {
       "status": "BLOCKED",
-      "evidence": "owner sign-off still pending (T-0028, human-only); code-side defects closed: T-0027 next_step contract FIXED_VALIDATED @e84049d (4/5 concrete) and T-0029 rescue-template anchoring FIXED_VALIDATED @b91194b (5/5 turn-anchored, evidence/t0029-1..5.json)"
+      "evidence": "owner sign-off still pending (T-0028, human-only). Real-model journey evidence now COMPLETE (2026-10-24, linksub relay + glm-5.3, key env-only): 10/10 journey steps pass — streaming capability verified, honest-unseen-code replies, plan continuity across sidecar restart, concrete tool-anchored next step with success signal (SLICE OK) + formal-verify offer, cross-workspace isolation holds. evidence/journey-real/. Structural gates T-0027 @e84049d and T-0029 @b91194b stand."
     },
     "design_acceptance": {
       "status": "PASS",

@@ -1,0 +1,7 @@
+{
+  "status": 200,
+  "visible_chars": 1415,
+  "has_complete": true,
+  "next_step": "把上面的 thread_slice.py 放入工作区并运行，成功信号是终端输出 `SLICE OK`；之后我可以用 verify_practice_current_file 对照实际文件做正式核对。",
+  "reply_excerpt": "没有当前打开的文件或工作区快照，所以我先按计划里的当前步（“把 Python 多线程压成一个很小的补丁目标”）把这一步完整写出来，并给出验证方法。等我拿到你的文件后可以再对实际代码做核对。\n\n## 这一步的目标（压缩后的小切片）\n\n**一个明确行为**：用 `ThreadPoolExecutor` 并发跑两个任务，主线程不阻塞等待全部完成后打印汇总。\n\n**一个小边界**：其中一个任务会抛异常，程序不能崩溃，且要能拿到那个异常。\n\n代码（可以直接放成 `thread_slice.py`）：\n\n```python\nimport time\nfrom concurrent.futures import ThreadPoolExecutor, as_completed\n\ndef work(name, seconds, fail=False):\n    time.sleep(seconds)\n    if fail:\n        raise ValueError(f\"{name} failed\")\n    return f\"{name} done\"\n\nresults, errors = [], []\n\nwith ThreadPoolExecutor(max_workers=2) as pool:\n    futures = {\n        pool.submit(work, \"fast\", 0.2): \"fast\",\n        pool.submit(work, \"bad\", 0.1, fail=True): \"bad\",\n    }\n    for fut in as_completed(futures):\n        name = futures[fut]\n        try:\n            results.append(fut.result())\n        except ValueError as e:\n            errors.append(str(e))\n\nprint(\"results:\", sorted(results"
+}
