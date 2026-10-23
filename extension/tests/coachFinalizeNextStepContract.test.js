@@ -67,7 +67,13 @@ test('router repairs generic or pasted-prose next_step from the reply labelled a
   assert.match(routersSource, /先交付一个小而可复盘的/);
   // Repair never fabricates: only replaces when the reply yields a labelled action.
   assert.match(routersSource, /reply_action = visible_next_step\(reply_content\)/);
-  assert.match(routersSource, /if reply_action:\n\s+agent_meta\["next_step"\] = reply_action/);
+  assert.match(routersSource, /agent_meta\["next_step"\] = reply_action/);
+  // T-0048: the repair is a named helper invoked before grounding AND memory
+  // persistence, so the recorded thread and the grounding gate see the same
+  // shipped step as the response surfaces.
+  assert.match(routersSource, /def repair_generic_finalize_next_step\(/);
+  assert.match(routersSource, /coach_turn_payload = repair_generic_finalize_next_step\(\n\s+assistant_content,/);
+  assert.match(routersSource, /refreshed_coach_turn_data = repair_generic_finalize_next_step\(/);
 });
 
 test('pedagogy rescue templates derive their target from the turn subject', () => {
