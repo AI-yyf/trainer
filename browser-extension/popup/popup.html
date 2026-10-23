@@ -8,8 +8,9 @@
   <body>
     <!--
       en-US fallback text only; popup.js localizes via the shared copy map.
-      One card, three states (unpaired / offline / connected), one primary
-      action. Words live in tooltips; the card stays quiet like a menu.
+      Two states: pairing (first run) and capture. No connection status, no
+      import history — captures land in Trainer and the badge carries the
+      queued count. Words live in tooltips; the card stays quiet like a menu.
     -->
 
     <svg class="sprite" aria-hidden="true" focusable="false" width="0" height="0">
@@ -23,26 +24,11 @@
         <symbol id="icon-refresh" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
           <path d="M16.3 9.2a6.3 6.3 0 1 0-1.6 4.6" /><path d="M16.6 4.9v4.3h-4.3" />
         </symbol>
-        <symbol id="icon-trash" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4.4 6.3h11.2" /><path d="M8 6.3V4.9a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.4" /><path d="M6.1 6.3l.7 8.5a1.3 1.3 0 0 0 1.3 1.2h3.8a1.3 1.3 0 0 0 1.3-1.2l.7-8.5" />
-        </symbol>
         <symbol id="icon-external" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
           <path d="M11.4 4.4h4.2v4.2" /><path d="M15.6 4.4 9.8 10.2" /><path d="M14.6 11.7v3.2a1.3 1.3 0 0 1-1.3 1.3H5.1a1.3 1.3 0 0 1-1.3-1.3V6.7a1.3 1.3 0 0 1 1.3-1.3h3.2" />
         </symbol>
-        <symbol id="icon-cloud-off" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6.6 14.9h8a3.2 3.2 0 0 0 .8-6.3 4.6 4.6 0 0 0-6.5-3.9" /><path d="M8 5.6a4.6 4.6 0 0 0-2.3 7.2" /><path d="M4.6 15.4 15.4 4.6" />
-        </symbol>
         <symbol id="icon-plug" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
           <path d="M7.2 3.6v3.1M12.8 3.6v3.1" /><path d="M5.4 6.7h9.2v2a4.6 4.6 0 0 1-9.2 0z" /><path d="M10 13.3v3.1" />
-        </symbol>
-        <symbol id="icon-file-text" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11.6 3.5H6.3A1.3 1.3 0 0 0 5 4.8v10.4a1.3 1.3 0 0 0 1.3 1.3h7.4a1.3 1.3 0 0 0 1.3-1.3V6.9z" /><path d="M11.6 3.5v3.4H15" /><path d="M7.6 11.2h4.8M7.6 13.6h3.2" />
-        </symbol>
-        <symbol id="icon-file-pdf" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11.6 3.5H6.3A1.3 1.3 0 0 0 5 4.8v10.4a1.3 1.3 0 0 0 1.3 1.3h7.4a1.3 1.3 0 0 0 1.3-1.3V6.9z" /><path d="M11.6 3.5v3.4H15" /><path d="M7.7 13.7v-3h.9a.9.9 0 0 1 0 1.8h-.9" /><path d="M11.1 10.7h1.4v3h-1.4" />
-        </symbol>
-        <symbol id="icon-git-branch" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6.6 6.5v7" /><circle cx="6.6" cy="4.9" r="1.6" /><circle cx="6.6" cy="15.1" r="1.6" /><circle cx="13.4" cy="9.1" r="1.6" /><path d="M13.4 10.7c0 2-1.6 2.6-3.2 2.8" />
         </symbol>
         <symbol id="icon-folder-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3.8 6.2a1.3 1.3 0 0 1 1.3-1.3h2.3l1.4 1.6h5.1a1.3 1.3 0 0 1 1.3 1.3v6.7a1.3 1.3 0 0 1-1.3 1.3H5.1a1.3 1.3 0 0 1-1.3-1.3z" /><path d="M8.1 11.3l1.4 1.4 2.6-3" />
@@ -68,11 +54,6 @@
         <span class="visually-hidden" data-copy="close">Close</span>
       </button>
 
-      <!-- kept for the status contract; the quiet card speaks through states -->
-      <span id="status-dot" class="visually-hidden" aria-hidden="true"></span>
-      <span id="status-line" class="visually-hidden" role="status" aria-live="polite" data-copy="checking"></span>
-      <span id="queue-chip" class="visually-hidden" hidden><span id="queue-chip-count">0</span></span>
-
       <section id="pair-panel" class="panel" hidden>
         <h1 class="card-title" data-copy="pairHeading"></h1>
         <p id="detect-line" class="muted-line" data-copy="detecting"></p>
@@ -91,19 +72,6 @@
             <span class="visually-hidden" data-copy="detectAgain">Detect again</span>
           </button>
           <p id="pair-feedback" class="feedback" role="status" aria-live="polite"></p>
-        </div>
-      </section>
-
-      <section id="offline-panel" class="panel" hidden>
-        <div class="labelrow">
-          <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-cloud-off"></use></svg>
-          <strong class="labelrow__text" data-copy="statusOffline"></strong>
-        </div>
-      </section>
-
-      <section id="connected-panel" class="panel" hidden>
-        <div class="labelrow">
-          <strong id="workspace-name" class="sectionlabel"></strong>
         </div>
       </section>
 
@@ -127,41 +95,12 @@
         <p id="download-feedback" class="feedback" role="status" aria-live="polite" hidden></p>
       </section>
 
-      <section id="queue-panel" class="panel" hidden>
-        <div class="labelrow">
-          <span class="sectionlabel" data-copy="queueHeading"></span>
-          <span id="queue-count" class="muted-line"></span>
-        </div>
-        <ul id="queue-list" class="rows"></ul>
-        <p id="queue-empty" class="muted-line" data-copy="queueEmpty" hidden></p>
-        <div class="row row--tight">
-          <button id="queue-retry" class="iconbtn" type="button" data-copy-label="queueRetry">
-            <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-refresh"></use></svg>
-            <span class="visually-hidden" data-copy="queueRetry">Retry now</span>
-          </button>
-          <button id="queue-clear" class="iconbtn iconbtn--danger" type="button" data-copy-label="queueClear">
-            <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-trash"></use></svg>
-            <span class="visually-hidden" data-copy="queueClear">Clear queue</span>
-          </button>
-        </div>
-        <p id="queue-feedback" class="feedback" role="status" aria-live="polite"></p>
-      </section>
-
-      <section id="history-panel" class="panel" hidden>
-        <div class="labelrow"><span class="sectionlabel" data-copy="historyHeading"></span></div>
-        <ul id="history-list" class="rows"></ul>
-      </section>
-
       <footer class="foot">
         <button id="open-trainer" class="pill" type="button">
           <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-external"></use></svg>
           <span data-copy="openTrainer">Open Trainer</span>
         </button>
         <span class="foot__spacer"></span>
-        <button id="repair" class="iconbtn" type="button" hidden data-copy-label="pairAgain">
-          <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-refresh"></use></svg>
-          <span class="visually-hidden" data-copy="pairAgain">Pair again</span>
-        </button>
         <button id="revoke" class="iconbtn" type="button" data-copy-label="pairRevoke">
           <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-unlink"></use></svg>
           <span class="visually-hidden" data-copy="pairRevoke">Revoke pairing</span>

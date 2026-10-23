@@ -14,7 +14,6 @@
   --r: 14px;
   --r-sm: 10px;
   --dur: 140ms;
-  --queued: #f59e0b;
   --warn: #b45309;
 }
 
@@ -85,15 +84,6 @@ html, body {
 .panel { display: flex; flex-direction: column; gap: 7px; }
 .panel + .panel { margin-top: 9px; }
 
-.labelrow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 12px;
-  min-width: 0;
-}
-
 .sectionlabel {
   font-size: 12px;
   font-weight: 650;
@@ -145,46 +135,6 @@ html, body {
 
 .row__plus { color: var(--muted); transition: transform var(--dur) ease, color var(--dur) ease; }
 .row--action:hover:not(:disabled) .row__plus { color: var(--fg); transform: scale(1.08); }
-
-.rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-
-.rows li {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 5px;
-  border-radius: var(--r-sm);
-  font-size: 12.5px;
-  min-width: 0;
-}
-.rows li:hover { background: var(--hover); }
-
-.queue__icon, .history__icon { color: var(--muted); display: inline-flex; }
-.queue__body, .history__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.queue__title, .history__title {
-  font-weight: 600;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.queue__meta, .history__meta {
-  font-size: 10.5px; color: var(--muted);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.history__dot, .queue__dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--muted); flex: none;
-}
-.history__dot--ok { background: var(--ok); }
-.history__dot--queued { background: var(--queued); }
-.history__dot--failed { background: var(--danger); }
-.history__empty, .queue__empty { margin: 0; font-size: 11.5px; color: var(--muted); }
-
-.history__links { display: inline-flex; margin-inline-start: auto; }
-.history__link {
-  display: inline-flex; align-items: center;
-  color: var(--muted); text-decoration: none; padding: 2px; border: 0; background: none; cursor: pointer;
-}
-.history__link:hover { color: var(--fg); }
-.history__link .icon { width: 13px; height: 13px; }
 
 /* ---------------------------------------------------------------- inputs */
 
@@ -276,9 +226,6 @@ input[aria-invalid="true"] { outline-color: var(--danger); }
 .capture-check.is-drawn .check-path { animation: check-draw 260ms ease-out both; }
 
 @keyframes check-draw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
-@keyframes count-bump { 0% { transform: scale(1); } 40% { transform: scale(1.2); } 100% { transform: scale(1); } }
-.count--bump, .chip--bump { animation: count-bump 180ms ease; }
-
 @keyframes panel-enter { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 .panel--reveal { animation: panel-enter 150ms ease both; }
 

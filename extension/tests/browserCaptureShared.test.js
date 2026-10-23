@@ -1236,33 +1236,32 @@ test('popup actually hides inactive panels and refreshes the library count after
   assert.match(captureBody, /refreshStateFromHost\(\)/);
 });
 
-test('the popup carries the three states and the full offline queue manager', () => {
+test('the popup stays minimal: pairing and capture only — no status, no history', () => {
+  // Owner directive: the card carries pairing + capture + download and
+  // nothing else — no connection status, no import history, no queue manager
+  // (queued captures deliver automatically; the badge carries the count).
   const html = fs.readFileSync(POPUP_HTML_PATH, 'utf8');
+  for (const id of ['pair-panel', 'capture-panel', 'download-block', 'target-dir', 'capture-download']) {
+    assert.ok(html.includes(`id="${id}"`), `popup.html must define #${id}`);
+  }
   for (const id of [
-    'pair-panel',
     'offline-panel',
     'connected-panel',
-    'capture-panel',
-    'download-block',
-    'target-dir',
-    'capture-download',
     'queue-panel',
     'queue-list',
-    'queue-count',
     'queue-retry',
     'queue-clear',
     'history-panel',
     'status-dot',
+    'status-line',
     'queue-chip'
   ]) {
-    assert.ok(html.includes(`id="${id}"`), `popup.html must define #${id}`);
+    assert.ok(!html.includes(`id="${id}"`), `popup.html must NOT define #${id}`);
   }
   const js = fs.readFileSync(POPUP_JS_PATH, 'utf8');
-  assert.match(js, /trainer:queue-remove/);
-  assert.match(js, /trainer:queue-clear/);
   assert.match(js, /trainer:set-target-dir/);
   assert.match(js, /trainer:capture-tab',[\s\S]{0,80}download: true/);
-  assert.match(js, /statusOffline|offline/);
+  assert.doesNotMatch(js, /renderHistory|renderQueue|setStatus\(/);
 });
 
 test('every data-copy key used by the popup exists in the copy map', () => {
@@ -1271,7 +1270,7 @@ test('every data-copy key used by the popup exists in the copy map', () => {
   for (const match of html.matchAll(/data-copy(?:-placeholder|-title|-label)?="([A-Za-z0-9_]+)"/g)) {
     used.add(match[1]);
   }
-  assert.ok(used.size >= 20, 'the popup must drive its copy through data-copy attributes');
+  assert.ok(used.size >= 12, 'the popup must drive its copy through data-copy attributes');
   for (const key of used) {
     assert.ok(
       Object.prototype.hasOwnProperty.call(TrainerCapture.COPY.en, key),
@@ -1287,7 +1286,7 @@ test('every id the popup script looks up exists in the popup markup', () => {
   for (const match of js.matchAll(/getElementById\('([^']+)'\)/g)) {
     ids.add(match[1]);
   }
-  assert.ok(ids.size >= 20);
+  assert.ok(ids.size >= 15);
   for (const id of ids) {
     assert.ok(html.includes(`id="${id}"`), `popup.html must define #${id}`);
   }
@@ -1298,7 +1297,7 @@ test('the popup is a monochrome icon-led card (no legacy brand chrome)', () => {
   assert.match(html, /stroke-width="1\.7"/);
   assert.match(html, /stroke-linecap="round"/);
   assert.match(html, /stroke-linejoin="round"/);
-  assert.ok((html.match(/<symbol id="icon-/g) || []).length >= 12, 'expected a full inline icon sprite');
+  assert.ok((html.match(/<symbol id="icon-/g) || []).length >= 8, 'expected a complete inline icon sprite for the card');
   assert.match(html, /id="popup-close"/, 'the card has its own close affordance');
   // The 2026-10 monochrome redesign removes the indigo/gold logo block from
   // the popup; the toolbar PNG carries the monochrome brand instead.
@@ -1310,7 +1309,6 @@ test('the popup is a monochrome icon-led card (no legacy brand chrome)', () => {
   assert.match(css, /prefers-reduced-motion: reduce/);
   assert.match(css, /@keyframes panel-enter/);
   assert.match(css, /@keyframes check-draw/);
-  assert.match(css, /@keyframes count-bump/);
   assert.match(css, /@keyframes shake-x/);
   assert.doesNotMatch(css, /--indigo-600/);
   assert.doesNotMatch(css, /--gold-500/);
