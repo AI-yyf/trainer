@@ -3,11 +3,11 @@
   "gates": {
     "ci_cross_platform": {
       "status": "PASS",
-      "evidence": "run 39992093740 @04a33ce (push, T-0049 streaming persist fix) and run 39978190239 @c84dadb: 9/9 jobs success each — UI/Server/Package on windows/macos/ubuntu"
+      "evidence": "run 40179403488 @04770cc (workflow_dispatch with run_vsix_host_e2e=true, supersedes the concurrency-cancelled push run of the same SHA): 9/9 jobs success — UI/Server/Package on windows/macos/ubuntu; prior 9/9 runs 39992093740 @04a33ce, 39978190239 @c84dadb"
     },
     "native_install_e2e": {
       "status": "PASS",
-      "evidence": "run 39995273745 @04a33ce (workflow_dispatch, run_vsix_host_e2e=true): installed-VSIX host E2E 9/9 jobs success at the T-0049 final SHA; prior run 39981652151 @93f479b"
+      "evidence": "run 40179403488 @04770cc (workflow_dispatch, run_vsix_host_e2e=true): installed-VSIX host E2E 9/9 jobs success at the T-0050 final SHA (covers activation incl. the deferred first-run onboarding); prior run 39995273745 @04a33ce"
     },
     "browser_e2e": {
       "status": "PASS_LOCAL",
