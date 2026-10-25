@@ -531,7 +531,7 @@
       "acceptance": "First activation after install shows the prompt once; picking a browser stages the bundle, opens that browser's extensions page and copies the path; prepared/paired users never see it",
       "evidence": "extension/tests/browserCaptureOnboarding.test.js (gate matrix incl. defensive inputs, 8-locale copy completeness, per-browser launch composition) 4/4 after build; npm run check clean; full extension suite green",
       "resolved_at": "2026-10-25",
-      "resolved_sha": "PENDING_COMMIT"
+      "resolved_sha": "1c73222"
     }
   ]
 }
