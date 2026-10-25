@@ -37,7 +37,12 @@ export type BrowserCaptureHostCopyKey =
   | 'pairingRevokeFailed'
   | 'deepLinkIgnoredLog'
   | 'deepLinkUnconfirmedLog'
-  | 'deepLinkOpenedLog';
+  | 'deepLinkOpenedLog'
+  | 'onboardingPrompt'
+  | 'onboardingInstall'
+  | 'onboardingNotNow'
+  | 'pickBrowserPlaceholder'
+  | 'installForBrowserDone';
 
 type BrowserCaptureHostCopyTable = Record<BrowserCaptureHostCopyKey, string>;
 
@@ -70,6 +75,11 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     deepLinkIgnoredLog: '已忽略无法识别的深链：{uri}',
     deepLinkUnconfirmedLog: '资源 {resourceId} 的深链在 {attempts} 次尝试后仍无法确认工作台可见',
     deepLinkOpenedLog: '深链已打开资源 {resourceId}（投递尝试 {attempts} 次）',
+    onboardingPrompt: '想在浏览器里一键采集网页资料到 Trainer 吗？Trainer 检测到了已安装的浏览器，选一个即可完成安装引导。',
+    onboardingInstall: '安装到浏览器…',
+    onboardingNotNow: '暂不',
+    pickBrowserPlaceholder: '选择要安装 Trainer 采集扩展的浏览器',
+    installForBrowserDone: '已打开 {browser} 的扩展页，安装路径已复制到剪贴板（{dir}）。在扩展页开启“开发者模式”，点“加载已解压的扩展程序”并粘贴该路径，然后回到 Trainer 设置完成配对。',
   },
   'en-US': {
     installReady: '{label} is ready.',
@@ -104,6 +114,11 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       'deep link for {resourceId} could not confirm a visible workbench after {attempts} attempts',
     deepLinkOpenedLog:
       'deep link opened resource {resourceId} (delivery attempts: {attempts})',
+    onboardingPrompt: 'Want one-click capture of web pages into Trainer? Trainer detected your installed browsers — pick one and we will walk you through the install.',
+    onboardingInstall: 'Install to browser…',
+    onboardingNotNow: 'Not now',
+    pickBrowserPlaceholder: 'Pick the browser to install the Trainer capture extension into',
+    installForBrowserDone: 'Opened the {browser} extensions page; the install path is on your clipboard ({dir}). Turn on Developer mode there, choose Load unpacked, paste the path, then finish pairing in Trainer Settings.',
   },
   'es-ES': {
     installReady: '{label} está listo.',
@@ -141,6 +156,11 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       'el enlace profundo de {resourceId} no pudo confirmar un área de trabajo visible tras {attempts} intentos',
     deepLinkOpenedLog:
       'el enlace profundo abrió el recurso {resourceId} (intentos de entrega: {attempts})',
+    onboardingPrompt: '¿Quieres capturar páginas web en Trainer con un clic? Trainer detectó tus navegadores instalados: elige uno y te guiamos en la instalación.',
+    onboardingInstall: 'Instalar en el navegador…',
+    onboardingNotNow: 'Ahora no',
+    pickBrowserPlaceholder: 'Elige el navegador donde instalar la extensión de captura de Trainer',
+    installForBrowserDone: 'Se abrió la página de extensiones de {browser}; la ruta de instalación está en tu portapapeles ({dir}). Activa el modo desarrollador, elige «Cargar descomprimida», pega la ruta y completa el emparejamiento en Ajustes de Trainer.',
   },
   'fr-FR': {
     installReady: '{label} est prêt.',
@@ -178,6 +198,11 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       'le lien profond de {resourceId} n’a pas pu confirmer un espace de travail visible après {attempts} tentatives',
     deepLinkOpenedLog:
       'le lien profond a ouvert la ressource {resourceId} (tentatives de livraison : {attempts})',
+    onboardingPrompt: 'Envie de capturer des pages web vers Trainer en un clic ? Trainer a détecté vos navigateurs installés — choisissez-en un, nous vous guidons.',
+    onboardingInstall: 'Installer dans le navigateur…',
+    onboardingNotNow: 'Plus tard',
+    pickBrowserPlaceholder: 'Choisissez le navigateur où installer l’extension de capture Trainer',
+    installForBrowserDone: 'La page d’extensions de {browser} est ouverte ; le chemin d’installation est dans le presse-papiers ({dir}). Activez le mode développeur, choisissez « Charger l’extension non empaquetée », collez le chemin, puis terminez l’appairage dans Trainer.',
   },
   'de-DE': {
     installReady: '{label} ist bereit.',
@@ -215,6 +240,11 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       'Deep-Link für {resourceId} konnte nach {attempts} Versuchen kein sichtbares Workbench-Fenster bestätigen',
     deepLinkOpenedLog:
       'Deep-Link hat Ressource {resourceId} geöffnet (Zustellversuche: {attempts})',
+    onboardingPrompt: 'Webseiten mit einem Klick in Trainer sichern? Trainer hat deine installierten Browser erkannt — wähle einen, und wir führen dich durch die Installation.',
+    onboardingInstall: 'Im Browser installieren…',
+    onboardingNotNow: 'Später',
+    pickBrowserPlaceholder: 'Browser wählen, in dem die Trainer-Erfassungserweiterung installiert wird',
+    installForBrowserDone: 'Die Erweiterungsseite von {browser} ist geöffnet; der Installationspfad liegt in der Zwischenablage ({dir}). Aktiviere dort den Entwicklermodus, wähle „Entpackte Erweiterung laden“, füge den Pfad ein und schließe die Kopplung in den Trainer-Einstellungen ab.',
   },
   'ja-JP': {
     installReady: '{label} の準備ができました。',
@@ -253,6 +283,11 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       '{resourceId} のディープリンクは {attempts} 回試行してもワークベンチの表示を確認できませんでした',
     deepLinkOpenedLog:
       'ディープリンクでリソース {resourceId} を開きました（配信試行: {attempts} 回）',
+    onboardingPrompt: 'ワンクリックでウェブページを Trainer に取り込みませんか？インストール済みのブラウザを検出しました。選ぶだけでインストールを案内します。',
+    onboardingInstall: 'ブラウザにインストール…',
+    onboardingNotNow: '今はしない',
+    pickBrowserPlaceholder: 'Trainer 収集拡張機能をインストールするブラウザを選択',
+    installForBrowserDone: '{browser} の拡張機能ページを開き、インストール先パスをクリップボードにコピーしました（{dir}）。ページでデベロッパーモードをオンにし、「パッケージ化されていない拡張機能を読み込む」でパスを貼り付けて、Trainer の設定でペアリングを完了してください。',
   },
   'ko-KR': {
     installReady: '{label}이(가) 준비되었습니다.',
@@ -287,6 +322,11 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       '{resourceId} 딥링크가 {attempts}회 시도 후에도 워크벤치 표시를 확인하지 못했습니다',
     deepLinkOpenedLog:
       '딥링크로 리소스 {resourceId}을(를) 열었습니다(전달 시도: {attempts}회)',
+    onboardingPrompt: '웹 페이지를 한 번의 클릭으로 Trainer 에 모으고 싶으신가요? 설치된 브라우저를 감지했습니다. 하나를 선택하면 설치를 안내합니다.',
+    onboardingInstall: '브라우저에 설치…',
+    onboardingNotNow: '나중에',
+    pickBrowserPlaceholder: 'Trainer 수집 확장을 설치할 브라우저 선택',
+    installForBrowserDone: '{browser} 확장 페이지를 열었고 설치 경로가 클립보드에 복사되었습니다({dir}). 페이지에서 개발자 모드를 켜고 [압축해제된 확장 로드]로 경로를 붙여넣은 뒤 Trainer 설정에서 페어링을 마치세요.',
   },
   'pt-BR': {
     installReady: '{label} está pronto.',
@@ -326,6 +366,11 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
       'o link profundo de {resourceId} não conseguiu confirmar um workbench visível após {attempts} tentativas',
     deepLinkOpenedLog:
       'o link profundo abriu o recurso {resourceId} (tentativas de entrega: {attempts})',
+    onboardingPrompt: 'Quer capturar páginas da web no Trainer com um clique? Trainer detectou seus navegadores instalados — escolha um e nós guiamos a instalação.',
+    onboardingInstall: 'Instalar no navegador…',
+    onboardingNotNow: 'Agora não',
+    pickBrowserPlaceholder: 'Escolha o navegador onde instalar a extensão de captura do Trainer',
+    installForBrowserDone: 'A página de extensões do {browser} foi aberta; o caminho de instalação está na sua área de transferência ({dir}). Ative o modo desenvolvedor, escolha “Carregar sem empacotamento”, cole o caminho e conclua o pareamento nas Configurações do Trainer.',
   },
 };
 

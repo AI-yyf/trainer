@@ -166,3 +166,17 @@
   persist in both paths (same non-empty-meta guard). Failure-first streaming
   test added; suite 3678 green; ruff/pyright clean.
 - Still BLOCKED on external: T-0028 owner §6 sign-off, Remote-SSH L2 window.
+
+## 2026-10-25 — Owner-directed first-run capture onboarding (T-0050)
+- VS Code 首次激活后 4 秒（不阻塞首绘）一次性提醒；全局状态标志在弹提示
+  之前写入，保证仅提示一次；已准备/已配对用户不再看到。
+- installForBrowser 命令：检测 7 个 Chromium 系浏览器（三平台、复用现有
+  纯函数检测器；IE 无扩展体系不受支持，Edge 为其继任；Firefox 留待 AMO
+  上架阶段）→ QuickPick 选择 → 暂存扩展包 → 打开所选浏览器自己的扩展页
+  → 安装路径自动进剪贴板 → 一条消息说明剩余的开发者模式步骤。
+- Chromium 品牌浏览器拒绝静默安装，这是非商店安装能做到的最接近一键的
+  形态；Web Store 上架（所有者账号）之后可换成字面意义的一键，命令侧
+  只需把主按钮换成商店页（一行改动）。
+- 失败用例先行：browserCaptureOnboarding.test.js 4/4（门控矩阵 + 防御性
+  输入 + 8 语言文案完整性 + 按浏览器启动组合）；npm run check 干净；扩展
+  全量套件绿。Webview 未动，设计验收无需重拍。

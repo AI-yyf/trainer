@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { registerCommands } from './commands';
+import { maybePromptCaptureOnboarding } from './commands/browserCaptureCommands';
 import { createBrowserCaptureRuntime } from './browserCapture/runtime';
 import { evaluatePublishedFileCommand } from './commands/evaluationCommands';
 import { primeProviderModelsState } from './commands/providerWebviewCommands';
@@ -545,6 +546,17 @@ export async function activate(
   );
 
   outputChannel.appendLine('[activation] Trainer extension host activated');
+  // First-run browser-capture onboarding (owner direction, T-0050): deferred
+  // so first paint never waits on it, exactly-once via the global-state flag
+  // written inside maybePromptCaptureOnboarding before the prompt renders.
+  const captureOnboardingTimer = setTimeout(() => {
+    void maybePromptCaptureOnboarding(commandContext).catch((error: unknown) => {
+      outputChannel.appendLine(`[browser-capture] onboarding failed: ${String(error)}`);
+    });
+  }, 4_000);
+  extensionContext.subscriptions.push({
+    dispose: () => clearTimeout(captureOnboardingTimer),
+  });
   const restoredSessionId = getPersistedWorkspaceSessionId(
     extensionContext,
     trustGuard.getSnapshot().workspaceFolder,

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-24",
+  "updated": "2026-10-25",
   "baseline_commit": "e7e6f4161e929378c0186be5e3311e710b89fcf6",
   "issues": [
     {
@@ -517,6 +517,21 @@
       "evidence": "server/tests/test_next_step_surface_consistency.py (3 API tests incl. streaming persist); resolved at commit on this branch",
       "resolved_at": "2026-10-24",
       "resolved_sha": "fc245cf"
+    },
+    {
+      "id": "T-0050",
+      "title": "First-run browser-capture onboarding with detected-browser picker (owner direction)",
+      "priority": "P1",
+      "area": "browser",
+      "status": "FIXED_VALIDATED",
+      "discovered": "2026-10-25",
+      "source": "owner directive: VS Code 首次打开应有提醒，一键安装到检测到的浏览器（Chrome/Edge 等）",
+      "detail": "The install command existed but was passive — users had to discover it. Owner asked for a first-open reminder, browser auto-detection, and a per-browser install choice (Chrome/Edge; IE has no extension system and is superseded by Edge, so the Chromium-family detector covers the intent).",
+      "resolution": "maybePromptCaptureOnboarding: deferred (4s) after activation so first paint never waits, gated by a global-state flag written BEFORE the prompt renders (exactly-once even if the notification is dropped) plus the install-dir prepared check. installBrowserCaptureForBrowserCommand: detectChromiumBrowsers (7 Chromium-family browsers, 3 platforms — IE not applicable, Firefox deferred to the AMO store phase) → QuickPick → stage bundle → open THAT browser's own extensions page → install path auto-copied to clipboard → one message with the remaining developer-mode steps. Chromium brands refuse silent installs, so this is the closest a non-store install can get to one click; the Web Store publish (owner account) later turns it into a literal one-click and the command's store-first swap is a one-line change once a URL exists.",
+      "acceptance": "First activation after install shows the prompt once; picking a browser stages the bundle, opens that browser's extensions page and copies the path; prepared/paired users never see it",
+      "evidence": "extension/tests/browserCaptureOnboarding.test.js (gate matrix incl. defensive inputs, 8-locale copy completeness, per-browser launch composition) 4/4 after build; npm run check clean; full extension suite green",
+      "resolved_at": "2026-10-25",
+      "resolved_sha": "PENDING_COMMIT"
     }
   ]
 }

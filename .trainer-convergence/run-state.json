@@ -2,7 +2,7 @@
   "version": 1,
   "loop": 5,
   "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "04a33ce",
+  "head": "PENDING",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -38,7 +38,8 @@
     "T-0048": "FIXED_VALIDATED (6d8fb10: post-turn hydrate no longer re-derives turn-authored coaching_state; memory thread records the repaired step; sentence-boundary inline extractor for compact closes; API-boundary tests server/tests/test_next_step_surface_consistency.py; full suite 3677 green); CI 9/9 @c84dadb (run 39978190239)",
     "install_state_e2e": "run 39995273745 @04a33ce (workflow_dispatch, run_vsix_host_e2e=true): 9/9 success at the T-0049 final SHA; prior run 39981652151 @93f479b",
     "teaching_journey_real_model": "COMPLETE (2026-10-24, linksub relay + glm-5.3, key env-only, zero key in repo): evidence/journey-real/ 10/10 steps — capability gate verified, honest replies, restart continuity, concrete next step w/ success signal, isolation holds; run 2 archived (evidence/journey-real-run2/) confirming the fix against the real relay — 10/10 again",
-    "T-0049": "FIXED_VALIDATED (streaming persist lanes: pre-persist repair added to /session/message/stream and /turn/stream; failure-first test; suite 3678 green)"
+    "T-0049": "FIXED_VALIDATED (streaming persist lanes: pre-persist repair added to /session/message/stream and /turn/stream; failure-first test; suite 3678 green)",
+    "T-0050": "FIXED_VALIDATED (first-run capture onboarding + per-browser picker; failure-first tests 4/4; check clean; PENDING_COMMIT sha backfill)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",

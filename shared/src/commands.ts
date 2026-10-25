@@ -36,6 +36,7 @@ export const trainerCommands = {
   remoteInstallCompanion: "trainer.remote.installCompanion",
   remoteCompanionState: "trainer.remote.companionState",
   installBrowserCapture: "trainer.browserCapture.install",
+  installBrowserCaptureForBrowser: "trainer.browserCapture.installForBrowser",
   openBrowserExtensionsPage: "trainer.browserCapture.openExtensionsPage",
   showBrowserPairingCode: "trainer.browserCapture.pairingCode",
   coachDebugLoop: "trainer.coach.debugLoop",

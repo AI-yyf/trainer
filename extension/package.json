@@ -311,6 +311,10 @@
         "title": "Trainer: Install Browser Capture Extension"
       },
       {
+        "command": "trainer.browserCapture.installForBrowser",
+        "title": "Trainer: Install Browser Capture into a detected browser"
+      },
+      {
         "command": "trainer.browserCapture.openExtensionsPage",
         "title": "Trainer: Open Browser Extensions Page"
       },

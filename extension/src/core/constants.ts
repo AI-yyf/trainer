@@ -143,6 +143,7 @@ export const COMMAND_IDS = {
   scenarioLabAction: trainerCommands.scenarioLabAction,
   // Browser capture lane (install bundle, pairing, revoke)
   browserCaptureInstall: 'trainer.browserCapture.install',
+  browserCaptureInstallForBrowser: 'trainer.browserCapture.installForBrowser',
   browserCaptureOpenExtensionsPage: 'trainer.browserCapture.openExtensionsPage',
   browserCaptureStatus: 'trainer.browserCapture.status',
   browserCapturePairingCode: 'trainer.browserCapture.pairingCode',
