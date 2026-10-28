@@ -7,11 +7,11 @@ import logging
 import posixpath
 import re
 from collections.abc import AsyncIterator
-from dataclasses import asdict, is_dataclass, replace
+from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
-from typing import Literal, NotRequired, Sequence, TypedDict, cast, overload
+from typing import Literal, Sequence, cast, overload
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
@@ -24,7 +24,6 @@ from ..core.models import (
     ActiveCardSelectionResult,
     AffectState,
     AgentCheckpointAccessRequest,
-    AgentMeta,
     CapabilityFlags,
     CardGenerationContext,
     CardGenerationRequest,
@@ -76,7 +75,6 @@ from ..core.models import (
     SessionMessageRequest,
     SessionMessageResponse,
     SessionStartRequest,
-    SuggestedAction,
     TaskNextRequest,
     TaskSpec,
     TaskSpecifyRequest,
@@ -110,7 +108,7 @@ from ..llm.provider_service import (
 )
 from ..llm.reply_continuity import visible_next_step
 from ..llm.stream_agent_metadata import merge_stream_agent_metadata
-from ..llm.training_review_context import active_training_review, apply_training_review_context
+from ..llm.training_review_context import active_training_review
 from ..llm.turn_grounding import (
     GroundingDecision,
     WorkspaceEvidence,
@@ -124,7 +122,6 @@ from ..llm.turn_grounding import (
     trim_ungrounded_segments,
 )
 from ..memory.models import utc_now
-from ..memory.note_request import message_requests_explicit_learning_note
 from ..memory.workspace_recovery import (
     AFFECT_STATE_KEY,
     CURRENT_TASK_KEY,
@@ -149,11 +146,9 @@ from ..memory.workspace_recovery import (
     live_plan_update_persist_chrome,
     live_runtime_stage_id,
     live_task_clean_step_candidates,
-    live_task_converted_copy,
     live_task_focus_area,
     live_task_heading,
     live_task_label,
-    live_task_picked_copy,
     live_task_suggested_reason,
     live_task_suggested_title,
     live_task_training_concepts,
@@ -197,7 +192,7 @@ from ._singleflight import (
     fail_session_request_singleflight,
     publish_session_request_singleflight,
 )
-from .coach_support import CoachSupportDeps
+from .coach_support import CoachSupportDeps, CoachTurnPayload
 from .router_support import (
     _apply_pedagogy_controls_to_card_request,
     _attach_requested_workspace_files,
@@ -240,7 +235,6 @@ from .training_card_identity import (
 from .training_card_identity import (
     training_card_is_live_for_verify as training_card_is_live_for_verify_impl,
 )
-from .training_return_feedback import completed_return_feedback
 from .training_skill_evidence import record_executed_training_evidence
 
 logger = logging.getLogger(__name__)
@@ -368,24 +362,6 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         with resource_training_card_locks_guard:
             return resource_training_card_locks.setdefault(workspace_id, Lock())
 
-
-    class CoachTurnPayload(TypedDict):
-        """Stable data returned by ``resolve_coach_turn`` to every reply path."""
-
-        scenario: str
-        learner_signal: str
-        coach_context: dict[str, object]
-        suggested_actions: list[dict[str, object]]
-        artifacts: dict[str, object]
-        coach_turn: CoachTurnSummary
-        stream: bool
-        # Optional payload members written by the grounding assembly step: the
-        # user-facing downgrade flag and the per-turn cached decision (DESIGN.md
-        # §2.3: "缓存于 payload 私有键"; applied exactly once per turn).
-        requires_confirmation: NotRequired[bool]
-        _grounding_decision: NotRequired[GroundingDecision]
-        _grounding_memory_provenance: NotRequired[dict[str, str]]
-        _grounding_evaluated_next_step: NotRequired[str]
 
     def extract_coach_turn_payload(value: object) -> CoachTurnPayload:
         """Restore the stable coach-turn contract after legacy recovery helpers."""
@@ -5836,616 +5812,6 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             return "full"
         return "minimal"
 
-    def resolve_coach_turn(
-        *,
-        state,
-        profile: UserProfile,
-        request: TurnRequest | SessionMessageRequest,
-        message: str,
-        coaching_service: ProviderService,
-        current_task: TaskSpec | None = None,
-        current_plan: LearningPlan | None = None,
-        current_evaluation=None,
-        force_scenario: str | None = None,
-        stream: bool = False,
-    ) -> CoachTurnPayload:
-        learner_signal = infer_learner_signal(message, getattr(request, "current_file", None))
-        requested_scenario = force_scenario or infer_coaching_scenario(
-            request,
-            current_task=current_task,
-            evaluation_summary=current_evaluation.summary if current_evaluation else None,
-        )
-        scenario = requested_scenario
-        selected_resource_ids = request_resource_ids(request)
-        pedagogy_request = (
-            request
-            if isinstance(request, TurnRequest)
-            else TurnRequest(
-                session_id=request.session_id,
-                workspace_id=request.workspace_id,
-                message=request.message,
-                resource_ids=selected_resource_ids,
-                resourceComposerIntent=request.resource_composer_intent,
-                current_file=request.current_file,
-                responseLanguage=request.response_language,
-                answer_mode=request.answer_mode,
-                intent="coach",
-            )
-        )
-        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-        state.snapshot.profile = profile
-        completed_return = bool(
-            current_evaluation is not None and current_evaluation.passed
-            and completed_return_feedback(runtime, state.workspace_id, request)
-        )
-        if completed_return and current_evaluation is not None and current_evaluation.passed:
-            current_evaluation = current_evaluation.model_copy(update={"next_step": localized_text(
-                "Verification, reflection and Return are complete. Review the returned evidence in Plan before deciding whether to adopt it.",
-                "这张卡的验证、复盘和回流已完成。在学习页查看回流证据，再决定是否接纳到当前计划。",
-                request.response_language,
-            )})
-            state.snapshot.evaluation = current_evaluation
-        scenario = inherit_active_thread_scenario_for_continuation(
-            scenario,
-            message=request.message,
-            active_thread=state.snapshot.memory.active_thread,
-        )
-        resource_context = compose_resource_context(
-            state.workspace_id,
-            selected_resource_ids,
-            message=request.message,
-            resource_composer_intent=request.resource_composer_intent,
-        )
-        if pedagogy_request.current_file is not None or resource_context:
-            workspace_understanding = runtime.pedagogy_service.build_workspace_understanding(
-                request=pedagogy_request,
-                memory_snapshot=state.snapshot.memory,
-                resource_context=resource_context,
-            )
-            if workspace_understanding is not None:
-                runtime.memory_service.save_workspace_understanding(
-                    state.workspace_id,
-                    workspace_understanding,
-                )
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-        pedagogy_learner_state_raw = runtime.pedagogy_service.infer_learner_state(
-            request=pedagogy_request,
-            profile=profile,
-            memory_snapshot=state.snapshot.memory,
-        )
-        modeled_learner_state = model_learner_state(pedagogy_learner_state_raw)
-        modeled_affect_state = runtime.affect_service.infer_state(
-            message=message,
-            learner_state=modeled_learner_state or LearnerState(),
-            memory_snapshot=state.snapshot.memory,
-        )
-        memory_workspace_payload = (
-            state.snapshot.memory.workspace
-            if isinstance(getattr(state.snapshot.memory, "workspace", None), dict)
-            else {}
-        )
-        pedagogy_decision_raw = runtime.pedagogy_service.decide_teaching(
-            request=pedagogy_request,
-            learner_state=pedagogy_learner_state_raw,
-            profile=profile,
-            memory_snapshot=state.snapshot.memory,
-            affect_state=modeled_affect_state,
-            skill_projection=(
-                memory_workspace_payload.get("training_skill_projection")
-                if isinstance(memory_workspace_payload, dict)
-                else None
-            ),
-        )
-        lowered_message = request.message.lower()
-        first_user_turn = sum(
-            1
-            for item in state.snapshot.messages
-            if str(getattr(item, "role", "") or "").strip().lower() == "user"
-        ) == 1
-        structured_onboarding_intake = first_user_turn and all(
-            (
-                any(
-                    token in lowered_message
-                    for token in (
-                        "long-term goal",
-                        "long term goal",
-                        "career goal",
-                        "\u957f\u671f\u76ee\u6807",
-                        "\u804c\u4e1a\u76ee\u6807",
-                    )
-                ),
-                bool(
-                    re.search(
-                        r"\b(?:right now\s+)?i(?:'m| am)\s+(?:an?\s+)?"
-                        r"(?:beginner|junior|intermediate|senior|experienced|self-taught)\b",
-                        lowered_message,
-                    )
-                    or re.search(
-                        r"(?:\u76ee\u524d|\u73b0\u5728|\u6211\u662f).{0,8}"
-                        r"(?:\u521d\u7ea7|\u4e2d\u7ea7|\u9ad8\u7ea7|\u6709\u7ecf\u9a8c)",
-                        lowered_message,
-                    )
-                ),
-                bool(
-                    re.search(
-                        r"\b\d+(?:\.\d+)?\s*(?:hours?|hrs?)\s*(?:per|a)\s+week\b",
-                        lowered_message,
-                    )
-                    or re.search(
-                        r"(?:\u6bcf\u5468.{0,8}\d+(?:\.\d+)?\s*\u5c0f\u65f6|"
-                        r"\d+(?:\.\d+)?\s*\u5c0f\u65f6.{0,8}\u6bcf\u5468)",
-                        lowered_message,
-                    )
-                ),
-                any(
-                    token in lowered_message
-                    for token in (
-                        "guide me",
-                        "coach me",
-                        "help me learn",
-                        "teach me step by step",
-                        "\u5e26\u6211\u5b66",
-                        "\u6307\u5bfc\u6211",
-                        "\u4e00\u6b65\u4e00\u6b65\u5e26\u6211",
-                    )
-                ),
-            )
-        )
-        beginner_goal_opening = first_user_turn and all(
-            (
-                pedagogy_request.current_file is None,
-                not resource_context,
-                any(
-                    token in lowered_message
-                    for token in (
-                        "complete beginner",
-                        "total beginner",
-                        "new to programming",
-                        "no programming experience",
-                        "never coded",
-                        "zero experience",
-                        "\u5b8c\u5168\u4e0d\u4f1a",
-                        "\u96f6\u57fa\u7840",
-                        "\u6ca1\u5b66\u8fc7\u7f16\u7a0b",
-                        "\u6ca1\u6709\u7f16\u7a0b\u7ecf\u9a8c",
-                        "\u4ece\u6ca1\u5199\u8fc7\u4ee3\u7801",
-                        "\u65b0\u624b",
-                        "\u521d\u5b66\u8005",
-                    )
-                ),
-                any(
-                    token in lowered_message
-                    for token in (
-                        "i want to",
-                        "i'd like to",
-                        "want to learn",
-                        "want to build",
-                        "my goal",
-                        "\u60f3\u5b66",
-                        "\u60f3\u505a",
-                        "\u60f3\u5728",
-                        "\u76ee\u6807",
-                        "\u5e0c\u671b",
-                    )
-                ),
-            )
-        )
-        preserve_requested_first_lane = requested_scenario in {
-            "remote_workspace",
-            "debug_loop",
-            "function_guidance",
-            "idea_implementation",
-            "project_adaptation",
-            "project_sourcing",
-        }
-        continuation_of_active_thread = (
-            message_keeps_existing_thread(request.message)
-            and state.snapshot.memory.active_thread is not None
-        )
-        relationship_first_opening = (
-            not continuation_of_active_thread
-            and (
-                structured_onboarding_intake
-                or beginner_goal_opening
-                or (
-                    not preserve_requested_first_lane
-            and pedagogy_request.current_file is None
-            and not resource_context
-            and any(
-                token in lowered_message
-                for token in (
-                    "how do we start",
-                    "where should we start",
-                    "help me get started",
-                    "before we start",
-                    "want to practice with you",
-                    "coach me through",
-                    "不知道从哪里开始",
-                    "从哪里开始",
-                    "带我开始",
-                    "帮我开始",
-                    "\u600e\u4e48\u5f00\u59cb",
-                    "\u5148\u5e2e\u6211\u770b\u770b\u600e\u4e48\u5f00\u59cb",
-                    "\u4e00\u6b65\u4e00\u6b65\u5e26\u6211",
-                    "\u5148\u966a\u6211\u770b\u770b",
-                    "\u5148\u4e00\u8d77\u5b9a\u4e00\u4e2a",
-                )
-            )
-                )
-            )
-        )
-        if relationship_first_opening:
-            onboarding_focus = runtime.pedagogy_service._onboarding_focus(  # noqa: SLF001
-                pedagogy_request,
-                pedagogy_learner_state_raw,
-                profile,
-                state.snapshot.memory,
-            )
-            adaptive_bias = runtime.pedagogy_service._adaptive_bias(state.snapshot.memory)  # noqa: SLF001
-            (
-                lesson_shape,
-                exercise_shape,
-                teaching_strategy,
-                closing_move,
-                artifact_priority,
-            ) = runtime.pedagogy_service._mode_playbook(  # noqa: SLF001
-                mode="onboarding",
-                scenario="guided",
-                focus_area=onboarding_focus or getattr(pedagogy_learner_state_raw, "active_focus", ""),
-                learner_state=pedagogy_learner_state_raw,
-                memory_snapshot=state.snapshot.memory,
-                adaptive_bias=adaptive_bias,
-                decision_should_generate_exercise=False,
-                decision_should_produce_plan_artifact=False,
-            )
-            reason_parts = [
-                *list(getattr(pedagogy_decision_raw, "evidence", []) or []),
-                "relationship_first_opening",
-            ]
-            override_payload = {
-                "mode": "onboarding",
-                "scenario": "guided",
-                "focus_area": onboarding_focus,
-                "reason": "; ".join(
-                    item for item in reason_parts if str(item or "").strip()
-                ),
-                "primary_goal": runtime.pedagogy_service._build_primary_goal(  # noqa: SLF001
-                    "onboarding",
-                    onboarding_focus,
-                    getattr(pedagogy_learner_state_raw, "active_focus", ""),
-                ),
-                "lesson_shape": lesson_shape,
-                "exercise_shape": exercise_shape,
-                "teaching_strategy": teaching_strategy,
-                "closing_move": closing_move,
-                "artifact_priority": artifact_priority,
-                "should_end_with_question": True,
-                "should_generate_exercise": False,
-                "should_reveal_code": False,
-                "should_produce_plan_artifact": False,
-                "should_trigger_deep_analysis": False,
-                "should_focus_on_implementation_steps": False,
-                "tone_profile": "steady",
-                "evidence": reason_parts,
-            }
-            pedagogy_decision_raw = replace(pedagogy_decision_raw, **override_payload)
-        if requested_scenario == "project_sourcing":
-            scenario_override = {
-                "mode": "project_sourcing",
-                "scenario": "project_sourcing",
-            }
-            pedagogy_decision_raw = replace(pedagogy_decision_raw, **scenario_override)
-        request_focus_area = request.focus_area if isinstance(request, TurnRequest) else None
-        focus_area_hint = (
-            str(pedagogy_decision_raw.focus_area or "").strip()
-            or str(pedagogy_learner_state_raw.active_focus or "").strip()
-            or str(state.snapshot.memory.current_focus or "").strip()
-            or str(request_focus_area or "").strip()
-            or str(message or "").strip()
-        )
-        context_tier = _resolve_context_tier(request)
-        if context_tier == "minimal":
-            # Pure Q&A: skip resource/knowledge retrieval entirely. The turn
-            # answers from the model plus the recent conversation.
-            resolved_external_references = None
-            resolved_curated_background_references = None
-            resolved_recent_background_findings = None
-        else:
-            (
-                resolved_external_references,
-                resolved_curated_background_references,
-                resolved_recent_background_findings,
-            ) = resolve_external_references(
-                workspace_id=state.workspace_id,
-                resource_context=resource_context,
-                focus_area=focus_area_hint,
-                limit=4,
-            )
-        pedagogy_artifacts_raw = runtime.pedagogy_service.build_artifacts(
-            request=pedagogy_request,
-            learner_state=pedagogy_learner_state_raw,
-            decision=pedagogy_decision_raw,
-            profile=profile,
-            memory_snapshot=state.snapshot.memory,
-            affect_state=modeled_affect_state,
-            external_references=resolved_external_references,
-        )
-        modeled_teaching_decision = model_teaching_decision(pedagogy_decision_raw)
-        modeled_tone_decision = runtime.affect_service.decide_tone(
-            profile=profile,
-            learner_state=modeled_learner_state or LearnerState(),
-            teaching_decision=modeled_teaching_decision or TeachingDecision(),
-            affect_state=modeled_affect_state,
-        )
-        pedagogy_payload = pedagogy_artifacts_raw.to_payload()
-        modeled_adaptation_guide = model_project_adaptation_guide(
-            pedagogy_payload.get("project_adaptation_guide") or pedagogy_payload.get("adaptation_guide")
-        )
-        modeled_project_sources = model_project_sources(pedagogy_payload.get("project_sources"))
-        modeled_principle_notes = model_principle_notes(
-            pedagogy_payload.get("principle_notes") or pedagogy_payload.get("principle_note")
-        )
-        apply_pedagogy_snapshot(
-            snapshot=state.snapshot,
-            learner_state=modeled_learner_state,
-            teaching_decision=modeled_teaching_decision,
-            affect_state=modeled_affect_state,
-            tone_decision=modeled_tone_decision,
-            implementation_guide=model_implementation_guide(pedagogy_payload.get("implementation_guide")),
-            project_ideas=model_project_ideas(pedagogy_payload.get("project_ideas")),
-            project_adaptation_guide=modeled_adaptation_guide,
-            project_sources=modeled_project_sources,
-            principle_notes=modeled_principle_notes,
-            selected_teaching_assets=[
-                TeachingKnowledgeAsset.model_validate(item)
-                for item in pedagogy_payload.get("selected_teaching_assets", [])
-                if isinstance(item, dict)
-            ]
-            if isinstance(pedagogy_payload.get("selected_teaching_assets"), list)
-            else None,
-            exercise_prompt=pedagogy_payload.get("exercise_prompt")
-            if isinstance(pedagogy_payload.get("exercise_prompt"), dict)
-            else None,
-        )
-        runtime.memory_service.persist_turn_context_pressure(
-            state.workspace_id,
-            current_task=current_task or state.snapshot.current_task,
-            affect_state=modeled_affect_state,
-            learner_state=modeled_learner_state,
-            teaching_decision=modeled_teaching_decision,
-            tone_decision=modeled_tone_decision,
-            adaptation_guide=modeled_adaptation_guide,
-            project_sources=modeled_project_sources,
-            principle_notes=modeled_principle_notes,
-            coach_focus={
-                "current_focus": getattr(state.snapshot.memory, "current_focus", "")
-                if state.snapshot.memory
-                else "",
-                "next_step": getattr(state.snapshot.coaching_state, "next_step", "")
-                if state.snapshot.coaching_state
-                else "",
-            },
-            coach_turn=getattr(state.snapshot, "coach_turn", None),
-            next_step_hint=getattr(state.snapshot, "next_step_hint", None),
-            coaching_adaptation=(
-                state.snapshot.memory.coaching_adaptation if state.snapshot.memory else None
-            ),
-        )
-        # High urgency (affect) is persisted above; refresh so invent gates and
-        # hint-only chips see task_urgency without waiting for weekly_hours/tight budget.
-        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-        if modeled_learner_state and modeled_learner_state.learner_signal:
-            learner_signal = modeled_learner_state.learner_signal
-        if infer_learner_signal(message, getattr(request, "current_file", None)) == "blocked":
-            learner_signal = "blocked"
-        if modeled_teaching_decision:
-            raw_scenario_value = getattr(
-                pedagogy_decision_raw,
-                "scenario",
-                getattr(modeled_teaching_decision, "mode", ""),
-            )
-            if getattr(modeled_teaching_decision, "mode", "") == "onboarding":
-                raw_scenario_value = "onboarding"
-            scenario_alias_map = {
-                "guided": "onboarding" if getattr(modeled_teaching_decision, "mode", "") == "onboarding" else "guided",
-                "project_idea_mining": "project_idea",
-                "project_sourcing": "project_sourcing",
-                "principle_explanation": "principle",
-                "review_reflection": "review",
-            }
-            mapped_scenario = scenario_alias_map.get(raw_scenario_value, raw_scenario_value)
-            if mapped_scenario not in {
-                "general",
-                "onboarding",
-                "idea_implementation",
-                "project_idea",
-                "project_adaptation",
-                "project_sourcing",
-                "principle",
-                "remote_workspace",
-                "debug_loop",
-                "function_guidance",
-                "review",
-                "plan",
-                "task",
-                "next_task",
-            }:
-                mapped_scenario = "onboarding" if getattr(modeled_teaching_decision, "mode", "") == "onboarding" else scenario or "general"
-            if (
-                requested_scenario == "principle"
-                and mapped_scenario in {"idea_implementation", "project_adaptation", "project_idea"}
-                and pedagogy_request.current_file is None
-                and resource_context
-            ):
-                mapped_scenario = "principle"
-            scenario = force_scenario or preserve_requested_domain_scenario(
-                requested_scenario=requested_scenario,
-                decided_scenario=mapped_scenario,
-            )
-        scenario = inherit_active_thread_scenario_for_continuation(
-            scenario,
-            message=request.message,
-            active_thread=state.snapshot.memory.active_thread,
-        )
-        if (
-            (
-                should_remap_task_intent_without_live_plan(
-                    state.workspace_id,
-                    message=request.message,
-                    snapshot=state.snapshot,
-                    current_task=state.snapshot.current_task,
-                    current_plan=state.snapshot.plan,
-                )
-            )
-            and scenario
-            in {
-                "plan",
-                "task",
-                "next_task",
-                "idea_implementation",
-                "project_adaptation",
-                "project_idea",
-                "project_sourcing",
-            }
-            and (
-                not force_scenario
-                or closed_loop_return_blocks_task_mint(state.workspace_id)
-                or not runtime.provider_connection_verified(coaching_service)
-            )
-        ):
-            # The gate controls artifacts/tasks; non-minting domain lanes (plan,
-            # idea, project) stay as classified. TaskSpec-minting lanes are
-            # different: without a live plan there is nothing to execute, so a
-            # "task"/"next_task" coach turn would advertise a mint path that
-            # /task/next and /task/specify fail-close. Coerce to the honest
-            # general coaching lane.
-            if scenario in {"task", "next_task"}:
-                scenario = "general"
-        coach_support.hydrate_snapshot(coach_support_deps,
-            state.snapshot,
-            response_language=request.response_language,
-            answer_mode=request.answer_mode or profile.answer_policy,
-            scenario=scenario,
-            learner_signal=learner_signal,
-            message=request.message,
-            current_file=request.current_file,
-            grounding_context=resource_context,
-            active_view=request.active_view,
-            session_workspace_id=state.workspace_id,
-        )
-        memory = state.snapshot.memory
-        coach_context = build_coach_context(
-            state.snapshot,
-            resource_context,
-            response_language=request.response_language,
-            message=request.message,
-            active_view=request.active_view,
-            current_file=request.current_file,
-            external_references=resolved_external_references,
-            curated_background_references=resolved_curated_background_references,
-            recent_background_findings=resolved_recent_background_findings,
-            plan_runtime_recovery=getattr(request, "plan_runtime_recovery", None),
-            context_tier=context_tier,
-        )
-        if completed_return and current_evaluation is not None and current_evaluation.passed:
-            coach_context["completed_training_return_feedback"] = True
-            coach_context["next_step_hint"] = current_evaluation.next_step
-        if isinstance(request, TurnRequest) and request.intent == "plan" and request.formal_plan_mutation:
-            coach_context["formal_plan_mutation"] = True
-            coach_context["allow_coach_only_tools"] = True
-        _stamp_library_sandbox_work(coach_context, request)
-        if pressure_without_live_object_blocks_mint(
-            state.workspace_id,
-            snapshot=state.snapshot,
-            current_task=current_task or state.snapshot.current_task,
-            current_plan=current_plan or state.snapshot.plan,
-            message=request.message,
-        ):
-            # High urgency / tight budget: ReAct tools stay hint-only.
-            # Chat "create a card" is not the mint path; POST /plan/generate and
-            # /training/generate-card remain the explicit leftover binders.
-            coach_context["pressure_blocks_live_object_mint"] = True
-        if streak_without_live_object_blocks_mint(
-            state.workspace_id,
-            snapshot=state.snapshot,
-            current_task=current_task or state.snapshot.current_task,
-            current_plan=current_plan or state.snapshot.plan,
-        ):
-            # Consecutive fail/success without a live object: adapt pace only.
-            # Fail-closed like evidence_controls — do not invent TaskSpec/card.
-            coach_context["streak_blocks_live_object_mint"] = True
-        if live_formal_plan_for_explicit_task_next(state.workspace_id) is not None:
-            # ReAct specify_task / next_task may mint only for this live identity.
-            coach_context["live_formal_plan_for_task_mint"] = True
-        if closed_loop_return_blocks_task_mint(state.workspace_id):
-            # Live plan + completed/verified Return: host/webview fail-closed mint chips.
-            # Explicit POST /task/next and /task/specify remain the mint paths.
-            coach_context["closed_loop_return_blocks_task_mint"] = True
-        # Host/user attestation only — never trust model tool-arg self-attestation.
-        # Fail-closed: Direct API resourceOrganizationConfirmed without a prior
-        # organize_resources proposal for this workspace must not stamp.
-        if getattr(request, "resource_organization_confirmed", False) is True:
-            pending = getattr(runtime, "resource_organization_pending", None)
-            if isinstance(pending, dict) and state.workspace_id in pending:
-                coach_context["resource_organization_confirmed"] = True
-        suggested_actions = honest_suggested_actions_without_live_object(
-            structured_suggested_actions(
-                coach_support.coach_suggested_actions(coach_support_deps,
-                    request.response_language,
-                    scenario=scenario,
-                    snapshot=state.snapshot,
-                ),
-                response_language=request.response_language,
-                scenario=scenario,
-                focus_area=stateful_focus_area(
-                    current_task,
-                    current_plan,
-                    current_evaluation,
-                    snapshot=state.snapshot,
-                ),
-            ),
-            workspace_id=state.workspace_id,
-            response_language=request.response_language,
-            snapshot=state.snapshot,
-            current_task=current_task,
-            current_plan=current_plan,
-            current_evaluation=current_evaluation,
-            message=request.message,
-            scenario=scenario,
-        )
-        artifacts = coach_support.build_coaching_artifacts(coach_support_deps,
-            scenario=scenario,
-            response_language=request.response_language,
-            coaching_state=state.snapshot.coaching_state,
-            memory=memory,
-            message=request.message,
-            task=current_task,
-            plan=current_plan,
-            evaluation=current_evaluation,
-            snapshot=state.snapshot,
-            grounding_context=resource_context,
-            completed_return=completed_return,
-            active_view=request.active_view,
-        )
-        if active_training_review(memory, normalize_active_view_name(request.active_view)) is not None:
-            suggested_actions = []
-        return {
-            "scenario": scenario,
-            "learner_signal": learner_signal,
-            "coach_context": coach_context,
-            "suggested_actions": suggested_actions,
-            "artifacts": artifacts,
-            "coach_turn": build_turn_summary(
-                snapshot=state.snapshot,
-                scenario=scenario,
-                learner_signal=learner_signal,
-                artifacts=artifacts,
-                suggested_actions=suggested_actions,
-                coach_context=coach_context,
-                response_language=request.response_language,
-            ),
-            "stream": stream,
-        }
 
     def build_user_message_metadata(
         request: TurnRequest | SessionMessageRequest,
@@ -6857,7 +6223,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         return
                 except RuntimeError:
                     pass
-                response, artifacts, _service = await execute_turn(
+                response, artifacts, _service = await coach_support.execute_turn(coach_support_deps, 
                     request,
                     payload,
                     stream=False,
@@ -8870,666 +8236,6 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             )
         return coach_turn_data
 
-    def build_session_response(
-        *,
-        state,
-        request: TurnRequest | SessionMessageRequest,
-        reply_content: str,
-        artifacts: dict[str, object],
-        suggested_actions: list[dict[str, object]],
-        scenario: str,
-        learner_signal: str,
-        coach_turn_data: dict[str, object] | None = None,
-        response_snapshot: WorkbenchSnapshot | None = None,
-        agent_meta: dict[str, object] | None = None,
-        attachment_delivery: dict[str, object] | None = None,
-    ) -> SessionMessageResponse:
-        if isinstance(agent_meta, dict):
-            agent_meta = {key: value for key, value in agent_meta.items() if value is not None}
-        snapshot_for_response = response_snapshot if response_snapshot is not None else state.snapshot
-        snapshot_for_response.snapshot_revision = runtime.next_snapshot_revision(state.workspace_id)
-        repair_legacy_assistant_messages(snapshot_for_response, request.response_language)
-        response_scenario = scenario
-        fresh_lane_coach_turn = False
-        if isinstance(coach_turn_data, dict):
-            coach_turn_scenario = str(coach_turn_data.get("scenario") or "").strip()
-            coach_context = coach_turn_data.get("coach_context")
-            fresh_lane_coach_turn = (
-                isinstance(coach_context, dict)
-                and str(coach_context.get("history_mode") or "").strip().lower() == "fresh_lane"
-            )
-            if fresh_lane_coach_turn and coach_turn_scenario == "general":
-                response_scenario = "general"
-            elif coach_turn_scenario and coach_turn_scenario != "general" and response_scenario == "general":
-                response_scenario = coach_turn_scenario
-        if isinstance(agent_meta, dict):
-            agent_scenario = str(agent_meta.get("scenario") or "").strip()
-            if (
-                not fresh_lane_coach_turn
-                and agent_scenario
-                and agent_scenario != "general"
-                and response_scenario == "general"
-            ):
-                response_scenario = agent_scenario
-            latest_user_message = ""
-            for message in reversed(snapshot_for_response.messages):
-                role = str(getattr(message, "role", "") or "").strip().lower()
-                if role != "user":
-                    continue
-                latest_user_message = str(getattr(message, "content", "") or "").strip()
-                if latest_user_message:
-                    break
-            short_continuation_request = latest_user_message in {
-                "continue",
-                "Continue",
-                "\u7ee7\u7eed",
-                "\u8bf7\u7ee7\u7eed",
-                "\u7ee7\u7eed\u5427",
-                "\u63a5\u7740",
-                "\u4e0b\u4e00\u6b65",
-            } or message_requests_lane_continuation(latest_user_message)
-            if (
-                str(agent_meta.get("stop_reason") or "").strip() == "language_corruption"
-                and short_continuation_request
-            ):
-                continuation_active_thread = None
-                if isinstance(coach_turn_data, dict):
-                    coach_context = coach_turn_data.get("coach_context")
-                    if isinstance(coach_context, dict) and isinstance(coach_context.get("active_thread"), dict):
-                        continuation_active_thread = coach_context.get("active_thread")
-                continuation_scenario = response_scenario
-                if continuation_scenario == "general":
-                    continuation_scenario = active_thread_scenario_value(
-                        continuation_active_thread or snapshot_for_response.memory.active_thread
-                    ) or response_scenario
-                if continuation_scenario and continuation_scenario != "general":
-                    response_scenario = continuation_scenario
-                current_next_step = strip_visible_next_step_prefix(agent_meta.get("next_step") or "")
-                repaired_next_step = current_next_step
-                if looks_like_mojibake_text(current_next_step):
-                    repaired_next_step = ""
-                if continuation_step_needs_local_repair(current_next_step) or generic_guided_review_fallback_needs_repair(current_next_step):
-                    repaired_next_step = resolve_local_continuation_step(
-                        snapshot=snapshot_for_response,
-                        coach_turn=coach_turn_data if isinstance(coach_turn_data, dict) else {},
-                        fallback_next_step=current_next_step,
-                    )
-                if continuation_step_needs_local_repair(repaired_next_step) or generic_guided_review_fallback_needs_repair(repaired_next_step):
-                    repaired_next_step = extract_lane_continuation_step(current_next_step)
-                if continuation_step_needs_local_repair(repaired_next_step) or generic_guided_review_fallback_needs_repair(repaired_next_step):
-                    repaired_next_step = local_continuation_step_for_scenario(
-                        response_scenario,
-                        request.response_language,
-                    )
-                if repaired_next_step and repaired_next_step != current_next_step:
-                    repaired_summary = str(agent_meta.get("summary") or "").strip()
-                    repaired_blocker = str(agent_meta.get("blocker") or repaired_summary).strip()
-                    repaired_teaching_note = localized_text(
-                        "Keep the same learning lane. When a short continuation is corrupted, resume from the saved thread locally and verify the next visible move.",
-                        "\u7ee7\u7eed\u7559\u5728\u540c\u4e00\u6761\u5b66\u4e60\u4e3b\u7ebf\u91cc\u3002\u5f53\u77ed continuation \u88ab\u7834\u574f\u65f6\uff0c\u5148\u4ece\u5df2\u4fdd\u5b58\u7684 thread \u5728\u672c\u5730\u7eed\u4e0a\uff0c\u518d\u9a8c\u8bc1\u4e0b\u4e00\u4e2a\u53ef\u89c1\u52a8\u4f5c\u3002",
-                        request.response_language,
-                    )
-                    repaired_resume_thread = localized_text(
-                        f"Continue the saved coaching thread. Next: {repaired_next_step}",
-                        f"\u7ee7\u7eed\u6cbf\u7740\u5df2\u4fdd\u5b58\u7684\u4e3b\u7ebf\u63a8\u8fdb\u3002\u4e0b\u4e00\u6b65\uff1a{repaired_next_step}",
-                        request.response_language,
-                    )
-                    agent_meta = dict(agent_meta)
-                    agent_meta["next_step"] = repaired_next_step
-                    agent_meta["resume_thread"] = repaired_resume_thread
-                    agent_meta["teaching_note"] = repaired_teaching_note
-                    if response_scenario and response_scenario != "general":
-                        agent_meta["scenario"] = response_scenario
-                    reply_content = localized_text(
-                        f"{repaired_summary}\n\nThe provider did not preserve this short continuation cleanly, so Trainer resumed the saved thread locally instead of repeating the provider setup blocker.\n\nNext step: {repaired_next_step}",
-                        f"{repaired_summary}\n\nprovider \u6ca1\u6709\u7a33\u5b9a\u4fdd\u7559\u8fd9\u6761\u5f88\u77ed\u7684 continuation\uff0c\u6240\u4ee5 Trainer \u5148\u6309\u5df2\u4fdd\u5b58\u7684\u4e3b\u7ebf\u5728\u672c\u5730\u7eed\u4e0a\uff0c\u4e0d\u518d\u91cd\u590d provider \u914d\u7f6e\u963b\u585e\u3002\n\n\u4e0b\u4e00\u6b65\uff1a{repaired_next_step}",
-                        request.response_language,
-                    )
-                    if snapshot_for_response.coaching_state:
-                        snapshot_for_response.coaching_state = snapshot_for_response.coaching_state.model_copy(
-                            update={
-                                "summary": repaired_summary,
-                                "next_step": repaired_next_step,
-                                "resume_thread": repaired_resume_thread,
-                            }
-                        )
-                    if isinstance(coach_turn_data, dict):
-                        coach_turn_data = merge_agent_finalize_into_coach_turn(
-                            {
-                                **coach_turn_data,
-                                "scenario": response_scenario,
-                            },
-                            summary=repaired_summary,
-                            next_step=repaired_next_step,
-                            blocker=repaired_blocker,
-                            resume_thread=repaired_resume_thread,
-                            teaching_note=repaired_teaching_note,
-                        )
-        refreshed_coach_turn_data = coach_turn_data
-        if isinstance(coach_turn_data, dict):
-            original_coach_context = (
-                coach_turn_data.get("coach_context")
-                if isinstance(coach_turn_data.get("coach_context"), dict)
-                else None
-            )
-            original_turn_summary = (
-                coach_turn_data.get("coach_turn")
-                if isinstance(coach_turn_data.get("coach_turn"), CoachTurnSummary)
-                else None
-            )
-            requested_resource_ids = request_resource_ids(request)
-            refreshed_resource_context = compose_resource_context(
-                state.workspace_id,
-                requested_resource_ids,
-                message=request.message,
-                resource_composer_intent=request.resource_composer_intent,
-            )
-            refreshed_coach_context = build_coach_context(
-                snapshot_for_response,
-                refreshed_resource_context,
-                message=request.message,
-                active_view=request.active_view,
-                current_file=getattr(request, "current_file", None),
-                response_language=request.response_language,
-                plan_runtime_recovery=getattr(request, "plan_runtime_recovery", None),
-            )
-            original_history_mode = (
-                str(original_coach_context.get("history_mode") or "").strip().lower()
-                if isinstance(original_coach_context, dict)
-                else ""
-            )
-            if original_history_mode == "fresh_lane":
-                refreshed_coach_context["history_mode"] = "fresh_lane"
-                refreshed_coach_context["current_focus"] = (
-                    str(original_coach_context.get("current_focus") or "").strip()
-                    if isinstance(original_coach_context, dict)
-                    else ""
-                )
-                preserve_relationship_continuity = should_preserve_relationship_continuity_for_turn(
-                    snapshot_for_response.memory,
-                    message=request.message,
-                    grounding_context=refreshed_resource_context,
-                    active_view=request.active_view,
-                )
-                refreshed_coach_context["memory_evidence"] = []
-                refreshed_coach_context["recent_teaching_signals"] = []
-                refreshed_coach_context["recent_wins"] = []
-                refreshed_coach_context["teaching_observations"] = []
-                if not preserve_relationship_continuity:
-                    refreshed_coach_context["continuity_summary"] = ""
-                refreshed_coach_context["active_thread"] = None
-                refreshed_memory_payload = normalized_object_mapping(
-                    refreshed_coach_context.get("memory")
-                )
-                if refreshed_memory_payload is not None:
-                    refreshed_memory = refreshed_memory_payload
-                    refreshed_memory["current_focus"] = ""
-                    refreshed_memory["recent_summary"] = ""
-                    refreshed_memory["recent_wins"] = []
-                    refreshed_memory["teaching_observations"] = []
-                    refreshed_memory["memory_evidence"] = []
-                    refreshed_memory["active_thread"] = None
-                    if not turn_keeps_review_signals(
-                        response_scenario,
-                        snapshot_for_response.teaching_decision,
-                    ):
-                        refreshed_memory["due_reviews"] = []
-                        refreshed_memory["due_review_count"] = 0
-                        refreshed_memory["review_rhythm"] = ""
-                    refreshed_coach_context["memory"] = refreshed_memory
-                if not turn_keeps_review_signals(
-                    response_scenario,
-                    snapshot_for_response.teaching_decision,
-                ):
-                    refreshed_coach_context["review_rhythm"] = ""
-                    refreshed_coach_context["review_queue_summary"] = ""
-                    refreshed_coach_context["due_reviews"] = []
-                    refreshed_coach_context["due_review_count"] = 0
-            # Refresh rebuilds coach_context; keep mint-block stamps from resolve_coach_turn
-            # (or re-evaluate) so /session/message + /turn (+ streams) still surface them.
-            if (
-                isinstance(original_coach_context, dict)
-                and original_coach_context.get("pressure_blocks_live_object_mint") is True
-            ) or pressure_without_live_object_blocks_mint(
-                state.workspace_id,
-                snapshot=snapshot_for_response,
-                current_task=snapshot_for_response.current_task,
-                current_plan=snapshot_for_response.plan,
-                message=getattr(request, "message", None),
-            ):
-                refreshed_coach_context["pressure_blocks_live_object_mint"] = True
-            if (
-                isinstance(original_coach_context, dict)
-                and original_coach_context.get("streak_blocks_live_object_mint") is True
-            ) or streak_without_live_object_blocks_mint(
-                state.workspace_id,
-                snapshot=snapshot_for_response,
-                current_task=snapshot_for_response.current_task,
-                current_plan=snapshot_for_response.plan,
-            ):
-                refreshed_coach_context["streak_blocks_live_object_mint"] = True
-            if (
-                isinstance(original_coach_context, dict)
-                and original_coach_context.get("live_formal_plan_for_task_mint") is True
-            ) or live_formal_plan_for_explicit_task_next(state.workspace_id) is not None:
-                refreshed_coach_context["live_formal_plan_for_task_mint"] = True
-            if (
-                isinstance(original_coach_context, dict)
-                and original_coach_context.get("closed_loop_return_blocks_task_mint") is True
-            ) or closed_loop_return_blocks_task_mint(state.workspace_id):
-                refreshed_coach_context["closed_loop_return_blocks_task_mint"] = True
-            refreshed_coach_turn_data = {
-                "scenario": response_scenario,
-                "learner_signal": learner_signal,
-                "artifacts": artifacts,
-                "suggested_actions": suggested_actions,
-                "coach_context": refreshed_coach_context,
-                "coach_turn": (
-                    original_turn_summary
-                    if original_turn_summary is not None
-                    else build_turn_summary(
-                    snapshot=snapshot_for_response,
-                    scenario=response_scenario,
-                    learner_signal=learner_signal,
-                    artifacts=artifacts,
-                    suggested_actions=suggested_actions,
-                    coach_context=refreshed_coach_context,
-                    response_language=request.response_language,
-                    )
-                ),
-            }
-        if isinstance(agent_meta, dict):
-            refreshed_coach_turn_data = merge_agent_finalize_into_coach_turn(
-                refreshed_coach_turn_data,
-                summary=agent_meta.get("summary"),
-                next_step=agent_meta.get("next_step"),
-                blocker=agent_meta.get("blocker"),
-                resume_thread=agent_meta.get("resume_thread") or agent_meta.get("resumeThread"),
-                decision=agent_meta.get("decision"),
-                teaching_note=agent_meta.get("teaching_note") or agent_meta.get("teachingNote"),
-                confidence=agent_meta.get("confidence"),
-                evidence=agent_meta.get("evidence"),
-            )
-            normalized_agent_summary = str(agent_meta.get("summary") or "").strip()
-            normalized_agent_next_step = strip_visible_next_step_prefix(
-                agent_meta.get("next_step") or ""
-            )
-            resume_thread = str(
-                agent_meta.get("resume_thread") or agent_meta.get("resumeThread") or ""
-            ).strip()
-            if (
-                normalized_agent_next_step
-                and normalized_agent_summary
-                and (not resume_thread or normalized_agent_next_step not in resume_thread)
-            ):
-                resume_thread = build_resume_thread_text(
-                    normalized_agent_summary,
-                    normalized_agent_next_step,
-                    response_language=request.response_language,
-                )
-                agent_meta = dict(agent_meta)
-                agent_meta["resume_thread"] = resume_thread
-            if str(agent_meta.get("stop_reason") or "").strip() == "coach_finalize":
-                if resume_thread and state.snapshot.coaching_state:
-                    state.snapshot.coaching_state = state.snapshot.coaching_state.model_copy(
-                        update={"resume_thread": resume_thread}
-                    )
-                if resume_thread and isinstance(refreshed_coach_turn_data, dict):
-                    coach_context = refreshed_coach_turn_data.get("coach_context")
-                    if isinstance(coach_context, dict):
-                        coach_context["resume_thread"] = resume_thread
-                    refreshed_coach_turn_data = merge_agent_finalize_into_coach_turn(
-                        refreshed_coach_turn_data,
-                        resume_thread=resume_thread,
-                    )
-            if (
-                str(agent_meta.get("stop_reason") or "").strip() == "empty_response"
-                and agent_meta.get("local_sequence_fallback") is not True
-            ):
-                reply_content = build_empty_response_visible_reply(
-                    summary=agent_meta.get("summary"),
-                    next_step=agent_meta.get("next_step"),
-                    response_language=request.response_language,
-                )
-        reply_content, refreshed_coach_turn_data, repaired_agent_meta, _guided_lane_repaired = (
-            apply_guided_lane_visible_fallback(
-                reply=reply_content,
-                scenario=response_scenario,
-                learner_message=getattr(request, "message", None),
-                response_language=request.response_language,
-                coach_turn=refreshed_coach_turn_data,
-                agent_meta=agent_meta,
-            )
-        )
-        reply_content = sanitize_visible_coach_reply_content(
-            reply_content,
-            request.response_language,
-        )
-        agent_meta = repaired_agent_meta or None
-        # T-0027/T-0035/T-0048 repair — see repair_generic_finalize_next_step.
-        refreshed_coach_turn_data = repair_generic_finalize_next_step(
-            reply_content,
-            agent_meta,
-            refreshed_coach_turn_data,
-            response_language=request.response_language,
-        )
-        if (
-            not message_requests_explicit_explanation_or_example(getattr(request, "message", None))
-            and str(response_scenario or "").strip().lower() in GUIDED_VISIBLE_REPAIR_SCENARIOS
-            and (
-                guided_lane_visible_reply_is_generic(reply_content)
-                or guided_lane_visible_reply_has_foreign_markers(
-                    reply_content,
-                    scenario=response_scenario,
-                )
-            )
-        ):
-            coach_context = (
-                normalized_object_mapping(refreshed_coach_turn_data.get("coach_context"))
-                if isinstance(refreshed_coach_turn_data, dict)
-                else None
-            )
-            stable_reply = build_guided_lane_stable_visible_reply(
-                scenario=response_scenario,
-                response_language=request.response_language,
-                coach_context=coach_context,
-            )
-            if stable_reply is not None:
-                reply_content = stable_reply["reply"]
-                stabilized_agent_meta = dict(agent_meta or {})
-                stabilized_agent_meta["summary"] = stable_reply["summary"]
-                stabilized_agent_meta["next_step"] = stable_reply["next_step"]
-                stabilized_agent_meta["teaching_note"] = stable_reply["teaching_note"]
-                stabilized_agent_meta["resume_thread"] = stable_reply["resume_thread"]
-                stabilized_agent_meta["scenario"] = str(response_scenario or "").strip() or "general"
-                stabilized_agent_meta["guided_lane_visible_repaired"] = True
-                agent_meta = stabilized_agent_meta
-                if isinstance(refreshed_coach_turn_data, dict):
-                    refreshed_coach_turn_data = merge_agent_finalize_into_coach_turn(
-                        {
-                            **refreshed_coach_turn_data,
-                            "scenario": str(response_scenario or "").strip() or "general",
-                        },
-                        summary=stable_reply["summary"],
-                        next_step=stable_reply["next_step"],
-                        blocker=stabilized_agent_meta.get("blocker"),
-                        resume_thread=stable_reply["resume_thread"],
-                        decision=stabilized_agent_meta.get("decision"),
-                        teaching_note=stable_reply["teaching_note"],
-                        confidence=stabilized_agent_meta.get("confidence"),
-                        evidence=stabilized_agent_meta.get("evidence"),
-                    )
-        plan_commit_verified = formal_plan_commit_verified(
-            state=state,
-            request=request,
-            agent_meta=agent_meta,
-        )
-        if requires_formal_plan_commit(request) and not plan_commit_verified:
-            reply_content = formal_plan_commit_missing_reply(request.response_language)
-            next_step = formal_plan_commit_missing_next_step(request.response_language)
-            blocker = localized_text(
-                "The model did not complete the required save_formal_plan tool call, so no formal plan was committed.",
-                "模型没有完成必须的 save_formal_plan 工具调用，因此没有正式计划被提交。",
-                request.response_language,
-            )
-            agent_meta = {
-                **(agent_meta or {}),
-                "agentic": True,
-                "formal_plan_commit": "missing",
-                "stop_reason": "formal_plan_commit_missing",
-                "summary": blocker,
-                "next_step": next_step,
-                "blocker": blocker,
-            }
-            refreshed_coach_turn_data = merge_agent_finalize_into_coach_turn(
-                refreshed_coach_turn_data,
-                summary=blocker,
-                next_step=next_step,
-                blocker=blocker,
-            )
-        if isinstance(agent_meta, dict):
-            apply_agent_meta_to_coaching_state(
-                snapshot_for_response,
-                agent_meta,
-                response_scenario=response_scenario,
-            )
-            if snapshot_for_response is not state.snapshot:
-                apply_agent_meta_to_coaching_state(
-                    state.snapshot,
-                    agent_meta,
-                    response_scenario=response_scenario,
-                )
-        repaired_memory_snapshot = repair_guided_lane_memory_snapshot_for_response(
-            snapshot_for_response.memory,
-            scenario=response_scenario,
-            response_language=request.response_language,
-            learner_message=getattr(request, "message", None),
-        )
-        if repaired_memory_snapshot is not snapshot_for_response.memory:
-            snapshot_for_response.memory = repaired_memory_snapshot
-            if snapshot_for_response is not state.snapshot:
-                state.snapshot.memory = repair_guided_lane_memory_snapshot_for_response(
-                    state.snapshot.memory,
-                    scenario=response_scenario,
-                    response_language=request.response_language,
-                    learner_message=getattr(request, "message", None),
-                )
-        assistant_reply = ChatMessage(
-            id=f"message-{uuid4().hex[:10]}",
-            role="assistant",
-            content=reply_content,
-            timestamp=datetime.now(UTC),
-            metadata=build_assistant_metadata(
-                request,
-                artifacts,
-                snapshot_for_response,
-                snapshot_for_response.coaching_state.summary if snapshot_for_response.coaching_state else None,
-                refreshed_coach_turn_data,
-                agent_meta,
-                attachment_delivery,
-            ),
-        )
-        state.snapshot.messages.append(assistant_reply)
-        # Make the matching session durable before its replay-only trace is committed.
-        runtime.save_session_state(state.session_id)
-        if isinstance(agent_meta, dict) and agent_meta.get("agentic") is True:
-            checkpoint = runtime.record_agent_turn_checkpoint(
-                state=state,
-                request=request,
-                assistant_reply=assistant_reply,
-                agent_meta=agent_meta,
-                coach_turn_data=refreshed_coach_turn_data,
-            )
-            agent_meta = dict(agent_meta)
-            agent_meta["checkpoint_id"] = str(checkpoint.get("checkpoint_id") or "")
-            recovery = checkpoint.get("recovery")
-            agent_meta["recovery_available"] = bool(
-                recovery.get("recovery_available") if isinstance(recovery, dict) else False
-            )
-            assistant_reply.metadata["agent_checkpoint"] = {
-                "checkpoint_id": agent_meta["checkpoint_id"],
-                "recovery_available": agent_meta["recovery_available"],
-            }
-        runtime.memory_service.record_session_message(
-            state.session_id,
-            f"assistant: {assistant_reply.content}",
-            workspace_id=state.workspace_id,
-        )
-        update_snapshot_plan_from_turn(
-            state=state,
-            reply_content=reply_content,
-            coach_turn=refreshed_coach_turn_data,
-            allow_formal_plan_mutation=bool(
-                requires_formal_plan_commit(request) and plan_commit_verified
-            ),
-        )
-        state.snapshot.plan_runtime_status = attach_plan_runtime_status(
-            workspace_id=state.workspace_id,
-            snapshot=state.snapshot,
-            response_language=request.response_language,
-            profile=state.snapshot.profile,
-            coach_turn=refreshed_coach_turn_data,
-            agent_meta=agent_meta,
-        )
-        if snapshot_for_response is state.snapshot:
-            response_payload_snapshot = state.snapshot.model_copy(deep=True)
-        else:
-            response_payload_snapshot = snapshot_for_response.model_copy(deep=True)
-            response_payload_snapshot.messages.append(assistant_reply)
-        response_payload_snapshot.plan_runtime_status = attach_plan_runtime_status(
-            workspace_id=state.workspace_id,
-            snapshot=response_payload_snapshot,
-            response_language=request.response_language,
-            profile=response_payload_snapshot.profile,
-            coach_turn=refreshed_coach_turn_data,
-            agent_meta=agent_meta,
-        )
-        response_payload_snapshot.memory = repair_guided_lane_memory_snapshot_for_response(
-            response_payload_snapshot.memory,
-            scenario=response_scenario,
-            response_language=request.response_language,
-            learner_message=getattr(request, "message", None),
-        )
-        if snapshot_for_response is not state.snapshot:
-            response_payload_snapshot.memory = response_payload_snapshot.memory.model_copy(
-                update={
-                    "due_reviews": [],
-                    "due_review_count": 0,
-                }
-            )
-            response_payload_snapshot.review_queue_summary = summarize_review_queue(
-                [],
-                request.response_language,
-            )
-            response_payload_snapshot.next_review_due = None
-        response_payload_snapshot.memory = repair_guided_lane_memory_snapshot_for_response(
-            response_payload_snapshot.memory,
-            scenario=response_scenario,
-            response_language=request.response_language,
-            learner_message=getattr(request, "message", None),
-        )
-        if response_payload_snapshot.coaching_state is not None:
-            aligned_coaching_state_payload = language_aligned_coaching_state_payload(
-                response_payload_snapshot.coaching_state.model_dump(),
-                request.response_language,
-            )
-            if isinstance(aligned_coaching_state_payload, dict):
-                response_payload_snapshot.coaching_state = type(
-                    response_payload_snapshot.coaching_state
-                ).model_validate(aligned_coaching_state_payload)
-        runtime.save_session_state(state.session_id)
-        raw_response_coach_turn = (
-            refreshed_coach_turn_data.get("coach_turn")
-            if isinstance(refreshed_coach_turn_data, dict)
-            else None
-        )
-        response_coach_context = (
-            normalized_object_mapping(refreshed_coach_turn_data.get("coach_context"))
-            if isinstance(refreshed_coach_turn_data, dict)
-            else None
-        )
-        if isinstance(raw_response_coach_turn, CoachTurnSummary):
-            response_coach_turn = raw_response_coach_turn
-        else:
-            response_coach_turn = build_turn_summary(
-                snapshot=response_payload_snapshot,
-                scenario=response_scenario,
-                learner_signal=learner_signal,
-                artifacts=artifacts,
-                suggested_actions=suggested_actions,
-                coach_context=response_coach_context,
-                response_language=request.response_language,
-            )
-        if isinstance(agent_meta, dict):
-            raw_agent_evidence = agent_meta.get("evidence")
-            agent_turn_update = {
-                key: value
-                for key, value in {
-                    "summary": str(agent_meta.get("summary") or "").strip(),
-                    "next_step": strip_visible_next_step_prefix(agent_meta.get("next_step") or ""),
-                    "resume_thread": str(
-                        agent_meta.get("resume_thread") or agent_meta.get("resumeThread") or ""
-                    ).strip(),
-                    "decision": str(agent_meta.get("decision") or "").strip(),
-                    "blocker": str(agent_meta.get("blocker") or "").strip(),
-                    "teaching_note": str(
-                        agent_meta.get("teaching_note") or agent_meta.get("teachingNote") or ""
-                    ).strip(),
-                    "confidence": str(agent_meta.get("confidence") or "").strip(),
-                    "evidence": [
-                        str(item).strip()
-                        for item in raw_agent_evidence
-                        if str(item).strip()
-                    ]
-                    if isinstance(raw_agent_evidence, list)
-                    else [],
-                }.items()
-                if value
-            }
-            response_coach_turn = response_coach_turn.model_copy(update=agent_turn_update)
-        if (
-            isinstance(response_coach_context, dict)
-            and response_coach_context.get("pressure_blocks_live_object_mint") is True
-        ):
-            # Non-agent paths pass agent_meta=None; still stamp so host adapter can camelCase.
-            agent_meta = dict(agent_meta) if isinstance(agent_meta, dict) else {"agentic": False}
-            agent_meta["pressure_blocks_live_object_mint"] = True
-        if (
-            isinstance(response_coach_context, dict)
-            and response_coach_context.get("streak_blocks_live_object_mint") is True
-        ):
-            agent_meta = dict(agent_meta) if isinstance(agent_meta, dict) else {"agentic": False}
-            agent_meta["streak_blocks_live_object_mint"] = True
-        if (
-            isinstance(response_coach_context, dict)
-            and response_coach_context.get("closed_loop_return_blocks_task_mint") is True
-        ):
-            agent_meta = dict(agent_meta) if isinstance(agent_meta, dict) else {"agentic": False}
-            agent_meta["closed_loop_return_blocks_task_mint"] = True
-        suggested_actions = honest_suggested_actions_without_live_object(
-            suggested_actions,
-            workspace_id=state.workspace_id,
-            response_language=request.response_language,
-            snapshot=snapshot_for_response,
-            current_task=snapshot_for_response.current_task,
-            current_plan=snapshot_for_response.plan,
-            current_evaluation=snapshot_for_response.evaluation,
-            message=getattr(request, "message", None),
-            scenario=str(response_scenario or "general"),
-        )
-        response_suggested_actions = [
-            SuggestedAction.model_validate(action) for action in suggested_actions
-        ]
-        response_cached_grounding_decision = grounding_decision_from_payload(coach_turn_data)
-        if response_cached_grounding_decision is not None:
-            # Consume the per-turn decision resolved before persistence — the
-            # response must never re-evaluate the turn (DESIGN.md §2.3).
-            response_coach_turn = grounding_response_coach_turn(
-                coach_turn=response_coach_turn,
-                decision=response_cached_grounding_decision,
-            )
-        else:
-            # Legacy path: a caller that never ran the resolve step still gets
-            # the synchronous gate (kept for compatibility, not for wire flows).
-            response_coach_turn = apply_next_step_grounding_policy(
-                coach_turn=response_coach_turn,
-                reply_content=reply_content,
-                request=request,
-                agent_meta=agent_meta,
-                coach_turn_data=coach_turn_data,
-                history_text=turn_history_text(snapshot_for_response),
-            )
-        response_agent_meta = AgentMeta.model_validate(agent_meta) if isinstance(agent_meta, dict) else None
-        return SessionMessageResponse(
-            session_id=state.session_id,
-            reply=assistant_reply,
-            snapshot=response_payload_snapshot,
-            suggested_actions=response_suggested_actions,
-            artifacts=artifacts,
-            coach_turn=response_coach_turn,
-            agent_meta=response_agent_meta,
-            agent=response_agent_meta,
-        )
 
     def to_json_payload(value: object) -> object:
         return sanitize_visible_coach_payload(jsonable_encoder(value))
@@ -14269,627 +12975,6 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         # save_formal_plan already committed. Do not rewrite leftover identity from reply prose.
         state.snapshot.plan = current_plan
 
-    def build_coach_context(
-        snapshot: WorkbenchSnapshot,
-        resource_context: dict[str, object] | None = None,
-        *,
-        response_language: str | None = None,
-        message: str | None = None,
-        active_view: str | None = None,
-        current_file=None,
-        external_references: list[dict[str, object]] | None = None,
-        curated_background_references: list[dict[str, object]] | None = None,
-        recent_background_findings: list[dict[str, object]] | None = None,
-        plan_runtime_recovery: dict[str, object] | None = None,
-        context_tier: str = "full",
-    ) -> dict[str, object]:
-        minimal_context = context_tier == "minimal"
-        coaching_state = snapshot.coaching_state
-        memory = snapshot.memory
-        active_stage = active_plan_stage(snapshot.plan)
-        failing_checks: list[str] = []
-        if snapshot.evaluation:
-            failing_checks = [
-                check.label
-                for check in [
-                    *snapshot.evaluation.static_checks,
-                    *snapshot.evaluation.dynamic_checks,
-                    *snapshot.evaluation.semantic_checks,
-                ]
-                if check.status in {"failed", "warning"}
-            ]
-        current_focus = language_aligned_context_text(
-            memory.current_focus or (coaching_state.summary if coaching_state else ""),
-            response_language,
-        )
-        summary = language_aligned_context_text(
-            coaching_state.summary if coaching_state else memory.current_focus,
-            response_language,
-        )
-        coaching_scenario = str(coaching_state.scenario if coaching_state else "general")
-        keeps_review_signals = turn_keeps_review_signals(
-            coaching_scenario,
-            snapshot.teaching_decision,
-        )
-        review_rhythm = language_aligned_review_rhythm(memory.review_rhythm, response_language)
-        if (
-            not review_rhythm
-            and keeps_review_signals
-            and memory.due_reviews
-        ):
-            due_concept = str(memory.due_reviews[0].concept or "current review").strip()
-            review_rhythm = localized_text(
-                f"Review '{due_concept}' before opening another lane.",
-                f"先回看「{due_concept}」，再开启新的主线。",
-                response_language,
-            )
-        current_file_name = function_guidance_current_file_name(
-            current_file,
-            scenario=coaching_scenario,
-        )
-        persist_chrome = live_plan_update_persist_chrome(
-            plan=snapshot.plan,
-            runtime=plan_runtime_recovery if isinstance(plan_runtime_recovery, dict) else coach_focus_runtime_from_snapshot(snapshot),
-            existing=plan_runtime_recovery if isinstance(plan_runtime_recovery, dict) else coach_focus_runtime_from_snapshot(snapshot),
-            stage_title=active_stage.title if active_stage else "",
-            task_title=snapshot.current_task.title if snapshot.current_task else "",
-            stage_goal=active_stage.goal if active_stage else "",
-        )
-        turn_focus_hint = resolve_turn_focus_hint(
-            user_message=message,
-            current_file_name=current_file_name or None,
-            task_focus=persist_chrome["task_focus"] or None,
-            stage_focus=persist_chrome["stage_focus"] or None,
-        )
-        scenario_focus = canonical_focus_for_scenario(coaching_scenario, response_language) or ""
-        lane_focus = (
-            turn_focus_hint
-            or scenario_focus
-            or persist_chrome["lane_focus"]
-            or current_file_name
-            or summary
-        )
-        coach_anchor = language_aligned_context_text(memory.coach_anchor, response_language)
-        active_thread = language_aligned_thread_payload(
-            memory.active_thread.model_dump() if memory.active_thread else None,
-            response_language,
-        )
-        preserve_active_thread = should_preserve_active_thread_for_turn(
-            coaching_scenario,
-            active_thread,
-            message=message,
-            grounding_context=resource_context,
-            active_view=active_view,
-        )
-        preserve_relationship_continuity = should_preserve_relationship_continuity_for_turn(
-            memory,
-            message=message,
-            grounding_context=resource_context,
-            active_view=active_view,
-        )
-        continuity_thread = (
-            active_thread
-            if preserve_active_thread or preserve_relationship_continuity
-            else None
-        )
-        view_owned_lane = active_view_owns_turn_lane(active_view)
-        fresh_lane = view_owned_lane
-        if not preserve_active_thread:
-            active_thread = None
-            fresh_lane = fresh_lane or coaching_scenario != "general" or bool(turn_focus_hint)
-            current_focus = (
-                guided_focus_display_value(
-                    turn_focus_hint or lane_focus,
-                    scenario=coaching_scenario,
-                    response_language=response_language,
-                )
-                if fresh_lane
-                else ""
-            )
-            if fresh_lane:
-                if not keeps_review_signals:
-                    review_rhythm = ""
-                coach_anchor = guided_focus_display_value(
-                    turn_focus_hint or lane_focus or coach_anchor,
-                    scenario=coaching_scenario,
-                    response_language=response_language,
-                )
-        suppress_review_signals = fresh_lane and not keeps_review_signals
-        thread_decision = ""
-        thread_blocker = ""
-        thread_teaching_note = ""
-        thread_confidence = ""
-        thread_evidence: list[str] = []
-        if isinstance(active_thread, dict):
-            thread_decision = str(active_thread.get("decision") or "").strip()
-            thread_blocker = str(active_thread.get("blocker") or "").strip()
-            thread_teaching_note = str(active_thread.get("teaching_note") or "").strip()
-            thread_confidence = str(active_thread.get("confidence") or "").strip()
-            raw_thread_evidence = active_thread.get("evidence")
-            if isinstance(raw_thread_evidence, list):
-                thread_evidence = [str(item).strip() for item in raw_thread_evidence if str(item).strip()][:4]
-        next_step_hint = language_aligned_flat_payload(
-            build_next_step_hint(
-                snapshot=snapshot,
-                response_language=response_language,
-            ),
-            response_language,
-        )
-        if not preserve_active_thread:
-            next_step_hint = None
-        next_step = strip_visible_next_step_prefix(
-            str(next_step_hint.get("title") or "").strip()
-            if isinstance(next_step_hint, dict)
-            else coaching_state.next_step if coaching_state else ""
-        )
-        selected_teaching_assets = snapshot.selected_teaching_assets
-        selected_teaching_asset_ids = [item.id for item in selected_teaching_assets if item.id]
-        workspace_understanding = (
-            memory.workspace_understanding.model_dump() if memory.workspace_understanding else None
-        )
-        teaching_decision_payload = language_aligned_flat_payload(
-            snapshot.teaching_decision.model_dump() if snapshot.teaching_decision else None,
-            response_language,
-        )
-        tone_decision_payload = language_aligned_flat_payload(
-            snapshot.tone_decision.model_dump() if snapshot.tone_decision else None,
-            response_language,
-        )
-        affect_state_payload = language_aligned_flat_payload(
-            snapshot.affect_state.model_dump() if snapshot.affect_state else None,
-            response_language,
-        )
-        implementation_guide_payload = language_aligned_flat_payload(
-            snapshot.implementation_guide.model_dump()
-            if snapshot.implementation_guide
-            else None,
-            response_language,
-        )
-        exercise_prompt_payload = language_aligned_flat_payload(
-            snapshot.exercise_prompt if isinstance(snapshot.exercise_prompt, dict) else None,
-            response_language,
-        )
-        principle_notes_payload = language_aligned_flat_payload(
-            snapshot.principle_notes.model_dump() if snapshot.principle_notes else None,
-            response_language,
-        )
-        coach_defaults = memory.workspace.get("coach_defaults") if isinstance(memory.workspace, dict) else None
-        workspace_id = (
-            str(memory.workspace.get("workspace_id") or "").strip()
-            if isinstance(memory.workspace, dict)
-            else ""
-        )
-        memory_evidence = runtime.memory_service.memory_evidence(workspace_id) if workspace_id else []
-        preferred_strategy = (
-            memory.teaching_strategy_effectiveness[0]
-            if memory.teaching_strategy_effectiveness
-            else None
-        )
-        strategy_preference_summary = ""
-        if isinstance(preferred_strategy, dict):
-            focus_label = preferred_strategy.get("focus_area") or preferred_strategy.get("scenario") or "current lane"
-            success_count = preferred_strategy.get("success_count")
-            total_count = preferred_strategy.get("total_count")
-            challenge_level = preferred_strategy.get("challenge_level")
-            hint_depth = preferred_strategy.get("hint_depth")
-            explanation_mode = preferred_strategy.get("explanation_mode")
-            next_step_bias = preferred_strategy.get("next_step_bias")
-            strategy_preference_summary = language_aligned_context_text(
-                (
-                f"{focus_label}: {success_count}/{total_count} useful outcomes with "
-                f"{challenge_level}/{hint_depth}/{explanation_mode}/{next_step_bias}"
-                ),
-                response_language,
-            )
-        if fresh_lane:
-            strategy_preference_summary = ""
-            memory_evidence = []
-        recent_teaching_signals: list[str] = []
-        if isinstance(memory.workspace, dict):
-            latest_signal = language_aligned_context_text(
-                memory.workspace.get("latest_turn_teaching_signal"),
-                response_language,
-            )
-            if latest_signal:
-                recent_teaching_signals.append(latest_signal)
-        for item in memory.teaching_observations[:2]:
-            normalized = language_aligned_context_text(item, response_language)
-            if normalized and normalized not in recent_teaching_signals:
-                recent_teaching_signals.append(normalized)
-        if not preserve_active_thread:
-            recent_teaching_signals = []
-        teaching_observations = [] if fresh_lane else memory.teaching_observations
-        recent_wins = [] if fresh_lane else memory.recent_wins
-        continuity_parts: list[str] = []
-        if continuity_thread and isinstance(continuity_thread, dict):
-            for candidate in (
-                continuity_thread.get("focus_area"),
-                continuity_thread.get("next_step"),
-                continuity_thread.get("blocker"),
-            ):
-                normalized = language_aligned_context_text(candidate, response_language)
-                if normalized and normalized not in continuity_parts:
-                    continuity_parts.append(normalized)
-                if len(continuity_parts) >= 2:
-                    break
-        if not continuity_parts and preserve_relationship_continuity:
-            for learning_outcome in reversed(memory.learning_outcomes[-3:]):
-                if not isinstance(learning_outcome, dict):
-                    continue
-                for candidate in (
-                    learning_outcome.get("concept"),
-                    learning_outcome.get("summary"),
-                ):
-                    normalized = language_aligned_context_text(candidate, response_language)
-                    if normalized and normalized not in continuity_parts:
-                        continuity_parts.append(normalized)
-                    if len(continuity_parts) >= 2:
-                        break
-                if len(continuity_parts) >= 2:
-                    break
-        if not continuity_parts:
-            for candidate in (
-                current_focus,
-                next_step,
-                recent_teaching_signals[0] if recent_teaching_signals else "",
-            ):
-                normalized = language_aligned_context_text(candidate, response_language)
-                if normalized and normalized not in continuity_parts:
-                    continuity_parts.append(normalized)
-                if len(continuity_parts) >= 2:
-                    break
-        continuity_summary = " -> ".join(continuity_parts[:2])
-        if not preserve_active_thread and not preserve_relationship_continuity:
-            continuity_summary = ""
-        due_review_concepts = {
-            str(getattr(item, "concept", "") or "").strip().lower()
-            for item in getattr(memory, "due_reviews", []) or []
-        }
-        synthetic_due_reviews = bool(due_review_concepts) and due_review_concepts.issubset(
-            {"new-workspace", "plan-discipline", "resource-grounding"}
-        )
-        relationship_stage = "active"
-        first_turn_priority = ""
-        if (
-            not memory.active_thread
-            and not memory.learning_outcomes
-            and not (memory.due_reviews and not synthetic_due_reviews)
-        ):
-            relationship_stage = "intake"
-            first_turn_priority = "orient, reassure, clarify learner goal and choose one coaching lane"
-        if coaching_state and coaching_state.scenario == "onboarding":
-            relationship_stage = "intake"
-            first_look_next = first_look_recommended_next_from_snapshot(snapshot)
-            first_turn_priority = (
-                (
-                    f"stay with the first-look next: {first_look_next}. "
-                    "Do not invent a plan, card, or task."
-                )
-                if first_look_next
-                else "orient, reassure, clarify learner goal and choose one coaching lane"
-            )
-        elif fresh_lane:
-            relationship_stage = "intake"
-            if resource_grounding_turn_prefers_fresh_lane(message, resource_context):
-                first_turn_priority = (
-                    "answer the grounded library question directly before widening into adjacent coaching"
-                )
-            else:
-                first_turn_priority = "re-anchor on the newly requested coaching lane and keep the first move compact"
-        normalized_active_view_text = str(active_view or "").strip().lower()
-        normalized_active_view = (
-            normalized_active_view_text
-            if normalized_active_view_text in {"coach", "plan", "resources", "training", "progress", "settings"}
-            else None
-        )
-        coach_context = {
-            "scenario": coaching_state.scenario if coaching_state else "general",
-            "active_view": normalized_active_view,
-            "learner_signal": coaching_state.learner_signal if coaching_state else "steady",
-            "relationship_stage": relationship_stage,
-            "first_turn_priority": first_turn_priority,
-            "explicit_training_card_request": message_requests_explicit_training_card(message),
-            "explicit_learning_note_request": message_requests_explicit_learning_note(message),
-            "history_mode": (
-                "fresh_lane" if fresh_lane else "resume"
-            ),
-            "summary": summary,
-            "next_step": next_step,
-            "decision": language_aligned_context_text(
-                thread_decision or (coaching_state.decision if coaching_state else ""),
-                response_language,
-            ),
-            "blocker": language_aligned_context_text(
-                thread_blocker or (coaching_state.blocker if coaching_state else ""),
-                response_language,
-            ),
-            "teaching_note": language_aligned_context_text(
-                thread_teaching_note or (coaching_state.teaching_note if coaching_state else ""),
-                response_language,
-            ),
-            "confidence": language_aligned_context_text(
-                thread_confidence or (coaching_state.confidence if coaching_state else ""),
-                response_language,
-            ),
-            "evidence": thread_evidence or (coaching_state.evidence if coaching_state else []),
-            "next_step_hint": next_step_hint,
-            "encouragement": language_aligned_context_text(
-                coaching_state.encouragement if coaching_state else "",
-                response_language,
-            ),
-            "intervention_strategy": language_aligned_context_text(
-                coaching_state.intervention_strategy if coaching_state else "",
-                response_language,
-            ),
-            "teaching_goal": language_aligned_context_text(
-                coaching_state.teaching_goal if coaching_state else "",
-                response_language,
-            ),
-            "resume_thread": language_aligned_context_text(
-                coaching_state.resume_thread if coaching_state else "",
-                response_language,
-            ),
-            "support_strategy": language_aligned_context_text(
-                coaching_state.support_strategy if coaching_state else "",
-                response_language,
-            ),
-            "current_focus": current_focus,
-            "current_file_name": current_file_name or None,
-            "active_stage": live_stage_object_label(
-                snapshot.plan,
-                snapshot=snapshot,
-                stage=active_stage,
-            )
-            or None,
-            "active_task": persist_chrome["active_task"] or None,
-            "learner_state": snapshot.learner_state.model_dump() if snapshot.learner_state else None,
-            "teaching_decision": teaching_decision_payload,
-            "teaching_mode_strategy": {
-                "lesson_shape": snapshot.teaching_decision.lesson_shape if snapshot.teaching_decision else "",
-                "exercise_shape": snapshot.teaching_decision.exercise_shape if snapshot.teaching_decision else "",
-                "teaching_strategy": snapshot.teaching_decision.teaching_strategy if snapshot.teaching_decision else "",
-                "closing_move": snapshot.teaching_decision.closing_move if snapshot.teaching_decision else "",
-                "artifact_priority": snapshot.teaching_decision.artifact_priority if snapshot.teaching_decision else [],
-            },
-            "coaching_adaptation": memory.coaching_adaptation.model_dump() if memory.coaching_adaptation else None,
-            "affect_state": affect_state_payload,
-            "tone_decision": tone_decision_payload,
-            "recent_wins": language_aligned_context_list(recent_wins, response_language),
-            "weak_spots": language_aligned_context_list(memory.weaknesses, response_language),
-            "coach_anchor": coach_anchor,
-            "top_weakness": language_aligned_context_text(memory.top_weakness, response_language),
-            "lowest_mastery_concepts": language_aligned_context_list(
-                memory.lowest_mastery_concepts,
-                response_language,
-            ),
-            "review_rhythm": review_rhythm,
-            "due_reviews": [] if suppress_review_signals else [item.model_dump() for item in memory.due_reviews],
-            "due_review_count": 0 if suppress_review_signals else memory.due_review_count,
-            "pace_signal": language_aligned_context_text(memory.pace_signal, response_language),
-            "memory_evidence": memory_evidence,
-            "strategy_preference_summary": strategy_preference_summary,
-            "recent_teaching_signals": recent_teaching_signals[:3],
-            "continuity_summary": continuity_summary,
-            "teaching_observations": language_aligned_context_list(
-                teaching_observations,
-                response_language,
-            ),
-            "teaching_knowledge_catalog": memory.teaching_knowledge_catalog,
-            "workspace_understanding": workspace_understanding,
-            "project_summary": language_aligned_context_text(
-                workspace_understanding.get("repo_summary") if workspace_understanding else "",
-                response_language,
-            ),
-            "project_entry_points": function_guidance_entry_points(
-                workspace_understanding.get("entry_points", []) if workspace_understanding else [],
-                scenario=coaching_scenario,
-            ),
-            "project_feature_lanes": workspace_understanding.get("feature_lanes", [])
-            if workspace_understanding
-            else [],
-            "project_risk_zones": workspace_understanding.get("risk_zones", []) if workspace_understanding else [],
-            "project_training_opportunities": workspace_understanding.get("training_opportunities", [])
-            if workspace_understanding
-            else [],
-            "learner_name": language_aligned_context_text(
-                memory.workspace.get("learner_name") if isinstance(memory.workspace, dict) else "",
-                response_language,
-            ),
-            "target_project": language_aligned_context_text(
-                memory.profile.target_project if memory.profile else "",
-                response_language,
-            ),
-            "preferred_stack": language_aligned_context_text(
-                memory.workspace.get("preferred_stack") if isinstance(memory.workspace, dict) else "",
-                response_language,
-            ),
-            "preferred_rhythm": language_aligned_context_text(
-                memory.workspace.get("preferred_rhythm") if isinstance(memory.workspace, dict) else "",
-                response_language,
-            ),
-            "preferred_learning_mode": (
-                language_aligned_context_text(
-                    memory.workspace.get("preferred_learning_mode") if isinstance(memory.workspace, dict) else "",
-                    response_language,
-                )
-            ),
-            "onboarding_request": language_aligned_context_text(
-                memory.workspace.get("onboarding_request") if isinstance(memory.workspace, dict) else "",
-                response_language,
-            ),
-            "review_queue_summary": ""
-            if suppress_review_signals
-            else language_aligned_context_text(
-                snapshot.review_queue_summary,
-                response_language,
-            ),
-            "next_review_due": None if suppress_review_signals else snapshot.next_review_due,
-            "failing_checks": failing_checks,
-            "implementation_guide": implementation_guide_payload,
-            "project_ideas": [item.model_dump() for item in snapshot.project_ideas],
-            "project_adaptation_guide": snapshot.project_adaptation_guide.model_dump()
-            if snapshot.project_adaptation_guide
-            else None,
-            "project_sources": [item.model_dump() for item in snapshot.project_sources],
-            "principle_notes": principle_notes_payload,
-            "selected_teaching_assets": [item.model_dump() for item in selected_teaching_assets],
-            "selected_teaching_asset_ids": selected_teaching_asset_ids,
-            "exercise_prompt": exercise_prompt_payload,
-            "provider_mode": "background-embedded",
-            "active_thread": active_thread,
-            "coach_defaults": coach_defaults,
-            "coach_focus": {
-                "current_focus": current_focus,
-                "review_rhythm": review_rhythm,
-                "summary": summary,
-                "next_step": next_step,
-                "next_step_hint": next_step_hint,
-                "active_stage": persist_chrome["stage_focus"] or None,
-                "stage_focus": persist_chrome["stage_focus"] or None,
-                "lane_focus": lane_focus or None,
-                "active_task": persist_chrome["active_task"] or None,
-                "due_review_count": 0 if suppress_review_signals else memory.due_review_count,
-            },
-            "memory": language_aligned_memory_payload(memory.model_dump(), response_language),
-            "coaching_state": language_aligned_coaching_state_payload(
-                coaching_state.model_dump() if coaching_state else None,
-                response_language,
-            ),
-        }
-        if fresh_lane and isinstance(coach_context.get("memory"), dict):
-            fresh_memory = dict(coach_context["memory"])
-            fresh_memory["current_focus"] = ""
-            fresh_memory["recent_summary"] = ""
-            fresh_memory["recent_wins"] = []
-            fresh_memory["teaching_observations"] = []
-            fresh_memory["memory_evidence"] = []
-            if suppress_review_signals:
-                fresh_memory["due_reviews"] = []
-                fresh_memory["due_review_count"] = 0
-                fresh_memory["review_rhythm"] = ""
-            fresh_memory["active_thread"] = None
-            coach_context["memory"] = fresh_memory
-        if minimal_context and isinstance(coach_context.get("memory"), dict):
-            # Pure Q&A: the transcript itself carries continuity. Blank the
-            # learner-archive projections so the prompt stays lean and the
-            # answer is not steered by plan/review machinery.
-            minimal_memory = dict(coach_context["memory"])
-            minimal_memory["current_focus"] = ""
-            minimal_memory["recent_summary"] = ""
-            minimal_memory["recent_wins"] = []
-            minimal_memory["teaching_observations"] = []
-            minimal_memory["memory_evidence"] = []
-            minimal_memory["due_reviews"] = []
-            minimal_memory["due_review_count"] = 0
-            minimal_memory["review_rhythm"] = ""
-            minimal_memory["active_thread"] = None
-            coach_context["memory"] = minimal_memory
-            coach_context["context_tier"] = "minimal"
-        if resource_context:
-            coach_context.update(resource_context)
-        effective_focus = current_focus or summary
-        if workspace_id and not minimal_context:
-            teaching_knowledge_fragments = runtime.resource_service.top_knowledge_fragments(
-                workspace_id,
-                max_fragments=6,
-            )
-            if (
-                external_references is None
-                or curated_background_references is None
-                or recent_background_findings is None
-            ):
-                (
-                    resolved_external_references,
-                    resolved_curated_background_references,
-                    resolved_recent_background_findings,
-                ) = resolve_external_references(
-                    workspace_id=workspace_id,
-                    resource_context=coach_context,
-                    focus_area=effective_focus,
-                    limit=4,
-                    additional_curated_fragments=teaching_knowledge_fragments,
-                )
-                if external_references is None:
-                    external_references = resolved_external_references
-                if curated_background_references is None:
-                    curated_background_references = resolved_curated_background_references
-                if recent_background_findings is None:
-                    recent_background_findings = resolved_recent_background_findings
-            if curated_background_references:
-                coach_context["background_references"] = curated_background_references
-            if recent_background_findings:
-                coach_context["recent_background_findings"] = recent_background_findings
-        if external_references and not minimal_context:
-            coach_context["external_references"] = external_references
-            background_reference_summary_parts: list[str] = []
-            for item in external_references[:2]:
-                if not isinstance(item, dict):
-                    continue
-                summary_text = str(
-                    item.get("evidence_summary")
-                    or item.get("summary")
-                    or item.get("snippet")
-                    or ""
-                ).strip()
-                if not summary_text:
-                    continue
-                source_text = str(item.get("source", "") or "").strip()
-                if source_text:
-                    background_reference_summary_parts.append(f"{summary_text} ({source_text})")
-                else:
-                    background_reference_summary_parts.append(summary_text)
-            if background_reference_summary_parts:
-                coach_context["background_reference_summary"] = "; ".join(background_reference_summary_parts)
-            recalled_coaching_memories = runtime.memory_service.recalled_coaching_memories(
-                workspace_id,
-                scenario=coach_context.get("scenario"),
-                focus_area=effective_focus,
-                query=" ".join(part for part in [summary, next_step, current_focus] if part).strip(),
-                exclude_asset_ids=selected_teaching_asset_ids,
-                limit=3,
-            )
-            if recalled_coaching_memories:
-                coach_context["recalled_coaching_memories"] = recalled_coaching_memories
-                coach_context["recalled_memory_summary"] = "; ".join(
-                    (
-                        f"{item['title']}: {item['lesson']}"
-                        if item.get("title") and item.get("lesson")
-                        else str(item.get("lesson") or item.get("summary") or "").strip()
-                    )
-                    for item in recalled_coaching_memories[:2]
-                    if str(item.get("lesson") or item.get("summary") or "").strip()
-                )
-            teaching_assets = selected_teaching_assets
-            if teaching_assets:
-                selected_payload = [item.model_dump() for item in teaching_assets]
-                selected_summary = "; ".join(
-                    f"{item.kind}: {item.summary or item.title}"
-                    for item in teaching_assets[:2]
-                    if (item.summary or item.title)
-                )
-                coach_context["selected_teaching_assets"] = selected_payload
-                coach_context["selected_teaching_asset_ids"] = selected_teaching_asset_ids
-                coach_context["teaching_assets"] = [item.model_dump() for item in teaching_assets]
-                coach_context["teaching_asset_ids"] = selected_teaching_asset_ids
-                coach_context["teaching_asset_summary"] = selected_summary
-        accepted_recovery = accept_plan_runtime_resume_request(
-            plan_runtime_recovery,
-            recovered_status=snapshot.plan_runtime_status
-            if isinstance(snapshot.plan_runtime_status, dict)
-            else None,
-        )
-        if accepted_recovery:
-            coach_context["plan_runtime_recovery"] = accepted_recovery
-            recovered_step = str(accepted_recovery.get("current_step") or "").strip()
-            recovered_blocker = str(accepted_recovery.get("blocked_reason") or "").strip()
-            if recovered_step:
-                coach_context["current_focus"] = recovered_step
-            if recovered_blocker:
-                coach_context["blocker"] = recovered_blocker
-            coach_context["formal_plan_mutation"] = False
-        if isinstance(message, str) and message.strip():
-            coach_context["learner_message"] = message
-        return apply_training_review_context(coach_context, memory, normalized_active_view)
 
     def task_training_concepts(
         task: TaskSpec | None,
@@ -15582,1098 +13667,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             message=snapshot.messages[-1].content if snapshot.messages else None,
             session_workspace_id=workspace_id,
         )
-        return build_coach_context(
+        return coach_support.build_coach_context(coach_support_deps, 
             preview,
             response_language=resolved_response_language,
             message=snapshot.messages[-1].content if snapshot.messages else None,
         )
 
-    async def execute_turn(
-        request: TurnRequest,
-        payload: dict,
-        *,
-        stream: bool = False,
-        stream_id: str | None = None,
-    ) -> tuple[object, object, object]:
-        workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
-        state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
-        profile = resolved_profile(state.workspace_id)
-        frozen_formal_plan_mutation_requested = bool(
-            request.intent == "plan"
-            and request.formal_plan_mutation
-            and leftover_frozen_blocks_turn_generation(state.workspace_id)
-        )
-        raw_requested_answer_mode = str(
-            payload.get("answer_mode") or payload.get("answerMode") or ""
-        ).strip()
-        saved_answer_mode = str(workspace_preferences(workspace_id).get("answer_mode") or "").strip()
-        request = request_with_workspace_defaults(
-            request,
-            workspace_id=workspace_id,
-            profile=profile,
-        )
-        profile = profile_with_teaching_style(profile, request.teaching_style)
-        coaching_service = build_coaching_service(payload)
-        use_agent_loop = _resolve_agent_loop_enabled(
-            request, coaching_service, stream=stream, payload=payload
-        )
-        ensure_coach_provider_ready(
-            coaching_service,
-            response_language=request.response_language,
-        )
-        provider_live_usable = provider_is_live_usable(coaching_service, payload)
-        if provider_live_usable:
-            ensure_agent_tools_ready(request, coaching_service)
-        attachments_payload = [a.model_dump() for a in request.attachments]
-        attachment_delivery = describe_request_attachment_delivery(
-            request,
-            coaching_service,
-            use_agent_loop=use_agent_loop,
-        )
-
-        user_message = ChatMessage(
-            id=f"message-{uuid4().hex[:10]}",
-            role="user",
-            content=request.message,
-            timestamp=datetime.now(UTC),
-            metadata=build_user_message_metadata(
-                request,
-                profile,
-                attachment_delivery,
-                stream_id=stream_id,
-                stream_state="in_progress" if stream_id else None,
-            ),
-        )
-        state.snapshot.messages.append(user_message)
-        state.snapshot.profile = profile
-        if stream:
-            runtime.save_session_state(state.session_id)
-
-        scenario = infer_coaching_scenario(request)
-        suggested_actions = honest_suggested_actions_without_live_object(
-            structured_suggested_actions(
-                coach_support.coach_suggested_actions(coach_support_deps,
-                    request.response_language,
-                    scenario=scenario,
-                    snapshot=state.snapshot,
-                ),
-                response_language=request.response_language,
-                scenario=scenario,
-                focus_area=stateful_focus_area(
-                    state.snapshot.current_task,
-                    state.snapshot.plan,
-                    state.snapshot.evaluation,
-                    snapshot=state.snapshot,
-                ),
-            ),
-            workspace_id=workspace_id,
-            response_language=request.response_language,
-            snapshot=state.snapshot,
-            current_task=state.snapshot.current_task,
-            current_plan=state.snapshot.plan,
-            current_evaluation=state.snapshot.evaluation,
-            message=request.message,
-            scenario=scenario,
-        )
-        artifacts: dict[str, object] = {}
-        assistant_content = ""
-        learner_signal = infer_learner_signal(request.message, getattr(request, "current_file", None))
-        agent_meta: dict[str, object] = {}
-        language_corruption_detected = False
-        provider_failure_detected = False
-
-        if request.intent == "coach" and provider_live_usable:
-            if stream:
-                return state, coaching_service, user_message
-            safe_activate_training_card_from_coach_request(
-                workspace_id=state.workspace_id,
-                snapshot=state.snapshot,
-                message=request.message,
-                current_file=request.current_file,
-                response_language=request.response_language,
-                provider_service_override=coaching_service,
-            )
-            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-            state.snapshot.profile = profile
-            coach_turn: CoachTurnPayload = resolve_coach_turn(
-                state=state,
-                profile=profile,
-                request=request,
-                message=request.message,
-                coaching_service=coaching_service,
-                current_task=state.snapshot.current_task,
-                current_plan=state.snapshot.plan,
-                current_evaluation=state.snapshot.evaluation,
-            )
-            scenario = str(coach_turn.get("scenario") or "general")
-            if guarantee_guided_learn_first_training_card(
-                workspace_id=state.workspace_id,
-                scenario=str(coach_turn["scenario"] or ""),
-                message=request.message,
-                current_file=request.current_file,
-                response_language=request.response_language,
-                active_thread=state.snapshot.memory.active_thread,
-                requested_answer_mode=raw_requested_answer_mode,
-                saved_answer_mode=saved_answer_mode,
-                profile=profile,
-            ):
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-            scenario = str(coach_turn["scenario"])
-            learner_signal = str(coach_turn["learner_signal"])
-            if infer_learner_signal(request.message, getattr(request, "current_file", None)) == "blocked":
-                learner_signal = "blocked"
-            artifacts = dict(coach_turn["artifacts"])
-            suggested_actions = list(coach_turn["suggested_actions"])
-            if not provider_live_usable:
-                suggested_actions = honest_suggested_actions_without_usable_provider(
-                    suggested_actions,
-                    response_language=request.response_language,
-                    snapshot=state.snapshot,
-                    current_task=state.snapshot.current_task,
-                    current_plan=state.snapshot.plan,
-                    current_evaluation=state.snapshot.evaluation,
-                )
-            guided_training_prefers_local_reply = should_bypass_agent_loop_for_guided_training(
-                workspace_id=state.workspace_id,
-                scenario=scenario,
-                message=request.message,
-                active_view=request.active_view,
-                requested_answer_mode=raw_requested_answer_mode,
-                saved_answer_mode=saved_answer_mode,
-                profile=profile,
-            )
-            guided_training_local_reply = (
-                build_guided_training_visible_fallback(
-                    workspace_id=state.workspace_id,
-                    response_language=request.response_language,
-                )
-                if guided_training_prefers_local_reply
-                else None
-            )
-            preflight_language_probe = detect_provider_language_corruption(
-                coaching_service,
-                message=request.message,
-                response_language=request.response_language,
-                coach_context=dict(coach_turn["coach_context"]),
-            )
-            if preflight_language_probe is not None:
-                language_corruption_detected = True
-                coach_turn = extract_coach_turn_payload(
-                    isolate_preflight_language_corruption_turn(
-                        coach_turn_mapping(coach_turn),
-                        message=request.message,
-                        current_file=request.current_file.model_dump() if request.current_file else None,
-                    )
-                )
-                assistant_content, updated_coach_turn, agent_meta = apply_language_corruption_override(
-                    coaching_service=coaching_service,
-                    snapshot=state.snapshot,
-                    coach_turn=coach_turn_mapping(coach_turn),
-                    message=request.message,
-                    response_language=request.response_language,
-                    allow_guided_recovery=False,
-                )
-                coach_turn = extract_coach_turn_payload(updated_coach_turn)
-                ensure_explicit_training_card_after_language_block(
-                    state=state,
-                    message=request.message,
-                    current_file=request.current_file,
-                    response_language=request.response_language,
-                    fallback_scenario=str(coach_turn.get("scenario") or scenario),
-                    force_training_card=(
-                        auto_preference_requests_training_card(
-                            request.message,
-                            requested_scenario=str(coach_turn.get("scenario") or scenario),
-                            requested_answer_mode=raw_requested_answer_mode,
-                            saved_answer_mode=saved_answer_mode,
-                            profile=profile,
-                        )
-                        or auto_lane_learn_first_force_training_card(
-                            request.message,
-                            requested_scenario=str(coach_turn.get("scenario") or scenario),
-                            requested_answer_mode=raw_requested_answer_mode,
-                            saved_answer_mode=saved_answer_mode,
-                            profile=profile,
-                        )
-                ),
-                provider_service_override=coaching_service,
-            )
-                scenario = str(coach_turn.get("scenario") or scenario)
-                agent_meta["scenario"] = scenario
-            else:
-                if guided_training_local_reply is not None:
-                    assistant_content, updated_coach_turn, agent_meta = apply_guided_training_visible_fallback(
-                        coach_turn=coach_turn_mapping(coach_turn),
-                        fallback=guided_training_local_reply,
-                    )
-                    coach_turn = extract_coach_turn_payload(updated_coach_turn)
-                elif use_agent_loop and not guided_training_prefers_local_reply:
-                    agent_context = dict(coach_turn["coach_context"])
-                    agent_context["__runtime__"] = runtime
-                    agent_context["workspace_id"] = workspace_id
-                    agent_context["session_id"] = state.session_id
-                    _stamp_library_sandbox_work(agent_context, request, payload)
-                    agent_outcome = await coaching_service.coaching_reply_agentic(
-                        profile,
-                        request.message,
-                        request.current_file.model_dump() if request.current_file else None,
-                        response_language=request.response_language,
-                        answer_mode=request.answer_mode,
-                        coach_context=agent_context,
-                        attachments=attachments_payload,
-                        protocol=getattr(coaching_service._config, "protocol", None) if coaching_service._config else None,
-                        history=build_conversation_history(
-                            state.snapshot.messages,
-                            drop_latest_user=True,
-                        ),
-                    )
-                    assistant_content = str(agent_outcome.get("content") or "").strip()
-                    agent_resume_thread = str(agent_outcome.get("resume_thread") or "").strip()
-                    if not agent_resume_thread:
-                        agent_resume_thread = build_resume_thread_text(
-                            str(agent_outcome.get("summary") or "").strip(),
-                            str(agent_outcome.get("next_step") or "").strip(),
-                            response_language=request.response_language,
-                        )
-                    agent_meta = {
-                        "stop_reason": agent_outcome.get("stop_reason"),
-                        "summary": agent_outcome.get("summary"),
-                        "next_step": agent_outcome.get("next_step"),
-                        "decision": agent_outcome.get("decision"),
-                        "blocker": agent_outcome.get("blocker"),
-                        "teaching_note": agent_outcome.get("teaching_note"),
-                        "resume_thread": agent_resume_thread,
-                        "confidence": agent_outcome.get("confidence"),
-                        "evidence": agent_outcome.get("evidence"),
-                        "steps": agent_outcome.get("steps", []),
-                        "tool_events": agent_outcome.get("tool_events", []),
-                        "fell_back": bool(agent_outcome.get("fell_back")),
-                        "recovered_stop_reason": agent_outcome.get("recovered_stop_reason"),
-                        "agentic": True,
-                    }
-                    apply_attachment_delivery_metadata(agent_meta, agent_outcome)
-                    original_agent_stop_reason = str(agent_outcome.get("stop_reason") or "").strip()
-                    local_sequence_fallback = build_local_sequence_visible_fallback(
-                        coach_context=dict(coach_turn["coach_context"]),
-                        response_language=request.response_language,
-                    )
-                    force_local_sequence = bool(
-                        local_sequence_fallback is not None
-                        and (
-                            original_agent_stop_reason == "empty_response"
-                            or not reply_explicitly_lists_prepared_sequence(
-                                assistant_content,
-                                coach_context=dict(coach_turn["coach_context"]),
-                            )
-                        )
-                    )
-                    if force_local_sequence and local_sequence_fallback is not None:
-                        assistant_content = local_sequence_fallback["reply"]
-                        coaching_service.clear_last_reply_override()
-                        agent_meta["summary"] = (
-                            agent_meta.get("summary") or local_sequence_fallback["summary"]
-                        )
-                        agent_meta["next_step"] = (
-                            agent_meta.get("next_step") or local_sequence_fallback["next_step"]
-                        )
-                        agent_meta["teaching_note"] = (
-                            agent_meta.get("teaching_note") or local_sequence_fallback["teaching_note"]
-                        )
-                        if not str(agent_meta.get("resume_thread") or "").strip():
-                            agent_meta["resume_thread"] = local_sequence_fallback["resume_thread"]
-                        if original_agent_stop_reason == "empty_response":
-                            agent_meta["fell_back"] = True
-                            agent_meta["recovered_stop_reason"] = original_agent_stop_reason
-                            agent_meta["stop_reason"] = "completed"
-                        else:
-                            agent_meta["grounded_sequence_enforced"] = True
-                        agent_meta["local_sequence_fallback"] = True
-                    elif not assistant_content:
-                        if local_sequence_fallback is None:
-                            assistant_content = await coaching_service.coaching_reply(
-                                profile,
-                                request.message,
-                                request.current_file.model_dump() if request.current_file else None,
-                                response_language=request.response_language,
-                                answer_mode=request.answer_mode,
-                                coach_context=dict(coach_turn["coach_context"]),
-                                history=build_conversation_history(
-                                    state.snapshot.messages,
-                                    drop_latest_user=True,
-                                ),
-                            )
-                        else:
-                            assistant_content = local_sequence_fallback["reply"]
-                            coaching_service.clear_last_reply_override()
-                            agent_meta["summary"] = (
-                                agent_meta.get("summary") or local_sequence_fallback["summary"]
-                            )
-                            agent_meta["next_step"] = (
-                                agent_meta.get("next_step") or local_sequence_fallback["next_step"]
-                            )
-                            agent_meta["teaching_note"] = (
-                                agent_meta.get("teaching_note") or local_sequence_fallback["teaching_note"]
-                            )
-                            if not str(agent_meta.get("resume_thread") or "").strip():
-                                agent_meta["resume_thread"] = local_sequence_fallback["resume_thread"]
-                        agent_meta["fell_back"] = True
-                        if original_agent_stop_reason == "empty_response":
-                            agent_meta["recovered_stop_reason"] = original_agent_stop_reason
-                            agent_meta["stop_reason"] = "completed"
-                        agent_meta["local_sequence_fallback"] = local_sequence_fallback is not None
-                    updated_coach_turn = merge_agent_finalize_into_coach_turn(
-                        coach_turn_mapping(coach_turn),
-                        summary=agent_outcome.get("summary")
-                        or (local_sequence_fallback or {}).get("summary"),
-                        next_step=agent_outcome.get("next_step")
-                        or (local_sequence_fallback or {}).get("next_step"),
-                        blocker=agent_outcome.get("blocker"),
-                        resume_thread=agent_resume_thread
-                        or (local_sequence_fallback or {}).get("resume_thread"),
-                        decision=agent_outcome.get("decision"),
-                        teaching_note=agent_outcome.get("teaching_note")
-                        or (local_sequence_fallback or {}).get("teaching_note"),
-                        confidence=agent_outcome.get("confidence"),
-                        evidence=agent_outcome.get("evidence"),
-                    )
-                    coach_turn = extract_coach_turn_payload(updated_coach_turn)
-                else:
-                    assistant_content = await coaching_service.coaching_reply(
-                        profile,
-                        request.message,
-                        request.current_file.model_dump() if request.current_file else None,
-                        response_language=request.response_language,
-                        answer_mode=request.answer_mode,
-                        coach_context=dict(coach_turn["coach_context"]),
-                        history=build_conversation_history(
-                            state.snapshot.messages,
-                            drop_latest_user=True,
-                        ),
-                    )
-                provider_empty_reply_override = consume_provider_empty_reply_override(
-                    coaching_service=coaching_service,
-                    snapshot=state.snapshot,
-                    coach_turn=coach_turn_mapping(coach_turn),
-                    response_language=request.response_language,
-                    assistant_content=assistant_content,
-                )
-                if provider_empty_reply_override is not None:
-                    provider_failure_detected = True
-                    assistant_content, updated_coach_turn, override_meta = provider_empty_reply_override
-                    coach_turn = extract_coach_turn_payload(updated_coach_turn)
-                    agent_meta.update(override_meta)
-                else:
-                    provider_failure_override = consume_provider_reply_failure_override(
-                        coaching_service=coaching_service,
-                        snapshot=state.snapshot,
-                        coach_turn=coach_turn_mapping(coach_turn),
-                        message=request.message,
-                        response_language=request.response_language,
-                        workspace_id=state.workspace_id,
-                    )
-                    if provider_failure_override is not None:
-                        provider_failure_detected = True
-                        assistant_content, updated_coach_turn, override_meta = provider_failure_override
-                        coach_turn = extract_coach_turn_payload(updated_coach_turn)
-                        agent_meta.update(override_meta)
-                    elif not language_corruption_detected and coaching_service.detect_language_corruption(
-                        message=request.message,
-                        reply=assistant_content,
-                        response_language=request.response_language,
-                    ):
-                        language_corruption_detected = True
-                        assistant_content, updated_coach_turn, override_meta = apply_language_corruption_override(
-                            coaching_service=coaching_service,
-                            snapshot=state.snapshot,
-                            coach_turn=coach_turn_mapping(coach_turn),
-                            message=request.message,
-                            response_language=request.response_language,
-                            reply_corruption=True,
-                        )
-                        coach_turn = extract_coach_turn_payload(updated_coach_turn)
-                        ensure_explicit_training_card_after_language_block(
-                            state=state,
-                            message=request.message,
-                            current_file=request.current_file,
-                            response_language=request.response_language,
-                            fallback_scenario=str(coach_turn.get("scenario") or scenario),
-                            force_training_card=(
-                                auto_preference_requests_training_card(
-                                    request.message,
-                                    requested_scenario=str(coach_turn.get("scenario") or scenario),
-                                    requested_answer_mode=raw_requested_answer_mode,
-                                    saved_answer_mode=saved_answer_mode,
-                                    profile=profile,
-                                )
-                                or auto_lane_learn_first_force_training_card(
-                                    request.message,
-                                    requested_scenario=str(coach_turn.get("scenario") or scenario),
-                                    requested_answer_mode=raw_requested_answer_mode,
-                                    saved_answer_mode=saved_answer_mode,
-                                    profile=profile,
-                                )
-                            ),
-                            provider_service_override=coaching_service,
-                        )
-                        scenario = str(coach_turn.get("scenario") or scenario)
-                        agent_meta.update(override_meta)
-                if not provider_failure_detected:
-                    resource_contract_fallback = None
-                    if grounded_resource_contract_needs_repair(
-                        assistant_content,
-                        coach_context=dict(coach_turn["coach_context"]),
-                    ):
-                        resource_contract_fallback = build_grounded_resource_contract_visible_fallback(
-                            workspace_id=workspace_id,
-                            coach_context=dict(coach_turn["coach_context"]),
-                            agent_meta=agent_meta,
-                            response_language=request.response_language,
-                        )
-                    if resource_contract_fallback is not None:
-                        assistant_content = resource_contract_fallback["reply"]
-                        agent_meta["summary"] = resource_contract_fallback["summary"]
-                        agent_meta["next_step"] = resource_contract_fallback["next_step"]
-                        agent_meta["teaching_note"] = resource_contract_fallback["teaching_note"]
-                        agent_meta["resume_thread"] = resource_contract_fallback["resume_thread"]
-                        agent_meta["grounded_resource_contract_repaired"] = True
-                        agent_meta["scenario"] = str(coach_turn.get("scenario") or scenario)
-                        updated_coach_turn = merge_agent_finalize_into_coach_turn(
-                            coach_turn_mapping(coach_turn),
-                            summary=resource_contract_fallback["summary"],
-                            next_step=resource_contract_fallback["next_step"],
-                            blocker=agent_meta.get("blocker"),
-                            resume_thread=resource_contract_fallback["resume_thread"],
-                            decision=agent_meta.get("decision"),
-                            teaching_note=resource_contract_fallback["teaching_note"],
-                            confidence=agent_meta.get("confidence"),
-                            evidence=agent_meta.get("evidence"),
-                        )
-                        coach_turn = extract_coach_turn_payload(updated_coach_turn)
-                    assistant_content, updated_coach_turn, agent_meta, _guided_lane_repaired = (
-                        apply_guided_lane_visible_fallback(
-                            reply=assistant_content,
-                            scenario=str(coach_turn.get("scenario") or scenario),
-                            learner_message=request.message,
-                            response_language=request.response_language,
-                            coach_turn=coach_turn_mapping(coach_turn),
-                            agent_meta=agent_meta,
-                        )
-                    )
-                    coach_turn = extract_coach_turn_payload(updated_coach_turn)
-                    ensure_explicit_training_card_after_coach_reply(
-                        state=state,
-                        message=request.message,
-                        current_file=request.current_file,
-                        response_language=request.response_language,
-                        fallback_scenario=str(coach_turn.get("scenario") or scenario),
-                        force_training_card=auto_preference_requests_training_card(
-                            request.message,
-                            requested_scenario=str(coach_turn.get("scenario") or scenario),
-                            requested_answer_mode=raw_requested_answer_mode,
-                            saved_answer_mode=saved_answer_mode,
-                            profile=profile,
-                        )
-                        or auto_lane_learn_first_force_training_card(
-                            request.message,
-                            requested_scenario=str(coach_turn.get("scenario") or scenario),
-                            requested_answer_mode=raw_requested_answer_mode,
-                            saved_answer_mode=saved_answer_mode,
-                            profile=profile,
-                        ),
-                        provider_service_override=coaching_service,
-                    )
-        elif request.intent == "coach":
-            # Remapped task/next_task (no live plan) still uses task honesty copy so
-            # the learner hears "did not invent a task" rather than bare coach failure.
-            raw_intent = str(payload.get("intent") or "").strip()
-            unusable_kind: Literal["task", "plan", "coach"] = (
-                "task" if raw_intent in {"task", "next_task"} else "coach"
-            )
-            if scenario == "general":
-                scenario = infer_message_coaching_scenario(
-                    request.message,
-                    normalize_current_file_payload(getattr(request, "current_file", None)),
-                    default="general",
-                )
-                if message_requests_project_sourcing(request.message):
-                    scenario = "project_sourcing"
-            coach_turn = honest_unusable_provider_coach_turn(
-                response_language=request.response_language,
-                snapshot=state.snapshot,
-                coaching_service=coaching_service,
-                object_kind=unusable_kind,
-                # infer_coaching_scenario/infer_message_coaching_scenario only
-                # return valid scenario names.
-                scenario=cast(CoachScenario, scenario),
-            )
-            scenario = str(coach_turn["scenario"] or scenario)
-            artifacts = {}
-            suggested_actions = list(coach_turn["suggested_actions"])
-            assistant_content = str(coach_turn["coach_turn"].summary)
-            agent_meta = {
-                "summary": coach_turn["coach_turn"].summary,
-                "next_step": coach_turn["coach_turn"].next_step,
-            }
-        elif request.intent == "next_task":
-            if not provider_live_usable:
-                coach_turn = honest_unusable_provider_coach_turn(
-                    response_language=request.response_language,
-                    snapshot=state.snapshot,
-                    coaching_service=coaching_service,
-                    object_kind="task",
-                )
-                scenario = "general"
-                artifacts = {}
-                suggested_actions = list(coach_turn["suggested_actions"])
-                assistant_content = str(coach_turn["coach_turn"].summary)
-                agent_meta = {
-                    "summary": coach_turn["coach_turn"].summary,
-                    "next_step": coach_turn["coach_turn"].next_step,
-                }
-            else:
-                task = coach_support.review_aware_next_task(coach_support_deps,
-                    workspace_id=workspace_id,
-                    profile=profile,
-                    focus_area=request.focus_area,
-                    response_language=request.response_language,
-                )
-                task = clean_active_thread_task(
-                    task,
-                    request.response_language,
-                    runtime.memory_service.snapshot(state.workspace_id).active_thread,
-                    plan=state.snapshot.plan,
-                    snapshot=state.snapshot,
-                )
-                state.snapshot.current_task = task
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-                state.snapshot.profile = profile
-                coach_turn = resolve_coach_turn(
-                    state=state,
-                    profile=profile,
-                    request=request,
-                    message=request.message,
-                    coaching_service=coaching_service,
-                    current_task=task,
-                    current_plan=state.snapshot.plan,
-                    current_evaluation=state.snapshot.evaluation,
-                    force_scenario="next_task",
-                )
-                scenario = "next_task"
-                learner_signal = str(coach_turn["learner_signal"])
-                artifacts = dict(coach_turn["artifacts"])
-                suggested_actions = list(coach_turn["suggested_actions"])
-                leftover_runtime = coach_focus_runtime_from_snapshot(state.snapshot)
-                picked = live_task_picked_copy(
-                    plan=state.snapshot.plan,
-                    task=task,
-                    runtime=leftover_runtime,
-                    existing=leftover_runtime,
-                    task_title=task.title,
-                )
-                assistant_content = localized_text(picked["en"], picked["zh"], request.response_language)
-        elif request.intent == "task":
-            if not provider_live_usable:
-                coach_turn = honest_unusable_provider_coach_turn(
-                    response_language=request.response_language,
-                    snapshot=state.snapshot,
-                    coaching_service=coaching_service,
-                    object_kind="task",
-                )
-                scenario = "general"
-                artifacts = {}
-                suggested_actions = list(coach_turn["suggested_actions"])
-                assistant_content = str(coach_turn["coach_turn"].summary)
-                agent_meta = {
-                    "summary": coach_turn["coach_turn"].summary,
-                    "next_step": coach_turn["coach_turn"].next_step,
-                }
-            else:
-                task = runtime.spec_service.specify(
-                    TaskSpecifyRequest(
-                        session_id=request.session_id,
-                        workspace_id=workspace_id,
-                        natural_language_goal=request.message,
-                    )
-                )
-                state.snapshot.current_task = task
-                state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-                state.snapshot.profile = profile
-                coach_turn = resolve_coach_turn(
-                    state=state,
-                    profile=profile,
-                    request=request,
-                    message=request.message,
-                    coaching_service=coaching_service,
-                    current_task=task,
-                    current_plan=state.snapshot.plan,
-                    current_evaluation=state.snapshot.evaluation,
-                    force_scenario="task",
-                )
-                scenario = "task"
-                learner_signal = str(coach_turn["learner_signal"])
-                artifacts = dict(coach_turn["artifacts"])
-                suggested_actions = list(coach_turn["suggested_actions"])
-                leftover_runtime = coach_focus_runtime_from_snapshot(state.snapshot)
-                converted = live_task_converted_copy(
-                    plan=state.snapshot.plan,
-                    task=task,
-                    runtime=leftover_runtime,
-                    existing=leftover_runtime,
-                    task_title=task.title,
-                )
-                assistant_content = localized_text(converted["en"], converted["zh"], request.response_language)
-        elif request.intent == "plan":
-            # Formal plans are committed by the model through save_formal_plan.
-            # Leftover stored plans stay stored. Do not paint them live without
-            # recovered runtime identity, and do not synthesize a replacement.
-            leftover_plan, leftover_runtime = leftover_runtime_for_workspace(workspace_id)
-            plan = (
-                leftover_plan
-                if leftover_formal_plan_is_live_for_fill(
-                    plan=leftover_plan,
-                    runtime=leftover_runtime,
-                    existing=leftover_runtime,
-                )
-                else None
-            )
-            runtime.memory_service.record_profile(workspace_id, profile)
-            state.snapshot.plan = plan
-            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-            state.snapshot.profile = profile
-            if not provider_live_usable:
-                coach_turn = honest_unusable_provider_coach_turn(
-                    response_language=request.response_language,
-                    snapshot=state.snapshot,
-                    coaching_service=coaching_service,
-                    object_kind="plan",
-                    scenario="plan",
-                )
-                scenario = "plan"
-                artifacts = {}
-                suggested_actions = list(coach_turn["suggested_actions"])
-                assistant_content = str(coach_turn["coach_turn"].summary)
-                agent_meta = {
-                    "summary": coach_turn["coach_turn"].summary,
-                    "next_step": coach_turn["coach_turn"].next_step,
-                }
-            else:
-                coach_turn = resolve_coach_turn(
-                    state=state,
-                    profile=profile,
-                    request=request,
-                    message=request.message,
-                    coaching_service=coaching_service,
-                    current_task=state.snapshot.current_task,
-                    current_plan=plan,
-                    current_evaluation=state.snapshot.evaluation,
-                    force_scenario="plan",
-                )
-                stage_count = len(plan.phases) if plan is not None else 0
-                scenario = "plan"
-                learner_signal = str(coach_turn["learner_signal"])
-                artifacts = dict(coach_turn["artifacts"])
-                suggested_actions = list(coach_turn["suggested_actions"])
-                assistant_content = (
-                    ""
-                    if request.formal_plan_mutation
-                    else localized_text(
-                        (
-                            f"I refreshed your learning plan with {stage_count} stages. "
-                            "Anchor on the current stage first, then convert it into a small set of actions you can actually finish."
-                        ),
-                        f"\u6211\u5df2\u7ecf\u66f4\u65b0\u4e86\u4f60\u7684\u5b66\u4e60\u8ba1\u5212\uff0c\u5171 {stage_count} \u4e2a\u9636\u6bb5\u3002"
-                        "\u5148\u56f4\u7ed5\u5f53\u524d\u9636\u6bb5\u63a8\u8fdb\uff0c\u518d\u628a\u5b83\u62c6\u6210\u4f60\u73b0\u5728\u80fd\u5b8c\u6210\u7684\u5c0f\u52a8\u4f5c\u3002",
-                        request.response_language,
-                    )
-                )
-        elif request.intent == "review":
-            if request.current_file is None:
-                raise HTTPException(status_code=400, detail="Current file is required for review turns.")
-            leftover = leftover_plan_state_fields(workspace_id)
-            leftover_runtime = leftover.get("leftover_runtime")
-            report = stamp_produced_workspace_record(
-                runtime.evaluator_service.evaluate_current_file(
-                    EvaluateCurrentFileRequest(
-                        session_id=request.session_id,
-                        workspace_id=workspace_id,
-                        task_spec_id=state.snapshot.current_task.id if state.snapshot.current_task else None,
-                        file_path=request.current_file.path,
-                        language_id=request.current_file.language_id,
-                        content=request.current_file.content,
-                    ),
-                    state.snapshot.current_task,
-                    leftover_plan=leftover.get("leftover_plan"),
-                    leftover_runtime=leftover_runtime if isinstance(leftover_runtime, dict) else {},
-                    leftover_task_title=str(leftover.get("leftover_task_title") or ""),
-                    response_language=(
-                        supported_response_language(request.response_language)
-                        or workspace_response_language(workspace_id)
-                    ),
-                ),
-                workspace_id,
-            )
-            state.snapshot.evaluation = report
-            persist_evaluation_learning_loop(
-                workspace_id=workspace_id,
-                state=state,
-                report=report,
-                action_type="review",
-                fallback_focus_area=(
-                    Path(str(request.current_file.path or "")).stem.strip() or "review"
-                ),
-            )
-            advance_plan_after_evaluation(
-                workspace_id=workspace_id,
-                state=state,
-                report=report,
-            )
-            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-            state.snapshot.profile = profile
-            coach_turn = resolve_coach_turn(
-                state=state,
-                profile=profile,
-                request=request,
-                message=request.message,
-                coaching_service=coaching_service,
-                current_task=state.snapshot.current_task,
-                current_plan=state.snapshot.plan,
-                current_evaluation=report,
-                force_scenario="review",
-            )
-            scenario = "review"
-            learner_signal = str(coach_turn["learner_signal"])
-            artifacts = dict(coach_turn["artifacts"])
-            suggested_actions = list(coach_turn["suggested_actions"])
-            assistant_content = localized_text(
-                f"Review finished. {report.summary} Highest-leverage next step: {report.next_step}",
-                f"\u8bc4\u5ba1\u5b8c\u6210\u3002{report.summary} \u5f53\u524d\u6700\u503c\u5f97\u5148\u505a\u7684\u4e0b\u4e00\u6b65\uff1a{report.next_step}",
-                request.response_language,
-            )
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported turn intent.")
-
-        final_resource_context = compose_resource_context(
-            state.workspace_id,
-            request_resource_ids(request),
-            message=request.message,
-            resource_composer_intent=request.resource_composer_intent,
-        )
-        runtime.memory_service.record_session_message(
-            state.session_id,
-            f"user: {request.message}",
-            workspace_id=state.workspace_id,
-        )
-        request_coach_context = coach_turn.get("coach_context")
-        if isinstance(request_coach_context, dict):
-            request_coach_context = dict(request_coach_context)
-            if final_resource_context:
-                for key, value in final_resource_context.items():
-                    request_coach_context.setdefault(key, value)
-        else:
-            request_coach_context = build_coach_context(
-                state.snapshot,
-                final_resource_context,
-                message=request.message,
-                active_view=request.active_view,
-                current_file=request.current_file,
-                response_language=request.response_language,
-                plan_runtime_recovery=getattr(request, "plan_runtime_recovery", None),
-            )
-        if request.intent == "plan" and not stream and provider_live_usable:
-            history = build_conversation_history(
-                state.snapshot.messages,
-                drop_latest_user=True,
-            )
-            if use_agent_loop:
-                agent_context = dict(request_coach_context or {})
-                agent_context["__runtime__"] = runtime
-                agent_context["workspace_id"] = workspace_id
-                agent_context["session_id"] = state.session_id
-                _stamp_library_sandbox_work(agent_context, request, payload)
-                agent_outcome = await coaching_service.coaching_reply_agentic(
-                    profile,
-                    request.message,
-                    request.current_file.model_dump() if request.current_file else None,
-                    response_language=request.response_language,
-                    answer_mode=request.answer_mode,
-                    coach_context=agent_context,
-                    attachments=attachments_payload,
-                    protocol=(
-                        getattr(coaching_service._config, "protocol", None)
-                        if coaching_service._config
-                        else None
-                    ),
-                    history=history,
-                )
-                assistant_content = str(agent_outcome.get("content") or "").strip()
-                agent_resume_thread = str(agent_outcome.get("resume_thread") or "").strip()
-                if not agent_resume_thread:
-                    agent_resume_thread = build_resume_thread_text(
-                        str(agent_outcome.get("summary") or "").strip(),
-                        str(agent_outcome.get("next_step") or "").strip(),
-                        response_language=request.response_language,
-                    )
-                agent_meta = {
-                    "stop_reason": agent_outcome.get("stop_reason"),
-                    "summary": agent_outcome.get("summary"),
-                    "next_step": agent_outcome.get("next_step"),
-                    "decision": agent_outcome.get("decision"),
-                    "blocker": agent_outcome.get("blocker"),
-                    "teaching_note": agent_outcome.get("teaching_note"),
-                    "resume_thread": agent_resume_thread,
-                    "confidence": agent_outcome.get("confidence"),
-                    "evidence": agent_outcome.get("evidence"),
-                    "steps": agent_outcome.get("steps", []),
-                    "tool_events": agent_outcome.get("tool_events", []),
-                    "fell_back": bool(agent_outcome.get("fell_back")),
-                    "recovered_stop_reason": agent_outcome.get("recovered_stop_reason"),
-                    "agentic": True,
-                }
-                apply_attachment_delivery_metadata(agent_meta, agent_outcome)
-                if request.formal_plan_mutation:
-                    persisted_plan = runtime.repository.get_latest_plan(workspace_id)
-                    _leftover_after, leftover_runtime_after = leftover_runtime_for_workspace(
-                        workspace_id
-                    )
-                    if persisted_plan is not None and leftover_formal_plan_is_live_for_fill(
-                        plan=persisted_plan,
-                        runtime=leftover_runtime_after,
-                        existing=leftover_runtime_after,
-                    ):
-                        state.snapshot.plan = persisted_plan
-            else:
-                # When the Agent loop is disabled, keep the legacy provider
-                # reply path. It still cannot synthesize or persist a formal
-                # plan because this branch is discussion-only.
-                assistant_content = await coaching_service.coaching_reply(
-                    profile,
-                    request.message,
-                    request.current_file.model_dump() if request.current_file else None,
-                    response_language=request.response_language,
-                    answer_mode=request.answer_mode,
-                    coach_context=request_coach_context,
-                    history=history,
-                )
-        if should_attach_auto_resource_events(agent_meta):
-            agent_meta = apply_auto_resource_agent_evidence(
-                agent_meta,
-                auto_resource_lookup_tool_events(
-                    request_coach_context if isinstance(request_coach_context, dict) else None,
-                    request.message,
-                ),
-            )
-        if not use_agent_loop and agent_meta:
-            agent_meta["agentic"] = False
-        request_turn_summary = coach_turn.get("coach_turn")
-        coach_turn_payload = {
-            "scenario": scenario,
-            "learner_signal": learner_signal,
-            "coach_context": request_coach_context,
-            "coach_turn": (
-                request_turn_summary
-                if isinstance(request_turn_summary, CoachTurnSummary)
-                else build_turn_summary(
-                    snapshot=state.snapshot,
-                    scenario=scenario,
-                    learner_signal=learner_signal,
-                    artifacts=artifacts,
-                    suggested_actions=suggested_actions,
-                    coach_context=request_coach_context,
-                    response_language=request.response_language,
-                )
-            ),
-        }
-        if isinstance(agent_meta, dict):
-            coach_turn_payload = merge_agent_finalize_into_coach_turn(
-                coach_turn_payload,
-                summary=agent_meta.get("summary"),
-                next_step=agent_meta.get("next_step"),
-                blocker=agent_meta.get("blocker"),
-                resume_thread=agent_meta.get("resume_thread") or agent_meta.get("resumeThread"),
-                decision=agent_meta.get("decision"),
-                teaching_note=agent_meta.get("teaching_note") or agent_meta.get("teachingNote"),
-                confidence=agent_meta.get("confidence"),
-                evidence=agent_meta.get("evidence"),
-            )
-            stop_reason = str(agent_meta.get("stop_reason") or "").strip()
-            preserve_active_thread = should_preserve_active_thread_for_turn(
-                scenario,
-                state.snapshot.memory.active_thread,
-                message=request.message,
-                grounding_context=request_coach_context if isinstance(request_coach_context, dict) else None,
-                active_view=request.active_view,
-            )
-            if (
-                not preserve_active_thread
-                and stop_reason in PROVIDER_REPLY_STOP_REASONS
-                and isinstance(coach_turn_payload, dict)
-            ):
-                coach_context = coach_turn_payload.get("coach_context")
-                turn_summary = coach_turn_payload.get("coach_turn")
-                if isinstance(coach_context, dict) and isinstance(turn_summary, CoachTurnSummary):
-                    focus_hint = extract_focus_hint_from_message(request.message) or ""
-                    visible_focus_hint = guided_focus_display_value(
-                        focus_hint,
-                        scenario=scenario,
-                        response_language=request.response_language,
-                    )
-                    if visible_focus_hint:
-                        coach_context["current_focus"] = visible_focus_hint
-                    coach_context["active_thread"] = {
-                        "scenario": scenario,
-                        "focus_area": visible_focus_hint or focus_hint,
-                        "summary": turn_summary.summary,
-                        "next_step": turn_summary.next_step,
-                        "blocker": turn_summary.blocker,
-                        "decision": turn_summary.decision,
-                        "teaching_note": turn_summary.teaching_note,
-                        "confidence": turn_summary.confidence,
-                        "evidence": list(turn_summary.evidence or []),
-                    }
-        response_snapshot = state.snapshot.model_copy(deep=True)
-        # T-0048: repair a generic finalize step BEFORE grounding and memory
-        # persistence so the recorded thread, the grounding gate and the
-        # response surfaces all ship the same step. Only a non-empty
-        # agent_meta carries a finalize step; an empty dict is the legacy
-        # (non-agent) lane and must stay empty or the turn surfaces as agentic.
-        coach_turn_payload = repair_generic_finalize_next_step(
-            assistant_content,
-            agent_meta if isinstance(agent_meta, dict) and agent_meta else None,
-            coach_turn_payload,
-            response_language=request.response_language,
-        ) or coach_turn_payload
-        grounding_decision = await resolve_turn_grounding_async(
-            coach_turn_payload=coach_turn_payload,
-            reply_content=assistant_content,
-            request=request,
-            agent_meta=agent_meta if isinstance(agent_meta, dict) else None,
-            history_text=turn_history_text(state.snapshot),
-            coaching_service=coaching_service,
-        )
-        agent_meta = apply_grounding_decision(
-            coach_turn_payload=coach_turn_payload,
-            decision=grounding_decision,
-            agent_meta=agent_meta if isinstance(agent_meta, dict) else None,
-        ) or agent_meta
-        coach_support.persist_turn_reflection(coach_support_deps,
-            workspace_id=workspace_id,
-            session_id=state.session_id,
-            user_message=request.message,
-            scenario=scenario,
-            response_language=request.response_language,
-            answer_mode=answer_mode_preference_for_persistence(
-                raw_requested_answer_mode,
-                saved_answer_mode,
-                request.answer_mode,
-                profile.answer_policy,
-            ),
-            coach_defaults=request.coach_defaults,
-            coach_turn_data=coach_turn_payload,
-            grounding_decision=grounding_decision,
-            stop_reason=str(agent_meta.get("stop_reason") or ""),
-            recovered_stop_reason=str(agent_meta.get("recovered_stop_reason") or ""),
-            local_sequence_fallback=bool(agent_meta.get("local_sequence_fallback")),
-        )
-        persist_recovered_plan_resume_after_turn(
-            workspace_id=workspace_id,
-            request=request,
-            reply_content=assistant_content,
-            agent_meta=agent_meta if isinstance(agent_meta, dict) else None,
-            coach_context=request_coach_context if isinstance(request_coach_context, dict) else None,
-            recovered_status=state.snapshot.plan_runtime_status
-            if isinstance(state.snapshot.plan_runtime_status, dict)
-            else None,
-        )
-        if not language_corruption_detected and not provider_failure_detected:
-            persist_external_references_as_background(
-                workspace_id=workspace_id,
-                scenario=scenario,
-                coach_turn_data=coach_turn_payload,
-            )
-        if not provider_live_usable:
-            suggested_actions = honest_suggested_actions_without_usable_provider(
-                suggested_actions,
-                response_language=request.response_language,
-                snapshot=state.snapshot,
-                current_task=state.snapshot.current_task,
-                current_plan=state.snapshot.plan,
-                current_evaluation=state.snapshot.evaluation,
-            )
-        if agent_meta:
-            # Stamp reliability only onto a real agent meta. Stamping an empty
-            # dict would resurrect agent_meta for clean non-agent turns and the
-            # AgentMeta default (agentic=True) would mislabel the reply lane.
-            agent_meta["reliability"] = operation_reliability_record(
-                phase="acked",
-                outcome=(
-                    "failure"
-                    if not provider_live_usable or provider_failure_detected
-                    else "success"
-                ),
-                request_id=str(request.request_id or "").strip() or None,
-            )
-        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-        state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
-        coach_support.hydrate_snapshot(coach_support_deps,
-            state.snapshot,
-            response_language=request.response_language,
-            answer_mode=request.answer_mode or profile.answer_policy,
-            scenario=scenario,
-            learner_signal=learner_signal,
-            message=request.message,
-            current_file=request.current_file,
-            active_view=request.active_view,
-            session_workspace_id=workspace_id,
-        )
-        if frozen_formal_plan_mutation_requested:
-            assistant_content = "\n\n".join(
-                part
-                for part in (frozen_plan_mutation_notice(request.response_language), assistant_content)
-                if part
-            )
-            agent_meta["formal_plan_mutation_blocked"] = True
-        if not (scenario == "idea_implementation" and request.current_file is not None):
-            response_snapshot = state.snapshot
-
-        if stream and request.intent != "coach":
-            return (
-                {
-                    "__turn_stream_preparation__": True,
-                    "state": state,
-                    "request": request,
-                    "profile": profile,
-                    "scenario": scenario,
-                    "learner_signal": learner_signal,
-                    "coach_turn_data": coach_turn_payload,
-                    "artifacts": artifacts,
-                    "suggested_actions": suggested_actions,
-                    "agent_meta": agent_meta,
-                    "response_snapshot": response_snapshot,
-                    "attachment_delivery": attachment_delivery,
-                    "fallback_reply": assistant_content,
-                    "use_agent_loop": use_agent_loop,
-                },
-                artifacts,
-                coaching_service,
-            )
-
-        return (
-            build_session_response(
-                state=state,
-                request=request,
-                reply_content=assistant_content,
-                artifacts=artifacts,
-                suggested_actions=suggested_actions,
-                scenario=scenario,
-                learner_signal=learner_signal,
-                coach_turn_data=coach_turn_payload,
-                response_snapshot=response_snapshot,
-                agent_meta=agent_meta or None,
-                attachment_delivery=attachment_delivery,
-            ),
-            artifacts,
-            coaching_service,
-        )
 
     @router.get("/health")
     def health(request: Request) -> dict[str, object]:
@@ -17121,7 +14120,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         provider_live_usable = provider_is_live_usable(coaching_service, payload)
         if not provider_live_usable:
             turn_request = turn_request_from_stream_payload(payload, intent="coach")
-            response, artifacts, _ = await execute_turn(turn_request, payload, stream=False)
+            response, artifacts, _ = await coach_support.execute_turn(coach_support_deps, turn_request, payload, stream=False)
             response_payload = json_object_payload(response)
             if artifacts:
                 response_payload["artifacts"] = artifacts
@@ -17196,7 +14195,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     message=request.message,
                     active_view=request.active_view,
                 )
-                response = build_session_response(
+                response = coach_support.build_session_response(coach_support_deps, 
                     state=state,
                     request=request,
                     reply_content=handled_reply,
@@ -17210,7 +14209,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 )
                 runtime.save_session_state(state.session_id)
                 return _finish_session_response(json_object_payload(response))
-        coach_turn: CoachTurnPayload = resolve_coach_turn(
+        coach_turn: CoachTurnPayload = coach_support.resolve_coach_turn(coach_support_deps, 
             state=state,
             profile=profile,
             request=request,
@@ -17660,7 +14659,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 current_plan=state.snapshot.plan,
                 current_evaluation=state.snapshot.evaluation,
             )
-        response = build_session_response(
+        response = coach_support.build_session_response(coach_support_deps, 
             state=state,
             request=request,
             reply_content=assistant_content,
@@ -18065,7 +15064,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if current_task is not None:
                 current_task.add_done_callback(_owner_task_cleanup)
 
-        response, artifacts, _ = await execute_turn(request, payload)
+        response, artifacts, _ = await coach_support.execute_turn(coach_support_deps, request, payload)
         if isinstance(response, SessionMessageResponse):
             response.snapshot.memory = repair_guided_lane_memory_snapshot_for_response(
                 runtime.memory_service.snapshot(workspace_id),
@@ -18439,7 +15438,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     provider_service_override=coaching_service,
                 )
                 state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-                coach_turn: CoachTurnPayload = resolve_coach_turn(
+                coach_turn: CoachTurnPayload = coach_support.resolve_coach_turn(coach_support_deps, 
                     state=state,
                     profile=profile,
                     request=request,
@@ -18939,7 +15938,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         auto_resource_events,
                     )
                 response_data = json_object_payload(
-                    build_session_response(
+                    coach_support.build_session_response(coach_support_deps, 
                         state=state,
                         request=request,
                         reply_content=full_content,
@@ -19343,7 +16342,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     return
                 yield stream_status_event("preparing_context", stream_id)
                 if request.intent != "coach":
-                    preparation_or_response, prepared_artifacts, prepared_service = await execute_turn(
+                    preparation_or_response, prepared_artifacts, prepared_service = await coach_support.execute_turn(coach_support_deps, 
                         request,
                         payload,
                         stream=True,
@@ -19683,7 +16682,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         ) or final_agent_meta
 
                     response_data = json_response_payload(
-                        build_session_response(
+                        coach_support.build_session_response(coach_support_deps, 
                             state=state,
                             request=request,
                             reply_content=full_content,
@@ -19784,7 +16783,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     provider_service_override=coaching_service,
                 )
                 state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-                coach_turn: CoachTurnPayload = resolve_coach_turn(
+                coach_turn: CoachTurnPayload = coach_support.resolve_coach_turn(coach_support_deps, 
                     state=state,
                     profile=profile,
                     request=request,
@@ -20021,7 +17020,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                             raise
                         # Grounding recovery is deliberately exceptional: the
                         # nominal path above is always provider-backed SSE.
-                        fallback_response, fallback_artifacts, _ = await execute_turn(
+                        fallback_response, fallback_artifacts, _ = await coach_support.execute_turn(coach_support_deps, 
                             request,
                             payload,
                             stream=False,
@@ -20320,7 +17319,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         auto_resource_events,
                     )
                 response_data = json_response_payload(
-                    build_session_response(
+                    coach_support.build_session_response(coach_support_deps, 
                         state=state,
                         request=request,
                         reply_content=full_content,
@@ -21536,6 +18535,128 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
 
 
     coach_support_deps = CoachSupportDeps(
+        coach_suggested_actions=lambda *args, **kwargs: coach_support.coach_suggested_actions(coach_support_deps, *args, **kwargs),
+        hydrate_snapshot=lambda *args, **kwargs: coach_support.hydrate_snapshot(coach_support_deps, *args, **kwargs),
+        review_aware_next_task=lambda *args, **kwargs: coach_support.review_aware_next_task(coach_support_deps, *args, **kwargs),
+        persist_turn_reflection=lambda *args, **kwargs: coach_support.persist_turn_reflection(coach_support_deps, *args, **kwargs),
+        build_coaching_artifacts=lambda *args, **kwargs: coach_support.build_coaching_artifacts(coach_support_deps, *args, **kwargs),
+        workspace_response_language=workspace_response_language,
+        workspace_preferences=workspace_preferences,
+        update_snapshot_plan_from_turn=update_snapshot_plan_from_turn,
+        turn_keeps_review_signals=turn_keeps_review_signals,
+        turn_history_text=turn_history_text,
+        streak_without_live_object_blocks_mint=streak_without_live_object_blocks_mint,
+        should_remap_task_intent_without_live_plan=should_remap_task_intent_without_live_plan,
+        should_preserve_relationship_continuity_for_turn=should_preserve_relationship_continuity_for_turn,
+        should_bypass_agent_loop_for_guided_training=should_bypass_agent_loop_for_guided_training,
+        should_attach_auto_resource_events=should_attach_auto_resource_events,
+        sanitize_visible_coach_reply_content=sanitize_visible_coach_reply_content,
+        safe_activate_training_card_from_coach_request=safe_activate_training_card_from_coach_request,
+        resolved_profile=resolved_profile,
+        resolve_turn_grounding_async=resolve_turn_grounding_async,
+        resolve_local_continuation_step=resolve_local_continuation_step,
+        resolve_external_references=resolve_external_references,
+        resolve_coach_turn=lambda *args, **kwargs: coach_support.resolve_coach_turn(coach_support_deps, *args, **kwargs),
+        requires_formal_plan_commit=requires_formal_plan_commit,
+        request_with_workspace_defaults=request_with_workspace_defaults,
+        request_resource_ids=request_resource_ids,
+        reply_explicitly_lists_prepared_sequence=reply_explicitly_lists_prepared_sequence,
+        repair_legacy_assistant_messages=repair_legacy_assistant_messages,
+        repair_guided_lane_memory_snapshot_for_response=repair_guided_lane_memory_snapshot_for_response,
+        repair_generic_finalize_next_step=repair_generic_finalize_next_step,
+        provider_is_live_usable=provider_is_live_usable,
+        profile_with_teaching_style=profile_with_teaching_style,
+        pressure_without_live_object_blocks_mint=pressure_without_live_object_blocks_mint,
+        preserve_requested_domain_scenario=preserve_requested_domain_scenario,
+        persist_recovered_plan_resume_after_turn=persist_recovered_plan_resume_after_turn,
+        persist_external_references_as_background=persist_external_references_as_background,
+        persist_evaluation_learning_loop=persist_evaluation_learning_loop,
+        operation_reliability_record=operation_reliability_record,
+        normalize_current_file_payload=normalize_current_file_payload,
+        model_teaching_decision=model_teaching_decision,
+        model_project_sources=model_project_sources,
+        model_project_ideas=model_project_ideas,
+        model_project_adaptation_guide=model_project_adaptation_guide,
+        model_principle_notes=model_principle_notes,
+        model_learner_state=model_learner_state,
+        model_implementation_guide=model_implementation_guide,
+        message_requests_project_sourcing=message_requests_project_sourcing,
+        message_requests_explicit_explanation_or_example=message_requests_explicit_explanation_or_example,
+        message_keeps_existing_thread=message_keeps_existing_thread,
+        merge_agent_finalize_into_coach_turn=merge_agent_finalize_into_coach_turn,
+        live_formal_plan_for_explicit_task_next=live_formal_plan_for_explicit_task_next,
+        leftover_plan_state_fields=leftover_plan_state_fields,
+        leftover_frozen_blocks_turn_generation=leftover_frozen_blocks_turn_generation,
+        language_aligned_thread_payload=language_aligned_thread_payload,
+        language_aligned_review_rhythm=language_aligned_review_rhythm,
+        language_aligned_memory_payload=language_aligned_memory_payload,
+        language_aligned_flat_payload=language_aligned_flat_payload,
+        language_aligned_context_text=language_aligned_context_text,
+        language_aligned_context_list=language_aligned_context_list,
+        language_aligned_coaching_state_payload=language_aligned_coaching_state_payload,
+        isolate_preflight_language_corruption_turn=isolate_preflight_language_corruption_turn,
+        inherit_active_thread_scenario_for_continuation=inherit_active_thread_scenario_for_continuation,
+        infer_learner_signal=infer_learner_signal,
+        infer_coaching_scenario=infer_coaching_scenario,
+        honest_unusable_provider_coach_turn=honest_unusable_provider_coach_turn,
+        honest_suggested_actions_without_usable_provider=honest_suggested_actions_without_usable_provider,
+        guided_lane_visible_reply_is_generic=guided_lane_visible_reply_is_generic,
+        guided_lane_visible_reply_has_foreign_markers=guided_lane_visible_reply_has_foreign_markers,
+        guarantee_guided_learn_first_training_card=guarantee_guided_learn_first_training_card,
+        grounding_response_coach_turn=grounding_response_coach_turn,
+        grounding_decision_from_payload=grounding_decision_from_payload,
+        grounded_resource_contract_needs_repair=grounded_resource_contract_needs_repair,
+        function_guidance_entry_points=function_guidance_entry_points,
+        frozen_plan_mutation_notice=frozen_plan_mutation_notice,
+        formal_plan_commit_verified=formal_plan_commit_verified,
+        formal_plan_commit_missing_reply=formal_plan_commit_missing_reply,
+        formal_plan_commit_missing_next_step=formal_plan_commit_missing_next_step,
+        extract_focus_hint_from_message=extract_focus_hint_from_message,
+        extract_coach_turn_payload=extract_coach_turn_payload,
+        ensure_explicit_training_card_after_language_block=ensure_explicit_training_card_after_language_block,
+        ensure_explicit_training_card_after_coach_reply=ensure_explicit_training_card_after_coach_reply,
+        ensure_coach_provider_ready=ensure_coach_provider_ready,
+        ensure_agent_tools_ready=ensure_agent_tools_ready,
+        detect_provider_language_corruption=detect_provider_language_corruption,
+        describe_request_attachment_delivery=describe_request_attachment_delivery,
+        current_workspace_id=current_workspace_id,
+        consume_provider_reply_failure_override=consume_provider_reply_failure_override,
+        consume_provider_empty_reply_override=consume_provider_empty_reply_override,
+        compose_resource_context=compose_resource_context,
+        coach_turn_mapping=coach_turn_mapping,
+        closed_loop_return_blocks_task_mint=closed_loop_return_blocks_task_mint,
+        clean_active_thread_task=clean_active_thread_task,
+        canonical_focus_for_scenario=canonical_focus_for_scenario,
+        build_user_message_metadata=build_user_message_metadata,
+        build_turn_summary=build_turn_summary,
+        build_session_response=lambda *args, **kwargs: coach_support.build_session_response(coach_support_deps, *args, **kwargs),
+        build_local_sequence_visible_fallback=build_local_sequence_visible_fallback,
+        build_guided_training_visible_fallback=build_guided_training_visible_fallback,
+        build_guided_lane_stable_visible_reply=build_guided_lane_stable_visible_reply,
+        build_grounded_resource_contract_visible_fallback=build_grounded_resource_contract_visible_fallback,
+        build_empty_response_visible_reply=build_empty_response_visible_reply,
+        build_conversation_history=build_conversation_history,
+        build_coaching_service=build_coaching_service,
+        build_coach_context=lambda *args, **kwargs: coach_support.build_coach_context(coach_support_deps, *args, **kwargs),
+        build_assistant_metadata=build_assistant_metadata,
+        auto_resource_lookup_tool_events=auto_resource_lookup_tool_events,
+        auto_preference_requests_training_card=auto_preference_requests_training_card,
+        auto_lane_learn_first_force_training_card=auto_lane_learn_first_force_training_card,
+        apply_pedagogy_snapshot=apply_pedagogy_snapshot,
+        apply_next_step_grounding_policy=apply_next_step_grounding_policy,
+        apply_language_corruption_override=apply_language_corruption_override,
+        apply_guided_training_visible_fallback=apply_guided_training_visible_fallback,
+        apply_guided_lane_visible_fallback=apply_guided_lane_visible_fallback,
+        apply_grounding_decision=apply_grounding_decision,
+        apply_auto_resource_agent_evidence=apply_auto_resource_agent_evidence,
+        apply_attachment_delivery_metadata=apply_attachment_delivery_metadata,
+        apply_agent_meta_to_coaching_state=apply_agent_meta_to_coaching_state,
+        answer_mode_preference_for_persistence=answer_mode_preference_for_persistence,
+        advance_plan_after_evaluation=advance_plan_after_evaluation,
+        active_thread_scenario_value=active_thread_scenario_value,
+        _resolve_context_tier=_resolve_context_tier,
+        PROVIDER_REPLY_STOP_REASONS=PROVIDER_REPLY_STOP_REASONS,
+        GUIDED_VISIBLE_REPAIR_SCENARIOS=GUIDED_VISIBLE_REPAIR_SCENARIOS,
         runtime=runtime,
         GROUNDING_MEMORY_PROVENANCE_CACHE_KEY=GROUNDING_MEMORY_PROVENANCE_CACHE_KEY,
         GUIDED_LANE_SCENARIOS=GUIDED_LANE_SCENARIOS,

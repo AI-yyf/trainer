@@ -2630,7 +2630,7 @@ async def test_honest_unusable_provider_stream_abort_publishes_failure_complete_
         assert real_message is not None
         return real_message(*args, **kwargs)
 
-    import app.api.routers as routers_mod
+    import app.api.coach_support as coach_support_mod
     from app.core.models import ChatMessage as RealChatMessage
 
     real_message = RealChatMessage
@@ -2649,7 +2649,7 @@ async def test_honest_unusable_provider_stream_abort_publishes_failure_complete_
     retry_payload = {**payload, "stream_id": f"stream-{request_id}-b"}
 
     transport = httpx.ASGITransport(app=app)
-    with patch.object(routers_mod, "ChatMessage", side_effect=counting_chat_message):
+    with patch.object(coach_support_mod, "ChatMessage", side_effect=counting_chat_message):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             first = await client.post(path, json=payload)
             second = await client.post(path, json=retry_payload)
