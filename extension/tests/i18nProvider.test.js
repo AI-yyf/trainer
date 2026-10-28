@@ -4,12 +4,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const contextSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'context.tsx');
 
 test('the webview tree is wrapped in the i18n provider and the provider fails loud when missing', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
   const contextSource = fs.readFileSync(contextSourcePath, 'utf8');
 
   assert.match(appSource, /import \{ I18nProvider \} from "\.\.\/lib\/i18n\/context";/);

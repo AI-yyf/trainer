@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const {
   describeWorkspaceTrustState,
@@ -293,7 +294,7 @@ test('host coach/session command surface has no WorkspaceEdit project rewrite pa
 
 test('Settings first screen paints live trust sentence, not leftover sandbox chrome', () => {
   const settings = fs.readFileSync(settingsViewPath, 'utf8');
-  const app = fs.readFileSync(appPath, 'utf8');
+  const app = readAppModuleSource();
 
   assert.match(settings, /data-workspace-trust-state=\{issue.id === "trust" \? resolvedWorkspaceTrustState : undefined\}/);
   assert.match(settings, /data-settings-workspace-trust=\{issue.id === "trust" \? "true" : undefined\}/);

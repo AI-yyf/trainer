@@ -4,11 +4,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
 test('Training currentFocus does not use leftover formal title or coach focus', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const focusStart = source.indexOf('const localizedCurrentFocus =');
   const focusEnd = source.indexOf('return (', focusStart);
 
@@ -29,7 +30,7 @@ test('Training currentFocus does not use leftover formal title or coach focus', 
 test('Training and Practice views gate leftover teachingDecision.focusArea', () => {
   // The standalone CoachTrainingView / CoachPracticeView panels are gone; the
   // focus chrome is assembled once in App and handed to the single-card view.
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   assert.match(source, /preferRecoveredTrainingFocusChrome\(/);
   assert.match(source, /teachingDecisionFocusArea: data\.teachingDecision\?\.focusArea/);
   assert.match(source, /liveTrainingFocusChrome\.teachingDecisionFocusArea/);
@@ -40,7 +41,7 @@ test('Training and Practice views gate leftover teachingDecision.focusArea', () 
 });
 
 test('Training first screen gates leftover handoff card chrome', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   assert.match(source, /leftoverTrainingHandoffChromeIsNotLive\(/);
   assert.match(source, /preferRecoveredTrainingHandoffChrome\(/);
   assert.match(source, /successSignal: pickFirstText\(/);

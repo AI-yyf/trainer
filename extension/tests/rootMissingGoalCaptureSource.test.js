@@ -2,15 +2,19 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readCopyModuleSource } = require('./helpers/copyModuleSource');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const copyPath = path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'copy.ts');
+const copyTypesPath = path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'copyTypes.ts');
 
 test('a missing workspace root preserves a typed goal instead of disabling the Coach input', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
-  const copy = fs.readFileSync(copyPath, 'utf8');
+  const source = readAppModuleSource();
+  const copy = readCopyModuleSource();
+  const copyTypes = fs.readFileSync(copyTypesPath, 'utf8');
 
   assert.match(
     source,
@@ -28,6 +32,6 @@ test('a missing workspace root preserves a typed goal instead of disabling the C
     source,
     /submitDisabled=\{\s*canCaptureGoalBeforeWorkspaceSetup\s*\?\s*!normalizedDraft\s*\|\|\s*imageAttachmentSendBlocked\s*:\s*composerSendBlocked\s*\|\|\s*imageAttachmentSendBlocked\s*\}/,
   );
-  assert.match(copy, /\| "workspaceAdmissionGoalSaved"/);
+  assert.match(copyTypes, /\| "workspaceAdmissionGoalSaved"/);
   assert.equal((copy.match(/workspaceAdmissionGoalSaved:/g) ?? []).length, 8);
 });

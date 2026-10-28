@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const settingsViewPath = path.resolve(
@@ -42,7 +43,7 @@ function sourceBetween(source, startMarker, endMarker) {
 }
 
 test('settings provider profile actions are wired through App and rendered in Settings', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
   const settingsSource = fs.readFileSync(settingsViewPath, 'utf8');
   const providerProfilesPanel = extractProviderProfilesPanel(settingsSource);
 

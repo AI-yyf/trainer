@@ -6,7 +6,9 @@ export type ErrorSurfaceKind =
   | "upstream"
   | "thinking"
   | "unverified"
-  | "empty";
+  | "empty"
+  | "connection"
+  | "timeout";
 
 export interface ErrorSurfaceRecord {
   kind: ErrorSurfaceKind;
@@ -36,6 +38,9 @@ const UPSTREAM_PATTERN =
   /\b(?:upstream[_ ]?(?:body|payload|response)|provider response body|response body)\b/i;
 const HTTP_DUMP_PATTERN = /\bHTTP\/\d(?:\.\d)?\b|\b<(?:html|head|body|pre)\b/i;
 const BARE_SUCCESS_PATTERN = /^(?:ok|okay|success|successful|ready|completed|complete|pass|passed|done)\b/i;
+const CONNECTION_PATTERN =
+  /\b(?:ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|EPIPE|EHOSTUNREACH|ENETUNREACH)\b|\bsocket hang up\b|\bfetch failed\b|\bFailed to fetch\b|\bnetwork error\b|\bNetworkError\b/i;
+const TIMEOUT_PATTERN = /\bETIMEDOUT\b|\bSidecar request timed out\b|\brequest timed out\b|\btimed out after\b/i;
 const REDACTED = "[redacted]";
 
 type SurfaceCopy = {
@@ -46,6 +51,8 @@ type SurfaceCopy = {
   thinking: { message: string; why: string; next: string };
   unverified: { message: string; why: string; next: string };
   empty: { message: string; why: string; next: string };
+  connection: { message: string; why: string; next: string };
+  timeout: { message: string; why: string; next: string };
   fallback: { message: string; why: string; next: string };
 };
 
@@ -85,6 +92,16 @@ const SURFACE_COPY: Record<string, SurfaceCopy> = {
       message: "这一步没有完成。",
       why: "错误内容为空，还不能判断原因。",
       next: "再试一次；若继续失败，打开设置检查连接。",
+    },
+    connection: {
+      message: "本地引擎没有响应。",
+      why: "连接在回复到达前就断开了。",
+      next: "再试一次；若继续失败，在设置里重启本地引擎。",
+    },
+    timeout: {
+      message: "本地引擎响应超时。",
+      why: "请求在限定时间内没有返回。",
+      next: "再试一次；若继续失败，在设置里重启本地引擎。",
     },
     fallback: {
       message: "这一步没有完成。",
@@ -128,6 +145,16 @@ const SURFACE_COPY: Record<string, SurfaceCopy> = {
       why: "The error text was empty, so the cause is still unknown.",
       next: "Try again. If it keeps failing, check the connection in Settings.",
     },
+    connection: {
+      message: "The local engine is not responding.",
+      why: "The connection closed before a reply arrived.",
+      next: "Try again. If it keeps failing, restart the local engine in Settings.",
+    },
+    timeout: {
+      message: "The local engine timed out before replying.",
+      why: "The request did not return within its time limit.",
+      next: "Try again. If it keeps failing, restart the local engine in Settings.",
+    },
     fallback: {
       message: "This step did not finish.",
       why: "Only a learner-facing failure remains after unsafe details were removed.",
@@ -169,6 +196,16 @@ const SURFACE_COPY: Record<string, SurfaceCopy> = {
       message: "Este paso no terminó.",
       why: "El texto del error estaba vacío, así que la causa sigue sin verse.",
       next: "Inténtalo de nuevo. Si sigue fallando, revisa la conexión en Ajustes.",
+    },
+    connection: {
+      message: "El motor local no responde.",
+      why: "La conexión se cerró antes de recibir una respuesta.",
+      next: "Inténtalo de nuevo. Si sigue fallando, reinicia el motor local en Ajustes.",
+    },
+    timeout: {
+      message: "El motor local agotó el tiempo de espera.",
+      why: "La solicitud no volvió dentro del límite.",
+      next: "Inténtalo de nuevo. Si sigue fallando, reinicia el motor local en Ajustes.",
     },
     fallback: {
       message: "Este paso no terminó.",
@@ -212,6 +249,16 @@ const SURFACE_COPY: Record<string, SurfaceCopy> = {
       why: "Le texte d'erreur était vide, la cause reste inconnue.",
       next: "Réessayez. Si cela continue, vérifiez la connexion dans Réglages.",
     },
+    connection: {
+      message: "Le moteur local ne répond pas.",
+      why: "La connexion s'est fermée avant l'arrivée d'une réponse.",
+      next: "Réessayez. Si cela continue, redémarrez le moteur local dans Réglages.",
+    },
+    timeout: {
+      message: "Le moteur local a dépassé le délai de réponse.",
+      why: "La requête n'a pas abouti dans le temps imparti.",
+      next: "Réessayez. Si cela continue, redémarrez le moteur local dans Réglages.",
+    },
     fallback: {
       message: "Cette étape n'est pas terminée.",
       why: "Il ne reste qu'une explication claire, sans détail interne.",
@@ -253,6 +300,16 @@ const SURFACE_COPY: Record<string, SurfaceCopy> = {
       message: "Dieser Schritt ist nicht abgeschlossen.",
       why: "Der Fehlertext war leer, die Ursache ist noch unbekannt.",
       next: "Versuche es erneut. Wenn es weiter scheitert, prüfe die Verbindung in Einstellungen.",
+    },
+    connection: {
+      message: "Die lokale Engine antwortet nicht.",
+      why: "Die Verbindung wurde geschlossen, bevor eine Antwort ankam.",
+      next: "Versuche es erneut. Wenn es weiter scheitert, starte die lokale Engine in Einstellungen neu.",
+    },
+    timeout: {
+      message: "Die lokale Engine hat das Zeitlimit überschritten.",
+      why: "Die Anfrage kam nicht innerhalb der Frist zurück.",
+      next: "Versuche es erneut. Wenn es weiter scheitert, starte die lokale Engine in Einstellungen neu.",
     },
     fallback: {
       message: "Dieser Schritt ist nicht abgeschlossen.",
@@ -296,6 +353,16 @@ const SURFACE_COPY: Record<string, SurfaceCopy> = {
       why: "エラー文が空なので、原因はまだ分かりません。",
       next: "もう一度試してください。続く場合は設定で接続を確認してください。",
     },
+    connection: {
+      message: "ローカルエンジンが応答していません。",
+      why: "返信が届く前に接続が切れました。",
+      next: "もう一度試してください。続く場合は設定でローカルエンジンを再起動してください。",
+    },
+    timeout: {
+      message: "ローカルエンジンがタイムアウトしました。",
+      why: "制限時間内に応答が返りませんでした。",
+      next: "もう一度試してください。続く場合は設定でローカルエンジンを再起動してください。",
+    },
     fallback: {
       message: "この手順は完了していません。",
       why: "分かる失敗説明だけが残っています。内部詳細はありません。",
@@ -338,6 +405,16 @@ const SURFACE_COPY: Record<string, SurfaceCopy> = {
       why: "오류 문구가 비어 있어 원인을 아직 알 수 없습니다.",
       next: "다시 시도하세요. 계속 실패하면 설정에서 연결을 확인하세요.",
     },
+    connection: {
+      message: "로컬 엔진이 응답하지 않습니다.",
+      why: "응답이 도착하기 전에 연결이 끊어졌습니다.",
+      next: "다시 시도하세요. 계속 실패하면 설정에서 로컬 엔진을 다시 시작하세요.",
+    },
+    timeout: {
+      message: "로컬 엔진 응답이 시간 초과되었습니다.",
+      why: "제한 시간 안에 요청이 돌아오지 않았습니다.",
+      next: "다시 시도하세요. 계속 실패하면 설정에서 로컬 엔진을 다시 시작하세요.",
+    },
     fallback: {
       message: "이 단계가 끝나지 않았습니다.",
       why: "이해할 수 있는 실패 설명만 남았고, 내부 세부 정보는 없습니다.",
@@ -379,6 +456,16 @@ const SURFACE_COPY: Record<string, SurfaceCopy> = {
       message: "Esta etapa não terminou.",
       why: "O texto do erro estava vazio, então a causa ainda não aparece.",
       next: "Tente de novo. Se continuar falhando, verifique a conexão em Configurações.",
+    },
+    connection: {
+      message: "O motor local não está respondendo.",
+      why: "A conexão foi encerrada antes de uma resposta chegar.",
+      next: "Tente de novo. Se continuar falhando, reinicie o motor local em Configurações.",
+    },
+    timeout: {
+      message: "O motor local excedeu o tempo de resposta.",
+      why: "A solicitação não retornou dentro do limite.",
+      next: "Tente de novo. Se continuar falhando, reinicie o motor local em Configurações.",
     },
     fallback: {
       message: "Esta etapa não terminou.",
@@ -509,7 +596,11 @@ function recordForKind(
                 ? copy.unverified
                 : kind === "empty"
                   ? copy.empty
-                  : copy.fallback;
+                  : kind === "connection"
+                    ? copy.connection
+                    : kind === "timeout"
+                      ? copy.timeout
+                      : copy.fallback;
   return {
     kind,
     message: compact(fallback?.trim() || selected.message),
@@ -560,6 +651,12 @@ export function sanitizeErrorSurface(
   }
   if (UPSTREAM_PATTERN.test(raw) || HTTP_DUMP_PATTERN.test(raw)) {
     return recordForKind("upstream", language, options?.fallback);
+  }
+  if (CONNECTION_PATTERN.test(raw)) {
+    return recordForKind("connection", language, options?.fallback);
+  }
+  if (TIMEOUT_PATTERN.test(raw)) {
+    return recordForKind("timeout", language, options?.fallback);
   }
 
   const redacted = redactSecretShapes(raw);

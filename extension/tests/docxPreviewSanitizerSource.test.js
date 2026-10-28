@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const webviewRoot = path.resolve(__dirname, '..', 'webview');
 const docxPreviewPath = path.resolve(
@@ -77,7 +78,7 @@ test('conversation file_preview paints via CoachMessageParts only (registry is H
     path.resolve(webviewRoot, 'src', 'components', 'coach', 'CoachConversationView.tsx'),
     'utf8',
   );
-  const app = fs.readFileSync(path.resolve(webviewRoot, 'src', 'app', 'App.tsx'), 'utf8');
+  const app = readAppModuleSource();
   const sharedRegistry = fs.readFileSync(
     path.resolve(__dirname, '..', '..', 'shared', 'src', 'partsRendererRegistry.ts'),
     'utf8',

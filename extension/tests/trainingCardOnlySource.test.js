@@ -17,6 +17,7 @@ function readStylesSource() {
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const trainingViewSourcePath = path.resolve(
   __dirname,
@@ -44,7 +45,7 @@ test('training card-only mode keeps one current card and moves response controls
 });
 
 test('training empty state creates the first small card without redirecting to Coach', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const trainingActionsStart = source.indexOf('actions={hasTrainingCard ? trainingCoachAction : undefined}');
   const emptyStateStart = source.indexOf('emptyState={', trainingActionsStart);
   const emptyStateEnd = source.indexOf('onNextCard={handleGenerateTrainingCard}', emptyStateStart);
@@ -75,7 +76,7 @@ test('training card-only mode keeps secondary primer and guidance surfaces out o
 
 test('training cards preserve their explicit deliverable and verification contract', () => {
   const source = fs.readFileSync(trainingViewSourcePath, 'utf8');
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
 
   assert.match(appSource, /const trainingDeliverable = pickFirstText/);
   assert.match(appSource, /const trainingValidationMethod = pickFirstText/);
@@ -101,7 +102,7 @@ test('training card-only mode replaces the full phase rail with the active phase
 });
 
 test('training restore targets become the current card and publish the visible single-card truth', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const selectionStart = source.indexOf('const selectedTrainingCardCandidate = useMemo');
   const selectionEnd = source.indexOf('const trainingRestoreForeground', selectionStart);
 
@@ -162,7 +163,7 @@ test('training restore targets become the current card and publish the visible s
 });
 
 test('reliability facts passed into the focused card require its exact current identity', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const start = source.indexOf('            latestTrainingReliability:');
   const end = source.indexOf('            reliabilityInFlight:', start);
   assert.ok(start >= 0 && end > start);

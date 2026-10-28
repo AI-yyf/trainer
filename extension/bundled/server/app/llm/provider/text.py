@@ -22,6 +22,10 @@ _LATIN1_MOJIBAKE_PATTERN = re.compile(
     r"[\u0080-\u00BF]{1,2}){2,}"
 )
 _THINK_BLOCK_PATTERN = re.compile(r"<think\b[^>]*>.*?</think\s*>", re.IGNORECASE | re.DOTALL)
+# A stream cut mid-reasoning leaves the opening tag without its closing tag.
+# Dropping only the tag would publish the raw chain-of-thought as coaching
+# text, so an unclosed block consumes everything to the end of the reply.
+_OPEN_THINK_BLOCK_PATTERN = re.compile(r"<think\b[^>]*>.*\Z", re.IGNORECASE | re.DOTALL)
 _THINK_TAG_PATTERN = re.compile(r"</?think\b[^>]*>", re.IGNORECASE | re.DOTALL)
 _PROVIDER_CONTROL_MARKER_PATTERN = re.compile(
     r"\]\s*<\]\s*minimax\s*\[>\s*\[", re.IGNORECASE | re.DOTALL,
@@ -75,6 +79,7 @@ def _strip_reasoning_blocks(text: str) -> str:
     if not text:
         return ""
     cleaned = _THINK_BLOCK_PATTERN.sub("", text)
+    cleaned = _OPEN_THINK_BLOCK_PATTERN.sub("", cleaned)
     cleaned = _THINK_TAG_PATTERN.sub("", cleaned)
     return _strip_provider_control_markers(cleaned)
 
@@ -482,3 +487,59 @@ def _trim_trailing_reasoning_prefix(text: str) -> str:
 
 def _prefers_chinese(response_language: str | None) -> bool:
     return bool(response_language and response_language.lower().startswith("zh"))
+
+
+class ReasoningBlockFilter:
+    def __init__(self) -> None:
+        self._buffer = ""
+        self._inside_think = False
+
+    def push(self, chunk: str) -> str:
+        self._buffer += chunk
+        emitted: list[str] = []
+
+        while self._buffer:
+            if self._inside_think:
+                close_match = _THINK_CLOSE_TAG_PATTERN.search(self._buffer)
+                if close_match:
+                    self._buffer = self._buffer[close_match.end() :]
+                    self._inside_think = False
+                    continue
+
+                tail_length = len("</think>") - 1
+                if len(self._buffer) > tail_length:
+                    self._buffer = self._buffer[-tail_length:]
+                break
+
+            open_match = _THINK_BLOCK_PATTERN.search(self._buffer)
+            if open_match:
+                emitted.append(self._buffer[: open_match.start()])
+                self._buffer = self._buffer[open_match.end() :]
+                continue
+
+            start_match = re.search(r"<think\b[^>]*>", self._buffer, re.IGNORECASE | re.DOTALL)
+            if start_match:
+                emitted.append(self._buffer[: start_match.start()])
+                self._buffer = self._buffer[start_match.end() :]
+                self._inside_think = True
+                continue
+
+            prefix_start = _reasoning_prefix_start(self._buffer)
+            if prefix_start is None:
+                emitted.append(self._buffer)
+                self._buffer = ""
+            elif prefix_start > 0:
+                emitted.append(self._buffer[:prefix_start])
+                self._buffer = self._buffer[prefix_start:]
+            break
+
+        return "".join(emitted)
+
+    def flush(self) -> str:
+        if self._inside_think:
+            self._buffer = ""
+            self._inside_think = False
+            return ""
+        buffered = _trim_trailing_reasoning_prefix(self._buffer)
+        self._buffer = ""
+        return _strip_reasoning_blocks(buffered)

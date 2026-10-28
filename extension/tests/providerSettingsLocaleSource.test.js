@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
@@ -14,7 +15,7 @@ function sourceBetween(source, startMarker, endMarker) {
 }
 
 test('provider settings actions and model menu use the complete locale copy', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const settingsFeedback = sourceBetween(
     source,
     'function buildSettingsFeedback(',

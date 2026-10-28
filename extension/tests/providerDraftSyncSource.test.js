@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
 const vm = require('node:vm');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 // Round 2: the editable draft, its facts projection and the hydration effect
@@ -118,7 +119,7 @@ test('provider hydration preserves dirty drafts across discovery and scope chang
     source,
     /const markProviderDraftSaved = useCallback\(\(\) => \{\s*providerDraftIsDirtyRef\.current = false;\s*setDraftState\(\(current\) => \(current\.apiKey \? \{ \.\.\.current, apiKey: "" \} : current\)\);\s*\}, \[\]\);/,
   );
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
   assert.match(appSource, /if \(next\) \{\s*settingsActionScopeRef\.current = settingsScopeKey;/);
   assert.match(
     appSource,
@@ -127,7 +128,7 @@ test('provider hydration preserves dirty drafts across discovery and scope chang
 });
 
 test('provider save and test commands use the language currently shown in Settings', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(
     source,

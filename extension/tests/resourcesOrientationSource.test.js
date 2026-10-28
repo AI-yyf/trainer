@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const viewPath = path.resolve(
@@ -17,7 +18,7 @@ const viewPath = path.resolve(
 );
 
 test('Resources view renders snapshot-backed orientation instead of inferred readiness', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const viewSource = fs.readFileSync(viewPath, 'utf8');
   const viewStart = source.indexOf('const renderResourcesView = () =>');
   const viewEnd = source.indexOf('const renderTrainingView', viewStart);

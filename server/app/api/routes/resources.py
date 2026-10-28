@@ -562,7 +562,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         if request.plan_id:
             found = runtime.repository.get_plan_by_id(request.plan_id)
             if found is None:
-                raise HTTPException(status_code=404, detail=f"plan not found: {request.plan_id}")
+                raise HTTPException(status_code=404, detail="This plan could not be found in this workspace.")
             plan_workspace_id, plan = found
             if plan_workspace_id != workspace_id:
                 raise HTTPException(

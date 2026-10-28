@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
@@ -16,7 +17,7 @@ function sourceSection(source, startMarker, endMarker) {
 }
 
 test('training answers and reflections keep authoritative commands before streamed Coach feedback', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const feedback = sourceSection(source, 'const sendTrainingFeedback =', 'const handleSubmit =');
   const submit = sourceSection(source, 'const handleSubmit =', 'const openComposerModelSettings');
   const answerBranch = sourceSection(
@@ -50,7 +51,7 @@ test('training card and Coach routes preserve separate drafts when the route cha
 });
 
 test('utility surfaces avoid duplicate conversation panels', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const replyHelper = sourceSection(source, 'const renderViewAgentReply =', 'const renderDockedView');
 
   assert.match(replyHelper, /data-view-agent-reply/);

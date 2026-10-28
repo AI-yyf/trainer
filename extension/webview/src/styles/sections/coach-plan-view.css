@@ -273,6 +273,32 @@
   min-width: 0;
 }
 
+.coach-plan-view__evidence-reason {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  min-width: 0;
+}
+
+.coach-plan-view__evidence-reason-input {
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-0);
+  color: var(--fg-1);
+  font: inherit;
+  font-size: var(--trainer-font-2xs);
+}
+
+.coach-plan-view__evidence-reason-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .coach-plan-view__read-rail-item em {
   grid-column: 2;
   min-width: 0;

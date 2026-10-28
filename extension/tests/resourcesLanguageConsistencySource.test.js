@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const resourcesSourcePath = path.resolve(
   __dirname,
@@ -141,7 +142,7 @@ test('Resources keeps host failure details out of ordinary search feedback', () 
 });
 
 test('app preserves the shared localized recovery copy for cross-view notices', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /function localizeUiViewReferences\(/);
   assert.match(source, /localizeUiViewReferences\(\s*blockedComposerSetupMessage/);

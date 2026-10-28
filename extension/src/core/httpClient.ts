@@ -110,9 +110,14 @@ export class SidecarHttpClient {
     options?: SidecarRequestOptions,
   ): Promise<{ bytes: Buffer; contentType?: string; filename?: string }> {
     const timeoutMs = this.resolveRequestTimeoutMs(options?.timeoutMs);
+    const signal = options?.signal;
+    if (signal?.aborted) {
+      throw new SidecarRequestAbortedError();
+    }
     return new Promise<{ bytes: Buffer; contentType?: string; filename?: string }>((resolve, reject) => {
       let settled = false;
       let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+      let removeAbortListener: (() => void) | undefined;
       const settle = (callback: () => void): void => {
         if (settled) {
           return;
@@ -121,6 +126,7 @@ export class SidecarHttpClient {
         if (deadlineTimer) {
           clearTimeout(deadlineTimer);
         }
+        removeAbortListener?.();
         callback();
       };
       const fail = (error: Error): void => settle(() => reject(error));
@@ -183,6 +189,15 @@ export class SidecarHttpClient {
       };
       request.on('timeout', abortForTimeout);
       request.on('error', fail);
+      if (signal) {
+        const abortForSignal = (): void => {
+          const error = new SidecarRequestAbortedError();
+          fail(error);
+          request.destroy(error);
+        };
+        signal.addEventListener('abort', abortForSignal, { once: true });
+        removeAbortListener = () => signal.removeEventListener('abort', abortForSignal);
+      }
       deadlineTimer = setTimeout(abortForTimeout, timeoutMs);
       request.end();
     });
@@ -369,10 +384,15 @@ export class SidecarHttpClient {
   ): Promise<T> {
     const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body), 'utf8');
     const timeoutMs = this.resolveRequestTimeoutMs(options?.timeoutMs);
+    const signal = options?.signal;
+    if (signal?.aborted) {
+      throw new SidecarRequestAbortedError();
+    }
 
     return new Promise<T>((resolve, reject) => {
       let settled = false;
       let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+      let removeAbortListener: (() => void) | undefined;
 
       const settle = (callback: () => void): void => {
         if (settled) {
@@ -382,6 +402,7 @@ export class SidecarHttpClient {
         if (deadlineTimer) {
           clearTimeout(deadlineTimer);
         }
+        removeAbortListener?.();
         callback();
       };
       const fail = (error: Error): void => settle(() => reject(error));
@@ -459,6 +480,15 @@ export class SidecarHttpClient {
       request.on('error', (error) => {
         fail(error);
       });
+      if (signal) {
+        const abortForSignal = (): void => {
+          const error = new SidecarRequestAbortedError();
+          fail(error);
+          request.destroy(error);
+        };
+        signal.addEventListener('abort', abortForSignal, { once: true });
+        removeAbortListener = () => signal.removeEventListener('abort', abortForSignal);
+      }
       deadlineTimer = setTimeout(abortForTimeout, timeoutMs);
 
       if (payload) {
@@ -509,7 +539,8 @@ function attachmentFilename(disposition: string | undefined): string | undefined
   return plainMatch?.[1]?.trim() || undefined;
 }
 
-function parseSafeSidecarError(text: string): SidecarErrorMetadata {  try {
+function parseSafeSidecarError(text: string): SidecarErrorMetadata {
+  try {
     const parsed: unknown = JSON.parse(text);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return {};

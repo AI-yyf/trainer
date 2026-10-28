@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const copyPath = path.resolve(
@@ -17,7 +18,7 @@ const copyPath = path.resolve(
 );
 
 test('Resources composer uses complete eight-language copy instead of a Chinese-or-English branch', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const copySource = fs.readFileSync(copyPath, 'utf8');
   const start = appSource.indexOf('  const resourceComposerModes = useMemo');
   const end = appSource.indexOf('  const activeResourcesComposerMode =', start);
@@ -47,7 +48,7 @@ test('Resources composer uses complete eight-language copy instead of a Chinese-
 });
 
 test('Resources composer renders localized guidance and uses the active mode for the send label', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
 
   assert.match(
     appSource,

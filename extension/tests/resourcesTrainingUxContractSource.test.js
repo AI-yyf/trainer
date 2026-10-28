@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const resourcesPath = path.resolve(
@@ -40,7 +41,7 @@ test('training defaults to a five-stage single-card loop with one visible, state
 });
 
 test('each workbench view keeps its own primary object instead of embedding the coach transcript', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   assert.match(appSource, /view-stack--single/);
   assert.doesNotMatch(appSource, /showEmbeddedCoachTranscript/);
   assert.doesNotMatch(appSource, /coach-pane coach-pane--embedded coach-pane--secondary/);

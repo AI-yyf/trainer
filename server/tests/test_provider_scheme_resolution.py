@@ -14,7 +14,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api import routers
+from app.api import router_support as routers
 from app.api.routers import (
     looks_like_schemeless_provider_host,
     reset_provider_scheme_cache,

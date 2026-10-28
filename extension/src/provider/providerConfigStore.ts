@@ -332,17 +332,10 @@ export class ProviderConfigStore implements vscode.Disposable {
           : createProviderApiKeyRef(),
     };
 
-    if (targetProfileId) {
-      await this.updateProfileConfig(targetProfileId, configWithSafeApiKeyRef);
-    }
-
     const nextConfig = this.materializeProviderConfig(
       configWithSafeApiKeyRef,
       targetProfileId ? this.getProfileConfigById(targetProfileId) : previousEffective,
     );
-    await this.extensionContext.globalState.update(STORAGE_KEYS.providerConfig, nextConfig);
-    this.mirrorConfigToFile(nextConfig);
-    await this.syncWorkspaceProviderOverride(nextConfig);
 
     const configsToClean = this.previousConfigsForSave(
       targetProfileId,
@@ -369,6 +362,43 @@ export class ProviderConfigStore implements vscode.Disposable {
       }
     }
 
+    // Transaction order: secret first, config second. Config-first used to
+    // leave a crash window where globalState named a provider whose key had
+    // never been written, so the connection looked configured but silently
+    // failed every send. If the profile/config write fails, restore the old
+    // secret so the keyring still matches the persisted config.
+    const secretValue =
+      apiKey !== undefined
+        ? apiKey.trim() || undefined
+        : inheritedApiKey?.trim() || carriedApiKey?.trim() || undefined;
+    const secretRef = nextConfig.apiKeyRef;
+    const previousSecret = secretValue ? await this.safeSecretGet(secretRef) : undefined;
+    if (secretValue) {
+      await this.extensionContext.secrets.store(this.secretKey(secretRef), secretValue);
+    }
+
+    try {
+      if (targetProfileId) {
+        await this.updateProfileConfig(targetProfileId, configWithSafeApiKeyRef);
+      }
+      await this.extensionContext.globalState.update(STORAGE_KEYS.providerConfig, nextConfig);
+      this.mirrorConfigToFile(nextConfig);
+      await this.syncWorkspaceProviderOverride(nextConfig);
+    } catch (error) {
+      if (secretValue) {
+        try {
+          if (previousSecret?.trim()) {
+            await this.extensionContext.secrets.store(this.secretKey(secretRef), previousSecret);
+          } else if (!this.isApiKeyRefUsedByAnotherProfile(secretRef, targetProfileId)) {
+            await this.extensionContext.secrets.delete(this.secretKey(secretRef));
+          }
+        } catch {
+          // Best-effort rollback; the original failure is the one to report.
+        }
+      }
+      throw error;
+    }
+
     for (const apiKeyRef of this.collectPreviousApiKeyRefs(configsToClean, nextConfig)) {
       if (!this.isApiKeyRefUsedByAnotherProfile(apiKeyRef, targetProfileId)) {
         await this.extensionContext.secrets.delete(this.secretKey(apiKeyRef));
@@ -383,16 +413,10 @@ export class ProviderConfigStore implements vscode.Disposable {
     }
 
     if (apiKey !== undefined) {
-      if (apiKey.trim()) {
-        await this.extensionContext.secrets.store(this.secretKey(nextConfig.apiKeyRef), apiKey.trim());
-      } else if (!this.isApiKeyRefUsedByAnotherProfile(nextConfig.apiKeyRef, targetProfileId)) {
+      if (!apiKey.trim() && !this.isApiKeyRefUsedByAnotherProfile(nextConfig.apiKeyRef, targetProfileId)) {
         await this.extensionContext.secrets.delete(this.secretKey(nextConfig.apiKeyRef));
       }
       await this.clearLastTestResult(nextConfig);
-    } else if (inheritedApiKey?.trim()) {
-      await this.extensionContext.secrets.store(this.secretKey(nextConfig.apiKeyRef), inheritedApiKey);
-    } else if (carriedApiKey) {
-      await this.extensionContext.secrets.store(this.secretKey(nextConfig.apiKeyRef), carriedApiKey);
     }
 
     this.emitter.fire(this.getConfig() ?? nextConfig);

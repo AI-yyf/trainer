@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const appUiCopyPath = path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'appUiCopy.ts');
@@ -20,7 +21,7 @@ const conversationViewPath = path.resolve(
 );
 
 test('coach streaming placeholder stays descriptive before the first chunk arrives', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const conversationView = fs.readFileSync(conversationViewPath, 'utf8');
   const appUiCopySource = fs.readFileSync(appUiCopyPath, 'utf8');
 
@@ -56,7 +57,7 @@ test('coach streaming placeholder stays descriptive before the first chunk arriv
 });
 
 test('every direct composer turn keeps streaming, even when intent analysis finds a task-shaped request', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /stream: true,/);
   assert.doesNotMatch(source, /stream: intent === "coach",/);

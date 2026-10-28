@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const browserSidecarPath = path.resolve(
@@ -25,7 +26,7 @@ const settingsViewPath = path.resolve(
 );
 
 test('browser preview detection honors the preview flag even when the VS Code shim exists', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(
     source,
@@ -34,7 +35,7 @@ test('browser preview detection honors the preview flag even when the VS Code sh
 });
 
 test('production workbench does not treat mockData or browserSidecar fixtures as host truth', () => {
-  const app = fs.readFileSync(appSourcePath, 'utf8');
+  const app = readAppModuleSource();
   const sidecar = fs.readFileSync(browserSidecarPath, 'utf8');
   const settings = fs.readFileSync(settingsViewPath, 'utf8');
 
@@ -50,7 +51,7 @@ test('production workbench does not treat mockData or browserSidecar fixtures as
 test('browserSidecar protocol defaults stay fail-closed for VS Code webview', () => {
   const sidecar = fs.readFileSync(browserSidecarPath, 'utf8');
   const settings = fs.readFileSync(settingsViewPath, 'utf8');
-  const app = fs.readFileSync(appSourcePath, 'utf8');
+  const app = readAppModuleSource();
 
   assert.match(sidecar, /function browserPreviewMayUseProtocolCapabilityDefaults\(\)/);
   assert.match(
@@ -69,7 +70,7 @@ test('browserSidecar protocol defaults stay fail-closed for VS Code webview', ()
 });
 
 test('browser preview language URL overrides are applied once and choice buttons use one click path', () => {
-  const app = fs.readFileSync(appSourcePath, 'utf8');
+  const app = readAppModuleSource();
   const settings = fs.readFileSync(settingsViewPath, 'utf8');
 
   assert.match(app, /browserPreviewLocationOverridesAppliedRef = useRef\(false\)/);

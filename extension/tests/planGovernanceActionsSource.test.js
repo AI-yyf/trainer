@@ -19,6 +19,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const learningPlanControllerPath = path.resolve(
@@ -50,7 +51,7 @@ const planComposerCopyPath = path.resolve(
 );
 
 test('Plan exposes formal evidence actions and an explicit freeze control', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /evidenceQueue=\{liveEvidenceQueue\}/);
   assert.match(source, /commandId: trainerCommands\.evidenceRefreshQueue/);
@@ -67,7 +68,7 @@ test('Plan composer modes are selectable and Plan and Settings keep a single pri
 });
 
 test('Plan composer uses complete eight-language copy for modes, placeholders, and accessibility labels', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const copySource = fs.readFileSync(planComposerCopyPath, 'utf8');
   const start = appSource.indexOf('  const planComposerModes = useMemo');
   const end = appSource.indexOf('  const activePlanComposerMode =', start);
@@ -103,7 +104,7 @@ test('Plan composer uses complete eight-language copy for modes, placeholders, a
 });
 
 test('formal plan generation is explicit while Plan discussion stays conversational', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(
     source,
@@ -159,7 +160,7 @@ test('formal plan generation is explicit while Plan discussion stays conversatio
 });
 
 test('an empty Plan starts in discussion mode and only an explicit action selects generation', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(
     source,
@@ -169,7 +170,7 @@ test('an empty Plan starts in discussion mode and only an explicit action select
 });
 
 test('Learning resolves one governed primary action before rendering', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const start = source.indexOf('  const renderPlanView = () => (');
   const end = source.indexOf('  const renderSettingsView = () => (', start);
   assert.ok(start >= 0 && end > start, 'expected the Plan view block');
@@ -371,7 +372,7 @@ test('a frozen plan resumes existing work without replacement generation', () =>
   const html = learningPlan(action);
   assert.ok(html.includes('Resume plan'));
   assert.ok(!html.includes('Create learning plan'));
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   assert.match(source, /const planIsFrozen = hasFormalPlan && livePlanFrozen;/);
   assert.match(source, /planIsFrozen \? modes\.filter\(\(mode\) => mode\.id !== "generate"\) : modes/);
   assert.match(source, /resumePlan: \(\) => handlePlanOrientationAction\("unfreeze_plan"\)/);
@@ -391,14 +392,14 @@ test('bound pending evidence exposes approval and quiet reject/defer beside it',
   assert.ok(html.includes('data-plan-evidence-decision="defer"'));
   assert.ok(html.includes('data-plan-evidence-decision="reject"'));
   assert.ok(html.indexOf('data-plan-evidence-decisions="true"') < html.indexOf('data-learning-section="reviews"'));
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   assert.match(source, /commandId: trainerCommands\.evidenceDefer/);
   assert.match(source, /commandId: trainerCommands\.evidenceReject/);
   assert.match(source, /adoptEvidence: \(evidenceId\) => postMessage/);
 });
 
 test('Plan moves next-task replies to Coach and protects an unsent composer draft', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const coachPlanSource = fs.readFileSync(coachPlanPath, 'utf8');
   const planStart = appSource.indexOf('  const renderPlanView = () => (');
   const planEnd = appSource.indexOf('  const renderSettingsView = () => (', planStart);
@@ -441,7 +442,7 @@ test('Plan moves next-task replies to Coach and protects an unsent composer draf
 });
 
 test('Plan first screen keeps one primary action and leftover-not-live honesty', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const coachPlanSource = fs.readFileSync(coachPlanPath, 'utf8');
   const resourcesPath = path.resolve(
     __dirname,
@@ -539,7 +540,7 @@ test('Plan first screen keeps one primary action and leftover-not-live honesty',
 });
 
 test('Plan first screen prefers verifyPlanAdvance what/why/next after snake→camel adapter', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const workbenchDataPath = path.resolve(__dirname, '..', 'src', 'core', 'workbenchData.ts');
   const typesPath = path.resolve(__dirname, '..', 'src', 'core', 'types.ts');
   const workbenchData = fs.readFileSync(workbenchDataPath, 'utf8');
@@ -552,4 +553,17 @@ test('Plan first screen prefers verifyPlanAdvance what/why/next after snake→ca
   assert.match(source, /verifyAdvance\?\.what,\s*verifyAdvance\?\.why/);
   assert.match(source, /verifyPlanAdvanceNext/);
   assert.match(source, /\{verifyPlanAdvanceNext\s*\|\|/);
+});
+
+test('Evidence defer and reject send the learner-typed reason, never the summary', () => {
+  const source = fs.readFileSync(coachPlanPath, 'utf8');
+
+  // The regression: decision callbacks were invoked with `summary`, which the
+  // backend stored as the rejection/deferral reason.
+  assert.doesNotMatch(source, /onDefer(?:Evidence)?\?\.\([^)]*summary/);
+  assert.doesNotMatch(source, /onReject(?:Evidence)?\?\.\([^)]*summary/);
+  assert.match(source, /const trimmed = reason\.trim\(\);/);
+  assert.match(source, /onDefer\?\.\(pendingId, trimmed\)/);
+  assert.match(source, /onReject\?\.\(pendingId, trimmed\)/);
+  assert.match(source, /aria-label=\{pendingKind === "defer" \? labels\.deferPrompt : labels\.rejectPrompt\}/);
 });

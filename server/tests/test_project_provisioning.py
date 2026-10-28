@@ -163,36 +163,42 @@ def test_adoption_job_becomes_retry_required_after_restart(
         original_scan = runtime.project_adoption_index_service._scan_project
 
         def slow_scan(project_path: str) -> dict[str, object]:
-            ready.wait(timeout=2.0)
+            # Hold the job inside the scan until this test has observed the
+            # persisted in-flight state. The old 2s timeout assumed an idle
+            # machine; on a loaded runner the second client could arrive after
+            # the timeout and see "completed" instead of "retry_required".
+            ready.wait(timeout=30.0)
             return original_scan(project_path)
 
         monkeypatch.setattr(runtime.project_adoption_index_service, "_scan_project", slow_scan)
 
-        adopted = client.post(
-            "/workspace/discovery/decision",
-            json={
-                "workspace_id": "workspace-retry",
-                "discovery_id": discovery_id,
-                "decision": "adopt",
-                "root_path": str(project.parent),
-            },
-        )
-        assert adopted.status_code == 200
-        job = adopted.json()["project_adoption_job"]
-
-        with _client(tmp_path) as restarted:
-            status = restarted.get(
-                "/workspace/adoption-job",
-                params={
+        try:
+            adopted = client.post(
+                "/workspace/discovery/decision",
+                json={
                     "workspace_id": "workspace-retry",
-                    "root_path": job["root_path"],
-                    "job_id": job["job_id"],
+                    "discovery_id": discovery_id,
+                    "decision": "adopt",
+                    "root_path": str(project.parent),
                 },
             )
-            assert status.status_code == 200
-            assert status.json()["project_adoption_job"]["status"] == "retry_required"
+            assert adopted.status_code == 200
+            job = adopted.json()["project_adoption_job"]
 
-        ready.set()
+            with _client(tmp_path) as restarted:
+                status = restarted.get(
+                    "/workspace/adoption-job",
+                    params={
+                        "workspace_id": "workspace-retry",
+                        "root_path": job["root_path"],
+                        "job_id": job["job_id"],
+                    },
+                )
+                assert status.status_code == 200
+                assert status.json()["project_adoption_job"]["status"] == "retry_required"
+        finally:
+            # Never leave the adoption thread blocked when an assertion fails.
+            ready.set()
 
 
 def test_adoption_interrupts_when_the_project_disappears_before_inventory(

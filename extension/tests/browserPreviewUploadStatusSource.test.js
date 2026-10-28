@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const appUiCopySourcePath = path.resolve(
@@ -17,7 +18,7 @@ const appUiCopySourcePath = path.resolve(
 );
 
 test('browser preview reports partial resource uploads without presenting them as full success', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const uploadStart = source.indexOf('const handleBrowserUploads = async (files: File[]) => {');
   const uploadEnd = source.indexOf('\n  const persistCoachSettings', uploadStart);
 

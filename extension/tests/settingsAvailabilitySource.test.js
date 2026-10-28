@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const settingsViewPath = path.resolve(
   __dirname,
@@ -63,7 +64,7 @@ function readProviderSettingsCopySource() {
 }
 
 function readAppSource() {
-  return fs.readFileSync(appPath, 'utf8');
+  return readAppModuleSource();
 }
 
 function readWorkspaceAuthoritySummarySource() {

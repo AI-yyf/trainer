@@ -5,7 +5,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
-const vm = require('node:vm');
+const { loadTsModule } = require('./helpers/loadTsModule');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const copySourcePath = path.resolve(
   __dirname,
@@ -16,43 +17,38 @@ const copySourcePath = path.resolve(
   'i18n',
   'copy.ts',
 );
+const copyTypesPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'copyTypes.ts',
+);
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
+const appUiCopyPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'i18n',
+  'appUiCopy.ts',
+);
 
 const expectedLanguages = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
 const baseLanguage = 'en-US';
 
-function loadCopyTable() {
-  const source = fs.readFileSync(copySourcePath, 'utf8');
-  const sourceFile = ts.createSourceFile(copySourcePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-  let tableNode;
-
-  function unwrapExpression(expression) {
-    let current = expression;
-    while (ts.isAsExpression(current) || ts.isSatisfiesExpression(current) || ts.isParenthesizedExpression(current)) {
-      current = current.expression;
-    }
-    return current;
-  }
-
-  function visit(node) {
-    if (
-      ts.isVariableDeclaration(node) &&
-      node.name.getText(sourceFile) === 'copyTable' &&
-      node.initializer &&
-      ts.isObjectLiteralExpression(unwrapExpression(node.initializer))
-    ) {
-      tableNode = unwrapExpression(node.initializer);
-      return;
-    }
-    ts.forEachChild(node, visit);
-  }
-
-  visit(sourceFile);
-  assert.ok(tableNode, 'expected copyTable object literal in copy.ts');
-  return { sourceFile, tableNode };
-}
-
-function getCopyKeys(sourceFile) {
+function loadCopyKeySet() {
+  const source = fs.readFileSync(copyTypesPath, 'utf8');
+  const sourceFile = ts.createSourceFile(
+    copyTypesPath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
   let copyKeyType;
 
   function visit(node) {
@@ -64,7 +60,7 @@ function getCopyKeys(sourceFile) {
   }
 
   visit(sourceFile);
-  assert.ok(copyKeyType, 'expected CopyKey type alias in copy.ts');
+  assert.ok(copyKeyType, 'expected CopyKey type alias in copyTypes.ts');
 
   const keys = new Set();
   function collect(node) {
@@ -83,88 +79,97 @@ function getCopyKeys(sourceFile) {
 }
 
 function loadCopyModule() {
-  const source = fs.readFileSync(copySourcePath, 'utf8');
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2020,
-    },
-  }).outputText;
-  const module = { exports: {} };
-
-  vm.runInNewContext(output, { exports: module.exports, module }, { filename: copySourcePath });
-  return module.exports;
+  return loadTsModule(copySourcePath);
 }
 
-test('English copy is a complete base and every locale resolves through it', () => {
+// Values that are legitimately identical across locales: brand names, short
+// loanwords, and protocol/algorithm acronyms. Any other English-identical
+// string in a non-English table is treated as a missing translation.
+const IDENTICAL_VALUE_ALLOWLIST = new Set([
+  'Coach',
+  'Trainer',
+  'Chat',
+  'Auto',
+  'Standard',
+  'Simple',
+  'Direct',
+  'Diagnostics',
+  'Source',
+  'System',
+  'Status',
+  'Offline',
+  'Personal',
+  'Action',
+  'Agent',
+  'Observation',
+  'Architecture',
+  'Training',
+  'Workspace',
+  'Flashcards',
+  'Insight',
+  'DDPG',
+  'PPO',
+  'MCTS',
+  'Deep Q-Network',
+  'OpenAI effort',
+  'Anthropic budget',
+  'Gemini thinkingConfig',
+]);
+
+test('every locale carries the complete key set with no English fallback', () => {
   const source = fs.readFileSync(copySourcePath, 'utf8');
   assert.equal(source.includes('as unknown as CopyTable'), false, 'copyTable must not bypass completeness checks');
   assert.equal(source.includes('} satisfies CopyTable;'), true, 'copyTable must be checked against CopyTable');
 
-  const { sourceFile, tableNode } = loadCopyTable();
-  const copyKeys = getCopyKeys(sourceFile);
-  const languages = [];
-  const languageEntries = new Map();
-
-  for (const entry of tableNode.properties) {
-    if (!ts.isPropertyAssignment(entry) || !ts.isStringLiteralLike(entry.name)) {
-      continue;
-    }
-    const language = entry.name.text;
-    assert.ok(
-      ts.isObjectLiteralExpression(entry.initializer),
-      `expected ${language} to map to an object literal`,
-    );
-    languages.push(language);
-
-    const keys = [];
-    const values = new Map();
-    for (const item of entry.initializer.properties) {
-      if (!ts.isPropertyAssignment(item)) {
-        continue;
-      }
-      const key = item.name.getText(sourceFile);
-      assert.ok(
-        ts.isStringLiteralLike(item.initializer),
-        `expected ${language}.${key} to be a string literal`,
-      );
-      assert.notEqual(item.initializer.text.trim(), '', `expected ${language}.${key} to be non-empty`);
-      keys.push(key);
-      values.set(key, item.initializer.text);
-    }
-    languageEntries.set(language, { keys, values });
-  }
+  const { copyTable, resolveCopy } = loadCopyModule();
+  const copyKeys = loadCopyKeySet();
+  const languages = Object.keys(copyTable);
 
   assert.deepEqual(languages, expectedLanguages, 'expected the 8 declared languages in stable order');
 
-  const baseEntry = languageEntries.get(baseLanguage);
-  assert.ok(baseEntry && baseEntry.keys.length > 0, 'expected en-US to define the base key set');
-  const baseSet = new Set(baseEntry.keys);
+  const baseEntry = copyTable[baseLanguage];
+  assert.ok(baseEntry && Object.keys(baseEntry).length > 0, 'expected en-US to define the base key set');
+  const baseKeys = Object.keys(baseEntry);
+  const baseSet = new Set(baseKeys);
   assert.deepEqual(
     [...copyKeys].filter((key) => !baseSet.has(key)),
     [],
     'en-US must define every CopyKey directly',
   );
   assert.deepEqual(
-    baseEntry.keys.filter((key) => !copyKeys.has(key)),
+    baseKeys.filter((key) => !copyKeys.has(key)),
     [],
     'en-US must not define keys outside CopyKey',
   );
 
   for (const language of expectedLanguages) {
-    const entry = languageEntries.get(language);
+    const entry = copyTable[language];
     assert.ok(entry, `missing language block: ${language}`);
+    assert.deepEqual(
+      Object.keys(entry),
+      baseKeys,
+      `${language} must define every English key in the same order`,
+    );
 
-    const extraKeys = entry.keys.filter((key) => !baseSet.has(key));
+    const extraKeys = Object.keys(entry).filter((key) => !baseSet.has(key));
     assert.deepEqual(extraKeys, [], `${language} should not introduce keys outside the English base`);
 
-    for (const key of baseEntry.keys) {
-      const resolved = entry.values.get(key) ?? baseEntry.values.get(key);
-      assert.ok(resolved && resolved.trim(), `${language}.${key} should resolve through direct text or en-US fallback`);
+    for (const key of baseKeys) {
+      assert.equal(typeof entry[key], 'string', `${language}.${key} must be a string`);
+      assert.ok(entry[key].trim(), `${language}.${key} must be non-empty`);
+      if (
+        language !== baseLanguage &&
+        entry[key] === baseEntry[key] &&
+        baseEntry[key] !== copyTable['zh-CN'][key]
+      ) {
+        assert.ok(
+          IDENTICAL_VALUE_ALLOWLIST.has(entry[key]),
+          `${language}.${key} still falls back to English (${JSON.stringify(entry[key])})`,
+        );
+      }
     }
   }
 
-  const { resolveCopy } = loadCopyModule();
   for (const language of expectedLanguages) {
     const resolvedCopy = resolveCopy(language);
     for (const key of copyKeys) {
@@ -174,8 +179,65 @@ test('English copy is a complete base and every locale resolves through it', () 
   }
 });
 
+const APP_UI_IDENTICAL_ALLOWLIST = new Set([
+  'Personal',
+  'Coach',
+  'Auto',
+  'Standard',
+  'System',
+  'Plan: {v}',
+]);
+
+test('appUiCopy carries real translations, not English placeholders', () => {
+  const { APP_UI_TEXT } = loadTsModule(appUiCopyPath);
+  const placeholderOnly = /^[^A-Za-z]*(\{[a-zA-Z]+\}[^A-Za-z]*)+$/;
+
+  for (const key of Object.keys(APP_UI_TEXT)) {
+    const row = APP_UI_TEXT[key];
+    assert.ok(row[baseLanguage], `${key} must define ${baseLanguage}`);
+    for (const language of expectedLanguages) {
+      if (language === 'zh-CN') {
+        // The Chinese source string is the record key; there is no zh-CN row.
+        continue;
+      }
+      assert.ok(
+        typeof row[language] === 'string' && row[language].trim(),
+        `${language}.${key} must be non-empty`,
+      );
+      if (language === baseLanguage) {
+        continue;
+      }
+      const value = row[language];
+      if (value === row[baseLanguage]) {
+        assert.ok(
+          APP_UI_IDENTICAL_ALLOWLIST.has(value) || placeholderOnly.test(value),
+          `${language}.${key} still carries the English placeholder: ${JSON.stringify(value)}`,
+        );
+      }
+    }
+  }
+});
+
+test('localized copy preserves every placeholder in the English base', () => {
+  const { copyTable } = loadCopyModule();
+  const base = copyTable[baseLanguage];
+  const placeholder = /\{[a-zA-Z]+\}/g;
+
+  for (const language of expectedLanguages) {
+    if (language === baseLanguage) {
+      continue;
+    }
+    const entry = copyTable[language];
+    for (const key of Object.keys(base)) {
+      const expected = (base[key].match(placeholder) ?? []).sort();
+      const actual = (entry[key].match(placeholder) ?? []).sort();
+      assert.deepEqual(actual, expected, `${language}.${key} must keep the English placeholders`);
+    }
+  }
+});
+
 test('App delegates non-English copy to the central resolver', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
 
   for (const language of ['es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR']) {
     assert.equal(

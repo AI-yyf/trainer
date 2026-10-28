@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const settingsPath = path.resolve(
@@ -17,7 +18,7 @@ const settingsPath = path.resolve(
 );
 
 test('template setup carries a host focus request into the Settings API key field', () => {
-  const app = fs.readFileSync(appPath, 'utf8');
+  const app = readAppModuleSource();
   const settings = fs.readFileSync(settingsPath, 'utf8');
   // Round 2: the counter lives in the provider-connection controller; App
   // requests an increment through the controller action.

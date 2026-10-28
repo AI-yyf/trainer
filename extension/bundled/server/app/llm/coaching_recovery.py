@@ -471,7 +471,7 @@ def _timeout_focus_seed(
     coach_context: dict[str, Any] | None,
     response_language: str | None,
 ) -> str:
-    chinese = response_language == "zh-CN"
+    chinese = _prefers_chinese(response_language)
     candidates: list[object] = []
     if isinstance(coach_context, dict):
         scenario = str(coach_context.get("scenario") or "").strip().lower()

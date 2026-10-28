@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const helpersSourcePath = path.resolve(
@@ -24,7 +25,7 @@ const helpersSourcePath = path.resolve(
  * was therefore removed instead of being redirected.
  */
 test('settings never auto-prime provider models; refresh stays an explicit action', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const helpers = fs.readFileSync(helpersSourcePath, 'utf8');
 
   // The auto-prime machinery is gone from App and the helpers.

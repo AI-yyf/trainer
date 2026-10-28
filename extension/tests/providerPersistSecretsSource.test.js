@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 test('webview layout persist strips provider snapshot secrets', () => {
   const stateSource = fs.readFileSync(
@@ -17,10 +18,7 @@ test('webview layout persist strips provider snapshot secrets', () => {
 });
 
 test('sanitizeHostFailureMessage never forwards host error prose', () => {
-  const appSource = fs.readFileSync(
-    path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx'),
-    'utf8',
-  );
+  const appSource = readAppModuleSource();
   // The store-side sanitizeOperationFailureMessage moved to the governance
   // module; the host-status chain stays in App and ends at the next top-level
   // declaration after it.

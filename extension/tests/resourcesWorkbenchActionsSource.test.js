@@ -19,6 +19,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const resourcesWorkbenchPath = path.resolve(
   __dirname,
@@ -48,7 +49,7 @@ test('Resources uses real knowledge records and opens them through the existing 
   // §十五: the zh/en base resource copy record moved verbatim into the i18n
   // segment file; its content assertions slice there.
   const inlineCopy = fs.readFileSync(resourcesInlineTextPath, 'utf8');
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const typesSource = fs.readFileSync(typesPath, 'utf8');
 
   assert.match(viewSource, /resources: ResourceRecord\[\];/);
@@ -213,7 +214,7 @@ test('Resources keeps the first screen focused and folds secondary governance ac
 test('Resources makes library writes visibly unavailable without blocking search or opening', () => {
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
   const inlineCopy = fs.readFileSync(resourcesInlineTextPath, 'utf8');
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
 
   assert.match(viewSource, /export interface ResourceWriteAccess \{[\s\S]*?allowed: boolean;/);
   assert.match(viewSource, /resourceWriteAccess\?: ResourceWriteAccess;/);
@@ -252,7 +253,7 @@ test('Resources makes library writes visibly unavailable without blocking search
 
 test('Resources keeps a slow index refresh single-flight across rapid clicks', () => {
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const refreshStart = viewSource.indexOf('const refreshResources = () => {');
   const refreshEnd = viewSource.indexOf('const toggleCollection =', refreshStart);
 
@@ -398,7 +399,7 @@ test('Resources derives compact Trash and mutation feedback from persistent host
 });
 
 test('Resources correlates host mutation results so failed delete or restore clears its pending state', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
 
   assert.match(appSource, /RESOURCE_OPERATION_STATUS_PATTERN/);
@@ -420,7 +421,7 @@ test('Resources correlates host mutation results so failed delete or restore cle
 });
 
 test('Resources preserves an explicit selection across views and records unmount separately', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
 
   assert.match(
@@ -444,7 +445,7 @@ test('Resources preserves an explicit selection across views and records unmount
 });
 
 test('Resources starts a review card only from fresh, trusted, indexed material in a managed workspace', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
   // §十五: the review-card handoff copy record moved verbatim into the i18n
   // segment file; its content assertion slices there.

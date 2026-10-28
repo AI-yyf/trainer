@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const composerSourcePath = path.resolve(
@@ -17,7 +18,7 @@ const composerSourcePath = path.resolve(
 );
 
 test('image attachments keep staging separate from the verified send gate', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
   const composerSource = fs.readFileSync(composerSourcePath, 'utf8');
 
   assert.match(

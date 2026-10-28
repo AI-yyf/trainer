@@ -62,6 +62,7 @@ export class SidecarProcessManager implements vscode.Disposable {
   private process?: ChildProcessWithoutNullStreams;
   private ensurePromise?: Promise<SidecarStatus>;
   private startPromise?: Promise<SidecarStatus>;
+  private didNotifyPortFallback = false;
   private status: SidecarStatus = {
     lifecycle: 'idle',
     host: SIDECAR_DEFAULTS.host,
@@ -528,6 +529,14 @@ export class SidecarProcessManager implements vscode.Disposable {
       this.outputChannel.appendLine(
         `[sidecar] configured port ${configuredPort} is unavailable; using a managed fallback port.`,
       );
+      if (!this.didNotifyPortFallback) {
+        // The user explicitly chose this port. Silently ignoring it makes the
+        // documented port look broken; say what actually happened, once.
+        this.didNotifyPortFallback = true;
+        void vscode.window?.showWarningMessage?.(
+          `Trainer: port ${configuredPort} is already in use, so the local engine started on a managed port instead.`,
+        );
+      }
     }
     return findAvailablePort(SIDECAR_DEFAULTS.portStart, SIDECAR_DEFAULTS.portEnd);
   }

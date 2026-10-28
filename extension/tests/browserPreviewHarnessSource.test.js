@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const harnessSourcePath = path.resolve(
   __dirname,
@@ -43,7 +44,7 @@ function readHarnessSource() {
 }
 
 function readAppSource() {
-  return fs.readFileSync(appSourcePath, 'utf8');
+  return readAppModuleSource();
 }
 
 function readGuidedTrainingPacksSource() {

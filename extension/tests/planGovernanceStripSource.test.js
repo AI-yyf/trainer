@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const planViewPath = path.resolve(
   __dirname,
@@ -153,7 +154,7 @@ test('Plan keeps project subplans inside the master current-plan card and outsid
 
 test('Plan keeps the global-to-project relationship compact and explicitly actionable', () => {
   const source = fs.readFileSync(planViewPath, 'utf8');
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const masterCardStart = source.indexOf('<LearningHome');
   const masterCardEnd = source.indexOf('</LearningHome>', masterCardStart);
   const globalContextStart = source.indexOf('{globalPlanContext}', masterCardStart);
@@ -204,7 +205,7 @@ test('Plan global-plan copy stays honest across missing, unlinked, and linked st
 });
 
 test('App shows an honest empty Plan and supplies every compact Plan label from the eight-language copy', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const planViewSource = fs.readFileSync(planViewPath, 'utf8');
   const planViewCopySource = fs.readFileSync(planViewCopyPath, 'utf8');
   const planSource = sourceBetween(source, '  const renderPlanView = () => (', '  const renderSettingsView = () => (');

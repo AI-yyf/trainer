@@ -19,6 +19,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const coachConversationControllerPath = path.resolve(
@@ -92,7 +93,7 @@ test('conversation view threads message actions into each bubble', () => {
 });
 
 test('save-to-resources posts a markdown inline upload bound to the selected reply', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /const requestCoachReplyUpload = useCallback\(/);
   const uploadStart = source.indexOf('const requestCoachReplyUpload');
@@ -117,7 +118,7 @@ test('save-to-resources posts a markdown inline upload bound to the selected rep
 });
 
 test('training-card action sends the reply through the real card generator', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const handlerStart = source.indexOf('const handleCoachMessageAction');
   assert.ok(handlerStart > -1, 'expected handleCoachMessageAction');
   const handler = source.slice(handlerStart, handlerStart + 8000);
@@ -132,7 +133,7 @@ test('training-card action sends the reply through the real card generator', () 
 });
 
 test('share action copies the selected reply to the clipboard', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const handlerStart = source.indexOf('const handleCoachMessageAction');
   assert.ok(handlerStart > -1, 'expected handleCoachMessageAction');
   const handler = source.slice(handlerStart, handlerStart + 3500);
@@ -150,7 +151,7 @@ test('share action copies the selected reply to the clipboard', () => {
 });
 
 test('reply uploads wait for their own acknowledgement while other actions clear on status', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const controllerSource = fs.readFileSync(coachConversationControllerPath, 'utf8');
   const dispatchStart = source.indexOf('const applyHostMessage = useCallback(');
   assert.ok(dispatchStart > -1, 'expected applyHostMessage');
@@ -171,7 +172,7 @@ test('reply uploads wait for their own acknowledgement while other actions clear
 });
 
 test('quick actions are wired into the coach conversation pane and docked reply', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   const paneStart = source.indexOf('const renderCoachConversationPane');
   assert.ok(paneStart > -1, 'expected renderCoachConversationPane');
@@ -195,7 +196,7 @@ test('browser preview mirrors the inline upload and card generation paths', () =
   assert.match(harness, /isResourceUpload\s*\?\s*"upload"/);
   assert.match(harness, /trainerCommands\.trainingGenerateCard/);
 
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const handlerStart = appSource.indexOf('const handleCoachMessageAction');
   const handler = appSource.slice(handlerStart, handlerStart + 3000);
   assert.match(handler, /browserPreview\.uploadBrowserPreviewResources/);

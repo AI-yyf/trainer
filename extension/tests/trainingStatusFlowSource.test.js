@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const webviewRoot = path.resolve(__dirname, '..', 'webview', 'src');
 const commandsPath = path.join(webviewRoot, 'app', 'useTrainingCommands.ts');
@@ -11,7 +12,7 @@ const appPath = path.join(webviewRoot, 'app', 'App.tsx');
 
 test('training keeps the coach bridge attached to the next action', () => {
   const commandsSource = fs.readFileSync(commandsPath, 'utf8');
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
 
   assert.match(commandsSource, /onOpenCoachWithBridge\?: \(bridge: TrainingCoachBridgeInput\)/);
   assert.match(commandsSource, /onOpenCoachWithBridge\(bridge\)/);
@@ -53,7 +54,7 @@ test('TrainingWorkbenchView skip uses hooked onCardStatusTransition persistence 
     path.join(webviewRoot, 'lib', 'i18n', 'segments', 'trainingCardActions.ts'),
     'utf8',
   );
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const commandsSource = fs.readFileSync(commandsPath, 'utf8');
 
   assert.match(appSource, /onCardStatusTransition: handleTrainingCardStatusTransition/);
@@ -126,7 +127,7 @@ test('TrainingCardRenderer cannot skip or grade without persistence callback', (
 });
 
 test('live reflect and return persist; leftover cannot fire them', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const commandsSource = fs.readFileSync(commandsPath, 'utf8');
   const workbenchPath = path.join(webviewRoot, 'components', 'training', 'TrainingWorkbenchView.tsx');
   const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
@@ -179,7 +180,7 @@ test('live reflect and return persist; leftover cannot fire them', () => {
 });
 
 test('live App training tree has no scenario skip or grade surface', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const workbenchPath = path.join(webviewRoot, 'components', 'training', 'TrainingWorkbenchView.tsx');
   const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
   const actionsSource = fs.readFileSync(
@@ -202,7 +203,7 @@ test('live App training tree has no scenario skip or grade surface', () => {
 });
 
 test('leftover-not-live context rail does not paint leftover dump as live activity', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const workbenchPath = path.join(webviewRoot, 'components', 'training', 'TrainingWorkbenchView.tsx');
   const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
   const actionsSource = fs.readFileSync(
@@ -241,7 +242,7 @@ test('leftover-not-live context rail does not paint leftover dump as live activi
 });
 
 test('Coach leftover chrome does not mount live training-lifecycle chrome for a dump card', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const orientationStart = appSource.indexOf('const coachOrientation = useMemo');
   const orientationEnd = appSource.indexOf('const trainingSuggestedWorkspaceAction');
   const orientationSource = appSource.slice(orientationStart, orientationEnd);

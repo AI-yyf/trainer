@@ -152,6 +152,11 @@ export function resolveTestWorkers({
 export function runServerTests(options = {}) {
   const workers = resolveTestWorkers(options);
   const parallel = workers > 1 ? ["-n", String(workers)] : [];
+  // A unique basetemp avoids two failure modes: (1) xdist workers reusing a
+  // stale pytest-of-* directory, and (2) a host shim that treats
+  // mkdir(exist_ok=True) as EEXIST when the directory already exists.
+  // Timestamped rather than mkdtemp: pytest must create the path itself.
+  const basetemp = path.join(os.tmpdir(), `pytest-trainer-${process.pid}-${Date.now()}`);
   return runServerCommand({
     ...options,
     // -p no:cacheprovider keeps workers from fighting over the pytest cache.
@@ -165,6 +170,12 @@ export function runServerTests(options = {}) {
     args: [
       "-m", "pytest", "tests", "-q",
       ...parallel,
+      // Per-file distribution: several modules build state in one test and
+      // assert it in the next (memory, evaluator, evidence). Splitting a file
+      // across workers breaks that implicit order and produced ~26
+      // interleaving-dependent failures. Files still run in parallel.
+      "--dist", "loadfile",
+      "--basetemp", basetemp,
       "-p", "no:cacheprovider",
       "-p", "trainer_suite_heartbeat",
     ],

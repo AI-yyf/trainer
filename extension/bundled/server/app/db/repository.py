@@ -75,14 +75,23 @@ class TrainerRepository:
     def _connect(self):
         connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
+        # FastAPI serves requests from a threadpool; two writers arriving
+        # together must wait for the lock instead of failing the request with
+        # "database is locked" after sqlite's 5s default.
+        connection.execute("PRAGMA busy_timeout = 5000")
+        committed = False
         try:
             yield connection
             connection.commit()
+            committed = True
         except Exception:
             connection.rollback()
             raise
         finally:
-            if connection.total_changes:
+            # A rolled-back statement still raises total_changes, which used to
+            # bump the snapshot generation and invalidate caches for a write
+            # that never landed.
+            if committed and connection.total_changes:
                 with self._write_generation_lock:
                     self.write_generation += 1
             connection.close()

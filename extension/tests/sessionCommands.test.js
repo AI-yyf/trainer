@@ -5670,3 +5670,74 @@ test('sendStreamMessageCommand sanitizes leaking tool_result before postMessage'
   assert.ok(stored);
   assertHostPayloadSanitized(stored);
 });
+
+test('a session activation while a coach send is in flight discards the late response', async () => {
+  const vscodeMock = {
+    commands: {
+      async executeCommand() {
+        return undefined;
+      },
+    },
+  };
+  const { sendMessageCommand, activateCoachSessionCommand } = loadWithVscodeMock(
+    sessionCommandsModulePath,
+    vscodeMock,
+  );
+  const context = createContext({ initialSessionId: 'session-original' });
+  context.sidecarManager = {
+    async ensureRunning() {
+      return { lifecycle: 'ready', port: 34891 };
+    },
+  };
+
+  let releaseSend;
+  context.sidecarClient = {
+    async getJson() {
+      throw new Error('Unexpected GET');
+    },
+    async postJson(port, requestPath, body) {
+      context.__postCalls.push([port, requestPath, body]);
+      if (requestPath === '/session/activate') {
+        return {
+          session_id: 'session-new',
+          snapshot: { session_id: 'session-new', messages: [], memory: {} },
+        };
+      }
+      if (requestPath === '/session/message' || requestPath === '/turn') {
+        return new Promise((resolve) => {
+          releaseSend = () =>
+            resolve({
+              session_id: 'session-original',
+              reply: { role: 'assistant', content: 'Late answer.', metadata: {} },
+              snapshot: { messages: [], memory: {} },
+            });
+        });
+      }
+      throw new Error(`Unexpected POST ${requestPath}`);
+    },
+  };
+
+  const sendPromise = sendMessageCommand(context, {
+    text: 'Help me continue.',
+    responseLanguage: 'en-US',
+  });
+  for (let attempt = 0; attempt < 200 && !releaseSend; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.equal(typeof releaseSend, 'function', 'the coach request should reach the sidecar');
+
+  const activation = await activateCoachSessionCommand(context, { sessionId: 'session-new' });
+  assert.equal(activation.ok, true, activation.message);
+  assert.equal(context.getSessionId(), 'session-new');
+
+  releaseSend();
+  const result = await sendPromise;
+
+  assert.equal(result.ok, true);
+  assert.match(result.message ?? '', /discarded/i);
+  assert.equal(context.getSessionId(), 'session-new');
+  const patchedSession = context.__patches.some((patch) =>
+    JSON.stringify(patch).includes('session-original'),
+  );
+  assert.equal(patchedSession, false, 'the late response must not patch the new session');
+});

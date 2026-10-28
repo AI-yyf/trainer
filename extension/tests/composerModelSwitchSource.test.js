@@ -4,13 +4,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 const webviewRoot = path.resolve(__dirname, '..', 'webview', 'src');
 const helpersSource = fs.readFileSync(path.resolve(webviewRoot, 'lib', 'composerModelHelpers.ts'), 'utf8');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
 test('composer model switch prioritizes live models and excludes configured aliases after resolution', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   // §四十八: menu item construction lives in lib/composerModelHelpers.ts.
   const helpers = helpersSource;
 
@@ -63,7 +64,7 @@ test('composer model switch keeps current provider models visible even when save
 });
 
 test('composer model switch label stays honest about the active model', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /const composerProviderProfileLabel = useMemo/);
   assert.match(source, /const resolvedModel = data\.providerConfig\.resolvedModel\?\.trim\(\);/);
@@ -76,7 +77,7 @@ test('composer model switch label stays honest about the active model', () => {
 });
 
 test('composer model switch becomes an accessible icon action in a narrow sidebar', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /density=\{composerModelActionDensity\}/);
   assert.match(source, /id: "model-switch",\s*compact: composerModelActionDensity === "compact",/);
@@ -87,7 +88,7 @@ test('composer model switch becomes an accessible icon action in a narrow sideba
 });
 
 test('Coach composer keeps model selection focused while setup stays in Settings', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /const openComposerModelSettings = useCallback\(\(\) => \{/);
   assert.match(source, /setActiveView\("settings"\);/);
@@ -149,7 +150,7 @@ test('Coach composer keeps model selection focused while setup stays in Settings
 });
 
 test('composer model switch retains a restricted active model but blocks a stale selection before host dispatch', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(helpersSource, /function composerModelPolicyHint\(/);
   assert.match(source, /const composerActiveModelPolicy = useMemo\(\(\) => \{/);
@@ -172,7 +173,7 @@ test('composer model switch retains a restricted active model but blocks a stale
 });
 
 test('composer model menu localizes current and single-model states for every supported language', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const languages = ["zh-CN", "en-US", "es-ES", "fr-FR", "de-DE", "ja-JP", "ko-KR", "pt-BR"];
 
   for (const language of languages) {

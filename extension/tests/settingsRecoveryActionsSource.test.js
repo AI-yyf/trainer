@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const settingsPath = path.resolve(
   __dirname,
@@ -43,14 +44,14 @@ test('Settings offers a direct sidecar restart and avoids duplicate model discov
 });
 
 test('Settings routes the sidecar recovery action through the existing extension command', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /onRestartSidecar=\{\s*isBrowserPreview\s*\? undefined/);
   assert.match(source, /payload: \{ commandId: trainerCommands\.restartSidecar \}/);
 });
 
 test('provider errors retain a safe, actionable recovery message in Settings', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   // The localized recovery copy lives in the pure governance module; App.tsx
   // keeps only the call sites (asserted below).
   const governanceSource = fs.readFileSync(governancePath, 'utf8');
@@ -69,7 +70,7 @@ test('provider errors retain a safe, actionable recovery message in Settings', (
 });
 
 test('browser preview keeps provider recovery context when actions resolve immediately', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const testProviderStart = source.indexOf('onTestProvider={() => {');
   const restartSidecarStart = source.indexOf('onRestartSidecar=', testProviderStart);
 

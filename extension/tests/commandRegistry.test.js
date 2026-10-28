@@ -238,3 +238,45 @@ test('browse and ignored projects retain registered read-only resource actions',
     assert.equal(context.syncCount, READ_ONLY_RESOURCE_COMMANDS.length, status);
   }
 });
+
+test('long-running commands show a step-specific progress on both invocation paths', async () => {
+  let registered;
+  const progressTitles = [];
+  const vscodeMock = {
+    commands: {
+      registerCommand(_commandId, callback) {
+        registered = callback;
+        return { dispose() {} };
+      },
+    },
+    window: {
+      async withProgress(options, task) {
+        progressTitles.push(options.title);
+        return task();
+      },
+    },
+    ProgressLocation: { Notification: 15 },
+  };
+  const { CommandRegistry } = loadWithVscodeMock(commandRegistryModulePath, vscodeMock);
+  const context = createContext('managed');
+  const registry = new CommandRegistry(context.outputChannel);
+  registry.setContext(context);
+  const extensionContext = { subscriptions: [] };
+  let handlerCalls = 0;
+  registry.register(extensionContext, 'trainer.training.generateCard', async () => {
+    handlerCalls += 1;
+    return { ok: true };
+  });
+
+  // Palette/shortcut path: invoke the callback registered with VS Code.
+  await registered();
+  assert.equal(handlerCalls, 1);
+  assert.equal(progressTitles.length, 1);
+  assert.match(progressTitles[0], /training card/i);
+
+  // Webview path: it calls execute() directly and must see the same progress.
+  const result = await registry.execute('trainer.training.generateCard');
+  assert.equal(result.ok, true);
+  assert.equal(handlerCalls, 2);
+  assert.equal(progressTitles.length, 2);
+});

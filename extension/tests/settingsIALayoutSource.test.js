@@ -2,8 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readCopyModuleSource } = require('./helpers/copyModuleSource');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const settingsViewPath = path.resolve(
   __dirname,
@@ -137,7 +139,7 @@ test('teaching is a flat section: preset radio, feedback + style, language, adva
 
 test('settings navigation has four categories with matching keyboard order and saves on change', () => {
   const source = readSettingsSource();
-  const app = fs.readFileSync(path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx'), 'utf8');
+  const app = readAppModuleSource();
 
   // Skills live under Teaching; advanced defaults live under Preferences.
   assert.match(
@@ -259,7 +261,7 @@ test('empty connection state is one screen: paste card plus a template entry', (
 });
 
 test('new settings copy ships in all eight languages', () => {
-  const copySource = fs.readFileSync(copyPath, 'utf8');
+  const copySource = readCopyModuleSource();
   const keys = [
     'settingsStatusRegionLabel',
     'settingsStatusConnected',

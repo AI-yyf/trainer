@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from hashlib import sha1
 from typing import Any, Literal
@@ -1366,7 +1367,13 @@ class TrainingCardCandidateSnapshot(BaseModel):
             if default_subtype and subject.subtype != "concept":
                 self.learning_subtype = subject.subtype
         except Exception:
-            pass
+            # Subject classification is a best-effort enrichment. A failure
+            # used to disappear entirely, so a broken taxonomy import looked
+            # exactly like a card that genuinely had no subject.
+            logging.getLogger("trainer.models").debug(
+                "learning subject classification failed; keeping theory/concept defaults",
+                exc_info=True,
+            )
         self.learning_family = self.learning_family or "theory"
         self.learning_subtype = self.learning_subtype or "concept"
         if self.learning_phase not in {"learn", "try", "verify", "reflect", "return"}:

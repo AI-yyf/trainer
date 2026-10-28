@@ -7,7 +7,7 @@ const path = require('node:path');
 const ts = require(require.resolve('typescript', {
   paths: [path.resolve(__dirname, '..', 'webview')],
 }));
-const vm = require('node:vm');
+const { loadTsModule } = require('./helpers/loadTsModule');
 
 // The composerLocaleCopy table migrated to the i18n home (2026-10-14); its
 // call sites stay in the component and are asserted against the component.
@@ -90,17 +90,7 @@ function propertyMap(sourceFile, objectLiteral) {
 }
 
 function loadCopyModule() {
-  const source = fs.readFileSync(copySourcePath, 'utf8');
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2020,
-    },
-  }).outputText;
-  const module = { exports: {} };
-
-  vm.runInNewContext(output, { exports: module.exports, module }, { filename: copySourcePath });
-  return module.exports;
+  return loadTsModule(copySourcePath);
 }
 
 test('Composer fallback labels are complete for every supported language', () => {

@@ -28,11 +28,9 @@ import { ActionButton, WorkbenchSurfaceButton } from "../common";
 import { MessageRichContent } from "../coach/MessageRichContent";
 import {
   CheckMarkIcon,
-  ChevronDownIcon,
   ArrowRightIcon,
   LinkIcon,
   PlanIcon,
-  TrashIcon,
 } from "../icons";
 import { useTranslation } from "../../lib/i18n/useTranslation";
 import { resolvePlanViewCopy } from "../../lib/i18n/planViewCopy";
@@ -445,21 +443,94 @@ function formatEvidenceTime(
   }
 }
 
-function LiveEvidenceDecisionRow({
+type EvidenceDecisionLabels = {
+  defer: string;
+  reject: string;
+  deferPrompt: string;
+  rejectPrompt: string;
+  reasonPlaceholder: string;
+  confirm: string;
+  cancel: string;
+};
+
+function EvidenceDecisionControls({
   pendingId,
-  pendingSummary,
-  deferLabel,
-  rejectLabel,
+  labels,
   onDefer,
   onReject,
 }: {
   pendingId: string;
-  pendingSummary: string;
-  deferLabel: string;
-  rejectLabel: string;
+  labels: EvidenceDecisionLabels;
   onDefer?: (evidenceId: string, reason?: string) => void;
   onReject?: (evidenceId: string, reason?: string) => void;
 }) {
+  const [pendingKind, setPendingKind] = useState<"defer" | "reject" | null>(null);
+  const [reason, setReason] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (pendingKind) {
+      inputRef.current?.focus();
+    }
+  }, [pendingKind]);
+
+  const close = () => {
+    setPendingKind(null);
+    setReason("");
+  };
+
+  const submit = () => {
+    if (!pendingKind) {
+      return;
+    }
+    // The reason is what the learner typed. The evidence summary used to be
+    // sent here, which overwrote the audit trail with text the learner never
+    // wrote.
+    const trimmed = reason.trim();
+    if (pendingKind === "defer") {
+      onDefer?.(pendingId, trimmed);
+    } else {
+      onReject?.(pendingId, trimmed);
+    }
+    close();
+  };
+
+  if (pendingKind) {
+    return (
+      <div
+        className="coach-plan-view__evidence-reason"
+        role="group"
+        aria-label={pendingKind === "defer" ? labels.deferPrompt : labels.rejectPrompt}
+      >
+        <input
+          ref={inputRef}
+          className="coach-plan-view__evidence-reason-input"
+          type="text"
+          value={reason}
+          maxLength={400}
+          placeholder={labels.reasonPlaceholder}
+          aria-label={pendingKind === "defer" ? labels.deferPrompt : labels.rejectPrompt}
+          onChange={(event) => setReason(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              submit();
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              close();
+            }
+          }}
+        />
+        <button type="button" className="button button--quiet button--micro" onClick={submit}>
+          {labels.confirm}
+        </button>
+        <button type="button" className="button button--quiet button--micro" onClick={close}>
+          {labels.cancel}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="coach-plan-view__compact-evidence-decisions" data-plan-evidence-decisions="true">
       {onDefer ? (
@@ -467,9 +538,10 @@ function LiveEvidenceDecisionRow({
           type="button"
           className="button button--quiet button--micro"
           data-plan-evidence-decision="defer"
-          onClick={() => onDefer(pendingId, pendingSummary)}
+          aria-label={`${labels.defer}: ${labels.deferPrompt}`}
+          onClick={() => setPendingKind("defer")}
         >
-          {deferLabel}
+          {labels.defer}
         </button>
       ) : null}
       {onReject ? (
@@ -477,9 +549,10 @@ function LiveEvidenceDecisionRow({
           type="button"
           className="button button--quiet button--micro"
           data-plan-evidence-decision="reject"
-          onClick={() => onReject(pendingId, pendingSummary)}
+          aria-label={`${labels.reject}: ${labels.rejectPrompt}`}
+          onClick={() => setPendingKind("reject")}
         >
-          {rejectLabel}
+          {labels.reject}
         </button>
       ) : null}
     </div>
@@ -507,6 +580,15 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     onRejectPlanChange,
   } = props;
   const { t, language } = useTranslation();
+  const evidenceDecisionLabels: EvidenceDecisionLabels = {
+    defer: t("evidenceDefer"),
+    reject: t("reject"),
+    deferPrompt: t("evidenceDeferPrompt"),
+    rejectPrompt: t("evidenceRejectPrompt"),
+    reasonPlaceholder: t("evidenceReasonPlaceholder"),
+    confirm: t("confirm"),
+    cancel: t("cancel"),
+  };
   const planViewText = resolvePlanViewCopy(language);
   const composerDraftReplacementCancelRef = useRef<HTMLButtonElement | null>(null);
 
@@ -733,11 +815,9 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       (evidenceActions?.onRejectEvidence || evidenceActions?.onDeferEvidence),
   );
   const liveEvidenceDecisionRow = showLiveEvidenceDecisions && livePendingEvidence ? (
-    <LiveEvidenceDecisionRow
+    <EvidenceDecisionControls
       pendingId={livePendingEvidenceId}
-      pendingSummary={inlineText(livePendingEvidence.summary)}
-      deferLabel={t("evidenceDefer")}
-      rejectLabel={t("reject")}
+      labels={evidenceDecisionLabels}
       onDefer={evidenceActions?.onDeferEvidence}
       onReject={evidenceActions?.onRejectEvidence}
     />
@@ -1080,22 +1160,12 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                             fullWidth={false}
                           />
                         ) : null}
-                        {evidenceActions?.onDeferEvidence ? (
-                          <ActionButton
-                            tone="ghost"
-                            icon={<ChevronDownIcon size={12} />}
-                            label={t("evidenceDefer")}
-                            onClick={() => evidenceActions.onDeferEvidence?.(item.id, summary)}
-                            fullWidth={false}
-                          />
-                        ) : null}
-                        {evidenceActions?.onRejectEvidence ? (
-                          <ActionButton
-                            tone="ghost"
-                            icon={<TrashIcon size={12} />}
-                            label={t("reject")}
-                            onClick={() => evidenceActions.onRejectEvidence?.(item.id, summary)}
-                            fullWidth={false}
+                        {evidenceActions?.onDeferEvidence || evidenceActions?.onRejectEvidence ? (
+                          <EvidenceDecisionControls
+                            pendingId={item.id}
+                            labels={evidenceDecisionLabels}
+                            onDefer={evidenceActions?.onDeferEvidence}
+                            onReject={evidenceActions?.onRejectEvidence}
                           />
                         ) : null}
                       </div>

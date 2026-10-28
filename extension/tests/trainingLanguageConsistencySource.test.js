@@ -2,8 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readCopyModuleSource } = require('./helpers/copyModuleSource');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const operationMessageGovernancePath = path.resolve(
@@ -52,7 +54,7 @@ const previewHarnessPath = path.resolve(
 );
 
 test('training contextual chrome uses direct host text without a rewrite or alignment layer', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   // Localization ownership lives with the host sidecar: the old webview
   // rewrite layer (localizeKnownCoachUiText), the global language-aligned
@@ -89,7 +91,7 @@ test('training contextual chrome uses direct host text without a rewrite or alig
 });
 
 test('zh-CN training rejects mixed English prose with a single Chinese token', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /function hasExcessiveEnglishProseForChinese/);
   assert.match(source, /function containsJapaneseText/);
@@ -100,8 +102,8 @@ test('zh-CN training rejects mixed English prose with a single Chinese token', (
 });
 
 test('training contextual status and Coach jump actions resolve through all locale copy paths', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
-  const copySource = fs.readFileSync(copyPath, 'utf8');
+  const appSource = readAppModuleSource();
+  const copySource = readCopyModuleSource();
   const previewSource = fs.readFileSync(previewHarnessPath, 'utf8');
   const overrideStart = copySource.indexOf('const contextRailLocaleOverrides');
   const overrideEnd = copySource.indexOf('\n};', overrideStart);
@@ -127,7 +129,7 @@ test('training contextual status and Coach jump actions resolve through all loca
 });
 
 test('training review actions do not fall back to English in supported locales', () => {
-  const copySource = fs.readFileSync(copyPath, 'utf8');
+  const copySource = readCopyModuleSource();
 
   for (const label of [
     '开始复习',
@@ -212,8 +214,8 @@ test('training card-only fallback copy stays complete across every supported lan
 });
 
 test('training entry actions and empty state use complete locale copy', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
-  const copySource = fs.readFileSync(copyPath, 'utf8');
+  const appSource = readAppModuleSource();
+  const copySource = readCopyModuleSource();
   const keys = [
     'trainingOpenCurrentCard',
     'trainingReturnToCoach',
@@ -270,7 +272,7 @@ test('training card navigation stays a single explicit next-card action in share
 });
 
 test('training composer labels and placeholders stay localized across every card state', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const languages = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
   const modeCopyStart = appSource.indexOf('const trainingComposerModeCopy');
   const modeCopyEnd = appSource.indexOf('function trainingComposerModeText', modeCopyStart);
@@ -342,7 +344,7 @@ test('training composer labels and placeholders stay localized across every card
 });
 
 test('training no-card and recoverable states keep actions, labels, and errors localized', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   // Recoverable-failure copy moved from App.tsx into the pure governance module.
   const governanceSource = fs.readFileSync(operationMessageGovernancePath, 'utf8');
   const bridgeSource = fs.readFileSync(trainingCoachBridgePath, 'utf8');

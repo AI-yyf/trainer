@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const {
   formalPlanIsLiveRuntimeIdentity,
@@ -44,7 +45,7 @@ const resourcesPath = path.resolve(
 const workbenchDataPath = path.resolve(__dirname, '..', 'src', 'core', 'workbenchData.ts');
 
 test('cold-start recovered stamp lights leftover overlay without leftover plan object', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const coachPlanSource = fs.readFileSync(coachPlanPath, 'utf8');
   const trainingSource = fs.readFileSync(trainingPath, 'utf8');
   const resourcesSource = fs.readFileSync(resourcesPath, 'utf8');
@@ -156,7 +157,7 @@ test('empty current.plan + recovered true is leftover-not-live (shared identity)
 });
 
 test('recovered true + matching live plan_id keeps leftover overlay off (source)', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const coachPlanSource = fs.readFileSync(coachPlanPath, 'utf8');
 
   // Fail-closed: overlay must AND !formalPlanLive — never recovered alone.

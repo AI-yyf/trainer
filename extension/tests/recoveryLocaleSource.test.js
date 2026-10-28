@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const webviewRoot = path.resolve(__dirname, '..', 'webview', 'src');
 const previewPath = path.join(webviewRoot, 'lib', 'browserPreviewHarness.ts');
@@ -12,7 +13,7 @@ const copyPath = path.join(webviewRoot, 'lib', 'i18n', 'copy.ts');
 
 test('recovery previews keep provider facts and locale-owned copy aligned', () => {
   const preview = fs.readFileSync(previewPath, 'utf8');
-  const app = fs.readFileSync(appPath, 'utf8');
+  const app = readAppModuleSource();
   const copy = fs.readFileSync(copyPath, 'utf8');
   const recoveryCopyStart = preview.indexOf('const recoveryPreviewCopy');
   const recoveryCopyEnd = preview.indexOf('\n};', recoveryCopyStart);

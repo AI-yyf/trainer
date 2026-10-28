@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const settingsSourcePath = path.resolve(
@@ -17,7 +18,7 @@ const settingsSourcePath = path.resolve(
 );
 
 test('App initializes browser preview flags before any callback or render branch reads them', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const declaration = source.indexOf('isBrowserPreview = inBrowserPreviewEnvironment();');
   const firstUse = source.search(/\bisBrowserPreview\b/);
   const fixtureDeclaration = source.indexOf('browserPreviewFixture =');

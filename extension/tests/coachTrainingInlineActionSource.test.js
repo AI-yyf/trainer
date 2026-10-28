@@ -4,11 +4,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
 test('coach suggested action footer keeps a direct training handoff when a current card exists', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /const coachTrainingInlineAction = useMemo/);
   assert.match(source, /if \(leftoverTrainingHandoffChromeNotLive\) \{\s*return null;/);

@@ -11,13 +11,43 @@ from typing import Any
 
 import pytest
 
+try:  # hypothesis ships with the dev extra; property tests import it too.
+    from hypothesis import HealthCheck
+    from hypothesis import settings as hypothesis_settings
+
+    # Input-strategy generation is CPU-bound. On a loaded CI runner or while a
+    # full xdist suite is running, Hypothesis can spend >1s generating the
+    # first valid example and fail the run with FailedHealthCheck: too_slow.
+    # That is a property-test infrastructure signal, not a product failure
+    # (and it reproduced only under load). Keep the deadline; suppress just
+    # the generation-speed check for every property test.
+    hypothesis_settings.register_profile(
+        "trainer-ci",
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    hypothesis_settings.load_profile("trainer-ci")
+except ImportError:  # pragma: no cover - runtime installs without dev extras
+    pass
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Test-isolation guard: never touch the developer's default data directory.
 # Must run before any app module import so Settings picks this up.
-_TEST_DATA_DIR = Path(__file__).resolve().parents[2] / "tmp" / "pytest-trainer-data"
+#
+# The suite runs under xdist with 4-8 processes. A single shared data
+# directory makes those processes race on the same SQLite files and lets one
+# worker observe another worker's evidence/card state, which showed up as
+# order-dependent failures in the evidence, flashcard and evaluator modules.
+# Scope the directory to the worker process so each worker owns its state.
+_TEST_WORKER = os.environ.get("PYTEST_XDIST_WORKER") or f"pid{os.getpid()}"
+_TEST_DATA_DIR = (
+    Path(__file__).resolve().parents[2] / "tmp" / f"pytest-trainer-data-{_TEST_WORKER}"
+)
 _TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
-os.environ.setdefault("TRAINER_DATA_DIR", str(_TEST_DATA_DIR))
+# Assignment, not setdefault: the controller imports this module first and its
+# environment is inherited by every worker, so setdefault would hand all
+# workers the controller's directory and re-introduce the shared-state races.
+os.environ["TRAINER_DATA_DIR"] = str(_TEST_DATA_DIR)
 
 provider_fixtures = importlib.import_module("provider_fixtures")
 seed_verified_capabilities = provider_fixtures.seed_verified_capabilities

@@ -1317,3 +1317,32 @@ test('ProviderConfigStore keeps an explicit disabled choice disabled when an eff
   assert.deepEqual(reloaded.requestDefaults.thinking, { type: 'disabled' });
   assert.equal(reloaded.requestDefaults.reasoning_effort, undefined);
 });
+
+test('provider save writes the secret before config and rolls it back when the config write fails', async () => {
+  const workspaceRoot = createWorkspaceRoot();
+  const { ProviderConfigStore } = loadWithVscodeMock(
+    providerConfigStoreModulePath,
+    createVscodeMock(workspaceRoot),
+  );
+  const globalState = createGlobalState();
+  const extensionContext = createExtensionContext(globalState);
+  const originalUpdate = globalState.update.bind(globalState);
+  let failNextConfigWrite = true;
+  globalState.update = async (key, value) => {
+    if (failNextConfigWrite && key === 'trainer.provider.config') {
+      failNextConfigWrite = false;
+      throw new Error('disk full while saving provider config');
+    }
+    return originalUpdate(key, value);
+  };
+
+  const store = new ProviderConfigStore(extensionContext);
+  await assert.rejects(
+    () => store.saveConfig(thinkingStoreConfig({ apiKeyRef: 'fresh.ref' }), 'sk-transactional-secret'),
+    /disk full/,
+  );
+
+  // The config never landed, so the secret must not survive as an orphan.
+  assert.equal(globalState.get('trainer.provider.config'), undefined);
+  assert.equal(extensionContext.secrets._store.get('trainer.provider.apiKey.fresh.ref'), undefined);
+});

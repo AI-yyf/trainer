@@ -219,6 +219,12 @@ export interface CommandExecutionResult<T = unknown> {
   ok: boolean;
   cancelled?: boolean;
   message?: string;
+  /**
+   * The command already showed this failure to the user (for example through
+   * a modal choice or an explicit toast). Palette invocations use it to avoid
+   * stacking a second warning on top of the one the user just read.
+   */
+  surfaced?: boolean;
   data?: T;
   /**
    * Structured provider outcome for connection actions. The webview renders a

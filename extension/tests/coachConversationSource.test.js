@@ -19,6 +19,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const coachConversationControllerPath = path.resolve(
@@ -87,7 +88,7 @@ const composerPath = path.resolve(
 );
 
 test('coach streaming lane exposes trainer agent activity', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const renderStart = source.indexOf('<CoachConversationView');
   assert.ok(renderStart > -1, 'expected CoachConversationView render');
   const renderEnd = source.indexOf('onArtifactOpen', renderStart);
@@ -137,7 +138,7 @@ test('coach summary stays a compact horizontal context rail', () => {
 });
 
 test('coach summary rail surfaces blocker guidance alongside the live thread', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const appUiCopySource = fs.readFileSync(appUiCopyPath, 'utf8');
 
   assert.match(source, /runtimeBlockedReason/);
@@ -147,7 +148,7 @@ test('coach summary rail surfaces blocker guidance alongside the live thread', (
 });
 
 test('coach keeps the normal message thread free of a summary rail', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const conversation = fs.readFileSync(
     path.resolve(__dirname, '..', 'webview', 'src', 'components', 'coach', 'CoachConversationView.tsx'),
     'utf8',
@@ -162,7 +163,7 @@ test('coach keeps the normal message thread free of a summary rail', () => {
 });
 
 test('coach composer keeps the resources button label short', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const blockStart = source.indexOf('icon: <ResourcesIcon size={16} />');
   assert.ok(blockStart > -1, 'expected composer resources action');
   const block = source.slice(blockStart - 80, blockStart + 140);
@@ -319,7 +320,7 @@ test('coach user timestamps stay attached to the identity rail instead of a deta
 });
 
 test('docked views retain a compact Coach context rail without docking the full transcript', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const railStart = source.indexOf('const renderContextualResultRail');
   const railEnd = source.indexOf('const renderDockedView');
   const railSource = source.slice(railStart, railEnd);
@@ -367,9 +368,9 @@ test('docked views retain a compact Coach context rail without docking the full 
 });
 
 test('formal Plan generation requires a current verified tools probe, not declared capability flags', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const helperStart = source.indexOf('function providerHasVerifiedToolsProbe(');
-  const helperEnd = source.indexOf('\ntype ProviderSettingsLocale', helperStart);
+  const helperEnd = [source.indexOf('\ntype ProviderSettingsLocale', helperStart), source.indexOf('\nexport type ProviderSettingsLocale', helperStart)].filter((value) => value > helperStart).sort((a, b) => a - b)[0];
   const gateStart = source.indexOf('const providerSupportsFormalPlanTools =');
   const gateEnd = source.indexOf('const formalPlanCapabilityMessage', gateStart);
 
@@ -409,7 +410,7 @@ test('formal Plan generation requires a current verified tools probe, not declar
 });
 
 test('coach composer does not gate sending on an unverified streaming probe', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   // The probe helper still lives in providerRecoveryCopy for Settings, but the
   // coach surface must not block sending while streaming evidence is missing:
   // the stream path degrades gracefully at runtime instead.
@@ -426,7 +427,7 @@ test('coach composer does not gate sending on an unverified streaming probe', ()
 });
 
 test('Coach interrupted recovery exposes last-progress resume and replay without resending the draft', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const appUiCopySource = fs.readFileSync(appUiCopyPath, 'utf8');
   assert.match(source, /function isCoachCheckpointRecoveryState\(/);
   assert.match(source, /streaming\.streamError/);
@@ -450,7 +451,7 @@ test('Coach interrupted recovery exposes last-progress resume and replay without
 });
 
 test('Plan next-step copy prefers the live current step before stale artifact teasers', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const { learningFacts, load } = require('./templateAssertions');
   const { resolveLearningPrimaryAction, executeLearningPrimaryAction } = load('lib/learningActionResolver.ts');
   const current = learningFacts({ plan: { state: 'active', id: 'live-plan', revision: 4,
@@ -490,7 +491,7 @@ test('Coach first-run starters fill the draft and never auto-send', () => {
   // §六十一 supersedes the v1.0.0 no-starters decision: the first-conversation
   // empty state offers three ways to start, but they must only fill the
   // composer draft — sending stays with the learner (no auto-coaching).
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /coach-empty-state__starters/);
   assert.match(source, /starters\.map\(\(starter\) =>/);
@@ -506,7 +507,7 @@ test('Coach first-run starters fill the draft and never auto-send', () => {
 });
 
 test('Coach first-run state starts from the learner goal before optional code context', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /const coachFirstComposerPlaceholder: Record<ComposerLanguage, string>/);
   assert.match(source, /\? coachFirstComposerPlaceholder\[layout\.composerLanguage\]/);
@@ -520,7 +521,7 @@ test('Training keeps card submission default while allowing a contextual Coach r
 });
 
 test('Training review entry uses shared localized copy and hides mismatched review prose', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /const primaryDueReviewTitle = primaryDueReview/);
   assert.match(source, /reviewConceptLabel\(primaryDueReview\.concept\)/);
@@ -529,7 +530,7 @@ test('Training review entry uses shared localized copy and hides mismatched revi
 });
 
 test('Composer keeps slash and skill discovery on demand, not as persistent controls', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const composerSource = fs.readFileSync(composerPath, 'utf8');
 
   assert.match(appSource, /normalizedDraft\.startsWith\("\/"\)/);
@@ -542,7 +543,7 @@ test('Composer keeps slash and skill discovery on demand, not as persistent cont
 });
 
 test('Composer candidate decks keep Codex-style draft ownership and keyboard dismissal', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const styles = readStylesSource();
   const commandDeck = source.slice(source.indexOf('const renderCommandDeck'), source.indexOf('const renderSkillDeck'));
   const skillDeck = source.slice(source.indexOf('const renderSkillDeck'), source.indexOf('const renderSuggestedActions'));
@@ -628,7 +629,7 @@ test('Composer expansion decks keep flat idle rows and visible selected/focus st
 });
 
 test('Unavailable image capability stays accessible and only surfaces inline after a paste or drop attempt', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const composerSource = fs.readFileSync(composerPath, 'utf8');
   const styles = readStylesSource();
 
@@ -654,7 +655,7 @@ test('Unavailable image capability stays accessible and only surfaces inline aft
 });
 
 test('hint suggested action fills the composer and does not mint a task turn', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const start = source.indexOf('const handleSuggestedAction');
   const end = source.indexOf('const handleSubmit', start);
   assert.ok(start > -1 && end > start, 'expected handleSuggestedAction before handleSubmit');
@@ -670,7 +671,7 @@ test('hint suggested action fills the composer and does not mint a task turn', (
 });
 
 test('handleSuggestedAction prefills task, next_task, and review drafts without sendTurn when leftover is not live', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const gateStart = source.indexOf('const leftoverSuggestedActionNotLive');
   const submitStart = source.indexOf('const handleSubmit', gateStart);
   assert.ok(gateStart > -1 && submitStart > gateStart, 'expected leftoverSuggestedActionNotLive before handleSubmit');

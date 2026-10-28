@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 // The durable training-persistence ack channel moved into the training-card
@@ -19,7 +20,7 @@ const trainingCardControllerPath = path.resolve(
 );
 
 test('formal training handoff draft persists without forcing navigation to Coach', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(source, /const trainingCoachBridge = useMemo\(/);
   assert.match(source, /buildTrainingCoachBridge\(\{/);
@@ -54,7 +55,7 @@ test('formal training handoff draft persists without forcing navigation to Coach
 });
 
 test('practice return evidence uses the authoritative response status for both outcomes', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const controllerSource = fs.readFileSync(trainingCardControllerPath, 'utf8');
 
   assert.match(controllerSource, /pending\.resolve\(message\.payload\.data\)/);
@@ -66,7 +67,7 @@ test('practice return evidence uses the authoritative response status for both o
 });
 
 test('training return and evidence adopt do not mint a plan, card, or task turn', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
   const trainingCommandsPath = path.resolve(
     __dirname,
     '..',

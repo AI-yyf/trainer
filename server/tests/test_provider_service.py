@@ -243,6 +243,16 @@ def test_visible_model_text_removes_provider_control_tool_markers() -> None:
     ) == "先确认 remote host。"
 
 
+def test_visible_model_text_drops_unclosed_think_block() -> None:
+    # A stream cut mid-reasoning has no closing tag. Keeping the body would
+    # publish raw chain-of-thought as coaching text (MiniMax/Kimi gateways
+    # emit these blocks inline).
+    assert _visible_model_text("<think>检查用户代码，先看循环边界") == ""
+    assert _visible_model_text("先确认边界。\n<think>然后检查索引") == "先确认边界。"
+    # A closed block still strips cleanly and leaves the visible answer.
+    assert _visible_model_text("<think>internal</think>先确认边界。") == "先确认边界。"
+
+
 def test_provider_test_returns_failure_when_model_is_not_supported() -> None:
     config = _make_config()
     service = ProviderService()
@@ -8468,3 +8478,20 @@ def test_minimax_declared_thinking_survives_every_wire_path() -> None:
     undeclared = normalized(max_tokens=256)
     # No declared thinking: the short-visible-reply default still applies.
     assert undeclared.get("extra_body", {}).get("thinking") == {"type": "disabled"}  # type: ignore[union-attr]
+
+
+def test_timeout_recovery_content_guard_preserves_substantive_progress() -> None:
+    from app.llm.provider_service import _timeout_recovery_should_replace_content
+
+    # Empty and short fragments are not usable answers: the recovery owns them.
+    assert _timeout_recovery_should_replace_content("")
+    assert _timeout_recovery_should_replace_content("Short partial")
+
+    # A substantive accumulated answer from earlier steps survives the timeout;
+    # summary/next-step still get the recovery guidance.
+    substantive = (
+        "The workspace boundary is the first thing to prove. Run pwd in the "
+        "remote terminal, then compare it with the Explorer path before editing."
+    )
+    assert len(substantive) >= 120
+    assert not _timeout_recovery_should_replace_content(substantive)

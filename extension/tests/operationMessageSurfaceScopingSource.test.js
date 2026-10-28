@@ -11,6 +11,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const governancePath = path.resolve(
@@ -34,7 +35,7 @@ const statusControllerPath = path.resolve(
 );
 
 test('operation message surface union and banner gate localize scoped messages to their own view', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const store = fs.readFileSync(storePath, 'utf8');
   const controller = fs.readFileSync(statusControllerPath, 'utf8');
 
@@ -81,7 +82,7 @@ test('setOperationMessage writes message and surface atomically through the gove
 });
 
 test('host resource and plan statuses are intercepted before the store banner write', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const store = fs.readFileSync(storePath, 'utf8');
 
   assert.match(source, /const hostSurfaceScope = resolveOperationMessageSurface\(/);
@@ -98,7 +99,7 @@ test('host resource and plan statuses are intercepted before the store banner wr
 });
 
 test('resource operation feedback is scoped to the Library surface', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   // Browser preview upload / URL import outcomes (App-owned resource flows).
   assert.match(
@@ -116,7 +117,7 @@ test('resource operation feedback is scoped to the Library surface', () => {
 });
 
 test('plan freeze and plan composer feedback is scoped to the Learning surface', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(
     source,
@@ -129,7 +130,7 @@ test('plan freeze and plan composer feedback is scoped to the Learning surface',
 });
 
 test('training verify notices stay card-owned; the following failure scopes itself by its own marker', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
 
   // Round 2: the atomic channel has no surface pre-positioning — a notice must
   // carry its own surface with the message. The boundary notices are card

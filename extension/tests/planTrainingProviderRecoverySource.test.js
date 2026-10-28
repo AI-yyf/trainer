@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
@@ -17,7 +18,7 @@ function sourceSection(source, startMarker, endMarker) {
 }
 
 test('workspace admission takes priority over provider recovery across coaching and plan actions', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const planView = sourceSection(
     source,
     '  const renderPlanView = () => (',

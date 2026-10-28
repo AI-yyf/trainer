@@ -364,15 +364,46 @@ def _compact_first_turn_reply(
         learner_message=learner_message,
         reply=reply,
     )
-    guided_note = _first_turn_lane_continuity_note(
-        guided_lane,
-        chinese=chinese,
-        coach_context=coach_context,
+    # A guided-lane announcement is only honest when this turn is actually
+    # lane-setting. Explicit scenarios and lanes inferred from the learner's
+    # own message always qualify. A reply-only lane (sparse input) is still
+    # allowed when the message itself has no concrete focus; what we block is
+    # an incidental word in a concrete answer ("ssh" in a login-test fix)
+    # reframing the whole reply as a tour the learner never asked for.
+    message_lane = _first_turn_guided_lane(scenario, learner_message)
+    lane_from_message = message_lane in {
+        "remote_workspace",
+        "debug_loop",
+        "function_guidance",
+        "project_adaptation",
+    }
+    message_has_concrete_focus = _first_turn_has_concrete_focus(
+        scenario=scenario,
+        learner_message=learner_message,
+        reply="",
     )
-    guided_close = _first_turn_lane_next_step(
-        guided_lane,
-        chinese=chinese,
-        coach_context=coach_context,
+    lane_prompt_allowed = (
+        str(scenario or "").strip().lower() in _FIRST_TURN_EXPLICIT_SCENARIOS
+        or lane_from_message
+        or not message_has_concrete_focus
+    )
+    guided_note = (
+        _first_turn_lane_continuity_note(
+            guided_lane,
+            chinese=chinese,
+            coach_context=coach_context,
+        )
+        if guided_lane and lane_prompt_allowed
+        else ""
+    )
+    guided_close = (
+        _first_turn_lane_next_step(
+            guided_lane,
+            chinese=chinese,
+            coach_context=coach_context,
+        )
+        if guided_lane and lane_prompt_allowed
+        else ""
     )
     if guided_lane == "function_guidance" and isinstance(coach_context, dict):
         starter = coach_context.get("function_guidance_starter")

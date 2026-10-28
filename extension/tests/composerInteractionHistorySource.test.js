@@ -19,6 +19,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const composerPath = path.resolve(
   __dirname,
@@ -80,7 +81,7 @@ test('Composer gives parent key handling first, then only navigates sent history
 });
 
 test('App history uses only this session user sends and preserves a cursor plus scratch draft', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   // §四十八: the navigation internals live in useComposerHistoryNavigation.ts.
   const hookSource = fs.readFileSync(
     path.resolve(__dirname, '..', 'webview', 'src', 'app', 'useComposerHistoryNavigation.ts'),

@@ -56,6 +56,30 @@ test('raw JSON bodies are not shown', () => {
   assert.ok(surface.next.length > 0);
 });
 
+test('network errno strings become a human connection message', () => {
+  for (const raw of [
+    'fetch failed',
+    'connect ECONNREFUSED 127.0.0.1:34891',
+    'getaddrinfo ENOTFOUND api.example.com',
+  ]) {
+    const surface = sanitizeErrorSurface(raw, { language: 'en-US' });
+    assert.equal(surface.kind, 'connection', raw);
+    assert.doesNotMatch(surface.message, /ECONNREFUSED|ENOTFOUND|fetch failed/);
+    assert.match(surface.message, /local engine/i);
+  }
+  const timeout = sanitizeErrorSurface(
+    'Sidecar request timed out after 90000ms: POST /provider/test',
+    { language: 'en-US' },
+  );
+  assert.equal(timeout.kind, 'timeout');
+  assert.match(timeout.message, /timed out/i);
+  assert.doesNotMatch(timeout.message, /90000ms/);
+
+  const zh = sanitizeErrorSurfaceText('fetch failed', 'zh-CN');
+  assert.match(zh, /本地引擎/);
+  assert.doesNotMatch(zh, /fetch failed/);
+});
+
 test('think-text leaks are removed', () => {
   const surface = sanitizeErrorSurface(
     `<think>internal plan with ${FAKE_KEY}</think>`,

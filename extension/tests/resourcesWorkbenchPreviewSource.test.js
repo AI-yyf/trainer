@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const resourcesWorkbenchPath = path.resolve(
   __dirname,
@@ -26,7 +27,7 @@ const browserPreviewHarnessPath = path.resolve(
 
 test('resource detail shows a governed indexed preview while delegating full rendering to VS Code', () => {
   const source = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const resourcesStart = appSource.indexOf('<ResourcesWorkbenchView');
   const resourcesEnd = appSource.indexOf('/>', resourcesStart);
   const resourcesView = appSource.slice(resourcesStart, resourcesEnd);

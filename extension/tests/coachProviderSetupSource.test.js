@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const recoveryCopySourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'providerRecoveryCopy.ts');
@@ -34,7 +35,7 @@ test('coach provider setup recovery owns complete, action-oriented copy for all 
   // Batch 7 moved the recovery copy table and scenario helpers into
   // providerRecoveryCopy.ts; App keeps the wiring (providerSetupState, gates).
   const source = fs.readFileSync(recoveryCopySourcePath, 'utf8');
-  const app = fs.readFileSync(appSourcePath, 'utf8');
+  const app = readAppModuleSource();
 
   assert.match(source, /const providerRecoveryCopy: Record<ComposerLanguage, ProviderRecoveryLocale> = \{/);
   assert.match(source, /function providerRecoveryScenario\(/);
@@ -91,7 +92,7 @@ test('coach provider setup recovery owns complete, action-oriented copy for all 
 });
 
 test('coach recovery keeps workspace admission primary and exposes provider recovery beside it', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(
     source,
@@ -243,7 +244,7 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
 });
 
 test('provider test action sends an unsaved draft to the isolated test path', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const controller = fs.readFileSync(providerControllerSourcePath, 'utf8');
 
   // The draft comparison lives in the controller now; App keeps the relay that
@@ -266,7 +267,7 @@ test('provider test action sends an unsaved draft to the isolated test path', ()
 });
 
 test('startup can scope a restored provider proof before sidecar memory finishes hydrating', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(
     source,

@@ -1532,7 +1532,10 @@ class TrainerRuntime:
         try:
             self.repository.save_provider_capability(key, states)
         except Exception:
-            pass
+            # Capability truth is only a cache. Losing it must not fail the
+            # probe, but a silent failure leaves the in-memory cache and the
+            # disk disagreeing after a restart with nothing to diagnose.
+            logger.warning("[provider] capability persistence failed", exc_info=True)
         if len(self.provider_capability_cache) > 16:
             oldest_key = next(iter(self.provider_capability_cache))
             if oldest_key != key:

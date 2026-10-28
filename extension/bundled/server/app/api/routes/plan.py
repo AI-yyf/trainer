@@ -178,7 +178,7 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
     def require_plan(plan_id: str) -> LearningPlan:
         plan_record = runtime.repository.get_plan_by_id(plan_id)
         if plan_record is None:
-            raise HTTPException(status_code=404, detail=f"Learning plan '{plan_id}' was not found.")
+            raise HTTPException(status_code=404, detail="This learning plan could not be found in this workspace.")
         _, plan = plan_record
         return plan
 
@@ -922,7 +922,7 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
         subplan = SubPlan.model_validate(payload)
         updated = runtime.planner_service.update_subplan(plan_id, subplan_id, subplan)
         if updated is None:
-            raise HTTPException(status_code=404, detail=f"Sub-plan '{subplan_id}' was not found.")
+            raise HTTPException(status_code=404, detail="This sub-plan could not be found in this workspace.")
         return subplan_payload(updated)
 
     @router.delete("/plan/{plan_id}/subplan/{subplan_id}", response_model=None)
@@ -930,7 +930,7 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
         require_plan(plan_id)
         deleted = runtime.planner_service.delete_subplan(plan_id, subplan_id)
         if not deleted:
-            raise HTTPException(status_code=404, detail=f"Sub-plan '{subplan_id}' was not found.")
+            raise HTTPException(status_code=404, detail="This sub-plan could not be found in this workspace.")
         return {"status": "deleted", "subplan_id": subplan_id, "plan_id": plan_id}
 
 

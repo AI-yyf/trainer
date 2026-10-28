@@ -160,7 +160,7 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
             if current_version is None:
                 raise HTTPException(
                     status_code=422,
-                    detail=f"Unknown resource_id for this workspace: {requested_resource_id}.",
+                    detail="That resource is not available in this workspace.",
                 )
             if request.resource_version_id and request.resource_version_id != current_version.get(
                 "version_id"

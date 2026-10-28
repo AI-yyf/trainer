@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const planPath = path.resolve(__dirname, '..', 'webview', 'src', 'components', 'plan', 'CoachPlanView.tsx');
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
@@ -18,7 +19,7 @@ test('Plan renders no memory-scope diagram (Settings owns memory scope)', () => 
 });
 
 test('Plan still receives authoritative global plan and current project link state', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   assert.match(source, /globalPlan=\{data\.globalPlan\}/);
   assert.match(source, /projectPlanLink=\{data\.projectPlanLink\}/);
 });

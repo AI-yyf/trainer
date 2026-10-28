@@ -4,11 +4,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
 test('Training card title does not use leftover formal plan or task title', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const titleStart = source.indexOf('const title = hasRenderableTrainingCard');
   const titleEnd = source.indexOf('const currentStep = hasRenderableTrainingCard', titleStart);
 

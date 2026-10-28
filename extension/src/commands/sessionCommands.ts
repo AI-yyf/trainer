@@ -1795,6 +1795,13 @@ export async function sendMessageCommand(
   const requestIsCurrent = (): boolean =>
     getRuntimeWorkspaceId(context) === requestWorkspaceId &&
     context.getHostState().workspace.workspaceFolder === requestWorkspaceFolder;
+  // A session activation during this request invalidates its UI ownership even
+  // when the workspace did not change. Without this fence the late response
+  // would write the old session id and transcript over the newly opened one.
+  const requestActivationGeneration = currentSessionActivationGeneration(context);
+  const responseIsStale = (): boolean =>
+    !requestIsCurrent() ||
+    !isCurrentSessionActivation(context, requestActivationGeneration);
 
   const message =
     extractSessionPayload(payload)?.text ??
@@ -1811,7 +1818,7 @@ export async function sendMessageCommand(
   const sessionPayload = extractSessionPayload(payload);
   const providerConfig = context.providerStore.getConfig();
   const apiKey = await context.providerStore.getApiKey();
-  if (!requestIsCurrent()) {
+  if (responseIsStale()) {
     return {
       ok: true,
       message: 'Session response discarded after the workspace changed.',
@@ -1836,7 +1843,7 @@ export async function sendMessageCommand(
   if (providerGuard) {
     return providerGuard;
   }
-  if (!requestIsCurrent()) {
+  if (responseIsStale()) {
     return {
       ok: true,
       message: 'Session response discarded after the workspace changed.',
@@ -1863,7 +1870,7 @@ export async function sendMessageCommand(
   if (status.lifecycle !== 'ready' || !status.port) {
     return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
   }
-  if (!requestIsCurrent()) {
+  if (responseIsStale()) {
     return {
       ok: true,
       message: 'Session response discarded after the workspace changed.',
@@ -1913,7 +1920,7 @@ export async function sendMessageCommand(
   } catch (error) {
     if (false) {
       response = await sendRequest().catch(async (retryError) => {
-        if (!requestIsCurrent()) {
+        if (responseIsStale()) {
           throw retryError;
         }
         const retryFailure = classifyProviderFailure(normalizeErrorText(retryError));
@@ -1923,7 +1930,7 @@ export async function sendMessageCommand(
         throw retryError;
       });
     } else {
-      if (!requestIsCurrent()) {
+      if (responseIsStale()) {
         throw error;
       }
       const failure = classifyProviderFailure(normalizeErrorText(error));
@@ -1937,7 +1944,7 @@ export async function sendMessageCommand(
     }
   }
 
-  if (!requestIsCurrent()) {
+  if (responseIsStale()) {
     return {
       ok: true,
       message: 'Session response discarded after the workspace changed.',
@@ -1949,15 +1956,40 @@ export async function sendMessageCommand(
     message,
     getRuntimeWorkspaceId(context),
   );
-  await context.setSessionId(sessionId ?? context.getSessionId());
-  if (!requestIsCurrent()) {
+  try {
+    await context.setSessionId(sessionId ?? context.getSessionId());
+  } catch (error) {
+    // The in-memory id is already updated before the durable write. A failed
+    // workspace-state write only affects restore-after-reload; the sidecar has
+    // persisted the turn, so reporting the send as failed would be false.
+    context.outputChannel.appendLine(
+      `[session] session id persistence failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (responseIsStale()) {
     return {
       ok: true,
       message: 'Session response discarded after the workspace changed.',
     };
   }
-  await context.patchWorkbenchData(patch);
-  if (requestIsCurrent()) {
+  try {
+    await context.patchWorkbenchData(patch);
+  } catch (error) {
+    // The turn is already committed server-side. Try a full resync; only when
+    // that also fails do we report a partial success with an explicit next
+    // action instead of inviting the learner to send the message twice.
+    try {
+      await context.workbench.syncState();
+    } catch {
+      return {
+        ok: false,
+        message:
+          'The message reached the coach, but the conversation could not refresh. Reload the workbench to see it.',
+        data: response,
+      };
+    }
+  }
+  if (!responseIsStale()) {
     noteRequestedWorkspaceFilesFromSessionResponse(context, response);
     const organizationPending = noteResourceOrganizationFromSessionResponse(
       context,
@@ -4425,6 +4457,14 @@ function nextSessionActivationGeneration(context: CommandContext): number {
   }
   state.latest += 1;
   return state.latest;
+}
+
+function currentSessionActivationGeneration(context: CommandContext): number {
+  return sessionActivationGenerations.get(context)?.latest ?? 0;
+}
+
+function isCurrentSessionActivation(context: CommandContext, generation: number): boolean {
+  return currentSessionActivationGeneration(context) === generation;
 }
 
 function isLatestSessionActivation(context: CommandContext, generation: number): boolean {

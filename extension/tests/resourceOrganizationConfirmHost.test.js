@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const sessionCommandsPath = path.resolve(
   __dirname,
@@ -158,7 +159,7 @@ test('cancel clears host pending and posts server organization cancel', () => {
 test('click path sets stamp: host arms only after pending; request body consumes host arm only', () => {
   const session = fs.readFileSync(sessionCommandsPath, 'utf8');
   const resources = fs.readFileSync(resourceCommandsPath, 'utf8');
-  const app = fs.readFileSync(appPath, 'utf8');
+  const app = readAppModuleSource();
   const view = fs.readFileSync(resourcesViewPath, 'utf8');
   const models = fs.readFileSync(modelsPath, 'utf8');
   const routers = readApiSource();

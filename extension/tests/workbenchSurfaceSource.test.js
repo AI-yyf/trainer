@@ -19,6 +19,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const iconsPath = path.resolve(
@@ -57,7 +58,7 @@ test('skill deck offers manage flow for custom skills', () => {
 });
 
 test('skill deck resolves on the trigger token so arguments keep the match', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   // Suggestions filter on the first $token only — text after it is skill
   // arguments, and a full-draft query would empty the deck for "$skill args".
   const skillsStart = source.indexOf('const matchingLocalSkills');
@@ -83,7 +84,7 @@ test('skill deck resolves on the trigger token so arguments keep the match', () 
 });
 
 test('enter submits a resolved skill with args instead of refilling the composer', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const enterStart = source.indexOf('alreadyResolvedWithArgs');
   assert.ok(enterStart > -1, 'expected alreadyResolvedWithArgs guard');
   const enterBlock = source.slice(enterStart - 600, enterStart + 900);
@@ -92,7 +93,7 @@ test('enter submits a resolved skill with args instead of refilling the composer
 });
 
 test('custom skills persist the normalized, capped list', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const persist = source.slice(
     source.indexOf('const persistCustomSkills'),
     source.indexOf('const saveCustomSkillDraft'),

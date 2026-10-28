@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const trainingViewPath = path.resolve(
@@ -17,7 +18,7 @@ const trainingViewPath = path.resolve(
 );
 
 test('Training why-now does not backfill leftover formal title or focus', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const viewSource = fs.readFileSync(trainingViewPath, 'utf8');
 
   assert.match(appSource, /liveTrainingWhyNow\(/);

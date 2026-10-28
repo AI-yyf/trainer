@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const workbenchDataPath = path.resolve(__dirname, '..', 'src', 'core', 'workbenchData.ts');
 const workbenchStatePath = path.resolve(
@@ -77,7 +78,7 @@ test('workspace settings chrome does not leftover-fill language, answer mode, or
 
 test('leftover Settings profile/rhythm is not live Settings identity when recovered (empty or with-step)', () => {
   const workbenchData = fs.readFileSync(workbenchDataPath, 'utf8');
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
 
   assert.match(workbenchData, /leftoverSettingsProfileRhythmIsNotLive\(/);
   assert.match(workbenchData, /leftoverSettingsLearnerProjectOnboardingIsNotLive\(/);
@@ -250,8 +251,8 @@ test('leftover Settings profile/rhythm is not live Settings identity when recove
     /leftoverSettingsLearnerProjectOnboardingNotLive\s*\?\s*null\s*:\s*data\.profile\.onboardingRequest/,
   );
 
-  const routers = fs.readFileSync(routersPath, 'utf8');
-  const bundledRouters = fs.readFileSync(bundledRoutersPath, 'utf8');
+  const routers = fs.readFileSync(routersPath, 'utf8') + fs.readFileSync(path.join(path.dirname(routersPath), 'coach_support.py'), 'utf8');
+  const bundledRouters = fs.readFileSync(bundledRoutersPath, 'utf8') + fs.readFileSync(path.join(path.dirname(bundledRoutersPath), 'coach_support.py'), 'utf8');
   assert.match(routers, /leftover_settings_profile_rhythm_is_not_live\(/);
   assert.match(routers, /leftover_settings_learner_project_onboarding_is_not_live\(/);
   assert.match(routers, /leftover_resource_sandbox_preview_is_not_live\(/);
@@ -424,8 +425,8 @@ test('card-status leftover-not-live identity is fail-closed in sidecar, bundled 
   );
   const identity = fs.readFileSync(identityPath, 'utf8');
   const bundledIdentity = fs.readFileSync(bundledIdentityPath, 'utf8');
-  const routers = fs.readFileSync(routersPath, 'utf8');
-  const bundledRouters = fs.readFileSync(bundledRoutersPath, 'utf8');
+  const routers = fs.readFileSync(routersPath, 'utf8') + fs.readFileSync(path.join(path.dirname(routersPath), 'coach_support.py'), 'utf8');
+  const bundledRouters = fs.readFileSync(bundledRoutersPath, 'utf8') + fs.readFileSync(path.join(path.dirname(bundledRoutersPath), 'coach_support.py'), 'utf8');
   const handoff = fs.readFileSync(handoffPath, 'utf8');
   const bundledHandoff = fs.readFileSync(bundledHandoffPath, 'utf8');
   const trainingCommands = fs.readFileSync(

@@ -4,11 +4,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
 test('Training why and source do not use leftover formal plan.summary', () => {
-  const source = fs.readFileSync(appPath, 'utf8');
+  const source = readAppModuleSource();
   const whyStart = source.indexOf('const localizedWhyNow =');
   const whyEnd = source.indexOf('const localizedSourceSummary =', whyStart);
   const sourceStart = source.indexOf('const localizedSourceSummary =');

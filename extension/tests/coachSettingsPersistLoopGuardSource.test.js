@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(
   __dirname,
@@ -32,7 +33,7 @@ const coachSettingsViewSourcePath = path.resolve(
 );
 
 function readAppSource() {
-  return fs.readFileSync(appSourcePath, 'utf8');
+  return readAppModuleSource();
 }
 
 function readBrowserSidecarSource() {
@@ -69,7 +70,7 @@ test('bootstrap request guard re-arms only on the false -> true host-state trans
   // `requestBootstrapOnce` call re-posted the request.
   assert.match(
     source,
-    /const hostStateReceivedOnceRef = useRef\(hasReceivedHostState\);\s*useEffect\(\(\) => \{\s*if \(!hasReceivedHostState\) \{\s*return;\s*\}\s*if \(hostStateReceivedOnceRef\.current\) \{\s*return;\s*\}\s*hostStateReceivedOnceRef\.current = true;\s*bootstrapRequestSent = false;\s*\}, \[hasReceivedHostState\]\);/,
+    /const hostStateReceivedOnceRef = useRef\(hasReceivedHostState\);\s*useEffect\(\(\) => \{\s*if \(!hasReceivedHostState\) \{\s*return;\s*\}\s*if \(hostStateReceivedOnceRef\.current\) \{\s*return;\s*\}\s*hostStateReceivedOnceRef\.current = true;\s*(?:bootstrapRequestSent = false|resetBootstrapRequestSent\(\));\s*\}, \[hasReceivedHostState\]\);/,
   );
 });
 

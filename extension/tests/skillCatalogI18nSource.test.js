@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const skillCatalogPath = path.resolve(__dirname, '..', '..', 'shared', 'src', 'skillCatalog.ts');
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
@@ -37,7 +38,7 @@ test('skill catalog keeps localized text and a readable fallback for every produ
 });
 
 test('app recovery and common copy receive the active language with a defined fallback', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
 
   assert.match(
     source,

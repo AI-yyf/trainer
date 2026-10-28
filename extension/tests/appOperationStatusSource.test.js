@@ -14,6 +14,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const governanceSourcePath = path.resolve(
@@ -35,7 +36,7 @@ function sourceSection(source, startMarker, endMarker) {
 }
 
 test('operation-status errors preserve only local recovery copy', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const governance = fs.readFileSync(governanceSourcePath, 'utf8');
   const parser = sourceSection(
     source,
@@ -105,7 +106,7 @@ test('operation-status errors preserve only local recovery copy', () => {
 });
 
 test('live-plan task mint 409 markers map to local copy and keep composer draft until ack', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const governance = fs.readFileSync(governanceSourcePath, 'utf8');
   assert.match(governance, /trainer-live-plan-task-gate:\(no_live\|leftover\)/);
   assert.match(governance, /export function livePlanTaskGateFailureMessage\(/);

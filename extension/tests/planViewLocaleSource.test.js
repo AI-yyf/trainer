@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const localePath = path.resolve(
@@ -27,7 +28,7 @@ function sourceBetween(source, startMarker, endMarker) {
 }
 
 test('Plan primary UI uses complete locale copy instead of a Chinese-English branch', () => {
-  const appSource = fs.readFileSync(appPath, 'utf8');
+  const appSource = readAppModuleSource();
   const localeSource = fs.readFileSync(localePath, 'utf8');
   const planView = sourceBetween(appSource, '  const renderPlanView = () => (', '  const renderSettingsView = () => (');
 

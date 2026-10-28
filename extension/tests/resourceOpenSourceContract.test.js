@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const root = path.resolve(__dirname, '..', '..');
 const sharedOpenPath = path.join(root, 'shared', 'src', 'resourceOpen.ts');
@@ -15,7 +16,7 @@ test('resource open source contract keeps URL browser behavior and local VS Code
   const shared = fs.readFileSync(sharedOpenPath, 'utf8');
   const view = fs.readFileSync(viewPath, 'utf8');
   const commands = fs.readFileSync(commandPath, 'utf8');
-  const app = fs.readFileSync(appPath, 'utf8');
+  const app = readAppModuleSource();
 
   assert.match(shared, /resource\.kind === "url"/);
   assert.match(shared, /kind: "browser"/);

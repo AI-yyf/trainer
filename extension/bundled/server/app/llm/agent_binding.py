@@ -50,6 +50,7 @@ from urllib.parse import quote
 import httpx
 
 from .agent_loop import AgentProvider, CoachAgentLoop
+from .provider.text import ReasoningBlockFilter
 from .provider_protocols import (
     _finish_reason_is_truncated,
     assess_provider_error,
@@ -60,7 +61,6 @@ from .provider_service import (
     _flatten_minimax_thinking_for_raw_http,
     _looks_like_provider_html_shell,
     _malformed_provider_html_shell_detail,
-    _ReasoningBlockFilter,
     _require_provider_runtime_response,
     _visible_model_text,
 )
@@ -1151,7 +1151,7 @@ class ProviderAgentBinding:
             raise RuntimeError(f"Unable to resolve a usable OpenAI Responses model for {model!r}.")
 
         text_buffer = ""
-        reasoning_filter = _ReasoningBlockFilter()
+        reasoning_filter = ReasoningBlockFilter()
         emitted_visible = False
 
         def _normalize_stream_chunk(text: str) -> str:
@@ -1294,7 +1294,7 @@ class ProviderAgentBinding:
                         body=body.decode("utf-8", errors="replace"),
                     )
                 text_buffer = ""
-                reasoning_filter = _ReasoningBlockFilter()
+                reasoning_filter = ReasoningBlockFilter()
                 emitted_visible = False
 
                 def _normalize_stream_chunk(text: str) -> str:
@@ -1606,7 +1606,7 @@ class ProviderAgentBinding:
             raise RuntimeError(f"Unable to resolve a usable OpenAI model for {model!r}.")
 
         text_buffer = ""
-        reasoning_filter = _ReasoningBlockFilter()
+        reasoning_filter = ReasoningBlockFilter()
         emitted_visible = False
 
         def _normalize_stream_chunk(text: str) -> str:
@@ -1841,7 +1841,7 @@ class ProviderAgentBinding:
                         body=body_text,
                     )
                 text_buffer = ""
-                reasoning_filter = _ReasoningBlockFilter()
+                reasoning_filter = ReasoningBlockFilter()
                 emitted_visible = False
 
                 def _normalize_stream_chunk(text: str) -> str:

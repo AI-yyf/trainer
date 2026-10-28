@@ -20,6 +20,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 const typescript = require(require.resolve('typescript', {
   paths: [path.resolve(__dirname, '..', 'webview')],
 }));
@@ -74,7 +75,7 @@ test('language direction recognizes future RTL locales without adding them to th
 
 test('the provider synchronizes root language and direction while App keeps preview overrides isolated', () => {
   const contextSource = fs.readFileSync(contextSourcePath, 'utf8');
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
 
   assert.match(contextSource, /useLayoutEffect/);
   assert.match(contextSource, /document\.documentElement\.setAttribute\("lang", language\)/);

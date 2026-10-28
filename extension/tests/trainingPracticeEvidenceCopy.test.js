@@ -19,6 +19,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const appUiCopySourcePath = path.resolve(
@@ -72,7 +73,7 @@ function assertNoCssOrderProperty(source, selector) {
 }
 
 test('training pasted proof stays hidden until it can change the verdict', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
   const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
 
   assert.match(appSource, /const handleSubmitTrainingEvidence = useCallback\(/);
@@ -121,7 +122,7 @@ test('training single-card keeps the knowledge card separate from composer verif
 });
 
 test('training structured guidance is wired from App into a collapsed single-card helper layer', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
   const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
   // The workbench text copy table moved verbatim into the i18n segment file;
   // the copy-content assertions slice there, the wiring assertions read the view.
@@ -164,7 +165,7 @@ test('training structured guidance is wired from App into a collapsed single-car
 });
 
 test('training verification-return strip is driven by snapshot status, not summary guessing', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
   const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
   // The verification-return copy table moved verbatim into the i18n segment
   // file; its English phrase assertions slice there.
@@ -239,7 +240,7 @@ test('training verification-return strip is driven by snapshot status, not summa
 });
 
 test('training composer uses explicit try reflect return phases for practice', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
 
   assert.match(appSource, /const trainingComposerPhase = trainingExecutionState\.composerPhase;/);
   assert.match(
@@ -274,7 +275,7 @@ test('training composer uses explicit try reflect return phases for practice', (
 });
 
 test('training return is an empty-draft command and handoff composer copy is localized', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
   const composerSource = fs.readFileSync(composerSourcePath, 'utf8');
   const stylesSource = readStylesSource();
 
@@ -306,7 +307,7 @@ test('training return is an empty-draft command and handoff composer copy is loc
 });
 
 test('training practice verification sends expected symbols while flash stays local-answer based', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
   const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
   // The surface label table moved verbatim into the i18n segment file; the
   // code-symbols label assertion slices there.
@@ -334,7 +335,7 @@ test('training practice verification sends expected symbols while flash stays lo
 });
 
 test('training app prefers practice when selection is ambiguous and passes real flash card payload through', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
 
   assert.match(appSource, /function firstTrainingCardOfType/);
   assert.match(appSource, /routeSelectedCardId/);
@@ -350,7 +351,7 @@ test('training app prefers practice when selection is ambiguous and passes real 
 });
 
 test('training view stays truthful when no governed card exists and keeps verification card-scoped first', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
   const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
 
   assert.match(
@@ -387,7 +388,7 @@ test('training view stays truthful when no governed card exists and keeps verifi
 });
 
 test('training current card never borrows a global action or another card\'s next-hop copy', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
   const trainingViewSource = fs.readFileSync(trainingViewSourcePath, 'utf8');
   const currentStepStart = appSource.indexOf('const currentStep = hasRenderableTrainingCard');
   const currentStepEnd = appSource.indexOf('const localizedSuggestedWorkspaceAction', currentStepStart);

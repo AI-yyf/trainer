@@ -4,11 +4,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 
 test('training flash answers use the persisted learnerAnswer contract before feedback streaming', () => {
-  const source = fs.readFileSync(appSourcePath, 'utf8');
+  const source = readAppModuleSource();
   const answerHandlerStart = source.indexOf('if (trainingComposerUsesAnswerMode)');
   const answerHandlerEnd = source.indexOf('} else {', answerHandlerStart);
   const answerHandler = source.slice(answerHandlerStart, answerHandlerEnd);

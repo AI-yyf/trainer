@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const appSourcePath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const governanceModulePath = path.resolve(
@@ -31,7 +32,7 @@ test('next-hop-only reflection and return reuse the execution phase that drives 
   assert.equal(reflection.composerPhase, 'reflect');
   assert.equal(returnFlow.composerPhase, 'return');
 
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
   assert.match(appSource, /const trainingComposerPhase = trainingExecutionState\.composerPhase;/);
   assert.match(
     appSource,
@@ -41,7 +42,7 @@ test('next-hop-only reflection and return reuse the execution phase that drives 
 });
 
 test('reflection and return phases keep their dedicated placeholder and persistence barrier', () => {
-  const appSource = fs.readFileSync(appSourcePath, 'utf8');
+  const appSource = readAppModuleSource();
 
   assert.match(
     appSource,

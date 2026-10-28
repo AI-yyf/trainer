@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readCopyModuleSource } = require('./helpers/copyModuleSource');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -98,14 +99,16 @@ test('trial command, registry overrides and command id are all registered', () =
 });
 
 test('onboarding copy exists in every locale', () => {
-  const copySource = read(webviewRoot, 'lib/i18n/copy.ts');
+  const copySource = readCopyModuleSource();
   const locales = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
+  // copy.ts is an assembly file; the eight locale tables carry the literals.
+  assert.equal(
+    (copySource.match(/onboardingTitle: "/g) ?? []).length,
+    locales.length,
+    'onboardingTitle must exist in every locale table',
+  );
   for (const locale of locales) {
-    assert.match(copySource, new RegExp(`"%s": \\{`.replace('%s', locale)));
-    assert.ok(
-      copySource.includes('onboardingTitle: "'),
-      'onboardingTitle must exist in copy.ts',
-    );
+    assert.match(copySource, new RegExp(`^export const ${locale.replace('-', '')}:`, 'm'), `${locale} table`);
   }
   assert.ok(copySource.includes('onboardingTrialAction: "'));
   assert.ok(copySource.includes('onboardingModelPastePlaceholder: "'));
@@ -120,7 +123,7 @@ test('P2 #24: the admission panel surfaces the classifier subject family honestl
   assert.match(panel, /props\.subjectFamily === "literature"/);
   assert.match(panel, /t\("workspaceAdmissionSubjectLiterature"\)/);
 
-  const copySource = read(webviewRoot, 'lib/i18n/copy.ts');
+  const copySource = readCopyModuleSource();
   assert.equal(
     (copySource.match(/workspaceAdmissionSubjectLiterature: "/g) ?? []).length,
     8,

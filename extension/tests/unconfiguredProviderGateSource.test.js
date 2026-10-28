@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const sharedStatusPath = path.resolve(__dirname, '..', '..', 'shared', 'src', 'providerStatus.ts');
 const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
@@ -16,7 +17,7 @@ const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx'
  */
 test('unconfigured or missing-key providers cannot send as a live coach', () => {
   const status = fs.readFileSync(sharedStatusPath, 'utf8');
-  const app = fs.readFileSync(appPath, 'utf8');
+  const app = readAppModuleSource();
 
   // Unconfigured/transport-missing and missing-key both produce a blocked
   // needs_configuration state; no lastTestResult gate exists at all.

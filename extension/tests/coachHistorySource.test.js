@@ -11,6 +11,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const webviewRoot = path.resolve(__dirname, '..', 'webview', 'src');
 const hookPath = path.join(webviewRoot, 'app', 'useCoachHistory.ts');
@@ -30,7 +31,7 @@ test('coach history state and actions live in the useCoachHistory hook', () => {
 });
 
 test('App.tsx consumes the hook and drops the inline history state', () => {
-  const app = fs.readFileSync(appPath, 'utf8');
+  const app = readAppModuleSource();
 
   assert.match(app, /useCoachHistory\(\{/);
   assert.match(app, /applySessionList\(/);

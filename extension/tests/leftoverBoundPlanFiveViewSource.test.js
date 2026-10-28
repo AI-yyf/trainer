@@ -19,6 +19,8 @@ const apiRoutesDir = path.resolve(__dirname, '..', '..', 'server', 'app', 'api',
 const bundledApiRoutesDir = path.resolve(__dirname, '..', 'bundled', 'server', 'app', 'api', 'routes');
 const readApiSource = () =>
   fs.readFileSync(routersPath, 'utf8') +
+  fs.readFileSync(path.join(path.dirname(routersPath), 'coach_support.py'), 'utf8') +
+  fs.readFileSync(path.join(path.dirname(routersPath), 'router_support.py'), 'utf8') +
   fs
     .readdirSync(apiRoutesDir)
     .filter((f) => f.endsWith('.py'))
@@ -26,6 +28,8 @@ const readApiSource = () =>
     .join('\n');
 const readBundledApiSource = () =>
   fs.readFileSync(bundledRoutersPath, 'utf8') +
+  fs.readFileSync(path.join(path.dirname(bundledRoutersPath), 'coach_support.py'), 'utf8') +
+  fs.readFileSync(path.join(path.dirname(bundledRoutersPath), 'router_support.py'), 'utf8') +
   fs
     .readdirSync(bundledApiRoutesDir)
     .filter((f) => f.endsWith('.py'))
@@ -134,7 +138,7 @@ test('leftover bound plan competing identity is omitted after generate on five v
   assert.match(routers, /leftover_plan_for_chrome/);
   assert.match(routers, /generated_plan_five_view_payload\(/);
   assert.match(routers, /leftover_plans=/);
-  assert.match(routers, /hydrate_snapshot\(\s*response.snapshot,/);
+  assert.match(routers, /hydrate_snapshot\(\s*(?:coach_support_deps,\s*)?response\.snapshot,/);
   assert.match(recovery, /plan: Any \| None = None/);
   assert.match(recovery, /return not leftover_formal_plan_is_live_for_fill\(/);
   assert.match(workbenchData, /leftoverBoundPlanCompetingIdentityLabels\(/);
@@ -151,7 +155,7 @@ test('leftover bound plan competing identity is omitted after generate on five v
   assert.match(bundledService, /competing_identity = leftover_bound_plan_competing_identity_labels\(/);
   assert.match(bundledRouters, /leftover_plan_for_chrome/);
   assert.match(bundledRouters, /generated_plan_five_view_payload\(/);
-  assert.match(bundledRouters, /hydrate_snapshot\(\s*response.snapshot,/);
+  assert.match(bundledRouters, /hydrate_snapshot\(\s*(?:coach_support_deps,\s*)?response\.snapshot,/);
   assert.match(bundledRecovery, /return not leftover_formal_plan_is_live_for_fill\(/);
   assert.match(bundledOrientation, /leftover_training_not_live_for_bound_plan/);
   assert.match(bundledRepository, /def list_plans\(/);

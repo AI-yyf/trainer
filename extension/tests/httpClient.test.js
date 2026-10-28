@@ -76,6 +76,39 @@ test('postJson exposes only allow-listed workspace conflict metadata', async (t)
   );
 });
 
+test('postJson aborts an in-flight request when the caller signal fires', async (t) => {
+  const server = http.createServer((_request, _response) => {
+    // Hold the response open: without signal support the call would wait for
+    // the full request timeout.
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const address = server.address();
+  assert.equal(typeof address, 'object');
+  assert.ok(address && 'port' in address);
+  const { SidecarHttpClient, SidecarRequestAbortedError } = require(httpClientModulePath);
+
+  const controller = new AbortController();
+  const pending = new SidecarHttpClient().postJson(
+    address.port,
+    '/session/message',
+    { message: 'hi' },
+    { signal: controller.signal, timeoutMs: 30_000 },
+  );
+  setTimeout(() => controller.abort(), 50);
+  await assert.rejects(pending, (error) => error instanceof SidecarRequestAbortedError);
+});
+
+test('postJson rejects before sending when the signal is already aborted', async () => {
+  const { SidecarHttpClient, SidecarRequestAbortedError } = require(httpClientModulePath);
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(
+    () => new SidecarHttpClient().postJson(1, '/unused', {}, { signal: controller.signal }),
+    (error) => error instanceof SidecarRequestAbortedError,
+  );
+});
+
 test('putJson sends a JSON PUT request for explicit plan links', async (t) => {
   const requests = [];
   const server = http.createServer((request, response) => {

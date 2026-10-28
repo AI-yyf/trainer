@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readAppModuleSource } = require('./helpers/appModuleSource');
 
 const webviewRoot = path.resolve(__dirname, '..', 'webview', 'src');
 const hostRoot = path.resolve(__dirname, '..', 'src');
@@ -41,7 +42,7 @@ test('Plan candidate diffs are sanitized instead of JSON.stringified', () => {
 
 test('Settings and Training display host errors through the sanitizer', () => {
   const settings = read('components/settings/CoachSettingsView.tsx');
-  const app = read('app/App.tsx');
+  const app = readAppModuleSource();
   const training = read('components/training/TrainingWorkbenchView.tsx');
   const state = read('app/useWorkbenchState.ts');
 
