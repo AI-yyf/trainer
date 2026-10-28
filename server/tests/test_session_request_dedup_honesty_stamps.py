@@ -59,15 +59,19 @@ def _client(tmp_path: Path) -> TestClient:
 
 def _completed_session_cache(app) -> dict:
     routes = []
-    for route in app.routes:
-        if getattr(route, "path", None) == "/session/message":
-            routes.append(route)
-        original = getattr(route, "original_router", None)
-        routes.extend(
-            child
-            for child in getattr(original, "routes", [])
-            if getattr(child, "path", None) == "/session/message"
-        )
+
+    def collect(items) -> None:
+        for route in items:
+            if getattr(route, "path", None) == "/session/message":
+                routes.append(route)
+            original = getattr(route, "original_router", None)
+            if original is not None:
+                collect(original.routes)
+            children = getattr(route, "routes", None)
+            if children:
+                collect(children)
+
+    collect(app.routes)
     for route in routes:
         endpoint = getattr(route, "endpoint", None)
         closure = getattr(endpoint, "__closure__", None)
@@ -79,6 +83,10 @@ def _completed_session_cache(app) -> dict:
                 value = cell.cell_contents
                 assert isinstance(value, dict)
                 return value
+            if name == "core":
+                value = getattr(cell.cell_contents, "completed_session_requests", None)
+                if isinstance(value, dict):
+                    return value
     raise AssertionError("completed_session_requests cache not found on /session/message")
 
 

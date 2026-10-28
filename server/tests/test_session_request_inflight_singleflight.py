@@ -468,7 +468,7 @@ async def test_stream_waiter_gets_honesty_overlay_stamps(tmp_path: Path) -> None
     transport = httpx.ASGITransport(app=app)
     with (
         patch.object(ProviderService, "coaching_reply_stream", new=slow_stream),
-        patch("app.api.routers.overlay_session_response_honesty_stamps", force_honesty_overlay),
+        patch("app.api.routes.core.overlay_session_response_honesty_stamps", force_honesty_overlay),
     ):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             first = asyncio.create_task(
@@ -687,7 +687,7 @@ async def test_turn_stream_waiter_gets_honesty_overlay_stamps(tmp_path: Path) ->
     transport = httpx.ASGITransport(app=app)
     with (
         patch.object(ProviderService, "coaching_reply_stream", new=slow_stream),
-        patch("app.api.routers.overlay_session_response_honesty_stamps", force_honesty_overlay),
+        patch("app.api.routes.core.overlay_session_response_honesty_stamps", force_honesty_overlay),
     ):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             first = asyncio.create_task(client.post("/turn/stream", json=payload))
@@ -1020,7 +1020,7 @@ async def test_turn_waiter_gets_honesty_overlay_stamps(tmp_path: Path) -> None:
     transport = httpx.ASGITransport(app=app)
     with (
         patch.object(ProviderService, "coaching_reply", new=slow_reply),
-        patch("app.api.routers.overlay_session_response_honesty_stamps", force_honesty_overlay),
+        patch("app.api.routes.core.overlay_session_response_honesty_stamps", force_honesty_overlay),
     ):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             first = asyncio.create_task(client.post("/turn", json=payload))
@@ -1299,7 +1299,7 @@ async def test_cross_route_waiter_gets_honesty_overlay_stamps(
     transport = httpx.ASGITransport(app=app)
     with (
         patch.object(ProviderService, "coaching_reply", new=slow_reply),
-        patch("app.api.routers.overlay_session_response_honesty_stamps", force_honesty_overlay),
+        patch("app.api.routes.core.overlay_session_response_honesty_stamps", force_honesty_overlay),
     ):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             first = asyncio.create_task(client.post(owner_path, json=_payload_for(owner_path)))
@@ -1593,7 +1593,7 @@ async def test_cross_route_stream_waiter_gets_honesty_overlay_stamps(
     transport = httpx.ASGITransport(app=app)
     with (
         patch.object(ProviderService, "coaching_reply_stream", new=slow_stream),
-        patch("app.api.routers.overlay_session_response_honesty_stamps", force_honesty_overlay),
+        patch("app.api.routes.core.overlay_session_response_honesty_stamps", force_honesty_overlay),
     ):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             first = asyncio.create_task(
@@ -1840,7 +1840,7 @@ async def test_cross_route_stream_nonstream_waiter_honesty_overlay(
     with (
         patch.object(ProviderService, "coaching_reply", new=slow_reply),
         patch.object(ProviderService, "coaching_reply_stream", new=slow_stream),
-        patch("app.api.routers.overlay_session_response_honesty_stamps", force_honesty_overlay),
+        patch("app.api.routes.core.overlay_session_response_honesty_stamps", force_honesty_overlay),
     ):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             first = asyncio.create_task(
@@ -2290,7 +2290,7 @@ async def test_stream_waiter_error_path_emits_failure_complete_with_overlay_hook
     with (
         patch.object(ProviderService, "coaching_reply_stream", new=cancellable_stream),
         patch(
-            "app.api.routers.overlay_session_response_honesty_stamps",
+            "app.api.routes.core.overlay_session_response_honesty_stamps",
             side_effect=tracking_overlay,
         ),
     ):

@@ -18,10 +18,19 @@ const promptsSource = fs.readFileSync(
   path.resolve(__dirname, '..', '..', 'server', 'app', 'llm', 'prompts.py'),
   'utf8',
 );
-const routersSource = fs.readFileSync(
-  path.resolve(__dirname, '..', '..', 'server', 'app', 'api', 'routers.py'),
-  'utf8',
-);
+const routersSource = [
+  'routers.py',
+  'coach_support.py',
+  'router_support.py',
+  path.join('routes', 'core.py'),
+]
+  .map((name) =>
+    fs.readFileSync(
+      path.resolve(__dirname, '..', '..', 'server', 'app', 'api', name),
+      'utf8',
+    ),
+  )
+  .join('\n');
 
 test('coach_finalize next_step schema demands an evidence-extracted concrete move', () => {
   assert.match(toolsSource, /The ONE concrete verifiable move from this turn's evidence/);
@@ -72,8 +81,8 @@ test('router repairs generic or pasted-prose next_step from the reply labelled a
   // persistence, so the recorded thread and the grounding gate see the same
   // shipped step as the response surfaces.
   assert.match(routersSource, /def repair_generic_finalize_next_step\(/);
-  assert.match(routersSource, /coach_turn_payload = repair_generic_finalize_next_step\(\n\s+assistant_content,/);
-  assert.match(routersSource, /refreshed_coach_turn_data = repair_generic_finalize_next_step\(/);
+  assert.match(routersSource, /coach_turn_payload = (?:deps\.)?repair_generic_finalize_next_step\(\n\s+assistant_content,/);
+  assert.match(routersSource, /refreshed_coach_turn_data = (?:deps\.)?repair_generic_finalize_next_step\(/);
 });
 
 test('pedagogy rescue templates derive their target from the turn subject', () => {

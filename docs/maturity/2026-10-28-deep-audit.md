@@ -310,16 +310,16 @@ flashcard 答题测试 12 连挂 + evidence_queue adopt/reject 5 连挂，意味
 |---|---|---|---|
 | `copy.ts` | 3,868 | 495 | `copyTypes.ts`（452）+ `locales/*.ts`（8×442） |
 | `App.tsx` | 14,934 | 11,627 | `appHelpers.tsx`（3,776） |
-| `routers.py` | 26,067 | 21,587 | `router_support.py`（530）+ `coach_support.py`（4,189） |
-| `provider_service.py` | 8,645 | 8,080 | `provider/context_budget.py`（478）+ `provider/service_support.py`（118） |
+| `routers.py` | 26,067 | 14,167 | `router_support.py`（530）+ `coach_support.py`（7,343）+ `routes/core.py`（5,020，40 条路由，build_router 只做装配） |
+| `provider_service.py` | 8,645 | 6,653 | `context_budget.py`（478）+ `model_catalog.py`（659）+ `language_probes.py`（679）+ `error_classification.py`（207）+ `service_support.py`（118） |
 
-`coach_support.py` 用显式 `CoachSupportDeps` 依赖包承载原先藏在 `build_router` 闭包里的 45 个名字；`router_support.py` 承载 19 个模块级助手；`context_budget.py` 以 mixin 形式承载 15 个预算方法。`App.tsx` 的 177 个模块级声明移入 `appHelpers.tsx`，源码守卫测试改为读取「逻辑模块合并源」。
+`coach_support.py` 用显式 `CoachSupportDeps` 依赖包承载原先藏在 `build_router` 闭包里的名字（含 build_coach_context / resolve_coach_turn / build_session_response / execute_turn）；`routes/core.py` 以 `CoreRouteDeps` 承载 40 条核心路由与 131 个闭包依赖，`build_router` 只负责装配与 include；`router_support.py` 承载 19 个模块级助手；`context_budget.py`/`model_catalog.py` 以 mixin 形式承载预算与模型目录方法。`App.tsx` 的 177 个模块级声明移入 `appHelpers.tsx`，源码守卫测试改为读取「逻辑模块合并源」。
 
 ### 9.5 本轮验证
 
 | 项目 | 结果 |
 |---|---|
-| 全量 server pytest | **3682 passed, 0 failed**（含真实 sidecar 200 场景；6m39s） |
+| 全量 server pytest | **3682 passed, 0 failed**（默认 8 worker 与 4 worker 各跑一轮） |
 | extension node:test | **2232 passed, 0 failed** |
 | `npm run check`（CSS 分区 + webview tsc + extension tsc） | 通过 |
 | `npm run build`（webview + extension） | 通过 |
@@ -331,6 +331,6 @@ flashcard 答题测试 12 连挂 + evidence_queue adopt/reject 5 连挂，意味
 
 ### 9.6 仍存的结构性风险（明确排期）
 
-1. **深闭包图尚未完全拆开**：`routers.py` 仍承载 session/turn/stream 的注册与装配（约 21.6k 行）；`provider_service.py` 仍是一个 8k 行类；`App.tsx` 仍是 11.6k 行编排器。本轮已经把三类稳定接缝抽出来（帮助函数、预算 mixin、模块级助手），下一步可以按 domain 继续迁移，但需要独立回归窗口——这与 §8.4 的判断一致。
-2. **同文件内测试顺序依赖**：套件仍以 `--dist loadfile` 运行，文件内 create→assert 序列是既有契约；新增测试应自建状态（§8.4 第 5 条保持）。
+1. **剩余深层拆分**：`routers.py` 仍有 14.2k 行 helper 闭包（路由已全部移出，build_router 只装配）；`provider_service.py` 仍是 7.5k 行类（协议/流式/重试尚未抽出）；`App.tsx` 仍是 11.6k 行组件体（render/effects 尚未拆）。路由层与四类稳定接缝已落地；剩余部分需要独立 UI/协议回归窗口——这与 §8.4 的判断一致。
+2. **同文件内测试顺序依赖**：套件仍以 `--dist loadfile` 运行，文件内 create→assert 序列是既有契约；本轮用默认 8 worker 与 4 worker 各跑一轮全量（均 3682 通过），验证了跨 worker/文件分配无耦合；新增测试仍应自建状态（§8.4 第 5 条保持）。
 3. **Windows/CI**：本轮未推送，未重跑云端三平台矩阵；本地验证以 macOS 为准。

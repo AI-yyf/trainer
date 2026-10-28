@@ -27,6 +27,9 @@ const routersPath = path.resolve(__dirname, '..', '..', 'server', 'app', 'api', 
 const apiRoutesDir = path.resolve(__dirname, '..', '..', 'server', 'app', 'api', 'routes');
 const readApiSource = () =>
   fs.readFileSync(routersPath, 'utf8') +
+  fs.readFileSync(path.join(path.dirname(routersPath), 'coach_support.py'), 'utf8') +
+  fs.readFileSync(path.join(path.dirname(routersPath), 'router_support.py'), 'utf8') +
+  fs.readFileSync(path.join(path.dirname(routersPath), 'routes', 'core.py'), 'utf8') +
   fs
     .readdirSync(apiRoutesDir)
     .filter((f) => f.endsWith('.py'))

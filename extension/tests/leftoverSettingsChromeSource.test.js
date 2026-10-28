@@ -251,8 +251,10 @@ test('leftover Settings profile/rhythm is not live Settings identity when recove
     /leftoverSettingsLearnerProjectOnboardingNotLive\s*\?\s*null\s*:\s*data\.profile\.onboardingRequest/,
   );
 
-  const routers = fs.readFileSync(routersPath, 'utf8') + fs.readFileSync(path.join(path.dirname(routersPath), 'coach_support.py'), 'utf8');
-  const bundledRouters = fs.readFileSync(bundledRoutersPath, 'utf8') + fs.readFileSync(path.join(path.dirname(bundledRoutersPath), 'coach_support.py'), 'utf8');
+  const routers = fs.readFileSync(routersPath, 'utf8') + fs.readFileSync(path.join(path.dirname(routersPath), 'coach_support.py'), 'utf8') +
+  fs.readFileSync(path.join(path.dirname(routersPath), 'routes', 'core.py'), 'utf8');
+  const bundledRouters = fs.readFileSync(bundledRoutersPath, 'utf8') + fs.readFileSync(path.join(path.dirname(bundledRoutersPath), 'coach_support.py'), 'utf8') +
+  fs.readFileSync(path.join(path.dirname(bundledRoutersPath), 'routes', 'core.py'), 'utf8');
   assert.match(routers, /leftover_settings_profile_rhythm_is_not_live\(/);
   assert.match(routers, /leftover_settings_learner_project_onboarding_is_not_live\(/);
   assert.match(routers, /leftover_resource_sandbox_preview_is_not_live\(/);
@@ -425,8 +427,10 @@ test('card-status leftover-not-live identity is fail-closed in sidecar, bundled 
   );
   const identity = fs.readFileSync(identityPath, 'utf8');
   const bundledIdentity = fs.readFileSync(bundledIdentityPath, 'utf8');
-  const routers = fs.readFileSync(routersPath, 'utf8') + fs.readFileSync(path.join(path.dirname(routersPath), 'coach_support.py'), 'utf8');
-  const bundledRouters = fs.readFileSync(bundledRoutersPath, 'utf8') + fs.readFileSync(path.join(path.dirname(bundledRoutersPath), 'coach_support.py'), 'utf8');
+  const routers = fs.readFileSync(routersPath, 'utf8') + fs.readFileSync(path.join(path.dirname(routersPath), 'coach_support.py'), 'utf8') +
+  fs.readFileSync(path.join(path.dirname(routersPath), 'routes', 'core.py'), 'utf8');
+  const bundledRouters = fs.readFileSync(bundledRoutersPath, 'utf8') + fs.readFileSync(path.join(path.dirname(bundledRoutersPath), 'coach_support.py'), 'utf8') +
+  fs.readFileSync(path.join(path.dirname(bundledRoutersPath), 'routes', 'core.py'), 'utf8');
   const handoff = fs.readFileSync(handoffPath, 'utf8');
   const bundledHandoff = fs.readFileSync(bundledHandoffPath, 'utf8');
   const trainingCommands = fs.readFileSync(
@@ -441,11 +445,11 @@ test('card-status leftover-not-live identity is fail-closed in sidecar, bundled 
   assert.match(bundledIdentity, /Recovered training card is leftover-not-live/);
   assert.match(routers, /def require_live_selected_card_for_status\(/);
   assert.match(routers, /require_live_selected_card_for_status_impl\(runtime, workspace_id, card_id\)/);
-  assert.match(routers, /require_live_selected_card_for_status\(request\.workspace_id, request\.card_id\)/);
+  assert.match(routers, /(?:core\.)?require_live_selected_card_for_status\(request\.workspace_id, request\.card_id\)/);
   assert.match(handoff, /require_live_selected_card_for_status\(runtime, request\.workspace_id, request\.card_id\)/);
   assert.match(bundledHandoff, /require_live_selected_card_for_status\(runtime, request\.workspace_id, request\.card_id\)/);
   assert.match(bundledRouters, /def require_live_selected_card_for_status\(/);
-  assert.match(bundledRouters, /require_live_selected_card_for_status\(request\.workspace_id, request\.card_id\)/);
+  assert.match(bundledRouters, /(?:core\.)?require_live_selected_card_for_status\(request\.workspace_id, request\.card_id\)/);
   assert.match(trainingCommands, /leftover-not-live\|does not match live selected_card_id/);
   assert.match(
     trainingCommands,
