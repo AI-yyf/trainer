@@ -153,6 +153,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     browser_lane_paths = frozenset(
         {
             "/browser/status",
+            "/browser/auto-pair",
             "/browser/coach-draft",
         }
     )

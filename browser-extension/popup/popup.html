@@ -8,9 +8,10 @@
   <body>
     <!--
       en-US fallback text only; popup.js localizes via the shared copy map.
-      Two states: pairing (first run) and capture. No connection status, no
-      import history — captures land in Trainer and the badge carries the
-      queued count. Words live in tooltips; the card stays quiet like a menu.
+      Zero pairing UI: the extension discovers Trainer and connects itself.
+      The card is capture-only — no connection status, no import history —
+      and the badge carries the queued count. Words live in tooltips; the
+      card stays quiet like a menu.
     -->
 
     <svg class="sprite" aria-hidden="true" focusable="false" width="0" height="0">
@@ -53,28 +54,6 @@
         <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-close"></use></svg>
         <span class="visually-hidden" data-copy="close">Close</span>
       </button>
-
-      <section id="pair-panel" class="panel" hidden>
-        <h1 class="card-title" data-copy="pairHeading"></h1>
-        <p id="detect-line" class="muted-line" data-copy="detecting"></p>
-        <div class="row">
-          <input id="pair-code" type="text" inputmode="numeric" autocomplete="one-time-code"
-            spellcheck="false" maxlength="7" data-copy-placeholder="pairCodePlaceholder"
-            data-copy-title="pairCodeHint" />
-          <button id="pair-submit" class="iconbtn iconbtn--solid" type="button" data-copy-label="pairAction">
-            <svg class="icon" aria-hidden="true"><use href="#icon-plug"></use></svg>
-            <span class="visually-hidden" data-copy="pairAction">Pair</span>
-          </button>
-        </div>
-        <p id="pair-recovery" class="muted-line" hidden></p>
-        <div class="row row--tight">
-          <button id="detect-again" class="iconbtn" type="button" data-copy-label="detectAgain">
-            <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-refresh"></use></svg>
-            <span class="visually-hidden" data-copy="detectAgain">Detect again</span>
-          </button>
-          <p id="pair-feedback" class="feedback" role="status" aria-live="polite"></p>
-        </div>
-      </section>
 
       <section id="capture-panel" class="panel" hidden>
         <h1 class="card-title" data-copy="captureHeading"></h1>

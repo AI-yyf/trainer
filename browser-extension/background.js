@@ -216,15 +216,17 @@ chrome.notifications.onClicked.addListener((notificationId) => {
 
 async function updateBadge() {
   try {
-    const [auth, queue] = await Promise.all([
+    const [auth, queue, drafts] = await Promise.all([
       TrainerCapture.loadAuth(),
-      TrainerCapture.loadQueue()
+      TrainerCapture.loadQueue(),
+      TrainerCapture.loadDraftQueue()
     ]);
+    const pending = queue.length + drafts.length;
     let text = '';
     if (!auth.credential) {
-      text = '!';
-    } else if (queue.length) {
-      text = String(queue.length);
+      text = pending ? String(pending) : '!';
+    } else if (pending) {
+      text = String(pending);
     }
     await chrome.action.setBadgeText({ text });
     if (text) {
@@ -394,13 +396,19 @@ async function runCapture(target, options) {
     targetDir: download ? String(target.targetDir || '') : ''
   };
 
-  const [auth, history, queue, storedFocusId, storedTargetDir] = await Promise.all([
+  let [auth, history, queue, storedFocusId, storedTargetDir] = await Promise.all([
     TrainerCapture.loadAuth(),
     TrainerCapture.loadHistory(),
     TrainerCapture.loadQueue(),
     TrainerCapture.loadFocusId(),
     TrainerCapture.loadTargetDir()
   ]);
+  if (!auth.credential || !auth.baseUrl) {
+    const auto = await ensureAutoPair({ force: true });
+    if (auto.ok) {
+      auth = auto.auth;
+    }
+  }
 
   // A right-click download carries no folder of its own: it uses the folder the
   // popup last saved. Resolve it *before* the dedup key, so a menu download and
@@ -409,6 +417,11 @@ async function runCapture(target, options) {
     normalizedTarget.targetDir = storedTargetDir || TrainerCapture.DEFAULT_TARGET_DIR;
   }
   const dedupKey = trainerDedupKey(normalizedTarget);
+  const focusId =
+    target.focusId !== undefined && target.focusId !== null
+      ? String(target.focusId)
+      : storedFocusId;
+  const clientCaptureId = TrainerCapture.createClientCaptureId();
 
   const label = TrainerCapture.captureLabel(normalizedTarget) || url;
   // Only the pending queue may short-circuit locally: a past SUCCESS record
@@ -440,16 +453,56 @@ async function runCapture(target, options) {
   }
 
   if (!auth.credential || !auth.baseUrl) {
-    const message = copy.captureUnpaired;
+    // Zero-code onboarding: a capture taken before Trainer is reachable is
+    // queued, never rejected. The queue item carries no workspace yet; the
+    // sidecar binds it to whichever workspace auto-pairs first.
+    const item = TrainerCapture.createQueueItem({
+      url,
+      kind,
+      title: normalizedTarget.title,
+      selection: normalizedTarget.selection,
+      focusId,
+      includeDocs: normalizedTarget.includeDocs,
+      download: normalizedTarget.download,
+      targetDir: normalizedTarget.targetDir,
+      clientCaptureId,
+      workspaceId: auth.workspaceId || ''
+    });
+    const enqueued = await withQueueLock(async () => {
+      const fresh = await TrainerCapture.loadQueue();
+      const next = TrainerCapture.enqueueCapture(fresh, item, TrainerCapture.LIMITS.queue);
+      if (!next.rejectedFull) {
+        await TrainerCapture.saveQueue(next.queue);
+      }
+      return next;
+    });
+    if (enqueued.rejectedFull) {
+      const message = TrainerCapture.formatCopy(copy.captureQueueFull, {});
+      if (settings.notify !== false) {
+        await notifyResult(copy.notifyFailedTitle, message, '');
+      }
+      await updateBadge();
+      return { status: 'failed', message, deepLink: '' };
+    }
+    const queueMessage = TrainerCapture.formatCopy(
+      download ? copy.captureDownloadQueued : copy.captureQueued,
+      { count: enqueued.queue.length }
+    );
+    await TrainerCapture.recordHistory(
+      buildHistoryEntry(normalizedTarget, 'queued', queueMessage, null)
+    );
+    await recordConnection('offline');
     if (settings.notify !== false) {
-      await notifyResult(copy.notifyFailedTitle, message, '');
+      await notifyResult(
+        download ? copy.notifyDownloadTitle : copy.notifyQueuedTitle,
+        queueMessage,
+        ''
+      );
     }
     await updateBadge();
-    return { status: 'unpaired', message, deepLink: '' };
+    return { status: 'queued', message: queueMessage, queueLength: enqueued.queue.length };
   }
 
-  const focusId = target.focusId !== undefined && target.focusId !== null ? String(target.focusId) : storedFocusId;
-  const clientCaptureId = TrainerCapture.createClientCaptureId();
   const payload = TrainerCapture.buildCapturePayload({
     url,
     kind,
@@ -508,16 +561,20 @@ async function runCapture(target, options) {
     };
   }
 
-  if (!response.retryable) {
-    // Permanent failure (e.g. network-disabled workspace, read-only workspace,
-    // bad credential): record it and never queue it.
+  if (response.unauthorized) {
+    // The sidecar may have been reset or re-paired while this browser kept the
+    // old credential. Drop it so the next flush auto-pairs again, and keep the
+    // capture instead of losing it to a stale token.
+    await TrainerCapture.clearAuth();
+    resetAutoPairCache();
+  }
+
+  if (!response.retryable && !response.unauthorized) {
+    // Permanent failure (e.g. network-disabled workspace, read-only workspace):
+    // record it and never queue it.
     const message = TrainerCapture.formatCopy(copy.captureFailed, { message: response.message });
     await TrainerCapture.recordHistory(buildHistoryEntry(normalizedTarget, 'failed', message, null));
-    if (response.unauthorized) {
-      await TrainerCapture.saveNotice(response.message || copy.errUnauthorized);
-    } else {
-      await recordConnection('ok');
-    }
+    await recordConnection('ok');
     if (settings.notify !== false) {
       await notifyResult(copy.notifyFailedTitle, message, '');
     }
@@ -589,11 +646,26 @@ async function flushQueueLocked(options) {
   const settings = options || {};
   const copy = dict();
   let auth = await TrainerCapture.loadAuth();
-  let queue = await TrainerCapture.loadQueue();
   if (!auth.credential || !auth.baseUrl) {
-    return { ok: false, flushed: 0, remaining: queue.length, reason: 'unpaired', message: copy.queueUnpaired };
+    const auto = await ensureAutoPair();
+    if (auto.ok) {
+      auth = auto.auth;
+    }
   }
-  if (!queue.length) {
+  let queue = await TrainerCapture.loadQueue();
+  let drafts = await TrainerCapture.loadDraftQueue();
+  const pending = () => queue.length + drafts.length;
+
+  if (!auth.credential || !auth.baseUrl) {
+    return {
+      ok: false,
+      flushed: 0,
+      remaining: pending(),
+      reason: 'unpaired',
+      message: copy.queueUnpaired
+    };
+  }
+  if (!pending()) {
     await updateBadge();
     return { ok: true, flushed: 0, remaining: 0, message: copy.queueEmpty };
   }
@@ -604,8 +676,21 @@ async function flushQueueLocked(options) {
   let stop = false;
   const savedPaths = [];
 
+  // Captures and downloads first.
   while (queue.length && !stop) {
     const item = TrainerCapture.takeNextQueueItem(queue);
+    if (item.workspaceId && auth.workspaceId && item.workspaceId !== auth.workspaceId) {
+      await TrainerCapture.saveNotice(copy.queueWorkspaceChanged);
+      queue = TrainerCapture.markQueueAttempt(
+        queue,
+        item.clientCaptureId,
+        copy.queueWorkspaceChanged
+      );
+      lastError = copy.queueWorkspaceChanged;
+      lastStatus = 0;
+      stop = true;
+      break;
+    }
     const payload = TrainerCapture.buildCapturePayload(item);
     const response = await sendCaptureWithRecovery(payload, auth);
 
@@ -654,9 +739,6 @@ async function flushQueueLocked(options) {
     }
 
     if (response.unauthorized) {
-      // 401 means "reachable, wrong identity", not "deliverable". Try to find
-      // the instance that accepts this credential once; otherwise pause with
-      // the item kept (issue T-0007).
       const recoveredBaseUrl = await findPairedBaseUrl(auth);
       if (recoveredBaseUrl && recoveredBaseUrl !== auth.baseUrl) {
         await TrainerCapture.saveAuth(recoveredBaseUrl, auth.credential);
@@ -665,10 +747,14 @@ async function flushQueueLocked(options) {
         continue;
       }
       await TrainerCapture.saveNotice(response.message || copy.errUnauthorized);
+      // A stale credential must not wedge the queue: clear it so the next
+      // flush auto-pairs again, and keep the item for that retry.
+      await TrainerCapture.clearAuth();
+      resetAutoPairCache();
       await recordConnection('offline');
       queue = TrainerCapture.markQueueAttempt(queue, item.clientCaptureId, response.message);
       lastError = response.message;
-      lastStatus = Number(response.status) || 401;
+      lastStatus = 0;
       stop = true;
       break;
     }
@@ -693,7 +779,87 @@ async function flushQueueLocked(options) {
     );
   }
 
+  // Coach drafts (selections) follow captures, same workspace fence.
+  while (drafts.length && !stop) {
+    const draft = TrainerCapture.takeNextDraft(drafts);
+    if (draft.workspaceId && auth.workspaceId && draft.workspaceId !== auth.workspaceId) {
+      await TrainerCapture.saveNotice(copy.queueWorkspaceChanged);
+      drafts = TrainerCapture.markDraftAttempt(
+        drafts,
+        draft.clientDraftId,
+        copy.queueWorkspaceChanged
+      );
+      lastError = copy.queueWorkspaceChanged;
+      lastStatus = 0;
+      stop = true;
+      break;
+    }
+    const payload = TrainerCapture.buildCoachDraftPayload({
+      selection: draft.selection,
+      url: draft.url,
+      title: draft.title,
+      clientId: draft.clientDraftId
+    });
+    const result = await TrainerCapture.sendCoachDraft(auth.baseUrl, auth.credential, payload);
+    if (result.ok) {
+      drafts = TrainerCapture.dequeueDraft(drafts, draft.clientDraftId);
+      flushed += 1;
+      await TrainerCapture.recordHistory(
+        buildHistoryEntry(
+          {
+            url: draft.url,
+            kind: 'web',
+            title: draft.title || draft.selection.slice(0, 60)
+          },
+          'ok',
+          copy.coachSent,
+          null
+        )
+      );
+      continue;
+    }
+    if (result.unauthorized) {
+      await TrainerCapture.clearAuth();
+      resetAutoPairCache();
+      drafts = TrainerCapture.markDraftAttempt(
+        drafts,
+        draft.clientDraftId,
+        result.message
+      );
+      lastError = result.message;
+      lastStatus = 0;
+      stop = true;
+      break;
+    }
+    if (result.status && result.status !== 429 && !TrainerCapture.isRetryableStatus(result.status)) {
+      drafts = TrainerCapture.dequeueDraft(drafts, draft.clientDraftId);
+      const message = TrainerCapture.formatCopy(copy.coachFailed, { message: result.message });
+      await TrainerCapture.recordHistory(
+        buildHistoryEntry(
+          {
+            url: draft.url,
+            kind: 'web',
+            title: draft.title || draft.selection.slice(0, 60)
+          },
+          'failed',
+          message,
+          null
+        )
+      );
+      continue;
+    }
+    drafts = TrainerCapture.markDraftAttempt(
+      drafts,
+      draft.clientDraftId,
+      result.message
+    );
+    lastError = result.message;
+    lastStatus = Number(result.status) || 0;
+    stop = true;
+  }
+
   await TrainerCapture.saveQueue(queue);
+  await TrainerCapture.saveDraftQueue(drafts);
   await updateBadge();
 
   if (flushed > 0) {
@@ -705,43 +871,138 @@ async function flushQueueLocked(options) {
     if (settings.notify !== false) {
       await notifyResult(copy.notifyQueueDoneTitle, message, '');
     }
-    return { ok: true, flushed, remaining: queue.length, message };
+    return { ok: true, flushed, remaining: pending(), message };
   }
   if (lastError) {
     await recordConnection(lastStatus ? 'ok' : 'offline');
-    return { ok: false, flushed: 0, remaining: queue.length, reason: 'offline', message: copy.queueOffline };
+    return {
+      ok: false,
+      flushed: 0,
+      remaining: pending(),
+      reason: 'offline',
+      message: lastError || copy.queueOffline
+    };
   }
-  return { ok: true, flushed: 0, remaining: queue.length, message: copy.queueNothing };
+  return { ok: true, flushed: 0, remaining: pending(), message: copy.queueNothing };
 }
 
 // ------------------------------------------------------------- state/UI ----
 
+let autoPairPromise = null;
+let lastAutoPairAt = 0;
+let lastAutoPairResult = null;
+
+function resetAutoPairCache() {
+  lastAutoPairAt = 0;
+  lastAutoPairResult = null;
+}
+
+/**
+ * Zero-code connection: discover the loopback sidecar and let it mint a
+ * workspace-bound credential. The popup never asks for a pair code, port or
+ * token. A failed probe is cached for a few seconds so opening the popup does
+ * not rescan the whole managed port range twice.
+ */
+async function ensureAutoPair(options) {
+  const force = Boolean(options && options.force);
+  if (autoPairPromise) {
+    return autoPairPromise;
+  }
+  const now = Date.now();
+  if (!force && lastAutoPairResult && now - lastAutoPairAt < 5000) {
+    return lastAutoPairResult;
+  }
+  autoPairPromise = (async () => {
+    const existing = await TrainerCapture.loadAuth();
+    if (existing.credential && existing.baseUrl) {
+      return { ok: true, auth: existing };
+    }
+    const disabled = await chrome.storage.local.get({
+      [TrainerCapture.STORAGE_KEYS.autoPairDisabled]: false
+    });
+    if (!force && disabled[TrainerCapture.STORAGE_KEYS.autoPairDisabled]) {
+      return { ok: false, disabled: true };
+    }
+    const discovered = await TrainerCapture.discoverSidecar({});
+    for (const baseUrl of discovered.baseUrls || []) {
+      const paired = await TrainerCapture.autoPairSidecar(baseUrl);
+      if (paired.ok) {
+        const saved = await TrainerCapture.saveAuth(
+          paired.baseUrl,
+          paired.credential,
+          paired.workspaceId
+        );
+        await TrainerCapture.saveWorkspaceName(paired.workspaceName);
+        await chrome.storage.local.set({
+          [TrainerCapture.STORAGE_KEYS.autoPairDisabled]: false
+        });
+        await recordConnection('ok');
+        return {
+          ok: true,
+          auth: { ...saved, workspaceName: paired.workspaceName }
+        };
+      }
+    }
+    await recordConnection('offline');
+    return { ok: false, message: dict().autoPairFailed };
+  })()
+    .then((result) => {
+      lastAutoPairAt = Date.now();
+      lastAutoPairResult = result;
+      return result;
+    })
+    .finally(() => {
+      autoPairPromise = null;
+    });
+  return autoPairPromise;
+}
+
 async function buildState() {
-  const [auth, cached, queue, history, focusId, targetDir, notice, connection] = await Promise.all([
-    TrainerCapture.loadAuth(),
-    TrainerCapture.loadStatusCache(),
-    TrainerCapture.loadQueue(),
-    TrainerCapture.loadHistory(),
-    TrainerCapture.loadFocusId(),
-    TrainerCapture.loadTargetDir(),
-    TrainerCapture.loadNotice(),
-    TrainerCapture.loadConnection()
-  ]);
+  let auth = await TrainerCapture.loadAuth();
+  if (!auth.credential || !auth.baseUrl) {
+    const auto = await ensureAutoPair();
+    if (auto.ok) {
+      auth = auto.auth;
+    }
+  }
+  const [cached, queue, drafts, history, focusId, targetDir, notice, connection, storedWorkspaceName] =
+    await Promise.all([
+      TrainerCapture.loadStatusCache(),
+      TrainerCapture.loadQueue(),
+      TrainerCapture.loadDraftQueue(),
+      TrainerCapture.loadHistory(),
+      TrainerCapture.loadFocusId(),
+      TrainerCapture.loadTargetDir(),
+      TrainerCapture.loadNotice(),
+      TrainerCapture.loadConnection(),
+      TrainerCapture.loadWorkspaceName()
+    ]);
+  const disabledState = await chrome.storage.local.get({
+    [TrainerCapture.STORAGE_KEYS.autoPairDisabled]: false
+  });
+  const autoPairDisabled = Boolean(
+    disabledState[TrainerCapture.STORAGE_KEYS.autoPairDisabled]
+  );
   const paired = Boolean(auth.credential && auth.baseUrl);
   return {
     paired,
-    // 'connected' is only asserted from an actual sidecar answer; a paired
-    // extension whose Trainer is not running reports offline (task 三).
+    autoPairDisabled,
+    // 'connected' is only asserted from an actual sidecar answer.
     connected: paired && connection === 'ok',
-    offline: paired && connection === 'offline',
+    offline: !paired || connection === 'offline',
     baseUrl: auth.baseUrl,
-    workspaceName: cached.workspaceName,
+    workspaceName:
+      auth.workspaceName ||
+      (cached && cached.workspaceName) ||
+      storedWorkspaceName ||
+      '',
     libraryCount: cached.libraryCount,
     focusOptions: cached.focusOptions,
     focusId,
     targetDir: targetDir || TrainerCapture.DEFAULT_TARGET_DIR,
-    queueCount: queue.length,
+    queueCount: queue.length + drafts.length,
     queue: queue.slice(),
+    drafts: drafts.slice(),
     history: history.slice(0, TrainerCapture.LIMITS.historyDisplay),
     notice
   };
@@ -794,9 +1055,15 @@ async function fetchStatusWithRecovery(auth) {
 }
 
 async function refreshState() {
-  const auth = await TrainerCapture.loadAuth();
+  let auth = await TrainerCapture.loadAuth();
   if (!auth.credential || !auth.baseUrl) {
-    await recordConnection('unknown');
+    const auto = await ensureAutoPair();
+    if (auto.ok) {
+      auth = auto.auth;
+    }
+  }
+  if (!auth.credential || !auth.baseUrl) {
+    await recordConnection('offline');
     await updateBadge();
     return buildState();
   }
@@ -864,6 +1131,10 @@ async function revokePairing() {
     remote = await TrainerCapture.revokePairing(auth.baseUrl, auth.credential);
   }
   await TrainerCapture.clearAuth();
+  resetAutoPairCache();
+  await chrome.storage.local.set({
+    [TrainerCapture.STORAGE_KEYS.autoPairDisabled]: true
+  });
   // Pending captures cannot be delivered without a credential; drop them so
   // the badge does not keep counting forever after an explicit revoke, and
   // clear the local capture records so a later re-capture is not short-
@@ -872,6 +1143,7 @@ async function revokePairing() {
   // here would erase a capture enqueued while revoke was running.
   await withQueueLock(async () => {
     await TrainerCapture.saveQueue([]);
+    await TrainerCapture.saveDraftQueue([]);
   });
   await TrainerCapture.clearHistory();
   await recordConnection('unknown');
@@ -887,19 +1159,24 @@ async function removeQueueEntry(clientCaptureId) {
     return { ok: false, message: dict().queueNothing };
   }
   const next = await withQueueLock(async () => {
-    const queue = await TrainerCapture.loadQueue();
-    const updated = TrainerCapture.removeQueueItem(queue, id);
-    await TrainerCapture.saveQueue(updated);
-    return updated;
+    const queue = TrainerCapture.removeQueueItem(await TrainerCapture.loadQueue(), id);
+    const drafts = TrainerCapture.dequeueDraft(await TrainerCapture.loadDraftQueue(), id);
+    await TrainerCapture.saveQueue(queue);
+    await TrainerCapture.saveDraftQueue(drafts);
+    return { queue, drafts };
   });
   await updateBadge();
-  return { ok: true, remaining: next.length, state: await buildState() };
+  return {
+    ok: true,
+    remaining: next.queue.length + next.drafts.length,
+    state: await buildState()
+  };
 }
 
-/** Queue manager: clear every pending capture (task 三). */
 async function clearQueueEntries() {
   await withQueueLock(async () => {
-    await TrainerCapture.saveQueue(TrainerCapture.clearQueue());
+    await TrainerCapture.saveQueue([]);
+    await TrainerCapture.saveDraftQueue([]);
   });
   await updateBadge();
   return { ok: true, remaining: 0, state: await buildState() };
@@ -912,10 +1189,12 @@ async function coachDraft(info, tab) {
     await notifyResult(copy.notifyDraftTitle, copy.coachEmptySelection, '');
     return { status: 'failed', message: copy.coachEmptySelection };
   }
-  const auth = await TrainerCapture.loadAuth();
+  let auth = await TrainerCapture.loadAuth();
   if (!auth.credential || !auth.baseUrl) {
-    await notifyResult(copy.notifyDraftTitle, copy.captureUnpaired, '');
-    return { status: 'unpaired', message: copy.captureUnpaired };
+    const auto = await ensureAutoPair({ force: true });
+    if (auto.ok) {
+      auth = auto.auth;
+    }
   }
   const payload = TrainerCapture.buildCoachDraftPayload({
     selection,
@@ -923,11 +1202,83 @@ async function coachDraft(info, tab) {
     title: tab && tab.title ? String(tab.title) : '',
     clientId: TrainerCapture.createCoachDraftId()
   });
+
+  if (!auth.credential || !auth.baseUrl) {
+    const item = TrainerCapture.createDraftQueueItem({
+      selection,
+      url: payload.url,
+      title: payload.title,
+      workspaceId: auth.workspaceId || ''
+    });
+    const enqueued = await withQueueLock(async () => {
+      const fresh = await TrainerCapture.loadDraftQueue();
+      const next = TrainerCapture.enqueueDraft(fresh, item, TrainerCapture.LIMITS.queue);
+      if (!next.rejectedFull) {
+        await TrainerCapture.saveDraftQueue(next.queue);
+      }
+      return next;
+    });
+    if (enqueued.rejectedFull) {
+      const message = copy.coachQueueFull;
+      await notifyResult(copy.notifyDraftTitle, message, '');
+      await updateBadge();
+      return { status: 'failed', message };
+    }
+    const message = TrainerCapture.formatCopy(copy.coachQueued, {
+      count: enqueued.queue.length
+    });
+    await notifyResult(copy.notifyDraftTitle, message, '');
+    await updateBadge();
+    return { status: 'queued', message, queueLength: enqueued.queue.length };
+  }
+
   const result = await TrainerCapture.sendCoachDraft(auth.baseUrl, auth.credential, payload);
   if (result.ok) {
     await notifyResult(copy.notifyDraftTitle, copy.coachSent, TrainerCapture.HOST_DEEP_LINK);
     return { status: 'sent', message: copy.coachSent };
   }
+
+  // Transport failures, 429 (host draft queue full), 5xx and a stale
+  // credential are transient: keep the selection locally, drop the credential
+  // so the next flush auto-pairs again, and retry on the next alarm/popup.
+  const retryable =
+    !result.status ||
+    result.status === 429 ||
+    result.unauthorized ||
+    TrainerCapture.isRetryableStatus(result.status);
+  if (retryable) {
+    if (result.unauthorized) {
+      await TrainerCapture.clearAuth();
+      resetAutoPairCache();
+    }
+    const item = TrainerCapture.createDraftQueueItem({
+      selection,
+      url: payload.url,
+      title: payload.title,
+      workspaceId: auth.workspaceId || ''
+    });
+    const enqueued = await withQueueLock(async () => {
+      const fresh = await TrainerCapture.loadDraftQueue();
+      const next = TrainerCapture.enqueueDraft(fresh, item, TrainerCapture.LIMITS.queue);
+      if (!next.rejectedFull) {
+        await TrainerCapture.saveDraftQueue(next.queue);
+      }
+      return next;
+    });
+    if (enqueued.rejectedFull) {
+      const message = copy.coachQueueFull;
+      await notifyResult(copy.notifyDraftTitle, message, '');
+      await updateBadge();
+      return { status: 'failed', message };
+    }
+    const message = TrainerCapture.formatCopy(copy.coachQueued, {
+      count: enqueued.queue.length
+    });
+    await notifyResult(copy.notifyDraftTitle, message, '');
+    await updateBadge();
+    return { status: 'queued', message, queueLength: enqueued.queue.length };
+  }
+
   const message = TrainerCapture.formatCopy(copy.coachFailed, { message: result.message });
   await notifyResult(copy.notifyDraftTitle, message, '');
   return { status: 'failed', message };
@@ -959,6 +1310,15 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
 const MESSAGE_HANDLERS = {
   'trainer:state': async () => buildState(),
+  'trainer:auto-pair': async () => {
+    await chrome.storage.local.set({
+      [TrainerCapture.STORAGE_KEYS.autoPairDisabled]: false
+    });
+    lastAutoPairAt = 0;
+    lastAutoPairResult = null;
+    const result = await ensureAutoPair({ force: true });
+    return { ok: result.ok, message: result.message || '', state: await buildState() };
+  },
   'trainer:refresh': async () => ({ ok: true, state: await refreshState() }),
   'trainer:capture-tab': async (message) =>
     captureActiveTab({
@@ -1053,6 +1413,9 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onStartup.addListener(() => {
   void ensureMenus();
   void ensureAlarm();
+  // Connect (or re-connect) as soon as the browser starts; a queued capture
+  // should not wait for the first alarm tick when Trainer is already open.
+  void flushQueue({ notify: true });
   void updateBadge();
 });
 

@@ -32,6 +32,7 @@
     pair: '/browser/pair',
     status: '/browser/status',
     capture: '/resources/capture',
+    autoPair: '/browser/auto-pair',
     coachDraft: '/browser/coach-draft'
   };
 
@@ -60,6 +61,9 @@
     credential: 'trainerCapture.credential',
     history: 'trainerCapture.history',
     queue: 'trainerCapture.queue',
+    draftQueue: 'trainerCapture.draftQueue',
+    workspaceName: 'trainerCapture.workspaceName',
+    autoPairDisabled: 'trainerCapture.autoPairDisabled',
     focusId: 'trainerCapture.focusId',
     workspaceId: 'trainerCapture.workspaceId',
     targetDir: 'trainerCapture.targetDir',
@@ -133,6 +137,7 @@
       detectAgain: '重新探测',
       needsPair: '需要先配对',
       pairHeading: '配对',
+      connectHeading: '连接 Trainer',
       pairCodeLabel: '配对码',
       pairCodePlaceholder: '6 位配对码',
       pairCodeHint: '在 VS Code 执行「Trainer: 复制配对码」，把 6 位码粘贴到这里。',
@@ -166,6 +171,16 @@
       queueOffline: 'Trainer 仍不可达，稍后会自动重试。',
       queueUnpaired: '尚未配对，无法投递。',
       queueEmpty: '没有待投递的采集。',
+      autoConnecting: '正在连接本地 Trainer…',
+      autoConnected: '已连接',
+      autoRetry: '重试连接',
+      autoPairFailed: '未找到正在运行的 Trainer',
+      autoDisconnected: '已断开',
+      autoOfflineHint: '现在采集也会自动排队，Trainer 启动后送达。',
+      coachQueued: '已排队，Trainer 启动后自动送入输入框（{count} 条待投递）',
+      coachQueueFull: '待投递队列已满（100 条），请先打开 Trainer 完成投递。',
+      queueWorkspaceChanged: '这条记录属于另一个工作区，已保留但不会投递到当前项目。',
+      queueDraftLabel: '划词',
       historyHeading: '最近采集',
       historyEmpty: '还没有采集记录。',
       openInTrainer: '在 Trainer 中打开',
@@ -256,6 +271,7 @@
       detectAgain: 'Detect again',
       needsPair: 'Pairing required',
       pairHeading: 'Pairing',
+      connectHeading: 'Connect to Trainer',
       pairCodeLabel: 'Pairing code',
       pairCodePlaceholder: '6-digit code',
       pairCodeHint: 'Run "Trainer: Copy pairing code" in VS Code, then paste the 6-digit code here.',
@@ -289,6 +305,16 @@
       queueOffline: 'Trainer is still unreachable; retrying automatically.',
       queueUnpaired: 'Not paired yet, nothing can be delivered.',
       queueEmpty: 'Nothing waiting to be delivered.',
+      autoConnecting: 'Connecting to local Trainer…',
+      autoConnected: 'Connected',
+      autoRetry: 'Retry connection',
+      autoPairFailed: 'Trainer is not running yet',
+      autoDisconnected: 'Disconnected',
+      autoOfflineHint: 'Captures are queued automatically and delivered when Trainer starts.',
+      coachQueued: 'Queued — it will prefill the coach composer when Trainer starts ({count} pending)',
+      coachQueueFull: 'The pending queue is full (100). Open Trainer and let it deliver first.',
+      queueWorkspaceChanged: 'This item belongs to another workspace. It is kept but will not be delivered to the current project.',
+      queueDraftLabel: 'Selection',
       historyHeading: 'Recent captures',
       historyEmpty: 'No captures yet.',
       openInTrainer: 'Open in Trainer',
@@ -379,6 +405,7 @@
       detectAgain: 'Volver a buscar',
       needsPair: 'Se requiere emparejamiento',
       pairHeading: 'Emparejamiento',
+      connectHeading: 'Conectar con Trainer',
       pairCodeLabel: 'Código de emparejamiento',
       pairCodePlaceholder: 'Código de 6 dígitos',
       pairCodeHint: 'Ejecuta «Trainer: Show Browser Pairing Code» en VS Code y pega aquí el código de 6 dígitos.',
@@ -412,6 +439,16 @@
       queueOffline: 'Trainer sigue inaccesible; se reintentará automáticamente.',
       queueUnpaired: 'Aún no está emparejado; no se puede entregar nada.',
       queueEmpty: 'Nada en espera de entrega.',
+      autoConnecting: 'Conectando con Trainer local…',
+      autoConnected: 'Conectado',
+      autoRetry: 'Reintentar conexión',
+      autoPairFailed: 'Trainer aún no está en ejecución',
+      autoDisconnected: 'Desconectado',
+      autoOfflineHint: 'Las capturas se guardan en cola y se entregan cuando Trainer inicie.',
+      coachQueued: 'En cola: se enviará al compositor cuando Trainer inicie ({count} pendientes)',
+      coachQueueFull: 'La cola está llena (100). Abre Trainer para entregarla primero.',
+      queueWorkspaceChanged: 'Este elemento pertenece a otro espacio de trabajo. Se conserva pero no se entregará al proyecto actual.',
+      queueDraftLabel: 'Selección',
       historyHeading: 'Capturas recientes',
       historyEmpty: 'Aún no hay capturas.',
       openInTrainer: 'Abrir en Trainer',
@@ -502,6 +539,7 @@
       detectAgain: 'Rechercher à nouveau',
       needsPair: 'Association requise',
       pairHeading: 'Association',
+      connectHeading: 'Connexion à Trainer',
       pairCodeLabel: 'Code d’association',
       pairCodePlaceholder: 'Code à 6 chiffres',
       pairCodeHint: 'Exécutez « Trainer: Show Browser Pairing Code » dans VS Code, puis collez le code à 6 chiffres ici.',
@@ -535,6 +573,16 @@
       queueOffline: 'Trainer est toujours injoignable ; nouvelle tentative automatique.',
       queueUnpaired: 'Pas encore associé : rien ne peut être envoyé.',
       queueEmpty: 'Rien en attente d’envoi.',
+      autoConnecting: 'Connexion à Trainer local…',
+      autoConnected: 'Connecté',
+      autoRetry: 'Réessayer la connexion',
+      autoPairFailed: 'Trainer n’est pas encore lancé',
+      autoDisconnected: 'Déconnecté',
+      autoOfflineHint: 'Les captures sont mises en file et livrées au démarrage de Trainer.',
+      coachQueued: 'En file — la sélection sera préremplie au démarrage de Trainer ({count} en attente)',
+      coachQueueFull: 'La file d’attente est pleine (100). Ouvrez Trainer pour la livrer d’abord.',
+      queueWorkspaceChanged: 'Cet élément appartient à un autre espace de travail. Il est conservé mais ne sera pas livré au projet actuel.',
+      queueDraftLabel: 'Sélection',
       historyHeading: 'Captures récentes',
       historyEmpty: 'Aucune capture pour le moment.',
       openInTrainer: 'Ouvrir dans Trainer',
@@ -625,6 +673,7 @@
       detectAgain: 'Erneut suchen',
       needsPair: 'Kopplung erforderlich',
       pairHeading: 'Kopplung',
+      connectHeading: 'Mit Trainer verbinden',
       pairCodeLabel: 'Kopplungscode',
       pairCodePlaceholder: '6-stelliger Code',
       pairCodeHint: 'Führe „Trainer: Show Browser Pairing Code“ in VS Code aus und füge den 6-stelligen Code hier ein.',
@@ -658,6 +707,16 @@
       queueOffline: 'Trainer ist weiterhin nicht erreichbar; erneuter Versuch erfolgt automatisch.',
       queueUnpaired: 'Noch nicht gekoppelt; es kann nichts übertragen werden.',
       queueEmpty: 'Nichts wartet auf Übertragung.',
+      autoConnecting: 'Verbindung zu lokalem Trainer…',
+      autoConnected: 'Verbunden',
+      autoRetry: 'Verbindung erneut versuchen',
+      autoPairFailed: 'Trainer läuft noch nicht',
+      autoDisconnected: 'Getrennt',
+      autoOfflineHint: 'Aufnahmen werden automatisch eingereiht und beim Start von Trainer zugestellt.',
+      coachQueued: 'Eingereiht – wird beim Start von Trainer in den Coach-Composer eingesetzt ({count} ausstehend)',
+      coachQueueFull: 'Die Warteschlange ist voll (100). Öffne Trainer, um sie zuerst zuzustellen.',
+      queueWorkspaceChanged: 'Dieses Element gehört zu einem anderen Arbeitsbereich. Es bleibt erhalten, wird aber nicht an das aktuelle Projekt zugestellt.',
+      queueDraftLabel: 'Auswahl',
       historyHeading: 'Letzte Erfassungen',
       historyEmpty: 'Noch keine Erfassungen.',
       openInTrainer: 'In Trainer öffnen',
@@ -748,6 +807,7 @@
       detectAgain: '再検出',
       needsPair: 'ペアリングが必要です',
       pairHeading: 'ペアリング',
+      connectHeading: 'Trainer に接続',
       pairCodeLabel: 'ペアリングコード',
       pairCodePlaceholder: '6 桁のコード',
       pairCodeHint: 'VS Code で「Trainer: Show Browser Pairing Code」を実行し、6 桁のコードをここに貼り付けてください。',
@@ -781,6 +841,16 @@
       queueOffline: 'Trainer にまだ接続できません。自動的に再試行します。',
       queueUnpaired: 'まだペアリングされていないため、配信できません。',
       queueEmpty: '配信待ちはありません。',
+      autoConnecting: 'ローカル Trainer に接続中…',
+      autoConnected: '接続済み',
+      autoRetry: '接続を再試行',
+      autoPairFailed: 'Trainer はまだ起動していません',
+      autoDisconnected: '切断済み',
+      autoOfflineHint: 'キャプチャは自動的にキューに入り、Trainer の起動時に届けられます。',
+      coachQueued: 'キューに追加しました。Trainer 起動時にコーチ入力欄へ挿入されます（{count} 件待機）',
+      coachQueueFull: '待機キューがいっぱいです（100 件）。先に Trainer を開いて送信してください。',
+      queueWorkspaceChanged: 'この項目は別のワークスペースのものです。保持されますが、現在のプロジェクトには送信されません。',
+      queueDraftLabel: '選択範囲',
       historyHeading: '最近のキャプチャ',
       historyEmpty: 'まだキャプチャ記録がありません。',
       openInTrainer: 'Trainer で開く',
@@ -871,6 +941,7 @@
       detectAgain: '다시 찾기',
       needsPair: '페어링 필요',
       pairHeading: '페어링',
+      connectHeading: 'Trainer 연결',
       pairCodeLabel: '페어링 코드',
       pairCodePlaceholder: '6자리 코드',
       pairCodeHint: 'VS Code에서 "Trainer: Show Browser Pairing Code"를 실행한 뒤 6자리 코드를 여기에 붙여넣으세요.',
@@ -904,6 +975,16 @@
       queueOffline: 'Trainer에 아직 연결할 수 없습니다. 자동으로 다시 시도합니다.',
       queueUnpaired: '아직 페어링되지 않아 전송할 수 없습니다.',
       queueEmpty: '전송 대기 중인 항목이 없습니다.',
+      autoConnecting: '로컬 Trainer에 연결하는 중…',
+      autoConnected: '연결됨',
+      autoRetry: '연결 다시 시도',
+      autoPairFailed: 'Trainer가 아직 실행 중이 아닙니다',
+      autoDisconnected: '연결 해제됨',
+      autoOfflineHint: '캡처는 자동으로 대기열에 저장되고 Trainer가 시작되면 전달됩니다.',
+      coachQueued: '대기열에 저장했습니다. Trainer가 시작되면 코치 입력창에 채워집니다({count}개 대기).',
+      coachQueueFull: '대기열이 가득 찼습니다(100개). 먼저 Trainer를 열어 전달하세요.',
+      queueWorkspaceChanged: '이 항목은 다른 작업 공간의 것입니다. 보관되지만 현재 프로젝트로 전달되지는 않습니다.',
+      queueDraftLabel: '선택',
       historyHeading: '최근 캡처',
       historyEmpty: '아직 캡처 기록이 없습니다.',
       openInTrainer: 'Trainer에서 열기',
@@ -994,6 +1075,7 @@
       detectAgain: 'Procurar novamente',
       needsPair: 'Emparelhamento necessário',
       pairHeading: 'Emparelhamento',
+      connectHeading: 'Conectar ao Trainer',
       pairCodeLabel: 'Código de emparelhamento',
       pairCodePlaceholder: 'Código de 6 dígitos',
       pairCodeHint: 'Execute "Trainer: Show Browser Pairing Code" no VS Code e cole o código de 6 dígitos aqui.',
@@ -1027,6 +1109,16 @@
       queueOffline: 'O Trainer continua inacessível; nova tentativa automática.',
       queueUnpaired: 'Ainda não emparelhado; nada pode ser entregue.',
       queueEmpty: 'Nada aguardando entrega.',
+      autoConnecting: 'Conectando ao Trainer local…',
+      autoConnected: 'Conectado',
+      autoRetry: 'Tentar conexão novamente',
+      autoPairFailed: 'O Trainer ainda não está em execução',
+      autoDisconnected: 'Desconectado',
+      autoOfflineHint: 'As capturas entram na fila e são entregues quando o Trainer iniciar.',
+      coachQueued: 'Na fila — será preenchido no compositor quando o Trainer iniciar ({count} pendentes)',
+      coachQueueFull: 'A fila está cheia (100). Abra o Trainer para entregá-la primeiro.',
+      queueWorkspaceChanged: 'Este item pertence a outro espaço de trabalho. Ele é mantido, mas não será entregue ao projeto atual.',
+      queueDraftLabel: 'Seleção',
       historyHeading: 'Capturas recentes',
       historyEmpty: 'Ainda não há capturas.',
       openInTrainer: 'Abrir no Trainer',
@@ -1578,6 +1670,70 @@
     return { count: list.length, next: list.length ? list[0] : null };
   }
 
+  // -------------------------------------------------- coach-draft queue ----
+  // Selections are just as valuable as page captures: losing one because the
+  // sidecar was down is the same broken promise. Drafts get their own queue
+  // with the workspace they were captured under.
+
+  function createDraftQueueItem(input) {
+    const source = input || {};
+    const selection = String(source.selection || '').trim();
+    if (!selection) {
+      return null;
+    }
+    return {
+      clientDraftId: String(source.clientDraftId || createCoachDraftId()),
+      selection,
+      url: normalizeCaptureUrl(source.url) || String(source.url || '').trim(),
+      title: String(source.title || '').trim(),
+      workspaceId: String(source.workspaceId || '').trim(),
+      createdAt: String(source.createdAt || new Date().toISOString()),
+      attempts: Number.isFinite(source.attempts) ? Math.trunc(source.attempts) : 0,
+      lastError: '',
+      lastAttemptAt: ''
+    };
+  }
+
+  function enqueueDraft(queue, item, limit) {
+    const cap = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : LIMITS.queue;
+    const list = Array.isArray(queue) ? queue.slice() : [];
+    if (!item) {
+      return { queue: list, added: false, rejectedFull: false };
+    }
+    if (list.some((entry) => entry.clientDraftId === item.clientDraftId)) {
+      return { queue: list, added: false, rejectedFull: false };
+    }
+    if (list.length >= cap) {
+      return { queue: list, added: false, rejectedFull: true };
+    }
+    list.push(item);
+    return { queue: list, added: true, rejectedFull: false };
+  }
+
+  function dequeueDraft(queue, clientDraftId) {
+    return (Array.isArray(queue) ? queue : []).filter(
+      (entry) => entry.clientDraftId !== clientDraftId
+    );
+  }
+
+  function markDraftAttempt(queue, clientDraftId, error, at) {
+    const stamp = String(at || new Date().toISOString());
+    return (Array.isArray(queue) ? queue : []).map((entry) => {
+      if (entry.clientDraftId !== clientDraftId) {
+        return entry;
+      }
+      return Object.assign({}, entry, {
+        attempts: (Number.isFinite(entry.attempts) ? entry.attempts : 0) + 1,
+        lastAttemptAt: stamp,
+        lastError: error ? String(error) : ''
+      });
+    });
+  }
+
+  function takeNextDraft(queue) {
+    return Array.isArray(queue) && queue.length ? queue[0] : null;
+  }
+
   /**
    * Client-side duplicate hint. The sidecar stays authoritative (client_capture_id
    * idempotency + server dedup), this only avoids double capture/queueing.
@@ -1943,6 +2099,43 @@
     return { ok: true, credential, baseUrl: base, workspaceId };
   }
 
+  async function autoPairSidecar(baseUrl) {
+    const dict = activeCopy();
+    const base = normalizeBaseUrl(baseUrl);
+    if (!base) {
+      return { ok: false, reason: 'invalid_base_url', message: dict.pairTransport };
+    }
+    const result = await requestJson({
+      baseUrl: base,
+      path: API.autoPair,
+      method: 'POST',
+      body: {},
+      timeoutMs: PAIR_TIMEOUT_MS
+    });
+    if (!result.ok) {
+      const message = result.transportError
+        ? dict.pairTransport
+        : describeHttpError(result.status, result.body, dict);
+      return {
+        ok: false,
+        reason: result.transportError ? 'transport' : 'http',
+        status: result.status,
+        message
+      };
+    }
+    const credential = String((result.body && result.body.credential) || '').trim();
+    if (!credential) {
+      return { ok: false, reason: 'empty_credential', message: dict.pairCodeRejected };
+    }
+    return {
+      ok: true,
+      credential,
+      baseUrl: base,
+      workspaceId: String((result.body && result.body.workspace_id) || '').trim(),
+      workspaceName: String((result.body && result.body.workspace_name) || '').trim()
+    };
+  }
+
   async function revokePairing(baseUrl, credential) {
     const dict = activeCopy();
     const base = normalizeBaseUrl(baseUrl);
@@ -2111,6 +2304,29 @@
 
   async function saveQueue(queue) {
     await chrome.storage.local.set({ [STORAGE_KEYS.queue]: Array.isArray(queue) ? queue : [] });
+  }
+
+  async function loadDraftQueue() {
+    const stored = await chrome.storage.local.get({ [STORAGE_KEYS.draftQueue]: [] });
+    const queue = stored[STORAGE_KEYS.draftQueue];
+    return Array.isArray(queue) ? queue : [];
+  }
+
+  async function saveDraftQueue(queue) {
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.draftQueue]: Array.isArray(queue) ? queue : []
+    });
+  }
+
+  async function loadWorkspaceName() {
+    const stored = await chrome.storage.local.get({ [STORAGE_KEYS.workspaceName]: '' });
+    return String(stored[STORAGE_KEYS.workspaceName] || '').trim();
+  }
+
+  async function saveWorkspaceName(name) {
+    const value = String(name || '').trim();
+    await chrome.storage.local.set({ [STORAGE_KEYS.workspaceName]: value });
+    return value;
   }
 
   async function loadFocusId() {
@@ -2342,6 +2558,11 @@
     markQueueAttempt,
     takeNextQueueItem,
     summarizeQueue,
+    createDraftQueueItem,
+    enqueueDraft,
+    dequeueDraft,
+    markDraftAttempt,
+    takeNextDraft,
     findLocalDuplicate,
     buildCapturePayload,
     buildCoachDraftPayload,
@@ -2361,6 +2582,7 @@
     probeBaseUrl,
     discoverSidecar,
     pairSidecar,
+    autoPairSidecar,
     revokePairing,
     fetchStatus,
     sendCapture,
@@ -2373,6 +2595,10 @@
     recordHistory,
     loadQueue,
     saveQueue,
+    loadDraftQueue,
+    saveDraftQueue,
+    loadWorkspaceName,
+    saveWorkspaceName,
     loadFocusId,
     saveFocusId,
     loadTargetDir,

@@ -663,3 +663,46 @@ def test_pair_route_exemption_is_method_scoped_under_instance_token(tmp_path, mo
         assert host_revoke.status_code == 401, host_revoke.text
         with_token = client.delete("/browser/pair", headers={"x-trainer-token": "test-instance-token"})
         assert with_token.status_code == 200, with_token.text
+
+
+def test_auto_pair_issues_a_workspace_bound_credential(tmp_path) -> None:
+    with build_client(tmp_path) as client:
+        _start_session(client, "workspace-auto-pair", "Auto Pair WS")
+        response = client.post(
+            "/browser/auto-pair",
+            headers={"Origin": "chrome-extension://abcdefghijklmnop"},
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["workspace_id"] == "workspace-auto-pair"
+        assert payload["workspace_name"] == "Auto Pair WS"
+        credential = payload["credential"]
+        assert credential.startswith("trcb_")
+
+        status = client.get(
+            "/browser/status",
+            headers={"Authorization": f"Bearer {credential}"},
+        )
+        assert status.status_code == 200, status.text
+        assert status.json()["workspace_name"] == "Auto Pair WS"
+
+
+def test_auto_pair_refuses_a_non_extension_origin(tmp_path) -> None:
+    with build_client(tmp_path) as client:
+        _start_session(client, "workspace-auto-origin", "Auto Origin")
+        response = client.post(
+            "/browser/auto-pair",
+            headers={"Origin": "https://evil.example"},
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "extension_origin_required"
+
+
+def test_auto_pair_requires_an_open_host_session(tmp_path) -> None:
+    with build_client(tmp_path) as client:
+        response = client.post(
+            "/browser/auto-pair",
+            headers={"Origin": "chrome-extension://abcdefghijklmnop"},
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "no_workspace"

@@ -52,7 +52,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installStepExtensions: '1. 打开浏览器的扩展页：chrome://extensions、edge://extensions、brave://extensions、opera://extensions、vivaldi://extensions（Arc 用 arc://extensions）。',
     installStepDeveloperMode: '2. 开启开发者模式。',
     installStepLoadUnpacked: '3. 选择“加载已解压的扩展程序”，选中 {dir}。',
-    installStepPair: '4. 在 Trainer 设置中点“显示配对码”，再到扩展弹窗输入。',
+    installStepPair: '4. 打开浏览器扩展即可自动连接，无需配对码。',
     installFolderFallback: 'Trainer 无法自动打开该文件夹。请在文件管理器中手动打开：{dir}',
     openExtensionsPage: '打开扩展页',
     noChromiumBrowserFound: '没有检测到 Chromium 浏览器。请手动打开 Chrome、Edge、Brave、Arc、Opera 或 Vivaldi 的扩展页。',
@@ -86,7 +86,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installStepExtensions: '1. Open your browser\'s extensions page: chrome://extensions, edge://extensions, brave://extensions, opera://extensions, vivaldi://extensions (Arc: arc://extensions).',
     installStepDeveloperMode: '2. Turn on Developer mode.',
     installStepLoadUnpacked: '3. Choose "Load unpacked" and select {dir}.',
-    installStepPair: '4. In Trainer Settings, choose "Show pairing code", then enter it in the extension popup.',
+    installStepPair: '4. Open the extension; it connects automatically — no pairing code.',
     installFolderFallback:
       'Trainer could not open the folder automatically. Open this path in your file manager: {dir}',
     openExtensionsPage: 'Open Extensions Page',
@@ -125,7 +125,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installStepExtensions: '1. Abre la página de extensiones de tu navegador: chrome://extensions, edge://extensions, brave://extensions, opera://extensions o vivaldi://extensions (Arc: arc://extensions).',
     installStepDeveloperMode: '2. Activa el modo de desarrollador.',
     installStepLoadUnpacked: '3. Elige «Cargar descomprimida» y selecciona {dir}.',
-    installStepPair: '4. En Ajustes de Trainer elige «Mostrar código de emparejamiento» e introdúcelo en la ventana de la extensión.',
+    installStepPair: '4. Abre la extensión; se conecta automáticamente, sin código.',
     installFolderFallback:
       'Trainer no pudo abrir la carpeta automáticamente. Ábrela manualmente en tu gestor de archivos: {dir}',
     openExtensionsPage: 'Abrir página de extensiones',
@@ -167,7 +167,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installStepExtensions: '1. Ouvrez la page des extensions de votre navigateur : chrome://extensions, edge://extensions, brave://extensions, opera://extensions ou vivaldi://extensions (Arc : arc://extensions).',
     installStepDeveloperMode: '2. Activez le mode développeur.',
     installStepLoadUnpacked: '3. Choisissez « Charger l’extension non empaquetée » et sélectionnez {dir}.',
-    installStepPair: '4. Dans Réglages de Trainer, choisissez « Afficher le code d’association », puis saisissez-le dans la fenêtre de l’extension.',
+    installStepPair: '4. Ouvrez l’extension ; elle se connecte automatiquement, sans code.',
     installFolderFallback:
       'Trainer n’a pas pu ouvrir le dossier automatiquement. Ouvrez-le dans votre gestionnaire de fichiers : {dir}',
     openExtensionsPage: 'Ouvrir la page des extensions',
@@ -209,7 +209,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installStepExtensions: '1. Öffne die Erweiterungsseite deines Browsers: chrome://extensions, edge://extensions, brave://extensions, opera://extensions oder vivaldi://extensions (Arc: arc://extensions).',
     installStepDeveloperMode: '2. Aktiviere den Entwicklermodus.',
     installStepLoadUnpacked: '3. Wähle „Entpackte Erweiterung laden“ und dann {dir}.',
-    installStepPair: '4. Wähle in den Trainer-Einstellungen „Kopplungscode anzeigen“ und gib ihn im Erweiterungsfenster ein.',
+    installStepPair: '4. Öffne die Erweiterung; sie verbindet sich automatisch – kein Code.',
     installFolderFallback:
       'Trainer konnte den Ordner nicht automatisch öffnen. Öffne diesen Pfad selbst im Dateimanager: {dir}',
     openExtensionsPage: 'Erweiterungsseite öffnen',
@@ -252,7 +252,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installStepDeveloperMode: '2. デベロッパーモードをオンにします。',
     installStepLoadUnpacked:
       '3.「パッケージ化されていない拡張機能を読み込む」を選び、{dir} を指定します。',
-    installStepPair: '4. Trainer の設定で「ペアリングコードを表示」を選び、拡張機能のポップアップに入力します。',
+    installStepPair: '4. 拡張機能を開くと自動的に接続します（コード不要）。',
     installFolderFallback:
       'Trainer はフォルダーを自動で開けませんでした。ファイルマネージャーで次のパスを開いてください：{dir}',
     openExtensionsPage: '拡張機能ページを開く',
@@ -294,7 +294,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installStepExtensions: '1. 브라우저의 확장 프로그램 페이지를 엽니다: chrome://extensions, edge://extensions, brave://extensions, opera://extensions, vivaldi://extensions (Arc: arc://extensions).',
     installStepDeveloperMode: '2. 개발자 모드를 켭니다.',
     installStepLoadUnpacked: '3. "압축해제된 확장 프로그램을 로드"를 선택하고 {dir}을(를) 지정합니다.',
-    installStepPair: '4. Trainer 설정에서 "페어링 코드 표시"를 선택한 뒤 확장 프로그램 팝업에 입력하세요.',
+    installStepPair: '4. 확장 프로그램을 열면 자동으로 연결됩니다(코드 불필요).',
     installFolderFallback:
       'Trainer가 폴더를 자동으로 열지 못했습니다. 파일 관리자에서 다음 경로를 직접 여세요: {dir}',
     openExtensionsPage: '확장 프로그램 페이지 열기',
@@ -333,7 +333,7 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     installStepExtensions: '1. Abra a página de extensões do seu navegador: chrome://extensions, edge://extensions, brave://extensions, opera://extensions ou vivaldi://extensions (Arc: arc://extensions).',
     installStepDeveloperMode: '2. Ative o modo de desenvolvedor.',
     installStepLoadUnpacked: '3. Escolha "Carregar sem compactação" e selecione {dir}.',
-    installStepPair: '4. Nas Configurações do Trainer, escolha “Mostrar código de pareamento” e insira-o na janela da extensão.',
+    installStepPair: '4. Abra a extensão; ela se conecta automaticamente, sem código.',
     installFolderFallback:
       'O Trainer não conseguiu abrir a pasta automaticamente. Abra este caminho no gerenciador de arquivos: {dir}',
     openExtensionsPage: 'Abrir página de extensões',

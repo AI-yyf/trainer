@@ -3,7 +3,7 @@
  * Real browser-capture acceptance (Chrome + MV3 extension + real sidecar).
  *
  * Exercises the shipped extension source, not a stub:
- *   discover sidecar → register a single-use pairing code → pair in the popup
+ *   discover sidecar → auto-pair in the popup (no pairing code)
  *   → capture a public page through the background worker → verify the
  *   library through the paired `/browser/status` → revoke → old credential 401.
  *
@@ -32,7 +32,6 @@ const extensionDir = process.env.TRAINER_BROWSER_E2E_EXTENSION_DIR
   ? path.resolve(process.env.TRAINER_BROWSER_E2E_EXTENSION_DIR)
   : path.join(repoRoot, "extension", "browser-capture");
 const python = path.join(serverDir, ".venv", "bin", "python");
-const PAIR_CODE = "123456";
 const CAPTURE_URL = "https://example.com/";
 const PDF_URL = "https://pdfobject.com/pdf/sample.pdf";
 const RETRY_PDF_URL = "https://www.orimi.com/pdf-test.pdf";
@@ -113,24 +112,6 @@ async function waitForHealth(baseUrl, deadlineMs = 30000) {
     await sleep(250);
   }
   throw new Error(`Sidecar health did not become ready at ${baseUrl}.`);
-}
-
-async function registerPairCode(baseUrl) {
-  const response = await fetch(`${baseUrl}/browser/pair-code`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      workspace_id: WORKSPACE_ID,
-      workspace_name: WORKSPACE_NAME,
-      code: PAIR_CODE,
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(
-      `Pair-code registration failed: HTTP ${response.status} ${await response.text()}`,
-    );
-  }
-  return await response.json();
 }
 
 async function startSession(baseUrl, projectDir) {
@@ -224,10 +205,6 @@ async function main() {
     assert(session.contextId === WORKSPACE_ID, `Unexpected session context: ${session.contextId}`);
     ok("workspace-session", projectDir);
 
-    const registration = await registerPairCode(baseUrl);
-    assert(registration.code === PAIR_CODE, "Pair-code registration did not echo the code.");
-    ok("pair-code-registered", `workspace=${registration.workspace_id}`);
-
     context = await chromium.launchPersistentContext(profileDir, {
       headless: process.env.TRAINER_BROWSER_E2E_HEADLESS === "1",
       channel: process.env.TRAINER_BROWSER_E2E_CHANNEL || undefined,
@@ -252,21 +229,21 @@ async function main() {
       await popup.goto(`chrome-extension://${extensionId}/popup/popup.html`);
     }
     ok("extension-worker", extensionId);
-    await popup.locator("#pair-panel").waitFor({ state: "visible", timeout: 30000 });
-    await popup.locator("#pair-code").waitFor({ state: "visible", timeout: 30000 });
 
-    // Detection probes the managed port range; wait until the field is usable.
-    const deadline = Date.now() + 30000;
-    while (Date.now() < deadline) {
-      if (await popup.locator("#pair-submit").isEnabled()) break;
+    // Zero-code onboarding: the popup discovers the sidecar and pairs itself.
+    const autoDeadline = Date.now() + 30000;
+    while (Date.now() < autoDeadline) {
+      const stored = await popup.evaluate(
+        () =>
+          new Promise((resolve) => {
+            chrome.storage.local.get(["trainerCapture.credential"], resolve);
+          }),
+      );
+      if (stored["trainerCapture.credential"]) break;
       await sleep(250);
     }
-    assert(await popup.locator("#pair-submit").isEnabled(), "Pair button never became enabled.");
-
-    await popup.locator("#pair-code").fill(PAIR_CODE);
-    await popup.locator("#pair-submit").click();
-    await popup.locator("#capture-page").waitFor({ state: "visible", timeout: 30000 });
-    ok("paired-in-popup");
+    await popup.locator("#capture-panel").waitFor({ state: "visible", timeout: 30000 });
+    ok("auto-paired");
 
     let auth = {};
     const authDeadline = Date.now() + 15000;
@@ -283,16 +260,15 @@ async function main() {
       if (auth["trainerCapture.credential"]) break;
       await sleep(250);
     }
-    const pairFeedback = (await popup.locator("#pair-feedback").textContent().catch(() => "")) || "";
     assert(
       auth["trainerCapture.credential"],
-      `The extension did not store a credential. feedback=${JSON.stringify(pairFeedback.trim())}`,
+      "The extension did not auto-pair.",
     );
     assert(
       String(auth["trainerCapture.baseUrl"]).includes(`:${port}`),
       `Extension paired with an unexpected base URL: ${auth["trainerCapture.baseUrl"]}`,
     );
-    const credential = auth["trainerCapture.credential"];
+    let credential = auth["trainerCapture.credential"];
     ok("credential-stored");
 
     const capture = await popup.evaluate(
@@ -305,6 +281,22 @@ async function main() {
         }),
       CAPTURE_URL,
     );
+    if (!capture || (capture.status !== "ok" && capture.status !== "duplicated")) {
+      const debug = await popup.evaluate(
+        () =>
+          new Promise((resolve) => {
+            chrome.storage.local.get(
+              [
+                "trainerCapture.queue",
+                "trainerCapture.credential",
+                "trainerCapture.baseUrl",
+              ],
+              resolve,
+            );
+          }),
+      );
+      console.error("[capture-debug]", JSON.stringify(debug));
+    }
     assert(
       capture && (capture.status === "ok" || capture.status === "duplicated"),
       `Capture failed: ${JSON.stringify(capture)}`,
@@ -531,17 +523,24 @@ async function main() {
     // A restarted sidecar must re-register the host workspace before a queued
     // download can resolve its target folder.
     await startSession(baseUrl, projectDir);
-    const flush = await popup.evaluate(
-      () =>
-        new Promise((resolve) => {
-          chrome.runtime.sendMessage({ type: "trainer:flush" }, resolve);
-        }),
-    );
+    // The retry PDF is an external host; a transient upstream timeout is a
+    // retryable queue outcome, so give the flush a bounded second chance.
+    let flush = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      flush = await popup.evaluate(
+        () =>
+          new Promise((resolve) => {
+            chrome.runtime.sendMessage({ type: "trainer:flush" }, resolve);
+          }),
+      );
+      if (flush && Number(flush.remaining) === 0) break;
+      await sleep(3000);
+    }
     assert(
-      flush && flush.ok === true && Number(flush.flushed) >= 2 && Number(flush.remaining) === 0,
+      flush && flush.ok === true && Number(flush.remaining) === 0,
       `Offline flush did not drain the queue: ${JSON.stringify(flush)}`,
     );
-    ok("offline-flushed", `flushed=${flush.flushed}`);
+    ok("offline-flushed", `remaining=${flush.remaining}`);
     const retryPdfPath = path.join(projectDir, DOWNLOAD_DIR, "Retry PDF.pdf");
     assert(
       fs.existsSync(retryPdfPath) && fs.statSync(retryPdfPath).isFile(),
@@ -555,6 +554,55 @@ async function main() {
     );
     ok("offline-library-status", `count=${flushedStatus.body.library_count}`);
 
+    // Stale credential self-healing: a sidecar reset invalidates the stored
+    // token. The capture must queue (not fail), the next flush must auto-pair
+    // again, and the queued item must still land in the same workspace.
+    await popup.evaluate(
+      () =>
+        new Promise((resolve) => {
+          chrome.storage.local.set({ "trainerCapture.credential": "trcb_stale_token" }, resolve);
+        }),
+    );
+    const staleCapture = await sendCapture({
+      url: `${CAPTURE_URL}?stale=1`,
+      kind: "web",
+      title: "Stale credential capture",
+    });
+    assert(
+      staleCapture && staleCapture.status === "queued",
+      `A stale credential must queue the capture: ${JSON.stringify(staleCapture)}`,
+    );
+    ok("stale-credential-queued");
+    let staleFlush = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      staleFlush = await popup.evaluate(
+        () =>
+          new Promise((resolve) => {
+            chrome.runtime.sendMessage({ type: "trainer:flush" }, resolve);
+          }),
+      );
+      if (staleFlush && Number(staleFlush.remaining) === 0) break;
+      await sleep(3000);
+    }
+    assert(
+      staleFlush && staleFlush.ok === true && Number(staleFlush.remaining) === 0,
+      `Stale-credential flush did not recover: ${JSON.stringify(staleFlush)}`,
+    );
+    const recoveredAuth = await popup.evaluate(
+      () =>
+        new Promise((resolve) => {
+          chrome.storage.local.get(["trainerCapture.credential"], resolve);
+        }),
+    );
+    assert(
+      recoveredAuth["trainerCapture.credential"] &&
+        recoveredAuth["trainerCapture.credential"] !== "trcb_stale_token",
+      "The extension did not auto-pair again after the stale credential.",
+    );
+    // Revoke now targets the credential the extension actually holds.
+    credential = recoveredAuth["trainerCapture.credential"];
+    ok("stale-credential-recovered");
+
     const revoke = await popup.evaluate(
       () =>
         new Promise((resolve) => {
@@ -567,6 +615,9 @@ async function main() {
     assert(revokedStatus.status === 401, `Revoked credential still works: HTTP ${revokedStatus.status}`);
     ok("revoked-credential-rejected");
   } finally {
+    if (checks.some((check) => !check.ok)) {
+      console.error("[sidecar-log]", sidecarLog.slice(-6000));
+    }
     if (context) {
       await context.close().catch(() => {});
     }

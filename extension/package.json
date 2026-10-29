@@ -323,10 +323,6 @@
         "title": "Trainer: Browser Capture Status"
       },
       {
-        "command": "trainer.browserCapture.pairingCode",
-        "title": "Trainer: Show Browser Pairing Code"
-      },
-      {
         "command": "trainer.browserCapture.revokePairing",
         "title": "Trainer: Revoke Browser Pairing"
       },

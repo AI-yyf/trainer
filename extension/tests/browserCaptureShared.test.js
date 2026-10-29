@@ -1236,32 +1236,44 @@ test('popup actually hides inactive panels and refreshes the library count after
   assert.match(captureBody, /refreshStateFromHost\(\)/);
 });
 
-test('the popup stays minimal: pairing and capture only — no status, no history', () => {
-  // Owner directive: the card carries pairing + capture + download and
-  // nothing else — no connection status, no import history, no queue manager
-  // (queued captures deliver automatically; the badge carries the count).
+test('the popup has no pairing UI and lets the worker connect by itself', () => {
   const html = fs.readFileSync(POPUP_HTML_PATH, 'utf8');
-  for (const id of ['pair-panel', 'capture-panel', 'download-block', 'target-dir', 'capture-download']) {
+  for (const id of [
+    'capture-panel',
+    'capture-page',
+    'download-block',
+    'target-dir',
+    'capture-download',
+    'popup-close'
+  ]) {
     assert.ok(html.includes(`id="${id}"`), `popup.html must define #${id}`);
   }
+  // Zero-code onboarding removes the pairing design entirely: no panel, code
+  // field, submit button, detect button or connection-status row.
   for (const id of [
-    'offline-panel',
-    'connected-panel',
-    'queue-panel',
-    'queue-list',
-    'queue-retry',
-    'queue-clear',
-    'history-panel',
-    'status-dot',
-    'status-line',
-    'queue-chip'
+    'pair-panel',
+    'pair-code',
+    'pair-submit',
+    'detect-again',
+    'detect-line',
+    'connect-line',
+    'retry-connect',
+    'pair-feedback'
   ]) {
     assert.ok(!html.includes(`id="${id}"`), `popup.html must NOT define #${id}`);
   }
+
   const js = fs.readFileSync(POPUP_JS_PATH, 'utf8');
   assert.match(js, /trainer:set-target-dir/);
   assert.match(js, /trainer:capture-tab',[\s\S]{0,80}download: true/);
-  assert.doesNotMatch(js, /renderHistory|renderQueue|setStatus\(/);
+  assert.match(js, /function renderState\(/);
+  assert.doesNotMatch(js, /pair-code|pairSidecar|trainer:auto-pair/);
+
+  // Auto-connect lives in the worker, not in the card.
+  const background = fs.readFileSync(BACKGROUND_JS_PATH, 'utf8');
+  assert.match(background, /async function ensureAutoPair\(/);
+  assert.match(background, /TrainerCapture\.autoPairSidecar\(/);
+  assert.match(background, /'trainer:auto-pair'/);
 });
 
 test('every data-copy key used by the popup exists in the copy map', () => {
@@ -1270,7 +1282,7 @@ test('every data-copy key used by the popup exists in the copy map', () => {
   for (const match of html.matchAll(/data-copy(?:-placeholder|-title|-label)?="([A-Za-z0-9_]+)"/g)) {
     used.add(match[1]);
   }
-  assert.ok(used.size >= 12, 'the popup must drive its copy through data-copy attributes');
+  assert.ok(used.size >= 8, 'the popup must drive its copy through data-copy attributes');
   for (const key of used) {
     assert.ok(
       Object.prototype.hasOwnProperty.call(TrainerCapture.COPY.en, key),
@@ -1286,7 +1298,7 @@ test('every id the popup script looks up exists in the popup markup', () => {
   for (const match of js.matchAll(/getElementById\('([^']+)'\)/g)) {
     ids.add(match[1]);
   }
-  assert.ok(ids.size >= 15);
+  assert.ok(ids.size >= 12);
   for (const id of ids) {
     assert.ok(html.includes(`id="${id}"`), `popup.html must define #${id}`);
   }
@@ -1299,12 +1311,12 @@ test('the popup is a monochrome icon-led card (no legacy brand chrome)', () => {
   assert.match(html, /stroke-linejoin="round"/);
   assert.ok((html.match(/<symbol id="icon-/g) || []).length >= 8, 'expected a complete inline icon sprite for the card');
   assert.match(html, /id="popup-close"/, 'the card has its own close affordance');
-  // The 2026-10 monochrome redesign removes the indigo/gold logo block from
-  // the popup; the toolbar PNG carries the monochrome brand instead.
+  // The popup stays black/white/grey; the toolbar PNG carries the brand.
   assert.doesNotMatch(html, /#4338CA/i);
   assert.doesNotMatch(html, /#F59E0B/i);
 
   const css = fs.readFileSync(POPUP_CSS_PATH, 'utf8');
+  assert.match(css, /width:\s*280px/);
   assert.match(css, /prefers-color-scheme: dark/);
   assert.match(css, /prefers-reduced-motion: reduce/);
   assert.match(css, /@keyframes panel-enter/);
@@ -1444,12 +1456,12 @@ test('T-0041: every background queue writer runs inside the queue lock', () => {
   // racing a locked flush resurrects removed items or erases fresh captures.
   assert.match(
     backgroundSource,
-    /const next = await withQueueLock\(async \(\) => \{\s*const queue = await TrainerCapture\.loadQueue\(\);\s*const updated = TrainerCapture\.removeQueueItem/,
+    /const next = await withQueueLock\(async \(\) => \{[\s\S]*?TrainerCapture\.removeQueueItem\(await TrainerCapture\.loadQueue\(\), id\)[\s\S]*?saveDraftQueue/,
     'removeQueueEntry must lock'
   );
   const clearFn = backgroundSource.slice(
     backgroundSource.indexOf('async function clearQueueEntries'),
-    backgroundSource.indexOf('}', backgroundSource.indexOf('saveQueue(TrainerCapture.clearQueue())'))
+    backgroundSource.indexOf('async function coachDraft')
   );
   assert.match(clearFn, /withQueueLock/, 'clearQueueEntries must lock');
   const revokeSection = backgroundSource.slice(

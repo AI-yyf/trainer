@@ -3,13 +3,11 @@
 /**
  * Trainer Capture — popup.
  *
- * Two states, nothing else on the card:
- *   1. unpaired — auto-discovers the local sidecar (default port + managed
- *      range) and asks for the 6-digit pairing code copied from VS Code;
- *   2. paired — the capture row (page / PDF / GitHub repo), the optional
- *      project-folder download, and the library binding. Captures that cannot
- *      deliver queue automatically (badge carries the count); no connection
- *      status and no import history are shown.
+ * Zero pairing UI: the background discovers the local sidecar and connects
+ * itself, so the card is capture-only — the capture row (page / PDF / GitHub
+ * repo), the optional project-folder download, and the library binding.
+ * Captures taken while Trainer is unreachable queue automatically (the badge
+ * carries the count); no connection status and no import history are shown.
  *
  * Copy follows the browser locale (zh-CN, en-US, es-ES, fr-FR, de-DE, ja-JP,
  * ko-KR, pt-BR — with English as the fallback). Motion is explanatory only and
@@ -19,12 +17,6 @@
 const TrainerCapture = self.TrainerCapture;
 
 const elements = {
-  pairPanel: document.getElementById('pair-panel'),
-  detectLine: document.getElementById('detect-line'),
-  pairCode: document.getElementById('pair-code'),
-  pairSubmit: document.getElementById('pair-submit'),
-  detectAgain: document.getElementById('detect-again'),
-  pairFeedback: document.getElementById('pair-feedback'),
   capturePanel: document.getElementById('capture-panel'),
   pageLine: document.getElementById('page-line'),
   focusSelect: document.getElementById('focus-select'),
@@ -41,10 +33,7 @@ const elements = {
 };
 
 const copy = TrainerCapture.copyFor(TrainerCapture.browserLocale());
-let detectedBaseUrl = '';
-let detectedBaseUrls = [];
 let currentTab = { url: '', title: '', kind: 'web' };
-let lastQueueCount = -1;
 let lastTabUrl = '';
 
 function t(key, values) {
@@ -97,9 +86,8 @@ function revealPanel(element) {
   void element.offsetWidth;
   element.classList.add('panel--reveal');
   // Move focus only when the previously focused control actually sat inside
-  // a panel that just became hidden (for example #pair-submit after pairing
-  // succeeds). On popup open every panel is revealed from `hidden` — focusing
-  // each would cascade to the last panel instead of the primary action.
+  // a panel that just became hidden. On popup open the panel is revealed from
+  // `hidden`, so focus is left on the primary action instead of cascading.
   const previous = document.activeElement;
   const previousPanel = previous instanceof HTMLElement ? previous.closest('.panel') : null;
   if (previousPanel && previousPanel.hidden) {
@@ -172,42 +160,22 @@ function renderFocusOptions(state) {
   elements.focusSelect.value = known ? state.focusId : '';
 }
 
+function revealCapturePanel() {
+  if (!elements.capturePanel.hidden) {
+    return;
+  }
+  elements.capturePanel.hidden = false;
+  revealPanel(elements.capturePanel);
+}
+
 function renderState(state) {
   const paired = Boolean(state && state.paired);
 
-  // Two panels, nothing else: pairing on first run, capture once paired.
-  // Connection state, import history and the queue manager stay out of the
-  // card — queued captures deliver automatically and the badge carries the
-  // count.
-  const panels = [
-    ['pairPanel', !paired],
-    ['capturePanel', paired]
-  ];
-  for (const [key, shown] of panels) {
-    const node = elements[key];
-    const wasHidden = node.hidden;
-    node.hidden = !shown;
-    if (shown && wasHidden) {
-      revealPanel(node);
-    }
-  }
-
+  // The card is capture-only. A capture taken before Trainer is reachable is
+  // queued by the worker and delivered automatically, so there is no pairing
+  // state to render and no reason to block the primary action.
+  revealCapturePanel();
   elements.revoke.hidden = !paired;
-
-  // Owner-directed recovery entry: hidden normally, shown only when captures
-  // are queued while unpaired — the learner must know the material survived
-  // and how to recover it from Trainer.
-  const queueCount = Number(state && state.queueCount) || 0;
-  const recovery = document.getElementById('pair-recovery');
-  if (recovery) {
-    if (!paired && queueCount > 0) {
-      recovery.hidden = false;
-      recovery.textContent = t('pairQueueWaiting', { count: queueCount });
-    } else {
-      recovery.hidden = true;
-      recovery.textContent = '';
-    }
-  }
 
   renderFocusOptions(state || {});
 
@@ -249,85 +217,18 @@ async function renderTabLine() {
   const downloadable = http && TrainerCapture.supportsDownload(currentTab.kind);
   elements.downloadBlock.hidden = !downloadable;
   elements.captureDownload.disabled = !downloadable;
-  if (downloadable && lastTabUrl !== url) {
-    revealPanel(elements.downloadBlock);
+  if (downloadable) {
+    if (!elements.targetDir.value) {
+      elements.targetDir.value = TrainerCapture.DEFAULT_TARGET_DIR;
+    }
+    if (lastTabUrl !== url) {
+      revealPanel(elements.downloadBlock);
+    }
   }
   lastTabUrl = url;
 }
 
-// --------------------------------------------------------------- detection --
-
-async function runDetection() {
-  const auth = await TrainerCapture.loadAuth();
-  elements.detectLine.classList.remove('detect--error');
-  elements.detectLine.textContent = t('detecting');
-  elements.detectAgain.disabled = true;
-  elements.pairSubmit.disabled = true;
-
-  const discovery = await TrainerCapture.discoverSidecar({ storedBaseUrl: auth.baseUrl });
-  detectedBaseUrl = discovery.found ? discovery.baseUrl : '';
-  detectedBaseUrls = Array.isArray(discovery.baseUrls) && discovery.baseUrls.length
-    ? discovery.baseUrls
-    : (discovery.found ? [discovery.baseUrl] : []);
-  if (discovery.found) {
-    elements.detectLine.textContent = t('detected', { url: discovery.baseUrl });
-  } else {
-    elements.detectLine.classList.add('detect--error');
-    elements.detectLine.textContent = t('detectFailed');
-    shake(elements.detectLine);
-  }
-  elements.detectAgain.disabled = false;
-  elements.pairSubmit.disabled = !discovery.found;
-}
-
-// ----------------------------------------------------------------- actions --
-
-async function pairNow() {
-  const code = elements.pairCode.value;
-  if (!TrainerCapture.isValidPairCode(code)) {
-    setFeedback(elements.pairFeedback, t('pairInvalidCode'), 'error');
-    return;
-  }
-  if (!detectedBaseUrl) {
-    setFeedback(elements.pairFeedback, t('detectFailed'), 'error');
-    return;
-  }
-  elements.pairSubmit.disabled = true;
-  setFeedback(elements.pairFeedback, t('checking'), '');
-  // Try every reachable Trainer window. With two VS Code windows open the
-  // sidecar that answers the fastest may not be the one holding this code.
-  const bases = [detectedBaseUrl, ...detectedBaseUrls].filter(
-    (value, index, list) => value && list.indexOf(value) === index,
-  );
-  let result = null;
-  let pairedBaseUrl = '';
-  for (const baseUrl of bases) {
-    result = await TrainerCapture.pairSidecar(baseUrl, code);
-    if (result.ok) {
-      pairedBaseUrl = baseUrl;
-      break;
-    }
-  }
-  if (!result || !result.ok) {
-    elements.pairSubmit.disabled = false;
-    setFeedback(
-      elements.pairFeedback,
-      (result && (result.message || t('pairTransport'))) || t('pairTransport'),
-      'error',
-    );
-    return;
-  }
-  detectedBaseUrl = pairedBaseUrl;
-  elements.detectLine.textContent = t('detected', { url: pairedBaseUrl });
-  await TrainerCapture.saveAuth(pairedBaseUrl, result.credential);
-  await TrainerCapture.clearNotice();
-  elements.pairCode.value = '';
-  setFeedback(elements.pairFeedback, t('pairSuccess'), '');
-  const refreshed = await send({ type: 'trainer:refresh' });
-  renderState(refreshed.state || (await send({ type: 'trainer:state' })));
-  elements.pairSubmit.disabled = false;
-}
-
+// ------------------------------------------------------------------- run --
 
 async function refreshStateFromHost() {
   const refreshed = await send({ type: 'trainer:refresh' });
@@ -391,41 +292,36 @@ async function disconnectAndRepair() {
   }
   const result = await send({ type: 'trainer:revoke' });
   renderState(await send({ type: 'trainer:state' }));
-  setFeedback(elements.pairFeedback, result.message || t('pairRevokeDone'), '');
+  setFeedback(elements.captureResult, result.message || t('pairRevokeDone'), '');
   await renderTabLine();
-  await runDetection();
 }
 
 // ------------------------------------------------------------------ wiring --
 
 async function init() {
   applyCopy();
+  // Do not wait for the auto-pair probe: the card is usable (and queues)
+  // immediately, even when Trainer is not running yet.
+  revealCapturePanel();
+  renderFocusOptions({});
   const state = await send({ type: 'trainer:state' });
   renderState(state);
   await renderTabLine();
 
-  if (state.paired) {
+  if (state && state.paired) {
     const refreshed = await send({ type: 'trainer:refresh' });
-    renderState(refreshed.state || state);
-  } else {
-    await runDetection();
+    renderState((refreshed && refreshed.state) || state);
   }
+
+  window.setInterval(async () => {
+    const next = await send({ type: 'trainer:state' });
+    if (next && next.state) {
+      renderState(next.state);
+    } else if (next && typeof next.paired === 'boolean') {
+      renderState(next);
+    }
+  }, 4000);
 }
-
-elements.detectAgain.addEventListener('click', () => {
-  void runDetection();
-});
-
-elements.pairSubmit.addEventListener('click', () => {
-  void pairNow();
-});
-
-elements.pairCode.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    void pairNow();
-  }
-});
 
 elements.capturePage.addEventListener('click', () => {
   void capturePage();

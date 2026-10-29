@@ -58,6 +58,26 @@ def _bearer_token(request: Request) -> str:
     return token.strip()
 
 
+
+def _loopback_request(request: Request) -> bool:
+    client = getattr(request, "client", None)
+    host = str(getattr(client, "host", "") or "").strip().lower()
+    return host in {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+def _extension_origin_allowed(request: Request) -> bool:
+    """Only a browser-extension origin may auto-pair.
+
+    A request with no Origin is a native/local caller (curl, tests); an Origin
+    from a normal website is refused, so a random page cannot silently mint a
+    capture credential even though the endpoint is loopback-only.
+    """
+    origin = str(request.headers.get("origin") or "").strip().lower()
+    if not origin:
+        return True
+    return origin.startswith(("chrome-extension://", "moz-extension://"))
+
+
 def _require_browser_credential(
     runtime: TrainerRuntime,
     request: Request,
@@ -181,6 +201,54 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             bridge.revoke_token(token)
             return {"revoked": True, "had_registration": True, "credentials_revoked": 1}
         return bridge.revoke_registered_pairing()
+
+    @router.post("/browser/auto-pair")
+    def auto_pair(request: Request) -> dict[str, object]:
+        """Zero-code pairing: the extension discovers the loopback sidecar.
+
+        The extension calls this on first use. The credential is bound to the
+        workspace of the latest host session, so the browser never has to ask
+        the learner for a code, port, URL or token.
+        """
+        if not _loopback_request(request):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "loopback_only",
+                    "message": "Automatic browser pairing is only available on the local machine.",
+                },
+            )
+        if not _extension_origin_allowed(request):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "extension_origin_required",
+                    "message": "Automatic pairing is only available to a browser extension.",
+                },
+            )
+        latest = runtime.latest_session()
+        if latest is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "no_workspace",
+                    "message": "Open Trainer in VS Code first; the browser extension connects automatically.",
+                },
+            )
+        workspace_id = latest.workspace_id
+        workspace_name = _workspace_display_name(runtime, workspace_id, "")
+        bridge = _browser_bridge(runtime)
+        try:
+            credential, token = bridge.issue_auto_credential(
+                workspace_id=workspace_id,
+                workspace_name=workspace_name,
+            )
+        except BrowserPairingError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail={"code": exc.code, "message": exc.detail},
+            ) from exc
+        return credential.as_payload(credential=token)
 
     @router.get("/browser/status")
     def browser_status(request: Request) -> dict[str, object]:

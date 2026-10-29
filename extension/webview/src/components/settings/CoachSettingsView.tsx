@@ -278,7 +278,6 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
   body: string;
   install: string;
   open: string;
-  pair: string;
   hint: string;
 } {
   switch (language) {
@@ -288,8 +287,7 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         body: "把网页、PDF 和选中文本一键采集到资料库。支持 Chrome、Edge、Brave、Arc、Opera、Vivaldi 等所有 Chromium 浏览器。",
         install: "安装浏览器扩展",
         open: "打开扩展页",
-        pair: "显示配对码",
-        hint: "安装只需一次：在浏览器扩展页开启开发者模式，选择“加载已解压的扩展程序”，指向 Trainer 打开的文件夹。Trainer 更新会刷新该文件夹；在扩展页点一次“重新加载”即可。",
+        hint: "安装只需一次：在浏览器扩展页开启开发者模式，选择“加载已解压的扩展程序”，指向 Trainer 打开的文件夹。Trainer 更新会刷新该文件夹；在扩展页点一次“重新加载”即可。打开扩展会自动连接，无需配对码。",
       };
     case "es-ES":
       return {
@@ -297,8 +295,7 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         body: "Guarda páginas, PDF y texto seleccionado en tu biblioteca con un clic. Compatible con Chrome, Edge, Brave, Arc, Opera y Vivaldi.",
         install: "Instalar extensión",
         open: "Abrir página de extensiones",
-        pair: "Mostrar código de emparejamiento",
-        hint: "La instalación se hace una sola vez: activa el modo desarrollador, elige «Cargar descomprimida» y selecciona la carpeta que abre Trainer. Las actualizaciones refrescan esa carpeta; pulsa «Recargar» una vez en la página de extensiones.",
+        hint: "La instalación se hace una sola vez: activa el modo desarrollador, elige «Cargar descomprimida» y selecciona la carpeta que abre Trainer. Las actualizaciones refrescan esa carpeta; pulsa «Recargar» una vez en la página de extensiones. La extensión se conecta sola, sin código.",
       };
     case "fr-FR":
       return {
@@ -306,8 +303,7 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         body: "Enregistrez pages, PDF et texte sélectionné dans votre bibliothèque en un clic. Compatible avec Chrome, Edge, Brave, Arc, Opera et Vivaldi.",
         install: "Installer l’extension",
         open: "Ouvrir la page des extensions",
-        pair: "Afficher le code d’association",
-        hint: "L’installation se fait une seule fois : activez le mode développeur, choisissez « Charger l’extension non empaquetée » et sélectionnez le dossier ouvert par Trainer. Les mises à jour rafraîchissent ce dossier ; cliquez une fois sur « Recharger » dans la page des extensions.",
+        hint: "L’installation se fait une seule fois : activez le mode développeur, choisissez « Charger l’extension non empaquetée » et sélectionnez le dossier ouvert par Trainer. Les mises à jour rafraîchissent ce dossier ; cliquez une fois sur « Recharger » dans la page des extensions. L’extension se connecte seule, sans code.",
       };
     case "de-DE":
       return {
@@ -315,8 +311,7 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         body: "Speichere Webseiten, PDFs und markierten Text mit einem Klick in deiner Bibliothek. Unterstützt Chrome, Edge, Brave, Arc, Opera und Vivaldi.",
         install: "Browser-Erweiterung installieren",
         open: "Erweiterungsseite öffnen",
-        pair: "Kopplungscode anzeigen",
-        hint: "Die Installation ist einmalig: Entwicklermodus aktivieren, „Entpackte Erweiterung laden“ wählen und den von Trainer geöffneten Ordner auswählen. Trainer-Updates erneuern diesen Ordner; klicke auf der Erweiterungsseite einmal auf „Neu laden“.",
+        hint: "Die Installation ist einmalig: Entwicklermodus aktivieren, „Entpackte Erweiterung laden“ wählen und den von Trainer geöffneten Ordner auswählen. Trainer-Updates erneuern diesen Ordner; klicke auf der Erweiterungsseite einmal auf „Neu laden“. Die Erweiterung verbindet sich automatisch, ohne Code.",
       };
     case "ja-JP":
       return {
@@ -324,8 +319,7 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         body: "Web ページ、PDF、選択したテキストをワンクリックでライブラリへ保存します。Chrome、Edge、Brave、Arc、Opera、Vivaldi に対応しています。",
         install: "ブラウザー拡張機能をインストール",
         open: "拡張機能ページを開く",
-        pair: "ペアリングコードを表示",
-        hint: "インストールは一度だけです。拡張機能ページでデベロッパーモードをオンにし、「パッケージ化されていない拡張機能を読み込む」で Trainer が開いたフォルダーを選びます。Trainer の更新時にフォルダーが更新されるので、拡張機能ページで一度「再読み込み」してください。",
+        hint: "インストールは一度だけです。拡張機能ページでデベロッパーモードをオンにし、「パッケージ化されていない拡張機能を読み込む」で Trainer が開いたフォルダーを選びます。Trainer の更新時にフォルダーが更新されるので、拡張機能ページで一度「再読み込み」してください。拡張機能を開くと自動で接続し、コードは不要です。",
       };
     case "ko-KR":
       return {
@@ -333,8 +327,7 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         body: "웹 페이지, PDF, 선택한 텍스트를 클릭 한 번으로 자료실에 저장합니다. Chrome, Edge, Brave, Arc, Opera, Vivaldi를 지원합니다.",
         install: "브라우저 확장 프로그램 설치",
         open: "확장 프로그램 페이지 열기",
-        pair: "페어링 코드 표시",
-        hint: "설치는 한 번만 하면 됩니다. 확장 프로그램 페이지에서 개발자 모드를 켜고 '압축해제된 확장 프로그램을 로드'를 선택한 뒤 Trainer가 연 폴더를 지정하세요. Trainer 업데이트 시 폴더가 갱신되며, 확장 프로그램 페이지에서 한 번 '새로고침'하면 됩니다.",
+        hint: "설치는 한 번만 하면 됩니다. 확장 프로그램 페이지에서 개발자 모드를 켜고 '압축해제된 확장 프로그램을 로드'를 선택한 뒤 Trainer가 연 폴더를 지정하세요. Trainer 업데이트 시 폴더가 갱신되며, 확장 프로그램 페이지에서 한 번 '새로고침'하면 됩니다. 확장 프로그램을 열면 자동으로 연결되며 코드가 필요 없습니다.",
       };
     case "pt-BR":
       return {
@@ -342,8 +335,7 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         body: "Salve páginas, PDFs e texto selecionado na sua biblioteca com um clique. Compatível com Chrome, Edge, Brave, Arc, Opera e Vivaldi.",
         install: "Instalar extensão do navegador",
         open: "Abrir página de extensões",
-        pair: "Mostrar código de pareamento",
-        hint: "A instalação é feita uma única vez: ative o modo desenvolvedor, escolha “Carregar sem compactação” e selecione a pasta aberta pelo Trainer. As atualizações renovam essa pasta; clique uma vez em “Recarregar” na página de extensões.",
+        hint: "A instalação é feita uma única vez: ative o modo desenvolvedor, escolha “Carregar sem compactação” e selecione a pasta aberta pelo Trainer. As atualizações renovam essa pasta; clique uma vez em “Recarregar” na página de extensões. A extensão se conecta sozinha, sem código.",
       };
     default:
       return {
@@ -351,8 +343,7 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
         body: "Save web pages, PDFs and selected text to your library in one click. Works with Chrome, Edge, Brave, Arc, Opera and Vivaldi.",
         install: "Install browser extension",
         open: "Open extensions page",
-        pair: "Show pairing code",
-        hint: "Install once: turn on Developer mode, choose “Load unpacked” and select the folder Trainer opens. Trainer updates refresh that folder; click Reload once on the extensions page.",
+        hint: "Install once: turn on Developer mode, choose “Load unpacked” and select the folder Trainer opens. Trainer updates refresh that folder; click Reload once on the extensions page. Opening the extension connects automatically — no code.",
       };
   }
 }
@@ -6575,18 +6566,6 @@ function CoachSettingsViewSheet({
                   }
                 >
                   {browserCaptureCopy.open}
-                </button>
-                <button
-                  type="button"
-                  className="toolbar-button"
-                  onClick={() =>
-                    postWebviewMessage({
-                      type: "command/execute",
-                      payload: { commandId: trainerCommands.showBrowserPairingCode },
-                    })
-                  }
-                >
-                  {browserCaptureCopy.pair}
                 </button>
               </div>
               <p className="settings-sheet__note settings-sheet__note--compact">{browserCaptureCopy.hint}</p>

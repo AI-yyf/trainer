@@ -341,20 +341,30 @@ test('the capture commands are declared in the manifest and registered by the co
   const { COMMAND_IDS } = require(constantsModulePath);
   const manifest = JSON.parse(fs.readFileSync(extensionPackageJsonPath, 'utf8'));
   const declared = manifest.contributes.commands.map((entry) => entry.command);
-  const expected = [
+  // Zero-code onboarding: the pairing-code command is no longer surfaced in
+  // the palette, but the handler stays registered for internal compatibility.
+  const declaredCommands = [
+    COMMAND_IDS.browserCaptureInstall,
+    COMMAND_IDS.browserCaptureRevokePairing,
+  ];
+  const registeredCommands = [
     COMMAND_IDS.browserCaptureInstall,
     COMMAND_IDS.browserCapturePairingCode,
     COMMAND_IDS.browserCaptureRevokePairing,
   ];
 
-  assert.deepEqual(expected, [
+  assert.deepEqual(declaredCommands, [
     'trainer.browserCapture.install',
-    'trainer.browserCapture.pairingCode',
     'trainer.browserCapture.revokePairing',
   ]);
-  for (const commandId of expected) {
+  for (const commandId of declaredCommands) {
     assert.ok(declared.includes(commandId), `manifest should declare ${commandId}`);
   }
+  assert.equal(
+    declared.includes(COMMAND_IDS.browserCapturePairingCode),
+    false,
+    'the pairing-code command must not appear in the command palette',
+  );
 
   const registeredCommandIds = [];
   const messages = [];
@@ -377,7 +387,7 @@ test('the capture commands are declared in the manifest and registered by the co
     },
   });
 
-  for (const commandId of expected) {
+  for (const commandId of registeredCommands) {
     assert.ok(registeredCommandIds.includes(commandId), `registry should register ${commandId}`);
   }
 });

@@ -37,6 +37,7 @@ from uuid import uuid4
 logger = logging.getLogger(__name__)
 
 PAIR_CODE_LENGTH = 6
+AUTO_PAIR_ID = "auto"
 # T-0037: /browser/pair is token-exempt and the code is 6 digits, so failed
 # exchanges must be capped or a local loopback process can brute-force the
 # window and obtain a long-lived workspace-bound credential.
@@ -368,6 +369,45 @@ class BrowserBridgeService:
                 created_at=_utc_now_iso(),
                 pair_code_id=self._latest_pair_code_id,
             )
+            self._credentials[credential.token_hash] = {
+                **asdict(credential),
+                "last_used_at": None,
+            }
+            self._write_state_locked()
+        return credential, token
+
+    # --------------------------------------------------------- auto pairing
+
+    def issue_auto_credential(
+        self,
+        *,
+        workspace_id: str,
+        workspace_name: str,
+    ) -> tuple[BrowserCredential, str]:
+        """Issue a long-lived workspace-bound credential without a pair code.
+
+        The browser extension discovers the loopback sidecar and calls the
+        auto-pair route. The route is the only gate (loopback + extension
+        Origin); this method owns the credential shape so it stays identical
+        to a code-paired credential.
+        """
+        normalized_workspace = str(workspace_id or "").strip()
+        if not normalized_workspace:
+            raise BrowserPairingError(
+                "invalid_workspace",
+                "Automatic pairing needs a workspace.",
+                status_code=422,
+            )
+        token = f"{CREDENTIAL_PREFIX}{secrets.token_urlsafe(32)}"
+        credential = BrowserCredential(
+            token_hash=_hashed(token),
+            token_suffix=token[-4:],
+            workspace_id=normalized_workspace,
+            workspace_name=str(workspace_name or "").strip() or normalized_workspace,
+            created_at=_utc_now_iso(),
+            pair_code_id=AUTO_PAIR_ID,
+        )
+        with self._lock:
             self._credentials[credential.token_hash] = {
                 **asdict(credential),
                 "last_used_at": None,
