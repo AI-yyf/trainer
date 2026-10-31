@@ -55,8 +55,9 @@
     "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
   },
   "ci": {
-    "run_id": 41240042027,
-    "sha": "ac72b35",
+    "run_id": 41242296019,
+    "sha": "8b3bb0b",
+    "code_sha": "ac72b35",
     "workflow": "Trainer Cross-Platform Verify",
     "conclusion": "success",
     "jobs": "9/9"
@@ -91,5 +92,6 @@
     "teaching acceptance remains BLOCKED on owner sign-off T-0028; real-model journey evidence is 10/10 from 2026-10-24 at an older SHA",
     "T-0026 real-provider latency remains measured beyond budget (first chunk 5.6-12.8s, total 10.9-19.0s); no re-run at 52fe632",
     "browser capture is verified in real Chrome on macOS; Windows/Linux browser installs are not part of the current evidence"
-  ]
+  ],
+  "docs_head": "8b3bb0b"
 }

@@ -3,7 +3,7 @@
   "gates": {
     "ci_cross_platform": {
       "status": "PASS",
-      "evidence": "run 41240042027 @ac72b35 on maturity/p1-final-convergence-2026-10-20: 9/9 jobs success (UI/Server/Package on windows/macos/ubuntu); prior 41236836839 @52fe632 9/9"
+      "evidence": "run 41242296019 @8b3bb0b (docs head; code ac72b35) on maturity/p1-final-convergence-2026-10-20: 9/9 jobs success (UI/Server/Package on windows/macos/ubuntu); prior 41236836839 @52fe632 and 41240042027 @ac72b35 also 9/9"
     },
     "native_install_e2e": {
       "status": "PASS",
