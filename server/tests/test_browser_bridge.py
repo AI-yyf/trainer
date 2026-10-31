@@ -706,3 +706,41 @@ def test_auto_pair_requires_an_open_host_session(tmp_path) -> None:
         )
         assert response.status_code == 409
         assert response.json()["detail"]["code"] == "no_workspace"
+
+
+def test_auto_pair_candidates_prefer_the_focused_workspace(tmp_path) -> None:
+    with build_client(tmp_path) as client:
+        _start_session(client, "workspace-focus-a", "Focus A")
+        headers = {"Origin": "chrome-extension://abcdefghijklmnop"}
+
+        before = client.get("/browser/auto-pair/candidates", headers=headers)
+        assert before.status_code == 200, before.text
+        assert before.json()["workspace_id"] == "workspace-focus-a"
+        assert before.json()["last_host_focus_at"] == ""
+
+        focused = client.post(
+            "/browser/host-focus",
+            json={"workspace_id": "workspace-focus-a"},
+        )
+        assert focused.status_code == 200, focused.text
+        assert focused.json()["focused_at"]
+
+        after = client.get("/browser/auto-pair/candidates", headers=headers)
+        assert after.status_code == 200, after.text
+        assert after.json()["last_host_focus_at"] == focused.json()["focused_at"]
+
+        # Focus that belongs to another window must not rank this sidecar.
+        other = client.post(
+            "/browser/host-focus",
+            json={"workspace_id": "workspace-focus-b"},
+        )
+        assert other.status_code == 200, other.text
+        not_mine = client.get("/browser/auto-pair/candidates", headers=headers)
+        assert not_mine.json()["last_host_focus_at"] == ""
+
+
+def test_host_focus_requires_a_workspace(tmp_path) -> None:
+    with build_client(tmp_path) as client:
+        response = client.post("/browser/host-focus", json={"workspace_id": ""})
+        assert response.status_code == 422
+        assert response.json()["detail"]["code"] == "invalid_workspace"

@@ -936,7 +936,22 @@ async function ensureAutoPair(options) {
       return { ok: false, disabled: true };
     }
     const discovered = await TrainerCapture.discoverSidecar({});
-    for (const baseUrl of discovered.baseUrls || []) {
+    let candidateUrls = discovered.baseUrls || [];
+    // Several VS Code windows can be open at once. Prefer the sidecar whose
+    // Trainer window last had focus; fall back to discovery order when the
+    // focus route is unavailable.
+    if (candidateUrls.length > 1) {
+      const candidates = (
+        await Promise.all(
+          candidateUrls.map((baseUrl) => TrainerCapture.fetchAutoPairCandidate(baseUrl))
+        )
+      ).filter(Boolean);
+      const ranked = TrainerCapture.rankAutoPairCandidates(candidates);
+      if (ranked.length) {
+        candidateUrls = ranked.map((candidate) => candidate.baseUrl);
+      }
+    }
+    for (const baseUrl of candidateUrls) {
       const paired = await TrainerCapture.autoPairSidecar(baseUrl);
       if (paired.ok) {
         const saved = await TrainerCapture.saveAuth(

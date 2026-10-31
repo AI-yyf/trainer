@@ -49,3 +49,23 @@ test('queue rotation lets a retryable head item yield to later work', () => {
     ['b', 'a'],
   );
 });
+
+test('auto-pair prefers the focused sidecar and keeps discovery order on ties', () => {
+  const older = { baseUrl: 'a', hasSession: true, focusAt: 100 };
+  const newer = { baseUrl: 'b', hasSession: true, focusAt: 200 };
+  const noSession = { baseUrl: 'c', hasSession: false, focusAt: 999 };
+  assert.deepEqual(
+    C.rankAutoPairCandidates([older, newer]).map((item) => item.baseUrl),
+    ['b', 'a'],
+  );
+  assert.deepEqual(
+    C.rankAutoPairCandidates([noSession, older, newer]).map((item) => item.baseUrl),
+    ['b', 'a', 'c'],
+  );
+  const tieA = { baseUrl: 'a', hasSession: true, focusAt: 200 };
+  const tieB = { baseUrl: 'b', hasSession: true, focusAt: 200 };
+  assert.deepEqual(
+    C.rankAutoPairCandidates([tieA, tieB]).map((item) => item.baseUrl),
+    ['a', 'b'],
+  );
+});

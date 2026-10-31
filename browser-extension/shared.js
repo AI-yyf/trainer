@@ -33,6 +33,7 @@
     status: '/browser/status',
     capture: '/resources/capture',
     autoPair: '/browser/auto-pair',
+    autoPairCandidates: '/browser/auto-pair/candidates',
     coachDraft: '/browser/coach-draft'
   };
 
@@ -2134,6 +2135,55 @@
     return { ok: true, credential, baseUrl: base, workspaceId };
   }
 
+  async function fetchAutoPairCandidate(baseUrl) {
+    const base = normalizeBaseUrl(baseUrl);
+    if (!base) {
+      return null;
+    }
+    const result = await requestJson({
+      baseUrl: base,
+      path: API.autoPairCandidates,
+      method: 'GET',
+      timeoutMs: SIDECAR.probeTimeoutMs
+    });
+    if (!result.ok || !result.body || typeof result.body !== 'object') {
+      return null;
+    }
+    const body = result.body;
+    const workspaceId = String(body.workspace_id || '').trim();
+    if (!workspaceId) {
+      return null;
+    }
+    const focusAt = Date.parse(String(body.last_host_focus_at || ''));
+    return {
+      baseUrl: base,
+      workspaceId,
+      workspaceName: String(body.workspace_name || '').trim(),
+      hasSession: body.has_session === true,
+      lastHostFocusAt: String(body.last_host_focus_at || ''),
+      focusAt: Number.isFinite(focusAt) ? focusAt : 0
+    };
+  }
+
+  function rankAutoPairCandidates(candidates) {
+    return (Array.isArray(candidates) ? candidates : [])
+      .map((candidate, index) => ({ candidate, index }))
+      .sort((left, right) => {
+        const sessionDelta =
+          Number(right.candidate.hasSession === true) -
+          Number(left.candidate.hasSession === true);
+        if (sessionDelta !== 0) {
+          return sessionDelta;
+        }
+        const focusDelta = (right.candidate.focusAt || 0) - (left.candidate.focusAt || 0);
+        if (focusDelta !== 0) {
+          return focusDelta;
+        }
+        return left.index - right.index;
+      })
+      .map((entry) => entry.candidate);
+  }
+
   async function autoPairSidecar(baseUrl) {
     const dict = activeCopy();
     const base = normalizeBaseUrl(baseUrl);
@@ -2621,6 +2671,8 @@
     discoverSidecar,
     pairSidecar,
     autoPairSidecar,
+    fetchAutoPairCandidate,
+    rankAutoPairCandidates,
     revokePairing,
     fetchStatus,
     sendCapture,

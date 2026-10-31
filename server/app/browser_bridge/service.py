@@ -160,6 +160,8 @@ class BrowserBridgeService:
         self._captures: dict[str, dict[str, object]] = {}
         self._pending_drafts: list[_PendingDraft] = []
         self._acked_draft_client_ids: list[str] = []
+        self._host_focus_workspace_id = ""
+        self._host_focus_at = ""
         self._load_state()
 
     # ------------------------------------------------------------ persistence
@@ -375,6 +377,35 @@ class BrowserBridgeService:
             }
             self._write_state_locked()
         return credential, token
+
+    # --------------------------------------------------------- host focus
+
+    def mark_host_focus(self, workspace_id: str) -> str:
+        """Record that this sidecar's Trainer window just gained focus.
+
+        The browser extension probes every reachable sidecar before auto-pair
+        and prefers the one with the newest focus signal, so a two-window setup
+        binds to the window the learner is actually using.
+        """
+        normalized = str(workspace_id or "").strip()
+        if not normalized:
+            raise BrowserPairingError(
+                "invalid_workspace",
+                "Host focus needs a workspace.",
+                status_code=422,
+            )
+        focused_at = _utc_now_iso()
+        with self._lock:
+            self._host_focus_workspace_id = normalized
+            self._host_focus_at = focused_at
+        return focused_at
+
+    def host_focus_for(self, workspace_id: str) -> str:
+        normalized = str(workspace_id or "").strip()
+        with self._lock:
+            if not normalized or self._host_focus_workspace_id != normalized:
+                return ""
+            return self._host_focus_at
 
     # --------------------------------------------------------- auto pairing
 

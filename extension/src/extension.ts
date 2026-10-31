@@ -579,12 +579,58 @@ export async function activate(
   await restoreProviderModelCache();
   await syncExtensionState(commandContext);
 
+  // Browser auto-pair ranks sidecars by the window that last had focus. Post
+  // this window's focus to its own sidecar; the browser never sees a token.
+  let hostFocusTimer: ReturnType<typeof setTimeout> | undefined;
+  const postHostFocus = async (): Promise<void> => {
+    const status = sidecarManager.getStatus();
+    if (status.lifecycle !== 'ready' || !status.port) {
+      return;
+    }
+    const workspaceId = getRuntimeWorkspaceContext({ getHostState }).workspaceId;
+    if (!workspaceId) {
+      return;
+    }
+    try {
+      await sidecarClient.postJson(
+        status.port,
+        '/browser/host-focus',
+        { workspace_id: workspaceId },
+        { timeoutMs: 2_000 },
+      );
+    } catch (error) {
+      outputChannel.appendLine(
+        `[browser-capture] host focus was not recorded: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  };
+  const scheduleHostFocus = (): void => {
+    if (hostFocusTimer) {
+      clearTimeout(hostFocusTimer);
+    }
+    hostFocusTimer = setTimeout(() => void postHostFocus(), 80);
+  };
+  const windowFocusSubscription = vscode.window.onDidChangeWindowState((state) => {
+    if (state.focused) {
+      scheduleHostFocus();
+    }
+  });
+  extensionContext.subscriptions.push(windowFocusSubscription, {
+    dispose: () => {
+      if (hostFocusTimer) {
+        clearTimeout(hostFocusTimer);
+      }
+    },
+  });
   if (vscode.workspace.isTrusted) {
     void rehydrateWorkbenchRuntime(commandContext, {
       ensureSidecar: true,
       syncWorkbench: true,
     }).then(
       async () => {
+        void postHostFocus();
         const runtimeStatus = buildTrainerRuntimeStatus(commandContext);
         await workbench.postMessage({
           type: 'operation/status',

@@ -29,6 +29,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 
 from ...browser_bridge import BrowserBridgeService, BrowserCredential, BrowserPairingError
 from ..runtime import TrainerRuntime
@@ -57,6 +58,10 @@ def _bearer_token(request: Request) -> str:
         return ""
     return token.strip()
 
+
+
+class HostFocusRequest(BaseModel):
+    workspace_id: str = ""
 
 
 def _loopback_request(request: Request) -> bool:
@@ -249,6 +254,51 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
                 detail={"code": exc.code, "message": exc.detail},
             ) from exc
         return credential.as_payload(credential=token)
+
+    @router.post("/browser/host-focus")
+    def host_focus(body: HostFocusRequest) -> dict[str, object]:
+        """Record which Trainer window currently has the learner's focus.
+
+        Host-facing (instance token); the browser lane never calls it. The
+        timestamp lets the extension choose the right sidecar when several VS
+        Code windows are open.
+        """
+        bridge = _browser_bridge(runtime)
+        try:
+            focused_at = bridge.mark_host_focus(body.workspace_id)
+        except BrowserPairingError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail={"code": exc.code, "message": exc.detail},
+            ) from exc
+        return {"ok": True, "focused_at": focused_at}
+
+    @router.get("/browser/auto-pair/candidates")
+    def auto_pair_candidates(request: Request) -> dict[str, object]:
+        """One candidate per sidecar, used to rank auto-pair targets."""
+        if not _loopback_request(request) or not _extension_origin_allowed(request):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "extension_origin_required",
+                    "message": "Automatic pairing is only available to a browser extension.",
+                },
+            )
+        latest = runtime.latest_session()
+        if latest is None:
+            return {
+                "workspace_id": "",
+                "workspace_name": "",
+                "has_session": False,
+                "last_host_focus_at": "",
+            }
+        bridge = _browser_bridge(runtime)
+        return {
+            "workspace_id": latest.workspace_id,
+            "workspace_name": _workspace_display_name(runtime, latest.workspace_id, ""),
+            "has_session": True,
+            "last_host_focus_at": bridge.host_focus_for(latest.workspace_id),
+        }
 
     @router.get("/browser/status")
     def browser_status(request: Request) -> dict[str, object]:

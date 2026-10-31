@@ -154,6 +154,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         {
             "/browser/status",
             "/browser/auto-pair",
+            "/browser/auto-pair/candidates",
             "/browser/coach-draft",
         }
     )
