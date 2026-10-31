@@ -403,11 +403,10 @@ async function runCapture(target, options) {
     TrainerCapture.loadFocusId(),
     TrainerCapture.loadTargetDir()
   ]);
-  if (!auth.credential || !auth.baseUrl) {
-    const auto = await ensureAutoPair({ force: true });
-    if (auto.ok) {
-      auth = auto.auth;
-    }
+  // A user action must land in the window they are using right now.
+  const auto = await ensureAutoPair({ force: true });
+  if (auto.ok) {
+    auth = auto.auth;
   }
 
   // A right-click download carries no folder of its own: it uses the folder the
@@ -926,30 +925,47 @@ async function ensureAutoPair(options) {
   }
   autoPairPromise = (async () => {
     const existing = await TrainerCapture.loadAuth();
-    if (existing.credential && existing.baseUrl) {
-      return { ok: true, auth: existing };
-    }
     const disabled = await chrome.storage.local.get({
       [TrainerCapture.STORAGE_KEYS.autoPairDisabled]: false
     });
     if (!force && disabled[TrainerCapture.STORAGE_KEYS.autoPairDisabled]) {
       return { ok: false, disabled: true };
     }
+    // The fast path keeps popup polls and periodic flushes cheap. A forced
+    // call (user capture / selection) re-checks the focused window so a
+    // two-window setup does not stay pinned to the first sidecar.
+    if (existing.credential && existing.baseUrl && !force) {
+      return { ok: true, auth: existing };
+    }
     const discovered = await TrainerCapture.discoverSidecar({});
-    let candidateUrls = discovered.baseUrls || [];
+    const discoveredUrls = discovered.baseUrls || [];
+    let ranked = [];
     // Several VS Code windows can be open at once. Prefer the sidecar whose
     // Trainer window last had focus; fall back to discovery order when the
     // focus route is unavailable.
-    if (candidateUrls.length > 1) {
+    if (discoveredUrls.length > 1) {
       const candidates = (
         await Promise.all(
-          candidateUrls.map((baseUrl) => TrainerCapture.fetchAutoPairCandidate(baseUrl))
+          discoveredUrls.map((baseUrl) => TrainerCapture.fetchAutoPairCandidate(baseUrl))
         )
       ).filter(Boolean);
-      const ranked = TrainerCapture.rankAutoPairCandidates(candidates);
-      if (ranked.length) {
-        candidateUrls = ranked.map((candidate) => candidate.baseUrl);
+      ranked = TrainerCapture.rankAutoPairCandidates(candidates);
+    }
+    let candidateUrls = discoveredUrls;
+    if (existing.credential && existing.baseUrl) {
+      const focused = ranked[0];
+      const shouldSwitch =
+        Boolean(focused) &&
+        focused.baseUrl !== existing.baseUrl &&
+        Number(focused.focusAt) > 0;
+      if (!shouldSwitch) {
+        return { ok: true, auth: existing };
       }
+      // Only the focused window is a valid replacement; if re-pairing fails,
+      // keep the known-good credential rather than silently binding elsewhere.
+      candidateUrls = [focused.baseUrl];
+    } else if (ranked.length) {
+      candidateUrls = ranked.map((candidate) => candidate.baseUrl);
     }
     for (const baseUrl of candidateUrls) {
       const paired = await TrainerCapture.autoPairSidecar(baseUrl);
@@ -969,6 +985,9 @@ async function ensureAutoPair(options) {
           auth: { ...saved, workspaceName: paired.workspaceName }
         };
       }
+    }
+    if (existing.credential && existing.baseUrl) {
+      return { ok: true, auth: existing };
     }
     await recordConnection('offline');
     return { ok: false, message: dict().autoPairFailed };
@@ -1217,11 +1236,9 @@ async function coachDraft(info, tab) {
     return { status: 'failed', message: copy.coachEmptySelection };
   }
   let auth = await TrainerCapture.loadAuth();
-  if (!auth.credential || !auth.baseUrl) {
-    const auto = await ensureAutoPair({ force: true });
-    if (auto.ok) {
-      auth = auto.auth;
-    }
+  const auto = await ensureAutoPair({ force: true });
+  if (auto.ok) {
+    auth = auto.auth;
   }
   const payload = TrainerCapture.buildCoachDraftPayload({
     selection,

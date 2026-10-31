@@ -1022,14 +1022,22 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           const drafts = previousScope
             ? { ...state.layout.composerDrafts, [previousScope]: state.layout.composerDraft }
             : { ...(state.layout.composerDrafts ?? {}) };
-          drafts[coachScope] = draft;
+          const existingDraft = String(drafts[coachScope] ?? "").trim();
+          // A browser selection must never destroy words the learner already
+          // typed. Keep both, with the selection after the existing draft; a
+          // retry of the same selection is idempotent.
+          const nextDraft =
+            existingDraft && !existingDraft.includes(draft)
+              ? `${existingDraft}\n\n${draft}`
+              : existingDraft || draft;
+          drafts[coachScope] = nextDraft;
           return {
             layout: persistLayout({
               ...state.layout,
               activeView: "coach",
               composerDraftScope: coachScope,
               composerDrafts: drafts,
-              composerDraft: draft,
+              composerDraft: nextDraft,
               ...(draftId
                 ? {
                     appliedDraftIds: [...(state.layout.appliedDraftIds ?? []), draftId].slice(
@@ -1592,10 +1600,23 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           return {};
         }
         liveActiveView = "coach"; // authoritative move (T-0038)
+        const coachScope = composerDockDraftScope(
+          "coach",
+          `${state.data.memory.workspace?.resourceSandbox?.effectivePath
+            ?? state.data.memory.workspace?.workspaceId
+            ?? state.data.workspaceName}\u0000${state.data.sessionLabel}`,
+        );
+        const previousScope = state.layout.composerDraftScope;
+        const drafts = previousScope
+          ? { ...state.layout.composerDrafts, [previousScope]: state.layout.composerDraft }
+          : { ...(state.layout.composerDrafts ?? {}) };
+        drafts[coachScope] = draft;
         return {
           layout: persistLayout({
             ...state.layout,
             activeView: "coach",
+            composerDraftScope: coachScope,
+            composerDrafts: drafts,
             composerDraft: draft,
           }),
         };

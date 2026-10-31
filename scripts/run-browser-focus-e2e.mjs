@@ -167,27 +167,27 @@ async function main() {
       throw new Error(`Auto-pair did not follow focus B: ${JSON.stringify(first)}`);
     }
 
+    // A normal user capture must re-rank the focused window even though a
+    // credential is already stored; no manual revoke/clear is involved.
     await post(portA, tokenA, '/browser/host-focus', { workspace_id: 'workspace-a' });
     await sleep(60);
-    await page.evaluate(
+    const capture = await page.evaluate(
       () =>
         new Promise((resolve) => {
-          chrome.storage.local.remove(
-            [
-              'trainerCapture.baseUrl',
-              'trainerCapture.credential',
-              'trainerCapture.workspaceId',
-            ],
+          chrome.runtime.sendMessage(
+            {
+              type: 'trainer:capture',
+              url: 'https://example.com/?focus-switch=1',
+              kind: 'web',
+              title: 'Focus switch capture',
+            },
             resolve,
           );
         }),
     );
-    await page.evaluate(
-      () =>
-        new Promise((resolve) => {
-          chrome.runtime.sendMessage({ type: 'trainer:auto-pair' }, resolve);
-        }),
-    );
+    if (!capture || !['ok', 'duplicated', 'queued'].includes(capture.status)) {
+      throw new Error(`Focus-switch capture did not run: ${JSON.stringify(capture)}`);
+    }
     const second = await readAuth();
     if (
       second['trainerCapture.workspaceId'] !== 'workspace-a' ||

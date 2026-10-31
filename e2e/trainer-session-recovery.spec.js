@@ -224,6 +224,39 @@ test("browser selection prefill lands in Coach and preserves the Learning draft"
   await expect(page.getByRole("textbox")).toHaveValue("MY PLAN DRAFT");
 });
 
+test("host coach prompt lands in Coach without leaking into the Learning draft", async ({ page }) => {
+  await page.goto("/vscode-preview.html?view=plan&lang=en-US&connection=connected&scenario=ready");
+  await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
+  await page.getByRole("textbox").fill("PLAN DRAFT");
+  await page.evaluate(() => {
+    window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
+      type: "ui/coachPrompt",
+      payload: { draft: "HOST PROMPT" },
+    });
+  });
+  await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("textbox")).toHaveValue("HOST PROMPT");
+  await page.getByTestId("trainer-view-nav-plan").click();
+  await expect(page.getByRole("textbox")).toHaveValue("PLAN DRAFT");
+});
+
+test("browser selection prefill appends to an unsent Coach draft", async ({ page }) => {
+  await page.goto("/vscode-preview.html?view=coach&lang=en-US&connection=connected&scenario=ready");
+  await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
+  await page.getByRole("textbox").fill("MY COACH DRAFT");
+  await page.evaluate(() => {
+    window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
+      type: "ui/coachDraftPrefill",
+      draftId: "browser-prefill-coach-1",
+      text: "BROWSER SELECTION",
+    });
+  });
+  await expect(page.getByRole("textbox")).toHaveValue(
+    "MY COACH DRAFT\n\nBROWSER SELECTION",
+  );
+  await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
+});
+
 test("Plan generate keeps an unsent Coach draft instead of overwriting it", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=plan&lang=zh-CN&connection=connected&run=first-plan");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
