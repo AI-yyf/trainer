@@ -206,6 +206,65 @@ test("empty Plan honors an explicit Generate plan action", async ({ page }) => {
   await expect(page.getByRole("textbox")).toHaveValue(/生成正式计划/);
 });
 
+test("browser selection prefill lands in Coach and preserves the Learning draft", async ({ page }) => {
+  await page.goto("/vscode-preview.html?view=plan&lang=en-US&connection=connected&scenario=ready");
+  await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
+  const textbox = page.getByRole("textbox");
+  await textbox.fill("MY PLAN DRAFT");
+  await page.evaluate(() => {
+    window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
+      type: "ui/coachDraftPrefill",
+      draftId: "browser-prefill-1",
+      text: "BROWSER SELECTION",
+    });
+  });
+  await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("textbox")).toHaveValue("BROWSER SELECTION");
+  await page.getByTestId("trainer-view-nav-plan").click();
+  await expect(page.getByRole("textbox")).toHaveValue("MY PLAN DRAFT");
+});
+
+test("Plan generate keeps an unsent Coach draft instead of overwriting it", async ({ page }) => {
+  await page.goto("/vscode-preview.html?view=plan&lang=zh-CN&connection=connected&run=first-plan");
+  await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
+  await page.evaluate(() => {
+    const current = window.__TRAINER_BOOTSTRAP__;
+    window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: "bootstrap", payload: {
+      ...current, plan: null,
+      providerConfig: { ...current.providerConfig, lastTestResult: {
+        ...current.providerConfig.lastTestResult, ok: true, status: "connected",
+        workspaceId: current.memory.workspace.workspaceId,
+        profileId: current.providerConfig.profileId, checkedAt: new Date().toISOString(),
+        providerName: current.providerConfig.name, baseUrl: current.providerConfig.baseUrl,
+        model: current.providerConfig.model, protocol: current.providerConfig.protocol,
+        toolsReady: true, toolProbeStatus: "verified", streamingReady: true,
+        capabilityEvidence: [{ name: "tools", state: "verified", observed: true }],
+      } },
+      planRuntimeStatus: { recovered: false, currentStep: "", reviewPoints: [] },
+      memory: { ...current.memory, evidenceQueue: { pending: [], adopted: [], rejected: [], deferred: [] },
+        sandboxState: { ...current.memory.sandboxState, authority: {
+          ...current.memory.sandboxState.authority, authorityScope: "trainer_sandbox",
+          resourceWriteAllowed: true,
+          resourceWriteEvidence: { operation: "write", scope: "trainer_sandbox", allowed: true },
+        } },
+        workspaceUnderstanding: undefined, workspace: { ...current.memory.workspace,
+        latestPlanRuntime: undefined, activeThread: undefined, firstLookSummary: undefined,
+      } },
+      workspaceTrainingState: { workspaceId: current.memory.workspace.workspaceId, trainingCardCandidates: [] },
+      evidenceQueue: { pending: [], adopted: [], rejected: [], deferred: [] },
+    } });
+  });
+  await expect(page.getByText(/先启用一组可用连接/)).toHaveCount(0);
+  await page.getByTestId("trainer-view-nav-coach").click();
+  await page.getByRole("textbox").fill("我的教练草稿");
+  await page.getByTestId("trainer-view-nav-plan").click();
+  await page.locator('[data-surface=plan] details > summary').filter({ hasText: /^动作$/ }).click();
+  await page.getByRole("button", { name: "生成计划", exact: true }).click();
+  await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("textbox")).toHaveValue("我的教练草稿");
+  await expect(page.locator(".template-context")).toContainText("生成计划");
+});
+
 test("training generation keeps raw card JSON out of the conversation surface", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=coach&lang=en-US&connection=connected&run=card-stream");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();

@@ -22,6 +22,7 @@ import {
   normalizeOperationReliabilityOutcome,
   normalizeOperationReliabilityPhase,
 } from "../../../../shared/src/operationReliabilityGovernance";
+import { composerDockDraftScope } from "../lib/composerDock";
 import { createNeutralBootstrapData } from "../lib/neutralBootstrap";
 import {
   resolveOperationMessageSurface,
@@ -1010,20 +1011,35 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       const alreadyApplied = Boolean(draftId) && appliedDraftIds.includes(draftId);
       if (draft && !alreadyApplied) {
         liveActiveView = "coach"; // authoritative move (T-0038)
-        set((state) => ({
-          layout: persistLayout({
-            ...state.layout,
-            activeView: "coach",
-            composerDraft: draft,
-            ...(draftId
-              ? {
-                  appliedDraftIds: [...(state.layout.appliedDraftIds ?? []), draftId].slice(
-                    -COACH_DRAFT_APPLIED_LIMIT,
-                  ),
-                }
-              : {}),
-          }),
-        }));
+        set((state) => {
+          const coachScope = composerDockDraftScope(
+            "coach",
+            `${state.data.memory.workspace?.resourceSandbox?.effectivePath
+              ?? state.data.memory.workspace?.workspaceId
+              ?? state.data.workspaceName}\u0000${state.data.sessionLabel}`,
+          );
+          const previousScope = state.layout.composerDraftScope;
+          const drafts = previousScope
+            ? { ...state.layout.composerDrafts, [previousScope]: state.layout.composerDraft }
+            : { ...(state.layout.composerDrafts ?? {}) };
+          drafts[coachScope] = draft;
+          return {
+            layout: persistLayout({
+              ...state.layout,
+              activeView: "coach",
+              composerDraftScope: coachScope,
+              composerDrafts: drafts,
+              composerDraft: draft,
+              ...(draftId
+                ? {
+                    appliedDraftIds: [...(state.layout.appliedDraftIds ?? []), draftId].slice(
+                      -COACH_DRAFT_APPLIED_LIMIT,
+                    ),
+                  }
+                : {}),
+            }),
+          };
+        });
       }
       if (draftId) {
         // Confirm delivery only after the prefill reached the composer: the

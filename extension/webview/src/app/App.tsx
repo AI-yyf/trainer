@@ -3449,19 +3449,36 @@ export function App() {
       // The dock keeps one draft scope per surface. Select Coach's scope before
       // writing the prompt, otherwise the guidance lands in the Plan scope and
       // disappears the moment the composer switches surfaces.
-      useWorkbenchState
-        .getState()
-        .selectComposerDraftScope(composerDockDraftScope("coach", composerSessionKey));
+      const coachScope = composerDockDraftScope("coach", composerSessionKey);
+      const existingCoachDraft = (
+        activeView === "coach"
+          ? draft
+          : layout.composerDrafts?.[coachScope] ?? ""
+      ).trim();
+      useWorkbenchState.getState().selectComposerDraftScope(coachScope);
       setActiveView("coach");
       setPlanComposerMode(mode);
       setCoachPlanContext(mode);
-      const modeCopy = resolvePlanComposerCopy(layout.composerLanguage).modes[mode];
-      const prompt =
-        mode === "blocker" ? modeCopy.secondaryPrompt.prompt : modeCopy.primaryPrompt.prompt;
-      setComposerDraft(prompt);
+      // Never destroy an unsent Coach draft. The plan context chip still tells
+      // the learner why the composer kept their words; clearing the draft and
+      // choosing the action again applies the canned prompt.
+      if (!existingCoachDraft) {
+        const modeCopy = resolvePlanComposerCopy(layout.composerLanguage).modes[mode];
+        const prompt =
+          mode === "blocker" ? modeCopy.secondaryPrompt.prompt : modeCopy.primaryPrompt.prompt;
+        setComposerDraft(prompt);
+      }
       requestCoachComposerFocus();
     },
-    [composerSessionKey, layout.composerLanguage, requestCoachComposerFocus, setActiveView],
+    [
+      activeView,
+      composerSessionKey,
+      draft,
+      layout.composerDrafts,
+      layout.composerLanguage,
+      requestCoachComposerFocus,
+      setActiveView,
+    ],
   );
   const handlePlanOrientationAction = useCallback(
     (action: PlanOrientationAction | string | null) => {
