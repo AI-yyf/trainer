@@ -44,7 +44,7 @@ from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 from app.core.models import ResourceUploadRequest
 from app.network_fetch import ControlledFetchError, ControlledFetchResponse, fetch_url
 
-from .ingest import PdfSourceDetected, extract_from_url
+from .ingest import PdfSourceDetected, SourceTooLarge, extract_from_url
 from .versioning import compute_content_hash
 
 # PDF sources are routinely larger than the 2 MiB default used for HTML/text
@@ -301,6 +301,8 @@ def _capture_web(url: str, title_hint: str | None, *, selection: str | None) -> 
         extracted = extract_from_url(url, network_enabled=True)
     except PdfSourceDetected as exc:
         return _capture_pdf_response(url, title_hint, exc.response)
+    except SourceTooLarge:
+        return _capture_large_web_source(url, title_hint)
     except ConnectionError as exc:
         raise CaptureError(
             "fetch_failed",
@@ -352,6 +354,28 @@ def _capture_pdf(url: str, title_hint: str | None) -> CapturedSource:
         timeout_seconds=PDF_FETCH_TIMEOUT_SECONDS,
     )
     return _capture_pdf_response(url, title_hint, response)
+
+
+def _capture_large_web_source(url: str, title_hint: str | None) -> CapturedSource:
+    """A web capture exceeded 2MiB; retry with the PDF bound and be honest.
+
+    Suffix-less PDF endpoints (for example arXiv ``/pdf/<id>``) are common.
+    Only a real ``%PDF-`` payload is promoted to the PDF ingest path; a large
+    HTML page gets an explicit size error instead of a misleading fetch error.
+    """
+
+    response = _fetch(
+        url,
+        max_response_bytes=PDF_MAX_RESPONSE_BYTES,
+        timeout_seconds=PDF_FETCH_TIMEOUT_SECONDS,
+    )
+    if response.body.startswith(b"%PDF-"):
+        return _capture_pdf_response(url, title_hint, response)
+    raise CaptureError(
+        "source_too_large",
+        "This page is too large to capture. Save the link instead.",
+        status_code=413,
+    )
 
 
 def _capture_pdf_response(url: str, title_hint: str | None, response: ControlledFetchResponse) -> CapturedSource:

@@ -33,6 +33,14 @@ class PdfSourceDetected(ValueError):
         self.response = response
 
 
+class SourceTooLarge(Exception):
+    """The page exceeded the web bound and may still be a large PDF."""
+
+    def __init__(self, url: str) -> None:
+        super().__init__(f"The source exceeded the web capture size bound: {url}")
+        self.url = url
+
+
 def extract_from_url(url: str, *, network_enabled: bool = False) -> ExtractedContent:
     """Extract readable text and metadata from a controlled URL fetch.
 
@@ -49,6 +57,8 @@ def extract_from_url(url: str, *, network_enabled: bool = False) -> ExtractedCon
     try:
         response = fetch_url(url, network_enabled=network_enabled)
     except ControlledFetchError as exc:
+        if exc.code == "response_too_large":
+            raise SourceTooLarge(url) from exc
         msg = f"Controlled URL fetch failed ({exc.code}): {url}"
         raise ConnectionError(msg) from exc
 

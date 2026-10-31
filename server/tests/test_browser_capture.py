@@ -1030,3 +1030,51 @@ def test_non_snapshot_capture_cannot_request_an_artifact_download(tmp_path) -> N
         )
         assert response.status_code == 422
         assert "Only a full source capture can download an artifact" in response.text
+
+
+def test_suffixless_pdf_over_the_web_bound_is_retried_with_the_pdf_bound(
+    tmp_path, monkeypatch
+) -> None:
+    """A >2MiB PDF at /pdf/<id> must not be reported as a web fetch failure."""
+
+    from app.resources.ingest import SourceTooLarge
+
+    workspace_id = "workspace-capture-large-pdf"
+    pdf_url = "https://papers.example.com/pdf/8842"
+    pdf_body = minimal_pdf(["Large suffix-less PDF marker 9917."])
+    calls: list[tuple[str, int | None, float | None]] = []
+
+    def fake_extract(url: str, *, network_enabled: bool = False):
+        raise SourceTooLarge(url)
+
+    def fake_fetch(url: str, **kwargs):
+        calls.append(
+            (
+                url,
+                kwargs.get("max_response_bytes"),
+                kwargs.get("timeout_seconds"),
+            )
+        )
+        return _readonly_response(pdf_body, url, "application/pdf")
+
+    monkeypatch.setattr("app.resources.capture.extract_from_url", fake_extract)
+    monkeypatch.setattr("app.resources.capture._fetch", fake_fetch)
+
+    with build_client(tmp_path) as client:
+        session_id = _start_session(client, workspace_id)
+        response = client.post(
+            "/resources/capture",
+            json={
+                "session_id": session_id,
+                "workspace_id": workspace_id,
+                "url": pdf_url,
+                "kind": "web",
+                "title": "Large paper",
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["kind"] == "pdf"
+        assert calls == [(pdf_url, PDF_MAX_RESPONSE_BYTES, PDF_FETCH_TIMEOUT_SECONDS)]
+        assert Path(payload["source"]).read_bytes() == pdf_body
