@@ -2015,6 +2015,7 @@
         method: options.method || 'GET',
         headers,
         body: options.body ? JSON.stringify(options.body) : undefined,
+        cache: 'no-store',
         signal: controller.signal
       });
       let text = '';

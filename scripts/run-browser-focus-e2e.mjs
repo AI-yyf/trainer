@@ -167,10 +167,11 @@ async function main() {
       throw new Error(`Auto-pair did not follow focus B: ${JSON.stringify(first)}`);
     }
 
-    // A normal user capture must re-rank the focused window even though a
-    // credential is already stored; no manual revoke/clear is involved.
+    // A normal user capture must leave a dead stored sidecar and land in the
+    // live focused window; no manual revoke/clear is involved.
     await post(portA, tokenA, '/browser/host-focus', { workspace_id: 'workspace-a' });
-    await sleep(60);
+    sidecarB.kill('SIGKILL');
+    await sleep(400);
     const capture = await page.evaluate(
       () =>
         new Promise((resolve) => {

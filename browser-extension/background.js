@@ -943,7 +943,7 @@ async function ensureAutoPair(options) {
     // Several VS Code windows can be open at once. Prefer the sidecar whose
     // Trainer window last had focus; fall back to discovery order when the
     // focus route is unavailable.
-    if (discoveredUrls.length > 1) {
+    if (discoveredUrls.length > 0) {
       const candidates = (
         await Promise.all(
           discoveredUrls.map((baseUrl) => TrainerCapture.fetchAutoPairCandidate(baseUrl))
@@ -953,17 +953,27 @@ async function ensureAutoPair(options) {
     }
     let candidateUrls = discoveredUrls;
     if (existing.credential && existing.baseUrl) {
+      const existingReachable = discoveredUrls.includes(existing.baseUrl);
       const focused = ranked[0];
-      const shouldSwitch =
-        Boolean(focused) &&
-        focused.baseUrl !== existing.baseUrl &&
-        Number(focused.focusAt) > 0;
-      if (!shouldSwitch) {
-        return { ok: true, auth: existing };
+      if (!existingReachable) {
+        // The stored sidecar is gone (window closed / port changed). Move to
+        // a live workspace even if it has no focus signal yet.
+        if (!ranked.length) {
+          return { ok: true, auth: existing };
+        }
+        candidateUrls = ranked.map((candidate) => candidate.baseUrl);
+      } else {
+        const shouldSwitch =
+          Boolean(focused) &&
+          focused.baseUrl !== existing.baseUrl &&
+          Number(focused.focusAt) > 0;
+        if (!shouldSwitch) {
+          return { ok: true, auth: existing };
+        }
+        // Only the focused window is a valid replacement; if re-pairing fails,
+        // keep the known-good credential rather than silently binding elsewhere.
+        candidateUrls = [focused.baseUrl];
       }
-      // Only the focused window is a valid replacement; if re-pairing fails,
-      // keep the known-good credential rather than silently binding elsewhere.
-      candidateUrls = [focused.baseUrl];
     } else if (ranked.length) {
       candidateUrls = ranked.map((candidate) => candidate.baseUrl);
     }
@@ -976,6 +986,7 @@ async function ensureAutoPair(options) {
           paired.workspaceId
         );
         await TrainerCapture.saveWorkspaceName(paired.workspaceName);
+        await TrainerCapture.saveStatusCache(null);
         await chrome.storage.local.set({
           [TrainerCapture.STORAGE_KEYS.autoPairDisabled]: false
         });
