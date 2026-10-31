@@ -603,6 +603,67 @@ async function main() {
     credential = recoveredAuth["trainerCapture.credential"];
     ok("stale-credential-recovered");
 
+    // Head-of-line recovery: a permanently failing DNS item must yield its
+    // turn so the next queued capture still lands in the library.
+    const beforeHeadBypass = await browserStatus(baseUrl, credential);
+    const liveHeadUrl = `${CAPTURE_URL}?head-bypass=1`;
+    const seeded = await popup.evaluate(
+      (liveUrl) =>
+        new Promise((resolve) => {
+          const Trainer = self.TrainerCapture;
+          const dead = Trainer.createQueueItem({
+            url: "https://trainer-dead.invalid/never",
+            kind: "web",
+            title: "Dead head item",
+            clientCaptureId: "head-dead",
+          });
+          const live = Trainer.createQueueItem({
+            url: liveUrl,
+            kind: "web",
+            title: "Head bypass capture",
+            clientCaptureId: "head-live",
+          });
+          chrome.storage.local.set({ "trainerCapture.queue": [dead, live] }, () => resolve(true));
+        }),
+      liveHeadUrl,
+    );
+    assert(seeded === true, "Could not seed the head-of-line queue.");
+    let headFlush = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      headFlush = await popup.evaluate(
+        () =>
+          new Promise((resolve) => {
+            chrome.runtime.sendMessage({ type: "trainer:flush" }, resolve);
+          }),
+      );
+      if (headFlush && Number(headFlush.flushed) >= 1) break;
+      await sleep(2000);
+    }
+    assert(
+      headFlush && headFlush.ok === true && Number(headFlush.flushed) >= 1,
+      `The dead head item blocked later work: ${JSON.stringify(headFlush)}`,
+    );
+    const afterHeadBypass = await browserStatus(baseUrl, credential);
+    assert(
+      Number(afterHeadBypass.body?.library_count) >
+        Number(beforeHeadBypass.body?.library_count),
+      "The live item behind the dead head item did not reach the library.",
+    );
+    const remainingQueue = await popup.evaluate(
+      () =>
+        new Promise((resolve) => {
+          chrome.storage.local.get(["trainerCapture.queue"], resolve);
+        }),
+    );
+    const remainingIds = (remainingQueue["trainerCapture.queue"] || []).map(
+      (item) => item.clientCaptureId,
+    );
+    assert(
+      remainingIds.includes("head-dead") && !remainingIds.includes("head-live"),
+      `Head-of-line rotation lost the wrong item: ${JSON.stringify(remainingIds)}`,
+    );
+    ok("head-of-line-yields", "dead item retained, live item delivered");
+
     const revoke = await popup.evaluate(
       () =>
         new Promise((resolve) => {

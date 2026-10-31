@@ -673,11 +673,16 @@ async function flushQueueLocked(options) {
   let flushed = 0;
   let lastError = '';
   let lastStatus = 0;
+  let lastErrorWasFence = false;
   let stop = false;
+  let capturePasses = queue.length;
+  let draftPasses = drafts.length;
   const savedPaths = [];
 
-  // Captures and downloads first.
-  while (queue.length && !stop) {
+  // Captures and downloads first. One pass visits each queued capture at most
+  // once: a retryable head item yields its turn instead of wedging the queue.
+  while (queue.length && !stop && capturePasses > 0) {
+    capturePasses -= 1;
     const item = TrainerCapture.takeNextQueueItem(queue);
     if (item.workspaceId && auth.workspaceId && item.workspaceId !== auth.workspaceId) {
       await TrainerCapture.saveNotice(copy.queueWorkspaceChanged);
@@ -688,8 +693,12 @@ async function flushQueueLocked(options) {
       );
       lastError = copy.queueWorkspaceChanged;
       lastStatus = 0;
-      stop = true;
-      break;
+      lastErrorWasFence = true;
+      // A fenced item must not block work that belongs to the current
+      // workspace. Keep it for the workspace it was captured under and try the
+      // rest of the queue.
+      queue = TrainerCapture.rotateQueueItem(queue, item.clientCaptureId);
+      continue;
     }
     const payload = TrainerCapture.buildCapturePayload(item);
     const response = await sendCaptureWithRecovery(payload, auth);
@@ -734,8 +743,8 @@ async function flushQueueLocked(options) {
       queue = TrainerCapture.markQueueAttempt(queue, item.clientCaptureId, response.message);
       lastError = response.message;
       lastStatus = Number(response.status) || 0;
-      stop = true;
-      break;
+      queue = TrainerCapture.rotateQueueItem(queue, item.clientCaptureId);
+      continue;
     }
 
     if (response.unauthorized) {
@@ -779,8 +788,10 @@ async function flushQueueLocked(options) {
     );
   }
 
-  // Coach drafts (selections) follow captures, same workspace fence.
-  while (drafts.length && !stop) {
+  // Coach drafts (selections) follow captures, same workspace fence and
+  // one-pass rotation.
+  while (drafts.length && !stop && draftPasses > 0) {
+    draftPasses -= 1;
     const draft = TrainerCapture.takeNextDraft(drafts);
     if (draft.workspaceId && auth.workspaceId && draft.workspaceId !== auth.workspaceId) {
       await TrainerCapture.saveNotice(copy.queueWorkspaceChanged);
@@ -791,8 +802,9 @@ async function flushQueueLocked(options) {
       );
       lastError = copy.queueWorkspaceChanged;
       lastStatus = 0;
-      stop = true;
-      break;
+      lastErrorWasFence = true;
+      drafts = TrainerCapture.rotateDraft(drafts, draft.clientDraftId);
+      continue;
     }
     const payload = TrainerCapture.buildCoachDraftPayload({
       selection: draft.selection,
@@ -855,7 +867,7 @@ async function flushQueueLocked(options) {
     );
     lastError = result.message;
     lastStatus = Number(result.status) || 0;
-    stop = true;
+    drafts = TrainerCapture.rotateDraft(drafts, draft.clientDraftId);
   }
 
   await TrainerCapture.saveQueue(queue);
@@ -874,7 +886,7 @@ async function flushQueueLocked(options) {
     return { ok: true, flushed, remaining: pending(), message };
   }
   if (lastError) {
-    await recordConnection(lastStatus ? 'ok' : 'offline');
+    await recordConnection(lastStatus || lastErrorWasFence ? 'ok' : 'offline');
     return {
       ok: false,
       flushed: 0,

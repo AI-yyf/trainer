@@ -30,3 +30,22 @@ test('GitHub current-page capture preserves files, issues and branches', () => {
     assert.equal(C.githubRepositoryUrl('https://github.com/acme/research'+suffix), 'https://github.com/acme/research');
   }
 });
+
+test('queue rotation lets a retryable head item yield to later work', () => {
+  const a = { clientCaptureId: 'a' };
+  const b = { clientCaptureId: 'b' };
+  assert.deepEqual(
+    C.rotateQueueItem([a, b], 'a').map((item) => item.clientCaptureId),
+    ['b', 'a'],
+  );
+  assert.deepEqual(
+    C.rotateQueueItem([a, b], 'b').map((item) => item.clientCaptureId),
+    ['a', 'b'],
+  );
+  const da = { clientDraftId: 'a' };
+  const db = { clientDraftId: 'b' };
+  assert.deepEqual(
+    C.rotateDraft([da, db], 'a').map((item) => item.clientDraftId),
+    ['b', 'a'],
+  );
+});

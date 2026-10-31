@@ -1680,6 +1680,17 @@
     return { count: list.length, next: list.length ? list[0] : null };
   }
 
+  function rotateQueueItem(queue, clientCaptureId) {
+    const list = Array.isArray(queue) ? queue.slice() : [];
+    const index = list.findIndex((entry) => entry.clientCaptureId === clientCaptureId);
+    if (index < 0 || index === list.length - 1) {
+      return list;
+    }
+    const [item] = list.splice(index, 1);
+    list.push(item);
+    return list;
+  }
+
   // -------------------------------------------------- coach-draft queue ----
   // Selections are just as valuable as page captures: losing one because the
   // sidecar was down is the same broken promise. Drafts get their own queue
@@ -1742,6 +1753,17 @@
 
   function takeNextDraft(queue) {
     return Array.isArray(queue) && queue.length ? queue[0] : null;
+  }
+
+  function rotateDraft(queue, clientDraftId) {
+    const list = Array.isArray(queue) ? queue.slice() : [];
+    const index = list.findIndex((entry) => entry.clientDraftId === clientDraftId);
+    if (index < 0 || index === list.length - 1) {
+      return list;
+    }
+    const [item] = list.splice(index, 1);
+    list.push(item);
+    return list;
   }
 
   /**
@@ -2572,11 +2594,13 @@
     markQueueAttempt,
     takeNextQueueItem,
     summarizeQueue,
+    rotateQueueItem,
     createDraftQueueItem,
     enqueueDraft,
     dequeueDraft,
     markDraftAttempt,
     takeNextDraft,
+    rotateDraft,
     findLocalDuplicate,
     buildCapturePayload,
     buildCoachDraftPayload,
