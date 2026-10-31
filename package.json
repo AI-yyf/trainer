@@ -34,7 +34,8 @@
     "perf:probe": "node ./scripts/perf-probe.mjs",
     "verify:version": "node ./scripts/verify-version.mjs",
     "verify:credentials": "node ./scripts/verify-no-plaintext-credentials.mjs",
-    "verify:server-pyright": "node ./scripts/run-server-pyright.mjs"
+    "verify:server-pyright": "node ./scripts/run-server-pyright.mjs",
+    "test:browser-focus-e2e": "node ./scripts/run-browser-focus-e2e.mjs"
   },
   "repository": {
     "type": "git",
