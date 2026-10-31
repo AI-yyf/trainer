@@ -3446,6 +3446,12 @@ export function App() {
     coachContextTransition.conversationLength === data.conversation.length;
   const openPlanComposerMode = useCallback(
     (mode: PlanComposerMode) => {
+      // The dock keeps one draft scope per surface. Select Coach's scope before
+      // writing the prompt, otherwise the guidance lands in the Plan scope and
+      // disappears the moment the composer switches surfaces.
+      useWorkbenchState
+        .getState()
+        .selectComposerDraftScope(composerDockDraftScope("coach", composerSessionKey));
       setActiveView("coach");
       setPlanComposerMode(mode);
       setCoachPlanContext(mode);
@@ -3455,7 +3461,7 @@ export function App() {
       setComposerDraft(prompt);
       requestCoachComposerFocus();
     },
-    [layout.composerLanguage, requestCoachComposerFocus, setActiveView],
+    [composerSessionKey, layout.composerLanguage, requestCoachComposerFocus, setActiveView],
   );
   const handlePlanOrientationAction = useCallback(
     (action: PlanOrientationAction | string | null) => {
