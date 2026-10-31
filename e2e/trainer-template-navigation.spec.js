@@ -13,7 +13,9 @@ for (const width of [340, 420, 460]) {
           await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
           const nav = page.locator('.app-shell-nav');
           await expect(nav.getByRole('button')).toHaveText(labels);
-          await expect(page.locator('#coach-composer')).toHaveCount(route === 'coach' ? 1 : 0);
+          // Product ruling (lib/composerDock.ts): the persistent dock composer
+          // lives on Coach, Learning and Resources; Training/Progress/Settings do not dock.
+          await expect(page.locator('#coach-composer')).toHaveCount(['coach', 'plan', 'resources'].includes(route) ? 1 : 0);
           const current = nav.locator('[aria-current="page"]');
           if (route === 'settings') await expect(current).toHaveCount(0);
           else await expect(current).toHaveAttribute('data-testid', `trainer-view-nav-${['training', 'progress'].includes(route) ? 'plan' : route}`);

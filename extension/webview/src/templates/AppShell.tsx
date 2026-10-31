@@ -2,19 +2,7 @@ import type { ReactNode } from "react";
 import type { ActiveWorkbenchView, ComposerLanguage } from "../lib/types";
 import { viewLabels } from "../lib/viewLabels";
 import { PRIMARY_DESTINATIONS, primaryDestinationForRoute } from "../lib/workbenchDestinations";
-import {
-  CoachNavIcon,
-  HistoryIcon,
-  LearningNavIcon,
-  ResourcesNavIcon,
-  SettingsIcon,
-} from "../components/icons";
-
-const PRIMARY_NAV_ICONS = {
-  coach: CoachNavIcon,
-  plan: LearningNavIcon,
-  resources: ResourcesNavIcon,
-} as const;
+import { HistoryIcon, SettingsIcon } from "../components/icons";
 
 const NAV_LABEL: Record<ComposerLanguage, string> = {
   "zh-CN": "主导航", "en-US": "Primary navigation", "es-ES": "Navegación principal", "fr-FR": "Navigation principale",
@@ -62,15 +50,11 @@ export function AppShell({ language, direction, activeView, context, historyOpen
           {surfaceControl ? <span className="app-shell-header__surface">{surfaceControl}</span> : null}
         </div>
         <nav className="app-shell-nav" aria-label={NAV_LABEL[language]}>
-          {PRIMARY_DESTINATIONS.map((view) => {
-            const Icon = PRIMARY_NAV_ICONS[view];
-            return (
-              <button key={view} type="button" className="app-shell-nav__item" data-testid={`trainer-view-nav-${view}`} aria-label={viewLabels[language][view]} aria-pressed={selected === view} aria-current={selected === view ? "page" : undefined} onClick={() => onNavigate(view)}>
-                <Icon size={18} active={selected === view} aria-hidden="true" />
-                <span>{viewLabels[language][view]}</span>
-              </button>
-            );
-          })}
+          {PRIMARY_DESTINATIONS.map((view) => (
+            <button key={view} type="button" className="app-shell-nav__item" data-testid={`trainer-view-nav-${view}`} aria-label={viewLabels[language][view]} aria-pressed={selected === view} aria-current={selected === view ? "page" : undefined} onClick={() => onNavigate(view)}>
+              <span>{viewLabels[language][view]}</span>
+            </button>
+          ))}
         </nav>
       </header>
       {children}
