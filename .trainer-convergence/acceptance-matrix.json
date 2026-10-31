@@ -3,15 +3,15 @@
   "gates": {
     "ci_cross_platform": {
       "status": "PASS",
-      "evidence": "run 41242296019 @8b3bb0b (docs head; code ac72b35) on maturity/p1-final-convergence-2026-10-20: 9/9 jobs success (UI/Server/Package on windows/macos/ubuntu); prior 41236836839 @52fe632 and 41240042027 @ac72b35 also 9/9"
+      "evidence": "run 41251375795 @5881e56 on maturity/p1-final-convergence-2026-10-20: 9/9 jobs success (UI/Server/Package on windows/macos/ubuntu); prior 41236836839 @52fe632 and 41240042027 @ac72b35 also 9/9"
     },
     "native_install_e2e": {
       "status": "PASS",
-      "evidence": "local packaged VSIX host E2E at ac72b35 (includes composer scope fix): report ok=true, 36/36 host steps, rebuiltCurrentVsix=true, fixture provider; evidence/vsix-e2e-ac72b35.json. Visual window capture is win32-only and was skipped on macOS; cross-platform package jobs passed in run 41240042027."
+      "evidence": "local packaged VSIX host E2E at 5881e56: report ok=true, 36/36 host steps, rebuiltCurrentVsix=true, fixture provider; evidence/vsix-e2e-5881e56.json. Visual window capture is win32-only and was skipped on macOS; cross-platform package jobs passed in run 41251375795."
     },
     "browser_e2e": {
       "status": "PASS_LOCAL",
-      "evidence": "24/24 real Chrome + sidecar checks at 52fe632 (auto-pair, capture, offline queue, PDF retry, stale-credential recovery); evidence/browser-e2e-52fe632.log. Windows/Linux browser installs not included."
+      "evidence": "25/25 real Chrome + sidecar checks at 5881e56 (auto-pair/focus switch, capture, offline queue, head-of-line rotation, PDF retry, stale-credential recovery); evidence/browser-e2e-5881e56.log + focus-e2e-5881e56.log. Windows/Linux browser installs not included."
     },
     "remote_ssh_e2e": {
       "status": "BLOCKED",
@@ -23,7 +23,7 @@
     },
     "design_acceptance": {
       "status": "PASS",
-      "evidence": "at 52fe632: 471/471 geometry (evidence/geometry-52fe632.log), 96/96 a11y pages (evidence/design-a11y-report-52fe632.json), perf budgets pass (streaming longtask=0, warm nav p90=39ms; evidence/perf-52fe632.log)"
+      "evidence": "at 5881e56: 471/471 geometry (evidence/geometry-5881e56.log), 96/96 a11y pages (evidence/design-a11y-report-5881e56.json), perf budgets pass (streaming longtask=0, warm nav p90=35ms; evidence/perf-5881e56.log)"
     }
   }
 }

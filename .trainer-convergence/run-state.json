@@ -2,7 +2,7 @@
   "version": 1,
   "loop": 6,
   "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "ac72b35",
+  "head": "5881e56",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -46,7 +46,15 @@
     "install_state_e2e_current": "FIXED_VALIDATED (ac72b35: local packaged VSIX host E2E 36/36 steps, fixture provider, rebuiltCurrentVsix=true; evidence/vsix-e2e-ac72b35.json. Visual window capture skipped on macOS because that probe is win32-only.)",
     "composer_draft_scope": "FIXED_VALIDATED (fb56333: Plan generate guidance writes the Coach draft scope before switching surfaces; the regression test failed with an empty textarea pre-fix and session recovery is 20/20 post-fix)",
     "experience_matrix": "PASS_LOCAL (200/200 at 6c3683c; preview layer)",
-    "session_recovery": "PASS_LOCAL (20/20 at fb56333)"
+    "session_recovery": "PASS_LOCAL (24/24 at 5881e56; evidence/session-recovery-5881e56.log)",
+    "audit_wave_3": "FIXED_VALIDATED (five independent P1s: multi-window focus binding, queue head-of-line blocking, >2MiB suffix-less PDF, browser prefill scope/overwrite, Plan generate clobber; independent re-audit at 5881e56 reports no remaining reproducible P0/P1)",
+    "browser_focus_binding": "FIXED_VALIDATED (02cf4fc + 5881e56: host focus beacon, candidate ranking, forced re-rank on user action, dead stored sidecar fall-through; npm run test:browser-focus-e2e -> B then A PASS)",
+    "queue_head_of_line": "FIXED_VALIDATED (d42ca7b: retryable/fenced items rotate within one pass; browser e2e 25/25 includes head-of-line-yields)",
+    "large_suffixless_pdf": "FIXED_VALIDATED (9f0526c: SourceTooLarge retry with 25MiB PDF bound; server 3691 passed)",
+    "composer_draft_safety": "FIXED_VALIDATED (360aaed + e913644: browser prefill appends to Coach draft, Plan generate preserves unsent Coach draft, coachPrompt selects Coach scope; session recovery 24/24)",
+    "browser_focus_e2e": "PASS_LOCAL (focus e2e 1/1 at 5881e56; evidence/focus-e2e-5881e56.log)",
+    "browser_capture_e2e": "PASS_LOCAL (25/25 at 5881e56; evidence/browser-e2e-5881e56.log)",
+    "server_final": "PASS_LOCAL (3691 passed / 28 subtests at 5881e56 code; evidence/server-5881e56.log)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
@@ -55,9 +63,8 @@
     "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
   },
   "ci": {
-    "run_id": 41242296019,
-    "sha": "8b3bb0b",
-    "code_sha": "ac72b35",
+    "run_id": 41251375795,
+    "sha": "5881e56",
     "workflow": "Trainer Cross-Platform Verify",
     "conclusion": "success",
     "jobs": "9/9"
@@ -65,33 +72,35 @@
   "next": [
     "owner sign-off (T-0028) — human",
     "real Remote-SSH window (L2) — environment",
-    "re-run T-0026 latency only when the owner relay/model changes"
+    "re-run T-0026 latency only when the owner relay/model changes",
+    "Windows/Linux browser install acceptance — environment"
   ],
   "updated": "2026-11-01",
   "design_acceptance": {
-    "sha": "52fe632",
-    "geometry": "471/471 (evidence/geometry-52fe632.log)",
-    "a11y": "96/96 (evidence/design-a11y-report-52fe632.json)",
-    "perf": "budgets pass: streaming longtask=0, warm nav p90=39ms (evidence/perf-52fe632.log)",
+    "sha": "5881e56",
+    "geometry": "471/471 (evidence/geometry-5881e56.log)",
+    "a11y": "96/96 (evidence/design-a11y-report-5881e56.json)",
+    "perf": "budgets pass: streaming longtask=0, warm nav p90=35ms (evidence/perf-5881e56.log)",
     "reshot": "2026-11-01"
   },
   "popup_redesign": "owner-directed minimal card @7cf5760; pairing panel removed @93b3798 (zero-code auto-connect); the card has no pairing code, status page, history list or queue manager",
   "install_state_e2e": {
     "run": "local npm run test:vsix-e2e",
-    "sha": "ac72b35",
+    "sha": "5881e56",
     "status": "PASS",
     "steps": "36/36",
     "provider": "fixture (no real key claimed)",
-    "limitation": "visual window capture skipped on macOS; Windows job covers its own package build, not this probe",
-    "evidence": "evidence/vsix-e2e-ac72b35.json"
+    "evidence": "evidence/vsix-e2e-5881e56.json",
+    "limitation": "visual window capture is win32-only and skipped on macOS"
   },
   "notes": "Owner delivered a fresh linksub test key on 2026-10-24; real-model journey evidence completed same day. Remaining external gates: T-0028 owner §6 sign-off (teaching_acceptance), real Remote-SSH window (remote_ssh_e2e L2).",
   "branch": "maturity/p1-final-convergence-2026-10-20",
   "gaps": [
     "Remote-SSH L2 real-window acceptance remains BLOCKED (environment not available)",
     "teaching acceptance remains BLOCKED on owner sign-off T-0028; real-model journey evidence is 10/10 from 2026-10-24 at an older SHA",
-    "T-0026 real-provider latency remains measured beyond budget (first chunk 5.6-12.8s, total 10.9-19.0s); no re-run at 52fe632",
+    "T-0026 real-provider latency remains measured beyond budget (first chunk 5.6-12.8s, total 10.9-19.0s); no re-run at 5881e56",
     "browser capture is verified in real Chrome on macOS; Windows/Linux browser installs are not part of the current evidence"
   ],
-  "docs_head": "8b3bb0b"
+  "docs_head": "8b3bb0b",
+  "engineering_status": "ENGINEERING_CONVERGED — EXTERNAL_ACCEPTANCE_PENDING"
 }

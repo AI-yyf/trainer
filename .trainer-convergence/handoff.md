@@ -235,3 +235,27 @@
   passes and the full session-recovery spec is 20/20. Experience matrix was
   200/200 at the preceding docs head; both are local preview evidence, not a
   substitute for real-provider acceptance.
+
+## 2026-11-01 — independent audit wave 3: five P1s fixed; engineering converged
+
+- An independent adversarial audit of the new zero-code/focus/queue/prefill code
+  found five reproducible P1s. All are fixed and re-audited:
+  1. multi-window auto-pair now posts a host focus beacon, ranks candidates and
+     re-ranks on user capture; a dead stored sidecar falls through to the live
+     workspace (`02cf4fc`, `5881e56`; focus e2e PASS B then A).
+  2. retryable/fenced queue heads rotate within one pass instead of blocking all
+     later captures/drafts (`d42ca7b`; e2e head-of-line-yields).
+  3. suffix-less PDFs above the 2MiB web bound retry with the 25MiB PDF bound and
+     only promote `%PDF-` (`9f0526c`; server 3691).
+  4. browser selection prefill selects the Coach scope and appends to an unsent
+     Coach draft; `ui/coachPrompt` also selects Coach (`360aaed`, `e913644`).
+  5. Plan generate preserves an unsent Coach draft instead of overwriting it.
+- Final evidence at 5881e56: server 3691 passed; extension suite exit 0; check
+  clean; browser e2e 25/25; focus e2e 1/1; session recovery 24/24; geometry
+  471/471; a11y 96/96; perf budgets pass; packaged VSIX host E2E 36/36;
+  Cross-Platform CI run 41251375795 = 9/9. Independent re-audit: no remaining
+  reproducible P0/P1.
+- Remaining gates are external only: T-0028 owner teaching sign-off, real
+  Remote-SSH L2 window, T-0026 latency re-run when the relay/model changes, and
+  Windows/Linux browser install acceptance. Do not mark these PASS without new
+  evidence.

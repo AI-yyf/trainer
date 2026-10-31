@@ -1,0 +1,5 @@
+
+> trainer-workspace@1.3.4 test:browser-focus-e2e
+> node ./scripts/run-browser-focus-e2e.mjs
+
+[PASS] focus ranking: B -> 34892/workspace-b, A -> 34891/workspace-a
