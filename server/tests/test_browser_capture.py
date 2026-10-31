@@ -931,3 +931,102 @@ def test_deduped_repo_capture_reports_docs_listing_failure(tmp_path, monkeypatch
         assert second.json()["deduped"] is True
         assert any("docs/ listing" in str(w) for w in second.json()["warnings"])
         assert "docs-supplemented" not in second.json()["tags"]
+
+
+def test_link_capture_is_honest_and_deduped_within_its_intent(tmp_path) -> None:
+    workspace_id = "workspace-capture-link-intent"
+    with build_client(tmp_path, enable_network_fetch=False) as client:
+        session_id = _start_session(client, workspace_id)
+        body = {
+            "session_id": session_id,
+            "workspace_id": workspace_id,
+            "url": "https://docs.example.com/links/rotation",
+            "kind": "web",
+            "title": "Rotation link",
+            "capture_mode": "link",
+            "client_capture_id": "link-1",
+        }
+        first = client.post("/resources/capture", json=body)
+        assert first.status_code == 200, first.text
+        payload = first.json()
+        assert payload["deduped"] is False
+        assert "capture-intent:link" in payload["tags"]
+        snapshot = Path(payload["source"]).read_text(encoding="utf-8")
+        assert "Source link only" in snapshot
+        assert "Full source content has not been captured" in snapshot
+
+        replay = client.post(
+            "/resources/capture",
+            json={**body, "client_capture_id": "link-2"},
+        )
+        assert replay.status_code == 200, replay.text
+        assert replay.json()["deduped"] is True
+        assert replay.json()["id"] == payload["id"]
+
+
+def test_selection_capture_keeps_its_excerpt_and_does_not_collide_with_other_intents(
+    tmp_path,
+) -> None:
+    workspace_id = "workspace-capture-selection-intent"
+    with build_client(tmp_path, enable_network_fetch=False) as client:
+        session_id = _start_session(client, workspace_id)
+        body = {
+            "session_id": session_id,
+            "workspace_id": workspace_id,
+            "url": "https://docs.example.com/links/rotation",
+            "kind": "web",
+            "title": "Rotation excerpt",
+            "capture_mode": "selection",
+            "selection": "The rotation guard runs before the retry queue drains.",
+            "client_capture_id": "selection-1",
+        }
+        first = client.post("/resources/capture", json=body)
+        assert first.status_code == 200, first.text
+        payload = first.json()
+        assert payload["deduped"] is False
+        assert any(tag.startswith("capture-intent:selection:") for tag in payload["tags"])
+        snapshot = Path(payload["source"]).read_text(encoding="utf-8")
+        assert "The rotation guard runs before the retry queue drains." in snapshot
+
+        different = client.post(
+            "/resources/capture",
+            json={
+                **body,
+                "selection": "A different passage from the same source.",
+                "client_capture_id": "selection-2",
+            },
+        )
+        assert different.status_code == 200, different.text
+        assert different.json()["deduped"] is False
+        assert different.json()["id"] != payload["id"]
+
+        missing = client.post(
+            "/resources/capture",
+            json={
+                **body,
+                "selection": "",
+                "client_capture_id": "selection-3",
+            },
+        )
+        assert missing.status_code == 422
+        assert "Selection capture requires a non-empty excerpt" in missing.text
+
+
+def test_non_snapshot_capture_cannot_request_an_artifact_download(tmp_path) -> None:
+    workspace_id = "workspace-capture-link-download"
+    with build_client(tmp_path, enable_network_fetch=False) as client:
+        session_id = _start_session(client, workspace_id)
+        response = client.post(
+            "/resources/capture",
+            json={
+                "session_id": session_id,
+                "workspace_id": workspace_id,
+                "url": "https://docs.example.com/links/rotation",
+                "kind": "web",
+                "capture_mode": "link",
+                "download": True,
+                "target_dir": "Trainer Library/",
+            },
+        )
+        assert response.status_code == 422
+        assert "Only a full source capture can download an artifact" in response.text

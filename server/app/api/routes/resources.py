@@ -39,6 +39,7 @@ from ...resources.asset_library import (
 from ...resources.capture import (
     CapturedSource,
     CaptureError,
+    capture_intent_tag,
     capture_source,
     capture_url_key,
     github_docs_section,
@@ -636,6 +637,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         *,
         url_key: str,
         content_hash: str = "",
+        intent_tag: str = "",
     ) -> ResourceRecord | None:
         """Locate an earlier capture of the same URL or identical content.
 
@@ -645,8 +647,21 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         """
 
         wanted_hash = str(content_hash or "").strip()
+
+        def matches_intent(resource: ResourceRecord) -> bool:
+            tags = tuple(resource.tags)
+            if intent_tag:
+                return intent_tag in tags
+            # A full snapshot is a different operation from an honest link or
+            # excerpt capture; never let one impersonate the other.
+            return not any(tag.startswith("capture-intent:") for tag in tags)
+
         try:
-            resources = runtime.repository.list_resources(workspace_id)
+            resources = [
+                resource
+                for resource in runtime.repository.list_resources(workspace_id)
+                if matches_intent(resource)
+            ]
         except Exception:
             logger.warning("Capture dedup scan failed for workspace %s.", workspace_id, exc_info=True)
             return None
@@ -887,9 +902,10 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             return updated, warnings
 
         # Fast path: the requested URL is already captured in this library.
+        intent_tag = capture_intent_tag(request.capture_mode, request.selection)
         requested_key = capture_url_key(request.url)
         if requested_key:
-            existing = find_captured_resource(workspace_id, url_key=requested_key)
+            existing = find_captured_resource(workspace_id, url_key=requested_key, intent_tag=intent_tag)
             if existing is not None:
                 download, download_warnings = download_capture_artifact(
                     kind=request.kind,
@@ -933,6 +949,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 declared_title=request.title,
                 selection=request.selection,
                 include_docs=request.include_docs,
+                capture_mode=request.capture_mode,
             )
         except CaptureError as exc:
             raise HTTPException(
@@ -946,6 +963,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             workspace_id,
             url_key=canonical_key,
             content_hash=captured.content_hash,
+            intent_tag=intent_tag,
         )
         if duplicate is not None:
             download, download_warnings = download_capture_artifact(

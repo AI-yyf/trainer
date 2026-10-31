@@ -39,12 +39,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Literal, TypedDict
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 
 from app.core.models import ResourceUploadRequest
 from app.network_fetch import ControlledFetchError, ControlledFetchResponse, fetch_url
 
-from .ingest import extract_from_url
+from .ingest import PdfSourceDetected, extract_from_url
 from .versioning import compute_content_hash
 
 # PDF sources are routinely larger than the 2 MiB default used for HTML/text
@@ -211,6 +211,7 @@ def capture_source(
     declared_title: str | None = None,
     selection: str | None = None,
     include_docs: bool = False,
+    capture_mode: str = "snapshot",
 ) -> CapturedSource:
     """Fetch and extract one browser-captured source.
 
@@ -221,6 +222,53 @@ def capture_source(
 
     normalized_url = _validated_http_url(url)
     title_hint = _clean_title(declared_title)
+    if capture_mode in {"link", "selection"}:
+        excerpt = _clean_selection(selection)
+        if capture_mode == "selection" and not excerpt:
+            raise CaptureError(
+                "empty_selection",
+                "Select some text before saving an excerpt.",
+                status_code=422,
+            )
+        if capture_mode == "link":
+            body = "Source link only. Full source content has not been captured."
+        else:
+            body = (
+                "User-selected excerpt. "
+                "Full source content has not been captured."
+            )
+        resolved_title = title_hint or _url_display_name(url)
+        snapshot = _compose_markdown_snapshot(
+            title=resolved_title,
+            source_url=url,
+            kind=kind,
+            body=body,
+            selection=excerpt if capture_mode == "selection" else None,
+            extra_sections=(),
+        )
+        tags = (
+            *_capture_tags(
+                kind=kind,
+                display_url=url,
+                url_keys=(url,),
+                selection=bool(excerpt),
+            ),
+            capture_intent_tag(capture_mode, excerpt),
+        )
+        return CapturedSource(
+            kind=kind,
+            source_url=url,
+            title=resolved_title,
+            content=snapshot,
+            content_encoding=None,
+            upload_kind="markdown",
+            tags=tags,
+            capture_url=normalized_url,
+            content_hash=compute_content_hash(snapshot),
+            selection_present=bool(excerpt),
+            source_domain=_source_domain(url),
+            captured_at=_utc_now_iso(),
+        )
     if not network_enabled:
         raise CaptureError(
             "network_disabled",
@@ -246,8 +294,13 @@ def capture_source(
 
 
 def _capture_web(url: str, title_hint: str | None, *, selection: str | None) -> CapturedSource:
+    file_capture = _capture_github_file(url, title_hint)
+    if file_capture is not None:
+        return file_capture
     try:
         extracted = extract_from_url(url, network_enabled=True)
+    except PdfSourceDetected as exc:
+        return _capture_pdf_response(url, title_hint, exc.response)
     except ConnectionError as exc:
         raise CaptureError(
             "fetch_failed",
@@ -298,6 +351,10 @@ def _capture_pdf(url: str, title_hint: str | None) -> CapturedSource:
         max_response_bytes=PDF_MAX_RESPONSE_BYTES,
         timeout_seconds=PDF_FETCH_TIMEOUT_SECONDS,
     )
+    return _capture_pdf_response(url, title_hint, response)
+
+
+def _capture_pdf_response(url: str, title_hint: str | None, response: ControlledFetchResponse) -> CapturedSource:
     if not response.body.startswith(b"%PDF-"):
         raise CaptureError(
             "not_a_pdf",
@@ -329,6 +386,37 @@ def _capture_pdf(url: str, title_hint: str | None) -> CapturedSource:
         source_domain=_source_domain(source_url),
         captured_at=_utc_now_iso(),
     )
+
+
+def capture_intent_tag(mode: str, selection: str | None = None) -> str:
+    if mode == "link":
+        return "capture-intent:link"
+    if mode == "selection":
+        digest = sha256(_clean_selection(selection).encode("utf-8")).hexdigest()[:24]
+        return f"capture-intent:selection:{digest}"
+    return ""
+
+
+def _capture_github_file(url: str, title_hint: str | None) -> CapturedSource | None:
+    parsed = urlsplit(url)
+    parts = parsed.path.strip("/").split("/")
+    if parsed.hostname not in _GITHUB_REPO_HOSTS or len(parts) < 5 or parts[2] != "blob":
+        return None
+    owner, repo, _, ref, *path = parts
+    if not _GITHUB_REPO_SEGMENT.match(owner) or not _GITHUB_REPO_SEGMENT.match(repo):
+        return None
+    api_url = GITHUB_CONTENTS_API.format(owner=owner, repo=repo, path="/".join(path)) + "?" + urlencode({"ref": unquote(ref)})
+    response = _fetch(api_url, headers={"Accept": "application/vnd.github+json"})
+    try:
+        payload = json.loads(response.body)
+        if not isinstance(payload, dict) or payload.get("encoding") != "base64":
+            raise ValueError("GitHub did not return a readable file.")
+        content = base64.b64decode(str(payload.get("content") or ""), validate=False).decode("utf-8")
+    except (ValueError, UnicodeDecodeError, binascii.Error) as exc:
+        raise CaptureError("github_file_unreadable", "This GitHub file cannot be read as text; save its link instead.", status_code=422) from exc
+    title = title_hint or "/".join(path)
+    snapshot = _compose_markdown_snapshot(title=title, source_url=url, kind="web", body=content, selection=None, extra_sections=())
+    return CapturedSource(kind="web", source_url=url, title=title, content=snapshot, content_encoding=None, upload_kind="markdown", tags=_capture_tags(kind="web", display_url=url, url_keys=(url,), selection=False), capture_url=normalize_capture_url(url), content_hash=compute_content_hash(snapshot), source_domain="github.com", captured_at=_utc_now_iso())
 
 
 def _capture_github_repo(

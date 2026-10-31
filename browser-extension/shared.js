@@ -1360,7 +1360,8 @@
     } catch (_error) {
       canonical = normalized;
     }
-    return `${kind}|${variant}|${canonical}`;
+    const scope = [target && target.workspaceId || '', target && target.focusId || '', target && target.captureMode || 'snapshot', target && target.selection || ''];
+    return `${kind}|${variant}|${canonical}|${JSON.stringify(scope)}`;
   }
 
   function buildDedupVariant(kind, target) {
@@ -1465,8 +1466,13 @@
     return `${match[1]}/${match[2]}`;
   }
 
+  function githubRepositoryUrl(url) {
+    const label = githubRepoLabel(url);
+    return label ? `https://github.com/${label}` : '';
+  }
+
   function detectKind(url) {
-    if (githubRepoLabel(url)) {
+    if (githubRepoLabel(url) && /^https?:\/\/(?:www\.)?github\.com\/[^/?#]+\/[^/?#]+\/?(?:[?#]|$)/i.test(url)) {
       return 'github_repo';
     }
     if (isPdfUrl(url)) {
@@ -1572,6 +1578,7 @@
       dedupKey: String(
         source.dedupKey ||
           buildDedupKey({
+            ...source,
             url,
             kind,
             includeDocs: source.includeDocs,
@@ -1581,6 +1588,9 @@
       ),
       url,
       kind,
+      workspaceId: String(source.workspaceId || '').trim(),
+      workspaceName: String(source.workspaceName || '').trim(),
+      captureMode: ['link', 'selection'].includes(source.captureMode) ? source.captureMode : 'snapshot',
       title: source.title ? String(source.title).trim() : '',
       selection: source.selection ? String(source.selection) : '',
       focusId: source.focusId ? String(source.focusId) : '',
@@ -1778,6 +1788,9 @@
     const workspaceId = String(source.workspaceId || '').trim();
     if (workspaceId) {
       payload.workspace_id = workspaceId;
+    }
+    if (source.captureMode === 'link' || source.captureMode === 'selection') {
+      payload.capture_mode = source.captureMode;
     }
     const title = String(source.title || '').trim();
     if (title) {
@@ -2536,6 +2549,7 @@
     normalizeKind,
     isPdfUrl,
     githubRepoLabel,
+    githubRepositoryUrl,
     detectKind,
     buildDeepLink,
     normalizeBaseUrl,

@@ -11,7 +11,7 @@ try:
 except ImportError:  # pragma: no cover - optional extraction enhancement
     trafilatura = None
 
-from app.network_fetch import ControlledFetchError, fetch_url
+from app.network_fetch import ControlledFetchError, ControlledFetchResponse, fetch_url
 
 
 @dataclass(slots=True)
@@ -23,6 +23,14 @@ class ExtractedContent:
     author: str | None
     date: str | None
     url: str
+
+
+class PdfSourceDetected(ValueError):
+    """A fetched URL is a PDF, including URLs without a .pdf suffix."""
+
+    def __init__(self, response: ControlledFetchResponse) -> None:
+        super().__init__("The source is a PDF document.")
+        self.response = response
 
 
 def extract_from_url(url: str, *, network_enabled: bool = False) -> ExtractedContent:
@@ -44,6 +52,8 @@ def extract_from_url(url: str, *, network_enabled: bool = False) -> ExtractedCon
         msg = f"Controlled URL fetch failed ({exc.code}): {url}"
         raise ConnectionError(msg) from exc
 
+    if response.body.startswith(b"%PDF-"):
+        raise PdfSourceDetected(response)
     downloaded = response.body.decode("utf-8", errors="replace")
 
     if trafilatura is None:

@@ -3035,6 +3035,7 @@ class ResourceCaptureRequest(BaseModel):
     url: str
     kind: Literal["web", "pdf", "github_repo"]
     title: str | None = None
+    capture_mode: Literal["snapshot", "link", "selection"] = "snapshot"
     # Selection captures still store the full readable body; the excerpt is kept
     # as capture metadata so the source stays honest after the page changes.
     selection: str | None = None
@@ -3059,6 +3060,10 @@ class ResourceCaptureRequest(BaseModel):
     def require_capture_url(self) -> "ResourceCaptureRequest":
         if not self.url.strip():
             raise ValueError("Capture requires a non-empty source URL.")
+        if self.capture_mode == "selection" and not str(self.selection or "").strip():
+            raise ValueError("Selection capture requires a non-empty excerpt.")
+        if self.capture_mode != "snapshot" and self.download:
+            raise ValueError("Only a full source capture can download an artifact.")
         if str(self.target_dir or "").strip() and not self.download:
             raise ValueError("target_dir requires download=true.")
         return self

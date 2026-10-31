@@ -123,7 +123,9 @@ test('detectKind classifies PDFs, GitHub repositories and plain pages', () => {
   assert.equal(TrainerCapture.detectKind('https://example.com/docs'), 'web');
   assert.equal(TrainerCapture.detectKind('https://github.com/acme/tool'), 'github_repo');
   assert.equal(TrainerCapture.detectKind('https://www.github.com/acme/tool.git'), 'github_repo');
-  assert.equal(TrainerCapture.detectKind('https://github.com/acme/tool/tree/main/src'), 'github_repo');
+  // A deep GitHub page is a page capture; only the repository root is a repo capture.
+  assert.equal(TrainerCapture.detectKind('https://github.com/acme/tool/tree/main/src'), 'web');
+  assert.equal(TrainerCapture.detectKind('https://github.com/acme/tool/blob/main/README.md'), 'web');
   assert.equal(TrainerCapture.detectKind('https://github.com/settings/profile'), 'web');
   assert.equal(TrainerCapture.detectKind('https://github.com/marketplace/actions/checkout'), 'web');
 });
@@ -253,7 +255,10 @@ test('createQueueItem normalizes fields and fills idempotency defaults', () => {
   assert.equal(item.focusId, 'focus-1');
   assert.equal(item.includeDocs, false);
   assert.match(item.clientCaptureId, /^bc-/);
-  assert.equal(item.dedupKey, TrainerCapture.buildDedupKey({ url: 'https://example.com/a', kind: 'web' }));
+  assert.equal(
+    item.dedupKey,
+    TrainerCapture.buildDedupKey({ url: 'https://example.com/a', kind: 'web', focusId: 'focus-1' })
+  );
   assert.equal(item.attempts, 0);
   assert.ok(item.createdAt);
 });
